@@ -18,7 +18,6 @@
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "TagManagerView.h"
-#include "InvalidDataListView.h"
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
 
@@ -93,7 +92,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     resize(1200, 800);
     setMinimumSize(1180, 653); // 物理对齐：5x230px面板 + 20px分割手柄 + 10px全局边距
-    setWindowTitle("FERREX");
+    setWindowTitle("ArcMeta");
 
     // ============================================================
     // 【物理护栏 - 禁止移动】事件过滤器必须在 initUi() 之前创建
@@ -250,6 +249,16 @@ void MainWindow::initUi() {
         unifiedNavigateTo(path);
     });
 
+    // 监听内容容器的右键添加至收藏夹信号 (对应用户原话：“选中某个项目单击右键选择该选项“添加至收藏夹”时，则把选中的项目收藏到收藏区里”)
+    connect(m_contentPanel, &ContentPanel::requestAddFavorite, this, [this](const QStringList& paths) {
+        if (m_navPanel) {
+            for (const QString& p : paths) {
+                m_navPanel->addFavoriteItem(p);
+            }
+            m_navPanel->saveFavorites();
+        }
+    });
+
     // 1a. 分类选择 -> 统一导航中枢 (Plan-56)
     connect(m_categoryPanel, &CategoryPanel::categorySelected, this, [this](int id, const QString& name, const QString& type, const QString& path) {
         m_currentCategoryId = id;
@@ -273,7 +282,7 @@ void MainWindow::initUi() {
         } else if (type == "bookmark" && !path.isEmpty()) {
             unifiedNavigateTo(path);
         } else if (type == "all" || type == "uncategorized" || type == "untagged" || 
-                   type == "recently_visited" || type == "trash" || type == "invalid_data") {
+                   type == "recently_visited" || type == "trash") {
             unifiedNavigateTo(kProtocolSystem + type);
         } else {
             // 回滚：对于未识别的系统项，仅执行搜索展示
@@ -937,7 +946,7 @@ void MainWindow::setupSplitters() {
     m_logoLabel->setStyleSheet("background: transparent; border: none;");
     m_titleBarLayout->addWidget(m_logoLabel);
 
-    m_appNameLabel = new QLabel("FERREX", m_titleBarWidget);
+    m_appNameLabel = new QLabel("ArcMeta", m_titleBarWidget);
     m_appNameLabel->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold;").arg(BrandOrange.name()));
     m_titleBarLayout->addWidget(m_appNameLabel);
     m_titleBarLayout->addStretch();
@@ -999,9 +1008,6 @@ void MainWindow::setupSplitters() {
     m_tagManagerView = new TagManagerView(this);
     m_tagManagerView->hide();
 
-    m_invalidDataListView = new InvalidDataListView(this);
-    m_invalidDataListView->hide();
-
     // 2026-05-07 按照用户要求：焦点线持久化显示，基于数据来源而非焦点位置
     connect(m_contentPanel, &ContentPanel::dataSourceChanged, this, [this](const QString& source) {
         m_currentDataSource = source;
@@ -1024,7 +1030,6 @@ void MainWindow::setupSplitters() {
     m_mainSplitter->addWidget(m_metaPanel);
     m_mainSplitter->addWidget(m_filterPanel);
     m_mainSplitter->addWidget(m_tagManagerView);
-    m_mainSplitter->addWidget(m_invalidDataListView);
 
 
     // 2026-07-xx 按照用户要求：标签搜索联动
@@ -1284,20 +1289,8 @@ void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
         // system://all | trash | etc.
         QString type = url.mid(kProtocolSystem.length());
         
-        // 2026-08-xx 按照 Plan-128：失效数据审计模式下的容器收敛
-        if (type == "invalid_data") {
-            m_navPanel->hide();
-            m_contentPanel->hide();
-            m_filterPanel->hide();
-            m_metaPanel->hide();
-            
-            m_invalidDataListView->refresh();
-            m_invalidDataListView->show();
-        } else {
-            m_invalidDataListView->hide();
-            m_contentPanel->show(); // 基础显示
-            loadPanelVisibility();
-        }
+        m_contentPanel->show(); // 基础显示
+        loadPanelVisibility();
 
         if (m_categoryPanel) {
             m_categoryPanel->blockSignals(true);
@@ -1313,7 +1306,6 @@ void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
     }
     else {
         // 2026-08-xx 按照 Plan-128：常规导航，根据记忆状态恢复显示
-        m_invalidDataListView->hide();
         m_contentPanel->show();
         loadPanelVisibility();
 
@@ -1508,7 +1500,6 @@ void MainWindow::resetSplitterLayout() {
     // 1. 物理恢复可见性并退出特殊模式
     m_isTagManagerMode = false;
     m_tagManagerView->hide();
-    if (m_invalidDataListView) m_invalidDataListView->hide();
 
     m_categoryPanel->show();
     m_navPanel->show();
@@ -1544,9 +1535,9 @@ void MainWindow::loadPanelVisibility() {
 }
 
 void MainWindow::savePanelVisibility() {
-    // 2026-08-xx 物理回避：在失效数据或标签管理等收敛模式下，禁止保存当前布局状态，
+    // 2026-08-xx 物理回避：在标签管理等收敛模式下，禁止保存当前布局状态，
     // 防止覆盖用户正常的日常分栏配置。
-    if (m_isTagManagerMode || (m_invalidDataListView && m_invalidDataListView->isVisible())) {
+    if (m_isTagManagerMode) {
         return;
     }
 

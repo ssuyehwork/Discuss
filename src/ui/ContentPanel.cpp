@@ -1774,6 +1774,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
  
         menu.addSeparator(); 
         menu.addAction("复制路径")->setData(ActionCopyPath); 
+        menu.addAction("添加至收藏夹")->setData(ActionAddToFavorites); 
         menu.addAction("属性")->setData(ActionProperties); 
 
         // 2026-07-xx 按照 Development_Plan 2.1：始终显示“重新扫描”选项 (仅限托管库内项目)
@@ -2231,6 +2232,23 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             }
             break;
         }
+        case ActionAddToFavorites: {
+            QStringList selectedPaths;
+            QModelIndexList indexes = getSelectedIndexes();
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    QString p = idx.data(PathRole).toString();
+                    if (!p.isEmpty()) {
+                        selectedPaths << p;
+                    }
+                }
+            }
+            if (!selectedPaths.isEmpty()) {
+                emit requestAddFavorite(selectedPaths);
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+            }
+            break;
+        }
         case ActionCopyPath: QApplication::clipboard()->setText(QDir::toNativeSeparators(path)); break; 
         case ActionProperties: { 
             ShellHelper::showProperties(onItem ? path : m_currentPath); 
@@ -2459,48 +2477,7 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     // 2026-07-xx 按照 Plan-119：记录最近访问历史（打开即记录）
     AutoImportManager::recordRecentVisitedFolder(path.toStdWString());
 
-    // 2026-07-xx 按照 Plan-116：检测是否导航进入托管库内部
-    std::wstring wp = path.toStdWString();
-    std::wstring volSerial = MetadataManager::getVolumeSerialNumber(wp);
-    QString key = QString("ManagedFolder/Volume_%1").arg(QString::fromStdWString(volSerial));
-    QString relPath = AppConfig::instance().getValue(key, "").toString();
-    bool isInsideLibrary = false;
-    if (!relPath.isEmpty()) {
-        QString drive = path.left(3);
-        QString managedAbs = QDir::toNativeSeparators(drive + relPath).toLower();
-        if (path.toLower().startsWith(managedAbs)) isInsideLibrary = true;
-    }
-
     QPointer<ContentPanel> panelPtr(this); 
-    
-    // 镜像加载模式（加速）
-    if (isInsideLibrary && !recursive) {
-        (void)QtConcurrent::run([panelPtr, path, reqId]() {
-            if (!panelPtr) return;
-            
-            // Plan-124: 利用树级索引实现 O(1) 检索，并仅持有锁获取副本，消除锁争用
-            auto children = MetadataManager::instance().getChildrenFromCache(path.toStdWString());
-            
-            std::vector<ItemRecord> allItems;
-            allItems.reserve(children.size());
-            for (const auto& pair : children) {
-                // 利用重构后的 createItemRecord 传入已拉取的元数据，实现真正的零 I/O
-                allItems.push_back(ContentPanel::createItemRecord(QString::fromStdWString(pair.first), &pair.second));
-            }
-
-            QMetaObject::invokeMethod(QCoreApplication::instance(), [panelPtr, allItems, reqId]() {
-                if (panelPtr && panelPtr->m_loadRequestId == reqId) {
-                    panelPtr->m_model->setRecords(allItems);
-                    panelPtr->m_proxyModel->sort(0, Qt::AscendingOrder);
-                    panelPtr->m_isLoading = false;
-                    panelPtr->recalculateAndEmitStats();
-                    panelPtr->applyFilters();
-                    ArcMeta::Logger::log(QString("[Content] 托管库镜像加载完成 [%1]").arg(reqId));
-                }
-            });
-        });
-        return;
-    }
 
     // 物理扫描模式（原逻辑）
     (void)QThreadPool::globalInstance()->start([panelPtr, path, recursive, reqId]() { 

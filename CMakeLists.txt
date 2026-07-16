@@ -46,6 +46,8 @@ set(SOURCES
     src/meta/sqlite3.h
     src/core/CoreController.cpp
     src/core/CoreController.h
+    src/core/NativeFolderWatcher.cpp
+    src/core/NativeFolderWatcher.h
     src/core/CacheManager.cpp
     src/core/CacheManager.h
     src/core/IndexedEntry.h
@@ -101,8 +103,6 @@ set(SOURCES
     src/ui/DropTreeView.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
-    src/ui/InvalidDataModel.h
-    src/ui/InvalidDataListView.h
     src/ui/FramelessDialog.cpp
     src/ui/FramelessDialog.h
     src/ui/FramelessFileDialog.cpp

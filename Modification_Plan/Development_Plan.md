@@ -2,12 +2,12 @@
 
 ## 1. 托管库 (ArcMeta.Library_) 自动化链路规约
 
-### 1.1 监控架构演进：单一 USN 主轨方针 (Single USN Track)
-- **唯一监控信源**：彻底废除基于 `ReadDirectoryChangesW` 的 `NativeFolderWatcher`。全系统物理监控逻辑收拢至 **NTFS USN Journal**（由 `MftReader` 驱动）。
-- **全卷监控 + 精准路径过滤**：系统启动对全卷的 USN 监控，但在解析层执行“精准物理过滤”。
-    - **过滤策略**：使用 **USN Journal 监控整个磁盘卷**，但在解析阶段只保留路径属于 `ArcMeta.Library_[盘符]` 文件夹及其子目录的事件，其他文件夹（如系统临时目录、非托管区）的事件全部丢弃。
-    - **性能加速**：优先利用内存中的 FRN 父子映射关系进行层级判定，避免频繁的字符串路径拼接与比对，非托管区事件在解析第一步即被静默丢弃。
-- **入库触发机制**：所谓的“收揽入库/扫描入库”在底层仅执行物理位移（Move）。元数据登记与摄取（Status 0/1）必须由位移完成后的 USN 变动信号**反向触发**，严禁 UI 侧直接操作数据库记录。
+### 1.1 监控架构演进：恢复 NativeFolderWatcher (IOCP) 主轨
+- **唯一监控信源**：彻底废除并卸载 USN Journal 监控。系统物理监控逻辑重新全部收拢至基于 `ReadDirectoryChangesW` 的 **NativeFolderWatcher (IOCP)** 机制。
+- **作用域过滤与移除调试**：
+    - **过滤策略**：监控 `ArcMeta.Library_[盘符]` 文件夹及其所有子树的物理变动。
+    - **彻底移除 QMessageBox 调试日志**：由于全面弃用并废除 USN 机制，必须彻底移除 `AutoImportManager.cpp` 等中由于原先 USN 调试目的而引入的 `QMessageBox` 弹出框调试、`safeShowMessageBox` 全局辅助函数、以及相关调试信息及引用的头文件，确保不留任何痕迹。
+- **入库触发机制**：元数据登记与摄取动作由 `NativeFolderWatcher` 在捕获到文件系统物理变动后，通过后台异步线程反向回调 `MetadataManager::registerItemsAsync` 或 `markAsRegistered` 触发。
 
 ### 1.2 镜像铁律：1:1 物理复刻 (Absolute Mirroring)
 - **物理决定逻辑**：在 `ArcMeta.Library_` 分支下，侧边栏分类树必须是磁盘物理目录的 **1:1 绝对镜像**。
@@ -64,7 +64,10 @@
 ## 4. 架构红线与禁令
 
 - **严禁重复造轮子**：全应用禁止出现两套平行的扫描入库引擎。`AutoImportManager` 仅作为变动监听的触发器，具体的解析逻辑必须收拢至 `ImportHelper`（或归一化后的摄取模块）。
-- **严禁启动自扫描**：主程序启动时严禁自动执行全量物理递归。一切物理读盘开销必须由“USN Journal 离线补偿信号”或“用户手动选中”驱动，以确保 UI 绝对流畅，不发生假死与卡顿。
+- **严禁启动自扫描**：主程序启动时严禁自动执行全量物理递归。一切物理读盘开销必须由 “NativeFolderWatcher (IOCP)” 物理变动信号或“用户手动选中”驱动，以确保 UI 绝对流畅，不发生假死与卡顿。
+- **彻底废除及移除“失效数据”机制**：
+  - **分类移除**：必须彻底从侧边栏系统分类树（`CategoryModel`、`CategoryPanel` 等）中剔除 “失效数据” (invalid_data) 节点。
+  - **逻辑与视图清理**：完全清理其底层在 `MainWindow` 中的实例、显隐控制逻辑，并物理删除/剔除 `InvalidDataListView.h`、`InvalidDataModel.h` 对应的前端视图和模型文件，使整个工程无任何残留。
 
 ## 5. 盘符栏 (Drive Bar) 逻辑架构规约
 
