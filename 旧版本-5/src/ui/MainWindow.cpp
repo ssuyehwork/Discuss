@@ -2,20 +2,31 @@
 #define NOMINMAX
 #endif
 #include "MainWindow.h"
+#include <QDateTime>
+#include "Logger.h"
+#include "../core/UndoManager.h"
+#include "../core/BasicCommands.h"
+#include "TrayController.h"
+#include "HoverEventFilter.h"
+#include "ResizeEventFilter.h"
+#include "AddressBar.h"
 #include "../core/CoreController.h"
-#include "BreadcrumbBar.h"
 #include "CategoryPanel.h"
 #include "CategoryModel.h"
 #include "NavPanel.h"
 #include "ContentPanel.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
+#include "TagManagerView.h"
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
-#include "ScanDialog.h"
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 #include "../mft/MftReader.h"
-#include "../db/CategoryRepo.h"
-#include "../db/ItemRepo.h"
+#include "../meta/CategoryRepo.h"
+
 #include "SearchHistoryPanel.h"
 #include "SvgIcons.h"
 
@@ -28,12 +39,18 @@
 #include <QKeyEvent>
 #include <QCursor>
 #include <QApplication>
-#include <QSettings>
+#include "../core/AppConfig.h"
 #include <QCloseEvent>
 #include <QMenu>
 #include <QAction>
 #include <QTimer>
 #include "UiHelper.h"
+#include "StyleLibrary.h"
+#include "../core/SyncStatusService.h"
+#include "DriveButton.h"
+#include "../util/ShellHelper.h"
+using namespace ArcMeta::Style;
+#include "../core/ModelContract.h"
 #include <QFileInfo>
 #include <QDir>
 #include "../meta/MetadataManager.h"
@@ -41,15 +58,30 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <Dbt.h>
+#include <psapi.h>
 #endif
 
-#include "../db/SyncEngine.h"
+
 #include <QtConcurrent>
 
 namespace ArcMeta {
 
+// 【物理护栏-禁止修改/禁止改为0】全局边缘留白基准值，统一应用于标题栏/导航栏/主体容器右侧
+// 及状态栏左右两侧。2026-06-xx 曾被错误改为0导致搜索框/元数据/筛选面板右侧被截断，
+// 任何"贴合边缘/滚动条对齐/物理修正"等理由都不能作为改动此常量或下方四处引用的依据。
+constexpr int kEdgeMargin = 5;
+constexpr int kStatusBarMargin = 12;
+
+MainWindow::~MainWindow() {
+    // 对应 initUi() 中 QCoreApplication::instance()->installEventFilter(m_resizeFilter)
+    // 安装位置和卸载位置必须严格一致，禁止改成 this->removeEventFilter(...)
+    if (m_resizeFilter) {
+        QCoreApplication::instance()->removeEventFilter(m_resizeFilter);
+    }
+}
+
 MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent) {
+    : QMainWindow(parent), m_currentDataSource("nav"), m_currentCategoryId(0) {
     // 2026-04-12 关键修复：显式初始化面板加载状态锁，防止未定义行为导致闪退
     m_panelsInitialized = false;
     qDebug() << "[Main] MainWindow 构造开始执行";
@@ -62,9 +94,22 @@ MainWindow::MainWindow(QWidget* parent)
     setMinimumSize(1180, 653); // 物理对齐：5x230px面板 + 20px分割手柄 + 10px全局边距
     setWindowTitle("ArcMeta");
 
+    // ============================================================
+    // 【物理护栏 - 禁止移动】事件过滤器必须在 initUi() 之前创建
+    // 原因：initUi() -> initToolbar()/setupCustomTitleBarButtons() 会调用
+    //       installEventFilter(m_hoverFilter)，setupCustomTitleBarButtons()
+    //       内部还依赖 m_resizeFilter 做全局安装。
+    //       若此处移到 initUi() 之后，installEventFilter 会收到 nullptr，
+    //       Qt 不会报错也不会崩溃，但功能（hover提示/边缘缩放）会静默失效，
+    //       极难排查。2026-06-xx 已踩坑一次。
+    // ============================================================
+    m_hoverFilter = new HoverEventFilter(this);
+    m_resizeFilter = new ResizeEventFilter(this);
+    Q_ASSERT(m_hoverFilter && m_resizeFilter);
+    // ============================================================
+
     // 从设置读取置顶状态
-    QSettings settings("ArcMeta团队", "ArcMeta");
-    m_isPinned = settings.value("MainWindow/AlwaysOnTop", false).toBool();
+    m_isPinned = AppConfig::instance().getValue("MainWindow/AlwaysOnTop", false).toBool();
     
     // 设置基础窗口标志 (保持无边框)
     setWindowFlags(Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
@@ -73,124 +118,92 @@ MainWindow::MainWindow(QWidget* parent)
     // 2026-03-xx 关键修复：构造函数内不再调用 winId() 或 SetWindowPos 避免触发窗口提前显示
     // 置顶逻辑现在改为按需由 external 或 showEvent 安全触发
     if (m_isPinned) {
+#ifdef Q_OS_WIN
+        QTimer::singleShot(0, this, [this]() {
+            HWND hwnd = reinterpret_cast<HWND>(winId());
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+        });
+#else
         setWindowFlag(Qt::WindowStaysOnTopHint, true);
+#endif
     }
 
-    // 应用全局样式（包括滚动条美化）
-    QString qss = R"(
-        QMainWindow { background-color: #1E1E1E; }
-
-        /* 核心容器样式还原 - 强化 1 像素物理切割感，回归绝对直角设计 */
-        #SidebarContainer, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
-            background-color: #1E1E1E;
-            border: 1px solid #333333;
-            border-radius: 0px;
-        }
-
-        /* 容器标题栏样式 (还原旧版 #252526 实色背景与下边框) */
-        /* 2026-03-xx 物理回归：标题栏必须保持绝对直角，以体现“物理切割感” */
-        #ContainerHeader {
-            background-color: #252526;
-            border-bottom: 1px solid #333333;
-            border-top-left-radius: 0px;
-            border-top-right-radius: 0px;
-        }
-
-        /* 全局滚动条美化 */
-        QScrollBar:vertical {
-            border: none;
-            background: transparent;
-            width: 4px;
-            margin: 0px;
-        }
-        QScrollBar::handle:vertical {
-            background: #333333;
-            min-height: 20px;
-            border-radius: 2px;
-        }
-        QScrollBar::handle:vertical:hover {
-            background: #444444;
-        }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-            height: 0px;
-        }
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-            background: none;
-        }
-
-        QScrollBar:horizontal {
-            border: none;
-            background: transparent;
-            height: 4px;
-            margin: 0px;
-        }
-        QScrollBar::handle:horizontal {
-            background: #333333;
-            min-width: 20px;
-            border-radius: 2px;
-        }
-        QScrollBar::handle:horizontal:hover {
-            background: #444444;
-        }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-            width: 0px;
-        }
-        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-            background: none;
-        }
-
-        /* 统一复选框样式 */
-        QCheckBox { color: #EEEEEE; font-size: 12px; spacing: 5px; }
-        QCheckBox::indicator { width: 15px; height: 15px; border: 1px solid #444; border-radius: 2px; background: #1E1E1E; }
-        QCheckBox::indicator:hover { border: 1px solid #666; }
-        QCheckBox::indicator:checked { 
-            border: 1px solid #378ADD; 
-            background: #1E1E1E; 
-            image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzc4QUREIiBzdHJva2Utd2lkdGg9IjMuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSIyMCA2IDkgMTcgNCAxMiI+PC9wb2x5bGluZT48L3N2Zz4=);
-        }
-
-        /* 统一输入框与多行文本框样式，应用 6px 圆角规范 */
-        QLineEdit, QPlainTextEdit, QTextEdit {
-            background: #1E1E1E;
-            border: 1px solid #333333;
-            border-radius: 6px;
-            color: #EEEEEE;
-            padding-left: 8px;
-        }
-        QLineEdit:focus {
-            border: 1px solid #378ADD;
-        }
-    )";
-    setStyleSheet(qss);
+    // 应用全局样式（优先尝试从资源系统加载以支持动态同步）
+    // 2026-06-xx 物理修复：如果资源加载失败，则回退到内联样式以确保“物理切割感”永不消失
+    QFile file(":/style.qss");
+    if (file.open(QFile::ReadOnly)) {
+        setStyleSheet(QLatin1String(file.readAll()));
+    } else {
+        QString qss = QString(R"(
+            QMainWindow { background-color: %1; }
+            #SidebarContainer, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
+                background-color: %1; border: 1px solid %2; border-radius: 0px;
+            }
+            #ContainerHeader {
+                background-color: %3; border-bottom: 1px solid %2;
+            }
+            QScrollBar:vertical { border: none; background: transparent; width: 10px; }
+            QScrollBar::handle:vertical { background: %2; min-height: 20px; border-radius: 3px; }
+            QScrollBar::handle:vertical:hover { background: %4; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { width: 0px; height: 0px; }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
+            QScrollBar:horizontal { border: none; background: transparent; height: 10px; }
+            QScrollBar::handle:horizontal { background: %2; min-width: 20px; border-radius: 3px; }
+            QScrollBar::handle:horizontal:hover { background: %4; }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; height: 0px; }
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }
+            QLineEdit, QPlainTextEdit, QTextEdit {
+                background: %1; border: 1px solid %2; border-radius: 6px; color: %5; padding-left: 8px;
+            }
+            QLineEdit:focus { border: 1px solid %6; }
+        )")
+        .arg(qssColor(BackgroundDeep))
+        .arg(qssColor(BorderColor))
+        .arg(qssColor(BackgroundHeader))
+        .arg(qssColor(BorderDark))
+        .arg(qssColor(TextMain))
+        .arg(qssColor(PrimaryBlue));
+        setStyleSheet(qss);
+    }
 
     initUi();
-    initTrayIcon();
-    initIdleDetector();
-    qDebug() << "[Main] MainWindow 构造函数 UI/托盘/闲置检测初始化完成";
 
-    // 2026-03-xx 性能优化：严禁在构造函数中执行任何可能导致阻塞的同步加载 (如 navigateTo)。
+    m_trayController = new TrayController(this);
+    m_trayController->show();
+
+    // 2026-05-29 性能优化：事件过滤器仅安装在 MainWindow 实例上，减少 qApp 全局事件分发的 overhead。
+    this->installEventFilter(this);
+
+    qDebug() << "[Main] MainWindow 构造函数 UI/托盘初始化完成";
+
+    // 2026-03-xx 性能优化：严禁在构造函数中执行任何可能导致阻塞的同步加载 (如 unifiedNavigateTo)。
     // 改为延迟 200ms 触发首次加载，确保 MainWindow 框架先瞬间弹出，提升用户感知的“秒开”响应速度。
     QTimer::singleShot(200, [this]() {
-        QSettings settings("ArcMeta团队", "ArcMeta");
-        QString lastPath = settings.value("MainWindow/LastPath", "computer://").toString();
+        QString lastPath = AppConfig::instance().getValue("MainWindow/LastPath", "computer://").toString();
         
-        // 2026-04-11 按照用户要求：物理还原最后一次开启的文件夹
-        // 校验路径：如果是虚拟路径或真实存在的磁盘路径，则载入
-        if (lastPath == "computer://" || QDir(lastPath).exists()) {
-            qDebug() << "[Main] 执行延迟首次加载: 恢复历史路径 ->" << lastPath;
-            navigateTo(lastPath);
-            m_navPanel->selectPath(lastPath);
+        // 2026-04-11 按照用户要求：物理还原最后一次开启的内容 (Plan-56)
+        // 校验：如果是协议路径或存在的磁盘路径，则载入
+        bool isValid = lastPath.contains("://") || QDir(lastPath).exists();
+        if (isValid) {
+            qDebug() << "[Main] 执行延迟首次加载: 恢复历史状态 ->" << lastPath;
+            unifiedNavigateTo(lastPath);
         } else {
             qDebug() << "[Main] 历史路径无效，回退至: 此电脑";
-            navigateTo("computer://");
-            m_navPanel->selectPath("computer://");
+            unifiedNavigateTo("computer://");
         }
     });
 }
 
 void MainWindow::initUi() {
+    // 物理断言：确保过滤器已就绪，防止静默失效
+    Q_ASSERT(m_hoverFilter && m_resizeFilter && "事件过滤器必须在 initUi() 之前创建，见构造函数顶部注释");
+
     initToolbar();
     setupSplitters();
+
+    // 全局安装：拦截子控件边缘鼠标事件以支持无边框窗口缩放
+    QCoreApplication::instance()->installEventFilter(m_resizeFilter);
+
     setupCustomTitleBarButtons();
     
     // 2026-04-11 按照用户要求：物理锁定侧边栏宽度，最大化时仅“内容”区拉伸
@@ -201,10 +214,11 @@ void MainWindow::initUi() {
     m_mainSplitter->setStretchFactor(4, 0); // 筛选
 
     // 2026-04-11 按照用户要求：物理还原/记忆侧边栏宽度
-    QSettings settings("ArcMeta团队", "ArcMeta");
-    QByteArray state = settings.value("MainWindow/SplitterState").toByteArray();
+    QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
     if (!state.isEmpty()) {
         m_mainSplitter->restoreState(state);
+        // 2026-07-xx 按照 Plan-63：恢复面板显隐状态 (必须在 restoreState 之后以防布局错乱)
+        loadPanelVisibility();
     } else {
         // 初始默认分配: 230 | 230 | 600 | 230 | 230
         QList<int> sizes;
@@ -214,60 +228,93 @@ void MainWindow::initUi() {
 
     // 核心红线：建立各面板间的信号联动 (Data Linkage)
     
-    // 1. 导航/收藏/内容面板 双击跳转 -> 统一路径调度
+    // 1. 导航/收藏/内容面板 双击跳转 -> 统一导航中枢 (Plan-56)
     connect(m_navPanel, &NavPanel::directorySelected, this, [this](const QString& path) {
-        navigateTo(path);
+        unifiedNavigateTo(path);
+    });
+
+    // 2026-xx-xx 按照 Plan-95：实现收藏文件定位逻辑
+    connect(m_navPanel, &NavPanel::requestLocateFile, this, [this](const QString& path) {
+        QFileInfo fi(path);
+        QString parentDir = fi.absolutePath();
+        
+        // 1. 设置待定位的文件名 (不开启编辑模式)
+        m_contentPanel->setPendingSelectName(fi.fileName(), false);
+
+        // 2. 跳转到父目录
+        unifiedNavigateTo(parentDir);
     });
 
     connect(m_contentPanel, &ContentPanel::directorySelected, this, [this](const QString& path) {
-        navigateTo(path);
+        unifiedNavigateTo(path);
     });
 
-    // 1a. 分类选择 -> 内容面板执行数据加载 (针对问题 2)
-    // 2026-05-27 物理加固：补全 this 上下文
+    // 1a. 分类选择 -> 统一导航中枢 (Plan-56)
     connect(m_categoryPanel, &CategoryPanel::categorySelected, this, [this](int id, const QString& name, const QString& type, const QString& path) {
-        // 2026-04-12 关键修正：跳转分类时，物理重置搜索状态，防止逻辑锁死
-        if (m_searchEdit) m_searchEdit->clear();
-        m_contentPanel->search("");
-
-        m_pathStack->setCurrentWidget(m_pathEdit);
-        m_pathEdit->setText("分类: " + name);
+        m_currentCategoryId = id;
         
+        // 标签管理模式属于特殊 UI 模式，暂时保持独立
+        if (type == "tags") {
+            m_navPanel->hide(); m_contentPanel->hide(); m_metaPanel->hide(); m_filterPanel->hide();
+            m_tagManagerView->refresh(); m_tagManagerView->show();
+            m_isTagManagerMode = true;
+            if (m_addressBar) m_addressBar->setPath("标签管理");
+            if (m_searchEdit && !m_searchEdit->text().isEmpty()) m_tagManagerView->search(m_searchEdit->text().trimmed());
+            return;
+        } else if (m_isTagManagerMode) {
+            m_tagManagerView->hide(); m_navPanel->show(); m_contentPanel->show(); m_metaPanel->show(); m_filterPanel->show();
+            m_isTagManagerMode = false;
+        }
+
+        // 构建协议 URL 并跳转
         if (type == "category") {
-            // 2026-06-xx 重构逻辑：内容面板负责展示该分类下的子分类与绑定文件
-            m_contentPanel->loadCategory(id);
-        } else if (type == "bookmark") {
-            // 2026-06-xx 处理快速访问项跳转 (Favorite 路径加载)
-            if (!path.isEmpty()) {
-                navigateTo(path);
-            } else {
-                m_contentPanel->search(name);
-            }
+            unifiedNavigateTo(kProtocolCategory + QString::number(id) + "?name=" + name);
+        } else if (type == "bookmark" && !path.isEmpty()) {
+            unifiedNavigateTo(path);
         } else if (type == "all" || type == "uncategorized" || type == "untagged" || 
-                   type == "today" || type == "yesterday" || type == "recently_visited" || type == "trash") {
-            // 2026-06-xx 物理修复：所有系统项直接走数据库专用路径接口，彻底断开与搜索框的傻逼耦合
-            m_contentPanel->loadPaths(ItemRepo::getPathsBySystemType(type));
+                   type == "recently_visited" || type == "trash") {
+            unifiedNavigateTo(kProtocolSystem + type);
         } else {
-            // 其余系统项 (标签管理等) 维持搜索逻辑
-            m_contentPanel->search(name); 
+            // 回滚：对于未识别的系统项，仅执行搜索展示
+            if (m_searchEdit) { m_searchEdit->blockSignals(true); m_searchEdit->clear(); m_searchEdit->blockSignals(false); }
+            if (m_addressBar) m_addressBar->setPath("分类: " + name);
+            if (!name.isEmpty()) m_contentPanel->search(name);
         }
     });
 
-    // 1b. 内容面板内部跳转分类 (双击同步)
+    // 1b. 内容面板内部跳转分类 (双击同步) -> 统一导航中枢 (Plan-56)
     connect(m_contentPanel, &ContentPanel::categoryClicked, this, [this](int id) {
-        if (m_categoryPanel) m_categoryPanel->selectCategory(id);
+        // 通过 Repo 获取分类名称以构建完整的协议 URL
+        auto all = CategoryRepo::getAll();
+        QString name = QString::number(id);
+        for(const auto& cat : all) if(cat.id == id) { name = QString::fromStdWString(cat.name); break; }
+        unifiedNavigateTo(kProtocolCategory + QString::number(id) + "?name=" + name);
+    });
+
+    // 监听内容容器的右键添加至收藏夹信号
+    connect(m_contentPanel, &ContentPanel::requestAddFavorite, this, [this](const QStringList& paths) {
+        if (m_navPanel) {
+            for (const QString& p : paths) {
+                m_navPanel->addFavoriteItem(p);
+            }
+            m_navPanel->saveFavorites();
+        }
     });
 
     // 2. 内容面板选中项改变 -> 元数据面板刷新 & 自动预览
     // 2026-03-xx 按照高性能要求，优先从模型 Role 读取元数据缓存，避免频繁磁盘 IO
     // 2026-05-27 物理加固：补全 this 上下文
     connect(m_contentPanel, &ContentPanel::selectionChanged, this, [this](const QStringList& paths) {
+        m_metaPanel->setSelectedPaths(paths);
         if (paths.isEmpty()) {
             m_metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false);
             m_metaPanel->setRating(0);
             m_metaPanel->setColor(L"");
             m_metaPanel->setPinned(false);
             m_metaPanel->setTags(QStringList());
+            m_metaPanel->setNote(L"");
+            m_metaPanel->setURL(L"");
+            m_metaPanel->setCategory("-");
         } else {
             // 2026-03-xx 高性能优化：优先从模型缓存中读取元数据，避免频繁磁盘访问
             auto indexes = m_contentPanel->getSelectedIndexes();
@@ -295,9 +342,14 @@ void MainWindow::initUi() {
             m_metaPanel->setPinned(idx.data(IsLockedRole).toBool());
             m_metaPanel->setTags(idx.data(TagsRole).toStringList());
             
-            // 加载备注和色板
+            // 加载备注、URL和色板
             RuntimeMeta rm = MetadataManager::instance().getMeta(path.toStdWString());
             m_metaPanel->setNote(rm.note);
+            m_metaPanel->setURL(rm.url);
+
+            // 设置分类显示 (根据当前 UI 状态或路径推导)
+            QString category = info.isDir() ? info.absoluteFilePath() : info.absolutePath();
+            m_metaPanel->setCategory(category);
 
             // 将色板数据转换为 QVector<QPair<QColor, float>>
             QVector<QPair<QColor, float>> pal;
@@ -346,20 +398,10 @@ void MainWindow::initUi() {
         // 2026-04-11 按照用户要求：补全物理持久化逻辑 (MetadataManager 直接入库)
         MetadataManager::instance().setRating(m_currentQuickLookPath.toStdWString(), rating);
 
-        // 物理同步：实时刷新 ContentPanel 列表模型，确保主界面同步变迁
-        auto* proxy = m_contentPanel->getProxyModel();
-        for (int i = 0; i < proxy->rowCount(); ++i) {
-            QModelIndex idx = proxy->index(i, 0);
-            if (idx.data(PathRole).toString() == m_currentQuickLookPath) {
-                proxy->setData(idx, rating, RatingRole);
-                break;
-            }
-        }
-
         m_metaPanel->setRating(rating);
         // 2026-04-11 按照用户要求：在预览窗设定星级时，左上方即时反馈
-        QString msg = QString("已设定星级: <span style='color: #FAC775;'>%1 星</span>").arg(rating);
-        ToolTipOverlay::instance()->showText(QPoint(50, 50), msg, 1500, QColor("#FAC775"));
+        QString msg = QString("已设定星级: <span style='color: #FECF0E;'>%1 星</span>").arg(rating);
+        ToolTipOverlay::instance()->showText(QPoint(50, 50), msg, 1500, QColor("#FECF0E"));
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this](const QString& color) {
@@ -367,16 +409,6 @@ void MainWindow::initUi() {
 
         // 2026-04-11 按照用户要求：补全物理持久化逻辑 (MetadataManager 直接入库)
         MetadataManager::instance().setColor(m_currentQuickLookPath.toStdWString(), color.toStdWString());
-
-        // 物理同步：实时刷新 ContentPanel 列表模型，确保主界面同步变迁
-        auto* proxy = m_contentPanel->getProxyModel();
-        for (int i = 0; i < proxy->rowCount(); ++i) {
-            QModelIndex idx = proxy->index(i, 0);
-            if (idx.data(PathRole).toString() == m_currentQuickLookPath) {
-                proxy->setData(idx, color, ColorRole);
-                break;
-            }
-        }
 
         m_metaPanel->setColor(color.toStdWString());
         
@@ -394,96 +426,107 @@ void MainWindow::initUi() {
         ToolTipOverlay::instance()->showText(QPoint(50, 50), msg, 1500, QColor("#41F2F2"));
     });
 
-    // 5a. 目录装载完成 -> FilterPanel 动态填充 (六参数版本)
+    // 5a. 目录装载完成 -> FilterPanel 动态填充 (六参数版本: 移除标签统计)
     connect(m_contentPanel, &ContentPanel::directoryStatsReady, this,
         [this](const QMap<int,int>& r, const QMap<QString,int>& c,
-               const QMap<QString,int>& t, const QMap<QString,int>& tp,
-               const QMap<QString,int>& cd, const QMap<QString,int>& md) {
-            m_filterPanel->populate(r, c, t, tp, cd, md);
+               const QMap<QString,int>& tp,
+               const QMap<QString,int>& cd, const QMap<QString,int>& md,
+               int ef) {
+            m_filterPanel->populate(r, c, tp, cd, md, ef);
         });
 
-    // 5b. FilterPanel 勾选变化 -> 内容面板过滤
+    // 5b. FilterPanel 状态变化 -> 内容面板过滤 (Plan-92: 统一搜索词合并)
     // 2026-05-27 物理加固：补全 this 上下文
     connect(m_filterPanel, &FilterPanel::filterChanged, this, [this](const FilterState& state) {
-        m_contentPanel->applyFilters(state);
+        FilterState mergedState = state;
+        if (m_searchEdit) {
+            mergedState.keyword = m_searchEdit->text().trimmed();
+        }
+        m_contentPanel->applyFilters(mergedState);
         updateStatusBar(); // 筛选后立即更新底栏可见项目总数
     });
 
-    connect(m_filterPanel, &FilterPanel::resetSearchRequested, this, [this]() {
-        // 2026-04-12 关键同步：点击右侧“清除”时，同步清空顶部搜索框
-        if (m_searchEdit) m_searchEdit->clear();
-        m_contentPanel->search("");
+
+    // 6. 地址栏路径跳转与刷新 -> 统一导航中枢 (Plan-56)
+    connect(m_addressBar, &AddressBar::pathChanged, this, [this](const QString& path) {
+        unifiedNavigateTo(path);
     });
 
-    // 6. 工具栏路径跳转
-    // 2026-05-27 物理加固：补全 this 上下文
-    connect(m_pathEdit, &QLineEdit::returnPressed, this, [this]() {
-        QString input = m_pathEdit->text();
-        if (QDir(input).exists()) {
-            navigateTo(input);
-        } else if (input == "computer://" || input == "此电脑") {
-            navigateTo("computer://");
-        } else {
-            // 如果路径无效，恢复为当前实际路径
-            m_pathEdit->setText(QDir::toNativeSeparators(m_currentPath));
-            m_pathStack->setCurrentWidget(m_breadcrumbBar);
-        }
+    connect(m_addressBar, &AddressBar::refreshRequested, this, [this]() {
+        if (m_contentPanel) m_contentPanel->refreshAll();
     });
 
-    // 7. 搜索框回车触发逻辑 (带历史记录和搜索模式分流)
-    QSettings searchSettings("ArcMeta", "ArcMeta");
-    m_searchHistory = searchSettings.value("Search/History").toStringList();
+    // 7. 搜索框回车触发逻辑 (2026-07-xx 按照 Plan-57 升级为异步流式展示)
+    m_searchHistory = AppConfig::instance().getValue("Search/History").toStringList();
     
     m_searchHistoryPanel = new SearchHistoryPanel(this);
     m_searchHistoryPanel->setHistory(m_searchHistory);
 
-    // 回车搜索核心逻辑
-    auto performSearch = [this](const QString& keyword) {
-        if (keyword.isEmpty()) {
-            m_contentPanel->loadDirectory(m_currentPath);
-            m_searchHistoryPanel->hide();
+    // 2026-xx-xx 按照 Plan-106：初始化搜索防抖计时器
+    m_searchTimer = new QTimer(this);
+    m_searchTimer->setSingleShot(true);
+    m_searchTimer->setInterval(300);
+
+    // 回车搜索核心逻辑 (2026-07-xx 定点修复：搜索框作为筛选器的一个输入组件，走本地过滤引擎)
+    auto doSearch = [this](const QString& keyword) {
+        if (m_isTagManagerMode) {
+            m_tagManagerView->search(keyword);
             return;
         }
 
-        // 维护历史记录（去重，置顶，最多保持10条）
-        m_searchHistory.removeAll(keyword);
-        m_searchHistory.prepend(keyword);
-        if (m_searchHistory.size() > 10) m_searchHistory.removeLast();
-        QSettings settings("ArcMeta", "ArcMeta");
-        settings.setValue("Search/History", m_searchHistory);
-        m_searchHistoryPanel->setHistory(m_searchHistory);
-        m_searchHistoryPanel->hide();
+        // 2026-07-xx 按照 Plan-118：搜索行为回归筛选流。
+        // 搜索框作为当前视图的本地过滤器，不再执行外部 fs 拼装，直接驱动 ContentPanel。
+        m_contentPanel->search(keyword);
+        updateStatusBar();
 
-        // 按照用户要求：不再区分局部/全局，设定为全局搜索
-        // 全局数据库匹配加载
-        QStringList paths = ItemRepo::searchByKeyword(keyword, "");
-        m_contentPanel->loadPaths(paths);
+        // 维护历史记录
+        if (!keyword.isEmpty()) {
+            m_searchHistory.removeAll(keyword);
+            m_searchHistory.prepend(keyword);
+            if (m_searchHistory.size() > 10) m_searchHistory.removeLast();
+            AppConfig::instance().setValue("Search/History", m_searchHistory);
+            m_searchHistoryPanel->setHistory(m_searchHistory);
+        }
+        m_searchHistoryPanel->hide();
     };
 
     // 2026-05-27 物理加固：补全 this 上下文
-    connect(m_searchEdit, &QLineEdit::returnPressed, this, [this, performSearch]() {
-        performSearch(m_searchEdit->text().trimmed());
+    connect(m_searchEdit, &QLineEdit::returnPressed, this, [this, doSearch]() {
+        doSearch(m_searchEdit->text().trimmed());
+    });
+
+    // 2026-04-xx 按照用户要求：支持标签管理模式下的实时搜索
+    // 2026-xx-xx 按照 Plan-106：防抖处理
+    connect(m_searchEdit, &QLineEdit::textChanged, this, [this, doSearch](const QString& text) {
+        if (text.isEmpty()) {
+            m_searchTimer->stop();
+            doSearch(""); // 清空时立即响应
+            return;
+        }
+        m_searchTimer->start();
+    });
+
+    connect(m_searchTimer, &QTimer::timeout, this, [this, doSearch]() {
+        doSearch(m_searchEdit->text().trimmed());
     });
     
     m_searchEdit->installEventFilter(this); // 拦截 FocusIn 事件展示历史面板
 
     // 历史面板信号对接
-    connect(m_searchHistoryPanel, &SearchHistoryPanel::historyItemClicked, this, [this, performSearch](const QString& keyword) {
+    connect(m_searchHistoryPanel, &SearchHistoryPanel::historyItemClicked, this, [this, doSearch](const QString& keyword) {
         m_searchEdit->setText(keyword);
-        performSearch(keyword);
+        doSearch(keyword);
     });
 
     connect(m_searchHistoryPanel, &SearchHistoryPanel::historyItemRemoved, this, [this](const QString& keyword) {
         m_searchHistory.removeAll(keyword);
-        QSettings settings("ArcMeta", "ArcMeta");
-        settings.setValue("Search/History", m_searchHistory);
+        AppConfig::instance().setValue("Search/History", m_searchHistory);
         m_searchHistoryPanel->setHistory(m_searchHistory);
     });
 
     connect(m_searchHistoryPanel, &SearchHistoryPanel::clearAllRequested, this, [this]() {
         m_searchHistory.clear();
-        QSettings settings("ArcMeta", "ArcMeta");
-        settings.setValue("Search/History", m_searchHistory);
+        AppConfig::instance().setValue("Search/History", m_searchHistory);
         m_searchHistoryPanel->setHistory(m_searchHistory);
     });
 
@@ -494,37 +537,79 @@ void MainWindow::initUi() {
     connect(m_metaPanel, &MetaPanel::metadataChanged, this, [this](int rating, const std::wstring& color) {
         auto indexes = m_contentPanel->getSelectedIndexes();
         for (const auto& idx : indexes) {
-            QString path = idx.data(ItemRole::PathRole).toString(); 
+            QString path = idx.data(PathRole).toString(); 
             if(path.isEmpty()) continue;
             
             if (rating != -1) {
-                // 2026-05-24 按照用户要求：彻底移除 JSON，改为中心化异步持久化
-                m_contentPanel->getProxyModel()->setData(idx, rating, RatingRole);
+                // 2026-05-24 按照用户要求：彻底移除 SCCH，改为中心化异步持久化
                 MetadataManager::instance().setRating(path.toStdWString(), rating);
             }
             if (color != L"__NO_CHANGE__") {
-                m_contentPanel->getProxyModel()->setData(idx, QString::fromStdWString(color), ColorRole);
                 MetadataManager::instance().setColor(path.toStdWString(), color);
             }
         }
     });
 
-    // 2026-06-xx 调色盘搜索联动
-    connect(m_metaPanel, &MetaPanel::searchByColor, this, [this](const QColor& color) {
-        if (m_contentPanel) {
-            m_contentPanel->search(color.name().toUpper());
+    // 2026-07-xx 按照用户要求：响应元数据面板标签批量变更信号
+    connect(m_metaPanel, &MetaPanel::tagsChanged, this, [this](const QStringList& tags) {
+        auto indexes = m_contentPanel->getSelectedIndexes();
+        for (const auto& idx : indexes) {
+            QString path = idx.data(PathRole).toString();
+            if (path.isEmpty()) continue;
+            
+            std::wstring wPath = path.toStdWString();
+            
+            MetadataManager::instance().setTags(wPath, tags);
         }
     });
 
-    // 9. 2026-03-xx 按照用户要求：响应元数据全局变更，同步刷新侧边栏计数
-    // 确保在内容面板收藏项目后，侧边栏的“收藏 (X)”数字能实时跳变
-    // 2026-05-27 物理修复：显式增加 this 上下文参数
-    // 理由：MetadataManager 可能在后台线程（如初始化扫描阶段）发射信号，
-    // 若无 context 参数，Lambda 将在发射信号的后台线程执行，导致非法线程操作 UI (refresh()) 引起崩溃。
-    connect(&MetadataManager::instance(), &MetadataManager::metaChanged, this, [this]() {
-        if (m_categoryPanel && m_categoryPanel->model()) {
-            m_categoryPanel->model()->refresh();
+    // 2026-06-xx调色盘搜索联动：将颜色喂给筛选器，由筛选器驱动过滤
+    connect(m_metaPanel, &MetaPanel::searchByColor, this, [this](const QColor& color) {
+        if (m_filterPanel) {
+            m_filterPanel->selectColor(color);
         }
+    });
+
+    // 9. 2026-03-xx 按照用户要求：响应元数据全局变更，同步刷新 UI
+    
+    // 9a. 全局内容区同步：只要元数据变了，通知内容面板刷新对应的行
+    connect(&MetadataManager::instance(), &MetadataManager::metaChanged, this, [this](const QString& path) {
+        if (path == "__RELOAD_ALL__") {
+            m_contentPanel->refreshAll();
+            return;
+        }
+        // 关键修复：通知 ContentPanel 局部更新该路径的数据
+        m_contentPanel->updateItemMetadata(path);
+
+        // 2026-06-xx 物理修复：实时刷新联动
+        // 当元数据（如颜色、备注、标签）发生变更时，如果当前选中项正好是该文件，
+        // 则强制触发元数据面板刷新，确保 UI 与后台数据物理一致。
+        auto indexes = m_contentPanel->getSelectedIndexes();
+        if (!indexes.isEmpty()) {
+            if (indexes.first().data(PathRole).toString() == path) {
+                emit m_contentPanel->selectionChanged({path});
+            }
+        }
+    });
+
+    // 9b. 侧边栏刷新防抖
+    m_sidebarRefreshTimer = new QTimer(this);
+    m_sidebarRefreshTimer->setInterval(800);
+    m_sidebarRefreshTimer->setSingleShot(true);
+
+    connect(&MetadataManager::instance(), &MetadataManager::metaChanged, this, [this](const QString& path) {
+        if (!m_categoryPanel) return;
+
+        // __RELOAD_ALL__ 信号立即刷新，其他信号防抖
+        if (path == "__RELOAD_ALL__") {
+            m_categoryPanel->requestRefresh(true);
+        } else {
+            m_sidebarRefreshTimer->start(); // 重置计时器
+        }
+    });
+
+    connect(m_sidebarRefreshTimer, &QTimer::timeout, this, [this]() {
+        if (m_categoryPanel) m_categoryPanel->requestRefresh();
     });
 
     // 10. 侧边栏点击物理项（文件预览或文件夹跳转）
@@ -533,7 +618,7 @@ void MainWindow::initUi() {
         QFileInfo fi(path);
         if (fi.isDir()) {
             // 如果是文件夹，执行界面跳转联动
-            navigateTo(path);
+            unifiedNavigateTo(path);
         } else {
             // 2026-03-xx 按照用户要求：侧边栏选中任何物理文件，立即执行即时全能预览
             m_contentPanel->previewFile(path);
@@ -553,7 +638,6 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
             qDebug() << "[Main] 检测到磁盘硬件变更，触发全量 GLOB 对账对账...";
             // 异步触发扫描，防止阻塞 UI
             (void)QtConcurrent::run([]() {
-                SyncEngine::instance().runFullScan({}, nullptr);
             });
         }
     }
@@ -567,26 +651,32 @@ void MainWindow::showEvent(QShowEvent* event) {
     qDebug() << "[Main] showEvent 触发, m_panelsInitialized =" << m_panelsInitialized;
     if (!m_panelsInitialized) {
         m_panelsInitialized = true;
+        qint64 scheduleStart = QDateTime::currentMSecsSinceEpoch();
         qDebug() << "[Main] 正在排期延迟加载任务 (QTimer::singleShot(0))...";
-        QTimer::singleShot(0, [this]() {
-            qDebug() << "[Main] 延迟加载任务开始执行";
+        QTimer::singleShot(0, [this, scheduleStart]() {
+            qint64 taskStart = QDateTime::currentMSecsSinceEpoch();
+            qDebug() << "[Main] 延迟加载任务开始执行，排期等待耗时:" << (taskStart - scheduleStart) << "ms";
+            
             if (m_categoryPanel) {
-                qDebug() << "[Main] 正在初始化 CategoryPanel...";
+                qint64 start = QDateTime::currentMSecsSinceEpoch();
                 m_categoryPanel->deferredInit();
+                qDebug() << "[PERF] CategoryPanel 初始化耗时:" << (QDateTime::currentMSecsSinceEpoch() - start) << "ms";
             }
             if (m_navPanel) {
-                qDebug() << "[Main] 正在初始化 NavPanel...";
+                qint64 start = QDateTime::currentMSecsSinceEpoch();
                 m_navPanel->deferredInit();
+                qDebug() << "[PERF] NavPanel 初始化耗时:" << (QDateTime::currentMSecsSinceEpoch() - start) << "ms";
             }
             if (m_contentPanel) {
-                qDebug() << "[Main] 正在初始化 ContentPanel...";
+                qint64 start = QDateTime::currentMSecsSinceEpoch();
                 m_contentPanel->deferredInit();
+                qDebug() << "[PERF] ContentPanel 初始化耗时:" << (QDateTime::currentMSecsSinceEpoch() - start) << "ms";
             }
             // MetaPanel 和 FilterPanel 暂时不需要延迟数据加载，因为它们通常随选中项动态刷新
             
             // 2026-04-14 按照用户要求：物理禁用"最后一个窗口关闭时退出"逻辑
             // 确保程序只能通过托盘菜单显式退出，提高驻留稳定性
-            qDebug() << "[Main] 所有核心面板数据延迟初始化完成，UI 响应已恢复";
+            qDebug() << "[PERF] 所有核心面板数据延迟加载完成，总耗时:" << (QDateTime::currentMSecsSinceEpoch() - taskStart) << "ms";
         });
     }
     
@@ -625,7 +715,7 @@ void MainWindow::mousePressEvent(QMouseEvent* event) {
     }
 
     // 原有拖动逻辑：仅标题栏区域
-    if (localPos.y() <= 32) {
+    if (localPos.y() <= 34) {
         m_isDragging = true;
         m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
         event->accept();
@@ -669,7 +759,11 @@ void MainWindow::mouseMoveEvent(QMouseEvent* event) {
 
 // 2026-05-08 按照用户要求：实现边缘resize方向检测函数
 MainWindow::ResizeDirection MainWindow::getResizeDirection(const QPoint& pos) const {
-    const int m = kResizeMargin;
+    // 按照用户建议：将感应宽度改为根据 DPI 动态计算
+    int m = kResizeMargin;
+    if (windowHandle()) {
+        m = qRound(screen()->logicalDotsPerInch() / 96.0 * (double)kResizeMargin);
+    }
     const int w = width(), h = height();
     bool left   = pos.x() < m;
     bool right  = pos.x() > w - m;
@@ -707,6 +801,24 @@ void MainWindow::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {
+    // 0. F5: 刷新当前目录
+    if (event->key() == Qt::Key_F5) {
+        if (m_contentPanel) m_contentPanel->refreshAll();
+        event->accept();
+        return;
+    }
+
+    // 0.1 Ctrl+Z / Ctrl+Shift+Z: 撤销与重做
+    if (event->key() == Qt::Key_Z && (event->modifiers() & Qt::ControlModifier)) {
+        if (event->modifiers() & Qt::ShiftModifier) {
+            UndoManager::instance().redo();
+        } else {
+            UndoManager::instance().undo();
+        }
+        event->accept();
+        return;
+    }
+
     // 1. Alt+Q: 切换窗口置顶状态
     if (event->key() == Qt::Key_Q && (event->modifiers() & Qt::AltModifier)) {
         m_btnPinTop->setChecked(!m_btnPinTop->isChecked());
@@ -730,39 +842,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
 
 // 2026-03-xx 按照用户要求：物理拦截事件以实现自定义 ToolTipOverlay 的显隐控制
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
-    // 2026-06-15 闲置感应：拦截用户交互事件，重置同步倒计时
-    if (event->type() == QEvent::MouseMove || event->type() == QEvent::MouseButtonPress || 
-        event->type() == QEvent::KeyPress || event->type() == QEvent::Wheel) {
-        if (m_idleTimer) {
-            m_idleTimer->start(); // 重新开始 30 秒计次
-        }
-    }
-
-    // 2026-05-08 按照用户要求：新增全局鼠标移动时同步更新边缘 Resize 光标
-    // 由于子控件会吃掉 MouseMove，必须在 qApp 级别拦截才能覆盖所有情况
-    if (event->type() == QEvent::MouseMove && !m_isResizing && !m_isDragging) {
-        QMouseEvent* me = static_cast<QMouseEvent*>(event);
-        QPoint localPos = mapFromGlobal(me->globalPosition().toPoint());
-        ResizeDirection dir = getResizeDirection(localPos);
-        updateCursorShape(dir);
-    }
-
-    // 2026-05-08 按照用户要求：新增鼠标离开窗口时恢复箭头光标
-    if (event->type() == QEvent::Leave && watched == this) {
-        if (!m_isResizing) setCursor(Qt::ArrowCursor);
-    }
-
-    // 2026-05-20 性能优化：同时支持 Enter/Leave 与 Hover 事件，确保标题栏按钮响应“零延迟”
-    if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) {
-        QString text = watched->property("tooltipText").toString();
-        if (!text.isEmpty()) {
-            // 物理级别禁绝原生 ToolTip，强制调用 ToolTipOverlay
-            ToolTipOverlay::instance()->showText(QCursor::pos(), text);
-        }
-    } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::Leave || event->type() == QEvent::MouseButtonPress) {
-        ToolTipOverlay::hideTip();
-    } else if (event->type() == QEvent::FocusIn && watched == m_searchEdit) {
-        // 2026-04-12 按照用户要求：搜索框获得焦点时弹出历史记录
+    // 2026-06-xx 物理修复：双击搜索框时弹出历史记录
+    if (event->type() == QEvent::MouseButtonDblClick && watched == m_searchEdit) {
         if (!m_searchHistory.isEmpty()) {
             m_searchHistoryPanel->showBelow(m_searchEdit);
         }
@@ -786,10 +867,11 @@ void MainWindow::initToolbar() {
         btn->installEventFilter(this);
 
         // 极致精简样式：无边框，仅悬停可见背景
+        // 按照要求：杜绝 rgba 蒙版，普通按钮使用 #3E3E42
         btn->setStyleSheet(
             "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-            "QPushButton:hover { background: rgba(255, 255, 255, 0.1); }"
-            "QPushButton:pressed { background: rgba(255, 255, 255, 0.2); }"
+            "QPushButton:hover { background: #3E3E42; }"
+            "QPushButton:pressed { background: #4E4E52; }"
             "QPushButton:disabled { opacity: 0.3; }"
         );
         return btn;
@@ -797,59 +879,23 @@ void MainWindow::initToolbar() {
 
     m_btnBack = createBtn("nav_prev", "");
     m_btnBack->setProperty("tooltipText", "后退");
-    m_btnBack->installEventFilter(this);
+    m_btnBack->installEventFilter(m_hoverFilter);
 
     m_btnForward = createBtn("nav_next", "");
     m_btnForward->setProperty("tooltipText", "前进");
-    m_btnForward->installEventFilter(this);
+    m_btnForward->installEventFilter(m_hoverFilter);
 
     m_btnUp = createBtn("arrow_up", "");
     m_btnUp->setProperty("tooltipText", "上级");
-    m_btnUp->installEventFilter(this);
+    m_btnUp->installEventFilter(m_hoverFilter);
 
     connect(m_btnBack, &QPushButton::clicked, this, &MainWindow::onBackClicked);
     connect(m_btnForward, &QPushButton::clicked, this, &MainWindow::onForwardClicked);
     connect(m_btnUp, &QPushButton::clicked, this, &MainWindow::onUpClicked);
 
-    // --- 路径地址栏重构 (Stack: Breadcrumb + QLineEdit) ---
-    m_pathStack = new QStackedWidget(this);
-    // 2026-03-xx 按照用户最新要求：地址栏高度还原为 32px
-    m_pathStack->setFixedHeight(32); 
-    m_pathStack->setMinimumWidth(300);
-    m_pathStack->setStyleSheet("QStackedWidget { background: #1E1E1E; border: 1px solid #444444; border-radius: 6px; }");
-
-    // A. 面包屑视图
-    m_breadcrumbBar = new BreadcrumbBar(m_pathStack);
-    m_pathStack->addWidget(m_breadcrumbBar);
-
-    // B. 编辑视图
-    m_pathEdit = new QLineEdit(m_pathStack);
-    m_pathEdit->setPlaceholderText("输入路径...");
-    // 物理对齐：修正高度为 32px 以匹配 Stack 容器，确保圆角边框完美重合
-    m_pathEdit->setFixedHeight(32);
-    m_pathEdit->setStyleSheet("QLineEdit { background: transparent; border: none; color: #EEEEEE; padding-left: 8px; }");
-    m_pathStack->addWidget(m_pathEdit);
-
-    m_pathStack->setCurrentWidget(m_breadcrumbBar);
-
-    // 交互逻辑
-    // 2026-05-27 物理加固：补全 this 上下文
-    connect(m_breadcrumbBar, &BreadcrumbBar::blankAreaClicked, this, [this]() {
-        m_pathEdit->setText(QDir::toNativeSeparators(m_currentPath));
-        m_pathStack->setCurrentWidget(m_pathEdit);
-        m_pathEdit->setFocus();
-        m_pathEdit->selectAll();
-    });
-    connect(m_pathEdit, &QLineEdit::editingFinished, this, [this]() {
-        // 只有在失去焦点或按回车后切回面包屑 (如果不是由于 confirm 跳转)
-        if (m_pathStack->currentWidget() == m_pathEdit) {
-            m_pathStack->setCurrentWidget(m_breadcrumbBar);
-        }
-    });
-    connect(m_breadcrumbBar, &BreadcrumbBar::pathClicked, this, [this](const QString& path) {
-        navigateTo(path);
-    });
-
+    // --- 路径地址栏重构 (复合 AddressBar) ---
+    m_addressBar = new AddressBar(this);
+    m_addressBar->setMinimumWidth(300); // 2026-06-xx 物理红线：地址栏最小宽度，防止被搜索框挤压
 
     // 2026-04-12 按照用户要求：搜索框容器（搜索框 + 模式切换按钮）
     m_searchContainer = new QWidget(this);
@@ -859,19 +905,22 @@ void MainWindow::initToolbar() {
     searchLayout->setSpacing(0);
 
     m_searchEdit = new QLineEdit(m_searchContainer);
-    m_searchEdit->setPlaceholderText("查找文件...");
-    m_searchEdit->setMinimumWidth(180);
-    m_searchEdit->setFixedHeight(32);
-    m_searchEdit->addAction(UiHelper::getIcon("search", QColor("#888888")), QLineEdit::LeadingPosition);
-    // 按照用户要求：移除局部/全局切换按钮，恢复搜索框 6px 完整圆角
-    m_searchEdit->setStyleSheet(
-        "QLineEdit { background: #1E1E1E; border: 1px solid #444444;"
-        "  border-radius: 6px;"
-        "  color: #EEEEEE; padding-left: 5px; }"
-        "QLineEdit:focus { border: 1px solid #378ADD; }"
-    );
+    m_searchEdit->setPlaceholderText("搜索...");
+    // 2026-06-xx 物理红线：强制锁定 230 像素，禁止脑补拉伸
+    m_searchEdit->setFixedSize(230, 32);
+    m_searchEdit->addAction(UiHelper::getIcon("search", TextMuted), QLineEdit::LeadingPosition);
+    
+    // 2026-xx-xx 工业级拨乱反正：废除手动 Action 模拟，回归原生清除按钮以确保项目视觉一致性
+    m_searchEdit->setClearButtonEnabled(true);
 
-    searchLayout->addWidget(m_searchEdit, 1);
+    m_searchEdit->setStyleSheet(QString(
+        "QLineEdit { background: %1; border: 1px solid %2;"
+        "  border-radius: 6px;"
+        "  color: %3; padding-left: 5px; padding-right: 5px; }"
+        "QLineEdit:focus { border: 1px solid %4; }"
+    ).arg(qssColor(BackgroundDeep)).arg(qssColor(BorderColor)).arg(qssColor(TextMain)).arg(qssColor(PrimaryBlue)));
+
+    searchLayout->addWidget(m_searchEdit);
 }
 
 
@@ -886,48 +935,65 @@ void MainWindow::setupSplitters() {
 
     // --- 1. 自定义标题栏 (第一行) ---
     m_titleBarWidget = new QWidget(centralC);
-    m_titleBarWidget->setFixedHeight(32);
-    // 2026-03-xx 物理回归：将分割线重新锁定在第一行下方，保持物理切割感
-    m_titleBarWidget->setStyleSheet("QWidget { background-color: #1E1E1E; border-bottom: 1px solid #333333; }");
+    m_titleBarWidget->setObjectName("TitleBar");
+    // 2026-xx-xx 按照用户要求：添加 1px 底部切割线，与全局规范对齐
+    m_titleBarWidget->setStyleSheet(QString("QWidget#TitleBar { border: none; border-bottom: 1px solid %1; background: transparent; }").arg(qssColor(BorderColor)));
+    m_titleBarWidget->setFixedHeight(34);
     m_titleBarLayout = new QHBoxLayout(m_titleBarWidget);
-    m_titleBarLayout->setContentsMargins(8, 0, 5, 0); // 右侧对齐 5px 物理边距
+    // 2026-xx-xx 按照用户要求：标题栏左侧与右侧均保持 5px 呼吸边距
+    m_titleBarLayout->setContentsMargins(5, 0, kEdgeMargin, 0); 
     m_titleBarLayout->setSpacing(8);
 
+    m_logoLabel = new QLabel(m_titleBarWidget);
+    m_logoLabel->setFixedSize(18, 18);
+    m_logoLabel->setPixmap(UiHelper::getIcon("ferrex", BrandOrange).pixmap(16, 16));
+    m_logoLabel->setAlignment(Qt::AlignCenter);
+    m_logoLabel->setStyleSheet("background: transparent; border: none;");
+    m_titleBarLayout->addWidget(m_logoLabel);
+
     m_appNameLabel = new QLabel("ArcMeta", m_titleBarWidget);
-    m_appNameLabel->setStyleSheet("color: #AAAAAA; font-size: 12px; font-weight: bold;");
+    m_appNameLabel->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold;").arg(BrandOrange.name()));
     m_titleBarLayout->addWidget(m_appNameLabel);
     m_titleBarLayout->addStretch();
 
     // --- 2. 统一导航栏 (第二行) ---
     m_navBarWidget = new QWidget(centralC);
-    m_navBarWidget->setFixedHeight(37); // 32px 内容 + 5px 上边距
-    m_navBarWidget->setStyleSheet("background: transparent; border: none;");
+    m_navBarWidget->setObjectName("NavBar");
+    m_navBarWidget->setStyleSheet("QWidget#NavBar { border: none; background: transparent; }");
+    m_navBarWidget->setFixedHeight(42); 
     
     m_navBarLayout = new QHBoxLayout(m_navBarWidget);
-    // 2026-03-xx 物理对齐：实现上下 5px 呼吸感，上边距由本布局提供，下边距由 bodyLayout 提供
-    m_navBarLayout->setContentsMargins(5, 5, 5, 0); 
+    // 右边距使用 kEdgeMargin，与 navBar/body 保持统一基准线，禁止改为0
+    m_navBarLayout->setContentsMargins(kEdgeMargin, kEdgeMargin, kEdgeMargin, kEdgeMargin); 
     m_navBarLayout->setSpacing(5);
     m_navBarLayout->setAlignment(Qt::AlignVCenter);
 
     m_navBarLayout->addWidget(m_btnBack);
     m_navBarLayout->addWidget(m_btnForward);
     m_navBarLayout->addWidget(m_btnUp);
-    m_navBarLayout->addWidget(m_pathStack, 1);
+    m_navBarLayout->addWidget(m_addressBar, 1);
+    // 2026-06-xx 物理对标：移除额外 addSpacing，直接依赖 layout 默认 5px spacing 达到精准 5 像素间距
     m_navBarLayout->addWidget(m_searchContainer);
 
     // --- 3. 主体核心容器 (物理还原：10px 全局边距包裹，确保边缘resize可用) ---
     QWidget* bodyWrapper = new QWidget(centralC);
     bodyWrapper->setStyleSheet("background: transparent;"); // 确保背景透明不遮挡阴影
     m_bodyLayout = new QVBoxLayout(bodyWrapper);
-    m_bodyLayout->setContentsMargins(5, 5, 5, 5); // 物理还原：5px 边距是 1180px 宽度计算的逻辑基础
+    // 必须与 setupSplitters() 中的初始值保持一致，禁止改为0，否则筛选面板/元数据面板右侧会贴边截断
+    m_bodyLayout->setContentsMargins(kEdgeMargin, 0, kEdgeMargin, kEdgeMargin); 
     m_bodyLayout->setSpacing(0);
 
     // --- 3. 主拆分条 (物理还原：5px 物理缝隙) ---
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
     m_mainSplitter->setHandleWidth(5); 
     m_mainSplitter->setChildrenCollapsible(false);
-    // 物理还原：严禁脑补，背景完全透明，依靠容器边框实现视觉缝隙
-    m_mainSplitter->setStyleSheet("QSplitter { background: transparent; border: none; } QSplitter::handle { background: transparent; }");
+    // 物理还原：显式设置手柄样式，增强物理切割感
+    // 2026-06-xx 物理强化：手柄背景设为 #1E1E1E，并在两侧增加深色线条，强化“切割”视觉效果
+    m_mainSplitter->setStyleSheet(QString(
+        "QSplitter { background: transparent; border: none; }"
+        "QSplitter::handle { background-color: %1; width: 5px; }"
+        "QSplitter::handle:hover { background-color: %2; }" 
+    ).arg(qssColor(BackgroundDeep)).arg(qssColor(BackgroundHover)));
 
     m_categoryPanel = new CategoryPanel(this);
     m_categoryPanel->setObjectName("SidebarContainer");
@@ -944,8 +1010,12 @@ void MainWindow::setupSplitters() {
     m_filterPanel = new FilterPanel(this);
     m_filterPanel->setObjectName("FilterContainer");
 
+    m_tagManagerView = new TagManagerView(this);
+    m_tagManagerView->hide();
+
     // 2026-05-07 按照用户要求：焦点线持久化显示，基于数据来源而非焦点位置
     connect(m_contentPanel, &ContentPanel::dataSourceChanged, this, [this](const QString& source) {
+        m_currentDataSource = source;
         // 重置所有面板高亮
         if (m_navPanel)      m_navPanel->setFocusHighlight(false);
         if (m_categoryPanel) m_categoryPanel->setFocusHighlight(false);
@@ -964,39 +1034,55 @@ void MainWindow::setupSplitters() {
     m_mainSplitter->addWidget(m_contentPanel);
     m_mainSplitter->addWidget(m_metaPanel);
     m_mainSplitter->addWidget(m_filterPanel);
+    m_mainSplitter->addWidget(m_tagManagerView);
+
+
+    // 2026-07-xx 按照用户要求：标签搜索联动
+    connect(m_tagManagerView, &TagManagerView::requestSearchTag, this, [this](const QString& tag) {
+        // 自动切回正常模式并搜索
+        if (m_categoryPanel) m_categoryPanel->selectCategory(-1); // 选中“全部数据”
+        if (m_searchEdit) m_searchEdit->setText(tag);
+        
+        // 标签跳转默认作为全局搜索处理 (不限范围)
+        QStringList paths = MetadataManager::instance().searchInCache(tag);
+        m_contentPanel->loadPaths(paths);
+    });
 
     m_bodyLayout->addWidget(m_mainSplitter);
 
     // --- 4. 底部状态栏 (0 边距) ---
     QWidget* statusBar = new QWidget(centralC);
+    statusBar->setObjectName("StatusBar");
     statusBar->setFixedHeight(28);
-    statusBar->setStyleSheet("QWidget { background-color: #252525; border-top: 1px solid #333333; }");
     QHBoxLayout* statusL = new QHBoxLayout(statusBar);
-    statusL->setContentsMargins(12, 0, 12, 0);
+    statusL->setContentsMargins(kStatusBarMargin, 0, kStatusBarMargin, 0);
     statusL->setSpacing(0);
 
     m_statusLeft = new QLabel("就绪中...", statusBar);
-    m_statusLeft->setStyleSheet("font-size: 11px; color: #B0B0B0; background: transparent;");
+    m_statusLeft->setStyleSheet(QString("font-size: 11px; color: %1; background: transparent;").arg(qssColor(TextDim)));
 
     statusL->addWidget(m_statusLeft);
     statusL->addStretch(1);
 
     // 绑定 CoreController 状态到状态栏
-    auto updateStatus = [this](const QString& text) {
-        m_statusLeft->setText(text);
+    auto updateStatus = [this]() {
+        m_statusLeft->setText(CoreController::instance().statusText());
         if (CoreController::instance().isIndexing()) {
-            m_statusLeft->setStyleSheet("font-size: 11px; color: #4FACFE; background: transparent; font-weight: bold;");
+            m_statusLeft->setStyleSheet(QString("font-size: 11px; color: %1; background: transparent; font-weight: bold;")
+                                      .arg(qssColor(PrimaryBlue)));
         } else {
-            m_statusLeft->setStyleSheet("font-size: 11px; color: #B0B0B0; background: transparent;");
+            m_statusLeft->setStyleSheet(QString("font-size: 11px; color: %1; background: transparent;")
+                                      .arg(qssColor(TextDim)));
         }
     };
     connect(&CoreController::instance(), &CoreController::statusTextChanged, this, updateStatus);
-    connect(&CoreController::instance(), &CoreController::isIndexingChanged, this, [this, updateStatus]() {
-        updateStatus(CoreController::instance().statusText());
-    });
-    updateStatus(CoreController::instance().statusText());
+    connect(&CoreController::instance(), &CoreController::isIndexingChanged, this, updateStatus);
+    updateStatus();
+
+    initDriveBar();
 
     mainL->addWidget(m_titleBarWidget);
+    mainL->addWidget(m_driveBarWidget);
     mainL->addWidget(m_navBarWidget);
     mainL->addWidget(bodyWrapper, 1);
     mainL->addWidget(statusBar);
@@ -1011,9 +1097,9 @@ void MainWindow::setupCustomTitleBarButtons() {
     QWidget* titleBarBtns = new QWidget(this);
     QHBoxLayout* layout = new QHBoxLayout(titleBarBtns);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(4);
+    layout->setSpacing(5); // 2026-xx-xx 按照用户要求：按钮高亮间距统一为 5px
 
-    auto createTitleBtn = [this](const QString& iconKey, const QString& hoverColor = "rgba(255, 255, 255, 0.1)") {
+    auto createTitleBtn = [this](const QString& iconKey, const QString& hoverColor = "#3E3E42") {
         QPushButton* btn = new QPushButton(this);
         btn->setAttribute(Qt::WA_Hover); // 2026-05-20 性能优化：必须开启 Hover 属性以触发悬停事件
         btn->setFixedSize(24, 24); // 固定 24x24px
@@ -1026,64 +1112,61 @@ void MainWindow::setupCustomTitleBarButtons() {
         btn->setStyleSheet(QString(
             "QPushButton { background: transparent; border: none; border-radius: 4px; padding: 0; }"
             "QPushButton:hover { background: %1; }"
-            "QPushButton:pressed { background: rgba(255, 255, 255, 0.2); }"
+            "QPushButton:pressed { background: #4E4E52; }"
         ).arg(hoverColor));
         return btn;
     };
 
-    m_btnSync = createTitleBtn("sync");
-    m_btnSync->setProperty("tooltipText", "无待同步任务");
-    m_btnSync->installEventFilter(this);
-
-    // 2026-06-15 按照用户要求：手动点击同步
-    connect(m_btnSync, &QPushButton::clicked, this, [this]() {
-        SyncEngine::instance().runIncrementalSync();
-        ToolTipOverlay::instance()->showText(m_btnSync->mapToGlobal(QPoint(0,0)), "正在启动延时同步...", 1500);
+    m_btnToggleDriveBar = createTitleBtn("chevrons_down");
+    m_btnToggleDriveBar->setProperty("tooltipText", "展开/收起盘符管理栏");
+    m_btnToggleDriveBar->installEventFilter(m_hoverFilter);
+    m_btnToggleDriveBar->setCheckable(true);
+    m_btnToggleDriveBar->setChecked(true);
+    connect(m_btnToggleDriveBar, &QPushButton::toggled, this, [this](bool checked) {
+        if (m_driveBarWidget) {
+            m_driveBarWidget->setVisible(checked);
+            m_btnToggleDriveBar->setIcon(UiHelper::getIcon(checked ? "chevrons_down" : "chevrons_up", QColor("#EEEEEE")));
+        }
     });
 
-    // 联动同步按钮颜色状态 (红色预警)
-    auto updateSyncBtnState = [this](bool hasPending) {
-        if (hasPending) {
-            m_btnSync->setIcon(UiHelper::getIcon("sync", QColor("#E81123"))); // 强制红色
-            m_btnSync->setProperty("tooltipText", "存在待同步元数据，请点击或等待闲置同步");
+    m_btnSync = createTitleBtn("sync");
+    m_btnSync->setProperty("tooltipText", "元数据已同步至物理文件");
+    m_btnSync->installEventFilter(m_hoverFilter);
+
+    // 2026-07-xx 按照用户要求 (Plan-121)：通过试点服务解耦同步状态展示
+    connect(&SyncStatusService::instance(), &SyncStatusService::statusUpdated, this, [this](bool syncing, int count) {
+        if (syncing) {
+            m_btnSync->setIcon(UiHelper::getIcon("sync", ErrorRed)); // 强制红色
+            m_btnSync->setProperty("tooltipText", QString("正在同步元数据 (%1 项待落盘)...").arg(count));
         } else {
-            m_btnSync->setIcon(UiHelper::getIcon("sync", QColor("#EEEEEE"))); // 恢复正常
+            m_btnSync->setIcon(UiHelper::getIcon("sync", TextMain)); // 恢复正常
             m_btnSync->setProperty("tooltipText", "元数据已同步至物理文件");
         }
-    };
-    
-    connect(&MetadataManager::instance(), &MetadataManager::pendingSyncChanged, this, updateSyncBtnState);
-    connect(&SyncEngine::instance(), &SyncEngine::syncStatusChanged, this, [this, updateSyncBtnState](bool running) {
-        if (!running) {
-            updateSyncBtnState(SyncEngine::instance().hasPendingTasks());
+    });
+
+    // 2026-06-15 按照用户要求：手动点击同步 (仅作交互反馈)
+    connect(m_btnSync, &QPushButton::clicked, this, [this]() {
+        if (SyncStatusService::instance().isSyncing()) {
+            ToolTipOverlay::instance()->showText(m_btnSync->mapToGlobal(QPoint(0,0)), "同步正在进行中...", 1500);
+        } else {
+            ToolTipOverlay::instance()->showText(m_btnSync->mapToGlobal(QPoint(0,0)), "元数据已全部落地", 1500);
         }
     });
 
-    // 启动时初始化一次状态
-    QTimer::singleShot(500, this, [this, updateSyncBtnState]() {
-        updateSyncBtnState(SyncEngine::instance().hasPendingTasks());
-    });
-
-    m_btnScan = createTitleBtn("scan");
-    m_btnScan->setProperty("tooltipText", "实时扫描与查找...");
-    m_btnScan->installEventFilter(this);
-    // 2026-05-09 按照用户要求：扫描窗口与主界面操作相互不干扰，去除父子关系
-    connect(m_btnScan, &QPushButton::clicked, this, [this]() {
-        auto* dlg = new ScanDialog(nullptr);
-        dlg->setAttribute(Qt::WA_DeleteOnClose); // 2026-05-27 物理修复：关闭后自动释放内存
-        dlg->setModal(false);
-        dlg->show();
+    m_btnLayout = createTitleBtn("layout");
+    m_btnLayout->setProperty("tooltipText", "布局管理与重置");
+    m_btnLayout->installEventFilter(m_hoverFilter);
+    connect(m_btnLayout, &QPushButton::clicked, this, [this]() {
+        QMenu menu(this);
+        UiHelper::applyMenuStyle(&menu);
+        populatePanelMenu(&menu);
+        menu.exec(m_btnLayout->mapToGlobal(QPoint(0, m_btnLayout->height())));
     });
 
     m_btnCreate = createTitleBtn("add"); // 2026-03-xx 规范化：“+”按钮图标修正
     m_btnCreate->setProperty("tooltipText", "新建...");
     QMenu* createMenu = new QMenu(m_btnCreate);
-    createMenu->setStyleSheet(
-        "QMenu { background-color: #2D2D2D; color: #EEE; border: 1px solid #444; padding: 4px; border-radius: 8px; }"
-        "QMenu::item { padding: 6px 25px 6px 10px; border-radius: 4px; font-size: 12px; }"
-        "QMenu::item:selected { background-color: #3E3E42; color: white; }"
-        "QMenu::right-arrow { image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRUVFRUVFIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBvbHlsaW5lIHBvaW50cz0iOSAxOCAxNSAxMiA5IDYiPjwvcG9seWxpbmU+PC9zdmc+); width: 12px; height: 12px; right: 8px; }"
-    );
+    UiHelper::applyMenuStyle(createMenu);
     
     QAction* actNewFolder = createMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹");
     QAction* actNewMd     = createMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown");
@@ -1107,39 +1190,40 @@ void MainWindow::setupCustomTitleBarButtons() {
 
     m_btnPinTop = createTitleBtn(m_isPinned ? "pin_vertical" : "pin_tilted");
     m_btnPinTop->setProperty("tooltipText", "置顶窗口");
-    m_btnPinTop->installEventFilter(this);
+    m_btnPinTop->installEventFilter(m_hoverFilter);
     m_btnPinTop->setCheckable(true);
     m_btnPinTop->setChecked(m_isPinned);
     if (m_isPinned) {
-        m_btnPinTop->setIcon(UiHelper::getIcon("pin_vertical", QColor("#FF551C")));
+        m_btnPinTop->setIcon(UiHelper::getIcon("pin_vertical", Style::ActiveOrange));
     }
 
     m_btnMin = createTitleBtn("minimize");
     m_btnMin->setProperty("tooltipText", "最小化");
-    m_btnMin->installEventFilter(this);
+    m_btnMin->installEventFilter(m_hoverFilter);
 
-    m_btnMax = createTitleBtn(isMaximized() ? "restore_window" : "maximize");
+    m_btnMax = createTitleBtn(isMaximized() ? "restore_line" : "maximize");
     m_btnMax->setProperty("tooltipText", "最大化/还原");
-    m_btnMax->installEventFilter(this);
+    m_btnMax->installEventFilter(m_hoverFilter);
 
-    m_btnClose = createTitleBtn("close", "#e81123"); // 初始创建
+    m_btnClose = createTitleBtn("close", qssColor(ErrorRed)); // 初始创建
     // 按照用户要求：关闭按钮持续显示红色高亮，不再仅悬停显示
-    m_btnClose->setStyleSheet(
-        "QPushButton { background-color: #E81123; border: none; border-radius: 4px; padding: 0; }"
-        "QPushButton:hover { background-color: #F1707A; }"
+    m_btnClose->setStyleSheet(QString(
+        "QPushButton { background-color: %1; border: none; border-radius: 4px; padding: 0; }"
+        "QPushButton:hover { background-color: %1; }"
         "QPushButton:pressed { background-color: #A50000; }"
-    );
+    ).arg(qssColor(ErrorRed)));
     m_btnClose->setProperty("tooltipText", "关闭项目");
-    m_btnClose->installEventFilter(this);
+    m_btnClose->installEventFilter(m_hoverFilter);
 
-    m_btnCreate->installEventFilter(this);
-    layout->addWidget(m_btnSync);
-    layout->addWidget(m_btnScan);
-    layout->addWidget(m_btnCreate);
-    layout->addWidget(m_btnPinTop);
-    layout->addWidget(m_btnMin);
-    layout->addWidget(m_btnMax);
-    layout->addWidget(m_btnClose);
+    m_btnCreate->installEventFilter(m_hoverFilter);
+    layout->addWidget(m_btnToggleDriveBar, 0, Qt::AlignVCenter);
+    layout->addWidget(m_btnSync, 0, Qt::AlignVCenter);
+    layout->addWidget(m_btnLayout, 0, Qt::AlignVCenter);
+    layout->addWidget(m_btnCreate, 0, Qt::AlignVCenter);
+    layout->addWidget(m_btnPinTop, 0, Qt::AlignVCenter);
+    layout->addWidget(m_btnMin, 0, Qt::AlignVCenter);
+    layout->addWidget(m_btnMax, 0, Qt::AlignVCenter);
+    layout->addWidget(m_btnClose, 0, Qt::AlignVCenter);
 
     // 绑定基础逻辑
     connect(m_btnMin, &QPushButton::clicked, this, &MainWindow::showMinimized);
@@ -1158,126 +1242,97 @@ void MainWindow::setupCustomTitleBarButtons() {
     connect(m_btnPinTop, &QPushButton::toggled, this, &MainWindow::onPinToggled);
 }
 
-void MainWindow::initIdleDetector() {
-    // 2026-06-15 按照用户要求：建立 30 秒闲置自动同步机制
-    m_idleTimer = new QTimer(this);
-    m_idleTimer->setInterval(30000); // 30秒
-    m_idleTimer->setSingleShot(true);
-    
-    connect(m_idleTimer, &QTimer::timeout, this, [this]() {
-        qDebug() << "[Main] 检测到系统闲置超过30秒，触发自动对账同步...";
-        SyncEngine::instance().runIncrementalSync();
-    });
 
-    // 启动闲置计时
-    m_idleTimer->start();
-    
-    // 安装全局事件过滤器以感应操作（在 QApplication 级别感应更佳，这里先按窗口级实现）
-    qApp->installEventFilter(this);
-}
+void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
+    if (url.isEmpty()) return;
+    ArcMeta::Logger::log(QString("[Main] 统一导航调度 -> %1 %2").arg(url).arg(record ? "(记录历史)" : "(不记录)"));
 
-void MainWindow::initTrayIcon() {
-    // 2026-03-xx 按照用户要求：集成系统托盘功能
-    m_trayIcon = new QSystemTrayIcon(this);
-    
-    // 2026-04-14 物理加固：锁定图标来源为 Qt 资源系统中的标准 ico
-    // 杜绝使用 windowIcon() 导致的潜在路径失效风险
-    m_trayIcon->setIcon(QIcon(":/app_icon.ico"));
-
-    // 托盘图标由于是 OS 级容器，不受 ToolTipOverlay 控制，允许保留原生或根据系统行为处理
-    m_trayIcon->setToolTip("ArcMeta");
-
-    QMenu* trayMenu = new QMenu(this);
-    trayMenu->setStyleSheet(
-        "QMenu { background-color: #2D2D2D; color: #EEE; border: 1px solid #444; padding: 4px; border-radius: 8px; }"
-        "QMenu::item { padding: 6px 25px 6px 10px; border-radius: 4px; font-size: 12px; }"
-        "QMenu::item:selected { background-color: #3E3E42; color: white; }"
-    );
-
-    QAction* showAction = trayMenu->addAction("显示主界面");
-    trayMenu->addSeparator();
-    QAction* quitAction = trayMenu->addAction("退出 ArcMeta");
-
-    connect(showAction, &QAction::triggered, this, [this]() {
-        showNormal();
-        activateWindow();
-    });
-
-    // 2026-05-11 物理加固退出逻辑：在退出前显式隐藏托盘并释放核心引擎，确保 USN 线程安全停止
-    connect(quitAction, &QAction::triggered, this, [this]() {
-        if (m_trayIcon) m_trayIcon->hide();
-        MftReader::instance().clear(); 
-        QApplication::quit();
-    });
-
-    m_trayIcon->setContextMenu(trayMenu);
-
-    // 点击托盘图标逻辑
-    connect(m_trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
-        if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) {
-            if (isVisible()) {
-                hide();
-            } else {
-                showNormal();
-                activateWindow();
-            }
-        }
-    });
-
-    m_trayIcon->show();
-}
-
-void MainWindow::navigateTo(const QString& path, bool record) {
-    if (path.isEmpty()) return;
-    qDebug() << "[Main] 执行跳转 ->" << path << (record ? "(记录历史)" : "(不记录)");
-
-    // 2026-04-12 关键协议：任何导航操作（手动输入、点击、后退、上级）都应强制重置搜索态与筛选态
-    if (m_searchEdit && !m_searchEdit->text().isEmpty()) {
-        qDebug() << "[Main] 检测到导航操作，物理清空搜索关键词残留:" << m_searchEdit->text();
+    // 1. 物理重置搜索与筛选状态
+    if (m_searchEdit) {
+        m_searchEdit->blockSignals(true);
         m_searchEdit->clear();
+        m_searchEdit->blockSignals(false);
+    }
+    
+    // 2026-07-xx 物理强化：无论搜索框原先是否为空，在导航行为发生时都必须强制重置内容面板的搜索词，
+    // 防止因代理模型中残留的旧搜索词导致新加载的目录内容被错误过滤。
+    if (m_contentPanel) {
         m_contentPanel->search("");
     }
-    
-    if (m_filterPanel) {
-        m_filterPanel->clearAllFilters();
-    }
-    
-    // 处理虚拟路径 "computer://" —— 此电脑（磁盘分区列表）
-    if (path == "computer://") {
-        m_currentPath = "computer://";
-        if (record) {
-            if (m_history.isEmpty() || m_history.last() != path) {
-                m_history.append(path);
-                m_historyIndex = static_cast<int>(m_history.size()) - 1;
-            }
-        }
-        m_pathEdit->setText("此电脑");
-        m_breadcrumbBar->setPath("computer://");
-        m_pathStack->setCurrentWidget(m_breadcrumbBar);
-        m_contentPanel->loadDirectory(""); 
-        int driveCount = static_cast<int>(QDir::drives().count());
-        m_statusLeft->setText(QString("%1 个分区").arg(driveCount));
-        updateNavButtons();
-        return;
-    }
 
-    QString normPath = QDir::toNativeSeparators(path);
-    m_currentPath = normPath;
+    if (m_filterPanel) m_filterPanel->clearAllFilters();
 
+    // 2. 压栈逻辑 (原子化)
     if (record) {
-            if (m_historyIndex < static_cast<int>(m_history.size()) - 1) {
+        if (m_historyIndex < static_cast<int>(m_history.size()) - 1) {
             m_history = m_history.mid(0, m_historyIndex + 1);
         }
-        if (m_history.isEmpty() || m_history.last() != normPath) {
-            m_history.append(normPath);
-                m_historyIndex = static_cast<int>(m_history.size()) - 1;
+        if (m_history.isEmpty() || m_history.last() != url) {
+            m_history.append(url);
+            m_historyIndex = static_cast<int>(m_history.size()) - 1;
         }
     }
-    
-    m_pathEdit->setText(normPath);
-    m_breadcrumbBar->setPath(normPath);
-    m_pathStack->setCurrentWidget(m_breadcrumbBar);
-    m_contentPanel->loadDirectory(normPath);
+
+    // 3. 协议分流加载
+    if (url.startsWith(kProtocolCategory)) {
+        // category://{id}?name={name}
+        QString params = url.mid(kProtocolCategory.length());
+        int qMark = params.indexOf('?');
+        int id = params.left(qMark == -1 ? params.length() : qMark).toInt();
+        QString name = (qMark != -1) ? params.mid(qMark + 6) : QString::number(id);
+
+        if (m_categoryPanel) {
+            m_categoryPanel->blockSignals(true);
+            m_categoryPanel->selectCategory(id);
+            m_categoryPanel->blockSignals(false);
+        }
+        if (m_contentPanel) m_contentPanel->loadCategory(id);
+        if (m_addressBar) m_addressBar->setPath("分类: " + name);
+        m_currentPath = url; // 逻辑路径
+    }
+    else if (url.startsWith(kProtocolSystem)) {
+        // system://all | trash | etc.
+        QString type = url.mid(kProtocolSystem.length());
+        if (m_categoryPanel) {
+            m_categoryPanel->blockSignals(true);
+            m_categoryPanel->selectCategoryByType(type);
+            m_categoryPanel->blockSignals(false);
+        }
+        if (m_contentPanel) {
+            m_contentPanel->setCurrentCategoryType(type);
+            m_contentPanel->loadPaths(CategoryRepo::getSystemCategoryPaths(type));
+        }
+        if (m_addressBar) m_addressBar->setPath("系统: " + type);
+        m_currentPath = url;
+    }
+    else {
+        // 物理路径 (file:// 或 原生路径)
+        QString path = url;
+        if (path.startsWith(kProtocolFile)) path = path.mid(kProtocolFile.length());
+        
+        if (path == "computer://") {
+            if (m_addressBar) m_addressBar->setPath("computer://");
+            if (m_contentPanel) m_contentPanel->loadDirectory("");
+            if (m_navPanel) m_navPanel->selectPath("computer://");
+            m_currentPath = "computer://";
+        } else {
+            QString normPath = QDir::toNativeSeparators(path);
+            if (m_addressBar) m_addressBar->setPath(normPath);
+            if (m_contentPanel) m_contentPanel->loadDirectory(normPath);
+            if (m_navPanel) m_navPanel->selectPath(normPath);
+            m_currentPath = normPath;
+        }
+    }
+
+    // 2026-07-xx 按照 Plan-118：通知筛选面板当前数据源性质
+    if (m_filterPanel && m_contentPanel) {
+        bool isMirror = !m_contentPanel->getCurrentCategoryType().isEmpty();
+        if (!isMirror && !m_currentPath.isEmpty() && m_currentPath != "computer://") {
+            isMirror = MetadataManager::isInsideManagedLibrary(m_currentPath.toStdWString());
+        }
+        m_filterPanel->setMirrorSource(isMirror);
+    }
+
     updateNavButtons();
     updateStatusBar();
 }
@@ -1285,21 +1340,27 @@ void MainWindow::navigateTo(const QString& path, bool record) {
 void MainWindow::onBackClicked() {
     if (m_historyIndex > 0) {
         m_historyIndex--;
-        navigateTo(m_history[m_historyIndex], false);
+        unifiedNavigateTo(m_history[m_historyIndex], false);
     }
 }
 
 void MainWindow::onForwardClicked() {
     if (m_historyIndex < m_history.size() - 1) {
         m_historyIndex++;
-        navigateTo(m_history[m_historyIndex], false);
+        unifiedNavigateTo(m_history[m_historyIndex], false);
     }
 }
 
 void MainWindow::onUpClicked() {
+    // 物理路径支持向上，逻辑路径默认回退至“此电脑”
+    if (m_currentPath.contains("://") && m_currentPath != "computer://") {
+        unifiedNavigateTo("computer://");
+        return;
+    }
+
     QDir dir(m_currentPath);
     if (dir.cdUp()) {
-        navigateTo(dir.absolutePath());
+        unifiedNavigateTo(dir.absolutePath());
     }
 }
 
@@ -1307,7 +1368,8 @@ void MainWindow::updateNavButtons() {
     m_btnBack->setEnabled(m_historyIndex > 0);
     m_btnForward->setEnabled(m_historyIndex < m_history.size() - 1);
     
-    bool atRoot = (m_currentPath == "computer://" || (QDir(m_currentPath).isRoot()));
+    bool isLogic = m_currentPath.contains("://");
+    bool atRoot = (m_currentPath == "computer://" || (!isLogic && QDir(m_currentPath).isRoot()));
     m_btnUp->setEnabled(!atRoot && !m_currentPath.isEmpty());
 }
 
@@ -1322,7 +1384,7 @@ void MainWindow::onStatusBarStatsUpdated(int fileCount, int folderCount, int tot
     }
     int selectedCount = uniqueRows.size();
     
-    m_statusLeft->setText(QString("%1 个项目, 已选中 %2 个").arg(totalCount).arg(selectedCount));
+    m_statusLeft->setText(QString("%1 个项目, 已选中 %2 个").arg(QString::number(totalCount)).arg(QString::number(selectedCount)));
     
     Q_UNUSED(fileCount);
     Q_UNUSED(folderCount);
@@ -1354,44 +1416,222 @@ void MainWindow::onPinToggled(bool checked) {
 
     // 更新图标和颜色 (按下置顶为品牌橙色)
     if (m_isPinned) {
-        m_btnPinTop->setIcon(UiHelper::getIcon("pin_vertical", QColor("#FF551C")));
+        m_btnPinTop->setIcon(UiHelper::getIcon("pin_vertical", Style::ActiveOrange));
     } else {
-        m_btnPinTop->setIcon(UiHelper::getIcon("pin_tilted", QColor("#EEEEEE")));
+        m_btnPinTop->setIcon(UiHelper::getIcon("pin_tilted", TextMain));
     }
 
     // 持久化存储
-    QSettings settings("ArcMeta团队", "ArcMeta");
-    settings.setValue("MainWindow/AlwaysOnTop", m_isPinned);
+    AppConfig::instance().setValue("MainWindow/AlwaysOnTop", m_isPinned);
 }
 
 void MainWindow::changeEvent(QEvent* event) {
     if (event->type() == QEvent::WindowStateChange) {
+        // 2026-06-xx 物理对标：当窗口最小化时，显式隐藏搜索历史面板
+        if (isMinimized() && m_searchHistoryPanel) {
+            m_searchHistoryPanel->hide();
+        }
+
         // 2026-04-11 按照用户要求：物理识别窗口状态，精准切换最大化/还原图标
         if (m_btnMax) {
-            QString iconKey = isMaximized() ? "restore_window" : "maximize";
+            QString iconKey = isMaximized() ? "restore_line" : "maximize";
             m_btnMax->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
         }
 
-        // 2026-06-xx 按照用户要求：最大化时保留顶部 5px 间距，防止与地址栏粘连
+        // 2026-06-xx 按照用户要求：顶部始终为 0，确保容器顶部边框作为物理切割线；无论是否最大化，左右和底部的 5px (kEdgeMargin) 留白均需保留
         if (m_bodyLayout) {
-            if (isMaximized()) {
-                m_bodyLayout->setContentsMargins(0, 5, 0, 0);
-            } else {
-                m_bodyLayout->setContentsMargins(5, 5, 5, 5);
-            }
+            m_bodyLayout->setContentsMargins(kEdgeMargin, 0, kEdgeMargin, kEdgeMargin);
         }
     }
     QMainWindow::changeEvent(event);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
-    QSettings settings("ArcMeta团队", "ArcMeta");
-    settings.setValue("MainWindow/LastPath", m_currentPath);
+    AppConfig::instance().setValue("MainWindow/LastPath", m_currentPath);
     // 2026-04-11 按照用户要求：物理保存各容器宽度状态
     if (m_mainSplitter) {
-        settings.setValue("MainWindow/SplitterState", m_mainSplitter->saveState());
+        AppConfig::instance().setValue("MainWindow/SplitterState", m_mainSplitter->saveState());
+        // 2026-07-xx 按照 Plan-63：保存面板显隐状态
+        savePanelVisibility();
     }
+    AppConfig::instance().sync();
+
+    // 2026-06-xx 物理加固：退出前强制所有分类数据落盘，彻底解决因防抖计时器导致的重启回滚问题
+    CategoryRepo::saveImmediately();
+
     QMainWindow::closeEvent(event);
+}
+
+void MainWindow::showPanelContextMenu(const QPoint& globalPos) {
+    QMenu menu(this);
+    UiHelper::applyMenuStyle(&menu);
+    populatePanelMenu(&menu);
+    menu.exec(globalPos);
+}
+
+void MainWindow::populatePanelMenu(QMenu* menu) {
+    auto addToggleAction = [&](const QString& text, QWidget* panel, bool canHide = true) {
+        QAction* action = menu->addAction(text);
+        action->setCheckable(true);
+        action->setChecked(panel->isVisible());
+        action->setEnabled(canHide);
+        // 使用 Lambda 捕获成员变量，确保连接有效
+        connect(action, &QAction::toggled, panel, [panel](bool visible) {
+            panel->setVisible(visible);
+        });
+    };
+
+    addToggleAction("显示分类栏", m_categoryPanel);
+    addToggleAction("显示目录导航", m_navPanel);
+    addToggleAction("显示内容区", m_contentPanel, false); // 核心区锁定不可隐藏
+    addToggleAction("显示元数据栏", m_metaPanel);
+    addToggleAction("显示筛选栏", m_filterPanel);
+
+    // 2. 新增重置选项
+    menu->addSeparator();
+    QAction* resetAct = menu->addAction("重置分栏");
+    connect(resetAct, &QAction::triggered, this, &MainWindow::resetSplitterLayout);
+}
+
+void MainWindow::resetSplitterLayout() {
+    // 1. 物理恢复可见性并退出特殊模式
+    m_isTagManagerMode = false;
+    m_tagManagerView->hide();
+
+    m_categoryPanel->show();
+    m_navPanel->show();
+    m_contentPanel->show();
+    m_metaPanel->show();
+    m_filterPanel->show();
+
+    // 2. 物理恢复尺寸比例 (索引 0-4)
+    QList<int> sizes;
+    sizes << 230 << 230 << 600 << 230 << 230;
+    // 如果 TagManagerView 在索引 5，需确保其 size 为 0 或处于 hide 状态
+    if (m_mainSplitter->count() > 5) sizes << 0;
+
+    m_mainSplitter->setSizes(sizes);
+
+    // 3. 清除持久化状态，防止重启后回滚旧布局
+    AppConfig::instance().remove("MainWindow/SplitterState");
+    AppConfig::instance().remove("MainWindow/PanelVisibility");
+    AppConfig::instance().sync();
+
+    ToolTipOverlay::instance()->showText(QCursor::pos(), "布局已重置为默认值", 1500);
+}
+
+void MainWindow::loadPanelVisibility() {
+    QVariant val = AppConfig::instance().getValue("MainWindow/PanelVisibility");
+    if (!val.isValid()) return;
+
+    QStringList hiddenPanels = val.toStringList();
+    if (hiddenPanels.contains("category")) m_categoryPanel->hide();
+    if (hiddenPanels.contains("nav"))      m_navPanel->hide();
+    if (hiddenPanels.contains("meta"))     m_metaPanel->hide();
+    if (hiddenPanels.contains("filter"))   m_filterPanel->hide();
+}
+
+void MainWindow::savePanelVisibility() {
+    QStringList hiddenPanels;
+    if (!m_categoryPanel->isVisible()) hiddenPanels << "category";
+    if (!m_navPanel->isVisible())      hiddenPanels << "nav";
+    if (!m_metaPanel->isVisible())     hiddenPanels << "meta";
+    if (!m_filterPanel->isVisible())   hiddenPanels << "filter";
+    
+    AppConfig::instance().setValue("MainWindow/PanelVisibility", hiddenPanels);
+}
+
+void MainWindow::initDriveBar() {
+    m_driveBarWidget = new QWidget(this);
+    m_driveBarWidget->setObjectName("DriveBar");
+    m_driveBarWidget->setFixedHeight(42);
+    m_driveBarWidget->setStyleSheet(QString(
+        "QWidget#DriveBar { background-color: %1; border-bottom: 1px solid %2; }"
+    ).arg(qssColor(BackgroundHeader)).arg(qssColor(BorderColor)));
+
+    m_driveBarLayout = new QHBoxLayout(m_driveBarWidget);
+    m_driveBarLayout->setContentsMargins(15, 5, 15, 5);
+    m_driveBarLayout->setSpacing(8);
+
+    auto drives = QDir::drives();
+    for (const QFileInfo& drive : drives) {
+        QString letter = drive.absolutePath().left(2);
+        if (letter.endsWith("/")) letter = letter.left(1) + ":";
+        
+        DriveButton* btn = new DriveButton(letter, m_driveBarWidget);
+        m_driveButtons[letter] = btn;
+        m_driveBarLayout->addWidget(btn);
+
+        connect(btn, &QPushButton::clicked, this, &MainWindow::onDriveButtonClicked);
+        btn->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(btn, &QWidget::customContextMenuRequested, this, &MainWindow::onDriveButtonContextMenu);
+        
+        // 根据托管库是否存在初始化状态
+        QString managedPath = drive.absolutePath() + "ArcMeta.Library_" + letter.left(1);
+        if (QDir(managedPath).exists()) {
+            btn->setState(DriveButton::Active);
+        } else {
+            btn->setState(DriveButton::Inactive);
+        }
+    }
+    m_driveBarLayout->addStretch();
+}
+
+void MainWindow::onDriveButtonClicked() {
+    // TODO: 盘符点击逻辑待后期安排
+    qDebug() << "[Main] Drive button clicked (TODO)";
+}
+
+void MainWindow::onDriveButtonContextMenu(const QPoint& pos) {
+    DriveButton* btn = qobject_cast<DriveButton*>(sender());
+    if (!btn) return;
+    QString letter = btn->driveLetter();
+    QString managedPath = letter + "/ArcMeta.Library_" + letter.left(1);
+
+    QMenu menu(this);
+    UiHelper::applyMenuStyle(&menu);
+    if (!QDir(managedPath).exists()) {
+        menu.addAction("创建托管文件夹")->setData(1);
+    } else {
+        menu.addAction("打开托管文件夹")->setData(2);
+        menu.addAction("重新扫描该盘")->setData(3);
+    }
+
+    QAction* act = menu.exec(btn->mapToGlobal(pos));
+    if (!act) return;
+    int val = act->data().toInt();
+    if (val == 1) {
+        if (QDir().mkpath(managedPath)) {
+            btn->setState(DriveButton::Active);
+            
+            // 2026-08-xx 物理同步：创建托管库时，同步注册逻辑分类并锚定 FRN
+            std::wstring wPath = QDir::toNativeSeparators(managedPath).toStdWString();
+            std::string fid;
+            std::wstring frnStr;
+            if (MetadataManager::fetchWinApiMetadataDirect(wPath, fid, &frnStr)) {
+                try {
+                    Category cat;
+                    cat.name = QFileInfo(managedPath).fileName().toStdWString();
+                    cat.physicalFrn = std::stoull(frnStr, nullptr, 16);
+                    cat.physicalPath = wPath;
+                    cat.color = CategoryRepo::getDefaultColor();
+                    if (CategoryRepo::add(cat)) {
+                        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
+                    }
+                } catch (...) {}
+            }
+            
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "托管库创建成功", 1500, Style::SuccessGreen);
+        }
+    } else if (val == 2) {
+        ShellHelper::openInExplorer(managedPath);
+    } else if (val == 3) {
+        // 2026-07-xx 按照 Development_Plan 2.1：“重新扫描该盘”是指扫描该盘符下的“ArcMeta.Library_[盘符]”文件夹里所有的数据
+        if (QDir(managedPath).exists()) {
+            MetadataManager::instance().markAsRegistered(managedPath.toStdWString());
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "已开始重新扫描托管库", 1500, QColor("#378ADD"));
+        }
+    }
 }
 
 } // namespace ArcMeta

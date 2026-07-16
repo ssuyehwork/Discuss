@@ -2,6 +2,7 @@
 #include "MftReader.h"
 #include <QDebug>
 #include <winioctl.h>
+#include <cstring> // 引入标准内存操作，用于安全的 memcpy
 
 namespace ArcMeta {
 
@@ -69,11 +70,28 @@ void UsnWatcher::run() {
     while (!m_stopRequested.load()) {
         if (!DeviceIoControl(m_hVolume, FSCTL_READ_USN_JOURNAL, &readData, sizeof(readData), buffer.get(), bufferSize, &bytesReturned, NULL)) {
             DWORD err = GetLastError();
-            // 方案二：引入 USN 自愈探测。若 Journal 失效或被覆盖，执行重置
-            if (err == ERROR_JOURNAL_DELETE_IN_PROGRESS || err == ERROR_JOURNAL_NOT_ACTIVE || err == ERROR_INVALID_PARAMETER) {
-                qDebug() << "[UsnWatcher] 检测到 Journal 失效，执行自愈重置..." << QString::fromStdWString(m_volume);
-                readData.StartUsn = 0;
-                m_lastUsn = 0;
+            
+            // 引入 USN 自愈探测。若 Journal 失效、重建，或者因历史数据被覆盖截断 (ERROR_JOURNAL_ENTRY_DELETED = 1181) 执行重置
+            if (err == ERROR_JOURNAL_DELETE_IN_PROGRESS || 
+                err == ERROR_JOURNAL_NOT_ACTIVE || 
+                err == ERROR_INVALID_PARAMETER ||
+                err == ERROR_JOURNAL_ENTRY_DELETED) {
+                
+                qDebug() << "[UsnWatcher] 检测到 Journal 失效或被截断，执行自愈重置... 错误码:" << err << QString::fromStdWString(m_volume);
+                
+                // 自愈核心：必须重新查询当前的合法 JournalID
+                USN_JOURNAL_DATA_V0 newJournalData;
+                DWORD queryBytes;
+                if (DeviceIoControl(m_hVolume, FSCTL_QUERY_USN_JOURNAL, NULL, 0, &newJournalData, sizeof(newJournalData), &queryBytes, NULL)) {
+                    readData.UsnJournalID = newJournalData.UsnJournalID;
+                    // 由于旧的记录已被覆盖/丢失，将监控起点重置为当前最新位置
+                    readData.StartUsn = newJournalData.NextUsn;
+                    m_lastUsn = readData.StartUsn;
+                    qDebug() << "[UsnWatcher] 自愈重置成功。新 JournalID:" << newJournalData.UsnJournalID << "新 StartUsn:" << readData.StartUsn;
+                } else {
+                    readData.StartUsn = 0;
+                    m_lastUsn = 0;
+                }
             }
             
             // 出错时小步长等待，确保可及时退出
@@ -91,21 +109,29 @@ void UsnWatcher::run() {
         uint8_t* pEnd = buffer.get() + bytesReturned;
 
         std::vector<uint8_t*> updateBatch; // 存储原始指针以保留版本信息
-        while (pRecord < pEnd) {
+        while (pRecord < pEnd && !m_stopRequested.load()) {
             USN_RECORD_COMMON_HEADER* header = reinterpret_cast<USN_RECORD_COMMON_HEADER*>(pRecord);
             
             // 工业级优化：优先采用批量处理模式
             if (header->MajorVersion == 2 || header->MajorVersion == 3) {
-                uint32_t reason = (header->MajorVersion == 2) ? 
-                    reinterpret_cast<USN_RECORD_V2*>(pRecord)->Reason : 
-                    reinterpret_cast<USN_RECORD_V3*>(pRecord)->Reason;
+                uint32_t reason = 0;
+                uint64_t frn = 0;
+
+                // 规避 C++ 严格别名规则（Strict Aliasing）漏洞，避免未定义行为
+                if (header->MajorVersion == 2) {
+                    USN_RECORD_V2* v2 = reinterpret_cast<USN_RECORD_V2*>(pRecord);
+                    reason = v2->Reason;
+                    frn = v2->FileReferenceNumber;
+                } else {
+                    USN_RECORD_V3* v3 = reinterpret_cast<USN_RECORD_V3*>(pRecord);
+                    reason = v3->Reason;
+                    // 安全拷贝 128位文件号字段的前 8字节
+                    std::memcpy(&frn, &v3->FileReferenceNumber, sizeof(uint64_t));
+                }
                 
                 if (reason & (USN_REASON_FILE_CREATE | USN_REASON_DATA_OVERWRITE | USN_REASON_BASIC_INFO_CHANGE | USN_REASON_RENAME_NEW_NAME)) {
                     updateBatch.push_back(pRecord);
                 } else if (reason & USN_REASON_FILE_DELETE) {
-                    uint64_t frn = (header->MajorVersion == 2) ? 
-                        reinterpret_cast<USN_RECORD_V2*>(pRecord)->FileReferenceNumber : 
-                        *reinterpret_cast<uint64_t*>(&reinterpret_cast<USN_RECORD_V3*>(pRecord)->FileReferenceNumber);
                     MftReader::instance().removeEntryByFrn(m_volume, frn);
                 }
             }
@@ -113,7 +139,7 @@ void UsnWatcher::run() {
         }
 
         if (!updateBatch.empty()) {
-            // 2026-06-xx 工业级 UI 饥饿修复：
+            // 工业级 UI 饥饿修复：
             // 如果批次过大，进行分片处理，并在分片间强制释放写锁，给 GUI 线程留出渲染时间
             const size_t chunkSize = 1000;
             for (size_t i = 0; i < updateBatch.size(); i += chunkSize) {
@@ -133,29 +159,32 @@ void UsnWatcher::run() {
     }
 }
 
+// 维持 handleRecord 原始函数签名不变，内部安全重构，规避对 v3 指针的直接解引用
 void UsnWatcher::handleRecord(USN_RECORD_V2* pRecord) {
-    USN_RECORD_COMMON_HEADER* header = reinterpret_cast<USN_RECORD_COMMON_HEADER*>(pRecord);
-    uint32_t reason;
-    uint64_t frn;
+    if (!pRecord) return;
+
+    uint8_t* pRaw = reinterpret_cast<uint8_t*>(pRecord);
+    USN_RECORD_COMMON_HEADER* header = reinterpret_cast<USN_RECORD_COMMON_HEADER*>(pRaw);
+    uint32_t reason = 0;
+    uint64_t frn = 0;
 
     if (header->MajorVersion == 2) {
         reason = pRecord->Reason;
         frn = pRecord->FileReferenceNumber;
     } else if (header->MajorVersion == 3) {
-        USN_RECORD_V3* v3 = reinterpret_cast<USN_RECORD_V3*>(pRecord);
+        USN_RECORD_V3* v3 = reinterpret_cast<USN_RECORD_V3*>(pRaw);
         reason = v3->Reason;
-        frn = *reinterpret_cast<uint64_t*>(&v3->FileReferenceNumber);
-    } else return;
+        std::memcpy(&frn, &v3->FileReferenceNumber, sizeof(uint64_t));
+    } else {
+        return;
+    }
 
     // 仅更新 MftReader 内存 SoA，不直接操作数据库
-    if (reason & (USN_REASON_FILE_CREATE | USN_REASON_DATA_OVERWRITE | USN_REASON_BASIC_INFO_CHANGE)) {
-        MftReader::instance().updateEntryFromUsn(reinterpret_cast<uint8_t*>(pRecord), m_volume);
+    if (reason & (USN_REASON_FILE_CREATE | USN_REASON_DATA_OVERWRITE | USN_REASON_BASIC_INFO_CHANGE | USN_REASON_RENAME_NEW_NAME)) {
+        MftReader::instance().updateEntryFromUsn(pRaw, m_volume);
     }
     else if (reason & USN_REASON_FILE_DELETE) {
         MftReader::instance().removeEntryByFrn(m_volume, frn);
-    }
-    else if (reason & USN_REASON_RENAME_NEW_NAME) {
-        MftReader::instance().updateEntryFromUsn(reinterpret_cast<uint8_t*>(pRecord), m_volume);
     }
 }
 

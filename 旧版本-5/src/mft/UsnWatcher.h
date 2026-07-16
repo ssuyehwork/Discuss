@@ -6,8 +6,7 @@
 #include <string>
 #include <atomic>
 #include <memory>
-#include <windows.h>
-#include <winioctl.h>
+#include "MftReader.h"
 #include <QString>
 #include <QThread>
 #include <QList>
@@ -38,6 +37,7 @@ public:
     virtual ~UsnWatcher();
 
     void stop();
+    bool isStopped() const { return m_stopRequested.load(); }
 
 protected:
     void run() override;

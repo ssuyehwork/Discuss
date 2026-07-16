@@ -1,9 +1,10 @@
 #include "NavPanel.h"
 #include "UiHelper.h"
+#include "Logger.h"
 #include "TreeItemDelegate.h"
 #include "DropTreeView.h"
 #include "ContentPanel.h"
-#include "../meta/AmMetaJson.h"
+#include "../core/AppConfig.h"
 #include <QHeaderView>
 #include <QScrollBar>
 #include <QLabel>
@@ -14,7 +15,12 @@
 #include <QIcon>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QPushButton>
 #include <QPointer>
+#include <QMenu>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonDocument>
 #include <QtConcurrent>
 #include <QApplication>
 
@@ -37,6 +43,8 @@ NavPanel::NavPanel(QWidget* parent)
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
 
+    // 2026-07-xx 按照 Plan-63：启用右键菜单
+    setContextMenuPolicy(Qt::CustomContextMenu);
     initUi();
 }
 
@@ -88,6 +96,23 @@ void NavPanel::deferredInit() {
         }
         qDebug() << "[NavPanel] 磁盘图标填充完成";
     });
+
+    // 延迟加载收藏夹
+    QTimer::singleShot(100, this, &NavPanel::loadFavorites);
+
+    // 2026-xx-xx 按照 Plan-107：按内容自适应 + 从 AppConfig 恢复持久化比例
+    if (m_splitter) {
+        QByteArray splitterState = AppConfig::instance()
+            .getValue("NavPanel/SplitterState").toByteArray();
+        if (!splitterState.isEmpty()) {
+            m_splitter->restoreState(splitterState);
+        } else {
+            // 默认：磁盘树占 2/3，收藏夹占 1/3
+            m_splitter->setStretchFactor(0, 2);
+            m_splitter->setStretchFactor(1, 1);
+        }
+    }
+
     qDebug() << "[NavPanel] deferredInit 同步部分执行完毕";
 }
 
@@ -103,11 +128,10 @@ void NavPanel::initUi() {
     m_focusLine->hide(); // 初始隐藏
     m_mainLayout->addWidget(m_focusLine);
 
-    // 面板标题 (还原旧版架构：Layout + Icon + Text)
+    // 面板标题 (2026-xx-xx 按照 Plan-96：作为顶层固定标题)
     QWidget* header = new QWidget(this);
     header->setObjectName("ContainerHeader");
     header->setFixedHeight(32);
-    // 重新注入标题栏样式，确保背景色和边框还原
     header->setStyleSheet(
         "QWidget#ContainerHeader {"
         "  background-color: #252526;"
@@ -115,8 +139,8 @@ void NavPanel::initUi() {
         "}"
     );
     QHBoxLayout* headerLayout = new QHBoxLayout(header);
-    headerLayout->setContentsMargins(15, 2, 15, 0); // 严格还原 15px 左右边距，顶部 2px 偏移以垂直居中
-    headerLayout->setSpacing(8);
+    headerLayout->setContentsMargins(15, 0, 5, 0);
+    headerLayout->setSpacing(5);
 
     QLabel* iconLabel = new QLabel(header);
     iconLabel->setPixmap(UiHelper::getIcon("list_ul", QColor("#2ecc71"), 18).pixmap(18, 18));
@@ -126,60 +150,94 @@ void NavPanel::initUi() {
     titleLabel->setStyleSheet("color: #2ecc71; font-size: 13px; font-weight: bold; background: transparent; border: none;");
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
-
     m_mainLayout->addWidget(header);
 
-    // 核心修正：为列表内容包裹容器，恢复旧版 (15, 8, 15, 8) 的呼吸边距
-    QWidget* contentWrapper = new QWidget(this);
-    contentWrapper->setStyleSheet("background: transparent; border: none;");
-    QVBoxLayout* contentLayout = new QVBoxLayout(contentWrapper);
-    contentLayout->setContentsMargins(15, 8, 15, 8);
-    contentLayout->setSpacing(0);
+    // 2026-xx-xx 按照 Plan-107：物理还原 QSplitter 弹性架构
+    m_splitter = new QSplitter(Qt::Vertical, this);
+    m_splitter->setHandleWidth(1);
+    m_splitter->setStyleSheet("QSplitter::handle { background: #333333; }");
 
-    // 物理还原：使用自定义视图以支持无快照拖拽
+    // --- 磁盘树 ---
     m_treeView = new DropTreeView(this);
-    m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_treeView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_treeView->setHeaderHidden(true);
     m_treeView->setAnimated(true);
-    
-    // 物理还原：20px 缩进以对齐三角形图标
     m_treeView->setIndentation(20);
-    
-    // 物理修正：禁用编辑触发，防止双击重命名
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    
-    // 物理还原：双击锁定为伸展或折叠
     m_treeView->setExpandsOnDoubleClick(true);
-    
-    // 增强：开启拖拽收藏功能
     m_treeView->setDragEnabled(true);
     m_treeView->setDragDropMode(QAbstractItemView::DragOnly);
-    
-    m_treeView->setItemDelegate(new TreeItemDelegate(this));
+    m_treeView->setItemDelegate(new TreeItemDelegate(this, false));
+    // 物理恢复：允许内部滚动
+    m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     m_model = new QStandardItemModel(this);
     m_treeView->setModel(m_model);
-    connect(m_treeView, &QTreeView::expanded, this, &NavPanel::onItemExpanded);
 
-    // 树形控件样式美化
-    // 2026-03-xx 按照用户要求：同步左侧“数据分类”样式，为三角形图标添加 padding 以实现清秀感，杜绝粗大感
-    m_treeView->setStyleSheet(
-        "QTreeView { background-color: transparent; border: none; font-size: 12px; outline: none; }"
+    // --- 分组：收藏夹 ---
+    QVBoxLayout* favLayout = nullptr;
+    QWidget* favGroup = buildGroup("收藏夹", UiHelper::getIcon("star_filled", QColor("#FDB70A"), 18), QColor("#FDB70A"), favLayout);
+
+    m_favoriteView = new DropTreeView(this);
+    m_favoriteView->setHeaderHidden(true);
+    m_favoriteView->setIndentation(0);
+    m_favoriteView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_favoriteView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_favoriteView->setDragEnabled(true);
+    m_favoriteView->setAcceptDrops(true);
+    m_favoriteView->setDropIndicatorShown(true);
+    m_favoriteView->setDefaultDropAction(Qt::MoveAction);
+    m_favoriteView->setDragDropMode(QAbstractItemView::DragDrop);
+    // 物理恢复：允许内部滚动
+    m_favoriteView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_favoriteView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_favoriteView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    m_favoriteModel = new QStandardItemModel(this);
+    m_favoriteView->setModel(m_favoriteModel);
+    favLayout->addWidget(m_favoriteView);
+
+    // 将各组件加入 Splitter
+    m_splitter->addWidget(m_treeView);
+    m_splitter->addWidget(favGroup);
+
+    m_mainLayout->addWidget(m_splitter, 1);
+
+    // 样式美化
+    QString arrowRight = UiHelper::getSvgTempFilePath("arrow_right", QColor("#3498db"));
+    QString arrowDown  = UiHelper::getSvgTempFilePath("arrow_down",  QColor("#3498db"));
+    QString treeStyle = QString(
+        "QTreeView { background-color: transparent; border: none; font-size: 12px; outline: none; padding-left: 15px; }"
         "QTreeView::item { height: 28px; padding-left: 0px; color: #EEEEEE; }"
-        
-        "/* 物理还原：复原三角形折叠图标，增加 padding 以实现极致精简视觉 */"
-        "QTreeView::branch:has-children:closed { image: url(:/icons/arrow_right.svg); padding: 4px; }"
-        "QTreeView::branch:has-children:open   { image: url(:/icons/arrow_down.svg); padding: 4px; }"
-        "QTreeView::branch:has-children:closed:has-siblings { image: url(:/icons/arrow_right.svg); padding: 4px; }"
-        "QTreeView::branch:has-children:open:has-siblings   { image: url(:/icons/arrow_down.svg); padding: 4px; }"
-    );
+        "QTreeView::branch { width: 20px; }"
+        "QTreeView::branch:has-children:closed { image: url(\"%1\"); }"
+        "QTreeView::branch:has-children:open   { image: url(\"%2\"); }"
+    ).arg(arrowRight, arrowDown);
 
+    m_treeView->setStyleSheet(treeStyle);
+    m_favoriteView->setStyleSheet(treeStyle);
 
+    // 信号连接
+    connect(m_treeView, &QTreeView::expanded, this, &NavPanel::onItemExpanded);
     connect(m_treeView, &QTreeView::clicked, this, &NavPanel::onTreeClicked);
 
-    contentLayout->addWidget(m_treeView);
-    m_mainLayout->addWidget(contentWrapper, 1);
+    connect(m_favoriteView, &QTreeView::clicked, this, &NavPanel::onFavoriteClicked);
+    connect(m_favoriteView, &QWidget::customContextMenuRequested, this, &NavPanel::onFavoriteContextMenu);
+    connect(m_favoriteView, &DropTreeView::pathsDropped, this, &NavPanel::onPathsDroppedToFavorite);
+    
+    // 收藏夹模型监听
+    auto updateFavAndSave = [this](){ saveFavorites(); };
+    connect(m_favoriteModel, &QStandardItemModel::rowsMoved, this, updateFavAndSave);
+    connect(m_favoriteModel, &QStandardItemModel::rowsInserted, this, updateFavAndSave);
+    connect(m_favoriteModel, &QStandardItemModel::rowsRemoved, this, updateFavAndSave);
+
+    // 监听 Splitter 变化并持久化
+    connect(m_splitter, &QSplitter::splitterMoved, this, [this]() {
+        AppConfig::instance().setValue(
+            "NavPanel/SplitterState",
+            m_splitter->saveState());
+    });
 }
 
 /**
@@ -213,6 +271,99 @@ void NavPanel::onTreeClicked(const QModelIndex& index) {
     }
 }
 
+void NavPanel::onFavoriteClicked(const QModelIndex& index) {
+    QString path = index.data(Qt::UserRole + 1).toString();
+    if (path.isEmpty()) return;
+
+    QFileInfo fi(path);
+    if (fi.isDir()) {
+        emit directorySelected(path);
+    } else {
+        // 文件收藏：跳转到父目录并请求定位文件
+        emit requestLocateFile(path);
+    }
+}
+
+void NavPanel::onFavoriteContextMenu(const QPoint& pos) {
+    QModelIndex index = m_favoriteView->indexAt(pos);
+    if (!index.isValid()) return;
+
+    QMenu menu(this);
+    UiHelper::applyMenuStyle(&menu);
+
+    QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "取消收藏");
+    connect(removeAct, &QAction::triggered, this, [this, index]() {
+        m_favoriteModel->removeRow(index.row());
+        // 信号已连接到 saveFavorites()
+    });
+
+    menu.exec(m_favoriteView->viewport()->mapToGlobal(pos));
+}
+
+void NavPanel::onPathsDroppedToFavorite(const QStringList& paths, const QModelIndex& target) {
+    Q_UNUSED(target);
+    for (const QString& path : paths) {
+        addFavoriteItem(path);
+    }
+    saveFavorites();
+}
+
+void NavPanel::loadFavorites() {
+    if (!m_favoriteModel) return;
+    m_favoriteModel->clear();
+
+    QVariant val = AppConfig::instance().getValue("NavPanel/Favorites");
+    if (!val.isValid()) return;
+
+    QJsonDocument doc = QJsonDocument::fromJson(val.toByteArray());
+    if (!doc.isArray()) return;
+
+    QJsonArray arr = doc.array();
+    for (int i = 0; i < arr.size(); ++i) {
+        QJsonObject obj = arr.at(i).toObject();
+        QString path = obj.value("path").toString();
+        if (!path.isEmpty()) {
+            addFavoriteItem(path);
+        }
+    }
+}
+
+void NavPanel::saveFavorites() {
+    if (!m_favoriteModel) return;
+
+    QJsonArray arr;
+    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+        QStandardItem* item = m_favoriteModel->item(i);
+        QString path = item->data(Qt::UserRole + 1).toString();
+        
+        QJsonObject obj;
+        obj.insert("path", path);
+        arr.append(obj);
+    }
+
+    QJsonDocument doc(arr);
+    AppConfig::instance().setValue("NavPanel/Favorites", doc.toJson(QJsonDocument::Compact));
+}
+
+void NavPanel::addFavoriteItem(const QString& path) {
+    // 检查重复
+    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+        if (m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString() == path) {
+            return;
+        }
+    }
+
+    QFileInfo fi(path);
+    if (!fi.exists()) return;
+
+    QIcon icon = UiHelper::getFileIcon(path, 18);
+    QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? path : fi.fileName());
+    item->setData(path, Qt::UserRole + 1);
+    
+    // 物理红线：收藏项不再显示子节点（扁平化展示）
+    m_favoriteModel->appendRow(item);
+}
+
 void NavPanel::onItemExpanded(const QModelIndex& index) {
     QStandardItem* item = m_model->itemFromIndex(index);
     if (!item) return;
@@ -221,6 +372,72 @@ void NavPanel::onItemExpanded(const QModelIndex& index) {
     if (item->rowCount() == 1 && item->child(0)->text() == "Loading...") {
         fetchChildDirs(item);
     }
+}
+
+void NavPanel::updateTreeHeight() {
+    // 2026-xx-xx 按照 Plan-107：废弃手动高度计算，解锁 Splitter 自由拉伸
+}
+
+void NavPanel::updateFavoriteHeight() {
+    // 2026-xx-xx 按照 Plan-107：废弃手动高度计算
+}
+
+QWidget* NavPanel::buildGroup(const QString& title, const QIcon& icon, const QColor& color, QVBoxLayout*& outContentLayout) {
+    QWidget* wrapper = new QWidget(this);
+    wrapper->setAttribute(Qt::WA_StyledBackground, true);
+    wrapper->setStyleSheet("background: transparent;");
+    QVBoxLayout* wl = new QVBoxLayout(wrapper);
+    wl->setContentsMargins(0, 0, 0, 0);
+    wl->setSpacing(0);
+
+    QWidget* hdrRow = new QWidget(wrapper);
+    hdrRow->setObjectName("GroupHdrRow");
+    hdrRow->setFixedHeight(32);
+    hdrRow->setAttribute(Qt::WA_StyledBackground, true);
+    hdrRow->setStyleSheet(
+        "QWidget#GroupHdrRow {"
+        "  background: #252526;"
+        "  border-bottom: 1px solid #333333;"
+        "  border-top: 1px solid #333333;"
+        "}");
+
+    QHBoxLayout* hdrLayout = new QHBoxLayout(hdrRow);
+    hdrLayout->setContentsMargins(15, 0, 5, 0);
+    hdrLayout->setSpacing(5);
+
+    QLabel* iconLabel = new QLabel(hdrRow);
+    iconLabel->setPixmap(icon.pixmap(18, 18));
+    hdrLayout->addWidget(iconLabel);
+
+    QPushButton* hdrBtn = new QPushButton(title, hdrRow);
+    hdrBtn->setCheckable(false);
+    hdrBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    hdrBtn->setFixedHeight(32);
+    hdrBtn->setCursor(Qt::PointingHandCursor);
+    hdrBtn->setStyleSheet(QString(
+        "QPushButton {"
+        "  background: transparent;"
+        "  border: none;"
+        "  color: %1;"
+        "  font-size: 13px;"
+        "  font-weight: bold;"
+        "  text-align: left;"
+        "  padding: 0px;"
+        "  margin: 0px;"
+        "}"
+    ).arg(color.name()));
+    hdrLayout->addWidget(hdrBtn);
+
+    QWidget* content = new QWidget(wrapper);
+    content->setAttribute(Qt::WA_StyledBackground, true);
+    content->setStyleSheet("background: transparent;");
+    outContentLayout = new QVBoxLayout(content);
+    outContentLayout->setContentsMargins(0, 0, 0, 0);
+    outContentLayout->setSpacing(0);
+
+    wl->addWidget(hdrRow);
+    wl->addWidget(content, 1);
+    return wrapper;
 }
 
 /**
@@ -249,11 +466,8 @@ void NavPanel::fetchChildDirs(QStandardItem* parent) {
             results << DirInfo{info.fileName(), info.absoluteFilePath(), hasSub};
         }
 
-        // 2026-06-xx 按照视觉要求：检测目录下是否存在 .am_meta.json 以点亮 UI
-        bool hasJson = QFileInfo(path + "/.am_meta.json").exists();
-
         // 投递回主线程进行 UI 更新
-        QMetaObject::invokeMethod(qApp, [this, pIdx, results, hasJson]() {
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [this, pIdx, results]() {
             if (!pIdx.isValid()) return;
             QStandardItem* safeParent = m_model->itemFromIndex(pIdx);
             if (!safeParent) return;
@@ -261,32 +475,10 @@ void NavPanel::fetchChildDirs(QStandardItem* parent) {
             safeParent->removeRows(0, safeParent->rowCount());
             
             for (const auto& info : results) {
-                // 2026-06-xx 物理修复：在导航面板应用“受控状态”视觉
-                // 逻辑：基于本地 JSON 判定录入状态与置顶状态
-                bool isManaged = false;
-                bool isPinned = false;
-                if (hasJson) {
-                    AmMetaJson amJson(QFileInfo(info.absPath).absolutePath().toStdWString());
-                    if (amJson.load()) {
-                        auto& items = amJson.items();
-                        std::wstring wName = info.name.toStdWString();
-                        if (items.count(wName)) {
-                            isManaged = true;
-                            isPinned = items.at(wName).pinned;
-                        }
-                    }
-                }
-
                 QIcon folderIcon = UiHelper::getFileIcon(info.absPath, 18);
                 QStandardItem* child = new QStandardItem(folderIcon, info.name);
                 child->setData(info.absPath, Qt::UserRole + 1);
                 
-                // 2026-06-xx 按照要求：注入状态角色。
-                // InDatabaseRole 用于对勾逻辑，IsLockedRole 用于置顶逻辑（两者在 Delegate 互斥）
-                // 物理修复：校准作用域，ItemRole 位于 ArcMeta 空间而非 ContentPanel 类
-                child->setData(isManaged, InDatabaseRole);
-                child->setData(isPinned, IsLockedRole);
-
                 if (info.hasSub) {
                     child->appendRow(new QStandardItem("Loading..."));
                 }

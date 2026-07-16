@@ -162,6 +162,18 @@ public:
      */
     double getProgressFromDb(const std::wstring& folderPath);
 
+    /**
+     * @brief 判定指定目录在缓存中是否存在子项 (Plan-124)
+     * 依靠 m_parentToChildren 索引实现 O(1) 判定，用于废除物理磁盘空判定
+     */
+    bool hasChildrenInCache(const std::wstring& folderPath);
+
+    /**
+     * @brief 从缓存中获取指定目录的直接子项 (Plan-124)
+     * 返回路径与元数据的副本，调用者无需在耗时操作中持有锁
+     */
+    std::vector<std::pair<std::wstring, RuntimeMeta>> getChildrenFromCache(const std::wstring& folderPath);
+
     void ensureActivated(const std::wstring& nPath);
 
     void setRating(const std::wstring& path, int rating, bool notify = true);
@@ -172,6 +184,17 @@ public:
     void setURL(const std::wstring& path, const std::wstring& url, bool notify = true);
     void setEncrypted(const std::wstring& path, bool encrypted, bool notify = true);
     void setInvalid(const std::wstring& path, bool invalid, bool notify = true);
+
+    /**
+     * @brief 2026-08-xx 按照 Plan-128：递归标记指定目录及其子项为失效
+     */
+    void setInvalidRecursive(const std::wstring& path, bool invalid);
+
+    /**
+     * @brief 2026-08-xx 按照 Plan-128：根据物理 FRN 标记项失效
+     */
+    void setInvalidByFrn(uint64_t frn, const std::wstring& volSerial, bool invalid);
+
     void setManaged(const std::wstring& path, bool managed, bool notify = true);
     void setPalettes(const std::wstring& path, const QVector<QPair<QColor, float>>& palettes, bool notify = true);
 
@@ -195,6 +218,13 @@ public:
 
     void renameItem(const std::wstring& oldPath, const std::wstring& newPath);
     void removeMetadataSync(const std::wstring& path);
+
+    /**
+     * @brief 2026-08-xx 按照 Plan-128：高性能批量删除元数据
+     * 支持内存单事务与磁盘单任务大事务，解决大规模删除导致的 I/O 阻塞。
+     */
+    void removeMetadataBatchSync(const QStringList& paths);
+
     void markAsTrash(const std::wstring& path, bool isTrash, const std::wstring& origPath = L"");
     void setTrash(const std::wstring& path, bool isTrash);
     void deletePermanently(const std::wstring& path);
@@ -329,6 +359,11 @@ private:
 
     std::unordered_map<std::wstring, RuntimeMeta> m_cache;
     std::unordered_map<std::string, std::wstring> m_fidToPath;
+
+    // 2026-xx-xx 按照 Plan-124：快速层级倒排索引与进度缓存
+    // Key: 标准化父级目录路径 (结尾不含斜杠), Value: 直接子项的完整标准化路径集合
+    std::unordered_map<std::wstring, std::vector<std::wstring>> m_parentToChildren;
+    std::unordered_map<std::wstring, double> m_folderProgressCache;
 
     // 2026-07-xx 隔离式倒排索引：物理隔离文件、文件夹及后缀
     // 1. 仅文件 (Key: L"resume.pdf", Value: file_ids)

@@ -140,16 +140,17 @@ void MftReader::clear() {
         m_isInitialized = false; 
     }
 
-    // 2. 将耗时的停止、存盘、释放逻辑转移至后台线程
+    // 2. [Plan-130] 优化退出响应性：主线程同步停止监控线程，确保及时释放卷句柄
+    std::vector<UsnWatcher*> toStop;
+    {
+        QWriteLocker lock(&m_dataLock);
+        toStop = std::move(m_watchers);
+        m_watchers.clear();
+    }
+    for (auto* w : toStop) { if (w) { w->stop(); delete w; } }
+
+    // 3. 将后续耗时的存盘与释放逻辑转移至后台线程
     (void)QtConcurrent::run([this]() {
-        // A. 停止所有监控线程 (防止产生新的脏数据)
-        std::vector<UsnWatcher*> toStop;
-        {
-            QWriteLocker lock(&m_dataLock);
-            toStop = std::move(m_watchers);
-            m_watchers.clear();
-        }
-        for (auto* w : toStop) { if (w) { w->stop(); delete w; } }
 
         // B. 等待正在进行的异步写盘任务结束
         while (m_is_saving.load(std::memory_order_acquire)) {
@@ -619,6 +620,16 @@ int MftReader::getIndexByKey(uint64_t compositeKey) const {
     QReadLocker lock(&m_dataLock);
     auto it = m_frn_to_idx.find(compositeKey);
     return (it != m_frn_to_idx.end()) ? (int)it->second : -1;
+}
+
+uint64_t MftReader::getParentFrnByFrn(uint64_t frn, int driveIdx) const {
+    QReadLocker lock(&m_dataLock);
+    uint64_t compositeKey = (static_cast<uint64_t>(driveIdx) << 48) | (frn & 0x0000FFFFFFFFFFFFull);
+    auto it = m_frn_to_idx.find(compositeKey);
+    if (it != m_frn_to_idx.end()) {
+        return m_parent_frns[it->second] & 0x0000FFFFFFFFFFFFull;
+    }
+    return 0;
 }
 
 bool MftReader::matchEntry(int i, const QString& query, bool useRegex, bool caseSensitive, 

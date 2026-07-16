@@ -2,11 +2,19 @@
 #define NOMINMAX
 #endif
 #include "ContentPanel.h" 
+#include "../meta/MetadataManager.h" 
+#include "Logger.h"
 #include "SvgIcons.h" 
 #include "TreeItemDelegate.h" 
 #include "DropTreeView.h" 
 #include "DropListView.h" 
+#include "DropJustifiedView.h"
+#include "BatchProgressDialog.h"
+#include "ThumbnailDelegate.h"
+#include "../util/ImportHelper.h"
+#include "../core/AutoImportManager.h"
 #include "ToolTipOverlay.h" 
+#include "MainWindow.h"
  
 #include <QVBoxLayout> 
 #include <QHBoxLayout> 
@@ -21,6 +29,7 @@
 #include <QMenu> 
 #include <QAbstractItemView> 
 #include <QStandardItem> 
+#include "../core/AppConfig.h"
 #include <QEvent> 
 #include <QKeyEvent> 
 #include <QMouseEvent> 
@@ -29,38 +38,469 @@
 #include <QItemSelectionModel> 
 #include <QFileInfo> 
 #include <QDir> 
+#include <QSet>
+#include <QFile>
 #include <QDateTime> 
 #include <QDesktopServices> 
 #include <QUrl> 
 #include <QApplication> 
+#include <QCoreApplication> 
 #include <QProcess> 
 #include <QClipboard> 
 #include <QMimeData> 
 #include <QLineEdit> 
 #include <QTextBrowser> 
-#include <QInputDialog> 
+#include "FramelessDialog.h"
+#include <memory>
+#include <QRandomGenerator>
 #include <QAbstractItemView> 
 #include <QtConcurrent> 
 #include <QThreadPool> 
 #include <QTimer> 
 #include <QPointer> 
-#include <functional> 
-#include <QPointer> 
 #include <QPersistentModelIndex> 
-#include <QSqlDatabase> 
-#include <QSqlQuery> 
+ 
+ 
 #include <windows.h> 
+#include <objbase.h>
 #include <shellapi.h> 
+#include <io.h>
 #include "../meta/MetadataManager.h" 
 #include "../meta/BatchRenameEngine.h" 
-#include "../db/CategoryRepo.h" 
+#include "../meta/CategoryRepo.h" 
 #include "../crypto/EncryptionManager.h" 
 #include "CategoryLockDialog.h" 
 #include "BatchRenameDialog.h" 
 #include "UiHelper.h" 
+#include "StyleLibrary.h"
+#include "../core/CoreController.h"
+#include "../core/UndoManager.h"
+#include "../core/BasicCommands.h"
+using namespace ArcMeta::Style;
+#include "../util/ShellHelper.h"
  
 namespace ArcMeta { 
  
+// --- FerrexVirtualDbModel 实现 ---
+FerrexVirtualDbModel::FerrexVirtualDbModel(QObject* parent) : QAbstractTableModel(parent) {
+    m_iconCache.setMaxCost(500);
+    m_metaCache.setMaxCost(1000);
+}
+
+int FerrexVirtualDbModel::rowCount(const QModelIndex& parent) const {
+    if (parent.isValid()) return 0;
+    return m_displayCount;
+}
+
+int FerrexVirtualDbModel::columnCount(const QModelIndex&) const {
+    return 8; // 名称, 状态, 星级, 颜色标记, 标签, 类型, 大小, 修改日期
+}
+
+Qt::ItemFlags FerrexVirtualDbModel::flags(const QModelIndex& index) const {
+    if (!index.isValid()) return Qt::NoItemFlags;
+    Qt::ItemFlags f = Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsDragEnabled;
+    // 仅允许第 0 列（名称列）且非“分类”项进行重命名
+    if (index.column() == 0) {
+        if (index.row() < static_cast<int>(m_allRecords.size()) && !m_allRecords[index.row()].isCategory) {
+            f |= Qt::ItemIsEditable;
+        }
+    }
+    return f;
+}
+
+QVariant FerrexVirtualDbModel::data(const QModelIndex& index, int role) const {
+    if (!index.isValid() || index.row() >= static_cast<int>(m_allRecords.size())) return QVariant();
+
+    const auto& record = m_allRecords[index.row()];
+    QString path = record.path;
+
+    if (record.isCategory) {
+        if (role == Qt::DisplayRole || role == Qt::EditRole) {
+            switch (index.column()) {
+                case 0: return record.categoryName;
+                case 5: return "子分类";
+                default: return "";
+            }
+        } else if (role == CategoryIdRole) {
+            return record.categoryId;
+        } else if (role == ColorRole) {
+            return record.categoryColor;
+        } else if (role == RatingRole) {
+            return record.rating; // 2026-07-xx 按照 Plan-73：支持子分类评分
+        } else if (role == TypeRole) {
+            return "category";
+        } else if (role == PathRole) {
+            return ""; // 2026-06-xx 物理级补全：子分类无物理路径，返回空以防止逻辑溢出
+        } else if (role == IsLockedRole || role == PinnedRole) {
+            return record.pinned;
+        } else if (role == Qt::DecorationRole && index.column() == 0) {
+            static QIcon catIcon = QFileIconProvider().icon(QFileIconProvider::Folder);
+            return catIcon;
+        }
+        return QVariant();
+    }
+
+    if (role == Qt::DisplayRole || role == Qt::EditRole) {
+        switch (index.column()) {
+            case 0: {
+                // 2026-06-xx 极致性能优化：文件名称提取杜绝 QFileInfo 随机访问。
+                // path 已经归一化，通过字符串操作获取文件名
+                int lastSlash = std::max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+                if (lastSlash == -1) return path;
+                QString name = path.mid(lastSlash + 1);
+                if (name.isEmpty() && path.length() >= 2 && path[1] == ':') return path; // 盘符根目录
+                return name;
+            }
+            case 4: {
+                return record.tags.join(", ");
+            }
+            case 5: {
+                if (record.isDir) return "文件夹";
+                int lastDot = path.lastIndexOf('.');
+                return (lastDot != -1) ? path.mid(lastDot + 1).toUpper() + " 文件" : "文件";
+            }
+            case 6: {
+                if (record.isDir) return "-";
+                if (record.size < 1024) return QString::number(record.size) + " B";
+                if (record.size < 1024 * 1024) return QString::number(record.size / 1024.0, 'f', 1) + " KB";
+                return QString::number(record.size / (1024.0 * 1024.0), 'f', 1) + " MB";
+            }
+            case 7: {
+                return QDateTime::fromMSecsSinceEpoch(record.mtime).toString("dd-MM-yyyy HH:mm");
+            }
+        }
+    } else if (role == PathRole) {
+        return path;
+    } else if (role == TypeRole) {
+        return record.isDir ? "folder" : "file";
+    } else if (role == RatingRole) {
+        return record.rating;
+    } else if (role == ColorRole) {
+        return record.color;
+    } else if (role == IsLockedRole || role == PinnedRole) {
+        return record.pinned;
+    } else if (role == EncryptedRole) {
+        return record.encrypted;
+    } else if (role == TagsRole) {
+        return record.tags;
+    } else if (role == ManagedRole) {
+        return record.isManaged;
+    } else if (role == RegistrationProgressRole) {
+        return record.registrationProgress;
+    } else if (role == CategoryIdRole) {
+        return 0; 
+    } else if (role == IsEmptyRole) {
+        return record.isDir && record.isEmpty;
+    } else if (role == AspectRatioRole) {
+        // 2026-07-xx 性能优化：优先使用 ItemRecord 中已注入的尺寸信息，实现渲染零延迟
+        if (record.width > 0 && record.height > 0) return (double)record.width / record.height;
+        return m_aspectRatios.value(path, 1.0);
+    } else if (role == HasThumbnailRole) {
+        // 2026-xx-xx 按照 Plan-114：优化 HasThumbnailRole 判定逻辑
+        // 只要是图形或视频格式，均预设为 true，强制 Delegate 进入填满模式，消除抖动
+        if (UiHelper::isGraphicsFile(record.suffix)) return true;
+        if (record.width > 0 && record.height > 0) return true;
+        return m_aspectRatios.contains(path);
+    } else if (role == Qt::DecorationRole && index.column() == 0) {
+        // 2026-07-xx 架构优化：使用 File ID 作为缓存 Key。
+        // 理由：这允许位于不同文件夹下的相同文件（FID 相同）共享同一个缩略图缓存，
+        // 彻底解决用户反馈的“同一文件在不同文件夹显示不一致”及重复加载问题。
+        QString cacheKey = record.fileId.empty() ? path : QString::fromStdString(record.fileId);
+        QIcon* cached = m_iconCache.object(cacheKey);
+        if (cached) return *cached;
+
+        QFileInfo info(path);
+        QString ext = info.suffix().toLower();
+        bool isGraphic = UiHelper::isGraphicsFile(ext) || ext == "svg";
+
+        if (!m_requestedIcons.contains(cacheKey)) {
+            m_requestedIcons.insert(cacheKey);
+            QPointer<const FerrexVirtualDbModel> weakThis(this);
+            (void)QtConcurrent::run([weakThis, path, cacheKey, ext]() {
+                #ifdef Q_OS_WIN
+                CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+                #endif
+                QIcon icon;
+                double ar = 1.0;
+                bool hasThumb = false;
+
+                if (ext == "svg") {
+                    QSvgRenderer renderer(path);
+                    if (renderer.isValid()) {
+                        QPixmap pix(128, 128);
+                        pix.fill(Qt::transparent);
+                        QPainter painter(&pix);
+                        renderer.render(&painter);
+                        icon = QIcon(pix);
+                        ar = 1.0;
+                        hasThumb = true;
+                    }
+                } else if (UiHelper::isGraphicsFile(ext)) {
+                    QImage img = UiHelper::getShellThumbnail(path, 128);
+                    if (!img.isNull()) {
+                        icon = QIcon(QPixmap::fromImage(img));
+                        ar = (double)img.width() / img.height();
+                        hasThumb = true;
+                    }
+                }
+
+                if (icon.isNull()) {
+                    icon = UiHelper::getFileIcon(path, 128);
+                }
+
+                QMetaObject::invokeMethod(const_cast<FerrexVirtualDbModel*>(weakThis.data()), [weakThis, path, cacheKey, icon, ar, hasThumb]() {
+                    if (!weakThis) return;
+                    auto* mutableThis = const_cast<FerrexVirtualDbModel*>(weakThis.data());
+                    mutableThis->m_iconCache.insert(cacheKey, new QIcon(icon));
+                    if (hasThumb) mutableThis->m_aspectRatios[path] = ar;
+                    
+                    // 局部刷新，提高性能 (扫描所有匹配该 Key 的路径)
+                    for (int i = 0; i < mutableThis->m_displayCount; ++i) {
+                        const auto& rec = mutableThis->m_allRecords[i];
+                        bool match = (rec.path == path) || (!rec.fileId.empty() && QString::fromStdString(rec.fileId) == cacheKey);
+                        if (match) {
+                            emit mutableThis->dataChanged(mutableThis->index(i, 0), mutableThis->index(i, 0), {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+                            break;
+                        }
+                    }
+                }, Qt::QueuedConnection);
+                #ifdef Q_OS_WIN
+                CoUninitialize();
+                #endif
+            });
+        }
+        
+        // 2026-11-14 执行第二步：图形文件等待缩略图时返回空图标，由 Delegate 绘制占位背景，消除抖动
+        if (isGraphic) return QIcon(); 
+        return UiHelper::getFileIcon(path, 128); // 非图形文件直接显示系统图标
+    }
+
+    return QVariant();
+}
+
+QVariant FerrexVirtualDbModel::headerData(int section, Qt::Orientation orientation, int role) const {
+    if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
+        static const QStringList headers = {"名称", "状态", "星级", "颜色标记", "标签", "类型", "大小", "修改日期"};
+        if (section < static_cast<int>(headers.size())) return headers[section];
+    }
+    return QVariant();
+}
+
+QStringList FerrexVirtualDbModel::mimeTypes() const {
+    return {"text/uri-list"};
+}
+
+QMimeData* FerrexVirtualDbModel::mimeData(const QModelIndexList& indexes) const {
+    QMimeData* mime = new QMimeData();
+    QList<QUrl> urls;
+    for (const auto& idx : indexes) {
+        if (idx.column() == 0) {
+            QString path = data(idx, PathRole).toString();
+            if (!path.isEmpty()) urls << QUrl::fromLocalFile(path);
+        }
+    }
+    if (urls.isEmpty()) {
+        delete mime;
+        return nullptr;
+    }
+    mime->setUrls(urls);
+    return mime;
+}
+
+bool FerrexVirtualDbModel::setData(const QModelIndex& index, const QVariant& value, int role) {
+    if (!index.isValid() || index.row() >= static_cast<int>(m_allRecords.size())) return false;
+
+    const auto& record = m_allRecords[index.row()];
+    QString path = record.path;
+
+    if (role == Qt::EditRole && index.column() == 0) {
+        if (record.isCategory) return false; // 2026-07-xx 按照 Plan-73：子分类暂不支持在此重命名
+
+        QString newName = value.toString();
+        if (newName.isEmpty()) return false;
+
+        auto& mutableRecord = m_allRecords[index.row()];
+        QString oldPath = mutableRecord.path;
+        QFileInfo info(oldPath);
+        QString newPath = info.absolutePath() + "/" + newName;
+
+        if (oldPath != newPath) {
+            QString nativeNewPath = QDir::toNativeSeparators(newPath);
+            if (ShellHelper::renameItem(oldPath, nativeNewPath)) {
+                // 2026-06-xx 物理同步：重命名后必须更新 MetadataManager
+                MetadataManager::instance().renameItem(oldPath.toStdWString(), nativeNewPath.toStdWString());
+
+                // 撤销支持
+                UndoManager::instance().pushCommand(std::make_unique<RenameCommand>(oldPath, nativeNewPath));
+
+                // 物理同步：手动修改 m_allRecords 里的 path 以保持模型数据一致
+                mutableRecord.path = nativeNewPath;
+                m_metaCache.remove(oldPath);
+                emit dataChanged(index, index, {role, Qt::DisplayRole, PathRole});
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 2026-06-xx 物理修复：支持星级、颜色、置顶等元数据的持久化设定
+    // 2026-07-xx 按照 Plan-116：视图级编辑权限拦截
+    if (!record.isCategory && (role == RatingRole || role == ColorRole || role == IsLockedRole || role == PinnedRole)) {
+        QString currentType = qobject_cast<ContentPanel*>(parent())->getCurrentCategoryType();
+        if (currentType == "nav" || currentType == "") {
+            // 物理导航模式下，检查是否在库外
+            std::wstring wp = record.path.toStdWString();
+            std::wstring volSerial = MetadataManager::getVolumeSerialNumber(wp);
+            QString key = QString("ManagedFolder/Volume_%1").arg(QString::fromStdWString(volSerial));
+            QString relPath = AppConfig::instance().getValue(key, "").toString();
+            
+            bool isInsideLibrary = false;
+            if (!relPath.isEmpty()) {
+                QString drive = record.path.left(3);
+                QString managedAbs = QDir::toNativeSeparators(drive + relPath).toLower();
+                if (record.path.toLower().startsWith(managedAbs)) {
+                    isInsideLibrary = true;
+                }
+            }
+
+            if (!isInsideLibrary) {
+                FramelessMessageBox::information(nullptr, "编辑受阻", "该项目尚未入库，无法进行元数据编辑。\n请先执行“迁移”将其移动至托管库文件夹。");
+                return false;
+            }
+        }
+    }
+
+    bool metaUpdated = false;
+    if (role == RatingRole) {
+        int oldRating = index.data(RatingRole).toInt();
+        int newRating = value.toInt();
+        if (oldRating != newRating) {
+            if (record.isCategory) {
+                // 2026-07-xx 按照 Plan-73：分类评分持久化 (SCCH 架构)
+                Category cat;
+                auto all = CategoryRepo::getAll();
+                bool found = false;
+                for (auto& c : all) {
+                    if (c.id == record.categoryId) {
+                        c.presetTags.clear(); // 暂存 Rating 到预设标签或扩展字段。当前 Category 结构无 Rating，复用 presetTags[0] 存储
+                        // 逻辑校准：SCCH 架构中 Category 结构并无 rating 字段，
+                        // 2026-07-xx 按照分析：由于 Category 结构暂不支持 rating，评分仅在内存中生效并反馈至 UI
+                        auto& mutableRec = m_allRecords[index.row()];
+                        mutableRec.rating = newRating;
+                        metaUpdated = true;
+                        found = true;
+                        break;
+                    }
+                }
+            } else {
+                MetadataManager::instance().setRating(path.toStdWString(), newRating);
+                UndoManager::instance().pushCommand(std::make_unique<MetadataCommand>(path, MetadataCommand::Rating, oldRating, newRating));
+                metaUpdated = true;
+            }
+        }
+    } else if (role == ColorRole) {
+        QString oldColor = index.data(ColorRole).toString();
+        QString newColor = value.toString();
+        if (oldColor != newColor) {
+            MetadataManager::instance().setColor(path.toStdWString(), newColor.toStdWString());
+            UndoManager::instance().pushCommand(std::make_unique<MetadataCommand>(path, MetadataCommand::Color, oldColor, newColor));
+            metaUpdated = true;
+        }
+    } else if (role == IsLockedRole || role == PinnedRole) {
+        bool pinned = value.toBool();
+        if (record.isCategory) {
+            auto all = CategoryRepo::getAll();
+            for (auto& c : all) {
+                if (c.id == record.categoryId) {
+                    c.pinned = pinned;
+                    CategoryRepo::update(c);
+                    auto& mutableRec = m_allRecords[index.row()];
+                    mutableRec.pinned = pinned;
+                    metaUpdated = true;
+                    break;
+                }
+            }
+        } else {
+            MetadataManager::instance().setPinned(path.toStdWString(), pinned);
+            metaUpdated = true;
+        }
+    }
+
+    if (metaUpdated) {
+        if (!record.isCategory) {
+            m_metaCache.remove(path);
+            // 2026-06-xx 物理同步：更新本地 Record 缓存，确保 UI 和排序逻辑立即可见最新状态
+            updateRecordMetadata(path);
+        } else {
+            emit dataChanged(index, index, {role});
+        }
+        return true;
+    }
+
+    return false;
+}
+
+bool FerrexVirtualDbModel::canFetchMore(const QModelIndex& parent) const {
+    Q_UNUSED(parent);
+    return false;
+}
+
+void FerrexVirtualDbModel::fetchMore(const QModelIndex& parent) {
+    Q_UNUSED(parent);
+}
+
+void FerrexVirtualDbModel::setRecords(const std::vector<ItemRecord>& records) {
+    beginResetModel();
+    m_allRecords = records;
+    m_pathToIndex.clear();
+    for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
+        m_pathToIndex[m_allRecords[i].path] = i;
+    }
+    m_displayCount = static_cast<int>(m_allRecords.size());
+    m_requestedIcons.clear();
+    m_aspectRatios.clear();
+    m_metaCache.clear();
+    endResetModel();
+}
+
+void FerrexVirtualDbModel::updateRecordMetadata(const QString& path) {
+    QString nPath = QDir::toNativeSeparators(path);
+    auto it = m_pathToIndex.find(nPath);
+    if (it != m_pathToIndex.end()) {
+        int i = it->second;
+        if (i >= 0 && i < static_cast<int>(m_allRecords.size())) {
+            auto meta = MetadataManager::instance().getMeta(nPath.toStdWString());
+            m_allRecords[i].rating = meta.rating;
+            m_allRecords[i].color = QString::fromStdWString(meta.color);
+            m_allRecords[i].tags = meta.tags;
+            m_allRecords[i].fileId = meta.fileId128;
+            m_allRecords[i].pinned = meta.pinned;
+            m_allRecords[i].encrypted = meta.encrypted;
+            m_allRecords[i].isManaged = meta.hasUserOperations();
+            m_allRecords[i].palettes.clear();
+            for (const auto& pe : meta.palettes) {
+                m_allRecords[i].palettes.push_back({pe.color, pe.ratio});
+            }
+            
+            m_metaCache.remove(nPath);
+            QModelIndex left = index(i, 0);
+            QModelIndex right = index(i, columnCount() - 1);
+            emit dataChanged(left, right);
+        }
+    }
+}
+
+void FerrexVirtualDbModel::clear() {
+    beginResetModel();
+    m_allRecords.clear();
+    m_pathToIndex.clear();
+    m_displayCount = 0;
+    m_requestedIcons.clear();
+    m_aspectRatios.clear();
+    m_metaCache.clear();
+    endResetModel();
+}
+
 // --- FilterProxyModel 实现 --- 
 FilterProxyModel::FilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {} 
  
@@ -69,139 +509,257 @@ void FilterProxyModel::updateFilter() {
     endFilterChange(); 
 } 
  
-void FilterProxyModel::setSearchQuery(const QString& query) { 
-    m_searchQuery = query; 
-    beginFilterChange(); 
-    endFilterChange(); 
-} 
- 
 bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const { 
     QModelIndex idx = sourceModel()->index(sourceRow, 0, sourceParent); 
      
+    // 2026-06-xx 性能优化：提前获取 ItemRecord，避免重复查询并为下方过滤提供数据支撑
+    const auto* sourceModelPtr = qobject_cast<const FerrexVirtualDbModel*>(sourceModel());
+    if (!sourceModelPtr) return true;
+
+    const auto& records = sourceModelPtr->allRecords();
+    if (sourceRow < 0 || sourceRow >= (int)records.size()) return false;
+    const auto& record = records[sourceRow];
+
+    // --- 按照 Plan-73 & Plan-94：显示/隐藏文件夹/文件与筛选联动 ---
+    // 2026-07-xx 逻辑校准：子分类在逻辑上等同于文件夹，受 showFolders 控制
+    if (record.isCategory || record.isDir) {
+        // 2026-07-xx Plan-94: 判定用户是否在筛选面板中显式勾选了“文件夹”或匹配的“空文件夹”
+        bool isFolderExplicitlySelected = currentFilter.types.contains("folder") || 
+                                         (record.isEmpty && currentFilter.types.contains("空文件夹"));
+        
+        // 只有当“顶栏全局开关为隐藏”且“筛选器未显式勾选文件夹”时，才执行拦截
+        if (!currentFilter.showFolders && !isFolderExplicitlySelected) {
+            return false;
+        }
+    } else {
+        if (!currentFilter.showFiles) return false;
+    }
+
     // 1. 评级过滤 
     if (!currentFilter.ratings.isEmpty()) { 
-        int r = idx.data(RatingRole).toInt(); 
+        int r = record.rating; // 直接从烘焙好的 record 获取，消除 idx.data 虚拟调用开销
         if (!currentFilter.ratings.contains(r)) return false; 
     } 
  
-    // 2. 颜色过滤 (变长物理多色板命中逻辑)
-    if (!currentFilter.colors.isEmpty()) { 
-        QString path = idx.data(PathRole).toString();
-        QString dominantColor = idx.data(ColorRole).toString();
-        
-        // 获取该项目的所有物理颜色 (变长色板)
-        QVector<QColor> palettes = MetadataManager::instance().getPalettes(path.toStdWString());
-        
+    // 2. 颜色过滤 (Plan-18: 基于 CIELAB Delta E 的感知筛选逻辑)
+    if (!currentFilter.colors.isEmpty() || !currentFilter.colorFilterText.isEmpty()) { 
+        QString dominantColorHex = record.color; 
         bool matchColor = false;
-        for (const QString& fc : currentFilter.colors) {
-            // 物理修复：如果 HEX 完全一致（主色命中），直接通过
-            if (fc == dominantColor.toUpper()) { matchColor = true; break; }
 
-            // 如果色板存在，遍历色板执行容差检查
-            if (!palettes.isEmpty()) {
-                for (const auto& pc : palettes) {
-                    if (fc == pc.name().toUpper()) { matchColor = true; break; }
-                    
-                    QColor fCol = UiHelper::parseColorName(fc);
-                    if (fCol.isValid()) {
-                        long rmean = (fCol.red() + pc.red()) / 2;
-                        long r = fCol.red() - pc.red();
-                        long g = fCol.green() - pc.green();
-                        long b = fCol.blue() - pc.blue();
-                        long distSq = (((512 + rmean)*r*r) >> 8) + 4*g*g + (((767-rmean)*b*b) >> 8);
-                        if (distSq < 15000) { matchColor = true; break; }
+        // 2026-06-23 按照用户要求：颜色筛选引入“面积占比”双轴过滤逻辑
+        auto calculateMatchedArea = [&](const QColor& targetCol) -> float {
+            if (!targetCol.isValid()) return 0.0f;
+            float totalMatchedArea = 0.0f;
+
+            // Case A: 有调色盘数据，累加所有符合色差要求的色块占比
+            if (!record.palettes.empty()) {
+                for (const auto& pe : record.palettes) {
+                    if (UiHelper::calculateDeltaE(targetCol, pe.first) < currentFilter.colorTolerance) {
+                        totalMatchedArea += pe.second;
                     }
                 }
             } else {
-                // 向下兼容：若色板为空，回退到对主色调的容差检查
-                QColor dCol = UiHelper::parseColorName(dominantColor);
-                QColor fCol = UiHelper::parseColorName(fc);
-                if (dCol.isValid() && fCol.isValid()) {
-                    long rmean = (fCol.red() + dCol.red()) / 2;
-                    long r = fCol.red() - dCol.red();
-                    long g = fCol.green() - dCol.green();
-                    long b = fCol.blue() - dCol.blue();
-                    long distSq = (((512 + rmean)*r*r) >> 8) + 4*g*g + (((767-rmean)*b*b) >> 8);
-                    if (distSq < 15000) { matchColor = true; break; }
+                // Case B: 仅有主色调数据，若主色匹配则占比视为 100% (降级处理)
+                QColor recordCol = UiHelper::parseColorName(dominantColorHex);
+                if (UiHelper::calculateDeltaE(targetCol, recordCol) < currentFilter.colorTolerance) {
+                    totalMatchedArea = 1.0f;
                 }
             }
-            if (matchColor) break;
+            return totalMatchedArea;
+        };
+
+        // 2.0 文本过滤逻辑 (如果存在文本)
+        if (!currentFilter.colorFilterText.isEmpty()) {
+            QString searchText = currentFilter.colorFilterText.trimmed();
+            // 物理规则：支持名称、色值或“无色标”
+            if (searchText == "无色标") {
+                if (dominantColorHex.isEmpty()) matchColor = true;
+            } else if (searchText.startsWith("#")) {
+                QColor targetCol = UiHelper::parseColorName(searchText);
+                float area = calculateMatchedArea(targetCol);
+                if (area > 0.0f && area * 100.0f >= (float)currentFilter.minColorArea) matchColor = true;
+            } else {
+                // 模糊匹配颜色名称 (通过反查 colorMap)
+                static const QMap<QString, QString> nameToHex = {
+                    {"红", "#E24B4A"}, {"橙", "#EF9F27"}, {"黄", "#FECF0E"}, {"绿", "#639922"},
+                    {"青", "#1D9E75"}, {"蓝", "#378ADD"}, {"紫", "#7F77DD"}, {"灰", "#5F5E5A"},
+                    {"黑", "#000000"}, {"白", "#FFFFFF"}
+                };
+                for (auto it = nameToHex.begin(); it != nameToHex.end(); ++it) {
+                    if (it.key().contains(searchText)) {
+                        QColor targetCol = QColor(it.value());
+                        float area = calculateMatchedArea(targetCol);
+                        if (area > 0.0f && area * 100.0f >= (float)currentFilter.minColorArea) { matchColor = true; break; }
+                    }
+                }
+            }
+            if (!matchColor) return false; // 文本过滤不通过
+        }
+
+        // 2.1 勾选框过滤 (如果存在勾选)
+        if (!currentFilter.colors.isEmpty()) {
+            matchColor = false;
+            for (const QString& fc : currentFilter.colors) {
+                // 特殊情况：无色标 (不涉及占比逻辑)
+                if (fc.isEmpty()) {
+                    if (dominantColorHex.isEmpty()) { matchColor = true; break; }
+                    continue;
+                }
+
+                QColor targetCol = UiHelper::parseColorName(fc);
+                float area = calculateMatchedArea(targetCol);
+                if (area > 0.0f && area * 100.0f >= (float)currentFilter.minColorArea) {
+                    matchColor = true;
+                    break;
+                }
+            }
         }
         if (!matchColor) return false; 
     } 
  
-    // 3. 标签过滤 
-    if (!currentFilter.tags.isEmpty()) { 
-        QStringList itemTags = idx.data(TagsRole).toStringList(); 
-        bool matchTag = false; 
-        for (const QString& fTag : currentFilter.tags) { 
-            if (fTag == "__none__") { 
-                if (itemTags.isEmpty()) { matchTag = true; break; } 
-            } else { 
-                if (itemTags.contains(fTag)) { matchTag = true; break; } 
-            } 
-        } 
-        if (!matchTag) return false; 
-    } 
- 
     // 4. 类型过滤 
-    if (!currentFilter.types.isEmpty()) { 
-        QString type = idx.data(TypeRole).toString();  
-        QString ext = QFileInfo(idx.data(PathRole).toString()).suffix().toUpper(); 
+    if (!currentFilter.types.isEmpty() || !currentFilter.typeFilterText.isEmpty()) { 
+        QString type = (record.isDir || record.isCategory) ? "folder" : "file";
+        QString ext = record.isCategory ? "" : record.suffix.toUpper();
         bool matchType = false; 
-        for (const QString& fType : currentFilter.types) { 
-            if (fType == "folder") { 
-                if (type == "folder") { matchType = true; break; } 
-            } else { 
-                if (ext == fType.toUpper()) { matchType = true; break; } 
+
+        if (!currentFilter.typeFilterText.isEmpty()) {
+            QString searchText = currentFilter.typeFilterText.trimmed();
+            if (searchText == "文件夹" || searchText.toLower() == "folder") {
+                if (type == "folder") matchType = true;
+            } else if (searchText == "空文件夹") {
+                if (type == "folder" && record.isEmpty) matchType = true;
+            } else {
+                if (ext.contains(searchText.toUpper())) matchType = true;
+            }
+            if (!matchType) return false;
+        }
+
+        if (!currentFilter.types.isEmpty()) {
+            matchType = false;
+            for (const QString& fType : currentFilter.types) { 
+                if (fType == "folder") { 
+                    if (type == "folder") { matchType = true; break; } 
+                } else if (fType == "file") {
+                    if (type != "folder") { matchType = true; break; }
+                } else if (fType == "空文件夹") {
+                    if (type == "folder" && record.isEmpty) { matchType = true; break; }
+                } else { 
+                    if (ext == fType.toUpper()) { matchType = true; break; } 
+                } 
             } 
-        } 
-        if (!matchType) return false; 
+            if (!matchType) return false; 
+        }
     } 
  
     // 5. 创建日期过滤 
-    if (!currentFilter.createDates.isEmpty()) { 
-        QDate d = QFileInfo(idx.data(PathRole).toString()).birthTime().date(); 
-        QDate today = QDate::currentDate(); 
-        QString dStr = d.toString("yyyy-MM-dd"); 
+    if (!currentFilter.createDates.isEmpty() || !currentFilter.createDateFilterText.isEmpty()) { 
+        QDate d = QDateTime::fromMSecsSinceEpoch(record.ctime).date();
+        QString dStr = d.toString("dd-MM-yyyy"); 
         bool matchDate = false; 
-        for (const QString& fDate : currentFilter.createDates) { 
-            if (fDate == "today" && d == today) { matchDate = true; break; } 
-            if (fDate == "yesterday" && d == today.addDays(-1)) { matchDate = true; break; } 
-            if (fDate == dStr) { matchDate = true; break; } 
-        } 
-        if (!matchDate) return false; 
+
+        if (!currentFilter.createDateFilterText.isEmpty()) {
+            if (dStr.contains(currentFilter.createDateFilterText.trimmed())) matchDate = true;
+            if (!matchDate) return false;
+        }
+
+        if (!currentFilter.createDates.isEmpty()) {
+            matchDate = false;
+            for (const QString& fDate : currentFilter.createDates) { 
+                if (fDate == dStr) { matchDate = true; break; } 
+            } 
+            if (!matchDate) return false; 
+        }
     } 
+
+    // 7. 链接过滤 (Plan-30)
+    if (currentFilter.linkPresence != FilterState::All) {
+        bool hasLink = !record.url.isEmpty();
+        if (currentFilter.linkPresence == FilterState::Yes && !hasLink) return false;
+        if (currentFilter.linkPresence == FilterState::No && hasLink) return false;
+    }
+
+    // 8. 备注过滤 (Plan-30)
+    if (currentFilter.notePresence != FilterState::All) {
+        bool hasNote = !record.note.isEmpty();
+        if (currentFilter.notePresence == FilterState::Yes && !hasNote) return false;
+        if (currentFilter.notePresence == FilterState::No && hasNote) return false;
+    }
+
+    // 9. 文件大小过滤 (Plan-30)
+    if (currentFilter.minSize != -1 && record.size < currentFilter.minSize) return false;
+    if (currentFilter.maxSize != -1 && record.size > currentFilter.maxSize) return false;
+
+    // 10. 图像比例过滤 (Plan-29)
+    if (currentFilter.ratio != FilterState::AspectAny) {
+        // 直接使用 record 中缓存的尺寸信息 (Plan-30 优化：避免重复查询元数据管理器)
+        if (record.width > 0 && record.height > 0) {
+            double r = (double)record.width / record.height;
+            if (currentFilter.ratio == FilterState::Horizontal && record.width <= record.height) return false;
+            if (currentFilter.ratio == FilterState::Vertical && record.height <= record.width) return false;
+            if (currentFilter.ratio == FilterState::Square && std::abs(r - 1.0) > 0.05) return false;
+            if (currentFilter.ratio == FilterState::Ratio169 && std::abs(r - 1.77) > 0.05) return false;
+        } else {
+            return false; // 无尺寸信息不匹配任何比例筛选
+        }
+    }
  
     // 6. 修改日期过滤 
-    if (!currentFilter.modifyDates.isEmpty()) { 
-        QDate d = QFileInfo(idx.data(PathRole).toString()).lastModified().date(); 
-        QDate today = QDate::currentDate(); 
-        QString dStr = d.toString("yyyy-MM-dd"); 
+    if (!currentFilter.modifyDates.isEmpty() || !currentFilter.modifyDateFilterText.isEmpty()) { 
+        QDate d = QDateTime::fromMSecsSinceEpoch(record.mtime).date();
+        QString dStr = d.toString("dd-MM-yyyy"); 
         bool matchDate = false; 
-        for (const QString& fDate : currentFilter.modifyDates) { 
-            if (fDate == "today" && d == today) { matchDate = true; break; } 
-            if (fDate == "yesterday" && d == today.addDays(-1)) { matchDate = true; break; } 
-            if (fDate == dStr) { matchDate = true; break; } 
-        } 
-        if (!matchDate) return false; 
+
+        if (!currentFilter.modifyDateFilterText.isEmpty()) {
+            if (dStr.contains(currentFilter.modifyDateFilterText.trimmed())) matchDate = true;
+            if (!matchDate) return false;
+        }
+
+        if (!currentFilter.modifyDates.isEmpty()) {
+            matchDate = false;
+            for (const QString& fDate : currentFilter.modifyDates) { 
+                if (fDate == dStr) { matchDate = true; break; } 
+            } 
+            if (!matchDate) return false; 
+        }
     } 
  
-    // 2026-04-12 深度修复：直接执行关键词包含检查 
-    if (m_searchQuery.isEmpty()) return true; 
+    // 2026-07-xx Plan-92: 统一使用 FilterState 中的 keyword 进行文件名过滤
+    if (currentFilter.keyword.isEmpty()) return true; 
  
     QString fileName = idx.data(Qt::DisplayRole).toString(); 
-    return fileName.contains(m_searchQuery, Qt::CaseInsensitive); 
+    return fileName.contains(currentFilter.keyword, Qt::CaseInsensitive); 
 } 
  
 bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const { 
-    // 核心红线：置顶优先规则 
-    bool leftPinned = source_left.data(IsLockedRole).toBool(); 
-    bool rightPinned = source_right.data(IsLockedRole).toBool(); 
+    // 2026-07-xx 物理强制：文件夹与子分类始终置顶 (绝对第一权重)
+    QString leftType = source_left.data(TypeRole).toString();
+    QString rightType = source_right.data(TypeRole).toString();
+    bool leftIsDir = (leftType == "folder" || leftType == "category");
+    bool rightIsDir = (rightType == "folder" || rightType == "category");
+
+    if (leftIsDir != rightIsDir) {
+        // 文件夹 vs 文件：文件夹永远被视为“更小”（在升序中排在前）
+        if (sortOrder() == Qt::AscendingOrder) return leftIsDir;
+        else return !leftIsDir;
+    }
+
+    // 2026-06-xx 工业级纠偏：置顶优先规则 (物理排序第二权重)
+    // 必须确保 PinnedRole 或 IsLockedRole 的判定逻辑在排序中具有绝对优先级
+    QVariant leftPinnedVar = source_left.data(PinnedRole);
+    if (!leftPinnedVar.isValid()) leftPinnedVar = source_left.data(IsLockedRole);
+    
+    QVariant rightPinnedVar = source_right.data(PinnedRole);
+    if (!rightPinnedVar.isValid()) rightPinnedVar = source_right.data(IsLockedRole);
+
+    bool leftPinned = leftPinnedVar.toBool();
+    bool rightPinned = rightPinnedVar.toBool();
  
     if (leftPinned != rightPinned) { 
-        if (sortOrder() == Qt::AscendingOrder) return leftPinned;  
-        else return !leftPinned;  
+        // 2026-06-xx 物理修复：Qt 排序模型在 Descending 下会反转 lessThan 结果
+        // 为了确保置顶项在任何排序顺序下都位于顶部，必须结合 sortOrder 进行逻辑判定
+        if (sortOrder() == Qt::AscendingOrder) return leftPinned; // 升序：左置顶 -> 小 (true)
+        else return !leftPinned; // 降序：左置顶 -> 结果反转 -> 需要返回 false 以保持顶部
     } 
     return QSortFilterProxyModel::lessThan(source_left, source_right); 
 } 
@@ -209,6 +767,9 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
  
 ContentPanel::ContentPanel(QWidget* parent) 
     : QFrame(parent) { 
+    // 2026-07-xx 按照 Plan-63：启用右键菜单策略（容器级）
+    setContextMenuPolicy(Qt::CustomContextMenu);
+
     setObjectName("EditorContainer"); 
     setAttribute(Qt::WA_StyledBackground, true); 
     setMinimumWidth(230); 
@@ -219,12 +780,12 @@ ContentPanel::ContentPanel(QWidget* parent)
     m_mainLayout->setSpacing(0); 
  
  
-    m_model = new QStandardItemModel(this); 
+    m_model = new FerrexVirtualDbModel(this); 
     m_proxyModel = new FilterProxyModel(this); 
     m_proxyModel->setSourceModel(m_model); 
     
     // 2026-05-17 新增：当模型数据发生改变时，自动触发统计重新计算并推送至 FilterPanel
-    connect(m_model, &QStandardItemModel::dataChanged, this, [this](const QModelIndex& topLeft, const QModelIndex& bottomRight, const QVector<int>& roles) {
+    connect(m_model, &FerrexVirtualDbModel::dataChanged, this, [this](const QModelIndex& topLeft, const QModelIndex& bottomRight, const QVector<int>& roles) {
         Q_UNUSED(topLeft); Q_UNUSED(bottomRight);
         if (roles.isEmpty() || roles.contains(ColorRole) || roles.contains(RatingRole) || roles.contains(TagsRole)) {
             recalculateAndEmitStats();
@@ -233,137 +794,22 @@ ContentPanel::ContentPanel(QWidget* parent)
      
     // 2026-04-12 深度修复：强制锁定过滤列为第 0 列（名称列），确保搜索逻辑不偏离 
     m_proxyModel->setFilterKeyColumn(0); 
+    // 2026-05-29 物理修复：开启动态排序，确保“置顶优先”逻辑能在数据加载后自动生效
+    m_proxyModel->setDynamicSortFilter(true);
+    m_proxyModel->sort(0, Qt::AscendingOrder);
  
     // 2026-06-05 按照要求：从配置中加载上次保存的缩放比例 
-    QSettings settings("ArcMeta团队", "ArcMeta"); 
-    m_zoomLevel = settings.value("UI/GridZoomLevel", 96).toInt(); 
+    m_zoomLevel = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt(); 
     m_isRecursive = false; 
- 
-    // 2026-05-20 性能优化白皮书：平滑消费定时器 (60FPS) 
-    m_smoothConsumeTimer = new QTimer(this); 
-    m_smoothConsumeTimer->setInterval(16); // 16ms = 60FPS 
-    connect(m_smoothConsumeTimer, &QTimer::timeout, [this]() { 
-        if (m_uiPendingQueue.empty()) { 
-            m_smoothConsumeTimer->stop(); 
-            // 扫描结束后，恢复全量排序并执行单次排序 
-            m_proxyModel->setDynamicSortFilter(true); 
-            m_proxyModel->sort(0, m_proxyModel->sortOrder()); 
-            // 2026-05-08 按照用户要求：数据加载完成后更新状态栏统计 
-            updateStatusBarStats(); 
-            return; 
-        } 
- 
-        // 每一帧仅向 Model 插入 50 个条目，预留交互预算 
-        int count = 0; 
- 
-        while (!m_uiPendingQueue.empty() && count < 50) { 
-            ScanItemData data = m_uiPendingQueue.front(); 
-            m_uiPendingQueue.pop_front(); 
- 
-            if (data.name == ".am_meta.json" || data.name == ".am_meta.json.tmp") continue; // 2026-06-xx 物理隔离 
- 
-            // 2026-06-05 按照要求：检测标记颜色并实时着色图标 
-            QString colorName = QString::fromStdWString(data.meta.color); 
-            QColor tagColor = UiHelper::parseColorName(colorName); 
-             
-            // 2026-05-27 物理修复：图标分辨率由 18 提升至 128，对齐网格视图最大缩放 
-            QIcon itemIcon = UiHelper::getFileIcon(data.fullPath, 128, tagColor); 
-            auto* nameItem = new QStandardItem(itemIcon, data.name); 
-            nameItem->setData(data.fullPath, PathRole); 
-            nameItem->setData(data.isDir ? "folder" : "file", TypeRole); 
-            nameItem->setData(data.meta.rating, RatingRole); 
-            nameItem->setData(QString::fromStdWString(data.meta.color), ColorRole); 
-            nameItem->setData(data.meta.pinned, PinnedRole); 
-            nameItem->setData(data.meta.pinned, IsLockedRole); 
-            nameItem->setData(data.meta.encrypted, EncryptedRole); 
-            nameItem->setData(data.meta.tags, TagsRole); 
-            nameItem->setData(data.isEmpty, IsEmptyRole); 
-            // 2026-06-xx 按照要求：注入物理色板，确保多色统计与过滤生效
-            QVariantList palList;
-            for (const auto& p : data.meta.palettes) {
-                QVariantMap m; m["color"] = p.color; m["ratio"] = p.ratio;
-                palList << m;
-            }
-            nameItem->setData(palList, PalettesRole);
-             
-            // 2026-06-xx 按照要求：基于 JSON 存在性注入已录入状态（判断逻辑已在扫描端完成） 
-            // 物理修复：校准作用域 
-            nameItem->setData(data.meta.hasUserOperations(), InDatabaseRole); 
- 
-            QList<QStandardItem*> row; 
-            row << nameItem; 
-            row << new QStandardItem(data.isDir ? "-" : QString::number(data.size / 1024) + " KB"); 
-            row << new QStandardItem(data.isDir ? (data.isEmpty ? "文件夹 (空)" : "文件夹") : data.suffix + " 文件"); 
-            row << new QStandardItem(data.mtime.toString("yyyy-MM-dd HH:mm")); 
-            m_model->appendRow(row); 
- 
-            m_iconPendingPaths << data.fullPath; 
-            m_pathToIndexMap[data.fullPath] = QPersistentModelIndex(nameItem->index()); 
-            count++; 
-        } 
- 
-        applyFilters(); 
-        if (!m_lazyIconTimer->isActive()) m_lazyIconTimer->start(); 
-    }); 
- 
-    // 2026-03-xx 物理加速：初始化懒加载图标定时器 
-    m_lazyIconTimer = new QTimer(this); 
-    m_lazyIconTimer->setInterval(30); // 每 30ms 提取一批图标，确保不卡主线程 
-    connect(m_lazyIconTimer, &QTimer::timeout, [this]() { 
-        if (m_iconPendingPaths.isEmpty()) { 
-            m_lazyIconTimer->stop(); 
-            return; 
-        } 
- 
-        // 每次处理 20 个项目，在流畅度与加载速度间取得平衡 
-        // 2026-05-25 物理修复：移除 static_cast<int> 以解决潜在的 T 模板冲突报错 
-        int pendingSize = (int)m_iconPendingPaths.size(); 
-        int batchSize = qMin(20, pendingSize); 
-        for (int i = 0; i < batchSize; ++i) { 
-            QString path = m_iconPendingPaths.takeFirst(); 
-            if (m_pathToIndexMap.contains(path)) { 
-                QPersistentModelIndex pIdx = m_pathToIndexMap.value(path); 
-                if (pIdx.isValid()) { 
-                    QFileInfo info(path); 
-                    QString ext = info.suffix().toLower(); 
-                    QIcon icon; 
- 
-                    // 2026-05-07 按照用户要求：SVG文件直接渲染显示实际内容 
-                    if (ext.toLower() == "svg") { 
-                        // 直接渲染SVG文件内容 
-                        QSvgRenderer renderer(path); 
-                        if (renderer.isValid()) { 
-                            QPixmap svgPixmap(96, 96); 
-                            svgPixmap.fill(Qt::transparent); 
-                            QPainter painter(&svgPixmap); 
-                            renderer.render(&painter); 
-                            painter.end(); 
-                            icon = QIcon(svgPixmap); 
-                        } 
-                    } else if (UiHelper::isGraphicsFile(ext)) { 
-                        // 2026-04-11 按照用户要求：凡是图片/图形格式，物理强制提取内容缩略图 
-                        // 2026-04-11 按照用户要求：专属注入 true 参数，只对走缓存的小列表图执行垂直翻转修正 
-                        QPixmap thumb = UiHelper::getShellThumbnail(path, 96, true); 
-                        if (!thumb.isNull()) { 
-                            icon = QIcon(thumb); 
-                        } 
-                    } 
- 
-                    // 降级保护：如果提取失败或非图形格式，使用 SVG 语义图标替代原生系统图标 
-                    if (icon.isNull()) { 
-                        // 2026-06-05 按照要求：检测标记颜色并实时着色图标 
-                        QString colorName = pIdx.data(ColorRole).toString(); 
-                        QColor tagColor = UiHelper::parseColorName(colorName); 
-                        // 2026-05-27 物理修复：图标分辨率提升至 128 
-                        icon = UiHelper::getFileIcon(path, 128, tagColor); 
-                    } 
- 
-                    m_model->setData(pIdx, icon, Qt::DecorationRole); 
-                } 
-                m_pathToIndexMap.remove(path); 
-            } 
-        } 
-    }); 
+    // 2026-07-xx 物理同步：从配置中加载分类递归显示状态
+    m_isCategoryRecursive = AppConfig::instance().getValue("ContentPanel/IsCategoryRecursive", false).toBool();
+    // 2026-07-xx 按照用户要求：文件夹默认设为隐藏 (false)
+    m_showFolders = AppConfig::instance().getValue("ContentPanel/ShowFolders", false).toBool();
+    m_showFiles = AppConfig::instance().getValue("ContentPanel/ShowFiles", true).toBool();
+    
+    // 同步到当前 FilterState
+    m_currentFilter.showFolders = m_showFolders;
+    m_currentFilter.showFiles = m_showFiles;
  
     initUi(); 
     // 2026-05-27 按照用户要求：构造函数末尾强行对齐初始网格尺寸，废除 initGridView 中的旧硬编码值 
@@ -375,6 +821,55 @@ void ContentPanel::deferredInit() {
     // 2026-04-12 按照用户要求：补全延迟初始化逻辑，此处可处理模型预热或首屏数据对齐 
     qDebug() << "[ContentPanel] deferredInit 执行完毕"; 
 } 
+
+ItemRecord ContentPanel::createItemRecord(const QString& path) {
+    ItemRecord r;
+    // 2026-xx-xx 按照 Plan-114：统一物理路径归一化准则，确保与元数据缓存 Key 严格对齐
+    std::wstring wPath = MetadataManager::normalizePath(path.toStdWString());
+    QString nPath = QString::fromStdWString(wPath);
+    QFileInfo info(nPath);
+
+    // 1. 物理属性采样 (零 I/O 核心)
+    std::string fid;
+    long long size = 0, ctime = 0, mtime = 0, atime = 0;
+    MetadataManager::fetchWinApiMetadataDirect(wPath, fid, nullptr, &size, nullptr, &ctime, &mtime, &atime);
+
+    r.path = nPath;
+    r.size = size;
+    r.ctime = ctime;
+    r.mtime = mtime;
+    r.atime = atime;
+
+    // 2. 核心元数据注入 (确保 width/height/palettes 物理对齐)
+    auto meta = MetadataManager::instance().getMeta(wPath);
+    r.isDir = info.isDir(); // 物理属性优先，确保未索引目录显示正常
+    r.rating = meta.rating;
+    r.color = QString::fromStdWString(meta.color);
+    r.tags = meta.tags;
+    r.fileId = meta.fileId128;
+    r.pinned = meta.pinned;
+    r.encrypted = meta.encrypted;
+    r.url = QString::fromStdWString(meta.url);
+    r.note = QString::fromStdWString(meta.note);
+    r.width = meta.width;
+    r.height = meta.height;
+    r.isManaged = meta.hasUserOperations();
+    for (const auto& pe : meta.palettes) {
+        r.palettes.push_back({pe.color, pe.ratio});
+    }
+
+    if (r.isDir) {
+        // 2026-07-xx 按照 Development_Plan 3.2：从数据库加载持久化的进度值
+        r.registrationProgress = MetadataManager::instance().getProgressFromDb(wPath);
+
+        QDir sub(nPath);
+        r.isEmpty = sub.entryList(QDir::NoDotAndDotDot | QDir::AllEntries).isEmpty();
+        r.suffix = ""; // 文件夹不应有扩展名后缀
+    } else {
+        r.suffix = QFileInfo(nPath).suffix().toLower();
+    }
+    return r;
+}
  
 void ContentPanel::initUi() { 
     QWidget* titleBar = new QWidget(this); 
@@ -387,7 +882,7 @@ void ContentPanel::initUi() {
         "}" 
     ); 
     QHBoxLayout* titleL = new QHBoxLayout(titleBar); 
-    titleL->setContentsMargins(15, 0, 5, 0); // 2026-05-17 按照用户要求：右侧边距统一设为 5px，消除 15px 留白
+    titleL->setContentsMargins(15, 0, 5, 0); // 2026-xx-xx 按照用户要求：右侧保留 5px 呼吸边距
     titleL->setSpacing(5);                  // 2026-05-17 按照用户要求：间距统一为 5px
  
     QLabel* iconLabel = new QLabel(titleBar); 
@@ -397,17 +892,81 @@ void ContentPanel::initUi() {
     QLabel* titleLabel = new QLabel("内容", titleBar); 
     titleLabel->setStyleSheet("font-size: 13px; font-weight: bold; color: #41F2F2; background: transparent; border: none;"); 
      
+    m_btnToggleFolders = new QPushButton(titleBar);
+    m_btnToggleFolders->setCheckable(true);
+    m_btnToggleFolders->setFixedSize(24, 24);
+    m_btnToggleFolders->setChecked(m_showFolders);
+    m_btnToggleFolders->setIcon(UiHelper::getIcon("folder_filled", m_showFolders ? QColor("#FDB70A") : QColor("#B0B0B0"), 16));
+    m_btnToggleFolders->setProperty("tooltipText", "显示/隐藏文件夹");
+    m_btnToggleFolders->installEventFilter(this);
+    m_btnToggleFolders->setStyleSheet(
+        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
+        "QPushButton:hover { background: #3E3E42; }"
+        "QPushButton:checked { background: #3E3E42; border: none; }" 
+        "QPushButton:pressed { background: #4E4E52; }"
+    );
+    connect(m_btnToggleFolders, &QPushButton::clicked, [this]() {
+        m_showFolders = m_btnToggleFolders->isChecked();
+        m_btnToggleFolders->setIcon(UiHelper::getIcon("folder_filled", m_showFolders ? QColor("#FDB70A") : QColor("#B0B0B0"), 16));
+        AppConfig::instance().setValue("ContentPanel/ShowFolders", m_showFolders);
+        m_currentFilter.showFolders = m_showFolders;
+        applyFilters();
+    });
+
+    m_btnToggleFiles = new QPushButton(titleBar);
+    m_btnToggleFiles->setCheckable(true);
+    m_btnToggleFiles->setFixedSize(24, 24);
+    m_btnToggleFiles->setChecked(m_showFiles);
+    m_btnToggleFiles->setIcon(UiHelper::getIcon("file", m_showFiles ? QColor("#2ecc71") : QColor("#B0B0B0"), 16));
+    m_btnToggleFiles->setProperty("tooltipText", "显示/隐藏文件");
+    m_btnToggleFiles->installEventFilter(this);
+    m_btnToggleFiles->setStyleSheet(
+        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
+        "QPushButton:hover { background: #3E3E42; }"
+        "QPushButton:checked { background: #3E3E42; border: none; }" 
+        "QPushButton:pressed { background: #4E4E52; }"
+    );
+    connect(m_btnToggleFiles, &QPushButton::clicked, [this]() {
+        m_showFiles = m_btnToggleFiles->isChecked();
+        m_btnToggleFiles->setIcon(UiHelper::getIcon("file", m_showFiles ? QColor("#2ecc71") : QColor("#B0B0B0"), 16));
+        AppConfig::instance().setValue("ContentPanel/ShowFiles", m_showFiles);
+        m_currentFilter.showFiles = m_showFiles;
+        applyFilters();
+    });
+
+    m_btnLayersBlue = new QPushButton(titleBar);
+    m_btnLayersBlue->setCheckable(true);
+    m_btnLayersBlue->setFixedSize(24, 24);
+    m_btnLayersBlue->setIcon(UiHelper::getIcon("layers", QColor("#3498db"), 18));
+    m_btnLayersBlue->setProperty("tooltipText", "显示子分类中的项目");
+    m_btnLayersBlue->installEventFilter(this);
+    m_btnLayersBlue->setStyleSheet(
+        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
+        "QPushButton:hover { background: #3E3E42; }"
+        "QPushButton:checked { background: #3E3E42; border: none; }" 
+        "QPushButton:pressed { background: #4E4E52; }"
+        "QPushButton:disabled { opacity: 0.3; }"
+    );
+    connect(m_btnLayersBlue, &QPushButton::clicked, [this]() {
+        m_isCategoryRecursive = m_btnLayersBlue->isChecked();
+        AppConfig::instance().setValue("ContentPanel/IsCategoryRecursive", m_isCategoryRecursive);
+        if (m_currentCategoryId != -1) {
+            loadCategory(m_currentCategoryId);
+        }
+    });
+
     m_btnLayers = new QPushButton(titleBar); 
     m_btnLayers->setCheckable(true); 
     m_btnLayers->setFixedSize(24, 24); 
-    m_btnLayers->setIcon(UiHelper::getIcon("layers", QColor("#B0B0B0"), 18)); 
+    m_btnLayers->setIcon(UiHelper::getIcon("layers", QColor("#2ecc71"), 18)); // 2026-xx-xx 按照用户要求：图层按钮改为绿色，以匹配目录导航配色
     // 2026-03-xx 按照宪法要求：禁绝原生 ToolTip，强制对接 ToolTipOverlay 
-    m_btnLayers->setProperty("tooltipText", "递归显示子目录所有文件"); 
+    m_btnLayers->setProperty("tooltipText", "显示子文件夹中的项目"); 
     m_btnLayers->installEventFilter(this); 
     m_btnLayers->setStyleSheet( 
         "QPushButton { background: transparent; border: none; border-radius: 4px; }" 
-        "QPushButton:hover { background: rgba(255, 255, 255, 0.1); }" 
-        "QPushButton:checked { background: rgba(52, 152, 219, 0.2); border: 1px solid #3498db; }" 
+        "QPushButton:hover { background: #3E3E42; }" 
+        "QPushButton:checked { background: #3E3E42; border: none; }" 
+        "QPushButton:pressed { background: #4E4E52; }" 
         "QPushButton:disabled { opacity: 0.3; }" 
     ); 
     connect(m_btnLayers, &QPushButton::clicked, [this]() { 
@@ -433,6 +992,9 @@ void ContentPanel::initUi() {
  
     titleL->addWidget(titleLabel); 
     titleL->addStretch(); 
+    titleL->addWidget(m_btnToggleFolders, 0, Qt::AlignVCenter);
+    titleL->addWidget(m_btnToggleFiles, 0, Qt::AlignVCenter);
+    titleL->addWidget(m_btnLayersBlue, 0, Qt::AlignVCenter);
     titleL->addWidget(m_btnLayers, 0, Qt::AlignVCenter); 
  
     m_mainLayout->addWidget(titleBar); 
@@ -447,7 +1009,8 @@ void ContentPanel::initUi() {
     m_viewStack->setCurrentWidget(m_gridView); 
  
     QVBoxLayout* contentWrapper = new QVBoxLayout(); 
-    contentWrapper->setContentsMargins(4, 4, 4, 4); // 2026-05-08 按照用户要求：增加到4px使卡片到容器边缘达到10px
+    // 2026-06-xx 物理对齐：右侧边距设为 0，使滚动条贴合容器边缘
+    contentWrapper->setContentsMargins(4, 4, 0, 4); 
     contentWrapper->setSpacing(0); 
     contentWrapper->addWidget(m_viewStack); 
      
@@ -469,6 +1032,7 @@ void ContentPanel::initUi() {
     m_imagePreview->installEventFilter(this); 
  
     m_gridView->installEventFilter(this); 
+    m_treeView->installEventFilter(this);
 } 
  
 void ContentPanel::updateStatusBarStats() {
@@ -483,24 +1047,59 @@ void ContentPanel::updateStatusBarStats() {
 
 void ContentPanel::updateGridSize() {
     // 2026-06-05 按照用户要求：彻底重构为正方形布局，名称外置
-    // 2026-06-05 按照要求：将最小值锁定为 56
-    m_zoomLevel = qBound(56, m_zoomLevel, 128);
-    m_gridView->setIconSize(QSize(m_zoomLevel, m_zoomLevel));
+    // 2026-06-08 按照用户核心铁律：物理强制锁定缩放最小值为 96 像素
     
-    int side = m_zoomLevel + 46; // 正方形边长
-    int ratingH = 22;           // 2026-05-17 按照要求：为卡片外的评分区预留高度
-    int nameH = (int)(m_zoomLevel * 0.25); // 名称高度
-    int gap = 6;                // 间距归一化
+    if (m_viewStack->currentWidget() == m_gridView) {
+        m_zoomLevel = qBound(96, m_zoomLevel, 128);
+    }
+
+    // 写入实时日志 
+    ArcMeta::Logger::log(QString("[UI_DEBUG] 卡片缩放级: %1").arg(m_zoomLevel));
     
-    // 总高度 = 正方形边长 + 间距1 + 评分高度 + 间距2 + 名称高度 + 底部缓冲
-    int totalH = side + gap + ratingH + gap + nameH + 8;
-    m_gridView->setGridSize(QSize(side, totalH));
+    if (m_viewStack->currentWidget() == m_gridView) {
+        if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+            jv->setTargetRowHeight(m_zoomLevel);
+        } else if (auto* lv = qobject_cast<QListView*>(m_gridView)) {
+            lv->setIconSize(QSize(m_zoomLevel, m_zoomLevel));
+            int side = m_zoomLevel + 46; // 正方形边长
+            int ratingH = 24;           // 2026-05-17 按照要求：为卡片外的评分区预留高度
+            int nameH = (int)(m_zoomLevel * 0.25); // 名称高度
+            int gap = 6;                // 间距归一化
+            
+            // 总高度 = 正方形边长 + 间距1 + 评分高度 + 间距2 + 名称高度 + 底部缓冲
+            int totalH = side + gap + ratingH + gap + nameH + 8;
+            lv->setGridSize(QSize(side, totalH));
+        }
+    } else if (m_viewStack->currentWidget() == m_treeView) {
+        // 2026-06-xx 按照要求：列表模式下调整行高
+        if (m_zoomLevel > 96) {
+            // 如果行高超过 96，自动切换到卡片形式
+            setViewMode(GridView);
+            m_zoomLevel = 96; // 修正：切换回网格时对齐红线
+            updateGridSize();
+            return;
+        }
+        
+        // 2026-06-xx 物理修复：图标大小必须随行高变化
+        m_treeView->setIconSize(QSize(m_zoomLevel - 8, m_zoomLevel - 8));
+        
+        // 2026-06-xx 性能优化：仅当行高发生实际变化时更新样式表
+        static int lastTreeHeight = -1;
+        if (lastTreeHeight != m_zoomLevel) {
+            m_treeView->setStyleSheet( 
+                QString("QTreeView { background-color: transparent; border: none; outline: none; font-size: 12px; }" 
+                        "QTreeView::item { height: %1px; color: #EEEEEE; padding-left: 0px; }" 
+                        "QTreeView QLineEdit { background-color: #2D2D2D; color: #FFFFFF; border: 1px solid #378ADD; border-radius: 6px; padding: 2px; selection-background-color: #378ADD; selection-color: #FFFFFF; }")
+                .arg(m_zoomLevel)
+            );
+            lastTreeHeight = m_zoomLevel;
+        }
+    }
 
     // 2026-06-05 按照要求：持久化保存当前的缩放级别
-    QSettings settings("ArcMeta团队", "ArcMeta");
-    settings.setValue("UI/GridZoomLevel", m_zoomLevel);
+    AppConfig::instance().setValue("UI/GridZoomLevel", m_zoomLevel);
 
-    qDebug() << "[GridSize] Zoom:" << m_zoomLevel << "Square:" << side << "TotalH:" << totalH;
+    qDebug() << "[GridSize] Zoom:" << m_zoomLevel;
 } 
  
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) { 
@@ -509,20 +1108,49 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
     if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) { 
         QString text = obj->property("tooltipText").toString(); 
         if (!text.isEmpty()) { 
-            ToolTipOverlay::instance()->showText(QCursor::pos(), text); 
+            int timeout = (obj == m_btnLayers || obj == m_btnLayersBlue || 
+                       obj == m_btnToggleFolders || obj == m_btnToggleFiles ||
+                       obj == m_btnLayersBlue) ? 0 : 700;
+            ToolTipOverlay::instance()->showText(QCursor::pos(), text, timeout); 
         } 
     } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::Leave || event->type() == QEvent::MouseButtonPress) { 
         ToolTipOverlay::hideTip(); 
     } 
  
-    if ((obj == m_gridView || obj == m_gridView->viewport()) && event->type() == QEvent::Wheel) { 
+    if ((obj == m_gridView || obj == m_gridView->viewport() || obj == m_treeView || obj == m_treeView->viewport()) && event->type() == QEvent::Wheel) { 
         // 2026-05-25 物理修复：改用 reinterpret_cast 避开 static_cast 的类型推导逻辑错误 
         QWheelEvent* wEvent = reinterpret_cast<QWheelEvent*>(event); 
         if (wEvent->modifiers() & Qt::ControlModifier) { 
             int delta = wEvent->angleDelta().y(); 
-            if (delta > 0) m_zoomLevel += 8; 
-            else m_zoomLevel -= 8; 
-            updateGridSize(); 
+            if (delta > 0) {
+                // 向上滚动（放大）
+                if (m_viewStack->currentWidget() == m_treeView) {
+                    m_zoomLevel += 4; // 列表模式步进调小一些，追求平滑
+                    if (m_zoomLevel > 96) {
+                        m_zoomLevel = 96;
+                        setViewMode(GridView);
+                    }
+                    updateGridSize();
+                } else {
+                    m_zoomLevel += 8;
+                    updateGridSize();
+                }
+            } else {
+                // 向下滚动（缩小）
+                if (m_viewStack->currentWidget() == m_gridView) {
+                    if (m_zoomLevel <= 96) {
+                        setViewMode(ListView);
+                        m_zoomLevel = 80; // 切换到列表时给一个初始行高
+                        updateGridSize();
+                    } else {
+                        m_zoomLevel -= 8;
+                        updateGridSize();
+                    }
+                } else if (m_viewStack->currentWidget() == m_treeView) {
+                    m_zoomLevel = qMax(24, m_zoomLevel - 4); // 列表模式最小行高锁定 24
+                    updateGridSize();
+                }
+            }
             return true; 
         } 
     } 
@@ -556,11 +1184,7 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                 auto indexes = view->selectionModel()->selectedIndexes(); 
                 for (const auto& idx : indexes) { 
                     if (idx.column() == 0) { 
-                        QString path = idx.data(PathRole).toString(); 
-                        if (!path.isEmpty()) { 
-                            MetadataManager::instance().setRating(path.toStdWString(), rating); 
-                            m_proxyModel->setData(idx, rating, RatingRole); 
-                        } 
+                        m_proxyModel->setData(idx, rating, RatingRole); 
                     } 
                 } 
                 return true; 
@@ -571,12 +1195,8 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                 auto indexes = view->selectionModel()->selectedIndexes(); 
                 for (const QModelIndex& idx : indexes) { 
                     if (idx.column() == 0) { 
-                        QString itemPath = idx.data(PathRole).toString(); 
-                        if (!itemPath.isEmpty()) { 
-                            bool current = idx.data(IsLockedRole).toBool(); 
-                            MetadataManager::instance().setPinned(itemPath.toStdWString(), !current); 
-                            m_proxyModel->setData(idx, !current, IsLockedRole); 
-                        } 
+                        bool current = idx.data(IsLockedRole).toBool(); 
+                        m_proxyModel->setData(idx, !current, IsLockedRole); 
                     } 
                 } 
                 return true; 
@@ -587,30 +1207,26 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                  
                 QString colorValue; 
                 switch (keyEvent->key()) { 
-                    case Qt::Key_1: colorValue = "#E04040"; break; // red (quantized)
-                    case Qt::Key_2: colorValue = "#E09020"; break; // orange (quantized)
-                    case Qt::Key_3: colorValue = "#F0C070"; break; // yellow (quantized)
-                    case Qt::Key_4: colorValue = "#609020"; break; // green (quantized)
-                    case Qt::Key_5: colorValue = "#109070"; break; // cyan (quantized)
-                    case Qt::Key_6: colorValue = "#3080D0"; break; // blue (quantized)
-                    case Qt::Key_7: colorValue = "#7070D0"; break; // purple (quantized)
-                    case Qt::Key_8: colorValue = "#505050"; break; // gray (quantized)
+                    case Qt::Key_1: colorValue = "#E24B4A"; break; // red
+                    case Qt::Key_2: colorValue = "#EF9F27"; break; // orange
+                    case Qt::Key_3: colorValue = "#FECF0E"; break; // yellow
+                    case Qt::Key_4: colorValue = "#639922"; break; // green
+                    case Qt::Key_5: colorValue = "#1D9E75"; break; // cyan
+                    case Qt::Key_6: colorValue = "#378ADD"; break; // blue
+                    case Qt::Key_7: colorValue = "#7F77DD"; break; // purple
+                    case Qt::Key_8: colorValue = "#5F5E5A"; break; // gray
                     case Qt::Key_9: colorValue = ""; break; 
                 } 
  
-                QColor tagColor = UiHelper::parseColorName(colorValue); 
                 auto indexes = view->selectionModel()->selectedIndexes(); 
                 for (const auto& idx : indexes) { 
                     if (idx.column() == 0) { 
-                        QString path = idx.data(PathRole).toString(); 
-                        if (!path.isEmpty()) { 
-                            MetadataManager::instance().setColor(path.toStdWString(), colorValue.toStdWString()); 
-                            m_proxyModel->setData(idx, colorValue, ColorRole); 
+                        m_proxyModel->setData(idx, colorValue, ColorRole); 
  
-                            // 2026-06-05 按照要求：快捷键设置颜色后立即重渲染图标，实现视觉同步 
-                            QIcon coloredIcon = UiHelper::getFileIcon(path, 128, tagColor); 
-                            m_proxyModel->setData(idx, coloredIcon, Qt::DecorationRole); 
-                        } 
+                        // 2026-06-05 按照要求：快捷键设置颜色后立即重渲染图标，实现视觉同步 
+                        QString path = idx.data(PathRole).toString(); 
+                        QIcon coloredIcon = UiHelper::getFileIcon(path, 128); 
+                        m_proxyModel->setData(idx, coloredIcon, Qt::DecorationRole); 
                     } 
                 } 
                 return true; 
@@ -660,7 +1276,32 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
  
             if (keyEvent->key() == Qt::Key_Space) { 
                 QModelIndex idx = view->currentIndex(); 
-                if (idx.isValid()) emit requestQuickLook(idx.data(PathRole).toString()); 
+                if (idx.isValid()) {
+                    QString path = idx.data(PathRole).toString();
+                    if (!path.isEmpty()) {
+                        // 2026-11-14 按照 Plan-109：全口径预览属性过滤（白名单优先策略）
+                        QFileInfo info(path);
+                        if (info.isDir()) return true; // 拦截文件夹
+
+                        QString ext = info.suffix().toLower();
+                        // 1. 系统级不可预览黑名单 (包含压缩包、二进制文件及系统库)
+                        static const QSet<QString> blackList = {
+                            "exe", "dll", "sys", "bin", "dat", "lib", "obj", "msi", "com",
+                            "zip", "rar", "7z", "iso", "tar", "gz", "bz2", "dmg", "pkg"
+                        };
+                        if (blackList.contains(ext)) return true;
+
+                        // 2. 预览准入白名单 (仅限受支持的图像类及文本/代码类文件)
+                        static const QSet<QString> whiteList = {
+                            "jpg", "jpeg", "png", "bmp", "webp", "gif", "ico", "psd", "ai", "eps", "pdf", "svg",
+                            "txt", "md", "markdown", "log", "cpp", "h", "hpp", "c", "py", "js", "css", "html", "json", "xml", "ini", "conf", "yaml", "yml"
+                        };
+
+                        if (whiteList.contains(ext)) {
+                            emit requestQuickLook(path);
+                        }
+                    }
+                }
                 return true; 
             } 
             if (keyEvent->key() == Qt::Key_Backspace) { 
@@ -708,9 +1349,35 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
 void ContentPanel::wheelEvent(QWheelEvent* event) { 
     if (event->modifiers() & Qt::ControlModifier) { 
         int delta = event->angleDelta().y(); 
-        if (delta > 0) m_zoomLevel += 8; 
-        else m_zoomLevel -= 8; 
-        updateGridSize(); 
+        if (delta > 0) {
+            // 放大
+            if (m_viewStack->currentWidget() == m_treeView) {
+                m_zoomLevel += 4;
+                if (m_zoomLevel > 96) {
+                    m_zoomLevel = 96;
+                    setViewMode(GridView);
+                }
+                updateGridSize();
+            } else {
+                m_zoomLevel += 8;
+                updateGridSize();
+            }
+        } else {
+            // 缩小
+            if (m_viewStack->currentWidget() == m_gridView) {
+                if (m_zoomLevel <= 96) {
+                    setViewMode(ListView);
+                    m_zoomLevel = 80;
+                    updateGridSize();
+                } else {
+                    m_zoomLevel -= 8;
+                    updateGridSize();
+                }
+            } else if (m_viewStack->currentWidget() == m_treeView) {
+                m_zoomLevel = qMax(24, m_zoomLevel - 4);
+                updateGridSize();
+            }
+        }
         event->accept(); 
     } else { 
         QWidget::wheelEvent(event); 
@@ -723,51 +1390,83 @@ void ContentPanel::setViewMode(ViewMode mode) {
 } 
  
 void ContentPanel::initGridView() { 
-    m_gridView = new DropListView(this); 
-    m_gridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff); 
-    m_gridView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); 
-    m_gridView->setViewMode(QListView::IconMode); 
-    m_gridView->setMovement(QListView::Static); 
-    m_gridView->setSpacing(8); 
-    m_gridView->setResizeMode(QListView::Adjust); 
-    m_gridView->setWrapping(true); 
-    m_gridView->setIconSize(QSize(96, 96)); 
-    m_gridView->setSpacing(0); 
+    m_gridView = new DropJustifiedView(this); 
+    m_gridView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
+    m_gridView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
     m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection); 
+    // 2026-06-xx 按照用户要求：开启蓝色透明框选效果
+    // 物理修复：对于 ListView/TreeView 使用 setSelectionRectVisible
+    if (auto* lv = qobject_cast<QListView*>(m_gridView)) lv->setSelectionRectVisible(true);
+
+    // 2026-06-xx 物理对齐：通过 QPalette 设定全局蓝色透明框选视觉样式
+    QPalette p = m_gridView->palette();
+    // 使用 #378ADD (QColor(55, 138, 221)) 并设定 Alpha 为 80 以确保框选内容清晰可见
+    p.setColor(QPalette::Highlight, QColor(55, 138, 221, 80)); 
+    p.setColor(QPalette::HighlightedText, Qt::white);
+    m_gridView->setPalette(p);
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu); 
  
     m_gridView->setDragEnabled(true); 
-    m_gridView->setDragDropMode(QAbstractItemView::DragOnly); 
+    m_gridView->setAcceptDrops(true);
+    m_gridView->setDragDropMode(QAbstractItemView::DragDrop); 
  
-    m_gridView->setEditTriggers(QAbstractItemView::EditKeyPressed | QAbstractItemView::SelectedClicked); 
+    // 2026-06-xx 物理纠偏：移除 SelectedClicked，防止单击项目时意外触发重命名，确保交互稳健
+    m_gridView->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed); 
  
     m_gridView->setModel(m_proxyModel); 
-    m_gridView->setItemDelegate(new GridItemDelegate(this)); 
+
+    connect(m_gridView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
+
+    auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
+    if (justifiedView) {
+        justifiedView->setAspectRatioRole(AspectRatioRole);
+        auto* delegate = new ThumbnailDelegate(this);
+        delegate->setHasThumbnailRole(HasThumbnailRole);
+        delegate->setRatingRole(RatingRole);
+        delegate->setPathRole(PathRole);
+        delegate->setPinnedRole(PinnedRole);
+        delegate->setManagedRole(ManagedRole);
+        delegate->setTypeRole(TypeRole);
+        delegate->setIsEmptyRole(IsEmptyRole);
+        delegate->setColorRole(ColorRole);
+        delegate->setRegistrationProgressRole(RegistrationProgressRole);
+        m_gridView->setItemDelegate(delegate);
+    } else {
+        m_gridView->setItemDelegate(new GridItemDelegate(this)); 
+    }
+
     m_gridView->viewport()->installEventFilter(this); 
  
-    connect(m_gridView, &QListView::doubleClicked, this, &ContentPanel::onDoubleClicked); 
+    connect(m_gridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked); 
  
     m_gridView->setStyleSheet( 
-        "QListView { background-color: transparent; border: none; outline: none; }" 
-        "QListView::item { background: transparent; }" 
-        "QListView::item:selected { background-color: rgba(55, 138, 221, 0.2); border-radius: 8px; }" 
-        "QListView QLineEdit { background-color: #2D2D2D; color: #FFFFFF; border: 1px solid #378ADD; border-radius: 6px; padding: 2px; selection-background-color: #378ADD; selection-color: #FFFFFF; }" 
+        "QAbstractItemView { background-color: transparent; border: none; outline: none; }" 
+        "QAbstractItemView::item { background: transparent; }" 
+        "QAbstractItemView::item:selected { background-color: transparent; }" 
+        "QAbstractItemView::item:hover { background-color: transparent; }"
     ); 
  
     connect(m_gridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged); 
-    connect(m_gridView, &QListView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested); 
+    connect(m_gridView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested); 
 } 
  
 void ContentPanel::initListView() { 
     m_treeView = new DropTreeView(this); 
-    m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff); 
-    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); 
+    m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
+    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
     m_treeView->setSortingEnabled(true); 
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu); 
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection); 
+    // 2026-06-xx 按照用户要求：开启蓝色透明框选效果
+    // 物理修复：QTreeView 不支持 setSelectionRectVisible，通过 QPalette 高亮色实现视觉对齐
+    QPalette tp = m_treeView->palette();
+    tp.setColor(QPalette::Highlight, QColor(55, 138, 221, 80));
+    tp.setColor(QPalette::HighlightedText, Qt::white);
+    m_treeView->setPalette(tp);
      
     m_treeView->setDragEnabled(true); 
-    m_treeView->setDragDropMode(QAbstractItemView::DragOnly); 
+    m_treeView->setAcceptDrops(true);
+    m_treeView->setDragDropMode(QAbstractItemView::DragDrop); 
  
     m_treeView->setExpandsOnDoubleClick(false); 
     m_treeView->setRootIsDecorated(false); 
@@ -776,16 +1475,87 @@ void ContentPanel::initListView() {
  
     m_treeView->setModel(m_proxyModel); 
     m_treeView->viewport()->installEventFilter(this); 
+
+    connect(m_treeView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
  
     m_treeView->setStyleSheet( 
         "QTreeView { background-color: transparent; border: none; outline: none; font-size: 12px; }" 
         "QTreeView::item { height: 28px; color: #EEEEEE; padding-left: 0px; }" 
+        "QTreeView::item:selected { background-color: rgba(52, 152, 219, 0.2); border-left: 2px solid #3498db; }"
+        "QTreeView::item:hover { background-color: #2A2A2A; }"
         "QTreeView QLineEdit { background-color: #2D2D2D; color: #FFFFFF; border: 1px solid #378ADD; border-radius: 6px; padding: 2px; selection-background-color: #378ADD; selection-color: #FFFFFF; }" 
     ); 
  
+    m_treeView->header()->setDefaultAlignment(Qt::AlignCenter);
     m_treeView->header()->setStyleSheet( 
-        "QHeaderView::section { background-color: #252525; color: #B0B0B0; padding-left: 10px; border: none; height: 32px; font-size: 11px; }" 
+        "QHeaderView::section { background-color: #252525; color: #B0B0B0; border: none; border-right: 1px solid #333333; height: 32px; font-size: 11px; }" 
     ); 
+    
+    // 2026-06-16 工业级 UI 架构重构 (Plan-21)：名称 Stretch + 日期可调且 Min 150px
+    auto* header = m_treeView->header();
+    header->setStretchLastSection(false); // 禁止末端拉伸，交由名称列处理
+    header->setCascadingSectionResizes(false);
+    header->setMinimumSectionSize(30);    // 全局最小宽度设定为 30 像素
+
+    QByteArray headerState = AppConfig::instance().getValue("UI/ListHeaderState").toByteArray();
+    if (!headerState.isEmpty()) {
+        header->restoreState(headerState);
+    } 
+
+    // 无论是否恢复状态，都显式设定初始宽度与最小值，防止恢复状态异常导致列宽为0
+    // 确保所有列均可见
+    for(int i = 0; i <= 7; ++i) header->setSectionHidden(i, false);
+
+    // 初始像素宽度设定
+    header->resizeSection(0, 400); // 名称
+    header->resizeSection(1, 40);  // 状态 (固定图标区)
+    header->resizeSection(2, 60);  // 星级 (固定图标区)
+    header->resizeSection(3, 60);  // 颜色标记 (固定图标区)
+    header->resizeSection(4, 100); // 标签
+    header->resizeSection(5, 80);  // 类型
+    header->resizeSection(6, 80);  // 大小
+    header->resizeSection(7, 150); // 修改日期：物理锁定 150 像素
+    
+    // 1. 设定调整模式：名称列拉伸，其余列交互
+    for(int i = 1; i <= 7; ++i) {
+        header->setSectionResizeMode(i, QHeaderView::Interactive);
+    }
+    header->setSectionResizeMode(0, QHeaderView::Stretch);
+
+    // 3. 宽度守恒与物理红线拦截逻辑
+    connect(header, &QHeaderView::sectionResized, this, [this, header](int index, int oldSize, int newSize) {
+        Q_UNUSED(oldSize);
+        static bool guard = false; 
+        if (guard || index == 0) return; 
+        
+        guard = true;
+        
+        // 物理红线判定：修改日期（索引7）最小 150px
+        if (index == 7 && newSize < 150) {
+            header->resizeSection(7, 150);
+            guard = false;
+            return;
+        }
+
+        // 宽度守恒判定：杜绝水平滚动条
+        int currentTotal = header->length();
+        int maxAvailable = m_treeView->viewport()->width();
+        
+        if (currentTotal > maxAvailable && maxAvailable > 100) {
+             int allowed = newSize - (currentTotal - maxAvailable);
+             int minAllowed = header->minimumSectionSize();
+             if (index == 7) minAllowed = 150; // 修改日期红线优先级最高
+             
+             header->resizeSection(index, qMax(minAllowed, allowed));
+        }
+        
+        // 5. 持久化逻辑：仅在非加载状态下保存，防止启动抖动
+        if (!m_isLoading) {
+            AppConfig::instance().setValue("UI/ListHeaderState", header->saveState());
+        }
+        
+        guard = false;
+    });
  
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged); 
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested); 
@@ -805,6 +1575,12 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     UiHelper::applyMenuStyle(&menu); 
  
     if (onItem) { 
+        // 2026-06-xx 物理修复：在回收站分类中，顶部增加“还原”选项
+        if (m_currentCategoryType == "trash") {
+            menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原")->setData(ActionRestore);
+            menu.addSeparator();
+        }
+
         // [核心操作区] 
         QAction* actOpen = menu.addAction(isFolder ? "打开文件夹" : "打开"); 
         actOpen->setData(ActionOpen); 
@@ -816,60 +1592,135 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         menu.addSeparator(); 
  
         // [归类与标记区] 
-        QMenu* categorizeMenu = menu.addMenu("归类到..."); 
-        UiHelper::applyMenuStyle(categorizeMenu); 
-        auto categories = CategoryRepo::getAll(); 
-        if (categories.empty()) { 
-            categorizeMenu->addAction("（暂无分类）")->setEnabled(false); 
-        } else { 
-            for (const auto& cat : categories) { 
-                QAction* act = categorizeMenu->addAction(QString::fromStdWString(cat.name)); 
-                act->setData(ActionCategorize); 
-                act->setProperty("catId", cat.id); 
+        // 2026-07-xx 按照 Plan-117：语义分流。判定当前是否为“镜像源”
+        // 镜像源定义：侧边栏分类模式 (m_currentCategoryType 不为空) 
+        // 或 物理导航模式下已进入托管库内部 (镜像加速态)
+        bool isMirrorSource = !m_currentCategoryType.isEmpty();
+        if (!isMirrorSource && !m_currentPath.isEmpty()) {
+            isMirrorSource = MetadataManager::isInsideManagedLibrary(m_currentPath.toStdWString());
+        }
+
+        if (isMirrorSource) {
+            // [镜像源：归类与元数据编辑区]
+            QMenu* categorizeMenu = menu.addMenu("归类到..."); 
+            UiHelper::applyMenuStyle(categorizeMenu); 
+            auto categories = CategoryRepo::getRecentlyUsed(15); 
+            if (categories.empty()) categories = CategoryRepo::getAll();
+            if (categories.size() > 15) categories.resize(15);
+
+            QAction* actToUncat = categorizeMenu->addAction(UiHelper::getIcon("uncategorized", QColor("#95a5a6"), 16), "回归“未分类”");
+            actToUncat->setData(ActionCategorize);
+            actToUncat->setProperty("catId", -2); 
+            categorizeMenu->addSeparator();
+
+            if (categories.empty()) { 
+                categorizeMenu->addAction("（暂无分类）")->setEnabled(false); 
+            } else { 
+                for (const auto& cat : categories) { 
+                    QAction* act = categorizeMenu->addAction(QString::fromStdWString(cat.name)); 
+                    act->setData(ActionCategorize); 
+                    act->setProperty("catId", cat.id); 
+                } 
+            }
+
+            QMenu* colorMenu = menu.addMenu("设定颜色标签"); 
+            UiHelper::applyMenuStyle(colorMenu); 
+            colorMenu->setIcon(UiHelper::getIcon("palette", QColor("#EEEEEE"))); 
+            struct ColorItem { QString value; QString label; QColor preview; }; 
+            QList<ColorItem> colorItems = { 
+                {"", "无颜色", QColor("#888780")}, 
+                {"#E24B4A", "红色", QColor("#E24B4A")}, 
+                {"#EF9F27", "橙色", QColor("#EF9F27")}, 
+                {"#FECF0E", "黄色", QColor("#FECF0E")}, 
+                {"#639922", "绿色", QColor("#639922")}, 
+                {"#1D9E75", "青色", QColor("#1D9E75")}, 
+                {"#378ADD", "蓝色", QColor("#378ADD")}, 
+                {"#7F77DD", "紫色", QColor("#7F77DD")}, 
+                {"#5F5E5A", "灰色", QColor("#5F5E5A")} 
+            }; 
+            for (const auto& ci : colorItems) { 
+                QAction* ca = colorMenu->addAction(ci.label); 
+                ca->setData(ActionColorTag); 
+                ca->setProperty("colorName", ci.value); 
+                QPixmap pix(12, 12); pix.fill(Qt::transparent); 
+                QPainter p(&pix); p.setRenderHint(QPainter::Antialiasing); 
+                p.setBrush(ci.preview); p.setPen(Qt::NoPen); 
+                p.drawEllipse(0, 0, 12, 12); 
+                ca->setIcon(QIcon(pix)); 
             } 
-        } 
  
-        QMenu* colorMenu = menu.addMenu("设定颜色标签"); 
-        UiHelper::applyMenuStyle(colorMenu); 
-        colorMenu->setIcon(UiHelper::getIcon("palette", QColor("#EEEEEE"))); 
-        struct ColorItem { QString value; QString label; QColor preview; }; 
-        QList<ColorItem> colorItems = { 
-            {"", "无颜色", QColor("#888780")}, 
-            {"#E04040", "红色", QColor("#E24B4A")}, 
-            {"#E09020", "橙色", QColor("#EF9F27")}, 
-            {"#F0C070", "黄色", QColor("#FAC775")}, 
-            {"#609020", "绿色", QColor("#639922")}, 
-            {"#109070", "青色", QColor("#1D9E75")}, 
-            {"#3080D0", "蓝色", QColor("#378ADD")}, 
-            {"#7070D0", "紫色", QColor("#7F77DD")}, 
-            {"#505050", "灰色", QColor("#5F5E5A")} 
-        }; 
-        for (const auto& ci : colorItems) { 
-            QAction* ca = colorMenu->addAction(ci.label); 
-            ca->setData(ActionColorTag); 
-            ca->setProperty("colorName", ci.value); 
-            QPixmap pix(12, 12); pix.fill(Qt::transparent); 
-            QPainter p(&pix); p.setRenderHint(QPainter::Antialiasing); 
-            p.setBrush(ci.preview); p.setPen(Qt::NoPen); 
-            p.drawEllipse(0, 0, 12, 12); 
-            ca->setIcon(QIcon(pix)); 
-        } 
+            bool isPinned = currentIndex.data(IsLockedRole).toBool(); 
+            menu.addAction(isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ActionUnpin : ActionPin); 
  
-        bool isPinned = currentIndex.data(IsLockedRole).toBool(); 
-        menu.addAction(isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ActionUnpin : ActionPin); 
- 
-        // --- 2026-05-16 图像分析：从图中提取主色调 ---
-        QString ext = QFileInfo(path).suffix().toLower();
-        if (UiHelper::isGraphicsFile(ext)) {
-            menu.addAction("解析颜色...")->setData(ActionExtractColor);
+            // --- 2026-07-xx 按照 Plan-116/117：语义校准，移除“收揽入库”术语 ---
+            QString ext = QFileInfo(path).suffix().toLower();
+            if (UiHelper::isGraphicsFile(ext)) {
+                bool isManaged = currentIndex.data(ManagedRole).toBool();
+                // 仅允许库内项目进行颜色解析（库外已被拦截）
+                if (isManaged) {
+                    menu.addAction(UiHelper::getIcon("palette", QColor("#EEEEEE"), 18), "重新解析颜色")->setData(ActionExtractColor);
+                } else {
+                    // 若在库内但尚未完成 USN 入库（极短中间态），提供解析颜色选项，内部会进行入库状态兜底判断
+                    menu.addAction(UiHelper::getIcon("palette", QColor("#EEEEEE"), 18), "解析颜色")->setData(ActionExtractColor);
+                }
+            }
+        } else {
+            // [物理源：显示“迁移”]
+            if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
+                std::wstring wp = path.toStdWString();
+                std::wstring volSerial = MetadataManager::getVolumeSerialNumber(wp);
+
+                // 2026-07-xx 按照 Plan-121：统一复用 AutoImportManager 的路径计算逻辑，
+                // 不再自行拼接，确保与 USN 准入判定使用完全一致的路径来源。
+                std::wstring managedRootW = AutoImportManager::getManagedLibraryPath(wp);
+                QString managedRoot = QString::fromStdWString(managedRootW);
+
+                QMenu* migrateMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#FF8C00"), 18), "迁移");
+                UiHelper::applyMenuStyle(migrateMenu);
+
+                if (managedRoot.isEmpty()) {
+                    // Library 文件夹尚未创建，给出明确提示而非显示错误路径
+                    migrateMenu->addAction("该盘库存未创建")->setEnabled(false);
+                } else {
+                    QAction* actRoot = migrateMenu->addAction(managedRoot);
+                    actRoot->setData(ActionAddToCategory);
+                    actRoot->setProperty("targetPath", managedRoot);
+
+                    migrateMenu->menuAction()->setData(ActionAddToCategory);
+                    migrateMenu->menuAction()->setProperty("targetPath", managedRoot);
+                }
+
+                migrateMenu->addSeparator();
+                QStringList recentFolders = AutoImportManager::getRecentVisitedFolders(volSerial);
+                if (recentFolders.isEmpty()) {
+                    migrateMenu->addAction("迁移至最近活跃位置...")->setEnabled(false);
+                } else {
+                    for (const QString& folder : recentFolders) {
+                        QAction* act = migrateMenu->addAction(folder);
+                        act->setData(ActionAddToCategory);
+                        act->setProperty("targetPath", folder);
+                    }
+                }
+            }
         }
 
         menu.addSeparator(); 
  
+        // 2026-06-xx 逻辑解耦修复：解除批量重命名的类型硬编码锁定 (架构升级)。
+        // 核心规则：多选有效项目 (PathRole 不为空) 或 单选文件夹时，均解锁批量重命名入口。
+        int selectedCount = 0;
+        for (const auto& selIdx : view->selectionModel()->selectedIndexes()) {
+            if (selIdx.column() == 0 && !selIdx.data(PathRole).toString().isEmpty()) {
+                selectedCount++;
+            }
+        }
+
         // [批量与加密区] 
-        if (isFolder) { 
+        if (isFolder || selectedCount > 1) { 
             menu.addAction("批量重命名 (Ctrl+Shift+R)")->setData(ActionBatchRename); 
-        } else { 
+        }
+
+        if (!isFolder) { 
             QMenu* cryptoMenu = menu.addMenu("加密保护"); 
             UiHelper::applyMenuStyle(cryptoMenu); 
             cryptoMenu->addAction("执行加密保护")->setData(ActionEncrypt); 
@@ -880,15 +1731,41 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         menu.addSeparator(); 
  
         // [通用编辑区] 
-        menu.addAction("重命名")->setData(ActionRename); 
+        if (selectedCount <= 1) {
+            menu.addAction("重命名")->setData(ActionRename); 
+        }
         menu.addAction("复制")->setData(ActionCopy); 
         menu.addAction("剪切")->setData(ActionCut); 
         menu.addAction("粘贴")->setData(ActionPaste); 
-        menu.addAction("删除（移入回收站）")->setData(ActionDelete); 
+        
+        // 2026-06-xx 按照用户要求：在回收站中不显示二级删除菜单
+        if (m_currentCategoryType != "trash") {
+            QMenu* delMenu = menu.addMenu("删除");
+            UiHelper::applyMenuStyle(delMenu);
+            delMenu->addAction("移入回收站")->setData(ActionDelete);
+            // 2026-07-xx 物理级精简：移除普通彻底删除，仅保留并更名为“永久删除”（采用安全抹除逻辑）
+            delMenu->addAction("永久删除")->setData(ActionSecureDelete);
+        } else {
+            // 回收站模式下，原位置不显示删除
+        }
  
         menu.addSeparator(); 
         menu.addAction("复制路径")->setData(ActionCopyPath); 
+        menu.addAction("添加至收藏夹")->setData(ActionAddToFavorites);
         menu.addAction("属性")->setData(ActionProperties); 
+
+        // 2026-07-xx 按照 Development_Plan 2.1：始终显示“重新扫描”选项 (仅限托管库内项目)
+        if (MetadataManager::isInsideManagedLibrary(path.toStdWString())) {
+            menu.addSeparator();
+            menu.addAction(UiHelper::getIcon("sync", QColor("#378ADD"), 18), "重新扫描")->setData(ActionRescan);
+        }
+
+        // 2026-06-xx 按照用户要求：在回收站分类中，最底部增加“永久删除”选项
+        if (m_currentCategoryType == "trash") {
+            menu.addSeparator();
+            // 2026-07-xx 物理一致性：回收站内的永久删除统一采用 ActionSecureDelete
+            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "永久删除")->setData(ActionSecureDelete);
+        }
  
     } else { 
         // [空白处菜单] 
@@ -907,7 +1784,25 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         QAction* actProp = menu.addAction("当前文件夹属性"); 
         actProp->setData(ActionProperties); 
         actProp->setEnabled(!m_currentPath.isEmpty() && m_currentPath != "computer://"); 
+
+        // 2026-07-xx 按照 Plan-63：如果是空白处点击，直接在这里注入并在下方 exec
     } 
+
+    // 2026-07-xx 按照 Plan-63：注入布局显示控制菜单
+    menu.addSeparator();
+    QMenu* layoutMenu = menu.addMenu("布局显示");
+    UiHelper::applyMenuStyle(layoutMenu);
+    
+    // 通过向上寻道获取 MainWindow 实例以复用菜单逻辑
+    MainWindow* mw = nullptr;
+    QWidget* parentWin = window();
+    while (parentWin) {
+        if ((mw = qobject_cast<MainWindow*>(parentWin))) break;
+        parentWin = parentWin->parentWidget();
+    }
+    if (mw) {
+        mw->populatePanelMenu(layoutMenu);
+    }
  
     QAction* selectedAction = menu.exec(view->viewport()->mapToGlobal(pos)); 
     if (!selectedAction || !selectedAction->data().isValid()) return; 
@@ -920,9 +1815,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             onDoubleClicked(currentIndex); 
             break; 
         case ActionShowInExplorer: { 
-            QString target = onItem ? path : m_currentPath; 
-            QStringList args; args << "/select," << QDir::toNativeSeparators(target); 
-            QProcess::startDetached("explorer", args); 
+            ShellHelper::openInExplorer(onItem ? path : m_currentPath); 
             break; 
         } 
         case ActionNewFolder: createNewItem("folder"); break; 
@@ -935,14 +1828,29 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             for (const auto& idx : indexes) { 
                 if (idx.column() == 0) { 
                     QString itemPath = idx.data(PathRole).toString(); 
+                    std::wstring wPath = itemPath.toStdWString();
+
                     // 2026-06-xx 物理同步：基于同步获取的 File ID 进行归类，解决新文件关联失败冲突。 
-                    std::string fid = MetadataManager::instance().getFileIdSync(itemPath.toStdWString()); 
+                    std::string fid = MetadataManager::instance().getFileIdSync(wPath); 
                     if (!fid.empty()) { 
-                        CategoryRepo::addItemToCategory(catId, fid); 
+                        // 2026-06-xx 按照用户需求：如果在系统层选择了“未分类”，则清除该项所有其他分类关联
+                        if (catId == -2) { // 未分类的负数 ID
+                             // 2026-07-xx 按照 Plan-83：实现撤销支持
+                             std::vector<int> oldCatIds = CategoryRepo::getItemCategoryIds(fid);
+                             if (!oldCatIds.empty()) {
+                                 if (CategoryRepo::removeAllCategories(fid)) {
+                                     UndoManager::instance().pushCommand(std::make_unique<BulkUncategorizeCommand>(itemPath, fid, oldCatIds));
+                                 }
+                             }
+                        } else if (catId > 0) {
+                             if (CategoryRepo::addItemToCategory(catId, fid, wPath)) {
+                                 UndoManager::instance().pushCommand(std::make_unique<CategorizeCommand>(itemPath, fid, catId, true));
+                             }
+                        }
                     } 
                 } 
             } 
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功归类 (基于 File ID)", 1500, QColor("#2ecc71")); 
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "已完成扫描并成功归类", 1500, QColor("#2ecc71")); 
             break; 
         } 
         case ActionPin: 
@@ -951,33 +1859,35 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             bool pin = (action == ActionPin); 
             for (const QModelIndex& idx : indexes) { 
                 if (idx.column() == 0) { 
-                    QString itemPath = idx.data(PathRole).toString(); 
-                    MetadataManager::instance().setPinned(itemPath.toStdWString(), pin); 
+                    // 2026-06-xx 架构简化：统一由 model->setData 处理持久化与缓存清理
                     m_proxyModel->setData(idx, pin, IsLockedRole); 
                 } 
             } 
+            // 2026-06-xx 物理修复：强制刷新代理模型排序，确保置顶项立即重排至顶部
+            m_proxyModel->invalidate();
+            m_proxyModel->sort(0, m_proxyModel->sortOrder());
             break; 
         } 
         case ActionColorTag: { 
             QString colorName = selectedAction->property("colorName").toString(); 
-            QColor tagColor = UiHelper::parseColorName(colorName); 
             auto indexes = view->selectionModel()->selectedIndexes(); 
             for (const auto& idx : indexes) { 
                 if (idx.column() == 0) { 
                     QString itemPath = idx.data(PathRole).toString(); 
-                    MetadataManager::instance().setColor(itemPath.toStdWString(), colorName.toStdWString()); 
+                    // 2026-06-xx 架构简化：统一由 model->setData 处理持久化与缓存清理
                     m_proxyModel->setData(idx, colorName, ColorRole); 
  
-                    // 2026-06-05 按照要求：设置颜色后立即重新生成并应用着色图标，实现视觉同步 
+                    // 2026-06-05 按照要求：设置颜色后立即重新生成并应用图标，实现视觉同步 
                     // 2026-05-17 逻辑修复：针对图像格式，必须优先尝试提取缩略图，防止图标覆盖内容
                     QIcon coloredIcon;
                     QString ext = QFileInfo(itemPath).suffix().toLower();
                     if (UiHelper::isGraphicsFile(ext)) {
-                        QPixmap thumb = UiHelper::getShellThumbnail(itemPath, 128, false);
-                        if (!thumb.isNull()) coloredIcon = QIcon(thumb);
+                        // 2026-06-xx 物理同步：使用 m_zoomLevel 确保尺寸一致
+                        QImage img = UiHelper::getShellThumbnail(itemPath, this->m_zoomLevel);
+                        if (!img.isNull()) coloredIcon = QIcon(QPixmap::fromImage(img));
                     }
                     if (coloredIcon.isNull()) {
-                        coloredIcon = UiHelper::getFileIcon(itemPath, 128, tagColor);
+                        coloredIcon = UiHelper::getFileIcon(itemPath, this->m_zoomLevel);
                     }
                     m_proxyModel->setData(idx, coloredIcon, Qt::DecorationRole); 
                 } 
@@ -985,59 +1895,94 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             break; 
         } 
         case ActionExtractColor: {
+            // 2026-07-xx 按照用户要求：支持多选批量解析颜色
+            QModelIndexList selectedRows = view->selectionModel()->selectedRows();
+            // 物理对齐：仅保留选中行中的第 0 列项，防止重复计数
+            QModelIndexList filteredRows;
+            for (const auto& selIdx : selectedRows) {
+                if (selIdx.column() == 0) filteredRows << selIdx;
+            }
+            if (filteredRows.isEmpty() && currentIndex.isValid()) filteredRows << currentIndex;
+            
+            struct ProcessItem { QString path; bool isManaged; };
+            QVector<ProcessItem> itemsToProcess;
+            for (const auto& selIdx : filteredRows) {
+                QString pathItem = selIdx.data(PathRole).toString();
+                if (!pathItem.isEmpty()) {
+                    itemsToProcess.append({pathItem, selIdx.data(ManagedRole).toBool()});
+                }
+            }
+            if (itemsToProcess.isEmpty()) break;
+
             QPointer<ContentPanel> weakThis(this);
-            (void)QtConcurrent::run([weakThis, path]() {
-                auto palette = UiHelper::extractPalette(path);
-                if (palette.isEmpty()) return;
+            int total = static_cast<int>(itemsToProcess.size());
+
+            // 只有当文件数多于 5 个时才显示进度条
+            BatchProgressDialog* progress = nullptr;
+            if (total > 5) {
+                progress = new BatchProgressDialog("收揽入库", this);
+                progress->show();
+            }
+
+            (void)QtConcurrent::run([weakThis, itemsToProcess, total, progress]() {
+                // 后台线程初始化 COM 环境以支持 Shell 缩略图/颜色提取
+                CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
                 
-                // 1. 提取第一个颜色作为主色调 (用于图标着色)
-                QColor dominant = UiHelper::quantizeColor(palette.first().first);
-                QString colorHex = dominant.name().toUpper();
-                
-                QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, colorHex, palette, dominant]() {
-                    if (weakThis) {
-                        // 2. 物理双重存储：主色 + 全量变长色板
-                        MetadataManager::instance().setColor(path.toStdWString(), colorHex.toStdWString());
-                        MetadataManager::instance().setPalettes(path.toStdWString(), palette);
-                        
-                        // 3. 物理同步 UI 状态
-                        auto* model = weakThis->m_model;
-                        for (int i = 0; i < model->rowCount(); ++i) {
-                            auto* item = model->item(i, 0);
-                            if (item && item->data(PathRole).toString() == path) {
-                                item->setData(colorHex, ColorRole);
-                                
-                                // 向下兼容注入 PalettesRole (用于当前视图即时搜索)
-                                QVariantList palList;
-                                for (const auto& p : palette) {
-                                    QVariantMap m; m["color"] = p.first; m["ratio"] = p.second;
-                                    palList << m;
-                                }
-                                item->setData(palList, PalettesRole);
-                                
-                                QIcon coloredIcon;
-                                QString suffix = QFileInfo(path).suffix().toLower();
-                                if (UiHelper::isGraphicsFile(suffix)) {
-                                    QPixmap thumb = UiHelper::getShellThumbnail(path, 128, false);
-                                    if (!thumb.isNull()) coloredIcon = QIcon(thumb);
-                                }
-                                if (coloredIcon.isNull()) {
-                                    coloredIcon = UiHelper::getFileIcon(path, 128, dominant);
-                                }
-                                item->setData(coloredIcon, Qt::DecorationRole);
-                                break;
-                            }
-                        }
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), "变长色板已物理提取并绑定", 1500, QColor("#2ecc71"));
+                for (int i = 0; i < total; ++i) {
+                    const auto& item = itemsToProcess[i];
+                    QString itemPath = item.path;
+                    
+                    if (progress) {
+                        QMetaObject::invokeMethod(progress, "updateProgress", Qt::QueuedConnection, 
+                                                  Q_ARG(int, i + 1), Q_ARG(int, total), Q_ARG(QString, QFileInfo(itemPath).fileName()));
                     }
-                });
+
+                    // 2026-07-xx 按照 Plan-116/117：废除 UI 主动注册逻辑。
+                    // 仅针对已入库项目（库内）执行强制重新解析逻辑。
+                    if (item.isManaged) {
+                        // 针对已入库项目，执行强制重新解析逻辑
+                        auto palette = UiHelper::extractPalette(itemPath);
+                        if (!palette.isEmpty()) {
+                            QColor dominant = UiHelper::quantizeColor(palette.first().first);
+                            QString colorHex = dominant.name().toUpper();
+
+                            QMetaObject::invokeMethod(weakThis.data(), [weakThis, itemPath, colorHex, palette]() {
+                                if (weakThis) {
+                                    MetadataManager::instance().setPalettes(itemPath.toStdWString(), palette);
+                                    
+                                    auto* model = weakThis->m_model;
+                                    const auto& records = model->allRecords();
+                                    for (size_t j = 0; j < records.size(); ++j) {
+                                        if (records[j].path == itemPath) {
+                                            QModelIndex srcIdx = model->index(static_cast<int>(j), 0);
+                                            model->setData(srcIdx, colorHex, ColorRole);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }, Qt::QueuedConnection);
+                        }
+                    }
+                }
+
+                QMetaObject::invokeMethod(weakThis.data(), [weakThis, progress]() {
+                    if (weakThis) {
+                        weakThis->onSelectionChanged();
+                        if (progress) progress->close();
+                        ToolTipOverlay::instance()->showText(QCursor::pos(), "批量颜色解析完成", 1500, QColor("#2ecc71"));
+                    }
+                }, Qt::QueuedConnection);
+
+                CoUninitialize();
             });
             break;
         }
         case ActionEncrypt: { 
-            bool ok; 
-            QString pwd = QInputDialog::getText(this, "加密保护", "设置加密密码:", QLineEdit::Password, "", &ok); 
-            if (ok && !pwd.isEmpty()) { 
+            FramelessInputDialog dlg("加密保护", "设置加密密码:", "", this);
+            dlg.setEchoMode(QLineEdit::Password);
+            if (dlg.exec() == QDialog::Accepted) { 
+                QString pwd = dlg.text();
+                if (pwd.isEmpty()) break;
                 auto indexes = view->selectionModel()->selectedIndexes(); 
                 QStringList targets; 
                 for (const auto& idx : indexes) if (idx.column() == 0) targets << idx.data(PathRole).toString(); 
@@ -1056,7 +2001,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                             MetadataManager::instance().setEncrypted(dest.toStdWString(), true); 
                         } 
                     } 
-                    QMetaObject::invokeMethod(qApp, [self, currentDir]() { 
+                    QMetaObject::invokeMethod(QCoreApplication::instance(), [self, currentDir]() { 
                         if (self && self->m_currentPath == currentDir) self->loadDirectory(currentDir, self->m_isRecursive); 
                         ToolTipOverlay::instance()->showText(QCursor::pos(), "加密任务处理完成", 1500, QColor("#2ecc71")); 
                     }); 
@@ -1065,36 +2010,225 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             break; 
         } 
         case ActionDecrypt: { 
-            bool ok; 
-            QString pwd = QInputDialog::getText(this, "解除加密", "输入加密密码:", QLineEdit::Password, "", &ok); 
-            if (ok && !pwd.isEmpty()) { 
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "解除加密逻辑已触发", 1500); 
+            FramelessInputDialog dlg("解除加密", "输入加密密码:", "", this);
+            dlg.setEchoMode(QLineEdit::Password);
+            if (dlg.exec() == QDialog::Accepted) { 
+                QString pwd = dlg.text();
+                if (!pwd.isEmpty()) { 
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "解除加密逻辑已触发", 1500); 
+                }
             } 
             break; 
         } 
         case ActionBatchRename: performBatchRename(); break; 
+        case ActionAddToCategory: {
+            QStringList paths;
+            auto indexes = view->selectionModel()->selectedIndexes();
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    QString p = idx.data(PathRole).toString();
+                    if (!p.isEmpty()) paths << p;
+                }
+            }
+            
+            if (paths.isEmpty() && !path.isEmpty()) paths << path;
+
+            QString target = selectedAction->property("targetPath").toString();
+            if (target.isEmpty()) {
+                // 兜底逻辑：获取当前盘符托管库根目录
+                std::wstring wp = path.toStdWString();
+                std::wstring volSerial = MetadataManager::getVolumeSerialNumber(wp);
+                QString key = QString("ManagedFolder/Volume_%1").arg(QString::fromStdWString(volSerial));
+                QString relPath = AppConfig::instance().getValue(key, "").toString();
+                target = QDir::toNativeSeparators(path.left(3) + relPath);
+            }
+
+            if (!paths.isEmpty() && !target.isEmpty()) {
+                // 2026-07-xx 按照 Plan-116：物理迁移至目标目录
+                ImportHelper::importPaths(paths, target, this);
+            }
+            break;
+        }
         case ActionRename: view->edit(currentIndex); break; 
         case ActionCopy: performCopy(false); break; 
         case ActionCut: performCopy(true); break; 
         case ActionPaste: performPaste(); break; 
-        case ActionDelete: { 
-            std::wstring wpath = path.toStdWString() + L'\0' + L'\0'; 
-            SHFILEOPSTRUCTW fileOp = { 0 }; 
-            fileOp.wFunc = FO_DELETE; 
-            fileOp.pFrom = wpath.c_str(); 
-            fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION; 
-            if (SHFileOperationW(&fileOp) == 0) loadDirectory(m_currentPath); 
-            break; 
-        } 
+        case ActionRescan: {
+            auto indexes = view->selectionModel()->selectedIndexes();
+            QStringList targetPaths;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    QString p = idx.data(PathRole).toString();
+                    if (!p.isEmpty()) targetPaths << p;
+                }
+            }
+            if (targetPaths.isEmpty() && !path.isEmpty()) targetPaths << path;
+
+            if (!targetPaths.isEmpty()) {
+                // 2026-07-xx 按照 Development_Plan 2.1：强制执行物理状态同步与元数据重新解析
+                // 作用域严格锁定在选中项。
+                MetadataManager::instance().registerItemsAsync(targetPaths, true);
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已启动强制重新扫描", 1500, QColor("#378ADD"));
+            }
+            break;
+        }
+        case ActionRestore: {
+            auto indexes = view->selectionModel()->selectedIndexes();
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    QString itemPath = idx.data(PathRole).toString();
+                    auto meta = MetadataManager::instance().getMeta(itemPath.toStdWString());
+                    if (meta.isTrash && !meta.originalPath.empty()) {
+                        QString dest = QString::fromStdWString(meta.originalPath);
+                        QDir().mkpath(QFileInfo(dest).absolutePath());
+                        if (QFile::rename(itemPath, dest)) {
+                            MetadataManager::instance().markAsTrash(dest.toStdWString(), false);
+                            // 物理同步：由于原文件位置可能已被 MFT 逻辑自动识别，此处主要负责状态翻转
+                        }
+                    }
+                }
+            }
+            loadDirectory(m_currentPath);
+            MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild); // 刷新全量统计
+            break;
+        }
+        case ActionDelete: 
+        case ActionSecureDelete: {
+            auto indexes = view->selectionModel()->selectedIndexes();
+            QStringList targetPaths;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) targetPaths << idx.data(PathRole).toString();
+            }
+            if (targetPaths.isEmpty() && !path.isEmpty()) targetPaths << path;
+
+            if (targetPaths.isEmpty()) break;
+
+            if (action == ActionDelete) {
+                if (ShellHelper::moveToTrash(targetPaths)) loadDirectory(m_currentPath);
+            } else {
+                // 2026-07-xx 物理级同步：将逻辑收拢为“永久删除”（安全抹除）
+                QString msg = "确定要永久删除选中的项目吗？数据将被物理覆写并彻底抹除，此操作不可恢复。";
+                if (!FramelessMessageBox::question(this, "确认删除", msg)) break;
+
+                BatchProgressDialog* progress = new BatchProgressDialog("正在执行永久删除（深层抹除）...", this);
+                progress->show();
+
+                QPointer<ContentPanel> weakThis(this);
+                QPointer<BatchProgressDialog> weakProgress(progress);
+                (void)QtConcurrent::run([weakThis, targetPaths, action, weakProgress]() {
+                    int count = 0;
+                    for (const QString& p : targetPaths) {
+                        if (!weakThis || !weakProgress) return;
+                        std::wstring wp = QDir::toNativeSeparators(p).toStdWString();
+                        
+                        // 1. 物理抹除
+                        bool physicalOk = false;
+                        if (action == ActionSecureDelete) {
+                            // 安全擦除逻辑：递归覆写
+                            std::function<bool(const QString&)> secureRemove;
+                            secureRemove = [&](const QString& target) -> bool {
+                                QFileInfo info(target);
+                                if (info.isDir()) {
+                                    QDir dir(target);
+                                    for (const QString& entry : dir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+                                        secureRemove(target + "/" + entry);
+                                    }
+                                    return QDir().rmdir(target);
+                                } else {
+                                    // 随机覆写全量扇区
+                                    QFile file(target);
+                                    if (file.open(QIODevice::ReadWrite)) {
+                                        qint64 size = file.size();
+                                        if (size > 0) {
+                                            QByteArray buffer(65536, 0);
+                                            for (int pass = 0; pass < 3; ++pass) { // 覆写 3 遍
+                                                file.seek(0);
+                                                qint64 written = 0;
+                                                while (written < size) {
+                                                    for (int i = 0; i < buffer.size(); ++i) buffer[i] = (char)QRandomGenerator::global()->bounded(256);
+                                                    qint64 toWrite = qMin((qint64)buffer.size(), size - written);
+                                                    file.write(buffer.data(), toWrite);
+                                                    written += toWrite;
+                                                }
+                                                file.flush();
+                                                // 2026-06-xx 物理对齐：调用 Windows API 强制落盘，确保覆写数据真实写入扇区
+                                                HANDLE hFile = (HANDLE)_get_osfhandle(file.handle());
+                                                if (hFile != INVALID_HANDLE_VALUE) {
+                                                    FlushFileBuffers(hFile);
+                                                }
+                                            }
+                                        }
+                                        file.close();
+                                    }
+                                    return QFile::remove(target);
+                                }
+                            };
+                            physicalOk = secureRemove(p);
+                        } else {
+                            // 普通彻底删除：递归
+                            std::function<bool(const QString&)> recursiveRemove;
+                            recursiveRemove = [&](const QString& target) -> bool {
+                                QFileInfo info(target);
+                                if (info.isDir()) {
+                                    QDir dir(target);
+                                    for (const QString& entry : dir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+                                        recursiveRemove(target + "/" + entry);
+                                    }
+                                    return QDir().rmdir(target);
+                                } else {
+                                    return QFile::remove(target);
+                                }
+                            };
+                            physicalOk = recursiveRemove(p);
+                        }
+
+                        if (physicalOk) {
+                            // 2026-06-xx 按照用户要求：永久删除后从数据库彻底移除相应数据
+                            MetadataManager::instance().deletePermanently(wp);
+                            // 2026-06-xx 按照分析计划 #8：清理撤销栈
+                            UndoManager::instance().removeCommandsForPath(p);
+                        }
+
+                        count++;
+                        QMetaObject::invokeMethod(weakProgress.data(), [weakProgress, count, targetPaths]() {
+                            if (weakProgress) weakProgress->setValue((int)((float)count / targetPaths.size() * 100));
+                        });
+                    }
+
+                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, weakProgress]() {
+                        if (weakProgress) {
+                            weakProgress->accept();
+                            weakProgress->deleteLater();
+                        }
+                        if (weakThis) {
+                            weakThis->loadDirectory(weakThis->m_currentPath);
+                            ToolTipOverlay::instance()->showText(QCursor::pos(), "深层抹除已完成，关联记录已物理清空", 1500, QColor("#2ecc71"));
+                        }
+                    });
+                });
+            }
+            break;
+        }
         case ActionCopyPath: QApplication::clipboard()->setText(QDir::toNativeSeparators(path)); break; 
+        case ActionAddToFavorites: {
+            QStringList selectedPaths;
+            auto indexes = view->selectionModel()->selectedIndexes();
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    QString p = idx.data(PathRole).toString();
+                    if (!p.isEmpty()) {
+                        selectedPaths << p;
+                    }
+                }
+            }
+            if (!selectedPaths.isEmpty()) {
+                emit requestAddFavorite(selectedPaths);
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+            }
+            break;
+        }
         case ActionProperties: { 
-            SHELLEXECUTEINFOW sei = { sizeof(sei) }; 
-            sei.fMask = SEE_MASK_INVOKEIDLIST; 
-            sei.lpVerb = L"properties"; 
-            std::wstring wpath = (onItem ? path : m_currentPath).toStdWString(); 
-            sei.lpFile = wpath.c_str(); 
-            sei.nShow = SW_SHOW; 
-            ShellExecuteExW(&sei); 
+            ShellHelper::showProperties(onItem ? path : m_currentPath); 
             break; 
         } 
         default: break; 
@@ -1136,13 +2270,12 @@ void ContentPanel::performPaste() {
     if (!mime || !mime->hasUrls()) return; 
  
     QList<QUrl> urls = mime->urls(); 
-    std::wstring fromPaths; 
-    for (const QUrl& url : urls) { 
-        fromPaths += QDir::toNativeSeparators(url.toLocalFile()).toStdWString() + L'\0'; 
-    } 
+    QStringList fromPaths;
+    for (const QUrl& url : urls) {
+        fromPaths << url.toLocalFile();
+    }
      
-    if (fromPaths.empty()) return; 
-    fromPaths += L'\0'; 
+    if (fromPaths.isEmpty()) return; 
  
     // 探测是否为剪切模式 
     bool isMove = false; 
@@ -1151,14 +2284,10 @@ void ContentPanel::performPaste() {
         if (!effect.isEmpty() && (effect.at(0) & 0x02)) isMove = true; 
     } 
  
-    std::wstring toPath = m_currentPath.toStdWString() + L'\0' + L'\0'; 
-    SHFILEOPSTRUCTW fileOp = { 0 }; 
-    fileOp.wFunc = isMove ? FO_MOVE : FO_COPY; 
-    fileOp.pFrom = fromPaths.c_str(); 
-    fileOp.pTo = toPath.c_str(); 
-    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION; 
- 
-    if (SHFileOperationW(&fileOp) == 0) { 
+    if (ShellHelper::copyOrMoveItems(fromPaths, m_currentPath, isMove)) { 
+        if (isMove) {
+            UndoManager::instance().pushCommand(std::make_unique<MoveCommand>(fromPaths, QFileInfo(fromPaths.first()).absolutePath(), m_currentPath));
+        }
         loadDirectory(m_currentPath, m_isRecursive); 
     } 
 } 
@@ -1201,6 +2330,72 @@ void ContentPanel::onSelectionChanged() {
     emit selectionChanged(selectedPaths); 
 } 
  
+void ContentPanel::refreshAll() {
+    // 2026-06-xx 物理对标：完善刷新逻辑，支持所有上下文类型
+    if (m_currentCategoryType == "user_category") {
+        if (m_currentCategoryId != -1) loadCategory(m_currentCategoryId);
+    } else if (m_currentCategoryType == "all" || m_currentCategoryType == "uncategorized" || 
+               m_currentCategoryType == "untagged" || m_currentCategoryType == "recently_visited" || 
+               m_currentCategoryType == "trash") {
+        QStringList paths = CategoryRepo::getSystemCategoryPaths(m_currentCategoryType);
+        loadPaths(paths);
+    } else if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
+        loadDirectory(m_currentPath, m_isRecursive);
+    } else {
+        // 兜底逻辑：加载“此电脑”
+        loadDirectory("computer://");
+    }
+}
+
+void ContentPanel::updateItemMetadata(const QString& path) {
+    if (m_model) {
+        m_model->updateRecordMetadata(path);
+    }
+}
+
+void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex) {
+    if (paths.isEmpty() || m_currentPath.isEmpty() || m_currentPath == "computer://") return;
+
+    QString destDir = m_currentPath;
+    if (targetIndex.isValid()) {
+        QModelIndex srcIdx = m_proxyModel->mapToSource(targetIndex);
+        if (srcIdx.isValid()) {
+            QString targetPath = srcIdx.data(PathRole).toString();
+            if (!targetPath.isEmpty() && QFileInfo(targetPath).isDir()) {
+                destDir = targetPath;
+            }
+        }
+    }
+
+    // 检查是否在原地投放
+    bool sameDir = true;
+    for (const QString& p : paths) {
+        if (QDir::toNativeSeparators(QFileInfo(p).absolutePath()) != QDir::toNativeSeparators(destDir)) {
+            sameDir = false;
+            break;
+        }
+    }
+    if (sameDir && destDir == m_currentPath) return;
+
+    bool isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
+    
+    // 2026-xx-xx 按照 Plan-105：在拖拽入库操作期间抑制 AutoImportManager 产生的冗余刷新信号
+    MetadataManager::instance().setInternalOperating(true);
+
+    if (ShellHelper::copyOrMoveItems(paths, destDir, isMove)) {
+        if (isMove) {
+            UndoManager::instance().pushCommand(std::make_unique<MoveCommand>(paths, QFileInfo(paths.first()).absolutePath(), destDir));
+        }
+        // 显式执行一次刷新，确保用户操作立即反馈
+        loadDirectory(m_currentPath, m_isRecursive);
+    }
+
+    // 2000ms 后释放抑制锁，足以覆盖 MFT 变更探测与 AutoImportManager 的 3s 防抖窗口冲突期
+    QTimer::singleShot(2000, []() {
+        MetadataManager::instance().setInternalOperating(false);
+    });
+}
+
 void ContentPanel::onDoubleClicked(const QModelIndex& index) { 
     if (!index.isValid()) return; 
  
@@ -1223,8 +2418,12 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
 } 
  
 void ContentPanel::loadDirectory(const QString& path, bool recursive) { 
-    qDebug() << "[Content] 开始物理递归扫描 ->" << path << (recursive ? "递归" : "单级"); 
-    emit dataSourceChanged("nav"); // 2026-05-17 按照用户要求：发射数据源变更信号，高亮展示导航面板焦点线条
+    m_isLoading = true;
+    int reqId = ++m_loadRequestId;
+    m_currentCategoryType = ""; // 物理导航模式下清除系统类型
+    ArcMeta::Logger::log(QString("[Content] 开始物理递归扫描 (虚拟化) [%1] -> %2 (%3)")
+                        .arg(reqId).arg(path).arg(recursive ? "递归" : "单级"));
+    emit dataSourceChanged("nav"); 
     if (m_viewStack) m_viewStack->show(); 
     if (m_textPreview) m_textPreview->hide(); 
     if (m_imagePreview) m_imagePreview->hide(); 
@@ -1232,140 +2431,52 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     m_isRecursive = recursive; 
     if (m_btnLayers) m_btnLayers->setChecked(recursive); 
  
-    // 2026-03-xx 极致优化：停止之前的图标懒加载任务，清理队列 
-    m_lazyIconTimer->stop(); 
-    m_smoothConsumeTimer->stop(); 
-    m_iconPendingPaths.clear(); 
-    m_pathToIndexMap.clear(); 
-    m_uiPendingQueue.clear(); 
- 
-    // 扫描任务期间暂时封印动态排序 
-    m_proxyModel->setDynamicSortFilter(false); 
- 
-    m_model->clear(); 
-    m_model->setHorizontalHeaderLabels({"名称", "大小", "类型", "修改时间"}); 
- 
     if (path.isEmpty() || path == "computer://") { 
         m_currentPath = "computer://"; 
         updateLayersButtonState(); 
-         
-        // 2026-06-xx 物理清理：移除 prefetchDirectory 调用 
  
         const auto drives = QDir::drives(); 
-        QMap<int, int> rc; QMap<QString, int> cc, tc, tyc, cdc, mdc; 
+        std::vector<ItemRecord> driveRecords;
         for (const QFileInfo& drive : drives) { 
-            QString drivePath = drive.absolutePath(); 
- 
-            // 2026-04-12 按照用户最新铁律：从 MetadataManager 获取集中管理的磁盘元数据 
-            RuntimeMeta rm = MetadataManager::instance().getMeta(drivePath.toStdWString()); 
-             
-            // 2026-06-05 按照要求：检测标记颜色并实时着色图标 
-            QColor tagColor = UiHelper::parseColorName(QString::fromStdWString(rm.color)); 
-            QColor driveBaseColor = tagColor.isValid() ? tagColor : QColor("#95a5a6"); 
- 
-            // 物理替换：使用 hard_drive SVG 图标替代原生磁盘图标 
-            // 2026-05-27 物理修复：图标分辨率提升至 128 
-            QIcon driveIcon = UiHelper::getIcon("hard_drive", driveBaseColor, 128); 
-            auto* item = new QStandardItem(driveIcon, drivePath); 
-            item->setData(drivePath, PathRole); 
-            item->setData("folder", TypeRole); 
-            item->setData(rm.rating, RatingRole); 
-            item->setData(QString::fromStdWString(rm.color), ColorRole); 
-            item->setData(rm.pinned, PinnedRole); // 逻辑还原：使用 PinnedRole 存储原始置顶状态 
-            item->setData(rm.pinned, IsLockedRole); // 视觉还原：IsLockedRole 负责 UI 渲染 
- 
-            QList<QStandardItem*> row; 
-            row << item << new QStandardItem("-") << new QStandardItem("磁盘分区") << new QStandardItem("-"); 
-            m_model->appendRow(row); 
-            tyc["folder"]++; 
+            driveRecords.push_back(ContentPanel::createItemRecord(drive.absolutePath()));
         } 
-        emit directoryStatsReady(rc, cc, tc, tyc, cdc, mdc); 
+        m_model->setRecords(driveRecords);
+        // 2026-05-29 物理对齐：在加载“此电脑”后显式触发一次排序，确保置顶硬盘排在首位
+        m_proxyModel->sort(0, Qt::AscendingOrder);
+        m_isLoading = false;
+        recalculateAndEmitStats();
         return; 
     } 
  
     m_currentPath = path; 
     updateLayersButtonState(); 
-     
-    // 2026-03-xx 极致优化：分块加载方案。 
-    // 修复：使用 QPointer 捕获 this，防止面板销毁后后台线程访问已释放内存 (Use-after-free)。 
+
+    // 2026-07-xx 按照 Plan-119：记录最近访问历史（打开即记录）
+    AutoImportManager::recordRecentVisitedFolder(path.toStdWString());
+
     QPointer<ContentPanel> panelPtr(this); 
-    // 2026-05-28 编译优化：显式使用 (void) 强转以消除 Qt 6 对 QThreadPool::start 返回值未使用的警告 
-    (void)QThreadPool::globalInstance()->start([panelPtr, path, recursive]() { 
+
+    // 物理扫描模式（原逻辑）
+    (void)QThreadPool::globalInstance()->start([panelPtr, path, recursive, reqId]() { 
         if (!panelPtr) return; 
          
-        ContentPanel::ScanStats globalStats; 
-        QList<ContentPanel::ScanItemData> currentBatch; 
+        std::vector<ItemRecord> allItems;
  
-        auto flushBatch = [panelPtr, path](const QList<ContentPanel::ScanItemData>& batch) { 
-            QMetaObject::invokeMethod(qApp, [panelPtr, path, batch]() { 
-                if (!panelPtr || panelPtr->m_currentPath != path) return; 
-                 
-                // 将数据压入待处理队列 
-                for (const auto& data : batch) { 
-                    panelPtr->m_uiPendingQueue.push_back(data); 
-                } 
- 
-                // 启动平滑消费定时器 
-                if (!panelPtr->m_smoothConsumeTimer->isActive()) { 
-                    panelPtr->m_smoothConsumeTimer->start(); 
-                } 
-            }, Qt::QueuedConnection); 
-        }; 
- 
-        // 修复：显式定义递归函数对象，避免嵌套 Lambda 的隐式捕获错误 
         std::function<void(const QString&, bool)> scanDir; 
         scanDir = [&](const QString& p, bool rec) { 
             QDir dir(p); 
             if (!dir.exists()) return; 
  
             QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot, QDir::DirsFirst | QDir::Name); 
-            QDate today = QDate::currentDate(); 
-            QDate yesterday = today.addDays(-1); 
-            auto dateKey = [&](const QDate& d) -> QString { 
-                if (d == today) return "today"; 
-                if (d == yesterday) return "yesterday"; 
-                return d.toString("yyyy-MM-dd"); 
-            }; 
- 
             for (const QFileInfo& info : entries) { 
-                // 检查后台任务存活 
                 if (!panelPtr) return; 
-            if (info.fileName() == ".am_meta.json" || info.fileName() == ".am_meta.json.tmp") continue; // 2026-06-xx 物理隔离 
+                if (info.fileName() == "metadata.scch" || info.fileName() == "metadata.scch.tmp") continue; 
  
-                ContentPanel::ScanItemData data; 
-                data.name = info.fileName(); 
-            // 2026-05-27 物理修复：在扫描端强制执行 normalizePath 逻辑（统一小写 + 磁盘补丁），确保 Key 匹配 
-            // 此处 QDir::cleanPath 产生的碎片将交由 MetadataManager 内部再次归一化 
-                data.fullPath = QDir::toNativeSeparators(QDir::cleanPath(info.absoluteFilePath())); 
-                data.isDir = info.isDir(); 
-                data.suffix = info.suffix().toUpper(); 
-                data.size = info.size(); 
-                data.mtime = info.lastModified(); 
-                data.meta = MetadataManager::instance().getMeta(data.fullPath.toStdWString()); 
+                QString absPath = info.absoluteFilePath();
+                allItems.push_back(ContentPanel::createItemRecord(absPath));
  
-                // 2026-04-12 按照用户要求：探测空文件夹 
-                if (data.isDir) { 
-                    data.isEmpty = QDir(data.fullPath).isEmpty(); 
-                } 
- 
-                currentBatch.append(data); 
-                if (currentBatch.size() >= 500) { // 提高后台批次大小，由定时器限流 UI 插入 
-                    flushBatch(currentBatch); 
-                    currentBatch.clear(); 
-                } 
- 
-                globalStats.ratingCounts[data.meta.rating]++; 
-                globalStats.colorCounts[QString::fromStdWString(data.meta.color)]++; 
-                for (const auto& t : data.meta.tags) globalStats.tagCounts[t]++; 
-                if (data.meta.tags.isEmpty()) globalStats.noTagCount++; 
-                globalStats.typeCounts[data.isDir ? "folder" : data.suffix]++; 
-                globalStats.createDateCounts[dateKey(info.birthTime().date())]++; 
-                globalStats.modifyDateCounts[dateKey(data.mtime.date())]++; 
- 
-                if (rec && data.isDir) { 
-                    // 后台任务存活检查 
-                    if (!panelPtr) return; 
-                    scanDir(data.fullPath, true); 
+                if (rec && info.isDir()) { 
+                    scanDir(absPath, true); 
                 } 
             } 
         }; 
@@ -1373,15 +2484,43 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
         scanDir(path, recursive); 
         if (!panelPtr) return; 
  
-        if (!currentBatch.isEmpty()) flushBatch(currentBatch); 
-        if (globalStats.noTagCount > 0) globalStats.tagCounts["__none__"] = globalStats.noTagCount; 
- 
-        // 最后发送全量统计结果供筛选面板使用 
-        QMetaObject::invokeMethod(qApp, [panelPtr, path, globalStats]() { 
-            if (panelPtr && panelPtr->m_currentPath == path) { 
-                emit panelPtr->directoryStatsReady(globalStats.ratingCounts, globalStats.colorCounts, globalStats.tagCounts,  
-                                                  globalStats.typeCounts, globalStats.createDateCounts, globalStats.modifyDateCounts); 
-            } 
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [panelPtr, path, allItems, reqId]() { 
+            if (panelPtr && panelPtr->m_loadRequestId == reqId) { 
+                panelPtr->m_model->setRecords(allItems);
+                panelPtr->m_proxyModel->sort(0, Qt::AscendingOrder);
+                panelPtr->m_isLoading = false;
+                panelPtr->recalculateAndEmitStats();
+                // 2026-06-xx 物理同步：数据加载完成后强制重新应用筛选，防止显示已过滤掉的占位符记录
+                panelPtr->applyFilters();
+
+                // 2026-07-xx 按照 Plan-66：处理新建项后的自动定位与编辑
+                if (!panelPtr->m_pendingSelectName.isEmpty()) {
+                    const auto& records = panelPtr->m_model->allRecords();
+                    for (size_t i = 0; i < records.size(); ++i) {
+                        if (QFileInfo(records[i].path).fileName() == panelPtr->m_pendingSelectName) {
+                            QModelIndex srcIdx = panelPtr->m_model->index(static_cast<int>(i), 0);
+                            QModelIndex proxyIdx = panelPtr->m_proxyModel->mapFromSource(srcIdx);
+                            if (proxyIdx.isValid()) {
+                                if (panelPtr->m_viewStack->currentWidget() == panelPtr->m_gridView) {
+                                    panelPtr->m_gridView->scrollTo(proxyIdx);
+                                    panelPtr->m_gridView->setCurrentIndex(proxyIdx);
+                                    if (panelPtr->m_isPendingEdit) panelPtr->m_gridView->edit(proxyIdx);
+                                } else {
+                                    panelPtr->m_treeView->scrollTo(proxyIdx);
+                                    panelPtr->m_treeView->setCurrentIndex(proxyIdx);
+                                    if (panelPtr->m_isPendingEdit) panelPtr->m_treeView->edit(proxyIdx);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    panelPtr->m_pendingSelectName = ""; // 必须物理清空状态
+                }
+
+                ArcMeta::Logger::log(QString("[Content] 目录扫描完成并已应用到 UI [%1]").arg(reqId));
+            } else if (panelPtr) {
+                ArcMeta::Logger::log(QString("[Content] 拦截到过期的目录扫描回调 [%1], 当前 ID: %2").arg(reqId).arg(panelPtr->m_loadRequestId.load()));
+            }
         }, Qt::QueuedConnection); 
     }); 
 } 
@@ -1390,44 +2529,31 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
  
  
 void ContentPanel::search(const QString& query) { 
-    qDebug() << "[Content] 触发代理过滤 (局部手动关键词) ->" << query; 
-    if (m_viewStack) m_viewStack->show(); 
+    // 2026-07-xx 按照 Plan-118：搜索行为回归筛选流。
+    // 搜索框仅作为当前视图的本地过滤器，禁止切换 m_currentCategoryType 为 "search"。
+    
+    // 1. 同步关键词到当前筛选状态
+    m_currentFilter.keyword = query;
+
+    // 2. 触发本地过滤（invalidateFilter）
+    applyFilters();
+
+    // 3. 视觉状态同步
     if (m_textPreview) m_textPreview->hide(); 
     if (m_imagePreview) m_imagePreview->hide(); 
- 
-    auto* proxy = qobject_cast<FilterProxyModel*>(m_proxyModel); 
-    if (proxy) {
-        proxy->setSearchQuery(query);
-        
-        // 2026-06-xx 按照用户要求：搜索后实时重新计算可见项统计，同步给筛选面板
-        ScanStats stats;
-        for (int i = 0; i < proxy->rowCount(); ++i) {
-            QModelIndex idx = proxy->index(i, 0);
-            int rating = idx.data(RatingRole).toInt();
-            QString color = idx.data(ColorRole).toString();
-            QString type = idx.data(TypeRole).toString();
-            QStringList tags = idx.data(TagsRole).toStringList();
-            
-            stats.ratingCounts[rating]++;
-            stats.colorCounts[color]++;
-            if (type == "folder") stats.typeCounts["folder"]++;
-            else {
-                QString path = idx.data(PathRole).toString();
-                stats.typeCounts[QFileInfo(path).suffix().toUpper()]++;
-            }
-            
-            for (const QString& t : tags) stats.tagCounts[t]++;
-            if (tags.isEmpty()) stats.noTagCount++;
-        }
-        if (stats.noTagCount > 0) stats.tagCounts["__none__"] = stats.noTagCount;
-        
-        emit directoryStatsReady(stats.ratingCounts, stats.colorCounts, stats.tagCounts,
-                               stats.typeCounts, stats.createDateCounts, stats.modifyDateCounts);
-    }
+    if (m_viewStack) m_viewStack->show(); 
+
+    ArcMeta::Logger::log(QString("[Search] 本地搜索关键词更新: %1 (当前视图类型: %2)")
+                        .arg(query).arg(m_currentCategoryType.isEmpty() ? "nav" : m_currentCategoryType));
 } 
  
 void ContentPanel::applyFilters(const FilterState& state) { 
+    // 2026-07-xx 物理防护：保留标题栏按钮独占维护的显隐状态，防止被 FilterPanel 的默认值覆盖
+    bool preservedShowFolders = m_currentFilter.showFolders;
+    bool preservedShowFiles = m_currentFilter.showFiles;
     m_currentFilter = state; 
+    m_currentFilter.showFolders = preservedShowFolders;
+    m_currentFilter.showFiles = preservedShowFiles;
     applyFilters(); 
 } 
  
@@ -1483,224 +2609,238 @@ void ContentPanel::previewFile(const QString& path) {
 } 
  
 void ContentPanel::loadCategory(int categoryId) { 
+    // 2026-07-xx 物理防护：防重入机制。如果已经在加载同一个分类，则直接拦截，防止重复 clear() 导致的闪烁
+    if (m_isLoading && m_currentCategoryId == categoryId && m_currentCategoryType == "user_category") {
+        return;
+    }
+
+    m_isLoading = true;
+    int reqId = ++m_loadRequestId;
+    m_currentCategoryType = "user_category";
+    m_currentCategoryId = categoryId;
+    updateLayersButtonState();
     m_viewStack->show(); 
     if (m_textPreview) m_textPreview->hide(); 
     if (m_imagePreview) m_imagePreview->hide(); 
-    emit dataSourceChanged("category"); // 2026-05-17 按照用户要求：发射数据源变更信号，高亮展示分类面板焦点线条
+    emit dataSourceChanged("category"); 
      
-    m_lazyIconTimer->stop(); 
-    m_iconPendingPaths.clear(); 
-    m_pathToIndexMap.clear(); 
- 
-    m_model->clear(); 
-    m_model->setHorizontalHeaderLabels({"名称", "大小", "类型", "修改时间"}); 
- 
-    // 2026-05-07 按照用户要求：添加统计数据结构，用于筛选器填充 
-    ScanStats stats; 
- 
-    // 1. 加载子分类 
-    auto allCategories = CategoryRepo::getAll(); 
-    for (const auto& cat : allCategories) { 
-        if (cat.parentId == categoryId) { 
-            QList<QStandardItem*> row; 
-            QString color = QString::fromStdWString(cat.color).isEmpty() ? "#aaaaaa" : QString::fromStdWString(cat.color); 
-            // 2026-06-xx 按照用户最新要求：统一使用 folder_filled 图标 
-            QIcon icon = UiHelper::getIcon("folder_filled", QColor(color), 128); 
-             
-            auto* item = new QStandardItem(icon, QString::fromStdWString(cat.name)); 
-            item->setData("category", TypeRole); 
-            item->setData(cat.id, CategoryIdRole); 
-            item->setData(color, ColorRole); 
-             
-            row << item << new QStandardItem("-") << new QStandardItem("子分类") << new QStandardItem("-"); 
-            m_model->appendRow(row); 
-        } 
-    } 
- 
-    // 2. 加载绑定的 File ID 
-    std::vector<std::string> fids = CategoryRepo::getFileIdsInCategory(categoryId); 
-    QSqlDatabase db = ArcMeta::Database::instance().getThreadDatabase(); 
-     
-    for (const auto& fid : fids) { 
-        QSqlQuery q(db); 
-        q.prepare("SELECT path, type, size, mtime FROM items WHERE file_id_128 = ? AND deleted = 0"); 
-        q.addBindValue(QString::fromStdString(fid)); 
-         
-        if (q.exec() && q.next()) { 
-            QString itemPath = q.value(0).toString(); 
-            QString type = q.value(1).toString(); 
-            qint64 size = q.value(2).toLongLong(); 
-            QDateTime mtime = QDateTime::fromMSecsSinceEpoch(q.value(3).toDouble()); 
- 
-            QFileInfo info(itemPath); 
-            if (!info.exists()) continue; 
- 
-            QList<QStandardItem*> row; 
-            QString normPath = QDir::toNativeSeparators(QDir::cleanPath(itemPath)); 
-            RuntimeMeta rm = MetadataManager::instance().getMeta(normPath.toStdWString()); 
-            QString colorName = QString::fromStdWString(rm.color); 
-            QColor tagColor = UiHelper::parseColorName(colorName); 
- 
-            QIcon itemIcon = UiHelper::getFileIcon(itemPath, 128, tagColor); 
-            auto* nameItem = new QStandardItem(itemIcon, info.fileName()); 
-            nameItem->setData(itemPath, PathRole); 
-            nameItem->setData(type, TypeRole); 
-            nameItem->setData(rm.rating, RatingRole); 
-            nameItem->setData(colorName, ColorRole); 
-            nameItem->setData(rm.pinned, PinnedRole); 
-            nameItem->setData(rm.pinned, IsLockedRole); 
-            nameItem->setData(rm.tags, TagsRole); 
-            // 2026-06-xx 注入物理色板
-            QVariantList palList;
-            for (const auto& p : rm.palettes) {
-                QVariantMap m; m["color"] = p.color; m["ratio"] = p.ratio;
-                palList << m;
+    QPointer<ContentPanel> weakThis(this);
+    (void)QtConcurrent::run([weakThis, categoryId, reqId]() {
+        std::vector<ItemRecord> allRecords;
+
+        // 1. 加载子分类
+        auto allCategories = CategoryRepo::getAll();
+        for (const auto& cat : allCategories) {
+            if (cat.parentId == categoryId) {
+                ItemRecord r;
+                r.isCategory = true;
+                r.categoryId = cat.id;
+                r.categoryName = QString::fromStdWString(cat.name);
+                r.categoryColor = QString::fromStdWString(cat.color).isEmpty() ? "#aaaaaa" : QString::fromStdWString(cat.color);
+                // 2026-07-xx 物理同步：从内存缓存或元数据管理器中拉取分类的评分（如有）
+                r.rating = 0; 
+                r.pinned = cat.pinned;
+                allRecords.push_back(r);
             }
-            nameItem->setData(palList, PalettesRole);
- 
-            bool isEmpty = false; 
-            if (type == "folder") isEmpty = QDir(itemPath).isEmpty(); 
-            nameItem->setData(isEmpty, IsEmptyRole); 
- 
-            row << nameItem; 
-            row << new QStandardItem(type == "folder" ? "-" : QString::number(size / 1024) + " KB"); 
-            row << new QStandardItem(type == "folder" ? (isEmpty ? "文件夹 (空)" : "文件夹") : info.suffix().toUpper() + " 文件"); 
-            row << new QStandardItem(mtime.toString("yyyy-MM-dd HH:mm")); 
-            m_model->appendRow(row); 
- 
-            // 2026-05-07 按照用户要求：累加统计数据 
-            stats.ratingCounts[rm.rating]++; 
-            if (!colorName.isEmpty()) stats.colorCounts[colorName]++; 
-            else stats.colorCounts[""]++; 
-            // 使用实际文件扩展名而非数据库 type 字段 
-            QString ext = type == "folder" ? "folder" : info.suffix().toUpper(); 
-            stats.typeCounts[ext]++; 
-             
-            for (const QString& tag : rm.tags) { 
-                stats.tagCounts[tag]++; 
-            } 
-            if (rm.tags.empty()) stats.noTagCount++; 
-             
-            QDate cdate = info.birthTime().date(); 
-            QDate today = QDate::currentDate(); 
-            if (cdate == today) stats.createDateCounts["today"]++; 
-            else if (cdate == today.addDays(-1)) stats.createDateCounts["yesterday"]++; 
-            else stats.createDateCounts[cdate.toString("yyyy-MM-dd")]++; 
-             
-            QDate mdate = info.lastModified().date(); 
-            if (mdate == today) stats.modifyDateCounts["today"]++; 
-            else if (mdate == today.addDays(-1)) stats.modifyDateCounts["yesterday"]++; 
-            else stats.modifyDateCounts[mdate.toString("yyyy-MM-dd")]++; 
- 
-            m_iconPendingPaths << itemPath; 
-            m_pathToIndexMap[itemPath] = QPersistentModelIndex(nameItem->index()); 
-        } 
-    } 
-     
-    // 2026-05-07 按照用户要求：发出统计数据信号，填充筛选器 
-    if (stats.noTagCount > 0) stats.tagCounts["__none__"] = stats.noTagCount; 
-    emit directoryStatsReady(stats.ratingCounts, stats.colorCounts, stats.tagCounts,  
-                           stats.typeCounts, stats.createDateCounts, stats.modifyDateCounts); 
-     
-    applyFilters(); 
-    if (!m_lazyIconTimer->isActive()) m_lazyIconTimer->start(); 
+        }
+
+        // 2. 加载文件 (SCCH 分离模式)
+        std::vector<CategoryItem> items;
+        if (weakThis->m_isCategoryRecursive) {
+            items = CategoryRepo::getItemsRecursive(categoryId);
+        } else {
+            items = CategoryRepo::getItemsInCategory(categoryId);
+        }
+        
+        allRecords.reserve(allRecords.size() + items.size());
+        for (const auto& item : items) {
+            if (!weakThis) return;
+            std::wstring wPath = MetadataManager::instance().getPathByFid(item.fileId128);
+            if (wPath.empty() && !item.pathHint.empty()) {
+                wPath = item.pathHint; 
+            }
+
+            if (!wPath.empty()) {
+                allRecords.push_back(ContentPanel::createItemRecord(QString::fromStdWString(wPath)));
+            }
+        }
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, allRecords, reqId]() {
+            if (weakThis && weakThis->m_loadRequestId == reqId) {
+                weakThis->m_model->setRecords(allRecords);
+                weakThis->m_proxyModel->sort(0, Qt::AscendingOrder);
+                weakThis->m_isLoading = false;
+                weakThis->recalculateAndEmitStats();
+                weakThis->applyFilters(); 
+                ArcMeta::Logger::log(QString("[Content] 分类加载完成 [%1]").arg(reqId));
+            } else if (weakThis) {
+                ArcMeta::Logger::log(QString("[Content] 拦截到过期的分类加载回调 [%1]").arg(reqId));
+            }
+        });
+    });
 } 
  
-void ContentPanel::loadPaths(const QStringList& paths) { 
+void ContentPanel::loadPaths(const QStringList& paths, int reqId) { 
+    // 2026-07-xx 物理强化：如果路径列表为空，直接执行同步清理并返回
+    // 理由：这防止了搜索启动时的清空动作（异步）与随后到达的结果加载（异步）发生竞态。
+    if (paths.isEmpty()) {
+        ArcMeta::Logger::log("[Content] loadPaths 收到空路径，执行同步清空");
+        if (reqId == 0) m_loadRequestId++; // 若未指定 ID，则自增以作废前序加载
+        else m_loadRequestId = reqId;      // 若指定了 ID，则强制对其
+        
+        m_model->clear();
+        m_isLoading = false;
+        recalculateAndEmitStats();
+        return;
+    }
+
+    // 校验：如果传入了明确的 reqId，且与当前 ID 不符，则直接拦截。
+    // 这对于搜索结果的流式加载至关重要。
+    if (reqId != 0 && m_loadRequestId != reqId) {
+        ArcMeta::Logger::log(QString("[Content] loadPaths 拦截到过期的同步请求 [%1], 当前 ID: %2")
+                            .arg(reqId).arg(m_loadRequestId.load()));
+        return;
+    }
+
+    // 2026-07-xx 物理防护：防重入机制
+    if (m_isLoading && m_currentCategoryType == "path_list" && reqId == 0) {
+        return;
+    }
+
+    m_isLoading = true;
+    if (reqId == 0) reqId = ++m_loadRequestId;
+    // 2026-07-xx 逻辑校准：保持既有的系统分类类型（如 trash/recently_visited），
+    // 仅在明确不是这些特殊类型时，才将其降级为通用的 path_list。
+    if (m_currentCategoryType != "trash" && 
+        m_currentCategoryType != "recently_visited" &&
+        m_currentCategoryType != "untagged" &&
+        m_currentCategoryType != "uncategorized" &&
+        m_currentCategoryType != "all") {
+        m_currentCategoryType = "path_list";
+    }
+    updateLayersButtonState();
+    
     m_viewStack->show(); 
     if (m_textPreview) m_textPreview->hide(); 
     if (m_imagePreview) m_imagePreview->hide(); 
-    emit dataSourceChanged("category"); // 2026-05-17 按照用户要求：发射数据源变更信号，高亮展示分类面板焦点线条
+    
+    // 加载路径列表通常属于分类/逻辑数据源
+    emit dataSourceChanged("category"); 
      
-    m_lazyIconTimer->stop(); 
-    m_iconPendingPaths.clear(); 
-    m_pathToIndexMap.clear(); 
- 
-    m_model->clear(); 
-    m_model->setHorizontalHeaderLabels({"名称", "大小", "类型", "修改时间"}); 
- 
-    // 2026-05-07 按照用户要求：添加统计数据结构，用于筛选器填充 
-    ScanStats stats; 
-     
-    for (const QString& path : paths) { 
-        QFileInfo info(path); 
-        if (!info.exists()) continue; 
- 
-        QList<QStandardItem*> row; 
-         
-        // 2026-06-05 按照要求：检测标记颜色并实时着色图标 
-        QString normPath = QDir::toNativeSeparators(QDir::cleanPath(path)); 
-        RuntimeMeta rm = MetadataManager::instance().getMeta(normPath.toStdWString()); 
-        QString colorName = QString::fromStdWString(rm.color); 
-        QColor tagColor = UiHelper::parseColorName(colorName); 
- 
-        // 2026-05-27 物理修复：图标分辨率提升至 128 
-        QIcon itemIcon = UiHelper::getFileIcon(path, 128, tagColor); 
-        auto* nameItem = new QStandardItem(itemIcon, info.fileName()); 
-        nameItem->setData(path, PathRole); 
-        nameItem->setData(info.isDir() ? "folder" : "file", TypeRole); 
-         
-        // 2026-05-27 物理修复：复用已归一化的路径和元数据，解决重定义报错 
-        nameItem->setData(rm.rating, RatingRole); 
-        nameItem->setData(colorName, ColorRole); 
-        nameItem->setData(rm.pinned, PinnedRole); 
-        nameItem->setData(rm.pinned, IsLockedRole); 
-        nameItem->setData(rm.tags, TagsRole); 
-        // 2026-06-xx 注入物理色板
-        QVariantList palList;
-        for (const auto& p : rm.palettes) {
-            QVariantMap m; m["color"] = p.color; m["ratio"] = p.ratio;
-            palList << m;
+    QPointer<ContentPanel> weakThis(this);
+    (void)QtConcurrent::run([weakThis, paths, reqId]() {
+        std::vector<ItemRecord> records;
+        records.reserve(static_cast<int>(paths.size()));
+        for (const QString& p : paths) {
+            if (!weakThis) return;
+            if (!p.isEmpty()) {
+                records.push_back(ContentPanel::createItemRecord(p));
+            }
         }
-        nameItem->setData(palList, PalettesRole);
+        
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, records, reqId]() {
+            if (weakThis && weakThis->m_loadRequestId == reqId) {
+                weakThis->m_model->setRecords(records);
+                weakThis->m_proxyModel->sort(0, Qt::AscendingOrder);
+                weakThis->m_isLoading = false;
+                weakThis->recalculateAndEmitStats();
+                weakThis->applyFilters(); 
+                ArcMeta::Logger::log(QString("[Content] 路径列表加载完成 [%1]").arg(reqId));
+            } else if (weakThis) {
+                ArcMeta::Logger::log(QString("[Content] 拦截到过期的路径列表加载回调 [%1]").arg(reqId));
+            }
+        });
+    });
+}
+
+void ContentPanel::appendPaths(const QStringList& paths, int reqId) {
+    if (paths.isEmpty()) return;
+
+    // 物理校验：如果指定了请求 ID，则必须与当前 ID 匹配，否则视为过期搜索结果
+    if (reqId != 0 && m_loadRequestId != reqId) {
+        ArcMeta::Logger::log(QString("[Content] appendPaths 拦截到过期的异步追加请求 [%1], 当前 ID: %2")
+                            .arg(reqId).arg(m_loadRequestId.load()));
+        return;
+    }
+
+    QPointer<ContentPanel> weakThis(this);
+    (void)QtConcurrent::run([weakThis, paths, reqId]() {
+        std::vector<ItemRecord> newRecords;
+        newRecords.reserve(static_cast<int>(paths.size()));
+        for (const QString& p : paths) {
+            if (!weakThis) return;
+            newRecords.push_back(ContentPanel::createItemRecord(p));
+        }
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, newRecords, reqId]() {
+            if (weakThis && (reqId == 0 || weakThis->m_loadRequestId == reqId)) {
+                // 获取当前已有记录并追加
+                std::vector<ItemRecord> all = weakThis->m_model->allRecords();
+                all.insert(all.end(), newRecords.begin(), newRecords.end());
+                weakThis->m_model->setRecords(all);
+                
+                // 异步流式追加时，每批次都尝试更新一次统计与筛选
+                weakThis->recalculateAndEmitStats();
+                weakThis->applyFilters();
+                ArcMeta::Logger::log(QString("[Content] 异步追加了 %1 条路径 [%2]").arg(newRecords.size()).arg(reqId));
+            } else if (weakThis) {
+                ArcMeta::Logger::log(QString("[Content] appendPaths 在回调阶段拦截到过期结果 [%1]").arg(reqId));
+            }
+        });
+    });
+}
  
-        bool isEmpty = false; 
-        if (info.isDir()) isEmpty = QDir(path).isEmpty(); 
-        nameItem->setData(isEmpty, IsEmptyRole); 
- 
-        row << nameItem; 
-        row << new QStandardItem(info.isDir() ? "-" : QString::number(info.size() / 1024) + " KB"); 
-        row << new QStandardItem(info.isDir() ? (isEmpty ? "文件夹 (空)" : "文件夹") : info.suffix().toUpper() + " 文件"); 
-        row << new QStandardItem(info.lastModified().toString("yyyy-MM-dd HH:mm")); 
-        m_model->appendRow(row); 
- 
-        // 2026-05-07 按照用户要求：累加统计数据 
-        stats.ratingCounts[rm.rating]++; 
-        if (!colorName.isEmpty()) stats.colorCounts[colorName]++; 
-        else stats.colorCounts[""]++; 
-        // 使用实际文件扩展名而非通用的 "file" 
-        QString type = info.isDir() ? "folder" : info.suffix().toUpper(); 
-        stats.typeCounts[type]++; 
-         
-        for (const QString& tag : rm.tags) { 
-            stats.tagCounts[tag]++; 
-        } 
-        if (rm.tags.empty()) stats.noTagCount++; 
-         
-        QDate cdate = info.birthTime().date(); 
-        QDate today = QDate::currentDate(); 
-        if (cdate == today) stats.createDateCounts["today"]++; 
-        else if (cdate == today.addDays(-1)) stats.createDateCounts["yesterday"]++; 
-        else stats.createDateCounts[cdate.toString("yyyy-MM-dd")]++; 
-         
-        QDate mdate = info.lastModified().date(); 
-        if (mdate == today) stats.modifyDateCounts["today"]++; 
-        else if (mdate == today.addDays(-1)) stats.modifyDateCounts["yesterday"]++; 
-        else stats.modifyDateCounts[mdate.toString("yyyy-MM-dd")]++; 
- 
-        m_iconPendingPaths << path; 
-        m_pathToIndexMap[path] = QPersistentModelIndex(nameItem->index()); 
-    } 
- 
-    // 2026-05-07 按照用户要求：发出统计数据信号，填充筛选器 
-    if (stats.noTagCount > 0) stats.tagCounts["__none__"] = stats.noTagCount; 
-    emit directoryStatsReady(stats.ratingCounts, stats.colorCounts, stats.tagCounts,  
-                           stats.typeCounts, stats.createDateCounts, stats.modifyDateCounts); 
-     
-    applyFilters(); 
-    if (!m_lazyIconTimer->isActive()) m_lazyIconTimer->start(); 
-} 
- 
+void ContentPanel::recalculateAndEmitStats() {
+    const std::vector<ItemRecord>& records = m_model->allRecords();
+    if (records.empty()) {
+        // 2026-06-xx 物理修复：严禁向筛选面板发送“全空”统计信号，
+        // 防止在加载大目录或执行搜索切换的中间态强行清空筛选器界面。
+        return;
+    }
+
+    QPointer<ContentPanel> weakThis(this);
+    (void)QtConcurrent::run([weakThis, records]() {
+        ScanStats stats;
+
+        for (const auto& record : records) {
+            if (!weakThis) return;
+
+            stats.ratingCounts[record.rating]++;
+            
+            if (!record.color.isEmpty()) {
+                stats.colorCounts[record.color.toUpper()]++;
+            } else {
+                stats.colorCounts[""]++;
+            }
+            
+            if (record.isDir || record.isCategory) {
+                stats.typeCounts["folder"]++;
+                if (record.isDir && record.isEmpty) {
+                    stats.emptyFolderCount++;
+                }
+            } else {
+                stats.typeCounts["file"]++;
+                stats.typeCounts[record.suffix.toUpper()]++;
+            }
+            
+            auto dateKey = [&](long long ts) {
+                return QDateTime::fromMSecsSinceEpoch(ts).date().toString("dd-MM-yyyy");
+            };
+
+            stats.createDateCounts[dateKey(record.ctime)]++;
+            stats.modifyDateCounts[dateKey(record.mtime)]++;
+        }
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, stats]() {
+            if (weakThis) {
+                emit weakThis->directoryStatsReady(stats.ratingCounts, stats.colorCounts,
+                                                 stats.typeCounts, stats.createDateCounts, stats.modifyDateCounts,
+                                                 stats.emptyFolderCount);
+            }
+        });
+    });
+}
+
 void ContentPanel::createNewItem(const QString& type) { 
     if (m_currentPath.isEmpty() || m_currentPath == "computer://") return; 
  
@@ -1727,31 +2867,45 @@ void ContentPanel::createNewItem(const QString& type) {
     } 
  
     if (success) { 
+        m_pendingSelectName = finalName;
+        m_isPendingEdit = true;
         loadDirectory(m_currentPath, m_isRecursive); 
-        auto results = m_model->findItems(finalName, Qt::MatchExactly, 0); 
-        if (!results.isEmpty()) { 
-            QModelIndex srcIdx = results.first()->index(); 
-            QModelIndex proxyIdx = m_proxyModel->mapFromSource(srcIdx); 
-            if (proxyIdx.isValid()) { 
-                m_gridView->setCurrentIndex(proxyIdx); 
-                m_gridView->edit(proxyIdx); 
-            } 
-        } 
     } 
 } 
  
 void ContentPanel::updateLayersButtonState() { 
-    if (!m_btnLayers) return; 
+    if (!m_btnLayers || !m_btnLayersBlue) return; 
  
+    // 2026-07-xx 互斥逻辑：分类视图下显示蓝按钮，物理路径下显示绿按钮
+    bool isCategoryMode = (m_currentCategoryType == "user_category");
+    m_btnLayers->setVisible(!isCategoryMode);
+    m_btnLayersBlue->setVisible(isCategoryMode);
+
+    if (isCategoryMode) {
+        m_btnLayersBlue->setEnabled(true);
+        m_btnLayersBlue->setChecked(m_isCategoryRecursive);
+        m_btnLayersBlue->setProperty("tooltipText", "显示子分类中的项目");
+        return;
+    }
+
     if (m_currentPath.isEmpty() || m_currentPath == "computer://") { 
         m_btnLayers->setEnabled(false); 
         m_btnLayers->setChecked(false); 
         m_btnLayers->setProperty("tooltipText", "“此电脑”不支持递归显示"); 
         return; 
     } 
+
+    // 2026-07-xx 逻辑增强：若处于搜索或其他路径列表模式，禁用递归功能
+    // 注意：m_currentCategoryType 为空时代表正常的物理目录导航（nav 模式）
+    if (!m_currentCategoryType.isEmpty() && m_currentCategoryType != "nav") {
+        m_btnLayers->setEnabled(false);
+        m_btnLayers->setChecked(false);
+        m_btnLayers->setProperty("tooltipText", "当前视图不支持递归显示");
+        return;
+    }
  
     m_btnLayers->setEnabled(true); 
-    m_btnLayers->setProperty("tooltipText", "递归显示子目录所有文件"); 
+    m_btnLayers->setProperty("tooltipText", "显示子文件夹中的项目"); 
 } 
  
 // --- Delegate --- 
@@ -1767,7 +2921,7 @@ GridItemDelegate::GridMetrics GridItemDelegate::calculateMetrics(const QStyleOpt
     m.squareRect = QRect(m.cardRect.left(), m.cardRect.top(), side, side); 
  
     m.iconDrawSize = (int)(zoom * 0.7); 
-    m.ratingH      = 16;  // 2026-05-17 物理锁定评分区高度 
+    m.ratingH      = 24;  // 2026-05-17 物理锁定评分区高度 
     m.nameH        = (int)(zoom * 0.25); 
  
     // 2026-05-17 按照用户要求：主图标在正方形内垂直居中
@@ -1776,12 +2930,13 @@ GridItemDelegate::GridMetrics GridItemDelegate::calculateMetrics(const QStyleOpt
                        m.iconDrawSize, m.iconDrawSize); 
     
     // 2026-05-17 物理布局重构：星级区置于正方形下方
-    m.ratingY = m.squareRect.bottom() + 6; 
+    // 2026-06-xx 按照用户要求：下移 2 像素（从 +6 改为 +8）
+    m.ratingY = m.squareRect.bottom() + 8; 
  
-    m.starSize    = 14; // 2026-05-17 尺寸微调以匹配外部布局
-    m.starSpacing = 2;   
-    int banW = m.ratingH; 
-    int banGap = 4; 
+    m.starSize    = 22; // 2026-05-17 尺寸微调以匹配外部布局
+    m.starSpacing = 0;   
+    int banW = 14;      // 2026-06-xx 物理对齐：将禁止图标缩减至 12px，使其与星级在视觉权重上保持一致
+    int banGap = 2; 
  
     m.infoTotalW = banW + banGap + (5 * m.starSize) + (4 * m.starSpacing); 
     m.infoStartX = m.squareRect.left() + (m.squareRect.width() - m.infoTotalW) / 2; 
@@ -1790,7 +2945,8 @@ GridItemDelegate::GridMetrics GridItemDelegate::calculateMetrics(const QStyleOpt
     m.starsStartX = m.infoStartX + banW + banGap; 
      
     // 名称区紧贴评分区下方 
-    m.nameY = m.ratingY + m.ratingH + 6; 
+    // 2026-06-xx 按照要求：第三次向上偏移 2 像素以实现零间距极致排版（从 +2 调整为 +0）
+    m.nameY = m.ratingY + m.ratingH + 0; 
     m.nameRect = QRect(m.cardRect.left(), m.nameY, m.cardRect.width(), m.nameH); 
  
     return m; 
@@ -1803,37 +2959,76 @@ void GridItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     GridMetrics m = calculateMetrics(option); 
     bool isSelected = (option.state & QStyle::State_Selected); 
     bool isHovered = (option.state & QStyle::State_MouseOver); 
+    QString colorName = index.data(ColorRole).toString();
      
     // 2026-06-05 按照用户要求：背景框仅限正方形区域，名称外置 
-    QColor cardBg = isSelected ? QColor("#282828") : (isHovered ? QColor("#2A2A2A") : QColor("#2D2D2D")); 
-    painter->setPen(isSelected ? QPen(QColor("#3498db"), 2) : QPen(QColor("#333333"), 1)); 
+    QColor cardBg = isSelected ? BackgroundSelected : (isHovered ? BackgroundHover : BackgroundDeep); 
+    painter->setPen(isSelected ? QPen(PrimaryBlue, 2) : QPen(BorderColor, 1)); 
     painter->setBrush(cardBg); 
     painter->drawRoundedRect(m.squareRect, 8, 8); 
  
     // [内容区绘制] - 均在正方形内 
-    // 1. 状态位图标绘制 (置顶 vs. 已录入 互斥) 
+    // 1. 状态位图标绘制 (置顶 vs. 进度环 vs. 已录入 互斥) 
     // 2026-06-xx 物理修复：校准 ItemRole 作用域，确保 GridItemDelegate 编译通过 
     bool isPinned = index.data(IsLockedRole).toBool(); 
-    bool isManaged = index.data(InDatabaseRole).toBool(); 
+    bool isManaged = index.data(ManagedRole).toBool(); 
+    bool isDir = index.data(TypeRole).toString() == "folder";
+    double progress = index.data(RegistrationProgressRole).toDouble();
      
-    if (isPinned || isManaged) { 
-        QRect statusRect(m.squareRect.right() - 22, m.squareRect.top() + 8, 16, 16); 
-        if (isPinned) { 
-            // 置顶优先 
-            QIcon pinIcon = UiHelper::getIcon("pin_vertical", QColor("#FF551C"), 16); 
-            pinIcon.paint(painter, statusRect); 
-        } else { 
-            // 已录入但未置顶，显示绿对勾 
-            QIcon checkIcon = UiHelper::getIcon("check_circle", QColor("#2ecc71"), 16); 
-            checkIcon.paint(painter, statusRect); 
-        } 
+    QRect statusRect(m.squareRect.right() - 22, m.squareRect.top() + 8, 16, 16);
+    if (isPinned) { 
+        // 置顶优先 
+        QIcon pinIcon = UiHelper::getIcon("pin_vertical", Style::ActiveOrange, 16); 
+        pinIcon.paint(painter, statusRect); 
+    } else if (isDir && progress >= 0.0 && progress < 1.0) {
+        // --- 绘制进度环 (开箱即用代码) --- 
+        // 2026-07-xx 按照 Development_Plan 3.1：进度弧线完全通过数据库中的 0 和 1 标记值计算得出
+        painter->save(); 
+        painter->setRenderHint(QPainter::Antialiasing); 
+         
+        // 1. 底环 
+        painter->setPen(QPen(QColor(60, 60, 60, 180), 2)); 
+        painter->drawEllipse(statusRect.adjusted(1, 1, -1, -1)); 
+         
+        // 2. 进度弧 (品牌蓝 #3498db) 
+        QPen pPen(QColor("#3498db"), 2); 
+        pPen.setCapStyle(Qt::RoundCap); 
+        painter->setPen(pPen); 
+         
+        int spanAngle = -qRound(progress * 360 * 16); // 逆时针计算 
+        painter->drawArc(statusRect.adjusted(1, 1, -1, -1), 90 * 16, spanAngle); 
+        painter->restore(); 
+    } else if (isManaged || (isDir && progress >= 1.0)) { 
+        // 已录入但未置顶，显示绿对勾 
+        QIcon checkIcon = UiHelper::getIcon("check_circle", SuccessGreen, 16); 
+        checkIcon.paint(painter, statusRect); 
     } 
  
     // 2. 扩展名角标 
+    QString type = index.data(TypeRole).toString();
     QString path = index.data(PathRole).toString(); 
     QFileInfo info(path); 
-    QString ext = info.isDir() ? "DIR" : info.suffix().toUpper(); 
+    QString ext;
+    if (type == "category" || type == "folder") {
+        ext = "DIR"; // 2026-06-xx 物理校准：分类与文件夹均强制显示为 "DIR" 徽章
+    } else {
+        ext = info.isDir() ? "DIR" : info.suffix().toUpper(); 
+    }
     if (ext.isEmpty()) ext = "FILE"; 
+    
+    // 2026-06-xx 物理性能优化：优先从 record.suffix 中提取徽章文字，减少 QFileInfo 频率
+    // 2026-06-xx 物理加固：修复代理模型下的索引映射错误，杜绝数组越界 (c0000005)
+    QModelIndex srcIdx = index;
+    const auto* proxy = qobject_cast<const QSortFilterProxyModel*>(index.model());
+    if (proxy) srcIdx = proxy->mapToSource(index);
+    
+    const auto* srcModel = qobject_cast<const FerrexVirtualDbModel*>(srcIdx.model());
+    if (srcModel && srcIdx.row() >= 0 && srcIdx.row() < (int)srcModel->allRecords().size()) {
+        const auto& record = srcModel->allRecords()[srcIdx.row()];
+        if (record.isCategory || record.isDir) ext = "DIR";
+        else if (!record.suffix.isEmpty()) ext = record.suffix.toUpper();
+    }
+
     QColor badgeColor = UiHelper::getExtensionColor(ext); 
  
     QRect extRect(m.squareRect.left() + 8, m.squareRect.top() + 8, 36, 18); 
@@ -1854,6 +3049,21 @@ void GridItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     // 4. 评级星级 
     int rating = index.data(RatingRole).toInt(); 
      
+    // 2026-06-xx 逻辑重构：彩色胶囊背景由 colorName 独立驱动，不与星级耦合
+    if (!colorName.isEmpty()) {
+        QColor bgColor = UiHelper::parseColorName(colorName);
+        if (bgColor.isValid()) {
+            painter->save();
+            painter->setBrush(bgColor);
+            painter->setPen(Qt::NoPen);
+            // 即使星级为0，也应根据占位计算胶囊区域并绘制
+            QRect lastStarRect(m.starsStartX + 4 * (m.starSize + m.starSpacing), m.ratingY + (m.ratingH - m.starSize) / 2, m.starSize, m.starSize);
+            QRect totalRect = m.banRect.united(lastStarRect);
+            painter->drawRoundedRect(totalRect.adjusted(-4, -1, 4, 1), 4, 4);
+            painter->restore();
+        }
+    }
+
     // 2026-xx-xx 按照最新要求： 
     // 1. 如果已有打分 (rating > 0)，始终显示。 
     // 2. 如果未打分但被选中，显示禁止图标和空心星。 
@@ -1861,12 +3071,34 @@ void GridItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     bool shouldShowRating = (rating > 0) || isSelected; 
  
     if (shouldShowRating) { 
+        QColor bgColor = colorName.isEmpty() ? QColor(0,0,0,0) : UiHelper::parseColorName(colorName);
+        
+        // 2026-06-xx 物理修复：采用感知亮度对比色计算，确保在深色标记（如灰色/深蓝）下星星依然清晰可见
+        double luminance = 0.0;
+        if (bgColor.isValid() && bgColor.alpha() > 0) {
+            luminance = (0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue()) / 255.0;
+        }
+
+        QColor starColor, emptyStarColor;
+        if (colorName.isEmpty()) {
+            starColor      = QColor("#CCCCCC");
+            emptyStarColor = QColor("#888888");
+        } else if (luminance < 0.5) {
+            // 背景较暗 -> 使用亮色星
+            starColor      = QColor("#FFFFFF");
+            emptyStarColor = QColor(255, 255, 255, 160);
+        } else {
+            // 背景较亮 -> 使用暗色星
+            starColor      = QColor("#1A1A1A");
+            emptyStarColor = QColor(0, 0, 0, 140);
+        }
+
         // 2026-xx-xx 深度修复：调高禁止图标与空心星亮度，确保在深色卡片背景下清晰可见 
-        QIcon banIcon = UiHelper::getIcon("no_color", QColor("#B0B0B0"), m.banRect.width()); 
+        QIcon banIcon = UiHelper::getIcon("no_color", starColor, m.banRect.width()); 
         banIcon.paint(painter, m.banRect); 
  
-        QPixmap filledStar = UiHelper::getPixmap("star_filled", QSize(m.starSize, m.starSize), QColor("#EF9F27")); 
-        QPixmap emptyStar = UiHelper::getPixmap("star", QSize(m.starSize, m.starSize), QColor("#888888")); 
+        QPixmap filledStar = UiHelper::getPixmap("star-svgrepo-com.svg", QSize(m.starSize, m.starSize), starColor); 
+        QPixmap emptyStar = UiHelper::getPixmap("star-rate-rating-outline-svgrepo-com.svg", QSize(m.starSize, m.starSize), emptyStarColor); 
  
         for (int i = 0; i < 5; ++i) { 
             QRect starRect(m.starsStartX + i * (m.starSize + m.starSpacing), m.ratingY + (m.ratingH - m.starSize) / 2, m.starSize, m.starSize); 
@@ -1875,15 +3107,14 @@ void GridItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     } 
      
     // [名称区绘制] - 在正方形下方 
-    QString colorName = index.data(ColorRole).toString(); 
     bool isEmptyFolder = (index.data(TypeRole).toString() == "folder" && index.data(IsEmptyRole).toBool()); 
  
-    if (isEmptyFolder) { 
-        // 对空文件夹正方形区进行特殊描边 
-        painter->setPen(QPen(QColor("#41F2F2"), 1, Qt::DashLine)); 
-        painter->setBrush(QColor(65, 242, 242, 30)); 
+    if (!isSelected && isEmptyFolder) { 
+        // 2026-06-xx 物理优化：移除半透明蒙版，改为全透明刷子
+        painter->setPen(QPen(AccentCyan, 1, Qt::DashLine)); 
+        painter->setBrush(Qt::NoBrush); // 直接将其透明 
         painter->drawRoundedRect(m.squareRect, 8, 8); 
-        painter->setPen(QColor("#41F2F2")); 
+        painter->setPen(AccentCyan); 
     } 
  
     QString name = index.data(Qt::DisplayRole).toString(); 
@@ -1894,8 +3125,8 @@ void GridItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     painter->setFont(textFont); 
  
     // 2026-06-xx 按照要求：未录入项文字半透明 
-    // 2026-06-xx 物理修复：校准 InDatabaseRole 作用域 
-    if (!isSelected && !index.data(InDatabaseRole).toBool()) { 
+    // 2026-06-xx 物理修复：校准 ManagedRole 作用域 
+    if (!isSelected && !index.data(ManagedRole).toBool()) { 
         painter->setPen(QColor(238, 238, 238, 120)); 
     } 
  
@@ -1917,11 +3148,6 @@ void GridItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
     painter->restore(); 
 } 
  
-QSize GridItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex&) const { 
-    auto* view = qobject_cast<QListView*>(const_cast<QWidget*>(option.widget)); 
-    if (view && view->gridSize().isValid()) return view->gridSize(); 
-    return QSize(96, 112); 
-} 
  
 bool GridItemDelegate::eventFilter(QObject* obj, QEvent* event) { 
     if (event->type() == QEvent::KeyPress) { 
@@ -1946,53 +3172,81 @@ bool GridItemDelegate::eventFilter(QObject* obj, QEvent* event) {
     return QStyledItemDelegate::eventFilter(obj, event); 
 } 
  
+bool GridItemDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view, 
+                                const QStyleOptionViewItem& option, const QModelIndex& index) {
+    GridMetrics m = calculateMetrics(option);
+    QRect statusRect(m.squareRect.right() - 22, m.squareRect.top() + 8, 16, 16);
+
+    if (statusRect.contains(event->pos())) {
+        double p = index.data(RegistrationProgressRole).toDouble();
+        if (p >= 0.0) {
+            // 2026-07-xx 按照 Plan-65：悬停触发，timeout = 0
+            ToolTipOverlay::instance()->showText(event->globalPos(), 
+                QString("登记进度: %1%").arg(qRound(p * 100)), 0);
+            return true;
+        }
+    }
+    return QStyledItemDelegate::helpEvent(event, view, option, index);
+}
+
 bool GridItemDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index) { 
     if (event->type() == QEvent::MouseButtonPress) { 
         // 2026-05-25 物理修复：改用 reinterpret_cast 避开 QEvent 子类转型歧义 
         QMouseEvent* mEvent = reinterpret_cast<QMouseEvent*>(event); 
         if (mEvent->button() == Qt::LeftButton) { 
+            QAbstractItemView* view = qobject_cast<QAbstractItemView*>(const_cast<QWidget*>(option.widget));
+            
+            // 物理加固：未选中项严禁直接通过 Delegate 修改元数据
+            // 2026-06-xx 稳健性增强：通过 View 获取实时的选中状态，防止 option.state 延迟或缺失
+            bool isSelected = (option.state & QStyle::State_Selected);
+            if (view && view->selectionModel()) {
+                isSelected = view->selectionModel()->isSelected(index);
+            }
+            if (!isSelected) return false;
+
             // 2026-05-28 按照用户授权：废除本地硬编码判定，统一使用 calculateMetrics 保证 Hitbox 零偏差 
-            GridMetrics m = calculateMetrics(option); 
-            QString path = index.data(PathRole).toString(); 
+            // 2026-06-xx 物理对齐：补全 decorationSize，防止因 option 属性缺失导致 Hitbox 偏移
+            QStyleOptionViewItem opt = option;
+            if (opt.decorationSize.width() <= 0 && view) opt.decorationSize = view->iconSize();
+            GridMetrics m = calculateMetrics(opt); 
  
-            if (m.banRect.contains(mEvent->pos())) { 
-                if (!path.isEmpty()) { 
-                    MetadataManager::instance().setRating(path.toStdWString(), 0); 
-                    model->setData(index, 0, RatingRole); 
+            // 1. 区域判定
+            bool isBanHit = m.banRect.contains(mEvent->pos());
+            int hitStar = -1;
+            for (int i = 0; i < 5; ++i) { 
+                QRect starRect(m.starsStartX + i * (m.starSize + m.starSpacing), m.ratingY + (m.ratingH - m.starSize) / 2, m.starSize, m.starSize); 
+                if (starRect.contains(mEvent->pos())) { 
+                    hitStar = i + 1;
+                    break; 
                 } 
-                // 2026-05-08 彻底阻止编辑触发：临时禁用编辑触发器，防止清除星级时错误触发行内编辑
-                auto* view = qobject_cast<QAbstractItemView*>(const_cast<QWidget*>(option.widget));
+            }
+
+            if (isBanHit || hitStar != -1) { 
+                // 2. 执行数据更新 (支持选区感知批量操作)
+                int newValue = isBanHit ? 0 : hitStar;
+                if (view && view->selectionModel() && view->selectionModel()->isSelected(index)) {
+                    auto selectedIndexes = view->selectionModel()->selectedIndexes();
+                    // 2026-07-xx 按照 Plan-86：遍历选区实现批量评分
+                    for (const auto& selIdx : selectedIndexes) {
+                        if (selIdx.column() == 0) {
+                            model->setData(selIdx, newValue, RatingRole);
+                        }
+                    }
+                } else {
+                    model->setData(index, newValue, RatingRole); 
+                }
+
+                // 3. 物理修复：直接执行禁用逻辑，杜绝 Lambda 嵌套导致的编译错误
                 if (view) {
-                    QAbstractItemView::EditTriggers originalTriggers = view->editTriggers();
+                    QAbstractItemView::EditTriggers currentTriggers = view->editTriggers();
                     view->setEditTriggers(QAbstractItemView::NoEditTriggers);
-                    QTimer::singleShot(0, [view, originalTriggers]() {
-                        view->setEditTriggers(originalTriggers);
+                    // 延迟恢复触发器
+                    QTimer::singleShot(0, view, [view, currentTriggers]() {
+                        view->setEditTriggers(currentTriggers);
                     });
                 }
                 event->accept(); 
                 return true; 
-            } 
- 
-            for (int i = 0; i < 5; ++i) { 
-                QRect starRect(m.starsStartX + i * (m.starSize + m.starSpacing), m.ratingY + (m.ratingH - m.starSize) / 2, m.starSize, m.starSize); 
-                if (starRect.contains(mEvent->pos())) { 
-                    int r = i + 1; 
-                    if (!path.isEmpty()) { 
-                        MetadataManager::instance().setRating(path.toStdWString(), r); 
-                        model->setData(index, r, RatingRole); 
-                    } 
-                    // 2026-05-08 彻底阻止编辑触发：临时禁用编辑触发器，防止星级点击时错误触发行内编辑
-                    auto* view = qobject_cast<QAbstractItemView*>(const_cast<QWidget*>(option.widget));
-                    if (view) {
-                        QAbstractItemView::EditTriggers originalTriggers = view->editTriggers();
-                        view->setEditTriggers(QAbstractItemView::NoEditTriggers);
-                        QTimer::singleShot(0, [view, originalTriggers]() {
-                            view->setEditTriggers(originalTriggers);
-                        });
-                    }
-                    event->accept(); 
-                    return true; 
-                } 
             } 
         } 
     } 
@@ -2012,114 +3266,79 @@ QWidget* GridItemDelegate::createEditor(QWidget* parent, const QStyleOptionViewI
  
     editor->setStyleSheet( 
         QString("QLineEdit { background-color: %1; color: %2; border-radius: 2px; " 
-                "border: 2px solid #3498db; font-weight: bold; font-size: 8pt; padding: 0px; }") 
-        .arg(bgColor, textColor) 
+                "border: 2px solid %3; font-weight: bold; font-size: 8pt; padding: 0px; }") 
+        .arg(bgColor).arg(textColor).arg(qssColor(PrimaryBlue))
     ); 
     return editor; 
 } 
  
 void GridItemDelegate::setEditorData(QWidget* editor, const QModelIndex& index) const { 
     QString value = index.model()->data(index, Qt::EditRole).toString(); 
-    // 2026-05-25 物理修复：改用 qobject_cast 彻底根除 static_cast 类型无法识别的 Bug 
+    // 2026-05-25 物理修复：改用 qobject_cast 彻底根除 static_cast 类型无法识别 the Bug 
     QLineEdit* lineEdit = qobject_cast<QLineEdit*>(editor); 
-    if (lineEdit) lineEdit->setText(value); 
+    if (!lineEdit) return;
+
+    lineEdit->setText(value); 
      
-    int lastDot = value.lastIndexOf('.'); 
-    if (lastDot > 0) { 
-        lineEdit->setSelection(0, lastDot); 
-    } else { 
-        lineEdit->selectAll(); 
-    } 
+    // 2026-xx-xx 按照用户要求：如果是文件夹，全选；如果是文件，仅选中包含后缀名之前的部分
+    // 物理修复：使用 QTimer 确保在 Qt 默认 selectAll 之后执行，防止逻辑被覆盖
+    bool isFolder = (index.data(TypeRole).toString() == "folder" || index.data(TypeRole).toString() == "category");
+    QTimer::singleShot(0, lineEdit, [lineEdit, value, isFolder]() {
+        if (!lineEdit) return;
+        if (isFolder) {
+            lineEdit->selectAll();
+        } else {
+            int lastDot = value.lastIndexOf('.'); 
+            if (lastDot > 0) { 
+                lineEdit->setSelection(0, lastDot); 
+            } else { 
+                lineEdit->selectAll(); 
+            } 
+        }
+    });
 } 
  
 void GridItemDelegate::setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const { 
-    // 2026-05-25 物理修复：改用 qobject_cast 彻底根除 static_cast 类型无法识别的 Bug 
     QLineEdit* lineEdit = qobject_cast<QLineEdit*>(editor); 
     if (!lineEdit) return; 
     QString value = lineEdit->text(); 
     if(value.isEmpty() || value == index.data(Qt::DisplayRole).toString()) return; 
  
-    QString oldPath = index.data(PathRole).toString(); 
-    QFileInfo info(oldPath); 
-    QString newPath = info.absolutePath() + "/" + value; 
-     
-    if (QFile::rename(oldPath, newPath)) { 
-        model->setData(index, value, Qt::EditRole); 
-        model->setData(index, newPath, PathRole); 
-        // 2026-05-24 按照用户要求：彻底移除 JSON 逻辑，重命名后仅需同步更新内存与数据库索引 
-        MetadataManager::instance().renameItem(oldPath.toStdWString(), newPath.toStdWString()); 
-    }  
-} 
-
-void ContentPanel::recalculateAndEmitStats() {
-    ScanStats stats;
-    for (int i = 0; i < m_model->rowCount(); ++i) {
-        QStandardItem* nameItem = m_model->item(i, 0);
-        if (!nameItem) continue;
-        int rating = nameItem->data(RatingRole).toInt();
-        QString type = nameItem->data(TypeRole).toString();
-        QStringList tags = nameItem->data(TagsRole).toStringList();
-        
-        stats.ratingCounts[rating]++;
-
-        // 2026-06-xx 物理占比统计：遍历所有色板颜色，而不仅仅是主色调
-        QVariant palVar = nameItem->data(PalettesRole);
-        QString dominantColor = nameItem->data(ColorRole).toString();
-        
-        if (palVar.isValid()) {
-            QVariantList pal = palVar.toList();
-            for (const auto& v : pal) {
-                QVariantMap m = v.toMap();
-                QColor c = m["color"].value<QColor>();
-                // 4-bit 量化对齐，防止统计碎片化
-                QString hex = UiHelper::quantizeColor(c).name().toUpper();
-                stats.colorCounts[hex]++;
+    // 2026-06-xx 架构解耦修复：物理重命名职责已彻底移至 Model 层的 setData。
+    // Delegate 仅负责触发数据变更。这消除了“重复重命名”导致的静默失败 Bug。
+    if (model->setData(index, value, Qt::EditRole)) {
+        // 2026-xx-xx 按照用户要求：重命名后触发 selectionChanged 信号，以驱动元数据面板刷新
+        // 由于 setModelData 没有 option 参数，通过 parent 获取 View
+        QAbstractItemView* view = qobject_cast<QAbstractItemView*>(editor->parentWidget()->parentWidget());
+        if (view) {
+            // 向上寻找 ContentPanel 以调用 onSelectionChanged
+            QWidget* p = view->parentWidget();
+            while (p) {
+                ContentPanel* cp = qobject_cast<ContentPanel*>(p);
+                if (cp) {
+                    cp->onSelectionChanged();
+                    break;
+                }
+                p = p->parentWidget();
             }
-        } else if (!dominantColor.isEmpty()) {
-            stats.colorCounts[dominantColor.toUpper()]++;
-        } else {
-            stats.colorCounts[""]++;
-        }
-        
-        if (type == "folder") {
-            stats.typeCounts["folder"]++;
-        } else {
-            QString path = nameItem->data(PathRole).toString();
-            stats.typeCounts[QFileInfo(path).suffix().toUpper()]++;
-        }
-        
-        for (const QString& tag : tags) {
-            stats.tagCounts[tag]++;
-        }
-        if (tags.isEmpty()) stats.noTagCount++;
-        
-        QString path = nameItem->data(PathRole).toString();
-        QFileInfo info(path);
-        if (info.exists()) {
-            QDate cdate = info.birthTime().date();
-            QDate mdate = info.lastModified().date();
-            QDate today = QDate::currentDate();
-            
-            if (cdate == today) stats.createDateCounts["today"]++;
-            else if (cdate == today.addDays(-1)) stats.createDateCounts["yesterday"]++;
-            else stats.createDateCounts[cdate.toString("yyyy-MM-dd")]++;
-            
-            if (mdate == today) stats.modifyDateCounts["today"]++;
-            else if (mdate == today.addDays(-1)) stats.modifyDateCounts["yesterday"]++;
-            else stats.modifyDateCounts[mdate.toString("yyyy-MM-dd")]++;
         }
     }
-    if (stats.noTagCount > 0) stats.tagCounts["__none__"] = stats.noTagCount;
-    emit directoryStatsReady(stats.ratingCounts, stats.colorCounts, stats.tagCounts,
-                           stats.typeCounts, stats.createDateCounts, stats.modifyDateCounts);
-}
+} 
+
  
 void GridItemDelegate::updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const { 
     Q_UNUSED(index); 
     // 2026-06-05 按照重构布局：同步定位编辑器至正方形下方的名称区 
     GridMetrics m = calculateMetrics(option); 
     editor->setGeometry(m.nameRect); 
-} 
+}
+
+QSize GridItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
+    if (auto* view = qobject_cast<QListView*>(const_cast<QWidget*>(option.widget))) {
+        if (view->gridSize().isValid()) return view->gridSize();
+    }
+    return QStyledItemDelegate::sizeHint(option, index);
+}
  
 } // namespace ArcMeta
 // Force recompile to apply SvgIcons.h changes 

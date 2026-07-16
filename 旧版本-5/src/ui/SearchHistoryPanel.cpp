@@ -9,19 +9,18 @@
 namespace ArcMeta {
 
 SearchHistoryPanel::SearchHistoryPanel(QWidget* parent)
-    : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint)
+    : QFrame(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint)
 {
-    // 2026-04-12 按照用户要求：悬浮面板样式 —— 深色背景、8px 圆角，带 1px 边框
+    // 2026-06-xx 架构重构：使用 Qt::Popup 代替 Qt::Tool，Popup 标志位自带失焦自动关闭逻辑
+    // 移除 Qt::WindowStaysOnTopHint，防止在主窗口关闭/最小化后依然置顶显示
     setAttribute(Qt::WA_TranslucentBackground, false);
-    setAttribute(Qt::WA_ShowWithoutActivating, true);
-    setWindowFlag(Qt::WindowStaysOnTopHint, true);
 
     setObjectName("SearchHistoryPanel");
     setStyleSheet(
         "#SearchHistoryPanel {"
         "  background-color: #252526;"
         "  border: 1px solid #444444;"
-        "  border-radius: 8px;"
+        "  border-radius: 6px;"
         "}"
     );
 
@@ -32,8 +31,9 @@ SearchHistoryPanel::SearchHistoryPanel(QWidget* parent)
     hide();
 }
 
-void SearchHistoryPanel::setHistory(const QStringList& history) {
+void SearchHistoryPanel::setHistory(const QStringList& history, const QString& title) {
     m_history = history;
+    m_currentTitle = title;
     rebuild();
 }
 
@@ -46,7 +46,7 @@ void SearchHistoryPanel::rebuild() {
     }
 
     if (m_history.isEmpty()) {
-        QLabel* empty = new QLabel("暂无搜索记录", this);
+        QLabel* empty = new QLabel(QString("暂无%1").arg(m_currentTitle), this);
         empty->setStyleSheet("color: #666666; font-size: 12px; padding: 4px 8px;");
         m_layout->addWidget(empty);
     } else {
@@ -57,7 +57,7 @@ void SearchHistoryPanel::rebuild() {
         titleLayout->setContentsMargins(4, 0, 4, 0);
         titleLayout->setSpacing(0);
 
-        QLabel* titleLabel = new QLabel("最近搜索", titleRow);
+        QLabel* titleLabel = new QLabel(m_currentTitle, titleRow);
         titleLabel->setStyleSheet("color: #888888; font-size: 11px;");
 
         QPushButton* btnClearAll = new QPushButton("全部清除", titleRow);
@@ -81,7 +81,8 @@ void SearchHistoryPanel::rebuild() {
         m_layout->addWidget(sep);
 
         // 历史条目（最新的显示在最上方）
-        for (int i = m_history.size() - 1; i >= 0; --i) {
+        // 2026-06-xx 逻辑纠偏：m_history 索引 0 为最新，应正向遍历以确保最新项在布局顶端
+        for (int i = 0; i < m_history.size(); ++i) {
             const QString& keyword = m_history[i];
 
             QWidget* row = new QWidget(this);

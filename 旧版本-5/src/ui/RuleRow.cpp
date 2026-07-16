@@ -13,6 +13,11 @@ void RuleRow::initUi() {
     layout->setContentsMargins(0, 2, 0, 2);
     layout->setSpacing(6);
 
+    // 2026-07-xx 按照用户要求：升级下拉框 UI，圆角设计 + 实心三角形箭头
+    // 性能优化：使用静态变量快取路径，避免每行构造时重复触发 IO 写入
+    // 修正：改用紧凑型 dropdown_triangle 图标，并重算参数确保清晰可见
+    static const QString arrowPath = UiHelper::getSvgTempFilePath("dropdown_triangle", QColor("#AAAAAA"));
+
     m_typeCombo = new QComboBox(this);
     m_typeCombo->addItem("文本", static_cast<int>(RenameComponentType::Text));
     m_typeCombo->addItem("序列数字", static_cast<int>(RenameComponentType::Sequence));
@@ -20,11 +25,14 @@ void RuleRow::initUi() {
     m_typeCombo->addItem("日期", static_cast<int>(RenameComponentType::Date));
     m_typeCombo->setFixedWidth(100);
     m_typeCombo->setFixedHeight(25); // 2026-04-11 按照用户要求：物理锁定最高高度为25像素
-    m_typeCombo->setStyleSheet(
+    
+    m_typeCombo->setStyleSheet(QString(
         "QComboBox { background: #2B2B2B; border: 1px solid #444; border-radius: 4px; padding: 2px 4px; color: #EEE; }"
-        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #378ADD; color: #EEE; outline: 0; }"
-        "QComboBox QAbstractItemView::item { height: 22px; padding: 2px; }" // 修复下拉列表子项高度
-    );
+        "QComboBox::drop-down { border: none; width: 24px; }"
+        "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
+        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; selection-color: white; color: #EEE; outline: 0; }"
+        "QComboBox QAbstractItemView::item { height: 22px; padding: 2px; }" 
+    ).arg(arrowPath));
 
     m_paramStack = new QStackedWidget(this);
     m_paramStack->setFixedHeight(25);
@@ -54,10 +62,12 @@ void RuleRow::initUi() {
     m_paddingCombo->setCurrentIndex(2); // Default 3
     m_paddingCombo->setFixedHeight(25);
     m_paddingCombo->setFixedWidth(90);
-    m_paddingCombo->setStyleSheet(
-        "QComboBox { background: #1E1E1E; border: 1px solid #444; border-radius: 4px; color: #EEE; }"
-        "QComboBox QAbstractItemView { background-color: #2D2D2D; selection-background-color: #378ADD; }"
-    );
+    m_paddingCombo->setStyleSheet(QString(
+        "QComboBox { background: #1E1E1E; border: 1px solid #444; border-radius: 4px; padding-left: 4px; color: #EEE; }"
+        "QComboBox::drop-down { border: none; width: 24px; }"
+        "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
+        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; color: #EEE; outline: 0; }"
+    ).arg(arrowPath));
     
     seqL->addWidget(m_startSpin);
     seqL->addWidget(m_paddingCombo);
@@ -73,10 +83,12 @@ void RuleRow::initUi() {
     m_dateFormatCombo->addItems({"yyyyMMdd", "yyyy-MM-dd", "yyyy_MM_dd", "yyyy", "MM", "dd"});
     m_dateFormatCombo->setEditable(true);
     m_dateFormatCombo->setFixedHeight(25);
-    m_dateFormatCombo->setStyleSheet(
-        "QComboBox { background: #1E1E1E; border: 1px solid #444; border-radius: 4px; color: #EEE; }"
-        "QComboBox QAbstractItemView { background-color: #2D2D2D; selection-background-color: #378ADD; }"
-    );
+    m_dateFormatCombo->setStyleSheet(QString(
+        "QComboBox { background: #1E1E1E; border: 1px solid #444; border-radius: 4px; padding-left: 4px; color: #EEE; }"
+        "QComboBox::drop-down { border: none; width: 24px; }"
+        "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
+        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; color: #EEE; outline: 0; }"
+    ).arg(arrowPath));
     m_paramStack->addWidget(m_dateFormatCombo);
 
     auto createBtn = [this](const QString& text) {
@@ -84,7 +96,7 @@ void RuleRow::initUi() {
         btn->setFixedSize(22, 22); // 回归紧凑尺寸
         btn->setStyleSheet(
             "QPushButton { background: transparent; border: 1px solid #434343; border-radius: 2px; color: #888; font-weight: bold; font-size: 14px; }"
-            "QPushButton:hover { background: rgba(255, 255, 255, 0.05); color: #EEE; border-color: #666; }"
+            "QPushButton:hover { background: #3E3E42; color: #EEE; border-color: #666; }"
         );
         return btn;
     };
@@ -126,6 +138,33 @@ RenameRule RuleRow::getRule() const {
     }
     
     return rule;
+}
+
+void RuleRow::setRule(const RenameRule& rule) {
+    blockSignals(true);
+    for (int i = 0; i < m_typeCombo->count(); ++i) {
+        if (m_typeCombo->itemData(i).toInt() == static_cast<int>(rule.type)) {
+            m_typeCombo->setCurrentIndex(i);
+            m_paramStack->setCurrentIndex(i);
+            break;
+        }
+    }
+
+    if (rule.type == RenameComponentType::Text) {
+        m_textEdit->setText(rule.value);
+    } else if (rule.type == RenameComponentType::Sequence) {
+        m_startSpin->setValue(rule.start);
+        for (int i = 0; i < m_paddingCombo->count(); ++i) {
+            if (m_paddingCombo->itemData(i).toInt() == rule.padding) {
+                m_paddingCombo->setCurrentIndex(i);
+                break;
+            }
+        }
+    } else if (rule.type == RenameComponentType::Date) {
+        m_dateFormatCombo->setCurrentText(rule.value);
+    }
+    blockSignals(false);
+    emit changed();
 }
 
 } // namespace ArcMeta

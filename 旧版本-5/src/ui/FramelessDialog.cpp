@@ -1,11 +1,15 @@
 #include "FramelessDialog.h"
 #include "UiHelper.h"
+#include "ColorPicker.h"
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QTimer>
 #include <QApplication>
+#ifdef Q_OS_WIN
+#include <windows.h>
 #include <dwmapi.h>
 #pragma comment(lib, "dwmapi.lib")
+#endif
 
 namespace ArcMeta {
 
@@ -46,9 +50,9 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     // --- 标题栏 ---
     auto* titleBar = new QWidget();
     titleBar->setObjectName("TitleBar");
-    titleBar->setFixedHeight(32);
-    // 2026-05-16 物理对齐：高度压缩至 32px，边框色同步为主界面 #333333
-    titleBar->setStyleSheet("background-color: transparent; border-bottom: 1px solid #333333;");
+    titleBar->setFixedHeight(34);
+    // 移除 border-bottom 以防止穿透组件，改为使用独立的物理分割线
+    titleBar->setStyleSheet("background-color: transparent; border: none;");
     auto* titleLayout = new QHBoxLayout(titleBar);
     titleLayout->setContentsMargins(12, 0, 5, 0); // 右侧对齐 5px 物理边距
     titleLayout->setSpacing(4);
@@ -60,10 +64,10 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
 
     auto createTitleBtn = [this](const QString& iconName, const QString& tooltip, const QString& hoverColor) {
         QPushButton* btn = new QPushButton();
-        // 2026-05-16 对标 MainWindow 规范：尺寸固定为 24x24，图标 18x18，布局 spacing 控制间距
-        btn->setFixedSize(24, 24);
-        btn->setIcon(UiHelper::getIcon(iconName, QColor("#CCCCCC"), 18));
-        btn->setIconSize(QSize(18, 18));
+        // 2026-05-16 对标 MainWindow 规范：尺寸固定为 24x24 -> 20x20，图标 18x18 -> 16x16
+        btn->setFixedSize(20, 20);
+        btn->setIcon(UiHelper::getIcon(iconName, QColor("#CCCCCC"), 16));
+        btn->setIconSize(QSize(16, 16));
         btn->setAutoDefault(false);
         btn->setProperty("tooltipText", tooltip);
         btn->setCursor(Qt::PointingHandCursor);
@@ -76,46 +80,52 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
         return btn;
     };
 
-    m_pinBtn = createTitleBtn("pin_tilted", "置顶", "#333333");
+    m_pinBtn = createTitleBtn("pin_tilted", "置顶", "#3E3E42");
     // 2026-05-16 置顶按钮逻辑规范：移除内边距，改由全局 spacing 控制
     m_pinBtn->setCheckable(true);
     m_pinBtn->setStyleSheet(
         "QPushButton { background-color: transparent; border: none; border-radius: 4px; } "
-        "QPushButton:hover { background-color: #333333; } "
+        "QPushButton:hover { background-color: #3E3E42; } "
         "QPushButton:checked { background-color: rgba(255, 85, 28, 0.2); }" // 2026-05-16 品牌橙高亮
     );
     connect(m_pinBtn, &QPushButton::toggled, this, [this](bool checked) {
         m_pinBtn->setIcon(UiHelper::getIcon(checked ? "pin_vertical" : "pin_tilted", 
                                             checked ? QColor("#FF551C") : QColor("#CCCCCC"), 18));
-        // 设置/取消置顶
+        // 2026-06-xx 物理修复：废弃 Qt 标志位操作，改用 Win32 原生 API 以防止窗口重建消失 Bug
+#ifdef Q_OS_WIN
+        HWND hwnd = reinterpret_cast<HWND>(winId());
+        SetWindowPos(hwnd, checked ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+#else
         setWindowFlag(Qt::WindowStaysOnTopHint, checked);
         show();
+#endif
     });
 
-    m_minBtn = createTitleBtn("minimize", "最小化", "#333333");
+    m_minBtn = createTitleBtn("minimize", "最小化", "#3E3E42");
     connect(m_minBtn, &QPushButton::clicked, this, &QWidget::showMinimized);
 
-    m_maxBtn = createTitleBtn("maximize", "最大化", "#333333");
+    m_maxBtn = createTitleBtn("maximize", "最大化", "#3E3E42");
     connect(m_maxBtn, &QPushButton::clicked, this, [this]() {
         if (isMaximized()) {
             showNormal();
             m_maxBtn->setIcon(UiHelper::getIcon("maximize", QColor("#CCCCCC"), 18));
         } else {
             showMaximized();
-            m_maxBtn->setIcon(UiHelper::getIcon("restore_window", QColor("#CCCCCC"), 18));
+            m_maxBtn->setIcon(UiHelper::getIcon("restore_line", QColor("#CCCCCC"), 18));
         }
     });
 
     m_closeBtn = new QPushButton();
-    m_closeBtn->setFixedSize(24, 24); // 2026-05-16 同步为 24x24
-    m_closeBtn->setIcon(UiHelper::getIcon("close", QColor("#FFFFFF"), 18));
-    m_closeBtn->setIconSize(QSize(18, 18));
+    m_closeBtn->setFixedSize(20, 20); // 2026-05-16 同步为 20x20
+    m_closeBtn->setIcon(UiHelper::getIcon("close", QColor("#FFFFFF"), 16));
+    m_closeBtn->setIconSize(QSize(16, 16));
     m_closeBtn->setAutoDefault(false);
     m_closeBtn->setProperty("tooltipText", "关闭");
     m_closeBtn->setCursor(Qt::PointingHandCursor);
     m_closeBtn->setStyleSheet(
         "QPushButton { background-color: #E81123; border: none; border-radius: 4px; } "
-        "QPushButton:hover { background-color: #F1707A; } "
+        "QPushButton:hover { background-color: #E81123; } "
         "QPushButton:pressed { background-color: #A50000; }"
     );
     m_closeBtn->installEventFilter(this);
@@ -129,10 +139,28 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
 
     m_mainLayout->addWidget(titleBar);
 
+    // 按照用户要求：将标题栏下方的切割线向下偏移 2 像素 -> 增加到 4 像素以实现明显的向下偏移
+    m_mainLayout->addSpacing(4);
+
+    // 添加独立的 1px 分割线，彻底杜绝 UI 穿透问题
+    auto* line = new QFrame();
+    line->setFixedHeight(1);
+    line->setFrameShape(QFrame::HLine);
+    line->setFrameShadow(QFrame::Plain);
+    line->setStyleSheet("background-color: #333333; border: none;");
+    m_mainLayout->addWidget(line);
+
     m_contentArea = new QWidget();
     m_contentArea->setObjectName("DialogContentArea");
     m_contentArea->setStyleSheet("QWidget#DialogContentArea { background: transparent; border: none; }");
     m_mainLayout->addWidget(m_contentArea, 1);
+}
+
+void FramelessDialog::setVisibleButtons(int flags) {
+    if (m_pinBtn) m_pinBtn->setVisible(flags & Pin);
+    if (m_minBtn) m_minBtn->setVisible(flags & Min);
+    if (m_maxBtn) m_maxBtn->setVisible(flags & Max);
+    if (m_closeBtn) m_closeBtn->setVisible(flags & Close);
 }
 
 void FramelessDialog::showEvent(QShowEvent* event) {
@@ -207,6 +235,7 @@ FramelessInputDialog::FramelessInputDialog(const QString& title, const QString& 
                                            const QString& initial, QWidget* parent)
     : FramelessDialog(title, parent) 
 {
+    setVisibleButtons(Close);
     // 按照用户最新要求：高度减去 50 像素 (260 -> 210)
     resize(500, 210);
     setMinimumSize(400, 190);
@@ -225,10 +254,10 @@ FramelessInputDialog::FramelessInputDialog(const QString& title, const QString& 
     m_edit->setStyleSheet(
         "QLineEdit {"
         "  background-color: #2D2D2D; border: 1px solid #444; border-radius: 6px;"
-        "  padding: 0px 10px; color: white; selection-background-color: #4A90E2;"
+        "  padding: 0px 10px; color: white; selection-background-color: #3498db;"
         "  font-size: 14px;"
         "}"
-        "QLineEdit:focus { border: 1px solid #4A90E2; }"
+        "QLineEdit:focus { border: 1px solid #3498db; }"
     );
     layout->addWidget(m_edit);
 
@@ -253,8 +282,8 @@ FramelessInputDialog::FramelessInputDialog(const QString& title, const QString& 
     btnOk->setFixedSize(80, 32);
     btnOk->setCursor(Qt::PointingHandCursor);
     btnOk->setStyleSheet(
-        "QPushButton { background-color: #4A90E2; color: white; border: none; border-radius: 4px; font-weight: bold; } "
-        "QPushButton:hover { background-color: #3E3E42; }" // 统一悬停色
+        "QPushButton { background-color: #3498db; color: white; border: none; border-radius: 4px; font-weight: bold; } "
+        "QPushButton:hover { background-color: #2980b9; }" // 统一蓝色按钮悬停色，避免与普通透明按钮混淆
     );
     connect(btnOk, &QPushButton::clicked, this, &QDialog::accept);
     btnLayout->addWidget(btnOk);
@@ -268,6 +297,148 @@ FramelessInputDialog::FramelessInputDialog(const QString& title, const QString& 
 void FramelessInputDialog::showEvent(QShowEvent* event) {
     FramelessDialog::showEvent(event);
     QTimer::singleShot(50, m_edit, qOverload<>(&QWidget::setFocus));
+}
+
+void FramelessInputDialog::setEchoMode(QLineEdit::EchoMode mode) {
+    if (m_edit) {
+        m_edit->setEchoMode(mode);
+    }
+}
+
+// ============================================================================
+// FramelessColorPicker 实现
+// ============================================================================
+FramelessColorPicker::FramelessColorPicker(const QString& title, QWidget* parent)
+    : FramelessDialog(title, parent)
+{
+    setVisibleButtons(Close);
+    resize(360, 480);
+    setMinimumSize(320, 400);
+
+    auto* layout = new QVBoxLayout(m_contentArea);
+    layout->setContentsMargins(15, 10, 15, 15);
+    layout->setSpacing(10);
+
+    m_picker = new ColorPicker(this);
+    layout->addWidget(m_picker, 1);
+
+    auto* btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+
+    auto* btnCancel = new QPushButton("取消");
+    btnCancel->setFixedSize(80, 32);
+    btnCancel->setCursor(Qt::PointingHandCursor);
+    btnCancel->setStyleSheet(
+        "QPushButton { background-color: transparent; color: #888; border: 1px solid #444; border-radius: 4px; } "
+        "QPushButton:hover { color: #EEE; background-color: #333; }"
+    );
+    connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
+    btnLayout->addWidget(btnCancel);
+
+    auto* btnOk = new QPushButton("确定");
+    btnOk->setFixedSize(80, 32);
+    btnOk->setCursor(Qt::PointingHandCursor);
+    btnOk->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; border: none; border-radius: 4px; font-weight: bold; } "
+        "QPushButton:hover { background-color: #2980b9; }"
+    );
+    connect(btnOk, &QPushButton::clicked, this, [this]() {
+        m_selectedColor = m_picker->currentColor();
+        accept();
+    });
+    btnLayout->addWidget(btnOk);
+
+    layout->addLayout(btnLayout);
+}
+
+void FramelessColorPicker::setCurrentColor(const QColor& color) {
+    m_selectedColor = color;
+    m_picker->setCurrentColor(color);
+}
+
+// ============================================================================
+// FramelessConfirmDialog 实现
+// ============================================================================
+FramelessConfirmDialog::FramelessConfirmDialog(const QString& title, const QString& message, 
+                                               ButtonType type, const QString& iconName, 
+                                               const QColor& iconColor, QWidget* parent)
+    : FramelessDialog(title, parent)
+{
+    setVisibleButtons(Close);
+    resize(420, 180);
+    setMinimumSize(380, 160);
+
+    auto* layout = new QVBoxLayout(m_contentArea);
+    layout->setContentsMargins(25, 20, 25, 20);
+    layout->setSpacing(15);
+
+    auto* msgLayout = new QHBoxLayout();
+    msgLayout->setSpacing(15);
+
+    if (!iconName.isEmpty()) {
+        auto* iconLbl = new QLabel();
+        iconLbl->setPixmap(UiHelper::getIcon(iconName, iconColor, 32).pixmap(32, 32));
+        msgLayout->addWidget(iconLbl, 0, Qt::AlignTop);
+    }
+
+    auto* lbl = new QLabel(message);
+    lbl->setStyleSheet("color: #DDDDDD; font-size: 14px;");
+    lbl->setWordWrap(true);
+    lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    msgLayout->addWidget(lbl, 1);
+    
+    layout->addLayout(msgLayout, 1);
+
+    auto* btnLayout = new QHBoxLayout();
+    btnLayout->setSpacing(12);
+    btnLayout->addStretch();
+    
+    if (type == OkCancel) {
+        auto* btnCancel = new QPushButton("取消");
+        btnCancel->setFixedSize(85, 30);
+        btnCancel->setCursor(Qt::PointingHandCursor);
+        btnCancel->setStyleSheet(
+            "QPushButton { background-color: transparent; color: #999; border: 1px solid #444; border-radius: 4px; } "
+            "QPushButton:hover { color: #EEE; background-color: #333; }"
+        );
+        connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
+        btnLayout->addWidget(btnCancel);
+    }
+
+    auto* btnOk = new QPushButton("确定");
+    btnOk->setFixedSize(85, 30);
+    btnOk->setCursor(Qt::PointingHandCursor);
+    btnOk->setStyleSheet(
+        "QPushButton { background-color: #3498db; color: white; border: none; border-radius: 4px; font-weight: bold; } "
+        "QPushButton:hover { background-color: #2980b9; }"
+    );
+    connect(btnOk, &QPushButton::clicked, this, &QDialog::accept);
+    btnLayout->addWidget(btnOk);
+
+    layout->addLayout(btnLayout);
+}
+
+// ============================================================================
+// FramelessMessageBox 实现
+// ============================================================================
+void FramelessMessageBox::information(QWidget* parent, const QString& title, const QString& text) {
+    FramelessConfirmDialog dlg(title, text, FramelessConfirmDialog::OkOnly, "info", QColor("#3498db"), parent);
+    dlg.exec();
+}
+
+void FramelessMessageBox::warning(QWidget* parent, const QString& title, const QString& text) {
+    FramelessConfirmDialog dlg(title, text, FramelessConfirmDialog::OkOnly, "warning", QColor("#f1c40f"), parent);
+    dlg.exec();
+}
+
+bool FramelessMessageBox::question(QWidget* parent, const QString& title, const QString& text) {
+    FramelessConfirmDialog dlg(title, text, FramelessConfirmDialog::OkCancel, "help", QColor("#3498db"), parent);
+    return dlg.exec() == QDialog::Accepted;
+}
+
+void FramelessMessageBox::critical(QWidget* parent, const QString& title, const QString& text) {
+    FramelessConfirmDialog dlg(title, text, FramelessConfirmDialog::OkOnly, "error", QColor("#e81123"), parent);
+    dlg.exec();
 }
 
 } // namespace ArcMeta

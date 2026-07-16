@@ -3,10 +3,15 @@
 #include <QFrame>
 #include <QTreeView>
 #include <QVBoxLayout>
+#include <QPushButton>
+#include <QSet>
+#include <QModelIndex>
+#include <QLineEdit>
 
 namespace ArcMeta {
 
 class CategoryModel;
+class CategoryFilterProxyModel;
 class DropTreeView;
 
 /**
@@ -38,6 +43,18 @@ public:
      */
     void selectCategory(int id);
 
+    /**
+     * @brief 2026-07-xx 按照 Plan-56：通过类型选中系统项
+     */
+    void selectCategoryByType(const QString& type);
+
+    /**
+     * @brief 2026-06-xx 物理削峰：请求刷新侧边栏计数
+     * 采用 500ms 防抖逻辑，合并高频信号风暴
+     * @param fullRebuild 2026-07-xx: 是否强制重建树结构 (用于导入后即时显示新分类)
+     */
+    void requestRefresh(bool fullRebuild = false);
+
 signals:
     void categorySelected(int id, const QString& name, const QString& type, const QString& path = "");
     void fileSelected(const QString& path);
@@ -62,6 +79,13 @@ private slots:
     void onSortAllByNameAsc();
     void onSortAllByNameDesc();
 
+    // 2026-06-xx 按照用户要求：补全回收站专属操作
+    void onEmptyTrash();
+    void onRestoreAllFromTrash();
+
+    // 2026-xx-xx 按照 Plan-98：搜索过滤
+    void onSearchTextChanged(const QString& text);
+
 private:
     void initUi();
     void setupContextMenu();
@@ -78,6 +102,16 @@ private:
     void loadExpandedStateFromSettings();
 
     /**
+     * @brief 递归保存 QTreeView 的展开状态
+     */
+    void saveExpandedState(const QModelIndex& parent, QSet<int>& expandedIds, QStringList& expandedNames);
+
+    /**
+     * @brief 递归恢复 QTreeView 的展开状态
+     */
+    void restoreExpandedState(const QModelIndex& parent, const QSet<int>& expandedIds, const QStringList& expandedNames);
+
+    /**
      * @brief 2026-03-xx 安全逻辑：尝试解锁分类
      * @return 是否解锁成功
      */
@@ -88,12 +122,17 @@ private:
     
     DropTreeView* m_categoryTree = nullptr;
     CategoryModel* m_categoryModel = nullptr;
+    CategoryFilterProxyModel* m_proxyModel = nullptr;
+    QLineEdit* m_searchEdit = nullptr;
+    QTimer* m_refreshTimer = nullptr;
+    QTimer* m_searchTimer = nullptr; // 2026-xx-xx 按照 Plan-106：搜索防抖计时器
 
     // 2026-03-xx 会话级解锁列表：存储当前已验证通过的加密分类 ID
     QSet<int> m_unlockedIds;
 
     // 2026-04-15 物理锁：恢复状态期间严禁反向触发保存，防止信号回流污染 Settings
     bool m_isRestoringState = false;
+    bool m_isFirstLoad = true;
 };
 
 } // namespace ArcMeta

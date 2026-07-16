@@ -5,8 +5,9 @@
 #include "../meta/BatchRenameEngine.h"
 #include "../meta/MetadataManager.h"
 #include <QHeaderView>
-#include <QFileDialog>
-#include <QMessageBox>
+#include "FramelessFileDialog.h"
+#include "FramelessDialog.h"
+#include "ToolTipOverlay.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QLabel>
@@ -17,6 +18,10 @@
 #include <QTableWidgetItem>
 #include <QRadioButton>
 #include <QScrollArea>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include "../core/AppConfig.h"
 
 namespace ArcMeta {
 
@@ -25,7 +30,38 @@ BatchRenameDialog::BatchRenameDialog(const std::vector<std::wstring>& originalPa
     resize(850, 600); // 2026-04-11 按照用户要求：给予窗口更多弹性空间，提高初始显示质量
     initContent();
     applyTheme();
-    onAddRow(); 
+
+    m_autoSaveTimer = new QTimer(this);
+    m_autoSaveTimer->setSingleShot(true);
+    connect(m_autoSaveTimer, &QTimer::timeout, this, &BatchRenameDialog::doAutoSave);
+
+    // 还原上次规则
+    QString lastRules = AppConfig::instance().getValue("LastBatchRenameRules").toString();
+    if (!lastRules.isEmpty()) {
+        QJsonDocument doc = QJsonDocument::fromJson(lastRules.toUtf8());
+        if (doc.isArray()) {
+            QJsonArray arr = doc.array();
+            for (const auto& v : arr) {
+                onAddRow();
+                QJsonObject obj = v.toObject();
+                RenameRule rule;
+                QString typeStr = obj["type"].toString();
+                if (typeStr == "Text") rule.type = RenameComponentType::Text;
+                else if (typeStr == "Sequence") rule.type = RenameComponentType::Sequence;
+                else if (typeStr == "OriginalName") rule.type = RenameComponentType::OriginalName;
+                else if (typeStr == "Date") rule.type = RenameComponentType::Date;
+                
+                rule.value = obj["value"].toString();
+                rule.start = obj["start"].toInt();
+                rule.padding = obj["padding"].toInt();
+                m_ruleRows.last()->setRule(rule);
+            }
+        }
+    }
+
+    if (m_ruleRows.isEmpty()) {
+        onAddRow(); 
+    }
 }
 
 void BatchRenameDialog::initContent() {
@@ -40,20 +76,36 @@ void BatchRenameDialog::initContent() {
     // 1. 预设区
     QGroupBox* presetGroup = new QGroupBox("预设", this);
     QHBoxLayout* presetL = new QHBoxLayout(presetGroup);
+    presetL->setContentsMargins(10, 5, 10, 5);
+    presetL->setSpacing(5); // 2026-07-xx 按照用户要求：间距统一保持 5px
+
     m_presetCombo = new QComboBox(presetGroup);
-    m_presetCombo->addItem("默认值 (已修改)");
+    m_presetCombo->addItem("默认设置");
     m_presetCombo->setFixedHeight(25); 
-    
-    m_btnSavePreset = new QPushButton("存储...", presetGroup);
-    m_btnDeletePreset = new QPushButton("删除...", presetGroup);
-    m_btnSavePreset->setFixedHeight(25);
-    m_btnDeletePreset->setFixedHeight(25);
-    m_btnSavePreset->setFixedWidth(80);
-    m_btnDeletePreset->setFixedWidth(80);
-    
     presetL->addWidget(m_presetCombo, 1);
-    presetL->addWidget(m_btnSavePreset);
+
+    // 标记 ③：快速删除 "×" 按钮
+    m_btnQuickDelete = new QPushButton("×", presetGroup);
+    m_btnQuickDelete->setFixedSize(20, 20);
+    m_btnQuickDelete->setCursor(Qt::PointingHandCursor);
+    m_btnQuickDelete->setStyleSheet(
+        "QPushButton { background: #3E3E42; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: bold; }" // 2026-07-xx 按照用户要求：持续显示灰色高亮
+        "QPushButton:hover { background: #4E4E52; }"
+    );
+    connect(m_btnQuickDelete, &QPushButton::clicked, this, &BatchRenameDialog::onDeleteCurrentPreset);
+    presetL->addWidget(m_btnQuickDelete);
+
+    // 标记 ②：导入/导出按钮重构
+    // 映射关系修正：m_btnSavePreset(原存储) -> 导出，m_btnDeletePreset(原删除) -> 导入
+    m_btnDeletePreset = new QPushButton("导入...", presetGroup);
+    m_btnSavePreset = new QPushButton("导出...", presetGroup);
+    m_btnDeletePreset->setFixedHeight(25);
+    m_btnSavePreset->setFixedHeight(25);
+    m_btnDeletePreset->setFixedWidth(80);
+    m_btnSavePreset->setFixedWidth(80);
+    
     presetL->addWidget(m_btnDeletePreset);
+    presetL->addWidget(m_btnSavePreset);
     configL->addWidget(presetGroup);
 
     // 2. 目标文件夹
@@ -125,7 +177,7 @@ void BatchRenameDialog::initContent() {
         if (primary) {
             btn->setStyleSheet("QPushButton { background: #444; color: #EEE; border: 1px solid #666; border-radius: 6px; } QPushButton:hover { background: #555; }");
         } else {
-            btn->setStyleSheet("QPushButton { background: transparent; color: #BBB; border: 1px solid #444; border-radius: 6px; } QPushButton:hover { background: rgba(255,255,255,0.05); }");
+            btn->setStyleSheet("QPushButton { background: transparent; color: #BBB; border: 1px solid #444; border-radius: 6px; } QPushButton:hover { background: #3E3E42; }");
         }
     };
 
@@ -150,10 +202,17 @@ void BatchRenameDialog::initContent() {
     connect(m_btnCancel, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_btnExecute, &QPushButton::clicked, this, &BatchRenameDialog::onExecute);
     connect(m_btnPreview, &QPushButton::clicked, this, &BatchRenameDialog::onPreview);
+    connect(m_btnDeletePreset, &QPushButton::clicked, this, &BatchRenameDialog::onImportPreset);
+    connect(m_btnSavePreset, &QPushButton::clicked, this, &BatchRenameDialog::onExportPreset);
 }
 
 void BatchRenameDialog::applyTheme() {
-    setStyleSheet(
+    // 2026-07-xx 按照用户要求：升级下拉框 UI，圆角设计 + 实心三角形箭头
+    // 性能优化：使用静态变量快取路径
+    // 修正：改用紧凑型 dropdown_triangle 图标，并重算参数确保清晰可见
+    static const QString arrowPath = UiHelper::getSvgTempFilePath("dropdown_triangle", QColor("#AAAAAA"));
+
+    setStyleSheet(QString(
         "QDialog { background-color: #1E1E1E; color: #BBB; }"
         "QGroupBox { border: 1px solid #333; border-radius: 4px; margin-top: 10px; font-weight: bold; font-size: 11px; color: #888; }" // 还原全局 10px 边距
         "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 3px; }"
@@ -161,9 +220,11 @@ void BatchRenameDialog::applyTheme() {
         "QRadioButton { color: #BBB; spacing: 5px; }"
         "QPushButton { background: #333; color: #EEE; border-radius: 4px; }"
         "QComboBox { background: #252526; border: 1px solid #444; border-radius: 4px; padding: 1px 4px; color: #EEE; }"
-        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #378ADD; selection-color: white; color: #EEE; outline: 0; }"
+        "QComboBox::drop-down { border: none; width: 24px; }"
+        "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
+        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; selection-color: white; color: #EEE; outline: 0; }"
         "QComboBox QAbstractItemView::item { height: 22px; padding: 2px; }" 
-    );
+    ).arg(arrowPath));
 }
 
 void BatchRenameDialog::onAddRow() {
@@ -173,18 +234,121 @@ void BatchRenameDialog::onAddRow() {
     m_ruleRows.append(row);
     
     connect(row, &RuleRow::changed, this, &BatchRenameDialog::updatePreview);
+    connect(row, &RuleRow::changed, this, &BatchRenameDialog::scheduleAutoSave);
     connect(row, &RuleRow::addRequested, this, &BatchRenameDialog::onAddRow);
+    connect(row, &RuleRow::addRequested, this, &BatchRenameDialog::scheduleAutoSave);
     connect(row, &RuleRow::removeRequested, [this, row]() {
         if (m_ruleRows.size() > 1) {
             m_ruleRows.removeOne(row);
             row->deleteLater();
             updatePreview();
+            scheduleAutoSave();
         }
     });
 }
 
 void BatchRenameDialog::updatePreview() {
     // 逻辑占位，后续可在此触发底部的简单文本摘要预防
+}
+
+void BatchRenameDialog::onImportPreset() {
+    QString path = FramelessFileDialog::getOpenFileName(this, "导入重命名预设", "", "JSON Files (*.json)");
+    if (path.isEmpty()) return;
+
+    QFile file(path);
+    if (file.open(QIODevice::ReadOnly)) {
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        if (doc.isArray()) {
+            // 清空现有规则
+            while (m_ruleRows.size() > 0) {
+                auto* row = m_ruleRows.takeAt(0);
+                row->deleteLater();
+            }
+
+            QJsonArray arr = doc.array();
+            for (const auto& v : arr) {
+                onAddRow();
+                QJsonObject obj = v.toObject();
+                RenameRule rule;
+                QString typeStr = obj["type"].toString();
+                if (typeStr == "Text") rule.type = RenameComponentType::Text;
+                else if (typeStr == "Sequence") rule.type = RenameComponentType::Sequence;
+                else if (typeStr == "OriginalName") rule.type = RenameComponentType::OriginalName;
+                else if (typeStr == "Date") rule.type = RenameComponentType::Date;
+                
+                rule.value = obj["value"].toString();
+                rule.start = obj["start"].toInt();
+                rule.padding = obj["padding"].toInt();
+                m_ruleRows.last()->setRule(rule);
+            }
+            scheduleAutoSave();
+        }
+    }
+}
+
+void BatchRenameDialog::onExportPreset() {
+    QString path = FramelessFileDialog::getSaveFileName(this, "导出重命名预设", "Preset.json", "JSON Files (*.json)");
+    if (path.isEmpty()) return;
+
+    QJsonArray arr;
+    for (auto* row : m_ruleRows) {
+        RenameRule rule = row->getRule();
+        QJsonObject obj;
+        QString typeStr;
+        switch (rule.type) {
+            case RenameComponentType::Text: typeStr = "Text"; break;
+            case RenameComponentType::Sequence: typeStr = "Sequence"; break;
+            case RenameComponentType::OriginalName: typeStr = "OriginalName"; break;
+            case RenameComponentType::Date: typeStr = "Date"; break;
+            default: typeStr = "Unknown";
+        }
+        obj["type"] = typeStr;
+        obj["value"] = rule.value;
+        obj["start"] = rule.start;
+        obj["padding"] = rule.padding;
+        arr.append(obj);
+    }
+
+    QFile file(path);
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(QJsonDocument(arr).toJson());
+        file.close();
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "预设导出成功", 1500, QColor("#2ecc71"));
+    }
+}
+
+void BatchRenameDialog::onDeleteCurrentPreset() {
+    if (m_presetCombo->count() > 0) {
+        int index = m_presetCombo->currentIndex();
+        m_presetCombo->removeItem(index);
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "预设已删除", 1000);
+    }
+}
+
+void BatchRenameDialog::scheduleAutoSave() {
+    if (m_autoSaveTimer) m_autoSaveTimer->start(500);
+}
+
+void BatchRenameDialog::doAutoSave() {
+    QJsonArray arr;
+    for (auto* row : m_ruleRows) {
+        RenameRule rule = row->getRule();
+        QJsonObject obj;
+        QString typeStr;
+        switch (rule.type) {
+            case RenameComponentType::Text: typeStr = "Text"; break;
+            case RenameComponentType::Sequence: typeStr = "Sequence"; break;
+            case RenameComponentType::OriginalName: typeStr = "OriginalName"; break;
+            case RenameComponentType::Date: typeStr = "Date"; break;
+            default: typeStr = "Unknown";
+        }
+        obj["type"] = typeStr;
+        obj["value"] = rule.value;
+        obj["start"] = rule.start;
+        obj["padding"] = rule.padding;
+        arr.append(obj);
+    }
+    AppConfig::instance().setValue("LastBatchRenameRules", QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
 }
 
 void BatchRenameDialog::onPreview() {
@@ -199,7 +363,7 @@ void BatchRenameDialog::onPreview() {
 }
 
 void BatchRenameDialog::onBrowseTarget() {
-    QString dir = QFileDialog::getExistingDirectory(this, "选择目标文件夹");
+    QString dir = FramelessFileDialog::getExistingDirectory(this, "选择目标文件夹");
     if (!dir.isEmpty()) {
         m_targetPathEdit->setText(dir);
     }
@@ -213,7 +377,7 @@ void BatchRenameDialog::onExecute() {
     QString targetDir = m_targetPathEdit->text();
     
     if ((m_rbMove->isChecked() || m_rbCopy->isChecked()) && targetDir.isEmpty()) {
-        QMessageBox::warning(this, "错误", "请先选择目标文件夹");
+        FramelessMessageBox::warning(this, "错误", "请先选择目标文件夹");
         return;
     }
 
@@ -238,13 +402,13 @@ void BatchRenameDialog::onExecute() {
         if (ok) {
             successCount++;
             if (!m_rbCopy->isChecked()) {
-                // 2026-05-24 按照用户要求：彻底移除 JSON 逻辑
+                // 2026-05-24 按照用户要求：彻底移除 SCCH 逻辑
                 MetadataManager::instance().renameItem(oldInfo.absoluteFilePath().toStdWString(), QDir(finalTargetDir).absoluteFilePath(QString::fromStdWString(newNames[i])).toStdWString());
             }
         }
     }
 
-    QMessageBox::information(this, "操作完成", QString("成功处理 %1 个文件").arg(successCount));
+    FramelessMessageBox::information(this, "操作完成", QString("成功处理 %1 个文件").arg(successCount));
     accept();
 }
 

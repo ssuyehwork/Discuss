@@ -13,7 +13,10 @@
 
 namespace ArcMeta {
 
-class BreadcrumbBar;
+class TrayController;
+class HoverEventFilter;
+class ResizeEventFilter;
+class AddressBar;
 class CategoryPanel;
 class NavPanel;
 class ContentPanel;
@@ -30,7 +33,7 @@ class MainWindow : public QMainWindow {
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
-    ~MainWindow() override = default;
+    ~MainWindow() override;
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;
@@ -55,6 +58,8 @@ private slots:
     void onForwardClicked();
     void onUpClicked();
     void onStatusBarStatsUpdated(int fileCount, int folderCount, int totalCount);
+    void onDriveButtonClicked();
+    void onDriveButtonContextMenu(const QPoint& pos);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -79,6 +84,7 @@ private:
 
     QWidget* m_titleBarWidget = nullptr;
     QHBoxLayout* m_titleBarLayout = nullptr;
+    QLabel* m_logoLabel = nullptr;
     QLabel* m_appNameLabel = nullptr;
     QWidget* m_navBarWidget = nullptr;
     QHBoxLayout* m_navBarLayout = nullptr;
@@ -87,15 +93,26 @@ private:
     void initUi();
     void updateNavButtons();
     void updateStatusBar();
-    void navigateTo(const QString& path, bool record = true);
+    void initDriveBar();
+
+    // 2026-07-xx 导航协议常量
+    static inline const QString kProtocolFile     = "file://";
+    static inline const QString kProtocolCategory = "category://";
+    static inline const QString kProtocolSystem   = "system://";
+
+    /**
+     * @brief 2026-07-xx 按照 Plan-56：统一导航调度中心
+     * 支持 file://, category://, system:// 等协议
+     */
+    void unifiedNavigateTo(const QString& url, bool record = true);
+
     void initToolbar();
     void setupSplitters();
     void setupCustomTitleBarButtons();
-    void initTrayIcon();
+    void resetSplitterLayout();
 
-    // 面包屑地址栏
-    BreadcrumbBar* m_breadcrumbBar = nullptr;
-    QStackedWidget* m_pathStack = nullptr;
+    // 复合地址栏
+    AddressBar* m_addressBar = nullptr;
 
     // 六个面板
     CategoryPanel* m_categoryPanel = nullptr;
@@ -107,12 +124,12 @@ private:
     ContentPanel* m_contentPanel = nullptr;
     MetaPanel* m_metaPanel = nullptr;
     FilterPanel* m_filterPanel = nullptr;
+    class TagManagerView* m_tagManagerView = nullptr;
 
     QSplitter* m_mainSplitter = nullptr;
 
     // 工具栏组件
     QToolBar* m_toolbar    = nullptr;
-    QLineEdit* m_pathEdit  = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QPushButton* m_btnBack    = nullptr;
     QPushButton* m_btnForward = nullptr;
@@ -124,18 +141,27 @@ private:
     QStringList  m_searchHistory;             // 最近 10 条关键词
     
     // 标题栏按钮组 (用于 frameless 时的模拟，此处作为标准按钮展示)
+    QPushButton* m_btnToggleDriveBar = nullptr;
     QPushButton* m_btnSync   = nullptr;
-    QPushButton* m_btnScan   = nullptr;
+    QPushButton* m_btnLayout = nullptr;
     QPushButton* m_btnCreate = nullptr;
     QPushButton* m_btnPinTop = nullptr;
     QPushButton* m_btnMin = nullptr;
     QPushButton* m_btnMax = nullptr;
     QPushButton* m_btnClose = nullptr;
 
+    // 盘符管理栏组件
+    QWidget* m_driveBarWidget = nullptr;
+    QHBoxLayout* m_driveBarLayout = nullptr;
+    QMap<QString, class DriveButton*> m_driveButtons;
+
     // 状态管理
     bool m_isPinned = false;
+    bool m_isTagManagerMode = false;
+    QString m_currentDataSource; // "category" or "nav"
+    int m_currentCategoryId = 0;
     bool m_panelsInitialized = false; // 2026-04-12 状态锁：确保面板仅初始化一次
-    QTimer* m_idleTimer = nullptr;
+    QTimer* m_searchTimer = nullptr; // 2026-xx-xx 按照 Plan-106：搜索防抖计时器
     QString m_currentPath;
     QStringList m_history;
     int m_historyIndex = -1;
@@ -147,10 +173,26 @@ private:
     bool m_isDragging = false;
     QPoint m_dragPosition;
 
-    // 系统托盘
-    QSystemTrayIcon* m_trayIcon = nullptr;
-    // 2026-04-17 按照用户要求：修复 m_idleTimer 重定义，保留上方唯一成员声明
-    void initIdleDetector();
+    // 系统托盘控制器
+    TrayController* m_trayController = nullptr;
+    HoverEventFilter* m_hoverFilter = nullptr;
+    ResizeEventFilter* m_resizeFilter = nullptr;
+    QTimer* m_sidebarRefreshTimer = nullptr;
+
+public slots:
+    /**
+     * @brief 2026-07-xx 按照 Plan-63：显示统一的面板显隐控制菜单
+     */
+    void showPanelContextMenu(const QPoint& globalPos);
+
+    /**
+     * @brief 2026-07-xx 按照 Plan-63：为已有菜单填充面板显隐 Action
+     */
+    void populatePanelMenu(QMenu* menu);
+
+private:
+    void loadPanelVisibility();
+    void savePanelVisibility();
 };
 
 } // namespace ArcMeta

@@ -2,10 +2,17 @@
 #include <QKeyEvent>
 #include <QFileInfo>
 #include <QFile>
+#include <QSet>
+#include <QSvgRenderer>
+#include <QImageReader>
 #include <QGraphicsPixmapItem>
 #include <QLabel>
 #include <QShortcut>
 #include "UiHelper.h"
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace ArcMeta {
 
@@ -15,9 +22,35 @@ QuickLookWindow& QuickLookWindow::instance() {
 }
 
 QuickLookWindow::QuickLookWindow() : QWidget(nullptr) {
+    setObjectName("QuickLookWindow");
     // 强制赋予全屏及最高层级，禁绝系统装饰
-    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
-    setStyleSheet("QWidget { background-color: rgba(30, 30, 30, 0.95); border: 1px solid #444; border-radius: 12px; }");
+    setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+    
+    // 2026-11-14 按照 Plan-109：全口径样式覆盖。将滚动条规范（10px, 3px radius）提升至窗口级。
+    // 物理引用标准色值：BorderColor (#333333) 与 BorderDark (#444444)
+    setStyleSheet(
+        "#QuickLookWindow { background-color: rgba(30, 30, 30, 0.95); border: 1px solid #444; border-radius: 12px; }"
+        "QScrollBar:vertical { border: none; background: transparent; width: 10px; margin: 0px; }"
+        "QScrollBar::handle:vertical { background: #333333; min-height: 20px; border-radius: 3px; }"
+        "QScrollBar::handle:vertical:hover { background: #444444; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { width: 0px; height: 0px; }"
+        "QScrollBar:horizontal { height: 10px; background: transparent; border: none; margin: 0px; }"
+        "QScrollBar::handle:horizontal { background: #333333; border-radius: 3px; min-width: 20px; }"
+        "QScrollBar::handle:horizontal:hover { background: #444444; }"
+        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; height: 0px; }"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical, "
+        "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }"
+    );
+
+    // 2026-06-xx 物理修复：通过原生 API 实现置顶，避免标志位导致的重建问题
+#ifdef Q_OS_WIN
+    QTimer::singleShot(0, this, [this]() {
+        HWND hwnd = reinterpret_cast<HWND>(winId());
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+    });
+#else
+    setWindowFlag(Qt::WindowStaysOnTopHint, true);
+#endif
     
     resize(800, 600);
     initUi();
@@ -30,12 +63,15 @@ QuickLookWindow::QuickLookWindow() : QWidget(nullptr) {
 
 void QuickLookWindow::initUi() {
     m_mainLayout = new QVBoxLayout(this);
-    m_mainLayout->setContentsMargins(10, 10, 10, 10);
+    // 2026-11-14 物理修正：全屏预览窗边距置零，确保 fitInView 居中计算绝对精确
+    m_mainLayout->setContentsMargins(0, 0, 0, 0); 
 
     // 图片渲染层
     m_graphicsView = new QGraphicsView(this);
-    m_graphicsView->setRenderHint(QPainter::Antialiasing);
-    m_graphicsView->setRenderHint(QPainter::SmoothPixmapTransform);
+    // 2026-11-14 物理画质增强：开启全口径抗锯齿与平滑缩放提示
+    m_graphicsView->setRenderHint(QPainter::Antialiasing, true);
+    m_graphicsView->setRenderHint(QPainter::TextAntialiasing, true);
+    m_graphicsView->setRenderHint(QPainter::SmoothPixmapTransform, true);
     m_graphicsView->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
     m_graphicsView->setStyleSheet("background: transparent; border: none;");
     m_scene = new QGraphicsScene(this);
@@ -44,9 +80,7 @@ void QuickLookWindow::initUi() {
     // 文本渲染层
     m_textPreview = new QPlainTextEdit(this);
     m_textPreview->setReadOnly(true);
-    // 2026-04-11 按照用户要求：彻底修正原生样式污染问题
-    // transparent 会穿透至系统合成层（白色）而非深色背景，必须显式指定 #1E1E1E
-    // 同时完整覆盖 viewport、滚动条以及边框，确保与全局风格一致
+    // 2026-11-14 按照 Plan-109：移除局部样式，改由窗口全局样式统一控制
     m_textPreview->setStyleSheet(
         "QPlainTextEdit {"
         "  background-color: #1E1E1E;"
@@ -56,20 +90,6 @@ void QuickLookWindow::initUi() {
         "  font-size: 13px;"
         "  padding: 16px;"
         "}"
-        "QPlainTextEdit QScrollBar:vertical {"
-        "  border: none; background: transparent; width: 6px; margin: 0px;"
-        "}"
-        "QPlainTextEdit QScrollBar::handle:vertical {"
-        "  background: #444444; min-height: 20px; border-radius: 3px;"
-        "}"
-        "QPlainTextEdit QScrollBar::handle:vertical:hover { background: #555555; }"
-        "QPlainTextEdit QScrollBar::add-line:vertical, QPlainTextEdit QScrollBar::sub-line:vertical { height: 0px; }"
-        "QPlainTextEdit QScrollBar:horizontal { height: 6px; background: transparent; border: none; margin: 0px; }"
-        "QPlainTextEdit QScrollBar::handle:horizontal { background: #444444; border-radius: 3px; min-width: 20px; }"
-        "QPlainTextEdit QScrollBar::handle:horizontal:hover { background: #555555; }"
-        "QPlainTextEdit QScrollBar::add-line:horizontal, QPlainTextEdit QScrollBar::sub-line:horizontal { width: 0px; }"
-        "QPlainTextEdit QScrollBar::add-page:vertical, QPlainTextEdit QScrollBar::sub-page:vertical, "
-        "QPlainTextEdit QScrollBar::add-page:horizontal, QPlainTextEdit QScrollBar::sub-page:horizontal { background: none; }"
     );
     
     m_mainLayout->addWidget(m_graphicsView);
@@ -87,7 +107,15 @@ void QuickLookWindow::previewFile(const QString& path) {
 
     QFileInfo info(path);
     QString ext = info.suffix().toLower();
-    if (UiHelper::isGraphicsFile(ext)) {
+
+    // 2026-11-14 按照 Plan-109：全口径属性过滤分流渲染
+    // 标准图像采用全分辨率加载，专业格式继续采用高清缩略图引擎。
+    static const QSet<QString> standardImages = {"jpg", "jpeg", "png", "bmp", "webp", "gif", "ico"};
+    static const QSet<QString> professionalImages = {"psd", "ai", "eps", "pdf", "svg"};
+
+    if (standardImages.contains(ext)) {
+        renderImage(path);
+    } else if (professionalImages.contains(ext)) {
         renderProfessionalImage(path);
     } else {
         renderText(path);
@@ -108,37 +136,97 @@ void QuickLookWindow::resizeEvent(QResizeEvent* event) {
 }
 
 /**
- * @brief 硬件加速图片渲染
+ * @brief 硬件加速图片渲染 (全分辨率原图 + 高质量预缩放)
  */
 void QuickLookWindow::renderImage(const QString& path) {
     m_textPreview->hide();
     m_graphicsView->show();
     m_scene->clear();
-    // 2026-04-11 按照用户要求：切图时强制重置缩放矩阵，确保初始为 1:1 或满屏适配态
     m_graphicsView->resetTransform();
 
-    QPixmap pix(path);
-    if (!pix.isNull()) {
-        // 2026-04-11 按照用户要求：回归标准图片加载逻辑，Qt 自动处理正向扫描线
-        auto item = m_scene->addPixmap(pix);
-        m_graphicsView->fitInView(item, Qt::KeepAspectRatio);
+    // 2026-11-14 性能哨兵：超大文件直接降级到 Shell 缩略图引擎，保护 UI 响应
+    QFileInfo info(path);
+    if (info.size() > 50 * 1024 * 1024) {
+        renderProfessionalImage(path);
+        return;
     }
+
+    // 2026-11-14 物理画质增强：使用 QImageReader 实施高质量预缩放
+    // 理由：直接加载超大 Pixmap 会导致 QGraphicsView 在大幅缩小时因双线性过滤算法极限产生锯齿（Moiré 纹）。
+    // 通过 QImage::scaled(SmoothTransformation) 实施面积平均采样，可根治高频细节锯齿。
+    QImageReader reader(path);
+    reader.setAutoTransform(true);
+    QImage img = reader.read();
+
+    if (img.isNull()) {
+        // 2026-11-14 物理降级：若加载失败，尝试调用系统 Shell 引擎
+        renderProfessionalImage(path);
+        return;
+    }
+
+    // 2026-11-14 物理画质补丁：预缩放到视图尺寸以确保 SmoothTransformation 生效
+    // 理由：fitInView 的默认插值质量较低，先通过 QImage 面积平均采样缩放到大致尺寸
+    QSize viewSize = m_graphicsView->size();
+    if (!viewSize.isEmpty() && (img.width() > viewSize.width() || img.height() > viewSize.height())) {
+        img = img.scaled(viewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+
+    QPixmap pix = QPixmap::fromImage(img);
+    // 2026-11-14 物理修正：移除 setDevicePixelRatio 调用。不做人为逻辑尺寸缩放，
+    // 让 Qt 以原始像素渲染，防止由于 DPI 插值导致的二次锯齿。
+
+    auto item = m_scene->addPixmap(pix);
+    item->setTransformationMode(Qt::SmoothTransformation);
+    m_graphicsView->fitInView(item, Qt::KeepAspectRatio);
 }
 
 /**
- * @brief 使用 Shell 引擎渲染高清专业预览图 (PSD/AI/EPS/PDF)
+ * @brief 使用 Shell 引擎渲染高清专业预览图 (PSD/AI/EPS/PDF/SVG)
  */
 void QuickLookWindow::renderProfessionalImage(const QString& path) {
     m_textPreview->hide();
     m_graphicsView->show();
     m_scene->clear();
-    // 2026-04-11 按照用户要求：切图时强制重置缩放矩阵
     m_graphicsView->resetTransform();
 
-    // 2026-04-11 按照用户要求：请求 1024 级高清缩略图以支持 PSD/AI 快速预览
-    QPixmap pix = UiHelper::getShellThumbnail(path, 1024);
-    if (!pix.isNull()) {
+    QImage img;
+    QFileInfo info(path);
+    QString ext = info.suffix().toLower();
+
+    // 2026-11-14 按照用户反馈：针对 SVG 实施专属矢量渲染
+    // 理由：Shell 引擎可能返回第三方应用图标而非真实内容，使用 QSvgRenderer 强制 1:1 矢量加载。
+    if (ext == "svg") {
+        QSvgRenderer renderer(path);
+        if (renderer.isValid()) {
+            // 请求 2048 级别的高清渲染，确保缩放后依然细腻
+            img = QImage(2048, 2048, QImage::Format_ARGB32);
+            img.fill(Qt::transparent);
+            QPainter painter(&img);
+            renderer.render(&painter);
+        }
+    }
+
+    if (img.isNull()) {
+        // 2026-11-14 物理画质增强：请求 2560 级超清缩略图
+        img = UiHelper::getShellThumbnail(path, 2560);
+    }
+
+    if (img.isNull()) {
+        img.load(path);
+    }
+
+    if (!img.isNull()) {
+        // 2026-11-14 物理画质补丁：预缩放到视图尺寸
+        QSize viewSize = m_graphicsView->size();
+        if (!viewSize.isEmpty() && (img.width() > viewSize.width() || img.height() > viewSize.height())) {
+            img = img.scaled(viewSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        }
+
+        QPixmap pix = QPixmap::fromImage(img);
+        // 移除 setDevicePixelRatio
+        
         auto item = m_scene->addPixmap(pix);
+        item->setTransformationMode(Qt::SmoothTransformation);
         m_graphicsView->fitInView(item, Qt::KeepAspectRatio);
     }
 }

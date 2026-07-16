@@ -6,8 +6,11 @@
 #include <QStandardItem>
 #include <QVBoxLayout>
 #include <QDir>
+#include <QSplitter>
 
 namespace ArcMeta {
+
+class DropTreeView;
 
 /**
  * @brief 导航面板（面板二）
@@ -39,8 +42,9 @@ public:
      */
     void selectPath(const QString& path);
 
-private slots:
-    void onItemExpanded(const QModelIndex& index);
+    // 新增：向外暴露的收藏夹追加与持久化保存接口
+    void addFavoriteItem(const QString& path);
+    void saveFavorites();
 
 signals:
     /**
@@ -49,17 +53,42 @@ signals:
      */
     void directorySelected(const QString& path);
 
+    /**
+     * @brief 请求在内容面板中定位并选中某个文件
+     * @param path 文件完整路径
+     */
+    void requestLocateFile(const QString& path);
+
+private slots:
+    void onItemExpanded(const QModelIndex& index);
+    void onTreeClicked(const QModelIndex& index);
+    void onFavoriteClicked(const QModelIndex& index);
+    void onFavoriteContextMenu(const QPoint& pos);
+    void onPathsDroppedToFavorite(const QStringList& paths, const QModelIndex& target);
+    void updateTreeHeight();
+    void updateFavoriteHeight();
+
 private:
     void initUi();
     void fetchChildDirs(QStandardItem* parent);
     
+    // 收藏夹持久化
+    void loadFavorites();
+
+    QWidget* buildGroup(const QString& title, const QIcon& icon, const QColor& color, QVBoxLayout*& outContentLayout);
+
+    QSplitter* m_splitter = nullptr;
+    
+    // 上方：磁盘树
     QTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
+
+    // 下方：收藏夹
+    DropTreeView* m_favoriteView = nullptr;
+    QStandardItemModel* m_favoriteModel = nullptr;
+
     QVBoxLayout* m_mainLayout = nullptr;
     QWidget* m_focusLine = nullptr;
-
-private slots:
-    void onTreeClicked(const QModelIndex& index);
 };
 
 } // namespace ArcMeta

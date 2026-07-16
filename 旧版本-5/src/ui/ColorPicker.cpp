@@ -176,7 +176,7 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
     
     QStringList presets = {
         "#FFFFFF", "#808080", "#000000", "#EAEAEA", "#A0A0A0", "#8B4513", "#FF69B4",
-        "#E24B4A", "#EF9F27", "#FAC775", "#639922", "#1D9E75", "#378ADD", "#7F77DD"
+        "#E24B4A", "#EF9F27", "#FECF0E", "#639922", "#1D9E75", "#378ADD", "#7F77DD"
     };
     
     int row = 0, col = 0;
@@ -234,7 +234,7 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
     btnConfirm->setFlat(true);
     btnConfirm->setCursor(Qt::PointingHandCursor);
     btnConfirm->setIcon(UiHelper::getIcon("color_wheel", QColor("#EEEEEE"), 16));
-    btnConfirm->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: rgba(255,255,255,0.1); border-radius: 2px; }");
+    btnConfirm->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #3E3E42; border-radius: 2px; }");
     connect(btnConfirm, &QPushButton::clicked, this, [this]() {
         // 2026-05-17 按照用户要求：携带容差值发射
         emit colorSelected(m_color, m_toleranceSlider ? m_toleranceSlider->value() : 30);

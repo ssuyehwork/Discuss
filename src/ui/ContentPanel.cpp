@@ -822,31 +822,46 @@ void ContentPanel::deferredInit() {
     qDebug() << "[ContentPanel] deferredInit 执行完毕"; 
 } 
 
-ItemRecord ContentPanel::createItemRecord(const QString& path) {
+ItemRecord ContentPanel::createItemRecord(const QString& path, const RuntimeMeta* providedMeta) {
     ItemRecord r;
     // 2026-xx-xx 按照 Plan-114：统一物理路径归一化准则，确保与元数据缓存 Key 严格对齐
     std::wstring wPath = MetadataManager::normalizePath(path.toStdWString());
     QString nPath = QString::fromStdWString(wPath);
-    QFileInfo info(nPath);
 
     // 1. 物理属性采样 (零 I/O 核心)
-    std::string fid;
-    long long size = 0, ctime = 0, mtime = 0, atime = 0;
-    MetadataManager::fetchWinApiMetadataDirect(wPath, fid, nullptr, &size, nullptr, &ctime, &mtime, &atime);
+    RuntimeMeta meta;
+    if (providedMeta) {
+        meta = *providedMeta;
+    } else {
+        meta = MetadataManager::instance().getMeta(wPath);
+    }
+
+    // Plan-124: 只有在内存缓存缺失物理时间戳时，才触发 fetchWinApiMetadataDirect
+    if (meta.fileId128.empty() || (meta.ctime == 0 && meta.mtime == 0)) {
+        std::string fid;
+        long long size = 0, ctime = 0, mtime = 0, atime = 0;
+        MetadataManager::fetchWinApiMetadataDirect(wPath, fid, nullptr, &size, nullptr, &ctime, &mtime, &atime);
+        r.size = size;
+        r.ctime = ctime;
+        r.mtime = mtime;
+        r.atime = atime;
+        r.fileId = fid;
+        r.isDir = QFileInfo(nPath).isDir();
+    } else {
+        r.size = meta.fileSize;
+        r.ctime = meta.ctime;
+        r.mtime = meta.mtime;
+        r.atime = meta.atime;
+        r.fileId = meta.fileId128;
+        r.isDir = meta.isFolder;
+    }
 
     r.path = nPath;
-    r.size = size;
-    r.ctime = ctime;
-    r.mtime = mtime;
-    r.atime = atime;
 
     // 2. 核心元数据注入 (确保 width/height/palettes 物理对齐)
-    auto meta = MetadataManager::instance().getMeta(wPath);
-    r.isDir = info.isDir(); // 物理属性优先，确保未索引目录显示正常
     r.rating = meta.rating;
     r.color = QString::fromStdWString(meta.color);
     r.tags = meta.tags;
-    r.fileId = meta.fileId128;
     r.pinned = meta.pinned;
     r.encrypted = meta.encrypted;
     r.url = QString::fromStdWString(meta.url);
@@ -862,11 +877,19 @@ ItemRecord ContentPanel::createItemRecord(const QString& path) {
         // 2026-07-xx 按照 Development_Plan 3.2：从数据库加载持久化的进度值
         r.registrationProgress = MetadataManager::instance().getProgressFromDb(wPath);
 
-        QDir sub(nPath);
-        r.isEmpty = sub.entryList(QDir::NoDotAndDotDot | QDir::AllEntries).isEmpty();
+        // 2026-xx-xx 工业级稳健判定 (Plan-124 修正)：
+        // 只有当明确处于“镜像模式”（providedMeta != nullptr）或项已由数据库托管时，才信任内存索引。
+        // 物理路径导航模式下，若项未录入或缓存未命中，必须执行磁盘 I/O 探测以确保正确性。
+        if (providedMeta || meta.isManaged) {
+            r.isEmpty = !MetadataManager::instance().hasChildrenInCache(wPath);
+        } else {
+            QDir sub(nPath);
+            r.isEmpty = sub.entryList(QDir::NoDotAndDotDot | QDir::AllEntries).isEmpty();
+        }
         r.suffix = ""; // 文件夹不应有扩展名后缀
     } else {
-        r.suffix = QFileInfo(nPath).suffix().toLower();
+        int lastDot = nPath.lastIndexOf('.');
+        r.suffix = (lastDot != -1) ? nPath.mid(lastDot + 1).toLower() : "";
     }
     return r;
 }
@@ -2064,10 +2087,10 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             if (targetPaths.isEmpty() && !path.isEmpty()) targetPaths << path;
 
             if (!targetPaths.isEmpty()) {
-                // 2026-07-xx 按照 Development_Plan 2.1：强制执行物理状态同步与元数据重新解析
-                // 作用域严格锁定在选中项。
+                // 2026-08-xx 按照 Plan-126：用户手动发起的“重新扫描”应属于元数据刷新
+                // 此时依然允许通过 MetadataManager 执行，但不应作为常规“入库”手段
                 MetadataManager::instance().registerItemsAsync(targetPaths, true);
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已启动强制重新扫描", 1500, QColor("#378ADD"));
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已启动物理状态同步", 1500, QColor("#378ADD"));
             }
             break;
         }
@@ -2454,20 +2477,16 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (isInsideLibrary && !recursive) {
         (void)QtConcurrent::run([panelPtr, path, reqId]() {
             if (!panelPtr) return;
-            std::vector<ItemRecord> allItems;
             
-            // 从 MetadataManager 内存镜像中过滤出该路径下的直接子项
-            std::wstring normParent = MetadataManager::normalizePath(path.toStdWString());
-            if (!normParent.empty() && normParent.back() != L'\\' && normParent.back() != L'/') normParent += L'\\';
-
-            MetadataManager::instance().forEachCachedItem([&](const std::wstring& p, const RuntimeMeta& /*meta*/) {
-                if (p.find(normParent) == 0) {
-                    std::wstring sub = p.substr(normParent.length());
-                    if (sub.find_first_of(L"\\/") == std::wstring::npos) {
-                        allItems.push_back(ContentPanel::createItemRecord(QString::fromStdWString(p)));
-                    }
-                }
-            });
+            // Plan-124: 利用树级索引实现 O(1) 检索，并仅持有锁获取副本，消除锁争用
+            auto children = MetadataManager::instance().getChildrenFromCache(path.toStdWString());
+            
+            std::vector<ItemRecord> allItems;
+            allItems.reserve(children.size());
+            for (const auto& pair : children) {
+                // 利用重构后的 createItemRecord 传入已拉取的元数据，实现真正的零 I/O
+                allItems.push_back(ContentPanel::createItemRecord(QString::fromStdWString(pair.first), &pair.second));
+            }
 
             QMetaObject::invokeMethod(QCoreApplication::instance(), [panelPtr, allItems, reqId]() {
                 if (panelPtr && panelPtr->m_loadRequestId == reqId) {

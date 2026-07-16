@@ -1,15 +1,30 @@
 #include "ToolTipOverlay.h"
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+#include <QTimer>
+
 namespace ArcMeta {
 
 ToolTipOverlay::ToolTipOverlay() : QWidget(nullptr) {
     // [CRITICAL] 彻底弃用 Qt::ToolTip，防止 OS 动画残留
-    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | 
+    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | 
                   Qt::WindowTransparentForInput | Qt::NoDropShadowWindowHint | Qt::WindowDoesNotAcceptFocus);
     setObjectName("ToolTipOverlay");
 
     setAttribute(Qt::WA_TranslucentBackground);
     setAttribute(Qt::WA_ShowWithoutActivating);
+
+    // 2026-06-xx 物理修复：通过原生 API 实现置顶，避免标志位导致的重建问题
+#ifdef Q_OS_WIN
+    QTimer::singleShot(0, this, [this]() {
+        HWND hwnd = reinterpret_cast<HWND>(winId());
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+    });
+#else
+    setWindowFlag(Qt::WindowStaysOnTopHint, true);
+#endif
     
     m_doc.setUndoRedoEnabled(false);
     // [ULTIMATE FIX] 强制锁定调色板颜色
@@ -116,6 +131,7 @@ void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int 
     if (timeout > 0) {
         m_hideTimer.start(timeout);
     } else {
+        // 2026-07-xx 按照 Plan-65：如果 timeout 为 0 或负数，停止计时器以支持持续显示
         m_hideTimer.stop();
     }
 }

@@ -1,7 +1,10 @@
 #include "FilterPanel.h"
+#include "../core/AppConfig.h"
 #include "ToolTipOverlay.h"
 #include "UiHelper.h"
+#include "StyleLibrary.h"
 #include "ColorPicker.h"
+#include "SearchHistoryPanel.h"
 #include <QPushButton>
 #include <QMouseEvent>
 #include <QCursor>
@@ -9,6 +12,10 @@
 #include <QScreen>
 #include <QPainter>
 #include <QLinearGradient>
+#include <QComboBox>
+#include <QButtonGroup>
+
+using namespace ArcMeta::Style;
 
 namespace ArcMeta {
 
@@ -16,63 +23,141 @@ namespace ArcMeta {
 QMap<QString, QColor> FilterPanel::s_colorMap() {
     return {
         { "",        QColor("#888780") },
-        { "#E04040", QColor("#E24B4A") },
-        { "#E09020", QColor("#EF9F27") },
-        { "#F0C070", QColor("#FAC775") },
-        { "#609020", QColor("#639922") },
-        { "#109070", QColor("#1D9E75") },
-        { "#3080D0", QColor("#378ADD") },
-        { "#7070D0", QColor("#7F77DD") },
-        { "#505050", QColor("#5F5E5A") },
+        { "#E24B4A", QColor("#E24B4A") },
+        { "#EF9F27", QColor("#EF9F27") },
+        { "#FECF0E", QColor("#FECF0E") },
+        { "#639922", QColor("#639922") },
+        { "#1D9E75", QColor("#1D9E75") },
+        { "#378ADD", QColor("#378ADD") },
+        { "#7F77DD", QColor("#7F77DD") },
+        { "#5F5E5A", QColor("#5F5E5A") },
         { "#000000", QColor("#000000") },
         { "#FFFFFF", QColor("#FFFFFF") }
     };
-}
-
-static QString colorDisplayName(const QString& key) {
-    if (key.isEmpty()) return "无色标";
-    // 物理对标：筛选器直接展示 HEX 真值，绝不进行模糊语义映射
-    return key;
 }
 
 static QString ratingDisplayName(int r) {
     return r == 0 ? "无评级" : QString("★").repeated(r);
 }
 
+// ─── 自定义勾选框 ──────────────────────────────────────────────────
+StyledCheckBox::StyledCheckBox(QWidget* parent) : QCheckBox(parent) {
+    setFixedSize(15, 15);
+}
+
+void StyledCheckBox::paintEvent(QPaintEvent*) {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    bool checked = isChecked();
+    
+    // 使用 QRectF + 0.5px 内缩，确保笔触四边粗细完全一致
+    QRectF rect(0.5, 0.5, width() - 1.0, height() - 1.0);
+    QColor borderColor = checked ? QColor("#378ADD") : QColor("#444444");
+    
+    painter.setPen(QPen(borderColor, 1.0));
+    painter.setBrush(QColor("#1E1E1E"));
+    painter.drawRoundedRect(rect, 2.0, 2.0);
+
+    if (checked) {
+        QPen pen(QColor("#378ADD"), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(pen);
+        painter.setBrush(Qt::NoBrush);
+        // 在 15x15 的区域内绘制对勾折线，坐标相对于 widget 自身
+        QPolygonF checkMark;
+        checkMark << QPointF(2.5, 7.5)
+                  << QPointF(5.5, 11.0)
+                  << QPointF(12.0, 3.5);
+        painter.drawPolyline(checkMark);
+    }
+}
+
 // ─── 可整行点击的行控件 ────────────────────────────────────────────
-/**
- * ClickableRow: 点击行内任意位置均触发关联 QCheckBox 的 toggle。
- * 复选框本身的点击事件不需要额外处理，它会自然传播。
- */
-class ClickableRow : public QWidget {
-public:
-    explicit ClickableRow(QCheckBox* cb, QWidget* parent = nullptr)
-        : QWidget(parent), m_cb(cb) {
-        setCursor(Qt::PointingHandCursor);
-        setAttribute(Qt::WA_StyledBackground);
-    }
-protected:
-    void mousePressEvent(QMouseEvent* e) override {
-        if (e->button() == Qt::LeftButton) {
-            // 如果点击位置不在复选框上，手动 toggle，避免双重触发
-            QPoint local = m_cb->mapFromGlobal(e->globalPosition().toPoint());
-            if (!m_cb->rect().contains(local)) {
-                m_cb->setChecked(!m_cb->isChecked());
-            }
+ClickableRow::ClickableRow(StyledCheckBox* cb, QWidget* parent)
+    : QWidget(parent), m_cb(cb) {
+    setCursor(Qt::PointingHandCursor);
+    setAttribute(Qt::WA_StyledBackground);
+}
+
+void ClickableRow::mousePressEvent(QMouseEvent* e) {
+    if (e->button() == Qt::LeftButton) {
+        // 如果点击位置不在复选框上，手动 toggle，避免双重触发
+        QPoint local = m_cb->mapFromGlobal(e->globalPosition().toPoint());
+        if (!m_cb->rect().contains(local)) {
+            m_cb->setChecked(!m_cb->isChecked());
         }
-        QWidget::mousePressEvent(e);
     }
-    void enterEvent(QEnterEvent* e) override {
-        setStyleSheet("QWidget { background: #2A2A2A; border-radius: 4px; }");
-        QWidget::enterEvent(e);
+    QWidget::mousePressEvent(e);
+}
+
+void ClickableRow::enterEvent(QEnterEvent* e) {
+    setStyleSheet("QWidget { background: #2A2A2A; border-radius: 4px; }");
+    QWidget::enterEvent(e);
+}
+
+void ClickableRow::leaveEvent(QEvent* e) {
+    setStyleSheet("");
+    QWidget::leaveEvent(e);
+}
+
+// ─── ColorBlock ──────────────────────────────────────────────────
+ColorBlock::ColorBlock(const QColor& color, QWidget* parent) 
+    : QWidget(parent), m_color(color) {
+    // 2026-06-xx 物理规格对齐：与复选框 (15x15) 保持一致
+    setFixedSize(15, 15);
+    setCursor(Qt::PointingHandCursor);
+}
+
+void ColorBlock::setCount(int count) {
+    m_count = count;
+    update();
+}
+
+void ColorBlock::setChecked(bool checked) {
+    m_checked = checked;
+    update();
+}
+
+void ColorBlock::paintEvent(QPaintEvent*) {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    // 2026-06-xx 视觉对齐：外框微调，确保选中状态可见
+    QRectF r = rect().adjusted(1, 1, -1, -1);
+    
+    if (m_checked) {
+        // 选中态：加粗蓝色边框
+        painter.setPen(QPen(QColor("#378ADD"), 1.5));
+        painter.setBrush(m_color);
+        painter.drawRoundedRect(r, 2.0, 2.0);
+    } else {
+        // 未选中：悬停时显示浅色边框
+        painter.setPen(m_hovered ? QPen(QColor("#AAAAAA"), 1.0) : Qt::NoPen);
+        painter.setBrush(m_color);
+        painter.drawRoundedRect(r, 2.0, 2.0);
     }
-    void leaveEvent(QEvent* e) override {
-        setStyleSheet("");
-        QWidget::leaveEvent(e);
+    // 2026-06-xx 物理级同步：根据用户要求移除右上角计数黑点，保持色块纯净
+}
+
+void ColorBlock::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        emit clicked(m_color);
     }
-private:
-    QCheckBox* m_cb;
-};
+}
+
+void ColorBlock::enterEvent(QEnterEvent*) {
+    m_hovered = true;
+    update();
+    QString tip = QString("颜色: %1\n匹配项: %2").arg(m_color.name().toUpper()).arg(m_count);
+    // 2026-07-xx 按照 Plan-65：悬停触发，timeout = 0
+    ToolTipOverlay::instance()->showText(QCursor::pos(), tip, 0);
+}
+
+void ColorBlock::leaveEvent(QEvent*) {
+    m_hovered = false;
+    update();
+    ToolTipOverlay::hideTip();
+}
 
 // ─── InlineHueSlider ─────────────────────────────────────────────
 InlineHueSlider::InlineHueSlider(QWidget* parent) : QWidget(parent) {
@@ -81,7 +166,7 @@ InlineHueSlider::InlineHueSlider(QWidget* parent) : QWidget(parent) {
 }
 
 void InlineHueSlider::setHue(int h) {
-    m_h = qBound(0, h, 359);
+    m_h = h;
     update();
 }
 
@@ -90,40 +175,81 @@ void InlineHueSlider::paintEvent(QPaintEvent*) {
     painter.setRenderHint(QPainter::Antialiasing);
 
     int margin = 10; 
+    int bwgWidth = 42; // 黑白灰区域总宽
+    int gap = 6;
     int barHeight = 12;
     int barY = (height() - barHeight) / 2;
-    QRectF barRect(margin, barY, width() - 2 * margin, barHeight);
 
-    QLinearGradient grad(barRect.left(), 0, barRect.right(), 0);
-    // 2026-06-xx 按照代码审查建议：将饱和度和明度设为 220，与实际选色逻辑保持一致
-    grad.setColorAt(0.0/6.0, QColor::fromHsv(0, 220, 220));
-    grad.setColorAt(1.0/6.0, QColor::fromHsv(60, 220, 220));
-    grad.setColorAt(2.0/6.0, QColor::fromHsv(120, 220, 220));
-    grad.setColorAt(3.0/6.0, QColor::fromHsv(180, 220, 220));
-    grad.setColorAt(4.0/6.0, QColor::fromHsv(240, 220, 220));
-    grad.setColorAt(5.0/6.0, QColor::fromHsv(300, 220, 220));
-    grad.setColorAt(6.0/6.0, QColor::fromHsv(359, 220, 220));
+    // 1. 绘制黑白灰特殊色块 (3个 14px 宽度的色块)
+    QRectF blackRect(margin, barY, 14, barHeight);
+    QRectF grayRect(margin + 14, barY, 14, barHeight);
+    QRectF whiteRect(margin + 28, barY, 14, barHeight);
 
     painter.setPen(Qt::NoPen);
-    painter.setBrush(grad);
-    painter.drawRoundedRect(barRect, 6, 6);
+    painter.setBrush(Qt::black);
+    painter.drawRect(blackRect);
+    painter.setBrush(QColor("#808080"));
+    painter.drawRect(grayRect);
+    painter.setBrush(Qt::white);
+    painter.drawRect(whiteRect);
+    
+    // 给无色系区域加一个极细的边框，防止白色溢出
+    painter.setPen(QPen(QColor(80, 80, 80, 100), 1));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(margin, barY, bwgWidth, barHeight);
 
-    // Thumb: 16px white circle, 1px dark border
-    double ratio = m_h / 359.0;
-    int tx = margin + ratio * barRect.width();
-    int ty = height() / 2;
+    // 2. 绘制色相渐变区
+    int hueStartX = margin + bwgWidth + gap;
+    int hueWidth = width() - hueStartX - margin;
+    if (hueWidth > 0) {
+        QRectF hueRect(hueStartX, barY, hueWidth, barHeight);
+        QLinearGradient grad(hueRect.left(), 0, hueRect.right(), 0);
+        grad.setColorAt(0.0/6.0, QColor::fromHsv(0, 220, 220));
+        grad.setColorAt(1.0/6.0, QColor::fromHsv(60, 220, 220));
+        grad.setColorAt(2.0/6.0, QColor::fromHsv(120, 220, 220));
+        grad.setColorAt(3.0/6.0, QColor::fromHsv(180, 220, 220));
+        grad.setColorAt(4.0/6.0, QColor::fromHsv(240, 220, 220));
+        grad.setColorAt(5.0/6.0, QColor::fromHsv(300, 220, 220));
+        grad.setColorAt(6.0/6.0, QColor::fromHsv(359, 220, 220));
+
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(grad);
+        painter.drawRoundedRect(hueRect, 2, 2);
+    }
+
+    // 3. 绘制游标 (Thumb)
+    int tx = 0;
+    if (m_h == 1000) tx = blackRect.center().x();
+    else if (m_h == 1001) tx = grayRect.center().x();
+    else if (m_h == 1002) tx = whiteRect.center().x();
+    else {
+        double ratio = qBound(0, m_h, 359) / 359.0;
+        tx = hueStartX + ratio * hueWidth;
+    }
     
     painter.setBrush(Qt::white);
     painter.setPen(QPen(QColor(50, 50, 50), 1));
-    painter.drawEllipse(QPoint(tx, ty), 8, 8);
+    painter.drawEllipse(QPoint(tx, height() / 2), 8, 8);
 }
 
 void InlineHueSlider::updateFromPos(int x) {
     int margin = 10;
-    int barWidth = width() - 2 * margin;
-    if (barWidth <= 0) return;
-    int lx = qBound(0, x - margin, barWidth);
-    m_h = (lx * 359) / barWidth;
+    int bwgWidth = 42;
+    int gap = 6;
+    int hueStartX = margin + bwgWidth + gap;
+
+    if (x < margin + 14) {
+        m_h = 1000; // Black
+    } else if (x < margin + 28) {
+        m_h = 1001; // Gray
+    } else if (x < margin + 42) {
+        m_h = 1002; // White
+    } else {
+        int hueWidth = width() - hueStartX - margin;
+        if (hueWidth <= 0) return;
+        int lx = qBound(0, x - hueStartX, hueWidth);
+        m_h = (lx * 359) / hueWidth;
+    }
     update();
     emit hueChanged(m_h);
 }
@@ -141,7 +267,63 @@ void InlineHueSlider::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 // ─── FilterPanel ──────────────────────────────────────────────────
+
+void FilterPanel::syncUIFromFilterState() {
+    updateHeaderStatus();
+    
+    // 遍历所有 StyledCheckBox 及其对应的 ClickableRow
+    QList<StyledCheckBox*> allCheckBoxes = findChildren<StyledCheckBox*>();
+    for (auto* cb : allCheckBoxes) {
+        // 根据 checkbox 所在的上下文寻找对应的标识符
+        ClickableRow* row = qobject_cast<ClickableRow*>(cb->parentWidget());
+        if (!row) continue;
+        
+        QLabel* labelWidget = row->findChild<QLabel*>();
+        if (!labelWidget) continue;
+        
+        QString text = labelWidget->text();
+        bool shouldCheck = false;
+        
+        // 1. 评级匹配
+        if (text == "无评级") shouldCheck = m_filter.ratings.contains(0);
+        else if (text.contains("★")) shouldCheck = m_filter.ratings.contains(text.count("★"));
+        
+        // 2. 颜色匹配 (无色标)
+        else if (text == "无色标") shouldCheck = m_filter.colors.contains("");
+        
+        // 3. 类型/日期匹配
+        else if (m_filter.types.contains(text)) shouldCheck = true;
+        else if (m_filter.createDates.contains(text)) shouldCheck = true;
+        else if (m_filter.modifyDates.contains(text)) shouldCheck = true;
+        
+        // 4. 链接/备注/比例匹配
+        else if (text == "有链接") shouldCheck = (m_filter.linkPresence == FilterState::Yes);
+        else if (text == "无链接") shouldCheck = (m_filter.linkPresence == FilterState::No);
+        else if (text == "有备注") shouldCheck = (m_filter.notePresence == FilterState::Yes);
+        else if (text == "无备注") shouldCheck = (m_filter.notePresence == FilterState::No);
+        else if (text == "横图") shouldCheck = (m_filter.ratio == FilterState::Horizontal);
+        else if (text == "竖图") shouldCheck = (m_filter.ratio == FilterState::Vertical);
+        else if (text == "方形") shouldCheck = (m_filter.ratio == FilterState::Square);
+        else if (text == "16:9") shouldCheck = (m_filter.ratio == FilterState::Ratio169);
+
+        cb->blockSignals(true);
+        cb->setChecked(shouldCheck);
+        cb->blockSignals(false);
+    }
+
+    // 5. 颜色色块同步
+    QList<ColorBlock*> allColorBlocks = findChildren<ColorBlock*>();
+    for (auto* block : allColorBlocks) {
+        block->blockSignals(true);
+        block->setChecked(m_filter.colors.contains(block->color().name().toUpper()));
+        block->blockSignals(false);
+    }
+}
+
 FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
+    // 2026-07-xx 按照 Plan-63：启用右键菜单
+    setContextMenuPolicy(Qt::CustomContextMenu);
+
     setObjectName("FilterContainer");
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(230);
@@ -155,6 +337,8 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     m_mainLayout->setSpacing(0);
 
     // 顶部标题栏
+    // 2026-06-xx 物理对齐：FilterPanel 标题栏必须位于 QScrollArea 之外，
+    // 确保滚动条仅在内容区显示（标题下方），符合规范 ②
     QWidget* topBar = new QWidget(this);
     topBar->setObjectName("ContainerHeader");
     topBar->setFixedHeight(32);
@@ -166,19 +350,18 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
         "}"
     );
     QHBoxLayout* topL = new QHBoxLayout(topBar);
-    topL->setContentsMargins(15, 0, 5, 0); // 2026-05-17 按照用户要求：右侧边距统一设为 5px，上下 0px 垂直居中
+    topL->setContentsMargins(15, 0, 5, 0); // 2026-xx-xx 按照用户要求：右侧保留 5px 呼吸边距
     topL->setSpacing(5);                  // 2026-05-17 按照用户要求：间距统一为 5px
 
-    QLabel* iconLabel = new QLabel(topBar);
-    iconLabel->setPixmap(UiHelper::getIcon("filter", QColor("#f1c40f"), 18).pixmap(18, 18));
-    topL->addWidget(iconLabel);
+    m_iconLabel = new QLabel(topBar);
+    topL->addWidget(m_iconLabel);
 
-    QLabel* title = new QLabel("筛选", topBar);
-    title->setStyleSheet("font-size: 13px; font-weight: bold; color: #f1c40f; background: transparent; border: none;");
+    m_titleLabel = new QLabel("筛选", topBar);
+    topL->addWidget(m_titleLabel);
 
     m_btnClearAll = new QPushButton(topBar);
     m_btnClearAll->setFixedSize(24, 24); // 2026-05-17 按照用户要求：统一为 24x24 规格以实现像素级对齐
-    m_btnClearAll->setIcon(UiHelper::getIcon("trash", QColor("#B0B0B0"))); // 将文字重构为具有高度语义化的 trash SVG 图标
+    m_btnClearAll->setIcon(UiHelper::getIcon("reset_filter", QColor("#B0B0B0"))); // 2026-xx-xx 按照用户要求：使用新的 reset_filter 图标
     m_btnClearAll->setIconSize(QSize(16, 16));
     m_btnClearAll->setFlat(true);
     m_btnClearAll->setCursor(Qt::PointingHandCursor);
@@ -186,42 +369,159 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     m_btnClearAll->installEventFilter(this);
     m_btnClearAll->setStyleSheet(
         "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-        "QPushButton:hover { background: rgba(255, 255, 255, 0.1); }");
-    connect(m_btnClearAll, &QPushButton::clicked, this, &FilterPanel::clearAllFilters);
+        "QPushButton:hover { background: #3E3E42; }"
+        "QPushButton:pressed { background: #4E4E52; }");
+    connect(m_btnClearAll, &QPushButton::clicked, this, [this]() { clearAllFilters(true); });
 
-    topL->addWidget(title);
+    m_btnPin = new QPushButton(topBar);
+    m_btnPin->setFixedSize(24, 24);
+    m_btnPin->setIcon(UiHelper::getIcon("pin_tilted", QColor("#B0B0B0")));
+    m_btnPin->setIconSize(QSize(18, 18));
+    m_btnPin->setFlat(true);
+    m_btnPin->setCursor(Qt::PointingHandCursor);
+    m_btnPin->setProperty("tooltipText", "锁定当前筛选条件");
+    m_btnPin->installEventFilter(this);
+    m_btnPin->setStyleSheet(
+        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
+        "QPushButton:hover { background: #3E3E42; }"
+        "QPushButton:pressed { background: #4E4E52; }");
+    connect(m_btnPin, &QPushButton::clicked, this, [this]() {
+        m_isFilterPinned = !m_isFilterPinned;
+        if (m_isFilterPinned) {
+            m_btnPin->setIcon(UiHelper::getIcon("pin", Style::ActiveOrange)); // 使用物理标准激活色
+            m_btnPin->setProperty("tooltipText", "当前筛选条件已锁定（目录切换不重置）");
+        } else {
+            m_btnPin->setIcon(UiHelper::getIcon("pin_tilted", QColor("#B0B0B0")));
+            m_btnPin->setProperty("tooltipText", "锁定当前筛选条件");
+        }
+    });
+
+    m_btnToggleGroups = new QPushButton(topBar);
+    m_btnToggleGroups->setFixedSize(24, 24);
+    m_btnToggleGroups->setFlat(true);
+    m_btnToggleGroups->setCursor(Qt::PointingHandCursor);
+    m_btnToggleGroups->installEventFilter(this);
+    m_btnToggleGroups->setStyleSheet(
+        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
+        "QPushButton:hover { background: #3E3E42; }"
+        "QPushButton:pressed { background: #4E4E52; }");
+    connect(m_btnToggleGroups, &QPushButton::clicked, this, &FilterPanel::onToggleAllGroupsClicked);
+
     topL->addStretch();
+    topL->addWidget(m_btnPin, 0, Qt::AlignVCenter);
+    topL->addWidget(m_btnToggleGroups, 0, Qt::AlignVCenter);
     topL->addWidget(m_btnClearAll, 0, Qt::AlignVCenter);
     m_mainLayout->addWidget(topBar);
 
+    updateHeaderStatus();
+
     // 滚动内容区
     m_scrollArea = new QScrollArea(this);
-    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet("QScrollArea { border: none; background: transparent; }");
+    m_scrollArea->setStyleSheet(
+        "QScrollArea { border: none; background: transparent; }"
+        "QScrollBar:vertical { border-left: 1px solid #333333; }"
+    );
 
     m_container = new QWidget(m_scrollArea);
     m_container->setStyleSheet("QWidget { background: transparent; }");
     m_containerLayout = new QVBoxLayout(m_container);
-    // 恢复旧版边距：右侧和底部留出 10px 缓冲空间
-    m_containerLayout->setContentsMargins(0, 0, 0, 10); // 2026-05-17 按照用户要求：右侧由 10 改为 0，消除内容区右侧留白
+    // 恢复旧版边距：右侧和底部留出 0px 缓冲空间，确保滚动条贴边
+    m_containerLayout->setContentsMargins(0, 0, 0, 10); 
     m_containerLayout->setSpacing(0);
     m_containerLayout->addStretch();
 
     m_scrollArea->setWidget(m_container);
     m_mainLayout->addWidget(m_scrollArea, 1);
+
+    // 2026-06-xx 物理对齐：从 AppConfig 加载持久化的最近筛选色
+    m_recentColors = AppConfig::instance().getValue("Filter/RecentColors").toStringList();
+
+    m_historyPanel = new SearchHistoryPanel(this);
+
+    // 2026-xx-xx 按照用户要求：当筛选状态改变时，同步更新标题栏图标颜色
+    connect(this, &FilterPanel::filterChanged, this, &FilterPanel::updateHeaderStatus);
+}
+
+void FilterPanel::saveFilterHistory(const QString& key, const QString& text) {
+    if (text.trimmed().isEmpty()) return;
+    QString fullKey = "FilterHistory/" + key;
+    QStringList history = AppConfig::instance().getValue(fullKey).toStringList();
+    history.removeAll(text);
+    history.append(text);
+    if (history.size() > 10) history.removeFirst();
+    AppConfig::instance().setValue(fullKey, history);
+}
+
+QStringList FilterPanel::getFilterHistory(const QString& key) const {
+    return AppConfig::instance().getValue("FilterHistory/" + key).toStringList();
 }
 
 // 2026-03-xx 按照用户要求：物理拦截事件以实现自定义 ToolTipOverlay 的显隐控制
 bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
+    // 2026-xx-xx 按照用户要求：处理双击快速输入框显示历史记录
+    if (event->type() == QEvent::MouseButtonDblClick) {
+        QLineEdit* edit = qobject_cast<QLineEdit*>(watched);
+        if (edit && edit->objectName() == "FilterSearchEdit") {
+            QString key;
+            if (edit == m_editColor) key = "Color";
+            else if (edit == m_editType) key = "Type";
+            else if (edit == m_editCreateDate) key = "CreateDate";
+            else if (edit == m_editModifyDate) key = "ModifyDate";
+
+            if (!key.isEmpty()) {
+                QStringList history = getFilterHistory(key);
+                m_historyPanel->setHistory(history, "最近搜索");
+                
+                // 断开之前的连接
+                m_historyPanel->disconnect(this);
+
+                connect(m_historyPanel, &SearchHistoryPanel::historyItemClicked, this, [this, edit, key](const QString& text) {
+                    edit->setText(text);
+                    if (edit == m_editColor) m_filter.colorFilterText = text;
+                    else if (edit == m_editType) m_filter.typeFilterText = text;
+                    else if (edit == m_editCreateDate) m_filter.createDateFilterText = text;
+                    else if (edit == m_editModifyDate) m_filter.modifyDateFilterText = text;
+
+                    saveFilterHistory(key, text);
+                    emit filterChanged(m_filter);
+                    m_historyPanel->hide();
+                });
+
+                connect(m_historyPanel, &SearchHistoryPanel::historyItemRemoved, this, [this, key](const QString& text) {
+                    QString fullKey = "FilterHistory/" + key;
+                    QStringList history = AppConfig::instance().getValue(fullKey).toStringList();
+                    history.removeAll(text);
+                    AppConfig::instance().setValue(fullKey, history);
+                    m_historyPanel->setHistory(history, "最近搜索");
+                });
+
+                connect(m_historyPanel, &SearchHistoryPanel::clearAllRequested, this, [this, key]() {
+                    AppConfig::instance().setValue("FilterHistory/" + key, QStringList());
+                    m_historyPanel->setHistory(QStringList(), "最近搜索");
+                });
+
+                m_historyPanel->showBelow(edit);
+                return true;
+            }
+        }
+    }
+
     if (event->type() == QEvent::HoverEnter) {
         QString text = watched->property("tooltipText").toString();
         if (!text.isEmpty()) {
-            // 物理级别禁绝原生 ToolTip，强制调用 ToolTipOverlay
-            ToolTipOverlay::instance()->showText(QCursor::pos(), text);
+            // 2026-07-xx 按照 Plan-65：悬停触发，timeout = 0
+            ToolTipOverlay::instance()->showText(QCursor::pos(), text, 0);
         }
-    } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::MouseButtonPress) {
+    } else if (event->type() == QEvent::MouseMove || event->type() == QEvent::MouseButtonPress) {
+        // 2026-06-23 按照用户要求：滑杆滑动/悬停显示百分比数值
+        if (watched == m_areaSlider) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("%1%").arg(m_areaSlider->value()), 0);
+        }
+    } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::MouseButtonRelease || (event->type() == QEvent::MouseButtonPress && watched != m_areaSlider)) {
+        // 2026-06-23 逻辑修正：滑杆按下时不隐藏（以便滑动回显），离开或释放时隐藏
         ToolTipOverlay::hideTip();
     }
     
@@ -233,22 +533,116 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
 void FilterPanel::populate(
     const QMap<int, int>&       ratingCounts,
     const QMap<QString, int>&   colorCounts,
-    const QMap<QString, int>&   tagCounts,
     const QMap<QString, int>&   typeCounts,
     const QMap<QString, int>&   createDateCounts,
-    const QMap<QString, int>&   modifyDateCounts)
+    const QMap<QString, int>&   modifyDateCounts,
+    int                         emptyFolderCount)
 {
+    // 2026-06-xx 物理修复：若所有输入均为空，且当前没有活动的文本过滤，则判定为异步加载中间态，拒绝执行重绘以防止 UI 抖动
+    if (ratingCounts.isEmpty() && colorCounts.isEmpty() &&
+        typeCounts.isEmpty() && createDateCounts.isEmpty() && modifyDateCounts.isEmpty() &&
+        emptyFolderCount == 0 &&
+        m_filter.colorFilterText.isEmpty() &&
+        m_filter.typeFilterText.isEmpty() && m_filter.createDateFilterText.isEmpty() &&
+        m_filter.modifyDateFilterText.isEmpty()) {
+        return;
+    }
+
+    // 2026-xx-xx 按照 Plan-106：增量更新判定
+    // 判定依据：如果各项的数量（Keys）没有发生物理变动，仅执行增量同步，不重建 UI
+    bool structureChanged = (m_ratingCounts.keys() != ratingCounts.keys() ||
+                             m_colorCounts.keys() != colorCounts.keys() ||
+                             m_typeCounts.keys() != typeCounts.keys() ||
+                             m_createDateCounts.keys() != createDateCounts.keys() ||
+                             m_modifyDateCounts.keys() != modifyDateCounts.keys() ||
+                             m_emptyFolderCount != emptyFolderCount);
+
     m_ratingCounts     = ratingCounts;
     m_colorCounts      = colorCounts;
-    m_tagCounts        = tagCounts;
     m_typeCounts       = typeCounts;
     m_createDateCounts = createDateCounts;
     m_modifyDateCounts = modifyDateCounts;
-    rebuildGroups();
+    m_emptyFolderCount = emptyFolderCount;
+
+    if (structureChanged) {
+        rebuildGroups();
+    } else {
+        syncUIFromFilterState();
+        // 更新现有行中的计数 Label (Cnt)
+        QList<ClickableRow*> rows = m_container->findChildren<ClickableRow*>();
+        for (auto* row : rows) {
+             QList<QLabel*> labels = row->findChildren<QLabel*>();
+             if (labels.size() >= 2) {
+                 QLabel* cntLabel = labels.last(); // 计数 Label 在末尾
+                 QLabel* nameLabel = labels.at(labels.size() - 2);
+                 QString name = nameLabel->text();
+                 
+                 int count = 0;
+                 if (name == "无评级") count = m_ratingCounts[0];
+                 else if (name.contains("★")) count = m_ratingCounts[name.count("★")];
+                 else if (name == "空文件夹") count = m_emptyFolderCount;
+                 else if (name == "文件夹") count = m_typeCounts["folder"];
+                 else if (name == "文件") count = m_typeCounts["file"];
+                 else if (m_typeCounts.contains(name)) count = m_typeCounts[name];
+                 else if (m_createDateCounts.contains(name)) count = m_createDateCounts[name];
+                 else if (m_modifyDateCounts.contains(name)) count = m_modifyDateCounts[name];
+                 
+                 cntLabel->setText(QString::number(count));
+             }
+        }
+    }
+}
+
+void FilterPanel::rebuildDateCheckboxes(bool isCreateDate, bool descending) {
+    QVBoxLayout* layout = isCreateDate ? m_createDateLayout : m_modifyDateLayout;
+    if (!layout) return;
+
+    // 清除现有的复选框行 (保留 QLineEdit)
+    while (layout->count() > 1) {
+        QLayoutItem* item = layout->takeAt(1);
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
+    }
+
+    const QMap<QString, int>& counts = isCreateDate ? m_createDateCounts : m_modifyDateCounts;
+    // 2026-07-xx Plan-92: 通过引用访问当前筛选状态中的日期列表，确保勾选状态保留
+    QStringList& selected = isCreateDate ? m_filter.createDates : m_filter.modifyDates;
+
+    QStringList dates = counts.keys();
+    std::sort(dates.begin(), dates.end(), [descending](const QString& a, const QString& b) {
+        return descending ? (a > b) : (a < b);
+    });
+
+    for (const QString& d : dates) {
+        QCheckBox* cb = addFilterRow(layout, d, counts[d]);
+        cb->blockSignals(true);
+        cb->setChecked(selected.contains(d));
+        cb->blockSignals(false);
+        // 2026-07-xx 物理修复：禁止捕获局部引用以防止悬空指针崩溃，改为按值捕获 isCreateDate
+        connect(cb, &QCheckBox::toggled, this, [this, isCreateDate, d](bool on) {
+            QStringList& targetList = isCreateDate ? m_filter.createDates : m_filter.modifyDates;
+            if (on) { if (!targetList.contains(d)) targetList.append(d); }
+            else targetList.removeAll(d);
+            emit filterChanged(m_filter);
+        });
+    }
 }
 
 // ─── rebuildGroups ────────────────────────────────────────────────
 void FilterPanel::rebuildGroups() {
+    updateHeaderStatus();
+    m_groupHeaders.clear();
+
+    // 2026-xx-xx 物理安全：重置快速输入框指针，防止 Directory 切换导致的野指针崩溃
+    m_editColor = nullptr;
+    m_editType = nullptr;
+    m_editCreateDate = nullptr;
+    m_editModifyDate = nullptr;
+    m_createDateLayout = nullptr;
+    m_modifyDateLayout = nullptr;
+    m_accuracySlider = nullptr;
+    m_areaSlider = nullptr;
+
     // 清空旧内容（保留末尾 stretch）
     while (m_containerLayout->count() > 1) {
         QLayoutItem* item = m_containerLayout->takeAt(0);
@@ -258,10 +652,12 @@ void FilterPanel::rebuildGroups() {
 
     auto colorMap = s_colorMap();
 
+
     // ── 1. 评级 ──────────────────────────────────────────────
-    if (!m_ratingCounts.isEmpty()) {
+    if (!m_ratingCounts.isEmpty() && m_isMirrorSource) {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("评级", gl);
+        m_groupRating = g;
         for (int r : {0, 1, 2, 3, 4, 5}) {
             if (!m_ratingCounts.contains(r)) continue;
             QCheckBox* cb = addFilterRow(gl, ratingDisplayName(r), m_ratingCounts[r]);
@@ -277,190 +673,289 @@ void FilterPanel::rebuildGroups() {
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 2. 颜色标记 ──────────────────────────────────────────
-    if (!m_colorCounts.isEmpty() || !m_filter.colors.isEmpty()) {
+
+    // ── 2. 颜色标记 (Plan-18: 矩阵重构版) ─────────────────────────
+    if (m_isMirrorSource) { // 2026-07-xx 按照 Plan-118：仅在镜像源下显示颜色标记
         QVBoxLayout* gl = nullptr;
-        QHBoxLayout* hdrLayout = nullptr; // 标题行内嵌布局
+        QHBoxLayout* hdrLayout = nullptr;
         QWidget* g = buildGroup("颜色标记", gl, &hdrLayout);
+        m_groupColor = g;
 
-        if (hdrLayout) {
-            QPushButton* btnCustomColor = new QPushButton(hdrLayout->parentWidget());
-            btnCustomColor->setObjectName("BtnCustomColor");
-            btnCustomColor->setFixedSize(20, 20);
-            btnCustomColor->setCursor(Qt::PointingHandCursor);
-            // 2026-05-17 按照用户要求：rebuildGroups 每次重建按钮，图标颜色必须从
-            // m_filter.colors 中反查最后一个自定义色（#开头）来初始化，
-            // 而不能固定为蓝色，否则 rebuildGroups 后颜色会被还原。
-            QColor btnIconColor("#3498db"); // 默认蓝，未选过自定义颜色时的占位色
-            for (const QString& key : m_filter.colors)
-                if (key.startsWith('#')) btnIconColor = QColor(key);
-            btnCustomColor->setIcon(UiHelper::getIcon("paint_bucket", btnIconColor, 14));
-            btnCustomColor->setStyleSheet(
-                "QPushButton { background: transparent; border: none; }"
-                "QPushButton:hover { background: rgba(255,255,255,0.1); border-radius: 4px; }"
-            );
-            hdrLayout->addWidget(btnCustomColor); 
-            
-            connect(btnCustomColor, &QPushButton::clicked, this, [this, btnCustomColor]() {
-                ColorPicker* picker = new ColorPicker(this);
-                connect(picker, &ColorPicker::colorSelected, this, [this, btnCustomColor](const QColor& c, int tolerance) {
-                    QString hex = c.name().toUpper();
-                    // 2026-05-17 按照用户要求：存入容差值并触发筛选更新
-                    m_filter.colorTolerance = tolerance;
-                    // 2026-05-17 按照用户要求：图标颜色随所选颜色实时同步，不再固定为蓝色
-                    btnCustomColor->setIcon(UiHelper::getIcon("paint_bucket", c, 14));
-                    if (!m_filter.colors.contains(hex)) {
-                        m_filter.colors.append(hex);
-                        emit filterChanged(m_filter);
-                        rebuildGroups();
-                    }
-                });
-                picker->adjustSize();
-                QPoint pos = btnCustomColor->mapToGlobal(QPoint(0, 0));
-                
-                // 2026-06-xx 物理修复：引入智能边界避障算法，防止最大化时弹出框溢出屏幕
-                QScreen* currentScreen = QGuiApplication::screenAt(QCursor::pos());
-                QRect screen = currentScreen ? currentScreen->availableGeometry() : QRect(0, 0, 1920, 1080);
-                
-                // 水平避障：如果右侧空间不足，则改为向左对齐
-                if (pos.x() + picker->width() > screen.right()) {
-                    pos.setX(btnCustomColor->mapToGlobal(QPoint(btnCustomColor->width(), 0)).x() - picker->width());
-                }
-                
-                // 垂直避障：如果上方空间不足，则向下弹出
-                if (pos.y() - picker->height() - 5 < screen.top()) {
-                    pos.setY(btnCustomColor->mapToGlobal(QPoint(0, btnCustomColor->height())).y() + 5);
-                } else {
-                    pos.setY(pos.y() - picker->height() - 5);
-                }
-                
-                picker->move(pos);
-                picker->show();
-            });
-        }
-
-        // 插入色相滑块
-        InlineHueSlider* hueSlider = new InlineHueSlider(g);
-        if (!m_hueSliderColor.isEmpty()) {
-            QColor c(m_hueSliderColor);
-            int h, s, v;
-            c.getHsv(&h, &s, &v);
-            hueSlider->setHue(h);
-        }
-        connect(hueSlider, &InlineHueSlider::sliderReleased, this, [this, hueSlider]() {
-            int h = hueSlider->hue();
-            if (h == 0) {
-                // 清除
-                if (!m_hueSliderColor.isEmpty()) {
-                    m_filter.colors.removeAll(m_hueSliderColor);
-                    m_hueSliderColor.clear();
-                    emit filterChanged(m_filter);
-                    rebuildGroups();
-                }
-            } else {
-                QColor c = QColor::fromHsv(h, 220, 220);
-                QString hex = c.name().toUpper();
-                if (!m_hueSliderColor.isEmpty()) {
-                    m_filter.colors.removeAll(m_hueSliderColor);
-                }
-                m_hueSliderColor = hex;
-                if (!m_filter.colors.contains(hex)) {
-                    m_filter.colors.append(hex);
-                }
-                m_filter.colorTolerance = 40;
+        // 新增快速输入框
+        m_editColor = new QLineEdit(g);
+        m_editColor->setClearButtonEnabled(true);
+        m_editColor->setPlaceholderText("例： 红 / #E24B4A / 无色标");
+        m_editColor->setText(m_filter.colorFilterText);
+        m_editColor->setObjectName("FilterSearchEdit");
+        m_editColor->setStyleSheet(
+            "QLineEdit#FilterSearchEdit {"
+            "  background: #2D2D2D;"
+            "  color: #CCCCCC;"
+            "  border: 1px solid #444444;"
+            "  border-radius: 6px;" // 2026-07-xx 按照《Plan-21》：输入框统一使用 6px 圆角
+            "  padding: 4px 8px;"
+            "  margin: 4px 5px;"
+            "  font-size: 11px;"
+            "}"
+            "QLineEdit#FilterSearchEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
+        );
+        m_editColor->installEventFilter(this);
+        connect(m_editColor, &QLineEdit::returnPressed, this, [this]() {
+            m_filter.colorFilterText = m_editColor->text();
+            saveFilterHistory("Color", m_filter.colorFilterText);
+            emit filterChanged(m_filter);
+        });
+        connect(m_editColor, &QLineEdit::textChanged, this, [this](const QString& text) {
+            if (text.isEmpty() && !m_filter.colorFilterText.isEmpty()) {
+                m_filter.colorFilterText = "";
                 emit filterChanged(m_filter);
-                rebuildGroups();
             }
         });
-        gl->insertWidget(0, hueSlider);
+        gl->addWidget(m_editColor);
+
+        // 2.1 顶部色相滑块
+        // 2026-06-xx 物理对齐：滑块及其容器增加 4px 左右边距（相对于 gl 的 0 边距），实现视觉平衡
+        QWidget* hueContainer = new QWidget(g);
+        QHBoxLayout* hueLayout = new QHBoxLayout(hueContainer);
+        hueLayout->setContentsMargins(5, 0, 5, 0);
+        hueLayout->setSpacing(0);
         
-        // 追加已被筛选但不在基础列表中的自定义颜色 (相近色)
-        for (const QString& key : m_filter.colors) {
-            if (key.startsWith("#")) {
-                QColor dotC = QColor(key);
-                QCheckBox* cb = addFilterRow(gl, "相近色: " + key, 0, dotC);
-                cb->blockSignals(true);
-                cb->setChecked(true);
-                cb->blockSignals(false);
-                connect(cb, &QCheckBox::toggled, this, [this, key](bool on) {
-                    if (!on) {
-                        m_filter.colors.removeAll(key);
-                        emit filterChanged(m_filter);
-                        rebuildGroups();
-                    }
-                });
+        InlineHueSlider* hueSlider = new InlineHueSlider(hueContainer);
+        hueLayout->addWidget(hueSlider);
+        connect(hueSlider, &InlineHueSlider::sliderReleased, this, [this, hueSlider]() {
+            int h = hueSlider->hue();
+            QColor c;
+            if (h == 1000) c = Qt::black;
+            else if (h == 1001) c = QColor("#808080");
+            else if (h == 1002) c = Qt::white;
+            else c = QColor::fromHsv(h, 220, 220);
+
+            QString hex = c.name().toUpper();
+            m_filter.colors.clear();
+            m_filter.colors.append(hex);
+            
+            // LRU 更新 (2026-06-xx: 容量扩展至 50 个，且由左上向右下按时间排布)
+            m_recentColors.removeAll(hex);
+            m_recentColors.prepend(hex);
+            if (m_recentColors.size() > 50) m_recentColors.removeLast();
+            AppConfig::instance().setValue("Filter/RecentColors", m_recentColors);
+
+            emit filterChanged(m_filter);
+            rebuildGroups();
+        });
+        gl->addWidget(hueContainer);
+
+        // 2.1.5 颜色准确度 (容差) 滑块 ─────────────────────────
+        // 2026-07-xx 按照用户要求：还原此前被误删的准确度控制条
+        QWidget* accContainer = new QWidget(g);
+        QHBoxLayout* accLayout = new QHBoxLayout(accContainer);
+        accLayout->setContentsMargins(10, 4, 10, 4);
+        accLayout->setSpacing(8);
+
+        QLabel* lblAcc = new QLabel("准确度:", accContainer);
+        lblAcc->setStyleSheet("color: #AAAAAA; font-size: 11px;");
+        accLayout->addWidget(lblAcc);
+
+        m_accuracySlider = new QSlider(Qt::Horizontal, accContainer);
+        m_accuracySlider->setRange(0, 100);
+        m_accuracySlider->setValue(m_filter.colorTolerance);
+        m_accuracySlider->setCursor(Qt::PointingHandCursor);
+        m_accuracySlider->setStyleSheet(
+            "QSlider::groove:horizontal { height: 2px; background: #444; border-radius: 1px; }"
+            "QSlider::handle:horizontal { background: #EEE; border: 1px solid #777; width: 10px; height: 10px; margin: -4px 0; border-radius: 5px; }"
+            "QSlider::handle:horizontal:hover { background: #FFF; border-color: #378ADD; }"
+        );
+        accLayout->addWidget(m_accuracySlider, 1);
+
+        connect(m_accuracySlider, &QSlider::valueChanged, this, [this](int val) {
+            m_filter.colorTolerance = val;
+            emit filterChanged(m_filter);
+        });
+
+        gl->addWidget(accContainer);
+
+        // 2.1.6 颜色占比滑块 ─────────────────────────────────
+        // 2026-06-23 按照用户要求：新增颜色面积占比过滤逻辑
+        QWidget* areaContainer = new QWidget(g);
+        QHBoxLayout* areaLayout = new QHBoxLayout(areaContainer);
+        areaLayout->setContentsMargins(10, 4, 10, 4);
+        areaLayout->setSpacing(8);
+
+        QLabel* lblArea = new QLabel("占比:", areaContainer);
+        lblArea->setStyleSheet("color: #AAAAAA; font-size: 11px;");
+        areaLayout->addWidget(lblArea);
+
+        m_areaSlider = new QSlider(Qt::Horizontal, areaContainer);
+        m_areaSlider->setRange(0, 100);
+        m_areaSlider->setValue(m_filter.minColorArea);
+        m_areaSlider->setCursor(Qt::PointingHandCursor);
+        m_areaSlider->setMouseTracking(true); // 2026-06-23 按照用户要求：支持悬停/滑动实时回显百分比
+        m_areaSlider->installEventFilter(this);
+        m_areaSlider->setStyleSheet(
+            "QSlider::groove:horizontal { height: 2px; background: #444; border-radius: 1px; }"
+            "QSlider::handle:horizontal { background: #EEE; border: 1px solid #777; width: 10px; height: 10px; margin: -4px 0; border-radius: 5px; }"
+            "QSlider::handle:horizontal:hover { background: #FFF; border-color: #378ADD; }"
+        );
+        areaLayout->addWidget(m_areaSlider, 1);
+
+        connect(m_areaSlider, &QSlider::valueChanged, this, [this](int val) {
+            m_filter.minColorArea = val;
+            emit filterChanged(m_filter);
+        });
+
+        gl->addWidget(areaContainer);
+
+        // 2.2 标准色矩阵 (12色)
+        // 2026-06-xx 物理对齐：设置左边距 8px 以对齐下方的复选框视觉线
+        QLabel* lblStatic = new QLabel("标准色系", g);
+        lblStatic->setStyleSheet("color: #666; font-size: 10px; margin-top: 4px; margin-left: 5px;");
+        gl->addWidget(lblStatic);
+
+        QWidget* staticGrid = new QWidget(g);
+        staticGrid->setContentsMargins(5, 0, 5, 0); 
+        // 2026-06-xx 物理微调：间距从 4px 缩减至 2px
+        FlowLayout* staticFlow = new FlowLayout(staticGrid, 0, 2, 2);
+        staticGrid->setLayout(staticFlow);
+        
+        QStringList standardHex = {
+            "#E24B4A", "#EF9F27", "#FECF0E", "#639922", 
+            "#1D9E75", "#378ADD", "#7F77DD", "#E91E63",
+            "#000000", "#808080", "#FFFFFF", "#795548"
+        };
+
+        for (const QString& hex : standardHex) {
+            ColorBlock* block = new ColorBlock(QColor(hex), staticGrid);
+            block->setChecked(m_filter.colors.contains(hex));
+            
+            // 异步统计对账 (模拟：此处可后续接入真正的数据查询)
+            int count = 0;
+            for (auto it = m_colorCounts.begin(); it != m_colorCounts.end(); ++it) {
+                if (UiHelper::calculateDeltaE(QColor(hex), UiHelper::parseColorName(it.key())) < 10.0) {
+                    count += it.value();
+                }
             }
+            block->setCount(count);
+
+            connect(block, &ColorBlock::clicked, this, [this, hex](const QColor& /*c*/) {
+                if (m_filter.colors.contains(hex)) {
+                    m_filter.colors.removeAll(hex);
+                } else {
+                    m_filter.colors.clear(); // 单选模式
+                    m_filter.colors.append(hex);
+                    
+                    // LRU 更新
+                    m_recentColors.removeAll(hex);
+                    m_recentColors.prepend(hex);
+                    if (m_recentColors.size() > 50) m_recentColors.removeLast();
+                    AppConfig::instance().setValue("Filter/RecentColors", m_recentColors);
+                }
+                emit filterChanged(m_filter);
+                rebuildGroups();
+            });
+            staticFlow->addWidget(block);
+        }
+        gl->addWidget(staticGrid);
+
+        // 2.3 最近筛选 (LRU)
+        if (!m_recentColors.isEmpty()) {
+            QLabel* lblRecent = new QLabel("最近筛选", g);
+            lblRecent->setStyleSheet("color: #666; font-size: 10px; margin-top: 8px; margin-left: 5px;");
+            gl->addWidget(lblRecent);
+
+            QWidget* recentGrid = new QWidget(g);
+            recentGrid->setContentsMargins(5, 0, 5, 0);
+            // 2026-06-xx 物理微调：间距从 4px 缩减至 2px
+            FlowLayout* recentFlow = new FlowLayout(recentGrid, 0, 2, 2);
+            recentGrid->setLayout(recentFlow);
+
+            for (const QString& hex : m_recentColors) {
+                ColorBlock* block = new ColorBlock(QColor(hex), recentGrid);
+                block->setChecked(m_filter.colors.contains(hex));
+                
+                int count = 0;
+                for (auto it = m_colorCounts.begin(); it != m_colorCounts.end(); ++it) {
+                    if (UiHelper::calculateDeltaE(QColor(hex), UiHelper::parseColorName(it.key())) < 10.0) {
+                        count += it.value();
+                    }
+                }
+                block->setCount(count);
+
+                connect(block, &ColorBlock::clicked, this, [this, hex](const QColor& /*c*/) {
+                    if (m_filter.colors.contains(hex)) {
+                        m_filter.colors.removeAll(hex);
+                    } else {
+                        m_filter.colors.clear();
+                        m_filter.colors.append(hex);
+                        
+                        // 即使是在最近面板中点击，也应更新排序使其置顶
+                        m_recentColors.removeAll(hex);
+                        m_recentColors.prepend(hex);
+                        AppConfig::instance().setValue("Filter/RecentColors", m_recentColors);
+                    }
+                    emit filterChanged(m_filter);
+                    rebuildGroups();
+                });
+                recentFlow->addWidget(block);
+            }
+            gl->addWidget(recentGrid);
         }
 
-        // 2026-06-xx 按照要求：如实展示所有物理提取到的真值颜色
-        QStringList allKeys = m_colorCounts.keys();
-        allKeys.sort();
-
-        // 优先显示无色标
+        // 2.4 无色标处理
         if (m_colorCounts.contains("")) {
-            QCheckBox* cb = addFilterRow(gl, "无色标", m_colorCounts[""], QColor("#888780"));
-            cb->blockSignals(true);
-            cb->setChecked(m_filter.colors.contains(""));
-            cb->blockSignals(false);
-            connect(cb, &QCheckBox::toggled, this, [this](bool on) {
-                if (on) { if (!m_filter.colors.contains("")) m_filter.colors.append(""); }
-                else m_filter.colors.removeAll("");
-                emit filterChanged(m_filter);
-            });
-            allKeys.removeAll("");
+             QCheckBox* cb = addFilterRow(gl, "无色标", m_colorCounts[""], QColor("#888780"));
+             cb->setChecked(m_filter.colors.contains(""));
+             connect(cb, &QCheckBox::toggled, this, [this](bool on) {
+                 if (on) { m_filter.colors.clear(); m_filter.colors.append(""); }
+                 else m_filter.colors.removeAll("");
+                 emit filterChanged(m_filter);
+                 rebuildGroups();
+             });
         }
 
-        for (const QString& key : allKeys) {
-            QColor dotC = UiHelper::parseColorName(key);
-            QCheckBox* cb = addFilterRow(gl, colorDisplayName(key), m_colorCounts[key], dotC);
-            cb->blockSignals(true);
-            cb->setChecked(m_filter.colors.contains(key));
-            cb->blockSignals(false);
-            connect(cb, &QCheckBox::toggled, this, [this, key](bool on) {
-                if (on) { if (!m_filter.colors.contains(key)) m_filter.colors.append(key); }
-                else m_filter.colors.removeAll(key);
-                emit filterChanged(m_filter);
-            });
-        }
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 3. 标签 / 关键字 ─────────────────────────────────────
-    if (!m_tagCounts.isEmpty()) {
-        QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("标签 / 关键字", gl);
-        if (m_tagCounts.contains("__none__")) {
-            QCheckBox* cb = addFilterRow(gl, "无标签", m_tagCounts["__none__"]);
-            cb->blockSignals(true);
-            cb->setChecked(m_filter.tags.contains("__none__"));
-            cb->blockSignals(false);
-            connect(cb, &QCheckBox::toggled, this, [this](bool on) {
-                if (on) { if (!m_filter.tags.contains("__none__")) m_filter.tags.append("__none__"); }
-                else    m_filter.tags.removeAll("__none__");
-                emit filterChanged(m_filter);
-            });
-        }
-        QStringList sorted = m_tagCounts.keys();
-        sorted.sort(Qt::CaseInsensitive);
-        for (const QString& tag : sorted) {
-            if (tag == "__none__") continue;
-            QCheckBox* cb = addFilterRow(gl, tag, m_tagCounts[tag]);
-            cb->blockSignals(true);
-            cb->setChecked(m_filter.tags.contains(tag));
-            cb->blockSignals(false);
-            connect(cb, &QCheckBox::toggled, this, [this, tag](bool on) {
-                if (on) { if (!m_filter.tags.contains(tag)) m_filter.tags.append(tag); }
-                else m_filter.tags.removeAll(tag);
-                emit filterChanged(m_filter);
-            });
-        }
-        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
-    }
 
     // ── 4. 文件类型 ──────────────────────────────────────────
-    if (!m_typeCounts.isEmpty()) {
+    if (!m_typeCounts.isEmpty() || !m_filter.typeFilterText.isEmpty() || m_emptyFolderCount > 0) {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("文件类型", gl);
+
+        m_editType = new QLineEdit(g);
+        m_editType->setClearButtonEnabled(true);
+        m_editType->setPlaceholderText("例： png / 文件夹...");
+        m_editType->setText(m_filter.typeFilterText);
+        m_editType->setObjectName("FilterSearchEdit");
+        m_editType->setStyleSheet(
+            "QLineEdit#FilterSearchEdit { background: #2D2D2D; color: #CCCCCC; border: 1px solid #444444; border-radius: 6px; padding: 4px 8px; margin: 4px 5px; font-size: 11px; }"
+            "QLineEdit#FilterSearchEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
+        );
+        m_editType->installEventFilter(this);
+        connect(m_editType, &QLineEdit::returnPressed, this, [this]() {
+            m_filter.typeFilterText = m_editType->text();
+            saveFilterHistory("Type", m_filter.typeFilterText);
+            emit filterChanged(m_filter);
+        });
+        connect(m_editType, &QLineEdit::textChanged, this, [this](const QString& text) {
+            if (text.isEmpty() && !m_filter.typeFilterText.isEmpty()) {
+                m_filter.typeFilterText = "";
+                emit filterChanged(m_filter);
+            }
+        });
+        gl->addWidget(m_editType);
+
+        if (m_emptyFolderCount > 0) {
+            QCheckBox* cb = addFilterRow(gl, "空文件夹", m_emptyFolderCount);
+            cb->blockSignals(true);
+            cb->setChecked(m_filter.types.contains("空文件夹"));
+            cb->blockSignals(false);
+            connect(cb, &QCheckBox::toggled, this, [this](bool on) {
+                if (on) { if (!m_filter.types.contains("空文件夹")) m_filter.types.append("空文件夹"); }
+                else    m_filter.types.removeAll("空文件夹");
+                emit filterChanged(m_filter);
+            });
+        }
+
         if (m_typeCounts.contains("folder")) {
             QCheckBox* cb = addFilterRow(gl, "文件夹", m_typeCounts["folder"]);
             cb->blockSignals(true);
@@ -472,9 +967,20 @@ void FilterPanel::rebuildGroups() {
                 emit filterChanged(m_filter);
             });
         }
+        if (m_typeCounts.contains("file")) {
+            QCheckBox* cb = addFilterRow(gl, "文件", m_typeCounts["file"]);
+            cb->blockSignals(true);
+            cb->setChecked(m_filter.types.contains("file"));
+            cb->blockSignals(false);
+            connect(cb, &QCheckBox::toggled, this, [this](bool on) {
+                if (on) { if (!m_filter.types.contains("file")) m_filter.types.append("file"); }
+                else    m_filter.types.removeAll("file");
+                emit filterChanged(m_filter);
+            });
+        }
         QStringList exts = m_typeCounts.keys(); exts.sort();
         for (const QString& ext : exts) {
-            if (ext == "folder") continue;
+            if (ext == "folder" || ext == "file" || ext == "空文件夹") continue;
             QString label = ext.isEmpty() ? "无扩展名" : ext;
             QCheckBox* cb = addFilterRow(gl, label, m_typeCounts[ext]);
             cb->blockSignals(true);
@@ -489,69 +995,303 @@ void FilterPanel::rebuildGroups() {
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 5. 创建日期 ──────────────────────────────────────────
-    if (!m_createDateCounts.isEmpty()) {
+    // ── 5. 创建日期 (Plan-92: 排序支持) ──────────────────────────
+    if (!m_createDateCounts.isEmpty() || !m_filter.createDateFilterText.isEmpty()) {
         QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("创建日期", gl);
-        // "今天"/"昨天"置顶
-        for (const QString& key : QStringList{"today", "yesterday"}) {
-            if (!m_createDateCounts.contains(key)) continue;
-            QString label = (key == "today") ? "今天" : "昨天";
-            QCheckBox* cb = addFilterRow(gl, label, m_createDateCounts[key]);
-            cb->blockSignals(true);
-            cb->setChecked(m_filter.createDates.contains(key));
-            cb->blockSignals(false);
-            connect(cb, &QCheckBox::toggled, this, [this, key](bool on) {
-                if (on) { if (!m_filter.createDates.contains(key)) m_filter.createDates.append(key); }
-                else m_filter.createDates.removeAll(key);
+        QHBoxLayout* hdrLayout = nullptr;
+        QWidget* g = buildGroup("创建日期", gl, &hdrLayout);
+        m_createDateLayout = gl;
+
+        QPushButton* btnSort = new QPushButton(g);
+        btnSort->setFixedSize(16, 16);
+        btnSort->setIcon(UiHelper::getIcon(m_createDateDesc ? "arrow_down" : "arrow_up", QColor("#B0B0B0")));
+        btnSort->setFlat(true);
+        btnSort->setCursor(Qt::PointingHandCursor);
+        btnSort->setStyleSheet("QPushButton { background: transparent; border: none; } QPushButton:hover { background: #3E3E42; border-radius: 2px; }");
+        hdrLayout->addWidget(btnSort);
+        connect(btnSort, &QPushButton::clicked, this, [this, btnSort]() {
+            m_createDateDesc = !m_createDateDesc;
+            btnSort->setIcon(UiHelper::getIcon(m_createDateDesc ? "arrow_down" : "arrow_up", QColor("#B0B0B0")));
+            rebuildDateCheckboxes(true, m_createDateDesc);
+        });
+
+        m_editCreateDate = new QLineEdit(g);
+        m_editCreateDate->setClearButtonEnabled(true);
+        m_editCreateDate->setPlaceholderText("例： 2025 / 03-2025...");
+        m_editCreateDate->setText(m_filter.createDateFilterText);
+        m_editCreateDate->setObjectName("FilterSearchEdit");
+        m_editCreateDate->setStyleSheet(
+            "QLineEdit#FilterSearchEdit { background: #2D2D2D; color: #CCCCCC; border: 1px solid #444444; border-radius: 6px; padding: 4px 8px; margin: 4px 5px; font-size: 11px; }"
+            "QLineEdit#FilterSearchEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
+        );
+        m_editCreateDate->installEventFilter(this);
+        connect(m_editCreateDate, &QLineEdit::returnPressed, this, [this]() {
+            m_filter.createDateFilterText = m_editCreateDate->text();
+            saveFilterHistory("CreateDate", m_filter.createDateFilterText);
+            emit filterChanged(m_filter);
+        });
+        connect(m_editCreateDate, &QLineEdit::textChanged, this, [this](const QString& text) {
+            if (text.isEmpty() && !m_filter.createDateFilterText.isEmpty()) {
+                m_filter.createDateFilterText = "";
+                emit filterChanged(m_filter);
+            }
+        });
+        gl->addWidget(m_editCreateDate);
+
+        rebuildDateCheckboxes(true, m_createDateDesc);
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+    // ── 6. 修改日期 (Plan-92: 排序支持) ──────────────────────────
+    if (!m_modifyDateCounts.isEmpty() || !m_filter.modifyDateFilterText.isEmpty()) {
+        QVBoxLayout* gl = nullptr;
+        QHBoxLayout* hdrLayout = nullptr;
+        QWidget* g = buildGroup("修改日期", gl, &hdrLayout);
+        m_modifyDateLayout = gl;
+
+        QPushButton* btnSort = new QPushButton(g);
+        btnSort->setFixedSize(16, 16);
+        btnSort->setIcon(UiHelper::getIcon(m_modifyDateDesc ? "arrow_down" : "arrow_up", QColor("#B0B0B0")));
+        btnSort->setFlat(true);
+        btnSort->setCursor(Qt::PointingHandCursor);
+        btnSort->setStyleSheet("QPushButton { background: transparent; border: none; } QPushButton:hover { background: #3E3E42; border-radius: 2px; }");
+        hdrLayout->addWidget(btnSort);
+        connect(btnSort, &QPushButton::clicked, this, [this, btnSort]() {
+            m_modifyDateDesc = !m_modifyDateDesc;
+            btnSort->setIcon(UiHelper::getIcon(m_modifyDateDesc ? "arrow_down" : "arrow_up", QColor("#B0B0B0")));
+            rebuildDateCheckboxes(false, m_modifyDateDesc);
+        });
+
+        m_editModifyDate = new QLineEdit(g);
+        m_editModifyDate->setClearButtonEnabled(true);
+        m_editModifyDate->setPlaceholderText("例： 2025 / 03-2025...");
+        m_editModifyDate->setText(m_filter.modifyDateFilterText);
+        m_editModifyDate->setObjectName("FilterSearchEdit");
+        m_editModifyDate->setStyleSheet(
+            "QLineEdit#FilterSearchEdit { background: #2D2D2D; color: #CCCCCC; border: 1px solid #444444; border-radius: 6px; padding: 4px 8px; margin: 4px 5px; font-size: 11px; }"
+            "QLineEdit#FilterSearchEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
+        );
+        m_editModifyDate->installEventFilter(this);
+        connect(m_editModifyDate, &QLineEdit::returnPressed, this, [this]() {
+            m_filter.modifyDateFilterText = m_editModifyDate->text();
+            saveFilterHistory("ModifyDate", m_filter.modifyDateFilterText);
+            emit filterChanged(m_filter);
+        });
+        connect(m_editModifyDate, &QLineEdit::textChanged, this, [this](const QString& text) {
+            if (text.isEmpty() && !m_filter.modifyDateFilterText.isEmpty()) {
+                m_filter.modifyDateFilterText = "";
+                emit filterChanged(m_filter);
+            }
+        });
+        gl->addWidget(m_editModifyDate);
+
+        rebuildDateCheckboxes(false, m_modifyDateDesc);
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+    // ── 7. 链接 (独立主选项) ──────────────────────────────────────────
+    if (m_isMirrorSource) {
+        QVBoxLayout* gl = nullptr;
+        QWidget* g = buildGroup("链接", gl);
+        m_groupLink = g;
+
+        QButtonGroup* linkGroup = new QButtonGroup(g);
+        linkGroup->setExclusive(false); // 改为非排他性，允许取消勾选
+        for (auto p : {FilterState::Yes, FilterState::No}) {
+            QString label = (p == FilterState::Yes ? "有链接" : "无链接");
+            
+            StyledCheckBox* cb = new StyledCheckBox();
+            ClickableRow* row = new ClickableRow(cb);
+            row->setFixedHeight(24);
+            QHBoxLayout* rl = new QHBoxLayout(row);
+            rl->setContentsMargins(5, 0, 5, 0);
+            rl->setSpacing(5);
+            rl->addWidget(cb);
+            QLabel* lbl = new QLabel(label, row);
+            lbl->setStyleSheet("font-size: 12px; color: #CCCCCC; background: transparent;");
+            rl->addWidget(lbl, 1);
+            gl->addWidget(row);
+
+            if (m_filter.linkPresence == p) cb->setChecked(true);
+            connect(cb, &QCheckBox::toggled, this, [this, p, linkGroup, cb](bool on) {
+                if (on) {
+                    // 手动实现单选逻辑：勾选当前项时，取消同组其他项
+                    for (QAbstractButton* b : linkGroup->buttons()) {
+                        if (b != cb && b->isChecked()) {
+                            b->blockSignals(true);
+                            b->setChecked(false);
+                            b->blockSignals(false);
+                        }
+                    }
+                    m_filter.linkPresence = p;
+                } else {
+                    m_filter.linkPresence = FilterState::All;
+                }
                 emit filterChanged(m_filter);
             });
-        }
-        QStringList dates = m_createDateCounts.keys(); dates.sort(Qt::CaseInsensitive);
-        for (const QString& d : dates) {
-            if (d == "today" || d == "yesterday") continue;
-            QCheckBox* cb = addFilterRow(gl, d, m_createDateCounts[d]);
-            cb->blockSignals(true);
-            cb->setChecked(m_filter.createDates.contains(d));
-            cb->blockSignals(false);
-            connect(cb, &QCheckBox::toggled, this, [this, d](bool on) {
-                if (on) { if (!m_filter.createDates.contains(d)) m_filter.createDates.append(d); }
-                else m_filter.createDates.removeAll(d);
-                emit filterChanged(m_filter);
-            });
+            linkGroup->addButton(cb);
         }
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 6. 修改日期 ──────────────────────────────────────────
-    if (!m_modifyDateCounts.isEmpty()) {
+    // ── 8. 备注 (独立主选项) ──────────────────────────────────────────
+    if (m_isMirrorSource) {
         QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("修改日期", gl);
-        for (const QString& key : QStringList{"today", "yesterday"}) {
-            if (!m_modifyDateCounts.contains(key)) continue;
-            QString label = (key == "today") ? "今天" : "昨天";
-            QCheckBox* cb = addFilterRow(gl, label, m_modifyDateCounts[key]);
-            cb->blockSignals(true);
-            cb->setChecked(m_filter.modifyDates.contains(key));
-            cb->blockSignals(false);
-            connect(cb, &QCheckBox::toggled, this, [this, key](bool on) {
-                if (on) { if (!m_filter.modifyDates.contains(key)) m_filter.modifyDates.append(key); }
-                else m_filter.modifyDates.removeAll(key);
+        QWidget* g = buildGroup("备注", gl);
+        m_groupNote = g;
+
+        QButtonGroup* noteGroup = new QButtonGroup(g);
+        noteGroup->setExclusive(false); // 改为非排他性
+        for (auto p : {FilterState::Yes, FilterState::No}) {
+            QString label = (p == FilterState::Yes ? "有备注" : "无备注");
+            
+            StyledCheckBox* cb = new StyledCheckBox();
+            ClickableRow* row = new ClickableRow(cb);
+            row->setFixedHeight(24);
+            QHBoxLayout* rl = new QHBoxLayout(row);
+            rl->setContentsMargins(5, 0, 5, 0);
+            rl->setSpacing(5);
+            rl->addWidget(cb);
+            QLabel* lbl = new QLabel(label, row);
+            lbl->setStyleSheet("font-size: 12px; color: #CCCCCC; background: transparent;");
+            rl->addWidget(lbl, 1);
+            gl->addWidget(row);
+
+            if (m_filter.notePresence == p) cb->setChecked(true);
+            connect(cb, &QCheckBox::toggled, this, [this, p, noteGroup, cb](bool on) {
+                if (on) {
+                    for (QAbstractButton* b : noteGroup->buttons()) {
+                        if (b != cb && b->isChecked()) {
+                            b->blockSignals(true);
+                            b->setChecked(false);
+                            b->blockSignals(false);
+                        }
+                    }
+                    m_filter.notePresence = p;
+                } else {
+                    m_filter.notePresence = FilterState::All;
+                }
                 emit filterChanged(m_filter);
             });
+            noteGroup->addButton(cb);
         }
-        QStringList dates = m_modifyDateCounts.keys(); dates.sort(Qt::CaseInsensitive);
-        for (const QString& d : dates) {
-            if (d == "today" || d == "yesterday") continue;
-            QCheckBox* cb = addFilterRow(gl, d, m_modifyDateCounts[d]);
-            cb->blockSignals(true);
-            cb->setChecked(m_filter.modifyDates.contains(d));
-            cb->blockSignals(false);
-            connect(cb, &QCheckBox::toggled, this, [this, d](bool on) {
-                if (on) { if (!m_filter.modifyDates.contains(d)) m_filter.modifyDates.append(d); }
-                else m_filter.modifyDates.removeAll(d);
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+    // ── 9. 文件大小 (独立主选项) ──────────────────────────────────────────
+    {
+        QVBoxLayout* gl = nullptr;
+        QWidget* g = buildGroup("文件大小", gl);
+
+        QHBoxLayout* hs = new QHBoxLayout();
+        hs->setContentsMargins(5, 4, 5, 8);
+        hs->setSpacing(8); // 增加间距
+        
+        QLineEdit* minEdit = new QLineEdit(g);
+        minEdit->setClearButtonEnabled(true);
+        QLineEdit* maxEdit = new QLineEdit(g);
+        maxEdit->setClearButtonEnabled(true);
+        QComboBox* unitCombo = new QComboBox(g);
+        unitCombo->addItems({"KB", "MB", "GB"});
+        unitCombo->setCurrentIndex(1); // Default MB
+
+        auto sizeEditStyle = "QLineEdit { background: #2D2D2D; color: #EEE; border: 1px solid #444; border-radius: 4px; padding: 2px 4px; font-size: 11px; }";
+        minEdit->setStyleSheet(sizeEditStyle);
+        maxEdit->setStyleSheet(sizeEditStyle);
+        minEdit->setPlaceholderText("最小");
+        maxEdit->setPlaceholderText("最大");
+        minEdit->setFixedHeight(24);
+        maxEdit->setFixedHeight(24);
+
+        // 优化 QComboBox 样式 (使用物理 SVG 三角形并紧凑布局)
+        QString arrowPath = UiHelper::getSvgTempFilePath("menu_triangle", QColor("#AAAAAA"));
+        unitCombo->setFixedHeight(24);
+        unitCombo->setFixedWidth(52); 
+        unitCombo->setStyleSheet(QString(
+            "QComboBox { background: #2D2D2D; color: #EEEEEE; border: 1px solid #444444; border-radius: 4px; font-size: 11px; padding-left: 6px; }"
+            "QComboBox::drop-down { border: none; width: 18px; }"
+            "QComboBox::down-arrow { image: url(%1); width: 10px; height: 10px; }"
+            "QComboBox QAbstractItemView { background-color: #252526; color: #EEEEEE; selection-background-color: #3E3E42; border: 1px solid #444444; outline: none; }"
+        ).arg(arrowPath));
+
+        hs->addWidget(minEdit);
+        QLabel* sep = new QLabel("-", g); sep->setStyleSheet("color: #AAA;"); hs->addWidget(sep);
+        hs->addWidget(maxEdit);
+        hs->addWidget(unitCombo);
+        gl->addLayout(hs);
+
+        auto updateSizeFilter = [this, minEdit, maxEdit, unitCombo]() {
+            auto toBytes = [](const QString& txt, const QString& unit) -> long long {
+                if (txt.isEmpty()) return -1;
+                bool ok;
+                double val = txt.toDouble(&ok);
+                if (!ok) return -1;
+                long long factor = 1024;
+                if (unit == "MB") factor = 1024 * 1024;
+                else if (unit == "GB") factor = 1024 * 1024 * 1024;
+                return (long long)(val * factor);
+            };
+            m_filter.minSize = toBytes(minEdit->text(), unitCombo->currentText());
+            m_filter.maxSize = toBytes(maxEdit->text(), unitCombo->currentText());
+            emit filterChanged(m_filter);
+        };
+
+        connect(minEdit, &QLineEdit::editingFinished, this, updateSizeFilter);
+        connect(minEdit, &QLineEdit::textChanged, this, [updateSizeFilter](const QString& text) {
+            if (text.isEmpty()) updateSizeFilter();
+        });
+        connect(maxEdit, &QLineEdit::editingFinished, this, updateSizeFilter);
+        connect(maxEdit, &QLineEdit::textChanged, this, [updateSizeFilter](const QString& text) {
+            if (text.isEmpty()) updateSizeFilter();
+        });
+        connect(unitCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [updateSizeFilter](int){ updateSizeFilter(); });
+
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+
+    // ── 11. 图像比例 (独立主选项) ──────────────────────────────────────────
+    if (m_isMirrorSource) {
+        QVBoxLayout* gl = nullptr;
+        QWidget* g = buildGroup("图像比例", gl);
+        m_groupRatio = g;
+
+        static const QList<QPair<FilterState::AspectRatio, QString>> ratios = {
+            {FilterState::Horizontal, "横图"}, {FilterState::Vertical, "竖图"},
+            {FilterState::Square, "方形"}, {FilterState::Ratio169, "16:9"}
+        };
+        QButtonGroup* ratioGroup = new QButtonGroup(g);
+        ratioGroup->setExclusive(false); // 改为非排他性
+        for (const auto& pair : ratios) {
+            StyledCheckBox* cb = new StyledCheckBox();
+            ClickableRow* row = new ClickableRow(cb);
+            row->setFixedHeight(24);
+            QHBoxLayout* rl = new QHBoxLayout(row);
+            rl->setContentsMargins(5, 0, 5, 0);
+            rl->setSpacing(5);
+            rl->addWidget(cb);
+            QLabel* lbl = new QLabel(pair.second, row);
+            lbl->setStyleSheet("font-size: 12px; color: #CCCCCC; background: transparent;");
+            rl->addWidget(lbl, 1);
+            gl->addWidget(row);
+
+            if (m_filter.ratio == pair.first) cb->setChecked(true);
+            connect(cb, &QCheckBox::toggled, this, [this, pair, ratioGroup, cb](bool on) {
+                if (on) {
+                    for (QAbstractButton* b : ratioGroup->buttons()) {
+                        if (b != cb && b->isChecked()) {
+                            b->blockSignals(true);
+                            b->setChecked(false);
+                            b->blockSignals(false);
+                        }
+                    }
+                    m_filter.ratio = pair.first;
+                } else {
+                    m_filter.ratio = FilterState::AspectAny;
+                }
                 emit filterChanged(m_filter);
             });
+            ratioGroup->addButton(cb);
         }
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
@@ -609,8 +1349,8 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
         "  font-size: 11px;"
         "  font-weight: 600;"
         "  text-align: left;"
-        "  padding-left: 8px;"
-        "  padding-right: 4px;"
+        "  padding-left: 5px;"
+        "  padding-right: 5px;"
         "  padding-top: 0px;"
         "  padding-bottom: 0px;"
         "  margin: 0px;"
@@ -630,6 +1370,13 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
 
     connect(hdr, &QPushButton::toggled, content, &QWidget::setVisible);
 
+    m_groupHeaders.append(hdr);
+    // 2026-07-xx 按照 Plan-77：应用全局持久化折叠状态
+    bool allCollapsed = AppConfig::instance().getValue("FilterPanel/AllGroupsCollapsed", false).toBool();
+    if (allCollapsed) {
+        hdr->setChecked(false);
+    }
+
     wl->addWidget(hdrRow);     // 加入 hdrRow，不再直接加 hdr
     wl->addWidget(content);
     return wrapper;
@@ -637,19 +1384,7 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
 
 // ─── addFilterRow ─────────────────────────────────────────────────
 QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, int count, const QColor& dotColor) {
-    QCheckBox* cb = new QCheckBox();
-    // 2026-03-xx 按照用户要求，仅保留蓝色勾选标记 (#378ADD)，背景保持深色
-    cb->setStyleSheet(
-        "QCheckBox { spacing: 0px; }"
-        "QCheckBox::indicator { width: 15px; height: 15px; border: 1px solid #444;"
-        "                       border-radius: 2px; background: #1E1E1E; }"
-        "QCheckBox::indicator:hover { border: 1px solid #666; }"
-        "QCheckBox::indicator:checked { "
-        "   border: 1px solid #378ADD; "
-        "   background: #1E1E1E; "
-        "   image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzc4QUREIiBzdHJva2Utd2lkdGg9IjMuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSIyMCA2IDkgMTcgNCAxMiI+PC9wb2x5bGluZT48L3N2Zz4=);"
-        "}"
-    );
+    StyledCheckBox* cb = new StyledCheckBox();
 
     // 整行可点击容器
     // 增加高度至 24px 以适配各种系统缩放，避免文字截断
@@ -657,7 +1392,7 @@ QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, 
     row->setFixedHeight(24);
 
     QHBoxLayout* rl = new QHBoxLayout(row);
-    rl->setContentsMargins(4, 0, 4, 0);
+    rl->setContentsMargins(5, 0, 5, 0);
     rl->setSpacing(5);
     rl->addWidget(cb);
 
@@ -682,16 +1417,100 @@ QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, 
 }
 
 // ─── clearAllFilters ──────────────────────────────────────────────
-void FilterPanel::clearAllFilters() {
-    m_filter = FilterState{};
-    const auto cbs = m_container->findChildren<QCheckBox*>();
-    for (QCheckBox* cb : cbs) {
-        cb->blockSignals(true);
-        cb->setChecked(false);
-        cb->blockSignals(false);
+void FilterPanel::clearAllFilters(bool force) {
+    // 2026-06-23 按照用户要求：若处于锁定状态且非强制重置，则拒绝清理
+    if (!force && m_isFilterPinned) {
+        return;
     }
+
+    // 2026-06-23 按照用户要求：若按下“重置”按钮，则同步解除锁定状态
+    if (force && m_isFilterPinned) {
+        m_isFilterPinned = false;
+        if (m_btnPin) {
+            m_btnPin->setIcon(UiHelper::getIcon("pin_tilted", QColor("#B0B0B0")));
+            m_btnPin->setProperty("tooltipText", "锁定当前筛选条件");
+        }
+    }
+
+    // 2026-06-xx 物理修复：重置所有筛选内存状态
+    m_filter = FilterState{};
+    m_hueSliderColor.clear();
+
+    // 2026-xx-xx 按照用户要求：清空剩余输入框的文字
+    if (m_editColor) m_editColor->clear();
+    if (m_editType) m_editType->clear();
+    if (m_editCreateDate) m_editCreateDate->clear();
+    if (m_editModifyDate) m_editModifyDate->clear();
+    
+    // 2026-06-xx 逻辑重构：由于 Plan-18 引入了色块矩阵，必须调用 rebuildGroups 
+    // 以实现全量 UI 组件的选中态物理归零，杜绝手动遍历子控件的傻逼逻辑。
+    rebuildGroups();
+    
+    // 2026-06-xx 按照用户铁律：点击“清除”仅重置筛选器内部状态，严禁干扰搜索框或上下文
     emit filterChanged(m_filter);
-    emit resetSearchRequested();
+}
+
+void FilterPanel::updateHeaderStatus() {
+    if (!m_iconLabel || !m_titleLabel || !m_btnClearAll || !m_btnToggleGroups) return;
+    
+    bool active = !m_filter.isEmpty();
+    
+    // 标记 ①：始终保持彩色
+    QColor brandYellow = QColor("#f1c40f");
+    m_iconLabel->setPixmap(UiHelper::getIcon("filter_funnel_outline", brandYellow, 18).pixmap(18, 18));
+    m_titleLabel->setStyleSheet(QString("font-size: 13px; font-weight: bold; color: %1; background: transparent; border: none;").arg(brandYellow.name()));
+
+    // 标记 ②：根据筛选状态动态切换颜色（激活为彩色，空闲为灰色）
+    QColor btnColor = active ? brandYellow : QColor("#B0B0B0");
+    m_btnClearAll->setIcon(UiHelper::getIcon("reset_filter", btnColor));
+
+    // 标记 ③：全局折叠按钮状态
+    // 2026-07-xx 按照评审意见：校准图标映射。要求：展开状态(false)显示 down，折叠状态(true)显示 up
+    bool allCollapsed = AppConfig::instance().getValue("FilterPanel/AllGroupsCollapsed", false).toBool();
+    m_btnToggleGroups->setIcon(UiHelper::getIcon(allCollapsed ? "chevrons_up" : "chevrons_down", QColor("#B0B0B0"), 16));
+    m_btnToggleGroups->setProperty("tooltipText", allCollapsed ? "展开所有分组" : "折叠所有分组");
+}
+
+void FilterPanel::onToggleAllGroupsClicked() {
+    bool currentlyCollapsed = AppConfig::instance().getValue("FilterPanel/AllGroupsCollapsed", false).toBool();
+    bool targetCollapsed = !currentlyCollapsed;
+
+    for (QPushButton* hdr : m_groupHeaders) {
+        if (hdr) hdr->setChecked(!targetCollapsed);
+    }
+
+    AppConfig::instance().setValue("FilterPanel/AllGroupsCollapsed", targetCollapsed);
+    updateHeaderStatus();
+}
+
+void FilterPanel::setMirrorSource(bool isMirror) {
+    if (m_isMirrorSource == isMirror) return;
+    m_isMirrorSource = isMirror;
+    
+    // 2026-07-xx 按照 Plan-118：强制重绘以刷新受控分组显隐
+    rebuildGroups();
+}
+
+void FilterPanel::selectColor(const QColor& color) {
+    QString hex = color.name().toUpper();
+    
+    // 1. 设置当前过滤色（单选模式）
+    m_filter.colors.clear();
+    m_filter.colors.append(hex);
+
+    // 2. 更新“最近筛选”列表（置顶、去重、上限50）
+    m_recentColors.removeAll(hex);
+    m_recentColors.prepend(hex);
+    if (m_recentColors.size() > 50) m_recentColors.removeLast();
+
+    // 3. 持久化
+    AppConfig::instance().setValue("Filter/RecentColors", m_recentColors);
+
+    // 4. 刷新 UI 表现（同步复选框与最近筛选色块）
+    rebuildGroups();
+
+    // 5. 驱动数据过滤
+    emit filterChanged(m_filter);
 }
 
 } // namespace ArcMeta

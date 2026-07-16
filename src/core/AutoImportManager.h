@@ -4,6 +4,8 @@
 #include <vector>
 #include <string>
 #include <mutex>
+#include <unordered_set>
+#include <cstdint>
 
 namespace ArcMeta {
 
@@ -39,6 +41,8 @@ private slots:
     void onEntryAdded(uint64_t key);
     // 2026-07-xx 按照 Plan-120：订阅 USN 触发的更新条目
     void onEntryUpdated(uint64_t key);
+    // 2026-08-xx 按照 Plan-126：处理 USN 移除信号
+    void onEntryRemoved(uint64_t key);
     // 去抖超时，合并写入数据库
     void processImportQueue();
 
@@ -49,10 +53,18 @@ private:
     bool checkAndGetManagedPath(const std::wstring& path, std::wstring& outManagedFolder);
     void handleRecursiveIngestion(const std::wstring& rootPath);
 
+    /**
+     * @brief 2026-08-xx 按照 Plan-126：基于 FRN 链的高效托管路径过滤
+     */
+    bool isUnderManagedLibrary(uint64_t key);
+
     QTimer* m_debounceTimer = nullptr;
     std::vector<std::wstring> m_pendingPaths;
     std::mutex m_queueMutex;
     bool m_isListening = false;
+
+    // 2026-08-xx [Plan-131 方案 B]：托管库根目录 FRN 缓存
+    std::unordered_set<uint64_t> m_managedFrnCache;
 };
 
 } // namespace ArcMeta

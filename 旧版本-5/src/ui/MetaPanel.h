@@ -7,7 +7,7 @@
 #include <QScrollArea>
 #include <QPushButton>
 #include <QCheckBox>
-#include <QPlainTextEdit>
+#include <QTextEdit>
 #include <QLineEdit>
 #include <QFrame>
 #include <QStyle>
@@ -17,18 +17,36 @@
 namespace ArcMeta {
 
 /**
+ * @brief ElasticEdit: 弹性高度编辑框，内容自动撑开高度
+ * 2026-06-xx 工业级重构：基类切换为 QTextEdit 以获得精确的像素级渲染高度反馈
+ */
+class ElasticEdit : public QTextEdit {
+    Q_OBJECT
+public:
+    explicit ElasticEdit(QWidget* parent = nullptr);
+    void adjustHeight();
+signals:
+    void returnPressed(); // 统一信号接口
+protected:
+    void keyPressEvent(QKeyEvent* e) override;
+    void resizeEvent(QResizeEvent* e) override;
+};
+
+/**
  * @brief Tag Pill 圆角标签组件 (22px height, 11px radius)
  */
 class TagPill : public QWidget {
     Q_OBJECT
 public:
     explicit TagPill(const QString& text, QWidget* parent = nullptr);
+    void setData(const QString& text);
 signals:
     void deleteRequested(const QString& text);
 protected:
     void paintEvent(QPaintEvent* event) override;
 private:
     QString m_text;
+    QLabel* m_label = nullptr;
     QPushButton* m_closeBtn = nullptr;
 };
 
@@ -60,44 +78,25 @@ private:
 };
 
 /**
- * @brief 自定义星级打分器 (20x20px stars, 4px spacing)
+ * @brief ColorPill: 用于流式展示的单个颜色块 (16x16px, 4px 圆角)
  */
-class StarRatingWidget : public QWidget {
+class ColorPill : public QWidget {
     Q_OBJECT
 public:
-    explicit StarRatingWidget(QWidget* parent = nullptr);
-    void setRating(int rating);
-    int rating() const { return m_rating; }
+    explicit ColorPill(const QColor& color, float ratio, QWidget* parent = nullptr);
+    void setData(const QColor& color, float ratio);
 signals:
-    void ratingChanged(int rating);
+    void colorSelected(const QColor& color);
+    void requestSetAsPrimary(const QColor& color);
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void enterEvent(QEnterEvent* event) override;
+    void leaveEvent(QEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
 private:
-    int m_rating = 0;
-};
-
-/**
- * @brief 自定义颜色选择器 (18x18px dots, 6px spacing)
- */
-class ColorPickerWidget : public QWidget {
-    Q_OBJECT
-public:
-    explicit ColorPickerWidget(QWidget* parent = nullptr);
-    void setColor(const std::wstring& colorName);
-    std::wstring color() const { return m_currentColor; }
-signals:
-    void colorChanged(const std::wstring& colorName);
-protected:
-    void paintEvent(QPaintEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-private:
-    std::wstring m_currentColor = L"";
-    struct ColorEntry {
-        std::wstring name;
-        QColor value;
-    };
-    std::vector<ColorEntry> m_colors;
+    QColor m_color;
+    float m_ratio;
+    bool m_hovered = false;
 };
 
 /**
@@ -113,6 +112,11 @@ public:
     void updateInfo(const QString& name, const QString& type, const QString& size,
                     const QString& ctime, const QString& mtime, const QString& atime,
                     const QString& path, bool encrypted);
+
+    /**
+     * @brief 设置当前选中的路径列表，用于多选批量操作
+     */
+    void setSelectedPaths(const QStringList& paths) { m_selectedPaths = paths; }
 
     /**
      * @brief 设置变长色板显示
@@ -132,6 +136,11 @@ signals:
      */
     void searchByColor(const QColor& color);
 
+    /**
+     * @brief 标签变更信号 (支持批量更新)
+     */
+    void tagsChanged(const QStringList& tags);
+
 public:
     /**
      * @brief 设置星级显示
@@ -141,12 +150,17 @@ public:
     void setPinned(bool pinned);
     void setTags(const QStringList& tags);
     void setNote(const std::wstring& note);
+    void setURL(const std::wstring& url);
+    void setCategory(const QString& category);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
     void initUi();
+    void adjustFlowHeights();
     void addInfoRow(const QString& label, QLabel*& valueLabel);
     QFrame* createSeparator();
     
@@ -159,19 +173,37 @@ private:
     QScrollArea* m_scrollArea = nullptr;
     QWidget* m_container = nullptr;
     QVBoxLayout* m_containerLayout = nullptr;
-    QLabel* lblName = nullptr, *lblType = nullptr, *lblSize = nullptr;
+    
+    ElasticEdit* m_nameEdit = nullptr;
+    QLabel* lblType = nullptr, *lblSize = nullptr;
     QLabel* lblCtime = nullptr, *lblMtime = nullptr, *lblAtime = nullptr;
-    QLabel* lblPath = nullptr, *lblEncrypted = nullptr;
-    QWidget* m_paletteContainer = nullptr;
-    QHBoxLayout* m_paletteLayout = nullptr;
+    ElasticEdit* m_pathEdit = nullptr;
+    QLabel* lblEncrypted = nullptr;
+    
+    QWidget* m_paletteBox = nullptr;
+    FlowLayout* m_paletteFlowLayout = nullptr;
+    
+    QWidget* m_tagBox = nullptr;
     QWidget* m_tagContainer = nullptr;
     FlowLayout* m_tagFlowLayout = nullptr;
-    QLineEdit* m_tagEdit = nullptr;
-    QPlainTextEdit* m_noteEdit = nullptr;
+    ElasticEdit* m_tagEdit = nullptr;
+    
+    ElasticEdit* m_noteEdit = nullptr;
+    ElasticEdit* m_linkEdit = nullptr;
+    
+    ElasticEdit* m_categoryEdit = nullptr;
+
+    QStringList m_selectedPaths;
+
+    // 2026-06-xx 性能优化：控件复用池
+    QList<TagPill*> m_tagPool;
+    QList<ColorPill*> m_colorPool;
+    QTimer* m_adjustTimer = nullptr;
 
 private slots:
     void onTagAdded();
     void onTagDeleted(const QString& text);
+    void setAsPrimaryColor(const QColor& color);
 };
 
 } // namespace ArcMeta

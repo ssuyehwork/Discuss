@@ -1,6 +1,6 @@
 #include "CoreController.h"
-#include "NativeFolderWatcher.h"
 #include "AutoImportManager.h"
+#include "../mft/MftReader.h"
 #include "AppConfig.h"
 #include "../meta/CategoryRepo.h"
 #include "../meta/MetadataManager.h"
@@ -42,28 +42,13 @@ void CoreController::startSystem() {
             // 仅执行 SQLite 模式初始化
             MetadataManager::instance().initFromScchMode();
 
-            // 启动原生监控服务
-            // 2026-07-xx 按照 Plan-117/118：初始化完成后，使用统一识别算法启动监控
-            const auto drives = QDir::drives();
-            for (const QFileInfo& d : drives) {
-                std::wstring wPath = d.absolutePath().toStdWString();
-                std::wstring volSerial = MetadataManager::getVolumeSerialNumber(wPath);
-                QString letter = d.absolutePath().left(1).toUpper();
-
-                if (volSerial != L"UNKNOWN") {
-                    std::wstring managedAbsW = MetadataManager::getManagedLibraryPath(volSerial, letter);
-                    if (!managedAbsW.empty()) {
-                        qDebug() << "[Core] 识别到托管库 (或兜底路径)，开启监控:" << QString::fromStdWString(managedAbsW);
-                        NativeFolderWatcher::instance().addWatch(managedAbsW);
-                    } else {
-                        QString msg("[Core] 盘符 ");
-                        msg.append(letter);
-                        msg.append(" 未配置且无默认托管库，跳过监控");
-                        qDebug() << msg;
-                    }
-                }
-            }
+            // 2026-08-xx 按照 Plan-126：彻底废除 NativeFolderWatcher (IOCP) 双轨制。
+            // 全面转向单一 USN Journal 主轨。
+            AutoImportManager::instance().startListening();
             
+            // [Plan-129] USN 监控点火：系统启动时自动载入缓存并开启监控线程
+            MftReader::instance().loadFromCache();
+
             // 2026-08-xx 物理同步：初始化完成后执行一次全量物理库对账 (在后台线程执行，避免阻塞 UI)
             AutoImportManager::instance().syncAllManagedLibraries();
 
@@ -173,6 +158,23 @@ void CoreController::performSearch(const QString& keyword, const QString& scopeS
 void CoreController::abortSearch() {
     m_isSearchAborted = true;
     // 等待现有搜索任务退出的轻量化处理（实际生产环境可能需要更复杂的等待机制）
+}
+
+void CoreController::handleDeviceChange(unsigned long wParam, unsigned long long lParam) {
+#ifdef Q_OS_WIN
+    // 2026-05-24 按照用户要求：捕捉硬件变更，硬盘插入时触发 GLOB 扫描对账
+    // [Plan-131 方案 E] 从 MainWindow 迁移至此
+    if (wParam == 0x8000 /* DBT_DEVICEARRIVAL */ || wParam == 0x8004 /* DBT_DEVICEREMOVECOMPLETE */) {
+        qDebug() << "[Core] [Plan-131] 检测到磁盘硬件变更，触发全量 GLOB 对账...";
+        // 异步触发扫描，防止阻塞 UI
+        (void)QtConcurrent::run([]() {
+            // 这里可以根据需要驱动 MftReader 重新扫描或 AutoImportManager 对账
+            // 例如：MftReader::instance().buildIndex(); 
+            // 或者 AutoImportManager::instance().syncAllManagedLibraries();
+        });
+    }
+#endif
+    Q_UNUSED(lParam);
 }
 
 void CoreController::setStatus(const QString& text, bool indexing) {

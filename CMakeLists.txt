@@ -54,8 +54,6 @@ set(SOURCES
     src/core/AutoImportManager.cpp
     src/core/AutoImportManager.h
     src/core/AppConfig.h
-    src/core/NativeFolderWatcher.cpp
-    src/core/NativeFolderWatcher.h
     src/mft/UsnWatcher.cpp
     src/mft/UsnWatcher.h
     src/crypto/EncryptionManager.cpp
@@ -103,6 +101,8 @@ set(SOURCES
     src/ui/DropTreeView.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
+    src/ui/InvalidDataModel.h
+    src/ui/InvalidDataListView.h
     src/ui/FramelessDialog.cpp
     src/ui/FramelessDialog.h
     src/ui/FramelessFileDialog.cpp
