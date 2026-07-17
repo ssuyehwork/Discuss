@@ -416,7 +416,7 @@ for (const QString& folder : customFolders) {
 1. **输入框清除功能**：强制贯彻 **6.1 关于“清除”按钮** 的铁律，新对话框中的 `QLineEdit` 必须通过原生自带的 `setClearButtonEnabled(true)` 实现。
 2. **样式一致性**：对齐 **5.4 标题栏按钮样式** 及 **3.3 按钮物理参数**，悬停使用 `#3E3E42`背景，按下使用 `#4E4E52` 背景，且严禁使用 rgba 蒙版。
 3. **安全跨线程与事件通知**：`NativeFolderWatcher` 仍运行于独立的 IOCP 专属工作线程。由于对自定义监控文件夹触发回调时需要通过 `MetadataManager::registerItemsAsync` 流水线式入库，该函数内部会自动分发到后台线程处理，故该机制具备极高的时间及空间并发安全性。
-4. **ToolTipOverlay 的对接**：完全禁绝 QWidget 的原生 `setToolTip(...)`。文件夹悬停提示必须一律通过 `ToolTipOverlay::instance()->showText(...)` 和 `ToolTipOverlay::hideTip()` 手动实现。
+4. **ToolTipOverlay 的对接**：完全禁绝 QWidget 的原生 `setToolTip(...)`。文件夹悬停提示必须一律通过 `ToolTipOverlay::instance()->showText(...)` and `ToolTipOverlay::hideTip()` 手动实现。
 
 ## 7. Memories.md 合规检查
 
