@@ -1,18 +1,17 @@
-# 扩展 NativeFolderWatcher 监控自定义文件夹及 UI 联动规划 —— Modification_Plan-4.md
+# 扩展 NativeFolderWatcher 监控自定义文件夹及 UI 联动规划 —— Modification_Plan-5.md
 
 ## 1. 任务背景
-在目前的 ArcMeta 架构中，系统通过 NativeFolderWatcher (IOCP) 自启动监控每个物理磁盘上的默认“托管库（Managed Library）”（即 `ArcMeta.Library_[盘符]` 文件夹）。为了满足用户更高的灵活性需求，需要支持在盘符栏 (Drive Bar) 上动态添加、移除以及持久化监控任意自定义文件夹。
+在目前的 ArcMeta 架构中，系统通过 NativeFolderWatcher (IOCP) 自启动监控每个物理磁盘上的默认“托管库（Managed Library）”（即 `ArcMeta.Library_[盘符]` 文件夹）。为了满足用户更高的灵活性需求，需要支持在盘符栏 (Drive Bar) 上动态添加、移除以及持久化监控任意自定义文件夹。本方案在设计上确保所有自定义监控文件夹在监控的同时，能自动在侧边栏分类树中对应建立 1:1 的镜像子分类，并在移除时彻底、干净地清理元数据，杜绝垃圾数据残留。
 
 ## 2. 问题定位、编译隐患排查与统一入库闭环
-在对方案进行深度审视时发现，除了头文件缺失的编译隐患，原先对自定义文件夹的登记及镜像分类同步机制也存在重大的设计盲区：
-- **拒绝另起炉灶，融入统一入库通道**：原先逻辑只调用了 `addWatch`，但并没有对已存在的子文件夹及文件进行扫描，导致侧边栏没有像默认托管库那样建立 1:1 的镜像物理分类。
-- **共享既有对账轮子**：应当完全复用并融入 `AutoImportManager` 中已有的、高度成熟并实现大事务提交的物理分类镜像树引擎 —— **`AutoImportManager::handleRecursiveIngestion(rootPath)`**。
-  - **动态导入点火时**：通过 `QtConcurrent::run` 异步执行对该自定义目录的 `handleRecursiveIngestion` 对账。它会自动遍历子目录、创建 1:1 分类镜像节点（由于其父目录在数据库中无分类，它会优雅地自适应注册为根分类！），并同步导入其下所有物理文件。
-  - **自启动阶段时**：在系统自启动载入自定义配置后，也依次异步点火执行一次对账。
-  - **移除监控时**：为保持数据的极度纯净，在移除该自定义文件夹后，应直接调用 `MetadataManager::instance().removeMetadataSync(normPath)`，该函数能递归清除此文件夹及子项的元数据缓存，并物理切断与侧边栏分类树的映射关系。
-- **头文件依赖补全**：
-  - `DriveButton.cpp` & `DriveButton.h` 必须补全 `<QEnterEvent>`、`<QFileInfo>`、`<QDir>` 以及 `"ToolTipOverlay.h"` 的包含。
-  - `MainWindow.cpp` 必须补全 `<QLineEdit>`、`"FramelessDialog.h"`、`"FramelessFileDialog.h"` 的包含，并在使用异步 handle 之前包含 `"core/AutoImportManager.h"` 与 `"meta/MetadataManager.h"`。
+本方案在前序方案设计的基础之上，重拳出击，彻底消灭所有编译依赖与逻辑漏洞：
+- **拒绝另起炉灶，融入统一入库分类通道**：新添加的自定义文件夹绝非只做单调的文件系统底层监控，而是必须无缝接入 `AutoImportManager` 中已有的、高度成熟的分类树自动构建引擎：**`AutoImportManager::handleRecursiveIngestion(rootPath)`**。
+  - **动态导入新建时**：点击输入框“完成”并开启 IOCP 监控后，通过 `QtConcurrent::run` 异步触发 `handleRecursiveIngestion(normPath)`。该引擎会自动递归遍历并提取子目录，在侧边栏自动建立对应的 1:1 镜像物理分类树，并将所有内含的物理文件导入登记。
+  - **自启动加载点火时**：主程序启动在 `CoreController::startSystem()` 中载入自定义 monitored 列表时，除开启 NativeFolderWatcher IOCP 监控外，也自动异步点火拉起 `handleRecursiveIngestion(normPath)` 完成全量镜像对账，保证侧边栏镜像一致。
+  - **移除监控数据根除**：当用户在盘符栏对准文件夹按钮右键并点击“移除”时，不仅注销其 IOCP 监控，还必须通过直接调用 **`MetadataManager::instance().removeMetadataSync(normPath)`**，递归强力根除该目录下在数据库中的所有注册文件、项元数据记录以及在侧边栏中 1:1 自动建立的整个镜像分类树节点，保证数据库不保留任何不需要的垃圾数据，实现数据库的极致洁净（对应用户原话：“如果把“新建自动导入”的监控移除掉之后，那么与之相应数据库里的数据同样也要被移除掉，没必要保留”）。
+- **编译隐患全面排查与依赖补全**：
+  - `DriveButton.cpp` & `DriveButton.h` 必须补充包含 `<QEnterEvent>`、`<QFileInfo>`、`<QDir>`、`"ToolTipOverlay.h"`，否则由于不完整类型或缺少声明，会导致编译器报严重 C2079 / C2027 错误。
+  - `MainWindow.cpp` 必须补充包含 `<QLineEdit>`、`"FramelessDialog.h"`、`"FramelessFileDialog.h"`，并在调用异步 handle 之前包含 `"core/AutoImportManager.h"`、`"meta/MetadataManager.h"`。
 
 ## 3. 强制对照表
 
@@ -24,7 +23,9 @@
 | 4    | 点击完成按钮后，该文件夹正式被NativeFolderWatcher监控，然后采用folder.svg显示在盘符栏上 | 点击“完成”后，将该路径加入 `AppConfig` 的 `"DriveBar/CustomMonitoredFolders"`，立即调用 `NativeFolderWatcher::instance().addWatch(path)`，随后在 `DriveBar` 的布局上生成并添加 `FolderButton` 实例 | ✅ |
 | 5    | 当鼠标悬停在某个folder.svg图标上方则显示ToolTipOverlay将该文件夹名称显示出来 | 在 `FolderButton` 中重写 `enterEvent` 与 `leaveEvent`，进入时调用 `ToolTipOverlay::instance()->showText` 显示文件夹名称与物理路径，离开时调用 `ToolTipOverlay::hideTip()` | ✅ |
 | 6    | 当用户对准盘符栏上的文件夹单击右键时，弹出两个选项为“新建自动导入”、“移除” | 在 `FolderButton` 上设置右键菜单，选项包括“新建自动导入”与“移除” | ✅ |
-| 7    | 所谓的“移除”就是将该文件夹从监控中移除，不再监控中 | 点击“移除”后，调用 `NativeFolderWatcher::instance().removeWatch` 停止监控，并在数据库中清除元数据与分类树镜像关系，从 `AppConfig` 移除文件夹并更新 DriveBar UI | ✅ |
+| 7    | 所谓的“移除”就是将该文件夹从监控中移除，不再监控中 | 点击“移除”后，调用 `NativeFolderWatcher::instance().removeWatch` 停止监控，从 `AppConfig` 移除文件夹并更新 DriveBar UI | ✅ |
+| 8    | 被监控的“ArcMeta.Library_[盘符]”文件夹 是不是会被创建到侧边栏分类呢？包括子文件夹也会被创建成子分类对不？ | 确认该机制，并决定自定义监控目录也完全接入统一的 handleRecursiveIngestion 入库分类树，自动镜像 1:1 分类树 | ✅ |
+| 9    | 如果把“新建自动导入”的监控移除掉之后，那么与之相应数据库里的数据同样也要被移除掉，没必要保留 | 在点击“移除”时，同步调用 `MetadataManager::instance().removeMetadataSync(normPath)`，从数据库中物理根除该目录对应的元数据、文件注册表及侧边栏镜像分类 | ✅ |
 
 ## 4. 详细解决方案
 
@@ -140,13 +141,14 @@ void FolderButton::leaveEvent(QEvent* event) {
 ### 4.2 引入 `CustomFolderImportDialog` 路径输入窗与依赖补全 (实现于 `src/ui/MainWindow.cpp`)
 
 #### 4.2.1 依赖补全 (在 `src/ui/MainWindow.cpp` 头部)
-必须补全 `<QLineEdit>`、`"FramelessDialog.h"`、`"FramelessFileDialog.h"` 的包含，由于后面要对账同步，还需要包含 `"core/AutoImportManager.h"`：
+必须补全 `<QLineEdit>`、`"FramelessDialog.h"`、`"FramelessFileDialog.h"`、`"core/AutoImportManager.h"`、`"meta/MetadataManager.h"` 的包含，由于后面要对账同步及物理强力根除数据，这些头文件是必不可少的：
 ```cpp
 // 增加在 MainWindow.cpp 头部包含区
 #include <QLineEdit>             // 编译补全
 #include "FramelessDialog.h"     // 编译补全：父对话框
 #include "FramelessFileDialog.h" // 编译补全：选择路径
 #include "../core/AutoImportManager.h" // 编译补全：调用 handleRecursiveIngestion 进行 1:1 分类
+#include "../meta/MetadataManager.h"   // 编译补全：调用 removeMetadataSync 彻底根除垃圾数据
 ```
 
 #### 4.2.2 `CustomFolderImportDialog` 类定义
@@ -342,7 +344,7 @@ void MainWindow::showNewAutoImportDialog() {
             NativeFolderWatcher::instance().addWatch(normPath);
 
             // 3. 拒绝另起炉灶：调用统一的 handleRecursiveIngestion 入库通道。
-            //    这会在后台大事务事务中自动递归遍历此自定义文件夹，并为该物理目录建立 1:1 的侧边栏分类树，同时加载关联其中所有物理文件！
+            //    这会在后台大事务中自动递归遍历此自定义文件夹，并为该物理目录建立 1:1 的侧边栏分类树，同时加载关联其中所有物理文件！
             (void)QtConcurrent::run([normPath]() {
                 AutoImportManager::instance().handleRecursiveIngestion(normPath);
             });
@@ -387,7 +389,7 @@ void MainWindow::removeCustomMonitoredFolder(const QString& path) {
         // 2. 从 NativeFolderWatcher 监控中注销此路径
         NativeFolderWatcher::instance().removeWatch(normPath);
 
-        // 3. 为保持高度纯净性，递归清理该目录下所有注册的文件、子项元数据以及在侧边栏自动创建的 1:1 分类映射！
+        // 3. 强力数据根除，拒绝数据残留：递归清理该目录下所有注册的文件、子项元数据以及在侧边栏自动创建的 1:1 分类树映射！
         MetadataManager::instance().removeMetadataSync(normPath);
 
         // 4. 动态刷新盘符栏
@@ -429,7 +431,7 @@ for (const QString& folder : customFolders) {
 - [ ] 严禁修改其他与此功能不相关的 UI 组件。
 
 ## 6. 实现准则与预警【核心】
-1. **统一对账，防重复造轮子**：绝对不允许为自定义监控文件夹另行手写一套新的文件扫描或分类映射代码。必须统一且唯一调用 `AutoImportManager::handleRecursiveIngestion` 进行对账，保证代码纯净性和架构极致内聚。
+1. **统一对账与清理，防重复造轮子**：绝对不允许为自定义监控文件夹另行手写一套新的文件扫描或分类映射代码。必须统一且唯一调用 `AutoImportManager::handleRecursiveIngestion` 进行对账；并统一调用 `MetadataManager::removeMetadataSync` 根除监控移除后的数据，保证代码纯净性和架构极致内聚。
 2. **输入框清除功能**：强制贯彻 **6.1 关于“清除”按钮** 的铁律，新对话框中的 `QLineEdit` 必须通过原生自带的 `setClearButtonEnabled(true)` 实现。
 3. **样式一致性**：对齐 **5.4 标题栏按钮样式** 及 **3.3 按钮物理参数**，悬停使用 `#3E3E42`背景，按下使用 `#4E4E52` 背景，且严禁使用 rgba 蒙版。
 4. **安全跨线程与事件通知**：`NativeFolderWatcher` 仍运行于独立的 IOCP 专属工作线程。由于对自定义监控文件夹触发回调时需要通过 `MetadataManager::registerItemsAsync` 流水线式入库，该函数内部会自动分发到后台线程处理，故该机制具备极高的时间及空间并发安全性。
