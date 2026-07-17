@@ -1,49 +1,29 @@
-# 扩展 NativeFolderWatcher 监控自定义文件夹及 UI 联动规划 —— Modification_Plan-4.md
+扩展 NativeFolderWatcher 监控自定义文件夹及 UI 联动规划 —— Modification_Plan-4.md
+1. 任务背景
+在目前的 ArcMeta 架构中，系统通过 NativeFolderWatcher (IOCP) 自启动监控每个物理磁盘上的默认“托管库（Managed Library）”（即 ArcMeta.Library_[盘符] 文件夹）。为了满足用户更高的灵活性需求，需要支持在盘符栏 (Drive Bar) 上动态添加、移除以及持久化监控任意自定义文件夹。
 
-## 1. 任务背景
-在目前的 ArcMeta 架构中，系统通过 NativeFolderWatcher (IOCP) 自启动监控每个物理磁盘上的默认“托管库（Managed Library）”（即 `ArcMeta.Library_[盘符]` 文件夹）。为了满足用户更高的灵活性需求，需要支持在盘符栏 (Drive Bar) 上动态添加、移除以及持久化监控任意自定义文件夹。
+2. 问题定位
+当前 CoreController::startSystem 在自启动阶段仅调用 MetadataManager::getManagedLibraryPath 获取固定托管库并开启监控，尚未具备加载并开启自定义监控目录列表的能力。
+当前盘符栏 m_driveBarWidget 仅渲染物理 DriveButton 按钮。需要在此处扩展：
+盘符栏空白处右键单击调出“新建自动导入”右键菜单；
+点击该选项后，弹出一个含路径输入框、支持调用 FramelessFileDialog “浏览”并确认“完成”的自定义无边框对话框；
+确认后调用 NativeFolderWatcher::instance().addWatch(path) 立即开启监控；
+使用 folder 图标 (即 folder.svg 图标，对应 "folder" SVG资源) 形式追加渲染在盘符栏上作为 FolderButton 实例，悬停时使用自定义 ToolTipOverlay 气泡显示该文件夹路径及名称；
+文件夹按钮上支持右键单击并弹窗两个选项：“新建自动导入”与“移除”；
+点击“移除”后，调用 NativeFolderWatcher::instance().removeWatch 注销监控，从 UI 上和 AppConfig 的 "DriveBar/CustomMonitoredFolders" 持久化缓存中移除。
+3. 强制对照表
+编号	用户原话 / 我的理解	方案对应点	是否一致
+1	NativeFolderWatcher (IOCP) 机制不仅仅监控“ArcMeta.Library_[盘符]”文件夹，还要监控其他灵活性较高的文件夹	在 CoreController::startSystem 中不仅监控默认托管库，还加载并监控 AppConfig 中保存的自定义监控文件夹列表；并在动态添加/移除时同步点火和注销监控	✅
+2	当用户盘符栏空白处单击右键弹出一个菜单选项为“新建自动导入”	设置 m_driveBarWidget 的 ContextMenuPolicy 为 CustomContextMenu，在右键空白处时弹出“新建自动导入”右键菜单	✅
+3	点击该选项后，弹出一个仅可以输入文件夹路径的输入框和“浏览”以及“完成”按钮	实现一个自定义 FramelessDialog 子类 CustomFolderImportDialog，包含路径输入框、浏览（调用 FramelessFileDialog）与完成按钮	✅
+4	点击完成按钮后，该文件夹正式被NativeFolderWatcher监控，然后采用folder.svg显示在盘符栏上	点击“完成”后，将该路径加入 AppConfig 的 "DriveBar/CustomMonitoredFolders"，并立即调用 NativeFolderWatcher::instance().addWatch(path)，随后在 DriveBar 的布局上动态生成并添加 FolderButton 实例	✅
+5	当鼠标悬停在某个folder.svg图标上方则显示ToolTipOverlay将该文件夹名称显示出来	在 FolderButton 中重写 enterEvent 与 leaveEvent，进入时调用 ToolTipOverlay::instance()->showText 显示文件夹名称与物理路径，离开时调用 ToolTipOverlay::hideTip()	✅
+6	当用户对准盘符栏上的文件夹单击右键时，弹出两个选项为“新建自动导入”、“移除”	在 FolderButton 上设置右键菜单，选项包括“新建自动导入”与“移除”	✅
+7	所谓的“移除”就是将该文件夹从监控中移除，不再监控中	点击“移除”后，调用 NativeFolderWatcher::instance().removeWatch 停止监控，从 AppConfig 中删除该文件夹，并更新 DriveBar UI 界面	✅
+4. 详细解决方案
+4.1 引入 FolderButton 自定义控件 (定义于 src/ui/DriveButton.h & DriveButton.cpp)
+在 DriveButton.h 增加一个紧凑型的、专用于渲染监控文件夹的 FolderButton：
 
-## 2. 问题定位、编译隐患排查与统一入库闭环
-在对方案进行深度审视时发现，除了头文件缺失的编译隐患，原先对自定义文件夹的登记及镜像分类同步机制也存在重大的设计盲区：
-- **拒绝另起炉灶，融入统一入库通道**：原先逻辑只调用了 `addWatch`，但并没有对已存在的子文件夹及文件进行扫描，导致侧边栏没有像默认托管库那样建立 1:1 的镜像物理分类。
-- **共享既有对账轮子**：应当完全复用并融入 `AutoImportManager` 中已有的、高度成熟并实现大事务提交的物理分类镜像树引擎 —— **`AutoImportManager::handleRecursiveIngestion(rootPath)`**。
-  - **动态导入点火时**：通过 `QtConcurrent::run` 异步执行对该自定义目录的 `handleRecursiveIngestion` 对账。它会自动遍历子目录、创建 1:1 分类镜像节点（由于其父目录在数据库中无分类，它会优雅地自适应注册为根分类！），并同步导入其下所有物理文件。
-  - **自启动阶段时**：在系统自启动载入自定义配置后，也依次异步点火执行一次对账。
-  - **移除监控时**：为保持数据的极度纯净，在移除该自定义文件夹后，应直接调用 `MetadataManager::instance().removeMetadataSync(normPath)`，该函数能递归清除此文件夹及子项的元数据缓存，并物理切断与侧边栏分类树的映射关系。
-- **头文件依赖补全**：
-  - `DriveButton.cpp` & `DriveButton.h` 必须补全 `<QEnterEvent>`、`<QFileInfo>`、`<QDir>` 以及 `"ToolTipOverlay.h"` 的包含。
-  - `MainWindow.cpp` 必须补全 `<QLineEdit>`、`"FramelessDialog.h"`、`"FramelessFileDialog.h"` 的包含，并在使用异步 handle 之前包含 `"core/AutoImportManager.h"` 与 `"meta/MetadataManager.h"`。
-
-## 3. 强制对照表
-
-| 编号 | 用户原话 / 我的理解 | 方案对应点 | 是否一致 |
-|------|---------------------|------------|----------|
-| 1    | NativeFolderWatcher (IOCP) 机制不仅仅监控“ArcMeta.Library_[盘符]”文件夹，还要监控其他灵活性较高的文件夹 | 在 `CoreController::startSystem` 中不仅监控默认托管库，还加载并监控 `AppConfig` 中保存的自定义监控文件夹列表；并在动态添加/移除时同步点火和注销监控 | ✅ |
-| 2    | 当用户盘符栏空白处单击右键弹出一个菜单选项为“新建自动导入” | 设置 `m_driveBarWidget` 的 `ContextMenuPolicy` 为 `CustomContextMenu`，在右键空白处时弹出“新建自动导入”右键菜单 | ✅ |
-| 3    | 点击该选项后，弹出一个仅可以输入文件夹路径的输入框和“浏览”以及“完成”按钮 | 实现一个自定义 `FramelessDialog` 子类 `CustomFolderImportDialog`，包含路径输入框、浏览（调用 `FramelessFileDialog`）与完成按钮 | ✅ |
-| 4    | 点击完成按钮后，该文件夹正式被NativeFolderWatcher监控，然后采用folder.svg显示在盘符栏上 | 点击“完成”后，将该路径加入 `AppConfig` 的 `"DriveBar/CustomMonitoredFolders"`，立即调用 `NativeFolderWatcher::instance().addWatch(path)`，随后在 `DriveBar` 的布局上生成并添加 `FolderButton` 实例 | ✅ |
-| 5    | 当鼠标悬停在某个folder.svg图标上方则显示ToolTipOverlay将该文件夹名称显示出来 | 在 `FolderButton` 中重写 `enterEvent` 与 `leaveEvent`，进入时调用 `ToolTipOverlay::instance()->showText` 显示文件夹名称与物理路径，离开时调用 `ToolTipOverlay::hideTip()` | ✅ |
-| 6    | 当用户对准盘符栏上的文件夹单击右键时，弹出两个选项为“新建自动导入”、“移除” | 在 `FolderButton` 上设置右键菜单，选项包括“新建自动导入”与“移除” | ✅ |
-| 7    | 所谓的“移除”就是将该文件夹从监控中移除，不再监控中 | 点击“移除”后，调用 `NativeFolderWatcher::instance().removeWatch` 停止监控，并在数据库中清除元数据与分类树镜像关系，从 `AppConfig` 移除文件夹并更新 DriveBar UI | ✅ |
-
-## 4. 详细解决方案
-
-### 4.1 引入 `FolderButton` 自定义控件与依赖补全 (定义于 `src/ui/DriveButton.h` & `DriveButton.cpp`)
-
-#### 4.1.1 在 `src/ui/DriveButton.h` 中：
-由于使用了 `QEnterEvent`，必须在头文件中引入 `<QEnterEvent>`：
-```cpp
-// 增加在 DriveButton.h 的头部
-#include <QPushButton>
-#include <QTimer>
-#include <QEnterEvent> // 编译补全
-#include "StyleLibrary.h"
-
-namespace ArcMeta {
-
-// 既有的 DriveButton 保持不变...
-
-// 新增 FolderButton 声明
 class FolderButton : public QPushButton {
     Q_OBJECT
 public:
@@ -59,25 +39,8 @@ private:
     QString m_folderPath;
     QString m_folderName;
 };
+在 DriveButton.cpp 中实现绘制与 Hover 悬停事件：
 
-} // namespace ArcMeta
-```
-
-#### 4.1.2 在 `src/ui/DriveButton.cpp` 中：
-必须补全 `QFileInfo`、`QDir` 以及 `ToolTipOverlay.h` 的包含，否则编译器会发生严重的不完整类型报错：
-```cpp
-// 增加在 DriveButton.cpp 的头部包含区
-#include "DriveButton.h"
-#include <QPainter>
-#include <QMouseEvent>
-#include <QFileInfo>       // 编译补全：解析路径名称
-#include <QDir>            // 编译补全：路径格式标准化
-#include "UiHelper.h"
-#include "ToolTipOverlay.h" // 编译补全：气泡提示
-
-namespace ArcMeta {
-
-// FolderButton 实现部分
 FolderButton::FolderButton(const QString& folderPath, QWidget* parent)
     : QPushButton(parent), m_folderPath(folderPath) {
     setFixedSize(28, 28);
@@ -133,26 +96,8 @@ void FolderButton::leaveEvent(QEvent* event) {
     Q_UNUSED(event);
     ToolTipOverlay::hideTip();
 }
-
-} // namespace ArcMeta
-```
-
-### 4.2 引入 `CustomFolderImportDialog` 路径输入窗与依赖补全 (实现于 `src/ui/MainWindow.cpp`)
-
-#### 4.2.1 依赖补全 (在 `src/ui/MainWindow.cpp` 头部)
-必须补全 `<QLineEdit>`、`"FramelessDialog.h"`、`"FramelessFileDialog.h"` 的包含，由于后面要对账同步，还需要包含 `"core/AutoImportManager.h"`：
-```cpp
-// 增加在 MainWindow.cpp 头部包含区
-#include <QLineEdit>             // 编译补全
-#include "FramelessDialog.h"     // 编译补全：父对话框
-#include "FramelessFileDialog.h" // 编译补全：选择路径
-#include "../core/AutoImportManager.h" // 编译补全：调用 handleRecursiveIngestion 进行 1:1 分类
-```
-
-#### 4.2.2 `CustomFolderImportDialog` 类定义
-在 `MainWindow.cpp` 中定义一个专用的输入框。按照宪法规约 **6.1 关于“清除”按钮** 的铁律，此 QLineEdit 必须且仅可通过原生的 `setClearButtonEnabled(true)` 支持清除动作。
-```cpp
-namespace ArcMeta {
+4.2 引入 CustomFolderImportDialog 路径输入窗 (实现于 src/ui/MainWindow.cpp)
+实现一个自带 QLineEdit、浏览按钮、完成按钮的无边框输入框。 按照宪法规约 6.1 关于“清除”按钮 的硬性指标，此 QLineEdit 必须且仅可通过原生的 setClearButtonEnabled(true) 支持清除动作。
 
 class CustomFolderImportDialog : public FramelessDialog {
     Q_OBJECT
@@ -247,50 +192,37 @@ private:
     }
     QLineEdit* m_edit;
 };
+4.3 MainWindow 盘符栏空白处与 FolderButton 右键菜单管理交互
+修改 MainWindow.h 增加对应声明：
 
-} // namespace ArcMeta
-```
-
-### 4.3 `MainWindow` 盘符栏空白处与 FolderButton 右键菜单管理交互
-
-#### 4.3.1 修改 `MainWindow.h`：
-增加对应声明与 `m_folderButtons` 控件数组：
-```cpp
-// 在 MainWindow.h 的 private 区域增加
+// 在 MainWindow.h 中增加声明
 QVector<class FolderButton*> m_folderButtons;
+void updateCustomFolderButtons();
+void showNewAutoImportDialog();
+void removeCustomMonitoredFolder(const QString& path);
+void onDriveBarContextMenu(const QPoint& pos);
+void onFolderButtonContextMenu(const QPoint& pos);
+修改 MainWindow.cpp：
 
-private slots:
-    void updateCustomFolderButtons();
-    void showNewAutoImportDialog();
-    void removeCustomMonitoredFolder(const QString& path);
-    void onDriveBarContextMenu(const QPoint& pos);
-    void onFolderButtonContextMenu(const QPoint& pos);
-```
+在 MainWindow::initDriveBar 中：
 
-#### 4.3.2 修改 `MainWindow.cpp` 的 `initDriveBar` 实现：
-在 `MainWindow::initDriveBar` 的最末尾，注册 `m_driveBarWidget` 的自定义右键菜单并拉取初始化自定义文件夹按钮：
-```cpp
-    // 增加在 initDriveBar() 函数结束的 m_driveBarLayout->addStretch(); 后面
-    m_driveBarWidget->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_driveBarWidget, &QWidget::customContextMenuRequested, this, &MainWindow::onDriveBarContextMenu);
+设置 m_driveBarWidget 的右键菜单策略并连接到 onDriveBarContextMenu：
+m_driveBarWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+connect(m_driveBarWidget, &QWidget::customContextMenuRequested, this, &MainWindow::onDriveBarContextMenu);
+在 initDriveBar 函数末尾，通过调用 updateCustomFolderButtons() 自动追加加载自定义 monitored buttons。
+实现具体的交互和更新方法：
 
-    // 绘制并加载初始化自定义 monitored 文件夹按钮
-    updateCustomFolderButtons();
-```
-
-#### 4.3.3 实现右键空白/右键按钮及增删监控的核心联动逻辑：
-```cpp
 void MainWindow::updateCustomFolderButtons() {
-    // 1. 安全清除既有的 custom folder 按钮，防止布局残余
+    // 清除既有 custom folder 按钮
     for (FolderButton* btn : m_folderButtons) {
         m_driveBarLayout->removeWidget(btn);
         btn->deleteLater();
     }
     m_folderButtons.clear();
 
-    // 2. 载入配置并追加至伸缩垫片 (stretch spacer) 之前
+    // 载入配置并追加
     QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-    int insertIndex = m_driveBarLayout->count() - 1;
+    int insertIndex = m_driveBarLayout->count() - 1; // 插入在末尾 stretch spacer 之前
     if (insertIndex < 0) insertIndex = 0;
 
     for (const QString& path : customFolders) {
@@ -298,7 +230,7 @@ void MainWindow::updateCustomFolderButtons() {
         btn->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(btn, &QWidget::customContextMenuRequested, this, &MainWindow::onFolderButtonContextMenu);
 
-        // 单击该文件夹按钮，自动将目录导航重定向至此物理路径
+        // 单击该文件夹按钮，自动将内容导航面板重定向至此物理路径
         connect(btn, &QPushButton::clicked, this, [this, path]() {
             m_navPanel->setRootPath(path);
         });
@@ -341,16 +273,10 @@ void MainWindow::showNewAutoImportDialog() {
             // 2. 动态点火 NativeFolderWatcher 的监控
             NativeFolderWatcher::instance().addWatch(normPath);
 
-            // 3. 拒绝另起炉灶：调用统一的 handleRecursiveIngestion 入库通道。
-            //    这会在后台大事务事务中自动递归遍历此自定义文件夹，并为该物理目录建立 1:1 的侧边栏分类树，同时加载关联其中所有物理文件！
-            (void)QtConcurrent::run([normPath]() {
-                AutoImportManager::instance().handleRecursiveIngestion(normPath);
-            });
-
-            // 4. 重新加载渲染盘符栏 FolderButtons
+            // 3. 重新加载渲染盘符栏 FolderButtons
             updateCustomFolderButtons();
 
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "已开始自动监控该文件夹并同步镜像分类", 1500, Style::SuccessGreen);
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "已开始自动监控该文件夹", 1500, Style::SuccessGreen);
         }
     }
 }
@@ -387,58 +313,41 @@ void MainWindow::removeCustomMonitoredFolder(const QString& path) {
         // 2. 从 NativeFolderWatcher 监控中注销此路径
         NativeFolderWatcher::instance().removeWatch(normPath);
 
-        // 3. 为保持高度纯净性，递归清理该目录下所有注册的文件、子项元数据以及在侧边栏自动创建的 1:1 分类映射！
-        MetadataManager::instance().removeMetadataSync(normPath);
-
-        // 4. 动态刷新盘符栏
+        // 3. 动态刷新盘符栏
         updateCustomFolderButtons();
 
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "已停止监控该文件夹并移除相关镜像分类", 1500, QColor("#FECF0E"));
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "已停止监控该文件夹", 1500, QColor("#FECF0E"));
     }
 }
-```
+4.4 后台自启动点火监控 (实现于 src/core/CoreController.cpp)
+在主程序异步初始化启动监控时，加载 "DriveBar/CustomMonitoredFolders" 中记录的所有持久化自定义目录并依次注册：
 
-### 4.4 后台自启动点火监控与分类对账同步 (实现于 `src/core/CoreController.cpp`)
-在主程序异步初始化启动监控时，加载 `"DriveBar/CustomMonitoredFolders"` 中记录的所有持久化自定义目录，依次注册 NativeFolderWatcher 监控并异步进行全量 1:1 分类对账更新，彻底告别状态丢失：
-```cpp
 // 在 CoreController.cpp 的 CoreController::startSystem 里的 NativeFolderWatcher 自启动监控循环后追加：
 QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
 for (const QString& folder : customFolders) {
     std::wstring normPath = MetadataManager::normalizePath(folder.toStdWString());
     if (!normPath.empty()) {
-        qDebug() << "[Core] 识别到自定义监控目录，开启 IOCP 监控并对账同步:" << QString::fromStdWString(normPath);
+        qDebug() << "[Core] 识别到自定义监控目录，开启 IOCP 监控:" << QString::fromStdWString(normPath);
         NativeFolderWatcher::instance().addWatch(normPath);
-
-        // 自启动阶段自动拉起异步分类对账，实现真正的 1:1 绝对镜像
-        (void)QtConcurrent::run([normPath]() {
-            AutoImportManager::instance().handleRecursiveIngestion(normPath);
-        });
     }
 }
-```
+5. 修改边界声明【红线】
+本次方案涉及范围：
 
-## 5. 修改边界声明【红线】
+模块/文件：src/core/CoreController.cpp（追加自定义监控目录的后台点火逻辑）
+模块/文件：src/ui/DriveButton.h & DriveButton.cpp（定义并实现自定义 FolderButton）
+模块/文件：src/ui/MainWindow.h & MainWindow.cpp（定义 CustomFolderImportDialog、接管 DriveBar 空白处及 FolderButton 右键菜单弹出、追加/移除监控、配置持久化更新）
+明确禁止越界修改的范围：
 
-**本次方案涉及范围：**
-- [x] 模块/文件：`src/core/CoreController.cpp`（追加自定义监控目录的自启动 IOCP 监控与 handleRecursiveIngestion 分类对账逻辑）
-- [x] 模块/文件：`src/ui/DriveButton.h` & `DriveButton.cpp`（定义并实现自定义 FolderButton，包含完整的头文件依赖引入）
-- [x] 模块/文件：`src/ui/MainWindow.h` & `MainWindow.cpp`（定义 CustomFolderImportDialog、接管 DriveBar 空白处及 FolderButton 右键菜单弹出、追加与自适应 `handleRecursiveIngestion` 分类对账、移除监控递归清理元数据 `removeMetadataSync`、配置持久化更新，包含缺失的 QLineEdit、Dialog、AutoImportManager 等依赖引入）
-
-**明确禁止越界修改的范围：**
-- [ ] 严禁改变 NTFS 的物理 USN 日志接收底层。
-- [ ] 严禁修改其他与此功能不相关的 UI 组件。
-
-## 6. 实现准则与预警【核心】
-1. **统一对账，防重复造轮子**：绝对不允许为自定义监控文件夹另行手写一套新的文件扫描或分类映射代码。必须统一且唯一调用 `AutoImportManager::handleRecursiveIngestion` 进行对账，保证代码纯净性和架构极致内聚。
-2. **输入框清除功能**：强制贯彻 **6.1 关于“清除”按钮** 的铁律，新对话框中的 `QLineEdit` 必须通过原生自带的 `setClearButtonEnabled(true)` 实现。
-3. **样式一致性**：对齐 **5.4 标题栏按钮样式** 及 **3.3 按钮物理参数**，悬停使用 `#3E3E42`背景，按下使用 `#4E4E52` 背景，且严禁使用 rgba 蒙版。
-4. **安全跨线程与事件通知**：`NativeFolderWatcher` 仍运行于独立的 IOCP 专属工作线程。由于对自定义监控文件夹触发回调时需要通过 `MetadataManager::registerItemsAsync` 流水线式入库，该函数内部会自动分发到后台线程处理，故该机制具备极高的时间及空间并发安全性。
-5. **ToolTipOverlay 的对接**：完全禁绝 QWidget 的原生 `setToolTip(...)`。文件夹悬停提示必须一律通过 `ToolTipOverlay::instance()->showText(...)` and `ToolTipOverlay::hideTip()` 手动实现。
-
-## 7. Memories.md 合规检查
-
-| 组件 / 模式 | Memories.md 规范要求 | 本方案是否符合 |
-|-------------|----------------------|----------------|
-| 输入框清除   | 唯一标准：一律使用 Qt 原生 setClearButtonEnabled(true)，严禁通过自定义按钮模拟清除逻辑 | ✅ 符合，完美实现 |
-| 标题栏按钮样式| 悬停使用 `#3E3E42`（Style::HoverBackground），按下使用 `#4E4E52`（Style::PressedBackground），严禁使用 rgba 蒙版 | ✅ 符合，不使用 rgba 蒙版并完美对齐色值 |
-| ToolTipOverlay 渲染 | 禁绝原生 ToolTip，强制对接 ToolTipOverlay 渲染 | ✅ 符合，采用 enter/leaveEvent 强制触发 ToolTipOverlay 气泡 |
+严禁改变 NTFS 的物理 USN 日志接收底层。
+严禁修改其他与此功能不相关的 UI 组件。
+6. 实现准则与预警【核心】
+输入框清除功能：强制贯彻 6.1 关于“清除”按钮 的铁律，新对话框中的 QLineEdit 必须通过原生自带的 setClearButtonEnabled(true) 实现。
+样式一致性：对齐 5.4 标题栏按钮样式 及 3.3 按钮物理参数，悬停使用 #3E3E42背景，按下使用 #4E4E52 背景，且严禁使用 rgba 蒙版。
+安全跨线程与事件通知：NativeFolderWatcher 仍运行于独立的 IOCP 专属工作线程。由于对自定义监控文件夹触发回调时需要通过 MetadataManager::registerItemsAsync 流水线式入库，该函数内部会自动分发到后台线程处理，故该机制具备极高的时间及空间并发安全性。
+ToolTipOverlay 的对接：完全禁绝 QWidget 的原生 setToolTip(...)。文件夹悬停提示必须一律通过 ToolTipOverlay::instance()->showText(...) 和 ToolTipOverlay::hideTip() 手动实现。
+7. Memories.md 合规检查
+组件 / 模式	Memories.md 规范要求	本方案是否符合
+输入框清除	唯一标准：一律使用 Qt 原生 setClearButtonEnabled(true)，严禁通过自定义按钮模拟清除逻辑	✅ 符合，完美实现
+标题栏按钮样式	悬停使用 #3E3E42（Style::HoverBackground），按下使用 #4E4E52（Style::PressedBackground），严禁使用 rgba 蒙版	✅ 符合，不使用 rgba 蒙版并完美对齐色值
+ToolTipOverlay 渲染
