@@ -5,10 +5,6 @@
 #include "../meta/MetadataManager.h" 
 #include "Logger.h"
 #include "SvgIcons.h" 
-#include "IScanResultView.h"
-#include "ListResultView.h"
-#include "JustifiedResultView.h"
-#include "GridResultView.h"
 #include "TreeItemDelegate.h" 
 #include "DropTreeView.h" 
 #include "DropListView.h" 
@@ -1088,21 +1084,11 @@ void ContentPanel::initUi() {
  
     m_viewStack = new QStackedWidget(this); 
      
-    initListView(); 
     initGridView(); 
-    initGridCardView();
+    initListView(); 
  
-    // 实例化三大结果视图包装类 (对应 IScanResultView.h 及三大视图模式移植)
-    m_listResultView = new ListResultView(qobject_cast<DropTreeView*>(m_treeView), this);
-    m_justifiedResultView = new JustifiedResultView(qobject_cast<DropJustifiedView*>(m_gridView), this);
-    m_gridResultView = new GridResultView(qobject_cast<DropJustifiedView*>(m_gridCardView), this);
-
-    m_viewStack->addWidget(m_treeView); 
     m_viewStack->addWidget(m_gridView); 
-    m_viewStack->addWidget(m_gridCardView); 
-
-    // 设置默认激活视图为等高排版视图 (JustifiedViewMode)
-    m_currentActiveView = m_justifiedResultView;
+    m_viewStack->addWidget(m_treeView); 
     m_viewStack->setCurrentWidget(m_gridView); 
  
     QVBoxLayout* contentWrapper = new QVBoxLayout(); 
@@ -1143,15 +1129,54 @@ void ContentPanel::updateStatusBarStats() {
 }
 
 void ContentPanel::updateGridSize() {
-    // 限制 m_zoomLevel 的物理边界为 32px 至 256px (对应双尺寸调节机制方案)
-    m_zoomLevel = qBound(32, m_zoomLevel, 256);
+    // 2026-06-05 按照用户要求：彻底重构为正方形布局，名称外置
+    // 2026-06-08 按照用户核心铁律：物理强制锁定缩放最小值为 96 像素
+    
+    if (m_viewStack->currentWidget() == m_gridView) {
+        m_zoomLevel = qBound(96, m_zoomLevel, 128);
+    }
 
     // 写入实时日志 
     ArcMeta::Logger::log(QString("[UI_DEBUG] 卡片缩放级: %1").arg(m_zoomLevel));
     
-    if (m_currentActiveView) {
-        m_currentActiveView->setIconSize(m_zoomLevel);
-        m_currentActiveView->refreshLayout();
+    if (m_viewStack->currentWidget() == m_gridView) {
+        if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+            jv->setTargetRowHeight(m_zoomLevel);
+        } else if (auto* lv = qobject_cast<QListView*>(m_gridView)) {
+            lv->setIconSize(QSize(m_zoomLevel, m_zoomLevel));
+            int side = m_zoomLevel + 46; // 正方形边长
+            int ratingH = 24;           // 2026-05-17 按照要求：为卡片外的评分区预留高度
+            int nameH = (int)(m_zoomLevel * 0.25); // 名称高度
+            int gap = 6;                // 间距归一化
+            
+            // 总高度 = 正方形边长 + 间距1 + 评分高度 + 间距2 + 名称高度 + 底部缓冲
+            int totalH = side + gap + ratingH + gap + nameH + 8;
+            lv->setGridSize(QSize(side, totalH));
+        }
+    } else if (m_viewStack->currentWidget() == m_treeView) {
+        // 2026-06-xx 按照要求：列表模式下调整行高
+        if (m_zoomLevel > 96) {
+            // 如果行高超过 96，自动切换到卡片形式
+            setViewMode(GridView);
+            m_zoomLevel = 96; // 修正：切换回网格时对齐红线
+            updateGridSize();
+            return;
+        }
+        
+        // 2026-06-xx 物理修复：图标大小必须随行高变化
+        m_treeView->setIconSize(QSize(m_zoomLevel - 8, m_zoomLevel - 8));
+        
+        // 2026-06-xx 性能优化：仅当行高发生实际变化时更新样式表
+        static int lastTreeHeight = -1;
+        if (lastTreeHeight != m_zoomLevel) {
+            m_treeView->setStyleSheet( 
+                QString("QTreeView { background-color: transparent; border: none; outline: none; font-size: 12px; }" 
+                        "QTreeView::item { height: %1px; color: #EEEEEE; padding-left: 0px; }" 
+                        "QTreeView QLineEdit { background-color: #2D2D2D; color: #FFFFFF; border: 1px solid #378ADD; border-radius: 6px; padding: 2px; selection-background-color: #378ADD; selection-color: #FFFFFF; }")
+                .arg(m_zoomLevel)
+            );
+            lastTreeHeight = m_zoomLevel;
+        }
     }
 
     // 2026-06-05 按照要求：持久化保存当前的缩放级别
@@ -1175,24 +1200,39 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
         ToolTipOverlay::hideTip(); 
     } 
  
-    if ((obj == m_gridView || obj == m_gridView->viewport() || 
-         obj == m_treeView || obj == m_treeView->viewport() ||
-         obj == m_gridCardView || obj == m_gridCardView->viewport()) && event->type() == QEvent::Wheel) { 
+    if ((obj == m_gridView || obj == m_gridView->viewport() || obj == m_treeView || obj == m_treeView->viewport()) && event->type() == QEvent::Wheel) { 
+        // 2026-05-25 物理修复：改用 reinterpret_cast 避开 static_cast 的类型推导逻辑错误 
         QWheelEvent* wEvent = reinterpret_cast<QWheelEvent*>(event); 
         if (wEvent->modifiers() & Qt::ControlModifier) { 
             int delta = wEvent->angleDelta().y(); 
-            int step = (delta > 0) ? 10 : -10; // (对应双尺寸调节机制：按住 Ctrl 键时，按 +10 / -10 增减滑动条的值)
-            
-            // 向上寻找 MainWindow 实例并修改 Slider
-            MainWindow* mw = nullptr;
-            QWidget* parentWin = window();
-            while (parentWin) {
-                if ((mw = qobject_cast<MainWindow*>(parentWin))) break;
-                parentWin = parentWin->parentWidget();
-            }
-            if (mw) {
-                int newVal = qBound(32, m_zoomLevel + step, 256);
-                mw->setSliderValue(newVal);
+            if (delta > 0) {
+                // 向上滚动（放大）
+                if (m_viewStack->currentWidget() == m_treeView) {
+                    m_zoomLevel += 4; // 列表模式步进调小一些，追求平滑
+                    if (m_zoomLevel > 96) {
+                        m_zoomLevel = 96;
+                        setViewMode(GridView);
+                    }
+                    updateGridSize();
+                } else {
+                    m_zoomLevel += 8;
+                    updateGridSize();
+                }
+            } else {
+                // 向下滚动（缩小）
+                if (m_viewStack->currentWidget() == m_gridView) {
+                    if (m_zoomLevel <= 96) {
+                        setViewMode(ListView);
+                        m_zoomLevel = 80; // 切换到列表时给一个初始行高
+                        updateGridSize();
+                    } else {
+                        m_zoomLevel -= 8;
+                        updateGridSize();
+                    }
+                } else if (m_viewStack->currentWidget() == m_treeView) {
+                    m_zoomLevel = qMax(24, m_zoomLevel - 4); // 列表模式最小行高锁定 24
+                    updateGridSize();
+                }
             }
             return true; 
         } 
@@ -1357,7 +1397,7 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                 return true; 
             } 
             if (keyEvent->modifiers() & Qt::ControlModifier && keyEvent->key() == Qt::Key_Backslash) { 
-                setViewMode(m_viewStack->currentIndex() == 0 ? GridViewMode : ListViewMode); 
+                setViewMode(m_viewStack->currentIndex() == 0 ? ListView : GridView); 
                 return true; 
             } 
         } 
@@ -1398,7 +1438,7 @@ void ContentPanel::wheelEvent(QWheelEvent* event) {
                 m_zoomLevel += 4;
                 if (m_zoomLevel > 96) {
                     m_zoomLevel = 96;
-                    setViewMode(GridViewMode);
+                    setViewMode(GridView);
                 }
                 updateGridSize();
             } else {
@@ -1409,7 +1449,7 @@ void ContentPanel::wheelEvent(QWheelEvent* event) {
             // 缩小
             if (m_viewStack->currentWidget() == m_gridView) {
                 if (m_zoomLevel <= 96) {
-                    setViewMode(ListViewMode);
+                    setViewMode(ListView);
                     m_zoomLevel = 80;
                     updateGridSize();
                 } else {
@@ -1428,21 +1468,8 @@ void ContentPanel::wheelEvent(QWheelEvent* event) {
 } 
  
 void ContentPanel::setViewMode(ViewMode mode) { 
-    if (mode == ListViewMode) {
-        m_currentActiveView = m_listResultView;
-        m_viewStack->setCurrentWidget(m_treeView);
-    } else if (mode == JustifiedViewMode) {
-        m_currentActiveView = m_justifiedResultView;
-        m_viewStack->setCurrentWidget(m_gridView);
-    } else if (mode == GridViewMode) {
-        m_currentActiveView = m_gridResultView;
-        m_viewStack->setCurrentWidget(m_gridCardView);
-    }
-
-    if (m_currentActiveView) {
-        m_currentActiveView->setIconSize(m_zoomLevel);
-        m_currentActiveView->refreshLayout();
-    }
+    if (mode == GridView) m_viewStack->setCurrentWidget(m_gridView); 
+    else m_viewStack->setCurrentWidget(m_treeView); 
 } 
  
 void ContentPanel::initGridView() { 
@@ -1616,62 +1643,6 @@ void ContentPanel::initListView() {
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged); 
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested); 
     connect(m_treeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked); 
-} 
-
-void ContentPanel::initGridCardView() { 
-    m_gridCardView = new DropJustifiedView(this); 
-    m_gridCardView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
-    m_gridCardView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
-    m_gridCardView->setSelectionMode(QAbstractItemView::ExtendedSelection); 
-    if (auto* lv = qobject_cast<QListView*>(m_gridCardView)) lv->setSelectionRectVisible(true);
-
-    QPalette p = m_gridCardView->palette();
-    p.setColor(QPalette::Highlight, QColor(55, 138, 221, 80)); 
-    p.setColor(QPalette::HighlightedText, Qt::white);
-    m_gridCardView->setPalette(p);
-    m_gridCardView->setContextMenuPolicy(Qt::CustomContextMenu); 
- 
-    m_gridCardView->setDragEnabled(true); 
-    m_gridCardView->setAcceptDrops(true);
-    m_gridCardView->setDragDropMode(QAbstractItemView::DragDrop); 
- 
-    m_gridCardView->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed); 
- 
-    m_gridCardView->setModel(m_proxyModel); 
-
-    connect(m_gridCardView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
-
-    auto* justifiedView = qobject_cast<JustifiedView*>(m_gridCardView);
-    if (justifiedView) {
-        justifiedView->setAspectRatioRole(AspectRatioRole);
-        auto* delegate = new ThumbnailDelegate(this);
-        delegate->setHasThumbnailRole(HasThumbnailRole);
-        delegate->setRatingRole(RatingRole);
-        delegate->setPathRole(PathRole);
-        delegate->setPinnedRole(PinnedRole);
-        delegate->setManagedRole(ManagedRole);
-        delegate->setTypeRole(TypeRole);
-        delegate->setIsEmptyRole(IsEmptyRole);
-        delegate->setColorRole(ColorRole);
-        delegate->setRegistrationProgressRole(RegistrationProgressRole);
-        m_gridCardView->setItemDelegate(delegate);
-    } else {
-        m_gridCardView->setItemDelegate(new GridItemDelegate(this)); 
-    }
-
-    m_gridCardView->viewport()->installEventFilter(this); 
- 
-    connect(m_gridCardView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked); 
- 
-    m_gridCardView->setStyleSheet( 
-        "QAbstractItemView { background-color: transparent; border: none; outline: none; }" 
-        "QAbstractItemView::item { background: transparent; }" 
-        "QAbstractItemView::item:selected { background-color: transparent; }" 
-        "QAbstractItemView::item:hover { background-color: transparent; }"
-    ); 
- 
-    connect(m_gridCardView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged); 
-    connect(m_gridCardView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested); 
 } 
  
 void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) { 
@@ -2488,14 +2459,7 @@ void ContentPanel::performBatchRename() {
 } 
  
 void ContentPanel::onSelectionChanged() { 
-    QItemSelectionModel* selectionModel = nullptr;
-    if (m_viewStack->currentWidget() == m_treeView) {
-        selectionModel = m_treeView->selectionModel();
-    } else if (m_viewStack->currentWidget() == m_gridView) {
-        selectionModel = m_gridView->selectionModel();
-    } else if (m_viewStack->currentWidget() == m_gridCardView) {
-        selectionModel = m_gridCardView->selectionModel();
-    }
+    QItemSelectionModel* selectionModel = (m_viewStack->currentWidget() == m_gridView) ? m_gridView->selectionModel() : m_treeView->selectionModel(); 
     if (!selectionModel) return; 
  
     QStringList selectedPaths; 
@@ -2684,10 +2648,6 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
                                     panelPtr->m_gridView->scrollTo(proxyIdx);
                                     panelPtr->m_gridView->setCurrentIndex(proxyIdx);
                                     if (panelPtr->m_isPendingEdit) panelPtr->m_gridView->edit(proxyIdx);
-                                } else if (panelPtr->m_viewStack->currentWidget() == panelPtr->m_gridCardView) {
-                                    panelPtr->m_gridCardView->scrollTo(proxyIdx);
-                                    panelPtr->m_gridCardView->setCurrentIndex(proxyIdx);
-                                    if (panelPtr->m_isPendingEdit) panelPtr->m_gridCardView->edit(proxyIdx);
                                 } else {
                                     panelPtr->m_treeView->scrollTo(proxyIdx);
                                     panelPtr->m_treeView->setCurrentIndex(proxyIdx);
