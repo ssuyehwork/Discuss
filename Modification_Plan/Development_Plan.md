@@ -143,3 +143,18 @@
 - **菜单位置与入口**：在侧边栏分类项右键弹出菜单（`CategoryPanel::setupContextMenu`）中新增主选项：“**文件夹图标**”（对应用户原话：“在右键菜单中新增一个主选项”）。
 - **子菜单 SVG 展现**：主选项下挂载一个二级子菜单（`QMenu`）。该子菜单中平铺或分页承载系统内置的所有 SVG 矢量图标（SVG 数据统一从 `SvgIcons.h` 中检索加载），子项展示对应矢量图标。
 - **操作与动态反馈**：用户点击子菜单中的 SVG 图标后，立即触发 `CategoryRepo::update` 将变更写入本地磁盘 SQLite 数据库并调用 `CategoryModel::refresh()` 重新加载，实现侧边栏图标无缝实时变更新渲染。
+
+## 11. 盘符栏自定义文件夹外观自定义规约 (Drive Bar Folder Button Customization)
+
+### 11.1 持久化结构设计
+- **去中心化 KV 绑定**：由于自定义文件夹路径在 `AppConfig` 的 `"DriveBar/CustomMonitoredFolders"` 中以扁平 `QStringList` 的形式存取，为了绑定对应的个性化外观属性，需在 `AppConfig` 下追加如下绑定：
+  - 按钮颜色设定：`DriveBar/FolderColor_[物理路径]` (类型为 `QString`, 存 `#RRGGBB` 格式色值)
+  - 按钮图标设定：`DriveBar/FolderIcon_[物理路径]` (类型为 `QString`, 存 `SvgIcons.h` 中对应的 SVG 键名)
+- **数据清理同步**：当用户在盘符栏点击 “移除” 该自定义文件夹时，系统必须在清理 `CustomMonitoredFolders` 的同时，静默将该物理路径对应的 `FolderColor_` 和 `FolderIcon_` 键名配置一并抹除，防止配置文件膨胀。
+
+### 11.2 右键菜单交互体系对齐
+- **主选项菜单项扩展**：在顶部盘符栏自定义监控按钮（`FolderButton`）右键弹出菜单中，在原有的 “新建自动导入” 与 “移除” 选项之下追加：
+  - **“设置颜色”**：弹出 `FramelessColorPicker` 颜色选取器，选择后应用并写入配置。
+  - **“随机颜色”**：从系统内置的调色板中随机抽取一个高亮色应用。
+  - **“文件夹图标”**：平铺或分页承载内置 SVG 图标子菜单，允许选择并实时更新。
+- **重绘与无缝视觉更新**：外观设定变更完成后，立即重新触发 `DriveBar` 局部重绘（调用对应的 `update()` 或重设样式），实现自定义文件夹按钮图标与颜色的瞬时、流畅更变渲染。
