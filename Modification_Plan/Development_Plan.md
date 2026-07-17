@@ -131,3 +131,15 @@
 
 ### 9.4 友好气泡提示
 - **气泡反馈**：添加成功后，在用户鼠标指针所在位置弹出淡入淡出的气泡提示（内容为：“已成功添加至收藏夹”），使用系统的 `ToolTipOverlay::instance()->showText(...)` 展现。
+
+## 10. 侧边栏分类图标自定义规约 (Category Icon Customization)
+
+### 10.1 数据字典与持久化拓展
+- **底层数据库字段拓展**：在 `categories` 表结构中追加 TEXT 类型字段 `icon`，默认值为空或 `"folder_filled"`。
+- **实体属性定义**：在 `struct Category` 结构体中新增 `std::wstring icon;` 字段，并在 `CategoryRepo.cpp` 中处理其插入、更新与查询绑定逻辑。
+- **动态升级迁移**：在 `DatabaseManager::loadDb` 函数中引入 categories 表 table_info 探测与动态 ALTER COLUMN 机制，确保启动时自动升级历史数据库文件、零损无感适配。
+
+### 10.2 右键菜单交互体系
+- **菜单位置与入口**：在侧边栏分类项右键弹出菜单（`CategoryPanel::setupContextMenu`）中新增主选项：“**文件夹图标**”（对应用户原话：“在右键菜单中新增一个主选项”）。
+- **子菜单 SVG 展现**：主选项下挂载一个二级子菜单（`QMenu`）。该子菜单中平铺或分页承载系统内置的所有 SVG 矢量图标（SVG 数据统一从 `SvgIcons.h` 中检索加载），子项展示对应矢量图标。
+- **操作与动态反馈**：用户点击子菜单中的 SVG 图标后，立即触发 `CategoryRepo::update` 将变更写入本地磁盘 SQLite 数据库并调用 `CategoryModel::refresh()` 重新加载，实现侧边栏图标无缝实时变更新渲染。
