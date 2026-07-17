@@ -29,6 +29,8 @@ using namespace ArcMeta::Style;
 #include <QScrollBar>
 #include <QMenu>
 #include <QAction>
+#include <QWidgetAction>
+#include <QGridLayout>
 #include <QApplication>
 #include <QRandomGenerator>
 #include <QSet>
@@ -247,6 +249,87 @@ void CategoryPanel::setupContextMenu() {
                 menu.addAction(UiHelper::getIcon("palette", WarningOrange, 18), "设置颜色", this, &CategoryPanel::onSetColor);
                 menu.addAction(UiHelper::getIcon("random_color", QColor("#e91e63"), 18), "随机颜色", this, &CategoryPanel::onRandomColor);
                 menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9b59b6"), 18), "设置预设标签", this, &CategoryPanel::onSetPresetTags);
+
+                // [Plan-6] 创建主选项“文件夹图标”
+                int id = index.data(IdRole).toInt();
+                QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", WarningOrange, 18), "文件夹图标");
+                UiHelper::applyMenuStyle(iconMenu);
+
+                QString colorStr = index.data(ColorRole).toString();
+                QColor catColor = colorStr.isEmpty() ? QColor("#555555") : QColor(colorStr);
+
+                // 使用 QWidgetAction 构建纯图标选择器（无任何文字，网格排列，支持 Hover 色值对齐与 Tooltip）
+                QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
+                QWidget* pickerWidget = new QWidget(iconMenu);
+                QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
+                pickerLayout->setContentsMargins(6, 6, 6, 6);
+                pickerLayout->setSpacing(6);
+
+                static const QList<QPair<QString, QString>> builtInIcons = {
+                    {"默认文件夹", "folder_filled"},
+                    {"层级分类", "category"},
+                    {"照片媒体", "image_filled"},
+                    {"时钟历史", "clock_filled"},
+                    {"星标收藏", "star_filled"},
+                    {"爱心常用", "heart_filled"},
+                    {"加密安全", "lock_filled"},
+                    {"图书文档", "book"},
+                    {"配置管理", "settings_filled"},
+                    {"网络球体", "globe_filled"}
+                };
+
+                int row = 0;
+                int col = 0;
+                for (const auto& pair : builtInIcons) {
+                    QString label = pair.first;
+                    QString iconKey = pair.second;
+
+                    QPushButton* btn = new QPushButton(pickerWidget);
+                    btn->setFixedSize(28, 28);
+                    btn->setCursor(Qt::PointingHandCursor);
+                    btn->setStyleSheet(
+                        "QPushButton { "
+                        "  background-color: transparent; "
+                        "  border: 1px solid transparent; "
+                        "  border-radius: 4px; "
+                        "}"
+                        "QPushButton:hover { "
+                        "  background-color: #3E3E42; "
+                        "  border: 1px solid #555555; "
+                        "}"
+                        "QPushButton:pressed { "
+                        "  background-color: #4E4E52; "
+                        "}"
+                    );
+                    btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
+                    btn->setIconSize(QSize(18, 18));
+                    btn->setToolTip(label); // 使用中文 label 作为 tooltip 提示
+
+                    pickerLayout->addWidget(btn, row, col);
+
+                    connect(btn, &QPushButton::clicked, this, [this, id, iconKey, iconMenu]() {
+                        auto cats = CategoryRepo::getAll();
+                        for (auto& cat : cats) {
+                            if (cat.id == id) {
+                                cat.icon = iconKey.toStdWString();
+                                CategoryRepo::update(cat);
+                                break;
+                            }
+                        }
+                        m_categoryModel->refresh();
+                        iconMenu->close(); // 选中后关闭菜单
+                    });
+
+                    col++;
+                    if (col >= 5) {
+                        col = 0;
+                        row++;
+                    }
+                }
+
+                pickerWidget->setLayout(pickerLayout);
+                pickerAction->setDefaultWidget(pickerWidget);
+                iconMenu->addAction(pickerAction);
 
                 menu.addSeparator();
 

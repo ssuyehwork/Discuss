@@ -253,7 +253,7 @@ private:
 } // namespace ArcMeta
 ```
 
-### 4.3 `MainWindow` 盘符栏空白处与 FolderButton 右键菜单 management 交互
+### 4.3 `MainWindow` 盘符栏空白处与 FolderButton 右键菜单管理交互
 
 #### 4.3.1 修改 `MainWindow.h`：
 增加对应声明与 `m_folderButtons` 控件数组：
@@ -424,7 +424,7 @@ for (const QString& folder : customFolders) {
 **本次方案涉及范围：**
 - [x] 模块/文件：`src/core/CoreController.cpp`（追加自定义监控目录的自启动 IOCP 监控与 handleRecursiveIngestion 分类对账逻辑）
 - [x] 模块/文件：`src/ui/DriveButton.h` & `DriveButton.cpp`（定义并实现自定义 FolderButton，包含完整的头文件依赖引入）
-- [x] 模块/文件：`src/ui/MainWindow.h` & `MainWindow.cpp`（定义 CustomFolderImportDialog、接管 DriveBar 空白处及 FolderButton 右键菜单弹出、追加与自适应 `handleRecursiveIngestion` 分类对账、移除监控递归清理元数据 `removeMetadataSync`、配置持久化更新，包含缺失 of QLineEdit、Dialog、AutoImportManager 等依赖引入）
+- [x] 模块/文件：`src/ui/MainWindow.h` & `MainWindow.cpp`（定义 CustomFolderImportDialog、接管 DriveBar 空白处及 FolderButton 右键菜单弹出、追加与自适应 `handleRecursiveIngestion` 分类对账、移除监控递归清理元数据 `removeMetadataSync`、配置持久化更新，包含缺失的 QLineEdit、Dialog、AutoImportManager 等依赖引入）
 
 **明确禁止越界修改的范围：**
 - [ ] 严禁改变 NTFS 的物理 USN 日志接收底层。
