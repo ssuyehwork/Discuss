@@ -1,0 +1,55 @@
+# Development Plan —— 物理监控自动同步、右键菜单高级排序与三大视图/双尺寸调节移植计划
+
+## 1. 物理监控与侧边栏分类树自动同步需求
+### 1.1 核心需求
+在停用 USN Journal 后，当用户在内容面板中执行“迁移”将文件夹移动至 `ArcMeta.Library_[盘符]`，或者以其他物理方式在托管库/自定义监控文件夹内创建、拷贝、移入新子目录时，`NativeFolderWatcher` 能够实时检测并在 SQLite 数据库中构建对应的 1:1 分类树记录（即向 `categories` 表里创建分类记录），使新文件夹在无需重启主程序的情况下，立即在侧边栏中刷新呈现。
+
+### 1.2 解决方案概述
+在 `NativeFolderWatcher::handleNotification` 中检测到目录级变动（`info.isDir()`）时，通过 `QtConcurrent::run` 异步拉起级联入库同步引擎 `AutoImportManager::instance().handleRecursiveIngestion(fullPath)`。这不仅会自动注册所有子文件和路径，还会递归在 SQLite 的 `categories` 表中补全 1:1 分类结构，最后触发 `"__RELOAD_ALL__"` 信号驱动侧边栏重载，实现完美实时刷新。
+
+
+## 2. 内容容器右键“排序”主菜单与子选项需求
+### 2.1 核心需求
+无论在“列表模式”还是“卡片网格模式”下，内容容器中都应该提供统一的交互入口来让用户随意切换数据的排序方式。
+系统需要在内容容器右键菜单（空白处及选中项目）中，新增一个主选项为“排序”的二级子菜单。
+
+### 2.2 “排序”二级子菜单定义
+- **排序属性**（单选联动，带 check 勾选状态）：
+  - **名称**
+  - **创建日期**
+  - **修改日期**
+  - **扩展名**
+  - **大小**
+  - **尺寸**
+  - **评分**
+- **分隔线**
+- **排序方向**（单选联动，带 check 勾选状态）：
+  - **升序**
+  - **降序**
+
+### 2.3 解决方案概述
+1. **状态维护**：
+   在 `ContentPanel` 中维护 `SortType m_sortType` 和 `Qt::SortOrder m_sortOrder`。
+2. **菜单注入**：
+   在右键菜单弹出逻辑中，通过 `QActionGroup` 注入“排序”选项组并同步勾选状态。
+3. **底层重排重写**：
+   重写 `FilterProxyModel::lessThan` 算法。在排除了第一和第二排序权重后，直接根据 `m_sortType` 属性，提取并对比两个 `ItemRecord` 的对应物理/元数据信息。
+
+
+## 3. 移植 FERREX-META 三大视图模式与双尺寸调节需求
+### 3.1 核心需求
+当前内容容器需要完美移植并支持 `FERREX-META` 版本中的全量 3 种视图模式，以及 2 种高度灵敏的卡片/图标尺寸调节机制。
+
+### 3.2 移植功能点定义
+1. **三种显示视图模式**：
+   - **列表视图 (`ListResultView`)**：标准的多列排版。
+   - **等高合理排版视图 (`JustifiedResultView`)**：高度固定，宽度按比例自适应。
+   - **网格卡片视图 (`GridResultView`)**：规则的正方形卡片网格布局。
+2. **两种卡片/图标尺寸调节方式**：
+   - **滑动条直接交互（拖拽 / 点击轨道定位）**：支持在 UI 的工具栏/控制栏增加一个 QSlider 滑动条，范围限制在 `32px` 到 `256px`。用户不仅可以拖拽手柄，还可以直接左键单击轨道任意位置，滑动条通过 `QStyle::sliderValueFromPosition` 瞬间计算并跳转至定位值。
+   - **Ctrl + 鼠标滚轮物理缩放**：当鼠标悬停在内容容器任何视图的视口上，按住键盘 `Ctrl` 键滚动鼠标滚轮时，能以 `10px` 为步进动态调节卡片/图标大小，并双向联动更新 QSlider 的滑块位置，获得极致平滑的动态视觉反馈。
+
+### 3.3 解决方案概述
+- 将 `FERREX-META/src/ui/` 中的 `IScanResultView.h`、`ListResultView.h/cpp`、`JustifiedResultView.h/cpp`、`GridResultView.h/cpp` 作为三大视图内核进行移植，并融入当前程序。
+- 在工具栏或标题栏新增 `m_sizeSlider` (QSlider)，设置其范围为 `32` 到 `256`，在值发生变动时通知当前激活视图更新 `setIconSize`。
+- 在 `MainWindow` 或 `ContentPanel` 的 `eventFilter` 中拦截 `QEvent::Wheel`。一旦检测到 `wheelEvent->modifiers() & Qt::ControlModifier`，根据滚轮方向将 `m_sizeSlider` 的值以 `+10` / `-10` 步进进行调整，通过单值驱动所有视图和 Delegates 实现统一的卡片和图标大小动态重载。
