@@ -1,42 +1,22 @@
-# SQLite 分类对账同步刷新修复 —— Modification_Plan-9.md
+# 物理监控目录自动同步分类与实时刷新 —— Modification_Plan-9.md
 
 ## 1. 任务背景
-当用户在内容面板右键通过“迁移”或者将文件夹物理移动（如将“1”文件夹移动）至盘符下的“ArcMeta.Library_[盘符]”托管库文件夹内时，系统后端的 `AutoImportManager` 会通过物理扫描/对账机制（如 MFT/USN 或手动扫描）自动将该目录注册、持久化为数据库（SQLite）中的分类。然而，迁移完成后，侧边栏分类树（`CategoryPanel`）却没有自动刷新展示该新增的分类，只有在重启主程序后才会显示出来。这极大地破坏了界面的实时连贯性。
+在项目当前架构中，为了确保极限稳定性，已经停用了基于 USN Journal 的对账监听（`MftReader` 监听处于注销状态），所有物理变更监控完全收拢在 `NativeFolderWatcher` (IOCP) 这一条主轨上。
+然而，当用户在内容容器中对文件夹执行“迁移”移入托管库 `ArcMeta.Library_[盘符]`（或在托管库/自定义监控目录内创建、移入新文件夹）时，`NativeFolderWatcher` 检测到目录增加后仅仅触发了路径登记（`MetadataManager::instance().markAsRegistered`）。该调用只将项目路径记录进 `metadata` 表，完全没有在数据库的 `categories` 分类表里创建条目。这导致对应的分类树节点无法在侧边栏自动生成，用户必须手动重启整个主程序来触发自启动同步。
+
+本方案旨在打通这一核心断层，实现物理目录变动到侧边栏分类树的实时、无感自动生成与刷新。
 
 ## 2. 问题定位
-通过细致的代码审计，定位到以下两个关键缺陷导致刷新中断：
-
-### 2.1 `CategoryPanel` 监听元数据变更信号时，未响应全量重建指令
-在 `src/ui/CategoryPanel.cpp` 的构造函数第 130 行：
-```cpp
-    // 2026-06-xx 物理修复：监听元数据变更信号，确保删除项或标记状态后计数实时更新
-    connect(&MetadataManager::instance(), &MetadataManager::metaChanged, this, [this](const QString& /*path*/) {
-        requestRefresh();
-    });
-```
-当 `AutoImportManager::handleRecursiveIngestion` 或 `processImportQueue` 完成对新分类的注册和数据库写入后，会调用 `MetadataManager::instance().notifyFullUIRebuild()`。该函数会将 `"__RELOAD_ALL__"` 塞入更新队列中并异步发射 `metaChanged("__RELOAD_ALL__")` 信号。
-但是，`CategoryPanel` 在接收到此信号时：
-- 完全忽略了 `path` 参数；
-- 默认调用了 `requestRefresh()`（即不传参数，默认为 `fullRebuild = false`）。
-
-这导致 `m_refreshTimer` 触发时，`needsFullRebuild` 始终为 `false`，从而跳过了对分类树模型的重新加载：
-```cpp
-    connect(m_refreshTimer, &QTimer::timeout, this, [this]() {
-        if (!m_categoryModel) return;
-
-        bool needsFullRebuild = m_refreshTimer->property("fullRebuild").toBool();
-
-        if (m_isFirstLoad || needsFullRebuild) {
-            m_categoryModel->refresh(); // 👈 只有这里才会重建分类树！但 needsFullRebuild 始终为 false 导致此处被跳过！
-            m_isFirstLoad = false;
-            m_refreshTimer->setProperty("fullRebuild", false); // 消费完重置
-        }
-        ...
-```
-
-### 2.2 `ImportHelper::importPaths` 之后没有主动触发侧边栏分类树的重建
-物理迁移是通过内容容器右键的“迁移”选项或拖入分类引发物理移动并完成。
-在物理迁移结束后，`ContentPanel` 触发了自身的 `refreshAll()`，但这仅仅重载了内容视图（Panel 二），而没有使侧边栏（Panel 一，`CategoryPanel`）获得全量重建通知，因而侧边栏不自动呈现新添加的分类。
+- **断层所在**：`src/core/NativeFolderWatcher.cpp` 第 191-195 行：
+  ```cpp
+                  if (info.isDir()) {
+                      // 目录：触发登记（内部已优化为异步，见 MetadataManager::markAsRegistered）
+                      qDebug() << "[Watcher] 检测到目录级变动，触发级联登记";
+                      MetadataManager::instance().markAsRegistered(fullPath);
+                  }
+  ```
+  - `markAsRegistered` 仅仅执行了文件元数据的登记事务，并不具备在 SQLite 中进行物理到分类映射、生成 category DB 记录的能力。
+  - 核心的镜像分类生成和级联树创建完全由 `AutoImportManager::handleRecursiveIngestion` 实现。由于没有人在 IOCP 触发该过程，导致自动创建分类失效。
 
 ---
 
@@ -44,54 +24,57 @@
 
 | 编号 | 用户原话 / 我的理解 | 方案对应点 | 是否一致 |
 |------|---------------------|------------|----------|
-| 1    | 将文件夹迁移到 ArcMeta.Library 托管库内后侧边栏应该展示对应的分类 | 修复 `CategoryPanel` 在感知到全量重建信号 `"__RELOAD_ALL__"` 时进行重建加载 | ✅ 一致 |
-| 2    | 不需要重启主程序，应该立即自动刷新 | 在 `MetadataManager::metaChanged` 信号响应中判断 `"__RELOAD_ALL__"` 并触发 `requestRefresh(true)` | ✅ 一致 |
+| 1    | 将文件夹迁移到 ArcMeta.Library_[盘符] 托管库后，侧边栏能够自动同步创建和刷新分类 | 在 `NativeFolderWatcher::handleNotification` 中，检测到目录级别变化时，由 `markAsRegistered` 替换为异步拉起 `AutoImportManager::handleRecursiveIngestion(fullPath)` 对账 | ✅ 一致 |
+| 2    | 不需要重启主程序，应该立即自动刷新 | `handleRecursiveIngestion` 在后台对账完成后会调用 `notifyFullUIRebuild()`，向 GUI 发送 `"__RELOAD_ALL__"`，从而触发 `CategoryPanel` 实时全量重载，实现免重启刷新 | ✅ 一致 |
 
 ---
 
 ## 4. 详细解决方案
 
-### 方案 A：修正 `CategoryPanel::connect` 接收 `metaChanged` 的刷新逻辑
-在 `src/ui/CategoryPanel.cpp` 构造函数第 130 行，针对 `MetadataManager::instance().metaChanged` 信号：
-- 当 `path` 参数为 `"__RELOAD_ALL__"` 时，显式调用 `requestRefresh(true)`，强制使 `m_refreshTimer` 携带 `fullRebuild = true` 的标记。
+### 4.1 引入异步分类构建与实时对账机制
+修改 `src/core/NativeFolderWatcher.cpp` 中的 `handleNotification`。在捕获到新增/改名/修改动作（`FILE_ACTION_ADDED` 等）且实体为目录（`info.isDir()`）时，直接通过 `QtConcurrent::run` 异步调度分类映射构建与级联同步函数 `AutoImportManager::instance().handleRecursiveIngestion(fullPath)`：
 
-修改前：
+**修改前 (`src/core/NativeFolderWatcher.cpp` 第 191-195 行)：**
 ```cpp
-    // 2026-06-xx 物理修复：监听元数据变更信号，确保删除项或标记状态后计数实时更新
-    connect(&MetadataManager::instance(), &MetadataManager::metaChanged, this, [this](const QString& /*path*/) {
-        requestRefresh();
-    });
+                if (info.isDir()) {
+                    // 目录：触发登记（内部已优化为异步，见 MetadataManager::markAsRegistered）
+                    qDebug() << "[Watcher] 检测到目录级变动，触发级联登记";
+                    MetadataManager::instance().markAsRegistered(fullPath);
+                }
 ```
 
-修改后：
+**修改后：**
 ```cpp
-    // 2026-06-xx 物理修复：监听元数据变更信号，确保删除项或标记状态后计数实时更新
-    // 2026-07-xx 按照 Plan-127：识别全量重建信号 __RELOAD_ALL__，强制触发侧边栏树结构刷新
-    connect(&MetadataManager::instance(), &MetadataManager::metaChanged, this, [this](const QString& path) {
-        if (path == "__RELOAD_ALL__") {
-            requestRefresh(true);
-        } else {
-            requestRefresh(false);
-        }
-    });
+                if (info.isDir()) {
+                    // 目录：触发级联对账与分类树构建（统一交由 handleRecursiveIngestion 执行）
+                    // 2026-07-xx 按照 Plan-128: 对目录级变动，统一调用 handleRecursiveIngestion 实现 1:1 分类树自动创建与全量重构刷新
+                    qDebug() << "[Watcher] 检测到目录级变动，触发级联对账与 1:1 分类树构建";
+                    (void)QtConcurrent::run([fullPath]() {
+                        AutoImportManager::instance().handleRecursiveIngestion(fullPath);
+                    });
+                }
 ```
+
+同时，必须在 `src/core/NativeFolderWatcher.cpp` 的头部引入 `AutoImportManager.h` 和 `<QtConcurrent>` 头文件。
 
 ---
 
 ## 5. 修改边界声明【红线】
 
 **本次方案涉及范围：**
-- [ ] 模块/文件：`src/ui/CategoryPanel.cpp` 构造函数中关于 `MetadataManager::metaChanged` 的信号槽绑定连接。
+- [x] 模块/文件：`src/core/NativeFolderWatcher.cpp`
+  - 引入 `AutoImportManager.h` 和 `<QtConcurrent>`
+  - 将目录级变化的 `markAsRegistered` 处理逻辑修改为 `AutoImportManager::handleRecursiveIngestion`
 
 **明确禁止越界修改的范围：**
-- [ ] 严禁修改任何其他 UI 组件及分类数据的核心加载架构（`CategoryModel` 和 `CategoryRepo`）。
+- [ ] 严禁修改任何 UI 树加载结构、排序、元数据编辑限制或其他不相关的底层数据层。
 
 ---
 
 ## 6. 实现准则与预警【核心】
 
-1. **依赖的头文件**：修改均在已导入头文件 `MetadataManager.h` 保护的 `CategoryPanel.cpp` 中完成，无需引入新的头文件依赖。
-2. **高风险操作警告**：`requestRefresh(true)` 会重置 `CategoryModel`（触发 `beginResetModel` 和 `endResetModel`），这在有极高频率的文件系统事件触发时可能会产生短暂开销。因此保持了 `QTimer` 的 **200ms 合并防抖时间** 能够完美避开信号风暴。
+1. **头文件依赖**：确保在 `NativeFolderWatcher.cpp` 中通过 `#include "AutoImportManager.h"` 与 `#include <QtConcurrent>` 正确建立链接。
+2. **并发安全性**：由于 `NativeFolderWatcher` 接收文件系统高频的底层变更信号，`AutoImportManager::handleRecursiveIngestion` 内部已具备完善的 `recursive_mutex` 独占机制与 `setInternalOperating` 高频抑制机制，异步拉起它是绝对安全、高性能且防抖的。
 
 ---
 
@@ -99,10 +82,5 @@
 
 | 组件 / 模式 | Memories.md 规范要求 | 本方案是否符合 |
 |-------------|----------------------|----------------|
-| 双轨机制 | 侧边栏分类模式使用 SQLite 数据库关联加载；物理路径模式使用 QDir 实时扫描。 | ✅ 符合。本次仅在侧边栏数据库重载时接收信号刷新分类，绝对不触碰 QDir 物理导航链路。 |
-| 分类刷新 | 需要及时对账与刷新。 | ✅ 符合。修复了信号传输中全量重建标志丢失的问题。 |
-
----
-
-## 8. 待确认事项
-无。方案已经过完整的考古和逻辑校验，确保精准闭环，绝不顾此失彼。
+| 双轨机制 | 物理路径模式与侧边栏分类模式分离；监控 for 'ArcMeta.Library_[Drive]' folders has transitioned back to IOCP-based NativeFolderWatcher. | ✅ 符合。本次完全利用并维护 NativeFolderWatcher IOCP 链，实现极致的对账刷新。 |
+| 侧边栏刷新 | 提供无重启、自动重载机制。 | ✅ 符合。利用已有的 notifyFullUIRebuild 触发 __RELOAD_ALL__，实现完美的自动化界面一致性。 |
