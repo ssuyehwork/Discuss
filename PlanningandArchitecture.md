@@ -127,7 +127,31 @@
 
 ## 三、数据库访问点清单
 
-当前应用已经废除 `内存数据库 :memory:`，全面转向直连磁盘的高性能数据库模式（WAL 模式 + SYNCHRONOUS = NORMAL），所有的 `sqlite3*` 句柄均直接操作磁盘文件。数据库访问点如下表所示：
+当前应用已经废除 `内存数据库 :memory:`，全面转向直连磁盘的高性能数据库模式（WAL 模式 + SYNCHRONOUS = NORMAL），所有的 `sqlite3*` 句柄均直接操作磁盘文件。
+
+### 3.1 核心句柄 `getGlobalDb()` 与 `getMemoryDb()` 的底层 `sqlite3_open_v2` 调用细节
+
+经过对 `src/meta/DatabaseManager.cpp` 中的 `loadDb` 函数的静态走查，这两个函数对应连接句柄的底层创建事实如下：
+
+1.  **传入的文件路径参数具体是什么**：
+    *   **`getGlobalDb()`**：其底层的数据库路径是通过 `DatabaseManager::init()` 中的 `globalPath` 决定，即 `getAppDir() + "/.arcmeta/global.db"` 的标准化路径（`std::wstring` 转换为 utf-8 的 std::string）。
+    *   **`getMemoryDb()`**：其底层的数据库路径是每一个在线物理磁盘对应的本地分库数据库文件路径，具体形式为 `getAppDir() + "/.arcmeta/Arcmeta_<SERIAL>_<LETTER>.db"`。
+    *   *代码事实*：两个函数传入 `sqlite3_open_v2` 的第一参数**全部为本地真实的磁盘文件路径**，没有使用 `":memory:"` 或 `"file::memory:?cache=shared"` 的内存或共享内存路径。
+2.  **传入的 flags 参数具体是什么**：
+    *   *代码事实*：在 `loadDb` 的底层调用中，`sqlite3_open_v2` 的第三个参数（flags）显式硬编码为：
+        ```cpp
+        SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+        ```
+        并未开启如 `SQLITE_OPEN_SHAREDCACHE`（共享缓存）或 `SQLITE_OPEN_NOMUTEX` 等扩展 flags 标志。
+3.  **连接对象的生命周期与线程共享模式**：
+    *   *代码事实*：
+        *   数据库连接句柄在 `DatabaseManager` 单例内部的私有成员变量 `m_globalDb` 和私有映射容器 `m_driveDbs`（`std::map<std::wstring, DbConnection>`）中唯一常驻维护。
+        *   在任何调用线程（包括 UI 主线程、工作线程、监控线程和线程池线程）通过调用 `getGlobalDb()` 或 `getMemoryDb()` 获取底层 `sqlite3*` 连接句柄时，都是直接返回单例内部保存的**这同一份唯一连接句柄指针**。
+        *   即**全进程全局/各磁盘分库分别仅持有唯一的一份连接句柄实例，多线程调用时共享同一份指针，并没有为各调用线程各自独立打开、创建或维护独立的连接对象**。
+
+### 3.2 数据库访问点明细表
+
+数据库访问点如下表所示：
 
 | 文件名 + 函数名 | SQL 执行类型 | 是否在事务中 | Prepared Statement 机制 | 执行线程 | 连接对象模式 | SQL 具体业务用途 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
