@@ -9,7 +9,7 @@
 - **定位模块 1（TagManagerView 职责严重越界）**：
   在 `src/ui/TagManagerView.cpp` 中存在多处原生硬编码 `DatabaseManager::instance().getMemoryDb(L"C")`（对应用户原话："TagManagerView.cpp 中多处硬编码 DatabaseManager::instance().getMemoryDb(L"C")"）以及多处直接使用原生 `sqlite3_prepare_v2`、`sqlite3_step`、`sqlite3_exec` 等系列 C API 进行事务控制、标签和标签组记录的原始增、删、改、查（对应用户原话："直接在 UI 类内部编写并执行 SQL 语句（INSERT/DELETE/事务控制）"），缺乏持久化封装。
 - **定位模块 2（AutoImportManager 全局排队）**：
-  在 `src/core/AutoImportManager.cpp` 中定义并持有了 `static std::recursive_mutex s_dbAccessMutex;`。它被无差别地置于 MFT 自动导入与 `handleRecursiveIngestion` DFS 级联分类递归建立的超长物理周期中（对应用户原话："static std::recursive_mutex s_dbAccessMutex 笼统保护所有盘符的对账、分类创建、数据库写入"），导致即使不同的物理盘符在进行独立的目录监视与扫描对账，也在这个静态锁上产生了不必要的互斥排队，完全扼杀了 WAL 模式多盘符并行的设计初衷（对应用户原话："导致不同盘符的独立扫描任务互相阻塞排队，废掉了 WAL 并发和多驱动器独立并行的设计初衷"）。
+  在 `src/core/AutoImportManager.cpp` 中定义并持有了 `static std::recursive_mutex s_dbAccessMutex;`。它被无差别地置于 MFT 自动导入与 `handleRecursiveIngestion` DFS 级联分类递归建立的超长物理周期中（对应用户原话："static std::recursive_mutex s_dbAccessMutex 笼统保护所有盘符的对账、分类创建、数据库写入"），导致即使不同的物理盘符在进行独立的目录监视与扫描对账，也在这个静态锁上产生了不必要的互斥排队，完全扼杀了 WAL 模式多盘符并行的设计初衷（对应用户原话："导致不同盘符的独立扫描任务互相阻塞排队，废掉了 WAL 并发 and 多驱动器独立并行的设计初衷"）。
 
 ## 3. 强制对照表
 
@@ -20,7 +20,7 @@
 | 3    | UI 只通过 TagRepository 暴露接口读写，不接触原生 sqlite3 API | 彻底擦除 `TagManagerView.cpp` 中的 `sqlite3_*` 调用，完全重构为对 `TagRepository` 的接口调用 | ✅ 一致 |
 | 4    | 提供不丢失老用户数据的平滑迁移方案，废置 C 盘数据，并写入 `tag_migration_completed` 标记 | 采用“静默废置迁移机制”：检查全局库 `system_stats` 里的标志。如有必要，读取 C 盘数据并转移至全局库，之后将 C 盘标签表废置，并在 `system_stats` 中写入 `tag_migration_completed` 强标记 | ✅ 一致 |
 | 5    | 按盘符拆分锁粒度，确保不同盘符对账扫描可以真正并行，并详细界定跨盘符共享资源 | 拆除全局大锁。建立按盘符隔离的物理元数据写入锁，同时定义唯一的全局库并发锁，并制定严格的“先全局，后盘符”两阶段锁顺序规范（对应用户原话："锁拆分方案：方向批准，但必须先解决以下两点，否则会引入新的死锁风险"） | ✅ 一致 |
-| 6    | 保证动态锁映射表 `m_driveDbMutexMap` 结构本身的线程安全 | 引入独立的轻量级读写锁/自旋互斥锁（如 `std::mutex m_mapMutex`）来严格保护锁映射表的运行时动态插入与检索过程（对应用户原话："m_driveDbMutexMap 这个映射表本身在运行时可能需要动态插入新盘符对应的锁对象，这个插入操作本身需要额外的保护机制"） | ✅ 一致 |
+| 6    | 保证动态锁映射表 `m_driveDbMutexMap` 结构本身的线程安全 | 引入独立的轻量级读写锁/自旋锁（如 `std::mutex m_mapMutex`）来严格保护锁映射表的运行时动态插入与检索过程（对应用户原话："m_driveDbMutexMap 这个映射表本身在运行时可能需要动态插入新盘符对应的锁对象，这个插入操作本身需要额外的保护机制"） | ✅ 一致 |
 
 ## 4. 详细解决方案
 
@@ -53,19 +53,19 @@
   }
   ```
 
-### 4.2 平滑静默废置数据迁移机制（对应用户原话："说明这次改动是否会影响现有用户数据的迁移"）
-为了兼容升级，系统在 `TagRepository` 初始化（如 `getAllGroups` 首次触发）或数据库加载（`DatabaseManager::init` 成功后）时，执行一次优雅的静默迁移逻辑：
-1. **优先强标记检查（对应用户原话："优先检查这个标记来判断是否需要迁移"）**：
-   查询全局库的 `system_stats` 表中是否存在 `key = 'tag_migration_completed'` 且 `value = 1` 的记录。若存在，直接跳过迁移。
+### 4.2 平滑静默废置数据迁移机制与线程安全加固
+为了兼容升级，系统在 `TagRepository` 初始化或数据库加载时，执行一次优雅、线程安全的静默迁移逻辑：
+1. **优先强标记检查与 `std::call_once` 保护（评审意见加固）**：
+   在 `TagRepository` 内部，我们使用静态变量 `std::once_flag s_migrationFlag;` 确保迁移方法 `checkAndMigrate()` 在整个生命周期中只被安全触发一次，杜绝任何并发初始化数据竞争风险。
 2. **执行条件及平滑复制（对应用户原话："平滑迁移到新存储位置的方案"）**：
-   若无标记，且尝试在全局库的 `tag_groups` 表中未发现任何记录，则触发迁移流程：
-   - 获取旧 C 盘数据库（即盘符对应的本地数据库）连接（如果存在 C 盘数据库文件）。
-   - 通过 `SELECT` 读取 C 盘库中 `tag_groups` 与 `tag_group_items` 的数据。
-   - 使用 `SqlTransaction` 开启全局库事务，将这些记录完整 `INSERT` 到全局数据库。
+   若全局库中 `system_stats` 表不存在 `tag_migration_completed = 1` 的标记，则启动迁移事务：
+   - 获取旧 C 盘数据库物理连接（若存在）。
+   - 通过 `SELECT` 提取旧 `tag_groups` / `tag_group_items` 数据。
+   - 使用 `SqlTransaction` 开启全局库事务，将其完整 `INSERT` 到全局数据库 `global.db` 中。
 3. **安全废置政策（对应用户原话："明确采用'废置'而非'清除'C盘旧数据"）**：
-   迁移成功后，**旧版 C 盘数据库中的标签物理数据不进行任何 DELETE 或 DROP TABLE 清理**，使其原样保留在磁盘上，为可能出现的突发迁移错误预留人工找回数据的余地。
+   迁移成功后，**旧版 C 盘数据库中的标签物理数据原样保留，绝不物理删除**，为任何可能的潜在恢复预留空间。
 4. **状态写入（对应用户原话："在 system_stats 中写入一个显式的 tag_migration_completed 标记"）**：
-   迁移操作成功提交后，在全局数据库的 `system_stats` 表中显式写入 `('tag_migration_completed', 1)` 记录，并写入脏标记确保落盘。下次程序启动即可在 0.1 毫秒内由于命中强标记而直接跳过。
+   迁移提交后，在全局数据库 `system_stats` 中强制写入 `('tag_migration_completed', 1)` 记录。下次启动时由于直接命中此标记而瞬间跳过检查。
 
 ### 4.3 剥离 UI 直接写 SQL（对应用户原话："UI 只通过 TagRepository 暴露的接口读写"）
 1. 彻底移除 `TagManagerView.cpp` 中包含的 `#include "sqlite3.h"` 头文件依赖。
@@ -73,22 +73,22 @@
 3. 替换为对应的 `QtConcurrent::run` 后台线程中调用 `TagRepository` 的封装接口。
 4. 在 `refresh()` 中，原本需要调用 `getMemoryDb(L"C")` 读取标签组的逻辑，直接替换为 `TagRepository::getAllGroups()`，使 UI 拥有极致纯粹的 MVC 视图渲染职责。
 
-### 4.4 高并发锁粒度细化设计
-拆除全局大锁 `s_dbAccessMutex`。
+### 4.4 高并发锁粒度细化设计与自死锁预防（评审意见加固）
+为了兼顾 MFT 扫描递归、深度对账的重入安全以及不同物理盘符的独立高并发处理，我们将原本的全局排他大锁 `s_dbAccessMutex` 拆分为：
 
-#### 1. 锁体系定义与映射表安全（对应用户原话："按盘符/按资源拆分锁粒度"）
-- **`m_globalDbMutex` (全局库保护锁)**：由 `DatabaseManager` 管理，专门用于保护全局库中的公共资源写入与读取安全。
-- **物理元数据写入隔离锁 (分盘符锁)**：不同物理盘符的数据由于互不相干，使用各自独立的互斥锁保护。
+- **`m_globalDbMutex` (全局库递归锁，`std::recursive_mutex`)**：
+  由 `DatabaseManager` 管理，专门用于保护全局库（`global.db`）中 `categories`、`category_items`、`system_stats` 等公共资源的写入、读取与级联修改，支持同一个线程下的伪嵌套或递归重入。
+- **物理元数据写入隔离锁 (分盘符递归锁，`std::recursive_mutex`)**：
+  采用 `std::recursive_mutex` 保护。不同盘符的分库数据彻底隔离。
 - **`m_driveDbMutexMap` 的线程安全保障（对应用户原话："映射表本身在运行时可能需要动态插入新盘符对应的锁对象"）**：
-  为避免动态加载新驱动器时在映射表的操作上产生数据竞争，我们使用独立的自旋锁或轻量级互斥锁 `m_mapMutex` 专门对锁映射结构本身加锁：
+  为避免动态加载新驱动器时在映射表的操作上产生数据竞争，我们使用独立的 `std::mutex m_mapMutex` 专门对锁映射结构本身加锁：
   ```cpp
-  // 伪代码示意：
-  std::shared_ptr<std::mutex> getDriveMutex(const std::wstring& volSerial) {
-      std::lock_guard<std::mutex> lock(m_mapMutex); // 强力保护映射表自身操作
+  // 线程安全的驱动锁提取：
+  std::shared_ptr<std::recursive_mutex> getDriveMutex(const std::wstring& volSerial) {
+      std::lock_guard<std::mutex> lock(m_mapMutex); // 强力保护映射结构本身
       auto it = m_driveDbMutexMap.find(volSerial);
       if (it == m_driveDbMutexMap.end()) {
-          // 动态插入新锁对象
-          auto mtx = std::make_shared<std::mutex>();
+          auto mtx = std::make_shared<std::recursive_mutex>(); // 采用递归锁保障重入安全
           m_driveDbMutexMap[volSerial] = mtx;
           return mtx;
       }
@@ -104,11 +104,11 @@
   ```cpp
   void someBusinessLogic(const std::wstring& volSerial) {
       // 第一步：无条件先获取全局库锁
-      std::lock_guard<std::mutex> globalLock(DatabaseManager::instance().getGlobalMutex());
+      std::lock_guard<std::recursive_mutex> globalLock(DatabaseManager::instance().getGlobalMutex());
 
       // 第二步：再获取特定盘符的分库隔离锁
       auto driveMutex = DatabaseManager::instance().getDriveMutex(volSerial);
-      std::lock_guard<std::mutex> driveLock(*driveMutex);
+      std::lock_guard<std::recursive_mutex> driveLock(*driveMutex);
 
       // 执行具体业务...
   }
