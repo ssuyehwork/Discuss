@@ -70,7 +70,18 @@
 | **IOCP Monitor Thread** | 后台工作线程 | `NativeFolderWatcher` 内部 Win32 IOCP 线程。 | 监听托管库与自定义文件夹的物理变化。 | 常驻，直到监控移除 |
 | **Concurrent Thread Pool** | 线程池 | `QThreadPool::globalInstance()` / `QtConcurrent::run()`。 | 执行耗时的目录递归扫描（`ContentPanel::loadDirectory` 后台扫描）、视觉颜色提取（`UiHelper::extractPalette`）、图像尺寸读取以及大容量数据批量落盘事务。 | 临时，按需唤醒与销毁 |
 
-### 2.2 所有跨线程通信（IPC）机制点
+### 2.2 NativeFolderWatcher (IOCP) 监控目录映射机制
+
+经过对 `CoreController::startSystem()` 和 `MainWindow::showNewAutoImportDialog()` 的代码走查，`NativeFolderWatcher (IOCP)` 机制主要监控以下两类物理文件夹：
+
+1.  **分区的托管库文件夹（Managed Library Folders）**：
+    *   *扫描触发与位置*：启动时（`src/core/CoreController.cpp` 第 56-68 行），系统遍历物理驱动器。如果磁盘包含有效卷序列号（`volSerial != L"UNKNOWN"`），系统会通过 `MetadataManager::getManagedLibraryPath(volSerial, letter)` 提取该分区对应的常驻托管库文件夹物理路径（如位于 `D:/ArcMeta.Library_D/`）。
+    *   *监控建立*：调用 `NativeFolderWatcher::instance().addWatch(managedAbsW)` 对每个在线磁盘分区的托管库建立 IOCP 句柄监听。
+2.  **用户自定义监控文件夹（Custom Monitored Folders）**：
+    *   *启动时加载*：启动时（`src/core/CoreController.cpp` 第 70-80 行），系统读取持久化配置 `AppConfig` 的 `"DriveBar/CustomMonitoredFolders"` 键名，提取用户先前添加的所有自定义监控物理目录。对每项标准路径，同步调用 `addWatch(normPath)` 启动 IOCP 变化监听，并在后台线程对该目录执行递归扫描入库（`AutoImportManager::handleRecursiveIngestion`）。
+    *   *动态新增监控*：当用户通过界面盘符栏空白右键菜单动态添加自动导入文件夹时（`src/ui/MainWindow.cpp` 第 1805-1825 行），在用户选定目标物理路径后，系统不仅将其持久化到 `AppConfig`，还会直接调用 `NativeFolderWatcher::instance().addWatch(normPath)` 即时动态点火激活对该自定义文件夹的 IOCP 变化监控。
+
+### 2.3 所有跨线程通信（IPC）机制点
 
 #### A. 信号与槽（Signals / Slots）
 *   **`CoreController::initializationFinished` 信号**
