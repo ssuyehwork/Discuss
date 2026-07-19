@@ -52,4 +52,15 @@
 ### 3.3 解决方案概述
 - 将 `FERREX-META/src/ui/` 中的 `IScanResultView.h`、`ListResultView.h/cpp`、`JustifiedResultView.h/cpp`、`GridResultView.h/cpp` 作为三大视图内核进行移植，并融入当前程序。
 - 在工具栏或标题栏新增 `m_sizeSlider` (QSlider)，设置其范围为 `32` 到 `256`，在值发生变动时通知当前激活视图更新 `setIconSize`。
-- 在 `MainWindow` 或 `ContentPanel` 的 `eventFilter` 中拦截 `QEvent::Wheel`。一旦检测到 `wheelEvent->modifiers() & Qt::ControlModifier`，根据滚轮方向将 `m_sizeSlider` 的值以 `+10` / `-10` 步进进行调整，通过单值驱动所有视图和 Delegates 实现统一的卡片和图标大小动态重载。
+- 在 `MainWindow` 或 `ContentPanel` 的 `eventFilter` 中拦截 `QEvent::Wheel`。一旦检测到 `wheelEvent->modifiers() & Qt::ControlModifier`，根据滚轮方向将 `m_sizeSlider` 的值以 `+10` / `-10` 步进进行调整，通过单值驱动所有视图 and Delegates 实现统一的卡片和图标大小动态重载。
+
+
+## 4. [2026-07-06] 标签视图界面 SQL 裸写重构与 MVC 解耦
+### 4.1 核心需求
+`TagManagerView` 是标准的表现层 UI View 控件，但其多处直接执行底层 `sqlite3` API （如 `sqlite3_prepare_v2`）裸写 SQL 语句，且硬编码了对特定 C 盘数据库连接的调用。在百万级元数据大并发处理时易导致死锁或 `SQLITE_BUSY` 冲突。需求是彻底废除 `TagManagerView` 的 SQL 裸写职责，将其下沉至元数据/数据持久层管理器中。
+
+### 4.2 解决方案概述
+1. **持久层下沉**：在 `MetadataManager` 中新增或封装对标签、标签组的增删改查底层原子接口，统一管理多盘符并发下的事务与锁。
+2. **MVC 分离**：重构 `TagManagerView` 内部关于标签组与标签的加载、新建、删除以及关联逻辑。UI 仅保留事件触发与 Model/视图刷新，彻底实现“哑表现”与“数据持久层”的清晰剥离。
+3. **消除硬编码**：解耦所有硬编码盘符获取连接的脏逻辑，统一走数据服务层的路由解析。
+4. **对应方案文档**：Modification_Plan-23.md
