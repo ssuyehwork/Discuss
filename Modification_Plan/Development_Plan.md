@@ -29,7 +29,7 @@
 
 ### 2.3 解决方案概述
 1. **状态维护**：
-   在 `ContentPanel` 中维护 `SortType m_sortType` 和 `Qt::SortOrder m_sortOrder`。
+   in `ContentPanel` 中维护 `SortType m_sortType` 和 `Qt::SortOrder m_sortOrder`。
 2. **菜单注入**：
    在右键菜单弹出逻辑中，通过 `QActionGroup` 注入“排序”选项组并同步勾选状态。
 3. **底层重排重写**：
@@ -64,3 +64,31 @@
 2. **MVC 分离**：重构 `TagManagerView` 内部关于标签组与标签的加载、新建、删除以及关联逻辑。UI 仅保留事件触发与 Model/视图刷新，彻底实现“哑表现”与“数据持久层”的清晰剥离。
 3. **消除硬编码**：解耦所有硬编码盘符获取连接的脏逻辑，统一走数据服务层的路由解析。
 4. **对应方案文档**：Modification_Plan-23.md
+
+
+## 5. [2026-07-20] 账本核对审计 (fullRecount) 增量化重构与 MVC 分离
+### 5.1 核心需求
+`CategoryRepo::fullRecount`（判定为 FAIL 的第 3 项）不仅包含对全账本核对审计和全局静态计数器维护等非分类持久化职责（职责不单一），而且在百万记录规模下，每次启动或刷新分类时，会强行线性遍历 `MetadataManager` 数百万条记录的内存快照进行对账。这是一个明显的性能灾难（耗时高、高频持有大锁、产生不可恢复的 UI 假死）。需要对该全量审计进行**增量化重构**并从主加载链条剥离。
+
+### 5.2 解决方案概述
+1. **废除 fullRecount 的全量线性对账**：
+   彻底删除或屏蔽在系统初始化时阻塞主线程调用的 `fullRecount` $O(N)$ 遍历计算。
+2. **构建“内存增量对账模型”**：
+   在内存中通过分类变动（如归类、去分类、批量删除）的信号和原子计数增减，维护瞬时、实时的已分类/未分类计数；全局数据库表（如 `system_stats`）中维护分类计数持久化，仅在关键原子操作中通过数据库级别增量更新（无需全表/全缓存线性重数）。
+3. **剥离全局静态计数器职责**：
+   将 `s_totalFileCount` 计数器和回收站数据同步从 `CategoryRepo` 剥离出去，确保其只专注于分类树与关联表的关系。
+4. **对应方案文档**：Modification_Plan-24.md
+
+
+## 6. [2026-07-21] DatabaseManager 纯酸化与物理 I/O 及纠偏逻辑剥离
+### 6.1 核心需求
+`DatabaseManager`（判定为 FAIL 的第 1 项）核心职责应仅为 SQLite 连接管理与高并发 I/O 任务调度。但其内部直接调用了 Windows 物理文件 API（`SetFileAttributesW` 设置隐藏属性）、`QFile::rename` 物理盘符纠偏以及对无效冗余历史数据库的清理、移动等物理磁盘动作。这些非数据库事务逻辑降低了其高可靠度并引入了多线程下的外部磁盘 I/O 阻塞风险，亟待拆分纯酸化。
+
+### 6.2 解决方案概述
+1. **物理隐藏下沉剥离**：
+   彻底废除 `DatabaseManager::ensureHidden` 及相关 Windows.h 调用，将文件隐藏属性标记交由上层的物理搬运层 `ImportHelper` 或 `ShellHelper` 实现。
+2. **盘符路由与数据库文件名自适应纠偏解耦**：
+   重构 `DatabaseManager::getMemoryDb` 接口，废除其中对历史数据库物理 `rename`、冗余无效应答及清理行为。
+3. **建立纯酸的底层连接架构**：
+   `DatabaseManager` 纯粹地通过 wstring 绝对物理路径，加载 SQLite 连接和分配并发事务（WriteGuard / SqlTransaction），将 I/O 线程和内存备份高度内聚，确保 100% 数据库专职单一性。
+4. **对应方案文档**：Modification_Plan-25.md
