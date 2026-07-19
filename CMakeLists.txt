@@ -55,6 +55,14 @@ set(SOURCES
     src/core/SyncStatusService.h
     src/core/AutoImportManager.cpp
     src/core/AutoImportManager.h
+    src/core/CategoryStructureMapper.cpp
+    src/core/CategoryStructureMapper.h
+    src/core/HistoryPathManager.cpp
+    src/core/HistoryPathManager.h
+    src/core/DiskSearchEngine.cpp
+    src/core/DiskSearchEngine.h
+    src/core/FileMigrationHandler.cpp
+    src/core/FileMigrationHandler.h
     src/core/AppConfig.h
     src/mft/UsnWatcher.cpp
     src/mft/UsnWatcher.h
@@ -66,6 +74,12 @@ set(SOURCES
     src/meta/TagRepository.h
     src/meta/DatabaseManager.cpp
     src/meta/DatabaseManager.h
+    src/meta/DbFileSystemHelper.cpp
+    src/meta/DbFileSystemHelper.h
+    src/meta/FileMetadataExtractor.cpp
+    src/meta/FileMetadataExtractor.h
+    src/meta/MetadataRepository.cpp
+    src/meta/MetadataRepository.h
     src/meta/BatchRenameEngine.cpp
     src/meta/BatchRenameEngine.h
     src/meta/MetadataDefs.h
@@ -155,6 +169,14 @@ set(SOURCES
     src/ui/ToolTipOverlay.h
     src/ui/TreeItemDelegate.h
     src/ui/UiHelper.h
+    src/ui/StylePainter.cpp
+    src/ui/StylePainter.h
+    src/ui/PaletteAnalyzer.cpp
+    src/ui/PaletteAnalyzer.h
+    src/ui/AsyncJobScheduler.h
+    src/ui/ShellIconManager.cpp
+    src/ui/ShellIconManager.h
+    src/ui/UiHelper.cpp
     src/util/ShellHelper.cpp
     src/util/ShellHelper.h
     src/util/ImportHelper.cpp

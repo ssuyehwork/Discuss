@@ -1,4 +1,5 @@
 #include "DatabaseManager.h"
+#include "DbFileSystemHelper.h"
 #include <chrono>
 #include <QDir>
 #include <QFile>
@@ -107,10 +108,6 @@ QString DatabaseManager::getAppDir() {
     return QCoreApplication::applicationDirPath();
 }
 
-void DatabaseManager::ensureHidden(const std::wstring& path) {
-    SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_HIDDEN);
-}
-
 bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
     std::string utf8Path = QString::fromStdWString(diskPath).toUtf8().toStdString();
     qDebug() << "[DB] 内存数据库模式开启 ->" << QString::fromStdString(utf8Path);
@@ -130,7 +127,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         return false;
     }
     sqlite3_busy_timeout(conn.memDb, 25000);
-    ensureHidden(diskPath);
+    DbFileSystemHelper::ensureFileHidden(diskPath);
 
     // 使用 SQLite Backup API 将 conn.diskDb 的数据一次性导入内存 conn.memDb
     sqlite3_backup* backup = sqlite3_backup_init(conn.memDb, "main", conn.diskDb, "main");
@@ -464,10 +461,8 @@ sqlite3* DatabaseManager::getMemoryDb(const std::wstring& volumeSerial, const QS
     if (m_driveDbs.find(volumeSerial) != m_driveDbs.end()) {
         if (!cleanLetter.isEmpty()) {
             QString currentDiskPath = QString::fromStdWString(m_driveDbs[volumeSerial].diskPath);
-            QString expectedFileName = QString("Arcmeta_%1_%2.db").arg(QString::fromStdWString(volumeSerial).toUpper()).arg(cleanLetter);
-            if (!currentDiskPath.endsWith(expectedFileName)) {
-                qDebug() << "[DB] 检测到盘符漂移，执行动态迁移:" << currentDiskPath << " -> " << expectedFileName;
-                
+            QString targetPath = DbFileSystemHelper::handleDriveDriftRename(volumeSerial, driveLetter, currentDiskPath, getAppDir());
+            if (targetPath != currentDiskPath) {
                 DbConnection& conn = m_driveDbs[volumeSerial];
                 saveDb(conn); // 先持久化
                 
@@ -477,28 +472,7 @@ sqlite3* DatabaseManager::getMemoryDb(const std::wstring& volumeSerial, const QS
                 conn.memDb = nullptr;
                 conn.diskDb = nullptr;
 
-                QString metaDir = getAppDir() + "/.arcmeta";
-                QString targetPath = metaDir + "/" + expectedFileName;
-                qDebug() << "[DB] 准备执行重命名:" << currentDiskPath << "->" << targetPath;
-                
-                // 如果目标已存在且不是自己，先将其移走（按用户规则重命名为无效）
-                if (QFile::exists(targetPath) && targetPath != currentDiskPath) {
-                    QString invalidBase = QString("%1/Arcmeta_%2_无效").arg(metaDir).arg(QString::fromStdWString(volumeSerial).toUpper());
-                    QString invalidPath = invalidBase + ".db";
-                    int counter = 1;
-                    while (QFile::exists(invalidPath)) {
-                        invalidPath = QString("%1_%2.db").arg(invalidBase).arg(counter++);
-                    }
-                    qDebug() << "[DB] 目标文件已存在，先将其重命名为无效:" << invalidPath;
-                    QFile::rename(targetPath, invalidPath);
-                }
-
-                if (QFile::rename(currentDiskPath, targetPath)) {
-                    conn.diskPath = targetPath.toStdWString();
-                    qDebug() << "[DB] 重命名成功";
-                } else {
-                    qWarning() << "[DB] 重命名失败";
-                }
+                conn.diskPath = targetPath.toStdWString();
                 
                 // 重新加载到内存
                 loadDb(conn.diskPath, conn);
@@ -535,19 +509,7 @@ sqlite3* DatabaseManager::getMemoryDb(const std::wstring& volumeSerial, const QS
                     targetPath = bestInfo.absoluteFilePath();
                 }
 
-                // 处理冲突的其他旧文件 (Plan-97 补充要求)
-                for (int i = 1; i < list.size(); ++i) {
-                    QString conflictPath = list.at(i).absoluteFilePath();
-                    QString invalidBase = QString("%1/Arcmeta_%2_无效").arg(metaDir).arg(serialStr);
-                    QString invalidPath = invalidBase + ".db";
-                    int counter = 1;
-                    while (QFile::exists(invalidPath)) {
-                        invalidPath = QString("%1_%2.db").arg(invalidBase).arg(counter++);
-                    }
-                    if (QFile::rename(conflictPath, invalidPath)) {
-                        qDebug() << "[DB] 冲突处理：将冗余数据库标记为无效" << list.at(i).fileName() << "->" << QFileInfo(invalidPath).fileName();
-                    }
-                }
+                DbFileSystemHelper::cleanupInvalidDatabases(volumeSerial, getAppDir());
             }
         }
 

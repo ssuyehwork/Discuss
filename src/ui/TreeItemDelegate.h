@@ -9,7 +9,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include "ContentPanel.h"
-#include "../meta/MetadataManager.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 using namespace ArcMeta::Style;
