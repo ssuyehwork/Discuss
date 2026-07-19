@@ -1,8 +1,12 @@
 # 备份备注
 
-**备份时间**：2026-07-17 21:30:44  
-**备份目录**：Buk_20260717_213043  
+**备份时间**：2026-07-19 00:39:29  
+**备份目录**：Buk_20260719_003923  
 
 ---
 
-在内容容器（ContentPanel）右键菜单中注入二级菜单“排序”，其子菜单包括名称、创建日期、修改日期、扩展名、大小、尺寸、评分等7种属性单选选项、1条分割线及升序、降序等2种方向单选选项。通过 QActionGroup 实现属性和方向选项的单选联动，并通过 AppConfig 实现持久化保存。重写并扩充 FilterProxyModel::lessThan 底层排序比较算法，使其不再单纯依赖列序号，而是利用多维真实物理数值高精度类型比对（规避了字典序导致的排序错乱），并在触发切换时调用 invalidate() 和 sort() 实现列表和网格等所有视图下的无闪烁、无感实时重排。
+完成了 Modification_Plan-17.md 关于侧边栏计数服务及 24h 滑动窗口的全部整改工作：
+1. 在 CategoryRepo 中定义并引入 7 个静态 std::atomic<int> 计数寄存器及全局标签去重集合，重构 CategoryRepo::getSystemCounts 瞬间提取加载实现 O(1) 检索，消灭 system-wide 线性扫描；
+2. 精细梳理并重写新注册、打标、设失效、移入/移出回收站和分配分类（MetadataManager / CategoryRepo）等多维写链路，瞬间进行 fetch_add/fetch_sub 的极速增量维护；
+3. 设计有序双端队列 std::deque + 快速哈希 set 架构对 atime 变动更新，在 15秒 DatabaseManager::flushAll 后台定时器中对队头旧数据执行 O(K) 局部时间滑动剪枝，彻底消灭 recent 线性全量时间戳扫描；
+4. 取消程序启动时的主线程 fullRecount() 阻碍，改用 loadStatsFromDb 同步极速加载 system_stats 快照秒开界面；在加载 2.0s 后拉起后台子线程 QtConcurrent::run 对账，最终以 fetch_add 修正 delta 偏差确保最终一致性。

@@ -172,6 +172,7 @@ private:
     void closeDb(DbConnection& conn);
 
     QString getAppDir();
+    void ensureHidden(const std::wstring& path);
 };
 
 class WriteGuard {

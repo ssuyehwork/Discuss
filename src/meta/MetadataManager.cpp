@@ -22,8 +22,6 @@
 #include "MetadataManager.h"
 #include "MetadataDefs.h"
 #include "DatabaseManager.h"
-#include "FileMetadataExtractor.h"
-#include "MetadataRepository.h"
 #include "../core/AppConfig.h"
 #include "../mft/MftReader.h"
 #include "../meta/CategoryRepo.h"
@@ -1690,7 +1688,34 @@ bool MetadataManager::isInsideManagedLibrary(const std::wstring& path) {
 }
 
 bool MetadataManager::fetchWinApiMetadataDirect(const std::wstring& path, std::string& outId128, std::wstring* outFrn, long long* outSize, std::wstring* outType, long long* outCtime, long long* outMtime, long long* outAtime) {
-    return FileMetadataExtractor::fetchWinApiMetadataDirect(path, outId128, outFrn, outSize, outType, outCtime, outMtime, outAtime);
+    HANDLE hFile = CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    std::wstring vol = getVolumeSerialNumber(path);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        if (outFrn) *outFrn = MetadataManager::generateDeterministicFrn(path);
+        outId128 = MetadataManager::generateDeterministicSha256Id(path);
+        return false;
+    }
+    BY_HANDLE_FILE_INFORMATION basicInfo;
+    if (GetFileInformationByHandle(hFile, &basicInfo)) {
+        wchar_t frnBuf[17];
+        unsigned long long fullFrn = (static_cast<unsigned long long>(basicInfo.nFileIndexHigh) << 32) | basicInfo.nFileIndexLow;
+        swprintf(frnBuf, 17, L"%016llX", fullFrn);
+        if (outFrn) *outFrn = frnBuf;
+        outId128 = MetadataManager::generateFallbackFid(vol, frnBuf);
+        if (outSize) *outSize = (static_cast<long long>(basicInfo.nFileSizeHigh) << 32) | basicInfo.nFileSizeLow;
+        if (outType) *outType = (basicInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? L"folder" : L"file";
+        auto toMS = [](const FILETIME& ft) {
+            ULARGE_INTEGER ull; ull.LowPart = ft.dwLowDateTime; ull.HighPart = ft.dwHighDateTime;
+            return static_cast<long long>((ull.QuadPart - 116444736000000000ULL) / 10000ULL);
+        };
+        if (outCtime) *outCtime = toMS(basicInfo.ftCreationTime);
+        if (outMtime) *outMtime = toMS(basicInfo.ftLastWriteTime);
+        if (outAtime) *outAtime = toMS(basicInfo.ftLastAccessTime);
+        CloseHandle(hFile);
+        return true;
+    }
+    CloseHandle(hFile);
+    return false;
 }
 
 void MetadataManager::syncPhysicalMetadata(const std::wstring& path, bool notify) { persistAsync(path, notify); }
@@ -1701,30 +1726,44 @@ void MetadataManager::activateItem(const std::wstring& path) {
 
 void MetadataManager::tryExtractDimensions(const std::wstring& path) {
     std::wstring nPath = normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (!info.isFile()) return;
+
     int w = 0, h = 0;
-    if (FileMetadataExtractor::extractDimensions(nPath, w, h)) {
+    
+    // 2026-07-xx 按照计划：SVG 需特殊处理，防止 QImageReader 获取到错误的默认尺寸
+    if (info.suffix().toLower() == "svg") {
+        QSvgRenderer renderer(info.absoluteFilePath());
+        if (renderer.isValid()) {
+            QSize sz = renderer.defaultSize();
+            w = sz.width();
+            h = sz.height();
+        }
+    } else {
+        // 方案 A: 尝试通过 QImageReader 获取尺寸 (仅读取头部，极快)
+        QImageReader reader(info.absoluteFilePath());
+        QSize sz = reader.size();
+        if (sz.isValid()) {
+            w = sz.width();
+            h = sz.height();
+        }
+    }
+    
+    // 2026-07-xx 按照 Plan-29：如果 QImageReader 失败且是图像类型，尝试 Windows Shell 属性
+#ifdef Q_OS_WIN
+    if (w <= 0 || h <= 0) {
+        // PSD/AI 等格式可能需要 Shell 接口
+        // TODO: 后续可集成 IPropertyStore 进一步增强专业格式识别
+    }
+#endif
+
+    if (w > 0 && h > 0) {
         std::unique_lock<std::shared_mutex> lock(instance().m_mutex);
         RuntimeMeta& meta = instance().m_cache[nPath];
         meta.width = w;
         meta.height = h;
         qDebug() << "[Metadata] 尺寸解析成功:" << w << "x" << h << QString::fromStdWString(nPath);
     } else {
-        // 对于非标准/特殊格式，我们可以在此处保留原有的 SVG 处理
-        QFileInfo info(QString::fromStdWString(nPath));
-        if (info.isFile() && info.suffix().toLower() == "svg") {
-            QSvgRenderer renderer(info.absoluteFilePath());
-            if (renderer.isValid()) {
-                QSize sz = renderer.defaultSize();
-                w = sz.width();
-                h = sz.height();
-                std::unique_lock<std::shared_mutex> lock(instance().m_mutex);
-                RuntimeMeta& meta = instance().m_cache[nPath];
-                meta.width = w;
-                meta.height = h;
-                qDebug() << "[Metadata] SVG 尺寸解析成功:" << w << "x" << h << QString::fromStdWString(nPath);
-                return;
-            }
-        }
         qDebug() << "[Metadata] 尺寸解析跳过或失败:" << QString::fromStdWString(nPath);
     }
 }
