@@ -52,7 +52,7 @@
 ### 3.3 解决方案概述
 - 将 `FERREX-META/src/ui/` 中的 `IScanResultView.h`、`ListResultView.h/cpp`、`JustifiedResultView.h/cpp`、`GridResultView.h/cpp` 作为三大视图内核进行移植，并融入当前程序。
 - 在工具栏或标题栏新增 `m_sizeSlider` (QSlider)，设置其范围为 `32` 到 `256`，在值发生变动时通知当前激活视图更新 `setIconSize`。
-- 在 `MainWindow` 或 `ContentPanel` 的 `eventFilter` 中拦截 `QEvent::Wheel`。一旦检测到 `wheelEvent->modifiers() & Qt::ControlModifier`，根据滚轮方向将 `m_sizeSlider` 的值以 `+10` / `-10` 步进进行调整，通过单值驱动所有视图 and Delegates 实现统一的卡片和图标大小动态重载。
+- 在 `MainWindow` 或 `ContentPanel` 的 `eventFilter` 中拦截 `QEvent::Wheel`。一旦检测到 `wheelEvent->modifiers() & Qt::ControlModifier`，根据滚轮方向将 `m_sizeSlider` 的值以 `+10` / `-10` 步进进行调整，通过单值驱动所有视图 and Delegates 实现统一的卡片 and 图标大小动态重载。
 
 
 ## 4. [2026-07-06] 标签视图界面 SQL 裸写重构与 MVC 解耦
@@ -104,7 +104,7 @@
 2. **全量接入 FTS5 Trigram 高性能模糊检索**：
    将模糊匹配职责剥离下沉至 SQLite 已配置的分词虚拟表 `metadata_fts` 中。利用 SQL 进行高性能模糊索引分词 $O(\log N)$ 检索，并仅返回匹配成功的 FID 列表。
 3. **极速反查内存快速同步**：
-   对 FTS5 检出的少量命中项目，直接利用 `MetadataManager` 已具备的 $O(1)$ 的 FID 反查内存缓存（`m_cache`）路径接口输出结果，从而使百万级搜索从 **“秒级”** 的 UI 灾难，瞬间解耦降维至 **“5毫秒以内”** 的丝滑体验！
+   对 FTS5 检出的少量命中项目，直接利用 `MetadataManager` 已具备 of $O(1)$ 的 FID 反查内存缓存（`m_cache`）路径接口输出结果，从而使百万级搜索从 **“秒级”** 的 UI 灾难，瞬间解耦降维至 **“5毫秒以内”** 的丝滑体验！
 4. **对应方案文档**：Modification_Plan-26.md
 
 
@@ -134,3 +134,17 @@
 3. **右键业务策略解耦**：
    将右键菜单里判断是否为托管库、是否支持同步/重新扫描的逻辑，通过高阶解耦或代理模型进行映射，使得 `ContentPanel` 专注于视图组件的事件承载与布局。
 4. **对应方案文档**：Modification_Plan-28.md
+
+
+## 10. [2026-07-25] AutoImportManager 职责解耦与多盘符并行无大锁优化
+### 10.1 核心需求
+`AutoImportManager`（判定为 FAIL 的第 7 项）虽然名义上是“后台物理对账与扫描监听”，但其职责高度不单一：它插手了 AppConfig 中 14 条历史记录落盘、在递归中级联构建 Category 树。此外，在 `handleRecursiveIngestion` 中，其头部持有了 DatabaseManager 的全局数据库同步大锁，这导致多盘符并行扫描对账时发生无意义的互斥串行排队。
+
+### 10.2 解决方案概述
+1. **历史导航记录职责剥离**：
+   将 `recordRecentVisitedFolder` 与 `getRecentVisitedFolders` 历史操作剪切，归并入专职的配置或导航历史服务层进行管理，消除其对 USN 物理引擎的侵入。
+2. **1:1 级联 Category 树构建算法移出下沉**：
+   将 DFS 级联扫描并构建同步 `categories` 的核心算法下沉至 `CategoryRepo` 专有业务接口中。
+3. **消除 Global 大锁，推行多盘符并发对账**：
+   废除 `handleRecursiveIngestion` 中的全局大锁 `DatabaseManager::instance().getGlobalMutex()`。在对账时依靠驱动器私有的卷连接锁独立并发对各自的分库进行对账与注册，最大化 WAL 数据库多驱动器异步高并发吞吐优势。
+4. **对应方案文档**：Modification_Plan-29.md
