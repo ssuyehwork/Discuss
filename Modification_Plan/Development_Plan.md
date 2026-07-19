@@ -106,3 +106,17 @@
 3. **极速反查内存快速同步**：
    对 FTS5 检出的少量命中项目，直接利用 `MetadataManager` 已具备的 $O(1)$ 的 FID 反查内存缓存（`m_cache`）路径接口输出结果，从而使百万级搜索从 **“秒级”** 的 UI 灾难，瞬间解耦降维至 **“5毫秒以内”** 的丝滑体验！
 4. **对应方案文档**：Modification_Plan-26.md
+
+
+## 8. [2026-07-23] UiHelper 上帝辅助类纯净化与多媒体系统总线提取剥离
+### 8.1 核心需求
+`UiHelper`（判定为 FAIL 的第 6 项）名义上是轻量“UI样式与渲染辅助类”，但其实际成为了高耦合的“系统多媒体提取及多线程调度总线中心”。内部混合了 QPainter 渲染、物理临时文件计算、Windows Shell COM 缩略图提取、CIE76 重型色差量化、以及基于 QFuture 的多任务多线程后台调度这 5 种不相关职责。其命名与实际职责严重不符（FAIL 第 7 项），导致极高的跨层级 include 编译膨胀（编译焦油坑），必须将其纯净化、分流剥离。
+
+### 8.2 解决方案概述
+1. **上帝类退化（纯样式哑辅助）**：
+   彻底剥离 `UiHelper` 中所有物理系统 COM 调用和多线程任务派发机制，退化为仅包含 `parseColorName`、`applyMenuStyle` 等无状态纯样式几何计算与渲染包装。
+2. **多媒体色差提取算法下沉**：
+   将 `extractPalette`（CIE76 算法）、`quantizeColor` 等重型色度量化和对比机制，100% 移入并收拢至 `MediaColorExtractor` 组件，实现算法高内聚。
+3. **Windows 物理系统 Shell COM 图标提供器分流**：
+   将 `getShellThumbnail`、`getFileIcon` 物理图标和缩略图提取逻辑完全交由 `WindowsShellThumbnailProvider` 独立实现。
+4. **对应方案文档**：Modification_Plan-27.md
