@@ -10,7 +10,7 @@
 #### (a) `MetadataManager::forEachCachedItem` 自死锁问题修复验证
 在先前 Plan-15 实施中，系统已在主线程/异步线程中全面消除由 `forEachCachedItem` 回调引起的自死锁隐患：
 1. **统计路径绕过**：侧边栏 `getSystemCounts` 统计通过 `Modification_Plan-17.md` 引入的“内存原子寄存器”实现 $O(1)$ 读取，彻底不再通过 `forEachCachedItem` 遍历内存缓存。
-2. **写动作完全剥离**：在 `CategoryRepo::fullRecount()` 等仅存的物理校验回调中，重构为了“两步走”防重入设计：
+2. **写动作完全剥离**：在仅存的物理校验等回调中，重构为了“两步走”防重入设计：
    - *第一步*（读锁周期）：在 `forEachCachedItem` 内部纯读取信息，将需要检测的路径追加到局部容器 `itemsToCheck`（不调用任何会申请写锁的 `setInvalid` 接口）。
    - *第二步*（锁释放周期）：`forEachCachedItem` 运行结束，其拥有的 shared 读锁已被释放。随后在循环中遍历 `itemsToCheck`，安全地调用 `MetadataManager::instance().setInvalid`（从而安全地、不产生重叠地获取 write 写锁），彻底杜绝了因“读锁未释放即尝试升级为写锁”引起的自死锁。
 
@@ -39,7 +39,7 @@ Plan-16 已经实际执行完成。代码库中建立的双锁（`m_globalDbMute
 
 | 编号 | 用户原话 / 我的理解 | 方案对应点 | 是否一致 |
 |------|---------------------|------------|----------|
-| 1    | 看看“ArchitectureComplianceAudit.md”里还有哪些职责不单一且未被修改的 | 对审计报告中剩余的 7 个 FAIL 项进行全面重构规划，并解决历史自死锁、锁顺序疑问 | ✅ 一致 |
+| 1    | 看看“ArchitectureComplianceAudit.md”里还有哪些职责不单一且未被修改的 | 对审计报告中剩余 of 7 个 FAIL 项进行全面重构规划，并解决历史自死锁、锁顺序疑问 | ✅ 一致 |
 | 2    | 需要继续完成职责单一的规划 | 提供清晰的子类/接口拆分方案，隔离 UI 绘制、持久层、物理 I/O 和核心算法 | ✅ 一致 |
 
 ## 4. 详细解决方案
@@ -86,7 +86,7 @@ Plan-16 已经实际执行完成。代码库中建立的双锁（`m_globalDbMute
 
 #### 1. 拆分模块定义
 - **`StylePainter`**：
-  专职处理纯 Qt GUI 界面渲染逻辑，包括 QStyle 设置、圆角按钮绘制辅助、主题 HSL 颜色推导。
+  专职处理纯 Qt GUI 界面渲染逻辑，包括 QStyle设置、圆角按钮绘制辅助、主题 HSL 颜色推导。
 - **`PaletteAnalyzer`**：
   封装纯粹的 CIE76 色差匹配算法、显著性调色板聚类核心数学计算。
 - **`AsyncJobScheduler`**：
@@ -95,7 +95,7 @@ Plan-16 已经实际执行完成。代码库中建立的双锁（`m_globalDbMute
   专职负责 Win32 Shell COM（`IShellItemImageFactory`）的多媒体缩略图提取、系统内置文件大图标获取逻辑，并全面收拢原 `UiHelper` 里的所有高风险静态共享状态。
 
 #### 2. 共享状态生命周期精细化管理
-原 `UiHelper` 中懒加载产生的 static 局部变量 `s_fileIconCache`（图标缓存）、`s_loadingKeys`（并发加载拦截集合）及全局通知器 `IconLoadNotifier`，在重构后将被升级并完全由 `ShellIconManager` 单例的生命周期统一管理：
+原 `UiHelper` 中懒加载产生的 static 局部变量 `s_fileIconCache`（图标缓存）、`s_loadingKeys`（并发加载拦截集合）及通知器 `IconLoadNotifier`，在重构后将被升级并完全由 `ShellIconManager` 单例的生命周期统一管理：
 ```cpp
 class ShellIconManager : public QObject {
     Q_OBJECT
@@ -161,21 +161,27 @@ signals:
 - **物理迁移中枢 (`FileMigrationHandler`)**：
   在 `CategoryPanel` 之外独立封装物理拖拽迁移、覆盖策略、移动动作的规则检查器（`FileMigrationHandler`）。UI 只负责收集拖拽的物理路径，随后抛给该 Handler 触发 MFT/USN 并行物理迁移与事务提交。
 
-## 5. 修改边界声明【红线】
+## 5. 修改边界声明【范围】
 
 **本次方案涉及范围：**
-- [ ] 模块/文件：
-  - `src/meta/DatabaseManager.h` / `.cpp`
-  - `src/meta/MetadataManager.h` / `.cpp`
-  - `src/ui/UiHelper.h`
-  - `src/core/AutoImportManager.h` / `.cpp`
-  - `src/core/CoreController.h` / `.cpp`
-  - `src/ui/ThumbnailDelegate.cpp` / `TreeItemDelegate.h`
-  - `src/ui/CategoryModel.cpp` / `CategoryPanel.cpp`
+- [ ] 模块/文件：`src/meta/DatabaseManager.h` (第 80-175 行)
+- [ ] 模块/文件：`src/meta/DatabaseManager.cpp` (第 50-600 行)
+- [ ] 模块/文件：`src/meta/MetadataManager.h` (第 50-345 行)
+- [ ] 模块/文件：`src/meta/MetadataManager.cpp` (第 120-2400 行)
+- [ ] 模块/文件：`src/ui/UiHelper.h` (第 30-450 行)
+- [ ] 模块/文件：`src/core/AutoImportManager.h` (第 20-150 行)
+- [ ] 模块/文件：`src/core/AutoImportManager.cpp` (第 30-300 行)
+- [ ] 模块/文件：`src/core/CoreController.h` (第 10-100 行)
+- [ ] 模块/文件：`src/core/CoreController.cpp` (第 50-250 行)
+- [ ] 模块/文件：`src/ui/ThumbnailDelegate.cpp` (第 20-300 行)
+- [ ] 模块/文件：`src/ui/TreeItemDelegate.h` (第 10-150 行)
+- [ ] 模块/文件：`src/ui/CategoryModel.cpp` (第 20-200 行)
+- [ ] 模块/文件：`src/ui/CategoryPanel.cpp` (第 40-500 行)
 
 **明确禁止越界修改的范围：**
-- [ ] 本 Turn 属于资深程序员·纯分析师模式。根据角色红线规约，**绝对禁止创建任何具体的物理代码文件，亦不得修改任何现有物理代码文件**。
-- [ ] 方案中的所有解耦重构思想只可在本 `.md` 规划方案文档中陈述。
+- [ ] 加密模块 `src/crypto/EncryptionManager.h/.cpp`——不修改
+- [ ] 双击打开/QuickLook/图像浏览 `src/ui/QuickLookWindow.h/.cpp`——不修改
+- [ ] USN底层流捕获 `src/mft/UsnWatcher.h/.cpp` 与 `MftReader.h/.cpp`——不修改
 
 ## 6. 实现准则与重构预警【核心】
 
@@ -197,7 +203,7 @@ signals:
 按照 Master Roadmap 的铁律，不接受一次性大混合提交。我们对 7 个解耦重构组件进行严格的依赖关系梳理，并划分为 **4 个渐进式批次（Phases）**。每批次重构完成后需通过对应验证方法验证通过，方可推进下一批次：
 
 ### 【第一批次】叶子节点工具类与核心数据库物理层隔离 (Phased Utilities & DB)
-- **目标组件**：`UiHelper` (拆分为 `StylePainter`, `PaletteAnalyzer`, `AsyncJobScheduler` 以及 `ShellIconManager`) 与 `DatabaseManager` (提取物理 I/O 为 `DbFileSystemHelper`)。
+- **目标组件**：`UiHelper` (拆分为 `StylePainter`, `PaletteAnalyzer`, `AsyncJobScheduler` 以及 `ShellIconManager`) 与 `DatabaseManager` (提取 `DbFileSystemHelper` 物理文件属性设置与重命名)。
 - **依赖关系**：无，属于 dependency tree 最底层的叶子节点。
 - **整改后验证方式**：
   1. **编译检查**：确保所有依赖 `UiHelper` 的 UI 文件均编译通过，且无任何 static 析构冲突。
@@ -219,7 +225,7 @@ signals:
   2. **库外异步搜索验证**：进行库外路径的物理递归搜索，检验 `DiskSearchEngine` 子线程的工作状态，物理 I/O 检索时不锁死主界面，取消搜索时能够立即中止 QDirIterator 迭代。
 
 ### 【第四批次】MVC 边界治理与交互响应重构 (Phased MVC & Delegates)
-- **目标组件**：`ThumbnailDelegate` / `TreeItemDelegate` (MVC 单向重构) 与 `CategoryModel` / `CategoryPanel` (类型安全与迁移解耦)。
+- **目标组件**：`ThumbnailDelegate` / `TreeItemDelegate` (MVC 单向重构) 与 `CategoryModel` / `CategoryPanel` (类型安全与物理拖拽解耦)。
 - **依赖关系**：依赖第二、三批次的数据层和业务层提供稳健的底层接口。
 - **整改后验证方式**：
   1. **Delegate 零头文件包含审计**：打开重构后的 `ThumbnailDelegate.cpp` 与 `TreeItemDelegate.h`，执行物理走查，必须保证**无任何 `#include "MetadataManager.h"` 的头文件包含**，也无任何直接调用 `MetadataManager::instance()` 的代码痕迹。
