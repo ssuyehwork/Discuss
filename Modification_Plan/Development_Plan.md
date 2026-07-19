@@ -29,7 +29,7 @@
 
 ### 2.3 解决方案概述
 1. **状态维护**：
-   in `ContentPanel` 中维护 `SortType m_sortType` 和 `Qt::SortOrder m_sortOrder`。
+   在 `ContentPanel` 中维护 `SortType m_sortType` 和 `Qt::SortOrder m_sortOrder`。
 2. **菜单注入**：
    在右键菜单弹出逻辑中，通过 `QActionGroup` 注入“排序”选项组并同步勾选状态。
 3. **底层重排重写**：
@@ -74,7 +74,7 @@
 1. **废除 fullRecount 的全量线性对账**：
    彻底删除或屏蔽在系统初始化时阻塞主线程调用的 `fullRecount` $O(N)$ 遍历计算。
 2. **构建“内存增量对账模型”**：
-   在内存中通过分类变动（如归类、去分类、批量删除）的信号和原子计数增减，维护瞬时、实时的已分类/未分类计数；全局数据库表（如 `system_stats`）中维护分类计数持久化，仅在关键原子操作中通过数据库级别增量更新（无需全表/全缓存线性重数）。
+   在内存中通过分类变动（如归类、去分类、批量删除）的信号 and 原子计数增减，维护瞬时、实时的已分类/未分类计数；全局数据库表（如 `system_stats`）中维护分类计数持久化，仅在关键原子操作中通过数据库级别增量更新（无需全表/全缓存线性重数）。
 3. **剥离全局静态计数器职责**：
    将 `s_totalFileCount` 计数器和回收站数据同步从 `CategoryRepo` 剥离出去，确保其只专注于分类树与关联表的关系。
 4. **对应方案文档**：Modification_Plan-24.md
@@ -92,3 +92,31 @@
 3. **建立纯酸的底层连接架构**：
    `DatabaseManager` 纯粹地通过 wstring 绝对物理路径，加载 SQLite 连接和分配并发事务（WriteGuard / SqlTransaction），将 I/O 线程和内存备份高度内聚，确保 100% 数据库专职单一性。
 4. **对应方案文档**：Modification_Plan-25.md
+
+
+## 7. [2026-07-22] 百万级模糊查询 O(N) 降维重构与 FTS5 引擎分流
+### 7.1 核心需求
+`MetadataManager::searchInCache`（判定为 FAIL 的第 2 项）承担了对百万级内存缓存 `m_cache` 的全量模糊搜索过滤职责。然而其内部使用的是极度低效的全缓存线性遍历扫描（$O(N)$ 复杂度），并在此期间对主缓存高频持有了 `std::shared_mutex` 读锁。在导入数百万记录的大数据量高频搜索时，这会完全霸占 CPU、锁死后台 MFT/USN 解析线程，造成应用不可恢复的严重 UI 假死与死锁崩溃。需要对此高危害机制进行**模糊索引降维检索重构**。
+
+### 7.2 解决方案概述
+1. **消灭 $O(N)$ 同步线性对内存扫描**：
+   彻底废除 `MetadataManager::searchInCache` 内部关于线性 `for` 循环全遍历内存缓存的低效逻辑。
+2. **全量接入 FTS5 Trigram 高性能模糊检索**：
+   将模糊匹配职责剥离下沉至 SQLite 已配置的分词虚拟表 `metadata_fts` 中。利用 SQL 进行高性能模糊索引分词 $O(\log N)$ 检索，并仅返回匹配成功的 FID 列表。
+3. **极速反查内存快速同步**：
+   对 FTS5 检出的少量命中项目，直接利用 `MetadataManager` 已具备的 $O(1)$ 的 FID 反查内存缓存（`m_cache`）路径接口输出结果，从而使百万级搜索从 **“秒级”** 的 UI 灾难，瞬间解耦降维至 **“5毫秒以内”** 的丝滑体验！
+4. **对应方案文档**：Modification_Plan-26.md
+
+
+## 8. [2026-07-23] UiHelper 上帝辅助类纯净化与多媒体系统总线提取剥离
+### 8.1 核心需求
+`UiHelper`（判定为 FAIL 的第 6 项）名义上是轻量“UI样式与渲染辅助类”，但其实际成为了高耦合的“系统多媒体提取及多线程调度总线中心”。内部混合了 QPainter 渲染、物理临时文件计算、Windows Shell COM 缩略图提取、CIE76 重型色差量化、以及基于 QFuture 的多任务多线程后台调度这 5 种不相关职责。其命名与实际职责严重不符（FAIL 第 7 项），导致极高的跨层级 include 编译膨胀（编译焦油坑），必须将其纯净化、分流剥离。
+
+### 8.2 解决方案概述
+1. **上帝类退化（纯样式哑辅助）**：
+   彻底剥离 `UiHelper` 中所有物理系统 COM 调用和多线程任务派发机制，退化为仅包含 `parseColorName`、`applyMenuStyle` 等无状态纯样式几何计算与渲染包装。
+2. **多媒体色差提取算法下沉**：
+   将 `extractPalette`（CIE76 算法）、`quantizeColor` 等重型色度量化和对比机制，100% 移入并收拢至 `MediaColorExtractor` 组件，实现算法高内聚。
+3. **Windows 物理系统 Shell COM 图标提供器分流**：
+   将 `getShellThumbnail`、`getFileIcon` 物理图标和缩略图提取逻辑完全交由 `WindowsShellThumbnailProvider` 独立实现。
+4. **对应方案文档**：Modification_Plan-27.md
