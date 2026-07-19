@@ -5,7 +5,7 @@
 在停用 USN Journal 后，当用户在内容面板中执行“迁移”将文件夹移动至 `ArcMeta.Library_[盘符]`，或者以其他物理方式在托管库/自定义监控文件夹内创建、拷贝、移入新子目录时，`NativeFolderWatcher` 能够实时检测并在 SQLite 数据库中构建对应的 1:1 分类树记录（即向 `categories` 表里创建分类记录），使新文件夹在无需重启主程序的情况下，立即在侧边栏中刷新呈现。
 
 ### 1.2 解决方案概述
-in `NativeFolderWatcher::handleNotification` 中检测到目录级变动（`info.isDir()`）时，通过 `QtConcurrent::run` 异步拉起级联入库同步引擎 `AutoImportManager::instance().handleRecursiveIngestion(fullPath)`。这不仅会自动注册所有子文件和路径，还会递归在 SQLite 的 `categories` 表中补全 1:1 分类结构，最后触发 `"__RELOAD_ALL__"` 信号驱动侧边栏重载，实现完美实时刷新。
+在 `NativeFolderWatcher::handleNotification` 中检测到目录级变动（`info.isDir()`）时，通过 `QtConcurrent::run` 异步拉起级联入库同步引擎 `AutoImportManager::instance().handleRecursiveIngestion(fullPath)`。这不仅会自动注册所有子文件和路径，还会递归在 SQLite 的 `categories` 表中补全 1:1 分类结构，最后触发 `"__RELOAD_ALL__"` 信号驱动侧边栏重载，实现完美实时刷新。
 
 
 ## 2. 内容容器右键“排序”主菜单与子选项需求
@@ -29,7 +29,7 @@ in `NativeFolderWatcher::handleNotification` 中检测到目录级变动（`info
 
 ### 2.3 解决方案概述
 1. **状态维护**：
-   在 `ContentPanel` 中维护 `SortType m_sortType` 和 `Qt::SortOrder m_sortOrder`。
+   in `ContentPanel` 中维护 `SortType m_sortType` 和 `Qt::SortOrder m_sortOrder`。
 2. **菜单注入**：
    在右键菜单弹出逻辑中，通过 `QActionGroup` 注入“排序”选项组并同步勾选状态。
 3. **底层重排重写**：
@@ -52,7 +52,7 @@ in `NativeFolderWatcher::handleNotification` 中检测到目录级变动（`info
 ### 3.3 解决方案概述
 - 将 `FERREX-META/src/ui/` 中的 `IScanResultView.h`、`ListResultView.h/cpp`、`JustifiedResultView.h/cpp`、`GridResultView.h/cpp` 作为三大视图内核进行移植，并融入当前程序。
 - 在工具栏或标题栏新增 `m_sizeSlider` (QSlider)，设置其范围为 `32` 到 `256`，在值发生变动时通知当前激活视图更新 `setIconSize`。
-- 在 `MainWindow` 或 `ContentPanel` 的 `eventFilter` 中拦截 `QEvent::Wheel`。一旦检测到 `wheelEvent->modifiers() & Qt::ControlModifier`，根据滚轮方向将 `m_sizeSlider` 的值以 `+10` / `-10` 步进进行调整，通过单值驱动所有视图 and Delegates 实现统一的卡片 and 图标大小动态重载。
+- 在 `MainWindow` 或 `ContentPanel` 的 `eventFilter` 中拦截 `QEvent::Wheel`。一旦检测到 `wheelEvent->modifiers() & Qt::ControlModifier`，根据滚轮方向将 `m_sizeSlider` 的值以 `+10` / `-10` 步进进行调整，通过单值驱动所有视图 and Delegates 实现统一的卡片和图标大小动态重载。
 
 
 ## 4. [2026-07-06] 标签视图界面 SQL 裸写重构与 MVC 解耦
@@ -78,3 +78,17 @@ in `NativeFolderWatcher::handleNotification` 中检测到目录级变动（`info
 3. **剥离全局静态计数器职责**：
    将 `s_totalFileCount` 计数器和回收站数据同步从 `CategoryRepo` 剥离出去，确保其只专注于分类树与关联表的关系。
 4. **对应方案文档**：Modification_Plan-24.md
+
+
+## 6. [2026-07-21] DatabaseManager 纯酸化与物理 I/O 及纠偏逻辑剥离
+### 6.1 核心需求
+`DatabaseManager`（判定为 FAIL 的第 1 项）核心职责应仅为 SQLite 连接管理与高并发 I/O 任务调度。但其内部直接调用了 Windows 物理文件 API（`SetFileAttributesW` 设置隐藏属性）、`QFile::rename` 物理盘符纠偏以及对无效冗余历史数据库的清理、移动等物理磁盘动作。这些非数据库事务逻辑降低了其高可靠度并引入了多线程下的外部磁盘 I/O 阻塞风险，亟待拆分纯酸化。
+
+### 6.2 解决方案概述
+1. **物理隐藏下沉剥离**：
+   彻底废除 `DatabaseManager::ensureHidden` 及相关 Windows.h 调用，将文件隐藏属性标记交由上层的物理搬运层 `ImportHelper` 或 `ShellHelper` 实现。
+2. **盘符路由与数据库文件名自适应纠偏解耦**：
+   重构 `DatabaseManager::getMemoryDb` 接口，废除其中对历史数据库物理 `rename`、冗余无效应答及清理行为。
+3. **建立纯酸的底层连接架构**：
+   `DatabaseManager` 纯粹地通过 wstring 绝对物理路径，加载 SQLite 连接和分配并发事务（WriteGuard / SqlTransaction），将 I/O 线程和内存备份高度内聚，确保 100% 数据库专职单一性。
+4. **对应方案文档**：Modification_Plan-25.md
