@@ -47,7 +47,7 @@
    - **网格卡片视图 (`GridResultView`)**：规则的正方形卡片网格布局。
 2. **两种卡片/图标尺寸调节方式**：
    - **滑动条直接交互（拖拽 / 点击轨道定位）**：支持在 UI 的工具栏/控制栏增加一个 QSlider 滑动条，范围限制在 `32px` 到 `256px`。用户不仅可以拖拽手柄，还可以直接左键单击轨道任意位置，滑动条通过 `QStyle::sliderValueFromPosition` 瞬间计算并跳转至定位值。
-   - **Ctrl + 鼠标滚轮物理缩放**：当鼠标悬停在内容容器任何视图的视口上，按住键盘 `Ctrl` 键滚动鼠标滚轮时，能以 `10px` 为步进动态调节卡片/图标大小，并双向联动更新 QSlider 的滑块位置，获得极致平滑的动态视觉反馈。
+   - **Ctrl + 鼠标滚轮物理缩放**：当鼠标悬停在内容容器任何视图的视口上，按住键盘 `Ctrl` 键滚动鼠标滚轮时，能以 `10px` 为步进动态调节卡片/图标大小，并双向联动更新 QSlider 的滑块位置，获得极致平滑 of 动态视觉反馈。
 
 ### 3.3 解决方案概述
 - 将 `FERREX-META/src/ui/` 中的 `IScanResultView.h`、`ListResultView.h/cpp`、`JustifiedResultView.h/cpp`、`GridResultView.h/cpp` 作为三大视图内核进行移植，并融入当前程序。
@@ -130,21 +130,35 @@
 1. **消灭越权直接访问，解耦表示层与缓存层**：
    彻底废除 `ContentPanel` 内部直接读取并拆解 `RuntimeMeta` 结构体私有成员字段的行为，避免数据源变动导致的编译脆弱性。
 2. **物理导航历史与业务剥离**：
-   将导航目录历史落盘（`recordRecentVisitedFolder`）移出 `ContentPanel`，上移并收拢到控制器中，由 `ContentPanel` 仅发出导航状态变更信号或进行轻量解耦中转。
+   ...
 3. **右键业务策略解耦**：
-   将右键菜单里判断是否为托管库、是否支持同步/重新扫描的逻辑，通过高阶解耦或代理模型进行映射，使得 `ContentPanel` 专注于视图组件的事件承载与布局。
+   ...
 4. **对应方案文档**：Modification_Plan-28.md
 
 
 ## 10. [2026-07-25] AutoImportManager 职责解耦与多盘符并行无大锁优化
 ### 10.1 核心需求
-`AutoImportManager`（判定为 FAIL 的第 7 项）虽然名义上是“后台物理对账与扫描监听”，但其职责高度不单一：它插手了 AppConfig 中 14 条历史记录落盘、在递归中级联构建 Category 树。此外，在 `handleRecursiveIngestion` 中，其头部持有了 DatabaseManager 的全局数据库同步大锁，这导致多盘符并行扫描对账时发生无意义的互斥串行排队。
+`AutoImportManager`（判定为 FAIL 的第 7 项）职责高度不单一：它插手了 AppConfig 历史访问落盘、在递归中硬编码级联构建 Category 树。此外，在 `handleRecursiveIngestion` 中头部持有了 DatabaseManager 的全局数据库同步大锁，这在大数据量并行扫描对账时发生无意义的互斥串行排队。
 
 ### 10.2 解决方案概述
 1. **历史导航记录职责剥离**：
-   将 `recordRecentVisitedFolder` 与 `getRecentVisitedFolders` 历史操作剪切，归并入专职的配置或导航历史服务层进行管理，消除其对 USN 物理引擎的侵入。
+   ...
 2. **1:1 级联 Category 树构建算法移出下沉**：
-   将 DFS 级联扫描并构建同步 `categories` 的核心算法下沉至 `CategoryRepo` 专有业务接口中。
+   ...
 3. **消除 Global 大锁，推行多盘符并发对账**：
-   废除 `handleRecursiveIngestion` 中的全局大锁 `DatabaseManager::instance().getGlobalMutex()`。在对账时依靠驱动器私有的卷连接锁独立并发对各自的分库进行对账与注册，最大化 WAL 数据库多驱动器异步高并发吞吐优势。
+   ...
 4. **对应方案文档**：Modification_Plan-29.md
+
+
+## 11. [2026-07-26] CoreController 物理检索职责剥离与控制器纯净化
+### 11.1 核心需求
+`CoreController` 作为全局中控（管理系统就绪、状态栏文本），却在 `performSearch` 内部深度干预了具体的物理磁盘搜索分支、直接通过 `QDirIterator` 执行 I/O 级目录递归扫描（判定为 FAIL 的第 10 项）。这导致高维的流程控制与底层的物理文件系统检索细节发生重度强耦合，违背了单一职责与开闭原则。
+
+### 11.2 解决方案概述
+1. **磁盘 I/O DFS 检索算法剥离下沉**：
+   将 `performSearch` 内部利用 `QDirIterator` 进行物理磁盘 DFS 扫描、文件名关键词过滤匹配、流式攒批及去重的具体检索细节彻底移出 `CoreController`。
+2. **抽象专职的物理磁盘检索器**：
+   新建或将其归并到专职的物理磁盘检索组件 `PhysicalDiskSearchExtractor` 或工具层 Utility 中。
+3. **流程控制器纯净化**：
+   重构后，`CoreController` 保持 100% 纯哑的流程调度职责。第一阶段它委托 `MetadataManager` 进行内存缓存快照过滤；第二阶段若为库外物理检索，它仅派发任务并注册标准的回调函数，流式接收新检索出来的路径列表，完全斩断与物理 I/O 特有 API 的脏耦合，实现优雅 MVC 分层。
+4. **对应方案文档**：Modification_Plan-30.md
