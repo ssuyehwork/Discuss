@@ -40,7 +40,7 @@
   ```
 
 ### 4.2 高内聚 `WindowsShellThumbnailProvider`（操作系统 API 与缓存层）
-在 `src/ui/`（或 `src/util/`）下新建 `WindowsShellThumbnailProvider.h` 与 `WindowsShellThumbnailProvider.cpp`：
+in `src/ui/`（或 `src/util/`）下新建 `WindowsShellThumbnailProvider.h` 与 `WindowsShellThumbnailProvider.cpp`：
 - **职责范围**：集中式封装 Windows Shell 图标提供者（`QFileIconProvider`）与 COM 异步缩略图提取接口。
 - **去重与安全异步派发优化**：
   将 `getFileIcon` 中的静态缓存与正在加载 key 集合重构为类成员或受互斥锁保护的单例结构。 lambda 异步任务结束后，利用安全的信号槽连接（`connect`）替代不安全的 `QMetaObject::invokeMethod` 穿透，消除线程 Affinity 闪退和多线程并发死锁。
