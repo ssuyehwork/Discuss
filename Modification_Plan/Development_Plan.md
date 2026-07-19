@@ -5,7 +5,7 @@
 在停用 USN Journal 后，当用户在内容面板中执行“迁移”将文件夹移动至 `ArcMeta.Library_[盘符]`，或者以其他物理方式在托管库/自定义监控文件夹内创建、拷贝、移入新子目录时，`NativeFolderWatcher` 能够实时检测并在 SQLite 数据库中构建对应的 1:1 分类树记录（即向 `categories` 表里创建分类记录），使新文件夹在无需重启主程序的情况下，立即在侧边栏中刷新呈现。
 
 ### 1.2 解决方案概述
-在 `NativeFolderWatcher::handleNotification` 中检测到目录级变动（`info.isDir()`）时，通过 `QtConcurrent::run` 异步拉起级联入库同步引擎 `AutoImportManager::instance().handleRecursiveIngestion(fullPath)`。这不仅会自动注册所有子文件和路径，还会递归在 SQLite 的 `categories` 表中补全 1:1 分类结构，最后触发 `"__RELOAD_ALL__"` 信号驱动侧边栏重载，实现完美实时刷新。
+在 `NativeFolderWatcher::handleNotification` 中检测到目录级变动（`info.isDir()`）时，通过 `QtConcurrent::run` 异步拉起级联入库同步引擎 `AutoImportManager::instance().handleRecursiveIngestion(fullPath)`。这不仅会自动注册所有子文件和路径，还会递归在 SQLite 的 `categories` 表中补全 1:1分类结构，最后触发 `"__RELOAD_ALL__"` 信号驱动侧边栏重载，实现完美实时刷新。
 
 
 ## 2. 内容容器右键“排序”主菜单与子选项需求
@@ -114,9 +114,23 @@
 
 ### 8.2 解决方案概述
 1. **上帝类退化（纯样式哑辅助）**：
-   彻底剥离 `UiHelper` 中所有物理系统 COM 调用和多线程任务派发机制，退化为仅包含 `parseColorName`、`applyMenuStyle` 等无状态纯样式几何计算与渲染包装。
+   彻底剥离 `UiHelper` 中所有物理系统 COM 调用 and 多线程任务派发机制，退化为仅包含 `parseColorName`、`applyMenuStyle` 等无状态纯样式几何计算与渲染包装。
 2. **多媒体色差提取算法下沉**：
    将 `extractPalette`（CIE76 算法）、`quantizeColor` 等重型色度量化和对比机制，100% 移入并收拢至 `MediaColorExtractor` 组件，实现算法高内聚。
 3. **Windows 物理系统 Shell COM 图标提供器分流**：
    将 `getShellThumbnail`、`getFileIcon` 物理图标和缩略图提取逻辑完全交由 `WindowsShellThumbnailProvider` 独立实现。
 4. **对应方案文档**：Modification_Plan-27.md
+
+
+## 9. [2026-07-24] ContentPanel 越权访问剥离与纯 UI 表示层解耦
+### 9.1 核心需求
+`ContentPanel` 是核心 UI 容器，但它越权严重，深度介入了中后台业务逻辑：它直接调用 `MetadataManager::instance().getMeta(path)` 拿到物理镜像，自行对细节字段（如 `meta.isManaged`）进行拆解判断；在加载目录时擅自越级进行物理导航历史落盘（`recordRecentVisitedFolder`）；在右键菜单中混合了重型业务判断（如 `isInsideManagedLibrary`）。这种强耦合导致 View 与 Model/Cache 层深度绑定，一旦底层字段调整极易引发大范围编译失败，违背了 MVC 经典分层。
+
+### 9.2 解决方案概述
+1. **消灭越权直接访问，解耦表示层与缓存层**：
+   彻底废除 `ContentPanel` 内部直接读取并拆解 `RuntimeMeta` 结构体私有成员字段的行为，避免数据源变动导致的编译脆弱性。
+2. **物理导航历史与业务剥离**：
+   将导航目录历史落盘（`recordRecentVisitedFolder`）移出 `ContentPanel`，上移并收拢到控制器中，由 `ContentPanel` 仅发出导航状态变更信号或进行轻量解耦中转。
+3. **右键业务策略解耦**：
+   将右键菜单里判断是否为托管库、是否支持同步/重新扫描的逻辑，通过高阶解耦或代理模型进行映射，使得 `ContentPanel` 专注于视图组件的事件承载与布局。
+4. **对应方案文档**：Modification_Plan-28.md
