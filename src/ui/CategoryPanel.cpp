@@ -87,6 +87,7 @@ CategoryPanel::CategoryPanel(QWidget* parent)
         // 采用 QPointer 确保线程安全性
         QPointer<CategoryPanel> weakThis(this);
         (void)QtConcurrent::run([weakThis]() {
+            CategoryRepo::fullRecount();
             auto sysCounts = CategoryRepo::getSystemCounts();
             auto catCountsVec = CategoryRepo::getCounts();
             

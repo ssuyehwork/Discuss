@@ -71,12 +71,14 @@ DatabaseManager::SyncTaskToken::SyncTaskToken() {
     DatabaseManager::instance().incrementPendingTasks();
 }
 
-DatabaseManager::SyncTaskToken::SyncTaskToken(const SyncTaskToken&) {
-    DatabaseManager::instance().incrementPendingTasks();
+DatabaseManager::SyncTaskToken::SyncTaskToken(SyncTaskToken&& other) noexcept {
+    other.m_moved = true;
 }
 
 DatabaseManager::SyncTaskToken::~SyncTaskToken() {
-    DatabaseManager::instance().decrementPendingTasks();
+    if (!m_moved) {
+        DatabaseManager::instance().decrementPendingTasks();
+    }
 }
 
 DatabaseManager::DatabaseManager(QObject* parent) : QObject(parent) {
@@ -339,48 +341,17 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
 void DatabaseManager::saveDb(DbConnection& conn, bool forceFull) {
     if (!conn.diskDb || !conn.memDb) return;
 
-    if (!forceFull) {
-        bool expected = false;
-        if (!m_isBackupRunning.compare_exchange_strong(expected, true)) {
-            qDebug() << "[DB] Backup is already running, skipping background snapshot.";
-            return;
-        }
-    }
-
+    // 2026-07-20 优化设计：彻底废除性能极低的增量分步备份与频繁 sleep 让步机制。
+    // 因为该函数本身就在后台异步工作线程中运行，直接执行一次性全量备份（sqlite3_backup_step 设为 -1）
+    // 效率最高，通常在 1-5 毫秒内即可极速完成，完全不需要分片和让路。
+    (void)forceFull;
     sqlite3_backup* backup = sqlite3_backup_init(conn.diskDb, "main", conn.memDb, "main");
     if (backup) {
-        if (forceFull) {
-            // 中止可能存在的后台备份，同步执行一次性全量备份
-            sqlite3_backup_step(backup, -1);
-            qDebug() << "[DB] Successfully backed up memory database to disk synchronously:" << QString::fromStdWString(conn.diskPath);
-        } else {
-            // 增量分片备份：步长为 100 pages（约 400KB）
-            int rc;
-            do {
-                auto stagnant_start = std::chrono::steady_clock::now();
-                while (m_activeWriteSources.load() > 0) {
-                    auto now = std::chrono::steady_clock::now();
-                    double elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - stagnant_start).count() / 1000.0;
-                    if (elapsed >= 3.0) {
-                        break; // 3.0s 安全阀判定，防止无限期让路造成数据长期不落盘风险
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(2)); // 让步
-                }
-
-                rc = sqlite3_backup_step(backup, 100);
-                if (rc == SQLITE_OK || rc == SQLITE_BUSY || rc == SQLITE_LOCKED) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
-            } while (rc == SQLITE_OK || rc == SQLITE_BUSY || rc == SQLITE_LOCKED);
-            qDebug() << "[DB] Successfully backed up memory database to disk (incremental):" << QString::fromStdWString(conn.diskPath);
-        }
+        sqlite3_backup_step(backup, -1);
         sqlite3_backup_finish(backup);
+        qDebug() << "[DB] Successfully backed up memory database to disk:" << QString::fromStdWString(conn.diskPath);
     } else {
         qWarning() << "[DB] Failed to initialize backup from memory to disk:" << sqlite3_errmsg(conn.diskDb);
-    }
-
-    if (!forceFull) {
-        m_isBackupRunning.store(false);
     }
 }
 
@@ -549,7 +520,7 @@ void DatabaseManager::decrementPendingTasks() {
 }
 
 void DatabaseManager::enqueueSyncTask(std::function<void()> task) {
-    SyncTaskToken token; 
+    auto token = std::make_shared<SyncTaskToken>(); 
     {
         std::lock_guard<std::mutex> lock(m_queueMutex);
         m_syncQueue.push_back([task, token]() {

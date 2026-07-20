@@ -205,9 +205,9 @@ target_include_directories(ArcMeta PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/crypto
 )
 
-# 2026-03-xx 按照用户要求及《记忆碎片》规范：
-# 强制要求管理员权限 (requireAdministrator)
+# 2026-07-20 按照用户最新要求：
+# 彻底去除强制管理员权限，改为普通权限 (asInvoker)
 if(MSVC)
-    target_link_options(ArcMeta PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
+    target_link_options(ArcMeta PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
 endif()
 # Force Refresh CMake: 2026-06-xx 11:30 (Removed AmMetaJson & SyncQueue, switched to DB-only)
