@@ -32,11 +32,13 @@ JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     viewport()->setPalette(pal);
     setPalette(pal);
 
+    setProperty("gridMode", false);
 }
 
 void JustifiedView::setLayoutMode(LayoutMode mode) {
     if (m_layoutMode != mode) {
         m_layoutMode = mode;
+        setProperty("gridMode", m_layoutMode == GridMode);
         scheduleLayout();
     }
 }
