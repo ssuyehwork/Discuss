@@ -60,10 +60,12 @@
 !旧版本-8/**
 !旧版本-9/
 !旧版本-9/**
+!旧版本-9/
+!旧版本-9/**
 !Modification_Plan/
 !Modification_Plan/**
-!ScanDialog/
-!ScanDialog/**
+!Buk_20260720_144208/
+!Buk_20260720_144208/**
 
 # 忽略构建目录
 build/
