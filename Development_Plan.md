@@ -15,3 +15,11 @@
 - 本次任务边界：对 `src/ui/ContentPanel.cpp` 中的 `FerrexVirtualDbModel` 缩略图加载与缓存机制进行根因定位。定位并重构后台提取线程中直接操纵 GUI 敏感 `QPixmap` 导致的硬件句柄失效 Bug。在 `setRecords`（初次加载）与 `loadThumbnailsForRows`（滚动视口刷新）双阶段中同步引入自适应 `maxCost` 计算逻辑，确保无损与防御性限幅。
 - 不在本次范围内的是：修改物理 MFT 扫描、USN 监控底座以及其他非缩略图相关的逻辑。
 - 对应方案文档：Modification_Plan-33.md
+
+## [2026-07-20] 内容面板视图模式对齐重构与自定义调整滑杆及视图按钮移植
+
+- 用户描述的现象/问题：当前版本现有的三个视图模式没有达到预期；且原有Ctrl+滚轮缩放兼切换多视图的逻辑未达预期；同时顶部缺少方便调节卡片尺寸和快速切换视图排列方式的控件。
+- 用户期望的结果：在当前版本中移植并实现类似于 FERREX-META 版本的“调整卡片尺寸的滑杆（m_sizeSlider）”和“排列方式的视图按钮（viewBtn）”；完全放弃原有Ctrl+滚轮多级缩放切换视图的逻辑；且参照 FERREX-META 的实现彻底重构移植三个视图模式（列表、自适应、网格），确保职责单一模块化。
+- 本次任务边界：重写并替换当前版本的 `ListResultView`、`GridResultView`、`JustifiedResultView` 等视图接口与实现，剔除不合预期的多级滚轮缩放切换逻辑；并在 `ContentPanel` 顶部标题栏区域中嵌入 `m_sizeSlider` 与 `viewBtn` 控件，实现卡片尺寸 32~256 像素无缝调节及列表/自适应/网格三种排版模式的一键式极速切换。
+- 不在本次范围内的是：修改 MFT / USN 底层扫描或数据库检索流程，移植与视图显示无关的外部控制器组件。
+- 对应方案文档：Modification_Plan-34.md
