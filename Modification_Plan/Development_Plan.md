@@ -68,7 +68,7 @@
 
 ## 5. [2026-07-20] 账本核对审计 (fullRecount) 增量化重构与 MVC 分离
 ### 5.1 核心需求
-`CategoryRepo::fullRecount`（判定为 FAIL 的第 3 项）不仅包含对全账本核对审计和全局静态计数器维护等非分类持久化职责（职责不单一），而且在百万记录规模下，每次启动或刷新分类时，会强行线性遍历 `MetadataManager` 数百万条记录的内存快照进行对账。这是一个明显的性能灾难（耗时高、高频持有大锁、产生不可恢复的 UI 假死）。需要对该全量审计进行**增量化重构**并从主加载链条剥离。
+`CategoryRepo::fullRecount`（判定为 FAIL 的第 3 项）不仅包含对全账本核对审计和全局静态计数器维护等非分类持久化职责（职责不单一），而且在百万记录规模下，每次启动或刷新分类时，会强行线性遍历 `MetadataManager` 数百万条记录的内存快照进行对账。这是一个明显的性能灾难（耗时高、高频持有大锁、产生不可恢复 of UI 假死）。需要对该全量审计进行**增量化重构**并从主加载链条剥离。
 
 ### 5.2 解决方案概述
 1. **废除 fullRecount 的全量线性对账**：
@@ -156,9 +156,23 @@
 
 ### 11.2 解决方案概述
 1. **磁盘 I/O DFS 检索算法剥离下沉**：
-   将 `performSearch` 内部利用 `QDirIterator` 进行物理磁盘 DFS 扫描、文件名关键词过滤匹配、流式攒批及去重的具体检索细节彻底移出 `CoreController`。
+   ...
 2. **抽象专职的物理磁盘检索器**：
-   新建或将其归并到专职的物理磁盘检索组件 `PhysicalDiskSearchExtractor` 或工具层 Utility 中。
+   ...
 3. **流程控制器纯净化**：
-   重构后，`CoreController` 保持 100% 纯哑的流程调度职责。第一阶段它委托 `MetadataManager` 进行内存缓存快照过滤；第二阶段若为库外物理检索，它仅派发任务并注册标准的回调函数，流式接收新检索出来的路径列表，完全斩断与物理 I/O 特有 API 的脏耦合，实现优雅 MVC 分层。
+   ...
 4. **对应方案文档**：Modification_Plan-30.md
+
+
+## 12. [2026-07-27] CategoryPanel 拖拽搬运决策移出与纯哑侧边栏构建
+### 12.1 核心需求
+`CategoryPanel` 侧边栏面板（判定为 FAIL 的第 15 项）其核心应该只是一个负责展开树、管理选中过滤状态的树形 QWidget 表示层。但目前，在处理物理文件拖拽导入时，它深度混合了盘符解析、托管路径（ManagedFolder）读取、导入冲突校验、以及直接发令拉起 `ImportHelper::importPaths` 的具体物理导入决策和动作，超出了纯视图布局控制范围，破坏了 MVC 经典分层的内聚纯度。
+
+### 12.2 解决方案概述
+1. **取消 View 直写物理导入与迁移判定**：
+   彻底移除 `CategoryPanel` 内部连接 `pathsDropped` 的物理搬运核心 Lambda。
+2. **实现事件与执行异步分离（Action-Delegate）**：
+   `CategoryPanel` 仅负责处理基础拖入逻辑并发出独立的信号 `pathsDroppedToCategory(paths, targetCatId)`。
+3. **业务与物理层动作委托分流**：
+   该信号由 MainWindow 或专职控制器（如 `DragDropImportHandler` 或 Controller 层）捕获接管，在控制器层统一完成托管库校验并调用 `ImportHelper::importPaths` 执行搬移物理入库。使得表示层与物理细节彻底分层解耦。
+4. **对应方案文档**：Modification_Plan-31.md
