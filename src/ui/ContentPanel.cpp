@@ -426,6 +426,18 @@ void FerrexVirtualDbModel::setRecords(const std::vector<ItemRecord>& records) {
     m_requestedIcons.clear();
     m_aspectRatios.clear();
     m_metaCache.clear();
+
+    // 【双阶段自适应容量控制 - 阶段一】：数据初次载入时根据文件夹总容量初始化合理的 maxCost
+    int folderTotal = static_cast<int>(m_allRecords.size());
+    const int hardLimit = 3000;
+    int initCost = 500;
+    if (folderTotal <= hardLimit) {
+        initCost = qMax(500, folderTotal + 50); // 无损冗余缓冲
+    } else {
+        initCost = qBound(1000, 40 * 8, hardLimit); // 在尚无实际视口测量数据时预设 40 行可见行作为安全缓冲
+    }
+    m_iconCache.setMaxCost(initCost);
+
     endResetModel();
 }
 
@@ -447,6 +459,18 @@ void FerrexVirtualDbModel::updateRecordMetadata(const QString& path) {
 }
 
 void FerrexVirtualDbModel::loadThumbnailsForRows(const QList<int>& rows) {
+    // 【双阶段自适应容量控制 - 阶段二】：基于实际测量的可见行数动态修正 maxCost
+    int folderTotal = static_cast<int>(m_allRecords.size());
+    int visibleCount = rows.size();
+    const int hardLimit = 3000;
+    int dynamicCost = 500;
+    if (folderTotal <= hardLimit) {
+        dynamicCost = qMax(500, folderTotal + 50);
+    } else {
+        dynamicCost = qBound(1000, visibleCount * 8, hardLimit);
+    }
+    m_iconCache.setMaxCost(dynamicCost);
+
     std::vector<std::pair<QString, QString>> newQueue; // {path, cacheKey}
     
     for (int r : rows) {
@@ -494,38 +518,41 @@ void FerrexVirtualDbModel::loadThumbnailsForRows(const QList<int>& rows) {
                     QFileInfo info(path);
                     QString ext = info.suffix().toLower();
                     
-                    QIcon icon;
+                    QImage img;
                     double ar = 1.0;
                     bool hasThumb = false;
 
                     if (ext == "svg") {
                         QSvgRenderer renderer(path);
                         if (renderer.isValid()) {
-                            QPixmap pix(128, 128);
-                            pix.fill(Qt::transparent);
-                            QPainter painter(&pix);
+                            QImage svgImg(128, 128, QImage::Format_ARGB32);
+                            svgImg.fill(Qt::transparent);
+                            QPainter painter(&svgImg);
                             renderer.render(&painter);
-                            icon = QIcon(pix);
+                            img = svgImg;
                             ar = 1.0;
                             hasThumb = true;
                         }
                     } else if (UiHelper::isGraphicsFile(ext)) {
-                        QImage img = UiHelper::getShellThumbnail(path, 128);
+                        img = UiHelper::getShellThumbnail(path, 128);
                         if (!img.isNull()) {
-                            icon = QIcon(QPixmap::fromImage(img));
                             ar = (double)img.width() / img.height();
                             hasThumb = true;
                         }
                     }
 
-                    if (icon.isNull()) {
-                        icon = UiHelper::getFileIcon(path, 128);
-                    }
-
                     if (weakThis) {
-                        QMetaObject::invokeMethod(const_cast<FerrexVirtualDbModel*>(weakThis.data()), [weakThis, path, cacheKey, icon, ar, hasThumb]() {
+                        QMetaObject::invokeMethod(const_cast<FerrexVirtualDbModel*>(weakThis.data()), [weakThis, path, cacheKey, img, ar, hasThumb]() {
                             if (!weakThis) return;
                             auto* mutableThis = const_cast<FerrexVirtualDbModel*>(weakThis.data());
+
+                            QIcon icon;
+                            if (!img.isNull()) {
+                                icon = QIcon(QPixmap::fromImage(img));
+                            } else {
+                                icon = UiHelper::getFileIcon(path, 128);
+                            }
+
                             mutableThis->m_iconCache.insert(cacheKey, new QIcon(icon));
                             if (hasThumb) mutableThis->m_aspectRatios[path] = ar;
                             
