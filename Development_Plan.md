@@ -18,17 +18,17 @@
 
 ## [2026-07-20] 内容面板视图模式对齐重构与自定义调整滑杆及视图按钮移植
 
-- 用户描述的现象/问题：当前版本现有的三个视图模式没有达到预期；且原有Ctrl+滚轮缩放兼切换多视图的逻辑未达预期；同时顶部缺少方便调节卡片尺寸和快速切换视图排列方式的控件。
-- 用户期望的结果：在当前版本中移植并实现类似于 FERREX-META 版本的“调整卡片尺寸的滑杆（m_sizeSlider）”和“排列方式的视图按钮（viewBtn）”；完全放弃原有Ctrl+滚轮多级缩放切换视图的逻辑；且参照 FERREX-META 的实现彻底重构移植三个视图模式（列表、自适应、网格），确保职责单一模块化。
+- 用户描述的现象/问题：当前版本现有的三个视图模式没有达到预期；且原有Ctrl+滚轮缩放兼切换多视图的逻辑未达预期；同时顶部缺少方便调节卡片尺寸 and 快速切换视图排列方式的控件。
+- 用户期望的结果：在当前版本中移植并实现类似于 FERREX-META 版本的“调整卡片尺寸的滑杆（m_sizeSlider）”和“排列方式 of 视图按钮（viewBtn）”；完全放弃原有Ctrl+滚轮多级缩放切换视图的逻辑；且参照 FERREX-META 的实现彻底重构移植三个视图模式（列表、自适应、网格），确保职责单一模块化。
 - 本次任务边界：重写并替换当前版本的 `ListResultView`、`GridResultView`、`JustifiedResultView` 等视图接口与实现，剔除不合预期的多级滚轮缩放切换逻辑；并在 `ContentPanel` 顶部标题栏区域中嵌入 `m_sizeSlider` 与 `viewBtn` 控件，实现卡片尺寸 32~256 像素无缝调节及列表/自适应/网格三种排版模式的一键式极速切换。
-- 不在本次范围内的是：修改 MFT / USN 底层扫描或数据库检索流程，移植与视图显示无关的外部控制器组件。
+- 不在本次范围内的是：修改 MFT / USN 底层扫描或数据库检索流程，移植与视图显示无关 of 外部控制器组件。
 - 对应方案文档：Modification_Plan-34.md
 
 ## [2026-07-20] 三种视图架构设计缺陷排查与极致重构规划
 
 - 用户描述的现象/问题：当前版本中的三种视图（列表、网格、合理自适应对齐模式）存在逻辑冗余、职责过载以及交互/渲染卡顿等傻逼逻辑架构问题。
 - 用户期望的结果：对三种视图底层控制链展开深度排查，找出不合理的架构缺陷并形成极致解耦与性能提升的优化方案，并产出详细设计。
-- 本次任务边界：审计并理清 `JustifiedView`、`ListResultView`、`GridResultView`、`JustifiedResultView` 以及 `ContentPanel` 之间在视图控制、数据映射和布局渲染上的依赖关系，设计职责更清晰、耦合度更低的模块化结构。
+- 本次任务边界：审计并理清 `JustifiedView`、`ListResultView`、`GridResultView`、`JustifiedResultView` 以及 `ContentPanel` 之间在视图控制、数据映射 and 布局渲染上的依赖关系，设计职责更清晰、耦合度更低的模块化结构。
 - 不在本次范围内的是：实际修改或编译代码，移植非视图类的其他外部功能。
 - 对应方案文档：Modification_Plan-35.md
 
@@ -36,6 +36,37 @@
 
 - 用户描述的现象/问题：当前版本的 `QuickLookWindow` 预览运行逻辑不符合预期，其处理逻辑和界面交互（如图像缩放、音视频媒体处理、文本二进制检测及编码识别等）功能不够完备。
 - 用户期望的结果：彻底放弃当前版本的 `QuickLookWindow` 运行逻辑，将其替换为 `FERREX-META` 版本中的 `QuickLookWindow` 运行逻辑。这包括采用专门设计的 `QuickLookGraphicsView`（支持滚轮缩放、双击恢复/适配大小、鼠标拖拽移动及光标跟随变动）、引入更完整的多媒体及文本二进制与编码自动检测识别渲染，实现更好的大文件和特殊文件类型的预览。
-- 本次任务边界：彻底重构 `src/ui/QuickLookWindow.h` 和 `src/ui/QuickLookWindow.cpp`，将 `FERREX-META` 版本的 `QuickLookWindow` 和 `QuickLookGraphicsView` 控制与交互机制移植并合并至其中，适配 `ArcMeta` 命名空间及符合本项目标准的样式设计。同时确保当前项目正在运行的核心快捷键/信号链路继续工作（评分打标 `ratingRequested`、颜色标签打标 `colorRequested` 以及切图 `prevRequested`/`nextRequested` 信号），并对音视频进行优雅的占位降级兼容。
-- 不在本次范围内的是：修改 `MainWindow` 的主导航调度机制或任何非预览关联的面板组件。
+- 本次任务边界：彻底重构 `src/ui/QuickLookWindow.h` and `src/ui/QuickLookWindow.cpp`，将 `FERREX-META` 版本的 `QuickLookWindow` 和 `QuickLookGraphicsView` 控制与交互机制移植并合并至其中，适配 `ArcMeta` 命名空间及符合本项目标准的样式设计。同时确保当前项目正在运行的核心快捷键/信号链路继续工作（评分打标 `ratingRequested`、颜色标签打标 `colorRequested` 以及切图 `prevRequested`/`nextRequested` 信号），并对音视频进行优雅的占位降级兼容。
+- 不在本次范围内的是：修改 `MainWindow` 的主导航调度机制 or 任何非预览关联的面板组件。
 - 对应方案文档：Modification_Plan-36.md
+
+## [2026-07-21] 预览界面滚动条样式对齐考古规范优化
+
+- 用户描述的现象/问题：按下空格键打开预览界面后的滚动条样式，违背了考古，由上一代 AI 导致。
+- 用户期望的结果：将预览界面（QuickLookWindow）内的滚动条样式彻底重构，使其严格遵循全局规范：宽度 10px、圆角 3px、背景透明、Handle 颜色对齐 `BorderColor` #333333。
+- 本次任务边界：修改 `src/ui/QuickLookWindow.cpp` 中 `QuickLookGraphicsView` 和 `QPlainTextEdit` 控件的水平及垂直滚动条的 QSS 样式。
+- 不在本次范围内的是：修改预览界面其他的图片/文本渲染、缩放或事件分流逻辑。
+- 对应方案文档：Modification_Plan-37.md
+
+## [2026-07-21] 预览界面多媒体残留代码彻底物理根除与净化
+
+- 用户描述的现象/问题：上一代 AI 在收到彻底根除多媒体播放功能的指令后，依然在 `QuickLookWindow` 中保留了多媒体播放及占位相关冗余代码。
+- 用户期望的结果：彻底删除并根除 `QuickLookWindow` 中的所有多媒体组件（如播放、暂停、进度条、多媒体相关容器控件和占位框等）和无用快捷键与接口，音视频转走标准系统大图标降级展示。
+- 本次任务边界：彻底删除 `src/ui/QuickLookWindow.h` 与 `src/ui/QuickLookWindow.cpp` 中的所有多媒体成员变量、宏定义、多媒体容器构建、以及 `renderMedia`、`resetMedia`、键盘 `P` 按键处理逻辑等。
+- 不在本次范围内的是：修改预览界面其他的图片/文本渲染、缩放或事件分流逻辑。
+- 对应方案文档：Modification_Plan-38.md
+
+## [2026-07-21] 预览窗快捷键 ToolTip 屏幕上方居中淡进淡出显示、切图/导航加固及 ContentPanel 选中联动
+
+- 用户描述的现象/问题：
+  1. 在执行“QuickLookWindow”里的评分（1-5）和颜色标记（Alt+1-9）快捷键时，其 ToolTip 提示显示在偏角（QPoint(50,50)），而不是靠齐屏幕上方居中，且不具备优雅的淡进淡出（Fade In/Out）效果。
+  2. 切图/导航功能（Up/Left 切上一张，Down/Right 切下一张）失效，按下按键无响应。
+- 用户期望的结果：
+  1. 支持将 ToolTip 提示在屏幕上方居中且自带淡进淡出的视觉效果展现出来。
+  2. 修复切图/导航快捷键响应。按下 Arrow keys 时能精准跳转上一个或下一个文件，并让主界面的 ContentPanel 对应的高亮选中项也同步更新滚动。
+- 本次任务边界：
+  1. 在 `ToolTipOverlay` 中引入 QPropertyAnimation，实现 `windowOpacity` 属性动画（淡进淡出 150ms 优雅呈现），并新增 `exactPosition` 精确定位参数。
+  2. 在 `QuickLookWindow::eventFilter` 中加装事件过滤器物理拦截 `m_graphicsView` 和 `m_textEdit` 的 `KeyPress` 动作，拦截 arrow keys、数字、Alt 等核心快捷键并转发分发给 `keyPressEvent`。
+  3. 在 `ContentPanel` 中新增 `selectAndScrollToPath(path)` 方法，保持主视图选中态随切图进行双向联动。
+- 不在本次范围内的是：重构预览界面或主界面的非快捷键/切图逻辑。
+- 对应方案文档：Modification_Plan-39.md
