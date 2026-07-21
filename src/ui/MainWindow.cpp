@@ -534,8 +534,19 @@ void MainWindow::initUi() {
         MetadataManager::instance().setRating(m_currentQuickLookPath.toStdWString(), rating);
 
         m_metaPanel->setRating(rating);
-        // 2026-04-11 按照用户要求：在预览窗设定星级时，通过新计算的居中定位，靠齐屏幕上方居中显示
-        QString msg = QString("已设定星级: <span style='color: #FECF0E;'>%1 星</span>").arg(rating);
+        
+        // 2026-xx-xx 拨乱反正：不再使用任何非标金色，选中的星标高亮色采用全局置顶/激活唯一合法色值 ActiveOrange (#FF551C)！
+        QString starsStr;
+        // 采用标准 5 星格位显示，选中的为 ActiveOrange 激活色，其余未选中的置灰，没有字眼。即使 rating 级别为 0（无评级），也仅显示 5 个置灰暗星
+        int activeStars = qBound(0, rating, 5);
+        for (int i = 1; i <= 5; ++i) {
+            if (i <= activeStars) {
+                starsStr += "<span style='color: #FF551C; font-size: 14pt; margin-right: 2px;'>★</span>";
+            } else {
+                starsStr += "<span style='color: #444444; font-size: 14pt; margin-right: 2px;'>★</span>";
+            }
+        }
+        QString msg = QString("<div style='text-align: center; padding: 4px 10px;'>%1</div>").arg(starsStr);
         
         QScreen* screen = QGuiApplication::screenAt(QCursor::pos());
         if (!screen) screen = QGuiApplication::primaryScreen();
@@ -553,7 +564,7 @@ void MainWindow::initUi() {
         int targetX = centerX - w / 2;
         int targetY = screenGeom.y() + 50; // 靠齐屏幕上方居中 (留 50px 顶部安全间距)
 
-        ToolTipOverlay::instance()->showText(QPoint(targetX, targetY), msg, 1500, QColor("#FECF0E"), true);
+        ToolTipOverlay::instance()->showText(QPoint(targetX, targetY), msg, 1500, QColor("#FF551C"), true);
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this](const QString& color) {
@@ -564,35 +575,32 @@ void MainWindow::initUi() {
 
         m_metaPanel->setColor(color.toStdWString());
         
-        QString colorName = "无颜色";
-        if (color == "red") colorName = "红色";
-        else if (color == "orange") colorName = "橙色";
-        else if (color == "yellow") colorName = "黄色";
-        else if (color == "green") colorName = "绿色";
-        else if (color == "cyan") colorName = "青色";
-        else if (color == "blue") colorName = "蓝色";
-        else if (color == "purple") colorName = "紫色";
-        else if (color == "gray") colorName = "灰色";
+        // 2026-xx-xx 按照用户最新指令：采用颜色气泡直接覆盖 ToolTipOverlay 背景，彻底禁绝文本与 unicode 字符！
+        QColor colorHex = QColor("#2B2B2B"); // 默认/无颜色时
+        QColor borderCol = QColor("#888888");
+        
+        if (color == "red") { colorHex = QColor("#E81123"); borderCol = QColor("#FF6B6B"); }
+        else if (color == "orange") { colorHex = QColor("#FF551C"); borderCol = QColor("#FF8C00"); }
+        else if (color == "yellow") { colorHex = QColor("#FECF0E"); borderCol = QColor("#FFF200"); }
+        else if (color == "green") { colorHex = QColor("#2ECC71"); borderCol = QColor("#2ECC71"); }
+        else if (color == "cyan") { colorHex = QColor("#41F2F2"); borderCol = QColor("#E0FFFF"); }
+        else if (color == "blue") { colorHex = QColor("#3498DB"); borderCol = QColor("#00BFFF"); }
+        else if (color == "purple") { colorHex = QColor("#9B59B6"); borderCol = QColor("#EE82EE"); }
+        else if (color == "gray") { colorHex = QColor("#95A5A6"); borderCol = QColor("#BDC3C7"); }
 
-        QString msg = QString("已设定颜色: <span style='color: #41F2F2;'>%1</span>").arg(colorName);
+        // 传入空文本驱动纯色块模式
+        QString msg = "";
         
         QScreen* screen = QGuiApplication::screenAt(QCursor::pos());
         if (!screen) screen = QGuiApplication::primaryScreen();
         QRect screenGeom = screen ? screen->geometry() : QRect(0, 0, 1920, 1080);
 
-        QTextDocument doc;
-        doc.setHtml(msg);
-        doc.setDefaultStyleSheet("body, div, p, span, b, i { color: #EEEEEE !important; font-family: 'Microsoft YaHei', 'Segoe UI'; font-size: 9pt; }");
-        doc.setDocumentMargin(0);
-        qreal idealW = doc.idealWidth();
-        if (idealW > 450) idealW = 450;
-        int w = static_cast<int>(idealW) + 24;
-        
+        int w = 60; // 纯色块默认大小
         int centerX = screenGeom.x() + screenGeom.width() / 2;
         int targetX = centerX - w / 2;
         int targetY = screenGeom.y() + 50; // 靠齐屏幕上方居中 (留 50px 顶部安全间距)
 
-        ToolTipOverlay::instance()->showText(QPoint(targetX, targetY), msg, 1500, QColor("#41F2F2"), true);
+        ToolTipOverlay::instance()->showText(QPoint(targetX, targetY), msg, 1500, borderCol, true, colorHex);
     });
 
     // 5a. 目录装载完成 -> FilterPanel 动态填充 (六参数版本: 移除标签统计)
