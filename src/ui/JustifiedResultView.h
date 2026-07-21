@@ -8,7 +8,7 @@ class DropJustifiedView;
 class JustifiedResultView : public IScanResultView {
     Q_OBJECT
 public:
-    explicit JustifiedResultView(DropJustifiedView* view, QWidget* parent = nullptr);
+    explicit JustifiedResultView(QWidget* parent = nullptr);
     ~JustifiedResultView() override;
 
     QWidget* getWidget() override;

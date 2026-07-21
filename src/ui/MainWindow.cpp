@@ -21,6 +21,12 @@
 #include "../core/NavigationHistoryService.h"
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
+#include <QMenu>
+#include <QActionGroup>
+#include <QSlider>
+#include <QStyle>
+#include <QMouseEvent>
+#include "../core/AppConfig.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -956,6 +962,15 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
         }
     }
 
+    if (watched == m_sizeSlider && event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent* me = static_cast<QMouseEvent*>(event);
+        if (me->button() == Qt::LeftButton) {
+            int val = QStyle::sliderValueFromPosition(m_sizeSlider->minimum(), m_sizeSlider->maximum(), me->pos().x(), m_sizeSlider->width());
+            m_sizeSlider->setValue(val);
+            return true;
+        }
+    }
+
     return QMainWindow::eventFilter(watched, event);
 }
 
@@ -1341,7 +1356,81 @@ void MainWindow::setupCustomTitleBarButtons() {
     });
     connect(m_btnClose, &QPushButton::clicked, this, &MainWindow::close);
 
+    m_viewBtn = new QPushButton(m_titleBarWidget);
+    m_viewBtn->setAttribute(Qt::WA_Hover);
+    m_viewBtn->setFixedSize(24, 24);
+    m_viewBtn->setIcon(UiHelper::getIcon("grid", QColor("#CCCCCC"), 18));
+    m_viewBtn->setIconSize(QSize(18, 18));
+    m_viewBtn->setCursor(Qt::PointingHandCursor);
+    m_viewBtn->setProperty("tooltipText", "排列方式");
+    m_viewBtn->installEventFilter(m_hoverFilter);
+    m_viewBtn->setStyleSheet(
+        "QPushButton { background: transparent; border: none; border-radius: 4px; padding: 0; }"
+        "QPushButton:hover { background: #3E3E42; }"
+        "QPushButton:pressed { background: #4E4E52; }"
+    );
+
+    connect(m_viewBtn, &QPushButton::clicked, this, [this]() {
+        QMenu* menu = new QMenu(this);
+        UiHelper::applyMenuStyle(menu);
+        menu->setStyleSheet(
+            "QMenu { background: #1A1A1A; color: #CCC; border: 1px solid #333; border-radius: 6px; }"
+            "QMenu::item { padding: 6px 24px; }"
+            "QMenu::item:selected { background: #2A2A2A; color: #FFF; }"
+            "QMenu::item:checked { color: #FF551C; }"
+        );
+
+        QAction* jModeAct = menu->addAction("自适应(A)");
+        jModeAct->setCheckable(true);
+        jModeAct->setChecked(m_contentPanel->currentViewMode() == ContentPanel::JustifiedViewMode);
+
+        QAction* gModeAct = menu->addAction("网格(G)");
+        gModeAct->setCheckable(true);
+        gModeAct->setChecked(m_contentPanel->currentViewMode() == ContentPanel::GridView);
+
+        QAction* listModeAct = menu->addAction("列表(L)");
+        listModeAct->setCheckable(true);
+        listModeAct->setChecked(m_contentPanel->currentViewMode() == ContentPanel::ListView);
+
+        QActionGroup* modeGrp = new QActionGroup(menu);
+        modeGrp->addAction(jModeAct);
+        modeGrp->addAction(gModeAct);
+        modeGrp->addAction(listModeAct);
+
+        connect(jModeAct, &QAction::triggered, this, [this]() { m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode); });
+        connect(gModeAct, &QAction::triggered, this, [this]() { m_contentPanel->setViewMode(ContentPanel::GridView); });
+        connect(listModeAct, &QAction::triggered, this, [this]() { m_contentPanel->setViewMode(ContentPanel::ListView); });
+
+        menu->exec(m_viewBtn->mapToGlobal(QPoint(0, m_viewBtn->height() + 2)));
+    });
+
+    m_sizeSlider = new QSlider(Qt::Horizontal, m_titleBarWidget);
+    m_sizeSlider->setRange(32, 256);
+    m_sizeSlider->setValue(m_contentPanel->zoomLevel());
+    m_sizeSlider->setFixedSize(110, 20);
+    m_sizeSlider->setCursor(Qt::PointingHandCursor);
+    m_sizeSlider->installEventFilter(this);
+    m_sizeSlider->setStyleSheet(
+        "QSlider { background: transparent; margin-right: 5px; }"
+        "QSlider::groove:horizontal { height: 3px; background: #3F3F3F; border-radius: 2px; }"
+        "QSlider::sub-page:horizontal { background: #FF551C; border-radius: 2px; }"
+        "QSlider::handle:horizontal { width: 12px; height: 12px; margin: -5px 0; background: #FF551C; border-radius: 6px; }"
+    );
+
+    connect(m_sizeSlider, &QSlider::valueChanged, this, [this](int v) {
+        m_contentPanel->setZoomLevel(v);
+        AppConfig::instance().setValue("UI/GridZoomLevel", v);
+    });
+
+    connect(m_contentPanel, &ContentPanel::zoomLevelChanged, this, [this](int level) {
+        m_sizeSlider->blockSignals(true);
+        m_sizeSlider->setValue(level);
+        m_sizeSlider->blockSignals(false);
+    });
+
     if (m_titleBarLayout) {
+        m_titleBarLayout->addWidget(m_sizeSlider, 0, Qt::AlignVCenter);
+        m_titleBarLayout->addWidget(m_viewBtn, 0, Qt::AlignVCenter);
         m_titleBarLayout->addWidget(titleBarBtns);
     }
 

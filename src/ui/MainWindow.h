@@ -162,6 +162,9 @@ private:
     QPushButton* m_btnMax = nullptr;
     QPushButton* m_btnClose = nullptr;
 
+    QPushButton* m_viewBtn = nullptr;
+    QSlider* m_sizeSlider = nullptr;
+
     // 盘符管理栏组件
     QWidget* m_driveBarWidget = nullptr;
     QHBoxLayout* m_driveBarLayout = nullptr;
