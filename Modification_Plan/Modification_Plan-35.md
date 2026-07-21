@@ -23,7 +23,7 @@
 ### 4.1 核心视图层（Model-View-Delegate）极简化重构设计（对应用户原话：“排查当前版本的三种视图是否存在傻逼逻辑架构？”）
 1. **抽象化与合并 `ResultView` 职责**：
    - 将 `GridResultView` 与 `JustifiedResultView` 彻底归一化，或使其内部完全通过各自的类管理独立的 `LayoutMode`（`GridMode` 和 `JustifiedMode`），消灭 `ContentPanel` 里的对视图对象进行底层参数修改的越权逻辑。
-   - 所有与 `ThumbnailDelegate` 有关的属性、色标、评分等角色设置和样式注入，应当完全封装在 `ResultView` 的实例化阶段，严禁在 `ContentPanel` 内部进行暴露和越界硬编码。
+   - 所有与 `ThumbnailDelegate` 有关 of 属性、色标、评分等角色设置和样式注入，应当完全封装在 `ResultView` 的实例化阶段，严禁在 `ContentPanel` 内部进行暴露和越界硬编码。
 
 ### 4.2 双击与事件交互 Hitbox 解耦方案（对应用户原话：“排查当前版本的三种视图是否存在傻逼逻辑架构？”）
 1. **构建几何参数自适应计算机制**：
