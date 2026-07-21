@@ -1442,7 +1442,7 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
             return true; 
         } 
  
-        QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj); 
+        view = qobject_cast<QAbstractItemView*>(obj);
         if (!view) view = qobject_cast<QAbstractItemView*>(obj->parent()); 
  
         if (qobject_cast<QLineEdit*>(QApplication::focusWidget())) { 
