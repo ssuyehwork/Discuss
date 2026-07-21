@@ -23,12 +23,12 @@
 #include <QDebug>
 #include <QIcon>
 #include "FilterPanel.h"
+#include "IScanResultView.h"
 
 #include "../core/ModelContract.h"
 
 namespace ArcMeta {
 
-class IScanResultView;
 struct RuntimeMeta;
 
 /**
