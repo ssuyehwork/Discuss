@@ -8,7 +8,7 @@ class DropJustifiedView;
 class GridResultView : public IScanResultView {
     Q_OBJECT
 public:
-    explicit GridResultView(DropJustifiedView* view, QWidget* parent = nullptr);
+    explicit GridResultView(QWidget* parent = nullptr);
     ~GridResultView() override;
 
     QWidget* getWidget() override;

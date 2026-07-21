@@ -207,6 +207,15 @@ public:
         return {};
     }
 
+    int zoomLevel() const { return m_zoomLevel; }
+    void setZoomLevel(int level) {
+        m_zoomLevel = level;
+        if (m_currentActiveView) {
+            m_currentActiveView->setIconSize(level);
+        }
+    }
+    ViewMode currentViewMode() const { return m_currentViewMode; }
+
     /**
      * @brief 物理定位：在当前视图模型中寻找与 currentPath 相邻的文件路径
      * @param delta 偏移方向 (-1 为上一个, 1 为下一个)
@@ -214,6 +223,8 @@ public:
     QString getAdjacentFilePath(const QString& currentPath, int delta);
 
 signals:
+    void zoomLevelChanged(int level);
+
     /**
      * @brief 请求 QuickLook 预览信号
      * @param path 物理路径
@@ -252,8 +263,6 @@ signals:
 
 private:
     void initUi();
-    void initGridView();
-    void initListView();
     void setupContextMenu();
     void updateLayersButtonState();
 
@@ -270,20 +279,15 @@ private:
     QPushButton* m_btnLayersBlue = nullptr;
     QPushButton* m_btnToggleFolders = nullptr; // 2026-07-xx 按照 Plan-73：显示/隐藏文件夹切换
     QPushButton* m_btnToggleFiles = nullptr;   // 2026-07-xx 按照 Plan-73：显示/隐藏文件切换
-    QPushButton* m_viewBtn = nullptr;          // 视图下拉按钮
-    QSlider* m_sizeSlider = nullptr;           // 尺寸无缝滑动调节器
     QTextBrowser* m_textPreview = nullptr;
     QLabel* m_imagePreview = nullptr;
 
     // 视图组件
-    QAbstractItemView* m_gridView = nullptr;
-    QTreeView* m_treeView = nullptr;
-    FerrexVirtualDbModel* m_model = nullptr;
-
     IScanResultView* m_listResultView = nullptr;
     IScanResultView* m_gridResultView = nullptr;
     IScanResultView* m_justifiedResultView = nullptr;
     IScanResultView* m_currentActiveView = nullptr;
+    FerrexVirtualDbModel* m_model = nullptr;
 
     QTimer* m_visibleTimer = nullptr;
     void refreshVisibleThumbnails();
