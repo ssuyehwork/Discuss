@@ -10,7 +10,6 @@
 #include <QHBoxLayout>
 #include <QSystemTrayIcon>
 #include <QSet>
-#include <QSlider>
 
 #include "FramelessDialog.h"
 
@@ -162,9 +161,6 @@ private:
     QPushButton* m_btnMin = nullptr;
     QPushButton* m_btnMax = nullptr;
     QPushButton* m_btnClose = nullptr;
-
-    QPushButton* m_viewBtn = nullptr;
-    QSlider* m_sizeSlider = nullptr;
 
     // 盘符管理栏组件
     QWidget* m_driveBarWidget = nullptr;

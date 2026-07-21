@@ -23,7 +23,6 @@
 #include <QDebug>
 #include <QIcon>
 #include "FilterPanel.h"
-#include "IScanResultView.h"
 
 #include "../core/ModelContract.h"
 
@@ -201,20 +200,10 @@ public:
     QAbstractItemModel* model() const { return m_model; }
     QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
     QModelIndexList getSelectedIndexes() const {
-        if (m_currentActiveView && m_currentActiveView->getBaseView()) {
-            return m_currentActiveView->getBaseView()->selectionModel()->selectedIndexes();
-        }
-        return {};
+        return (m_viewStack->currentWidget() == m_gridView) ? 
+                m_gridView->selectionModel()->selectedIndexes() : 
+                m_treeView->selectionModel()->selectedIndexes();
     }
-
-    int zoomLevel() const { return m_zoomLevel; }
-    void setZoomLevel(int level) {
-        m_zoomLevel = level;
-        if (m_currentActiveView) {
-            m_currentActiveView->setIconSize(level);
-        }
-    }
-    ViewMode currentViewMode() const { return m_currentViewMode; }
 
     /**
      * @brief 物理定位：在当前视图模型中寻找与 currentPath 相邻的文件路径
@@ -223,8 +212,6 @@ public:
     QString getAdjacentFilePath(const QString& currentPath, int delta);
 
 signals:
-    void zoomLevelChanged(int level);
-
     /**
      * @brief 请求 QuickLook 预览信号
      * @param path 物理路径
@@ -263,6 +250,8 @@ signals:
 
 private:
     void initUi();
+    void initGridView();
+    void initListView();
     void setupContextMenu();
     void updateLayersButtonState();
 
@@ -283,10 +272,8 @@ private:
     QLabel* m_imagePreview = nullptr;
 
     // 视图组件
-    IScanResultView* m_listResultView = nullptr;
-    IScanResultView* m_gridResultView = nullptr;
-    IScanResultView* m_justifiedResultView = nullptr;
-    IScanResultView* m_currentActiveView = nullptr;
+    QAbstractItemView* m_gridView = nullptr;
+    QTreeView* m_treeView = nullptr;
     FerrexVirtualDbModel* m_model = nullptr;
 
     QTimer* m_visibleTimer = nullptr;

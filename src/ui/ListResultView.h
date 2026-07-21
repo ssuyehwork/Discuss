@@ -8,7 +8,7 @@ class DropTreeView;
 class ListResultView : public IScanResultView {
     Q_OBJECT
 public:
-    explicit ListResultView(QWidget* parent = nullptr);
+    explicit ListResultView(DropTreeView* treeView, QWidget* parent = nullptr);
     ~ListResultView() override;
 
     QWidget* getWidget() override;
