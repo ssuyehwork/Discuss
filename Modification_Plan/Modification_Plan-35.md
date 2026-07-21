@@ -37,13 +37,14 @@
 
 ## 5. 修改边界声明【范围】
 
-**本次方案涉及范围：**
-- [ ] 模块/文件：`src/ui/ContentPanel.cpp` — 视图数据交互解耦，不执行实际修改。
-- [ ] 模块/文件：`src/ui/JustifiedView.cpp` — 排版节流逻辑与事件分流重组，不执行实际修改。
-- [ ] 模块/文件：`src/ui/ListResultView.cpp` / `GridResultView.cpp` / `JustifiedResultView.cpp` — 视图渲染解耦规划，不执行实际修改。
+**本次方案涉及范围（将在执行者角色获得授权后进行实际代码修改）：**
+- [ ] 模块/文件：`src/ui/ContentPanel.cpp` — 实现视图数据交互解耦、管理新的 IScanResultView 指针，并接入尺寸滑杆与视图切换按钮。
+- [ ] 模块/文件：`src/ui/JustifiedView.cpp` — 重构排版节流逻辑、重新规划双击与选择交互事件的 Hitbox 分流。
+- [ ] 模块/文件：`src/ui/ListResultView.cpp` / `GridResultView.cpp` / `JustifiedResultView.cpp` — 各视图类自承载初始化底层 QAbstractItemView，真正做到职责单一模块化。
 
 **明确禁止越界修改的范围：**
-- [ ] 所有业务代码文件（`.cpp` / `.h` 等）—— 本次角色为分析师（对应 AGENTS.md：“分析师角色：只产出分析与方案文档，不修改任何代码文件”），严禁产生任何实际修改。
+- [ ] 物理 MFT 读取模块 `MftReader.cpp` — 不修改。
+- [ ] 主导航侧边栏分类 `CategoryPanel.cpp` — 不修改。
 
 ## 6. 实现准则与预警【核心】
 1. **编译依赖预警**：视图在重塑与解耦过程中，必须保证基类 `IScanResultView` 的纯虚接口设计不引入循环依赖，防止产生“找不到标识符”等编译错误。
