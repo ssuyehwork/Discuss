@@ -49,6 +49,7 @@
 #include <QTimer>
 #include "UiHelper.h"
 #include "StyleLibrary.h"
+#include "SvgIconRenderer.h"
 #include "../core/SearchHistoryService.h"
 #include "../core/SyncStatusService.h"
 #include "DriveButton.h"
@@ -1275,9 +1276,9 @@ void MainWindow::setupCustomTitleBarButtons() {
         QMenu menu(this); 
         UiHelper::applyMenuStyle(&menu); 
  
-        QAction* actAdaptive = menu.addAction("自适应"); 
-        QAction* actGrid = menu.addAction("网格"); 
-        QAction* actList = menu.addAction("列表"); 
+        QAction* actAdaptive = menu.addAction("自适应(A)"); 
+        QAction* actGrid = menu.addAction("网格(G)"); 
+        QAction* actList = menu.addAction("列表(L)"); 
  
         actAdaptive->setCheckable(true); 
         actGrid->setCheckable(true); 
@@ -1288,6 +1289,14 @@ void MainWindow::setupCustomTitleBarButtons() {
         actAdaptive->setChecked(mode == ContentPanel::JustifiedViewMode); 
         actGrid->setChecked(mode == ContentPanel::GridView); 
         actList->setChecked(mode == ContentPanel::ListView); 
+
+        // 自定义菜单项样式，高亮选中选项为 ActiveOrange 品牌橙色 (#ff551c)，并定制打勾图标
+        QString checkPath = SvgIconRenderer::getSvgTempFilePath("check", QColor("#ff551c"));
+        menu.setStyleSheet(menu.styleSheet() + QString(
+            "QMenu::item:checked { color: #ff551c; }"
+            "QMenu::item:checked:selected { color: #ff551c; }"
+            "QMenu::indicator:checked { image: url(%1); width: 14px; height: 14px; left: 4px; }"
+        ).arg(checkPath));
  
         connect(actAdaptive, &QAction::triggered, this, [this]() { 
             m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode); 
