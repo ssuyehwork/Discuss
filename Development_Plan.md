@@ -107,3 +107,13 @@
 - 本次任务边界：修改 `src/ui/ContentPanel.cpp` 中的 `ContentPanel::wheelEvent` 与 `ContentPanel::eventFilter`。物理擦除所有拦截 `Qt::ControlModifier` 并且进行缩放/切换视图的处理逻辑，还原为标准的 Qt 默认事件分发。
 - 不在本次范围内的是：添加卡片尺寸滑杆、添加排列方式选择按钮，或是修改其余视图或模型底层逻辑。
 - 对应方案文档：Modification_Plan-44.md
+
+## [2026-07-22] 调整卡片尺寸滑杆与排列视图按钮至顶部自定义标题栏移植
+
+- 用户描述的现象/问题：当前主界面顶部标题栏缺少方便调节卡片/缩略图尺寸的滑杆以及快速切换视图排列方式的控件，而原本的滚轮快捷变动已被彻底根除。
+- 用户期望的结果：在顶部自定义标题栏中优雅地嵌入移植自 FERREX-META 版本的“调整卡片尺寸滑杆（m_sizeSlider）”和“排列方式选择按钮（viewBtn）”，实现卡片尺寸在 32~256 像素间的无缝无级调节，以及一键调出菜单快速切换自适应/网格/列表三种视图排版模式。
+- 本次任务边界：
+  1. 在 `MainWindow::setupCustomTitleBarButtons` 中，构建水平滑杆 `m_sizeSlider` 与切换按钮 `m_viewBtn`，配置对齐 `Memories.md` 的 QSS 交互样式。
+  2. 建立交互链路：当滑杆滑动时，将数值传递并调用 `ContentPanel` 的 `m_zoomLevel` 并刷新视图行高/格尺寸；当点击排列按钮弹出菜单并选中对应选项时，调用 `ContentPanel::setViewMode` 切换视图排版模式。
+- 不在本次范围内的是：修改物理 MFT 扫描、USN 监控底座以及其他非滑杆/排列按钮移植的相关逻辑。
+- 对应方案文档：Modification_Plan-45.md
