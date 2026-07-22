@@ -6,7 +6,7 @@
 ## 2. 问题定位
 在当前活跃代码树中，“FERREX” 的硬编码及文档描述主要定位在以下位置：
 1. **任务栏/系统窗口标题设置**：
-   `src/ui/MainWindow.cpp` 第 95 行：`setWindowTitle("FERREX");` 
+   `src/ui/MainWindow.cpp` 第 95 行：`setWindowTitle("FERREX");`
 2. **主窗口自定义标题栏品牌 Label**：
    `src/ui/MainWindow.cpp` 第 944 行：`m_appNameLabel = new QLabel("FERREX", m_titleBarWidget);`
 3. **元数据管理器与缓存模块注释描述**：
