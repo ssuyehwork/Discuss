@@ -2,7 +2,6 @@
 
 #include <QMainWindow>
 #include <QSplitter>
-#include <QSlider>
 #include <QToolBar>
 #include <QLineEdit>
 #include <QPushButton>
@@ -157,8 +156,6 @@ private:
     QPushButton* m_btnToggleDriveBar = nullptr;
     QPushButton* m_btnSync   = nullptr;
     QPushButton* m_btnLayout = nullptr;
-    QPushButton* m_btnViewMenu = nullptr; // 2026-07-22 物理移植：排列方式视图一键切换按钮 (对应 Plan-45)
-    QSlider* m_sizeSlider = nullptr;      // 2026-07-22 物理移植：缩放比例调节滑杆 (对应 Plan-45)
     QPushButton* m_btnCreate = nullptr;
     QPushButton* m_btnPinTop = nullptr;
     QPushButton* m_btnMin = nullptr;
