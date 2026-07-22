@@ -117,3 +117,13 @@
   2. 建立交互链路：当滑杆滑动时，将数值传递并调用 `ContentPanel` 的 `m_zoomLevel` 并刷新视图行高/格尺寸；当点击排列按钮弹出菜单并选中对应选项时，调用 `ContentPanel::setViewMode` 切换视图排版模式。
 - 不在本次范围内的是：修改物理 MFT 扫描、USN 监控底座以及其他非滑杆/排列按钮移植的相关逻辑。
 - 对应方案文档：Modification_Plan-45.md
+
+## [2026-07-22] FERREX-META 版本 Ctrl+滚轮键 联动滑杆逻辑移植
+
+- 用户描述的现象/问题：用户不希望滚轮事件处于失效状态，而是需要移植来自 FERREX-META 版本优雅的滑杆联动机制。
+- 用户期望的结果：将 FERREX-META 版本的 Ctrl+滚轮逻辑移植到当前版本。按住 Ctrl 滚动鼠标滚轮时，每次向下/向上分别使顶部滑杆的 value 减/加 10，通过滑杆的变化触发整个系统的缩放与更新，保持极高稳定性。
+- 本次任务边界：
+  1. 修改 `ContentPanel::eventFilter`：在过滤视图 Wheel 事件时，若检测到 `Qt::ControlModifier`，提取 `angleDelta().y()`。向上滚动调用 `MainWindow::m_sizeSlider->setValue(slider->value() + 10)`，向下滚动调用 `setValue(slider->value() - 10)`。
+  2. 修改 `ContentPanel::wheelEvent`：实现同样的 Ctrl 滚轮捕获逻辑以更新滑杆。
+- 不在本次范围内的是：任何非滑杆缩放联动逻辑或对数据库和元数据扫描逻辑的改动。
+- 对应方案文档：Modification_Plan-46.md
