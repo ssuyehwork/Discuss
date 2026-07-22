@@ -1646,7 +1646,22 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
     return targetIdx.data(PathRole).toString(); 
 } 
  
+void ContentPanel::setZoomLevel(int level) {
+    int boundedLevel = qBound(96, level, 128);
+    if (m_zoomLevel == boundedLevel) return;
+    m_zoomLevel = boundedLevel;
+    updateGridSize();
+    emit zoomLevelChanged(m_zoomLevel);
+}
+
 void ContentPanel::wheelEvent(QWheelEvent* event) { 
+    if (event->modifiers() & Qt::ControlModifier) {
+        int deltaY = event->angleDelta().y();
+        int newZoom = m_zoomLevel + (deltaY > 0 ? 8 : -8);
+        setZoomLevel(newZoom);
+        event->accept();
+        return;
+    }
     QWidget::wheelEvent(event); 
 } 
  
@@ -1668,6 +1683,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
         m_viewStack->setCurrentWidget(m_gridView);
     }
     updateGridSize();
+    emit viewModeChanged(mode);
     m_visibleTimer->start();
 } 
  
