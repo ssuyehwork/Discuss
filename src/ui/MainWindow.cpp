@@ -1284,8 +1284,7 @@ void MainWindow::setupCustomTitleBarButtons() {
         actGrid->setCheckable(true); 
         actList->setCheckable(true); 
  
-        auto currentMode = m_contentPanel->property("currentViewMode").toInt(); 
-        ContentPanel::ViewMode mode = static_cast<ContentPanel::ViewMode>(currentMode); 
+        ContentPanel::ViewMode mode = m_contentPanel->currentViewMode(); 
         actAdaptive->setChecked(mode == ContentPanel::JustifiedViewMode); 
         actGrid->setChecked(mode == ContentPanel::GridView); 
         actList->setChecked(mode == ContentPanel::ListView); 
@@ -1331,13 +1330,6 @@ void MainWindow::setupCustomTitleBarButtons() {
     connect(m_contentPanel, &ContentPanel::zoomLevelChanged, this, [this](int level) { 
         QSignalBlocker blocker(m_sizeSlider); // 必须在回设滑杆时屏蔽其信号，防止跨组件循环触发导致栈溢出 
         m_sizeSlider->setValue(level); 
-    }); 
-     
-    connect(m_contentPanel, &ContentPanel::viewModeChanged, this, [this](ContentPanel::ViewMode mode) { 
-        QString iconKey = "grid"; 
-        if (mode == ContentPanel::ListView) iconKey = "list"; 
-        else if (mode == ContentPanel::JustifiedViewMode) iconKey = "columns"; 
-        m_btnViewMenu->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE"))); 
     }); 
  
     int initZoom = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt(); 
