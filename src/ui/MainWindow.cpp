@@ -1280,6 +1280,74 @@ void MainWindow::setupCustomTitleBarButtons() {
         }
     });
 
+    // 2026-07-22 物理一键排列方式视图按钮
+    m_btnViewMenu = createTitleBtn("grid");
+    m_btnViewMenu->setProperty("tooltipText", "排列方式");
+    m_btnViewMenu->installEventFilter(m_hoverFilter);
+
+    connect(m_btnViewMenu, &QPushButton::clicked, this, [this]() {
+        QMenu menu(this);
+        UiHelper::applyMenuStyle(&menu);
+
+        QAction* actAdaptive = menu.addAction("自适应");
+        QAction* actGrid = menu.addAction("网格");
+        QAction* actList = menu.addAction("列表");
+
+        actAdaptive->setCheckable(true);
+        actGrid->setCheckable(true);
+        actList->setCheckable(true);
+
+        auto currentMode = m_contentPanel->property("currentViewMode").toInt();
+        ContentPanel::ViewMode mode = static_cast<ContentPanel::ViewMode>(currentMode);
+        actAdaptive->setChecked(mode == ContentPanel::JustifiedViewMode);
+        actGrid->setChecked(mode == ContentPanel::GridView);
+        actList->setChecked(mode == ContentPanel::ListView);
+
+        connect(actAdaptive, &QAction::triggered, this, [this]() {
+            m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode);
+        });
+        connect(actGrid, &QAction::triggered, this, [this]() {
+            m_contentPanel->setViewMode(ContentPanel::GridView);
+        });
+        connect(actList, &QAction::triggered, this, [this]() {
+            m_contentPanel->setViewMode(ContentPanel::ListView);
+        });
+
+        menu.exec(m_btnViewMenu->mapToGlobal(QPoint(0, m_btnViewMenu->height())));
+    });
+
+    // 2026-07-22 物理缩放比例滑杆
+    m_sizeSlider = new QSlider(Qt::Horizontal, this);
+    m_sizeSlider->setRange(96, 128);
+    m_sizeSlider->setFixedSize(100, 20);
+    m_sizeSlider->setCursor(Qt::PointingHandCursor);
+    m_sizeSlider->setStyleSheet(
+        "QSlider { background: transparent; }"
+        "QSlider::groove:horizontal { height: 3px; background: #3F3F3F; border-radius: 2px; }"
+        "QSlider::sub-page:horizontal { background: #FF8C00; border-radius: 2px; }"
+        "QSlider::handle:horizontal { width: 10px; height: 10px; background: #FF8C00; border-radius: 5px; margin: -4px 0; }"
+    );
+
+    connect(m_sizeSlider, &QSlider::valueChanged, this, [this](int value) {
+        m_contentPanel->setZoomLevel(value);
+    });
+
+    // 双向数据流联动与初始化
+    connect(m_contentPanel, &ContentPanel::zoomLevelChanged, this, [this](int level) {
+        QSignalBlocker blocker(m_sizeSlider);
+        m_sizeSlider->setValue(level);
+    });
+
+    connect(m_contentPanel, &ContentPanel::viewModeChanged, this, [this](ContentPanel::ViewMode mode) {
+        QString iconKey = "grid";
+        if (mode == ContentPanel::ListView) iconKey = "list";
+        else if (mode == ContentPanel::JustifiedViewMode) iconKey = "columns";
+        m_btnViewMenu->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
+    });
+
+    int initZoom = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
+    m_sizeSlider->setValue(qBound(96, initZoom, 128));
+
     m_btnSync = createTitleBtn("sync");
     m_btnSync->setProperty("tooltipText", "元数据已同步至物理文件");
     m_btnSync->installEventFilter(m_hoverFilter);
@@ -1367,6 +1435,8 @@ void MainWindow::setupCustomTitleBarButtons() {
     m_btnClose->installEventFilter(m_hoverFilter);
 
     m_btnCreate->installEventFilter(m_hoverFilter);
+    layout->addWidget(m_sizeSlider, 0, Qt::AlignVCenter);   // 调节滑杆
+    layout->addWidget(m_btnViewMenu, 0, Qt::AlignVCenter); // 排列方式按钮
     layout->addWidget(m_btnToggleDriveBar, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnSync, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnLayout, 0, Qt::AlignVCenter);

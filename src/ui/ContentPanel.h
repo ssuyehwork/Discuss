@@ -232,6 +232,12 @@ signals:
     void directorySelected(const QString& path);
 
     /**
+     * @brief 2026-07-22 物理同步：缩放级别改变信号与视图模式改变信号 (对应 Plan-45)
+     */
+    void zoomLevelChanged(int level);
+    void viewModeChanged(ViewMode mode);
+
+    /**
      * @brief 请求将指定路径添加至收藏夹的信号 (对应用户原话：“把选中的项目收藏到收藏区里”)
      * @param paths 选中的项目绝对物理路径列表 (对应用户原话：“选中某个项目”)
      */
@@ -349,6 +355,11 @@ public slots:
      * @brief 强制重新加载当前视图的所有内容
      */
     void refreshAll();
+
+    /**
+     * @brief 2026-07-22 物理同步：设置缩放级别槽函数 (对应 Plan-45)
+     */
+    void setZoomLevel(int level);
 
     /**
      * @brief 局部更新某项的元数据（星级、颜色、标签等）

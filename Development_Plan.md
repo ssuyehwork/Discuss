@@ -8,7 +8,7 @@
 - 不在本次范围内的是：实际修改代码或引入任何功能性代码的改动。
 - 对应方案文档：无（本次为分析委托，直接产出 `Inspect and Mark.md` 文档，不需要单独编写 `Modification_Plan-N.md` 并执行代码修改，因为没有代码修改需求）
 
-## [2026-07-20] 缩略图“先显示后秒消失”故障分析与自适应缓存容量优化
+## [2026-07-20] 缩略图“先显示后秒消失”故障 analysis 与自适应缓存容量优化
 
 - 用户描述的现象/问题：在内容面板中显示数据时（尤其是SVG或图像等图形文件），缩略图会先短暂显示，随后在1秒内瞬间消失并退化为纯灰色占位符。
 - 用户期望的结果：分析该现象并给出彻底根治的逻辑架构方案，同时评估 QCache 的 LRU 淘汰机制是否为故障根因，重新设计一套能与虚拟滚动可见区域动态关联、避免在常见规模文件夹下产生缩略图淘汰的自适应动态缓存容量公式，并在超大/百万级文件夹下做合理的防御性妥协。
@@ -36,7 +36,7 @@
 
 - 用户描述的现象/问题：当前版本的 `QuickLookWindow` 预览运行逻辑不符合预期，其处理逻辑和界面交互（如图像缩放、音视频媒体处理、文本二进制检测及编码识别等）功能不够完备。
 - 用户期望的结果：彻底放弃当前版本的 `QuickLookWindow` 运行逻辑，将其替换为 `FERREX-META` 版本中的 `QuickLookWindow` 运行逻辑。这包括采用专门设计的 `QuickLookGraphicsView`（支持滚轮缩放、双击恢复/适配大小、鼠标拖拽移动及光标跟随变动）、引入更完整的多媒体及文本二进制与编码自动检测识别渲染，实现更好的大文件和特殊文件类型的预览。
-- 本次任务边界：彻底重构 `src/ui/QuickLookWindow.h` and `src/ui/QuickLookWindow.cpp`，将 `FERREX-META` 版本的 `QuickLookWindow` 和 `QuickLookGraphicsView` 控制与交互机制移植并合并至其中，适配 `ArcMeta` 命名空间及符合本项目标准的样式设计。同时确保当前项目正在运行的核心快捷键/信号链路继续工作（评分打标 `ratingRequested`、颜色标签打标 `colorRequested` 以及切图 `prevRequested`/`nextRequested` 信号），并对音视频进行优雅的占位降级兼容。
+- 本次任务边界：彻底重构 `src/ui/QuickLookWindow.h` and `src/ui/QuickLookWindow.cpp`，将 `FERREX-META` 版本的 `QuickLookWindow` and `QuickLookGraphicsView` 控制与交互机制移植并合并至其中，适配 `ArcMeta` 命名空间及符合本项目标准的样式设计。同时确保当前项目正在运行的核心快捷键/信号链路继续工作（评分打标 `ratingRequested`、颜色标签打标 `colorRequested` 以及切图 `prevRequested`/`nextRequested` 信号），并对音视频进行优雅的占位降级兼容。
 - 不在本次范围内的是：修改 `MainWindow` 的主导航调度机制 or 任何非预览关联的面板组件。
 - 对应方案文档：Modification_Plan-36.md
 
@@ -73,8 +73,19 @@
 
 ## [2026-07-21] ThumbnailDelegate 职责过载审计与模块化拆分规划
 
-- 用户描述的现象/问题：单元格展示委托 `ThumbnailDelegate` 存在多维重绘、生命期、排版和提示的职责过载，难以维护及复用。
+- 用户描述的现象/问题：单元格展示委托 `ThumbnailDelegate` 存在多维重绘、生命期、排版 and 提示的职责过载，难以维护及复用。
 - 用户期望的结果：对其进行代码职责过载分析并输出模块化的单一职责拆解和落地规划。
 - 本次任务边界：对 `src/ui/ThumbnailDelegate.h` 与 `src/ui/ThumbnailDelegate.cpp` 展开整体架构梳理，定位其过载现状，设计面向高内聚、零开销、低耦合的模块化（视觉物理渲染、文本排版、控制器生命期分流）拆分图纸。由于本 Turn 为只读分析师模式，不修改任何项目代码文件。
 - 不在本次范围内的是：修改逻辑代码、在外部执行构建验证。
 - 对应方案文档：Modification_Plan-40.md
+
+## [2026-07-22] 视图按钮及缩放滑杆功能移植重构
+
+- 用户描述的现象/问题：当前版本缺少直观的“缩放滑杆”和“视图模式一键切换”按钮，且 Ctrl+滚轮 缩放无法动态调整视图卡片的大小，交互体验滞后。
+- 用户期望的结果：将 FERREX-META 版本的滑杆（m_sizeSlider）和排列方式视图按钮（viewBtn）移植到当前版本并关联使用，同时支持通过 Ctrl+滚轮 在内容视图上进行自由的比例缩放。
+- 本次任务边界：
+  1. 在主窗口 `MainWindow::setupCustomTitleBarButtons()` 对应的自定义按钮组中，植入“缩放滑杆”和“视图模式一键切换按钮”，调整按钮间距物理对齐全局规范。
+  2. 重构 `ContentPanel` 的 `wheelEvent`，捕获 Ctrl+滚轮 动作实现滑杆尺寸/内容卡片尺寸 `m_zoomLevel`（限制在 96~128px 之间）的物理同频缩放，并保证滑杆值及 `updateGridSize()` 持久化一致。
+  3. 在“视图按钮”下拉菜单中，完美对接 `ListView`、`GridView` (网格自适应即 JustifiedMode) 以及 `JustifiedViewMode` 的逻辑切换。
+- 不在本次范围内的是：重写或修改物理 USN 监控底座或底层 MFT 文件过滤搜索流程。
+- 对应方案文档：Modification_Plan-45.md
