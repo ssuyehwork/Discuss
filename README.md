@@ -1,15 +1,8 @@
 # 备份备注
 
-**备份时间**：2026-07-22 12:12:59  
-**备份目录**：Buk_20260722_121257  
+**备份时间**：2026-07-22 19:38:23  
+**备份目录**：Buk_20260722_193817  
 
 ---
 
-本次提交完成了对 ThumbnailDelegate 的模块化拆分与职责重构：
-1. 成功解决了原 ThumbnailDelegate 极其臃肿、多维渲染与逻辑控制“职责过载”的问题。
-2. 提取出 ElidedTextUtility 专门负责双行文本裁剪算法。
-3. 提取出 CardPainterHelper 专门负责底层 QPainter 细节的原子化静态物理绘制，并在每个绘制阶段严格调用 save() 与 restore() 确保画笔状态安全。
-4. 使得 ThumbnailDelegate 大幅精简，只专注于卡片尺寸几何计算、输入法编辑器控制和分流交互，高内聚且低耦合，没有任何视觉样式回归。
-5. 注册 CMakeLists.txt，确保编译链接完全一致。
-
-这个版本 内容面板数据来源与内存情况下 显示的卡片是正确的，但来自目录导航是，显示的卡片是正方形，是错误的
+彻底物理删除了 ContentPanel 中原有的 Ctrl+滚轮键 缩放/切换视图的逻辑。具体修改了 ContentPanel::eventFilter 中针对 QEvent::Wheel 的 Qt::ControlModifier 的拦截代码块，使其不再拦截该事件；同时修改了 ContentPanel::wheelEvent，删除了其内针对 Qt::ControlModifier 的判断和复杂分流代码，使其直接退化为仅调用基类的原生滚轮事件。这能有效提升程序运行与交互的稳定性，避免非预期的视图缩放和卡顿。
