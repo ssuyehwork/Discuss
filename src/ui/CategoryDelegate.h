@@ -7,6 +7,7 @@
 #include <QAbstractProxyModel>
 #include "CategoryModel.h"
 #include "CategoryFilterProxyModel.h"
+#include "CardPainterHelper.h"
 #include "StyleLibrary.h"
 using namespace ArcMeta::Style;
 
@@ -54,9 +55,7 @@ public:
             // 应用宪法规范：margin 1px 2px (上下 1px, 左右 2px)
             contentRect.adjust(2, 1, -2, -1);
             
-            painter->setBrush(bg);
-            painter->setPen(Qt::NoPen);
-            painter->drawRoundedRect(contentRect, 4, 4);
+            ArcMeta::CardPainterHelper::drawCategoryBackground(painter, contentRect, selected, hover, colorHex);
             painter->restore();
         }
 
