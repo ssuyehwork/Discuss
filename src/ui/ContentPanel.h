@@ -196,6 +196,7 @@ public:
      * @brief 切换视图模式
      */
     void setViewMode(ViewMode mode);
+    ViewMode currentViewMode() const { return m_currentViewMode; }
 
     /**
      * @brief 拦截空格键（红线：物理拦截 QEvent::KeyPress 且为 Key_Space）
@@ -216,6 +217,13 @@ public:
      * @param delta 偏移方向 (-1 为上一个, 1 为下一个)
      */
     QString getAdjacentFilePath(const QString& currentPath, int delta);
+
+signals:
+    /**
+     * @brief 缩放比例与视图模式变更信号 (Modification_Plan-47)
+     */
+    void zoomLevelChanged(int level);
+    void viewModeChanged(ViewMode mode);
 
 signals:
     /**
@@ -323,6 +331,12 @@ private:
                                QMap<QString, int>& createDateCounts,
                                QMap<QString, int>& modifyDateCounts,
                                int& noTagCount);
+
+public slots:
+    /**
+     * @brief 设置缩放比例，限制在 96~128px 之间 (Modification_Plan-47)
+     */
+    void setZoomLevel(int level);
 
 public slots:
     void onSelectionChanged();

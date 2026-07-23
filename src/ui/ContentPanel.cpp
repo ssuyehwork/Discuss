@@ -1245,6 +1245,9 @@ void ContentPanel::updateGridSize() {
             m_treeView->setStyleSheet( 
                 QString("QTreeView { background-color: transparent; border: none; outline: none; font-size: 12px; }" 
                         "QTreeView::item { height: %1px; color: #EEEEEE; padding-left: 0px; }" 
+                        "QTreeView::item:alternate { background-color: #252526; }"
+                        "QTreeView::item:selected { background-color: rgba(52, 152, 219, 0.2); border-left: 2px solid #3498db; }"
+                        "QTreeView::item:hover { background-color: #2A2A2A; }"
                         "QTreeView QLineEdit { background-color: #2D2D2D; color: #FFFFFF; border: 1px solid #378ADD; border-radius: 6px; padding: 2px; selection-background-color: #378ADD; selection-color: #FFFFFF; }")
                 .arg(m_zoomLevel)
             );
@@ -1259,6 +1262,19 @@ void ContentPanel::updateGridSize() {
 } 
  
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) { 
+    if (event->type() == QEvent::Wheel) {
+        QWheelEvent* wEvent = static_cast<QWheelEvent*>(event);
+        if (wEvent->modifiers() & Qt::ControlModifier) {
+            if (m_currentViewMode != ListView) {
+                int deltaY = wEvent->angleDelta().y();
+                int newZoom = m_zoomLevel + (deltaY > 0 ? 8 : -8);
+                setZoomLevel(newZoom);
+            }
+            wEvent->accept();
+            return true; // 吞噬该事件，不让子视图产生滚动，彻底解决逻辑混乱和时灵时不灵问题
+        }
+    }
+
     // 2026-03-xx 按照宪法要求：物理拦截 Hover 事件以触发 ToolTipOverlay 
     // 2026-05-20 性能优化：同时支持 Enter/Leave 事件，确保响应灵敏 
     if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) { 
@@ -1646,7 +1662,24 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
     return targetIdx.data(PathRole).toString(); 
 } 
  
+void ContentPanel::setZoomLevel(int level) {
+    int boundedLevel = qBound(96, level, 128); // 限制在 96~128px
+    if (m_zoomLevel == boundedLevel) return;
+    m_zoomLevel = boundedLevel;
+    updateGridSize();
+    emit zoomLevelChanged(m_zoomLevel);
+}
+
 void ContentPanel::wheelEvent(QWheelEvent* event) { 
+    if (event->modifiers() & Qt::ControlModifier) {
+        if (m_currentViewMode != ListView) {
+            int deltaY = event->angleDelta().y();
+            int newZoom = m_zoomLevel + (deltaY > 0 ? 8 : -8);
+            setZoomLevel(newZoom);
+        }
+        event->accept();
+        return;
+    }
     QWidget::wheelEvent(event); 
 } 
  
@@ -1668,6 +1701,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
         m_viewStack->setCurrentWidget(m_gridView);
     }
     updateGridSize();
+    emit viewModeChanged(mode); // 触发模式改变信号
     m_visibleTimer->start();
 } 
  
@@ -1737,6 +1771,7 @@ void ContentPanel::initGridView() {
  
 void ContentPanel::initListView() { 
     m_treeView = new DropTreeView(this); 
+    m_treeView->setAlternatingRowColors(true); // 开启交替斑马纹背景
     m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
     m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
     m_treeView->setSortingEnabled(true); 
@@ -1767,6 +1802,7 @@ void ContentPanel::initListView() {
     m_treeView->setStyleSheet( 
         "QTreeView { background-color: transparent; border: none; outline: none; font-size: 12px; }" 
         "QTreeView::item { height: 28px; color: #EEEEEE; padding-left: 0px; }" 
+        "QTreeView::item:alternate { background-color: #252526; }" // 斑马纹交替行高亮背景
         "QTreeView::item:selected { background-color: rgba(52, 152, 219, 0.2); border-left: 2px solid #3498db; }"
         "QTreeView::item:hover { background-color: #2A2A2A; }"
         "QTreeView QLineEdit { background-color: #2D2D2D; color: #FFFFFF; border: 1px solid #378ADD; border-radius: 6px; padding: 2px; selection-background-color: #378ADD; selection-color: #FFFFFF; }" 

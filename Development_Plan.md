@@ -89,3 +89,14 @@
   3. 在“视图按钮”下拉菜单中，完美对接 `ListView`、`GridView` (网格自适应即 JustifiedMode) 以及 `JustifiedViewMode` 的逻辑切换。
 - 不在本次范围内的是：重写或修改物理 USN 监控底座或底层 MFT 文件过滤搜索流程。
 - 对应方案文档：Modification_Plan-45.md
+
+## [2026-07-23] 列表视图去分割线并启用斑马纹
+
+- 用户描述的现象/问题：列表视图这些分割线都是冗余的，影响界面整洁度；且未启用斑马纹背景。
+- 用户期望的结果：在列表视图中移除水平分割线，并且采用交替行背景色（斑马纹）样式。
+- 本次任务边界：
+  1. 修改 `src/ui/TreeItemDelegate.h` 中 Column 0 在 `m_drawMiniCards` 为 `true` 时的自绘底部分割线逻辑，彻底移除 `painter->drawLine` 相关代码。
+  2. 在 `src/ui/ContentPanel.cpp` 初始化 `m_treeView` 处，调用 `m_treeView->setAlternatingRowColors(true)`。
+  3. 更新 `src/ui/ContentPanel.cpp` 中 `m_treeView` 的 QSS 样式表，添加 `QTreeView::item:alternate` 交替背景色样式，使奇偶行背景在暗色主题下呈现自然斑马纹。
+- 不在本次范围内的是：修改导航面板的树形视图或其他视图模式。
+- 对应方案文档：Modification_Plan-48.md

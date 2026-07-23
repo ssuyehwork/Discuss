@@ -49,6 +49,7 @@
 #include <QTimer>
 #include "UiHelper.h"
 #include "StyleLibrary.h"
+#include "SvgIconRenderer.h"
 #include "../core/SearchHistoryService.h"
 #include "../core/SyncStatusService.h"
 #include "DriveButton.h"
@@ -63,6 +64,8 @@ using namespace ArcMeta::Style;
 #include "../core/NativeFolderWatcher.h"
 #include "FramelessDialog.h"
 #include "FramelessFileDialog.h"
+#include <QSlider>
+#include <QSignalBlocker>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -871,7 +874,6 @@ void MainWindow::mousePressEvent(QMouseEvent* event) {
     }
 }
 
-
 void MainWindow::mouseMoveEvent(QMouseEvent* event) {
     if (m_isResizing) {
         const QPoint delta = event->globalPosition().toPoint() - m_resizeStartGlobal;
@@ -1074,8 +1076,6 @@ void MainWindow::initToolbar() {
     searchLayout->addWidget(m_searchEdit);
 }
 
-
-
 void MainWindow::setupSplitters() {
     QWidget* centralC = new QWidget(this);
     centralC->setObjectName("CentralWidget");
@@ -1187,7 +1187,6 @@ void MainWindow::setupSplitters() {
     m_mainSplitter->addWidget(m_filterPanel);
     m_mainSplitter->addWidget(m_tagManagerView);
 
-
     // 2026-07-xx 按照用户要求：标签搜索联动
     connect(m_tagManagerView, &TagManagerView::requestSearchTag, this, [this](const QString& tag) {
         // 自动切回正常模式并搜索
@@ -1267,6 +1266,74 @@ void MainWindow::setupCustomTitleBarButtons() {
         ).arg(hoverColor));
         return btn;
     };
+
+    // 排列方式视图按钮及中性缩放滑杆 (Modification_Plan-47)
+    m_btnViewMenu = createTitleBtn("grid");
+    m_btnViewMenu->setProperty("tooltipText", "排列方式");
+    m_btnViewMenu->installEventFilter(m_hoverFilter);
+
+    connect(m_btnViewMenu, &QPushButton::clicked, this, [this]() {
+        QMenu menu(this);
+        UiHelper::applyMenuStyle(&menu);
+
+        QAction* actAdaptive = menu.addAction("自适应(A)");
+        QAction* actGrid = menu.addAction("网格(G)");
+        QAction* actList = menu.addAction("列表(L)");
+
+        actAdaptive->setCheckable(true);
+        actGrid->setCheckable(true);
+        actList->setCheckable(true);
+
+        ContentPanel::ViewMode mode = m_contentPanel->currentViewMode();
+        actAdaptive->setChecked(mode == ContentPanel::JustifiedViewMode);
+        actGrid->setChecked(mode == ContentPanel::GridView);
+        actList->setChecked(mode == ContentPanel::ListView);
+
+        // 自定义菜单项样式，高亮选中选项为 ActiveOrange 品牌橙色 (#ff551c)，并定制打勾图标
+        QString checkPath = SvgIconRenderer::getSvgTempFilePath("check", QColor("#ff551c"));
+        menu.setStyleSheet(menu.styleSheet() + QString(
+            "QMenu::item:checked { color: #ff551c; }"
+            "QMenu::item:checked:selected { color: #ff551c; }"
+            "QMenu::indicator:checked { image: url(%1); width: 14px; height: 14px; left: 4px; }"
+        ).arg(checkPath));
+
+        connect(actAdaptive, &QAction::triggered, this, [this]() {
+            m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode);
+        });
+        connect(actGrid, &QAction::triggered, this, [this]() {
+            m_contentPanel->setViewMode(ContentPanel::GridView);
+        });
+        connect(actList, &QAction::triggered, this, [this]() {
+            m_contentPanel->setViewMode(ContentPanel::ListView);
+        });
+
+        menu.exec(m_btnViewMenu->mapToGlobal(QPoint(0, m_btnViewMenu->height())));
+    });
+
+    m_sizeSlider = new QSlider(Qt::Horizontal, m_titleBarWidget);
+    m_sizeSlider->setRange(96, 128);
+    m_sizeSlider->setFixedSize(110, 20);
+    m_sizeSlider->setCursor(Qt::PointingHandCursor);
+    m_sizeSlider->setStyleSheet(
+        "QSlider { background: transparent; margin-right: 5px; }"
+        "QSlider::groove:horizontal { height: 3px; background: #3F3F3F; border-radius: 2px; }"
+        "QSlider::sub-page:horizontal { background: #3F3F3F; border-radius: 2px; }" // 统一为深灰背景，去除橙色高亮填充条
+        "QSlider::handle:horizontal { width: 10px; height: 10px; background: #8E8E93; border-radius: 5px; margin: -4px 0; }" // 中性手柄背景色
+        "QSlider::handle:horizontal:hover { background: #CCCCCC; }" // 悬停反馈
+    );
+
+    connect(m_sizeSlider, &QSlider::valueChanged, this, [this](int value) {
+        m_contentPanel->setZoomLevel(value);
+    });
+
+    // 信号槽的双向跨组件绑定联动 (Modification_Plan-47)
+    connect(m_contentPanel, &ContentPanel::zoomLevelChanged, this, [this](int level) {
+        QSignalBlocker blocker(m_sizeSlider); // 必须在回设滑杆时屏蔽其信号，防止跨组件循环触发导致栈溢出
+        m_sizeSlider->setValue(level);
+    });
+
+    int initZoom = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
+    m_sizeSlider->setValue(qBound(96, initZoom, 128));
 
     m_btnToggleDriveBar = createTitleBtn("chevrons_down");
     m_btnToggleDriveBar->setProperty("tooltipText", "展开/收起盘符管理栏");
@@ -1367,6 +1434,8 @@ void MainWindow::setupCustomTitleBarButtons() {
     m_btnClose->installEventFilter(m_hoverFilter);
 
     m_btnCreate->installEventFilter(m_hoverFilter);
+
+    // 右侧功能按钮组容器（内部维护 5px 严格按钮间距）
     layout->addWidget(m_btnToggleDriveBar, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnSync, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnLayout, 0, Qt::AlignVCenter);
@@ -1385,7 +1454,10 @@ void MainWindow::setupCustomTitleBarButtons() {
     });
     connect(m_btnClose, &QPushButton::clicked, this, &MainWindow::close);
 
+    // 外层标题栏布局 (m_titleBarLayout 维护 8px 组件间距与边距)
     if (m_titleBarLayout) {
+        m_titleBarLayout->addWidget(m_sizeSlider, 0, Qt::AlignVCenter);
+        m_titleBarLayout->addWidget(m_btnViewMenu, 0, Qt::AlignVCenter);
         m_titleBarLayout->addWidget(titleBarBtns);
     }
 
