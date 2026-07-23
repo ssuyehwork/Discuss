@@ -1403,7 +1403,8 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                             
                             int banW = 14;
                             int starSize = 18;
-                            int kSpacing = 2; // 与 Delegate 保持绝对统一
+                            int banGap = 2;
+                            int starSpacing = 0; // 与 Delegate 严格保持 0 间距对齐
                             int startX = col2Rect.left() + 6;
 
                             QRect banHitbox(startX, col2Rect.top() + (col2Rect.height() - banW)/2, banW, banW);
@@ -1411,9 +1412,9 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                             int hitStar = -1;
 
                             // 统一星级点击命中区参数，使其与 TreeItemDelegate 绘制参数保持绝对物理对齐
-                            int starsStartX = startX + banW + kSpacing;
+                            int starsStartX = startX + banW + banGap;
                             for (int i = 0; i < 5; ++i) {
-                                QRect starRect(starsStartX + i * (starSize + kSpacing), col2Rect.top() + (col2Rect.height() - starSize) / 2, starSize, starSize);
+                                QRect starRect(starsStartX + i * (starSize + starSpacing), col2Rect.top() + (col2Rect.height() - starSize) / 2, starSize, starSize);
                                 if (starRect.contains(pos)) {
                                     hitStar = i + 1;
                                     break;
