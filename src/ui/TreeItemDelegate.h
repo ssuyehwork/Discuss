@@ -150,8 +150,8 @@ public:
             painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
 
             painter->restore();
-        } else if (col == 1 || col == 2 || col == 3) {
-            // 这三列不调用默认 paint，完全自定义
+        } else if (col == 1 || col == 2) {
+            // 这两列不调用默认 paint，完全自定义
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing);
 
@@ -184,14 +184,13 @@ public:
                     UiHelper::getIcon("check_circle", QColor("#2ecc71"), 16).paint(painter, iconRect);
                 }
             } else if (col == 2) { // 星级列
-                // 2026-06-16 按照方案 20 纠偏：仅在选中或评分 > 0 时显示图标，减少视觉干扰
+                // 2026-06-16 按照方案 20 纠偏：仅在选中、评分 > 0 或标记了颜色时显示图标，减少视觉干扰且修复颜色无法显示的逻辑缺陷
                 QModelIndex idx0 = index.model()->index(index.row(), 0);
                 int rating = idx0.data(RatingRole).toInt();
                 bool isSelected = option.state & QStyle::State_Selected;
+                QString colorName = idx0.data(ColorRole).toString();
 
-                if (rating > 0 || isSelected) {
-                    QString colorName = idx0.data(ColorRole).toString();
-
+                if (rating > 0 || isSelected || !colorName.isEmpty()) {
                     int banW = 12;            // 禁止图标宽度：对齐紧凑规格 12px
                     int starSize = 18;        // 星级图标尺寸：18px
                     int banGap = 2;           // 禁止图标与第 1 颗星的间距：2px
@@ -216,45 +215,40 @@ public:
                         }
                     }
 
-                    // 移植网格视图的亮度对比度感知算法
-                    QColor bgColor = colorName.isEmpty() ? QColor(0,0,0,0) : UiHelper::parseColorName(colorName);
-                    double luminance = 0.0;
-                    if (bgColor.isValid() && bgColor.alpha() > 0) {
-                        luminance = (0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue()) / 255.0;
-                    }
+                    // 2026-xx-xx 按照最新深度共识：如果星级为0且不是(未打分但被选中且无颜色)的状态，则不绘制任何星星或禁止图标（只保留胶囊背景颜色）
+                    bool drawStars = (rating > 0) || (isSelected && colorName.isEmpty());
 
-                    QColor starColor, emptyStarColor;
-                    if (colorName.isEmpty()) {
-                        starColor      = QColor("#CCCCCC");
-                        emptyStarColor = QColor("#888888");
-                    } else if (luminance < 0.5) {
-                        starColor      = QColor("#FFFFFF");
-                        emptyStarColor = QColor(255, 255, 255, 160);
-                    } else {
-                        starColor      = QColor("#1A1A1A");
-                        emptyStarColor = QColor(0, 0, 0, 140);
-                    }
+                    if (drawStars) {
+                        // 移植网格视图的亮度对比度感知算法
+                        QColor bgColor = colorName.isEmpty() ? QColor(0,0,0,0) : UiHelper::parseColorName(colorName);
+                        double luminance = 0.0;
+                        if (bgColor.isValid() && bgColor.alpha() > 0) {
+                            luminance = (0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue()) / 255.0;
+                        }
 
-                    // 统一物理排版与标准 SVG 图标绘制 (对齐网格视图原生图标 star_filled 和 star)
-                    QIcon banIcon = UiHelper::getIcon("no_color", starColor, banW);
-                    banIcon.paint(painter, banRect);
+                        QColor starColor, emptyStarColor;
+                        if (colorName.isEmpty()) {
+                            starColor      = QColor("#CCCCCC");
+                            emptyStarColor = QColor("#888888");
+                        } else if (luminance < 0.5) {
+                            starColor      = QColor("#FFFFFF");
+                            emptyStarColor = QColor(255, 255, 255, 160);
+                        } else {
+                            starColor      = QColor("#1A1A1A");
+                            emptyStarColor = QColor(0, 0, 0, 140);
+                        }
 
-                    QPixmap filledStar = UiHelper::getPixmap("star_filled", QSize(starSize, starSize), starColor);
-                    QPixmap emptyStar = UiHelper::getPixmap("star", QSize(starSize, starSize), emptyStarColor);
+                        // 统一物理排版与标准 SVG 图标绘制 (对齐网格视图原生图标 star_filled 和 star)
+                        QIcon banIcon = UiHelper::getIcon("no_color", starColor, banW);
+                        banIcon.paint(painter, banRect);
 
-                    for (int i = 0; i < 5; ++i) {
-                        QRect starRect(starsStartX + i * (starSize + starSpacing), option.rect.top() + (option.rect.height() - starSize) / 2, starSize, starSize);
-                        painter->drawPixmap(starRect, (i < rating) ? filledStar : emptyStar);
-                    }
-                }
-            } else if (col == 3) { // 颜色列
-                QString colorHex = index.model()->index(index.row(), 0).data(ColorRole).toString();
-                if (!colorHex.isEmpty()) {
-                    QColor c = UiHelper::parseColorName(colorHex);
-                    if (c.isValid()) {
-                        painter->setBrush(c);
-                        painter->setPen(Qt::NoPen);
-                        painter->drawEllipse(option.rect.center(), 6, 6);
+                        QPixmap filledStar = UiHelper::getPixmap("star_filled", QSize(starSize, starSize), starColor);
+                        QPixmap emptyStar = UiHelper::getPixmap("star", QSize(starSize, starSize), emptyStarColor);
+
+                        for (int i = 0; i < 5; ++i) {
+                            QRect starRect(starsStartX + i * (starSize + starSpacing), option.rect.top() + (option.rect.height() - starSize) / 2, starSize, starSize);
+                            painter->drawPixmap(starRect, (i < rating) ? filledStar : emptyStar);
+                        }
                     }
                 }
             }
