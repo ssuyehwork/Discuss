@@ -107,7 +107,7 @@ int FerrexVirtualDbModel::rowCount(const QModelIndex& parent) const {
 }
 
 int FerrexVirtualDbModel::columnCount(const QModelIndex&) const {
-    return 8; // 名称, 状态, 星级, 颜色, 标签, 类型, 大小, 修改日期
+    return 7; // 名称, 状态, 星级, 尺寸, 类型, 大小, 修改日期（移除已冗余的“颜色”列）
 }
 
 Qt::ItemFlags FerrexVirtualDbModel::flags(const QModelIndex& index) const {
@@ -132,7 +132,7 @@ QVariant FerrexVirtualDbModel::data(const QModelIndex& index, int role) const {
         if (role == Qt::DisplayRole || role == Qt::EditRole) {
             switch (index.column()) {
                 case 0: return record.categoryName;
-                case 5: return "子分类";
+                case 4: return "子分类";
                 default: return "";
             }
         } else if (role == CategoryIdRole) {
@@ -165,25 +165,25 @@ QVariant FerrexVirtualDbModel::data(const QModelIndex& index, int role) const {
                 if (name.isEmpty() && path.length() >= 2 && path[1] == ':') return path; // 盘符根目录
                 return name;
             }
-            case 4: {
+            case 3: {
                 if (record.isDir) return "-";
                 if (record.width > 0 && record.height > 0) {
                     return QString("%1 x %2").arg(record.width).arg(record.height);
                 }
                 return "-";
             }
-            case 5: {
+            case 4: {
                 if (record.isDir) return "文件夹";
                 int lastDot = path.lastIndexOf('.');
                 return (lastDot != -1) ? path.mid(lastDot + 1).toUpper() : "";
             }
-            case 6: {
+            case 5: {
                 if (record.isDir) return "-";
                 if (record.size < 1024) return QString::number(record.size) + " B";
                 if (record.size < 1024 * 1024) return QString::number(record.size / 1024.0, 'f', 1) + " KB";
                 return QString::number(record.size / (1024.0 * 1024.0), 'f', 1) + " MB";
             }
-            case 7: {
+            case 6: {
                 return QDateTime::fromMSecsSinceEpoch(record.mtime).toString("dd-MM-yyyy HH:mm");
             }
         }
@@ -239,7 +239,7 @@ QVariant FerrexVirtualDbModel::data(const QModelIndex& index, int role) const {
 
 QVariant FerrexVirtualDbModel::headerData(int section, Qt::Orientation orientation, int role) const {
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
-        static const QStringList headers = {"名称", "状态", "星级", "颜色", "尺寸", "类型", "大小", "修改日期"};
+        static const QStringList headers = {"名称", "状态", "星级", "尺寸", "类型", "大小", "修改日期"};
         if (section < static_cast<int>(headers.size())) return headers[section];
     }
     return QVariant();
@@ -557,6 +557,12 @@ void FerrexVirtualDbModel::loadThumbnailsForRows(const QList<int>& rows) {
                             if (!weakThis) return;
                             auto* mutableThis = const_cast<FerrexVirtualDbModel*>(weakThis.data());
                             
+                            // [Plan-53] 保护已有缩略图缓存，若新读取的图片为空且已有缓存，进行无损退避
+                            bool alreadyHasIcon = mutableThis->m_iconCache.contains(cacheKey);
+                            if (img.isNull() && alreadyHasIcon) {
+                                return; // 优质缓存保护，无损退避
+                            }
+
                             QIcon icon;
                             if (!img.isNull()) {
                                 icon = QIcon(QPixmap::fromImage(img));
@@ -564,6 +570,10 @@ void FerrexVirtualDbModel::loadThumbnailsForRows(const QList<int>& rows) {
                                 icon = UiHelper::getFileIcon(path, 128);
                             }
                             
+                            if (icon.isNull()) {
+                                return; // 绝对禁止将空图标覆写入内存
+                            }
+
                             mutableThis->m_iconCache.insert(cacheKey, new QIcon(icon));
                             if (hasThumb) mutableThis->m_aspectRatios[QDir::toNativeSeparators(path)] = ar;
                             
@@ -990,6 +1000,10 @@ ContentPanel::ContentPanel(QWidget* parent)
     initUi(); 
     // 2026-05-27 按照用户要求：构造函数末尾强行对齐初始网格尺寸，废除 initGridView 中的旧硬编码值 
     updateGridSize(); 
+
+    // 从 AppConfig 恢复上一次的视图模式
+    int savedMode = AppConfig::instance().getValue("ContentPanel/ViewMode", static_cast<int>(GridView)).toInt();
+    setViewMode(static_cast<ViewMode>(savedMode));
 } 
  
 void ContentPanel::deferredInit() { 
@@ -1710,6 +1724,10 @@ void ContentPanel::setViewMode(ViewMode mode) {
         m_viewStack->setCurrentWidget(m_gridView);
     }
 
+    // 保存当前的视图模式到 AppConfig，实现跨生命周期持久化
+    AppConfig::instance().setValue("ContentPanel/ViewMode", static_cast<int>(mode));
+    AppConfig::instance().sync();
+
     updateGridSize();
     emit viewModeChanged(mode); // 触发模式改变信号
     emit zoomLevelChanged(m_zoomLevel); // 通知标题栏滑杆更新数值
@@ -1829,23 +1847,23 @@ void ContentPanel::initListView() {
     header->setStretchLastSection(false); // 禁止末端强行拉伸
     header->setCascadingSectionResizes(false);
 
-    // 1. 确保所有 8 列均可见
-    for (int i = 0; i <= 7; ++i) {
+    // 1. 确保所有 7 列均可见，并且彻底隐藏或移除多余的第 7 列（原本的第 7 列已被前移）
+    for (int i = 0; i <= 6; ++i) {
         header->setSectionHidden(i, false);
     }
+    header->setSectionHidden(7, true);
 
-    // 2. 精确设置各列固定像素宽度
+    // 2. 精确设置各列固定像素宽度（彻底移除“颜色”列，平移后续所有列宽度）
     header->resizeSection(1, 50);   // 状态 (固定 50px 图标区)
     header->resizeSection(2, 120);  // 星级 (固定 120px 图标区)
-    header->resizeSection(3, 50);   // 颜色 (固定 50px 图标区)
-    header->resizeSection(4, 120);  // 尺寸 (固定 120px)
-    header->resizeSection(5, 80);   // 类型 (固定 80px)
-    header->resizeSection(6, 100);  // 大小 (固定 100px)
-    header->resizeSection(7, 120);  // 修改日期 (固定 120px)
+    header->resizeSection(3, 120);  // 尺寸 (固定 120px)
+    header->resizeSection(4, 80);   // 类型 (固定 80px)
+    header->resizeSection(5, 100);  // 大小 (固定 100px)
+    header->resizeSection(6, 120);  // 修改日期 (固定 120px)
 
-    // 3. 锁定调整模式：第 0 列（名称）弹性自适应拉伸，第 1~7 列物理固定禁止拖拽
+    // 3. 锁定调整模式：第 0 列（名称）弹性自适应拉伸，第 1~6 列物理固定禁止拖拽
     header->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int i = 1; i <= 7; ++i) {
+    for (int i = 1; i <= 6; ++i) {
         header->setSectionResizeMode(i, QHeaderView::Fixed);
     }
  
@@ -3423,46 +3441,48 @@ void GridItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
         }
     }
 
-    // 2026-xx-xx 按照最新要求： 
-    // 1. 如果已有打分 (rating > 0)，始终显示。 
-    // 2. 如果未打分但被选中，显示禁止图标和空心星。 
-    // 3. 如果未打分且未选中，不显示。 
-    bool shouldShowRating = (rating > 0) || isSelected; 
+    // 2026-xx-xx 按照最新深度共识：如果标记了颜色 (!colorName.isEmpty()) 或者有星级评分 (rating > 0) 或者未评级但被选中 (isSelected)，显示外层背景或评级
+    bool shouldShowRating = (rating > 0) || isSelected || !colorName.isEmpty();
  
     if (shouldShowRating) { 
-        QColor bgColor = colorName.isEmpty() ? QColor(0,0,0,0) : UiHelper::parseColorName(colorName);
-        
-        // 2026-06-xx 物理修复：采用感知亮度对比色计算，确保在深色标记（如灰色/深蓝）下星星依然清晰可见
-        double luminance = 0.0;
-        if (bgColor.isValid() && bgColor.alpha() > 0) {
-            luminance = (0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue()) / 255.0;
-        }
+        // 精准控制是否绘制星级和禁止图标
+        bool drawStars = (rating > 0) || (isSelected && colorName.isEmpty());
 
-        QColor starColor, emptyStarColor;
-        if (colorName.isEmpty()) {
-            starColor      = QColor("#CCCCCC");
-            emptyStarColor = QColor("#888888");
-        } else if (luminance < 0.5) {
-            // 背景较暗 -> 使用亮色星
-            starColor      = QColor("#FFFFFF");
-            emptyStarColor = QColor(255, 255, 255, 160);
-        } else {
-            // 背景较亮 -> 使用暗色星
-            starColor      = QColor("#1A1A1A");
-            emptyStarColor = QColor(0, 0, 0, 140);
-        }
+        if (drawStars) {
+            QColor bgColor = colorName.isEmpty() ? QColor(0,0,0,0) : UiHelper::parseColorName(colorName);
 
-        // 2026-xx-xx 深度修复：调高禁止图标与空心星亮度，确保在深色卡片背景下清晰可见 
-        QIcon banIcon = UiHelper::getIcon("no_color", starColor, m.banRect.width()); 
-        banIcon.paint(painter, m.banRect); 
- 
-        QPixmap filledStar = UiHelper::getPixmap("star-svgrepo-com.svg", QSize(m.starSize, m.starSize), starColor); 
-        QPixmap emptyStar = UiHelper::getPixmap("star-rate-rating-outline-svgrepo-com.svg", QSize(m.starSize, m.starSize), emptyStarColor); 
- 
-        for (int i = 0; i < 5; ++i) { 
-            QRect starRect(m.starsStartX + i * (m.starSize + m.starSpacing), m.ratingY + (m.ratingH - m.starSize) / 2, m.starSize, m.starSize); 
-            painter->drawPixmap(starRect, (i < rating) ? filledStar : emptyStar); 
-        } 
+            // 2026-06-xx 物理修复：采用感知亮度对比色计算，确保在深色标记（如灰色/深蓝）下星星依然清晰可见
+            double luminance = 0.0;
+            if (bgColor.isValid() && bgColor.alpha() > 0) {
+                luminance = (0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue()) / 255.0;
+            }
+
+            QColor starColor, emptyStarColor;
+            if (colorName.isEmpty()) {
+                starColor      = QColor("#CCCCCC");
+                emptyStarColor = QColor("#888888");
+            } else if (luminance < 0.5) {
+                // 背景较暗 -> 使用亮色星
+                starColor      = QColor("#FFFFFF");
+                emptyStarColor = QColor(255, 255, 255, 160);
+            } else {
+                // 背景较亮 -> 使用暗色星
+                starColor      = QColor("#1A1A1A");
+                emptyStarColor = QColor(0, 0, 0, 140);
+            }
+
+            // 2026-xx-xx 深度修复：调高禁止图标与空心星亮度，确保在深色卡片背景下清晰可见
+            QIcon banIcon = UiHelper::getIcon("no_color", starColor, m.banRect.width());
+            banIcon.paint(painter, m.banRect);
+
+            QPixmap filledStar = UiHelper::getPixmap("star-svgrepo-com.svg", QSize(m.starSize, m.starSize), starColor);
+            QPixmap emptyStar = UiHelper::getPixmap("star-rate-rating-outline-svgrepo-com.svg", QSize(m.starSize, m.starSize), emptyStarColor);
+
+            for (int i = 0; i < 5; ++i) {
+                QRect starRect(m.starsStartX + i * (m.starSize + m.starSpacing), m.ratingY + (m.ratingH - m.starSize) / 2, m.starSize, m.starSize);
+                painter->drawPixmap(starRect, (i < rating) ? filledStar : emptyStar);
+            }
+        }
     } 
      
     // [名称区绘制] - 在正方形下方 
