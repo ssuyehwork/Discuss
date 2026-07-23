@@ -557,17 +557,6 @@ void FerrexVirtualDbModel::loadThumbnailsForRows(const QList<int>& rows) {
                             if (!weakThis) return;
                             auto* mutableThis = const_cast<FerrexVirtualDbModel*>(weakThis.data());
                             
-                            // [Plan-53 内存缓存无损退避机制] 
-                            // 在刷新或重置导致二次强行提取时，如果由于物理拷贝尚未完成或图片暂时遇阻，
-                            // img 返回空图，若此时缓存 m_iconCache 中已经存在了我们之前成功绘制出来的缩略图，
-                            // 我们必须无损退退避，绝对禁止用空图或低质默认文件图标将优质的内存 QIcon 缓存覆灭覆盖！
-                            if (img.isNull()) {
-                                if (mutableThis->m_iconCache.contains(cacheKey)) {
-                                    // 缓存已有优质图像，无损保留
-                                    return;
-                                }
-                            }
-
                             QIcon icon;
                             if (!img.isNull()) {
                                 icon = QIcon(QPixmap::fromImage(img));
