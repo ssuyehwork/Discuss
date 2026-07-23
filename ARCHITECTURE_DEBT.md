@@ -198,7 +198,7 @@
     236:                     targetCat = cat;
     ```
 - 拆分方案：
-  - 新建 `CategoryService` (分类业务控制器)：负责处理分类的更名、删除和合并等高级事务，包括驱动磁盘重命名和调用仓储持久化。
+  - 新建 `CategoryService` (分类业务控制器)：负责处理分类的更名、删除 and 合并等高级事务，包括驱动磁盘重命名和调用仓储持久化。
   - 原类收敛为：`CategoryModel` (纯模型层)，在数据被修改时抛出业务更名信号（如 `renameRequested`），不直接在 `setData` 内部干涉物理 I/O 和持久化逻辑。
   - 依赖解耦方式：Controller 监听 Model 的编辑请求，执行底层 `CategoryService` 业务，处理完成后触发 Model reload。
 - 历史重构备注：为了解决更名引起的锁冲突，此前将更名移入了 `QtConcurrent::run` 后台，但这反而进一步加深了 Model 穿透修改物理磁盘的 SRP 严重缺陷。
@@ -556,7 +556,7 @@
   - 新建 `ViewInteractiveHandler` (视图交互控制组件)：接管网格和列表内针对评分、色卡 Hitbox 的精确几何坐标命中测试与点击事件逻辑，交由控制器处理。
   - 原类收敛为：`GridItemPainter` / `TreeItemPainter`，仅仅作为只读的、无状态的（Stateless）QPainter 纯视觉渲染代理。
   - 依赖解耦方式：View 捕获鼠标点击，计算行 and 局部列位置，调用 View 内部 Controller 触发 `model->setData` 进行修改，使 Delegate 彻底回归无状态纯绘制角色。
-- 历史重构备注：此前在 `ContentPanel` 中增加了一部分事件拦截，但 Delegate 内部依然包含相当比例的交互控制和业务拦截逻辑。
+- 历史重构备注：此前在 `ContentPanel` 中增加了一部分事件拦截，但 Delegate 内部依然包含相当比例 of 交互控制和业务拦截逻辑。
 - 优先级：低 (主要发生于视口 Viewport 可见行范围内，其性能开销和危害不会随着全量数据扩展而线性暴涨，属于 MVC 经典划分不彻底缺陷)
 
 ---
