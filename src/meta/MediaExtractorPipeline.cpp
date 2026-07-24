@@ -95,23 +95,12 @@ void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
         MetadataManager::instance().setItemVisualMetadata(path, colorStr, palette, false);
     }
 
-    // [Plan-53 状态安全拦截] 校验是否真正完成了至少一项多媒体特征提取。
-    // 如果由于文件拷贝中、独占等竞态，导致 w, h 均无效且色彩也提取失败，则保持其 IngestionStatus = 0（待命自愈状态）！
-    // 只有当提取成功，或者该文件类型确定非媒体图像时，才允许将其置为 1（已完成）状态
-    QFileInfo info(QString::fromStdWString(path));
-    bool isGraphics = MediaColorExtractor::isGraphicsFile(info.suffix().toLower());
-    bool isExtractedOk = (w > 0 && h > 0) || success;
-    
-    if (isExtractedOk || (!isGraphics && !info.isDir())) {
-        MetadataManager::instance().updateIngestionStatus(path, 1);
-    } else {
-        qDebug() << "[Pipeline] [Plan-53] 多媒体文件读取遇阻，保留待处理状态(0)，送入重试链 ->" << QString::fromStdWString(path);
-    }
-
+    MetadataManager::instance().updateIngestionStatus(path, 1);
     MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, QString::fromStdWString(path));
 
     if (!success) {
-        if (info.isDir() || isGraphics) {
+        QFileInfo info(QString::fromStdWString(path));
+        if (info.isDir() || MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
             std::lock_guard<std::mutex> lock(m_retryMutex);
             if (std::find(m_visualRetryQueue.begin(), m_visualRetryQueue.end(), path) == m_visualRetryQueue.end()) {
                 m_visualRetryQueue.push_back(path);

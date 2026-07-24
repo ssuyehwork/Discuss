@@ -20,7 +20,7 @@
   7. 基础文件的简单内容预览（内置 QTextBrowser 文本预览和 QLabel 图片预览逻辑）
 - **代码证据**：`ContentPanel::loadDirectory` 函数。负责磁盘递归扫描和线程分发控制。
 ```cpp
-// 源码行号：2805 - 2824
+// 源码行号：2795 - 2814
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     m_isLoading = true;
     int reqId = ++m_loadRequestId;
@@ -41,6 +41,7 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
 
         const auto drives = QDir::drives();
         std::vector<ItemRecord> driveRecords;
+        for (const QFileInfo& drive : drives) {
 ```
 - **拆分方案**：
   - 新建 `DirectoryScanner`：负责物理磁盘扫描的线程调度与文件记录数据填充。
@@ -117,7 +118,7 @@ void MainWindow::initToolbar() {
   6. 变长调色板、标签库、星级等多维度属性的原子化内存/数据库同步设置与 UI 刷新语义化通知分发
 - **代码证据**：`MetadataManager::searchInCache` 方法。将元数据底层存储与多维范围检索的业务逻辑强行混杂。
 ```cpp
-// 源码行号：2056 - 2075
+// 源码行号：2034 - 2053
 QStringList MetadataManager::searchInCache(const QString& keyword, const QString& scopeSource, int categoryId, const QString& parentPath) {
     // [Plan-26] 彻底废除 O(N) 全量内存线性遍历，全面拥抱 FTS5 trigram 模糊检索引擎 + 内存 O(1) 快速反查
     QStringList results; if (keyword.isEmpty()) return results;
@@ -207,7 +208,7 @@ void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
   3. MFT SoA 数据结构索引缓存的序列化保存与反序列化从文件读取加载
   4. 多盘符掩码隔离下的高性能底层文件名、后缀、物理属性条件搜索算法实现
   5. 全局系统图标缓存管理（解决 UAF 风险的 QFileIconProvider 懒加载包装）
-- **代码证据**：`MftReader::getCachedIcon`。底层磁盘主引擎不应混入具体的文件格式 QIcon 获取 and 懒加载缓存管理。
+- **代码证据**：`MftReader::getCachedIcon`。底层磁盘主引擎不应混入具体的文件格式 QIcon 获取和懒加载缓存管理。
 ```cpp
 // 源码行号：1544 - 1563
 QIcon MftReader::getCachedIcon(const QString& ext, bool isDir) {
