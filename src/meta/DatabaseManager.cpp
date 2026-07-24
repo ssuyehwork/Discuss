@@ -93,6 +93,13 @@ DatabaseManager::DatabaseManager(QObject* parent) : QObject(parent) {
         });
     });
     m_syncTimer->start();
+
+    // 【修复】必须放在定时器创建完成之后：moveToThread 只会带走
+    // 调用时已存在的子对象，先创建子对象、最后再整体迁移线程，
+    // 才能保证 m_syncTimer 真正跟随主线程事件循环运行，保障后台定期兜底存盘保险正常运行。
+    if (QCoreApplication::instance()) {
+        this->moveToThread(QCoreApplication::instance()->thread());
+    }
 }
 
 DatabaseManager::~DatabaseManager() {
