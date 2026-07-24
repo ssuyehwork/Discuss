@@ -28,11 +28,6 @@ MediaExtractorPipeline& MediaExtractorPipeline::instance() {
 }
 
 MediaExtractorPipeline::MediaExtractorPipeline(QObject* parent) : QObject(parent) {
-    // 强制将本单例及其子对象关联到拥有 QEventLoop 的主线程上运行，避免因在没有事件循环的后台线程初始化而导致 QTimer 不触发
-    if (QCoreApplication::instance()) {
-        this->moveToThread(QCoreApplication::instance()->thread());
-    }
-
     m_timer = new QTimer(this);
     m_timer->setInterval(1500);
     connect(m_timer, &QTimer::timeout, this, &MediaExtractorPipeline::processNextBatch);
@@ -40,6 +35,13 @@ MediaExtractorPipeline::MediaExtractorPipeline(QObject* parent) : QObject(parent
     m_retryTimer = new QTimer(this);
     m_retryTimer->setInterval(3000);
     connect(m_retryTimer, &QTimer::timeout, this, &MediaExtractorPipeline::processRetryQueue);
+
+    // 【修复】必须放在两个定时器创建完成之后：moveToThread 只会带走
+    // 调用时已存在的子对象，先创建子对象、最后再整体迁移线程，
+    // 才能保证 m_timer/m_retryTimer 真正跟随主线程事件循环运行，避免后台线程因没有事件循环导致定时器哑死的问题。
+    if (QCoreApplication::instance()) {
+        this->moveToThread(QCoreApplication::instance()->thread());
+    }
 }
 
 MediaExtractorPipeline::~MediaExtractorPipeline() {
