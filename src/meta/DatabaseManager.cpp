@@ -174,7 +174,8 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
             original_path TEXT,
             width INTEGER DEFAULT 0,
             height INTEGER DEFAULT 0,
-            ingestion_status INTEGER DEFAULT -1
+            ingestion_status INTEGER DEFAULT -1,
+            auto_color TEXT DEFAULT ''
         );
         CREATE INDEX IF NOT EXISTS idx_path ON metadata(path);
 
@@ -277,6 +278,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
     bool hasWidthColumn = false;
     bool hasHeightColumn = false;
     bool hasIngestionStatusColumn = false;
+    bool hasAutoColorColumn = false;
 
     if (sqlite3_prepare_v2(conn.memDb, "PRAGMA table_info(metadata)", -1, &checkStmt, nullptr) == SQLITE_OK) {
         while (sqlite3_step(checkStmt) == SQLITE_ROW) {
@@ -286,6 +288,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
                 if (name == "width") hasWidthColumn = true;
                 if (name == "height") hasHeightColumn = true;
                 if (name == "ingestion_status") hasIngestionStatusColumn = true;
+                if (name == "auto_color") hasAutoColorColumn = true;
             }
         }
         sqlite3_finalize(checkStmt);
@@ -302,6 +305,10 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
     if (!hasIngestionStatusColumn) {
         qDebug() << "[DB] 检测到旧版数据库，正在添加 ingestion_status 字段...";
         sqlite3_exec(conn.memDb, "ALTER TABLE metadata ADD COLUMN ingestion_status INTEGER DEFAULT -1", nullptr, nullptr, nullptr);
+    }
+    if (!hasAutoColorColumn) {
+        qDebug() << "[DB] 检测到旧版数据库，正在添加 auto_color 字段...";
+        sqlite3_exec(conn.memDb, "ALTER TABLE metadata ADD COLUMN auto_color TEXT DEFAULT ''", nullptr, nullptr, nullptr);
     }
 
     // 2026-08-xx 物理同步扩展：迁移 categories 表字段

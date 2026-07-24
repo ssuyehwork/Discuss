@@ -1102,7 +1102,6 @@ void CategoryRepo::syncPhysicalDirectoryCascade(const std::wstring& rootPath) {
                 cat.name = info.fileName().toStdWString();
                 cat.physicalFrn = frn;
                 cat.physicalPath = rootPath;
-                cat.color = CategoryRepo::getDefaultColor();
                 if (CategoryRepo::add(cat)) {
                     rootCatId = cat.id;
                     // 对根文件夹自身注册元数据，使其进入颜色、尺寸等后台解析流水线
@@ -1133,7 +1132,6 @@ void CategoryRepo::syncPhysicalDirectoryCascade(const std::wstring& rootPath) {
                                 cat.name = fi.fileName().toStdWString();
                                 cat.physicalFrn = std::stoull(frnStr, nullptr, 16);
                                 cat.physicalPath = wPath;
-                                cat.color = CategoryRepo::getDefaultColor();
                                 if (CategoryRepo::add(cat)) {
                                     existingId = cat.id;
                                     // 对发现的子文件夹自身注册元数据，使其进入解析流水线

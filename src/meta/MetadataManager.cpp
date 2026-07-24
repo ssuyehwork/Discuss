@@ -171,7 +171,10 @@ void MetadataManager::initFromScchMode() {
                 rm.isFolder = sqlite3_column_int(stmt, 2);
                 rm.rating = sqlite3_column_int(stmt, 3);
                 const wchar_t* color = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 4));
-                if (color) rm.color = color;
+                if (color) rm.manualColor = color;
+
+                const wchar_t* autoColor = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 18));
+                if (autoColor) rm.autoColor = autoColor;
                 
                 const wchar_t* wtags = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 5));
                 QString tags = wtags ? QString::fromWCharArray(wtags) : "";
@@ -381,7 +384,7 @@ void MetadataManager::registerItem(const std::wstring& path, bool authorized) {
             bool metadataValid = true;
             QFileInfo info(QString::fromStdWString(nPath));
             if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
-                if (it->second.width <= 0 || it->second.height <= 0 || it->second.color.empty()) {
+                if (it->second.width <= 0 || it->second.height <= 0 || it->second.autoColor.empty()) {
                     metadataValid = false;
                 }
             }
@@ -669,7 +672,8 @@ void MetadataManager::ensureActivated(const std::wstring& nPath) {
         if (!rm.fileId128.empty() && m_fidToPath.count(rm.fileId128)) {
             const RuntimeMeta& existing = m_cache[m_fidToPath[rm.fileId128]];
             rm.rating    = existing.rating;
-            rm.color     = existing.color;
+            rm.manualColor = existing.manualColor;
+            rm.autoColor = existing.autoColor;
             rm.tags      = existing.tags;
             rm.note      = existing.note;
             rm.url       = existing.url;
@@ -783,7 +787,7 @@ void MetadataManager::setColor(const std::wstring& path, const std::wstring& col
     ensureActivated(nPath);
     { 
         std::unique_lock<std::shared_mutex> lock(m_mutex); 
-        m_cache[nPath].color = color; 
+        m_cache[nPath].manualColor = color;
     }
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
     persistAsync(nPath);
@@ -896,7 +900,7 @@ void MetadataManager::setItemVisualMetadata(const std::wstring& path, const std:
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         RuntimeMeta& meta = m_cache[nPath];
-        meta.color = color;
+        meta.autoColor = color;
         meta.palettes = entries;
         isFolder = meta.isFolder;
     }
@@ -1687,7 +1691,7 @@ void MetadataManager::persistBatchAsync(const std::vector<std::wstring>& paths, 
         if (db) groups[db].push_back(p);
     }
 
-    const char* sql = "INSERT OR REPLACE INTO metadata (file_id, path, is_folder, rating, color, tags, note, url, ctime, mtime, atime, file_size, palettes, is_trash, original_path, width, height, ingestion_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    const char* sql = "INSERT OR REPLACE INTO metadata (file_id, path, is_folder, rating, color, tags, note, url, ctime, mtime, atime, file_size, palettes, is_trash, original_path, width, height, ingestion_status, auto_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     for (auto& entry : groups) {
         sqlite3* memDb = entry.first;
@@ -1722,7 +1726,7 @@ void MetadataManager::persistBatchAsync(const std::vector<std::wstring>& paths, 
                     sqlite3_bind_text16(stmt, 2, path.c_str(), -1, SQLITE_TRANSIENT);
                     sqlite3_bind_int(stmt, 3, meta.isFolder ? 1 : 0);
                     sqlite3_bind_int(stmt, 4, meta.rating);
-                    sqlite3_bind_text16(stmt, 5, meta.color.c_str(), -1, SQLITE_TRANSIENT);
+                    sqlite3_bind_text16(stmt, 5, meta.manualColor.c_str(), -1, SQLITE_TRANSIENT);
                     sqlite3_bind_text16(stmt, 6, meta.tags.join(",").toStdWString().c_str(), -1, SQLITE_TRANSIENT);
                     sqlite3_bind_text16(stmt, 7, meta.note.c_str(), -1, SQLITE_TRANSIENT);
                     sqlite3_bind_text16(stmt, 8, meta.url.c_str(), -1, SQLITE_TRANSIENT);
@@ -1742,6 +1746,7 @@ void MetadataManager::persistBatchAsync(const std::vector<std::wstring>& paths, 
                     sqlite3_bind_int(stmt, 16, meta.width);
                     sqlite3_bind_int(stmt, 17, meta.height);
                     sqlite3_bind_int(stmt, 18, meta.ingestionStatus);
+                    sqlite3_bind_text16(stmt, 19, meta.autoColor.c_str(), -1, SQLITE_TRANSIENT);
                 };
                 bindLogic(memStmt, p, rMeta);
 
@@ -1815,7 +1820,7 @@ void MetadataManager::persistAsync(const std::wstring& path, bool notify, bool a
         sqlite3_bind_text16(stmt, 2, path.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 3, meta.isFolder ? 1 : 0);
         sqlite3_bind_int(stmt, 4, meta.rating);
-        sqlite3_bind_text16(stmt, 5, meta.color.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text16(stmt, 5, meta.manualColor.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text16(stmt, 6, meta.tags.join(",").toStdWString().c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text16(stmt, 7, meta.note.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text16(stmt, 8, meta.url.c_str(), -1, SQLITE_TRANSIENT);
@@ -1838,9 +1843,10 @@ void MetadataManager::persistAsync(const std::wstring& path, bool notify, bool a
         sqlite3_bind_int(stmt, 16, meta.width);
         sqlite3_bind_int(stmt, 17, meta.height);
         sqlite3_bind_int(stmt, 18, meta.ingestionStatus);
+        sqlite3_bind_text16(stmt, 19, meta.autoColor.c_str(), -1, SQLITE_TRANSIENT);
     };
 
-    const char* sql = "INSERT OR REPLACE INTO metadata (file_id, path, is_folder, rating, color, tags, note, url, ctime, mtime, atime, file_size, palettes, is_trash, original_path, width, height, ingestion_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    const char* sql = "INSERT OR REPLACE INTO metadata (file_id, path, is_folder, rating, color, tags, note, url, ctime, mtime, atime, file_size, palettes, is_trash, original_path, width, height, ingestion_status, auto_color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     
     sqlite3_stmt* memStmt;
     if (sqlite3_prepare_v2(memDb, sql, -1, &memStmt, nullptr) == SQLITE_OK) {
