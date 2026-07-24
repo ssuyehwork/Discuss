@@ -148,9 +148,6 @@ void MetadataManager::initFromScchMode() {
     qint64 startTime = QDateTime::currentMSecsSinceEpoch();
     DatabaseManager::instance().init();
 
-    // 【新增】在拥有活动事件循环的主线程中强制预先初始化多媒体提取单例，保障后续 QTimer 在主线程事件循环中正常触发超时
-    MediaExtractorPipeline::instance();
-
     qDebug() << "[PERF] 正在从 SQLite 内存模式初始化元数据缓存...";
     
     std::unordered_map<std::wstring, RuntimeMeta> tempCache;
