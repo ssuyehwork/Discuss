@@ -38,6 +38,9 @@ public:
      */
     void shutdown();
 
+signals:
+    void managedFolderRemoved(const std::wstring& path);
+
 private:
     NativeFolderWatcher(QObject* parent = nullptr);
     ~NativeFolderWatcher();
