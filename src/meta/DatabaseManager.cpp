@@ -332,8 +332,11 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
     return true;
 }
 
-void DatabaseManager::saveDb(DbConnection& conn, bool forceFull) {
-    if (!conn.diskDb || !conn.memDb) return;
+bool DatabaseManager::saveDb(DbConnection& conn, bool forceFull) {
+    if (!conn.diskDb || !conn.memDb) {
+        qWarning() << "[DB_TRACE] saveDb 失败：连接句柄为空，路径:" << QString::fromStdWString(conn.diskPath);
+        return false;
+    }
 
     // 2026-07-20 优化设计：彻底废除性能极低的增量分步备份与频繁 sleep 让步机制。
     // 因为该函数本身就在后台异步工作线程中运行，直接执行一次性全量备份（sqlite3_backup_step 设为 -1）
@@ -341,11 +344,18 @@ void DatabaseManager::saveDb(DbConnection& conn, bool forceFull) {
     (void)forceFull;
     sqlite3_backup* backup = sqlite3_backup_init(conn.diskDb, "main", conn.memDb, "main");
     if (backup) {
-        sqlite3_backup_step(backup, -1);
+        int rc = sqlite3_backup_step(backup, -1);
         sqlite3_backup_finish(backup);
-        qDebug() << "[DB] Successfully backed up memory database to disk:" << QString::fromStdWString(conn.diskPath);
+        if (rc == SQLITE_DONE) {
+            qDebug() << "[DB_TRACE] saveDb 成功备份内存数据库至硬盘！路径:" << QString::fromStdWString(conn.diskPath);
+            return true;
+        } else {
+            qWarning() << "[DB_TRACE] saveDb 备份到硬盘中途失败！错误代码:" << rc << "路径:" << QString::fromStdWString(conn.diskPath);
+            return false;
+        }
     } else {
-        qWarning() << "[DB] Failed to initialize backup from memory to disk:" << sqlite3_errmsg(conn.diskDb);
+        qWarning() << "[DB_TRACE] saveDb 初始化备份失败！错误:" << sqlite3_errmsg(conn.diskDb) << "路径:" << QString::fromStdWString(conn.diskPath);
+        return false;
     }
 }
 
@@ -381,15 +391,39 @@ void DatabaseManager::flushAll(bool forceFull) {
     MetadataManager::instance().slideRecentWindow();
 
     if (!m_isDirty.load()) {
-        qDebug() << "[DB] Database is clean (not dirty), skipping flushAll() for instant exit.";
+        qDebug() << "[DB_TRACE] flushAll 跳过：当前没有脏数据需要备份。";
         return;
     }
     std::lock_guard<std::mutex> lock(m_mutex);
-    saveDb(m_globalDb, forceFull);
-    for (auto& pair : m_driveDbs) {
-        saveDb(pair.second, forceFull);
+    qDebug() << "[DB_TRACE] flushAll 开始将所有脏数据库备份到硬盘...";
+
+    bool allSucceeded = true;
+
+    // 全局库互斥锁锁定保护
+    {
+        std::lock_guard<std::mutex> lockGlobal(m_globalDbMutex);
+        if (!saveDb(m_globalDb, forceFull)) {
+            allSucceeded = false;
+            qWarning() << "[DB_TRACE] flushAll: 全局库备份失败！";
+        }
     }
-    m_isDirty.store(false);
+
+    // 各驱动分库互斥锁锁定保护
+    for (auto& pair : m_driveDbs) {
+        auto dbLock = getDriveMutex(pair.first);
+        std::lock_guard<std::recursive_mutex> lockDrive(*dbLock);
+        if (!saveDb(pair.second, forceFull)) {
+            allSucceeded = false;
+            qWarning() << "[DB_TRACE] flushAll: 磁盘分库备份失败，序列号:" << QString::fromStdWString(pair.first);
+        }
+    }
+
+    if (allSucceeded) {
+        qDebug() << "[DB_TRACE] flushAll: 所有分库已全部成功持久化落盘，清空脏标记。";
+        m_isDirty.store(false);
+    } else {
+        qWarning() << "[DB_TRACE] flushAll: 存在分库备份失败！保留脏标记以防数据丢失，等候重试。";
+    }
 }
 
 bool DatabaseManager::flushStep() {
@@ -483,11 +517,11 @@ sqlite3* DatabaseManager::getDiskDb(sqlite3* memDb) {
     return nullptr;
 }
 
-std::shared_ptr<std::mutex> DatabaseManager::getDriveMutex(const std::wstring& volSerial) {
+std::shared_ptr<std::recursive_mutex> DatabaseManager::getDriveMutex(const std::wstring& volSerial) {
     std::lock_guard<std::mutex> lock(m_mapMutex);
     auto it = m_driveDbMutexMap.find(volSerial);
     if (it == m_driveDbMutexMap.end()) {
-        auto mtx = std::make_shared<std::mutex>();
+        auto mtx = std::make_shared<std::recursive_mutex>();
         m_driveDbMutexMap[volSerial] = mtx;
         return mtx;
     }
