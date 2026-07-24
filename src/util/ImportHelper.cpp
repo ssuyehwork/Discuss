@@ -52,8 +52,7 @@ void ImportHelper::importPaths(const QStringList& paths,
 
     // 捕获并保存 onComplete 刷新闭包
     context->future = QtConcurrent::run([paths, targetPhysicalPath, weakProgress, context, onComplete]() {
-        // 2026-07-xx 按照 Plan-116：收拢为纯物理移动动作
-        // 数据库入库动作完全依靠 USN Journal 异步感知。
+        // 物理移动后立即主动调用 syncAfterMove 进行元数据与统计对账
         
         int total = paths.size();
         int handled = 0;
@@ -67,8 +66,14 @@ void ImportHelper::importPaths(const QStringList& paths,
                                          Q_ARG(int, handled), Q_ARG(int, total), Q_ARG(QString, QFileInfo(src).fileName()));
             }
 
+            QString destPath = QDir(targetPhysicalPath).absoluteFilePath(QFileInfo(src).fileName());
             // 执行物理移动
-            ShellHelper::copyOrMoveItems({src}, targetPhysicalPath, true);
+            bool moved = ShellHelper::copyOrMoveItems({src}, targetPhysicalPath, true);
+            if (moved) {
+                MetadataManager::instance().syncAfterMove(
+                    QDir::toNativeSeparators(src).toStdWString(),
+                    QDir::toNativeSeparators(destPath).toStdWString());
+            }
         }
 
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakProgress, context, handled, onComplete]() {

@@ -370,15 +370,24 @@ void MetadataManager::registerItem(const std::wstring& path, bool authorized) {
     (void)authorized;
     std::wstring nPath = normalizePath(path);
 
-    // [Plan-131 方案 C] 物理指纹准入机制
+    // [Plan-131 方案 C + Plan-53 降级自愈安全防护] 物理指纹与高级特征双重准入机制
     std::string pFid;
     long long pSize = 0, pMtime = 0;
     if (fetchWinApiMetadataDirect(nPath, pFid, nullptr, &pSize, nullptr, nullptr, &pMtime, nullptr)) {
         std::shared_lock<std::shared_mutex> lock(m_mutex);
         auto it = m_cache.find(nPath);
         if (it != m_cache.end()) {
-            if (it->second.ingestionStatus == 1 && it->second.fileSize == pSize && it->second.mtime == pMtime) {
-                return; // 指纹一致且已完成解析，跳过后续所有流程
+            // 只有当文件指纹一致、曾经被置为1，且色彩和尺寸物理属性都确切存在、非残缺时，才允许返回跳过！
+            // 这杜绝了历史解析失败时留下空元数据、又因状态为 1 无法再次扫描提取的致命 Bug 
+            bool metadataValid = true;
+            QFileInfo info(QString::fromStdWString(nPath));
+            if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
+                if (it->second.width <= 0 || it->second.height <= 0 || it->second.color.empty()) {
+                    metadataValid = false;
+                }
+            }
+            if (it->second.ingestionStatus == 1 && it->second.fileSize == pSize && it->second.mtime == pMtime && metadataValid) {
+                return; // 物理指纹及高级多媒体特征完备且未发生改变，安全返回
             }
         }
     }
@@ -1161,6 +1170,28 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
 
         notifyFullUIRebuild();
     });
+}
+
+void MetadataManager::syncAfterMove(const std::wstring& oldPath, const std::wstring& newPath) {
+    std::wstring nOld = normalizePath(oldPath);
+    std::wstring nNew = normalizePath(newPath);
+    if (nOld == nNew) return;
+
+    bool wasManaged = isInsideManagedLibrary(nOld);
+    bool isNowManaged = isInsideManagedLibrary(nNew);
+
+    if (wasManaged && isNowManaged) {
+        // 库内移动（含跨托管子文件夹）：仅路径变化，元数据整体保留
+        renameItem(nOld, nNew);
+    } else if (wasManaged && !isNowManaged) {
+        // 移出托管库：等同于永久删除，彻底清除元数据
+        removeMetadataSync(nOld);
+        notifyFullUIRebuild();
+    } else if (!wasManaged && isNowManaged) {
+        // 移入托管库：走登记流水线，触发媒体特征提取
+        markAsRegistered(nNew);
+    }
+    // 库外移到库外：与托管数据无关，不做任何处理
 }
 
 void MetadataManager::removeMetadataSync(const std::wstring& path) {

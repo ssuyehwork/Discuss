@@ -557,6 +557,17 @@ void FerrexVirtualDbModel::loadThumbnailsForRows(const QList<int>& rows) {
                             if (!weakThis) return;
                             auto* mutableThis = const_cast<FerrexVirtualDbModel*>(weakThis.data());
                             
+                            // [Plan-53 内存缓存无损退避机制] 
+                            // 在刷新或重置导致二次强行提取时，如果由于物理拷贝尚未完成或图片暂时遇阻，
+                            // img 返回空图，若此时缓存 m_iconCache 中已经存在了我们之前成功绘制出来的缩略图，
+                            // 我们必须无损退退避，绝对禁止用空图或低质默认文件图标将优质的内存 QIcon 缓存覆灭覆盖！
+                            if (img.isNull()) {
+                                if (mutableThis->m_iconCache.contains(cacheKey)) {
+                                    // 缓存已有优质图像，无损保留
+                                    return;
+                                }
+                            }
+
                             QIcon icon;
                             if (!img.isNull()) {
                                 icon = QIcon(QPixmap::fromImage(img));
@@ -2649,6 +2660,11 @@ void ContentPanel::performPaste() {
  
     if (ShellHelper::copyOrMoveItems(fromPaths, m_currentPath, isMove)) { 
         if (isMove) {
+            for (const QString& src : fromPaths) {
+                QString destPath = QDir(m_currentPath).absoluteFilePath(QFileInfo(src).fileName());
+                MetadataManager::instance().syncAfterMove(
+                    src.toStdWString(), destPath.toStdWString());
+            }
             UndoManager::instance().pushCommand(std::make_unique<MoveCommand>(fromPaths, QFileInfo(fromPaths.first()).absolutePath(), m_currentPath));
         }
         loadDirectory(m_currentPath, m_isRecursive); 
@@ -2747,6 +2763,11 @@ void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& t
 
     if (ShellHelper::copyOrMoveItems(paths, destDir, isMove)) {
         if (isMove) {
+            for (const QString& src : paths) {
+                QString destPath = QDir(destDir).absoluteFilePath(QFileInfo(src).fileName());
+                MetadataManager::instance().syncAfterMove(
+                    src.toStdWString(), destPath.toStdWString());
+            }
             UndoManager::instance().pushCommand(std::make_unique<MoveCommand>(paths, QFileInfo(paths.first()).absolutePath(), destDir));
         }
         // 显式执行一次刷新，确保用户操作立即反馈
