@@ -3460,10 +3460,10 @@ void GridItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opti
         }
     }
 
-    // 2026-xx-xx 按照最新深度共识：如果标记了颜色 (!colorName.isEmpty()) 或者有星级评分 (rating > 0) 或者未评级但被选中 (isSelected)，显示外层背景或评级
-    bool shouldShowRating = (rating > 0) || isSelected || !colorName.isEmpty(); 
+    // 星星是否绘制，只取决于"评分非0"或"被选中"，与是否有颜色标记完全无关。
+    bool drawStars = (rating > 0) || isSelected;
  
-    if (shouldShowRating) { 
+    if (drawStars) {
         QColor bgColor = colorName.isEmpty() ? QColor(0,0,0,0) : UiHelper::parseColorName(colorName);
 
         // 2026-06-xx 物理修复：采用感知亮度对比色计算，确保在深色标记（如灰色/深蓝）下星星依然清晰可见

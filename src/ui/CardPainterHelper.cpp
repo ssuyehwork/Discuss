@@ -133,8 +133,8 @@ void CardPainterHelper::drawRatingStars(QPainter* painter, const QRect& banRect,
         }
     }
 
-    bool shouldShowRating = (rating > 0) || isSelected || !colorStr.isEmpty();
-    if (shouldShowRating) {
+    bool drawStars = (rating > 0) || isSelected;
+    if (drawStars) {
         QColor bgColor = colorStr.isEmpty() ? QColor(0,0,0,0) : UiHelper::parseColorName(colorStr);
 
         // 物理修复：采用感知亮度对比色计算
