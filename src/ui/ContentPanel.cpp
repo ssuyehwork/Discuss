@@ -145,7 +145,7 @@ QVariant FerrexVirtualDbModel::data(const QModelIndex& index, int role) const {
         } else if (role == TypeRole) {
             return "category";
         } else if (role == PathRole) {
-            return ""; // 2026-06-xx 物理级补全：子分类无物理路径，返回空以防止逻辑溢出
+            return record.path; // 2026-06-xx 物理级同步：返回子分类绑定的实际物理路径，以支持在资源管理器中定位
         } else if (role == IsLockedRole || role == PinnedRole) {
             return record.pinned;
         } else if (role == Qt::DecorationRole && index.column() == 0) {
@@ -1957,7 +1957,10 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         // 或 物理导航模式下已进入托管库内部 (镜像加速态)
         bool isMirrorSource = !m_currentCategoryType.isEmpty();
         if (!isMirrorSource && onItem) {
-            isMirrorSource = currentIndex.data(ManagedRole).toBool();
+            // 物理修复：只要该项已被登记（isManaged），或者是托管库内部的项，一律允许显示“设定颜色标签”和“归类”
+            bool isManaged = currentIndex.data(ManagedRole).toBool();
+            bool isInsideLib = MetadataManager::instance().isInsideManagedLibrary(path.toStdWString());
+            isMirrorSource = isManaged || isInsideLib;
         }
 
         if (isMirrorSource) {
@@ -2964,6 +2967,7 @@ void ContentPanel::loadCategory(int categoryId) {
                 // 2026-07-xx 物理同步：从内存缓存或元数据管理器中拉取分类的评分（如有）
                 r.rating = 0; 
                 r.pinned = cat.pinned;
+                r.path = QString::fromStdWString(cat.physicalPath);
                 allRecords.push_back(r);
             }
         }
