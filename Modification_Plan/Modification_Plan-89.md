@@ -1,6 +1,6 @@
 # main.cpp 打补丁式架构排查与极致重构规划 —— Modification_Plan-89.md
 
-> 状态：待批准执行（尚未获得用户"批准执行"指令）
+> 状态：已批准，执行中
 
 ## 1. 任务背景
 在项目长期迭代演进中，主入口文件 `src/main.cpp` 被写入了大量应急性补丁、跨线程单例强制点名预热、同步高频物理日志落盘等逻辑。这不仅造成其本身职责极度过载，导致初始化流程杂乱，而且埋下了极为隐患的多线程性能死穴、多实例切片竞争、COM 冲突以及程序退出强杀数据库的重大安全隐患。本次方案旨在对这一“打补丁式”的逻辑架构进行系统排查、精准定位与极致重构图纸设计，重构程序启动、退出与多线程协作流程，使其迈向工业级标准的稳定与优雅。
@@ -128,7 +128,7 @@
 
 ### 4.4 重构 4：COM 亲和性：成对生命期治理（对应用户原话：“COM 初始化顺序与 Qt 框架产生潜在冲突”）
 *   **规范化方案**：
-    *   将 `CoInitializeEx(NULL, COINIT_APARTMENTTHREADED)` 调整至 `QApplication a` 实例化之后进行，防止干扰 QPA 插件在 Windows 系统上的 OLE 管理（对应用户原话：“初始化 COM 环境 (多媒体缩略图提取需要)”）。
+    *   将 `CoInitializeEx(NULL, COINIT_APARTMENTTHREADED)` 调整至 `QApplication a` 实例化之后进行，防止干扰 QPA 插件在 Windows 系统上的 OLE管理（对应用户原话：“初始化 COM 环境 (多媒体缩略图提取需要)”）。
     *   在 `main` 退出前，成对地显式调用 `CoUninitialize()`，完成 COM 框架的完美回收。
 
 ### 4.5 重构 5：多段启动：先服务挂接，再平滑渲染（对应用户原话：“UI 构造与后台服务启动顺序倒置”）
@@ -153,14 +153,14 @@
 本节不进行任何执行状态、是否修改等角色的混淆声明，仅约束文件的范围。
 
 **本次方案涉及范围：**
-- [ ] `src/main.cpp` (物理重构启动顺序、日志管道拦截分流、COM治理及 aboutToQuit 清场注册)
-- [ ] `src/ui/Logger.h` / `src/ui/Logger.cpp` (新增内存高性能 RingBuffer 队列与后台 LoggerWriterThread 常驻线程)
-- [ ] `src/core/CoreController.h` / `src/core/CoreController.cpp` (增加 initializeCoreComponents() 接口，统一调度单例的拓扑构建生命周期)
+- [x] `src/main.cpp` (物理重构启动顺序、日志管道拦截分流、COM治理及 aboutToQuit 清场注册)
+- [x] `src/ui/Logger.h` / `src/ui/Logger.cpp` (新增内存高性能 RingBuffer 队列与后台 LoggerWriterThread 常驻线程)
+- [x] `src/core/CoreController.h` / `src/core/CoreController.cpp` (增加 initializeCoreComponents() 接口，统一调度单例的拓扑构建生命周期)
 
 **明确禁止越界修改的范围：**
-- [ ] MFT 物理磁盘扫描逻辑 —— 不修改
-- [ ] IOCP 目录实时监控底层监听驱动 —— 不修改
-- [ ] 各 UI 组件（ContentPanel 等）渲染逻辑及 Delegate 文本排版 —— 不修改
+- [x] MFT 物理磁盘扫描逻辑 —— 不修改
+- [x] IOCP 目录实时监控底层监听驱动 —— 不修改
+- [x] 各 UI 组件（ContentPanel 等）渲染逻辑及 Delegate 文本排版 —— 不修改
 
 ---
 
@@ -169,7 +169,7 @@
 1.  **依赖头文件显式预警**：重构涉及 `RingBuffer` 日志线程，必须精准包含 `<thread>`、`<mutex>`、`<condition_variable>` 或 Qt 的 `<QThread>`、`<QMutex>`，防止出现“未定义的标识符/找不到标识符”等编译障碍。
 2.  **COM 环境生命期对齐**：必须保证 `CoInitializeEx` 与 `CoUninitialize` 在 Windows 环境下物理成对成对执行，防止局部泄露。
 3.  **Clean Shutdown 死锁防御**：在退出时阻塞调用 `waitForDone()` 时，必须核对是否有子线程因处于 `blocking` 读状态而无法退出，对后台管道的关闭动作（如设置 `m_stopped = true`，并唤醒 `condition_variable`）必须在 `waitForDone()` 之前触发，杜绝死锁。
-4.  **开箱即用与上下文契合**：任何新增组件或重构接口，均需结合现有控制器 `CoreController` 的上下文契合，不修改其对外接口，保持上层逻辑零感。
+4.  **开箱即用与上下文契合**：any 新增组件或重构接口，均需结合现有控制器 `CoreController` 的上下文契合，不修改其对外接口，保持上层逻辑零感。
 5.  **严格遵守边界**：在方案获准执行时，在完成代码修改后，务必全面自检修改区域，绝不溢出第 5 节的范围。
 
 ---
