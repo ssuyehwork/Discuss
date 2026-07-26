@@ -35,7 +35,7 @@
 ## [2026-07-20] 彻底放弃当前 QuickLookWindow 运行逻辑并使用 FERREX-META 逻辑替代重构
 
 - 用户描述的现象/问题：当前版本的 `QuickLookWindow` 预览运行逻辑不符合预期，其处理逻辑 and 界面交互（如图像缩放、音视频媒体处理、文本二进制检测及编码识别等）功能不够完备。
-- 用户期望的结果：彻底放弃当前版本的 `QuickLookWindow` 预览运行逻辑，将其替换为 `FERREX-META` 版本中的 `QuickLookWindow` 运行逻辑。这包括采用专门设计的 `QuickLookGraphicsView`（支持滚轮缩放、双击恢复/适配大小、鼠标拖拽移动及光标跟随变动）、引入更完整的多媒体及文本二进制与编码自动检测识别渲染，实现更好的大文件和特殊文件类型的预览。
+- 用户期望的结果：彻底放弃当前版本的 `QuickLookWindow` 运行逻辑，将其替换为 `FERREX-META` 版本中的 `QuickLookWindow` 运行逻辑。这包括采用专门设计的 `QuickLookGraphicsView`（支持滚轮缩放、双击恢复/适配大小、鼠标拖拽移动及光标跟随变动）、引入更完整的多媒体及文本二进制与编码自动检测识别渲染，实现更好的大文件和特殊文件类型的预览。
 - 本次任务边界：彻底重构 `src/ui/QuickLookWindow.h` and `src/ui/QuickLookWindow.cpp`，将 `FERREX-META` 版本的 `QuickLookWindow` and `QuickLookGraphicsView`控制与交互机制移植并合并至其中，适配 `ArcMeta` 命名空间及符合本项目标准的样式设计。同时确保当前项目正在运行的核心快捷键/信号链路继续工作（评分打标 `ratingRequested`、颜色标签打标 `colorRequested` 以及切图 `prevRequested`/`nextRequested` 信号），并对音视频进行优雅的占位降级兼容。
 - 不在本次范围内的是：修改 `MainWindow` 的主导航调度机制 or 任何非预览关联的面板组件。
 - 对应方案文档：Modification_Plan-36.md
@@ -130,7 +130,7 @@
   4. 选中某个色块后，立即调用更新接口：
      - 如果是在 `CategoryPanel` 对分类进行设置，将色值写入对应分类在 `categories` 表的 `color` 字段，同时如果该分类绑定了物理文件夹路径，则将对应路径在 `metadata` 表的 `color` 字段也一并同步更新；
      - 如果是在 `MainWindow` 对 FolderButton 自定义 monitored folder 进行操作，将色值写入 AppConfig 中对应属性，并更新对应物理路径在 `metadata` 表的 `color` 字段（如果已登记到库中，也会同步到绑定映射分类）；
-     - 如果是在 `ContentPanel` 对登记的项目进行操作，将色值写入该项目在 `metadata` 表的 `color` 字段，若该项目是已入库且绑定了侧边栏映射分类的文件夹，也将色值存入对应分类的 `categories` 表的 `color` 字段中。
+     - 如果是在 `ContentPanel` 对登记的项目进行操作，将色值写入该项目在 `metadata` 表的 `color` 字段，若该项目是已入库且绑定了侧边栏映射分类 of 文件夹，也将色值存入对应分类的 `categories` 表的 `color` 字段中。
 - 不在本次范围内的是：修改非颜色属性的其他关联持久化，或者调整与色块绘制无关的其他右键菜单项。
 - 对应方案文档：Modification_Plan/Modification_Plan-62.md
 
@@ -163,3 +163,14 @@
   3. 严格遵守分析师角色，绝对不修改任何源码。
 - 不在本次范围内的是：在未获得用户“批准执行”指令前修改任何功能性源码文件。
 - 对应方案文档：Modification_Plan/Modification_Plan-92.md
+
+## [2026-07-26] 图形文件图像尺寸提取与 MetaPanel “大小”下一行展现方案规划
+
+- 用户描述的现象/问题：希望确认 `mediacolorextractor.cpp` 和 `meta/mediaextractorpipeline.cpp` 是否已经包含了提取图形图像文件尺寸的功能；若包含，需要在 `metapanel.cpp` 面板中，把提取出的尺寸在“大小”这一属性行的下一行清晰展现出来。
+- 用户期望的结果：地毯式分析提取管线对尺寸的抓取情况，提供清晰、专业的重构规划方案，并按物理视觉设计在 MetaPanel “大小”下一行插入“尺寸”标签和数值展现，产出 Modification_Plan 方案文档。
+- 本次任务边界：
+  1. 检索 `src/ui/MediaColorExtractor.cpp` 及 `src/meta/MediaExtractorPipeline.cpp` 的图像/特征尺寸提取逻辑，查证其是否在持久化 `metadata` 数据库、特征管道或缓存中抓取并保存了 `width` / `height` 分辨率。
+  2. 精确定位 `src/ui/MetaPanel.cpp` 中的 UI 标签排版位置，分析如何在“大小（m_sizeLabel）”的下一行动态嵌入并渲染图形尺寸信息（未选中或非图形文件时平滑隐藏，杜绝白屏/布局错乱）。
+  3. 新建 `Modification_Plan-93.md`，处于分析师角色，绝不直接修改代码。
+- 不在本次范围内的是：修改 C++ 源码、测试运行。
+- 对应方案文档：Modification_Plan/Modification_Plan-93.md
