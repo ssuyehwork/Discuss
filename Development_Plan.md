@@ -35,7 +35,7 @@
 ## [2026-07-20] 彻底放弃当前 QuickLookWindow 运行逻辑并使用 FERREX-META 逻辑替代重构
 
 - 用户描述的现象/问题：当前版本的 `QuickLookWindow` 预览运行逻辑不符合预期，其处理逻辑 and 界面交互（如图像缩放、音视频媒体处理、文本二进制检测及编码识别等）功能不够完备。
-- 用户期望的结果：彻底放弃当前版本的 `QuickLookWindow` 运行逻辑，将其替换为 `FERREX-META` 版本中的 `QuickLookWindow` 运行逻辑。这包括采用专门设计的 `QuickLookGraphicsView`（支持滚轮缩放、双击恢复/适配大小、鼠标拖拽移动及光标跟随变动）、引入更完整的多媒体及文本二进制与编码自动检测识别渲染，实现更好的大文件和特殊文件类型的预览。
+- 用户期望的结果：彻底放弃当前版本的 `QuickLookWindow` 运行逻辑，将其替换为 `FERREX-META` 版本中的 `QuickLookWindow` 运行逻辑。这包括采用专门设计的 `QuickLookGraphicsView`（支持滚轮缩放、双击恢复/适配大小、鼠标拖拽移动及光标跟随变动）、引入更完整的多媒体及文本二进制与编码自动检测识别渲染，实现更好的大文件 and 特殊文件类型的预览。
 - 本次任务边界：彻底重构 `src/ui/QuickLookWindow.h` and `src/ui/QuickLookWindow.cpp`，将 `FERREX-META` 版本的 `QuickLookWindow` and `QuickLookGraphicsView`控制与交互机制移植并合并至其中，适配 `ArcMeta` 命名空间及符合本项目标准的样式设计。同时确保当前项目正在运行的核心快捷键/信号链路继续工作（评分打标 `ratingRequested`、颜色标签打标 `colorRequested` 以及切图 `prevRequested`/`nextRequested` 信号），并对音视频进行优雅的占位降级兼容。
 - 不在本次范围内的是：修改 `MainWindow` 的主导航调度机制 or 任何非预览关联的面板组件。
 - 对应方案文档: Modification_Plan-36.md
@@ -159,7 +159,7 @@
 - 用户期望的结果：重命名成功后，缩略图和宽高比等高级元数据缓存应当无缝继承 to 新文件名路径下，不发生变灰与闪烁，保证无缝的高性能浏览体验。
 - 本次任务边界：
   1. 在 `FerrexVirtualDbModel::setData` 异步重命名成功的主线程回调中，针对 `m_iconCache`（缩略图缓存）与 `m_aspectRatios`（宽高比缓存）执行高内聚的 **无损缓存 Key 迁移**。
-  2. 将原保存在旧路径 `oldPath` 下的 `QIcon` 指针及 `m_aspectRatios` 值，安全移除并重新插入到新路径 `nativeNewPath` 的 Key 下，无需重新进行后台多媒体解析或读盘。
+  2. 将原保存在旧路径 `oldPath` 下 of `QIcon` 指针及 `m_aspectRatios` 值，安全移除并重新插入到新路径 `nativeNewPath` 的 Key 下，无需重新进行后台多媒体解析或读盘。
 - 不在本次范围内的是：修改物理 MFT 扫描、USN 监控底座以及其他非缩略图相关的逻辑。
 - 对应方案文档：Modification_Plan/Modification_Plan-94.md
 
@@ -214,3 +214,11 @@
   3. 在 `modelReset` 槽函数中，通过 `canConvert` 机制，增加对 `QVariantList` 与 `QList<int>` 双重类型的安全兼容解析与提取。
 - 不在本次范围内的是：修改物理库构建、重排和数据库层查询。
 - 对应方案文档：Modification_Plan/Modification_Plan-101.md
+
+## [2026-08-01] 高性能文件变动监控 NativeFolderWatcher 致命缺陷重构方案
+
+- 用户描述的现象/问题：`NativeFolderWatcher.cpp` 存在 5 大极其严重的设计缺陷，可能导致内存 UAF 悬空指针崩溃、文件重命名时丢失星级/标签等全部元数据、高频密集变更下缓冲区溢出时事件漏落库、多线程并发解析同一个监控缓冲区造成的内存竞态错乱，以及高频修改信号缺乏防抖触发信号风暴导致 UI 严重卡顿。
+- 用户期望的结果：在不改变底层高性能 IOCP 架构的基础上，创建一套能彻底根治上述 5 大致命缺陷的重构修复方案，确保极其稳定、高性能的多线程磁盘监控体验。
+- 本次任务边界：在 `Modification_Plan/` 文件夹下，新建 `Modification_Plan-103.md`，深度规划 `NativeFolderWatcher` 架构升级方案：使用 `std::shared_ptr` 管理 `WatchItem` 并实现安全异步延迟释放；支持重命名 `OLD_NAME` / `NEW_NAME` 成对配对与元数据同步继承逻辑；在 `bytesTransferred == 0` 时引入全量级联自愈扫描；利用工作线程专用内存块或重构为单工作线程/分发队列，并实现 200ms 高效路径去重防抖处理，从而彻底阻断信号风暴。
+- 不在本次范围内的是：对物理 `.cpp` 和 `.h` 代码文件进行任何实际修改。
+- 对应方案文档：Modification_Plan/Modification_Plan-103.md
