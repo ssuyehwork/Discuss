@@ -5,6 +5,7 @@
 #include "ColorPicker.h"
 #include <QWidgetAction>
 #include "../meta/MetadataManager.h" 
+#include "../meta/MediaExtractorPipeline.h"
 #include <algorithm>
 #include "Logger.h"
 #include "SvgIcons.h" 
@@ -2536,7 +2537,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                 }
 
                 // 1. 中止并取消队列中以及正在提取的高级多媒体任务
-                MediaExtractorPipeline::instance().cancelBatch(stdPaths);
+                ArcMeta::MediaExtractorPipeline::instance().cancelBatch(stdPaths);
 
                 // 2. 批量大事务级联擦除已入库的元数据和关联、进度、重置计数器
                 MetadataManager::instance().removeMetadataBatchSync(targetPaths);

@@ -27,8 +27,8 @@
 ## [2026-07-20] 三种视图架构设计缺陷排查与极致重构规划
 
 - 用户描述的现象/问题：当前版本中的三种视图（列表、网格、合理自适应对齐模式）存在逻辑冗余、职责过载以及交互/渲染卡顿等傻逼逻辑架构问题。
-- 用户期望的结果：对三种视图底层控制链展开深度排查，找出不合理的架构缺陷并形成极致解耦与性能提升 of 优化方案，并产出详细设计。
-- 本次任务边界：审计并理清 `JustifiedView`、`ListResultView`、`GridResultView`、`JustifiedResultView` 以及 `ContentPanel` 之间在视图控制、数据映射 and 布局渲染上的依赖关系，设计职责更清晰、耦合度更低的模块化结构。
+- 用户期望的结果：对三种视图底层控制链展开深度排查，找出不合理的架构缺陷并形成极致解耦与性能提升的优化方案，并产出详细设计。
+- 本次任务边界：审计并理清 `JustifiedView`、`ListResultView`、`GridResultView`、`JustifiedResultView` 以及 `ContentPanel` 之间在视图控制、数据映射以及布局渲染上的依赖关系，设计职责更清晰、耦合度更低的模块化结构。
 - 不在本次范围内的是：实际修改或编译代码，移植非视图类的其他外部功能。
 - 对应方案文档: Modification_Plan-35.md
 
@@ -126,7 +126,7 @@
 - 本次任务边界：
   1. 彻底删除 `CategoryPanel` 及 `MainWindow`（FolderButton 菜单）中的“随机颜色”与“设置颜色”旧 QAction 和旧对应响应函数（如 `onRandomColor` / `onSetColor`）。
   2. 针对 `CategoryPanel` 侧边分类右键菜单、`MainWindow` 中的 FolderButton 右键菜单，以及 `ContentPanel` 内容右键菜单中的“设定颜色标签”（ActionColorTag）子菜单，实现全新的一排水平排列色块快捷操作区域（可以使用自定义 `QWidgetAction` 加载色块容器）。
-  3. 每个色块尺寸 and 间距根据界面情况合理设定（如圆形色块，直径 20px-24px，间隔 6px-8px），且鼠标悬停在色块上方时绘制出明晰的白色同心圆突显色块边缘。
+  3. 每个色块尺寸和间距根据界面情况合理设定（如圆形色块，直径 20px-24px，间隔 6px-8px），且鼠标悬停在色块上方时绘制出明晰的白色同心圆突显色块边缘。
   4. 选中某个色块后，立即调用更新接口：
      - 如果是在 `CategoryPanel` 对分类进行设置，将色值写入对应分类在 `categories` 表的 `color` 字段，同时如果该分类绑定了物理文件夹路径，则将对应路径在 `metadata` 表的 `color` 字段也一并同步更新；
      - 如果是在 `MainWindow` 对 FolderButton 自定义 monitored folder 进行操作，将色值写入 AppConfig 中对应属性，并更新对应物理路径在 `metadata` 表的 `color` 字段（如果已登记到库中，也会同步到绑定映射分类）；
@@ -156,7 +156,7 @@
 ## [2026-07-26] 磁盘模式下重命名导致缩略图变灰设计缺陷修复
 
 - 用户描述的现象/问题：在磁盘导航模式下打开某个文件夹后，对其中的某个图形文件执行重命名操作。重命名成功后，由于新旧物理路径发生变更，但缩略图及宽高比缓存未同步迁移或清理，导致该文件在重置渲染时无法命中缓存，变为了纯灰色占位符。
-- 用户期望的结果：重命名成功后，缩略图和宽高比等高级元数据缓存应当无缝继承 to 新文件名路径下，不发生变灰与闪烁，保证无缝的高性能浏览体验。
+- 用户期望的结果：重命名成功后，缩略图和宽高比等高级元数据缓存应当无缝继承到新文件名路径下，不发生变灰与闪烁，保证无缝的高性能浏览体验。
 - 本次任务边界：
   1. 在 `FerrexVirtualDbModel::setData` 异步重命名成功的主线程回调中，针对 `m_iconCache`（缩略图缓存）与 `m_aspectRatios`（宽高比缓存）执行高内聚的 **无损缓存 Key 迁移**。
   2. 将原保存在旧路径 `oldPath` 下的 `QIcon` 指针及 `m_aspectRatios` 值，安全移除并重新插入 to 新路径 `nativeNewPath` 的 Key 下，无需重新进行后台多媒体解析或读盘。
@@ -188,7 +188,7 @@
 - 本次任务边界：
   1. 修复 `CategoryPanel::initUi` 中 `modelReset` 信号响应的竞态问题，重新引入 `QTimer::singleShot(0)` 异步延迟处理，确保 `QTreeView` 已经处理完重置并渲染出物理节点后才执行展开状态的恢复。
   2. 确保 `m_isInternalUpdating` 拦截锁覆盖异步延迟期，在节点物理生成并完成展开前屏蔽所有折叠虚假信号。
-  3. 完善 `saveExpandedStateToSettings` and `restoreExpandedState` 的控制与过滤。
+  3. 完善 `saveExpandedStateToSettings` 和 `restoreExpandedState` 的控制与过滤。
 - 不在本次范围内的是：修改 `CategoryRepo` 数据库的具体查询或系统项分类重排逻辑，修改其他面板（如内容面板）的数据加载逻辑。
 - 对应方案文档：Modification_Plan/Modification_Plan-99.md
 
