@@ -248,3 +248,25 @@
   3. 提供 `CacheManager::clearCacheForPath(path)` 或 `FerrexVirtualDbModel::clearCacheForFolder(path)` 接口，在擦除数据时一并无损清理对应的缩略图、宽高比和调色板内存及磁盘高级缓存。
 - 不在本次范围内的是：物理删除用户位于磁盘上的实际文件或源文件夹本身，或重构底层的 USN / MFT 核心监控及扫描时序。
 - 对应方案文档：Modification_Plan/Modification_Plan-107.md
+
+## [2026-07-28] NativeFolderWatcher 监控服务架构解耦与防抖重命名高内聚重构
+
+- 用户描述的现象/问题：底层文件系统 IOCP 监控服务 `NativeFolderWatcher` 职责不单一，直接依赖并耦合了上层 `MetadataManager` 和 `AutoImportManager` 的具体业务操作；高密集并发/批量重命名时由于先进先出（FIFO）弹出队列极易错配；高频事件可能导致 GUI 线程在极短时间内因大量 `invokeMethod` 回调而被风暴积压、假死卡顿；另外，单例在工作线程中无意被首次加载时可能引发 QTimer 线程亲和性失效警告。
+- 用户期望的结果：重构并优化 `NativeFolderWatcher` 架构，使其彻底解耦，不调用任何上层管理器，只负责基础 IO 事件处理并抛出标准 Qt 信号；重新设计防抖和并发重命名合并逻辑，杜绝 FIFO 错配并大幅削减对 GUI 线程的信号轰炸；确保单例模式下 QTimer 安全初始化。
+- 本次任务边界：
+  1. 彻底切断 `NativeFolderWatcher` 对 `MetadataManager`、`AutoImportManager` 等上层业务类的直接头文件依赖和调用。
+  2. 重构 `NativeFolderWatcher` 事件分发。所有捕获的文件变更（新增、修改、删除、重命名）均转化为标准的自定义结构并通过统一/分立信号（如 `fileChanged(path, action)`）分发。
+  3. 优化防抖/合并算法。采用高内聚的以路径为 Key、以定时器关联的去重延迟合并缓存，削减短时间内对主线程的通知风暴；在监控层独立实现一套安全、健壮的重命名匹配配对池，不再采用基于顺序的出队机制。
+  4. 解决线程亲和性警告，通过懒加载或确保 `m_debounceTimer` 正确关联主线程事件循环。
+- 不在本次范围内的：修改底层 Windows ReadDirectoryChangesW/IOCP 的异步多线程核心驱动机制，或者重写 `MftReader`、数据库 SQLite 事务持久化细节。
+- 对应方案文档：Modification_Plan/Modification_Plan-110.md
+
+## [2026-07-28] 全局核心组件（ContentPanel、MainWindow 等）SRP 违规深度整改与极致重构
+
+- 用户描述的现象/问题：整款应用中存在多处极其严重的单一职责原则（SRP）违规与职责过载（违反 SRP），例如 `ContentPanel` 混合了 UI 视图呈现、递归扫描、剪切板操作及右键菜单构建；`MainWindow` 混合了无边框拖曳、本地导航栈及预计耗时 (ETA) 业务运算；`MftReader` 混合了底层 MFT/USN 解析、系统图标提取与异步元数据填充任务调度。
+- 用户期望的结果：对全款应用及核心源码文件中的 SRP 违规点进行彻底梳理和标记，制定出高度模块化、科学解耦的整体重构整改（“整改”）方案，使各组件职责彻底单一化。
+- 本次任务边界：
+  1. 在 `Inspect and Mark.md` 中详细标记并剖析整款应用（尤其是 `ContentPanel`、`MainWindow`、`MftReader`、`FilterPanel`）的职责过载。
+  2. 规划科学的解耦重构技术路线，建立独立的服务接口（如 `ShellIconService` 负责提取图标，`NavigationHistoryService` 承接导航历史，`ContentContextMenuManager` 托管右键菜单构建等），从而彻底分流过载职责。
+- 不在本次范围内的：由于目前处于只读分析师状态，不直接修改任何 C++ 源码文件（.cpp / .h），不破坏现行软件编译流程。
+- 对应方案文档：Modification_Plan/Modification_Plan-111.md
