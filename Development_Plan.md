@@ -88,7 +88,7 @@
   2. 重构 `ContentPanel` 的 `wheelEvent`，捕获 Ctrl+滚轮 动作实现滑杆尺寸/内容卡片尺寸 `m_zoomLevel`（限制在 96~128px 之间）的物理同频缩放，并保证滑杆值及 `updateGridSize()` 持久化一致。
   3. 在“视图按钮”下拉菜单中，完美对接 `ListView`、`GridView` (网格自适应即 JustifiedMode) 以及 `JustifiedViewMode` 的 logic 切换。
 - 不在本次范围内的是：重写或修改物理 USN 监控底座或底层 MFT 文件过滤搜索流程。
-- 对应方案文档: Modification_Plan-45.md
+- 对应方案文档：Modification_Plan/Modification_Plan-45.md
 
 ## [2026-07-24] 全款应用架构与文件职责过载深度排查
 
@@ -122,7 +122,7 @@
 ## [2026-07-25] 彻底根除随机/设置颜色旧UI与在右键菜单上直接以悬停白圈色块展示并同步存库
 
 - 用户描述的现象/问题：现有的右键菜单及部分分类/文件夹设置中采用“随机颜色”和“设置颜色”的传统菜单项（QAction）及弹窗操作链路复杂、不够直观。
-- 用户期望的结果：彻底根除“随机颜色”和“设置颜色”相关逻辑代码，不可保留。直接将当前现有的标注色直接显示在右键菜单上作为一排水平排列的色块进行选择，悬停在某个色块上方时通过白圈突显色块。选择色块后，将色值同时存入到 categories 表的 color 字段和 metadata 表 of color 字段中。
+- 用户期望的结果：彻底根除“随机颜色”和“设置颜色”相关逻辑代码，不可保留。直接将当前现有的标注色直接显示在右键菜单上作为一排水平排列的色块进行选择，悬停在某个色块上方时通过白圈突显色块。选择色块后，将色值同时存入到 categories 表的 color 字段 and metadata 表 of color 字段中。
 - 本次任务边界：
   1. 彻底删除 `CategoryPanel` 及 `MainWindow`（FolderButton 菜单）中的“随机颜色”与“设置颜色”旧 QAction 和旧对应响应函数（如 `onRandomColor` / `onSetColor`）。
   2. 针对 `CategoryPanel` 侧边分类右键菜单、`MainWindow` 中的 FolderButton 右键菜单，以及 `ContentPanel` 内容右键菜单中的“设定颜色标签”（ActionColorTag）子菜单，实现全新的一排水平排列色块快捷操作区域（可以使用自定义 `QWidgetAction` 加载色块容器）。
@@ -188,7 +188,7 @@
 - 本次任务边界：
   1. 修复 `CategoryPanel::initUi` 中 `modelReset` 信号响应的竞态问题，重新引入 `QTimer::singleShot(0)` 异步延迟处理，确保 `QTreeView` 已经处理完重置并渲染出物理节点后才执行展开状态的恢复。
   2. 确保 `m_isInternalUpdating` 拦截锁覆盖异步延迟期，在节点物理生成并完成展开前屏蔽所有折叠虚假信号。
-  3. 完善 `saveExpandedStateToSettings` 和 `restoreExpandedState` 的控制与过滤。
+  3. 完善 `saveExpandedStateToSettings` and `restoreExpandedState` 的控制与过滤。
 - 不在本次范围内的是：修改 `CategoryRepo` 数据库的具体查询或系统项分类重排逻辑，修改其他面板（如内容面板）的数据加载逻辑。
 - 对应方案文档：Modification_Plan/Modification_Plan-99.md
 
@@ -198,7 +198,7 @@
 - 用户期望的结果：侧边栏某个分类展开之后能够持续化，即便重启主程序之后仍然处于展开状态，不被空状态异常覆盖，并期望添加调试日志以便追踪定位问题所在。
 - 本次任务边界：
   1. 在 `modelAboutToBeReset` 信号触发瞬间将 `m_isInternalUpdating` 设为 `true`，开启拦截锁，彻底断开 `beginResetModel` -> `removeRows` 期间视图中旧节点销毁引发的高频、同步 `collapsed` 信号风暴。
-  2. 在 `modelReset` 完成展开状态（`restoreExpandedState`）同步恢复后，将 `m_isInternalUpdating` 重置为 `false`，重新开放并允许用户手动交互被正常持久化。
+  2. 在 `modelReset` 完成展开状态（`restoreExpandedState`）同步恢复后，将 `m_isInternalUpdating`重置为 `false`，重新开放并允许用户手动交互被正常持久化。
   3. 实现析构函数 `~CategoryPanel()`，将 `m_isInternalUpdating` 设为 `true` 并安全 `disconnect` 展开/折叠信号，确保窗体销毁时无虚假状态污染配置文件。
   4. 引入全流程调试追踪日志，使用 `Logger::log` 在加载、重设、保存及析构全生命期中记录状态及防护标志的演变，供定位排查使用。
 - 不在本次范围内的是：修改分类树具体的构建、重排逻辑或数据库查询。
@@ -207,10 +207,44 @@
 ## [2026-07-26] 侧边栏分类树状展开状态重启持久化失效根治重构二期
 
 - 用户描述的现象/问题：在上一轮排查中，用户发现即便重构了锁逻辑，重启后仍折叠，排查出 3 个致命死穴（类型强转失败、内存/磁盘类型混用不一致、save 里的“我的分类”字符串过激匹配拦截）。
-- 用户期望的结果：通过统一加载数据类型、移除过激空拦截并实时同步 Property，以及在 `modelReset` 信号中加入兼容性安全类型解析，彻底根治持久化。
+- 用户期望的结果：通过统一加载数据类型、移除过激空拦截并实时同步 Property，以及在 `modelReset` 信号中加入兼容性安全类型解析，彻底根根治持久化。
 - 本次任务边界：
   1. 统一 `loadExpandedStateFromSettings` Property 存储类型为 `QList<int>`。
   2. 重构 `saveExpandedStateToSettings`，删除包含 `"我的分类"` 的过激拦截匹配，并在物理落盘后同步向 tree property 更新最新的 `idIntList`。
   3. 在 `modelReset` 槽函数中，通过 `canConvert` 机制，增加对 `QVariantList` 与 `QList<int>` 双重类型的安全兼容解析与提取。
 - 不在本次范围内的是：修改物理库构建、重排和数据库层查询。
 - 对应方案文档：Modification_Plan/Modification_Plan-101.md
+
+## [2026-07-27] 容器与状态栏 5px 隙缝悬浮进度条与状态栏计时联动落地实现
+
+- 用户描述的现象/问题：主界面五个容器与底部状态栏之间有 5 像素 of 物理间距，现在需要在这个间距上实现一个高度为 5 像素、用于展示元数据同步进度和耗时的微型进度条，要求不破坏现有布局、无重绘抖动、在同步时显示、同步完成后自动隐藏并恢复状态栏。
+- 用户期望的结果：在不改变已有布局边距的前提下，采用“无布局悬浮覆盖层 + 绝对定位”设计，在 5 像素的缝隙内精准渲染悬浮进度条，并与后台元数据同步状态服务联动，同步时显示滚动值及总耗时统计，同步完后淡出或静默隐藏并恢复状态栏。
+- 本次任务边界：
+  1. 在 `MainWindow.h` 中添加 `resizeEvent` 重写、悬浮计算方法 `updateProgressBarGeometry` 以及相关控制变量；
+  2. 在 `MainWindow.cpp` 的 `setupSplitters` 中初始化一个高度为 5px 的不占位悬浮 `QProgressBar` 并将其设为隐藏；
+  3. 实现 `resizeEvent` 与 `updateProgressBarGeometry`，通过 `centralC`、`bodyWrapper` 和 `statusBar` 的相对物理几何计算，精确确定进度条位置并调用 `raise()` 确保图层最上；
+  4. 关联状态栏耗时定时器与 `SyncStatusService` 的信号。
+- 不在本次范围内的是：修改任何非进度条相关的窗口层叠、对物理 MFT 扫描、磁盘监控等底座进行重构。
+- 对应方案文档：Modification_Plan/Modification_Plan-105.md
+
+## [2026-07-27] 悬浮进度条体验升级：扫描数据中语境、预计耗时 (ETA) 与从左向右推进彻底落地
+
+- 用户描述的现象/问题：Plan-105 方案设计存在 3 点不够完美的瑕疵，即文案称谓非直接“扫描”、未对剩余任务和时间比进行精确的“预计耗时 (ETA)”推算、以及进度百分比倒退引起视觉“自右向左”的严重倒退错觉。
+- 用户期望的结果：在 5px 隙缝悬浮进度条的基础上，将状态栏语境修正为“扫描数据中...”（完成时为“数据扫描完成”），将计时由静态已消耗修正为动态实时计算剩余的“预计耗时”；且锁定在任务开始时拦截并记录初始待处理项总量 `m_totalBatchCount`，用 `(总项数 - 剩余项数) / 总项数` 锁定并递增当前百分比，保证进度光条始终“由左向右”平滑推进。
+- 本次任务边界：
+  1. 升级 `MainWindow.h`，增设变量 `m_totalBatchCount` 保持批次总量感知；
+  2. 升级 `MainWindow.cpp`，显式设定 `setInvertedAppearance(false)` 强制普通方向；
+  3. 升级 `initUi()` 的 100ms 刷新槽和信号连接 logic，运用 $T_{elapsed} \times \frac{100 - P}{P}$ 动态公式推算预计耗时，并完美替换对应语境。
+- 不在本次范围内的是：修改 `SyncStatusService` 本身的发射频率，或者对除了 `MainWindow` 顶层控制链路之外的普通面板数据视图进行重设。
+- 对应方案文档：Modification_Plan/Modification_Plan-106.md
+
+## [2026-07-27] 创建自动导入中途取消与数据擦除机制安全落地
+
+- 用户描述的现象/问题：在自动导入（Auto-Import）进行过程中，如果用户突然改变主意，当前缺乏一种允许用户中途停止（Stop）并彻底擦除（Erase）已导入元数据和缓存垃圾的安全撤销机制（Kill & Purge）。
+- 用户期望的结果：在不破坏程序稳定性的前提下，设计并实现一套中途停止和擦除机制。用户触发取消时，首先安全、平滑地中止后台的多媒体特征提取与入库流水线（避免强杀线程造成死锁或数据库损坏），随后批量高效地删除该托管文件夹已入库的所有元数据记录，并彻底物理清理已生成的对应缩略图及宽高比高级缓存，恢复到干净的状态。
+- 本次任务边界：
+  1. 设计并实现 `MediaExtractorPipeline::cancelBatch()` 与 `cancelAll()` 接口，通过引入原子取消标记 `std::atomic<bool> m_isCanceled` 支持执行中断与排队任务清空，安全、非阻塞地挂起和清退流水线。
+  2. 在 `MetadataManager` 中新增 `removeMetadataBatchSync` 的同步数据擦除加固方法，支持对指定托管文件夹路径进行级联批量对账和物理清退，快速擦除所有在 `metadata` 与 `category_items` 表中的对应元数据及关联记录。
+  3. 提供 `CacheManager::clearCacheForPath(path)` 或 `FerrexVirtualDbModel::clearCacheForFolder(path)` 接口，在擦除数据时一并无损清理对应的缩略图、宽高比和调色板内存及磁盘高级缓存。
+- 不在本次范围内的是：物理删除用户位于磁盘上的实际文件或源文件夹本身，或重构底层的 USN / MFT 核心监控及扫描时序。
+- 对应方案文档：Modification_Plan/Modification_Plan-107.md
