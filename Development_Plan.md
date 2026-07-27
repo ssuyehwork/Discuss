@@ -66,7 +66,7 @@
   2. 修复切图/导航快捷键响应。按下 Arrow keys 时能精准跳转上一个或下一个文件，并让主界面的 ContentPanel 对应的高亮选中项也同步更新滚动。
 - 本次任务边界：
   1. 在 `ToolTipOverlay` 中引入 QPropertyAnimation，实现 `windowOpacity` 属性动画（淡进淡出 150ms 优雅呈现），并新增 `exactPosition` 精确定位参数。
-  2. 在 `QuickLookWindow::eventFilter` 中加装事件过滤器物理拦截 `m_graphicsView` 和 `m_textEdit` 的 `KeyPress` 动作，拦截 arrow keys、数字、Alt 等核心快捷键并转发分发给 `keyPressEvent`。
+  2. 在 `QuickLookWindow::eventFilter` 中加装事件过滤器物理拦截 `m_graphicsView` 和 `m_textEdit` 的 `KeyPress` 动作，拦截 arrow keys、数字、Alt 等核心快捷键并转发分发给 `keyPressEvent`
   3. 在 `ContentPanel` 中新增 `selectAndScrollToPath(path)` 方法，保持主视图选中态随切图进行双向联动。
 - 不在本次范围内的是：重构预览界面 or 主界面的非快捷键/切图逻辑。
 - 对应方案文档: Modification_Plan-39.md
@@ -198,7 +198,7 @@
 - 用户期望的结果：侧边栏某个分类展开之后能够持续化，即便重启主程序之后仍然处于展开状态，不被空状态异常覆盖，并期望添加调试日志以便追踪定位问题所在。
 - 本次任务边界：
   1. 在 `modelAboutToBeReset` 信号触发瞬间将 `m_isInternalUpdating` 设为 `true`，开启拦截锁，彻底断开 `beginResetModel` -> `removeRows` 期间视图中旧节点销毁引发的高频、同步 `collapsed` 信号风暴。
-  2. 在 `modelReset` 完成展开状态（`restoreExpandedState`）同步恢复后，将 `m_isInternalUpdating` 重置为 `false`，重新开放并允许用户手动交互被正常持久化。
+  2. 在 `modelReset` 完成展开状态（`restoreExpandedState`）同步恢复后，将 `m_isInternalUpdating`重置为 `false`，重新开放并允许用户手动交互被正常持久化。
   3. 实现析构函数 `~CategoryPanel()`，将 `m_isInternalUpdating` 设为 `true` 并安全 `disconnect` 展开/折叠信号，确保窗体销毁时无虚假状态污染配置文件。
   4. 引入全流程调试追踪日志，使用 `Logger::log` 在加载、重设、保存及析构全生命期中记录状态及防护标志的演变，供定位排查使用。
 - 不在本次范围内的是：修改分类树具体的构建、重排逻辑或数据库查询。
@@ -222,3 +222,11 @@
 - 本次任务边界：在 `Modification_Plan/` 文件夹下，新建 `Modification_Plan-103.md`，深度规划 `NativeFolderWatcher` 架构升级方案：使用 `std::shared_ptr` 管理 `WatchItem` 并实现安全异步延迟释放；支持重命名 `OLD_NAME` / `NEW_NAME` 成对配对与元数据同步继承逻辑；在 `bytesTransferred == 0` 时引入全量级联自愈扫描；利用工作线程专用内存块或重构为单工作线程/分发队列，并实现 200ms 高效路径去重防抖处理，从而彻底阻断信号风暴。
 - 不在本次范围内的是：对物理 `.cpp` 和 `.h` 代码文件进行任何实际修改。
 - 对应方案文档：Modification_Plan/Modification_Plan-103.md
+
+## [2026-08-01] 监控文件夹被移走后盘符不消失及残留清除的物理存在性自愈方案
+
+- 用户描述的现象/问题：在外部（如 Windows 资源管理器）将已监控的文件夹移动或删除后，原有的监控路径虽然物理失效，但软件并没有“物理存在性自愈”能力：不自动解绑监控，不自动在盘符栏销毁失效的文件夹按钮，也不清洗数据库中残留的元数据及在侧边栏自动创建的 1:1 镜像分类树。
+- 用户期望的结果：实现完美的自愈能力，一旦监控文件夹物理不存在（被重命名、移走、删除），软件应该在启动时、刷新时或者由于外部监控检测到变动时，实时物理清退：自动注销后台监控，自动清除盘符栏无效按钮，并且彻底清洗底层数据库对应路径下的所有元数据及 1:1 分类树，不残留任何残留废弃数据。
+- 本次任务边界：在 `Modification_Plan/` 文件夹下，新建 `Modification_Plan-104.md`，规划在 `MainWindow::updateCustomFolderButtons` 中对加载自定义监控项追加物理 `QDir::exists()` 检验；在 `NativeFolderWatcher::handleNotification` 中在发现自定义自动导入文件夹被外部移除时，也向主线程抛出 `managedFolderRemoved` 通告；并在 `MainWindow` 中响应该通告并联动触发 `removeCustomMonitoredFolder` 进行清除销毁和数据库物理除账，保证绝无残留。
+- 不在本次范围内的是：实际修改任何功能性代码。
+- 对应方案文档：Modification_Plan/Modification_Plan-104.md
