@@ -1,156 +1,60 @@
-# 悬浮进度条体验升级：扫描数据中语境、预计耗时 (ETA) 与从左向右推进彻底落地 —— Modification_Plan-106.md
+# 不改变既有 Layout 边距，无缝贴合微型缝隙的状态栏同步进度条方案 —— Modification_Plan-106.md
 
-> 状态：待批准执行（尚未获得用户"批准执行"指令）
+> 状态：已批准，执行中
 
 ## 1. 任务背景
-在上一代方案（Plan-105）中，设计的进度条和文案存在一些体验上的小瑕疵：
-1. 语境文案为“正在同步元数据”，不够贴合数据感知的“扫描”语境。
-2. 耗时展示仅为已消耗的累计时长，无法直观反映任务还需要多久结束，不符合工业级体验。
-3. 同步开始时直接采用 `100 - count` 导致百分比呈现倒退，产生了进度条“从右向左”缩短的负向视觉错觉。
+当系统后台执行高密集元数据同步、物理对账或大批量导入扫描时，前台界面需要向用户提供高响应度、精确耗时和极光进度指示。
 
-本方案承接自 `Modification_Plan-105.md`（旧方案已作为铁证永久只读保留，不再修改，符合 3.1.1 规范），在其基础上对文案、剩余预计时间（ETA）推算公式以及进度推进的几何方向进行彻底优化重构。
+然而，传统的 `QProgressBar` 控件若作为 `mainL->addWidget()` 加入全局 `QVBoxLayout` 容器中，在其 `show()` 和 `hide()` 时会强行触发整个主窗口的布局重绘与抖动（Layout Shift），容易引起界面闪烁、卡顿或微小挤压（尤其影响分栏右侧的贴边留白）。
+
+本方案旨在采用 **“无布局悬浮覆盖层（Overlay Widget）+ 绝对定位（Absolute Positioning）”** 的设计理念，将 5px 高的极光进度条完全吸附并覆盖在状态栏上方 5 像素的物理缝隙缝隙中，在不破坏已有 UI 呼吸感和留白基准线的前提下，实现 100% 丝滑无阻碍的高级耗时和进度状态指示。
 
 ## 2. 问题定位
-- **语境定位**：状态栏常态展示与数据扫描高内聚。启动时应呈现 **“扫描数据中...”**，完成时展示 **“数据扫描完成”**。
-- **预计耗时（ETA）算法推算**：
-  已知当前已消耗时长为 $T_{elapsed}$（秒），当前已完成进度为 $P$（百分比，即当前 `value()`）。
-  则整个任务的预计总时长为 $T_{total} = T_{elapsed} / (P / 100.0)$，预计剩余时长（即还需要多久完成）为：
-  $$T_{remaining} = T_{total} - T_{elapsed} = T_{elapsed} \times \frac{100 - P}{P}$$
-  为了在任务启动初期（数据量极小或波动时）避免产生剧烈抖动，在进度 $P < 5\%$ 时，耗时显示统一兜底为 `预计耗时: 计算中...`。
-- **自左向右绝对递增推进**：
-  在 `SyncStatusService::statusUpdated` 首次捕获 `syncing == true` 瞬间，将待处理项 `pendingCount` 锁定为当前批次的总任务量 **`m_totalBatchCount`**。
-  后续随着扫描推进，`pendingCount` 逐步减小。
-  当前已完成的任务项数为 `completedCount = m_totalBatchCount - pendingCount`。
-  当前进度的绝对物理百分比计算为：
-  $$P = \text{qBound}\left(1, \frac{completedCount}{m_totalBatchCount} \times 100, 99\right)$$
-  该百分比具有从 1 逐渐向 99 单调递增的物理特性（完成时瞬间拉满到 100%），从而配合 `setInvertedAppearance(false)`，彻底锁定进度条**“由左向右单向平滑扩展”**的运动轨迹。
+1. **Layout 强重绘导致的抖动**：原有布局如果直接包含/插入进度条，在同步显隐时会改变周围控件的实际高度和 Y 轴坐标，导致屏幕内容发生数像素的抖动。
+2. **5px 缝隙的不贴合**：主界面主体内容容器与状态栏之间自然预留了 5px 的间隙，这刚好是极光进度条施展绝对定位物理覆盖的天然缝隙。
 
 ## 3. 强制对照表
 
 | 编号 | 用户原话 / 我的理解 | 方案对应点 | 是否一致 |
 |------|---------------------|------------|----------|
-| 1    | 文案更正为“扫描数据中...”（用户原话） | 状态栏文案完美更正，且结束时更正为“数据扫描完成”。 | ✅ |
-| 2    | 预计耗时 = 已消耗 * (100 - P) / P 算法，以及 < 5% 提示计算中（用户原话） | 引入该公式推导预计剩余时间，并在 P < 5% 时显示“计算中...”。 | ✅ |
-| 3    | 锁定在任务开始时拦截并记录初始待处理项总量 `m_totalBatchCount`（用户原话） | 新增 `m_totalBatchCount` 并在首次激发时锁定记录。 | ✅ |
-| 4    | 严格计算【由左向右】递增的百分比：已完成 / 总项数（用户原话） | 采用已完成除以总项数再转换为百分比，保证进度条绝对不倒退。 | ✅ |
-| 5    | 5px 悬浮进度条、不加布局、绝对定位（承接 Plan-105 原话） | 承接并完整保留 5px 悬浮条、`centralC` 绝对定位、`raise()` 提层等底层不抖动方案。 | ✅ |
+| 1    | 无布局悬浮覆盖层 (Overlay Widget) | 进度条父对象绑定为 `centralC` 且不加入任何 Layout，以 Overlay 形式悬浮。 | ✅ |
+| 2    | 绝对定位 (Absolute Positioning) | 重写 `resizeEvent`，利用绝对坐标计算，使进度条精准覆盖于状态栏顶部上方的 5 像素缝隙内。 | ✅ |
+| 3    | 耗时与进度条显隐联动 | 绑定 `SyncStatusService` 信号，开启 QTimer 高精度秒级累加耗时并实现流畅的隐退机制。 | ✅ |
 
 ## 4. 详细解决方案
 
-### 4.1 头文件成员变量扩充
-在 `src/ui/MainWindow.h` 中，相比 Plan-105 新增或扩充以下私有成员变量：
-```cpp
-private:
-    QProgressBar* m_topProgressBar = nullptr; // 5px 悬浮覆盖层进度条
-    QTimer* m_elapsedTimer = nullptr;         // 实时耗时与 ETA 刷新定时器
-    qint64 m_syncStartTime = 0;               // 扫描开始时间戳 (毫秒)
-    int m_totalBatchCount = 0;                // 当前批次扫描的任务总项数
-```
+### 4.1 引入 QProgressBar 与绝对尺寸定义
+- 进度条作为主界面中央主体中央核心控件 `centralC` 的悬浮子项。设置高度为 `5px`，样式上背景完全透明、高亮进度使用主色调蓝色 `PrimaryBlue`，使其仿佛一条附着于边缘的蓝色极光。
 
-### 4.2 进度条方向物理属性锁定
-在 `src/ui/MainWindow.cpp` 的 `setupSplitters()` 进度条初始化位置，显式锁定递增外观：
-```cpp
-    m_topProgressBar->setInvertedAppearance(false); // 🚨 强制方向：绝对由左向右平滑推进！
-```
+### 4.2 重写窗口缩放事件以实时更新绝对几何定位
+- 重写 `resizeEvent` 监视器：
+  当窗口由于拖拽、最大化或还原而尺寸改变时，实时计算状态栏在 `centralC` 坐标系下的顶部坐标，将进度条的 `Geometry` 设置为 `(bodyWrapper.left, statusBar.top - 5, bodyWrapper.width, 5)`。
+- 调用 `raise()` 将其提升到渲染层级最顶端，保证绝不被遮挡。
 
-### 4.3 预计剩余耗时（ETA）刷新器实现
-在 `src/ui/MainWindow.cpp` 的 `initUi()` 底部，连接 `m_elapsedTimer` 的 `timeout` 信号：
-```cpp
-    connect(m_elapsedTimer, &QTimer::timeout, this, [this]() {
-        if (m_syncStartTime > 0) {
-            double elapsedSec = (QDateTime::currentMSecsSinceEpoch() - m_syncStartTime) / 1000.0;
-            int currentPct = m_topProgressBar->value();
-
-            // 动态推算预计剩余耗时 (ETA)
-            QString etaStr = "计算中...";
-            if (currentPct >= 5) {
-                double estRemainingSec = elapsedSec * (100.0 - currentPct) / (double)currentPct;
-                etaStr = QString("%1s").arg(QString::number(estRemainingSec, 'f', 1));
-            }
-
-            // 联动更新文本
-            m_statusLeft->setText(QString("扫描数据中... %1%  |  预计耗时: %2")
-                                  .arg(currentPct)
-                                  .arg(etaStr));
-        }
-    });
-```
-
-### 4.4 同步服务精确联动（百分比单调递增）
-在 `src/ui/MainWindow.cpp` 的 `initUi()` 底部，连接后台同步服务：
-```cpp
-    connect(&SyncStatusService::instance(), &SyncStatusService::statusUpdated,
-            this, [this](bool syncing, int pendingCount) {
-        if (syncing && pendingCount > 0) {
-            // --- 扫描任务启动 ---
-            if (m_syncStartTime == 0) {
-                m_syncStartTime = QDateTime::currentMSecsSinceEpoch();
-                m_totalBatchCount = pendingCount; // 锁定初始任务总量
-                m_elapsedTimer->start();
-                updateProgressBarGeometry();
-
-                m_topProgressBar->setValue(1); // 初始展现 1%
-                m_topProgressBar->show();
-            }
-
-            // 动态加固：防止扫描过程中突然有新追加的大批次项导致百分比计算溢出
-            if (pendingCount > m_totalBatchCount) {
-                m_totalBatchCount = pendingCount;
-            }
-
-            // 严格计算自左向右递增的百分比
-            int completedCount = m_totalBatchCount - pendingCount;
-            int pct = qBound(1, (int)((double)completedCount / m_totalBatchCount * 100), 99);
-
-            m_topProgressBar->setValue(pct); // 百分比单调递增，推动进度条平滑从 Left -> Right
-        } else {
-            // --- 扫描任务完成 ---
-            if (m_syncStartTime > 0) {
-                m_topProgressBar->setValue(100); // 极光条充满拉满至最右侧
-                m_elapsedTimer->stop();
-
-                double totalSec = (QDateTime::currentMSecsSinceEpoch() - m_syncStartTime) / 1000.0;
-                m_statusLeft->setText(QString("数据扫描完成  |  实际耗时: %1s").arg(QString::number(totalSec, 'f', 1)));
-
-                // 400ms 后隐藏，3秒后恢复常态
-                QTimer::singleShot(400, this, [this]() {
-                    m_topProgressBar->hide();
-                    m_syncStartTime = 0;
-                    m_totalBatchCount = 0;
-                    QTimer::singleShot(3000, this, [this]() {
-                        updateStatusBar(); // 复位状态栏
-                    });
-                });
-            }
-        }
-    });
-```
+### 4.3 高精度的耗时计时与显隐联动槽函数
+- 当 `SyncStatusService` 通知同步开始，记录毫秒时间戳 `m_syncStartTime`，开始 100ms 单次的耗时刷新，状态栏文字变为 `正在同步元数据... %1% | 耗时: %2s`，同时使进度条显影。
+- 当同步完成时，进度条快速平滑冲向 `100`，状态栏汇报 `元数据处理完成 | 总耗时: %1s`，并在 400ms 后自动将极光进度条完全隐藏，重置常态文本。
 
 ## 5. 修改边界声明【范围】
 
 **本次方案涉及范围：**
-- [ ] `src/ui/MainWindow.h`：添加 `m_totalBatchCount` 变量声明及 `resizeEvent` 等相关结构。
-- [ ] `src/ui/MainWindow.cpp`：升级 `setupSplitters` 初始化、`resizeEvent` 及 `updateProgressBarGeometry`，并彻底重构 `initUi` 中的定时器计时与进度信号连接。
+- [ ] 模块/文件：`src/ui/MainWindow.h` （追加进度条、QTimer、时间戳成员声明及 `resizeEvent` / `updateProgressBarGeometry` 重载声明）
+- [ ] 模块/文件：`src/ui/MainWindow.cpp` （实现 `setupSplitters` 中的进度条初始化、绝对定位逻辑以及高精度的显隐耗时对账联动）
 
 **明确禁止越界修改的范围：**
-- [ ] `SyncStatusService` 后台异步服务的状态转换逻辑——不修改
-- [ ] 系统常态底栏重置函数 `updateStatusBar` 内部统计——不修改
+- [ ] 主状态栏底栏常态计数文本样式——不修改
+- [ ] 主拆分条 `QSplitter` 手柄宽窄——不修改
 
 ## 6. 实现准则与预警【核心】
-
-1. **防除以零崩溃（Zero Division Guard）**：
-   预计耗时公式中，分母为 `currentPct`。在代码中必须加设 `currentPct >= 5` 安全屏障，绝对杜绝当 `currentPct` 为 0 时执行除法导致系统崩溃的死穴。
-2. **百分比安全限幅（Boundary Clamp）**：
-   在计算百分比时，必须采用 `qBound(1, pct, 99)` 进行严密包裹。确保在尚未真正完成前，百分比绝不会由于临时四舍五入提前跳到 `100%`，也绝不会出现越界负值。
-3. **动态总量补偿（Dynamic Total Compensation）**：
-   扫描过程中有可能在后续管道中突然追加新的任务数（导致 `pendingCount > m_totalBatchCount`）。方案中加入了 `if (pendingCount > m_totalBatchCount) { m_totalBatchCount = pendingCount; }` 动态防爆自适应，确保百分比分母永不低于分子，保证进度条绝对单调递增不紊乱。
+1. **样式与 QSS 隔离**：进度条的 `background` 必须设为 `transparent`，`border` 设为 `none`，限制其最大高度，确保在不显示时完全透明隐形、不产生白条或黑条。
+2. **多线程防重入**：在 `SyncStatusService` 回调时，应通过 `m_syncStartTime == 0` 来做原子防重置。防止由于高频 `statusUpdated` 回调不断刷新其计时原点，确保耗时计算的准确。
+3. **安全类型强转**：绝对定位时，需要验证 `m_mainSplitter->parentWidget()` 与状态栏的父子组件是否正常构建，做好安全拦截。
 
 ## 7. Memories.md 合规检查
 
 | 组件 / 模式 | Memories.md 规范要求（写具体内容，不写引用） | 本方案是否符合 |
 |-------------|----------------------|----------------|
-| 动画/计时器 | 超时操作使用毫秒级 `QTimer` 在主线程内处理，定时器具有父对象绑定或成员级释放，绝无内存/资源泄漏 | ✅ 符合 |
-| 边界限制 | 精确计算各子面板几何关系，Y 轴公式对齐 `statusBar->geometry().top() - 5` | ✅ 符合 |
+| 5px 留白基准  | 必须 100% 保持 5px 留白基准，左右两端对齐。 | ✅ 进度条宽度与左右 Y 轴定位完全对齐 bodyWrapper，不仅留存了 5px 切割缝隙，且极光正好覆盖其上，不增删任何布局间隙。 |
 
 ## 8. 待确认事项（可选）
-- 暂无待确认事项。
+- 暂无

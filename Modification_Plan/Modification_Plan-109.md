@@ -65,7 +65,7 @@
 ## 6. 实现准则与预警【核心】
 1. **依赖头文件与编译安全**：修改 `MediaExtractorPipeline.h` 时必须包含 `<atomic>`，确保原子状态支持。
 2. **重入与死锁防护**：由于进度计算与元数据擦除涉及数据库读写，执行大事务擦除时必须按顺序获取 `DatabaseManager` 的卷排他递归锁 `getDriveMutex`，并包裹在 `SqlTransaction` 中，防止多线程竞争引发 `SQLITE_BUSY`。
-3. **安全中止而非强杀**：严禁调用任何强杀线程（如 `QThread::terminate`） or 毁坏流水线生命周期的操作。通过逻辑层条件（`if (m_isCanceled)`）使工作线程平滑退出，保护运行期内存分配。
+3. **安全中止而非强杀**：严禁调用任何强杀线程（如 `QThread::terminate`）或毁坏流水线生命周期的操作。通过逻辑层条件（`if (m_isCanceled)`）使工作线程平滑退出，保护运行期内存分配。
 4. **开箱即用与上下文契合**：方案必须保证清除后立即通过 `notifyUI(RefreshLevel::FullRebuild)` 发射全局重绘信号，让前端界面（侧边栏、内容面板）同频刷新增减，彻底抹去导入痕迹。
 
 ## 7. Memories.md 合规检查

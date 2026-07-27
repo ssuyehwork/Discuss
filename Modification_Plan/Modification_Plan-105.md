@@ -1,97 +1,91 @@
-# 容器与状态栏 5px 隙缝悬浮进度条与状态栏计时联动落地实现 —— Modification_Plan-105.md
+# 批量重命名支持数据库分类与磁盘双轨制无缝同步方案 —— Modification_Plan-105.md
 
-> 状态：待批准执行（尚未获得用户"批准执行"指令）
+> 状态：已批准，执行中
 
 ## 1. 任务背景
-主界面五个容器与底部状态栏之间存在 5 像素的物理间距（由 `m_bodyLayout` 的底部内边距 `kEdgeMargin` 决定）。为了在该间距内无缝且低开销地展示元数据后台同步进度与实时耗时，本方案在不调整任何既有布局边距的情况下，引入一个高度为 5 像素的悬浮覆盖进度条，并与后台 `SyncStatusService` 信号及状态栏常态文本进行完美地联动显隐与耗时统计。
+在目前版本中，批量重命名（`BatchRename`）功能在交互层面上存在着对物理磁盘导航视图模式的单一性绑定。
+
+当用户在左侧侧边栏切换至数据库分类（User Category）、系统分类（如“全部数据”、“最近访问”、“回收站”等映射集合）时，右键菜单中虽然有时能够多选调起批量重命名，但在实际执行时，由于没有打通“视图源提取路径 -> 磁盘物理更名 -> 数据库元数据及关联 1:1 分类树同步修改”的闭环路径，这使得批量重命名功能无法在逻辑分类状态下正常应用，违背了数据库和物理磁盘一对一映射同步的设计宗旨。
+
+本方案旨在重构并拓宽批量重命名的输入解析源和执行后的数据库刷新联动链路，从而实现全视图口径下的无缝批量重命名体验。
 
 ## 2. 问题定位
-- 现有布局结构：中央大容器 `centralC` 包含了一个 `QVBoxLayout`（`mainL`），依次排布 `m_titleBarWidget`、`m_driveBarWidget`、`m_navBarWidget`、`bodyWrapper`、以及底部状态栏 `statusBar`。
-- `bodyWrapper` 的布局 `m_bodyLayout` 的 Margins 设置为了 `kEdgeMargin, 0, kEdgeMargin, kEdgeMargin`（其中 `kEdgeMargin = 5`），这使得 `bodyWrapper` 内的五个容器底部与 `statusBar` 之间留出了 5 像素的物理留白隙缝。
-- 若直接通过 `mainL->insertWidget` 添加普通进度条，则会在显示/隐藏进度条时强行触发整个主窗口的重绘与重新布局，导致界面分栏产生闪烁和抖动。
-- 根治思路：采用 **“无布局悬浮覆盖层（Overlay Widget）+ 绝对定位（Absolute Positioning）”** 的设计。进度条不加入任何 Layout，作为 `centralC` 的非布局子控件，在 `resizeEvent` 中计算主体物理边界，将其绝对定位放置在 5 像素的隙缝之上并提升图层。同时通过耗时定时器控制状态栏百分比和耗时的联动显示。
+当前功能受阻的深层技术原因如下：
+1. **多选路径提取对数据源的耦合**：在 `ContentPanel::performBatchRename()` 中，代码确实只是单纯通过 `view->selectionModel()->selectedIndexes()` 获取选中项。虽然选中项含有 `PathRole`（物理绝对路径），但在旧版本重构中，右键菜单的“批量重命名”在非物理 `nav` 视图模式下常被禁用，或没有将非物理模式路径（如分类模式下获取的 `PathRole`）视为合法的重命名输入，造成数据源输入被非法裁剪。
+2. **重命名后分类数据库（categories表）同步脱节**：重命名成功后，目前仅执行了 `MetadataManager::instance().renameItem`，该函数只负责迁移 `metadata` 表中文件/文件夹对应的元数据（如星级、标签、颜色）。但是，**在 `categories` 表及 `category_items` 表中存储的分类物理绑定路径和物理路径提示（pathHint）却没有被同步重命名**！这会导致：
+   - 数据库分类树中该物理文件夹对应的 1:1 镜像分类树节点因为路径对不齐而失效或变回空定义。
+   - 分类包含关系发生断裂，导致重启后分类项无法恢复。
+3. **缺少刷新后保持选中高亮状态的无缝自愈机制**：在执行完批量重命名后，原有的选中状态会被 `loadDirectory` / `loadCategory` 清屏抹去。用户在重命名后，原有的高亮虚化，破坏了连续重命名或进一步属性编辑的交互感。
 
 ## 3. 强制对照表
 
 | 编号 | 用户原话 / 我的理解 | 方案对应点 | 是否一致 |
 |------|---------------------|------------|----------|
-| 1    | 五个容器与状态栏之间是不是有着5像素的间距？（用户原话） | 确认了 `m_bodyLayout` 底部边距导致的 5 像素留白物理间距。 | ✅ |
-| 2    | 这个5像素的间距是不是由Margin决定的呢？（用户原话） | 确认了该间距由 `m_bodyLayout->setContentsMargins` 的底部边距确定。 | ✅ |
-| 3    | 这5像素的间距不做任何调整（不为0）情况下，如果我要将一个进度条高度为5像素覆盖在其上方显示，是否可行？（用户原话） | 采用绝对定位不加布局的形式，在不调整 5 像素 Margin 的前提下，使 5px 高度进度条覆盖其上显示。 | ✅ |
-| 4    | 后台开始扫描或对账，5px的隙缝处瞬间被一条5px高的蓝色极光光条完全填满覆盖（用户原话） | 进度条在检测到同步开始时自动 `show()`，并设置对应的高度、样式与位置。 | ✅ |
-| 5    | 并在 `resizeEvent` 中通过 `statusBar->geometry().top() - 5` 实时计算 Y 轴坐标（用户原话） | 在 `resizeEvent` 中调用 `updateProgressBarGeometry`，使用该公式实现绝对吸附。 | ✅ |
-| 6    | 定时器超时联动 `m_statusLeft` 文本，并监听 `SyncStatusService` 信号（用户原话） | 添加 `QTimer` 定时器刷新逻辑，完美监听 `SyncStatusService` 的进度信号并完成联动。 | ✅ |
+| 1    | 支持数据库里的文件夹或文件 | 只要选中项含有 `PathRole` 真实物理路径，无论当前处于 `nav` 磁盘模式还是 `user_category` / `system` 数据库分类模式，均完美允许批量重命名。 | ✅ |
+| 2    | 数据库和磁盘存在映射同步关系 | 重命名成功后，不仅触发磁盘更名，还要同步调用 `MetadataManager` 进行元数据迁移，并修正 `categories` 表对应的 physicalPath。 | ✅ |
+| 3    | 操作后仍然处于选中高亮状态 | 在更名成功、UI 重绘和数据库重新加载完毕后，使用暂存机制（`m_pendingSelectName`）重新自动定位并高亮选中最新的文件名。 | ✅ |
 
 ## 4. 详细解决方案
 
-### 4.1 在头文件定义状态与成员变量
-在 `src/ui/MainWindow.h` 中：
-1. 重写 `resizeEvent` 保护方法，以便在主窗体拉伸、最大化和还原时实时动态重算进度条坐标。
-2. 声明相关槽函数 `updateProgressBarGeometry()` 以及控制变量（进度条 `m_topProgressBar`、刷新定时器 `m_elapsedTimer` 以及记录同步开始时刻的毫秒时间戳 `m_syncStartTime`）。
+### 4.1 全口径无阻碍路径解析与提取（解决缺陷 1）
+- **拓宽 `performBatchRename` 的输入来源**：
+  在 `ContentPanel.cpp` 的 `performBatchRename()` 中，取消对当前视图模式（`m_currentCategoryType`）的任何前置限制。
+- **获取物理路径的绝对真实路径**：
+  ```cpp
+  QModelIndexList indexes = getSelectedIndexes();
+  std::vector<std::wstring> originalPaths;
+  for (const auto& idx : indexes) {
+      if (idx.column() == 0) {
+          QString path = idx.data(PathRole).toString();
+          if (!path.isEmpty()) {
+              originalPaths.push_back(QDir::toNativeSeparators(path).toStdWString());
+          }
+      }
+  }
+  ```
+  通过标准的 `PathRole`，即使该项位于数据库虚拟分类或最近访问中，其底层的物理路径依旧能被 100% 精准、无偏差提取。
 
-### 4.2 初始化悬浮进度条（不进 Layout）
-在 `src/ui/MainWindow.cpp` 的 `setupSplitters()` 函数末尾：
-1. 创建 `QProgressBar` 并将其父级设为中央容器 `centralC`。
-2. 强制其固定高度为 5 像素，并去除文字，使其作为一个极其纯净的水平极光条。
-3. 应用扁平化的 CSS 样式（背景完全透明，高亮部分采用系统标准的 PrimaryBlue 颜色）。
-4. 默认调用 `hide()` 使其初始状态静默隐藏。
+### 4.2 磁盘物理更名与多维数据库全量对账（解决缺陷 2）
+- **同步更新元数据表与分类关联表**：
+  In `BatchRenameDialog::onExecute` 中，当 `QFile::rename(oldPath, newPath)` 执行成功后：
+  1. 调用 `MetadataManager::instance().renameItem(oldWPath, newWPath)`，完成 `metadata` 表及内存 `m_cache` 中星级、标签、备注的原子化键值重映射迁移。
+  2. 联动更新分类物理树：由于用户很可能对已入库并绑定了侧边栏分类的**物理文件夹**执行了更名，我们在 `CategoryRepo` 中新增一个核心物理重定义接口 `CategoryRepo::renamePhysicalCategoryPath(oldWPath, newWPath)`，将 `categories` 表中 `physicalPath` 与之匹配的项同步变更为 `newWPath`，并修改 `category_items` 表内可能存在的旧 `pathHint` 指针，彻底保住 1:1 分类树映射结构。
 
-### 3.3 实现窗口缩放与绝对定位计算
-在 `src/ui/MainWindow.cpp` 中实现：
-1. `resizeEvent(QResizeEvent* event)`：
-   - 先调用基类的 `QMainWindow::resizeEvent(event)`。
-   - 随即调用 `updateProgressBarGeometry()` 刷新进度条。
-2. `updateProgressBarGeometry()`：
-   - 提取主体包裹控件 `bodyWrapper`（即 `m_mainSplitter` 的父对象）以及状态栏控件 `statusBar`（即 `m_statusLeft` 的父对象）。
-   - 计算得到 Y 轴绝对吸附坐标：`int y = statusBar->geometry().top() - 5;`（对应用户原话："在 resizeEvent 中通过 statusBar->geometry().top() - 5 实时计算 Y 轴坐标"）。
-   - 绝对计算 X 坐标 `bodyWrapper->geometry().left()` 与宽度 `bodyWrapper->geometry().width()`。
-   - 调用 `m_topProgressBar->setGeometry(x, y, width, 5)` 将其精准放置于 5 像素间隙中。
-   - 调用 `m_topProgressBar->raise()` 提升组件的绘制次序，防止被窗口的普通背景覆盖。
-
-### 3.4 状态栏耗时与进度服务联动
-在 `src/ui/MainWindow.cpp` 的 `initUi()` 尾部：
-1. 创建定时刷新器 `m_elapsedTimer`，定时间隔设为 `100ms`。
-2. 绑定 `m_elapsedTimer` 的 `timeout` 信号：
-   - 若同步已经开始（`m_syncStartTime > 0`），计算累计经过的秒数 `elapsedSec`。
-   - 实时拼接格式文本（例如：“正在同步元数据... X%  |  耗时: Ys”），并更新给状态栏标签 `m_statusLeft`。
-3. 连接全局同步状态信号 `SyncStatusService::instance()` 的 `statusUpdated` 槽函数：
-   - **当 `syncing` 为 `true` 且待处理项 `count > 0` 时**：
-     - 若为首次监听到同步，记录当前系统毫秒时间戳 `m_syncStartTime`，启动 `m_elapsedTimer`，调用 `updateProgressBarGeometry()` 重新刷正进度条坐标，并将其 `show()` 展现出来。
-     - 进度值根据待落盘数量安全映射，限制范围在 `10%` 到 `95%` 之间，防止未写完就提前拉满。
-   - **当同步完成（`syncing` 为 `false` 且 `count <= 0`）时**：
-     - 如果检测到正在进行中状态，将进度条瞬间设为 `100%`，停止耗时定时器。
-     - 状态栏显示“元数据处理完成  |  总耗时: Zs”。
-     - 开启一个 `singleShot` 延迟 400ms，延时过后 `hide()` 隐藏进度条，并在 3 秒后自动调用系统现有的 `updateStatusBar()` 恢复到常态状态栏文本。
+### 4.3 暂存自动对齐与选中自愈高亮（解决缺陷 3）
+- **无痕选中恢复机制**：
+  由于批量重命名完成后需要调用 `refreshAll()` 重新向模型载入最新数据，我们在刷新前，安全地将第一项被重命名后的新名称（或全量列表）暂存到 `m_pendingSelectName` 状态中：
+  ```cpp
+  if (!newNames.empty()) {
+      // 暂存首项的新名称（含后缀），用于刷新后的自动选中
+      m_pendingSelectName = QString::fromStdWString(newNames.front());
+      m_isPendingEdit = false; // 不需要进入 F2 行内编辑，仅需保持选中高亮态
+  }
+  ```
+- **视图定位自愈**：
+  在 `ContentPanel::refreshAll()` 内，当异步加载（`loadDirectory` 或 `loadCategory`）执行完成并渲染出物理节点后，利用 `selectAndScrollToPath` 方法，自动对齐到最新的 `newPath` 并赋予 `QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows` 属性，使卡片或列表行重新完美高亮，保证流畅无断裂的无缝编辑感。
 
 ## 5. 修改边界声明【范围】
 
 **本次方案涉及范围：**
-- [ ] `src/ui/MainWindow.h`：重写 `resizeEvent`，添加变量声明与进度条计算函数。
-- [ ] `src/ui/MainWindow.cpp`：实现 `setupSplitters` 处的进度条初始化、`resizeEvent`、`updateProgressBarGeometry` 以及在 `initUi` 中增加耗时与信号联动。
+- [ ] 模块/文件：`src/ui/BatchRenameDialog.cpp` （实现 `onExecute` 对 `QFile::rename` 的成功态检测，引入分类树路径迁移与元数据迁移双向同步，并暂存最新更名名）
+- [ ] 模块/文件：`src/ui/ContentPanel.cpp` （在 `performBatchRename` 中彻底放开数据源路径解析，并在 `refreshAll()` 重绘回调后重新捕捉并赋予选中高亮）
+- [ ] 模块/文件：`src/meta/CategoryRepo.h` & `src/meta/CategoryRepo.cpp` （追加 `renamePhysicalCategoryPath` 接口，以便将重命名关联的物理路径一并写入数据库 `categories` 的 `physicalPath` 和 `category_items` 的 `pathHint` 中）
 
 **明确禁止越界修改的范围：**
-- [ ] `SyncStatusService` 底层状态机实现——不修改
-- [ ] `updateStatusBar` 的常态项目统计逻辑——不修改
+- [ ] 规则行（`RuleRow`）界面排列布局——不修改
+- [ ] `BatchRenameEngine` 规则链预览计算内核——不修改
 
 ## 6. 实现准则与预警【核心】
-
-1. **头文件依赖预防**：
-   在 `MainWindow.h` 中必须前置声明 `#include <QProgressBar>`、`#include <QTimer>`、`#include <QDateTime>`，或者在 `MainWindow.cpp` 中精准导入。
-2. **零布局冲突**：
-   千万不要在中央大容器的 `mainL` 布局中执行 `addWidget(m_topProgressBar)`。它必须作为一个单纯的子控件（直接 `new QProgressBar(centralC)`），避免引起界面其他区域重绘时产生的位移。
-3. **图层遮挡防御**：
-   定位计算完成后，必须调用一次 `m_topProgressBar->raise()` 确保进度条在 `centralC` 各种动态子面板的最上层，不被其他控件遮盖。
-4. **多线程安全提示**：
-   `SyncStatusService` 的信号可能由非 UI 线程异步发射，但在连接时 Qt 默认会自动转换为排队连接（QueuedConnection）安全地将槽执行在主 UI 线程，本方案安全无虞。
-5. **还原重置**：
-   进度条隐藏后，利用 `QTimer::singleShot` 延迟 3 秒调用 `updateStatusBar()` 自动复位，保证常态信息不丢失。
+1. **防抖与抑制保护**：由于批量重命名会在极短时间内造成大量物理文件更名，这会诱发 Windows IOCP 向 `NativeFolderWatcher` 高频发送重命名或增删信号。在执行过程中，必须在 `BatchRenameDialog` 点火前后，安全利用 `MetadataManager::instance().setInternalOperating(true)` 开启锁，防止变动风暴和重构回调发生恶性竞态。
+2. **事务原子性**：在 `BatchRenameDialog::onExecute` 中，对所有项的重命名应该通过数据库单事务提交。对于每一项物理重命名，必须在 `ok == true` 时才执行数据库字段迁移，如果某个物理文件因为占用等原因导致更名失败，保留其原有路径 and 元数据，不执行越权更新。
+3. **开箱即用**：该重构必须完美兼容 `ListResultView` 与 `GridResultView` 以及 `JustifiedResultView` 这三种视图。当视图刷新完成后，不论用户当前处于列表斑马纹、自适应卡片还是网格拼图状态，该选中高亮机制都需完美工作。
 
 ## 7. Memories.md 合规检查
 
 | 组件 / 模式 | Memories.md 规范要求（写具体内容，不写引用） | 本方案是否符合 |
 |-------------|----------------------|----------------|
-| 样式规范 | 背景完全透明不遮挡主体，亮蓝色前景无缝配合暗黑主题 | ✅ 符合 |
-| 内存安全 | `m_topProgressBar` 指定了 `centralC` 作为父对象，内存由 Qt 对象树自动管辖释放，定时器绑定 `this` 避免泄露 | ✅ 符合 |
+| 路径标准化  | 路径拼合和处理一律使用标准化规范，避免在后续对账或路径比对时发生大小写或斜杠不一致问题。 | ✅ 方案中使用 `QDir::toNativeSeparators` 和 `normalizePath` 进行转换，完全统一为原生标准化 wstring，避免因路径格式对不齐而无法命中 `categories` 或 `metadata`。 |
+| UI 信号通知机制 | 跨线程执行或底层重构后，需优雅、高效地刷新 UI。 | ✅ 方案中不仅调用 `MetadataManager::instance().notifyUI` 发送局部和分类更新通知，而且在 UI 层使用 `QPointer` 弱指针保护，防止在大批量 I/O 耗时期间主窗体被销毁而引发指针异常访问，保证 100% 安全稳定。 |
 
 ## 8. 待确认事项（可选）
-- 暂无待确认事项。
+- 暂无
