@@ -39,10 +39,21 @@ void CardPainterHelper::drawCardCover(QPainter* painter, const QRect& cardRect, 
         if (!defaultIcon.isNull()) {
             // 针对普通文件（非图形/视频），保持 60% 比例缩小的图标绘制逻辑
             int iconSize = qMin(cardRect.width(), cardRect.height()) * 0.6;
-            QRect iconRect(cardRect.center().x() - iconSize / 2,
-                           cardRect.center().y() - iconSize / 2,
-                           iconSize, iconSize);
-            defaultIcon.paint(painter, iconRect);
+            if (iconSize < 16) iconSize = 16;
+
+            // 显式提取特定分辨率下的高清 Pixmap，避免直接 paint 时由于系统缩放导致其不美观或偏位
+            QPixmap pix = defaultIcon.pixmap(iconSize, iconSize);
+            if (!pix.isNull()) {
+                // 使用提取出的物理 Pixmap 尺寸，在卡片内部进行精确的绝对物理几何居中对齐
+                int x = cardRect.left() + (cardRect.width() - pix.width()) / 2;
+                int y = cardRect.top() + (cardRect.height() - pix.height()) / 2;
+                painter->drawPixmap(x, y, pix);
+            } else {
+                QRect iconRect(cardRect.center().x() - iconSize / 2,
+                               cardRect.center().y() - iconSize / 2,
+                               iconSize, iconSize);
+                defaultIcon.paint(painter, iconRect);
+            }
         }
     }
     painter->restore();
