@@ -219,10 +219,8 @@ QVariant ArcMetaVirtualDbModel::data(const QModelIndex& index, int role) const {
         if (record.width > 0 && record.height > 0) return (double)record.width / record.height;
         return m_aspectRatios.value(QDir::toNativeSeparators(path), 1.0);
     } else if (role == HasThumbnailRole) {
-        // 2026-xx-xx 按照 Plan-114：优化 HasThumbnailRole 判定逻辑
-        // 只要是图形或视频格式，均预设为 true，强制 Delegate 进入填满模式，消除抖动
-        if (UiHelper::isGraphicsFile(record.suffix)) return true;
-        if (record.width > 0 && record.height > 0) return true;
+        // 2026-07-29 极致重构：只有当真正拥有成功加载并计算的缩略图（已记录宽高比）时，才返回 true。
+        // 避免在未加载或加载失败降级时，由于宽松返回 true 导致 Delegate 强行将 fallback 系统默认图标当作缩略图执行 100% 拉伸绘制产生冗余内边框。
         return m_aspectRatios.contains(QDir::toNativeSeparators(path));
     } else if (role == Qt::DecorationRole && index.column() == 0) {
         // 统一使用稳定且唯一的 path 作为内存缩略图缓存 Key，彻底根除注册前/后 fileId 状态变化导致的缓存失效或闪烁痛点
