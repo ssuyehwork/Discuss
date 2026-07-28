@@ -173,6 +173,9 @@ QImage WindowsShellThumbnailProvider::getShellThumbnail(const QString& path, int
     }
 
 #ifdef Q_OS_WIN
+#ifndef SIIGBF_WONTADORN
+#define SIIGBF_WONTADORN 0x00000040
+#endif
     ComInitializer comInit;
     PIDLIST_ABSOLUTE pidl = nullptr;
     HRESULT hr = SHParseDisplayName(path.toStdWString().c_str(), nullptr, &pidl, 0, nullptr);
@@ -186,7 +189,7 @@ QImage WindowsShellThumbnailProvider::getShellThumbnail(const QString& path, int
         if (SUCCEEDED(hr)) {
             SIZE nativeSize = { size, size };
             HBITMAP hBitmap = nullptr;
-            hr = pFactory->GetImage(nativeSize, SIIGBF_THUMBNAILONLY, &hBitmap);
+            hr = pFactory->GetImage(nativeSize, static_cast<SIIGBF>(SIIGBF_THUMBNAILONLY | SIIGBF_WONTADORN), &hBitmap);
             if (SUCCEEDED(hr) && hBitmap) {
                 BITMAP bmpInfo;
                 GetObject(hBitmap, sizeof(bmpInfo), &bmpInfo);
