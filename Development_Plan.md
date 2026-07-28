@@ -77,7 +77,7 @@
 - 用户期望的结果：对其进行代码职责过载分析并输出模块化的单一职责拆解和落地规划。
 - 本次任务边界：对 `src/ui/ThumbnailDelegate.h` 与 `src/ui/ThumbnailDelegate.cpp` 展开整体架构梳理，定位其过载现状，设计面向高内聚、零开销、低耦合的模块化（视觉物理渲染、文本排版、控制器生命期分流）拆分图纸。由于本 Turn 为只读分析师模式，不修改任何项目代码文件。
 - 不在本次范围内的是：修改逻辑代码、在外部执行构建验证。
-- 对应方案文档: Modification_Plan-40.md
+- 对应方案文档：Modification_Plan-40.md
 
 ## [2026-07-22] 视图按钮及缩放滑杆功能移植重构
 
@@ -122,7 +122,7 @@
 ## [2026-07-25] 彻底根除随机/设置颜色旧UI与在右键菜单上直接以悬停白圈色块展示并同步存库
 
 - 用户描述的现象/问题：现有的右键菜单及部分分类/文件夹设置中采用“随机颜色”和“设置颜色”的传统菜单项（QAction）及弹窗操作链路复杂、不够直观。
-- 用户期望的结果：彻底根除“随机颜色”和“设置颜色”相关逻辑代码，不可保留。直接将当前现有的标注色直接显示在右键菜单上作为一排水平排列的色块进行选择，悬停在某个色块上方时通过白圈突显色块。选择色块后，将色值同时存入到 categories 表的 color 字段和 metadata 表 of color 字段中。
+- 用户期望的结果：彻底根除“随机颜色”和“设置颜色”相关逻辑代码，不可保留。直接将当前现有的标注色显示在右键菜单上作为一排水平排列的色块进行选择，悬停在某个色块上方时通过白圈突显色块。选择色块后，将色值同时存入到 categories 表的 color 字段 and metadata 表 of color 字段中。
 - 本次任务边界：
   1. 彻底删除 `CategoryPanel` 及 `MainWindow`（FolderButton 菜单）中的“随机颜色”与“设置颜色”旧 QAction 和旧对应响应函数（如 `onRandomColor` / `onSetColor`）。
   2. 针对 `CategoryPanel` 侧边分类右键菜单、`MainWindow` 中的 FolderButton 右键菜单，以及 `ContentPanel` 内容右键菜单中的“设定颜色标签”（ActionColorTag）子菜单，实现全新的一排水平排列色块快捷操作区域（可以使用自定义 `QWidgetAction` 加载色块容器）。
@@ -138,7 +138,7 @@
 
 - 用户描述的现象/问题：在全站范围内，当用户点击任意按钮时，按钮周边都会显示点状虚线聚焦边框。
 - 用户期望的结果：全局禁用这一虚线的显现，保持全站级的完美屏蔽，不影响原有样式且实现最简单、彻底的修复。
-- 本次任务边界：在 `src/main.cpp` 中初始化 `QApplication` 的位置，加入一行全局样式表设置 `a.setStyleSheet("QAbstractButton { outline: none; }");`。
+- 本次任务边界：在 `src/main.cpp` 中初始化 `QApplication` 的位置，加入一行全局样式表设置 `a.setStyleSheet("QAbstractButton { outline: none; }");` / `a.setStyleSheet("QAbstractButton { outline: none; }");` 的统一设置。
 - 不在本次范围内的是：逐个修改各页面组件按钮的逻辑，或在其他样式表文件中写分散的规则。
 - 对应方案文档：Modification_Plan/Modification_Plan-91.md
 
@@ -236,7 +236,7 @@
   2. 升级 `MainWindow.cpp`，显式设定 `setInvertedAppearance(false)` 强制普通方向；
   3. 升级 `initUi()` 的 100ms 刷新槽和信号连接 logic，运用 $T_{elapsed} \times \frac{100 - P}{P}$ 动态公式推算预计耗时，并完美替换对应语境。
 - 不在本次范围内的是：修改 `SyncStatusService` 本身的发射频率，或者对除了 `MainWindow`顶层控制链路之外的普通面板数据视图进行重设。
-- 对应方案文档: Modification_Plan/Modification_Plan-106.md
+- 对应方案文档: Modification_Plan-106.md
 
 ## [2026-07-27] 创建自动导入中途取消与数据擦除机制安全落地
 
@@ -254,7 +254,7 @@
 - 用户描述的现象/问题：底层文件系统 IOCP 监控服务 `NativeFolderWatcher` 职责不单一，直接依赖并耦合了上层 `MetadataManager` 和 `AutoImportManager` 的具体业务操作；高密集并发/批量重命名时由于先进先出（FIFO）弹出队列极易错配；高频事件可能导致 GUI 线程在极短时间内因大量 `invokeMethod` 回调而被风暴积压、假死卡顿；另外，单例在工作线程中无意被首次加载时可能引发 QTimer 线程亲和性失效警告。
 - 用户期望的结果：重构并优化 `NativeFolderWatcher` 架构，使其彻底解耦，不调用任何上层管理器，只负责基础 IO 事件处理并抛出标准 Qt 信号；重新设计防抖和并发重命名合并逻辑，杜绝 FIFO 错配并大幅削减对 GUI 线程的信号轰炸；确保单例模式下 QTimer 安全初始化。
 - 本次任务边界：
-  1. 彻底切断 `NativeFolderWatcher` 对 `MetadataManager`、`AutoImportManager` 等上层业务类的直接头文件依赖和调用。
+  1. 彻底切断 `NativeFolderWatcher` 对 `MetadataManager`、`AutoImportManager` 等上层业务类的直接头文件依赖 and 调用。
   2. 重构 `NativeFolderWatcher` 事件分发。所有捕获的文件变更（新增、修改、删除、重命名）均转化为标准的自定义结构并通过统一/分立信号（如 `fileChanged(path, action)`）分发。
   3. 优化防抖/合并算法。采用高内聚的以路径为 Key、以定时器关联的去重延迟合并缓存，削减短时间内对主线程的通知风暴；在监控层独立实现一套安全、健壮的重命名匹配配对池，不再采用基于顺序的出队机制。
   4. 解决线程亲和性警告，通过懒加载或确保 `m_debounceTimer` 正确关联主线程事件循环。
@@ -271,6 +271,21 @@
 - 不在本次范围内的：由于目前处于只读分析师状态，不直接修改 C++ 源码文件（.cpp / .h），不破坏现行软件编译流程。
 - 对应方案文档：Modification_Plan/Modification_Plan-111.md
 
+## [2026-07-28] 解决每次启动主程序时重复对账与无谓重新扫描元数据及主程序启动闪烁白色边框缺陷
+
+- 用户描述的现象/问题：
+  1. 被监控的文件夹没有新增任何文件或文件夹，元数据也已经持久化至磁盘数据库，但每次重启主程序时都会重新对账并触发全量文件元数据扫描与多媒体特征提取。
+  2. 启动主程序之后，主界面的导航栏或分割器区域会短暂显示白色边框，随后在界面完全初始化或 QSS 加载完成后消失，极为影响视觉观感。
+- 用户期望的结果：
+  1. 在启动主程序进行全量对账时，跳过已成功导入且指纹/修改时间未发生变化的完备文件，杜绝每次重启时的冗余扫描和特征提取，保护物理磁盘并大幅减少 CPU 占用。
+  2. 彻底根治主程序启动时的白色边框瞬时闪烁现象，使其在数据及样式未完全加载就绪前也能保持与暗色调主题同频一致的优雅灰色/深色背景展示。
+- 本次任务边界：
+  1. 在 `MetadataManager::registerItemsAsync` 中增加文件物理指纹与高级特征双重准入检查，若文件已完备且大小/修改时间一致，直接跳过登记和提取。
+  2. 在 `CategoryRepo::addItemToCategory` 中增加重复关联预检，防止每次重启时 `category_items` 被无谓 `INSERT OR REPLACE` 覆盖并导致 `added_at` 乱序 and 数据库频繁标记 Dirty。
+  3. 对 `NavPanel.cpp` 中的 `QSplitter` 及其内部控件（如 `DropTreeView`、`favGroup` 等）的底色样式表（QSS）进行重构，将由于延迟异步数据加载而发生的重排（Relayout）间隙背景显式强制声明为与主题匹配的暗色（如 `#1E1E1E` 或继承父窗底色），屏蔽未初始化时的默认浅灰色边缘露出。
+- 不在本次范围内的是：修改物理 MFT 扫描、USN 监控底座以及其他非元数据和分类对账关联、非启动界面底色修补的逻辑。
+- 对应方案文档：Modification_Plan/Modification_Plan-118.md
+
 ## [2026-07-28] 修复构建配置缺失与 FilterEngine 编译类型错误
 
 - 用户描述的现象/问题：编译 C++ 项目时，遇到了多处编译器语法错误（在 FilterEngine.cpp 中未声明的标识符 `record` / `fileName` / `pe` 等，将 `IngestedRecord` 假定为 `int` 等）以及 “util/ShellHelper.h”、“core/AppConfig.h”、“core/FileSystemService.h” 头文件无法找到的问题。
@@ -278,7 +293,7 @@
 - 本次任务边界：
   1. 修复 `src/ui/FilterEngine.h` 和 `src/ui/FilterEngine.cpp`，将未定义的 `IngestedRecord` 类型统一修改为系统实际定义的 `ItemRecord`。
   2. 修改 `CMakeLists.txt`，在 `target_include_directories` 中追加 `${CMAKE_CURRENT_SOURCE_DIR}/src` 包含路径，以解决未带 `src/` 前缀的绝对路径式头文件包含失败。
-- 不在本次范围内的：新增、修改任何业务功能和 UI 样式。
+- 不在本次范围内的：新增、修改任何业务功能 and UI 样式。
 - 对应方案文档：Modification_Plan/Modification_Plan-113.md
 
 ## [2026-07-28] NativeFolderWatcher 代码架构合理性、职责单一性与傻逼逻辑地毯式排查
