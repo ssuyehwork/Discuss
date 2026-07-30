@@ -92,6 +92,16 @@
 ### 2. 路径标准化（Normalization）的分散现场处理
 - 路径标准化未封装为高内聚、不可变的 `Path` 领域对象，导致多处重复现场处理，且不同组件（`MftReader`、`AutoImportManager`、`DatabaseManager`）所采用的标准不完全对齐，极易引发字母大小写错配。
 
+### 3. 数据来源（托管/镜像 vs 物理磁盘）判定的分散及重复造轮子（重要排查发现）
+- **非标代码对账**：`src/ui/MainWindow.cpp` 第 1603-1605 行
+  ```cpp
+  bool isMirror = !m_contentPanel->getCurrentCategoryType().isEmpty();
+  if (!isMirror && !m_currentPath.isEmpty() && m_currentPath != "computer://") {
+      isMirror = MetadataManager::isInsideManagedLibrary(m_currentPath.toStdWString());
+  }
+  ```
+- **架构缺陷标记**：在 `MainWindow` 状态同步中，通过读取原始弱类型字符串并判空来检查数据源。这不仅直接重复了 `m_contentPanel->isMirrorSource()`（即 `isFromMemory`）的轮子，而且嵌套判断还与 `m_contentPanel->isManagedContext()` 的具体实现完全雷同。这种非模块化的判断数据来源方式散落于主窗体，极其容易导致后期开发时因判定不一致、逻辑泄露而带来拼写 Bug。
+
 ---
 
 ## 四、 假死、线程竞争、卡顿排查与标记
