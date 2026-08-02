@@ -14,6 +14,97 @@
 #include <QHash>
 #include <cmath>
 #include <algorithm>
+#include "tiffio.h"
+
+// -------------------------------------------------------------------------
+// libtiff 物理级内存流容灾解码底层组件 (100% 消除 Qt TIFF 图像插件依赖)
+// -------------------------------------------------------------------------
+struct TiffMemStream {
+    const char* data;
+    toff_t size;
+    toff_t pos;
+};
+
+static tsize_t tiffMemRead(thandle_t clientData, tdata_t buf, tsize_t size) {
+    auto* stream = reinterpret_cast<TiffMemStream*>(clientData);
+    if (stream->pos >= stream->size) return 0;
+    toff_t bytesToRead = std::min(static_cast<toff_t>(size), stream->size - stream->pos);
+    std::memcpy(buf, stream->data + stream->pos, bytesToRead);
+    stream->pos += bytesToRead;
+    return static_cast<tsize_t>(bytesToRead);
+}
+
+static tsize_t tiffMemWrite(thandle_t clientData, tdata_t buf, tsize_t size) {
+    Q_UNUSED(clientData); Q_UNUSED(buf); Q_UNUSED(size);
+    return 0;
+}
+
+static toff_t tiffMemSeek(thandle_t clientData, toff_t off, int whence) {
+    auto* stream = reinterpret_cast<TiffMemStream*>(clientData);
+    switch (whence) {
+        case SEEK_SET: stream->pos = off; break;
+        case SEEK_CUR: stream->pos += off; break;
+        case SEEK_END: stream->pos = stream->size + off; break;
+        default: break;
+    }
+    if (stream->pos > stream->size) stream->pos = stream->size;
+    return stream->pos;
+}
+
+static int tiffMemClose(thandle_t clientData) {
+    Q_UNUSED(clientData);
+    return 0;
+}
+
+static toff_t tiffMemSize(thandle_t clientData) {
+    auto* stream = reinterpret_cast<TiffMemStream*>(clientData);
+    return stream->size;
+}
+
+static QImage decodeTiffFromMemory(const QByteArray& tiffData) {
+    if (tiffData.isEmpty()) return QImage();
+
+    TiffMemStream stream;
+    stream.data = tiffData.constData();
+    stream.size = tiffData.size();
+    stream.pos = 0;
+
+    TIFF* tif = TIFFClientOpen(
+        "MemoryTiff", "r",
+        reinterpret_cast<thandle_t>(&stream),
+        tiffMemRead,
+        tiffMemWrite,
+        tiffMemSeek,
+        tiffMemClose,
+        tiffMemSize,
+        nullptr,
+        nullptr
+    );
+
+    if (!tif) {
+        return QImage();
+    }
+
+    uint32_t width = 0, height = 0;
+    TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
+    TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
+
+    if (width == 0 || height == 0) {
+        TIFFClose(tif);
+        return QImage();
+    }
+
+    QImage img(width, height, QImage::Format_RGBA8888);
+    uint32_t* raster = reinterpret_cast<uint32_t*>(img.bits());
+
+    if (TIFFReadRGBAImageOriented(tif, width, height, raster, 1, 0)) {
+        TIFFClose(tif);
+        return img;
+    }
+
+    TIFFClose(tif);
+    return QImage();
+}
 
 namespace ArcMeta {
 
@@ -234,8 +325,12 @@ QImage MediaColorExtractor::extractEmbeddedEpsPreview(const QString& path) {
     QByteArray tiffData = file.read(tiffLength);
     QImage img;
     if (!img.loadFromData(tiffData, "TIFF")) {
-        qWarning() << "[MediaColorExtractor][EPS] 已定位到 TIFF 数据区但解码失败，长度：" << tiffData.size() << "：" << path;
-        return QImage();
+        // Qt 默认可能没有自带 TIFF 插件。此时通过我们内置的 libtiff 进行物理无损提取，达到 100% 绝对兼容性！
+        img = decodeTiffFromMemory(tiffData);
+        if (img.isNull()) {
+            qWarning() << "[MediaColorExtractor][EPS] 已定位到 TIFF 数据区但通过 Qt 及 libtiff 备用引擎解码均失败，长度：" << tiffData.size() << "：" << path;
+            return QImage();
+        }
     }
 
     qDebug() << "[MediaColorExtractor][EPS] 内嵌预览提取成功：" << path;

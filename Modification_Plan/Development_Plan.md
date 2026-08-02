@@ -78,7 +78,7 @@
   3. 新增 `CategoryLibraryPanel.h / .cpp`，负责数据库驱动的分类与快速访问托管库面板，引入上述托管头文件并处理素材解包与打包导入逻辑。
   4. 新建 `models` 子目录，并将 `ArcMetaVirtualDbModel` 与 `FilterProxyModel` 抽离成独立物理文件，实现 UI 与数据完全解耦。
   5. 重构后的 `ContentPanel` 仅作为一个极简的调度外壳，内部通过 `QStackedWidget` 实现对上述两个主面板的选择性分流挂载和动态切换调度。
-- 本次任务边界：物理拆分与新增 `DiskExplorerPanel`、`CategoryLibraryPanel`、及独立的 models 头文件/源文件，重新编写外壳 `ContentPanel` 并更新构建系统，确保物理断连。
+- 本次任务边界：物理拆分与新增 `DiskExplorerPanel`、`CategoryLibraryPanel`、及独立的 models 头文件/源文件，重新编写外壳 `ContentPanel` 并更新构建系统，确保物理断连.
 - 不在本次范围内的：不改动侧边栏与其他的 MainWindow 布局控制。
 - 对应方案文档：Modification_Plan-21.md
 
@@ -105,3 +105,11 @@
 - 本次任务边界：修改 `src/meta/CategoryRepo.cpp` 中的 `fullRecount()` 盘点逻辑，放行在托管库内以 `.arc` 形式存在的文件夹资产单元，彻底消除判定冲突。
 - 不在本次范围内的：不修改磁盘路径（DiskNav）模式下的普通文件夹原生物理遍历。
 - 对应方案文档：Modification_Plan-22.md
+
+## [2026-08-02] 引入 libtiff 内存流解码器彻底修复 EPS 内嵌 TIFF 缩略图生成失败缺陷
+
+- 用户描述的现象/问题：在导入 EPS 文件时，日志提示 `[MediaColorExtractor][EPS] 已定位到 TIFF 数据区但解码失败`，导致缩略图生成失败。这是由于 Qt 6 默认缺少 TIFF 图像格式插件，导致 `QImage::loadFromData` 无法解析从 EPS 提取出来的 TIFF 数据流。
+- 用户期望的结果：利用项目中内置的 libtiff 库提供可靠的内存解码管线，彻底消除对于 Qt 外界 TIFF 插件的依赖，实现 100% 解码内嵌 TIFF 预览并正确生成缩略图。
+- 本次任务边界：在 `src/ui/MediaColorExtractor.cpp` 中通过 `TIFFClientOpen` 和 `TIFFReadRGBAImageOriented` 编写高标准 TIFF 内存解码逻辑，并在 `extractEmbeddedEpsPreview` 解码失败时进行无缝后备回退解码。
+- 不在本次范围内的：不涉及除 EPS 提取 TIFF 格式以外的其他类型图像解码逻辑重构。
+- 对应方案文档：Modification_Plan-22.md (作为计数修复与图像容灾方案合并的一部分)
