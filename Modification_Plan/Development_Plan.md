@@ -14,7 +14,7 @@
   3. 未死守磁盘导航模式与内存数据库模式 100% 绝对隔离的原则。
 - 用户期望的结果：
   1. 内存模式下彻底解包 `.arc` 容器，显示真实素材文件名与对应缩略图。
-  2. `ArcMeta.Library_[盘符]` 托管库根分类节点后方的计数精准反映其包含的资产总数（如显示为 `2`）。
+  2. `ArcMeta.Library_[盘符]` 托管库根分类节点后方的计数精准反映其包含 of 资产总数（如显示为 `2`）。
   3. 磁盘模式（DiskNav）与内存模式（UserCategory/SystemCategory）控制链与显示逻辑 100% 独立隔离。
 - 本次任务边界：重构内存模式下 `.arc` 资产在数据库与 `ItemRecord` 的展示解包映射逻辑，修正托管库分类节点的统计与计算逻辑。
 - 不在本次范围内的：不修改磁盘导航模式对原生磁盘目录的扫描行为，不改动磁盘物理文件路径。
@@ -97,3 +97,11 @@
 - 本次任务边界：修改 `CMakeLists.txt`，将 `src/ui/models/ItemModelBase.h`、`src/ui/models/DiskItemModel.h`、`src/ui/models/DiskItemModel.cpp`、`src/ui/models/LibraryAssetModel.h`、`src/ui/models/LibraryAssetModel.cpp` 以及私有包含目录 `${CMAKE_CURRENT_SOURCE_DIR}/src/ui/models` 补全。
 - 不在本次范围内的：不修改除 CMakeLists.txt 以外的任何 C++ 代码文件。
 - 对应方案文档：Modification_Plan-21.md
+
+## [2026-08-02] 修复导入或拖拽资产包后侧边栏分类计数顽固显示为 0 的大 Bug
+
+- 用户描述的现象/问题：拖拽文件或导入资产到库中成功创建了 `.arc` 文件夹后，侧边栏中的“全部数据”、“未分类”以及快速访问中的分类节点计数顽固显示为 `(0)`。这是由于 `CategoryRepo::fullRecount()` 在执行全量计数重算时，粗暴地通过 `if (meta.isFolder) continue;` 将所有 `isFolder == true` 的元数据过滤掉，而 `AssetImporter` 为了物理存储，在持久化时恰好将资产包标记为了 `is_folder = 1`，从而导致所有合法托管资产全部被过滤跳过而不计入总数。
+- 用户期望的结果：重算全量计数时能够将合法的库内受控 `.arc` 资产文件夹正确计入，使得侧边栏相关计数在导入或修改后立刻自动精准显示真实的资产总数。
+- 本次任务边界：修改 `src/meta/CategoryRepo.cpp` 中的 `fullRecount()` 盘点逻辑，放行在托管库内以 `.arc` 形式存在的文件夹资产单元，彻底消除判定冲突。
+- 不在本次范围内的：不修改磁盘路径（DiskNav）模式下的普通文件夹原生物理遍历。
+- 对应方案文档：Modification_Plan-22.md
