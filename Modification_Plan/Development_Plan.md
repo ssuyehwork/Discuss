@@ -4,7 +4,7 @@
 - 用户期望的结果：内容面板应"穿透" `.arc` 包，读取包内的 `*_thumbnail.png` 文件作为该素材的视觉缩略图呈现给用户。
 - 本次任务边界：修复 `ContentPanel.cpp` 中 `loadThumbnailsForRows`、`HasThumbnailRole` 和 `DecorationRole` 三处针对 `.arc` 路径的缩略图加载逻辑。
 - 不在本次范围内的：不修改 `AssetImporter` 导入流程、不修改 MetadataManager 路径注册逻辑、不涉及磁盘模式（DiskNav）任何行为。
-- 对应方案文档：Modification_Plan-15.md
+- 对应方案文档: Modification_Plan-15.md
 
 ## [2026-07-31] 内存模式资产解包重构与托管库计数矫正
 
@@ -14,11 +14,11 @@
   3. 未死守磁盘导航模式与内存数据库模式 100% 绝对隔离的原则。
 - 用户期望的结果：
   1. 内存模式下彻底解包 `.arc` 容器，显示真实素材文件名与对应缩略图。
-  2. `ArcMeta.Library_[盘符]` 托管库根分类节点后方的计数精准反映其包含的资产总数（如显示为 `2`）。
+  2. `ArcMeta.Library_[盘符]` 托管库根分类节点后方的计数精准反映其包含 of 2 个资产总数（如显示为 `2`）。
   3. 磁盘模式（DiskNav）与内存模式（UserCategory/SystemCategory）控制链与显示逻辑 100% 独立隔离。
 - 本次任务边界：重构内存模式下 `.arc` 资产在数据库与 `ItemRecord` 的展示解包映射逻辑，修正托管库分类节点的统计与计算逻辑。
 - 不在本次范围内的：不修改磁盘导航模式对原生磁盘目录的扫描行为，不改动磁盘物理文件路径。
-- 对应方案文档：Modification_Plan-16.md
+- 对应方案文档: Modification_Plan-16.md
 
 ## [2026-07-31] 全局物理资产管线归一化与解包接口重构
 
@@ -34,7 +34,7 @@
   4. 磁盘导航模式保持 100% 独立，零解包原样遍历磁盘。
 - 本次任务边界：重构 `AssetImporter` 统一导入接口、`IndexedEntry` 内存解包接口、`CategoryRepo` 计数计算与 `UiHelper` 图标提取接口。
 - 不在本次范围内的：不改动磁盘导航模式的原生物理文件系统扫描逻辑。
-- 对应方案文档：Modification_Plan-17.md
+- 对应方案文档: Modification_Plan-17.md
 
 ## [2026-08-01] 全局物理数据库同库同事务重构与语义统一
 
@@ -50,14 +50,14 @@
   5. `ArcMeta.Library_G`仅作为侧边栏的物理入口，不作为用户语义分类；未人工手动归类前，其托管资产 100% 逻辑归属于“未分类”，保证数据对账 100% 契合（全部数据 = 未分类 = Library_G 仓库）。
 - 本次任务边界：重构 `DatabaseManager`、`CategoryRepo`、`MetadataManager`、`AssetImporter` 等模块数据库存储路由、同盘事务以及全局语义标识符更名。
 - 不在本次范围内的：不改动磁盘导航模式（DiskNav）的原生态磁盘物理文件系统扫描与缓存。
-- 对应方案文档：Modification_Plan-18.md
+- 对应方案文档: Modification_Plan-18.md
 
 ## [2026-08-01] 磁盘模式缩略图缓存与双轨 100% 隔离重构
 
 - 用户描述的现象/问题：
   1. WindowsShellThumbnailProvider 在 getShellThumbnail 中维护的 thumbs/ 缓存机制不合理，应当清理。
   2. 磁盘模式缩略图缺乏独立存放和隐藏的路径机制，存在与内存模式缩略图逻辑交叉的隐患。
-  3. 磁盘模式下递归扫描文件时没有排除 .arcmeta 本身，会导致“缓存的缓存”递归问题。
+  3. 磁盘模式下递归扫描文件时没有排除 .arcmeta 本身，会导致“缓存의缓存”递归问题。
   4. ContentPanel 及其底盘在多处（isManagedContext, onItem, performPaste, setData, ItemRecord::create 等）违反了“两种模式，100% 隔离”的核心规则，发生跨轨倒灌。
 - 用户期望的结果：
   1. 彻底移去 WindowsShellThumbnailProvider 的缓存。
@@ -66,7 +66,7 @@
   4. 重构并彻底解耦 ContentPanel、setData、ItemRecord 的行为，让磁盘模式不读取 SQLite 也不在右键菜单或粘贴/拖拽中调用托管逻辑，重命名区分物理/逻辑。
 - 本次任务边界：重构 `WindowsShellThumbnailProvider`、`MediaColorExtractor`、`ContentPanel` 与 `ItemRecord::create`，达到完美的双轨隔离与全新磁盘缓存规范。
 - 不在本次范围内的：不修改 NativeFolderWatcher 物理文件监控底座。
-- 对应方案文档：Modification_Plan-20.md
+- 对应方案文档: Modification_Plan-20.md
 
 ## [2026-08-01] ContentPanel 深度物理模块化拆分与 100% 架构断连
 
@@ -77,10 +77,10 @@
   2. 新增 `DiskExplorerPanel.h / .cpp`，负责纯物理磁盘导航（零 SQLite 数据库访问，彻底移除并禁止引入 `MetadataManager.h`、`CategoryRepo.h`、`AssetImporter.h`）。
   3. 新增 `CategoryLibraryPanel.h / .cpp`，负责数据库驱动的分类与快速访问托管库面板，引入上述托管头文件并处理素材解包与打包导入逻辑。
   4. 新建 `models` 子目录，并将 `ArcMetaVirtualDbModel` 与 `FilterProxyModel` 抽离成独立物理文件，实现 UI 与数据完全解耦。
-  5. 重构后的 `ContentPanel` 仅作为一个极简的调度外壳，内部通过 `QStackedWidget` 实现对上述两个主面板的选择性分流挂载和动态切换调度。
+  5. 重构后的 `ContentPanel` 仅作为一个极简 of 调度外壳，内部通过 `QStackedWidget` 实现对上述两个主面板的选择性分流挂载和动态切换调度。
 - 本次任务边界：物理拆分与新增 `DiskExplorerPanel`、`CategoryLibraryPanel`、及独立的 models 头文件/源文件，重新编写外壳 `ContentPanel` 并更新构建系统，确保物理断连。
 - 不在本次范围内的：不改动侧边栏与其他的 MainWindow 布局控制。
-- 对应方案文档：Modification_Plan-21.md
+- 对应方案文档: Modification_Plan-22.md
 
 ## [2026-08-02] 全应用误导性命名问题排查
 
@@ -88,4 +88,16 @@
 - 用户期望的结果：在分析师角色下，对全应用代码资产进行走查和审计，精准找出误导性类名、变量名、方法名或接口，并规划整改方案。
 - 本次任务边界：进行全应用代码排查与静态分析，撰写对应的方案文档，不进行物理代码修改。
 - 不在本次范围内的：不修改任何代码，不涉及任何物理重构执行。
-- 对应方案文档：Modification_Plan-18.md
+- 对应方案文档: Modification_Plan-18.md
+
+## [2026-08-02] 高清 AI 预览流解析重构与防虚标默认图标注入拦截
+
+- 用户描述的现象/问题：
+  1. AI 格式文件缩略图面临“重启后才能生成”的异常延迟（即导入当场显示失败，后被后台媒体管道所补救生成）。
+  2. 即便在重启/后期成功补救生成了缩略图，呈现出的画面居然也是系统给 `.ai` 文件配的“软件默认图标”，并非真实的卡片内容，严重货不对板。
+- 用户期望的结果：
+  1. 彻底切除并根治 `extractEmbeddedAiPreview` 中硬编码 5MB 的读取空间限制，改用不一次性吞噬内存的高效游标分块流扫搜寻，确保大文件的兼容性高清 JPEG 预览能被完美解析和当场捕获。
+  2. 彻底掐断、切除 `WindowsShellThumbnailProvider::getShellThumbnail` 对复杂设计格式（如 AI/PSD/EPS 等）的兜底。如果内嵌解析器提取失败，坚决不允许生成包含系统软件图标在内的虚假 `_thumbnail.png`，而是标记为无缩略图（`HasThumbnailRole` 返回 `false`），确保全应用视觉质量，开箱即用。
+- 本次任务边界：重构 `MediaColorExtractor.cpp` 中 `extractEmbeddedAiPreview` 的字节搜寻算法，拦截并掐断 `getImageForAnalysis` 以及 `loadThumbnailsForRows` 对复杂设计文件的通用软件图标的错误兜底。
+- 不在本次范围内的：不改动 PSD 文件的提取逻辑，不改动 EPS 文件的 libtiff 解析层。
+- 对应方案文档: Modification_Plan-21.md
