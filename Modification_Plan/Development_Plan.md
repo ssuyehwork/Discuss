@@ -33,7 +33,7 @@
   3. 构建 `CategoryRepo::recountAll` 统一计数接口，准确反映分类与托管库节点资产数。
   4. 磁盘导航模式保持 100% 独立，零解包原样遍历磁盘。
 - 本次任务边界：重构 `AssetImporter` 统一导入接口、`IndexedEntry` 内存解包接口、`CategoryRepo` 计数计算与 `UiHelper` 图标提取接口。
-- 不在本次范围内的：不改动磁盘导航模式的原生物理文件系统扫描逻辑。
+- 不在本次范围内的：不改动磁盘导航模式（DiskNav）的原生物理文件系统扫描与缓存。
 - 对应方案文档：Modification_Plan-17.md
 
 ## [2026-08-01] 全局物理数据库同库同事务重构与语义统一
@@ -55,7 +55,7 @@
 ## [2026-08-01] 磁盘模式缩略图缓存与双轨 100% 隔离重构
 
 - 用户描述的现象/问题：
-  1. WindowsShellThumbnailProvider 在 getShellThumbnail 中维护的 thumbs/ 缓存机制不合理，应当清理。
+  1. WindowsShellThumbnailProvider 在 getShellThumbnail 中维护 of 缓存机制不合理，应当清理。
   2. 磁盘模式缩略图缺乏独立存放和隐藏的路径机制，存在与内存模式缩略图逻辑交叉的隐患。
   3. 磁盘模式下递归扫描文件时没有排除 .arcmeta 本身，会导致“缓存的缓存”递归问题。
   4. ContentPanel 及其底盘在多处（isManagedContext, onItem, performPaste, setData, ItemRecord::create 等）违反了“两种模式，100% 隔离”的核心规则，发生跨轨倒灌。
@@ -85,7 +85,15 @@
 ## [2026-08-02] 全应用误导性命名问题排查
 
 - 用户描述的现象/问题：整款应用可能存在一些语义不一致、容易误导开发者、或者混淆物理与逻辑模式的“误导性命名”（Misleading Naming）。
-- 用户期望的结果：在分析师角色下，对全应用代码资产进行走查和审计，精准找出误导性类名、变量名、方法名或接口，并规划整改方案。
+- 用户期望的结果：在分析师角色下，对全应用代码资产进行走查 and 审计，精准找出误导性类名、变量名、方法名或接口，并规划整改方案。
 - 本次任务边界：进行全应用代码排查与静态分析，撰写对应的方案文档，不进行物理代码修改。
 - 不在本次范围内的：不修改任何代码，不涉及任何物理重构执行。
 - 对应方案文档：Modification_Plan-18.md
+
+## [2026-08-02] 修复 CMake 编译因缺失模型源码引发的 ItemRecord 未声明错误
+
+- 用户描述的现象/问题：在对项目进行 CMake 构建编译时，发生严重的模板实例化与符号未定义错误，提示 `“ItemRecord”: 未声明的标识符`、`"std::vector": "ItemRecord" 不是参数 "_Ty" 的有效模板类型参数` 等。
+- 用户期望的结果：在 CMakeLists.txt 中将这 5 个模型源码和头文件加入构建系统，并配置正确的头文件包含路径，使项目能够正常编译通过。
+- 本次任务边界：修改 `CMakeLists.txt`，将 `src/ui/models/ItemModelBase.h`、`src/ui/models/DiskItemModel.h`、`src/ui/models/DiskItemModel.cpp`、`src/ui/models/LibraryAssetModel.h`、`src/ui/models/LibraryAssetModel.cpp` 以及私有包含目录 `${CMAKE_CURRENT_SOURCE_DIR}/src/ui/models` 补全。
+- 不在本次范围内的：不修改除 CMakeLists.txt 以外的任何 C++ 代码文件。
+- 对应方案文档：Modification_Plan-21.md

@@ -3,7 +3,9 @@
 
 #include <QAbstractTableModel>
 #include <vector>
-#include "ItemRecord.h" // 确保引用正确路径
+#include "src/core/ItemRecord.h" // 修正为正确的头文件路径
+
+using ArcMeta::ItemRecord;
 
 class ItemModelBase : public QAbstractTableModel {
     Q_OBJECT
@@ -12,7 +14,7 @@ public:
     virtual ~ItemModelBase() override = default;
 
     // 只暴露 allRecords() 接口，供 FilterProxyModel 统一操作
-    virtual const std::vector<ItemRecord>& allRecords() const = 0;
+    virtual const std::vector<ArcMeta::ItemRecord>& allRecords() const = 0;
 };
 
 #endif // ITEMMODELBASE_H
