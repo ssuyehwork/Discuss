@@ -55,7 +55,7 @@
 ## [2026-08-01] 磁盘模式缩略图缓存与双轨 100% 隔离重构
 
 - 用户描述的现象/问题：
-  1. WindowsShellThumbnailProvider 在 getShellThumbnail 中维护的 thumbs/ 缓存机制不合理，应当清理。
+  1. WindowsShellThumbnailProvider 在 getShellThumbnail 中维护 of thumbs/ 缓存机制不合理，应当清理。
   2. 磁盘模式缩略图缺乏独立存放和隐藏的路径机制，存在与内存模式缩略图逻辑交叉的隐患。
   3. 磁盘模式下递归扫描文件时没有排除 .arcmeta 本身，会导致“缓存의缓存”递归问题。
   4. ContentPanel 及其底盘在多处（isManagedContext, onItem, performPaste, setData, ItemRecord::create 等）违反了“两种模式，100% 隔离”的核心规则，发生跨轨倒灌。
@@ -68,36 +68,14 @@
 - 不在本次范围内的：不修改 NativeFolderWatcher 物理文件监控底座。
 - 对应方案文档: Modification_Plan-20.md
 
-## [2026-08-01] ContentPanel 深度物理模块化拆分与 100% 架构断连
+## [2026-08-02] 双轨物理数据源 100% 隔离重构与高清预览搜寻
 
 - 用户描述的现象/问题：
-  ContentPanel 内部逻辑庞大，包含物理磁盘目录扫描与内存数据库模式两种截然不同的行为代码，它们在同一个类中混合并共享了诸如 `ArcMetaVirtualDbModel`、右键菜单和重命名等多项逻辑，难以实现物理级的编译断连阻断，依然具有强耦合的维护隐患。
+  1. 内容面板显示数据的逻辑架构违背了“两种模式，100% 隔离”的初衷。磁盘目录模式看到的就是磁盘上原原本本的文件夹结构（包括所有 .arc 容器），不应去数据库和文件包中解包和提取任何特殊语义；而内存数据库模式则负责解包、读取元数据。
+  2. AI 格式文件缩略图面临“重启后才能生成”的异常延迟（即导入当场显示失败，后被后台媒体管道所补救生成），且补救生成的缩略图是 Windows 默认软件大图标，并非真实的卡片内容。
 - 用户期望的结果：
-  1. 将原本极度复杂的 `ContentPanel` 拆分为 3 个职责高度单一的物理模块。
-  2. 新增 `DiskExplorerPanel.h / .cpp`，负责纯物理磁盘导航（零 SQLite 数据库访问，彻底移除并禁止引入 `MetadataManager.h`、`CategoryRepo.h`、`AssetImporter.h`）。
-  3. 新增 `CategoryLibraryPanel.h / .cpp`，负责数据库驱动的分类与快速访问托管库面板，引入上述托管头文件并处理素材解包与打包导入逻辑。
-  4. 新建 `models` 子目录，并将 `ArcMetaVirtualDbModel` 与 `FilterProxyModel` 抽离成独立物理文件，实现 UI 与数据完全解耦。
-  5. 重构后的 `ContentPanel` 仅作为一个极简 of 调度外壳，内部通过 `QStackedWidget` 实现对上述两个主面板的选择性分流挂载和动态切换调度。
-- 本次任务边界：物理拆分与新增 `DiskExplorerPanel`、`CategoryLibraryPanel`、及独立的 models 头文件/源文件，重新编写外壳 `ContentPanel` 并更新构建系统，确保物理断连。
-- 不在本次范围内的：不改动侧边栏与其他的 MainWindow 布局控制。
-- 对应方案文档: Modification_Plan-22.md
-
-## [2026-08-02] 全应用误导性命名问题排查
-
-- 用户描述的现象/问题：整款应用可能存在一些语义不一致、容易误导开发者、或者混淆物理与逻辑模式的“误导性命名”（Misleading Naming）。
-- 用户期望的结果：在分析师角色下，对全应用代码资产进行走查和审计，精准找出误导性类名、变量名、方法名或接口，并规划整改方案。
-- 本次任务边界：进行全应用代码排查与静态分析，撰写对应的方案文档，不进行物理代码修改。
-- 不在本次范围内的：不修改任何代码，不涉及任何物理重构执行。
-- 对应方案文档: Modification_Plan-18.md
-
-## [2026-08-02] 高清 AI 预览流解析重构与防虚标默认图标注入拦截
-
-- 用户描述的现象/问题：
-  1. AI 格式文件缩略图面临“重启后才能生成”的异常延迟（即导入当场显示失败，后被后台媒体管道所补救生成）。
-  2. 即便在重启/后期成功补救生成了缩略图，呈现出的画面居然也是系统给 `.ai` 文件配的“软件默认图标”，并非真实的卡片内容，严重货不对板。
-- 用户期望的结果：
-  1. 彻底切除并根治 `extractEmbeddedAiPreview` 中硬编码 5MB 的读取空间限制，改用不一次性吞噬内存的高效游标分块流扫搜寻，确保大文件的兼容性高清 JPEG 预览能被完美解析和当场捕获。
-  2. 彻底掐断、切除 `WindowsShellThumbnailProvider::getShellThumbnail` 对复杂设计格式（如 AI/PSD/EPS 等）的兜底。如果内嵌解析器提取失败，坚决不允许生成包含系统软件图标在内的虚假 `_thumbnail.png`，而是标记为无缩略图（`HasThumbnailRole` 返回 `false`），确保全应用视觉质量，开箱即用。
-- 本次任务边界：重构 `MediaColorExtractor.cpp` 中 `extractEmbeddedAiPreview` 的字节搜寻算法，拦截并掐断 `getImageForAnalysis` 以及 `loadThumbnailsForRows` 对复杂设计文件的通用软件图标的错误兜底。
-- 不在本次范围内的：不改动 PSD 文件的提取逻辑，不改动 EPS 文件的 libtiff 解析层。
+  1. 彻底切分“磁盘模式”和“内存模式”的路由和模型展示层，将 `ArcMetaVirtualDbModel` 彻底解构为两个独立的子类 `DiskItemModel` (100% 纯物理磁盘导航，不读取数据库及 `.arc` 资产) 与 `LibraryAssetModel` (100% 内存数据库，专注于逻辑资产解析解包)，并在 `ContentPanel` 最前端通过多态实现 0 与 1 路线的 100% 物理与逻辑断连。
+  2. 彻底切除 `extractEmbeddedAiPreview` 中硬编码 5MB 的限制，改用游标分块搜寻，确保大文件的内嵌预览当场捕获，同时拦截 `WindowsShellThumbnailProvider::getShellThumbnail` 对设计文件的默认软件图标兜底，确保在解析失败时彻底返回空图，使 UI Delegate 干净绘制。
+- 本次任务边界：重构 `ItemRecord::create`，在 `DiskScanService` 物理扫盘时禁止任何 SQLite 访问；重写 `ItemModelBase.h`、`DiskItemModel`、`LibraryAssetModel` 以及 `ContentPanel` 路由层，重写 `MediaColorExtractor` 的 AI 内嵌高清搜寻和兜底拦截。
+- 不在本次范围内的：不修改 NativeFolderWatcher 底座，不修改側边栏本身的展开收起。
 - 对应方案文档: Modification_Plan-21.md
