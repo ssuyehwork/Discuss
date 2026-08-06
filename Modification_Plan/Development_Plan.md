@@ -15,7 +15,7 @@ G:\ArcMeta.Library_G\00mscw74m6001.arc\1823760.psd
 G:\ArcMeta.Library_G\00mscw74m6001.arc\1823760_thumbnail.png
 
 ## 2.2 磁盘目录导航模式下，显示的逻辑应该是这样的（不穿透）
-就是纯粹的目录导航，行为等同于 Windows 资源管理器 / Adobe Bridge。用户从地址栏或目录树打开任何路径，看到的就是这个路径下物理磁盘上原原本本的内容，不做任何解释、不做任何特殊语义翻译。哪怕打开的是 ArcMeta.Library_[盘符] 这个托管库根目录本身，看到的也就是里面原本的文件夹结构（包括所有 .arc 容器），跟打开任何一个普通文件夹没有区别。
+就是纯粹的目录导航，行为等同于 Windows 资源管理器 / Adobe Bridge。用户从地址栏 or 目录树打开任何路径，看到的就是这个路径下物理磁盘上原原本本的内容，不做任何解释、不做任何特殊语义翻译。哪怕打开的是 ArcMeta.Library_[盘符] 这个托管库根目录本身，看到的也就是里面原本的文件夹结构（包括所有 .arc 容器），跟打开任何一个普通文件夹没有区别。
 
 ## 2.3 慢速多媒体提图与异步闭锁保护机制
 为了杜绝慢速资产（如 .ai 格式等）由于反复重绘、选中切换或快速滚动导致后台多媒体提取任务无限重复分发、线程池与 CPU 爆满并引发 UI 假死，所有模型（包括“SQLite 内存模式” `LibraryAssetModel` 与“磁盘目录模式” `DiskItemModel`）必须在 `loadThumbnailsForRows` 中启用严格的防抖上锁机制。在发起 `QtConcurrent::run` 异步提取前，必须将路径记入请求拦截集（如 `m_requestedIcons` / `m_requestedPaths`），在任务完成、写回缓存并通知 UI 刷新后再行移除。任何已被锁定在加载中的路径，后续检索一律 0 毫秒拦截、禁止重复投递。
@@ -65,7 +65,7 @@ G:\ArcMeta.Library_G\00mscw74m6001.arc\1823760_thumbnail.png
 1. **全库孤儿元数据反向检查**：
    在后台扫描阶段，不仅顺向检索磁盘空目录，还必须查询全局及各挂载盘数据库中 `is_folder = 1 AND path LIKE '%.arc'`（或所有托管的 `.arc` 文件夹记录），以及所有 `metadata` 中的非空记录。对这些记录中的物理路径，检查其在磁盘上是否真实存在。
 2. **完全级联清除与防漏删**：
-   若该物理路径已在磁盘上被彻底删除（或根本不存在），但在数据库中仍留有记录，则该记录被判定为“幽灵记录”。系统必须无条件级联清除该 `folder_id` 所对应的所有关联表数据（包括 `metadata` 主表、`category_items` 关系表、`system_stats` 统计表、以及内存缓存），防止脏数据残留。
+   若该物理路径已在磁盘上被彻底删除（或根本不存在），但在数据库中仍留有记录，则该记录被判定为“幽灵记录”。系统必须无条件级联清除该 `folder_id`所对应的所有关联表数据（包括 `metadata` 主表、`category_items` 关系表、`system_stats` 统计表、以及内存缓存），防止脏数据残留。
 3. **数据库级联清退规范**：
    在 `MetadataManager::removeMetadataBatchSync` 中，除了 `DELETE FROM metadata WHERE folder_id = ?`，必须级联执行 `DELETE FROM category_items WHERE folder_id = ?` 语句，彻底清除关联。
 通过顺向空包检查与逆向数据库对账双轨协同，实现全库数据 100% 极致洁净，彻底根治幽灵数据导致侧边栏计数不发生变化的 bug。
@@ -80,3 +80,20 @@ G:\ArcMeta.Library_G\00mscw74m6001.arc\1823760_thumbnail.png
    - **正轨 B（矢量级矢量光栅化）**：Ghostscript / Windows 原生矢量 PDF 渲染引擎，生成绝对准确的第一页矢量预览。
    - **正轨 C（Shell兜底）**：Windows Shell API 缩略图提图接口安全兜底。
 通过以上重构，确保多媒体提取层达到极致性能，且预览图 100% 真实纯净。
+
+# 8. 关于批量重命名
+## 8.1 双轨制物理隔离与高内聚拆分
+批量重命名在物理和架构上必须彻底拆分为两个完全独立、互不干扰的执行方法：`executeMemoryMode` 与 `executeDiskMode`。禁止在同一个执行逻辑中混淆混合双轨判断，以此根除底层架构隐患。
+
+## 8.2 内存模式下的批量重命名（`executeMemoryMode`）
+1. **选项管控限制**：只支持“在同一文件夹中重命名”，目标文件夹的“移动到其他文件夹”和“复制到其他文件夹”单选选项在界面上必须被禁选；
+2. **缩略图同步重命名**：执行时，不仅要对主资产文件进行重命名，还要对胶囊内部（`.arc` 文件夹内）同级配套的 `_thumbnail.png` 缩略图一并执行物理重命名（`QFile::rename`），保持主资产与缩略图文件名 1:1 同频命名，确保缩略图缓存不丢失；
+3. **元数据与分类树级联迁移**：必须同步完成数据库路径迁移（`MetadataManager::renameItem`）与侧边栏分类关系更新（`CategoryRepo::renamePhysicalCategoryPath`）。
+
+## 8.3 磁盘模式下的批量重命名（`executeDiskMode`）
+1. **选项功能完整**：支持“同一文件夹重命名”、“移动到其他文件夹”、“复制到其他文件夹”三项完整操作；
+2. **缩略图同步迁移**：必须对主资产文件与配套 `_thumbnail.png` 缩略图一并执行对应的 `QFile::copy` / `QFile::remove` / `QFile::rename` 操作；
+3. **离散元数据与倒排索引级联迁移**：必须同步迁移离散元数据 `.ArcMeta.json` 缓存与数据库倒排索引（`MetadataManager::renameItem`）。
+
+## 8.4 序列数字记忆与配置持久化
+在重命名执行成功后，必须更新界面中所有 Sequence（序列数字）规则的起始数值（累加当前批次文件大小，即 `start = start + 选定文件数 * step`），实时刷新 UI SpinBox 控件并调用 `doAutoSave()` 自动持久化写入本地配置缓存 `LastBatchRenameRules`，以便下次打开对话框时连贯继承。

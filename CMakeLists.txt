@@ -203,6 +203,8 @@ set(SOURCES
     src/util/ImportHelper.h
     src/util/AssetImporter.cpp
     src/util/AssetImporter.h
+    src/util/DiskFileManager.cpp
+    src/util/DiskFileManager.h
     ArcMeta.rc
     resources/resources.qrc
 )
