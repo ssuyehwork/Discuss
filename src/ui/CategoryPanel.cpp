@@ -251,7 +251,7 @@ void CategoryPanel::setupContextMenu() {
             // 2026-06-xx 物理级 1:1 还原：回收站专属右键菜单
             menu.addAction(UiHelper::getIcon("trash", ErrorRed, 18), "清空回收站", this, &CategoryPanel::onEmptyTrash);
             menu.addAction(UiHelper::getIcon("sync", PrimaryBlue, 18), "还原全部项目", this, &CategoryPanel::onRestoreAllFromTrash);
-        } else if (!index.isValid()) {
+        } else if (!index.isValid() || itemName == "分类") {
             menu.addAction(UiHelper::getIcon("folder_filled", QColor("#aaaaaa"), 18), "新建分类", this, &CategoryPanel::onCreateCategory);
             
             auto* sortMenu = menu.addMenu(UiHelper::getIcon("list_ul", QColor("#aaaaaa"), 18), "排列");
@@ -544,7 +544,7 @@ void CategoryPanel::restoreExpandedState(const QModelIndex& parent, const QSet<i
         if (expandedNames.contains(name) || (id != 0 && expandedIds.contains(id))) {
             shouldExpand = true;
         }
-        else if (name == "快速访问") {
+        else if (name == "快速访问" || name == "分类") {
             shouldExpand = true;
         }
         else if (!hasHistory) {
@@ -1515,7 +1515,7 @@ void CategoryPanel::initUi() {
     connect(m_categoryTree, &QTreeView::collapsed, this, &CategoryPanel::saveExpandedStateToSettings);
     // 2026-06-xx 物理同步：支持内部拖拽重排持久化
     connect(m_categoryModel, &QAbstractItemModel::rowsMoved, this, [this](const QModelIndex&, int, int, const QModelIndex&, int) {
-        // 核心逻辑：深度优先遍历分类树，根据 UI 层级物理同步 DB 中的 parent_id 与 sort_order
+        // 核心逻辑：深度优先遍历“分类”子树，根据 UI 层级物理同步 DB 中的 parent_id 与 sort_order
         std::function<void(const QModelIndex&, int)> syncSubtree;
         syncSubtree = [&](const QModelIndex& parentIdx, int parentIdInDb) {
             for (int i = 0; i < m_categoryModel->rowCount(parentIdx); ++i) {
@@ -1524,20 +1524,19 @@ void CategoryPanel::initUi() {
                 QString type = childIdx.data(TypeRole).toString();
                 bool isPinned = childIdx.data(PinnedRole).toBool();
 
-                // 物理阻断：严禁处理“镜像节点”（即 Pinned 为 true 的节点）。
+                // 物理阻断：严禁处理“镜像节点”（即 Pinned 为 true 且其父项不是“分类”的节点）。
                 // 理由：镜像节点仅作为 UI 快捷方式，其移动不应改写原始数据库中的 parentId 关系。
-                if (isPinned) {
+                if (parentIdInDb != -1 && isPinned && parentIdx.data(NameRole).toString() != "分类" && parentIdx.data(TypeRole).toString() != "category") {
                     continue;
                 }
 
-                if (type == "category" && id > 0) {
-                    int actualParentId = parentIdx.isValid() ? parentIdInDb : 0;
+                if (parentIdInDb != -1 && type == "category" && id > 0) {
                     // 只有在数据真正发生位移时才触发数据库 UPDATE，优化性能
                     auto all = CategoryRepo::getAll();
                     for (auto& cat : all) {
                         if (cat.id == id) {
-                            if (cat.parentId != actualParentId || cat.sortOrder != i) {
-                                cat.parentId = actualParentId;
+                            if (cat.parentId != parentIdInDb || cat.sortOrder != i) {
+                                cat.parentId = parentIdInDb;
                                 cat.sortOrder = i;
                                 CategoryRepo::update(cat);
                             }
@@ -1546,10 +1545,13 @@ void CategoryPanel::initUi() {
                     }
                     // 递归同步子分类
                     syncSubtree(childIdx, id);
+                } else if (childIdx.data(NameRole).toString() == "分类") {
+                    // 进入“分类”根容器
+                    syncSubtree(childIdx, 0);
                 }
             }
         };
-        syncSubtree(QModelIndex(), 0); // 从隐式根开始，0 表示顶层
+        syncSubtree(QModelIndex(), -1); // 从隐式根开始，-1 表示尚未进入有效分类区
     });
 }
 

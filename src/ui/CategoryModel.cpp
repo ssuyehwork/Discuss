@@ -82,10 +82,34 @@ void CategoryModel::refresh() {
         favGroup->setForeground(QColor("#FFFFFF"));
     }
 
+    QStandardItem* userGroup = nullptr;
     if (m_type == User || m_type == Both) {
         auto categories = CategoryRepo::getAll();
         QMap<int, QStandardItem*> itemMap;
         QMap<int, Category> catMap;
+
+        // 1. 统计手动和自动创建的自定义分类总数 (排除顶级托管库根节点本身)
+        int userTotalCount = 0;
+        for (const auto& cat : categories) {
+            bool isManagedLibraryRoot = (cat.parentId == 0 &&
+                QString::fromStdWString(cat.name).startsWith("ArcMeta.Library_", Qt::CaseInsensitive));
+            if (!isManagedLibraryRoot) {
+                userTotalCount++;
+            }
+        }
+
+        // 2. 构建“分类”根节点容器，动态注入计算好的手动和自动分类总数量
+        userGroup = new QStandardItem(QString("分类 (%1)").arg(userTotalCount));
+        userGroup->setData("分类", NameRole);
+        userGroup->setSelectable(false);
+        userGroup->setEditable(false);
+        userGroup->setFlags(userGroup->flags() | Qt::ItemIsDropEnabled);
+        userGroup->setIcon(UiHelper::getIcon("folder_filled", QColor("#FFFFFF"), 16));
+
+        QFont font = userGroup->font();
+        font.setBold(true);
+        userGroup->setFont(font);
+        userGroup->setForeground(QColor("#FFFFFF"));
 
         for (const auto& cat : categories) {
             catMap[cat.id] = cat;
@@ -113,43 +137,30 @@ void CategoryModel::refresh() {
             itemMap[id] = item;
         }
 
+        if (userGroup) {
+            root->appendRow(userGroup);
+        }
+
         // 1. 优先渲染托管库根分类 (parentId == 0 && ArcMeta.Library_) 到 root 中间位置
         for (const auto& cat : categories) {
             int id = cat.id;
             QStandardItem* item = itemMap[id];
             int parentId = cat.parentId;
 
-            if (parentId == 0) {
-                QString name = QString::fromStdWString(cat.name);
-                if (name.startsWith("ArcMeta.Library_", Qt::CaseInsensitive)) {
-                    root->appendRow(item);
-                }
-            } else if (parentId > 0 && itemMap.contains(parentId)) {
+            if (parentId > 0 && itemMap.contains(parentId)) {
                 itemMap[parentId]->appendRow(item);
+            } else {
+                if (QString::fromStdWString(cat.name).startsWith("ArcMeta.Library_", Qt::CaseInsensitive)) {
+                    root->appendRow(item);
+                } else if (userGroup) {
+                    userGroup->appendRow(item);
+                }
             }
         }
 
         // 2. 渲染“快速访问”分组节点
         if (favGroup) {
             root->appendRow(favGroup);
-        }
-
-        // 3. 渲染用户自定义分类树 (将非 ArcMeta.Library_ 的顶级自定义分类作为“快速访问”的子树展示)
-        for (const auto& cat : categories) {
-            int id = cat.id;
-            QStandardItem* item = itemMap[id];
-            int parentId = cat.parentId;
-
-            if (parentId == 0) {
-                QString name = QString::fromStdWString(cat.name);
-                if (!name.startsWith("ArcMeta.Library_", Qt::CaseInsensitive)) {
-                    if (favGroup) {
-                        favGroup->appendRow(item);
-                    } else {
-                        root->appendRow(item);
-                    }
-                }
-            }
         }
 
         // 4. 渲染置顶的镜像分类 (原快速访问镜像)
@@ -334,7 +345,7 @@ bool CategoryModel::dropMimeData(const QMimeData* mimeData, Qt::DropAction actio
         QString type = parentItem->data(TypeRole).toString();
         QString name = parentItem->data(NameRole).toString();
         
-        if (type != "category" && type != "bookmark") {
+        if (type != "category" && type != "bookmark" && name != "分类") {
             return false; 
         }
 

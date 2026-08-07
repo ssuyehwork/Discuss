@@ -36,7 +36,7 @@ protected:
         if (id < 0) return true;
 
         // 2. 根容器处理
-        if (name == "快速访问") {
+        if (name == "快速访问" || name == "分类") {
             return hasMatchingChild(index);
         }
 
