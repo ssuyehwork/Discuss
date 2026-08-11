@@ -377,7 +377,7 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     }
 
     // 3. 隐式双容器过滤分流：通过 objectName 区分当前过滤器的角色
-    bool isDirOrCat = (record.isCategory || record.isDir);
+    bool isDirOrCat = (rec.isCategory || rec.isDir);
     if (objectName() == "FolderProxyModel") {
         return isDirOrCat;
     } else if (objectName() == "FileProxyModel") {
@@ -419,7 +419,15 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
         }
     }
 
-    // 3. 物理第一权重：置顶优先规则 (升降序下均强制置顶，不随用户排序取反下沉)
+    // 3. 物理第一权重：文件夹与子分类始终置顶 (绝对强制，升降序下均不动摇)
+    bool leftIsDir = (leftRec.isDir || leftRec.isCategory);
+    bool rightIsDir = (rightRec.isDir || rightRec.isCategory);
+
+    if (leftIsDir != rightIsDir) {
+        return leftIsDir; // 文件夹永远“更小”排在前面
+    }
+
+    // 4. 物理第二权重：置顶优先规则 (升降序下均强制置顶，不随用户排序取反下沉)
     bool leftPinned = leftRec.pinned || leftRec.encrypted;
     bool rightPinned = rightRec.pinned || rightRec.encrypted;
  
@@ -1406,6 +1414,33 @@ void ContentPanel::initGridView() {
         connect(view->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
         connect(view, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
         connect(view, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
+
+        // 🚨 隐式双容器：高度随内容自动适配（Height-to-Content）机制，消除局部滚动，保证完全一体无边界
+        auto adjustHeight = [view]() {
+            if (!view) return;
+            int totalH = view->verticalScrollBar()->maximum() + view->viewport()->height();
+            if (view->model() && view->model()->rowCount() == 0) {
+                totalH = 0;
+            } else {
+                totalH = qMax(40, totalH + 12);
+            }
+            view->setFixedHeight(totalH);
+        };
+        connect(view->verticalScrollBar(), &QScrollBar::rangeChanged, this, [adjustHeight]() {
+            adjustHeight();
+        });
+
+        // 🚨 隐式双容器：左右键排他独占式单选择（两容器选中态完全互斥）
+        connect(view->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this, view]() {
+            if (m_viewStack->currentWidget() == m_seamlessContainer) {
+                QAbstractItemView* other = (view == m_folderView) ? m_fileView : m_folderView;
+                if (other && other->selectionModel() && !view->selectionModel()->selectedIndexes().isEmpty()) {
+                    other->selectionModel()->blockSignals(true);
+                    other->selectionModel()->clearSelection();
+                    other->selectionModel()->blockSignals(false);
+                }
+            }
+        });
     };
 
     setupSubView(m_folderView, m_folderProxyModel);
