@@ -259,6 +259,15 @@ private:
     LibraryAssetModel* m_libraryModel = nullptr; // 负责内存托管逻辑资产模型 (1)
     ItemModelBase* m_model = nullptr;           // 当前多态激活指针合约
 
+    // 隐式双容器架构
+    QWidget* m_seamlessContainer = nullptr;      // 外层无缝无界限滚动主容器
+    QVBoxLayout* m_seamlessLayout = nullptr;     // 统一无缝纵向布局器
+    QAbstractItemView* m_folderView = nullptr;   // 上层隐式容器（专门展示文件夹）
+    QAbstractItemView* m_fileView = nullptr;     // 下层隐式容器（专门展示文件）
+
+    FilterProxyModel* m_folderProxyModel = nullptr; // 文件夹专有过滤代理
+    FilterProxyModel* m_fileProxyModel = nullptr;   // 文件专有过滤代理
+
     QTimer* m_visibleTimer = nullptr;
     void refreshVisibleThumbnails();
     QSortFilterProxyModel* m_proxyModel = nullptr;
@@ -292,6 +301,7 @@ private:
     void updateGridSize();
     void updateStatusBarStats();
     void recalculateAndEmitStats();
+    void syncProxyModels();
 
     /**
      * @brief 统一判断粘贴/拖拽导入的目的地。

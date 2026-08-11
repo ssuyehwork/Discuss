@@ -369,10 +369,22 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     } 
  
     // 2026-07-xx Plan-92: 统一使用 FilterState 中的 keyword 进行文件名过滤
-    if (currentFilter.keyword.isEmpty()) return true; 
- 
-    QString fileName = idx.data(Qt::DisplayRole).toString(); 
-    return fileName.contains(currentFilter.keyword, Qt::CaseInsensitive); 
+    if (!currentFilter.keyword.isEmpty()) {
+        QString fileName = idx.data(Qt::DisplayRole).toString();
+        if (!fileName.contains(currentFilter.keyword, Qt::CaseInsensitive)) {
+            return false;
+        }
+    }
+
+    // 3. 隐式双容器过滤分流：通过 objectName 区分当前过滤器的角色
+    bool isDirOrCat = (record.isCategory || record.isDir);
+    if (objectName() == "FolderProxyModel") {
+        return isDirOrCat;
+    } else if (objectName() == "FileProxyModel") {
+        return !isDirOrCat;
+    }
+
+    return true;
 } 
  
 bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const { 
@@ -407,15 +419,7 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
         }
     }
 
-    // 3. 物理第一权重：文件夹与子分类始终置顶 (绝对强制，升降序下均不动摇)
-    bool leftIsDir = (leftRec.isDir || leftRec.isCategory);
-    bool rightIsDir = (rightRec.isDir || rightRec.isCategory);
-
-    if (leftIsDir != rightIsDir) {
-        return leftIsDir; // 文件夹永远“更小”排在前面
-    }
-
-    // 4. 物理第二权重：置顶优先规则 (升降序下均强制置顶，不随用户排序取反下沉)
+    // 3. 物理第一权重：置顶优先规则 (升降序下均强制置顶，不随用户排序取反下沉)
     bool leftPinned = leftRec.pinned || leftRec.encrypted;
     bool rightPinned = rightRec.pinned || rightRec.encrypted;
  
@@ -719,11 +723,11 @@ void ContentPanel::initUi() {
 
     m_lockWidget = new CategoryLockWidget(this);
  
-    m_viewStack->addWidget(m_gridView); 
+    m_viewStack->addWidget(m_seamlessContainer);
     m_viewStack->addWidget(m_treeView); 
     m_viewStack->addWidget(m_lockWidget);
 
-    m_viewStack->setCurrentWidget(m_gridView); 
+    m_viewStack->setCurrentWidget(m_seamlessContainer);
 
     connect(m_lockWidget, &CategoryLockWidget::unlocked, this, [this](int id) { 
         MainWindow* mw = nullptr; 
@@ -814,18 +818,23 @@ void ContentPanel::refreshVisibleThumbnails() {
 void ContentPanel::updateGridSize() {
     ArcMeta::Logger::log(QString("[UI_DEBUG] 缩放级: %1").arg(m_zoomLevel));
 
-    if (m_viewStack->currentWidget() == m_gridView) {
-        if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
-            jv->setTargetRowHeight(m_zoomLevel); // 自适应/网格模式下的卡片/行高
-        } else if (auto* lv = qobject_cast<QListView*>(m_gridView)) {
-            lv->setIconSize(QSize(m_zoomLevel, m_zoomLevel));
-            int side = m_zoomLevel + 46;
-            int ratingH = 24;
-            int nameH = (int)(m_zoomLevel * 0.25);
-            int gap = 6;
-            int totalH = side + gap + ratingH + gap + nameH + 8;
-            lv->setGridSize(QSize(side, totalH));
-        }
+    if (m_viewStack->currentWidget() == m_seamlessContainer) {
+        auto applyToSubView = [&](QAbstractItemView* view) {
+            if (!view) return;
+            if (auto* jv = qobject_cast<JustifiedView*>(view)) {
+                jv->setTargetRowHeight(m_zoomLevel); // 自适应/网格模式下的卡片/行高
+            } else if (auto* lv = qobject_cast<QListView*>(view)) {
+                lv->setIconSize(QSize(m_zoomLevel, m_zoomLevel));
+                int side = m_zoomLevel + 46;
+                int ratingH = 24;
+                int nameH = (int)(m_zoomLevel * 0.25);
+                int gap = 6;
+                int totalH = side + gap + ratingH + gap + nameH + 8;
+                lv->setGridSize(QSize(side, totalH));
+            }
+        };
+        applyToSubView(m_folderView);
+        applyToSubView(m_fileView);
     } else if (m_viewStack->currentWidget() == m_treeView) {
         // 列表模式：动态计算安全图标尺寸（最低不小于 16px）
         int iconSize = qMax(16, m_zoomLevel - 8);
@@ -849,7 +858,24 @@ void ContentPanel::updateGridSize() {
 
     // 持久化保存当前的缩放级别
     AppConfig::instance().setValue("UI/GridZoomLevel", m_zoomLevel);
-} 
+}
+
+void ContentPanel::syncProxyModels() {
+    if (m_folderProxyModel) {
+        if (m_folderProxyModel->sourceModel() != m_model) {
+            m_folderProxyModel->setSourceModel(m_model);
+        }
+        m_folderProxyModel->invalidate();
+        m_folderProxyModel->sort(0, m_sortOrder);
+    }
+    if (m_fileProxyModel) {
+        if (m_fileProxyModel->sourceModel() != m_model) {
+            m_fileProxyModel->setSourceModel(m_model);
+        }
+        m_fileProxyModel->invalidate();
+        m_fileProxyModel->sort(0, m_sortOrder);
+    }
+}
  
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) { 
     if (event->type() == QEvent::Wheel) {
@@ -1278,17 +1304,23 @@ void ContentPanel::setViewMode(ViewMode mode) {
     if (mode == ListView) {
         m_viewStack->setCurrentWidget(m_treeView);
     } else if (mode == GridView) {
-        auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
-        if (justifiedView) {
-            justifiedView->setLayoutMode(JustifiedView::GridMode);
-        }
-        m_viewStack->setCurrentWidget(m_gridView);
+        auto applyLayout = [&](QAbstractItemView* view) {
+            if (auto* jv = qobject_cast<JustifiedView*>(view)) {
+                jv->setLayoutMode(JustifiedView::GridMode);
+            }
+        };
+        applyLayout(m_folderView);
+        applyLayout(m_fileView);
+        m_viewStack->setCurrentWidget(m_seamlessContainer);
     } else if (mode == JustifiedViewMode) {
-        auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
-        if (justifiedView) {
-            justifiedView->setLayoutMode(JustifiedView::JustifiedMode);
-        }
-        m_viewStack->setCurrentWidget(m_gridView);
+        auto applyLayout = [&](QAbstractItemView* view) {
+            if (auto* jv = qobject_cast<JustifiedView*>(view)) {
+                jv->setLayoutMode(JustifiedView::JustifiedMode);
+            }
+        };
+        applyLayout(m_folderView);
+        applyLayout(m_fileView);
+        m_viewStack->setCurrentWidget(m_seamlessContainer);
     }
 
     // 保存当前的视图模式到 AppConfig，实现跨生命周期持久化
@@ -1302,65 +1334,94 @@ void ContentPanel::setViewMode(ViewMode mode) {
 } 
  
 void ContentPanel::initGridView() { 
-    m_gridView = new DropJustifiedView(this); 
-    m_gridView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
-    m_gridView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded); 
-    m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection); 
-    // 2026-06-xx 按照用户要求：开启蓝色透明框选效果
-    // 物理修复：对于 ListView/TreeView 使用 setSelectionRectVisible
-    if (auto* lv = qobject_cast<QListView*>(m_gridView)) lv->setSelectionRectVisible(true);
+    // 隐式双容器架构重构
+    m_seamlessContainer = new QWidget(this);
+    m_seamlessContainer->setObjectName("SeamlessContainer");
+    m_seamlessContainer->setStyleSheet("QWidget#SeamlessContainer { border: none; background: transparent; }");
 
-    // 2026-06-xx 物理对齐：通过 QPalette 设定全局蓝色透明框选视觉样式
-    QPalette p = m_gridView->palette();
-    // 使用 #378ADD (QColor(55, 138, 221)) 并设定 Alpha 为 80 以确保框选内容清晰可见
-    p.setColor(QPalette::Highlight, QColor(55, 138, 221, 80)); 
-    p.setColor(QPalette::HighlightedText, Qt::white);
-    m_gridView->setPalette(p);
-    m_gridView->setContextMenuPolicy(Qt::CustomContextMenu); 
- 
-    m_gridView->setDragEnabled(true); 
-    m_gridView->setAcceptDrops(true);
-    m_gridView->setDragDropMode(QAbstractItemView::DragDrop); 
- 
-    // 2026-06-xx 物理纠偏：移除 SelectedClicked，防止单击项目时意外触发重命名，确保交互稳健
-    m_gridView->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed); 
- 
-    m_gridView->setModel(m_proxyModel); 
+    m_seamlessLayout = new QVBoxLayout(m_seamlessContainer);
+    m_seamlessLayout->setContentsMargins(0, 0, 0, 0);
+    m_seamlessLayout->setSpacing(12);
 
-    connect(m_gridView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
+    // 实例化双模型代理
+    m_folderProxyModel = new FilterProxyModel(this);
+    m_folderProxyModel->setObjectName("FolderProxyModel");
+    m_folderProxyModel->setSourceModel(m_model);
+    m_folderProxyModel->setFilterKeyColumn(0);
+    m_folderProxyModel->setDynamicSortFilter(true);
 
-    auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
-    if (justifiedView) {
-        justifiedView->setAspectRatioRole(AspectRatioRole);
-        auto* delegate = new ThumbnailDelegate(this);
-        delegate->setHasThumbnailRole(HasThumbnailRole);
-        delegate->setRatingRole(RatingRole);
-        delegate->setPathRole(PathRole);
-        delegate->setPinnedRole(PinnedRole);
-        delegate->setManagedRole(ManagedRole);
-        delegate->setTypeRole(TypeRole);
-        delegate->setIsEmptyRole(IsEmptyRole);
-        delegate->setColorRole(ColorRole);
-        delegate->setRegistrationProgressRole(RegistrationProgressRole);
-        m_gridView->setItemDelegate(delegate);
-    }
+    m_fileProxyModel = new FilterProxyModel(this);
+    m_fileProxyModel->setObjectName("FileProxyModel");
+    m_fileProxyModel->setSourceModel(m_model);
+    m_fileProxyModel->setFilterKeyColumn(0);
+    m_fileProxyModel->setDynamicSortFilter(true);
 
-    m_gridView->viewport()->installEventFilter(this); 
- 
-    connect(m_gridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked); 
- 
-    m_gridView->setStyleSheet( 
-        "QAbstractItemView { background-color: transparent; border: none; outline: none; }" 
-        "QAbstractItemView::item { background: transparent; }" 
-        "QAbstractItemView::item:selected { background-color: transparent; }" 
-        "QAbstractItemView::item:hover { background-color: transparent; }"
-    ); 
- 
-    connect(m_gridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged); 
-    connect(m_gridView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested); 
-    connect(m_gridView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
-        m_visibleTimer->start();
-    });
+    auto setupSubView = [&](QAbstractItemView*& view, FilterProxyModel* proxy) {
+        view = new DropJustifiedView(this);
+        view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        view->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+        if (auto* lv = qobject_cast<QListView*>(view)) lv->setSelectionRectVisible(true);
+
+        QPalette p = view->palette();
+        p.setColor(QPalette::Highlight, QColor(55, 138, 221, 80));
+        p.setColor(QPalette::HighlightedText, Qt::white);
+        view->setPalette(p);
+        view->setContextMenuPolicy(Qt::CustomContextMenu);
+
+        view->setDragEnabled(true);
+        view->setAcceptDrops(true);
+        view->setDragDropMode(QAbstractItemView::DragDrop);
+
+        view->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed);
+        view->setModel(proxy);
+
+        auto* justifiedView = qobject_cast<JustifiedView*>(view);
+        if (justifiedView) {
+            justifiedView->setAspectRatioRole(AspectRatioRole);
+            auto* delegate = new ThumbnailDelegate(this);
+            delegate->setHasThumbnailRole(HasThumbnailRole);
+            delegate->setRatingRole(RatingRole);
+            delegate->setPathRole(PathRole);
+            delegate->setPinnedRole(PinnedRole);
+            delegate->setManagedRole(ManagedRole);
+            delegate->setTypeRole(TypeRole);
+            delegate->setIsEmptyRole(IsEmptyRole);
+            delegate->setColorRole(ColorRole);
+            delegate->setRegistrationProgressRole(RegistrationProgressRole);
+            view->setItemDelegate(delegate);
+        }
+
+        view->viewport()->installEventFilter(this);
+
+        view->setStyleSheet(
+            "QAbstractItemView { background-color: transparent; border: none; outline: none; }"
+            "QAbstractItemView::item { background: transparent; }"
+            "QAbstractItemView::item:selected { background-color: transparent; }"
+            "QAbstractItemView::item:hover { background-color: transparent; }"
+        );
+
+        connect(view, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
+        connect(view->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
+        connect(view, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
+        connect(view, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
+    };
+
+    setupSubView(m_folderView, m_folderProxyModel);
+    setupSubView(m_fileView, m_fileProxyModel);
+
+    m_seamlessLayout->addWidget(m_folderView);
+    m_seamlessLayout->addWidget(m_fileView);
+
+    // 让旧网格指针指向文件子视图，保持与其它操作（如选中、滚动、重命名等）契约完全一致
+    m_gridView = m_fileView;
+
+    // 初始化排序与默认样式对齐
+    m_folderProxyModel->sort(0, m_sortOrder);
+    m_fileProxyModel->sort(0, m_sortOrder);
+
+    updateGridSize();
 } 
  
 void ContentPanel::initListView() { 
@@ -1677,6 +1738,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             // 实时触发全量无效化与排序重计算
             m_proxyModel->invalidate();
             m_proxyModel->sort(0, m_sortOrder);
+            syncProxyModels();
         });
     };
 
@@ -1706,6 +1768,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             
             m_proxyModel->invalidate();
             m_proxyModel->sort(0, order);
+            syncProxyModels();
         });
     };
 
@@ -2410,19 +2473,31 @@ void ContentPanel::onSelectionChanged() {
         m_selectionTimer->setInterval(30); // 30 毫秒黄金防抖窗口
 
         connect(m_selectionTimer, &QTimer::timeout, this, [this]() {
-            QItemSelectionModel* selectionModel = (m_viewStack->currentWidget() == m_gridView) ? 
-                m_gridView->selectionModel() : m_treeView->selectionModel();
-            if (!selectionModel) return;
-
             QStringList selectedPaths;
-            QModelIndexList indices = selectionModel->selectedIndexes();
-            for (const QModelIndex& index : indices) {
-                if (index.column() == 0) {
-                    // 跳过组标题
-                    if (index.data(IsGroupHeaderRole).toBool()) continue;
-
-                    QString path = index.data(PathRole).toString();
-                    if (!path.isEmpty()) selectedPaths.append(path);
+            if (m_viewStack->currentWidget() == m_seamlessContainer) {
+                auto gatherSelection = [&](QAbstractItemView* view) {
+                    if (view && view->selectionModel()) {
+                        for (const QModelIndex& index : view->selectionModel()->selectedIndexes()) {
+                            if (index.column() == 0) {
+                                if (index.data(IsGroupHeaderRole).toBool()) continue;
+                                QString path = index.data(PathRole).toString();
+                                if (!path.isEmpty()) selectedPaths.append(path);
+                            }
+                        }
+                    }
+                };
+                gatherSelection(m_folderView);
+                gatherSelection(m_fileView);
+            } else {
+                QItemSelectionModel* selectionModel = m_treeView->selectionModel();
+                if (selectionModel) {
+                    for (const QModelIndex& index : selectionModel->selectedIndexes()) {
+                        if (index.column() == 0) {
+                            if (index.data(IsGroupHeaderRole).toBool()) continue;
+                            QString path = index.data(PathRole).toString();
+                            if (!path.isEmpty()) selectedPaths.append(path);
+                        }
+                    }
                 }
             }
 
@@ -2600,7 +2675,7 @@ void ContentPanel::restoreActiveView() {
     if (m_currentViewMode == ListView) {
         m_viewStack->setCurrentWidget(m_treeView);
     } else {
-        m_viewStack->setCurrentWidget(m_gridView);
+        m_viewStack->setCurrentWidget(m_seamlessContainer);
     }
 }
 
@@ -2611,6 +2686,7 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (m_model != m_diskModel) {
         m_model = m_diskModel;
         m_proxyModel->setSourceModel(m_model);
+        syncProxyModels();
     }
 
     m_isLoading = true;
@@ -2680,13 +2756,19 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
                     for (size_t i = 0; i < records.size(); ++i) {
                         if (QFileInfo(records[i].path).fileName() == panelPtr->m_pendingSelectName) {
                             QModelIndex srcIdx = panelPtr->m_model->index(static_cast<int>(i), 0);
-                            QModelIndex proxyIdx = panelPtr->m_proxyModel->mapFromSource(srcIdx);
-                            if (proxyIdx.isValid()) {
-                                if (panelPtr->m_viewStack->currentWidget() == panelPtr->m_gridView) {
-                                    panelPtr->m_gridView->scrollTo(proxyIdx);
-                                    panelPtr->m_gridView->setCurrentIndex(proxyIdx);
-                                    if (panelPtr->m_isPendingEdit) panelPtr->m_gridView->edit(proxyIdx);
-                                } else {
+                            if (panelPtr->m_viewStack->currentWidget() == panelPtr->m_seamlessContainer) {
+                                bool isDirOrCat = (records[i].isCategory || records[i].isDir);
+                                QAbstractItemView* subView = isDirOrCat ? panelPtr->m_folderView : panelPtr->m_fileView;
+                                QSortFilterProxyModel* subProxy = isDirOrCat ? panelPtr->m_folderProxyModel : panelPtr->m_fileProxyModel;
+                                QModelIndex subProxyIdx = subProxy->mapFromSource(srcIdx);
+                                if (subProxyIdx.isValid() && subView) {
+                                    subView->scrollTo(subProxyIdx);
+                                    subView->setCurrentIndex(subProxyIdx);
+                                    if (panelPtr->m_isPendingEdit) subView->edit(subProxyIdx);
+                                }
+                            } else {
+                                QModelIndex proxyIdx = panelPtr->m_proxyModel->mapFromSource(srcIdx);
+                                if (proxyIdx.isValid()) {
                                     panelPtr->m_treeView->scrollTo(proxyIdx);
                                     panelPtr->m_treeView->setCurrentIndex(proxyIdx);
                                     if (panelPtr->m_isPendingEdit) panelPtr->m_treeView->edit(proxyIdx);
@@ -2750,6 +2832,28 @@ void ContentPanel::applyFilters() {
         proxy->currentFilter = m_currentFilter; 
         proxy->updateFilter(); 
     } 
+
+    // 隐式双容器筛选与自愈显隐折叠动态联动
+    if (m_folderProxyModel) {
+        m_folderProxyModel->currentFilter = m_currentFilter;
+        m_folderProxyModel->updateFilter();
+        if (m_folderProxyModel->rowCount() == 0) {
+            m_folderView->hide();
+        } else {
+            m_folderView->show();
+        }
+    }
+
+    if (m_fileProxyModel) {
+        m_fileProxyModel->currentFilter = m_currentFilter;
+        m_fileProxyModel->updateFilter();
+        if (m_fileProxyModel->rowCount() == 0) {
+            m_fileView->hide();
+        } else {
+            m_fileView->show();
+        }
+    }
+
     // 2026-05-08 按照用户要求：筛选条件变化后更新状态栏统计
     updateStatusBarStats();
     m_visibleTimer->start();
@@ -2800,6 +2904,7 @@ void ContentPanel::loadCategory(int categoryId) {
     if (m_model != m_libraryModel) {
         m_model = m_libraryModel;
         m_proxyModel->setSourceModel(m_model);
+        syncProxyModels();
     }
 
     Category cat = CategoryRepo::getCachedById(categoryId);
@@ -2866,12 +2971,18 @@ void ContentPanel::loadCategory(int categoryId) {
                     for (size_t i = 0; i < records.size(); ++i) {
                         if (QFileInfo(records[i].path).fileName() == weakThis->m_pendingSelectName) {
                             QModelIndex srcIdx = weakThis->m_model->index(static_cast<int>(i), 0);
-                            QModelIndex proxyIdx = weakThis->m_proxyModel->mapFromSource(srcIdx);
-                            if (proxyIdx.isValid()) {
-                                if (weakThis->m_viewStack->currentWidget() == weakThis->m_gridView) {
-                                    weakThis->m_gridView->scrollTo(proxyIdx);
-                                    weakThis->m_gridView->setCurrentIndex(proxyIdx);
-                                } else {
+                            if (weakThis->m_viewStack->currentWidget() == weakThis->m_seamlessContainer) {
+                                bool isDirOrCat = (records[i].isCategory || records[i].isDir);
+                                QAbstractItemView* subView = isDirOrCat ? weakThis->m_folderView : weakThis->m_fileView;
+                                QSortFilterProxyModel* subProxy = isDirOrCat ? weakThis->m_folderProxyModel : weakThis->m_fileProxyModel;
+                                QModelIndex subProxyIdx = subProxy->mapFromSource(srcIdx);
+                                if (subProxyIdx.isValid() && subView) {
+                                    subView->scrollTo(subProxyIdx);
+                                    subView->setCurrentIndex(subProxyIdx);
+                                }
+                            } else {
+                                QModelIndex proxyIdx = weakThis->m_proxyModel->mapFromSource(srcIdx);
+                                if (proxyIdx.isValid()) {
                                     weakThis->m_treeView->scrollTo(proxyIdx);
                                     weakThis->m_treeView->setCurrentIndex(proxyIdx);
                                 }
@@ -2896,6 +3007,7 @@ void ContentPanel::loadPaths(const QStringList& paths, int reqId) {
     if (m_model != m_libraryModel) {
         m_model = m_libraryModel;
         m_proxyModel->setSourceModel(m_model);
+        syncProxyModels();
     }
 
     if (paths.isEmpty() && m_currentCategoryType != "trash") {
@@ -2948,12 +3060,18 @@ void ContentPanel::loadPaths(const QStringList& paths, int reqId) {
                     for (size_t i = 0; i < rList.size(); ++i) {
                         if (QFileInfo(rList[i].path).fileName() == weakThis->m_pendingSelectName) {
                             QModelIndex srcIdx = weakThis->m_model->index(static_cast<int>(i), 0);
-                            QModelIndex proxyIdx = weakThis->m_proxyModel->mapFromSource(srcIdx);
-                            if (proxyIdx.isValid()) {
-                                if (weakThis->m_viewStack->currentWidget() == weakThis->m_gridView) {
-                                    weakThis->m_gridView->scrollTo(proxyIdx);
-                                    weakThis->m_gridView->setCurrentIndex(proxyIdx);
-                                } else {
+                            if (weakThis->m_viewStack->currentWidget() == weakThis->m_seamlessContainer) {
+                                bool isDirOrCat = (rList[i].isCategory || rList[i].isDir);
+                                QAbstractItemView* subView = isDirOrCat ? weakThis->m_folderView : weakThis->m_fileView;
+                                QSortFilterProxyModel* subProxy = isDirOrCat ? weakThis->m_folderProxyModel : weakThis->m_fileProxyModel;
+                                QModelIndex subProxyIdx = subProxy->mapFromSource(srcIdx);
+                                if (subProxyIdx.isValid() && subView) {
+                                    subView->scrollTo(subProxyIdx);
+                                    subView->setCurrentIndex(subProxyIdx);
+                                }
+                            } else {
+                                QModelIndex proxyIdx = weakThis->m_proxyModel->mapFromSource(srcIdx);
+                                if (proxyIdx.isValid()) {
                                     weakThis->m_treeView->scrollTo(proxyIdx);
                                     weakThis->m_treeView->setCurrentIndex(proxyIdx);
                                 }
