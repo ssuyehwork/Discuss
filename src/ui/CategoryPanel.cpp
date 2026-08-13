@@ -239,8 +239,11 @@ void CategoryPanel::setupContextMenu() {
         QModelIndex index = m_proxyModel->mapToSource(proxyIndex);
         
         // 2026-03-xx 按照用户要求：实现右键点击即选中，解决“分类与其子分类”交互一致性问题
+        // 多选防护：若右键所在的节点已在当前多选集合中，绝对禁止重置，以保全批量删除操作（对应用户原话：“当我在侧边栏选中多个之后，再来执行‘删除’，结果只能删除其中一个”）
         if (proxyIndex.isValid()) {
-            m_categoryTree->setCurrentIndex(proxyIndex);
+            if (!m_categoryTree->selectionModel()->isSelected(proxyIndex)) {
+                m_categoryTree->setCurrentIndex(proxyIndex);
+            }
         }
 
         QMenu menu(this);
@@ -848,23 +851,25 @@ void CategoryPanel::onDeleteCategory() {
 
     QSet<int> idsToDelete;
     
-    // 递归收集分类及其所有子分类 ID 的辅助函数
+    // 递归收集分类及其所有子分类 ID 的辅助函数。在第一时序完全运行于 Source Index 的无损索引之上，彻底修复 rowCount() 失效导致的级联删除中断
     std::function<void(const QModelIndex&)> collectIds;
-    collectIds = [&](const QModelIndex& index) {
-        QString type = index.data(TypeRole).toString();
-        int id = index.data(IdRole).toInt();
+    collectIds = [&](const QModelIndex& srcIndex) {
+        if (!srcIndex.isValid()) return;
+        QString type = srcIndex.data(TypeRole).toString();
+        int id = srcIndex.data(IdRole).toInt();
         
         if (type == "category" && id > 0) {
             idsToDelete.insert(id);
             // 递归收集子分类
-            for (int i = 0; i < m_categoryModel->rowCount(index); ++i) {
-                collectIds(m_categoryModel->index(i, 0, index));
+            for (int i = 0; i < m_categoryModel->rowCount(srcIndex); ++i) {
+                collectIds(m_categoryModel->index(i, 0, srcIndex));
             }
         }
     };
 
-    for (const QModelIndex& index : selectedRows) {
-        collectIds(index);
+    for (const QModelIndex& proxyIdx : selectedRows) {
+        QModelIndex srcIndex = m_proxyModel->mapToSource(proxyIdx);
+        collectIds(srcIndex);
     }
 
     if (idsToDelete.isEmpty()) return;
@@ -1343,6 +1348,49 @@ void CategoryPanel::initUi() {
     m_categoryTree->setDragDropMode(QAbstractItemView::DragDrop);
     m_categoryTree->setDefaultDropAction(Qt::MoveAction);
     m_categoryTree->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+    // 监听多选改变信号，抛出联合信号
+    connect(m_categoryTree->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
+        if (m_isInternalUpdating) return;
+
+        QModelIndexList selectedRows = m_categoryTree->selectionModel()->selectedRows();
+        if (selectedRows.isEmpty()) return;
+
+        QList<int> catIds;
+        QStringList catNames;
+        QString type;
+
+        for (const QModelIndex& proxyIdx : selectedRows) {
+            QModelIndex index = m_proxyModel->mapToSource(proxyIdx);
+            if (!index.isValid()) continue;
+
+            int id = index.data(IdRole).toInt();
+            QString t = index.data(TypeRole).toString();
+            QString name = index.data(NameRole).toString();
+
+            if (t == "category" && id > 0) {
+                catIds.append(id);
+                catNames.append(name);
+                type = "category";
+            } else if (id < 0) {
+                // 如果用户选中了系统桶（如回收站、全部数据等），则强制单选该项，杜绝系统项与分类项多选混淆
+                catIds = {id};
+                catNames = {name};
+                type = t;
+                break;
+            }
+        }
+
+        if (!catIds.isEmpty()) {
+            if (catIds.size() == 1) {
+                // 仅有一项时，依然兼容发射单选信号，确保单项定制操作（如颜色设定/重命名）对齐
+                QModelIndex idx = m_proxyModel->mapToSource(selectedRows.first());
+                emit categorySelected(catIds.first(), catNames.first(), type, idx.data(PathRole).toString());
+            } else {
+                emit categoriesSelected(catIds, catNames, "category");
+            }
+        }
+    });
     
     // 2026-06-xx 按照用户要求：支持 Delete 键物理删除选中分类，使用 Action 提升快捷键响应等级
     QAction* deleteCatAction = new QAction(this);
@@ -1437,6 +1485,7 @@ void CategoryPanel::initUi() {
         Logger::log("[CategoryPanel] modelReset: Restore finished, m_isInternalUpdating set to false");
     });
 
+    // 彻底重构点击事件。由于多选点击会触发多选改变信号（selectionChanged），点击事件仅承担锁屏验证拦截工作，杜绝信号二次激增造成的死锁
     connect(m_categoryTree, &QTreeView::clicked, this, [this](const QModelIndex& proxyIndex) {
         QModelIndex index = m_proxyModel->mapToSource(proxyIndex);
         QString type = index.data(TypeRole).toString();
@@ -1449,12 +1498,6 @@ void CategoryPanel::initUi() {
         if (isEncrypted && id > 0 && !m_unlockedIds.contains(id)) {
             emit categorySelected(id, name, type, path);
             return;
-        }
-
-        // 核心联动：如果点击的是有效的分类、系统项或快速访问项
-        if (!type.isEmpty()) {
-             // 2026-06-xx 重构：点击项不再加载文件到树中，而是直接通过信号触发 ContentPanel 加载
-             emit categorySelected(id, name, type, path);
         }
     });
 
