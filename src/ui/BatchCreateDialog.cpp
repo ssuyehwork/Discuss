@@ -30,7 +30,7 @@ BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, QWidget* p
 
     // 2. 还原上次配置（类型、后缀名、数量）
     int lastType = AppConfig::instance().getValue("BatchCreate/LastType", 0).toInt();
-    QString lastSuffix = AppConfig::instance().getValue("BatchCreate/LastSuffix", "txt").toString();
+    QString lastSuffix = AppConfig::instance().getValue("BatchCreate/LastSuffix", "md").toString();
     // 自动清洗点号，确保输入框中不含点号
     while (lastSuffix.startsWith(".")) {
         lastSuffix.remove(0, 1);
@@ -51,7 +51,7 @@ BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, QWidget* p
         if (doc.isArray()) {
             QJsonArray arr = doc.array();
             for (const auto& v : arr) {
-                onAddRow();
+                onInsertRowAfter(nullptr);
                 QJsonObject obj = v.toObject();
                 RenameRule rule;
                 QString typeStr = obj["type"].toString();
@@ -69,7 +69,7 @@ BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, QWidget* p
     }
 
     if (m_ruleRows.isEmpty()) {
-        onAddRow(); 
+        onInsertRowAfter(nullptr);
     }
 
     // 绑定控件改变自动保存
@@ -109,8 +109,8 @@ void BatchCreateDialog::initContent() {
     suffixLabel->setStyleSheet("color: #BBB; font-weight: bold;");
     
     m_suffixEdit = new QLineEdit(this);
-    m_suffixEdit->setPlaceholderText("txt");
-    m_suffixEdit->setText("txt");
+    m_suffixEdit->setPlaceholderText("md");
+    m_suffixEdit->setText("md");
     m_suffixEdit->setFixedHeight(25);
     m_suffixEdit->setFixedWidth(80);
     m_suffixEdit->setEnabled(false); // 默认初始与“文件夹”选择同步禁用
@@ -186,20 +186,33 @@ void BatchCreateDialog::initContent() {
     connect(btnOk, &QPushButton::clicked, this, &BatchCreateDialog::onExecute);
 }
 
-void BatchCreateDialog::onAddRow() {
-    CreateRuleRow* row = new CreateRuleRow(m_rulesContainer);
-    m_rulesLayout->addWidget(row);
-    m_ruleRows.append(row);
+void BatchCreateDialog::onInsertRowAfter(CreateRuleRow* targetRow) {
+    CreateRuleRow* newRow = new CreateRuleRow(m_rulesContainer);
 
-    connect(row, &CreateRuleRow::addRequested, this, &BatchCreateDialog::onAddRow);
-    connect(row, &CreateRuleRow::removeRequested, [this, row]() {
+    int insertIndex = m_ruleRows.size(); // 默认插入末尾
+    if (targetRow) {
+        int targetIdx = m_ruleRows.indexOf(targetRow);
+        if (targetIdx != -1) {
+            insertIndex = targetIdx + 1; // 精准计算目标行正下方的索引
+        }
+    }
+
+    // 在布局与列表中指定位置精准插入 Widget，原本下方的行自动顺延下沉
+    m_rulesLayout->insertWidget(insertIndex, newRow);
+    m_ruleRows.insert(insertIndex, newRow);
+
+    // 绑定信号：点击该新行的 + 号时，在该新行正下方再次插入
+    connect(newRow, &CreateRuleRow::addRequested, this, [this, newRow]() {
+        onInsertRowAfter(newRow);
+    });
+    connect(newRow, &CreateRuleRow::removeRequested, [this, newRow]() {
         if (m_ruleRows.size() > 1) {
-            m_ruleRows.removeOne(row);
-            row->deleteLater();
+            m_ruleRows.removeOne(newRow);
+            newRow->deleteLater();
             scheduleAutoSave();
         }
     });
-    connect(row, &CreateRuleRow::changed, this, &BatchCreateDialog::scheduleAutoSave);
+    connect(newRow, &CreateRuleRow::changed, this, &BatchCreateDialog::scheduleAutoSave);
     scheduleAutoSave();
 }
 
@@ -216,7 +229,7 @@ void BatchCreateDialog::applyTheme() {
     ).arg(arrowPath));
 }
 
-QString BatchCreateDialog::renderOne(int index, const std::vector<RenameRule>& rules) {
+QString BatchCreateDialog::renderOne(int index, const std::vector<RenameRule>& rules) const {
     QString name = "";
     for (const auto& rule : rules) {
         switch (rule.type) {
@@ -274,6 +287,28 @@ void BatchCreateDialog::doAutoSave() {
     AppConfig::instance().setValue("BatchCreate/LastRules", QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
 }
 
+bool BatchCreateDialog::isFile() const {
+    return m_typeCombo->currentData().toInt() == 1;
+}
+
+QString BatchCreateDialog::fileSuffix() const {
+    return m_suffixEdit->text();
+}
+
+QStringList BatchCreateDialog::renderAllNames() const {
+    QStringList names;
+    int count = m_countSpin->value();
+    std::vector<RenameRule> rules;
+    for (auto* row : m_ruleRows) rules.push_back(row->getRule());
+
+    for (int i = 0; i < count; ++i) {
+        QString n = renderOne(i, rules);
+        if (n.isEmpty()) n = QString("NewItem_%1").arg(i + 1);
+        names << n;
+    }
+    return names;
+}
+
 void BatchCreateDialog::onExecute() {
     std::vector<RenameRule> rules;
     for (auto* row : m_ruleRows) {
@@ -288,12 +323,12 @@ void BatchCreateDialog::onExecute() {
     int createCount = m_countSpin->value();
     bool isFile = m_typeCombo->currentData().toInt() == 1;
     
-    // 自动清洗点号防呆：无论用户输入 txt 还是 .txt，统一清洗为 .txt
+    // 自动清洗点号防呆：无论用户输入 md 还是 .md，统一清洗为 .md
     QString rawSuffix = m_suffixEdit->text().trimmed();
     while (rawSuffix.startsWith(".")) {
         rawSuffix.remove(0, 1); // 清除前导点号
     }
-    QString finalSuffix = isFile ? ("." + (rawSuffix.isEmpty() ? "txt" : rawSuffix)) : "";
+    QString finalSuffix = isFile ? ("." + (rawSuffix.isEmpty() ? "md" : rawSuffix)) : "";
 
     QDir dir(m_currentDir);
     int itemsCreated = 0;

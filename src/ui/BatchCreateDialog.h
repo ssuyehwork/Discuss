@@ -19,6 +19,10 @@ public:
     explicit BatchCreateDialog(const QString& currentDirectory, QWidget* parent = nullptr);
     ~BatchCreateDialog() override = default;
 
+    bool isFile() const;
+    QString fileSuffix() const;
+    QStringList renderAllNames() const;
+
 private slots:
     void scheduleAutoSave();
     void doAutoSave();
@@ -26,9 +30,9 @@ private slots:
 private:
     void initContent();
     void onExecute();
-    void onAddRow();
+    void onInsertRowAfter(CreateRuleRow* targetRow = nullptr);
     void applyTheme();
-    QString renderOne(int index, const std::vector<RenameRule>& rules);
+    QString renderOne(int index, const std::vector<RenameRule>& rules) const;
 
     QString m_currentDir;
     

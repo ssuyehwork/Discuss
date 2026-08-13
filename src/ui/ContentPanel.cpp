@@ -1653,10 +1653,10 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
         QAction* actBatchCreate = menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE")), "批量创建项目...");
         actBatchCreate->setData(ActionBatchCreate);
-        // 6.1 磁盘目录模式独占
-        if (isMirrorSource()) {
+        // 6.1 磁盘目录模式独占 改为 全模式解锁（回收站除外）
+        if (m_currentCategoryType == "trash") {
             actBatchCreate->setEnabled(false);
-            actBatchCreate->setToolTip("批量创建仅支持在物理磁盘模式下使用");
+            actBatchCreate->setToolTip("回收站中不支持批量创建");
         }
 
         menu.addSeparator(); 
@@ -1979,9 +1979,91 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         }
         case ActionBatchCreate: {
             BatchCreateDialog dlg(m_currentPath, this);
-            if (dlg.exec() == QDialog::Accepted) {
+            if (dlg.exec() != QDialog::Accepted) break;
+
+            if (dataSourceType() == DataSourceType::DiskNav) {
                 refreshAll();
+                break;
             }
+
+            if (m_currentCategoryId <= 0) break;
+
+            Category currentCat = CategoryRepo::getCachedById(m_currentCategoryId);
+            bool isLibraryRoot = (currentCat.id > 0 && currentCat.parentId == 0 && currentCat.kind == CategoryKind::SystemLibrary);
+
+            QStringList renderedNames = dlg.renderAllNames();
+            if (renderedNames.isEmpty()) break;
+
+            bool isFile = dlg.isFile();
+
+            // 场景 B1：批量创建【分类】
+            if (!isFile) {
+                auto dbs = DatabaseManager::instance().getActiveMemoryDbs();
+                if (!dbs.empty() && dbs[0]) {
+                    SqlTransaction trans(dbs[0]);
+                    for (const QString& name : renderedNames) {
+                        Category cat;
+                        cat.name = name.toStdWString();
+                        cat.parentId = 0; // 恒为 0 (一等公民顶级分类)
+                        cat.color = CategoryRepo::getDefaultColor();
+                        CategoryRepo::add(cat);
+                    }
+                    trans.commit();
+                }
+
+                MainWindow* mw = nullptr;
+                QWidget* parentWin = window();
+                while (parentWin) {
+                    if ((mw = qobject_cast<MainWindow*>(parentWin))) break;
+                    parentWin = parentWin->parentWidget();
+                }
+                if (mw) {
+                    CategoryPanel* cp = mw->findChild<CategoryPanel*>();
+                    if (cp) cp->requestRefresh(true);
+                }
+                refreshAll();
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已成功批量创建 %1 个分类").arg(renderedNames.size()), 2000, Style::SuccessGreen);
+                break;
+            }
+
+            // 场景 B2：批量创建【受控物理资产文件 (txt/md)】
+            QString rawSuffix = dlg.fileSuffix().trimmed();
+            while (rawSuffix.startsWith(".")) rawSuffix.remove(0, 1);
+            QString ext = "." + (rawSuffix.isEmpty() ? "md" : rawSuffix);
+
+            // 确定物理托管库落地路径
+            QString managedRoot;
+            if (isLibraryRoot && !currentCat.physicalPath.empty()) {
+                managedRoot = QString::fromStdWString(currentCat.physicalPath);
+            } else {
+                QString drive = QCoreApplication::applicationDirPath().left(3);
+                if (!m_currentPath.isEmpty() && m_currentPath.length() >= 3 && m_currentPath[1] == ':') {
+                    drive = m_currentPath.left(3);
+                }
+                managedRoot = drive + "ArcMeta.Library_" + drive.at(0).toUpper();
+            }
+            QDir().mkpath(managedRoot);
+
+            int successCount = 0;
+            for (const QString& baseName : renderedNames) {
+                QString fileName = baseName + ext;
+                QString fileId = ShellHelper::generateBase36Id();
+                QString containerDir = managedRoot + "/" + fileId + ".arc";
+                if (!QDir().mkpath(containerDir)) continue;
+
+                QString destPath = containerDir + "/" + fileName;
+                QFile file(destPath);
+                if (file.open(QIODevice::WriteOnly)) {
+                    file.close();
+                    std::wstring wDestPath = QDir::toNativeSeparators(destPath).toStdWString();
+                    if (MetadataManager::instance().registerAsset(fileId.toStdString(), wDestPath, m_currentCategoryId)) {
+                        successCount++;
+                    }
+                }
+            }
+
+            refreshAll();
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已成功批量创建 %1 个受控文件").arg(successCount), 2000, Style::SuccessGreen);
             break;
         }
         case ActionRestore: {
@@ -3179,29 +3261,36 @@ void ContentPanel::createNewItem(const QString& type) {
     // --- 分流 B：内存受控托管库模式 (UserCategory) ---
     if (m_currentCategoryId <= 0) return;
 
-    // 场景 B1：新建文件夹 ➔ 生成逻辑子分类（对应用户原话：“场景 B1：新建文件夹 ➔ 生成逻辑子分类”）
+    Category currentCat = CategoryRepo::getCachedById(m_currentCategoryId);
+    bool isLibraryRoot = (currentCat.id > 0 && currentCat.parentId == 0 && currentCat.kind == CategoryKind::SystemLibrary);
+
+    // 内存受控模式下，新建文件夹一律立为“一等公民”顶级分类 (parentId 恒为 0)
     if (type == "folder") {
-        // 向侧边栏发射请求，由 CategoryPanel 自动展开并直接进入行内编辑重命名
-        emit requestCreateSubCategory(m_currentCategoryId);
+        emit requestCreateSubCategory(0); // 恒传 0
         return;
     }
 
-    // 场景 B2：新建 Markdown / txt ➔ 生成受控物理资产胶囊文件（对应用户原话：“场景 B2：新建 Markdown / txt ➔ 生成受控物理资产胶囊文件”）
+    // 场景 B2：新建 Markdown / txt 物理受控资产
     QString baseName = "未命名";
     QString ext = (type == "md") ? ".md" : ".txt";
     QString fileName = baseName + ext;
 
-    // 1. 获取当前盘符托管库根目录 (例如 G:\ArcMeta.Library_G)
-    QString drive = QCoreApplication::applicationDirPath().left(3);
-    if (!m_currentPath.isEmpty() && m_currentPath.length() >= 3 && m_currentPath[1] == ':') {
-        drive = m_currentPath.left(3);
+    // 1. 获取目标托管库根目录 (若选中的是库根节点，直接使用其 physicalPath，否则按盘符算路)
+    QString managedRoot;
+    if (isLibraryRoot && !currentCat.physicalPath.empty()) {
+        managedRoot = QString::fromStdWString(currentCat.physicalPath);
+    } else {
+        QString drive = QCoreApplication::applicationDirPath().left(3);
+        if (!m_currentPath.isEmpty() && m_currentPath.length() >= 3 && m_currentPath[1] == ':') {
+            drive = m_currentPath.left(3);
+        }
+        managedRoot = drive + "ArcMeta.Library_" + drive.at(0).toUpper();
     }
-    QString managedRoot = drive + "ArcMeta.Library_" + drive.at(0).toUpper();
     if (!QDir().exists(managedRoot)) {
         QDir().mkpath(managedRoot);
     }
 
-    // 2. 分配 13 位 Base36 胶囊 ID 并物理创建 file
+    // 2. 在物理托管库中分配 Base36 胶囊并建立空白文件
     QString fileId = ShellHelper::generateBase36Id();
     QString containerDir = managedRoot + "/" + fileId + ".arc";
     if (!QDir().mkpath(containerDir)) return;
@@ -3214,14 +3303,13 @@ void ContentPanel::createNewItem(const QString& type) {
     }
     file.close();
 
-    // 3. 登记写入 SQLite 数据库并绑定至当前分类 ID
+    // 3. 登记写入 SQLite 数据库（绑定至对应分类 ID）
     std::wstring wDestPath = QDir::toNativeSeparators(destPath).toStdWString();
     if (MetadataManager::instance().registerAsset(fileId.toStdString(), wDestPath, m_currentCategoryId)) {
-        // 4. 定位高亮并进入行内编辑状态
         m_pendingSelectName = fileName;
         m_isPendingEdit = true;
         refreshAll();
-    } 
+    }
 } 
  
 void ContentPanel::updateLayersButtonState() { 
