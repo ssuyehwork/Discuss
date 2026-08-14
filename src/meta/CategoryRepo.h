@@ -142,6 +142,59 @@ public:
      */
     static bool executeFidBatch(const std::vector<std::string>& fids, std::function<bool(sqlite3*, const std::string&)> action);
 
+    // 增量计数接口与数据库方法
+    static std::vector<std::pair<int, int>> getCounts();
+    static int getUniqueItemCount();
+    static int getUncategorizedItemCount();
+    static QMap<QString, int> getSystemCounts();
+    static int getTotalFileCount();
+    static int getUncategorizedCount();
+    static void setTotalFileCount(int count);
+    static void setCategorizedCount(int count);
+    static void incrementTotalFileCount(int delta);
+    static void incrementCategorizedCount(int delta);
+
+    /**
+     * @brief 从数据库加载历史持久化计数
+     */
+    static void loadStatsFromDb();
+
+    /**
+     * @brief 强制执行全量计数重计 (物理账本对账)
+     */
+    static void fullRecount();
+
+    /**
+     * @brief 统计指标更新原子化
+     * @param key 统计项 Key (total_file_count, categorized_count)
+     * @param delta 增量
+     */
+    static void updatePersistentStat(const std::string& key, int delta);
+
+    /**
+     * @brief 自动同步已分类计数
+     */
+    static void syncCategorizedCountForFid(const std::string& fid);
+
+    // 系统指标键名常量
+    static constexpr const char* STAT_TOTAL_FILES = "total_file_count";
+    static constexpr const char* STAT_CATEGORIZED = "categorized_count";
+
+    static std::atomic<int> s_totalFileCount;
+    static std::atomic<int> s_categorizedCount;
+    static std::atomic<bool> s_countsDirty;
+
+    // 侧边栏高性能原子计数器
+    static std::atomic<int> s_totalCount;             // 对应 "all"
+    static std::atomic<int> s_tagsCount;              // 对应 "tags"
+    static std::atomic<int> s_recentlyVisitedCount;   // 对应 "recently_visited"
+    static std::atomic<int> s_untaggedCount;          // 对应 "untagged"
+    static std::atomic<int> s_uncategorizedCount;     // 对应 "uncategorized"
+    static std::atomic<int> s_trashCount;             // 对应 "trash"
+
+    static std::mutex s_tagsMutex;
+    static QSet<QString> s_globalTagsSet;
+
 private:
     // 内存快照只读指针（RCU Lock-Free 机制）
     static std::shared_ptr<const std::vector<Category>> s_categoryCache;
