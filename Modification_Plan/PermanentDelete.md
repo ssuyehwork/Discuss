@@ -1,10 +1,10 @@
 # 内存模式“永久删除”三重彻底根除修复方案 —— PermanentDelete.md
 
-> **核心原则**：在内存模式（托管库）下，当用户选中项目并执行“永久删除”（Delete Permanently）时，系统必须 100% 执行 **物理胶囊 + 数据库元数据 + 内存快照** 的三重彻底根除，严禁产生 any 遗留垃圾或“幽灵记录”。
+> **核心原则**：在内存模式（托管库）下，当用户选中项目并执行“永久删除”（Delete Permanently）时，系统必须 100% 执行 **物理胶囊 + 数据库元数据 + 内存快照** 的三重彻底根除，严禁产生 any 遗留垃圾或“幽灵记录”；同时**全库所有维度关联计数（包含半静态托管库分类 `arcmeta.library_*`）必须同步扣减归零**。
 
 ---
 
-## 一、 实际代码中的 3 处核心缺陷分析 (Root Cause)
+## 一、 实际代码中的 4 处核心缺陷分析 (Root Cause)
 
 经过对 `src/ui/ContentPanel.cpp`、`src/meta/MetadataManager.cpp` 以及 `src/meta/StatisticsService.cpp` 底层源码的深度排查，发现当前代码存在以下不符合规范的缺陷：
 
@@ -18,10 +18,15 @@
 - **现象**：因为传入的路径与内存快照映射表中的 Key 未进行 Base36 ID 归一化转换，导致 `currentSnapshot->find(nPath)` 匹配失败，系统错误打印 `永久删除项不在数据库中，跳过清理动作` 并直接退出。
 - **后果**：SQLite `metadata` 主表、`category_items` 分类关联表里的数据库记录未被删除，产生“僵尸元数据”。
 
-### 3. UI 状态不同步：回收站项永久删除未扣减侧边栏计数
+### 3. UI 静态桶计数不同步：回收站项永久删除未扣减侧边栏计数
 - **代码位置**：`MetadataManager.cpp`（第 1935 行 `removeMetadataSync`）
 - **现象**：代码中判定 `if (isManagedAsset(...) && !it->second.isTrash)` 含有 `!it->second.isTrash` 限制。当在“回收站”选项卡中执行永久删除时，因为文件的 `isTrash` 已经是 `true`，导致 `notifyAssetRemoved` 扣减通知被跳过。
 - **后果**：侧边栏“回收站 (N)”数字未能及时归零扣减。
+
+### 4. UI 托管库计数不同步：永久删除未同步扣减 `arcmeta.library_*` 映射数
+- **代码位置**：`StatisticsService.cpp`（`notifyAssetRemoved`）与 `MetadataManager.cpp`（`removeMetadataSync`）
+- **现象**：`notifyAssetRemoved` 接口签名缺乏 `libraryCatId` 参数，且其内部仅更新了 `systemCounts`（静态桶）与 `userCategoryCounts`（自定义分类），**完全遗漏了更新 `libraryCounts`（托管库映射表）**。且 `removeMetadataSync` 删除资产时未反查并向 `StatisticsService` 传入资产所在的盘符托管库分类 ID。
+- **后果**：永久删除 G 盘素材后，侧边栏 **`arcmeta.library_g (5)`** 的计数仍然停留在旧的 **(5)**，未能同步扣减。
 
 ---
 
@@ -89,7 +94,7 @@ void MetadataManager::deletePermanently(const std::wstring& path) {
 
 ---
 
-### 3. UI 计数及时扣减：`removeMetadataSync` 移除 `!isTrash` 拦截
+### 3. UI 静态桶计数及时扣减：`removeMetadataSync` 移除 `!isTrash` 拦截
 
 修正 `removeMetadataSync`，保证回收站资产永久删除时依然触发计数扣减：
 
@@ -97,8 +102,54 @@ void MetadataManager::deletePermanently(const std::wstring& path) {
 // 在 removeMetadataSync 遍历扣减逻辑中：
 if (isManagedAsset(it->second.isFolder, curPath)) {
     totalDelta--;
-    // 🚨 无论是否处于回收站 (isTrash)，永久删除均必须通知 StatisticsService 扣减计数！
-    StatisticsService::instance().notifyAssetRemoved(0, !it->second.tags.isEmpty(), it->second.isTrash); 
+    // 🚨 提取资产所属的盘符托管库分类 ID (如 G 盘 -> arcmeta.library_g 的 category_id)
+    int libCatId = CategoryRepo::getLibraryCategoryIdByDrive(extractDriveLetter(curPath));
+
+    // 无论是否处于回收站 (isTrash)，永久删除均必须通知 StatisticsService 扣减静态桶与托管库计数！
+    StatisticsService::instance().notifyAssetRemoved(0, libCatId, !it->second.tags.isEmpty(), it->second.isTrash);
+}
+```
+
+---
+
+### 4. UI 托管库计数彻底扣减：`StatisticsService::notifyAssetRemoved` 增强与 `libraryCounts` 刷重绘
+
+扩展 `notifyAssetRemoved` 签名并补齐对 `libraryCounts` 映射表的更新：
+
+```cpp
+void StatisticsService::notifyAssetRemoved(int targetCatId, int libraryCatId, bool hadTags, bool wasTrash) {
+    if (wasTrash) {
+        m_trashCount.fetch_sub(1);
+    } else {
+        m_totalCount.fetch_sub(1);
+        if (targetCatId <= 0) {
+            m_uncategorizedCount.fetch_sub(1);
+        }
+        if (!hadTags) {
+            m_untaggedCount.fetch_sub(1);
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(m_snapshotMutex);
+    m_cachedSnapshot.systemCounts["all"] = m_totalCount.load();
+    m_cachedSnapshot.systemCounts["uncategorized"] = m_uncategorizedCount.load();
+    m_cachedSnapshot.systemCounts["untagged"] = m_untaggedCount.load();
+    m_cachedSnapshot.systemCounts["trash"] = m_trashCount.load();
+
+    // 🛡️ 补全：同步精准扣减半静态托管库分类 (arcmeta.library_*) 的内存快照计数
+    if (libraryCatId > 0 && m_cachedSnapshot.libraryCounts.contains(libraryCatId)) {
+        if (m_cachedSnapshot.libraryCounts[libraryCatId] > 0) {
+            m_cachedSnapshot.libraryCounts[libraryCatId]--;
+        }
+    }
+
+    if (targetCatId > 0 && !wasTrash) {
+        if (m_cachedSnapshot.userCategoryCounts[targetCatId] > 0) {
+            m_cachedSnapshot.userCategoryCounts[targetCatId]--;
+        }
+    }
+
+    emit statisticsUpdated(m_cachedSnapshot);
 }
 ```
 
@@ -110,7 +161,8 @@ if (isManagedAsset(it->second.isFolder, curPath)) {
 | :--- | :--- | :--- |
 | **物理磁盘** | 残留空白 `00ms73182x000.arc` 文件夹 | **物理胶囊文件夹及其内部文件 100% 被销毁清空** |
 | **SQLite 数据库** | `metadata` 主表与 `category_items` 表残存记录 | **数据库中该 ID 的所有行记录被 100% 清除** |
-| **侧边栏 UI 计数** | 永久删除后“回收站 (5)”数字不发生改变 | **侧边栏“回收站”以及“全部数据”等数字立刻精准扣减归零** |
+| **侧边栏 UI 静态桶计数** | 永久删除后“回收站 (5)”数字不发生改变 | **侧边栏“回收站”以及“全部数据”等数字立刻精准扣减归零** |
+| **侧边栏 UI 托管库计数** | 永久删除 G 盘 5 个项目后 `arcmeta.library_g (5)` 数字不变 | **侧边栏 `arcmeta.library_g` 计数立即精准同步扣减（5 -> 0）** |
 
 ---
-*文档建立时间：2026-08-13*
+*文档更新时间：2026-08-13*
