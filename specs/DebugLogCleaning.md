@@ -35,11 +35,11 @@
 ## 技术决策
 1. **基础设施零开销保留**：完好保留 `src/ui/Logger.h` 中的 `ArcMeta::Logger` 类与 `LoggerWriterThread` 写线程。当没有任何代码调用 `Logger::log()` 时，`s_writer` 保持为 `nullptr`，实现 0 线程创建、0 锁竞争、0 I/O 的极限性能。
 2. **全局重定向钩子保留**：保留 `src/main.cpp` 中的 `customMessageHandler` 函数，作为 Qt 框架与底层消息的全局捕捉点。
-3. **彻底清理业务日志点**：将全项目 84 处分散在 Core、Meta、UI、Util 等模块中的调试打印语句全部剔除，确保发布版代码纯净高效。
+3. **彻底清理业务日志点与孤立变量**：将全项目 84 处分散在 Core、Meta、UI、Util 等模块中的调试打印语句全部剔除，并且同步全量清扫仅用于日志输出的孤立局部变量，彻底杜绝 MSVC C4189 / GCC -Wunused-variable 编译警告。
 
 ---
 
-## 强制性五项断层排查清单
+## 强制性七项断层排查清单
 
 1. **头文件核对**：
    * `src/ui/Logger.h` 必须保留并在 `src/main.cpp` 中包含，保留 `ArcMeta::Logger` 定义。
@@ -51,6 +51,10 @@
    * 确保删除单行 `qDebug()` / `Logger::log()` 后，其前后的控制流（如 `if (!db) return;`）结构完全连续正确。
 5. **C++ 语法与特殊成员函数合规排查**：
    * 清理代码块时避免误删分号 `;` 或作用域大括号 `{}`。
+6. **废除成员全量引用点清扫排查**：
+   * 彻底清扫只在 log 打印中使用的临时结构与字符串对象。
+7. **未引用局部变量（-Wunused-variable）防断层排查**：
+   * 审查每一个被擦除 log 的函数上下文。如果某个局部变量（如 `reqId` 或仅用于日志的 `errMsg`）在擦除 log 后在函数体内再无其他引用，方案中必须**连同该局部变量的声明一并擦除**，确保编译零警告。
 
 ---
 
@@ -102,7 +106,7 @@
 ## 涉及文件清单
 1. `src/main.cpp`（修改：清理启动/退出时的无用调试日志）
 2. `src/ui/Logger.h`（仅核对未改动：完好保留 Logger 基础设施）
-3. `src/core/CoreController.cpp`（修改：清理搜索日志）
+3. `src/core/CoreController.cpp`（修改：清理搜索日志及仅用于日志的孤立变量）
 4. `src/core/PhysicalDiskSearchExtractor.cpp`（修改：清理 I/O 扫描进度日志）
 5. `src/meta/DatabaseManager.cpp`（修改：清理 DB 刷盘与迁移日志）
 6. `src/meta/MetadataManager.cpp`（修改：清理持久化日志）

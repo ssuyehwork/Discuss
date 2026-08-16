@@ -37,7 +37,7 @@
 
 ---
 
-## 强制性五项断层排查清单
+## 强制性七项断层排查清单
 
 1. **头文件核对**：
    * `src/ui/IconCacheManager.h` 包含 `<QIcon>`, `<QHash>`, `<QString>`, `<QReadWriteLock>`, `<QFileIconProvider>`。
@@ -50,6 +50,10 @@
    * 检查 `TagRepository.cpp` 中的 `checkAndMigrate` 函数，替换双重判断为直接遍历 `QDir::drives()`。
 5. **C++ 语法与特殊成员函数合规排查**：
    * `IconCacheManager` 构造函数显式声明为 `explicit IconCacheManager(QObject* parent = nullptr);`，在 `.cpp` 中实现。
+6. **废除成员全量引用点清扫排查**：
+   * 检查所有调用 `MftReader::instance().clear()` 的地方，一并删除该语句。
+7. **未引用局部变量（-Wunused-variable）防断层排查**：
+   * 在删除 `MftReader` 相关逻辑后，核对是否遗留了仅用于保存 `MftReader` 返回值的临时变量，一并擦除。
 
 ---
 
