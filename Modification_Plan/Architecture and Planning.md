@@ -24,6 +24,9 @@
 | 编号 | 功能名称 | 实施方案文档 | 所属章节 |
 |------|---------|-------------|---------|
 | 1.1-MetadataSharding | 阶段一：MetadataManager 256分片并发容器重构 | /specs/MetadataSharding.md | 1.1 全局数据与内存管理 |
+| 1.1-IncrementalLedger | 阶段二：增量账本引擎与倒排索引 | /specs/IncrementalLedger.md | 1.1 全局数据与内存管理 |
+| 1.1-MetadataBaking | 阶段三：元数据特征烘焙与 UI 零计算 | /specs/MetadataBaking.md | 1.1 全局数据与内存管理 |
+| 1.1-CategoryBindingManager | 阶段四：资产关系管家引擎与 SSOT 治理 | /specs/CategoryBindingManager.md | 1.1 全局数据与内存管理 |
 
 - 编号格式固定为 `<所属章节号>-<英文功能名>`（如 `1.1-Trash`），编号本身即可定位该功能挂靠在大纲哪一章节下。
 - 严禁编号重复；同一功能只允许对应唯一一份实施方案文档。
