@@ -54,3 +54,22 @@
 
 ##### B. 磁盘目录模式下：
 > *（注：磁盘目录模式 下的 内存模式500万+数据量分阶段重构路线图 逻辑架构尚未进行专题探讨与定义，暂时留空。）*
+
+
+#### 1.1.3 500万+ 阶段一底座止血具体技术实现规范 (MetadataManager 分片容器架构)
+
+##### A. 内存模式下：
+1. **256 分片并发容器结构设计 (256-Sharded Concurrent Map)**
+   - **架构定义**：`MetadataManager` 底层采用 `std::array<MetaShard, 256>`，其中每个 `MetaShard` 包含独立的 `std::shared_mutex` 和 `std::unordered_map<std::wstring, RuntimeMeta>`。
+   - **分片路由算法**：单项路径通过 `std::hash<std::wstring>{}(path) % 256` 确定归属分片，锁冲突概率严格稀释至 $1/256$。
+
+2. **单项元数据写操作规范 (setRating / setTags / setColor)**
+   - **加锁规范**：排他更新时仅获取目标分片 `m_shards[shardIndex].mutex` 的 `std::unique_lock`，严禁锁住全局或调用任何全量深拷贝函数。
+   - **性能指标**：单次写更新时间复杂度 $O(1)$，耗时 $< 0.01\text{ms}$，分配额外内存为 $0$。
+
+3. **并发读与批量写安全锁顺序规范**
+   - **读操作 (getMeta)**：仅获取目标分片的 `std::shared_lock`，支持多线程跨分片高并发只读。
+   - **批量跨分片写 (renameBatchAsync / removeMetadataBatchSync)**：涉及到跨分片更新时，必须先将路径列表按 `shardIndex` 升序排列，并按升序依次加锁，彻底规避死锁。
+
+##### B. 磁盘目录模式下：
+> *（注：磁盘目录模式 下的 内存模式500万+数据量阶段一底座止血技术方案 逻辑架构尚未进行专题探讨与定义，暂时留空。）*
