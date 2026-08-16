@@ -29,6 +29,7 @@
 | 1.1-CategoryBindingManager | 阶段四：资产关系管家引擎与 SSOT 治理 | /specs/CategoryBindingManager.md | 1.1 全局数据与内存管理 |
 | 1.1-DebugLogCleaning | 冗余调试日志根除与 Logger 基础设施保留规范 | /specs/DebugLogCleaning.md | 1.1 全局数据与内存管理 |
 | 1.1-MftDecoupling | MftReader 杂糅解耦、图标缓存抽离与模块物理清理方案 | /specs/MftDecoupling.md | 1.1 全局数据与内存管理 |
+| 1.1-UiSqlDecoupling | UI 层原生 SQL 越权剥离与 MVC 架构收拢规范 | /specs/UiSqlDecoupling.md | 1.1 全局数据与内存管理 |
 
 - 编号格式固定为 `<所属章节号>-<英文功能名>`（如 `1.1-Trash`），编号本身即可定位该功能挂靠在大纲哪一章节下。
 - 严禁编号重复；同一功能只允许对应唯一一份实施方案文档。
@@ -222,3 +223,17 @@
 
 ##### B. 磁盘目录模式下：
 > *（注：磁盘目录模式 下的 MftReader 杂糅解耦与僵尸代码根除规范 逻辑架构尚未进行专题探讨与定义，暂时留空。）*
+
+
+#### 1.1.9 UI 层原生 SQL 剥离与 MVC 架构收拢规范
+
+##### A. 内存模式下：
+- **架构要求**：严禁在 UI 视图层（`src/ui/`）直接遍历数据库连接或手写 `sqlite3_prepare_v2` / `sqlite3_step` 等原生 SQL 操作。
+- **重构设计**：
+  1. 新增专职仓储类 `TrashRepository`，收拢回收站状态查询；
+  2. 彻底剥离 `CategoryPanel.cpp` 与 `ContentPanel.cpp` 中的原生 SQL 代码；
+  3. 所有 UI 资产关系查询统一收拢至 `CategoryBindingManager` 或专职 Repository 层，恪守 MVC 架构与 SSOT 原则。
+- **具体实施方案**：详见 [/specs/UiSqlDecoupling.md](/specs/UiSqlDecoupling.md)。
+
+##### B. 磁盘目录模式下：
+> *（注：磁盘目录模式 下的 UI层原生SQL剥离与MVC架构收拢规范 逻辑架构尚未进行专题探讨与定义，暂时留空。）*
