@@ -27,6 +27,8 @@
 | 1.1-IncrementalLedger | 阶段二：增量账本引擎与倒排索引 | /specs/IncrementalLedger.md | 1.1 全局数据与内存管理 |
 | 1.1-MetadataBaking | 阶段三：元数据特征烘焙与 UI 零计算 | /specs/MetadataBaking.md | 1.1 全局数据与内存管理 |
 | 1.1-CategoryBindingManager | 阶段四：资产关系管家引擎与 SSOT 治理 | /specs/CategoryBindingManager.md | 1.1 全局数据与内存管理 |
+| 1.1-DebugLogCleaning | 冗余调试日志根除与 Logger 基础设施保留规范 | /specs/DebugLogCleaning.md | 1.1 全局数据与内存管理 |
+| 1.1-MftDecoupling | MftReader 杂糅解耦、图标缓存抽离与模块物理清理方案 | /specs/MftDecoupling.md | 1.1 全局数据与内存管理 |
 
 - 编号格式固定为 `<所属章节号>-<英文功能名>`（如 `1.1-Trash`），编号本身即可定位该功能挂靠在大纲哪一章节下。
 - 严禁编号重复；同一功能只允许对应唯一一份实施方案文档。
@@ -194,3 +196,29 @@
 
 ##### B. 磁盘目录模式下：
 > *（注：磁盘目录模式 下的 阶段执行顺序前置依赖规范 逻辑架构尚未进行专题探讨与定义，暂时留空。）*
+
+
+#### 1.1.7 正式版日志清理与 Logger 基础设施保留规范
+
+##### A. 内存模式下：
+- **架构要求**：正式版构建中根除全项目分散的调试输出点（84 处 `qDebug`/`qWarning`/`qCritical`/显式 `Logger::log`），消除无用字符串格式化运算开销与写锁开销。
+- **基础设施保留**：完好保留 `ArcMeta::Logger` 类及 `LoggerWriterThread` 延迟刷盘机制与 `customMessageHandler` 重定向钩子。无日志调用时保持 0 线程创建、0 锁竞争、0 I/O 的极限开销状态。
+- **具体实施方案**：详见 [/specs/DebugLogCleaning.md](/specs/DebugLogCleaning.md)。
+
+##### B. 磁盘目录模式下：
+> *（注：磁盘目录模式 下的 正式版日志清理与 Logger 基础设施保留规范 逻辑架构尚未进行专题探讨与定义，暂时留空。）*
+
+
+#### 1.1.8 MftReader 杂糅解耦与僵尸代码根除规范
+
+##### A. 内存模式下：
+- **架构要求**：彻底清理历史遗留的 `MftReader` 杂糅模块，解决职责杂糅与退避打补丁现象。
+- **解耦设计**：
+  1. 将 UI 图标缓存功能抽离至独立单例 `IconCacheManager`；
+  2. 统一系统盘符感知入口至 Qt 标准跨平台接口 `QDir::drives()`；
+  3. 清理全项目退场冗余调用与 `#include "mft/MftReader.h"` 头文件依赖；
+  4. 物理移除 `MftReader.h` 与 `MftReader.cpp` 源码文件及 CMake 构建配置。
+- **具体实施方案**：详见 [/specs/MftDecoupling.md](/specs/MftDecoupling.md)。
+
+##### B. 磁盘目录模式下：
+> *（注：磁盘目录模式 下的 MftReader 杂糅解耦与僵尸代码根除规范 逻辑架构尚未进行专题探讨与定义，暂时留空。）*
