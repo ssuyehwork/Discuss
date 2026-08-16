@@ -436,6 +436,7 @@ void MetadataManager::initFromScchMode() {
             entry.second.erase(std::unique(entry.second.begin(), entry.second.end()), entry.second.end());
         }
 
+        std::vector<std::wstring> dirtySvgPaths;
         for (const auto& pair : tempCache) {
             const RuntimeMeta& meta = pair.second;
             if (!meta.baseName.empty()) {
@@ -451,6 +452,17 @@ void MetadataManager::initFromScchMode() {
                     }
                 }
             }
+
+            // 开库自愈检查：如果是 SVG 文件且历史数据中宽高为 0x0，投递至后台抽取管线重新计算填补
+            if (!meta.isFolder && (meta.width <= 0 || meta.height <= 0)) {
+                if (meta.ext == L"svg" || meta.ext == L"SVG") {
+                    dirtySvgPaths.push_back(pair.first);
+                }
+            }
+        }
+
+        if (!dirtySvgPaths.empty()) {
+            MediaExtractorPipeline::instance().enqueueBatch(dirtySvgPaths);
         }
 
         m_loaded = true;
@@ -589,6 +601,10 @@ bool MetadataManager::registerAsset(const std::string& initialFolderId, const st
  
     // 4. 同步更新内存缓存 RuntimeMeta (SSOT 规则) 
     { 
+        // 补齐分类 ID 到内存对象中，防止内存中分类列表为空
+        if (targetCatId > 0) {
+            rm.categoryIds.push_back(targetCatId);
+        }
         std::unique_lock<std::shared_mutex> lock(m_mutex); 
         auto currentSnapshot = std::atomic_load(&m_snapshot);
         auto newMap = std::make_shared<std::unordered_map<std::wstring, RuntimeMeta>>(*currentSnapshot);
@@ -606,6 +622,12 @@ bool MetadataManager::registerAsset(const std::string& initialFolderId, const st
     registerItemsAsync({QString::fromStdWString(nPath)}, true); 
  
     notifyCategoryCountChanged();
+
+    // 1. 同步刷新分类仓储内存快照
+    CategoryRepo::refreshMemoryCache();
+
+    // 2. 触发统计服务异步全量重算账本，推动侧边栏数字刷新
+    StatisticsService::instance().requestFullRecountAsync();
 
     notifyUI(RefreshLevel::FullRebuild); 
     return true; 

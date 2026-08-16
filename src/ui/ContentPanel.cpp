@@ -79,6 +79,7 @@
 #include "../meta/MetadataManager.h" 
 #include "../meta/BatchRenameEngine.h" 
 #include "../meta/CategoryRepo.h" 
+#include "../meta/StatisticsService.h"
 #include "../crypto/EncryptionManager.h" 
 #include "CategoryLockDialog.h" 
 #include "CategoryLockWidget.h"
@@ -105,8 +106,43 @@ namespace ArcMeta {
 
 // --- FilterProxyModel 实现 --- 
 FilterProxyModel::FilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {} 
+
+void FilterProxyModel::recomputeDuplicateCache() {
+    m_cachedDuplicatePaths.clear();
+    if (currentFilter.duplicatePresence == FilterState::DupAll) return;
+
+    const auto* sourceModelPtr = qobject_cast<const ItemModelBase*>(sourceModel());
+    if (!sourceModelPtr) return;
+
+    const auto& records = sourceModelPtr->allRecords();
+
+    // 按照 (文件大小 + SHA256 / 文件名) 进行内存桶聚合
+    std::unordered_map<std::string, std::vector<QString>> hashBucket;
+    for (const auto& rec : records) {
+        if (rec.isDir || rec.isCategory) continue; // 排除目录与分类卡片
+
+        // 构造唯一指纹键
+        std::string key;
+        if (!rec.sha256.isEmpty()) {
+            key = rec.sha256.toStdString();
+        } else {
+            key = std::to_string(rec.size) + "_" + rec.filename.toLower().toStdString();
+        }
+        hashBucket[key].push_back(rec.path);
+    }
+
+    // 凡是数量 >= 2 的桶，全部标记为重复项
+    for (const auto& pair : hashBucket) {
+        if (pair.second.size() > 1) {
+            for (const auto& path : pair.second) {
+                m_cachedDuplicatePaths.insert(path);
+            }
+        }
+    }
+}
  
 void FilterProxyModel::updateFilter() { 
+    recomputeDuplicateCache(); // 预建缓存，保证 filterAcceptsRow 为 O(1) 瞬时响应
     beginFilterChange(); 
     endFilterChange(); 
 } 
@@ -369,11 +405,29 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         }
     } 
  
+    // 11. 重复状态过滤 (O(1) 瞬时判定)
+    if (currentFilter.duplicatePresence != FilterState::DupAll) {
+        if (record.isDir || record.isCategory) {
+            return false; // 处于重复项/未重复筛选时，自动排除文件夹
+        }
+        bool isDuplicate = (m_cachedDuplicatePaths.count(record.path) > 0);
+        if (currentFilter.duplicatePresence == FilterState::DuplicateOnly && !isDuplicate) {
+            return false;
+        }
+        if (currentFilter.duplicatePresence == FilterState::UniqueOnly && isDuplicate) {
+            return false;
+        }
+    }
+
     // 2026-07-xx Plan-92: 统一使用 FilterState 中的 keyword 进行文件名过滤
-    if (currentFilter.keyword.isEmpty()) return true; 
- 
-    QString fileName = idx.data(Qt::DisplayRole).toString(); 
-    return fileName.contains(currentFilter.keyword, Qt::CaseInsensitive); 
+    if (!currentFilter.keyword.isEmpty()) {
+        QString fileName = idx.data(Qt::DisplayRole).toString();
+        if (!fileName.contains(currentFilter.keyword, Qt::CaseInsensitive)) {
+            return false;
+        }
+    }
+
+    return true;
 } 
  
 bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const { 
@@ -1970,18 +2024,14 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             break;
         }
         case ActionBatchCreate: {
-            BatchCreateDialog dlg(m_currentPath, this);
+            bool isMemory = (dataSourceType() != DataSourceType::DiskNav);
+            BatchCreateDialog dlg(m_currentPath, isMemory, this);
             if (dlg.exec() != QDialog::Accepted) break;
 
             if (dataSourceType() == DataSourceType::DiskNav) {
                 refreshAll();
                 break;
             }
-
-            if (m_currentCategoryId <= 0) break;
-
-            Category currentCat = CategoryRepo::getCachedById(m_currentCategoryId);
-            bool isLibraryRoot = (currentCat.id > 0 && currentCat.parentId == 0 && currentCat.kind == CategoryKind::SystemLibrary);
 
             QStringList renderedNames = dlg.renderAllNames();
             if (renderedNames.isEmpty()) break;
@@ -1990,6 +2040,10 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
             // 场景 B1：批量创建【分类】
             if (!isFile) {
+                if (m_currentCategoryId <= 0) break;
+
+                Category currentCat = CategoryRepo::getCachedById(m_currentCategoryId);
+                bool isLibraryRoot = (currentCat.id > 0 && currentCat.parentId == 0 && currentCat.kind == CategoryKind::SystemLibrary);
                 int targetParentId = isLibraryRoot ? 0 : m_currentCategoryId; // 若选中的是托管库根节点，强制设为 0 (一等公民顶级分类)
 
                 auto dbs = DatabaseManager::instance().getActiveMemoryDbs();
@@ -2026,17 +2080,14 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             QString ext = "." + (rawSuffix.isEmpty() ? "md" : rawSuffix);
 
             // 确定物理托管库落地路径
-            QString managedRoot;
-            if (isLibraryRoot && !currentCat.physicalPath.empty()) {
-                managedRoot = QString::fromStdWString(currentCat.physicalPath);
-            } else {
-                QString drive = QCoreApplication::applicationDirPath().left(3);
-                if (!m_currentPath.isEmpty() && m_currentPath.length() >= 3 && m_currentPath[1] == ':') {
-                    drive = m_currentPath.left(3);
-                }
-                managedRoot = drive + "ArcMeta.Library_" + drive.at(0).toUpper();
+            QString managedRoot = dlg.selectedLibraryPath();
+            if (managedRoot.isEmpty() || !QDir(managedRoot).exists()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "无效的资源库路径！", 2000, QColor("#e81123"));
+                break;
             }
             QDir().mkpath(managedRoot);
+
+            int targetCatId = m_currentCategoryId > 0 ? m_currentCategoryId : 0;
 
             int successCount = 0;
             for (const QString& baseName : renderedNames) {
@@ -2050,12 +2101,29 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                 if (file.open(QIODevice::WriteOnly)) {
                     file.close();
                     std::wstring wDestPath = QDir::toNativeSeparators(destPath).toStdWString();
-                    if (MetadataManager::instance().registerAsset(fileId.toStdString(), wDestPath, m_currentCategoryId)) {
+                    if (MetadataManager::instance().registerAsset(fileId.toStdString(), wDestPath, targetCatId)) {
                         successCount++;
                     }
                 }
             }
 
+            // 1. 刷新分类与统计内存缓存
+            CategoryRepo::refreshMemoryCache();
+            StatisticsService::instance().requestFullRecountAsync();
+
+            // 2. 通知侧边栏 CategoryPanel 立即重绘计数
+            MainWindow* mw = nullptr;
+            QWidget* parentWin = window();
+            while (parentWin) {
+                if ((mw = qobject_cast<MainWindow*>(parentWin))) break;
+                parentWin = parentWin->parentWidget();
+            }
+            if (mw) {
+                CategoryPanel* cp = mw->findChild<CategoryPanel*>();
+                if (cp) cp->requestRefresh(true);
+            }
+
+            // 3. 刷新内容区视图
             refreshAll();
             ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已成功批量创建 %1 个受控文件").arg(successCount), 2000, Style::SuccessGreen);
             break;
