@@ -247,7 +247,10 @@
 ##### A. 内存模式下：
 - **架构要求**：严禁在“重新扫描托管库”时将库内资产全量无脑重置特征完成状态（`ingestion_status = 0`），严禁使用低效的单定时器（1500ms 仅 16 条）串行卡顿解析与单条 SQL UPDATE。
 - **重构设计**：
-  1. **增量指纹准入**：在 `MetadataManager::markAsRegistered` 中比对资产物理 `mtime`（修改时间）与 `size`（文件大小）。已解析且文件未变动的资产跳过状态重置与流水线投递；
+  1. **增量指纹准入与完成标记即时落盘**：
+     - 在 `MetadataManager::markAsRegistered` 中比对资产物理 `mtime`（修改时间）与 `size`（文件大小）。已解析且文件未变动的资产（`ingestion_status == 1`）坚决跳过状态重置与流水线投递；
+     - 后台流水线 `MediaExtractorPipeline` 每批次解析完成特征后，必须保证把 `ingestion_status = 1` 立即写进磁盘 SQLite 数据库（`.arcmeta/Arcmeta_*.db`），实现“一次解析，终身免扫描”；
+     - 视口动态插队操作（`prioritizeBatch`）不得广播全局进度，彻底消除卡片滚动过程中误触发全库扫描进度条的现象。
   2. **多核并行流水线**：重构 `MediaExtractorPipeline`，根据 CPU 核心数全速并发消费任务队列；
   3. **批量写盘与大事务**：特征提取完成后，以批次（Chunked Batch）或 SQLite 显式事务汇总落盘，将万级资产扫描吞吐压至极短时间内完成。
 - **具体实施方案**：详见 [/specs/ManagedLibraryScanPipeline.md](/specs/ManagedLibraryScanPipeline.md)。
