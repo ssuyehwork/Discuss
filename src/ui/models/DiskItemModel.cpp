@@ -255,9 +255,7 @@ void DiskItemModel::clearCacheForFolder(const QString& folderPath) {
 
 void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
     std::vector<std::pair<QString, QString>> newQueue;
-    // 逆序压栈：后收到的最新视口行优先排列在队列前端，极速回显当前定位页面
-    for (int i = rows.size() - 1; i >= 0; --i) {
-        int r = rows[i];
+    for (int r : rows) {
         if (r < 0 || r >= static_cast<int>(m_allRecords.size())) continue;
         const auto& rec = m_allRecords[r];
         if (rec.isDir) continue;
