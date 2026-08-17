@@ -21,6 +21,7 @@
 #endif
 #include "MetadataManager.h"
 #include "MetadataDefs.h"
+#include "MetadataDao.h"
 #include "DatabaseManager.h"
 #include "PhysicalDataExtractor.h"
 #include "IngestionProgressEngine.h"
@@ -64,47 +65,6 @@ static const char* kSqlSelectAllMeta =
     "width, height, ingestion_status, auto_color, base_name, ext, added_at, sha256 "
     "FROM metadata";
 
-// 🚨 全系统唯一权威 23 字段插入/更新 SQL
-static const char* kSqlInsertMeta = 
-    "INSERT OR REPLACE INTO metadata (folder_id, path, is_folder, rating, color, tags, note, url, "
-    "ctime, mtime, atime, file_size, palettes, is_trash, original_path, "
-    "width, height, ingestion_status, auto_color, base_name, ext, added_at, sha256) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-static void bindMetaHelper(sqlite3_stmt* stmt, const std::wstring& path, const RuntimeMeta& meta) {
-    sqlite3_bind_text(stmt, 1, meta.folderId.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 2, path.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 3, meta.isFolder ? 1 : 0);
-    sqlite3_bind_int(stmt, 4, meta.rating);
-    sqlite3_bind_text16(stmt, 5, meta.manualColor.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 6, meta.tags.join(",").toStdWString().c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 7, meta.note.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 8, meta.url.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 9, meta.ctime);
-    sqlite3_bind_int64(stmt, 10, meta.mtime);
-    sqlite3_bind_int64(stmt, 11, meta.atime);
-    sqlite3_bind_int64(stmt, 12, meta.fileSize);
-
-    QJsonArray arr;
-    for (const auto& pe : meta.palettes) {
-        QJsonObject obj;
-        obj["color"] = pe.color.name();
-        obj["ratio"] = (double)pe.ratio;
-        arr.append(obj);
-    }
-    QByteArray ba = QJsonDocument(arr).toJson(QJsonDocument::Compact);
-    sqlite3_bind_blob(stmt, 13, ba.constData(), ba.size(), SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 14, meta.isTrash ? 1 : 0);
-    sqlite3_bind_text16(stmt, 15, meta.originalPath.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 16, meta.width);
-    sqlite3_bind_int(stmt, 17, meta.height);
-    sqlite3_bind_int(stmt, 18, meta.ingestionStatus);
-    sqlite3_bind_text16(stmt, 19, meta.autoColor.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 20, meta.baseName.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 21, meta.ext.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 22, meta.added_at);
-    sqlite3_bind_text(stmt, 23, meta.sha256.c_str(), -1, SQLITE_TRANSIENT);
-}
 
 // --- Helper Functions ---
 
@@ -145,35 +105,15 @@ std::wstring MetadataManager::normalizePath(const std::wstring& path) {
 }
 
 std::string MetadataManager::generateFallbackFolderId(const std::wstring& vol, const std::wstring& frn) {
-    if (vol.empty() || frn.empty()) return "";
-    std::string result = "FRN:";
-    result.append(QString::fromStdWString(vol).toUpper().toStdString());
-    result.append(":");
-    result.append(QString::fromStdWString(frn).toUpper().toStdString());
-    return result;
+    return PhysicalDataExtractor::generateFallbackFolderId(vol, frn);
 }
 
 std::string MetadataManager::generateDeterministicFolderId(const std::wstring& path) {
-    if (path.empty()) return "";
-    std::wstring nPath = MetadataManager::normalizePath(path);
-    std::wstring vol = MetadataManager::getVolumeSerialNumber(nPath);
-    
-    std::wstring seedW(vol);
-    seedW.append(L":");
-    seedW.append(nPath);
-
-    QByteArray seed = QString::fromStdWString(seedW).toUtf8();
-    QByteArray hash = QCryptographicHash::hash(seed, QCryptographicHash::Sha256);
-    
-    std::string result = "PATHURL:";
-    result.append(hash.left(16).toHex().toUpper().toStdString());
-    return result;
+    return PhysicalDataExtractor::generateDeterministicFolderId(path);
 }
 
 std::wstring MetadataManager::generateDeterministicFrn(const std::wstring& path) {
-    if (path.empty()) return L"VIRTUAL_EMPTY";
-    QByteArray hash = QCryptographicHash::hash(QString::fromStdWString(path).toUtf8(), QCryptographicHash::Sha256);
-    return QString(hash.left(8).toHex().toUpper()).toStdWString();
+    return PhysicalDataExtractor::generateDeterministicFrn(path);
 }
 
 // --- MetadataManager Implementation ---
@@ -537,16 +477,10 @@ bool MetadataManager::registerAsset(const std::string& initialFolderId, const st
         SqlTransaction trans(db); 
         rm.folderId = folderId;
 
-        // 2. 写入数据库 metadata 表 (绝对绑定内部主文件路径，使用全局 kSqlInsertMeta 声明) 
-        sqlite3_stmt* stmtMeta = nullptr; 
-        int rc = SQLITE_ERROR;
-        if (sqlite3_prepare_v2(db, kSqlInsertMeta, -1, &stmtMeta, nullptr) == SQLITE_OK) { 
-            bindMetaHelper(stmtMeta, nPath, rm);
-            rc = sqlite3_step(stmtMeta); 
-            sqlite3_finalize(stmtMeta); 
-        } 
+        // 2. 写入数据库 metadata 表 (绝对绑定内部主文件路径)
+        bool ok = MetadataDao::insertOrReplace(db, nPath, rm);
 
-        if (rc == SQLITE_DONE) {
+        if (ok) {
             // 3. 若指定了有效用户分类，写入 category_items 表 
             if (targetCatId > 0) { 
                 const char* sqlItems = "INSERT OR REPLACE INTO category_items (category_id, folder_id, path_hint, added_at) VALUES (?, ?, ?, ?)"; 
@@ -616,6 +550,24 @@ bool MetadataManager::registerAsset(const std::string& initialFolderId, const st
     return true; 
 }
 
+bool MetadataManager::registerMigratedAsset(const std::string& newAssetId, const std::wstring& wNewPath, const RuntimeMeta& oldMeta) {
+    RuntimeMeta meta = oldMeta;
+    meta.folderId = newAssetId;
+    meta.isManaged = true;
+    {
+        std::unique_lock<std::shared_mutex> lock(m_mutex);
+        size_t idx = getShardIndex(wNewPath);
+        {
+            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+            m_shards[idx].items[wNewPath] = meta;
+        }
+        m_folderIdToPath[newAssetId] = wNewPath;
+    }
+
+    persistAsync(wNewPath, true, true);
+    return true;
+}
+
 // 🚨 SSOT 重构核心：跨盘托管库胶囊物理迁移（跨盘 1:1 重锚定）
 std::string MetadataManager::migrateCapsuleToLibrary(const std::string& assetId, const QString& targetLibraryPath) { 
     std::wstring currentPath = getPathByFolderId(assetId); 
@@ -623,51 +575,21 @@ std::string MetadataManager::migrateCapsuleToLibrary(const std::string& assetId,
  
     QFileInfo fileInfo(QString::fromStdWString(currentPath)); 
     QDir containerDir = fileInfo.dir(); // 获取 00ms73182x000.arc 胶囊文件夹 
-    QString containerName = containerDir.dirName(); 
  
-    // 生成全新唯一ID，保证ID唯一性（即便数据完全一致，但ID不同。对应用户原话：“复制整套数据到了之后，只需要修改其ID即可，这样就能保证ID的唯一性”）
     std::string newAssetId = ShellHelper::generateBase36Id().toStdString();
     QString targetContainerDir = targetLibraryPath + "/" + QString::fromStdString(newAssetId) + ".arc"; 
  
-    // 1. 物理复制整套胶囊包内部的文件
-    if (!QDir().mkpath(targetContainerDir)) {
-        qWarning() << "[CapsuleMigration] Failed to create dir:" << targetContainerDir;
+    // 1. 物理解耦：调度 CapsuleMediaExtractor 执行纯物理搬运与回滚
+    if (!CapsuleMediaExtractor::copyCapsuleFiles(containerDir.absolutePath(), targetContainerDir)) {
         return "";
     }
-    QDir srcDir(containerDir.absolutePath());
-    QStringList files = srcDir.entryList(QDir::Files | QDir::NoDotAndDotDot);
-    for (const QString& file : files) {
-        if (!QFile::copy(srcDir.absoluteFilePath(file), targetContainerDir + "/" + file)) {
-            qWarning() << "[CapsuleMigration] Failed to copy:" << file << "to" << targetContainerDir;
-            if (!QDir(targetContainerDir).removeRecursively()) {
-                qCritical() << "[CapsuleMigration] Rollback failed! Corrupted folder leftover:" << targetContainerDir;
-            }
-            return "";
-        }
-    }
  
-    // 2. 计算迁移/复制后的主资产新路径 
+    // 2. 计算新路径并由 MetadataManager 纯元数据层注册
     QString newMainFilePath = targetContainerDir + "/" + fileInfo.fileName(); 
     std::wstring wNewPath = normalizePath(newMainFilePath.toStdWString()); 
  
-    // 3. 获取旧的元数据并进行移植（不从旧库清除，保留整套原始数据与ID，以实现复制式归入）
     RuntimeMeta oldMeta = getMeta(currentPath); 
- 
-    // 4. 将旧的元数据移植并写入到新库，只修改其ID
-    oldMeta.folderId = newAssetId; 
-    oldMeta.isManaged = true; 
-    { 
-        std::unique_lock<std::shared_mutex> lock(m_mutex); 
-        size_t idx = getShardIndex(wNewPath);
-        {
-            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            m_shards[idx].items[wNewPath] = oldMeta;
-        }
-        m_folderIdToPath[newAssetId] = wNewPath; 
-    } 
- 
-    // 5. 异步落盘到新库并通知 UI 刷新 
-    persistAsync(wNewPath, true, true); 
+    registerMigratedAsset(newAssetId, wNewPath, oldMeta);
  
     return newAssetId; 
 }
@@ -2035,19 +1957,7 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
 
     // 2026-06-xx 物理级根除：基于 File ID (FRN) 批量清理
     if (db && !fids.empty()) {
-        const char* sql = "DELETE FROM metadata WHERE folder_id = ?";
-        // [Plan-131 方案 A] 直连模式，取消冗余异步任务
-        SqlTransaction trans(db);
-        sqlite3_stmt* memStmt;
-        if (sqlite3_prepare_v2(db, sql, -1, &memStmt, nullptr) == SQLITE_OK) {
-            for (const auto& fid : fids) {
-                sqlite3_bind_text(memStmt, 1, fid.c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_step(memStmt);
-                sqlite3_reset(memStmt);
-            }
-            sqlite3_finalize(memStmt);
-        }
-        trans.commit();
+        MetadataDao::deleteByFolderIds(db, fids);
     }
 
     // 2026-06-xx 物理级根除：基于 File ID (FRN) 批量清理所有分类关联，彻底杜绝“幽灵关联”
@@ -2335,13 +2245,7 @@ void MetadataManager::deletePermanently(const std::wstring& path) {
 }
 
 std::wstring MetadataManager::getVolumeSerialNumber(const std::wstring& path) {
-    if (path.length() < 2 || path[1] != L':') return L"UNKNOWN";
-    wchar_t root[4] = { static_cast<wchar_t>(towupper(path[0])), L':', L'\\', L'\0' };
-    DWORD serial = 0;
-    if (GetVolumeInformationW(root, nullptr, 0, &serial, nullptr, nullptr, nullptr, 0)) {
-        wchar_t buf[16]; swprintf(buf, 16, L"%08X", serial); return buf;
-    }
-    return L"UNKNOWN";
+    return PhysicalDataExtractor::getVolumeSerialNumber(path);
 }
 
 std::wstring MetadataManager::getManagedLibraryPath(const std::wstring& volSerial, const QString& driveLetter) {
@@ -2404,34 +2308,7 @@ bool MetadataManager::isInsideManagedLibrary(const std::wstring& path) {
 }
 
 bool MetadataManager::fetchWinApiMetadataDirect(const std::wstring& path, std::string& outId128, std::wstring* outFrn, long long* outSize, std::wstring* outType, long long* outCtime, long long* outMtime, long long* outAtime) {
-    HANDLE hFile = CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    std::wstring vol = getVolumeSerialNumber(path);
-    if (hFile == INVALID_HANDLE_VALUE) {
-        if (outFrn) *outFrn = MetadataManager::generateDeterministicFrn(path);
-        outId128 = MetadataManager::generateDeterministicFolderId(path);
-        return false;
-    }
-    BY_HANDLE_FILE_INFORMATION basicInfo;
-    if (GetFileInformationByHandle(hFile, &basicInfo)) {
-        wchar_t frnBuf[17];
-        unsigned long long fullFrn = (static_cast<unsigned long long>(basicInfo.nFileIndexHigh) << 32) | basicInfo.nFileIndexLow;
-        swprintf(frnBuf, 17, L"%016llX", fullFrn);
-        if (outFrn) *outFrn = frnBuf;
-        outId128 = MetadataManager::generateFallbackFolderId(vol, frnBuf);
-        if (outSize) *outSize = (static_cast<long long>(basicInfo.nFileSizeHigh) << 32) | basicInfo.nFileSizeLow;
-        if (outType) *outType = (basicInfo.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? L"folder" : L"file";
-        auto toMS = [](const FILETIME& ft) {
-            ULARGE_INTEGER ull; ull.LowPart = ft.dwLowDateTime; ull.HighPart = ft.dwHighDateTime;
-            return static_cast<long long>((ull.QuadPart - 116444736000000000ULL) / 10000ULL);
-        };
-        if (outCtime) *outCtime = toMS(basicInfo.ftCreationTime);
-        if (outMtime) *outMtime = toMS(basicInfo.ftLastWriteTime);
-        if (outAtime) *outAtime = toMS(basicInfo.ftLastAccessTime);
-        CloseHandle(hFile);
-        return true;
-    }
-    CloseHandle(hFile);
-    return false;
+    return PhysicalDataExtractor::fetchWinApiMetadataDirect(path, outId128, outFrn, outSize, outType, outCtime, outMtime, outAtime);
 }
 
 void MetadataManager::syncPhysicalMetadata(const std::wstring& path, bool notify) { persistAsync(path, notify); }
@@ -2493,13 +2370,7 @@ void MetadataManager::persistBatchAsync(const std::vector<std::wstring>& paths, 
             if (rMeta.folderId.empty()) continue;
 
             // 准入检查
-            bool isNew = true;
-            sqlite3_stmt* checkStmt;
-            if (sqlite3_prepare_v2(memDb, "SELECT 1 FROM metadata WHERE folder_id = ?", -1, &checkStmt, nullptr) == SQLITE_OK) {
-                sqlite3_bind_text(checkStmt, 1, rMeta.folderId.c_str(), -1, SQLITE_TRANSIENT);
-                if (sqlite3_step(checkStmt) == SQLITE_ROW) isNew = false;
-                sqlite3_finalize(checkStmt);
-            }
+            bool isNew = !MetadataDao::checkExistsByFolderId(memDb, rMeta.folderId);
 
             if (isNew && !authorized) {
                 if (!isInsideManagedLibrary(p)) continue;
@@ -2508,20 +2379,14 @@ void MetadataManager::persistBatchAsync(const std::vector<std::wstring>& paths, 
             // 重新解析出最新基名与后缀塞入
             parsePathComponents(p, rMeta.isFolder, rMeta.baseName, rMeta.ext);
 
-            sqlite3_stmt* memStmt;
-            if (sqlite3_prepare_v2(memDb, kSqlInsertMeta, -1, &memStmt, nullptr) == SQLITE_OK) {
-                bindMetaHelper(memStmt, p, rMeta);
-
-                if (sqlite3_step(memStmt) == SQLITE_DONE) {
-                    rMeta.isManaged = true;
-                    {
-                        size_t idx = getShardIndex(p);
-                        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-                        m_shards[idx].items[p] = rMeta;
-                    }
-                    recordsToSync.push_back({p, rMeta});
+            if (MetadataDao::insertOrReplace(memDb, p, rMeta)) {
+                rMeta.isManaged = true;
+                {
+                    size_t idx = getShardIndex(p);
+                    std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+                    m_shards[idx].items[p] = rMeta;
                 }
-                sqlite3_finalize(memStmt);
+                recordsToSync.push_back({p, rMeta});
             }
         }
         trans.commit();
@@ -2566,33 +2431,18 @@ void MetadataManager::persistAsync(const std::wstring& path, bool notify, bool a
     }
 
     // 1. 内存库操作 (Memory Commit)
-    bool isNew = true;
-    {
-        sqlite3_stmt* checkStmt;
-        if (sqlite3_prepare_v2(memDb, "SELECT 1 FROM metadata WHERE folder_id = ?", -1, &checkStmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(checkStmt, 1, rMeta.folderId.c_str(), -1, SQLITE_TRANSIENT);
-            if (sqlite3_step(checkStmt) == SQLITE_ROW) isNew = false;
-            sqlite3_finalize(checkStmt);
-        }
-    }
+    bool isNew = !MetadataDao::checkExistsByFolderId(memDb, rMeta.folderId);
 
     if (isNew && !authorized) {
         if (!isInsideManagedLibrary(nPath)) return;
         authorized = true;
     }
 
-    sqlite3_stmt* memStmt;
-    if (sqlite3_prepare_v2(memDb, kSqlInsertMeta, -1, &memStmt, nullptr) == SQLITE_OK) {
-        bindMetaHelper(memStmt, nPath, rMeta);
-        if (sqlite3_step(memStmt) == SQLITE_DONE) {
-            {
-                rMeta.isManaged = true;
-                size_t idx = getShardIndex(nPath);
-                std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-                m_shards[idx].items[nPath] = rMeta;
-            }
-        }
-        sqlite3_finalize(memStmt);
+    if (MetadataDao::insertOrReplace(memDb, nPath, rMeta)) {
+        rMeta.isManaged = true;
+        size_t idx = getShardIndex(nPath);
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath] = rMeta;
     }
         
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));

@@ -112,6 +112,8 @@ set(SOURCES
     src/meta/DuplicateDetectorService.h
     src/meta/DuplicateDetectorService.cpp
     src/meta/MetadataDefs.h
+    src/meta/MetadataDao.cpp
+    src/meta/MetadataDao.h
     src/meta/MetadataManager.cpp
     src/meta/MetadataManager.h
     src/meta/MediaExtractorPipeline.cpp

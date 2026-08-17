@@ -23,6 +23,11 @@ public:
 
     // 计算磁盘模式缩略图的哈希缓存路径
     static QString getDiskThumbCachePath(const QString& mainAssetPath);
+
+    /**
+     * @brief 纯物理层：执行 .arc 胶囊目录创建与内部文件物理复制，并在失败时做安全回滚
+     */
+    static bool copyCapsuleFiles(const QString& srcContainerDirPath, const QString& targetContainerDir);
 };
 
 } // namespace ArcMeta

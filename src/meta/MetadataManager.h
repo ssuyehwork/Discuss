@@ -161,6 +161,11 @@ public:
     std::string migrateCapsuleToLibrary(const std::string& assetId, const QString& targetLibraryPath);
 
     /**
+     * @brief 纯元数据层：轻量级移入/迁移元数据注册并异步落盘
+     */
+    bool registerMigratedAsset(const std::string& newAssetId, const std::wstring& wNewPath, const RuntimeMeta& oldMeta);
+
+    /**
      * @brief 一站式项目注册流程（受控模式）
      * 2026-07-xx 按照 Plan-116：仅允许受信任的来源（如 AutoImportManager）调用
      * @param path 物理路径

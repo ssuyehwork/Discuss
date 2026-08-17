@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QCryptographicHash>
 #include <QCoreApplication>
+#include <QDebug>
 
 namespace ArcMeta {
 
@@ -95,6 +96,25 @@ QImage CapsuleMediaExtractor::getCapsuleThumbnail(const QString& mainAssetPath, 
         }
     }
     return img;
+}
+
+bool CapsuleMediaExtractor::copyCapsuleFiles(const QString& srcContainerDirPath, const QString& targetContainerDir) {
+    if (!QDir().mkpath(targetContainerDir)) {
+        qWarning() << "[CapsuleMigration] Failed to create dir:" << targetContainerDir;
+        return false;
+    }
+    QDir srcDir(srcContainerDirPath);
+    QStringList files = srcDir.entryList(QDir::Files | QDir::NoDotAndDotDot);
+    for (const QString& file : files) {
+        if (!QFile::copy(srcDir.absoluteFilePath(file), targetContainerDir + "/" + file)) {
+            qWarning() << "[CapsuleMigration] Failed to copy:" << file << "to" << targetContainerDir;
+            if (!QDir(targetContainerDir).removeRecursively()) {
+                qCritical() << "[CapsuleMigration] Rollback failed! Corrupted folder leftover:" << targetContainerDir;
+            }
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace ArcMeta

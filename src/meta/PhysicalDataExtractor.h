@@ -12,8 +12,13 @@ namespace ArcMeta {
  */
 class PhysicalDataExtractor {
 public:
+    static std::string generateFallbackFolderId(const std::wstring& vol, const std::wstring& frn);
+    static std::string generateDeterministicFolderId(const std::wstring& path);
+    static std::wstring generateDeterministicFrn(const std::wstring& path);
+    static std::wstring getVolumeSerialNumber(const std::wstring& path);
+
     /**
-     * @brief 通过 WinAPI 获取 File ID 和基础元数据 (从 MetadataManager 物理移入)
+     * @brief 通过 WinAPI 获取 File ID 和基础元数据 (从 MetadataManager 物理移入，保持 FRN:VOL:FRN 统一指纹格式)
      */
     static bool fetchWinApiMetadataDirect(
         const std::wstring& path, 

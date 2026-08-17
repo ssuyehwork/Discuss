@@ -36,6 +36,7 @@
 #include <windows.h>
 #endif
 #include "../meta/CategoryRepo.h"
+#include "../meta/PhysicalDataExtractor.h"
 
 #include "SearchHistoryPanel.h"
 #include "SvgIcons.h"
@@ -2255,7 +2256,7 @@ void MainWindow::onDriveButtonContextMenu(const QPoint& pos) {
             // 2. 尝试锚定 Win32 物理 FRN (如果可用)
             std::string fid;
             std::wstring frnStr;
-            if (MetadataManager::fetchWinApiMetadataDirect(wPath, fid, &frnStr)) {
+            if (PhysicalDataExtractor::fetchWinApiMetadataDirect(wPath, fid, &frnStr)) {
                 try { cat.physicalFrn = std::stoull(frnStr, nullptr, 16); } catch (...) {}
             }
 

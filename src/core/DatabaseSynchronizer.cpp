@@ -2,6 +2,7 @@
 #include "../meta/CategoryRepo.h"
 #include "../meta/DatabaseManager.h"
 #include "../meta/MetadataManager.h"
+#include "../meta/PhysicalDataExtractor.h"
 #include "sqlite3.h"
 #include <QDir>
 #include <QFileInfo>
@@ -46,7 +47,7 @@ static void scanPhysicalDirectory(const QString& currentPath, ScanNode& node) {
 
             std::string fid;
             std::wstring frnStr;
-            if (MetadataManager::fetchWinApiMetadataDirect(wPath, fid, &frnStr)) {
+            if (PhysicalDataExtractor::fetchWinApiMetadataDirect(wPath, fid, &frnStr)) {
                 try {
                     ScanNode childNode;
                     childNode.path = wPath;

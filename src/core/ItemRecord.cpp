@@ -1,5 +1,6 @@
 #include "ItemRecord.h"
 #include "../meta/MetadataManager.h"
+#include "../meta/PhysicalDataExtractor.h"
 #include <QFileInfo>
 #include <QDir>
 #include <mutex>
@@ -53,7 +54,7 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
     if (meta.folderId.empty() || (meta.ctime == 0 && meta.mtime == 0)) {
         std::string fid;
         long long size = 0, ctime = 0, mtime = 0, atime = 0;
-        MetadataManager::fetchWinApiMetadataDirect(wPath, fid, nullptr, &size, nullptr, &ctime, &mtime, &atime);
+        PhysicalDataExtractor::fetchWinApiMetadataDirect(wPath, fid, nullptr, &size, nullptr, &ctime, &mtime, &atime);
         r.size = size;
         r.ctime = ctime;
         r.mtime = mtime;
