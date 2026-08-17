@@ -275,7 +275,9 @@ Qt::ItemFlags LibraryAssetModel::flags(const QModelIndex& index) const {
 
 void LibraryAssetModel::loadThumbnailsForRows(const QList<int>& rows) {
     std::vector<std::pair<QString, QString>> newQueue;
-    for (int r : rows) {
+    // 逆序压栈：后收到的最新视口行优先排列在队列前端，极速回显当前定位页面
+    for (int i = rows.size() - 1; i >= 0; --i) {
+        int r = rows[i];
         if (r < 0 || r >= static_cast<int>(m_allRecords.size())) continue;
         const auto& rec = m_allRecords[r];
         if (rec.isCategory) continue;

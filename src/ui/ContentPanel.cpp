@@ -583,7 +583,7 @@ ContentPanel::ContentPanel(QWidget* parent)
 
     m_visibleTimer = new QTimer(this);
     m_visibleTimer->setSingleShot(true);
-    m_visibleTimer->setInterval(60); 
+    m_visibleTimer->setInterval(150); // 瞬滑节流窗口：由 60ms 提升至 150ms，避免极速滚动中频繁投递失效任务
     connect(m_visibleTimer, &QTimer::timeout, this, &ContentPanel::refreshVisibleThumbnails);
     
     auto onDataChanged = [this](const QModelIndex& topLeft, const QModelIndex& bottomRight, const QVector<int>& roles) {
@@ -1413,9 +1413,10 @@ void ContentPanel::initGridView() {
     connect(m_gridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged); 
     connect(m_gridView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested); 
     connect(m_gridView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
-        m_visibleTimer->start(60);
+        m_visibleTimer->start(150);
     });
     connect(m_gridView->verticalScrollBar(), &QScrollBar::sliderReleased, this, [this]() {
+        m_visibleTimer->stop();
         refreshVisibleThumbnails();
     });
 } 
@@ -1499,7 +1500,11 @@ void ContentPanel::initListView() {
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested); 
     connect(m_treeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked); 
     connect(m_treeView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
-        m_visibleTimer->start();
+        m_visibleTimer->start(150);
+    });
+    connect(m_treeView->verticalScrollBar(), &QScrollBar::sliderReleased, this, [this]() {
+        m_visibleTimer->stop();
+        refreshVisibleThumbnails();
     });
 } 
  
