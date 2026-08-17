@@ -197,6 +197,16 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                         item.autoColor = dominant.name().toUpper().toStdWString();
                         item.palettes = pal;
                     }
+
+                    // 🚀【补齐落盘闭环】：将已解码的 512px 缩略图存入缓存，供 UI 直接秒读
+                    QString containerDir = info.absolutePath();
+                    if (containerDir.endsWith(".arc", Qt::CaseInsensitive)) {
+                        QString thumbPath = containerDir + "/" + info.completeBaseName() + "_thumbnail.png";
+                        thumb.save(thumbPath, "PNG");
+                    } else {
+                        QString diskThumbPath = CapsuleMediaExtractor::getDiskThumbCachePath(qPath);
+                        thumb.save(diskThumbPath, "PNG");
+                    }
                 }
             } else if (info.isDir()) {
                 std::wstring colorStr;

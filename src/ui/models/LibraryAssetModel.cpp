@@ -339,6 +339,9 @@ void LibraryAssetModel::loadThumbnailsForRows(const QList<int>& rows) {
 
             if (isInsideArc || ext == "svg" || ext == "psd" || ext == "psb" || ext == "ai" || ext == "eps" || UiHelper::isGraphicsFile(ext)) {
                 img = CapsuleMediaExtractor::getCapsuleThumbnailReadOnly(path);
+                if (img.isNull()) {
+                    img = CapsuleMediaExtractor::getCapsuleThumbnail(path, 512);
+                }
                 if (!img.isNull()) {
                     ar = (double)img.width() / img.height();
                     hasThumb = true;
