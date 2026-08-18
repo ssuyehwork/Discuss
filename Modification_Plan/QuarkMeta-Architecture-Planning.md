@@ -41,6 +41,11 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Arc
 
 ---
 
+## 4. 界面重构实施子计划索引 (Implementation Plans)
+- **收藏夹独占第二栏重构方案**：详见 `Modification_Plan/收藏夹独立第二栏实施方案.md`
+
+---
+
 ## 2. 磁盘模式离散 JSON 元数据缓存与代码类名物理重命名规范 (QuarkMetaJson Specification)
 
 ### 2.1 物理文件名与类名重命名规范
