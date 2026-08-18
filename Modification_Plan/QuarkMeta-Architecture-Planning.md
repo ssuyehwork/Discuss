@@ -43,6 +43,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Arc
 
 ## 4. 界面重构实施子计划索引 (Implementation Plans)
 - **收藏夹独占第二栏重构方案**：详见 `Modification_Plan/FavoritePanel.md`
+- **内存托管库模式彻底清理实施方案**：详见 `Modification_Plan/MemoryModeCleanup.md`
 
 ---
 
