@@ -120,7 +120,8 @@ FavoritePanel::FavoritePanel(QWidget* parent)
     setObjectName("ListContainer");
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(200);
-    setStyleSheet("FavoritePanel { background-color: #1E1E1E; color: #EEEEEE; }");
+    // 物理对齐：设置右侧 1px 深色物理分割线与内嵌容器背景，确保面板间物理分割清晰可见
+    setStyleSheet("FavoritePanel { background-color: #1E1E1E; color: #EEEEEE; border-right: 1px solid #2D2D30; }");
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
