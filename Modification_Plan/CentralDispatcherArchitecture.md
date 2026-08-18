@@ -68,8 +68,13 @@
 
 ### 3. 底层洗髓与并发加固规范
 
-1. **底层数据纯净化（清理历史垃圾）**：
-   - 彻底清除代码库中残留的 `.arc` 胶囊容器解析逻辑、`Base36 ID` 转换遗留代码，以及 `isInsideManagedLibrary` 的补丁函数。
+1. **底层数据纯净化（根除 Dual-mode 历史残留毒瘤代码）**：
+   - 由于当前 QuarkMeta 是从原双轨架构（`Dual-mode version`）中强行剥离与独立出来的纯磁盘直连模式应用，代码库中残留了大量属于原 ArcMeta 托管库模式的僵尸与补丁代码。
+   - **必须彻底根除**：
+     - `.arc` 胶囊容器解析与打包逻辑；
+     - `Base36 ID` 资产路径编码/转换遗留代码；
+     - 托管库复制、导入及 `isInsideManagedLibrary` 的硬编码/打补丁逻辑；
+     - 内存索引与托管库镜像同步器（`DatabaseSynchronizer`）的僵尸代码。
 2. **独立分库递归互斥锁**：
    - 在 `DatabaseManager` 中建立严格的 `QRecursiveMutex`，将读写操作与事务彻底锁定，杜绝 UI 线程与后台刷新线程在 `sqlite3*` 上的锁争抢。
 3. **异步取消令牌机制 (`CancellationToken`)**：

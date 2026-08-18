@@ -66,7 +66,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Arc
    - **铁律二**：UI 上的所有用户操作必须封装为 Command 提交给 `CoreEngine`。
    - **铁律三**：UI 只能订阅 `CentralEventHub` 的增量 Event 进行局部刷新，严格禁止调用 `notifyFullUIRebuild()` 强刷全屏。
 3. **底层数据纯净化与并发锁**：
-   - 彻底清除 `.arc` 胶囊容器、`Base36 ID` 等历史残留代码。
+   - 由于 QuarkMeta 是从原双轨架构（`Dual-mode version`）独立出的纯磁盘模式应用，必须彻底彻底根除 `.arc` 胶囊容器、`Base36 ID` 转换、托管库复制/导入以及 `isInsideManagedLibrary` 打补丁遗留代码。
    - `DatabaseManager` 强制采用分库递归互斥锁，杜绝跨线程 sqlite3 锁争抢。
    - 为后台耗时流水线引入原子化可中断的 `CancellationToken`，防止线程雪崩。
 
