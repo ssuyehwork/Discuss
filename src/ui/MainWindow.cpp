@@ -17,6 +17,8 @@
 #include "NavPanel.h"
 #include "FavoritePanel.h"
 #include "ContentPanel.h"
+#include "../core/CoreEngine.h"
+#include "../core/CentralEventHub.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "TagManagerView.h"
@@ -389,12 +391,15 @@ void MainWindow::initUi() {
         }
     });
 
-    // 4. 元数据变化 -> 同步元数据面板
+    // 4. 元数据变化 -> 通过 CoreEngine 指令中心提交持久化，驱动 CentralEventHub 广播
     connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this](int rating) {
         if (m_currentQuickLookPath.isEmpty()) return;
 
-        // 2026-04-11 按照用户要求：补全物理持久化逻辑 (MetadataManager 直接入库)
-        MetadataManager::instance().setRating(m_currentQuickLookPath.toStdWString(), rating);
+        AppCommand cmd;
+        cmd.type = AppCommandType::SetRating;
+        cmd.targetPaths << m_currentQuickLookPath;
+        cmd.params["rating"] = rating;
+        CoreEngine::instance().executeCommand(cmd);
 
         m_metaPanel->setRating(rating);
         
@@ -433,8 +438,11 @@ void MainWindow::initUi() {
     connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this](const QString& color) {
         if (m_currentQuickLookPath.isEmpty()) return;
 
-        // 2026-04-11 按照用户要求：补全物理持久化逻辑 (MetadataManager 直接入库)
-        MetadataManager::instance().setColor(m_currentQuickLookPath.toStdWString(), color.toStdWString());
+        AppCommand cmd;
+        cmd.type = AppCommandType::SetColor;
+        cmd.targetPaths << m_currentQuickLookPath;
+        cmd.params["color"] = color;
+        CoreEngine::instance().executeCommand(cmd);
 
         m_metaPanel->setColor(color.toStdWString());
         
@@ -581,17 +589,26 @@ void MainWindow::initUi() {
     // 2026-05-27 物理加固：补全 this 上下文
     connect(m_metaPanel, &MetaPanel::metadataChanged, this, [this](int rating, const std::wstring& color) {
         auto indexes = m_contentPanel->getSelectedIndexes();
+        QStringList paths;
         for (const auto& idx : indexes) {
             QString path = idx.data(PathRole).toString(); 
-            if(path.isEmpty()) continue;
-            
-            if (rating != -1) {
-                // 2026-05-24：改为中心化异步持久化
-                MetadataManager::instance().setRating(path.toStdWString(), rating);
-            }
-            if (color != L"__NO_CHANGE__") {
-                MetadataManager::instance().setColor(path.toStdWString(), color);
-            }
+            if(!path.isEmpty()) paths << path;
+        }
+        if (paths.isEmpty()) return;
+
+        if (rating != -1) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetRating;
+            cmd.targetPaths = paths;
+            cmd.params["rating"] = rating;
+            CoreEngine::instance().executeCommand(cmd);
+        }
+        if (color != L"__NO_CHANGE__") {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetColor;
+            cmd.targetPaths = paths;
+            cmd.params["color"] = QString::fromStdWString(color);
+            CoreEngine::instance().executeCommand(cmd);
         }
     });
 
@@ -664,14 +681,22 @@ void MainWindow::initUi() {
     });
 
     connect(m_metaPanel, &MetaPanel::noteEdited, this, [](const QStringList& paths, const QString& newNote) {
-        for (const QString& path : paths) {
-            MetadataManager::instance().setNote(path.toStdWString(), newNote.toStdWString());
+        if (!paths.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetNote;
+            cmd.targetPaths = paths;
+            cmd.params["note"] = newNote;
+            CoreEngine::instance().executeCommand(cmd);
         }
     });
 
     connect(m_metaPanel, &MetaPanel::linkEdited, this, [](const QStringList& paths, const QString& newLink) {
-        for (const QString& path : paths) {
-            MetadataManager::instance().setURL(path.toStdWString(), newLink.toStdWString());
+        if (!paths.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetURL;
+            cmd.targetPaths = paths;
+            cmd.params["url"] = newLink;
+            CoreEngine::instance().executeCommand(cmd);
         }
     });
 
