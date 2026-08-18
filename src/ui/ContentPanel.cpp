@@ -1880,8 +1880,10 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                 // 1. 中止并取消队列中以及正在提取的高级多媒体任务
                 MediaExtractorPipeline::instance().cancelBatch(stdPaths);
 
-                // 2. 批量大事务级联擦除已入库的元数据和关联、进度、重置计数器
-                MetadataManager::instance().removeMetadataBatchSync(targetPaths);
+                AppCommand cmd;
+                cmd.type = AppCommandType::RemoveBatchSync;
+                cmd.targetPaths = targetPaths;
+                CoreEngine::instance().executeCommand(cmd);
 
                 ToolTipOverlay::instance()->showText(QCursor::pos(), "已彻底擦除相关元数据", 2000, QColor("#e81123"));
                 refreshAll();
@@ -2026,20 +2028,16 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                                     ok = QFile::remove(target);
                                 }
 
-                                // 🛡️ 物理加固：如果删除的是 .arc 胶囊内部的文件或子文件夹，检查并销毁父目录 .arc
-                                if (ok && parentDir.dirName().endsWith(".arc", Qt::CaseInsensitive)) {
-                                    QStringList remaining = parentDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-                                    if (remaining.isEmpty()) {
-                                        parentDir.rmdir(parentDir.absolutePath());
-                                    }
-                                }
                                 return ok;
                             };
                             physicalOk = recursiveRemove(p);
                         }
 
                         if (physicalOk) {
-                            MetadataManager::instance().deletePermanently(wp);
+                            AppCommand cmd;
+                            cmd.type = AppCommandType::DeletePermanently;
+                            cmd.targetPaths << QString::fromStdWString(wp);
+                            CoreEngine::instance().executeCommand(cmd);
                             UndoManager::instance().removeCommandsForPath(p);
                         }
 
@@ -2109,7 +2107,11 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                     },
                     [](const QVector<AssetItemSnapshot>& beforeState) {
                         for (const auto& snap : beforeState) {
-                            MetadataManager::instance().setPinned(snap.path.toStdWString(), snap.isPinned, true);
+                            AppCommand cmd;
+                            cmd.type = AppCommandType::SetPinned;
+                            cmd.targetPaths << snap.path;
+                            cmd.params["pinned"] = snap.isPinned;
+                            CoreEngine::instance().executeCommand(cmd);
                         }
                         return true;
                     }

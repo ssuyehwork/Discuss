@@ -163,12 +163,7 @@ private:
     QWidget* m_driveBarWidget = nullptr;
     QHBoxLayout* m_driveBarLayout = nullptr;
     QMap<QString, class DriveButton*> m_driveButtons;
-    QVector<class FolderButton*> m_folderButtons;
-    
-    void updateCustomFolderButtons();
-    void removeCustomMonitoredFolder(const QString& path);
     void onDriveBarContextMenu(const QPoint& pos);
-    void onFolderButtonContextMenu(const QPoint& pos);
 
     // 状态管理
     bool m_isPinned = false;

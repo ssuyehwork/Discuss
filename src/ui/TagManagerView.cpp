@@ -1,6 +1,7 @@
 #include "TagManagerView.h"
 #include "UiHelper.h"
 #include "../core/CentralEventHub.h"
+#include "../core/CoreEngine.h"
 #include "StyleLibrary.h"
 #include "MetaPanel.h"
 #include "../meta/MetadataManager.h"
@@ -645,26 +646,21 @@ void TagManagerView::refresh() {
                     if (dlg.exec() == QDialog::Accepted) {
                         QString newName = dlg.text();
                         if (!newName.isEmpty() && newName != tagName) {
-                            QPointer<TagManagerView> weakThis(this);
-                            (void)QtConcurrent::run([weakThis, tagName, newName]() {
-                                MetadataManager::instance().renameTag(tagName, newName);
-                                if (weakThis) {
-                                    QMetaObject::invokeMethod(weakThis.data(), "refresh", Qt::QueuedConnection);
-                                }
-                            });
+                        AppCommand cmd;
+                        cmd.type = AppCommandType::RenameTag;
+                        cmd.params["oldTag"] = tagName;
+                        cmd.params["newTag"] = newName;
+                        CoreEngine::instance().executeCommand(cmd);
                         }
                     }
                 });
 
                 menu.addAction(UiHelper::getIcon("trash", ErrorRed), "删除标签", [this, tagName]() {
                     if (FramelessMessageBox::question(this, "删除标签", QString("确定要全局删除标签 \"%1\" 吗？此操作不可撤销。").arg(tagName))) {
-                        QPointer<TagManagerView> weakThis(this);
-                        (void)QtConcurrent::run([weakThis, tagName]() {
-                            MetadataManager::instance().removeTag(tagName);
-                            if (weakThis) {
-                                QMetaObject::invokeMethod(weakThis.data(), "refresh", Qt::QueuedConnection);
-                            }
-                        });
+                        AppCommand cmd;
+                        cmd.type = AppCommandType::RemoveGlobalTag;
+                        cmd.params["tag"] = tagName;
+                        CoreEngine::instance().executeCommand(cmd);
                     }
                 });
 

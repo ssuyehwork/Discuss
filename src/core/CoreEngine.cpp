@@ -19,7 +19,10 @@ std::shared_ptr<CancellationToken> CoreEngine::createCancellationToken() {
 }
 
 bool CoreEngine::executeCommand(const AppCommand& cmd) {
-    if (cmd.targetPaths.isEmpty() && cmd.type != AppCommandType::RecordAccess) {
+    if (cmd.targetPaths.isEmpty() && 
+        cmd.type != AppCommandType::RecordAccess &&
+        cmd.type != AppCommandType::RenameTag &&
+        cmd.type != AppCommandType::RemoveGlobalTag) {
         return false;
     }
 
@@ -39,6 +42,64 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         handleSetTags(cmd.targetPaths, tags);
         break;
     }
+    case AppCommandType::AddTag: {
+        QString tag = cmd.params.value("tag").toString();
+        for (const QString& path : cmd.targetPaths) {
+            auto meta = MetadataManager::instance().getMeta(path.toStdWString());
+            QStringList curTags = meta.tags;
+            if (!curTags.contains(tag)) {
+                curTags.append(tag);
+                MetadataManager::instance().setTags(path.toStdWString(), curTags, false);
+            }
+        }
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        ev.paths = cmd.targetPaths;
+        CentralEventHub::instance().publishEvent(ev);
+        break;
+    }
+    case AppCommandType::RemoveTag: {
+        QString tag = cmd.params.value("tag").toString();
+        for (const QString& path : cmd.targetPaths) {
+            auto meta = MetadataManager::instance().getMeta(path.toStdWString());
+            QStringList curTags = meta.tags;
+            curTags.removeAll(tag);
+            MetadataManager::instance().setTags(path.toStdWString(), curTags, false);
+        }
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        ev.paths = cmd.targetPaths;
+        CentralEventHub::instance().publishEvent(ev);
+        break;
+    }
+    case AppCommandType::RenameTag: {
+        QString oldTag = cmd.params.value("oldTag").toString();
+        QString newTag = cmd.params.value("newTag").toString();
+        MetadataManager::instance().renameTag(oldTag, newTag);
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        CentralEventHub::instance().publishEvent(ev);
+        break;
+    }
+    case AppCommandType::RemoveGlobalTag: {
+        QString tag = cmd.params.value("tag").toString();
+        MetadataManager::instance().removeTag(tag);
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        CentralEventHub::instance().publishEvent(ev);
+        break;
+    }
+    case AppCommandType::SetPinned: {
+        bool pinned = cmd.params.value("pinned", false).toBool();
+        for (const QString& path : cmd.targetPaths) {
+            MetadataManager::instance().setPinned(path.toStdWString(), pinned, true);
+        }
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        ev.paths = cmd.targetPaths;
+        CentralEventHub::instance().publishEvent(ev);
+        break;
+    }
     case AppCommandType::SetNote: {
         QString note = cmd.params.value("note").toString();
         handleSetNote(cmd.targetPaths, note);
@@ -47,6 +108,24 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
     case AppCommandType::SetURL: {
         QString url = cmd.params.value("url").toString();
         handleSetURL(cmd.targetPaths, url);
+        break;
+    }
+    case AppCommandType::DeletePermanently: {
+        for (const QString& path : cmd.targetPaths) {
+            MetadataManager::instance().deletePermanently(path.toStdWString());
+        }
+        AppEvent ev;
+        ev.type = AppEventType::ItemsDeleted;
+        ev.paths = cmd.targetPaths;
+        CentralEventHub::instance().publishEvent(ev);
+        break;
+    }
+    case AppCommandType::RemoveBatchSync: {
+        MetadataManager::instance().removeMetadataBatchSync(cmd.targetPaths);
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        ev.paths = cmd.targetPaths;
+        CentralEventHub::instance().publishEvent(ev);
         break;
     }
     case AppCommandType::RecordAccess: {
