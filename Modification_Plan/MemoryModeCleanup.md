@@ -87,10 +87,31 @@ src/core/CategoryDropProcessor.h
 
 ### 步骤五：清理 `CoreController.cpp` 与 `BasicCommands.h`
 1. **`src/core/CoreController.cpp`**：
+   - Line 4：删除 `#include "../meta/CategoryRepo.h"`。
    - Line 34：删除 `QuarkMeta::CategoryRepo::initialize();` 调用。
    - Line 158-169：删除自动检测并向数据库插入 `QuarkMeta.Library_X` 根分类的代码。
 2. **`src/core/BasicCommands.h`**：
+   - Line 4：删除 `#include "../meta/CategoryRepo.h"`。
    - 检索并清除 `UndoManager` 命令类中对 `CategoryRepo::addItemToCategory` / `removeItemFromCategory` / `removeAllCategories` 的所有代码。
+
+---
+
+### 步骤五 (附加)：清理其余全部包含 `#include "CategoryRepo.h"` 的残留源文件
+直接删除以下 13 个源文件中对 `#include "CategoryRepo.h"` 的头文件引用以及涉及 `CategoryRepo::*` 的逻辑调用，避免物理删除 `CategoryRepo.h` 后产生“无法打开包括文件”编译报错：
+
+1. **`src/main.cpp`** (Line 29)
+2. **`src/util/ShellHelper.cpp`** (Line 17)
+3. **`src/util/AssetImporter.cpp`** (Line 7)
+4. **`src/util/ImportHelper.cpp`** (Line 6)
+5. **`src/core/OperationSnapshotEngine.cpp`** (Line 3)
+6. **`src/core/CategoryLockManager.h`** (Line 7)
+7. **`src/meta/StatisticsService.h`** (Line 9)
+8. **`src/ui/TagManagerDialog.cpp`** (Line 4)
+9. **`src/ui/PresetTagsDialog.cpp`** (Line 4)
+10. **`src/ui/DiskBatchRenameService.cpp`** (Line 3)
+11. **`src/ui/models/DiskItemModel.cpp`** (Line 16)
+12. **`src/ui/BatchRenameDialog.cpp`** (Line 10)
+13. **`src/ui/CategoryPanel.cpp`** (若未完全移除时删除 Line 28)
 
 ---
 
