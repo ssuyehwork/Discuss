@@ -96,22 +96,45 @@ src/core/CategoryDropProcessor.h
 
 ---
 
-### 步骤五 (附加)：清理其余全部包含 `#include "CategoryRepo.h"` 的残留源文件
-直接删除以下 13 个源文件中对 `#include "CategoryRepo.h"` 的头文件引用以及涉及 `CategoryRepo::*` 的逻辑调用，避免物理删除 `CategoryRepo.h` 后产生“无法打开包括文件”编译报错：
+### 步骤五 (附加)：迁移核心数据结构与清理 Header 包含
+为了彻底删除 `CategoryRepo.h` 与 `CategoryLoadService.h` 且**保证项目 100% 编译通过**，必须完成以下数据结构迁移与头文件清理：
 
-1. **`src/main.cpp`** (Line 29)
-2. **`src/util/ShellHelper.cpp`** (Line 17)
-3. **`src/util/AssetImporter.cpp`** (Line 7)
-4. **`src/util/ImportHelper.cpp`** (Line 6)
-5. **`src/core/OperationSnapshotEngine.cpp`** (Line 3)
-6. **`src/core/CategoryLockManager.h`** (Line 7)
-7. **`src/meta/StatisticsService.h`** (Line 9)
-8. **`src/ui/TagManagerDialog.cpp`** (Line 4)
-9. **`src/ui/PresetTagsDialog.cpp`** (Line 4)
-10. **`src/ui/DiskBatchRenameService.cpp`** (Line 3)
-11. **`src/ui/models/DiskItemModel.cpp`** (Line 16)
-12. **`src/ui/BatchRenameDialog.cpp`** (Line 10)
-13. **`src/ui/CategoryPanel.cpp`** (若未完全移除时删除 Line 28)
+1. **迁移 `StatisticsSnapshot` 结构体至 `StatisticsService.h`**：
+   - 原 `StatisticsSnapshot` 定义在 `CategoryRepo.h` 中。物理删除 `CategoryRepo.h` 后，`StatisticsService` 与 `CategoryModel` 会报 `"systemCounts": 不是 "QuarkMeta::StatisticsSnapshot" 的成员` 错误。
+   - **解决方案**：在 `src/meta/StatisticsService.h` 中显式定义 `StatisticsSnapshot`：
+     ```cpp
+     struct StatisticsSnapshot {
+         // 1. 静态分类计数 (key -> count)
+         QMap<QString, int> systemCounts;
+         // 2. 半静态托管库计数 (categoryId -> count)
+         QMap<int, int> libraryCounts;
+         // 3. 全动态用户分类计数 (categoryId -> count)
+         QMap<int, int> userCategoryCounts;
+     };
+     ```
+   - 替换 `src/meta/StatisticsService.h` 中的 `#include "CategoryRepo.h"` 为上述结构体定义。
+
+2. **清理 `ContentPanel.cpp` 中对 `CategoryLoadService` 的依赖**：
+   - `ContentPanel.cpp` 原包含 `#include "../core/CategoryLoadService.h"` 并调用 `CategoryLoadService::loadTrashItems()` 与 `CategoryLoadService::loadPathItems()`。
+   - **解决方案**：
+     - 删除 `#include "../core/CategoryLoadService.h"`。
+     - 在 `ContentPanel.cpp` 的 `loadPathItems` / `loadTrashItems` 中直接转接至 `DiskScanService` / 磁盘回收站管线，彻底阻断对 `CategoryLoadService` 的静态与动态依赖。
+
+3. **清除其余 13 个源文件中对 `#include "CategoryRepo.h"` 的残留引用**：
+   直接删除以下源文件中的 `#include "CategoryRepo.h"` 头文件及相关调用：
+   1. **`src/main.cpp`** (Line 29)
+   2. **`src/util/ShellHelper.cpp`** (Line 17)
+   3. **`src/util/AssetImporter.cpp`** (Line 7)
+   4. **`src/util/ImportHelper.cpp`** (Line 6)
+   5. **`src/core/OperationSnapshotEngine.cpp`** (Line 3)
+   6. **`src/core/CategoryLockManager.h`** (Line 7)
+   7. **`src/meta/StatisticsService.h`** (Line 9)
+   8. **`src/ui/TagManagerDialog.cpp`** (Line 4)
+   9. **`src/ui/PresetTagsDialog.cpp`** (Line 4)
+   10. **`src/ui/DiskBatchRenameService.cpp`** (Line 3)
+   11. **`src/ui/models/DiskItemModel.cpp`** (Line 16)
+   12. **`src/ui/BatchRenameDialog.cpp`** (Line 10)
+   13. **`src/ui/CategoryPanel.cpp`** (若未完全移除时删除 Line 28)
 
 ---
 
