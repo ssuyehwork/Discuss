@@ -2562,6 +2562,7 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
         for (const QFileInfo& drive : drives) { 
             driveRecords.push_back(ItemRecord::create(drive.absolutePath()));
         } 
+        MetaCacheDecorator::decorate(driveRecords);
         m_model->setRecords(driveRecords);
         // 2026-05-29 物理对齐：在加载“此电脑”后显式触发一次排序，确保置顶硬盘排在首位
         m_proxyModel->sort(0, Qt::AscendingOrder);

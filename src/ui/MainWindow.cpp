@@ -311,11 +311,13 @@ void MainWindow::initUi() {
 
     setupCustomTitleBarButtons();
     
-    // 2026-04-11 按照用户要求：物理锁定侧边栏宽度，最大化时仅“内容”区拉伸
-    m_mainSplitter->setStretchFactor(0, 0); // 目录导航
-    m_mainSplitter->setStretchFactor(1, 1); // 内容 (主拉伸区)
-    m_mainSplitter->setStretchFactor(2, 0); // 元数据
-    m_mainSplitter->setStretchFactor(3, 0); // 筛选
+    // 物理锁定：主界面从左到右共 5 栏（索引 0:目录导航, 1:收藏夹, 2:内容展示区, 3:元数据, 4:筛选）
+    // 严格确保仅有第三栏“内容展示区”（索引 2）具备拉伸系数 1，其余 4 栏全部锁定为 0！
+    m_mainSplitter->setStretchFactor(0, 0); // 第一栏：目录导航 (NavPanel) -> 固定不拉伸
+    m_mainSplitter->setStretchFactor(1, 0); // 第二栏：收藏夹 (FavoritePanel) -> 严格固定不拉伸！
+    m_mainSplitter->setStretchFactor(2, 1); // 第三栏：内容展示区 (ContentPanel) -> 全界面唯一核心主拉伸区！
+    m_mainSplitter->setStretchFactor(3, 0); // 第四栏：元数据属性栏 (MetaPanel) -> 固定不拉伸
+    m_mainSplitter->setStretchFactor(4, 0); // 第五栏：条件筛选栏 (FilterPanel) -> 固定不拉伸
 
     // 1. 先应用面板显隐状态
     loadPanelVisibility();
@@ -1797,12 +1799,19 @@ void MainWindow::resetSplitterLayout() {
     m_metaPanel->show();
     m_filterPanel->show();
 
-    // 2. 物理恢复尺寸比例
+    // 2. 物理恢复 5 栏尺寸比例 (Index 0: NavPanel, Index 1: FavoritePanel, Index 2: ContentPanel, Index 3: MetaPanel, Index 4: FilterPanel)
     QList<int> sizes;
     sizes << 200 << 200 << 550 << 200 << 200;
-    if (m_mainSplitter->count() > 5) sizes << 0;
+    if (m_mainSplitter->count() > 5) sizes << 0; // 索引 5 为隐藏的 TagManagerView
 
     m_mainSplitter->setSizes(sizes);
+    
+    // 重新强制刷新 stretchFactor，确保无脑切回标准
+    m_mainSplitter->setStretchFactor(0, 0);
+    m_mainSplitter->setStretchFactor(1, 0);
+    m_mainSplitter->setStretchFactor(2, 1);
+    m_mainSplitter->setStretchFactor(3, 0);
+    m_mainSplitter->setStretchFactor(4, 0);
 
     // 3. 清除持久化状态，防止重启后回滚旧布局
     AppConfig::instance().remove("MainWindow/SplitterState");

@@ -1,5 +1,6 @@
 #include "DatabaseManager.h"
 #include "DatabaseMigrator.h"
+#include "DriveMetaDao.h"
 #include <chrono>
 #include <QDir>
 #include <QFile>
@@ -538,6 +539,9 @@ bool DatabaseManager::init() {
     // 加载全局库
     std::wstring globalPath = (metaDir + "/global.db").toStdWString();
     loadDb(globalPath, m_globalDb);
+
+    // 初始化盘符元数据表
+    DriveMetaDao::initTable();
 
     // 为每个驱动器加载数据库
     // 注意：此处实际应遍历当前在线的驱动器，这里先简化逻辑

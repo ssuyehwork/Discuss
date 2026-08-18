@@ -22,6 +22,7 @@
 #include "MetadataManager.h"
 #include "MetadataDefs.h"
 #include "DatabaseManager.h"
+#include "DriveMetaDao.h"
 #include "PhysicalDataExtractor.h"
 #include "IngestionProgressEngine.h"
 #include "../core/AppConfig.h"
@@ -1099,6 +1100,14 @@ void MetadataManager::ensureActivated(const std::wstring& nPath) {
 
 void MetadataManager::setRating(const std::wstring& path, int rating, bool notify) {
     std::wstring nPath = normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.rating = rating;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
     ensureActivated(nPath);
     size_t idx = getShardIndex(nPath);
     {
@@ -1346,10 +1355,16 @@ void MetadataManager::removeTag(const QString& tagName) {
 
 void MetadataManager::setColor(const std::wstring& path, const std::wstring& color, bool notify) {
     std::wstring nPath = MetadataManager::normalizePath(path);
-    ensureActivated(nPath);
-    
-    // 从源头上进行颜色 Hex 归一化处理
     std::wstring normColor = UiHelper::normalizeColorHex(QString::fromStdWString(color)).toStdWString();
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.color = normColor;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
     
     bool changed = false;
     bool isFolder = false;
@@ -1386,6 +1401,14 @@ void MetadataManager::setColor(const std::wstring& path, const std::wstring& col
 
 void MetadataManager::setPinned(const std::wstring& path, bool pinned, bool notify) {
     std::wstring nPath = MetadataManager::normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.pinned = pinned;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
     ensureActivated(nPath);
     size_t idx = getShardIndex(nPath);
     {
@@ -1439,6 +1462,14 @@ void MetadataManager::setTags(const std::wstring& path, const QStringList& tags,
 
 void MetadataManager::setNote(const std::wstring& path, const std::wstring& note, bool notify) {
     std::wstring nPath = MetadataManager::normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.note = note;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
     ensureActivated(nPath);
     size_t idx = getShardIndex(nPath);
     {
@@ -1456,6 +1487,14 @@ void MetadataManager::setNote(const std::wstring& path, const std::wstring& note
 
 void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, bool notify) {
     std::wstring nPath = MetadataManager::normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.url = url;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
     ensureActivated(nPath);
     size_t idx = getShardIndex(nPath);
     {

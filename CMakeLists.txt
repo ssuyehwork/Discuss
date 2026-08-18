@@ -88,6 +88,8 @@ set(SOURCES
     src/meta/CategoryBindingManager.h
     src/meta/DiskTrashRepo.cpp
     src/meta/DiskTrashRepo.h
+    src/meta/DriveMetaDao.cpp
+    src/meta/DriveMetaDao.h
     src/meta/TagRepository.cpp
     src/meta/TagRepository.h
     src/meta/TrashRepository.cpp

@@ -1,20 +1,39 @@
 #include "MetaCacheDecorator.h" 
 #include "QuarkMetaJson.h" 
+#include "DriveMetaDao.h"
 #include <QFileInfo> 
+#include <QDir>
 #include <unordered_map> 
 #include <memory> 
  
 namespace QuarkMeta { 
 void MetaCacheDecorator::decorate(std::vector<ItemRecord>& records) { 
     if (records.empty()) return; 
+
+    // 预先批量拉取全局盘符元数据
+    auto driveMetas = DriveMetaDao::getAllDriveMeta();
  
     // 按父目录路径建立离散 JSON 缓存池，避免重复读取同一目录的配置文件 
     std::unordered_map<std::wstring, std::shared_ptr<QuarkMetaJson>> jsonCacheMap; 
  
     for (auto& itemRec : records) { 
         if (itemRec.isCategory) continue; 
+
+        // 【盘符特殊处理】：如果是驱动器根目录（如 C:\、D:\）
+        std::wstring wPath = QDir::toNativeSeparators(itemRec.path).toStdWString();
+        QFileInfo info(itemRec.path);
+        if (info.isRoot() || itemRec.path.endsWith(":\\") || itemRec.path.endsWith(":/")) {
+            auto driveIt = driveMetas.find(wPath);
+            if (driveIt != driveMetas.end()) {
+                itemRec.rating = driveIt->second.rating;
+                itemRec.manualColor = QString::fromStdWString(driveIt->second.color);
+                itemRec.pinned = driveIt->second.pinned;
+                itemRec.note = QString::fromStdWString(driveIt->second.note);
+                itemRec.url = QString::fromStdWString(driveIt->second.url);
+            }
+            continue;
+        }
  
-        QFileInfo info(itemRec.path); 
         std::wstring dirPath = info.absolutePath().toStdWString(); 
  
         auto cacheIt = jsonCacheMap.find(dirPath); 

@@ -12,7 +12,7 @@ QMainWindow { background-color: #1E1E1E; color: #EEEEEE; }
 }
 
 /* 核心容器样式 - 强化 1 像素物理切割感 */
-#SidebarContainer, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
+#SidebarContainer, #FavoriteContainer, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
     background-color: #1E1E1E;
     border: 1px solid #333333;
     border-radius: 0px;
