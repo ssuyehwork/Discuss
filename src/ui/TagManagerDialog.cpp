@@ -1,7 +1,6 @@
 #include "TagManagerDialog.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
-#include "../meta/CategoryRepo.h"
 #include "../meta/QuarkMetaJson.h"
 #include "components/FlowLayout.h"
 #include <QApplication>

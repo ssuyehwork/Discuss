@@ -26,7 +26,6 @@
 #include "ui/MainWindow.h"
 
 #include "meta/MetadataManager.h"
-#include "meta/CategoryRepo.h"
 #include "meta/MediaExtractorPipeline.h"
 #include "meta/DatabaseManager.h"
 #include "core/CoreController.h"

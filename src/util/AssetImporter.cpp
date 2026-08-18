@@ -4,7 +4,6 @@
 #include "../ui/BatchProgressDialog.h" 
 #include "../ui/ToolTipOverlay.h" 
 #include "../meta/MetadataManager.h" 
-#include "../meta/CategoryRepo.h" 
 #include "../meta/DatabaseManager.h" 
 #include "../ui/MediaColorExtractor.h" 
 #include "../meta/CapsuleMediaExtractor.h"
@@ -50,18 +49,6 @@ void AssetImporter::importAssets(const ImportContext& ctx) {
 
             // 获取目标资源库物理根目录
             QString managedRoot = ctx.targetPhysicalPath;
-            if (managedRoot.isEmpty() && ctx.targetCategoryId > 0) {
-                Category targetCat = CategoryRepo::getById(ctx.targetCategoryId);
-                Category cur = targetCat;
-                while (cur.parentId != 0) {
-                    Category parent = CategoryRepo::getById(cur.parentId);
-                    if (parent.id == 0) break;
-                    cur = parent;
-                }
-                if (!cur.physicalPath.empty()) {
-                    managedRoot = QString::fromStdWString(cur.physicalPath);
-                }
-            }
             if (managedRoot.isEmpty()) {
                 QString drive = QFileInfo(src).absolutePath().left(3);
                 if (drive.isEmpty()) {
@@ -240,20 +227,13 @@ bool AssetImporter::importDirectoryRecursive(const QString& srcDir,
         return false; // 跳过物理容器本身 
     } 
  
-    Category cat; 
-    // 🚨 安全下限防护：若 parentCatId < 0（如 -2），自动修正为 0（顶级分类），防止生成幽灵隐形分类
-    cat.parentId = (parentCatId < 0) ? 0 : parentCatId; 
-    cat.name = dirInfo.fileName().toStdWString(); 
-    cat.color = CategoryRepo::getDefaultColor(); 
-    if (!CategoryRepo::add(cat)) return false; 
- 
     QDir dir(srcDir); 
     QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot, QDir::DirsFirst | QDir::Name); 
     for (const QFileInfo& entry : entries) { 
         if (entry.isFile()) { 
-            importSingleFile(entry.absoluteFilePath(), cat.id, managedRoot, newlyImportedPaths, allowMove); 
+            importSingleFile(entry.absoluteFilePath(), parentCatId, managedRoot, newlyImportedPaths, allowMove); 
         } else if (entry.isDir()) { 
-            importDirectoryRecursive(entry.absoluteFilePath(), cat.id, managedRoot, newlyImportedPaths, allowMove); 
+            importDirectoryRecursive(entry.absoluteFilePath(), parentCatId, managedRoot, newlyImportedPaths, allowMove); 
         } 
     } 
  

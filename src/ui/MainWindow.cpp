@@ -15,6 +15,7 @@
 #include "../core/CoreController.h"
 #include "ColorPicker.h"
 #include "NavPanel.h"
+#include "FavoritePanel.h"
 #include "ContentPanel.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
@@ -27,13 +28,11 @@
 #include "../util/DiskMediaExtractor.h"
 #include "DuplicateConflictDialog.h"
 #include "TaskProgressToolBar.h"
-#include "../core/CategoryDropProcessor.h"
 #include "../core/VolumeOnlineManager.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
-#include "../meta/CategoryRepo.h"
 
 #include "SearchHistoryPanel.h"
 #include "SvgIcons.h"
@@ -328,9 +327,9 @@ void MainWindow::initUi() {
             m_mainSplitter->restoreState(state);
         });
     } else {
-        // 初始默认分配: 250 (第一栏 NavPanel) | 650 (第二栏 ContentPanel) | 250 (元数据/筛选)
+        // 初始默认分配: 200 << 200 << 550 << 200 << 200
         QList<int> sizes;
-        sizes << 250 << 650 << 250 << 200;
+        sizes << 200 << 200 << 550 << 200 << 200;
         m_mainSplitter->setSizes(sizes);
     }
 
@@ -341,29 +340,27 @@ void MainWindow::initUi() {
         unifiedNavigateTo(path);
     });
 
-    // 2026-xx-xx 按照 Plan-95：实现收藏文件定位逻辑
-    connect(m_navPanel, &NavPanel::requestLocateFile, this, [this](const QString& path) {
-        QFileInfo fi(path);
-        QString parentDir = fi.absolutePath();
-        
-        // 1. 设置待定位的文件名 (不开启编辑模式)
-        m_contentPanel->setPendingSelectName(fi.fileName(), false);
+    connect(m_favoritePanel, &FavoritePanel::directorySelected, this, [this](const QString& path) {
+        unifiedNavigateTo(path);
+    });
 
-        // 2. 跳转到父目录
-        unifiedNavigateTo(parentDir);
+    connect(m_favoritePanel, &FavoritePanel::requestLocateFile, this, [this](const QString& path) {
+        QFileInfo fi(path);
+        m_contentPanel->setPendingSelectName(fi.fileName(), false);
+        unifiedNavigateTo(fi.absolutePath());
     });
 
     connect(m_contentPanel, &ContentPanel::directorySelected, this, [this](const QString& path) {
         unifiedNavigateTo(path);
     });
 
-    // 监听内容容器的右键添加至收藏夹信号 (对应用户原话：“选中某个项目单击右键选择该选项“添加至收藏夹”时，则把选中的项目收藏到收藏区里”)
+    // 监听内容容器的右键添加至收藏夹信号
     connect(m_contentPanel, &ContentPanel::requestAddFavorite, this, [this](const QStringList& paths) {
-        if (m_navPanel) {
+        if (m_favoritePanel) {
             for (const QString& p : paths) {
-                m_navPanel->addFavoriteItem(p);
+                m_favoritePanel->addFavoriteItem(p);
             }
-            m_navPanel->saveFavorites();
+            m_favoritePanel->saveFavorites();
         }
     });
 
@@ -435,23 +432,8 @@ void MainWindow::initUi() {
             m_metaPanel->setNote(rm.note);
             m_metaPanel->setURL(rm.url);
 
-            bool isDiskMode = !m_contentPanel->isMirrorSource() && !MetadataManager::isInsideManagedLibrary(path.toStdWString());
+            bool isDiskMode = true;
             m_metaPanel->setDiskPathMode(isDiskMode, path);
-
-            if (!isDiskMode) {
-                // 托管库模式：拉取文件绑定的真实分类列表并转为胶囊展示
-                std::string fid = MetadataManager::instance().getFolderIdSync(path.toStdWString());
-                std::vector<int> catIds = CategoryRepo::getItemCategoryIds(fid, path.toStdWString());
-                std::vector<std::pair<int, QString>> catPills;
-                
-                for (int cid : catIds) {
-                    Category c = CategoryRepo::getById(cid);
-                    if (c.id > 0) {
-                        catPills.push_back({c.id, QString::fromStdWString(c.name)});
-                    }
-                }
-                m_metaPanel->setCategoryPills(catPills);
-            }
 
             // 将色板数据转换为 QVector<QPair<QColor, float>>
             QVector<QPair<QColor, float>> pal;
@@ -593,9 +575,9 @@ void MainWindow::initUi() {
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::favoriteRequested, this, [this](const QString& path) {
-        if (!path.isEmpty() && m_navPanel) {
-            m_navPanel->addFavoriteItem(path);
-            m_navPanel->saveFavorites();
+        if (!path.isEmpty() && m_favoritePanel) {
+            m_favoritePanel->addFavoriteItem(path);
+            m_favoritePanel->saveFavorites();
             ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, Style::SuccessGreen);
         }
     });
@@ -781,20 +763,6 @@ void MainWindow::initUi() {
         }
     });
 
-    // 解绑分类事件响应
-    connect(m_metaPanel, &MetaPanel::unbindCategoryRequested, this, [this](const QString& path, int catId) {
-        std::string fid = MetadataManager::instance().getFolderIdSync(path.toStdWString());
-        if (!fid.empty()) {
-            CategoryRepo::removeItemFromCategory(catId, fid);
-            m_contentPanel->updateItemMetadata(path);
-        }
-    });
-
-    // 绑定分类事件响应
-    connect(m_metaPanel, &MetaPanel::bindCategoryRequested, this, [this](const QString& path) {
-        // 触发绑定逻辑，弹出分类选择列表
-        Q_UNUSED(path);
-    });
 
     // 9. 2026-03-xx 响应元数据全局变更，同步刷新 UI (合并优化，消除重复连接与性能损耗)
     connect(&MetadataManager::instance(), &MetadataManager::metaChanged, this, [this](const QString& path) {
@@ -1248,6 +1216,9 @@ void MainWindow::setupSplitters() {
 
     m_navPanel = new NavPanel(this);
     m_navPanel->setObjectName("SidebarContainer");
+
+    m_favoritePanel = new FavoritePanel(this);
+    m_favoritePanel->setObjectName("FavoriteContainer");
     
     m_contentPanel = new ContentPanel(this);
     m_contentPanel->setObjectName("EditorContainer");
@@ -1269,8 +1240,9 @@ void MainWindow::setupSplitters() {
         // 其他来源（搜索、筛选等）不显示焦点线
     });
 
-    // 纯磁盘模式三栏布局：第一栏导航(NavPanel)，第二栏内容区(ContentPanel)，第三栏元数据/筛选
+    // 5栏平铺布局：1. 目录导航 | 2. 收藏夹 | 3. 内容展示区 | 4. 元数据属性栏 | 5. 条件筛选栏
     m_mainSplitter->addWidget(m_navPanel);
+    m_mainSplitter->addWidget(m_favoritePanel);
     m_mainSplitter->addWidget(m_contentPanel);
     m_mainSplitter->addWidget(m_metaPanel);
     m_mainSplitter->addWidget(m_filterPanel);
@@ -1639,13 +1611,8 @@ void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
         }
     }
 
-    // 2026-07-xx 按照 Plan-118：通知筛选面板当前数据源性质
     if (m_filterPanel && m_contentPanel) {
-        bool isMirror = m_contentPanel->isMirrorSource();
-        if (!isMirror && !m_currentPath.isEmpty() && m_currentPath != "computer://") {
-            isMirror = MetadataManager::isInsideManagedLibrary(m_currentPath.toStdWString());
-        }
-        m_filterPanel->setMirrorSource(isMirror);
+        m_filterPanel->setMirrorSource(false);
     }
 
     updateNavButtons();
@@ -1784,8 +1751,6 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     }
     AppConfig::instance().sync();
 
-    // 2026-06-xx 物理加固：退出前强制所有分类数据落盘，彻底解决因防抖计时器导致的重启回滚问题
-    CategoryRepo::saveImmediately();
 
     QMainWindow::closeEvent(event);
 }
@@ -1810,6 +1775,7 @@ void MainWindow::populatePanelMenu(QMenu* menu) {
     };
 
     addToggleAction("显示目录导航", m_navPanel);
+    addToggleAction("显示收藏夹", m_favoritePanel);
     addToggleAction("显示内容区", m_contentPanel, false); // 核心区锁定不可隐藏
     addToggleAction("显示元数据栏", m_metaPanel);
     addToggleAction("显示筛选栏", m_filterPanel);
@@ -1826,14 +1792,15 @@ void MainWindow::resetSplitterLayout() {
     m_tagManagerView->hide();
 
     m_navPanel->show();
+    m_favoritePanel->show();
     m_contentPanel->show();
     m_metaPanel->show();
     m_filterPanel->show();
 
     // 2. 物理恢复尺寸比例
     QList<int> sizes;
-    sizes << 250 << 650 << 250 << 250;
-    if (m_mainSplitter->count() > 4) sizes << 0;
+    sizes << 200 << 200 << 550 << 200 << 200;
+    if (m_mainSplitter->count() > 5) sizes << 0;
 
     m_mainSplitter->setSizes(sizes);
 
@@ -1851,6 +1818,7 @@ void MainWindow::loadPanelVisibility() {
 
     QStringList hiddenPanels = val.toStringList();
     if (hiddenPanels.contains("nav"))      m_navPanel->hide();
+    if (hiddenPanels.contains("favorite")) m_favoritePanel->hide();
     if (hiddenPanels.contains("meta"))     m_metaPanel->hide();
     if (hiddenPanels.contains("filter"))   m_filterPanel->hide();
 }
@@ -1862,6 +1830,7 @@ void MainWindow::savePanelVisibility() {
 
     QStringList hiddenPanels;
     if (!m_navPanel->isVisible())      hiddenPanels << "nav";
+    if (!m_favoritePanel->isVisible()) hiddenPanels << "favorite";
     if (!m_metaPanel->isVisible())     hiddenPanels << "meta";
     if (!m_filterPanel->isVisible())   hiddenPanels << "filter";
     
@@ -1958,27 +1927,6 @@ void MainWindow::onDriveButtonContextMenu(const QPoint& pos) {
         if (QDir().mkpath(managedPath)) {
             btn->setState(DriveButton::Active);
             
-            std::wstring wPath = QDir::toNativeSeparators(managedPath).toStdWString();
-            
-            // 1. 构造半静态托管库分类记录
-            Category cat;
-            cat.name = QFileInfo(managedPath).fileName().toStdWString();
-            cat.parentId = 0;
-            cat.kind = CategoryKind::SystemLibrary;
-            cat.physicalPath = wPath;
-            cat.color = CategoryRepo::getDefaultColor();
-            
-            // 2. 尝试锚定 Win32 物理 FRN (如果可用)
-            std::string fid;
-            std::wstring frnStr;
-            if (MetadataManager::fetchWinApiMetadataDirect(wPath, fid, &frnStr)) {
-                try { cat.physicalFrn = std::stoull(frnStr, nullptr, 16); } catch (...) {}
-            }
-
-            // 3. 写入分类表并通知侧边栏 UI 1:1 重建刷新
-            if (CategoryRepo::add(cat)) {
-                MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
-            }
 
             ToolTipOverlay::instance()->showText(QCursor::pos(), "资源库创建成功", 1500, Style::SuccessGreen);
         }

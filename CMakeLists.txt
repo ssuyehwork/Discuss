@@ -69,8 +69,6 @@ set(SOURCES
     src/core/DiskScanService.h
     src/core/FileFilterService.cpp
     src/core/FileFilterService.h
-    src/core/CategoryLoadService.cpp
-    src/core/CategoryLoadService.h
     src/core/VolumeOnlineManager.cpp
     src/core/VolumeOnlineManager.h
     src/core/DiskTrashService.cpp
@@ -79,8 +77,6 @@ set(SOURCES
     src/core/SyncStatusService.h
     src/core/OperationSnapshotEngine.h
     src/core/OperationSnapshotEngine.cpp
-    src/core/CategoryDropProcessor.h
-    src/core/CategoryDropProcessor.cpp
     src/core/AppConfig.h
     src/core/NavigationHistoryService.cpp
     src/core/NavigationHistoryService.h
@@ -90,8 +86,6 @@ set(SOURCES
     src/crypto/EncryptionManager.h
     src/meta/CategoryBindingManager.cpp
     src/meta/CategoryBindingManager.h
-    src/meta/CategoryRepo.cpp
-    src/meta/CategoryRepo.h
     src/meta/DiskTrashRepo.cpp
     src/meta/DiskTrashRepo.h
     src/meta/TagRepository.cpp
@@ -195,6 +189,8 @@ set(SOURCES
     src/ui/components/ColorPill.cpp
     src/ui/NavPanel.cpp
     src/ui/NavPanel.h
+    src/ui/FavoritePanel.cpp
+    src/ui/FavoritePanel.h
     src/ui/BatchProgressDialog.h
     src/ui/QuickLookWindow.cpp
     src/ui/QuickLookWindow.h

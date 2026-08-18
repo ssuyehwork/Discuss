@@ -149,28 +149,16 @@ void StatisticsService::notifyDiskTrashCountChanged(int delta) {
 
 StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
     StatisticsSnapshot snapshot;
-    auto allCats = CategoryRepo::getCachedAll();
 
     // 0. 获取当前物理在线托管盘符集合
     QSet<QString> onlineDrives = VolumeOnlineManager::instance().getOnlineDrives();
-
-    // 1. 初始化所有分类映射
-    std::unordered_set<int> userCatIds;
-    for (const auto& cat : allCats) {
-        if (cat.kind == CategoryKind::User && cat.id > 0) {
-            userCatIds.insert(cat.id);
-            snapshot.userCategoryCounts[cat.id] = 0;
-        } else if (cat.kind == CategoryKind::SystemLibrary) {
-            snapshot.libraryCounts[cat.id] = 0;
-        }
-    }
 
     int allCount = 0;
     int untaggedCount = 0;
     int uncategorizedCount = 0;
     int libraryTrashCount = 0;
 
-    // 2. 纯内存 0ms 秒级核算（绝对真相源）
+    // 1. 纯内存 0ms 秒级核算（绝对真相源）
     MetadataManager::instance().forEachCachedItem([&](const std::wstring& path, const RuntimeMeta& meta) {
         if (meta.isFolder) return;
 
@@ -192,7 +180,7 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
 
         if (isInTrash) {
             libraryTrashCount++;
-            return; // 🚨 绝对提前退出！绝不参与 全部数据、未分类、托管库、自定义分类 的任何计数！
+            return; // 🚨 绝对提前退出！绝不参与 全部数据、未分类 的任何计数！
         }
 
         // 全部有效数据
@@ -202,33 +190,9 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
         if (meta.tags.isEmpty()) {
             untaggedCount++;
         }
-
-        // 自定义分类 ③ 与 未分类 判定
-        bool hasUserCat = false;
-        for (int cid : meta.categoryIds) {
-            if (userCatIds.count(cid)) {
-                snapshot.userCategoryCounts[cid]++;
-                hasUserCat = true;
-            }
-        }
-
-        if (!hasUserCat) {
-            uncategorizedCount++;
-        }
-
-        // 托管库分账统计
-        for (const auto& cat : allCats) {
-            if (cat.kind == CategoryKind::SystemLibrary && !cat.physicalPath.empty()) {
-                std::wstring normLib = MetadataManager::normalizePath(cat.physicalPath);
-                std::wstring normAsset = MetadataManager::normalizePath(path);
-                if (normAsset.rfind(normLib, 0) == 0) {
-                    snapshot.libraryCounts[cat.id]++;
-                }
-            }
-        }
     });
 
-    // 3. 汇总物理磁盘回收站 (离线盘过滤)
+    // 2. 汇总物理磁盘回收站 (离线盘过滤)
     int diskTrashCount = 0;
     auto dbs = DatabaseManager::instance().getActiveMemoryDbs();
     for (sqlite3* db : dbs) {
@@ -249,18 +213,16 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
         }
     }
 
-    snapshot.systemCounts["all"] = allCount;
-    snapshot.systemCounts["untagged"] = untaggedCount;
-    snapshot.systemCounts["uncategorized"] = uncategorizedCount;
-    snapshot.systemCounts["trash"] = libraryTrashCount + diskTrashCount;
-    snapshot.systemCounts["tags"] = 0;
-    snapshot.systemCounts["recently_visited"] = 0;
+    snapshot.totalCount = allCount;
+    snapshot.untaggedCount = untaggedCount;
+    snapshot.uncategorizedCount = uncategorizedCount;
+    snapshot.trashCount = libraryTrashCount + diskTrashCount;
 
-    // 4. 同步原子内存缓存
+    // 3. 同步原子内存缓存
     m_totalCount.store(allCount);
     m_uncategorizedCount.store(uncategorizedCount);
     m_untaggedCount.store(untaggedCount);
-    m_trashCount.store(snapshot.systemCounts["trash"]);
+    m_trashCount.store(snapshot.trashCount);
 
     {
         std::lock_guard<std::mutex> lock(m_snapshotMutex);

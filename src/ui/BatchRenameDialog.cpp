@@ -7,7 +7,6 @@
 #include "UndoToastOverlay.h"
 #include "../meta/BatchRenameEngine.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/CategoryRepo.h"
 #include <QHeaderView>
 #include "FramelessFileDialog.h"
 #include "FramelessDialog.h"
@@ -29,8 +28,8 @@
 
 namespace QuarkMeta {
 
-BatchRenameDialog::BatchRenameDialog(const std::vector<std::wstring>& originalPaths, bool isMirrorSource, QWidget* parent)
-    : FramelessDialog("批量重命名 - QuarkMeta", parent), m_originalPaths(originalPaths), m_isMirrorSource(isMirrorSource) {
+BatchRenameDialog::BatchRenameDialog(const std::vector<std::wstring>& originalPaths, QWidget* parent)
+    : FramelessDialog("批量重命名 - QuarkMeta", parent), m_originalPaths(originalPaths) {
     resize(850, 600); // 2026-04-11 按照用户要求：给予窗口更多弹性空间，提高初始显示质量
     initContent();
     applyTheme();
@@ -107,11 +106,6 @@ void BatchRenameDialog::initContent() {
     targetL->addWidget(m_rbMove);
     targetL->addWidget(m_rbCopy);
 
-    if (m_isMirrorSource) {
-        m_rbMove->setEnabled(false);
-        m_rbCopy->setEnabled(false);
-        m_rbRename->setChecked(true);
-    }
 
     QHBoxLayout* pathL = new QHBoxLayout();
     m_targetPathEdit = new QLineEdit(targetGroup);
@@ -125,10 +119,6 @@ void BatchRenameDialog::initContent() {
     pathL->addWidget(m_btnBrowse);
     targetL->addLayout(pathL);
 
-    if (m_isMirrorSource) {
-        m_targetPathEdit->hide();
-        m_btnBrowse->hide();
-    }
     configL->addWidget(targetGroup);
 
     // 3. 新文件名 (规则构造器)
@@ -332,7 +322,7 @@ void BatchRenameDialog::onExecute() {
     m_btnExecute->setEnabled(false);
 
     // 记录本次执行所操作的旧路径、旧物理目标及新物理目标（为撤销快照提供完整物理对账依据）
-    bool isCapsule = m_isMirrorSource;
+    bool isCapsule = false;
     DiskOperationMode mode = DiskOperationMode::Rename;
     if (m_rbMove->isChecked()) mode = DiskOperationMode::Move;
     else if (m_rbCopy->isChecked()) mode = DiskOperationMode::Copy;

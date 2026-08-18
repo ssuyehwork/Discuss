@@ -24,6 +24,7 @@ class ResizeEventFilter;
 class AddressBar;
 class TaskProgressToolBar;
 class NavPanel;
+class FavoritePanel;
 class ContentPanel;
 class MetaPanel;
 class FilterPanel;
@@ -139,6 +140,7 @@ private:
     
     // UI Panels
     NavPanel* m_navPanel = nullptr;
+    FavoritePanel* m_favoritePanel = nullptr;
     ContentPanel* m_contentPanel = nullptr;
     MetaPanel* m_metaPanel = nullptr;
     FilterPanel* m_filterPanel = nullptr;

@@ -236,7 +236,6 @@ private:
     QWidget* m_groupRatio = nullptr;
     QWidget* m_groupDuplicate = nullptr;
 
-    bool m_isMirrorSource = true;
 
     // 2026-xx-xx 新增快速输入框成员
     QLineEdit*    m_editColor       = nullptr;

@@ -1613,12 +1613,7 @@ void FilterPanel::onToggleAllGroupsClicked() {
 }
 
 void FilterPanel::setMirrorSource(bool isMirror) {
-    if (m_isMirrorSource == isMirror) return;
-    m_isMirrorSource = isMirror;
-    
-    // 🚨 三大组件解封后，评级、颜色标记、链接、备注、图像比例不再有 m_isMirrorSource 的显隐限制，
-    // 但如果有其他专属托管源的分组（如果有的话），依然可以刷新。为了保持体验一致性，此处执行重绘。
-    rebuildGroups();
+    Q_UNUSED(isMirror);
 }
 
 void FilterPanel::selectColor(const QColor& color) {

@@ -6,9 +6,18 @@
 #include <atomic> 
 #include <mutex> 
 #include <functional> 
-#include "CategoryRepo.h" // 复用 StatisticsSnapshot 结构体 
 
 namespace QuarkMeta { 
+
+struct StatisticsSnapshot {
+    int totalCount = 0;
+    int uncategorizedCount = 0;
+    int untaggedCount = 0;
+    int trashCount = 0;
+    std::unordered_map<int, int> categoryCounts;
+    std::unordered_map<int, int> tagCounts;
+};
+
 class StatisticsService : public QObject { 
     Q_OBJECT 
 public: 

@@ -25,7 +25,6 @@
 #include "PhysicalDataExtractor.h"
 #include "IngestionProgressEngine.h"
 #include "../core/AppConfig.h"
-#include "../meta/CategoryRepo.h"
 #include "../ui/MediaColorExtractor.h"
 #include "StatisticsService.h"
 #include "../core/VolumeOnlineManager.h"
@@ -561,9 +560,6 @@ bool MetadataManager::registerAsset(const std::string& initialFolderId, const st
                 } 
             } 
 
-            // 🚨 3.5：无论是否有自定义分类，入库资产都自动检测并绑定到物理托管根库分类
-            CategoryRepo::bindToLibraryRootCategory(folderId, nPath);
-
             if (trans.commit()) {
                 success = true;
                 break;
@@ -605,9 +601,6 @@ bool MetadataManager::registerAsset(const std::string& initialFolderId, const st
     registerItemsAsync({QString::fromStdWString(nPath)}, true); 
  
     notifyCategoryCountChanged();
-
-    // 1. 同步刷新分类仓储内存快照
-    CategoryRepo::refreshMemoryCache();
 
     // 2. 触发统计服务异步全量重算账本，推动侧边栏数字刷新
     StatisticsService::instance().requestFullRecountAsync();
@@ -1387,12 +1380,6 @@ void MetadataManager::setColor(const std::wstring& path, const std::wstring& col
                 persistAsync(nPath);
             });
             
-            // 自下而上：如果改变的是文件夹，同步更新映射分类颜色
-            if (isFolder) {
-                if (CategoryRepo::updateCategoryColorByPath(nPath, normColor)) {
-                    if (notify) notifyUI(RefreshLevel::CategoryOnly);
-                }
-            }
         }
     }
 }
@@ -1552,10 +1539,6 @@ void MetadataManager::setItemVisualMetadata(const std::wstring& path, const std:
         isFolder = meta.isFolder;
     }
     
-    // 【同步逻辑】如果是文件夹主色提取，则同步更新 categories 分类定义表中的颜色
-    if (isFolder) {
-        CategoryRepo::updateCategoryColorByPath(nPath, color);
-    }
     
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
     if (isInsideManagedLibrary(nPath)) {
@@ -1771,10 +1754,6 @@ void MetadataManager::renameBatchAsync(
             trans.commit(); // 【仅提交 1 次事务】
         }
 
-        // D. 同步更新 CategoryRepo 物理路径
-        for (const auto& pair : normalizedPairs) {
-            CategoryRepo::renamePhysicalCategoryPath(pair.first, pair.second);
-        }
 
         // E. 清理操作标志位，安全回到 UI 主线程通知
         setInternalOperating(false);
@@ -2034,9 +2013,7 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
 
                     if (isManagedAsset(it->second.isFolder, curPath)) {
                         totalDelta--;
-                        QString driveLetter = VolumeOnlineManager::extractDriveLetter(QString::fromStdWString(curPath));
-                        int libCatId = CategoryRepo::getLibraryCategoryIdByDrive(driveLetter);
-                        StatisticsService::instance().purgeAsset(libCatId, it->second.categoryIds, !it->second.tags.isEmpty(), it->second.isTrash); 
+                        StatisticsService::instance().purgeAsset(0, it->second.categoryIds, !it->second.tags.isEmpty(), it->second.isTrash); 
                     }
                     if (!it->second.folderId.empty()) {
                         std::string fid = it->second.folderId;
@@ -2091,26 +2068,6 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
         trans.commit();
     }
 
-    // 2026-06-xx 物理级根除：基于 File ID (FRN) 批量清理所有分类关联，彻底杜绝“幽灵关联”
-    if (!fids.empty()) {
-        CategoryRepo::removeAllCategoriesBatch(fids);
-    }
-
-    // [Plan-5] 移除 1:1 自动建立的整个镜像分类树节点（标准化比对加固）
-    auto allCats = CategoryRepo::getAll();
-    bool anyCatRemoved = false;
-    for (const auto& cat : allCats) {
-        if (!cat.physicalPath.empty()) {
-            std::wstring normCatPath = normalizePath(cat.physicalPath);
-            if (normCatPath == nPath || normCatPath.find(nPath + L"\\") == 0 || normCatPath.find(nPath + L"/") == 0) {
-                CategoryRepo::remove(cat.id);
-                anyCatRemoved = true;
-            }
-        }
-    }
-    if (anyCatRemoved) {
-        notifyUI(RefreshLevel::FullRebuild);
-    }
 }
 
 void MetadataManager::removeMetadataBatchSync(const QStringList& paths) {
@@ -2228,7 +2185,6 @@ void MetadataManager::removeMetadataBatchSync(const QStringList& paths) {
         }
     }
 
-    if (!allFids.empty()) CategoryRepo::removeAllCategoriesBatch(allFids);
     
     notifyFullUIRebuild();
 
@@ -2310,11 +2266,6 @@ void MetadataManager::markAsTrash(const std::wstring& path, bool isTrash, const 
     }
     
     if (changed) {
-        // 2026-06-xx 按照用户要求：移入回收站时，必须和其他分类彻底隔离
-        if (isTrash && !fid.empty()) {
-            // 将文件移入“回收站”桶位（ID -8），这会自动解除所有现有分类关联
-            CategoryRepo::moveToTrashBatch({fid});
-        }
 
         // 实时通知统计服务回收站状态变更 
         StatisticsService::instance().notifyAssetTrashChanged(isTrash, oldEmpty); 
@@ -2422,26 +2373,8 @@ std::wstring MetadataManager::getManagedLibraryPath(const std::wstring& volSeria
 }
 
 bool MetadataManager::isInsideManagedLibrary(const std::wstring& path) {
-    if (path.empty()) return false;
-    
-    std::wstring normW = normalizePath(path);
-    QString qPath = QString::fromStdWString(normW).toLower();
-
-    // 1. 检查默认资源库
-    std::wstring volSerial = getVolumeSerialNumber(path);
-    QString letter = (path.length() >= 2 && path[1] == L':') ? QString::fromWCharArray(&path[0], 1) : "";
-    std::wstring managedAbsW = getManagedLibraryPath(volSerial, letter);
-    if (!managedAbsW.empty()) {
-        QString managedAbs = QString::fromStdWString(managedAbsW).toLower();
-        if (qPath.startsWith(managedAbs)) {
-            if (qPath.length() == managedAbs.length() ||
-                qPath[managedAbs.length()] == '\\' || qPath[managedAbs.length()] == '/') {
-                return true;
-            }
-        }
-    }
-
-    return false;
+    Q_UNUSED(path);
+    return false; // 纯磁盘直连应用无托管库概念
 }
 
 bool MetadataManager::fetchWinApiMetadataDirect(const std::wstring& path, std::string& outId128, std::wstring* outFrn, long long* outSize, std::wstring* outType, long long* outCtime, long long* outMtime, long long* outAtime) {
@@ -2762,17 +2695,6 @@ QStringList MetadataManager::searchInCache(const QString& keyword, const QString
     std::unordered_set<std::string> scopeFids;
     bool hasScope = false;
 
-    if (scopeSource == "category" && categoryId != 0) {
-        // 1. 分类范围搜索：获取该分类及其子分类下的所有 FID
-        // 2026-07-xx 按照 Plan-81：支持递归搜索
-        std::vector<int> targetIds = { categoryId };
-        if (categoryId > 0) {
-            targetIds = CategoryRepo::getSubtreeIds(categoryId);
-        }
-        auto items = CategoryRepo::getItemsInCategories(targetIds);
-        for (const auto& item : items) scopeFids.insert(item.folderId);
-        hasScope = true;
-    }
 
     // 2026-07-xx 物理对账：规范化父路径前缀用于导航范围搜索
     std::wstring wParentPath = (scopeSource == "nav" && !parentPath.isEmpty()) ? normalizePath(parentPath.toStdWString()) : L"";

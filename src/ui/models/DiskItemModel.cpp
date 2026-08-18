@@ -13,7 +13,6 @@
 #include "../../meta/FileOperationHelper.h"
 #include "../../meta/CapsuleMediaExtractor.h"
 #include "../../meta/MetadataManager.h"
-#include "../../meta/CategoryRepo.h"
 
 using namespace QuarkMeta;
 
@@ -157,7 +156,6 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             std::wstring newW = QDir(destDir).absoluteFilePath(newPathStr).toStdWString();
 
             MetadataManager::instance().renameItem(oldW, newW);
-            CategoryRepo::renamePhysicalCategoryPath(oldW, newW);
         }
 
         if (success) {

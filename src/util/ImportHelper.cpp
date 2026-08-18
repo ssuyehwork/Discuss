@@ -3,7 +3,6 @@
 #include "../ui/BatchProgressDialog.h"
 #include "../ui/ToolTipOverlay.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/CategoryRepo.h"
 #include "../meta/DatabaseManager.h"
 #include "ShellHelper.h"
 #include <QDir>

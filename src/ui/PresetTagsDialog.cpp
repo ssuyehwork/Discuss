@@ -1,7 +1,6 @@
 #include "PresetTagsDialog.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
-#include "../meta/CategoryRepo.h"
 #include "../meta/MetadataManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -105,14 +104,8 @@ void PresetTagsDialog::initUi() {
 }
 
 void PresetTagsDialog::loadTags() {
-    Category cat = CategoryRepo::getById(m_categoryId);
-    m_categoryName = QString::fromStdWString(cat.name);
     m_folderNameEdit->setText(m_categoryName);
-
     m_presetTags.clear();
-    for (const auto& ws : cat.presetTags) {
-        m_presetTags.append(QString::fromStdWString(ws));
-    }
 }
 
 void PresetTagsDialog::populateTagPills() {
@@ -192,15 +185,7 @@ void PresetTagsDialog::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void PresetTagsDialog::onSaveClicked() {
-    Category cat = CategoryRepo::getById(m_categoryId);
-    cat.presetTags.clear();
-    for (const QString& tag : m_presetTags) {
-        cat.presetTags.push_back(tag.toStdWString());
-    }
-    
-    if (CategoryRepo::update(cat)) {
-        accept();
-    }
+    accept();
 }
 
 void PresetTagsDialog::onCancelClicked() {

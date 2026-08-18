@@ -1,6 +1,5 @@
 #include "OperationSnapshotEngine.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/CategoryRepo.h"
 #include "../ui/UndoToastOverlay.h"
 #include "UndoManager.h"
 #include "ActionCommand.h"
@@ -22,11 +21,6 @@ AssetItemSnapshot OperationSnapshotEngine::captureSingle(const QString& path) {
     std::string fid = MetadataManager::instance().getFolderIdSync(wpath);
 
     if (!fid.empty()) {
-        auto stdIds = CategoryRepo::getItemCategoryIds(fid);
-        snap.categoryIds.reserve(static_cast<int>(stdIds.size()));
-        for (int cid : stdIds) {
-            snap.categoryIds.append(cid);
-        }
         // 读取收藏/置顶与元数据属性
         auto meta = MetadataManager::instance().getMeta(wpath);
         snap.isPinned = meta.pinned;
