@@ -24,6 +24,8 @@
 #include "../core/NavigationHistoryService.h"
 #include "ToolTipOverlay.h" 
 #include "MainWindow.h"
+#include "../core/CoreEngine.h"
+#include "../core/CentralEventHub.h"
 #include "../util/SecureFileEraser.h"
 #include "../util/DiskIoService.h"
  
@@ -1881,7 +1883,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                 // 2. 批量大事务级联擦除已入库的元数据和关联、进度、重置计数器
                 MetadataManager::instance().removeMetadataBatchSync(targetPaths);
 
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已取消自动导入并彻底擦除相关元数据", 2000, QColor("#e81123"));
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已彻底擦除相关元数据", 2000, QColor("#e81123"));
                 refreshAll();
             }
             break;
@@ -2470,7 +2472,10 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
     if (info.isDir()) { 
         emit directorySelected(path);  
     } else { 
-        MetadataManager::instance().recordAccess(path.toStdWString());
+        AppCommand cmd;
+        cmd.type = AppCommandType::RecordAccess;
+        cmd.targetPaths << path;
+        CoreEngine::instance().executeCommand(cmd);
         
         // 2026-11-xx 按照用户全新要求：在内容面板双击某个文件时如同按下空格键那样打开预览
         QString ext = info.suffix().toLower();

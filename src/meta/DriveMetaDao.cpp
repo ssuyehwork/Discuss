@@ -1,5 +1,6 @@
 #include "DriveMetaDao.h"
 #include "DatabaseManager.h"
+#include "MetadataManager.h"
 #include "sqlite3.h"
 #include <QDateTime>
 
@@ -41,7 +42,7 @@ std::unordered_map<std::wstring, DriveMetaRecord> DriveMetaDao::getAllDriveMeta(
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             DriveMetaRecord rec;
             const wchar_t* pPath = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 0));
-            if (pPath) rec.drivePath = pPath;
+            if (pPath) rec.drivePath = MetadataManager::normalizePath(pPath);
             rec.rating = sqlite3_column_int(stmt, 1);
             const wchar_t* pColor = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 2));
             if (pColor) rec.color = pColor;
@@ -59,17 +60,20 @@ std::unordered_map<std::wstring, DriveMetaRecord> DriveMetaDao::getAllDriveMeta(
 }
 
 DriveMetaRecord DriveMetaDao::getDriveMeta(const std::wstring& drivePath) {
+    std::wstring normPath = MetadataManager::normalizePath(drivePath);
     auto all = getAllDriveMeta();
-    auto it = all.find(drivePath);
+    auto it = all.find(normPath);
     if (it != all.end()) return it->second;
     DriveMetaRecord defaultRec;
-    defaultRec.drivePath = drivePath;
+    defaultRec.drivePath = normPath;
     return defaultRec;
 }
 
 bool DriveMetaDao::saveDriveMeta(const DriveMetaRecord& record) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
+
+    std::wstring normPath = MetadataManager::normalizePath(record.drivePath);
 
     const char* sql = 
         "INSERT INTO drive_metadata (drive_path, rating, color, pinned, note, url, updated_at) "
@@ -86,7 +90,7 @@ bool DriveMetaDao::saveDriveMeta(const DriveMetaRecord& record) {
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
 
     qint64 now = QDateTime::currentMSecsSinceEpoch();
-    sqlite3_bind_text16(stmt, 1, record.drivePath.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text16(stmt, 1, normPath.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmt, 2, record.rating);
     sqlite3_bind_text16(stmt, 3, record.color.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmt, 4, record.pinned ? 1 : 0);
@@ -96,7 +100,15 @@ bool DriveMetaDao::saveDriveMeta(const DriveMetaRecord& record) {
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
-    return (rc == SQLITE_DONE);
+
+    if (rc == SQLITE_DONE) {
+        DatabaseManager::instance().setDirty(true);
+        DatabaseManager::instance().enqueueSyncTask([]() {
+            DatabaseManager::instance().flushAll();
+        });
+        return true;
+    }
+    return false;
 }
 
 } // namespace QuarkMeta

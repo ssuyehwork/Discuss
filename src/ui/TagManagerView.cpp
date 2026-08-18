@@ -1,5 +1,6 @@
 #include "TagManagerView.h"
 #include "UiHelper.h"
+#include "../core/CentralEventHub.h"
 #include "StyleLibrary.h"
 #include "MetaPanel.h"
 #include "../meta/MetadataManager.h"
@@ -50,6 +51,12 @@ void TagManagerView::initUi() {
 
     m_splitter->addWidget(m_sidebar);
     m_splitter->addWidget(m_contentContainer);
+
+    connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [this](const QuarkMeta::AppEvent& event) {
+        if (event.type == QuarkMeta::AppEventType::MetadataUpdated) {
+            refresh();
+        }
+    });
     
     // 侧边栏固定 230px
     m_splitter->setSizes({230, 1000});

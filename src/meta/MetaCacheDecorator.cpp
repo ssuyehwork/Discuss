@@ -1,6 +1,7 @@
 #include "MetaCacheDecorator.h" 
 #include "QuarkMetaJson.h" 
 #include "DriveMetaDao.h"
+#include "MetadataManager.h"
 #include <QFileInfo> 
 #include <QDir>
 #include <unordered_map> 
@@ -20,10 +21,10 @@ void MetaCacheDecorator::decorate(std::vector<ItemRecord>& records) {
         if (itemRec.isCategory) continue; 
 
         // 【盘符特殊处理】：如果是驱动器根目录（如 C:\、D:\）
-        std::wstring wPath = QDir::toNativeSeparators(itemRec.path).toStdWString();
+        std::wstring normWPath = MetadataManager::normalizePath(itemRec.path.toStdWString());
         QFileInfo info(itemRec.path);
         if (info.isRoot() || itemRec.path.endsWith(":\\") || itemRec.path.endsWith(":/")) {
-            auto driveIt = driveMetas.find(wPath);
+            auto driveIt = driveMetas.find(normWPath);
             if (driveIt != driveMetas.end()) {
                 itemRec.rating = driveIt->second.rating;
                 itemRec.manualColor = QString::fromStdWString(driveIt->second.color);

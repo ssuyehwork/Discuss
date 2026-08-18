@@ -50,64 +50,7 @@ CoreController::CoreController(QObject* parent) : QObject(parent) {
             std::wstring normNewPath = MetadataManager::normalizePath(ev.newPath.toStdWString());
             QString qNewPath = QString::fromStdWString(normNewPath);
 
-            // 1. 进行 "自动导入路径" 前缀精准匹配
-            bool isAutoImportMatch = false;
-            QString matchedPrefix;
-            for (const QString& folder : customFolders) {
-                if (qNewPath.compare(folder, Qt::CaseInsensitive) == 0) {
-                    isAutoImportMatch = true;
-                    matchedPrefix = folder;
-                    break;
-                }
-                QString folderWithSep = folder;
-                if (!folderWithSep.endsWith('/') && !folderWithSep.endsWith('\\')) {
-                    folderWithSep += QDir::separator();
-                }
-                if (qNewPath.startsWith(folderWithSep, Qt::CaseInsensitive)) {
-                    isAutoImportMatch = true;
-                    matchedPrefix = folder;
-                    break;
-                }
-            }
-
-            if (isAutoImportMatch) {
-                // 触发 自动导入剪切迁移机制
-                if (ev.action == QuarkMeta::WatcherAction::Added || ev.action == QuarkMeta::WatcherAction::Modified) {
-                    // 计算顶级项目（Top-level Item）物理路径
-                    // 计算相对路径成分名，取出相对路径的第一级，拼接到 matchedPrefix 后面
-                    QString relative = qNewPath.mid(matchedPrefix.length());
-                    if (relative.startsWith('\\') || relative.startsWith('/')) {
-                        relative = relative.mid(1);
-                    }
-                    // 健壮性优化：将所有路径分隔符统一替换为正斜杠 '/' 进行安全分段提取
-                    QString topLevelComponent = relative.replace('\\', '/').section('/', 0, 0);
-                    if (topLevelComponent.isEmpty()) {
-                        // 变动的就是监控文件夹本身，跳过
-                        continue;
-                    }
-                    QString topLevelPath = QDir::toNativeSeparators(QDir(matchedPrefix).absoluteFilePath(topLevelComponent));
-                    std::wstring wTopLevelPath = topLevelPath.toStdWString();
-
-                    // 检查物理路径是否真实存在，且其未被列入当前正在迁移的待处理批次中
-                    if (QFileInfo(topLevelPath).exists() && s_currentlyMigrating.find(wTopLevelPath) == s_currentlyMigrating.end()) {
-                        s_currentlyMigrating.insert(wTopLevelPath);
-
-
-                        // 直接调用资产打包导入器进行剪切迁移入库 (targetCatId = 0)，后台静默进行
-                        AssetImporter::importAssets(QStringList() << topLevelPath, 0, nullptr, [wTopLevelPath]() {
-                            s_currentlyMigrating.erase(wTopLevelPath);
-                            // 迁移完成后，自动调用 MetadataManager::instance().notifyFullUIRebuild() 进行自愈式刷新
-                            MetadataManager::instance().notifyFullUIRebuild();
-                        }, true);
-                    }
-                } else if (ev.action == QuarkMeta::WatcherAction::Removed) {
-                    // 处理 Removed 事件：在 CoreController 中处理 WatcherAction::Removed 时，若该路径是外部监控目录，调用 removeMetadataSync 即使返回未注册也不产生任何影响
-                    MetadataManager::instance().removeMetadataSync(normNewPath);
-                }
-                continue;
-            }
-
-            // 2. 原普通资源库/常规文件的 IOCP 变动响应逻辑
+            // 常规文件的物理磁盘变动响应逻辑
             if (ev.action == QuarkMeta::WatcherAction::Added || ev.action == QuarkMeta::WatcherAction::Modified) {
                 if (!ev.isDirectory) {
                     MetadataManager::instance().registerItemsAsync(QStringList() << ev.newPath, true);

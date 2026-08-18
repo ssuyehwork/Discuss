@@ -42,12 +42,37 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Arc
 ---
 
 ## 4. 界面重构实施子计划索引 (Implementation Plans)
+- **中央神经调度中枢与底层洗髓重构无脑实施方案**：详见 `Modification_Plan/CentralDispatcherArchitecture.md`
 - **五栏视图布局与伸缩因子修复方案**：详见 `Modification_Plan/FiveColumnLayoutFix.md`
 - **根目录/盘符元数据 global.db 持久化方案**：详见 `Modification_Plan/DriveRootMetaInGlobalDb.md`
 - **托管库与同步按钮彻底根除方案**：详见 `Modification_Plan/RemoveManagedLibraryAndSyncButtons.md`
 - **盘符栏清理、自动导入根除与“标签管理”实用按钮引入方案**：详见 `Modification_Plan/TagManagerAndLegacyCodePurge.md`
 - **收藏夹独占第二栏重构方案**：详见 `Modification_Plan/FavoritePanel.md`
 - **内存托管库模式彻底清理实施方案**：详见 `Modification_Plan/MemoryModeCleanup.md`
+
+---
+
+## 5. 中央神经调度中枢与三条交互铁律架构规范 (Central Dispatcher Architecture Specification)
+
+### 5.1 面板 / 视图层通信规范
+#### 5.1.1 交互组件 / 消息总线入口
+##### A. 内存模式下：
+> *（注：内存模式下的中央神经调度中枢架构不在 QuarkMeta 独立应用范畴内，暂时留空。）*
+
+##### B. 磁盘目录模式下：
+1. **双核调度中枢体系**：全系统建立唯一双核中央调度中枢——传声筒 `CentralEventHub`（纯消息事件分发、无数据逻辑）与中央大脑 `CoreEngine`（业务决策与逻辑编排）。
+2. **遵守三条交互铁律**：
+   - **铁律一**：UI 视图与控件绝对禁止直接调用 `MetadataManager`、`DatabaseManager`、`DiskIoService` 等底层服务。
+   - **铁律二**：UI 上的所有用户操作必须封装为 Command 提交给 `CoreEngine`。
+   - **铁律三**：UI 只能订阅 `CentralEventHub` 的增量 Event 进行局部刷新，严格禁止调用 `notifyFullUIRebuild()` 强刷全屏。
+3. **底层数据纯净化与并发锁**：
+   - 由于 QuarkMeta 是从原双轨架构（`Dual-mode version`）独立出的纯磁盘模式应用，中央中枢重构前必须彻底死刑、物理拔除以下残留垃圾：
+     1. IOCP 监控与自动导入剪切逻辑；
+     2. 创建资源库、`QuarkMeta.Library_X` 托管文件夹及右键菜单；
+     3. 标题栏同步按钮 `m_btnSync` 及 `SyncStatusService` 提示；
+     4. `.arc` 胶囊容器、`Base36 ID` 及 `isInsideManagedLibrary` 补丁代码。
+   - `DatabaseManager` 强制采用分库递归互斥锁，杜绝跨线程 sqlite3 锁争抢。
+   - 为后台耗时流水线引入原子化可中断的 `CancellationToken`，防止线程雪崩。
 
 ---
 
