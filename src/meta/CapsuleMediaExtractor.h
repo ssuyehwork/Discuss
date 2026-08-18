@@ -23,6 +23,9 @@ public:
 
     // 计算磁盘模式缩略图的哈希缓存路径
     static QString getDiskThumbCachePath(const QString& mainAssetPath);
+
+    // 512x512 高清 JPEG 85 落盘接口
+    static bool saveDiskThumbnail(const QString& mainAssetPath, const QImage& img512);
 };
 
 } // namespace QuarkMeta
