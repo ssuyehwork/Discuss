@@ -35,16 +35,27 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过剔除原 ArcMeta �
 
 ---
 
-## 2. 独立化应用改造与配置隔离规范 (Standalone Application & Isolation Specification)
+## 2. 磁盘模式离散 JSON 元数据缓存命名规范 (Disk Metadata JSON Specification)
 
-### 2.1 依赖清场与文件移除规范 (Code Deprecation)
+### 2.1 物理文件名重命名规范
+- **原物理文件名**：`.ArcMeta.json`
+- **新物理文件名**：`.QuarkMeta.json`
+- **处理原则**：
+  在 QuarkMeta 磁盘直连模式下，当用户对某个普通物理文件夹及其内部文件进行打标签、评级、备注或置顶等操作时，系统写入该物理文件夹根目录下的离散元数据缓存文件统一使用 **`.QuarkMeta.json`**，防止在磁盘上残留旧应用标识。
+- **.gitignore 忽略规则同步**：`.gitignore` 中原 `*.ArcMeta.json` 规则同步更新为 `*.QuarkMeta.json`。
+
+---
+
+## 3. 独立化应用改造与配置隔离规范 (Standalone Application & Isolation Specification)
+
+### 3.1 依赖清场与文件移除规范 (Code Deprecation)
 彻底移除专门服务于内存托管模式的逻辑与 UI 组件，包括但不限于：
 - 内存资产模型：`LibraryAssetModel.h / .cpp`
 - 内存重命名服务：`MemoryBatchRenameService.h / .cpp`
 - 数据库与同步器：`DatabaseSynchronizer.h / .cpp`
 - 自动导入与维护服务：`AutoImportManager.h / .cpp`，`LibraryMaintenanceService.h / .cpp`
 
-### 2.2 配置与日志隔离规范 (Config & Log Isolation)
+### 3.2 配置与日志隔离规范 (Config & Log Isolation)
 - **物理配置落盘**：`AppConfig` 的 `QSettings` 实例化强制改为 `m_settings("QuarkMeta", "QuarkMeta")`，使得注册表/INI文件存储于专属于 QuarkMeta 的全新路径，绝对禁止与 ArcMeta 共享或覆盖配置。
 - **运行日志隔离**：全局运行与调试日志由 `arcmeta_debug.log` 重命名为 `quarkmeta_debug.log`。
 - **可执行文件与项目重命名**：构建目标、可执行文件及 Windows 资源清单统一更名为 `QuarkMeta.exe` / `QuarkMeta.manifest` / `QuarkMeta.rc`。
