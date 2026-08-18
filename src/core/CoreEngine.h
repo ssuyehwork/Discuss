@@ -18,10 +18,16 @@ enum class AppCommandType {
     SetRating,         // 设置星级
     SetColor,          // 设置颜色标记
     SetTags,           // 设置/添加/移除标签
+    AddTag,            // 批量添加标签
+    RemoveTag,         // 批量移除标签
+    RenameTag,         // 重命名全局标签
+    RemoveGlobalTag,   // 擦除全局标签
     SetNote,           // 设置备注
     SetURL,            // 设置链接
+    SetPinned,         // 置顶/取消置顶
     RenameItems,       // 重命名文件/文件夹
     DeletePermanently, // 物理删除文件
+    RemoveBatchSync,   // 批量移除元数据
     RecordAccess       // 记录访问历史
 };
 

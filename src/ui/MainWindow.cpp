@@ -502,8 +502,15 @@ void MainWindow::initUi() {
         }
     });
 
-    // 5a. 目录装载完成 -> FilterPanel 动态填充
-    connect(m_contentPanel, &ContentPanel::directoryStatsReady, m_filterPanel, &FilterPanel::populateStats);
+    // 5a. 目录装载完成 -> 通过事件中枢触发 FilterPanel 动态填充
+    connect(m_contentPanel, &ContentPanel::directoryStatsReady, this, [this](const ScanStats& stats) {
+        if (m_filterPanel) {
+            m_filterPanel->populateStats(stats);
+        }
+        AppEvent ev;
+        ev.type = AppEventType::FilterStateChanged;
+        CentralEventHub::instance().publishEvent(ev);
+    });
 
     // 5b. FilterPanel 状态变化 -> 内容面板过滤 (Plan-92: 统一搜索词合并)
     // 2026-05-27 物理加固：补全 this 上下文
@@ -614,50 +621,30 @@ void MainWindow::initUi() {
 
     // 添加标签管网 
     connect(m_metaPanel, &MetaPanel::tagAddRequested, this, [this](const QStringList& paths, const QString& newTag) { 
-        for (const QString& p : paths) { 
-            if (p.isEmpty()) continue; 
-            std::wstring wPath = p.toStdWString(); 
-            bool isManaged = MetadataManager::isInsideManagedLibrary(wPath); 
- 
-            if (isManaged) { 
-                auto meta = MetadataManager::instance().getMeta(wPath); 
-                QStringList curTags = meta.tags; 
-                if (!curTags.contains(newTag)) { 
-                    curTags.append(newTag); 
-                    MetadataManager::instance().setTags(wPath, curTags, false); 
-                } 
-            } else {  
-                DiskNavigatorService::instance().saveItemMeta(p.toStdWString(), [newTag](ItemMeta& meta) { 
-                    std::wstring wNewTag = newTag.toStdWString(); 
-                    if (std::find(meta.tags.begin(), meta.tags.end(), wNewTag) == meta.tags.end()) { 
-                        meta.tags.push_back(wNewTag); 
-                    } 
-                }); 
-            }  
-            m_contentPanel->updateItemMetadata(p); 
-        } 
+        if (!paths.isEmpty() && !newTag.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::AddTag;
+            cmd.targetPaths = paths;
+            cmd.params["tag"] = newTag;
+            CoreEngine::instance().executeCommand(cmd);
+            for (const QString& p : paths) {
+                m_contentPanel->updateItemMetadata(p);
+            }
+        }
     }); 
  
     // 删除标签管网 
     connect(m_metaPanel, &MetaPanel::tagRemoveRequested, this, [this](const QStringList& paths, const QString& removeTag) { 
-        for (const QString& p : paths) { 
-            if (p.isEmpty()) continue; 
-            std::wstring wPath = p.toStdWString(); 
-            bool isManaged = MetadataManager::isInsideManagedLibrary(wPath); 
- 
-            if (isManaged) { 
-                auto meta = MetadataManager::instance().getMeta(wPath); 
-                QStringList curTags = meta.tags; 
-                curTags.removeAll(removeTag); 
-                MetadataManager::instance().setTags(wPath, curTags, false); 
-            } else {  
-                DiskNavigatorService::instance().saveItemMeta(p.toStdWString(), [removeTag](ItemMeta& meta) { 
-                    std::wstring wRemoveTag = removeTag.toStdWString(); 
-                    meta.tags.erase(std::remove(meta.tags.begin(), meta.tags.end(), wRemoveTag), meta.tags.end()); 
-                }); 
-            }  
-            m_contentPanel->updateItemMetadata(p); 
-        } 
+        if (!paths.isEmpty() && !removeTag.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::RemoveTag;
+            cmd.targetPaths = paths;
+            cmd.params["tag"] = removeTag;
+            CoreEngine::instance().executeCommand(cmd);
+            for (const QString& p : paths) {
+                m_contentPanel->updateItemMetadata(p);
+            }
+        }
     }); 
 
     // 2026-06-xx调色盘搜索联动：将颜色喂给筛选器，由筛选器驱动过滤
@@ -701,16 +688,21 @@ void MainWindow::initUi() {
     });
 
 
-    // 9. 2026-03-xx 响应元数据全局变更，同步刷新 UI (合并优化，消除重复连接与性能损耗)
-    connect(&MetadataManager::instance(), &MetadataManager::metaChanged, this, [this](const QString& path) {
-        // 1. 全局内容区同步
-        if (path == "__RELOAD_ALL__" || path == "__RELOAD_CATEGORY_ONLY__") {
+    // 9. 响应中央中枢事件，解耦驱动 UI 局部或全局同步
+    connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [this](const QuarkMeta::AppEvent& event) {
+        if (event.type == QuarkMeta::AppEventType::MetadataUpdated) {
+            if (!event.targetPath.isEmpty()) {
+                m_contentPanel->updateItemMetadata(event.targetPath);
+            } else if (!event.paths.isEmpty()) {
+                for (const QString& p : event.paths) {
+                    m_contentPanel->updateItemMetadata(p);
+                }
+            } else {
+                m_contentPanel->refreshAll();
+            }
+        } else if (event.type == QuarkMeta::AppEventType::ItemsDeleted || event.type == QuarkMeta::AppEventType::ItemsRenamed) {
             m_contentPanel->refreshAll();
-            return;
         }
-
-        // 2. 局部路径更新
-        m_contentPanel->updateItemMetadata(path);
     });
 
     m_elapsedTimer = new QTimer(this);
@@ -1786,240 +1778,10 @@ void MainWindow::initDriveBar() {
     }
     m_driveBarLayout->addStretch();
 
-    // 自动追加加载自定义 monitored buttons
-    updateCustomFolderButtons();
-
-    // 连接文件监视信号，当发现第三方删除资源库或自定义监控文件夹时安全更新 UI 与底层除账
-    connect(&NativeFolderWatcher::instance(), &NativeFolderWatcher::managedFolderRemoved, this, [this](const std::wstring& path) {
-        QString qPath = QString::fromStdWString(path);
-        std::wstring normPath = MetadataManager::normalizePath(path);
-        QString finalPath = QString::fromStdWString(normPath);
-
-        QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-
-        // 如果被移动/删除的是自定义监控文件夹，自动触发注销逻辑
-        if (customFolders.contains(finalPath) || customFolders.contains(qPath)) {
-            removeCustomMonitoredFolder(qPath);
-        } else {
-            // 默认资源库清退逻辑
-            QFileInfo info(qPath);
-            QString letter = info.absolutePath().left(2).toUpper(); // "D:"
-            if (m_driveButtons.contains(letter)) {
-                m_driveButtons[letter]->setState(DriveButton::Inactive); // 蓝色打勾变灰色
-            }
-            // 底层数据物理除账
-            MetadataManager::instance().removeMetadataSync(path);
-        }
-    });
-}
-
-
-void MainWindow::updateCustomFolderButtons() {
-    // 清除既有 custom folder 按钮
-    for (FolderButton* btn : m_folderButtons) {
-        m_driveBarLayout->removeWidget(btn);
-        btn->deleteLater();
-    }
-    m_folderButtons.clear();
-
-    // 载入配置并追加
-    QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-    int insertIndex = m_driveBarLayout->count() - 1; // 插入在末尾 stretch spacer 之前
-    if (insertIndex < 0) insertIndex = 0;
-
-    QStringList validFolders;
-    bool hasInvalid = false;
-
-    for (const QString& path : customFolders) {
-        std::wstring normPath = MetadataManager::normalizePath(path.toStdWString());
-        QString finalPath = QString::fromStdWString(normPath);
-
-        // 🚨 核心自愈逻辑：如果在物理磁盘上文件夹已经不存在（被移走或删除），自动触发数据清洗与自动解绑！
-        if (!QDir(finalPath).exists()) {
-            
-            // 1. 从 NativeFolderWatcher 监控中注销此路径
-            NativeFolderWatcher::instance().removeWatch(normPath);
-
-            // 2. 彻底清洗数据库元数据
-            MetadataManager::instance().removeMetadataSync(normPath);
-
-            // 3. 清除相关配置
-            AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(path), QVariant());
-            AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(path), QVariant());
-            AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(finalPath), QVariant());
-            AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(finalPath), QVariant());
-            
-            hasInvalid = true;
-            continue; // 跳过，不进行 UI 按钮绘制
-        }
-
-        validFolders.append(finalPath);
-
-        FolderButton* btn = new FolderButton(finalPath, m_driveBarWidget);
-        btn->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(btn, &QWidget::customContextMenuRequested, this, &MainWindow::onFolderButtonContextMenu);
-        
-        // 单击该文件夹按钮，自动将内容导航面板重定向至此物理路径
-        connect(btn, &QPushButton::clicked, this, [this, finalPath]() {
-            m_navPanel->setRootPath(finalPath);
-            unifiedNavigateTo(finalPath);
-        });
-
-        m_driveBarLayout->insertWidget(insertIndex++, btn);
-        m_folderButtons.push_back(btn);
-    }
-
-    // 配置回写与同步
-    if (hasInvalid) {
-        AppConfig::instance().setValue("DriveBar/CustomMonitoredFolders", validFolders);
-        AppConfig::instance().sync();
-    }
 }
 
 void MainWindow::onDriveBarContextMenu(const QPoint& pos) {
     Q_UNUSED(pos);
-}
-
-void MainWindow::onFolderButtonContextMenu(const QPoint& pos) {
-    FolderButton* btn = qobject_cast<FolderButton*>(sender());
-    if (!btn) return;
-    QString path = btn->folderPath();
-
-    QMenu menu(this);
-    UiHelper::applyMenuStyle(&menu);
-    QAction* actRemove = menu.addAction("解除监控");
-
-    menu.addSeparator();
-
-    QString colorStr = AppConfig::instance().getValue(QString("DriveBar/FolderColor_%1").arg(path), "#FFFFFF").toString();
-    QColor folderColor = QColor(colorStr);
-    if (!folderColor.isValid()) {
-        folderColor = Style::TextMain;
-    }
-
-    // 1. 新增 “设定分类色” 水平色块，直接展露在主菜单上
-    QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
-    ColorStripPicker* colorPickerWidget = new ColorStripPicker(colorStr, &menu);
-    colorPickerAction->setDefaultWidget(colorPickerWidget);
-    menu.addAction(colorPickerAction);
-
-    connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [btn, path, &menu](const QString& hexColor) {
-        AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(path), hexColor.toUpper());
-        AppConfig::instance().sync();
-        
-        // 如果此物理路径在资源库内已被入库标记为分类，同时也应同步存入 categories 表
-        std::wstring normPath = MetadataManager::normalizePath(path.toStdWString());
-        MetadataManager::instance().setColor(normPath, hexColor.toUpper().toStdWString(), true);
-        
-        btn->update();
-        menu.close();
-    });
-
-    // 3. 新增 “文件夹图标” 二级子菜单
-    QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", WarningOrange, 18), "文件夹图标");
-    UiHelper::applyMenuStyle(iconMenu);
-
-    QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
-    QWidget* pickerWidget = new QWidget(iconMenu);
-    QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
-    pickerLayout->setContentsMargins(6, 6, 6, 6);
-    pickerLayout->setSpacing(6);
-
-    static const QList<QPair<QString, QString>> builtInIcons = {
-        {"默认文件夹", "folder_filled"},
-        {"层级分类", "category"},
-        {"照片媒体", "image_filled"},
-        {"时钟历史", "clock_filled"},
-        {"星标收藏", "star_filled"},
-        {"爱心常用", "heart_filled"},
-        {"加密安全", "lock_filled"},
-        {"图书文档", "book"},
-        {"配置管理", "settings_filled"},
-        {"网络球体", "globe_filled"}
-    };
-
-    int row = 0;
-    int col = 0;
-    for (const auto& pair : builtInIcons) {
-        QString label = pair.first;
-        QString iconKey = pair.second;
-
-        QPushButton* btnIcon = new QPushButton(pickerWidget);
-        btnIcon->setFixedSize(28, 28);
-        btnIcon->setCursor(Qt::PointingHandCursor);
-        btnIcon->setStyleSheet(
-            "QPushButton { "
-            "  background-color: transparent; "
-            "  border: 1px solid transparent; "
-            "  border-radius: 4px; "
-            "}"
-            "QPushButton:hover { "
-            "  background-color: #3E3E42; "
-            "  border: 1px solid #555555; "
-            "}"
-            "QPushButton:pressed { "
-            "  background-color: #4E4E52; "
-            "}"
-        );
-        btnIcon->setIcon(UiHelper::getIcon(iconKey, folderColor, 18));
-        btnIcon->setIconSize(QSize(18, 18));
-        btnIcon->setToolTip(label);
-
-        pickerLayout->addWidget(btnIcon, row, col);
-
-        connect(btnIcon, &QPushButton::clicked, this, [btn, path, iconKey, iconMenu]() {
-            AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(path), iconKey);
-            AppConfig::instance().sync();
-            btn->update(); // 触发 FolderButton 的更新重绘
-            iconMenu->close(); // 选中后关闭菜单
-        });
-
-        col++;
-        if (col >= 5) {
-            col = 0;
-            row++;
-        }
-    }
-
-    pickerWidget->setLayout(pickerLayout);
-    pickerAction->setDefaultWidget(pickerWidget);
-    iconMenu->addAction(pickerAction);
-
-    QAction* selectedAct = menu.exec(btn->mapToGlobal(pos));
-    if (selectedAct == actRemove) {
-        removeCustomMonitoredFolder(path);
-    }
-}
-
-void MainWindow::removeCustomMonitoredFolder(const QString& path) {
-    QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-    std::wstring normPath = MetadataManager::normalizePath(path.toStdWString());
-    QString finalPath = QString::fromStdWString(normPath);
-
-    if (customFolders.contains(finalPath)) {
-        // 1. 从 AppConfig 中移除
-        customFolders.removeAll(finalPath);
-        AppConfig::instance().setValue("DriveBar/CustomMonitoredFolders", customFolders);
-        
-        // 1a. 清除颜色和图标配置
-        AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(path), QVariant());
-        AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(path), QVariant());
-        AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(finalPath), QVariant());
-        AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(finalPath), QVariant());
-        
-        AppConfig::instance().sync();
-
-        // 2. 从 NativeFolderWatcher 监控中注销此路径
-        NativeFolderWatcher::instance().removeWatch(normPath);
-
-        // 2a. 强力数据根除：清理该目录下所有注册的文件、子项元数据
-        MetadataManager::instance().removeMetadataSync(normPath);
-
-        // 3. 动态刷新盘符栏
-        updateCustomFolderButtons();
-
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "已停止监控该文件夹", 1500, QColor("#FECF0E"));
-    }
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event) {

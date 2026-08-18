@@ -40,12 +40,6 @@ CoreController::CoreController(QObject* parent) : QObject(parent) {
 
     // [Plan-115] 绑定 NativeFolderWatcher 纯净自定义批次变动信号到具体业务单例，彻底断开两端硬编码耦合
     connect(&NativeFolderWatcher::instance(), &NativeFolderWatcher::filesChanged, this, [this](const QList<QuarkMeta::FileWatcherEvent>& events) {
-        // 读取当前的 "DriveBar/CustomMonitoredFolders" 配置，用于前缀匹配
-        QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-        
-        // 记录当前批次正在迁移的顶级路径，防止重入/死循环
-        static std::unordered_set<std::wstring> s_currentlyMigrating;
-
         for (const auto& ev : events) {
             std::wstring normNewPath = MetadataManager::normalizePath(ev.newPath.toStdWString());
             QString qNewPath = QString::fromStdWString(normNewPath);
