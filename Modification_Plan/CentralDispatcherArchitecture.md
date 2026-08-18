@@ -68,13 +68,12 @@
 
 ### 3. 底层洗髓与并发加固规范
 
-1. **底层数据纯净化（根除 Dual-mode 历史残留毒瘤代码）**：
-   - 由于当前 QuarkMeta 是从原双轨架构（`Dual-mode version`）中强行剥离与独立出来的纯磁盘直连模式应用，代码库中残留了大量属于原 ArcMeta 托管库模式的僵尸与补丁代码。
-   - **必须彻底根除**：
-     - `.arc` 胶囊容器解析与打包逻辑；
-     - `Base36 ID` 资产路径编码/转换遗留代码；
-     - 托管库复制、导入及 `isInsideManagedLibrary` 的硬编码/打补丁逻辑；
-     - 内存索引与托管库镜像同步器（`DatabaseSynchronizer`）的僵尸代码。
+1. **底层数据纯净化（严禁垃圾包裹进重构，绝对彻底物理根除）**：
+   - 当前 QuarkMeta 为纯磁盘直连模式独立应用。**中央神经调度中枢（CoreEngine + CentralEventHub）绝不能为任何历史僵尸代码保留接口或打补丁，以下残留垃圾必须全线彻底死刑、物理拔除**：
+     - **IOCP 监控与自动导入（Auto Import）**：彻底清除 `isAutoImportMatch` 匹配、自动剪切迁移监听、自动导入对话框 (`showNewAutoImportDialog`) 及 `DriveBar/CustomMonitoredFolders` 配置。
+     - **“创建资源库”（Managed Library）及其右键菜单**：彻底拔除盘符按钮生成（C:/G:/H:等）、`QuarkMeta.Library_X` 托管文件夹创建、重新扫描资源库等右键菜单。
+     - **标题栏“同步”按钮（`m_btnSync`）**：彻底拔除标题栏 `m_btnSync` 按钮及背后的 `SyncStatusService` 提示逻辑。纯磁盘模式下元数据均实时即时落盘（写入离散 JSON 或 `global.db`），无需任何“同步中/元数据已同步”提示。
+     - **.arc 胶囊容器与 Base36 ID**：彻底清除 `.arc` 容器打包解析逻辑与 `Base36 ID` 路径编码代码。
 2. **独立分库递归互斥锁**：
    - 在 `DatabaseManager` 中建立严格的 `QRecursiveMutex`，将读写操作与事务彻底锁定，杜绝 UI 线程与后台刷新线程在 `sqlite3*` 上的锁争抢。
 3. **异步取消令牌机制 (`CancellationToken`)**：
