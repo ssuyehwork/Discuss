@@ -1,4 +1,4 @@
-# QuarkMeta 独立化改造（剥离内存模式 & 配置与应用重命名）实施方案
+# QuarkMeta 独立化改造（剥离内存模式 & UI 三栏布局重构 & 配置与应用重命名）实施方案
 
 ## 1. 所属大纲章节
 - 独立应用化改造章节：1.1-QuarkMetaStandalone
@@ -25,18 +25,19 @@
   - `src/ui/Logger.h`
   - `src/ui/MainWindow.h`
   - `src/ui/MainWindow.cpp`
+  - `src/ui/NavPanel.h`
+  - `src/ui/NavPanel.cpp`
   - `src/ui/ContentPanel.h`
   - `src/ui/ContentPanel.cpp`
-  - `src/ui/BatchRenameDialog.h`
   - `src/ui/BatchRenameDialog.cpp`
-  - `src/ui/models/ItemModelBase.h`
 
 ## 3. 功能描述
 本次改造旨在将纯磁盘目录直连模式单独剥离并提炼为独立应用 **QuarkMeta**。
-改动包含三个维度：
+改动包含四个维度：
 1. **彻底拔除内存模式代码文件**：删除专门用于内存托管库模式的 Model、重命名服务、数据库同步器及自动导入管理器，彻底纯化代码仓库。
-2. **物理配置隔离**：修改 `AppConfig` 单例的组织名与应用名为 `QuarkMeta`，使其 Windows 注册表与配置文件物理落盘路径彻底独立，避免与 ArcMeta 的配置互相覆盖或污染。
-3. **应用全量重命名**：将构建目标可执行文件名、项目工程名、资源描述文件、主窗口标题、运行日志文件名等全部更新为 `QuarkMeta`。
+2. **UI 三栏布局重构**：将磁盘“目录导航”树搬迁移至最左侧第一栏（替代原 `CategoryPanel`）；中间第二栏由“收藏夹”垂直独占撑满；第三栏为内容与元数据区。
+3. **物理配置隔离**：修改 `AppConfig` 单例的组织名与应用名为 `QuarkMeta`，使其 Windows 注册表与配置文件物理落盘路径彻底独立，避免与 ArcMeta 的配置互相覆盖或污染。
+4. **应用全量重命名**：将构建目标可执行文件名、项目工程名、资源描述文件、主窗口标题、运行日志文件名等全部更新为 `QuarkMeta`。
 
 ## 4. 技术决策与精准修改方案
 
@@ -107,86 +108,15 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/QuarkMeta")
 >>>>>>> REPLACE
 ```
 
-*在 SOURCES 列表中移除删除的文件，并更新 RC 文件与 Executable 目标*：
-
-```cpp
-<<<<<<< SEARCH
-    ArcMeta.rc
-=======
-    QuarkMeta.rc
->>>>>>> REPLACE
-```
-
-```cpp
-<<<<<<< SEARCH
-add_executable(ArcMeta WIN32 ${SOURCES})
-
-target_link_libraries(ArcMeta PRIVATE
-    Qt6::Core
-    Qt6::Widgets
-    Qt6::Gui
-    Qt6::Svg
-)
-
-target_include_directories(ArcMeta PRIVATE
-    ${PROJECT_SOURCE_DIR}/src
-    ${PROJECT_SOURCE_DIR}/src/ui
-    ${PROJECT_SOURCE_DIR}/src/core
-    ${PROJECT_SOURCE_DIR}/src/meta
-    ${PROJECT_SOURCE_DIR}/src/crypto
-    ${PROJECT_SOURCE_DIR}/src/third_party/libtiff
-)
-
-if(MSVC)
-    target_link_options(ArcMeta PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
-endif()
-=======
-add_executable(QuarkMeta WIN32 ${SOURCES})
-
-target_link_libraries(QuarkMeta PRIVATE
-    Qt6::Core
-    Qt6::Widgets
-    Qt6::Gui
-    Qt6::Svg
-)
-
-target_include_directories(QuarkMeta PRIVATE
-    ${PROJECT_SOURCE_DIR}/src
-    ${PROJECT_SOURCE_DIR}/src/ui
-    ${PROJECT_SOURCE_DIR}/src/core
-    ${PROJECT_SOURCE_DIR}/src/meta
-    ${PROJECT_SOURCE_DIR}/src/crypto
-    ${PROJECT_SOURCE_DIR}/src/third_party/libtiff
-)
-
-if(MSVC)
-    target_link_options(QuarkMeta PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
-endif()
->>>>>>> REPLACE
-```
-
 ---
 
-### 4.4 资源描述文件（QuarkMeta.manifest 与 QuarkMeta.rc）
+### 4.4 侧边栏与 UI 三栏式重构
 
-**文件**：`QuarkMeta.manifest`
-
-```xml
-<<<<<<< SEARCH
-  <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="ArcMeta" type="win32"/>
-  <description>ArcMeta File Manager</description>
-=======
-  <assemblyIdentity version="1.0.0.0" processorArchitecture="*" name="QuarkMeta" type="win32"/>
-  <description>QuarkMeta File Manager</description>
->>>>>>> REPLACE
-```
-
----
-
-### 4.5 主窗口标题重命名与清场
+1. **移除 `CategoryPanel` 控件**：在 `MainWindow` 布局中移除 `CategoryPanel`（及对应头文件与成员变量），第一栏直接放置包含“目录导航”的 `NavPanel` 视图。
+2. **`NavPanel` 布局调整**：将 `NavPanel` 拆分为独立组件，或将原“目录导航树”调整至第一栏，“收藏夹”调整至中间栏独立独占。
 
 **文件**：`src/ui/MainWindow.cpp`
-**精准定位**：Line 221 窗口标题初始化设置
+**精准定位**：Line 221 窗口标题初始化与布局绑定
 
 ```cpp
 <<<<<<< SEARCH
@@ -198,14 +128,8 @@ endif()
 
 ---
 
-### 4.6 界面模型多态纯化 (ContentPanel 与 BatchRenameDialog)
-
-在 `ContentPanel` 中完全移除 `LibraryAssetModel* m_libraryModel` 成员定义及相关头文件，将 UI 完全绑定于专为磁盘直连打造的 `DiskItemModel`；在 `BatchRenameDialog` 中移除 `MemoryBatchRenameService` 并全量切换为 `DiskBatchRenameService`。
-
----
-
 ## 5. 已知问题/待办
-- **旧配置不迁移策略**：ArcMeta 既有用户的偏好设置（如窗口位置、颜色偏好等）将留在原有 ArcMeta 路径下，QuarkMeta 将以后者全新的独立配置启动。
+- **旧配置不迁移策略**：ArcMeta 既有用户的偏好设置将留在原有 ArcMeta 路径下，QuarkMeta 将以后者全新的独立配置启动。
 - **图标与美术资源**：按照要求，本次改造保持现有 `.ico/.png` 等图标资源不动。
 
 ---
@@ -223,16 +147,18 @@ endif()
 - `src/core/LibraryMaintenanceService.h`
 - `src/core/LibraryMaintenanceService.cpp`
 
-### 2. 重命名/新增配置文件 (2 个)
+### 2. 新增/更新文档与资源文件 (3 个)
+- `Modification_Plan/QuarkMeta-Architecture-Planning.md`
 - `QuarkMeta.manifest`
 - `QuarkMeta.rc`
 
-### 3. 需要修改的文件 (8 个)
+### 3. 需要修改的文件 (9 个)
 - `CMakeLists.txt`
 - `src/core/AppConfig.h`
 - `src/main.cpp`
 - `src/ui/Logger.h`
+- `src/ui/MainWindow.h`
 - `src/ui/MainWindow.cpp`
-- `src/ui/ContentPanel.h`
+- `src/ui/NavPanel.h`
+- `src/ui/NavPanel.cpp`
 - `src/ui/ContentPanel.cpp`
-- `src/ui/BatchRenameDialog.cpp`
