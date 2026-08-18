@@ -1881,7 +1881,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                 // 2. 批量大事务级联擦除已入库的元数据和关联、进度、重置计数器
                 MetadataManager::instance().removeMetadataBatchSync(targetPaths);
 
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已取消自动导入并彻底擦除相关元数据", 2000, QColor("#e81123"));
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已彻底擦除相关元数据", 2000, QColor("#e81123"));
                 refreshAll();
             }
             break;

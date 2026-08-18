@@ -55,6 +55,10 @@ set(SOURCES
     src/meta/StatisticsService.h
     src/meta/MetaCacheDecorator.cpp
     src/meta/MetaCacheDecorator.h
+    src/core/CentralEventHub.cpp
+    src/core/CentralEventHub.h
+    src/core/CoreEngine.cpp
+    src/core/CoreEngine.h
     src/core/CoreController.cpp
     src/core/CoreController.h
     src/core/PhysicalDiskSearchExtractor.cpp
