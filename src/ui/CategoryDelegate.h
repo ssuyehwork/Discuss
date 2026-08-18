@@ -5,7 +5,6 @@
 #include <QApplication>
 #include <QLineEdit>
 #include <QAbstractProxyModel>
-#include "CategoryModel.h"
 #include "CategoryFilterProxyModel.h"
 #include "CardPainterHelper.h"
 #include "StyleLibrary.h"

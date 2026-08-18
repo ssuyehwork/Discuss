@@ -4,7 +4,7 @@
 #include <QSet>
 #include <QMimeData>
 #include "../core/ModelContract.h"
-#include "../meta/CategoryRepo.h"
+#include "../meta/StatisticsService.h"
 
 namespace QuarkMeta {
 

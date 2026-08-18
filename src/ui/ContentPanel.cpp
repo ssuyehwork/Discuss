@@ -3,6 +3,7 @@
 #endif
 #include "ContentPanel.h"
 #include "../meta/TrashRepository.h" 
+#include "../meta/DiskTrashRepo.h"
 #include "ColorPicker.h"
 #include "../core/DiskTrashService.h"
 #include <QWidgetAction>
@@ -2698,6 +2699,48 @@ void ContentPanel::loadCategory(int categoryId) {
     Q_UNUSED(categoryId);
 } 
  
+static std::vector<ItemRecord> loadPathItemsInternal(const QStringList& paths) {
+    std::vector<ItemRecord> records;
+    records.reserve(paths.size());
+    for (const QString& p : paths) {
+        records.push_back(ItemRecord::create(p));
+    }
+    MetaCacheDecorator::decorate(records);
+    return records;
+}
+
+static std::vector<ItemRecord> loadTrashItemsInternal() {
+    std::vector<ItemRecord> records;
+    
+    // 1. 扫描物理磁盘回收站表 (disk_trash)
+    auto rawDiskTrash = DiskTrashRepo::getAllTrashItems();
+    for (const auto& raw : rawDiskTrash) {
+        ItemRecord rec;
+        rec.isDiskTrash = true;
+        rec.diskTrashId = raw.id;
+        rec.path = QString::fromStdWString(raw.trashPath);
+        rec.originalPath = QString::fromStdWString(raw.originalPath);
+        rec.filename = QString::fromStdWString(raw.fileName);
+        rec.isDir = raw.isFolder;
+        rec.size = raw.fileSize;
+        rec.ctime = raw.deletedAt;
+        rec.mtime = raw.deletedAt;
+        records.push_back(rec);
+    }
+
+    // 2. 扫描内存缓存中的 isTrash 项
+    MetadataManager::instance().forEachCachedItem([&](const std::wstring& wpath, const RuntimeMeta& meta) {
+        if (meta.isTrash) {
+            ItemRecord rec = ItemRecord::create(QString::fromStdWString(wpath), &meta, true);
+            rec.originalPath = QString::fromStdWString(meta.originalPath);
+            records.push_back(rec);
+        }
+    });
+
+    MetaCacheDecorator::decorate(records);
+    return records;
+}
+
 void ContentPanel::loadPaths(const QStringList& paths, int reqId) {
     restoreActiveView();
 
@@ -2736,9 +2779,9 @@ void ContentPanel::loadPaths(const QStringList& paths, int reqId) {
         if (!weakThis) return;
         std::vector<ItemRecord> records;
         if (weakThis->getCurrentCategoryType() == "trash") {
-            records = CategoryLoadService::loadTrashItems();
+            records = loadTrashItemsInternal();
         } else {
-            records = CategoryLoadService::loadPathItems(paths);
+            records = loadPathItemsInternal(paths);
         }
         if (!weakThis) return;
         
@@ -2766,9 +2809,8 @@ void ContentPanel::appendPaths(const QStringList& paths, int reqId) {
 
     QPointer<ContentPanel> weakThis(this);
     (void)QtConcurrent::run([weakThis, paths, reqId]() {
-        // 【物理隔离】数据获取已迁出至 CategoryLoadService
         if (!weakThis) return;
-        std::vector<ItemRecord> newRecords = CategoryLoadService::loadPathItems(paths);
+        std::vector<ItemRecord> newRecords = loadPathItemsInternal(paths);
         if (!weakThis) return;
 
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, newRecords, reqId]() {

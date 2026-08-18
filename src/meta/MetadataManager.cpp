@@ -2688,6 +2688,7 @@ void MetadataManager::removeFidsFromLog(const QStringList&) {}
 void MetadataManager::addToSyncLog(const std::wstring&) {}
 
 QStringList MetadataManager::searchInCache(const QString& keyword, const QString& scopeSource, int categoryId, const QString& parentPath) {
+    Q_UNUSED(categoryId);
     // [Plan-26] 彻底废除 O(N) 全量内存线性遍历，全面拥抱 FTS5 trigram 模糊检索引擎 + 内存 O(1) 快速反查
     QStringList results; if (keyword.isEmpty()) return results;
     

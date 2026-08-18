@@ -14,6 +14,14 @@ struct StatisticsSnapshot {
     int uncategorizedCount = 0;
     int untaggedCount = 0;
     int trashCount = 0;
+
+    // 1. 静态分类计数 (key -> count)
+    QMap<QString, int> systemCounts;
+    // 2. 半静态托管库计数 (categoryId -> count)
+    QMap<int, int> libraryCounts;
+    // 3. 全动态用户分类计数 (categoryId -> count)
+    QMap<int, int> userCategoryCounts;
+
     std::unordered_map<int, int> categoryCounts;
     std::unordered_map<int, int> tagCounts;
 };
