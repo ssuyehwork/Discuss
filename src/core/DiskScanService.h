@@ -4,6 +4,7 @@
 #include <vector>
 #include <functional>
 #include "ItemRecord.h"
+#include "CoreEngine.h"
 
 namespace QuarkMeta {
 
@@ -25,6 +26,10 @@ public:
     static std::vector<ItemRecord> scanDirectory(const QString& path,
                                                   bool recursive,
                                                   const std::function<bool()>& shouldContinue);
+
+    static std::vector<ItemRecord> scanDirectory(const QString& path,
+                                                  bool recursive,
+                                                  std::shared_ptr<CancellationToken> token);
 };
 
 } // namespace QuarkMeta

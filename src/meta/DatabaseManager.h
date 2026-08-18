@@ -4,7 +4,7 @@
 #include <QString>
 #include <QObject>
 #include <QTimer>
-#include <QMutex>
+#include <QRecursiveMutex>
 #include "sqlite3.h"
 #include <map>
 #include <string>
@@ -45,7 +45,7 @@ class DatabaseManager : public QObject {
 public:
     static DatabaseManager& instance();
 
-    QMutex* dbMutex() { return &m_dbMutex; }
+    QRecursiveMutex* dbMutex() { return &m_dbMutex; }
 
     /**
      * @brief 初始化数据库（加载所有挂载驱动器的数据库到内存）
@@ -173,7 +173,7 @@ private:
     std::map<std::wstring, DbConnection> m_driveDbs;
     DbConnection m_globalDb;
     std::mutex m_mutex;
-    QMutex m_dbMutex;
+    QRecursiveMutex m_dbMutex;
 
     std::atomic<int> m_activeWriteSources{0};
     std::atomic<bool> m_isBackupRunning{false};

@@ -37,4 +37,12 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
     return allItems; 
 }
 
+std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
+                                                        bool recursive,
+                                                        std::shared_ptr<CancellationToken> token) {
+    return scanDirectory(path, recursive, [token]() {
+        return token ? !token->isCanceled() : true;
+    });
+}
+
 } // namespace QuarkMeta

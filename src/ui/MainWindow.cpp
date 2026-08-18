@@ -17,6 +17,8 @@
 #include "NavPanel.h"
 #include "FavoritePanel.h"
 #include "ContentPanel.h"
+#include "../core/CoreEngine.h"
+#include "../core/CentralEventHub.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "TagManagerView.h"
@@ -84,96 +86,6 @@ using namespace QuarkMeta::Style;
 
 namespace QuarkMeta {
 
-CustomFolderImportDialog::CustomFolderImportDialog(QWidget* parent)
-    : FramelessDialog("自动导入", parent) {
-    setFixedWidth(500);
-     
-    QWidget* content = getContentArea();
-    QVBoxLayout* layout = new QVBoxLayout(content);
-    layout->setContentsMargins(20, 15, 20, 20);
-    layout->setSpacing(15);
-
-    QHBoxLayout* pathL = new QHBoxLayout();
-    pathL->setSpacing(8);
-
-    m_edit = new QLineEdit(this);
-    m_edit->setPlaceholderText("请输入或选择文件夹路径...");
-    m_edit->setClearButtonEnabled(true); // 唯一指定清除实现
-    m_edit->setStyleSheet(
-        "QLineEdit { "
-        "  background-color: #252526; "
-        "  color: #F1F1F1; "
-        "  border: 1px solid #3E3E42; "
-        "  border-radius: 4px; "
-        "  padding: 6px 10px; "
-        "  font-family: 'Segoe UI', Microsoft YaHei; "
-        "  font-size: 12px; "
-        "}"
-        "QLineEdit:focus { border: 1px solid #007ACC; }"
-    );
-    pathL->addWidget(m_edit);
-
-    QPushButton* btnBrowse = new QPushButton("浏览", this);
-    btnBrowse->setCursor(Qt::PointingHandCursor);
-    btnBrowse->setStyleSheet(
-        "QPushButton { "
-        "  background-color: #3E3E42; "
-        "  color: #F1F1F1; "
-        "  border: 1px solid #555555; "
-        "  border-radius: 4px; "
-        "  padding: 6px 14px; "
-        "  font-size: 12px; "
-        "}"
-        "QPushButton:hover { background-color: #4E4E52; }"
-    );
-    pathL->addWidget(btnBrowse);
-    layout->addLayout(pathL);
-
-    QHBoxLayout* bottomL = new QHBoxLayout();
-    bottomL->addStretch();
-
-    QPushButton* btnOk = new QPushButton("完成", this);
-    btnOk->setCursor(Qt::PointingHandCursor);
-    btnOk->setStyleSheet(
-        "QPushButton { "
-        "  background-color: #007ACC; "
-        "  color: #FFFFFF; "
-        "  border: none; "
-        "  border-radius: 4px; "
-        "  padding: 6px 20px; "
-        "  font-weight: bold; "
-        "  font-size: 12px; "
-        "}"
-        "QPushButton:hover { background-color: #1C97EA; }"
-    );
-    bottomL->addWidget(btnOk);
-    layout->addLayout(bottomL);
-
-    connect(btnBrowse, &QPushButton::clicked, this, &CustomFolderImportDialog::onBrowse);
-    connect(btnOk, &QPushButton::clicked, this, [this]() {
-        QString path = m_edit->text().trimmed();
-        if (path.isEmpty()) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "路径不能为空！", 1500, QColor("#E81123"));
-            return;
-        }
-        if (!QDir(path).exists()) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "无效的文件夹路径！", 1500, QColor("#E81123"));
-            return;
-        }
-        accept();
-    });
-}
-
-QString CustomFolderImportDialog::selectedPath() const {
-    return m_edit->text().trimmed();
-}
-
-void CustomFolderImportDialog::onBrowse() {
-    QString dir = FramelessFileDialog::getExistingDirectory(this, "选择自动导入文件夹");
-    if (!dir.isEmpty()) {
-        m_edit->setText(QDir::toNativeSeparators(dir));
-    }
-}
 
 
 // 【物理护栏-禁止修改/禁止改为0】全局边缘留白基准值，统一应用于标题栏/导航栏/主体容器右侧
@@ -479,12 +391,15 @@ void MainWindow::initUi() {
         }
     });
 
-    // 4. 元数据变化 -> 同步元数据面板
+    // 4. 元数据变化 -> 通过 CoreEngine 指令中心提交持久化，驱动 CentralEventHub 广播
     connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this](int rating) {
         if (m_currentQuickLookPath.isEmpty()) return;
 
-        // 2026-04-11 按照用户要求：补全物理持久化逻辑 (MetadataManager 直接入库)
-        MetadataManager::instance().setRating(m_currentQuickLookPath.toStdWString(), rating);
+        AppCommand cmd;
+        cmd.type = AppCommandType::SetRating;
+        cmd.targetPaths << m_currentQuickLookPath;
+        cmd.params["rating"] = rating;
+        CoreEngine::instance().executeCommand(cmd);
 
         m_metaPanel->setRating(rating);
         
@@ -523,8 +438,11 @@ void MainWindow::initUi() {
     connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this](const QString& color) {
         if (m_currentQuickLookPath.isEmpty()) return;
 
-        // 2026-04-11 按照用户要求：补全物理持久化逻辑 (MetadataManager 直接入库)
-        MetadataManager::instance().setColor(m_currentQuickLookPath.toStdWString(), color.toStdWString());
+        AppCommand cmd;
+        cmd.type = AppCommandType::SetColor;
+        cmd.targetPaths << m_currentQuickLookPath;
+        cmd.params["color"] = color;
+        CoreEngine::instance().executeCommand(cmd);
 
         m_metaPanel->setColor(color.toStdWString());
         
@@ -671,17 +589,26 @@ void MainWindow::initUi() {
     // 2026-05-27 物理加固：补全 this 上下文
     connect(m_metaPanel, &MetaPanel::metadataChanged, this, [this](int rating, const std::wstring& color) {
         auto indexes = m_contentPanel->getSelectedIndexes();
+        QStringList paths;
         for (const auto& idx : indexes) {
             QString path = idx.data(PathRole).toString(); 
-            if(path.isEmpty()) continue;
-            
-            if (rating != -1) {
-                // 2026-05-24：改为中心化异步持久化
-                MetadataManager::instance().setRating(path.toStdWString(), rating);
-            }
-            if (color != L"__NO_CHANGE__") {
-                MetadataManager::instance().setColor(path.toStdWString(), color);
-            }
+            if(!path.isEmpty()) paths << path;
+        }
+        if (paths.isEmpty()) return;
+
+        if (rating != -1) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetRating;
+            cmd.targetPaths = paths;
+            cmd.params["rating"] = rating;
+            CoreEngine::instance().executeCommand(cmd);
+        }
+        if (color != L"__NO_CHANGE__") {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetColor;
+            cmd.targetPaths = paths;
+            cmd.params["color"] = QString::fromStdWString(color);
+            CoreEngine::instance().executeCommand(cmd);
         }
     });
 
@@ -754,14 +681,22 @@ void MainWindow::initUi() {
     });
 
     connect(m_metaPanel, &MetaPanel::noteEdited, this, [](const QStringList& paths, const QString& newNote) {
-        for (const QString& path : paths) {
-            MetadataManager::instance().setNote(path.toStdWString(), newNote.toStdWString());
+        if (!paths.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetNote;
+            cmd.targetPaths = paths;
+            cmd.params["note"] = newNote;
+            CoreEngine::instance().executeCommand(cmd);
         }
     });
 
     connect(m_metaPanel, &MetaPanel::linkEdited, this, [](const QStringList& paths, const QString& newLink) {
-        for (const QString& path : paths) {
-            MetadataManager::instance().setURL(path.toStdWString(), newLink.toStdWString());
+        if (!paths.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetURL;
+            cmd.targetPaths = paths;
+            cmd.params["url"] = newLink;
+            CoreEngine::instance().executeCommand(cmd);
         }
     });
 
@@ -1423,29 +1358,6 @@ void MainWindow::setupCustomTitleBarButtons() {
         }
     });
 
-    m_btnSync = createTitleBtn("sync");
-    m_btnSync->setProperty("tooltipText", "元数据已同步至物理文件");
-    m_btnSync->installEventFilter(m_hoverFilter);
-
-    // 2026-07-xx 按照用户要求 (Plan-121)：通过试点服务解耦同步状态展示
-    connect(&SyncStatusService::instance(), &SyncStatusService::statusUpdated, this, [this](bool syncing, int count) {
-        if (syncing) {
-            m_btnSync->setIcon(UiHelper::getIcon("sync", ErrorRed)); // 强制红色
-            m_btnSync->setProperty("tooltipText", QString("正在同步元数据 (%1 项待落盘)...").arg(count));
-        } else {
-            m_btnSync->setIcon(UiHelper::getIcon("sync", TextMain)); // 恢复正常
-            m_btnSync->setProperty("tooltipText", "元数据已同步至物理文件");
-        }
-    });
-
-    // 2026-06-15 按照用户要求：手动点击同步 (仅作交互反馈)
-    connect(m_btnSync, &QPushButton::clicked, this, [this]() {
-        if (SyncStatusService::instance().isSyncing()) {
-            ToolTipOverlay::instance()->showText(m_btnSync->mapToGlobal(QPoint(0,0)), "同步正在进行中...", 1500);
-        } else {
-            ToolTipOverlay::instance()->showText(m_btnSync->mapToGlobal(QPoint(0,0)), "元数据已全部落地", 1500);
-        }
-    });
 
     m_btnLayout = createTitleBtn("layout");
     m_btnLayout->setProperty("tooltipText", "布局管理与重置");
@@ -1513,7 +1425,6 @@ void MainWindow::setupCustomTitleBarButtons() {
 
     // 右侧功能按钮组容器（内部维护 5px 严格按钮间距）
     layout->addWidget(m_btnToggleDriveBar, 0, Qt::AlignVCenter);
-    layout->addWidget(m_btnSync, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnLayout, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnCreate, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnPinTop, 0, Qt::AlignVCenter);
@@ -1869,17 +1780,9 @@ void MainWindow::initDriveBar() {
         m_driveButtons[letter] = btn;
         m_driveBarLayout->addWidget(btn);
 
-        connect(btn, &QPushButton::clicked, this, &MainWindow::onDriveButtonClicked);
-        btn->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(btn, &QWidget::customContextMenuRequested, this, &MainWindow::onDriveButtonContextMenu);
-        
-        // 根据资源库是否存在初始化状态
-        QString managedPath = drive.absolutePath() + "QuarkMeta.Library_" + letter.left(1);
-        if (QDir(managedPath).exists()) {
-            btn->setState(DriveButton::Active);
-        } else {
-            btn->setState(DriveButton::Inactive);
-        }
+        connect(btn, &QPushButton::clicked, this, [this, letter]() {
+            unifiedNavigateTo(letter + "/");
+        });
     }
     m_driveBarLayout->addStretch();
 
@@ -1910,58 +1813,6 @@ void MainWindow::initDriveBar() {
     });
 }
 
-void MainWindow::onDriveButtonClicked() {
-    // TODO: 盘符点击逻辑待后期安排
-}
-
-void MainWindow::onDriveButtonContextMenu(const QPoint& pos) {
-    DriveButton* btn = qobject_cast<DriveButton*>(sender());
-    if (!btn) return;
-    QString letter = btn->driveLetter();
-    QString managedPath = letter + "/QuarkMeta.Library_" + letter.left(1);
-
-    QMenu menu(this);
-    UiHelper::applyMenuStyle(&menu);
-    if (!QDir(managedPath).exists()) {
-        menu.addAction("创建资源库")->setData(1);
-    } else {
-        menu.addAction("打开资源库")->setData(2);
-        menu.addAction("重新扫描该库")->setData(3);
-    }
-
-    QAction* act = menu.exec(btn->mapToGlobal(pos));
-    if (!act) return;
-    int val = act->data().toInt();
-    if (val == 1) {
-        if (QDir().mkpath(managedPath)) {
-            btn->setState(DriveButton::Active);
-            
-
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "资源库创建成功", 1500, Style::SuccessGreen);
-        }
-    } else if (val == 2) {
-        ShellHelper::openInExplorer(managedPath);
-    } else if (val == 3) {
-        rescanManagedLibrary(managedPath);
-    }
-}
-
-void MainWindow::rescanManagedLibrary(const QString& libraryPath) {
-    if (!QDir(libraryPath).exists()) return;
-
-    ToolTipOverlay::instance()->showText(QCursor::pos(), "正在扫描托管库并重新提取元数据...", 2000, QColor("#378ADD"));
-
-    // 在后台线程执行物理扫描与元数据重提取
-    (void)QtConcurrent::run([libraryPath]() {
-        std::wstring wLibPath = QDir::toNativeSeparators(libraryPath).toStdWString();
-        
-        // 1. 深入物理目录，注册/修复库内所有文件的基本信息
-        MetadataManager::instance().markAsRegistered(wLibPath);
-
-        // 2. 重新扫描并驱动 MediaExtractorPipeline 提取高级多媒体特征（分辨率、主色调、调色盘）
-        MetadataManager::instance().notifyFullUIRebuild();
-    });
-}
 
 void MainWindow::updateCustomFolderButtons() {
     // 清除既有 custom folder 按钮
@@ -2026,63 +1877,7 @@ void MainWindow::updateCustomFolderButtons() {
 }
 
 void MainWindow::onDriveBarContextMenu(const QPoint& pos) {
-    QMenu menu(this);
-    UiHelper::applyMenuStyle(&menu);
-    QAction* act = menu.addAction("自动导入");
-    
-    QAction* selectedAct = menu.exec(m_driveBarWidget->mapToGlobal(pos));
-    if (selectedAct == act) {
-        showNewAutoImportDialog();
-    }
-}
-
-void MainWindow::showNewAutoImportDialog() {
-    CustomFolderImportDialog dlg(this);
-    if (dlg.exec() == QDialog::Accepted) {
-        QString path = dlg.selectedPath();
-        if (!path.isEmpty()) {
-            QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-            std::wstring normPath = MetadataManager::normalizePath(path.toStdWString());
-            QString finalPath = QString::fromStdWString(normPath);
-
-            if (customFolders.contains(finalPath)) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "该文件夹已在监控列表中！", 1500, QColor("#E81123"));
-                return;
-            }
-
-            // 1. 记入 AppConfig 并持久化
-            customFolders.append(finalPath);
-            AppConfig::instance().setValue("DriveBar/CustomMonitoredFolders", customFolders);
-            AppConfig::instance().sync();
-
-            // 2. 动态点火 NativeFolderWatcher 的监控
-            NativeFolderWatcher::instance().addWatch(normPath);
-
-            // 2a. 自动同步对账整改：立即扫描外部目录中既有的所有文件/文件夹并迁移
-            QDir importDir(finalPath);
-            QStringList entries = importDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-            if (!entries.isEmpty()) {
-                QString drive = finalPath.left(3);
-                QString managedRoot = drive + "QuarkMeta.Library_" + drive.at(0).toUpper();
-                QDir().mkpath(managedRoot);
-
-                QStringList pathsToImport;
-                for (const QString& entryName : entries) {
-                    pathsToImport << QDir::toNativeSeparators(importDir.absoluteFilePath(entryName));
-                }
-
-                // 统一调用 AssetImporter::importAssets 搬运，targetCatId = 0，不弹窗问询
-                AssetImporter::importAssets(pathsToImport, 0, nullptr, [this]() {
-                    MetadataManager::instance().notifyFullUIRebuild();
-                }, true);
-            }
-
-            // 3. 重新加载渲染盘符栏 FolderButtons
-            updateCustomFolderButtons();
-
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "已开始自动监控该文件夹", 1500, Style::SuccessGreen);
-        }
-    }
+    Q_UNUSED(pos);
 }
 
 void MainWindow::onFolderButtonContextMenu(const QPoint& pos) {
@@ -2092,7 +1887,6 @@ void MainWindow::onFolderButtonContextMenu(const QPoint& pos) {
 
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
-    QAction* actNew = menu.addAction("自动导入");
     QAction* actRemove = menu.addAction("解除监控");
 
     menu.addSeparator();
@@ -2192,9 +1986,7 @@ void MainWindow::onFolderButtonContextMenu(const QPoint& pos) {
     iconMenu->addAction(pickerAction);
 
     QAction* selectedAct = menu.exec(btn->mapToGlobal(pos));
-    if (selectedAct == actNew) {
-        showNewAutoImportDialog();
-    } else if (selectedAct == actRemove) {
+    if (selectedAct == actRemove) {
         removeCustomMonitoredFolder(path);
     }
 }
