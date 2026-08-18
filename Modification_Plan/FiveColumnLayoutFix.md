@@ -13,27 +13,43 @@
    m_mainSplitter->setStretchFactor(2, 0); // 错误：把索引 2（第三栏 ContentPanel 内容区）设为了 0 (固定不拉伸)！
    m_mainSplitter->setStretchFactor(3, 0); // 元数据
    ```
-   **后果**：窗口一最大化或拉伸，第二栏“收藏夹”瞬间无限膨胀膨胀占满中间巨大的黑色区域，而真正的内容展示区反被压缩在最右边小角落！
+   **后果**：窗口一最大化或拉伸，第二栏“收藏夹”瞬间无限膨胀占满中间巨大的黑色区域，而真正的内容展示区反被压缩在最右边小角落！
 
-2. **默认尺寸分配数组未包含 5 栏规范**：
-   `setSizes` 和重置布局里的尺寸分配仍使用了旧逻辑或不精准比例。
+2. **默认尺寸分配数组未对齐 230px 标准**：
+   原有的面板默认尺寸标准为：**5 x 230px 面板 + 20px 分割手柄 (4x5px) + 10px 全局边距 (2x5px) = 1180px 最小窗口宽度**。如果误设为 200px 会导致界面过窄或与 `setMinimumSize(1180, 653)` 约束不符。
 
 3. **样式表 QSS 缺失 `#FavoriteContainer` 控件选择器**：
    全局 `style.qss` 统一边框和背景选择器中缺少 `#FavoriteContainer`，导致第二栏在特定情况下出现边框缺失或分割感不清晰的问题。
 
 ---
 
-## 2. 涉及修改文件路径与精确代码行号
+## 2. 各栏区标准宽度参数定义
+
+在标准初始化状态下（未拉伸时），主界面 5 个栏区的像素宽度具体定义如下：
+
+| 栏区索引 (Index) | 栏区名称 (Panel) | 控件类名 | 默认像素宽度 (Sizes) | 拉伸系数 (stretchFactor) | 说明 |
+| :---: | :--- | :--- | :---: | :---: | :--- |
+| **0** | **第一栏：目录导航** | `NavPanel` | **230 px** | **0** | 物理锁定宽度，不随窗口拉伸 |
+| **1** | **第二栏：收藏夹独占栏** | `FavoritePanel` | **230 px** | **0** | 垂直贯通独占，**严格锁定不拉伸** |
+| **2** | **第三栏：内容展示区** | `ContentPanel` | **600 px** | **1** | **全界面唯一核心主拉伸区**（拉伸时此栏扩展） |
+| **3** | **第四栏：元数据属性栏** | `MetaPanel` | **230 px** | **0** | 物理锁定宽度，不随窗口拉伸 |
+| **4** | **第五栏：条件筛选栏** | `FilterPanel` | **230 px** | **0** | 物理锁定宽度，不随窗口拉伸 |
+
+*注：5 个栏区之间各拥有 **5px** 宽度的深色拆分手柄（QSplitter Handle），4 个手柄共占用 **20px**，加上左右各 **5px** 全局边距（10px），完美契合主窗口最小宽度 `1180px` (`230*4 + 600 + 20 + 10 = 1750px` 默认窗口大小，最小化约束为 `230*5 + 20 + 10 = 1180px`)。*
+
+---
+
+## 3. 涉及修改文件路径与精确代码行号
 
 | 文件路径 | 精确代码行号/位置 | 修改说明 |
 | :--- | :--- | :--- |
-| `src/ui/MainWindow.cpp` | **Line 314 - Line 334** | 修正 `m_mainSplitter->setStretchFactor` 与初始 `setSizes` 的对应索引 |
-| `src/ui/MainWindow.cpp` | **Line 1801 - Line 1806** | 修正 `resetSplitterLayout()` 重置分栏的 `setSizes` 默认数组 |
+| `src/ui/MainWindow.cpp` | **Line 314 - Line 334** | 修正 `m_mainSplitter->setStretchFactor` 与初始 `setSizes` 对应索引与宽度 |
+| `src/ui/MainWindow.cpp` | **Line 1801 - Line 1806** | 修正 `resetSplitterLayout()` 重置分栏的 `setSizes` 默认数组为 `230, 230, 600, 230, 230` |
 | `resources/style.qss` | **Line 15** | 在 `#SidebarContainer, #ListContainer` 选择器组中补全 `#FavoriteContainer` |
 
 ---
 
-## 3. 无脑修复实施方案步骤（步骤与代码落地）
+## 4. 无脑修复实施方案步骤（步骤与代码落地）
 
 ### 步骤 1：修复 `src/ui/MainWindow.cpp` 中的 Splitter 拉伸系数与初始宽度
 
@@ -68,11 +84,11 @@
 ```cpp
     // 物理锁定：主界面从左到右共 5 栏（索引 0:目录导航, 1:收藏夹, 2:内容展示区, 3:元数据, 4:筛选）
     // 严格确保仅有第三栏“内容展示区”（索引 2）具备拉伸系数 1，其余 4 栏全部锁定为 0！
-    m_mainSplitter->setStretchFactor(0, 0); // 第一栏：目录导航 (NavPanel) -> 固定不拉伸
-    m_mainSplitter->setStretchFactor(1, 0); // 第二栏：收藏夹 (FavoritePanel) -> 严格固定不拉伸！
+    m_mainSplitter->setStretchFactor(0, 0); // 第一栏：目录导航 (NavPanel) -> 固定 230px
+    m_mainSplitter->setStretchFactor(1, 0); // 第二栏：收藏夹 (FavoritePanel) -> 严格固定 230px！
     m_mainSplitter->setStretchFactor(2, 1); // 第三栏：内容展示区 (ContentPanel) -> 全界面唯一核心主拉伸区！
-    m_mainSplitter->setStretchFactor(3, 0); // 第四栏：元数据属性栏 (MetaPanel) -> 固定不拉伸
-    m_mainSplitter->setStretchFactor(4, 0); // 第五栏：条件筛选栏 (FilterPanel) -> 固定不拉伸
+    m_mainSplitter->setStretchFactor(3, 0); // 第四栏：元数据属性栏 (MetaPanel) -> 固定 230px
+    m_mainSplitter->setStretchFactor(4, 0); // 第五栏：条件筛选栏 (FilterPanel) -> 固定 230px
 
     // 1. 先应用面板显隐状态
     loadPanelVisibility();
@@ -84,9 +100,9 @@
             m_mainSplitter->restoreState(state);
         });
     } else {
-        // 5 栏标准初始默认分配: 200px | 200px | 550px | 200px | 200px
+        // 5 栏标准初始默认分配: 230px | 230px | 600px | 230px | 230px
         QList<int> sizes;
-        sizes << 200 << 200 << 550 << 200 << 200;
+        sizes << 230 << 230 << 600 << 230 << 230;
         m_mainSplitter->setSizes(sizes);
     }
 ```
@@ -111,7 +127,7 @@
 ```cpp
     // 2. 物理恢复 5 栏尺寸比例 (Index 0: NavPanel, Index 1: FavoritePanel, Index 2: ContentPanel, Index 3: MetaPanel, Index 4: FilterPanel)
     QList<int> sizes;
-    sizes << 200 << 200 << 550 << 200 << 200;
+    sizes << 230 << 230 << 600 << 230 << 230;
     if (m_mainSplitter->count() > 5) sizes << 0; // 索引 5 为隐藏的 TagManagerView
 
     m_mainSplitter->setSizes(sizes);
@@ -150,16 +166,16 @@
 
 ---
 
-## 4. 修复效果预期与验证方法
+## 5. 修复效果预期与验证方法
 
 1. **界面布局对齐**：
    启动 QuarkMeta 后，主视图从左到右依次平铺：
-   - 1 栏（目录导航：200px）
-   - 2 栏（收藏夹：200px，垂直贯通）
-   - 3 栏（内容展示区：自适应拉伸占满其余空间）
-   - 4 栏（元数据属性栏：200px）
-   - 5 栏（条件筛选栏：200px）
+   - **第一栏（目录导航）**：**230 像素**
+   - **第二栏（收藏夹独占栏）**：**230 像素**，垂直贯通
+   - **第三栏（内容展示区）**：**600 像素**（初始），自适应拉伸占满其余全部空间
+   - **第四栏（元数据属性栏）**：**230 像素**
+   - **第五栏（条件筛选栏）**：**230 像素**
 2. **窗口拉伸验证**：
-   拖拽窗口边框或点击右上角最大化，**仅第三栏（内容展示区）随之放大**，第二栏“收藏夹”绝对不会出现大片黑色空白膨胀的情况。
+   拖拽窗口边框或点击右上角最大化，**仅第三栏（内容展示区）随之放大**，第二栏“收藏夹”绝对不会出现膨胀占满中间空白的情况。
 3. **分割线验证**：
-   各栏之间均拥有 5px 宽的深色物理分割手柄（`handle`），鼠标悬停可正常拖拽调节各栏宽度。
+   各栏之间均拥有 **5px** 宽的深色物理分割手柄（`handle`），鼠标悬停可正常拖拽调节各栏宽度。
