@@ -1,10 +1,18 @@
-# QuarkMeta 独立化改造（剥离内存模式 & UI 三栏布局重构 & 配置/日志/离散 JSON 与应用重命名）实施方案
+# QuarkMeta 独立化改造（剥离内存模式 & 彻底拔除 CategoryPanel & 离散 JSON 文件名/类名真实重命名 & 配置隔离与应用重命名）实施方案
 
 ## 1. 所属大纲章节
 - 独立应用化改造章节：1.1-QuarkMetaStandalone
 
 ## 2. 涉及代码文件
-- **拟彻底删除文件**：
+- **物理重命名代码文件 (Rename)**：
+  - `src/meta/AmMetaJson.h` -> `src/meta/QuarkMetaJson.h`
+  - `src/meta/AmMetaJson.cpp` -> `src/meta/QuarkMetaJson.cpp`
+- **拟彻底删除文件 (Delete)**：
+  - `src/ui/CategoryPanel.h`
+  - `src/ui/CategoryPanel.cpp`
+  - `src/ui/CategoryModel.h`
+  - `src/ui/CategoryModel.cpp`
+  - `src/ui/CategoryDelegate.h`
   - `src/ui/models/LibraryAssetModel.h`
   - `src/ui/models/LibraryAssetModel.cpp`
   - `src/ui/MemoryBatchRenameService.h`
@@ -24,8 +32,12 @@
   - `src/core/AppConfig.h`
   - `src/main.cpp`
   - `src/ui/Logger.h`
-  - `src/meta/AmMetaJson.h`
-  - `src/meta/AmMetaJson.cpp`
+  - `src/meta/QuarkMetaJson.h`
+  - `src/meta/QuarkMetaJson.cpp`
+  - `src/meta/DiskNavigatorService.h`
+  - `src/meta/DiskNavigatorService.cpp`
+  - `src/meta/MetadataManager.cpp`
+  - `src/meta/MetaCacheDecorator.cpp`
   - `src/core/FileFilterService.cpp`
   - `src/util/ShellHelper.cpp`
   - `src/ui/MainWindow.h`
@@ -33,22 +45,31 @@
   - `src/ui/NavPanel.h`
   - `src/ui/NavPanel.cpp`
   - `src/ui/ContentPanel.cpp`
+  - `src/ui/TagManagerDialog.cpp`
+  - `src/ui/models/DiskItemModel.cpp`
   - `src/ui/BatchRenameDialog.cpp`
 
 ## 3. 功能描述
-本次改造旨在将纯磁盘目录直连模式单独剥离并提炼为独立应用 **QuarkMeta**。
-改动包含五个维度：
-1. **彻底拔除内存模式代码文件**：删除专门用于内存托管库模式的 Model、重命名服务、数据库同步器及自动导入管理器，彻底纯化代码仓库。
-2. **离散 JSON 缓存更名**：将普通磁盘目录下生成的隐藏元数据缓存文件名由 `.ArcMeta.json` 彻底更新为 **`.QuarkMeta.json`**。
-3. **UI 三栏布局重构**：将磁盘“目录导航”树搬迁移至最左侧第一栏（替代原 `CategoryPanel`）；中间第二栏由“收藏夹”垂直独占撑满；第三栏为内容与元数据区。
-4. **物理配置隔离**：修改 `AppConfig` 单例的组织名与应用名为 `QuarkMeta`，使其 Windows 注册表与配置文件物理落盘路径彻底独立，避免与 ArcMeta 的配置互相覆盖或污染。
-5. **应用全量重命名**：将构建目标可执行文件名、项目工程名、资源描述文件、主窗口标题、运行日志文件名等全部更新为 `QuarkMeta`。
+本次改造旨在将纯磁盘目录直连模式单独剥离并彻底提炼为独立应用 **QuarkMeta**。
+改动包含六个维度：
+1. **彻底拔除内存模式代码文件**：删除专门用于内存托管库模式的 Model、分类面板（`CategoryPanel`）、重命名服务、数据库同步器及自动导入管理器，彻底纯化代码仓库。
+2. **彻底消除顶栏空白残影（拒绝 `.hide()` 打补丁）**：从 `MainWindow` 布局中彻底拔除 `CategoryPanel` 控件，第一栏直接放置包含“目录导航”的 `NavPanel` 视图，消除一切残影与空白空块。
+3. **物理文件名与类名真实重命名**：将离散元数据 JSON 管理类及其物理文件由 `AmMetaJson.h / .cpp` 真实更名为 **`QuarkMetaJson.h` / `QuarkMetaJson.cpp`**，类名更名为 **`QuarkMetaJson`**。
+4. **离散 JSON 缓存更名**：普通磁盘目录下生成的隐藏元数据缓存文件名由 `.ArcMeta.json` 彻底更新为 **`.QuarkMeta.json`**。
+5. **物理配置隔离**：修改 `AppConfig` 单例的组织名与应用名为 `QuarkMeta`，使其 Windows 注册表与配置文件物理落盘路径彻底独立，避免与 ArcMeta 的配置互相覆盖或污染。
+6. **应用全量重命名**：将构建目标可执行文件名、项目工程名、资源描述文件、主窗口标题、运行日志文件名等全部更新为 `QuarkMeta`。
 
 ## 4. 技术决策与精准修改方案
 
-### 4.1 离散 JSON 元数据缓存文件名更名 (.QuarkMeta.json)
+### 4.1 物理文件名与类名真实重命名 (QuarkMetaJson)
 
-**文件**：`src/meta/AmMetaJson.cpp`
+1. 重命名物理文件：
+   `git mv src/meta/AmMetaJson.h src/meta/QuarkMetaJson.h`
+   `git mv src/meta/AmMetaJson.cpp src/meta/QuarkMetaJson.cpp`
+
+2. 在 `QuarkMetaJson.h` 和 `QuarkMetaJson.cpp` 中将类名 `AmMetaJson` 替换为 `QuarkMetaJson`，将生成文件名更改为 `.QuarkMeta.json`：
+
+**文件**：`src/meta/QuarkMetaJson.cpp`
 **精准定位**：Line 22-23
 
 ```cpp
@@ -85,8 +106,53 @@
 
 ---
 
-### 4.2 配置文件与注册表隔离 (AppConfig)
-修改 `AppConfig` 单例中的 QSettings 构造参数，使得配置落盘于 `%APPDATA%/QuarkMeta/QuarkMeta.ini` 或 Windows 注册表 `HKCU\Software\QuarkMeta\QuarkMeta`。
+### 4.2 彻底拔除 MainWindow 中的 CategoryPanel 残留
+
+在 `MainWindow.h` 中彻底删除 `CategoryPanel* m_categoryPanel = nullptr;` 成员变量定义及 `#include "CategoryPanel.h"` 头文件引用。
+在 `MainWindow.cpp` 中彻底移除 `m_categoryPanel` 的实例化与布局添加代码，避免留下任何标题栏与残影。
+
+**文件**：`src/ui/MainWindow.h`
+**精准定位**：Line 26, Line 138
+
+```cpp
+<<<<<<< SEARCH
+class CategoryPanel;
+...
+    CategoryPanel* m_categoryPanel = nullptr;
+=======
+// CategoryPanel 彻底拔除废除
+>>>>>>> REPLACE
+```
+
+**文件**：`src/ui/MainWindow.cpp`
+**精准定位**：`setupSplitters()` 布局组装
+
+```cpp
+<<<<<<< SEARCH
+    m_categoryPanel = new CategoryPanel(this);
+    m_categoryPanel->setObjectName("SidebarContainer");
+
+    m_navPanel = new NavPanel(this);
+    m_navPanel->setObjectName("ListContainer");
+
+    ...
+
+    m_mainSplitter->addWidget(m_categoryPanel);
+    m_mainSplitter->addWidget(m_navPanel);
+=======
+    // 物理直接将 NavPanel 作为第一栏，彻底清除 CategoryPanel 残留
+    m_navPanel = new NavPanel(this);
+    m_navPanel->setObjectName("SidebarContainer");
+
+    ...
+
+    m_mainSplitter->addWidget(m_navPanel);
+>>>>>>> REPLACE
+```
+
+---
+
+### 4.3 配置文件与注册表隔离 (AppConfig)
 
 **文件**：`src/core/AppConfig.h`
 **精准定位**：Line 36 构造函数
@@ -101,7 +167,7 @@
 
 ---
 
-### 4.3 日志文件名隔离与更新
+### 4.4 日志文件名隔离与更新
 
 **文件**：`src/main.cpp`
 **精准定位**：Line 99 `rotateLogFiles` 启动点
@@ -115,7 +181,7 @@
 ```
 
 **文件**：`src/ui/Logger.h`
-**精准定位**：Line 131-132 降级直写轮转与写入点
+**精准定位**：Line 131-132
 
 ```cpp
 <<<<<<< SEARCH
@@ -129,12 +195,15 @@
 
 ---
 
-### 4.4 构建配置、目标名与文件列表更新
+### 4.5 构建配置与 CMakeLists.txt 更新
 
-**文件**：`CMakeLists.txt`
-**精准定位**：Line 2, Line 35-37, SOURCES 列表，与 Line 267/315/320/332/344 目标设置
+在 `CMakeLists.txt` 中：
+1. 将工程名由 `ArcMeta` 更新为 `QuarkMeta`；
+2. 移除已被彻底删除的 `.h/.cpp` 文件列表；
+3. 将 `src/meta/AmMetaJson.cpp` 更新为 `src/meta/QuarkMetaJson.cpp`；
+4. 更新资源文件为 `QuarkMeta.rc`。
 
-```cpp
+```cmake
 <<<<<<< SEARCH
 project(ArcMeta)
 
@@ -154,24 +223,6 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/QuarkMeta")
 
 ---
 
-### 4.5 侧边栏与 UI 三栏式重构
-
-1. **移除 `CategoryPanel` 控件**：在 `MainWindow` 布局中移除 `CategoryPanel`（及对应头文件与成员变量），第一栏直接放置包含“目录导航”的 `NavPanel` 视图。
-2. **`NavPanel` 布局调整**：将原“目录导航树”调整至最左侧第一栏，“收藏夹”调整至中间第二栏独立独占。
-
-**文件**：`src/ui/MainWindow.cpp`
-**精准定位**：Line 221 窗口标题初始化与布局绑定
-
-```cpp
-<<<<<<< SEARCH
-    setWindowTitle("ArcMeta");
-=======
-    setWindowTitle("QuarkMeta");
->>>>>>> REPLACE
-```
-
----
-
 ## 5. 已知问题/待办
 - **旧配置不迁移策略**：ArcMeta 既有用户的偏好设置将留在原有 ArcMeta 路径下，QuarkMeta 将以后者全新的独立配置启动。
 - **图标与美术资源**：按照要求，本次改造保持现有 `.ico/.png` 等图标资源不动。
@@ -179,7 +230,16 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/QuarkMeta")
 ---
 
 ## 涉及文件清单
-### 1. 拟彻底删除文件 (10 个)
+### 1. 拟重命名文件 (2 个)
+- `src/meta/AmMetaJson.h` -> `src/meta/QuarkMetaJson.h`
+- `src/meta/AmMetaJson.cpp` -> `src/meta/QuarkMetaJson.cpp`
+
+### 2. 拟彻底删除文件 (13 个)
+- `src/ui/CategoryPanel.h`
+- `src/ui/CategoryPanel.cpp`
+- `src/ui/CategoryModel.h`
+- `src/ui/CategoryModel.cpp`
+- `src/ui/CategoryDelegate.h`
 - `src/ui/models/LibraryAssetModel.h`
 - `src/ui/models/LibraryAssetModel.cpp`
 - `src/ui/MemoryBatchRenameService.h`
@@ -188,24 +248,25 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/QuarkMeta")
 - `src/core/DatabaseSynchronizer.cpp`
 - `src/core/AutoImportManager.h`
 - `src/core/AutoImportManager.cpp`
-- `src/core/LibraryMaintenanceService.h`
-- `src/core/LibraryMaintenanceService.cpp`
 
-### 2. 新增/更新文档与资源文件 (3 个)
+### 3. 新增/更新文档与资源文件 (3 个)
 - `Modification_Plan/QuarkMeta-Architecture-Planning.md`
 - `QuarkMeta.manifest`
 - `QuarkMeta.rc`
 
-### 3. 需要修改的文件 (12 个)
+### 4. 需要精确定位修改的文件 (15 个)
 - `CMakeLists.txt`
 - `.gitignore`
 - `src/core/AppConfig.h`
 - `src/main.cpp`
 - `src/ui/Logger.h`
-- `src/meta/AmMetaJson.cpp`
+- `src/meta/QuarkMetaJson.h`
+- `src/meta/QuarkMetaJson.cpp`
+- `src/meta/DiskNavigatorService.h`
+- `src/meta/DiskNavigatorService.cpp`
+- `src/meta/MetadataManager.cpp`
 - `src/core/FileFilterService.cpp`
 - `src/util/ShellHelper.cpp`
 - `src/ui/MainWindow.h`
 - `src/ui/MainWindow.cpp`
-- `src/ui/NavPanel.h`
 - `src/ui/ContentPanel.cpp`
