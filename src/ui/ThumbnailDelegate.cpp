@@ -1,7 +1,6 @@
 #include "ThumbnailDelegate.h"
 #include "ContentPanel.h"
 #include "CardPainterHelper.h"
-#include "../core/ModelContract.h"
 #include "ElidedTextUtility.h"
 #include "../meta/MetadataManager.h"
 #include <QPainter>

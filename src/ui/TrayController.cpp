@@ -4,7 +4,6 @@
 #include <QDebug>
 #include <QProgressDialog>
 #include "../meta/DatabaseManager.h"
-#include "BatchProgressDialog.h"
 
 namespace QuarkMeta {
 

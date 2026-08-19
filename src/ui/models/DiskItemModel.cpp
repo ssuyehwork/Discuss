@@ -1,7 +1,6 @@
 #include "DiskItemModel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
-#include "ModelContract.h"
 #include "../ContentPanel.h"
 #include <QDateTime>
 #include <QFileInfo>
@@ -12,7 +11,6 @@
 #include "../../core/CoreController.h"
 #include "../../util/DiskMediaExtractor.h"
 #include "../DiskBatchRenameService.h"
-#include "../../meta/FileOperationHelper.h"
 #include "../../meta/CapsuleMediaExtractor.h"
 #include "../../meta/MetadataManager.h"
 

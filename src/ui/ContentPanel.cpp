@@ -16,7 +16,6 @@
 #include "DropTreeView.h" 
 #include "DropListView.h" 
 #include "DropJustifiedView.h"
-#include "BatchProgressDialog.h"
 #include "ThumbnailDelegate.h"
 #include "../util/ImportHelper.h"
 #include "../util/AssetImporter.h"
@@ -26,8 +25,6 @@
 #include "MainWindow.h"
 #include "../core/CoreEngine.h"
 #include "../core/CentralEventHub.h"
-#include "../util/SecureFileEraser.h"
-#include "../util/DiskIoService.h"
  
 #include <QVBoxLayout> 
 #include <QHBoxLayout> 
@@ -89,7 +86,6 @@
 #include "BatchCreateDialog.h"
 #include "UiHelper.h" 
 #include "ShellIconManager.h"
-#include "StyleLibrary.h"
 #include <QFileIconProvider>
 #include "../core/CoreController.h"
 #include "../core/UndoManager.h"

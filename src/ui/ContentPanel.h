@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include "../core/ItemRecord.h"
+#include "../core/ModelContract.h"
 #include <QMap>
 #include <unordered_map>
 #include <deque>
@@ -22,11 +23,9 @@
 #include <QPersistentModelIndex>
 #include <QDebug>
 #include <QIcon>
-#include "ScanStats.h"
 #include "FilterPanel.h"
 #include "models/DiskItemModel.h"
 
-#include "../core/ModelContract.h"
 
 namespace QuarkMeta {
 

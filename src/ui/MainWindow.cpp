@@ -56,16 +56,13 @@
 #include <QGridLayout>
 #include <QTimer>
 #include "UiHelper.h"
-#include "StyleLibrary.h"
 #include "SvgIconRenderer.h"
 #include "../core/SearchHistoryService.h"
-#include "../core/SyncStatusService.h"
 #include "DriveButton.h"
 #include "../util/ShellHelper.h"
 #include "../util/ImportHelper.h"
 #include "../util/AssetImporter.h"
 using namespace QuarkMeta::Style;
-#include "../core/ModelContract.h"
 #include <QFileInfo>
 #include <QDir>
 #include "../meta/MetadataManager.h"

@@ -11,7 +11,6 @@
 #include <QSlider>
 #include <QMap>
 #include <QStringList>
-#include "ScanStats.h"
 #include "MetaPanel.h" // 引用 FlowLayout
 
 namespace QuarkMeta {

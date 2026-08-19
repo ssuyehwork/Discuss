@@ -14,7 +14,6 @@
 
 #include <QtConcurrent>
 #include <QCoreApplication>
-#include "../meta/FileOperationHelper.h"
 #include "../meta/CapsuleMediaExtractor.h"
 #include "../ui/DiskBatchRenameService.h"
 

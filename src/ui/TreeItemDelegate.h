@@ -14,7 +14,6 @@
 #include "../core/ModelContract.h"
 #include "UiHelper.h"
 #include "CardPainterHelper.h"
-#include "StyleLibrary.h"
 #include "ThumbnailDelegate.h"
 using namespace QuarkMeta::Style;
 

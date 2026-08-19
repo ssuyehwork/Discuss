@@ -5,7 +5,6 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
-#include "../core/CategoryLockManager.h"
 
 namespace QuarkMeta {
 

@@ -86,8 +86,6 @@ set(SOURCES
     src/core/SearchHistoryService.h
     src/crypto/EncryptionManager.cpp
     src/crypto/EncryptionManager.h
-    src/meta/CategoryBindingManager.cpp
-    src/meta/CategoryBindingManager.h
     src/meta/DiskTrashRepo.cpp
     src/meta/DiskTrashRepo.h
     src/meta/DriveMetaDao.cpp
@@ -120,13 +118,10 @@ set(SOURCES
     src/ui/DiskBatchRenameService.h
     src/ui/UndoToastOverlay.cpp
     src/ui/UndoToastOverlay.h
-    src/ui/CategoryFilterProxyModel.h
     src/ui/BreadcrumbBar.cpp
     src/ui/BreadcrumbBar.h
     src/ui/CategoryLockDialog.cpp
     src/ui/CategoryLockDialog.h
-    src/ui/CategorySetPasswordDialog.cpp
-    src/ui/CategorySetPasswordDialog.h
     src/ui/CategoryLockWidget.cpp
     src/ui/CategoryLockWidget.h
     src/ui/ColorPicker.cpp
@@ -142,12 +137,6 @@ set(SOURCES
     src/ui/DropTreeView.cpp
     src/ui/DropTreeView.h
     src/ui/IScanResultView.h
-    src/ui/ListResultView.cpp
-    src/ui/ListResultView.h
-    src/ui/GridResultView.cpp
-    src/ui/GridResultView.h
-    src/ui/JustifiedResultView.cpp
-    src/ui/JustifiedResultView.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
     src/ui/FramelessDialog.cpp
@@ -176,11 +165,8 @@ set(SOURCES
     src/ui/AddressBar.h
     src/ui/MetaPanel.cpp
     src/ui/MetaPanel.h
-    src/ui/TagManagerDialog.h
-    src/ui/PresetTagsDialog.cpp
     src/ui/TagSelectorOverlay.h
     src/ui/TagSelectorOverlay.cpp
-    src/ui/TagManagerDialog.cpp
     src/ui/TaskProgressToolBar.h
     src/ui/TaskProgressToolBar.cpp
     src/ui/components/ElasticEdit.h
@@ -195,7 +181,6 @@ set(SOURCES
     src/ui/NavPanel.h
     src/ui/FavoritePanel.cpp
     src/ui/FavoritePanel.h
-    src/ui/BatchProgressDialog.h
     src/ui/QuickLookWindow.cpp
     src/ui/QuickLookWindow.h
     src/ui/QuickLookMinimap.cpp
