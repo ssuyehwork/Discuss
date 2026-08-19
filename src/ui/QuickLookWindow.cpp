@@ -5,6 +5,7 @@
 #include "QuickLookMinimap.h"
 #include "../util/DiskMediaExtractor.h"
 #include "../meta/CapsuleMediaExtractor.h"
+#include "StyleLibrary.h"
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QMenu>

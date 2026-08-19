@@ -2,6 +2,7 @@
 #define NOMINMAX
 #endif
 #include "JustifiedView.h"
+#include "../core/ModelContract.h"
 #include <QPainter>
 #include <QScrollBar>
 #include <QResizeEvent>

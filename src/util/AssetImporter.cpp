@@ -1,6 +1,7 @@
 #include "AssetImporter.h" 
 #include "ShellHelper.h" 
 #include "../ui/Logger.h" 
+#include "../ui/BatchProgressDialog.h" 
 #include "../ui/ToolTipOverlay.h" 
 #include "../meta/MetadataManager.h" 
 #include "../meta/DatabaseManager.h" 

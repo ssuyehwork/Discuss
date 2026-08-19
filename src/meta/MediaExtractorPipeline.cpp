@@ -9,6 +9,7 @@
 #include "../ui/MediaColorExtractor.h"
 #include "../ui/ImageDecoderFacade.h"
 #include "../ui/ColorAlgorithmEngine.h"
+#include "../core/SyncStatusService.h"
 #include "DatabaseManager.h"
 #include <QImageReader>
 #include <QSvgRenderer>

@@ -1,11 +1,14 @@
 # 备份备注
 
-**备份时间**：2026-08-17 15:18:08  
-**备份目录**：Buk_20260817_151805  
+**备份时间**：2026-08-19 17:46:57  
+**备份目录**：Buk_20260819_174652  
 
 ---
 
-实施 Plan-134 修复缩略图占位符死锁与秒级出图：
-1. 修复 ContentPanel 节流定时器：恢复 m_visibleTimer 为单次触发 (60ms)，并在 verticalScrollBar valueChanged 时安全重启节流，避免定时器无限循环自增。
-2. 解除防抖锁死锁：移除 LibraryAssetModel 与 DiskItemModel 中的代际误杀比对，确保 m_requestedIcons/m_requestedPaths 请求锁 100% 正常释放，彻底修复全屏卡在灰色占位符的问题。
-3. 结合纯内存重构与硬件加速，恢复 60FPS 极速滑动与缩略图秒级回显。
+更新了 DiskItemModel::loadThumbnailsForRows：
+
+严格限制每批次只处理 2 个条目，并在主线程完成后触发一个 20ms 自驱动链式中继，调用 ContentPanel::refreshVisibleThumbnails。
+
+将 ContentPanel::refreshVisibleThumbnails 改为 public，以便 DiskItemModel 可以访问。
+
+所有后台任务都会验证 generation tokens，在目录导航时能够立即熔断。

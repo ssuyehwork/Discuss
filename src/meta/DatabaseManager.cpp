@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <windows.h>
 #include "MetadataManager.h"
+#include "../util/AppDirectoryInitializer.h"
 
 namespace {
 #ifdef Q_OS_WIN

@@ -1,6 +1,7 @@
 #pragma once
 #include <QPushButton>
 #include <QTimer>
+#include "StyleLibrary.h"
 
 namespace QuarkMeta {
 

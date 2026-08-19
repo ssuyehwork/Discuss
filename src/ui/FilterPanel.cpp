@@ -3,6 +3,7 @@
 #include <QSet>
 #include "ToolTipOverlay.h"
 #include "UiHelper.h"
+#include "StyleLibrary.h"
 #include "ColorPicker.h"
 #include "SearchHistoryPanel.h"
 #include "../core/SearchHistoryService.h"

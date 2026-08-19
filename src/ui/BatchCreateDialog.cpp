@@ -1,6 +1,7 @@
 #include "BatchCreateDialog.h"
 #include "ToolTipOverlay.h"
 #include "UiHelper.h"
+#include "StyleLibrary.h"
 #include "../core/AppConfig.h"
 #include "../meta/MetadataManager.h"
 #include <QVBoxLayout>

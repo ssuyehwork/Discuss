@@ -2,6 +2,7 @@
 #include "UiHelper.h"
 #include "../core/CentralEventHub.h"
 #include "../core/CoreEngine.h"
+#include "StyleLibrary.h"
 #include "MetaPanel.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/DatabaseManager.h"

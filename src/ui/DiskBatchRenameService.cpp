@@ -1,6 +1,7 @@
 #include "DiskBatchRenameService.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/CapsuleMediaExtractor.h"
+#include "../meta/FileOperationHelper.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>

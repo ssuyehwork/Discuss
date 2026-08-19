@@ -4,7 +4,7 @@
 namespace QuarkMeta {
 
 /**
- * @brief 全局模型契约角色定义 (ModelContract)
+ * @brief 工业级模型契约 (ModelContract)
  * 物理统一全应用 Role 定义，彻底解决跨组件 Role 冲突问题。
  */
 enum CommonRole {
@@ -26,10 +26,19 @@ enum CommonRole {
     IsEmptyRole         = Qt::UserRole + 106, // 是否为空目录
     CategoryIdRole      = Qt::UserRole + 107, // 所属分类 ID
     CategoryKindRole    = Qt::UserRole + 110, // 分类类型 (0=User, 1=SystemLibrary)
+    RegistrationProgressRole = Qt::UserRole + 205, // 文件夹入库进度 (double, 0.0 ~ 1.0)
     
-    // 扩展 UI 角色 (UserRole + 201..300)
-    RegistrationProgressRole = Qt::UserRole + 201, // 异步登记解析状态 (-1=未登记, 0..99=进度, 100=已完成)
-    IsGroupHeaderRole   = Qt::UserRole + 202  // 逻辑分组页眉标识
+    // UI/渲染角色 (UserRole + 201..300)
+    AspectRatioRole     = Qt::UserRole + 201, // 图像宽高比
+    HasThumbnailRole    = Qt::UserRole + 202, // 是否拥有物理缩略图
+    PalettesRole        = Qt::UserRole + 203, // 物理色板数据
+    CountRole           = Qt::UserRole + 204, // 子项数量
+
+    // 双轨回收站专用角色
+    IsGroupHeaderRole   = Qt::UserRole + 206, // 是否是分组标题
+    GroupNameRole       = Qt::UserRole + 207, // 分组名称
+    IsDiskTrashRole     = Qt::UserRole + 208, // 是否是磁盘回收站项目
+    DiskTrashIdRole     = Qt::UserRole + 209  // 磁盘回收站表 ID
 };
 
 } // namespace QuarkMeta
