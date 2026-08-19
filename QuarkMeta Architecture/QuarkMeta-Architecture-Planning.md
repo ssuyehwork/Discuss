@@ -49,6 +49,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Qua
 - **盘符栏清理、自动导入根除与“标签管理”实用按钮引入方案**：详见 `Implementation Plan/TagManagerAndLegacyCodePurge.md`
 - **收藏夹独占第二栏重构方案**：详见 `Implementation Plan/FavoritePanel.md`
 - **内存托管库模式彻底清理实施方案**：详见 `Implementation Plan/MemoryModeCleanup.md`
+- **`.arc` 胶囊文件夹磁盘纯只读直通预览实施方案**：详见 `Implementation Plan/ArcCapsuleReadOnlyPreview.md`
 
 ---
 
@@ -108,3 +109,14 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Qua
 - **物理配置落盘**：`AppConfig` 的 `QSettings` 实例化强制改为 `m_settings("QuarkMeta", "QuarkMeta")`，使得注册表/INI文件存储于专属于 QuarkMeta 的全新路径，绝对禁止与 QuarkMeta 共享或覆盖配置。
 - **运行日志隔离**：全局运行与调试日志由 `QuarkMeta_debug.log` 重命名为 `quarkmeta_debug.log`。
 - **可执行文件与项目重命名**：构建目标、可执行文件及 Windows 资源清单统一更名为 `QuarkMeta.exe` / `QuarkMeta.manifest` / `QuarkMeta.rc`。
+
+---
+
+## 6. `.arc` 胶囊文件夹磁盘纯只读直通预览规范 (Arc Capsule Read-Only Direct Preview Specification)
+
+### 6.1 设计理念
+在 QuarkMeta 纯磁盘直连模式下，用户可能在磁盘目录中访问历史上由托管库生成的 `.arc` 胶囊文件夹。系统采取 **“纯只读直通预览（零提取、零写盘、零缩略图生成）”** 策略：
+
+1. **允许直通查看**：将 `.arc` 胶囊文件夹视为可正常浏览的物理文件夹，支持在目录树和内容面板中点击进入并查看其封存的主资产。
+2. **过滤内部杂质**：在 `.arc` 目录内部导航时，自动识别并隐藏内部的 `meta.json`、`thumb_*.png` 等辅助缓存文件，仅将主体资产文件呈现给用户。
+3. **零污染与绝对只读**：在预览 `.arc` 内部资产时，强制关闭所有后台缩略图生成、磁盘写入、Hash 计算与解包提取逻辑，确保 `.arc` 物理文件夹及其内容的绝对只读与零改动。
