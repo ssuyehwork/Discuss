@@ -249,8 +249,10 @@ private:
     ItemModelBase* m_model = nullptr;           // 当前多态激活指针合约
 
     QTimer* m_visibleTimer = nullptr;
-    void refreshVisibleThumbnails();
     QSortFilterProxyModel* m_proxyModel = nullptr;
+
+public:
+    void refreshVisibleThumbnails();
 
 
     FilterState m_currentFilter;

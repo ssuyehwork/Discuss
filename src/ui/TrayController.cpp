@@ -65,13 +65,8 @@ void TrayController::onShowMainWindow() {
 }
 
 void TrayController::onQuitApp() {
-    // 2026-07-xx 按照用户要求 (Plan-119)：秒退出架构实现
     if (m_trayIcon) m_trayIcon->hide();
-
-    // 2. 调用 DatabaseManager 停用异步同步队列并释放句柄
-    // 数据已在运行期通过增量任务实时落地，此处仅执行排空队列动作，通常为毫秒级。
-    DatabaseManager::instance().shutdown();
-
+    // 严禁在此处调用 DatabaseManager::shutdown()，统一交给 main.cpp 集中调度
     QApplication::quit();
 }
 

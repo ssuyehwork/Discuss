@@ -22,6 +22,10 @@ public:
     Qt::ItemFlags flags(const QModelIndex& index) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
+    // 切换目录/清空数据时调用，使所有已派发的旧任务瞬间失效
+    void incrementGeneration() { m_currentGen.fetch_add(1, std::memory_order_relaxed); }
+    uint64_t currentGeneration() const { return m_currentGen.load(std::memory_order_relaxed); }
+
     const std::vector<QuarkMeta::ItemRecord>& allRecords() const override { return m_allRecords; }
     void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) override;
     void clear() override;

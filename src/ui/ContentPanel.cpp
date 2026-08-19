@@ -821,7 +821,7 @@ void ContentPanel::updateStatusBarStats() {
 void ContentPanel::refreshVisibleThumbnails() {
     QWidget* current = m_viewStack->currentWidget();
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(current);
-    if (!view || !m_model) return;
+    if (!view || !m_model || CoreController::isShuttingDown()) return;
 
     int top = 0;
     int bottom = m_proxyModel->rowCount() - 1;
@@ -833,10 +833,9 @@ void ContentPanel::refreshVisibleThumbnails() {
     if (topIdx.isValid()) top = topIdx.row();
     if (bottomIdx.isValid()) bottom = bottomIdx.row();
 
-    // 稍微向外扩大缓冲页，防止滑动假白 (Precache padding)
-    int padding = 25;
-    top = std::max(0, top - padding);
-    bottom = std::min(m_proxyModel->rowCount() - 1, bottom + padding);
+    // 稍微向外预加载 4 行缓冲，消除白块
+    top = std::max(0, top - 4);
+    bottom = std::min(m_proxyModel->rowCount() - 1, bottom + 4);
 
     QList<int> visibleRows;
     for (int r = top; r <= bottom; ++r) {
@@ -847,6 +846,7 @@ void ContentPanel::refreshVisibleThumbnails() {
         }
     }
 
+    // 触发本批次加载
     m_model->loadThumbnailsForRows(visibleRows);
 }
 
@@ -2544,6 +2544,14 @@ void ContentPanel::restoreSelections() {
 void ContentPanel::loadDirectory(const QString& path, bool recursive) { 
     restoreActiveView(); // 🚨 强行切离开锁屏页，恢复卡片网格/列表页！
 
+    // 1. 切换目录时立即熔断并清空前一次目录的后台提图任务队列
+    MediaExtractorPipeline::instance().cancelAll();
+
+    // 2. 递增模型代际号，废止前一个目录正在跑的所有子任务
+    if (m_diskModel) {
+        m_diskModel->incrementGeneration();
+    }
+
     if (m_model != m_diskModel) {
         m_model = m_diskModel;
         m_proxyModel->setSourceModel(m_model);
@@ -2583,9 +2591,9 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
 
     QPointer<ContentPanel> panelPtr(this); 
 
-    // 【物理隔离】纯磁盘扫描已迁出至 DiskScanService，本函数只负责调度与 UI 状态维护，
-    // 不再直接持有任何扫描细节，DiskScanService.cpp 中不可能出现 MetadataManager/CategoryRepo 调用
-    (void)QThreadPool::globalInstance()->start([panelPtr, path, recursive, reqId]() { 
+    // 通道隔离：使用 QtConcurrent::run 代替 QThreadPool::globalInstance()->start，
+    // 防止 UI 导航与目录扫描任务被后台大量缩略图提取慢任务死死霸占而排队卡死
+    (void)QtConcurrent::run([panelPtr, path, recursive, reqId]() { 
         if (!panelPtr) return; 
 
         std::vector<ItemRecord> allItems = DiskScanService::scanDirectory(

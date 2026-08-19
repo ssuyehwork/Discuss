@@ -51,20 +51,21 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext &context, con
  * @brief 退出时调用的清场函数，优雅停止各子系统线程、确保数据完整落盘不损坏。
  */
 void onApplicationAboutToQuit(HANDLE hMutex) {
+    // 1. 立即设置停机原子标记
     QuarkMeta::CoreController::requestShutdown();
 
-    // 1. 阻塞等待全局工作线程池中所有子任务退场，防止多线程写冲突与硬截断
-    QThreadPool::globalInstance()->waitForDone(3000);
+    // 2. 立即熔断提图后台流水线
+    QuarkMeta::MediaExtractorPipeline::instance().cancelAll();
 
-    // 2. 将高频落盘缓存中的所有待写数据同步强力落盘写入，安全闭卷
-    QuarkMeta::DatabaseManager::instance().flushAll(true);
+    // 3. 限时 200ms 排空线程池，绝不无限期死等
+    QThreadPool::globalInstance()->waitForDone(200);
 
+    // 4. 全系统唯一权威的数据库安全落盘与闭卷
+    QuarkMeta::DatabaseManager::instance().shutdown();
 
-    // 4. 释放 COM 套间环境
 #ifdef Q_OS_WIN
     CoUninitialize();
 
-    // 5. 释放单实例互斥量锁
     if (hMutex) {
         ReleaseMutex(hMutex);
         CloseHandle(hMutex);

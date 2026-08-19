@@ -4,6 +4,7 @@
 
 #include "MediaExtractorPipeline.h"
 #include "MetadataManager.h"
+#include "../core/CoreController.h"
 #include "CapsuleMediaExtractor.h"
 #include "../ui/MediaColorExtractor.h"
 #include "../ui/ImageDecoderFacade.h"
@@ -132,7 +133,7 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 #endif
 
-    while (!m_isCanceled.load()) {
+    while (!m_isCanceled.load() && !CoreController::isShuttingDown()) {
         std::vector<std::wstring> batch;
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
@@ -142,15 +143,14 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             m_queue.erase(m_queue.begin(), m_queue.begin() + batchSize);
 
             m_activeCount.fetch_add(static_cast<int>(batch.size()));
-            int remaining = static_cast<int>(m_queue.size()) + m_activeCount.load();
-            SyncStatusService::instance().updateMediaPending(remaining);
+            SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + m_activeCount.load());
         }
 
         std::vector<MetadataManager::ExtractedFeatureItem> results;
         results.reserve(batch.size());
 
         for (const auto& path : batch) {
-            if (m_isCanceled.load()) break;
+            if (m_isCanceled.load() || CoreController::isShuttingDown()) break;
 
             QString qPath = QString::fromStdWString(path);
             QFileInfo info(qPath);
@@ -162,16 +162,16 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             item.ingestionStatus = 1;
 
             if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
-                // 🚨 核心改造：单次读盘直接拿到【原始尺寸】和【512高清图】
+                // 单次读盘：同时拿到【原始尺寸】和【512 高清图】
                 DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(qPath, 512);
                 if (dec.isValid) {
                     item.width = dec.originalSize.width();
                     item.height = dec.originalSize.height();
 
-                    // 1. 512 高清缩略图快速落盘 (JPEG 85, <1ms)
+                    // 1. 写入 File ID 高清缩略图缓存 (JPEG 85)
                     CapsuleMediaExtractor::saveDiskThumbnail(qPath, dec.thumbnail512);
 
-                    // 2. 纯内存 64x64 测色 (<0.5ms)
+                    // 2. 内存 64x64 快速测色 (<0.5ms)
                     auto pal = ColorAlgorithmEngine::extractPaletteFromImage(dec.thumbnail512);
                     if (!pal.isEmpty()) {
                         QColor dominant = MediaColorExtractor::quantizeColor(pal.first().first);
@@ -179,27 +179,19 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                         item.palettes = pal;
                     }
                 }
-            } else if (info.isDir()) {
-                std::wstring colorStr;
-                QVector<QPair<QColor, float>> palette;
-                extractColor(path, colorStr, palette);
-                item.autoColor = colorStr;
-                item.palettes = palette;
             }
 
             results.push_back(item);
         }
 
-        if (!results.empty() && !m_isCanceled.load()) {
+        if (!results.empty() && !m_isCanceled.load() && !CoreController::isShuttingDown()) {
             MetadataManager::instance().updateExtractedMediaFeaturesBatch(results);
         }
 
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
             m_activeCount.fetch_sub(static_cast<int>(batch.size()));
-            int remaining = static_cast<int>(m_queue.size()) + m_activeCount.load();
-            if (remaining < 0) remaining = 0;
-            SyncStatusService::instance().updateMediaPending(remaining);
+            SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + m_activeCount.load());
         }
     }
 

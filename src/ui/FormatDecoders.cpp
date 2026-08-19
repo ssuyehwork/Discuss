@@ -179,10 +179,11 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize)
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return QImage();
 
-    QByteArray rawData = file.read(15 * 1024 * 1024);
+    // 🚨 优化：AI 缩略图与 XMP 头部 100% 存在于前 2MB 内，严禁无脑读 15MB！
+    QByteArray rawData = file.read(2 * 1024 * 1024);
     file.close();
 
-    if (rawData.isEmpty()) return QImage();
+    if (rawData.isEmpty() || CoreController::isShuttingDown()) return QImage();
 
     // =========================================================================
     // 通道 1：解析 PostScript %AI7_Thumbnail ~ %AI10_Thumbnail 256色索引调色板
@@ -425,15 +426,18 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
     if (CoreController::isShuttingDown()) return QImage();
 
     QString gsExec = findGhostscriptExecutable();
-    if (gsExec.isEmpty()) {
+    if (gsExec.isEmpty()) return QImage();
+
+    // 尝试获取信号量，若排队超过 100ms 则直接放弃，防止卡死
+    if (!g_gsConcurrencyLimit.tryAcquire(1, 100)) {
         return QImage();
     }
-
-    g_gsConcurrencyLimit.acquire();
     struct ReleaseGuard {
         QSemaphore& s;
         ~ReleaseGuard() { s.release(); }
     } guard{g_gsConcurrencyLimit};
+
+    if (CoreController::isShuttingDown()) return QImage();
 
     QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1.png").arg(QString::number(qHash(filePath), 16));
 
@@ -456,7 +460,8 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 #endif
     process.start(gsExec, args);
 
-    if (process.waitForFinished(5000)) {
+    // 🚨 优化：等待时间从 5000ms 强制压缩为 1200ms
+    if (process.waitForFinished(1200)) {
         if (QFile::exists(tempPng)) {
             QImage img(tempPng);
             QFile::remove(tempPng);
@@ -465,6 +470,10 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
                 return img.scaled(targetSize, targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             }
         }
+    }
+
+    if (process.state() == QProcess::Running) {
+        process.kill(); // 超时直接物理强杀进程，绝不占资源
     }
 
     if (QFile::exists(tempPng)) QFile::remove(tempPng);

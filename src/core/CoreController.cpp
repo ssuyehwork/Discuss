@@ -18,6 +18,7 @@
 namespace QuarkMeta {
 
 std::atomic<bool> CoreController::s_isShuttingDown{false};
+std::atomic<uint64_t> CoreController::s_navigationGeneration{1};
 
 CoreController& CoreController::instance() {
     static CoreController inst;
@@ -38,6 +39,8 @@ void CoreController::initializeCoreComponents() {
 
 void CoreController::requestShutdown() { s_isShuttingDown.store(true); }
 bool CoreController::isShuttingDown() { return s_isShuttingDown.load(); }
+uint64_t CoreController::incrementNavigationGeneration() { return ++s_navigationGeneration; }
+uint64_t CoreController::currentNavigationGeneration() { return s_navigationGeneration.load(); }
 
 CoreController::CoreController(QObject* parent) : QObject(parent) {
     // [Plan-115] 注册 Qt 元类型，防止 QueuedConnection 因未注册自定义类型而分发失败

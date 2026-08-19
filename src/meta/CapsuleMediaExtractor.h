@@ -4,28 +4,28 @@
 #include <QImage>
 #include <QString>
 #include <mutex>
+#include <cstdint>
 
 namespace QuarkMeta {
 
 class CapsuleMediaExtractor {
 public:
-    // 全局唯一：串行化保护一切会触碰Qt Gui/SVG内部状态的代码段
-    // （QSvgRenderer、QPainter、QPixmap等），跨MediaExtractorPipeline与
-    // CapsuleMediaExtractor共用同一把锁，防止多个worker线程并发触碰
-    // Qt6Gui.dll内部非线程安全缓存导致崩溃（进程会以0xC0000005访问冲突退出）
     static std::mutex s_qtGuiMutex;
 
-    // UI 热路径专属：只读已有缩略图（支持 .arc 胶囊内与 disk_thumbs 缓存）
-    static QImage getCapsuleThumbnailReadOnly(const QString& mainAssetPath);
+    // 1. 根据文件物理身份证 (卷序列号 + 64位 File ID) 计算 2 级分桶缓存路径
+    static QString getDiskThumbCachePathByFileId(uint32_t volSerial, uint64_t fileId);
+    
+    // 2. 根据文件路径自动探测并获取其缓存路径（免管理员权限）
+    static QString getDiskThumbCachePath(const QString& filePath);
 
-    // 后台管道提取与落盘缓存
-    static QImage getCapsuleThumbnail(const QString& mainAssetPath, int size = 512);
+    // 3. 只读快速命中（0ms 磁盘直读）
+    static QImage getCapsuleThumbnailReadOnly(const QString& filePath);
 
-    // 计算磁盘模式缩略图的哈希缓存路径
-    static QString getDiskThumbCachePath(const QString& mainAssetPath);
+    // 4. 后台提取并写入 512 高清缩略图 (JPEG 85)
+    static QImage getCapsuleThumbnail(const QString& filePath, int size = 512);
 
-    // 512x512 高清 JPEG 85 落盘接口
-    static bool saveDiskThumbnail(const QString& mainAssetPath, const QImage& img512);
+    // 5. 512 高清落盘保存接口
+    static bool saveDiskThumbnail(const QString& filePath, const QImage& img512);
 };
 
 } // namespace QuarkMeta

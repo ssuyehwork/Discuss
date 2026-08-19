@@ -26,6 +26,8 @@ public:
     static void initializeCoreComponents();
     static void requestShutdown();
     static bool isShuttingDown();
+    static uint64_t incrementNavigationGeneration();
+    static uint64_t currentNavigationGeneration();
 
     /**
      * @brief 启动异步初始化序列
@@ -82,6 +84,7 @@ private:
     std::atomic<bool> m_isSearching{false};
     std::atomic<int> m_currentSearchId{0}; // 物理搜索 ID：用于识别并中止过期的异步扫描任务
     static std::atomic<bool> s_isShuttingDown;
+    static std::atomic<uint64_t> s_navigationGeneration;
 };
 
 } // namespace QuarkMeta

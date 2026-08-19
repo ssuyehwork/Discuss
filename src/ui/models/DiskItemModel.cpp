@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QFileInfo>
 #include <QDir>
+#include <QThreadPool>
 #include "../../meta/QuarkMetaJson.h"
 #include "../MediaColorExtractor.h"
 #include "../../core/CoreController.h"
@@ -51,6 +52,7 @@ QVariant DiskItemModel::headerData(int section, Qt::Orientation orientation, int
 }
 
 void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
+    incrementGeneration(); // 🚨 代际递增：瞬间废除上一目录的所有在途任务！
     beginResetModel();
     m_allRecords = records;
     m_pathToIndex.clear();
@@ -64,6 +66,7 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
 }
 
 void DiskItemModel::clear() {
+    incrementGeneration(); // 🚨 代际递增
     beginResetModel();
     m_allRecords.clear();
     m_pathToIndex.clear();
@@ -253,30 +256,39 @@ void DiskItemModel::clearCacheForFolder(const QString& folderPath) {
 }
 
 void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
-    std::vector<std::pair<QString, QString>> newQueue;
+    if (rows.isEmpty() || CoreController::isShuttingDown()) return;
+
+    uint64_t thisGen = m_currentGen.load(std::memory_order_relaxed);
+
+    // 1. 严格锁定单批次只取 2 张！
+    QStringList pathsToLoad;
     for (int r : rows) {
+        if (pathsToLoad.size() >= 2) break; // 🚨 物理红线：严格死锁 2 张！
+
         if (r < 0 || r >= static_cast<int>(m_allRecords.size())) continue;
         const auto& rec = m_allRecords[r];
-        if (rec.isDir) continue;
-        
-        QString path = rec.path;
-        if (!UiHelper::isGraphicsFile(rec.suffix)) continue;
+        if (rec.isDir || !UiHelper::isGraphicsFile(rec.suffix)) continue;
 
+        QString path = rec.path;
         if (m_iconCache.contains(path) || m_requestedPaths.contains(path)) continue;
 
         m_requestedPaths.insert(path);
-        newQueue.push_back({path, path});
+        pathsToLoad << path;
     }
 
-    if (newQueue.empty()) return;
+    // 如果视口内没有需要加载的，直接退出
+    if (pathsToLoad.isEmpty()) return;
 
     QPointer<DiskItemModel> weakThis(this);
-    (void)QtConcurrent::run([weakThis, newQueue]() {
-        for (const auto& task : newQueue) {
-            if (!weakThis || CoreController::isShuttingDown()) break;
-            QString path = task.first;
 
-            QImage img = DiskMediaExtractor::getDiskThumbnail(path, 512);
+    // 2. 并发处理这 2 张
+    for (const QString& path : pathsToLoad) {
+        QThreadPool::globalInstance()->start([weakThis, path, thisGen]() {
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+
+            QImage img = CapsuleMediaExtractor::getCapsuleThumbnail(path, 512);
+
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
             double ar = 1.0;
             bool hasThumb = false;
@@ -285,8 +297,8 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
                 hasThumb = true;
             }
 
-            QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, img, ar, hasThumb]() {
-                if (weakThis) {
+            QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, img, ar, hasThumb, thisGen]() {
+                if (weakThis && weakThis->currentGeneration() == thisGen) {
                     QIcon icon = img.isNull() ? ShellIconManager::getFileIcon(path, 128) : QIcon(QPixmap::fromImage(img));
                     weakThis->m_iconCache.insert(path, new QIcon(icon));
                     weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = hasThumb ? ar : -1.0;
@@ -298,13 +310,24 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
                         if (weakThis->isSuspended()) {
                             weakThis->m_pendingUpdateRows.insert(rIdx);
                         } else {
-                            emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+                            emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), 
+                                                      {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
                         }
                     }
+
+                    // 🚨【核心自驱动接力】：解完这一张后，如果还没切走目录，自动触发一个 20ms 延时去接力解下 2 张！
+                    auto* panel = qobject_cast<ContentPanel*>(weakThis->parent());
+                    if (panel && !CoreController::isShuttingDown()) {
+                        QTimer::singleShot(20, panel, [panel, thisGen, weakThis]() {
+                            if (weakThis && weakThis->currentGeneration() == thisGen) {
+                                panel->refreshVisibleThumbnails();
+                            }
+                        });
+                    }
                 }
-            });
-        }
-    });
+            }, Qt::QueuedConnection);
+        });
+    }
 }
 
 Qt::ItemFlags DiskItemModel::flags(const QModelIndex& index) const {
