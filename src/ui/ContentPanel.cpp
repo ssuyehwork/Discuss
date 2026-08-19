@@ -1135,6 +1135,14 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                 return true; 
             } 
              
+            if ((keyEvent->modifiers() & Qt::ControlModifier) && (keyEvent->modifiers() & Qt::ShiftModifier)) { 
+                // 局内快捷键 Ctrl+Shift+D：将选中的项目移动到上一次执行移动的目标文件夹
+                if (keyEvent->key() == Qt::Key_D) { 
+                    moveToLastTargetFolder(); 
+                    return true; 
+                } 
+            } 
+
             if (keyEvent->modifiers() & Qt::ControlModifier) { 
                 // 2026-03-xx 按照用户要求：逻辑重构，统一调用 performCopy 业务函数 
                 if (keyEvent->key() == Qt::Key_C && !(keyEvent->modifiers() & Qt::ShiftModifier)) { 
@@ -1568,6 +1576,33 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         menu.addAction("复制")->setData(ActionCopy); 
         menu.addAction("剪切")->setData(ActionCut); 
         menu.addAction("粘贴")->setData(ActionPaste); 
+
+        // 快捷“移动”二级子菜单：列出最近访问过的文件夹（限制最多15项）
+        QMenu* moveMenu = menu.addMenu("移动");
+        UiHelper::applyMenuStyle(moveMenu);
+
+        QStringList recentHistory = NavigationHistoryService::instance().getHistory();
+        QStringList validFolders;
+        for (const QString& folder : recentHistory) {
+            if (folder.isEmpty() || folder == "computer://" || folder == m_currentPath) continue;
+            if (QFileInfo(folder).isDir()) {
+                validFolders << folder;
+            }
+            if (validFolders.size() >= 15) break;
+        }
+
+        if (validFolders.isEmpty()) {
+            QAction* noFolderAct = moveMenu->addAction("无可用的最近访问文件夹");
+            noFolderAct->setEnabled(false);
+        } else {
+            for (const QString& folderPath : validFolders) {
+                QAction* actMoveItem = moveMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#378ADD"), 16), folderPath);
+                connect(actMoveItem, &QAction::triggered, this, [this, folderPath]() {
+                    performMoveToFolder(folderPath);
+                });
+            }
+        }
+
         menu.addAction("复制名称")->setData(ActionCopyName); 
         menu.addAction("复制路径")->setData(ActionCopyPath); 
 
@@ -3024,5 +3059,60 @@ void ContentPanel::updateLayersButtonState() {
     m_btnLayers->setEnabled(true); 
     m_btnLayers->setProperty("tooltipText", "显示子文件夹中的项目"); 
 } 
- 
+
+void ContentPanel::performMoveToFolder(const QString& targetFolder) {
+    if (targetFolder.isEmpty() || !QFileInfo(targetFolder).isDir()) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "目标文件夹不存在或不可访问", 2000, QColor("#e81123"));
+        return;
+    }
+
+    QAbstractItemView* view = (m_viewStack->currentWidget() == m_treeView) ?
+        static_cast<QAbstractItemView*>(m_treeView) : static_cast<QAbstractItemView*>(m_gridView);
+    if (!view) return;
+
+    QStringList selectedPaths;
+    auto indexes = view->selectionModel()->selectedIndexes();
+    for (const auto& idx : indexes) {
+        if (idx.column() == 0) {
+            QString p = idx.data(PathRole).toString();
+            if (!p.isEmpty() && !selectedPaths.contains(p)) {
+                selectedPaths.append(p);
+            }
+        }
+    }
+
+    if (selectedPaths.isEmpty()) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "未选择任何需要移动的项目", 2000, QColor("#FECF0E"));
+        return;
+    }
+
+    // 记录为上一次移动的目标文件夹
+    AppConfig::instance().setValue("LastMoveTargetFolder", targetFolder);
+    AppConfig::instance().sync();
+
+    QPointer<ContentPanel> weakThis(this);
+    ImportHelper::importPaths(selectedPaths, targetFolder, this, [weakThis, targetFolder]() {
+        if (weakThis) {
+            weakThis->refreshAll();
+            ToolTipOverlay::instance()->showText(QCursor::pos(),
+                QString("已成功移动到：%1").arg(QFileInfo(targetFolder).fileName()), 2000, QColor("#2ecc71"));
+        }
+    });
+}
+
+void ContentPanel::moveToLastTargetFolder() {
+    QString lastFolder = AppConfig::instance().getValue("LastMoveTargetFolder", "").toString();
+    if (lastFolder.isEmpty()) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未设置上一次移动的目标文件夹", 2000, QColor("#FECF0E"));
+        return;
+    }
+
+    if (!QFileInfo(lastFolder).isDir()) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("上一次移动的目标文件夹不存在:\n%1").arg(lastFolder), 2000, QColor("#e81123"));
+        return;
+    }
+
+    performMoveToFolder(lastFolder);
+}
+
 } // namespace QuarkMeta
