@@ -46,3 +46,4 @@
 
 补充说明：
 QuarkMeta-Architecture-Planning.md 只是用来记录设计理念，不可将相关实施方案记录到该文档里。
+实施方案只能创建在“Implementation Plan”文件夹里，实施方案的命名规则，可以根据事件来命名实施方案，必须采用英文命名
