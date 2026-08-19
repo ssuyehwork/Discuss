@@ -1,61 +1,19 @@
 #include "DiskMediaExtractor.h"
-#include "../ui/WindowsShellThumbnailProvider.h"
-#include "../ui/MediaColorExtractor.h"
 #include "../meta/CapsuleMediaExtractor.h"
-#include <QFileInfo>
-#include <QDir>
-#include <QFile>
-#include <QCoreApplication>
-#include <QSvgRenderer>
-#include <QPainter>
 
 namespace QuarkMeta {
 
 QString DiskMediaExtractor::diskThumbCachePath(const QString& path, int size) {
     (void)size;
-    // 统一收口至 CapsuleMediaExtractor::getDiskThumbCachePath（具备父文件夹 SHA-256 哈希子目录隔离功能）
     return CapsuleMediaExtractor::getDiskThumbCachePath(path);
 }
 
+// 原本这里重复了一份 SVG/PSD/AI/EPS/Shell 提取逻辑，且 SVG 渲染没有加
+// CapsuleMediaExtractor::s_qtGuiMutex 锁保护 —— 在 loadThumbnailsForRows 的
+// 后台线程里并发调用时存在数据竞争/崩溃风险。现根除重复实现，唯一提取逻辑
+// 收口到 CapsuleMediaExtractor::getCapsuleThumbnail。
 QImage DiskMediaExtractor::getDiskThumbnail(const QString& path, int size) {
-    // 1. 查 disk_thumbs 缓存
-    QString cachePath = diskThumbCachePath(path, size);
-    if (QFile::exists(cachePath)) {
-        QImage cached;
-        if (cached.load(cachePath)) return cached;
-    }
-
-    // 2. 提取图像
-    QFileInfo fi(path);
-    QString ext = fi.suffix().toLower();
-    QImage img;
-
-    if (ext == "svg") {
-        QSvgRenderer renderer(path);
-        if (renderer.isValid()) {
-            img = QImage(size, size, QImage::Format_ARGB32);
-            img.fill(Qt::transparent);
-            QPainter painter(&img);
-            renderer.render(&painter);
-        }
-    } else if (ext == "psd" || ext == "psb") {
-        img = MediaColorExtractor::extractEmbeddedPsdThumbnail(path);
-    } else if (ext == "ai") {
-        img = MediaColorExtractor::extractEmbeddedAiPreview(path, size);
-    } else if (ext == "eps") {
-        img = MediaColorExtractor::extractEmbeddedEpsPreview(path, size);
-    }
-
-    if (img.isNull()) {
-        img = WindowsShellThumbnailProvider::getShellThumbnail(path, size);
-        if (img.isNull()) img.load(path);
-    }
-
-    // 3. 100% 仅落盘存入 disk_thumbs/ 目录
-    if (!img.isNull()) {
-        img.save(cachePath, "PNG");
-    }
-    return img;
+    return CapsuleMediaExtractor::getCapsuleThumbnail(path, size);
 }
 
 } // namespace QuarkMeta

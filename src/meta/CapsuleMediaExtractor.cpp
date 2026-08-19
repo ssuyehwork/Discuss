@@ -15,7 +15,7 @@ std::mutex CapsuleMediaExtractor::s_qtGuiMutex;
 
 QString CapsuleMediaExtractor::getDiskThumbCachePath(const QString& mainAssetPath) {
     if (mainAssetPath.isEmpty()) return "";
-    
+
     QString normPath = QDir::toNativeSeparators(mainAssetPath).toLower();
     quint64 h = qHash(normPath);
 
@@ -45,6 +45,8 @@ QImage CapsuleMediaExtractor::getCapsuleThumbnailReadOnly(const QString& mainAss
     return QImage();
 }
 
+// 【唯一提取实现】原 DiskMediaExtractor::getDiskThumbnail 中的重复提取逻辑已根除，
+// 统一收口到这一个函数。SVG 渲染统一加 s_qtGuiMutex 锁保护，消除并发崩溃风险。
 QImage CapsuleMediaExtractor::getCapsuleThumbnail(const QString& mainAssetPath, int size) {
     // 先尝试只读快速命中
     QImage cached = getCapsuleThumbnailReadOnly(mainAssetPath);
@@ -77,18 +79,9 @@ QImage CapsuleMediaExtractor::getCapsuleThumbnail(const QString& mainAssetPath, 
         if (img.isNull()) img.load(mainAssetPath);
     }
 
-    // 区分双轨落盘
+    // 唯一落盘出口：统一走 JPEG85，不再有任何地方硬编码 "PNG"
     if (!img.isNull()) {
-        QString containerDir = fi.absolutePath();
-        if (containerDir.endsWith(".arc", Qt::CaseInsensitive)) {
-            // A 模式：写入 .arc 胶囊内部
-            QString thumbPath = containerDir + "/" + fi.completeBaseName() + "_thumbnail.png";
-            img.save(thumbPath, "PNG");
-        } else {
-            // B 模式：统一写入 .QuarkMeta/disk_thumbs/ 目录
-            QString diskCachePath = getDiskThumbCachePath(mainAssetPath);
-            img.save(diskCachePath, "PNG");
-        }
+        saveDiskThumbnail(mainAssetPath, img);
     }
     return img;
 }
