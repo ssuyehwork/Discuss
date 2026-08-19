@@ -66,9 +66,8 @@
 !Version-10/**
 !Dual‑mode version/
 !Dual‑mode version/**
-!Modification_Plan/
-!Modification_Plan/**
-!Modification_Plan/**
+!QuarkMeta Architecture/
+!QuarkMeta Architecture/**
 !specs/
 !specs/**
 !Buk_20260720_144208/
@@ -83,8 +82,8 @@ attachments/
 attachments-*/
 J 禁止上传/
 J 禁止上传-*/
-Modification_Plan/Skip upload/
-Modification_Plan/Skip upload/**
+QuarkMeta Architecture/Skip upload/
+QuarkMeta Architecture/Skip upload/**
 Z 暂时保留/
 Z 暂时保留-*/
 backups/

@@ -1,7 +1,7 @@
 # QuarkMeta 独立化设计理念与规划规范 (QuarkMeta Architecture and Planning)
 
 ## 0. 设计理念与架构重构总则
-QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 ArcMeta 内存托管库/镜像数据库及全量内存索引相关代码，构建轻量、高效的实时磁盘 I/O 浏览与管理体验。
+QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 QuarkMeta 内存托管库/镜像数据库及全量内存索引相关代码，构建轻量、高效的实时磁盘 I/O 浏览与管理体验。
 
 ---
 
@@ -42,13 +42,13 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Arc
 ---
 
 ## 4. 界面重构实施子计划索引 (Implementation Plans)
-- **中央神经调度中枢与底层洗髓重构无脑实施方案**：详见 `Modification_Plan/CentralDispatcherArchitecture.md`
-- **五栏视图布局与伸缩因子修复方案**：详见 `Modification_Plan/FiveColumnLayoutFix.md`
-- **根目录/盘符元数据 global.db 持久化方案**：详见 `Modification_Plan/DriveRootMetaInGlobalDb.md`
-- **托管库与同步按钮彻底根除方案**：详见 `Modification_Plan/RemoveManagedLibraryAndSyncButtons.md`
-- **盘符栏清理、自动导入根除与“标签管理”实用按钮引入方案**：详见 `Modification_Plan/TagManagerAndLegacyCodePurge.md`
-- **收藏夹独占第二栏重构方案**：详见 `Modification_Plan/FavoritePanel.md`
-- **内存托管库模式彻底清理实施方案**：详见 `Modification_Plan/MemoryModeCleanup.md`
+- **中央神经调度中枢与底层洗髓重构无脑实施方案**：详见 `Implementation Plan/CentralDispatcherArchitecture.md`
+- **五栏视图布局与伸缩因子修复方案**：详见 `Implementation Plan/FiveColumnLayoutFix.md`
+- **根目录/盘符元数据 global.db 持久化方案**：详见 `Implementation Plan/DriveRootMetaInGlobalDb.md`
+- **托管库与同步按钮彻底根除方案**：详见 `Implementation Plan/RemoveManagedLibraryAndSyncButtons.md`
+- **盘符栏清理、自动导入根除与“标签管理”实用按钮引入方案**：详见 `Implementation Plan/TagManagerAndLegacyCodePurge.md`
+- **收藏夹独占第二栏重构方案**：详见 `Implementation Plan/FavoritePanel.md`
+- **内存托管库模式彻底清理实施方案**：详见 `Implementation Plan/MemoryModeCleanup.md`
 
 ---
 
@@ -79,18 +79,18 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Arc
 ## 2. 磁盘模式离散 JSON 元数据缓存与代码类名物理重命名规范 (QuarkMetaJson Specification)
 
 ### 2.1 物理文件名与类名重命名规范
-- **原物理文件名**：`src/meta/AmMetaJson.h` / `src/meta/AmMetaJson.cpp`
+- **原物理文件名**：`src/meta/QuarkMeta.h` / `src/meta/QuarkMeta.cpp`
 - **新物理文件名**：`src/meta/QuarkMetaJson.h` / `src/meta/QuarkMetaJson.cpp`
-- **原 C++ 类名**：`AmMetaJson`
+- **原 C++ 类名**：`QuarkMeta`
 - **新 C++ 类名**：`QuarkMetaJson`
-- **原生成离散 JSON 文件名**：`.ArcMeta.json`
+- **原生成离散 JSON 文件名**：`.QuarkMeta.json`
 - **新生成离散 JSON 文件名**：`.QuarkMeta.json`
 
 ### 2.2 处理原则
 在 QuarkMeta 磁盘直连模式下：
 1. 涉及磁盘离散元数据 JSON 的读写管理类统一重命名为 **`QuarkMetaJson`**，对应头文件为 **`QuarkMetaJson.h`**。
 2. 用户对普通物理文件夹或文件进行标注时，落盘的离散元数据缓存文件名统一使用 **`.QuarkMeta.json`**，防止在磁盘上残留旧应用标识。
-3. `.gitignore` 中原 `*.ArcMeta.json` 规则同步更新为 `*.QuarkMeta.json`。
+3. `.gitignore` 中原 `*.QuarkMeta.json` 规则同步更新为 `*.QuarkMeta.json`。
 
 ---
 
@@ -105,6 +105,6 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Arc
 - 自动导入与维护服务：`AutoImportManager.h / .cpp`，`LibraryMaintenanceService.h / .cpp`
 
 ### 3.2 配置与日志隔离规范 (Config & Log Isolation)
-- **物理配置落盘**：`AppConfig` 的 `QSettings` 实例化强制改为 `m_settings("QuarkMeta", "QuarkMeta")`，使得注册表/INI文件存储于专属于 QuarkMeta 的全新路径，绝对禁止与 ArcMeta 共享或覆盖配置。
-- **运行日志隔离**：全局运行与调试日志由 `arcmeta_debug.log` 重命名为 `quarkmeta_debug.log`。
+- **物理配置落盘**：`AppConfig` 的 `QSettings` 实例化强制改为 `m_settings("QuarkMeta", "QuarkMeta")`，使得注册表/INI文件存储于专属于 QuarkMeta 的全新路径，绝对禁止与 QuarkMeta 共享或覆盖配置。
+- **运行日志隔离**：全局运行与调试日志由 `QuarkMeta_debug.log` 重命名为 `quarkmeta_debug.log`。
 - **可执行文件与项目重命名**：构建目标、可执行文件及 Windows 资源清单统一更名为 `QuarkMeta.exe` / `QuarkMeta.manifest` / `QuarkMeta.rc`。

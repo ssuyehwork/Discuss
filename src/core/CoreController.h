@@ -24,6 +24,8 @@ public:
      * @brief 在主线程、QApplication 实例化后，顺序并安全地完成基础核心单例与定时器的依赖预热
      */
     static void initializeCoreComponents();
+    static void requestShutdown();
+    static bool isShuttingDown();
 
     /**
      * @brief 启动异步初始化序列
@@ -79,6 +81,7 @@ private:
     std::atomic<bool> m_isSearchAborted{false};
     std::atomic<bool> m_isSearching{false};
     std::atomic<int> m_currentSearchId{0}; // 物理搜索 ID：用于识别并中止过期的异步扫描任务
+    static std::atomic<bool> s_isShuttingDown;
 };
 
 } // namespace QuarkMeta

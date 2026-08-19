@@ -1,5 +1,6 @@
 #include "FormatDecoders.h"
 #include "WindowsShellThumbnailProvider.h"
+#include "../core/CoreController.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
@@ -421,6 +422,8 @@ QString FormatDecoders::findGhostscriptExecutable() {
 static QSemaphore g_gsConcurrencyLimit(2); // 最多2个Ghostscript进程并发跑
 
 QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targetSize) {
+    if (CoreController::isShuttingDown()) return QImage();
+
     QString gsExec = findGhostscriptExecutable();
     if (gsExec.isEmpty()) {
         return QImage();
@@ -446,6 +449,11 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
          << QDir::toNativeSeparators(filePath);
 
     QProcess process;
+#ifdef Q_OS_WIN
+    process.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* args) {
+        args->flags |= CREATE_NO_WINDOW;
+    });
+#endif
     process.start(gsExec, args);
 
     if (process.waitForFinished(5000)) {

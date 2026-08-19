@@ -6,8 +6,9 @@
 #include <QDateTime>
 #include <QFileInfo>
 #include <QDir>
-#include "../meta/QuarkMetaJson.h"
-#include "../ui/MediaColorExtractor.h" // 🚨 补全头文件引入
+#include "../../meta/QuarkMetaJson.h"
+#include "../MediaColorExtractor.h"
+#include "../../core/CoreController.h"
 #include "../../util/DiskMediaExtractor.h"
 #include "../DiskBatchRenameService.h"
 #include "../../meta/FileOperationHelper.h"
@@ -272,7 +273,7 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
     QPointer<DiskItemModel> weakThis(this);
     (void)QtConcurrent::run([weakThis, newQueue]() {
         for (const auto& task : newQueue) {
-            if (!weakThis) break;
+            if (!weakThis || CoreController::isShuttingDown()) break;
             QString path = task.first;
 
             QImage img = DiskMediaExtractor::getDiskThumbnail(path, 512);

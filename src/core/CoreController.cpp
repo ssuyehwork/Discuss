@@ -17,6 +17,8 @@
 
 namespace QuarkMeta {
 
+std::atomic<bool> CoreController::s_isShuttingDown{false};
+
 CoreController& CoreController::instance() {
     static CoreController inst;
     return inst;
@@ -33,6 +35,9 @@ void CoreController::initializeCoreComponents() {
     QuarkMeta::MediaExtractorPipeline::instance();
     
 }
+
+void CoreController::requestShutdown() { s_isShuttingDown.store(true); }
+bool CoreController::isShuttingDown() { return s_isShuttingDown.load(); }
 
 CoreController::CoreController(QObject* parent) : QObject(parent) {
     // [Plan-115] 注册 Qt 元类型，防止 QueuedConnection 因未注册自定义类型而分发失败
