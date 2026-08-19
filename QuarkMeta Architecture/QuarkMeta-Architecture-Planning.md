@@ -51,6 +51,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Qua
 - **内存托管库模式彻底清理实施方案**：详见 `Implementation Plan/MemoryModeCleanup.md`
 - **`.arc` 胶囊文件夹磁盘纯只读直通预览实施方案**：详见 `Implementation Plan/ArcCapsuleReadOnlyPreview.md`
 - **批量重命名单窗双栏与实时预览界面重构方案**：详见 `Implementation Plan/BatchRenameIntegratedUiRedesign.md`
+- **批量重命名保留用户大小写与 NTFS 改名修正方案**：详见 `Implementation Plan/BatchRenamePreserveCaseFix.md`
 
 ---
 
