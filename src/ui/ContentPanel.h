@@ -136,7 +136,8 @@ public:
         ActionRescan,
         ActionRefresh,
         ActionCancelImport,
-        ActionBatchCreate
+        ActionBatchCreate,
+        ActionMove
     };
 
     explicit ContentPanel(QWidget* parent = nullptr);
@@ -151,6 +152,9 @@ public:
      */
     void selectAndScrollToPath(const QString& path);
     void selectAndScrollToItem(const QString& type, const QString& path, int categoryId);
+
+    void performMoveToFolder(const QString& targetFolder);
+    void moveToLastTargetFolder();
 
     /**
      * @brief 切换视图模式

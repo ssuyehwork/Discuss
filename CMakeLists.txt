@@ -77,8 +77,6 @@ set(SOURCES
     src/core/VolumeOnlineManager.h
     src/core/DiskTrashService.cpp
     src/core/DiskTrashService.h
-    src/core/SyncStatusService.cpp
-    src/core/SyncStatusService.h
     src/core/OperationSnapshotEngine.h
     src/core/OperationSnapshotEngine.cpp
     src/core/AppConfig.h
