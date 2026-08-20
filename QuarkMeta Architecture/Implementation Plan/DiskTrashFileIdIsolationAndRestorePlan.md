@@ -2,12 +2,16 @@
 
 ## 1. Overview（概述与解决的问题）
 
-本实施方案旨在彻底重构 QuarkMeta 纯磁盘模式下的物理回收站机制，解决以下两大核心缺陷与安全隐患：
+本实施方案旨在彻底重构 QuarkMeta 纯磁盘模式下的物理回收站机制，解决以下三大核心缺陷与安全隐患：
 1. **入库重名碰撞与乱改物理文件名风险**：原代码 `DiskTrashService::moveToDiskTrash` 在发现同名文件时通过给文件名拼接时间戳前缀来避让，违背了“文件夹/文件名称 100% 保持原始名称”的原则，且在同一秒内批量删除多个同名项目时会导致移动失败。
-2. **还原（Restore）冲撞与无脑覆盖问题**：原代码 `DiskTrashService::restoreFromDiskTrash` 直接调用 `QFile::rename(trashPath, originalPath)`，当目标路径已存在同名项目时会导致还原失败。
+2. **移动后提取属性导致 `is_folder` 判定错误（文件夹显示为 FILE 徽章）**：原代码在 `QFile::rename(p, dest)` **之后**才去调用 `QFileInfo(p).isDir()`，由于原路径 `p` 已被移走，`isDir()` 永远返回 `false`，导致数据库中文件夹被错误记录为普通文件 `0`。
+3. **回收站列表遗漏 `rec.suffix` 导致图片无缩略图**：原代码在加载回收站记录时未给 `ItemRecord.suffix` 赋值，导致视图层误以为无后缀而不触发缩略图提取队列。
+4. **还原（Restore）冲撞与无脑覆盖问题**：原代码 `DiskTrashService::restoreFromDiskTrash` 直接调用 `QFile::rename(trashPath, originalPath)`，当目标路径已存在同名项目时会导致还原失败。
 
 ### 核心架构解法：
+- **属性提前提取（逻辑归位）**：在执行 `QFile::rename` 之前，先提取 `isDir = info.isDir()`、`size = info.size()`、`createdAt = info.birthTime()`，保证存入 `disk_trash` 数据库的 `is_folder` 100% 准确！
 - **FILE_ID 隔离盒存储**：将项目移入回收站（`<盘符>:\.QuarkMeta\disk_trash\`）时，系统为每个项目在其自身的 `File_ID` 独立文件夹中建盒（`<盘符>:\.QuarkMeta\disk_trash\{File_ID}\`），项目原封不动存入，**磁盘上的文件/文件夹名称 100% 保持原始名称**。
+- **列表数据补全 `suffix`**：在 `ContentPanel.cpp` 加载回收站记录时，自动补全 `rec.suffix = QFileInfo(rec.filename).suffix()`，使缩略图管线正常触发并呈现图形缩略图。
 - **基于创建时间的权威判别与 `-N` 还原重命名**：还原时对比数据库中记录的原始创建时间戳 $T_{\text{trash}}$ 与目标磁盘项目的创建时间戳 $T_{\text{disk}}$：
   - **无冲突**：直接原名移回 `original_path`。
   - **$T_{\text{trash}} < T_{\text{disk}}$（被还原项目更早）**：被还原项目作为最早创建的权威占用 `A.txt`，磁盘上现有的较晚项目自动重命名避让为 `A-1.txt`（或 `A-2.txt`）。
@@ -20,8 +24,8 @@
 1. `CMakeLists.txt` - 确认 `DiskTrashService` 和 `DiskTrashRepo` 的源文件列表与 Qt5::Core 依赖注册。
 2. `src/meta/DatabaseManager.cpp` - 数据库 schema 更新及 `PRAGMA table_info(disk_trash)` 自动平滑迁移。
 3. `src/meta/DiskTrashRepo.h` & `src/meta/DiskTrashRepo.cpp` - 更新 `DiskTrashRawItem` 结构体及查询 SQL 语句与 10 列对应属性解析提取。
-4. `src/core/DiskTrashService.h` & `src/core/DiskTrashService.cpp` - 引入 `<QUuid>`，实现基于 `File_ID` 隔离盒的入库位移逻辑，以及基于创建时间权威判别与 `-N` 连字符重命名的还原冲撞算法。
-5. `src/ui/ContentPanel.cpp` - 更新加载回收站视图的数据项映射。
+4. `src/core/DiskTrashService.h` & `src/core/DiskTrashService.cpp` - 引入 `<QUuid>`，在移动前提取 `QFileInfo` 属性，实现基于 `File_ID` 隔离盒的入库位移逻辑，以及基于创建时间权威判别与 `-N` 连字符重命名的还原冲撞算法。
+5. `src/ui/ContentPanel.cpp` - 更新加载回收站视图的数据项映射，补全 `suffix` 与 `isDir` 识别。
 
 ---
 
@@ -206,9 +210,9 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
 >>>>>>> REPLACE
 ```
 
-### 3.5 修改 `src/core/DiskTrashService.cpp`（引入 `<QUuid>` 头文件与 File_ID 盒子建目录完整绑定）
+### 3.5 修改 `src/core/DiskTrashService.cpp`（属性提前提取 + File_ID 盒子建目录逻辑）
 **修改文件**：`src/core/DiskTrashService.cpp`
-**修改目的**：引入 `<QUuid>` 头文件，使用项目自身的 `File_ID` 创建隔离盒子目录，保持原名直接移动入库，并完整绑定 9 个 SQL 变量。
+**修改目的**：引入 `<QUuid>` 头文件，**在移动前优先提取 `isDir`、`size`、`createdAt` 属性**，解决原代码移动后 `isDir()` 失效乱写数据库的重病，并实现 File_ID 隔离盒模式。
 
 ```
 <<<<<<< SEARCH
@@ -262,6 +266,11 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
                 sqlite3_bind_int64(stmt, 6, info.size());
                 sqlite3_bind_int64(stmt, 7, QDateTime::currentMSecsSinceEpoch());
 =======
+        // 🚨 关键修复：在物理移动前提前抓取原文件的各项属性，避免移动后 p 不存在导致 info.isDir() 错判为 0！
+        bool isFolder = info.isDir();
+        qint64 fileSize = info.size();
+        qint64 createdAt = info.birthTime().isValid() ? info.birthTime().toMSecsSinceEpoch() : info.lastModified().toMSecsSinceEpoch();
+
         QString fileId = QUuid::createUuid().toString(QUuid::WithoutBraces);
         QString itemContainerDir = trashDir + "/" + fileId;
         QDir().mkpath(itemContainerDir);
@@ -277,8 +286,6 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
                 continue;
             }
 
-            qint64 createdAt = info.birthTime().isValid() ? info.birthTime().toMSecsSinceEpoch() : info.lastModified().toMSecsSinceEpoch();
-
             SqlTransaction trans(db);
             sqlite3_stmt* stmt = nullptr;
             const char* sql = "INSERT INTO disk_trash (file_id, trash_path, original_path, drive_letter, file_name, is_folder, file_size, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -290,8 +297,8 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
                 sqlite3_bind_text16(stmt, 3, p.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_text16(stmt, 4, driveLetter.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
                 sqlite3_bind_text16(stmt, 5, info.fileName().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_bind_int(stmt, 6, info.isDir() ? 1 : 0);
-                sqlite3_bind_int64(stmt, 7, info.size());
+                sqlite3_bind_int(stmt, 6, isFolder ? 1 : 0);
+                sqlite3_bind_int64(stmt, 7, fileSize);
                 sqlite3_bind_int64(stmt, 8, createdAt);
                 sqlite3_bind_int64(stmt, 9, QDateTime::currentMSecsSinceEpoch());
 >>>>>>> REPLACE
@@ -417,9 +424,9 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
 >>>>>>> REPLACE
 ```
 
-### 3.7 修改 `src/ui/ContentPanel.cpp`
+### 3.7 修改 `src/ui/ContentPanel.cpp`（补全 `suffix` 与 `isDir` 识别）
 **修改文件**：`src/ui/ContentPanel.cpp`
-**修改目的**：在读取回收站视图列表时，把 `fileId` 赋值给 UI 数据记录项。
+**修改目的**：在读取回收站视图列表时，把 `fileId` 与 `suffix` 赋值给 UI 数据记录项，解决图标与缩略图加载失效问题。
 
 ```
 <<<<<<< SEARCH
@@ -428,6 +435,9 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
         rec.isDiskTrash = true;
         rec.diskTrashId = raw.id;
         rec.path = QString::fromStdWString(raw.trashPath);
+        rec.originalPath = QString::fromStdWString(raw.originalPath);
+        rec.filename = QString::fromStdWString(raw.fileName);
+        rec.isDir = raw.isFolder;
 =======
     for (const auto& raw : rawDiskTrash) {
         ItemRecord rec;
@@ -435,6 +445,10 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
         rec.diskTrashId = raw.id;
         rec.fileId = QString::fromStdWString(raw.fileId);
         rec.path = QString::fromStdWString(raw.trashPath);
+        rec.originalPath = QString::fromStdWString(raw.originalPath);
+        rec.filename = QString::fromStdWString(raw.fileName);
+        rec.suffix = QFileInfo(rec.filename).suffix();
+        rec.isDir = raw.isFolder;
 >>>>>>> REPLACE
 ```
 
@@ -450,9 +464,12 @@ cmake --build build --config Debug
 ```
 
 ### 4.2 验证方法与测试用例
-1. **批量移入测试（零修改文件名）**：
+1. **文件夹图标与图形缩略图正确呈现测试**：
+   - 将一个文件夹（如 `测试_a_009`）移入回收站，点击回收站按钮进入视图，确认图标准确呈现为 **文件夹图标与 "DIR" 徽章**，绝不再显示为带 "FILE" 的空白文档！
+   - 将 PNG/JPG 图片移入回收站，确认内容区正常触发图形解码并**成功呈现渲染出来的缩略图**！
+2. **批量移入测试（零修改文件名）**：
    同时将 10 个相同文件名（例如 `doc.pdf`）或文件夹移入回收站。检查 `<盘符>:\.QuarkMeta\disk_trash\` 目录，确认生成了 10 个以 `File_ID` 命名的独立隔离子文件夹，且内部项目文件名均完整保持为 `doc.pdf`，无任何时间戳前缀拼接。
-2. **还原冲突与 `-N` 重命名测试**：
+3. **还原冲突与 `-N` 重命名测试**：
    - 删除创建时间为 $T_1$ 的 `test.txt`；
    - 在原路径下重新创建一个新的 `test.txt`（创建时间为 $T_2$，$T_2 > T_1$）；
    - 执行还原。验证创建时间更早（$T_1$）的项目占用 `test.txt`，而较新的项目被自动重命名避让为 `test-1.txt`。
