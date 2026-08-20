@@ -44,7 +44,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **中央神经调度中枢与底层洗髓重构无脑实施方案**：详见 `Implementation Plan/CentralDispatcherArchitecture.md`
 - **五栏视图布局与伸缩因子修复方案**：详见 `Implementation Plan/FiveColumnLayoutFix.md`
 - **根目录/盘符元数据 global.db 持久化方案**：详见 `Implementation Plan/DriveRootMetaInGlobalDb.md`
-- **盘符栏清理、自动导入根除与“标签管理”实用按钮引入方案**：详见 `Implementation Plan/TagManagerAndLegacyCodePurge.md`
+- **盘符栏清理、自动导入根除与“标签管理”实用按钮引入方案**：详见 `Implementation Plan/tag_manager_and_drive_bar_purge.md`
 - **收藏夹独占第二栏重构方案**：详见 `Implementation Plan/FavoritePanel.md`
 - **`.arc` 胶囊文件夹磁盘纯只读直通预览实施方案**：详见 `Implementation Plan/ArcCapsuleReadOnlyPreview.md`
 - **回收站与 File_ID 隔离盒实施方案**：详见 `Implementation Plan/trash.md`
