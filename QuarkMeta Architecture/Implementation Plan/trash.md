@@ -1,8 +1,8 @@
-# 基于 File_ID 隔离盒与创建时间权威判别回收站无脑实施方案 —— DiskTrashFileIdIsolationAndRestorePlan
+# 基于 File_ID 隔离盒与创建时间权威判别回收站无脑实施方案 —— trash.md
 
 ## 1. Overview（概述与解决的问题）
 
-本实施方案旨在彻底重构 QuarkMeta 纯磁盘模式下的物理回收站机制，解决以下三大核心缺陷与安全隐患：
+本实施方案旨在彻底重构 QuarkMeta 纯磁盘模式下的物理回收站机制，解决以下四大核心缺陷与安全隐患：
 1. **入库重名碰撞与乱改物理文件名风险**：原代码 `DiskTrashService::moveToDiskTrash` 在发现同名文件时通过给文件名拼接时间戳前缀来避让，违背了“文件夹/文件名称 100% 保持原始名称”的原则，且在同一秒内批量删除多个同名项目时会导致移动失败。
 2. **移动后提取属性导致 `is_folder` 判定错误（文件夹显示为 FILE 徽章）**：原代码在 `QFile::rename(p, dest)` **之后**才去调用 `QFileInfo(p).isDir()`，由于原路径 `p` 已被移走，`isDir()` 永远返回 `false`，导致数据库中文件夹被错误记录为普通文件 `0`。
 3. **回收站列表遗漏 `rec.suffix` 导致图片无缩略图**：原代码在加载回收站记录时未给 `ItemRecord.suffix` 赋值，导致视图层误以为无后缀而不触发缩略图提取队列。
@@ -11,7 +11,7 @@
 ### 核心架构解法：
 - **属性提前提取（逻辑归位）**：在执行 `QFile::rename` 之前，先提取 `isDir = info.isDir()`、`size = info.size()`、`createdAt = info.birthTime()`，保证存入 `disk_trash` 数据库的 `is_folder` 100% 准确！
 - **FILE_ID 隔离盒存储**：将项目移入回收站（`<盘符>:\.QuarkMeta\disk_trash\`）时，系统为每个项目在其自身的 `File_ID` 独立文件夹中建盒（`<盘符>:\.QuarkMeta\disk_trash\{File_ID}\`），项目原封不动存入，**磁盘上的文件/文件夹名称 100% 保持原始名称**。
-- **列表数据补全 `suffix`**：在 `ContentPanel.cpp` 加载回收站记录时，自动补全 `rec.suffix = QFileInfo(rec.filename).suffix()`，使缩略图管线正常触发并呈现图形缩略图。
+- **列表数据补全 `suffix` 与 `fileId` 字段**：在 `ItemRecord.h` 中增加 `QString fileId;` 字段，并在 `ContentPanel.cpp` 加载回收站记录时补全 `rec.fileId` 与 `rec.suffix = QFileInfo(rec.filename).suffix()`，使缩略图管线正常触发并呈现图形缩略图。
 - **基于创建时间的权威判别与 `-N` 还原重命名**：还原时对比数据库中记录的原始创建时间戳 $T_{\text{trash}}$ 与目标磁盘项目的创建时间戳 $T_{\text{disk}}$：
   - **无冲突**：直接原名移回 `original_path`。
   - **$T_{\text{trash}} < T_{\text{disk}}$（被还原项目更早）**：被还原项目作为最早创建的权威占用 `A.txt`，磁盘上现有的较晚项目自动重命名避让为 `A-1.txt`（或 `A-2.txt`）。
@@ -22,10 +22,11 @@
 ## 2. Modified Files List（影响文件清单）
 
 1. `CMakeLists.txt` - 确认 `DiskTrashService` 和 `DiskTrashRepo` 的源文件列表与 Qt5::Core 依赖注册。
-2. `src/meta/DatabaseManager.cpp` - 数据库 schema 更新及 `PRAGMA table_info(disk_trash)` 自动平滑迁移。
-3. `src/meta/DiskTrashRepo.h` & `src/meta/DiskTrashRepo.cpp` - 更新 `DiskTrashRawItem` 结构体及查询 SQL 语句与 10 列对应属性解析提取。
-4. `src/core/DiskTrashService.h` & `src/core/DiskTrashService.cpp` - 引入 `<QUuid>`，在移动前提取 `QFileInfo` 属性，实现基于 `File_ID` 隔离盒的入库位移逻辑，以及基于创建时间权威判别与 `-N` 连字符重命名的还原冲撞算法。
-5. `src/ui/ContentPanel.cpp` - 更新加载回收站视图的数据项映射，补全 `suffix` 与 `isDir` 识别。
+2. `src/core/ItemRecord.h` - 为 `ItemRecord` 结构体增加 `QString fileId;` 成员变量声明。
+3. `src/meta/DatabaseManager.cpp` - 数据库 schema 更新及局部作用域隔离的 `PRAGMA table_info(disk_trash)` 自动平滑迁移。
+4. `src/meta/DiskTrashRepo.h` & `src/meta/DiskTrashRepo.cpp` - 更新 `DiskTrashRawItem` 结构体及查询 SQL 语句与 10 列对应属性解析提取。
+5. `src/core/DiskTrashService.h` & `src/core/DiskTrashService.cpp` - 引入 `<QUuid>`，在移动前提取 `QFileInfo` 属性，实现基于 `File_ID` 隔离盒的入库位移逻辑，以及基于创建时间权威判别与 `-N` 连字符重命名的还原冲撞算法。
+6. `src/ui/ContentPanel.cpp` - 更新加载回收站视图的数据项映射，赋值 `rec.fileId`、`rec.suffix` 与 `rec.isDir` 识别。
 
 ---
 
@@ -45,9 +46,26 @@
 >>>>>>> REPLACE
 ```
 
-### 3.2 修改 `src/meta/DatabaseManager.cpp`（Schema 创建与平滑迁移）
+### 3.2 修改 `src/core/ItemRecord.h`
+**修改文件**：`src/core/ItemRecord.h`
+**修改目的**：在 `ItemRecord` 结构体中新增 `QString fileId;` 成员声明，杜绝编译时出现 `fileId 不是 ItemRecord 的成员` 错误。
+
+```
+<<<<<<< SEARCH
+    bool isDiskTrash = false;
+    int diskTrashId = 0;
+    QString originalPath;
+=======
+    bool isDiskTrash = false;
+    int diskTrashId = 0;
+    QString fileId;
+    QString originalPath;
+>>>>>>> REPLACE
+```
+
+### 3.3 修改 `src/meta/DatabaseManager.cpp`（Schema 创建与平滑迁移，作用域隔离防止重定义）
 **修改文件**：`src/meta/DatabaseManager.cpp`
-**修改目的**：为 `disk_trash` 数据库表增加 `file_id` 隔离盒标识列与 `created_at` 原始创建时间列，并添加 `ALTER TABLE` 自动迁移逻辑以保证旧数据库平滑无缝兼容。
+**修改目的**：为 `disk_trash` 数据库表增加 `file_id` 隔离盒标识列与 `created_at` 原始创建时间列，并添加局部作用域 `{}` 隔离的 `ALTER TABLE` 自动迁移逻辑，杜绝变量重定义冲突。
 
 ```
 <<<<<<< SEARCH
@@ -85,33 +103,35 @@
 <<<<<<< SEARCH
     // 2026-08-xx 新增字段：持久化基名与后缀名，避免每次启动现算并优化回填
 =======
-    // 物理磁盘回收站平滑迁移：自动补全 file_id 与 created_at 字段
-    bool hasTrashFileIdColumn = false;
-    bool hasTrashCreatedAtColumn = false;
-    sqlite3_stmt* trashCheckStmt = nullptr;
-    if (sqlite3_prepare_v2(conn.memDb, "PRAGMA table_info(disk_trash)", -1, &trashCheckStmt, nullptr) == SQLITE_OK) {
-        while (sqlite3_step(trashCheckStmt) == SQLITE_ROW) {
-            const char* name = reinterpret_cast<const char*>(sqlite3_column_text(trashCheckStmt, 1));
-            if (name) {
-                std::string sName(name);
-                if (sName == "file_id") hasTrashFileIdColumn = true;
-                if (sName == "created_at") hasTrashCreatedAtColumn = true;
+    // 物理磁盘回收站平滑迁移：自动补全 file_id 与 created_at 字段 (用 {} 作用域隔离杜绝变量重定义)
+    {
+        bool hasTrashFileIdColumn = false;
+        bool hasTrashCreatedAtColumn = false;
+        sqlite3_stmt* checkTrashInfoStmt = nullptr;
+        if (sqlite3_prepare_v2(conn.memDb, "PRAGMA table_info(disk_trash)", -1, &checkTrashInfoStmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(checkTrashInfoStmt) == SQLITE_ROW) {
+                const char* name = reinterpret_cast<const char*>(sqlite3_column_text(checkTrashInfoStmt, 1));
+                if (name) {
+                    std::string sName(name);
+                    if (sName == "file_id") hasTrashFileIdColumn = true;
+                    if (sName == "created_at") hasTrashCreatedAtColumn = true;
+                }
             }
+            sqlite3_finalize(checkTrashInfoStmt);
         }
-        sqlite3_finalize(trashCheckStmt);
-    }
-    if (!hasTrashFileIdColumn) {
-        sqlite3_exec(conn.memDb, "ALTER TABLE disk_trash ADD COLUMN file_id TEXT DEFAULT ''", nullptr, nullptr, nullptr);
-    }
-    if (!hasTrashCreatedAtColumn) {
-        sqlite3_exec(conn.memDb, "ALTER TABLE disk_trash ADD COLUMN created_at INTEGER DEFAULT 0", nullptr, nullptr, nullptr);
+        if (!hasTrashFileIdColumn) {
+            sqlite3_exec(conn.memDb, "ALTER TABLE disk_trash ADD COLUMN file_id TEXT DEFAULT ''", nullptr, nullptr, nullptr);
+        }
+        if (!hasTrashCreatedAtColumn) {
+            sqlite3_exec(conn.memDb, "ALTER TABLE disk_trash ADD COLUMN created_at INTEGER DEFAULT 0", nullptr, nullptr, nullptr);
+        }
     }
 
     // 2026-08-xx 新增字段：持久化基名与后缀名，避免每次启动现算并优化回填
 >>>>>>> REPLACE
 ```
 
-### 3.3 修改 `src/meta/DiskTrashRepo.h`
+### 3.4 修改 `src/meta/DiskTrashRepo.h`
 **修改文件**：`src/meta/DiskTrashRepo.h`
 **修改目的**：在 `DiskTrashRawItem` 实体结构体中增加 `fileId` 与 `createdAt` 字段。
 
@@ -141,7 +161,7 @@ struct DiskTrashRawItem {
 >>>>>>> REPLACE
 ```
 
-### 3.4 修改 `src/meta/DiskTrashRepo.cpp`
+### 3.5 修改 `src/meta/DiskTrashRepo.cpp`
 **修改文件**：`src/meta/DiskTrashRepo.cpp`
 **修改目的**：更新查询 SQL 并精确绑定与提取 10 列属性（`file_id` 列 1，`created_at` 列 8）。
 
@@ -210,7 +230,7 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
 >>>>>>> REPLACE
 ```
 
-### 3.5 修改 `src/core/DiskTrashService.cpp`（属性提前提取 + File_ID 盒子建目录逻辑）
+### 3.6 修改 `src/core/DiskTrashService.cpp`（属性提前提取 + File_ID 盒子建目录逻辑）
 **修改文件**：`src/core/DiskTrashService.cpp`
 **修改目的**：引入 `<QUuid>` 头文件，**在移动前优先提取 `isDir`、`size`、`createdAt` 属性**，解决原代码移动后 `isDir()` 失效乱写数据库的重病，并实现 File_ID 隔离盒模式。
 
@@ -304,7 +324,7 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
 >>>>>>> REPLACE
 ```
 
-### 3.6 修改 `src/core/DiskTrashService.cpp`（还原判定与 `-N` 重命名算法完整逻辑）
+### 3.7 修改 `src/core/DiskTrashService.cpp`（还原判定与 `-N` 重命名算法完整逻辑）
 **修改文件**：`src/core/DiskTrashService.cpp`
 **修改目的**：从数据库读取 `created_at`，并在还原冲突时根据创建时间比较结果执行 `-N` 连字符递增重命名避让，完整替换还原事务逻辑。
 
@@ -424,7 +444,7 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
 >>>>>>> REPLACE
 ```
 
-### 3.7 修改 `src/ui/ContentPanel.cpp`（补全 `suffix` 与 `isDir` 识别）
+### 3.8 修改 `src/ui/ContentPanel.cpp`（补全 `rec.fileId` 与 `rec.suffix` 识别）
 **修改文件**：`src/ui/ContentPanel.cpp`
 **修改目的**：在读取回收站视图列表时，把 `fileId` 与 `suffix` 赋值给 UI 数据记录项，解决图标与缩略图加载失效问题。
 
