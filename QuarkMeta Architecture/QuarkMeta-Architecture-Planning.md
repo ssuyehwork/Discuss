@@ -50,6 +50,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Qua
 - **收藏夹独占第二栏重构方案**：详见 `Implementation Plan/FavoritePanel.md`
 - **内存托管库模式彻底清理实施方案**：详见 `Implementation Plan/MemoryModeCleanup.md`
 - **`.arc` 胶囊文件夹磁盘纯只读直通预览实施方案**：详见 `Implementation Plan/ArcCapsuleReadOnlyPreview.md`
+- **基于 File_ID 隔离盒与创建时间权威判别回收站实施方案**：详见 `Implementation Plan/DiskTrashFileIdIsolationAndRestorePlan.md`
 
 ---
 
@@ -120,3 +121,23 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除原 Qua
 1. **允许直通查看**：将 `.arc` 胶囊文件夹视为可正常浏览的物理文件夹，支持在目录树和内容面板中点击进入并查看其封存的主资产。
 2. **过滤内部杂质**：在 `.arc` 目录内部导航时，自动识别并隐藏内部的 `meta.json`、`thumb_*.png` 等辅助缓存文件，仅将主体资产文件呈现给用户。
 3. **零污染与绝对只读**：在预览 `.arc` 内部资产时，强制关闭所有后台缩略图生成、磁盘写入、Hash 计算与解包提取逻辑，确保 `.arc` 物理文件夹及其内容的绝对只读与零改动。
+
+---
+
+## 7. 基于 File_ID 隔离盒与创建时间权威判别回收站规范 (File_ID Trash & Creation Time Restore Specification)
+
+### 7.1 设计理念
+在 QuarkMeta 纯磁盘直连模式下，回收站彻底废除原有粗暴改名与容易冲突的直接位移逻辑，采用 **“基于项目自身 File_ID 独立盒隔离 + 原始名称 100% 保持 + 创建时间权威判别 + 连字符 `-N` 还原重命名避让”** 架构：
+
+1. **入库隔离与零名改动**：
+   - 移入回收站时，绝对禁止修改文件/文件夹本身的原始名称。
+   - 在对应盘符的回收站根目录（`<盘符>:\.QuarkMeta\disk_trash\`）下，为每个移入的项目创建以该项目**自身 `File_ID`**（全局唯一 UUID）命名的独立隔离盒文件夹：`<盘符>:\.QuarkMeta\disk_trash\{File_ID}\`。
+   - 将项目原封不动移入各自对应的 `{File_ID}` 盒内。全局数据库 `disk_trash` 表记录 `file_id`、`created_at`（原始创建时间毫秒戳）、`trash_path` 与 `original_path`。
+
+2. **还原 (Restore) 智能避让与创建时间权威判别**：
+   - 还原项目时，系统对比数据库中记录的原始创建时间戳 $T_{\text{trash}}$ 与目标磁盘已有同名项目的创建时间戳 $T_{\text{disk}}$。
+   - **无冲突时**：原名恢复至 `original_path`。
+   - **有同名冲突时**：
+     - 若 $T_{\text{trash}} < T_{\text{disk}}$（被还原项目创建更早）：被还原项目作为“最早创建权威”占用原始名称 `A.txt`，磁盘上较晚创建的现有项目被自动递增重命名避让为 **`A-1.txt`**（如存在顺延至 `A-2.txt`）。
+     - 若 $T_{\text{disk}} \le T_{\text{trash}}$（磁盘现有项目创建更早）：磁盘现有项目保持原名 `A.txt`，被还原项目重命名为 **`A-1.txt`** 还原移出。
+   - 格式强制要求：连字符 `-` 命名避让（如 `A-1.txt` / `Folder-1`），严格禁止使用圆括号 `(1)`。
