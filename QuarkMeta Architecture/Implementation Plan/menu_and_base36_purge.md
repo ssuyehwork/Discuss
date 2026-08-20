@@ -14,21 +14,28 @@
 1. `src/ui/ContentPanel.cpp`
 2. `src/util/ShellHelper.h`
 3. `src/util/ShellHelper.cpp`
-4. `src/meta/MetadataManager.h`
-5. `src/meta/MetadataManager.cpp`
-6. `src/util/AssetImporter.cpp`
-7. `src/main.cpp`
-8. `QuarkMeta Architecture/QuarkMeta-Architecture-Planning.md`
+4. `src/meta/MetadataManager.cpp`
+5. `src/util/AssetImporter.cpp`
+6. `src/main.cpp`
+7. `QuarkMeta Architecture/QuarkMeta-Architecture-Planning.md`
 
 ---
 
 ## 3. Detailed Line-by-Line Changes（精准替换块）
 
 ### 3.1 `src/ui/ContentPanel.cpp`
-调整右键菜单逻辑，将“排序”菜单项放置在常规组之后，将“删除”菜单项移至整个右键菜单的最底部。
+调整右键菜单逻辑，将原本位于中间的“删除”逻辑移除，并将“删除”菜单项严格放置于整个右键菜单的最底部（“排序”子菜单之后）。
 
 ```
 <<<<<<< SEARCH
+        if (!isFolder) {
+            QMenu* cryptoMenu = menu.addMenu("加密保护");
+            UiHelper::applyMenuStyle(cryptoMenu);
+            cryptoMenu->addAction("执行加密保护")->setData(ActionEncrypt);
+            cryptoMenu->addAction("解除加密")->setData(ActionDecrypt);
+            cryptoMenu->addAction("修改加密密码")->setData(ActionChangePwd);
+        }
+
         // 2026-06-xx 按照用户要求：在回收站中不显示二级删除菜单
         if (m_currentCategoryType != "trash") {
             QMenu* delMenu = menu.addMenu("删除");
@@ -40,80 +47,65 @@
         }
 
     } else {
-        // [空白处菜单]
-        QMenu* newMenu = menu.addMenu("新建...");
-        UiHelper::applyMenuStyle(newMenu);
-        newMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹")->setData(ActionNewFolder);
-        newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown")->setData(ActionNewMd);
-        newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建纯文本文件 (txt)")->setData(ActionNewTxt);
-
-        menu.addSeparator();
-
-        QAction* actBatchCreate = menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE")), "批量创建项目...");
-        actBatchCreate->setData(ActionBatchCreate);
-        // 6.1 磁盘目录模式独占 改为 全模式解锁（回收站除外）
-        if (m_currentCategoryType == "trash") {
-            actBatchCreate->setEnabled(false);
-            actBatchCreate->setToolTip("回收站中不支持批量创建");
-        }
-
-        menu.addSeparator();
-        QAction* actPaste = menu.addAction("粘贴");
-        actPaste->setData(ActionPaste);
-        actPaste->setEnabled(!m_currentPath.isEmpty() && m_currentPath != "computer://");
-
-        menu.addSeparator();
-        menu.addAction("刷新")->setData(ActionRefresh);
-    }
-
-    menu.addSeparator();
-
-    // 注入“排序”二级子菜单
-    QMenu* sortMenu = menu.addMenu("排序");
 =======
-    } else {
-        // [空白处菜单]
-        QMenu* newMenu = menu.addMenu("新建...");
-        UiHelper::applyMenuStyle(newMenu);
-        newMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹")->setData(ActionNewFolder);
-        newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown")->setData(ActionNewMd);
-        newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建纯文本文件 (txt)")->setData(ActionNewTxt);
-
-        menu.addSeparator();
-
-        QAction* actBatchCreate = menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE")), "批量创建项目...");
-        actBatchCreate->setData(ActionBatchCreate);
-        // 6.1 磁盘目录模式独占 改为 全模式解锁（回收站除外）
-        if (m_currentCategoryType == "trash") {
-            actBatchCreate->setEnabled(false);
-            actBatchCreate->setToolTip("回收站中不支持批量创建");
+        if (!isFolder) {
+            QMenu* cryptoMenu = menu.addMenu("加密保护");
+            UiHelper::applyMenuStyle(cryptoMenu);
+            cryptoMenu->addAction("执行加密保护")->setData(ActionEncrypt);
+            cryptoMenu->addAction("解除加密")->setData(ActionDecrypt);
+            cryptoMenu->addAction("修改加密密码")->setData(ActionChangePwd);
         }
 
-        menu.addSeparator();
-        QAction* actPaste = menu.addAction("粘贴");
-        actPaste->setData(ActionPaste);
-        actPaste->setEnabled(!m_currentPath.isEmpty() && m_currentPath != "computer://");
-
-        menu.addSeparator();
-        menu.addAction("刷新")->setData(ActionRefresh);
-    }
-
-    menu.addSeparator();
-
-    // 注入“排序”二级子菜单
-    QMenu* sortMenu = menu.addMenu("排序");
+    } else {
 >>>>>>> REPLACE
 ```
 
 ```
 <<<<<<< SEARCH
+    // 方向单选组
+    QActionGroup* orderGroup = new QActionGroup(this);
+    auto addOrderAct = [&](const QString& label, Qt::SortOrder order) {
+        QAction* act = sortMenu->addAction(label);
+        act->setCheckable(true);
+        act->setChecked(m_sortOrder == order);
+        orderGroup->addAction(act);
+        connect(act, &QAction::triggered, [this, order]() {
+            m_sortOrder = order;
+            AppConfig::instance().setValue("ContentPanel/RightClickSortOrder", static_cast<int>(order));
+
+            // 实时触发全量无效化与排序重计算
+            m_proxyModel->invalidate();
+            m_proxyModel->sort(0, m_sortOrder);
+        });
+    };
+
+    addOrderAct("升序", Qt::AscendingOrder);
+    addOrderAct("降序", Qt::DescendingOrder);
+
     orderGroup->addAction(actAsc);
     orderGroup->addAction(actDesc);
 
     // 恢复之前的自定义逻辑结束
 =======
-    orderGroup->addAction(actAsc);
-    orderGroup->addAction(actDesc);
+    // 方向单选组
+    QActionGroup* orderGroup = new QActionGroup(this);
+    auto addOrderAct = [&](const QString& label, Qt::SortOrder order) {
+        QAction* act = sortMenu->addAction(label);
+        act->setCheckable(true);
+        act->setChecked(m_sortOrder == order);
+        orderGroup->addAction(act);
+        connect(act, &QAction::triggered, [this, order]() {
+            m_sortOrder = order;
+            AppConfig::instance().setValue("ContentPanel/RightClickSortOrder", static_cast<int>(order));
+
+            // 实时触发全量无效化与排序重计算
+            m_proxyModel->invalidate();
+            m_proxyModel->sort(0, m_sortOrder);
+        });
+    };
+
+    addOrderAct("升序", Qt::AscendingOrder);
+    addOrderAct("降序", Qt::DescendingOrder);
 
     // 🚨 按照用户要求：确保“删除”选项严格位于右键菜单的最下方（仅在选中项目时显示）
     if (currentIndex.isValid()) {
@@ -174,7 +166,7 @@ QString ShellHelper::generateBase36Id() {
 ---
 
 ### 3.3 `src/meta/MetadataManager.cpp`
-清理静态方法 `extractBase36Id` 及调用的分支。
+清理静态方法 `extractBase36Id` 及数据库重试调用点。
 
 ```
 <<<<<<< SEARCH
@@ -217,9 +209,47 @@ static std::string extractBase36Id(const std::wstring& path) {
 >>>>>>> REPLACE
 ```
 
+```
+<<<<<<< SEARCH
+        // 🚀 仅在触发 UNIQUE 约束碰撞（SQLITE_CONSTRAINT）时，重新生成 ID 并重试
+        if (rc == SQLITE_CONSTRAINT || rc == SQLITE_CONSTRAINT_PRIMARYKEY || rc == 19) {
+            folderId = ShellHelper::generateBase36Id().toStdString();
+        } else {
+            // 其他常规数据库错误直接退出
+            break;
+        }
+=======
+        // 其他常规数据库错误直接退出
+        break;
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    std::string newAssetId = ShellHelper::generateBase36Id().toStdString();
+=======
+    std::string newAssetId = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
+>>>>>>> REPLACE
+```
+
 ---
 
-### 3.4 `src/main.cpp`
+### 3.4 `src/util/AssetImporter.cpp`
+用标准 UUID 替换 `ShellHelper::generateBase36Id()` 调用。
+
+```
+<<<<<<< SEARCH
+    // 1. 生成 13 位唯一 Base36 胶囊 ID
+    QString fileId = ShellHelper::generateBase36Id();
+=======
+    // 1. 生成全局唯一 UUID 容器 ID
+    QString fileId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+>>>>>>> REPLACE
+```
+
+---
+
+### 3.5 `src/main.cpp`
 引入 `LoadingWindow.h` 并将其在软件启动初始化阶段实例化与展示。
 
 ```
