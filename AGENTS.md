@@ -45,6 +45,39 @@
 
 补充说明：
 QuarkMeta-Architecture-Planning.md 只是用来记录设计理念，不可将相关实施方案记录到该文档里。
-实施方案只能创建在“Implementation Plan”文件夹里，实施方案的命名规则，可以根据事件来命名实施方案，必须采用英文命名
+实施方案只能创建在“Implementation Plan”文件夹里，实施方案的命名规则，可以根据事件来命名实施方案，必须采用英文命名。
 
-**根据问题创建详细的无脑实施方案** 重新调用 submit 工具，确保将实施方案文档并在评审面板（Review Panel）中完整预览出来。
+---
+
+## 5. 实施方案标准规范 (Implementation Plan Standard Specification)
+
+在生成“无脑实施方案”（ Implementation Plan ）时，必须严格遵守以下 5 大硬性标准，确保执行者无需猜测即可无缝实施且 100% 编译通过：
+
+### 5.1 Qt 与 CMake 链接严谨性红线
+1. **MOC 自动编译同步**：凡是在方案中新建或修改的类涉及 `Q_OBJECT` 宏，**必须在 `CMakeLists.txt` 的 `SOURCES` / `HEADERS` 列表中明确添加对应文件**（例如 `.h` 和 `.cpp`）。
+2. **拒绝盲目内联头文件**：带有 `Q_OBJECT` 的类必须创建配套的 `.cpp` 实现文件并注册至 CMake，严禁仅写在 `.h` 头文件中却忽略 MOC 编译目标，防止出现 `qt_metacast` / `metaObject` / `qt_metacall` 无法解析的外部符号链接错误。
+
+### 5.2 精准 代码替换格式 (Search / Replace Git Merge Diff Standard)
+1. 所有代码修改点必须使用标准的 Git Merge Diff 块标注，包含确切的文件相对路径与精确上下文代码块：
+   ```
+   <<<<<<< SEARCH
+   原代码上下文
+   =======
+   替换或新增的代码
+   >>>>>>> REPLACE
+   ```
+2. SEARCH 块中的代码必须在现有仓库中真实存在，绝不允许凭空捏造或忽略前后上下文。
+
+### 5.3 依赖与构建影响排查
+1. **移除/废弃代码排查**：当方案涉及删除或废弃某些类/组件时，必须在方案中列出 `CMakeLists.txt` 中需要同步剔除的源码行，并列出所有包含该类头文件引用的地方进行清理。
+2. **新增文件注册排查**：当方案新建文件时，必须包含修改 `CMakeLists.txt` 添加新增 `.cpp` / `.h` 的具体位置。
+
+### 5.4 结构化实施方案必备章节
+每个实施方案文件（位于 `QuarkMeta Architecture/Implementation Plan/` 目录下，英文命名）必须完整覆盖以下章节：
+1. **Overview（概述与解决的问题）**
+2. **Modified Files List（影响文件清单）**
+3. **Detailed Line-by-Line Changes（包含 CMakeLists.txt 在内的精准替换块）**
+4. **Build & Verification Steps（编译命令与验证方法）**
+
+### 5.5 提交与预览指令
+**根据问题创建详细的无脑实施方案** 后，重新调用 `submit` 工具，确保将实施方案文档并在评审面板（Review Panel）中完整预览出来。

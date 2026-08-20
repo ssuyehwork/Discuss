@@ -38,6 +38,7 @@ void DiskBatchRenameService::execute(const std::vector<std::wstring>& originalPa
             } else if (mode == DiskOperationMode::Move) {
                 ok = FileOperationHelper::safeMove(oldPath, newPathStr);
             } else { // Rename
+                // 强制调用 safeRename 进行两阶段 UUID 中转改名，解决 Windows NTFS 大小写不敏感缺陷
                 ok = FileOperationHelper::safeRename(oldPath, newPathStr);
             }
 

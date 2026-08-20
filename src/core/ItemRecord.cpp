@@ -62,7 +62,7 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
         // 直接从内存元数据注入真实素材文件名与后缀
         if (!meta.baseName.empty()) {
             QString baseNameStr = QString::fromStdWString(meta.baseName);
-            r.suffix = QString::fromStdWString(meta.ext).toLower();
+            r.suffix = QString::fromStdWString(meta.ext);
             // 严禁对已包含扩展名的文件名进行二次拼接（消除 .svg.svg 双后缀 Bug）
             if (!r.suffix.isEmpty() && !baseNameStr.endsWith("." + r.suffix, Qt::CaseInsensitive)) {
                 r.filename = baseNameStr + "." + r.suffix;
@@ -73,7 +73,7 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
             int lastSlash = std::max(nPath.lastIndexOf('\\'), nPath.lastIndexOf('/'));
             r.filename = (lastSlash != -1) ? nPath.mid(lastSlash + 1) : nPath;
             int lastDot = r.filename.lastIndexOf('.');
-            r.suffix = (lastDot != -1) ? r.filename.mid(lastDot + 1).toLower() : "";
+            r.suffix = (lastDot != -1) ? r.filename.mid(lastDot + 1) : "";
         }
 
         ItemRecord::fromMetadata(r, meta);
@@ -101,7 +101,7 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
         r.suffix = "";
     } else {
         int lastDot = nPath.lastIndexOf('.');
-        r.suffix = (lastDot != -1) ? nPath.mid(lastDot + 1).toLower() : "";
+        r.suffix = (lastDot != -1) ? nPath.mid(lastDot + 1) : "";
     }
 
     return r;

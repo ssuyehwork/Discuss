@@ -12,6 +12,7 @@
 #include <QGroupBox>
 #include <QList>
 #include <QTimer>
+#include <QTableWidget>
 #include <vector>
 #include <string>
 #include "../meta/BatchRenameEngine.h"
@@ -35,7 +36,6 @@ private slots:
     void onAddRow();
     void updatePreview();
     void onExecute();
-    void onPreview();
     void onBrowseTarget();
     void onImportPreset();
     void onExportPreset();
@@ -69,10 +69,11 @@ private:
     QVBoxLayout* m_rulesLayout = nullptr;
     QList<RuleRow*> m_ruleRows;
     
-    // 动作按钮 (右侧栏)
+    // 右侧实时预览表格 (700px 宽度)
+    QTableWidget* m_table = nullptr;
+
+    // 左侧底部主执行按钮 (水平居中)
     QPushButton* m_btnExecute = nullptr;
-    QPushButton* m_btnCancel = nullptr;
-    QPushButton* m_btnPreview = nullptr;
 
     QString m_firstNewName;
 };

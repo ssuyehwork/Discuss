@@ -108,8 +108,7 @@ set(SOURCES
     src/meta/MediaExtractorPipeline.h
     src/ui/BatchRenameDialog.cpp
     src/ui/BatchRenameDialog.h
-    src/ui/BatchRenamePreviewDialog.cpp
-    src/ui/BatchRenamePreviewDialog.h
+    src/ui/BatchProgressDialog.h
     src/ui/DuplicateConflictDialog.h
     src/ui/DuplicateConflictDialog.cpp
     src/ui/PresetManager.cpp
@@ -261,7 +260,6 @@ set(LIBTIFF_SOURCES
     src/third_party/libtiff/tif_luv.c
     src/third_party/libtiff/tif_lzw.c
     src/third_party/libtiff/tif_next.c
-    src/third_party/libtiff/tif_ojpeg.c
     src/third_party/libtiff/tif_open.c
     src/third_party/libtiff/tif_packbits.c
     src/third_party/libtiff/tif_pixarlog.c
