@@ -1758,7 +1758,7 @@ void MainWindow::initDriveBar() {
 
     // 🚨 按照用户要求：彻底根除盘符按钮生成逻辑，替换为使用 SVG 矢量图标的“标签管理”按钮
     m_btnTagManager = new QPushButton(UiHelper::getIcon("tag", QColor("#1abc9c"), 18), " 标签管理", m_driveBarWidget);
-    m_btnTagManager->setFixedHeight(32);
+    m_btnTagManager->setFixedHeight(28); // 由 32px 缩减为 28px，确保在 42px 容器内留有呼吸空间，彻底消除边框截断
     m_btnTagManager->setCursor(Qt::PointingHandCursor);
     m_btnTagManager->setStyleSheet(QString(
         "QPushButton { background-color: %1; border: 1px solid %2; border-radius: 4px; padding: 0 12px; color: %3; font-weight: bold; font-size: 13px; }"
