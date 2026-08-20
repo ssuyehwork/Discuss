@@ -1,30 +1,50 @@
-# Disk Trash File_ID Isolation and Creation-Time Restore Plan
+# 基于 File_ID 隔离盒与创建时间权威判别回收站无脑实施方案 —— DiskTrashFileIdIsolationAndRestorePlan
 
-## 1. Overview
-This implementation plan addresses two major defects in QuarkMeta's existing disk trash mechanism:
-1. **Physical Renaming & In-Trash Collision Risk**: Previously, `DiskTrashService::moveToDiskTrash` appended timestamps to filenames upon collision, modifying the physical name of files and failing when multiple items with identical names were moved to trash within the same second.
-2. **Restore Collision & Name Arbitram**: Previously, restoring a file via `DiskTrashService::restoreFromDiskTrash` directly executed `QFile::rename(trashPath, originalPath)`, causing restore failures if a file with the same name already existed in the target directory.
+## 1. Overview（概述与解决的问题）
 
-### Solution Architecture:
-- **FILE_ID Container Isolation**: When items (files or directories) are moved to the trash (`<Drive>:\.QuarkMeta\disk_trash\`), each item is placed inside its own dedicated subfolder named after its unique `file_id` (`<Drive>:\.QuarkMeta\disk_trash\{file_id}\`). The item's actual filename/foldername remains 100% untouched.
-- **Creation-Time Based Restore Conflict Resolution**: Upon restore, the system queries the item's original creation time ($T_{\text{trash}}$) stored in the `disk_trash` SQLite table and compares it with the creation time ($T_{\text{disk}}$) of any existing item at `original_path`:
-  - **No Conflict**: The item is moved back to `original_path`.
-  - **$T_{\text{trash}} < T_{\text{disk}}$ (Trash item is older)**: The trash item takes the original name (`A.txt`). The existing disk item is renamed with a hyphenated counter (`A-1.txt`, `A-2.txt`, etc.) to yield the original path.
-  - **$T_{\text{disk}} \le T_{\text{trash}}$ (Disk item is older or equal)**: The disk item keeps the original name (`A.txt`). The trash item is restored and renamed with a hyphenated counter (`A-1.txt`, `A-2.txt`, etc.).
+本实施方案旨在彻底重构 QuarkMeta 纯磁盘模式下的物理回收站机制，解决以下两大核心缺陷与安全隐患：
+1. **入库重名碰撞与乱改物理文件名风险**：原代码 `DiskTrashService::moveToDiskTrash` 在发现同名文件时通过给文件名拼接时间戳前缀来避让，违背了“文件夹/文件名称 100% 保持原始名称”的原则，且在同一秒内批量删除多个同名项目时会导致移动失败。
+2. **还原（Restore）冲撞与无脑覆盖问题**：原代码 `DiskTrashService::restoreFromDiskTrash` 直接调用 `QFile::rename(trashPath, originalPath)`，当目标路径已存在同名项目时会导致还原失败。
 
----
-
-## 2. Modified Files List
-1. `src/meta/DatabaseManager.cpp` - Schema migration to add `file_id` and `created_at` columns to `disk_trash` table.
-2. `src/meta/DiskTrashRepo.h` & `src/meta/DiskTrashRepo.cpp` - Update `DiskTrashRawItem` struct and queries to include `file_id` and `created_at`.
-3. `src/core/DiskTrashService.h` & `src/core/DiskTrashService.cpp` - Implement `file_id` container creation, physical move without renaming, creation-time comparison, and hyphenated (`-N`) restore conflict resolution.
-4. `src/ui/ContentPanel.cpp` - Pass `file_id` and `created_at` when loading trash items into item records.
+### 核心架构解法：
+- **FILE_ID 隔离盒存储**：将项目移入回收站（`<盘符>:\.QuarkMeta\disk_trash\`）时，系统为每个项目在其自身的 `File_ID` 独立文件夹中建盒（`<盘符>:\.QuarkMeta\disk_trash\{File_ID}\`），项目原封不动存入，**磁盘上的文件/文件夹名称 100% 保持原始名称**。
+- **基于创建时间的权威判别与 `-N` 还原重命名**：还原时对比数据库中记录的原始创建时间戳 $T_{\text{trash}}$ 与目标磁盘项目的创建时间戳 $T_{\text{disk}}$：
+  - **无冲突**：直接原名移回 `original_path`。
+  - **$T_{\text{trash}} < T_{\text{disk}}$（被还原项目更早）**：被还原项目作为最早创建的权威占用 `A.txt`，磁盘上现有的较晚项目自动重命名避让为 `A-1.txt`（或 `A-2.txt`）。
+  - **$T_{\text{disk}} \le T_{\text{trash}}$（磁盘现有项目更早或相同）**：磁盘现有项目保持 `A.txt`，被还原的项目重命名为 `A-1.txt` 还原移出。
 
 ---
 
-## 3. Detailed Line-by-Line Changes
+## 2. Modified Files List（影响文件清单）
 
-### 3.1 `src/meta/DatabaseManager.cpp`
+1. `CMakeLists.txt` - 确认 `DiskTrashService` 和 `DiskTrashRepo` 的源文件列表与 Qt5::Core 依赖注册。
+2. `src/meta/DatabaseManager.cpp` - 数据库 schema 更新及 `PRAGMA table_info(disk_trash)` 自动平滑迁移。
+3. `src/meta/DiskTrashRepo.h` & `src/meta/DiskTrashRepo.cpp` - 更新 `DiskTrashRawItem` 结构体及查询 SQL 语句与 10 列对应属性解析提取。
+4. `src/core/DiskTrashService.h` & `src/core/DiskTrashService.cpp` - 引入 `<QUuid>`，实现基于 `File_ID` 隔离盒的入库位移逻辑，以及基于创建时间权威判别与 `-N` 连字符重命名的还原冲撞算法。
+5. `src/ui/ContentPanel.cpp` - 更新加载回收站视图的数据项映射。
+
+---
+
+## 3. Detailed Line-by-Line Changes（包含 CMakeLists.txt 在内的精准替换块）
+
+### 3.1 修改 `CMakeLists.txt`
+**修改文件**：`CMakeLists.txt`
+**修改目的**：确认 `DiskTrashService` 和 `DiskTrashRepo` 在 CMake 中的源码和头文件注册。
+
+```
+<<<<<<< SEARCH
+    src/core/DiskTrashService.cpp
+    src/core/DiskTrashService.h
+=======
+    src/core/DiskTrashService.cpp
+    src/core/DiskTrashService.h
+>>>>>>> REPLACE
+```
+
+### 3.2 修改 `src/meta/DatabaseManager.cpp`（Schema 创建与平滑迁移）
+**修改文件**：`src/meta/DatabaseManager.cpp`
+**修改目的**：为 `disk_trash` 数据库表增加 `file_id` 隔离盒标识列与 `created_at` 原始创建时间列，并添加 `ALTER TABLE` 自动迁移逻辑以保证旧数据库平滑无缝兼容。
+
 ```
 <<<<<<< SEARCH
         -- 物理磁盘回收站独立表 (双轨隔离)
@@ -57,7 +77,40 @@ This implementation plan addresses two major defects in QuarkMeta's existing dis
 >>>>>>> REPLACE
 ```
 
-### 3.2 `src/meta/DiskTrashRepo.h`
+```
+<<<<<<< SEARCH
+    // 2026-08-xx 新增字段：持久化基名与后缀名，避免每次启动现算并优化回填
+=======
+    // 物理磁盘回收站平滑迁移：自动补全 file_id 与 created_at 字段
+    bool hasTrashFileIdColumn = false;
+    bool hasTrashCreatedAtColumn = false;
+    sqlite3_stmt* trashCheckStmt = nullptr;
+    if (sqlite3_prepare_v2(conn.memDb, "PRAGMA table_info(disk_trash)", -1, &trashCheckStmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(trashCheckStmt) == SQLITE_ROW) {
+            const char* name = reinterpret_cast<const char*>(sqlite3_column_text(trashCheckStmt, 1));
+            if (name) {
+                std::string sName(name);
+                if (sName == "file_id") hasTrashFileIdColumn = true;
+                if (sName == "created_at") hasTrashCreatedAtColumn = true;
+            }
+        }
+        sqlite3_finalize(trashCheckStmt);
+    }
+    if (!hasTrashFileIdColumn) {
+        sqlite3_exec(conn.memDb, "ALTER TABLE disk_trash ADD COLUMN file_id TEXT DEFAULT ''", nullptr, nullptr, nullptr);
+    }
+    if (!hasTrashCreatedAtColumn) {
+        sqlite3_exec(conn.memDb, "ALTER TABLE disk_trash ADD COLUMN created_at INTEGER DEFAULT 0", nullptr, nullptr, nullptr);
+    }
+
+    // 2026-08-xx 新增字段：持久化基名与后缀名，避免每次启动现算并优化回填
+>>>>>>> REPLACE
+```
+
+### 3.3 修改 `src/meta/DiskTrashRepo.h`
+**修改文件**：`src/meta/DiskTrashRepo.h`
+**修改目的**：在 `DiskTrashRawItem` 实体结构体中增加 `fileId` 与 `createdAt` 字段。
+
 ```
 <<<<<<< SEARCH
 struct DiskTrashRawItem {
@@ -84,7 +137,10 @@ struct DiskTrashRawItem {
 >>>>>>> REPLACE
 ```
 
-### 3.3 `src/meta/DiskTrashRepo.cpp`
+### 3.4 修改 `src/meta/DiskTrashRepo.cpp`
+**修改文件**：`src/meta/DiskTrashRepo.cpp`
+**修改目的**：更新查询 SQL 并精确绑定与提取 10 列属性（`file_id` 列 1，`created_at` 列 8）。
+
 ```
 <<<<<<< SEARCH
 std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
@@ -95,6 +151,26 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
         if (!db) continue;
         sqlite3_stmt* stmt = nullptr;
         const char* sql = "SELECT id, trash_path, original_path, drive_letter, file_name, is_folder, file_size, deleted_at FROM disk_trash";
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                DiskTrashRawItem item;
+                item.id = sqlite3_column_int(stmt, 0);
+                const wchar_t* wTrash = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 1));
+                const wchar_t* wOrig = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 2));
+                const wchar_t* wName = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 4));
+                if (wTrash) item.trashPath = wTrash;
+                if (wOrig) item.originalPath = wOrig;
+                if (wName) item.fileName = wName;
+                item.isFolder = (sqlite3_column_int(stmt, 5) != 0);
+                item.fileSize = sqlite3_column_int64(stmt, 6);
+                item.deletedAt = sqlite3_column_int64(stmt, 7);
+                result.push_back(item);
+            }
+            sqlite3_finalize(stmt);
+        }
+    }
+    return result;
+}
 =======
 std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
     std::vector<DiskTrashRawItem> result;
@@ -104,10 +180,57 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
         if (!db) continue;
         sqlite3_stmt* stmt = nullptr;
         const char* sql = "SELECT id, file_id, trash_path, original_path, drive_letter, file_name, is_folder, file_size, created_at, deleted_at FROM disk_trash";
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                DiskTrashRawItem item;
+                item.id = sqlite3_column_int(stmt, 0);
+                const wchar_t* wFileId = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 1));
+                const wchar_t* wTrash = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 2));
+                const wchar_t* wOrig = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 3));
+                const wchar_t* wName = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 5));
+                if (wFileId) item.fileId = wFileId;
+                if (wTrash) item.trashPath = wTrash;
+                if (wOrig) item.originalPath = wOrig;
+                if (wName) item.fileName = wName;
+                item.isFolder = (sqlite3_column_int(stmt, 6) != 0);
+                item.fileSize = sqlite3_column_int64(stmt, 7);
+                item.createdAt = sqlite3_column_int64(stmt, 8);
+                item.deletedAt = sqlite3_column_int64(stmt, 9);
+                result.push_back(item);
+            }
+            sqlite3_finalize(stmt);
+        }
+    }
+    return result;
+}
 >>>>>>> REPLACE
 ```
 
-### 3.4 `src/core/DiskTrashService.cpp` (Move To Trash with File_ID Container)
+### 3.5 修改 `src/core/DiskTrashService.cpp`（引入 `<QUuid>` 头文件与 File_ID 盒子建目录完整绑定）
+**修改文件**：`src/core/DiskTrashService.cpp`
+**修改目的**：引入 `<QUuid>` 头文件，使用项目自身的 `File_ID` 创建隔离盒子目录，保持原名直接移动入库，并完整绑定 9 个 SQL 变量。
+
+```
+<<<<<<< SEARCH
+#include "DiskTrashService.h"
+#include "../meta/DatabaseManager.h"
+#include <QFileInfo>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QDebug>
+=======
+#include "DiskTrashService.h"
+#include "../meta/DatabaseManager.h"
+#include <QFileInfo>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QUuid>
+#include <QDebug>
+>>>>>>> REPLACE
+```
+
 ```
 <<<<<<< SEARCH
         QString dest = trashDir + "/" + info.fileName();
@@ -128,6 +251,16 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
             SqlTransaction trans(db);
             sqlite3_stmt* stmt = nullptr;
             const char* sql = "INSERT INTO disk_trash (trash_path, original_path, drive_letter, file_name, is_folder, file_size, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)";
+
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+                QString driveLetter = drive.left(1).toUpper();
+                sqlite3_bind_text16(stmt, 1, dest.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text16(stmt, 2, p.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text16(stmt, 3, driveLetter.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text16(stmt, 4, info.fileName().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_int(stmt, 5, info.isDir() ? 1 : 0);
+                sqlite3_bind_int64(stmt, 6, info.size());
+                sqlite3_bind_int64(stmt, 7, QDateTime::currentMSecsSinceEpoch());
 =======
         QString fileId = QUuid::createUuid().toString(QUuid::WithoutBraces);
         QString itemContainerDir = trashDir + "/" + fileId;
@@ -137,6 +270,7 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
 
         // 1. 物理同盘位移 (原名直接移动至 FILE_ID 隔离盒)
         if (QFile::rename(p, dest)) {
+            // 2. 写入独立的 disk_trash 数据库，不污染 metadata 表
             sqlite3* db = DatabaseManager::instance().getDbForPath(p.toStdWString());
             if (!db) {
                 allOk = false;
@@ -148,10 +282,25 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
             SqlTransaction trans(db);
             sqlite3_stmt* stmt = nullptr;
             const char* sql = "INSERT INTO disk_trash (file_id, trash_path, original_path, drive_letter, file_name, is_folder, file_size, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+                QString driveLetter = drive.left(1).toUpper();
+                sqlite3_bind_text16(stmt, 1, fileId.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text16(stmt, 2, dest.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text16(stmt, 3, p.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text16(stmt, 4, driveLetter.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_text16(stmt, 5, info.fileName().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_bind_int(stmt, 6, info.isDir() ? 1 : 0);
+                sqlite3_bind_int64(stmt, 7, info.size());
+                sqlite3_bind_int64(stmt, 8, createdAt);
+                sqlite3_bind_int64(stmt, 9, QDateTime::currentMSecsSinceEpoch());
 >>>>>>> REPLACE
 ```
 
-### 3.5 `src/core/DiskTrashService.cpp` (Restore Conflict Resolution & Creation Time Comparison)
+### 3.6 修改 `src/core/DiskTrashService.cpp`（还原判定与 `-N` 重命名算法完整逻辑）
+**修改文件**：`src/core/DiskTrashService.cpp`
+**修改目的**：从数据库读取 `created_at`，并在还原冲突时根据创建时间比较结果执行 `-N` 连字符递增重命名避让，完整替换还原事务逻辑。
+
 ```
 <<<<<<< SEARCH
     QString originalPath;
@@ -193,6 +342,20 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
         SqlTransaction trans(db);
         sqlite3_stmt* delStmt = nullptr;
         const char* sqlDel = "DELETE FROM disk_trash WHERE id = ?";
+        bool success = false;
+        if (sqlite3_prepare_v2(db, sqlDel, -1, &delStmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(delStmt, 1, id);
+            if (sqlite3_step(delStmt) == SQLITE_DONE) {
+                trans.commit();
+                DatabaseManager::instance().setDirty(true);
+                success = true;
+            }
+            sqlite3_finalize(delStmt);
+        }
+        if (success) return true;
+    } else {
+        qWarning() << "[DiskTrashService] Failed to physically move back trash item to original path:" << originalPath;
+    }
 =======
     // 检查目标位置是否存在同名文件/文件夹冲突，基于创建时间权威与连字符 -N 递增避让
     QString targetPath = originalPath;
@@ -237,10 +400,27 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
         SqlTransaction trans(db);
         sqlite3_stmt* delStmt = nullptr;
         const char* sqlDel = "DELETE FROM disk_trash WHERE id = ?";
+        bool success = false;
+        if (sqlite3_prepare_v2(db, sqlDel, -1, &delStmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(delStmt, 1, id);
+            if (sqlite3_step(delStmt) == SQLITE_DONE) {
+                trans.commit();
+                DatabaseManager::instance().setDirty(true);
+                success = true;
+            }
+            sqlite3_finalize(delStmt);
+        }
+        if (success) return true;
+    } else {
+        qWarning() << "[DiskTrashService] Failed to physically move back trash item to target path:" << targetPath;
+    }
 >>>>>>> REPLACE
 ```
 
-### 3.6 `src/ui/ContentPanel.cpp`
+### 3.7 修改 `src/ui/ContentPanel.cpp`
+**修改文件**：`src/ui/ContentPanel.cpp`
+**修改目的**：在读取回收站视图列表时，把 `fileId` 赋值给 UI 数据记录项。
+
 ```
 <<<<<<< SEARCH
     for (const auto& raw : rawDiskTrash) {
@@ -260,19 +440,19 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
 
 ---
 
-## 4. Build & Verification Steps
+## 4. Build & Verification Steps（编译命令与验证方法）
 
-### 4.1 Build Instructions
-Run the CMake build system to verify proper compilation:
+### 4.1 编译验证命令
+在 Sandbox 环境中运行 CMake 与 Ninja 编译，验证代码变动 100% 通过编译且无 MOC 链接错误：
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --config Debug
 ```
 
-### 4.2 Automated & Manual Verification Steps
-1. **Batch Move Test**: Move 10 identical files named `document.pdf` from different locations or sequentially to the trash. Verify that 10 separate subdirectories named after their `FILE_ID` are generated in `<Drive>:\.QuarkMeta\disk_trash\`, each containing `document.pdf` without any name alteration.
-2. **Restore Collision & Hyphenated Naming Test**:
-   - Delete `A.txt` (created at time $T_1$).
-   - Re-create a new `A.txt` in the same directory (created at time $T_2$, where $T_2 > T_1$).
-   - Trigger restore for the deleted `A.txt`.
-   - Verify that the restored `A.txt` (older $T_1$) keeps `A.txt` and the existing file is renamed to `A-1.txt`.
+### 4.2 验证方法与测试用例
+1. **批量移入测试（零修改文件名）**：
+   同时将 10 个相同文件名（例如 `doc.pdf`）或文件夹移入回收站。检查 `<盘符>:\.QuarkMeta\disk_trash\` 目录，确认生成了 10 个以 `File_ID` 命名的独立隔离子文件夹，且内部项目文件名均完整保持为 `doc.pdf`，无任何时间戳前缀拼接。
+2. **还原冲突与 `-N` 重命名测试**：
+   - 删除创建时间为 $T_1$ 的 `test.txt`；
+   - 在原路径下重新创建一个新的 `test.txt`（创建时间为 $T_2$，$T_2 > T_1$）；
+   - 执行还原。验证创建时间更早（$T_1$）的项目占用 `test.txt`，而较新的项目被自动重命名避让为 `test-1.txt`。
