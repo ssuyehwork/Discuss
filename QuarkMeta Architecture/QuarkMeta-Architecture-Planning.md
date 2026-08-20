@@ -48,6 +48,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **收藏夹独占第二栏重构方案**：详见 `Implementation Plan/FavoritePanel.md`
 - **`.arc` 胶囊文件夹磁盘纯只读直通预览实施方案**：详见 `Implementation Plan/ArcCapsuleReadOnlyPreview.md`
 - **回收站与 File_ID 隔离盒实施方案**：详见 `Implementation Plan/trash.md`
+- **右键菜单调整、Base36 ID 彻底根除与 LoadingWindow 引入实施方案**：详见 `Implementation Plan/menu_and_base36_purge.md`
 
 ---
 
@@ -63,7 +64,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
    - QuarkMeta 核心架构禁止保留任何历史僵尸逻辑与监控：
      1. IOCP 监控与自动导入剪切逻辑；
      2. 标题栏同步按钮 `m_btnSync` 及 `SyncStatusService` 提示；
-     3. `.arc` 胶囊容器、`Base36 ID` 等历史判定代码。
+     3. `.arc` 胶囊容器、`Base36 ID` 等历史判定代码（Base36 ID 必须彻底根除）。
    - `DatabaseManager` 强制采用分库递归互斥锁，杜绝跨线程 sqlite3 锁争抢。
    - 为后台耗时流水线引入原子化可中断的 `CancellationToken`，防止线程雪崩。
 
