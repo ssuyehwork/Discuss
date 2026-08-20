@@ -1777,16 +1777,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             cryptoMenu->addAction("修改加密密码")->setData(ActionChangePwd); 
         } 
  
-        // 2026-06-xx 按照用户要求：在回收站中不显示二级删除菜单
-        if (m_currentCategoryType != "trash") {
-            QMenu* delMenu = menu.addMenu("删除");
-            UiHelper::applyMenuStyle(delMenu);
-            delMenu->addAction("移入回收站")->setData(ActionDelete);
-            delMenu->addAction("永久删除")->setData(ActionSecureDelete);
-        } else {
-            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "永久删除")->setData(ActionSecureDelete);
-        }
- 
     } else { 
         // [空白处菜单] 
         QMenu* newMenu = menu.addMenu("新建..."); 
@@ -1868,6 +1858,19 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
     addOrderAct("升序", Qt::AscendingOrder);
     addOrderAct("降序", Qt::DescendingOrder);
+
+    // 🚨 按照用户要求：确保“删除”选项严格位于右键菜单的最下方（仅在选中项目时显示）
+    if (currentIndex.isValid()) {
+        menu.addSeparator();
+        if (m_currentCategoryType != "trash") {
+            QMenu* delMenu = menu.addMenu("删除");
+            UiHelper::applyMenuStyle(delMenu);
+            delMenu->addAction("移入回收站")->setData(ActionDelete);
+            delMenu->addAction("永久删除")->setData(ActionSecureDelete);
+        } else {
+            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "永久删除")->setData(ActionSecureDelete);
+        }
+    }
 
     // 🚀 【补丁彻底根除】：废除硬锁信号与物理禁用绘制！
     // 菜单弹出期间开启无锁模态标记，后台异步提取数据仅挂起不触发死锁，菜单关闭后自动 Flush

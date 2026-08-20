@@ -162,7 +162,7 @@ private:
     // 盘符管理栏组件
     QWidget* m_driveBarWidget = nullptr;
     QHBoxLayout* m_driveBarLayout = nullptr;
-    QMap<QString, class DriveButton*> m_driveButtons;
+    QPushButton* m_btnTagManager = nullptr;
     void onDriveBarContextMenu(const QPoint& pos);
 
     // 状态管理

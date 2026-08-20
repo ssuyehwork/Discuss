@@ -61,6 +61,7 @@
 #include "../core/SearchHistoryService.h"
 #include "../core/SyncStatusService.h"
 #include "DriveButton.h"
+#include "TagManagerDialog.h"
 #include "../util/ShellHelper.h"
 #include "../util/ImportHelper.h"
 #include "../util/AssetImporter.h"
@@ -1775,19 +1776,25 @@ void MainWindow::initDriveBar() {
     m_driveBarLayout->setContentsMargins(15, 5, 15, 5);
     m_driveBarLayout->setSpacing(8);
 
-    auto drives = QDir::drives();
-    for (const QFileInfo& drive : drives) {
-        QString letter = drive.absolutePath().left(2);
-        if (letter.endsWith("/")) letter = letter.left(1) + ":";
-        
-        DriveButton* btn = new DriveButton(letter, m_driveBarWidget);
-        m_driveButtons[letter] = btn;
-        m_driveBarLayout->addWidget(btn);
+    // 🚨 按照用户要求：彻底根除盘符按钮生成逻辑，替换为使用 SVG 矢量图标的“标签管理”按钮
+    m_btnTagManager = new QPushButton(UiHelper::getIcon("tag", QColor("#1abc9c"), 18), " 标签管理", m_driveBarWidget);
+    m_btnTagManager->setFixedHeight(32);
+    m_btnTagManager->setCursor(Qt::PointingHandCursor);
+    m_btnTagManager->setStyleSheet(QString(
+        "QPushButton { background-color: %1; border: 1px solid %2; border-radius: 4px; padding: 0 12px; color: %3; font-weight: bold; font-size: 13px; }"
+        "QPushButton:hover { background-color: %4; border-color: #1abc9c; color: #FFFFFF; }"
+        "QPushButton:pressed { background-color: %5; }"
+    ).arg(qssColor(BackgroundHeader))
+     .arg(qssColor(BorderColor))
+     .arg(qssColor(TextMain))
+     .arg(qssColor(BackgroundHover))
+     .arg(qssColor(PressedBackground)));
 
-        connect(btn, &QPushButton::clicked, this, [this, letter]() {
-            unifiedNavigateTo(letter + "/");
-        });
-    }
+    connect(m_btnTagManager, &QPushButton::clicked, this, [this]() {
+        TagManagerDialog::showDialog(this, m_currentPath, false);
+    });
+
+    m_driveBarLayout->addWidget(m_btnTagManager);
     m_driveBarLayout->addStretch();
 
 }
