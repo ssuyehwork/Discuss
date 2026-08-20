@@ -12,6 +12,7 @@
 #include <QRegularExpression>
 #include <QImageReader>
 #include <QSvgRenderer>
+#include <QUuid>
 #ifdef Q_OS_WIN
 #include <objbase.h>
 #endif
@@ -111,28 +112,6 @@ static void bindMetaHelper(sqlite3_stmt* stmt, const std::wstring& path, const R
 // 统一资产判定静态函数，物理上不管是文件夹还是文件，只要以 .arc 结尾在内存语义中均为原子资产
 static bool isManagedAsset(bool isFolder, const std::wstring& path) {
     return !isFolder || (path.size() >= 4 && path.compare(path.size() - 4, 4, L".arc") == 0);
-}
-
-// 🚨 内存数据库模式唯一ID体系重构：路径级 Base36 ID 静态提取解析器
-static std::string extractBase36Id(const std::wstring& path) {
-    // 查找 ".arc" 容器扩展名在路径中的位置
-    size_t pos = path.find(L".arc");
-    if (pos == std::wstring::npos) return "";
-
-    // 向上查找紧邻 ".arc" 前方的路径分隔符以界定容器名称
-    size_t lastSep = path.rfind(L'\\', pos);
-    if (lastSep == std::wstring::npos) {
-        lastSep = path.rfind(L'/', pos);
-    }
-
-    size_t start = (lastSep == std::wstring::npos) ? 0 : lastSep + 1;
-    std::wstring folderName = path.substr(start, pos - start);
-
-    // 托管资产容器文件夹名格式恒为 13 位 Base36 字符串 (如 00ms73182x000)
-    if (folderName.length() == 13) {
-        return std::string(folderName.begin(), folderName.end());
-    }
-    return "";
 }
 
 std::wstring MetadataManager::normalizePath(const std::wstring& path) {
@@ -569,7 +548,7 @@ bool MetadataManager::registerAsset(const std::string& initialFolderId, const st
 
         // 🚀 仅在触发 UNIQUE 约束碰撞（SQLITE_CONSTRAINT）时，重新生成 ID 并重试
         if (rc == SQLITE_CONSTRAINT || rc == SQLITE_CONSTRAINT_PRIMARYKEY || rc == 19) {
-            folderId = ShellHelper::generateBase36Id().toStdString();
+            folderId = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
         } else {
             // 其他常规数据库错误直接退出
             break;
@@ -619,8 +598,8 @@ std::string MetadataManager::migrateCapsuleToLibrary(const std::string& assetId,
     QDir containerDir = fileInfo.dir(); // 获取 00ms73182x000.arc 胶囊文件夹 
     QString containerName = containerDir.dirName(); 
  
-    // 生成全新唯一ID，保证ID唯一性（即便数据完全一致，但ID不同。对应用户原话：“复制整套数据到了之后，只需要修改其ID即可，这样就能保证ID的唯一性”）
-    std::string newAssetId = ShellHelper::generateBase36Id().toStdString();
+    // 生成全新唯一ID，保证ID唯一性
+    std::string newAssetId = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
     QString targetContainerDir = targetLibraryPath + "/" + QString::fromStdString(newAssetId) + ".arc"; 
  
     // 1. 物理复制整套胶囊包内部的文件
@@ -1031,12 +1010,6 @@ void MetadataManager::ensureActivated(const std::wstring& nPath) {
         {
             std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
             if (m_shards[idx].items.count(nPath)) return; // 二次检查防止竞态
-        }
-
-        // 🚨 内存数据库模式唯一ID体系重构：激活写入内存缓存前，将主键统一覆盖为 13 位 Base36 ID
-        std::string base36 = extractBase36Id(nPath);
-        if (!base36.empty()) {
-            rm.folderId = base36;
         }
 
         // 共享元数据逻辑 (FID 关联)
@@ -2347,16 +2320,6 @@ void MetadataManager::setTrash(const std::wstring& path, bool isTrash) {
 
 void MetadataManager::deletePermanently(const std::wstring& path) {
     std::wstring nPath = MetadataManager::normalizePath(path);
-    
-    // 🛡️ 优先通过路径中的 13 位 Base36 ID 反查内存缓存 Key，防止路径解包不一致导致的匹配失败
-    std::string base36Id = extractBase36Id(nPath);
-    if (!base36Id.empty()) {
-        std::unique_lock<std::shared_mutex> lock(m_mutex);
-        auto it = m_folderIdToPath.find(base36Id);
-        if (it != m_folderIdToPath.end()) {
-            nPath = it->second; // 强行对齐为数据库与缓存中存储的标准路径
-        }
-    }
 
     // 执行彻底根除 (removeMetadataSync 会级联擦除 SQLite metadata 与 category_items)
     removeMetadataSync(nPath);
@@ -2458,12 +2421,6 @@ void MetadataManager::registerQuarkMetaFrn(const std::wstring&) {
 }
 
 std::string MetadataManager::getFolderIdSync(const std::wstring& path) {
-    // 1. 如果处于受控资源库中，直接提取 13 位 Base36 ID，终结系统级 FRN 物理依赖
-    std::string base36 = extractBase36Id(path);
-    if (!base36.empty()) {
-        return base36;
-    }
-
     // 2. 磁盘模式（非托管路径）不使用 Base36 ID，自愈退避至原本的系统级物理 FRN 
     std::string fid;
     if (!fetchWinApiMetadataDirect(path, fid, nullptr)) fid = MetadataManager::generateDeterministicFolderId(path);

@@ -193,6 +193,7 @@ void TagManagerView::setupContentArea() {
     m_contentContainer = new QFrame(this);
     m_contentContainer->setObjectName("EditorContainer"); // 物理对标：复用内容面板 ID
     m_contentContainer->setAttribute(Qt::WA_StyledBackground, true);
+    m_contentContainer->setStyleSheet("QFrame#EditorContainer { background-color: #1E1E1E; border: none; }");
     auto* mainL = new QVBoxLayout(m_contentContainer);
     mainL->setContentsMargins(0, 0, 0, 0);
     mainL->setSpacing(0);
@@ -228,7 +229,7 @@ void TagManagerView::setupContentArea() {
     popularTagsBox->setObjectName("PopularTagsBox");
     popularTagsBox->setFixedHeight(110); // 固定高度，防止晃动
     popularTagsBox->setStyleSheet(
-        "QWidget#PopularTagsBox { background-color: #1e1e1e; border-bottom: 1px solid #333; }"
+        "QWidget#PopularTagsBox { background-color: #1E1E1E; border-bottom: 1px solid #333333; }"
     );
     QVBoxLayout* popularL = new QVBoxLayout(popularTagsBox);
     popularL->setContentsMargins(20, 10, 20, 10);
@@ -254,7 +255,10 @@ void TagManagerView::setupContentArea() {
     // 2. 滚动区
     m_scrollArea = new QScrollArea(m_contentContainer);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet("QScrollArea { border: none; background-color: transparent; }");
+    m_scrollArea->setStyleSheet("QScrollArea { border: none; background-color: #1E1E1E; }");
+    if (m_scrollArea->viewport()) {
+        m_scrollArea->viewport()->setStyleSheet("background-color: #1E1E1E;");
+    }
     
     m_contentWidget = new QWidget();
     m_contentWidget->setObjectName("TagContentContainer");

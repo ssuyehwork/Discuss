@@ -151,8 +151,6 @@ set(SOURCES
     src/ui/CardPainterHelper.h
     src/ui/ThumbnailDelegate.cpp
     src/ui/ThumbnailDelegate.h
-    src/ui/LoadingWindow.cpp
-    src/ui/LoadingWindow.h
     src/ui/Logger.h
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
@@ -192,6 +190,8 @@ set(SOURCES
     src/ui/CreateRuleRow.h
     src/ui/BatchCreateDialog.cpp
     src/ui/BatchCreateDialog.h
+    src/ui/TagManagerDialog.cpp
+    src/ui/TagManagerDialog.h
     src/ui/SearchHistoryPanel.cpp
     src/ui/SearchHistoryPanel.h
     src/ui/AddressHistoryPanel.cpp

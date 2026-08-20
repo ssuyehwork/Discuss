@@ -24,6 +24,7 @@
 #include "ui/UiHelper.h"
 #include "ui/Logger.h"
 #include "ui/MainWindow.h"
+#include "ui/LoadingWindow.h"
 
 #include "meta/MetadataManager.h"
 #include "meta/MediaExtractorPipeline.h"
@@ -131,10 +132,17 @@ int main(int argc, char *argv[]) {
     // -------------------------------------------------------------
     QuarkMeta::CoreController::initializeCoreComponents();
 
+    // 显示启动加载窗口
+    QuarkMeta::LoadingWindow loadingWin;
+    loadingWin.show();
+    loadingWin.updateStatus("正在初始化系统核心组件...");
+    qApp->processEvents();
+
     // -------------------------------------------------------------
     // 重构 5：多段启动。MainWindow 放置于栈上局部作用域，利用 RAII 自动且安全析构，规避 Double Free
     // -------------------------------------------------------------
     QuarkMeta::MainWindow w;
+    loadingWin.onInitializationFinished();
     
     // 启动异步系统扫描与监控监听
     QuarkMeta::CoreController::instance().startSystem();

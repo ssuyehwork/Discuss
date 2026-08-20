@@ -15,6 +15,7 @@
 #include <QCoreApplication> 
 #include "FramelessDialog.h" 
 #include <QDateTime> 
+#include <QUuid>
  
 #ifdef Q_OS_WIN 
 #include <windows.h> 
@@ -173,8 +174,8 @@ bool AssetImporter::importSingleFile(const QString& srcPath,
     QFileInfo srcInfo(srcPath); 
     if (!srcInfo.exists() || !srcInfo.isFile()) return false; 
  
-    // 1. 生成 13 位唯一 Base36 胶囊 ID 
-    QString fileId = ShellHelper::generateBase36Id(); 
+    // 1. 生成唯一胶囊 ID
+    QString fileId = QUuid::createUuid().toString(QUuid::WithoutBraces);
  
     // 2. 建立物理容器 [ID].arc 
     QString containerDir = managedRoot + "/" + fileId + ".arc"; 

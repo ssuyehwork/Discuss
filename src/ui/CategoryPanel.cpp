@@ -18,7 +18,6 @@
 using namespace QuarkMeta::Style;
 #include "ToolTipOverlay.h"
 #include "FramelessDialog.h"
-#include "TagManagerDialog.h"
 #include "BatchProgressDialog.h"
 #include <QDir>
 #include <QFile>

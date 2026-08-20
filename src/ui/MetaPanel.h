@@ -9,6 +9,9 @@
 #include <QResizeEvent>
 #include <QShowEvent>
 #include "components/ElasticEdit.h"
+#include "TagSelectorOverlay.h"
+#include <QPointer>
+#include <QPushButton>
 #include "components/TagPill.h"
 #include "components/FlowLayout.h"
 #include "components/ColorPill.h"
@@ -82,7 +85,8 @@ private:
     QWidget* m_tagBox = nullptr;
     QWidget* m_tagContainer = nullptr;
     FlowLayout* m_tagFlowLayout = nullptr;
-    ElasticEdit* m_tagEdit = nullptr;
+    QPushButton* m_btnAddTag = nullptr;
+    QPointer<TagSelectorOverlay> m_tagSelectorOverlay;
     
     ElasticEdit* m_noteEdit = nullptr;
     ElasticEdit* m_linkEdit = nullptr;
@@ -102,7 +106,6 @@ private:
     bool m_isUserEditing = false; // 增加编辑态锁，防护焦点与异步刷新冲刷
 
 private slots:
-    void onTagAdded();
     void onTagDeleted(const QString& text);
     void setAsPrimaryColor(const QColor& color);
 };
