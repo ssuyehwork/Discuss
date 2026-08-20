@@ -28,7 +28,7 @@ public:
                     const QString& ctime, const QString& mtime, const QString& atime,
                     const QString& path, bool encrypted, int width = 0, int height = 0);
 
-    void setSelectedPaths(const QStringList& paths) { m_selectedPaths = paths; }
+    void setSelectedPaths(const QStringList& paths);
     void setPalettes(const QVector<QPair<QColor, float>>& palette);
     void setTags(const QStringList& tags);
     void setNote(const QString& note);
@@ -63,6 +63,7 @@ protected:
     void showEvent(QShowEvent* event) override;
 
 private:
+    void updateControlsState(bool hasSelection);
     void initUi();
     void adjustFlowHeights();
     void addInfoRow(const QString& label, QLabel*& valueLabel);

@@ -131,7 +131,6 @@ private:
     ContentPanel* m_contentPanel = nullptr;
     MetaPanel* m_metaPanel = nullptr;
     FilterPanel* m_filterPanel = nullptr;
-    class TagManagerView* m_tagManagerView = nullptr;
 
     QSplitter* m_mainSplitter = nullptr;
 

@@ -40,6 +40,7 @@ protected:
     QWidget* m_contentArea;
     QVBoxLayout* m_mainLayout;
     QVBoxLayout* m_outerLayout;
+    QHBoxLayout* m_titleLayout; // 暴露标题栏横向布局，支持子窗口插入自定义功能按钮
     QWidget* m_container;
     QLabel* m_titleLabel;
     QPushButton* m_pinBtn;
