@@ -126,6 +126,19 @@ void NavPanel::initUi() {
     titleLabel->setStyleSheet("color: #2ecc71; font-size: 13px; font-weight: bold; background: transparent; border: none;");
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
+
+    QPushButton* btnTrash = new QPushButton(header);
+    btnTrash->setFixedSize(24, 24);
+    btnTrash->setIcon(UiHelper::getIcon("trash", QColor("#e81123"), 16));
+    btnTrash->setToolTip("打开回收站");
+    btnTrash->setStyleSheet(
+        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
+        "QPushButton:hover { background: #3E3E42; }"
+        "QPushButton:pressed { background: #4E4E52; }"
+    );
+    connect(btnTrash, &QPushButton::clicked, this, &NavPanel::requestOpenTrash);
+    headerLayout->addWidget(btnTrash);
+
     m_mainLayout->addWidget(header);
 
     // --- 磁盘树 ---

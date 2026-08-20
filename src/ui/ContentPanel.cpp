@@ -1501,6 +1501,175 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
  
     QMenu menu(this); 
     UiHelper::applyMenuStyle(&menu); 
+
+    if (m_currentCategoryType == "trash") {
+        if (onItem) {
+            // 1. 【还原】
+            menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原")->setData(ActionRestore);
+            
+            // 2. 【剪切】
+            menu.addAction(UiHelper::getIcon("cut", QColor("#EEEEEE"), 18), "剪切")->setData(ActionCut);
+            
+            // 3. 【永久删除】
+            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "永久删除")->setData(ActionSecureDelete);
+            
+            menu.addSeparator();
+            
+            // 4. 【还原全部】
+            menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原全部")->setData(ActionRestoreAll);
+            
+            // 5. 【清空回收站】
+            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "清空回收站")->setData(ActionEmptyTrash);
+        } else {
+            // 空白处菜单：还原全部、清空回收站
+            menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原全部")->setData(ActionRestoreAll);
+            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "清空回收站")->setData(ActionEmptyTrash);
+        }
+
+        m_isContextMenuActive = true;
+        QAction* selectedAction = menu.exec(view->viewport()->mapToGlobal(pos));
+        m_isContextMenuActive = false;
+        if (m_model) {
+            m_model->flushPendingUpdates();
+        }
+
+        if (!selectedAction || !selectedAction->data().isValid()) return;
+
+        ContextAction action = static_cast<ContextAction>(selectedAction->data().toInt());
+        switch (action) {
+            case ActionRestore: {
+                auto indexes = view->selectionModel()->selectedIndexes();
+                for (const auto& idx : indexes) {
+                    if (idx.column() == 0) {
+                        if (idx.data(IsGroupHeaderRole).toBool()) continue;
+
+                        if (idx.data(IsDiskTrashRole).toBool()) {
+                            int id = idx.data(DiskTrashIdRole).toInt();
+                            QString trashPath = idx.data(PathRole).toString();
+                            DiskTrashService::restoreFromDiskTrash(id, trashPath);
+                        } else {
+                            QString itemPath = idx.data(PathRole).toString();
+                            auto meta = MetadataManager::instance().getMeta(itemPath.toStdWString());
+                            if (meta.isTrash && !meta.originalPath.empty()) {
+                                QString dest = QString::fromStdWString(meta.originalPath);
+                                QDir().mkpath(QFileInfo(dest).absolutePath());
+                                if (QFile::rename(itemPath, dest)) {
+                                    MetadataManager::instance().markAsTrash(dest.toStdWString(), false);
+                                }
+                            }
+                        }
+                    }
+                }
+                refreshAll();
+                MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
+                break;
+            }
+            case ActionCut: {
+                performCopy(true);
+                break;
+            }
+            case ActionSecureDelete: {
+                auto indexes = view->selectionModel()->selectedIndexes();
+                QStringList targetPaths;
+                std::vector<std::pair<int, QString>> diskTrashItems;
+
+                for (const auto& idx : indexes) {
+                    if (idx.column() == 0) {
+                        if (idx.data(IsGroupHeaderRole).toBool()) continue;
+
+                        if (idx.data(IsDiskTrashRole).toBool()) {
+                            int id = idx.data(DiskTrashIdRole).toInt();
+                            QString p = idx.data(PathRole).toString();
+                            diskTrashItems.push_back({id, p});
+                        } else {
+                            targetPaths << idx.data(PathRole).toString();
+                        }
+                    }
+                }
+                if (targetPaths.isEmpty() && diskTrashItems.empty() && !path.isEmpty()) {
+                    targetPaths << path;
+                }
+
+                if (targetPaths.isEmpty() && diskTrashItems.empty()) break;
+
+                QString msg = "确定要永久删除选中的项目吗？数据将被物理覆写并彻底抹除，此操作不可恢复。";
+                if (!FramelessMessageBox::question(this, "确认删除", msg)) break;
+
+                BatchProgressDialog* progress = new BatchProgressDialog("正在执行永久删除（深层抹除）...", this);
+                progress->show();
+
+                QPointer<ContentPanel> weakPanel(this);
+                QPointer<BatchProgressDialog> weakProgress(progress);
+
+                MetadataManager::instance().beginInternalOperation();
+
+                (void)QtConcurrent::run([targetPaths, diskTrashItems, weakPanel, weakProgress]() {
+                    int total = static_cast<int>(targetPaths.size() + diskTrashItems.size());
+                    int count = 0;
+
+                    for (const QString& p : targetPaths) {
+                        if (!weakPanel) return;
+                        std::wstring wp = QDir::toNativeSeparators(p).toStdWString();
+                        MetadataManager::instance().setEncrypted(wp, false);
+                        QFile::remove(p);
+                        count++;
+                        if (weakProgress) {
+                            QMetaObject::invokeMethod(weakProgress, "updateProgress",
+                                                      Qt::QueuedConnection,
+                                                      Q_ARG(int, count),
+                                                      Q_ARG(int, total),
+                                                      Q_ARG(QString, QFileInfo(p).fileName()));
+                        }
+                    }
+
+                    for (const auto& item : diskTrashItems) {
+                        if (!weakPanel) return;
+                        DiskTrashService::permanentlyDeleteDiskTrash(item.first, item.second);
+                        count++;
+                        if (weakProgress) {
+                            QMetaObject::invokeMethod(weakProgress, "updateProgress",
+                                                      Qt::QueuedConnection,
+                                                      Q_ARG(int, count),
+                                                      Q_ARG(int, total),
+                                                      Q_ARG(QString, QFileInfo(item.second).fileName()));
+                        }
+                    }
+
+                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, weakProgress]() {
+                        MetadataManager::instance().endInternalOperation();
+                        if (weakProgress) weakProgress->close();
+                        if (weakPanel) {
+                            weakPanel->refreshAll();
+                            MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
+                            ToolTipOverlay::instance()->showText(QCursor::pos(), "选中的回收站项目已彻底永久删除", 1500, QColor("#2ecc71"));
+                        }
+                    });
+                });
+                break;
+            }
+            case ActionRestoreAll: {
+                if (DiskTrashService::restoreAllDiskTrash()) {
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "所有回收站项目已成功还原", 1500, QColor("#2ecc71"));
+                }
+                refreshAll();
+                MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
+                break;
+            }
+            case ActionEmptyTrash: {
+                if (FramelessMessageBox::question(this, "清空回收站", "确定要清空回收站吗？回收站内的所有文件将被彻底删除，此操作不可撤销。")) {
+                    if (DiskTrashService::emptyDiskTrash()) {
+                        ToolTipOverlay::instance()->showText(QCursor::pos(), "回收站已清空", 1500, QColor("#2ecc71"));
+                    }
+                    refreshAll();
+                    MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+        return;
+    } 
  
     if (onItem) { 
         // 2026-06-xx 物理修复：在回收站分类中，顶部增加“还原”选项
@@ -2211,6 +2380,37 @@ void ContentPanel::performPaste() {
             if (!effect.isEmpty() && (effect.at(0) & 0x02)) isMove = true; 
         } 
 
+        // 检查来源路径中是否包含回收站路径 (.QuarkMeta/disk_trash)
+        bool hasTrashSource = false;
+        for (const QString& p : fromPaths) {
+            if (p.contains(".QuarkMeta/disk_trash", Qt::CaseInsensitive)) {
+                hasTrashSource = true;
+                break;
+            }
+        }
+
+        if (hasTrashSource) {
+            QPointer<ContentPanel> weakThis(this);
+            QString targetDir = m_currentPath;
+            (void)QtConcurrent::run([fromPaths, targetDir, weakThis]() {
+                int successCount = 0;
+                for (const QString& p : fromPaths) {
+                    if (DiskTrashService::restoreToDirectory(p, targetDir)) {
+                        successCount++;
+                    }
+                }
+                QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, targetDir, successCount]() {
+                    if (weakThis) {
+                        weakThis->loadDirectory(targetDir, weakThis->m_isRecursive);
+                        if (successCount > 0) {
+                            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("成功从回收站还原并恢复 %1 个项目").arg(successCount), 1500, QColor("#2ecc71"));
+                        }
+                    }
+                });
+            });
+            return;
+        }
+
         // 彻底切断主线程物理 I/O，全权交由 DiskIoService 异步处理，UI 主线程 0 毫秒阻塞
         DiskIoContext ioCtx;
         ioCtx.sources = fromPaths;
@@ -2713,6 +2913,14 @@ void ContentPanel::loadCategories(const QList<int>& categoryIds) {
 
 void ContentPanel::loadCategory(int categoryId) { 
     Q_UNUSED(categoryId);
+}
+
+void ContentPanel::loadCategory(const QString& categoryType) {
+    m_currentCategoryType = categoryType;
+    if (categoryType == "trash") {
+        m_currentPath = "trash://";
+        loadPaths({});
+    }
 } 
  
 static std::vector<ItemRecord> loadPathItemsInternal(const QStringList& paths) {

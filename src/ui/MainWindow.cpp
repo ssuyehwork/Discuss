@@ -254,6 +254,18 @@ void MainWindow::initUi() {
         unifiedNavigateTo(path);
     });
 
+    connect(m_navPanel, &NavPanel::requestOpenTrash, this, [this]() {
+        if (m_contentPanel) {
+            m_contentPanel->loadCategory("trash");
+        }
+        if (m_addressBar) {
+            m_addressBar->setPath("trash://");
+        }
+        m_currentPath = "trash://";
+        updateNavButtons();
+        updateStatusBar();
+    });
+
     connect(m_favoritePanel, &FavoritePanel::directorySelected, this, [this](const QString& path) {
         unifiedNavigateTo(path);
     });

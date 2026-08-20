@@ -84,6 +84,8 @@ set(SOURCES
     src/core/NavigationHistoryService.h
     src/core/SearchHistoryService.cpp
     src/core/SearchHistoryService.h
+    src/core/SyncStatusService.cpp
+    src/core/SyncStatusService.h
     src/crypto/EncryptionManager.cpp
     src/crypto/EncryptionManager.h
     src/meta/DiskTrashRepo.cpp
@@ -260,6 +262,7 @@ set(LIBTIFF_SOURCES
     src/third_party/libtiff/tif_luv.c
     src/third_party/libtiff/tif_lzw.c
     src/third_party/libtiff/tif_next.c
+    src/third_party/libtiff/tif_ojpeg.c
     src/third_party/libtiff/tif_open.c
     src/third_party/libtiff/tif_packbits.c
     src/third_party/libtiff/tif_pixarlog.c

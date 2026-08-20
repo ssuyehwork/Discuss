@@ -52,6 +52,11 @@ signals:
      */
     void requestLocateFile(const QString& path);
 
+    /**
+     * @brief 请求在内容面板中打开回收站
+     */
+    void requestOpenTrash();
+
 private slots:
     void onItemExpanded(const QModelIndex& index);
     void onTreeClicked(const QModelIndex& index);

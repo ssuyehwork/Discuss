@@ -24,6 +24,11 @@ public:
     static bool restoreFromDiskTrash(int id, const QString& trashPath);
 
     /**
+     * @brief 将回收站中的项目还原/恢复移动到指定的物理文件夹
+     */
+    static bool restoreToDirectory(const QString& trashPath, const QString& targetDir);
+
+    /**
      * @brief 彻底物理删除/抹除暂存区项目
      */
     static bool permanentlyDeleteDiskTrash(int id, const QString& trashPath);

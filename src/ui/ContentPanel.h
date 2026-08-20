@@ -56,12 +56,6 @@ private:
 };
 
 /**
- * @brief 虚拟化数据库模型：支持百万级条目瞬时加载 (2026-06-xx 重构)
- */
-// 🚨 极致物理重构：QuarkMetaVirtualDbModel 已彻底退役，在此安全移除
-
-
-/**
  * @brief 内容面板（面板四）：核心业务展示区
  * 支持网格视图（QListView）与列表视图（QTreeView）切换
  */
@@ -129,6 +123,8 @@ public:
         ActionPermanentDelete,
         ActionSecureDelete,
         ActionRestore,
+        ActionRestoreAll,
+        ActionEmptyTrash,
         ActionCopyName,
         ActionCopyPath,
         ActionAddToCategory,
@@ -391,6 +387,7 @@ public slots:
      * @brief 2026-06-xx 彻底重构：加载分类及其子项 (分类 ID 联动)
      */
     void loadCategory(int categoryId);
+    void loadCategory(const QString& categoryType);
     void loadCategories(const QList<int>& categoryIds);
 
     /**

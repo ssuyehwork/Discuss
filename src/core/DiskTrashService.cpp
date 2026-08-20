@@ -125,6 +125,41 @@ bool DiskTrashService::restoreFromDiskTrash(int id, const QString& trashPath) {
     return false;
 }
 
+bool DiskTrashService::restoreToDirectory(const QString& trashPath, const QString& targetDir) {
+    sqlite3* db = DatabaseManager::instance().getDbForPath(trashPath.toStdWString());
+    if (!db) return false;
+
+    QFileInfo info(trashPath);
+    QString dest = QDir(targetDir).filePath(info.fileName());
+    QDir().mkpath(targetDir);
+
+    bool moved = QFile::rename(trashPath, dest);
+    if (!moved) {
+        if (info.isDir()) {
+            moved = QFile::copy(trashPath, dest);
+            if (moved) QDir(trashPath).removeRecursively();
+        } else {
+            moved = QFile::copy(trashPath, dest) && QFile::remove(trashPath);
+        }
+    }
+
+    if (moved) {
+        SqlTransaction trans(db);
+        sqlite3_stmt* delStmt = nullptr;
+        const char* sqlDel = "DELETE FROM disk_trash WHERE trash_path = ?";
+        if (sqlite3_prepare_v2(db, sqlDel, -1, &delStmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_text16(delStmt, 1, trashPath.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(delStmt) == SQLITE_DONE) {
+                trans.commit();
+                DatabaseManager::instance().setDirty(true);
+            }
+            sqlite3_finalize(delStmt);
+        }
+        return true;
+    }
+    return false;
+}
+
 bool DiskTrashService::permanentlyDeleteDiskTrash(int id, const QString& trashPath) {
     sqlite3* db = DatabaseManager::instance().getDbForPath(trashPath.toStdWString());
     if (!db) return false;
