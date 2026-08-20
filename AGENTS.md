@@ -19,6 +19,11 @@
 - 达成共识后，经用户需求与批准，才可以去更改 **“QuarkMeta-Architecture-Planning.md”** 文档里的设计理念。  
 - 严格限制：只允许修改 **“QuarkMeta-Architecture-Planning.md”** 文档，不得触碰其他文件。  
 
+### 4.1 `QuarkMeta-Architecture-Planning.md` 纯洁性保护铁律（严禁污染设计理念）
+1. **职责绝对单一**：`QuarkMeta-Architecture-Planning.md` **仅且只能记录应用的高级设计理念、顶层架构规划与全局规范**。
+2. **严禁写入任何实施细节**：任何具体的代码修改点、Search/Replace Diff 替换块、具体代码行号、编译调试命令或局部修复方案，**绝对禁止写入 `QuarkMeta-Architecture-Planning.md`**！
+3. **实施方案必须物理隔离**：所有具体的代码修改与实施方案，必须且只能创建在 `QuarkMeta Architecture/Implementation Plan/` 目录下（采用英文命名），严禁将实施方案与设计理念混为一谈。下一任及所有后续 AI 助手必须严格遵守此防污染铁律！
+
 ---
 
 这样一来，Jules 的流程就是：  
