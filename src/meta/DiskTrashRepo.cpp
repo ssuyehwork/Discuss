@@ -14,19 +14,22 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
     std::vector<sqlite3*> dbs = DatabaseManager::instance().getActiveMemoryDbs(); 
     for (sqlite3* db : dbs) { 
         sqlite3_stmt* stmt = nullptr; 
-        const char* sql = "SELECT id, trash_path, original_path, drive_letter, file_name, is_folder, file_size, deleted_at FROM disk_trash"; 
+        const char* sql = "SELECT id, file_id, trash_path, original_path, drive_letter, file_name, is_folder, file_size, created_at, deleted_at FROM disk_trash";
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) { 
             while (sqlite3_step(stmt) == SQLITE_ROW) { 
                 DiskTrashRawItem r; 
                 r.id = sqlite3_column_int(stmt, 0); 
-                const wchar_t* wTrashPath = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 1)); 
-                const wchar_t* wOrigPath = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 2)); 
-                const wchar_t* wFileName = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 4)); 
-                r.isFolder = (sqlite3_column_int(stmt, 5) != 0); 
-                r.fileSize = sqlite3_column_int64(stmt, 6); 
-                r.deletedAt = sqlite3_column_int64(stmt, 7); 
+                const wchar_t* wFileId = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 1));
+                const wchar_t* wTrashPath = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 2));
+                const wchar_t* wOrigPath = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 3));
+                const wchar_t* wFileName = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 5));
+                r.isFolder = (sqlite3_column_int(stmt, 6) != 0);
+                r.fileSize = sqlite3_column_int64(stmt, 7);
+                r.createdAt = sqlite3_column_int64(stmt, 8);
+                r.deletedAt = sqlite3_column_int64(stmt, 9);
  
                 if (wTrashPath && wOrigPath) { 
+                    r.fileId = wFileId ? wFileId : L"";
                     r.trashPath = wTrashPath; 
                     r.originalPath = wOrigPath; 
                     r.fileName = wFileName ? wFileName : L""; 

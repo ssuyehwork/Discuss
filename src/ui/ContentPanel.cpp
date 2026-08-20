@@ -2942,12 +2942,14 @@ static std::vector<ItemRecord> loadTrashItemsInternal() {
         ItemRecord rec;
         rec.isDiskTrash = true;
         rec.diskTrashId = raw.id;
+        rec.fileId = QString::fromStdWString(raw.fileId);
         rec.path = QString::fromStdWString(raw.trashPath);
         rec.originalPath = QString::fromStdWString(raw.originalPath);
         rec.filename = QString::fromStdWString(raw.fileName);
+        rec.suffix = QFileInfo(rec.filename).suffix();
         rec.isDir = raw.isFolder;
         rec.size = raw.fileSize;
-        rec.ctime = raw.deletedAt;
+        rec.ctime = raw.createdAt > 0 ? raw.createdAt : raw.deletedAt;
         rec.mtime = raw.deletedAt;
         records.push_back(rec);
     }

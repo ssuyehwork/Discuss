@@ -30,6 +30,7 @@ struct ItemRecord {
     QString groupName;
     bool isDiskTrash = false;
     int diskTrashId = 0;
+    QString fileId;
     QString originalPath;
 
     // 2026-06-xx 物理对标：注入核心元数据，杜绝 UI 渲染时的同步 I/O

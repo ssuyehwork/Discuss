@@ -238,12 +238,14 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         -- 物理磁盘回收站独立表 (双轨隔离)
         CREATE TABLE IF NOT EXISTS disk_trash (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id TEXT NOT NULL,           -- 项目自身 File_ID 隔离盒标识
             trash_path TEXT NOT NULL,        -- 暂存区物理路径
             original_path TEXT NOT NULL,     -- 原始物理绝对路径
             drive_letter TEXT NOT NULL,      -- 所属盘符
             file_name TEXT NOT NULL,         -- 原始文件名
             is_folder INTEGER DEFAULT 0,     -- 是否为文件夹 (1: 是, 0: 否)
             file_size INTEGER DEFAULT 0,     -- 文件大小
+            created_at INTEGER DEFAULT 0,    -- 原始创建时间戳 (毫秒)
             deleted_at INTEGER DEFAULT 0     -- 删除时间戳 (毫秒)
         );
         CREATE INDEX IF NOT EXISTS idx_disk_trash_drive_letter ON disk_trash(drive_letter);
@@ -374,6 +376,30 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         sqlite3_exec(conn.memDb, "ALTER TABLE metadata ADD COLUMN sha256 TEXT DEFAULT ''", nullptr, nullptr, nullptr);
         sqlite3_exec(conn.memDb, "CREATE INDEX IF NOT EXISTS idx_metadata_hash ON metadata(file_size, sha256);", nullptr, nullptr, nullptr);
     }
+
+    // 迁移 disk_trash 补充 file_id 和 created_at 字段
+    bool hasFileIdInTrash = false;
+    bool hasCreatedAtInTrash = false;
+    sqlite3_stmt* trashCheckStmt = nullptr;
+    if (sqlite3_prepare_v2(conn.memDb, "PRAGMA table_info(disk_trash)", -1, &trashCheckStmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(trashCheckStmt) == SQLITE_ROW) {
+            const char* colName = reinterpret_cast<const char*>(sqlite3_column_text(trashCheckStmt, 1));
+            if (colName) {
+                std::string name(colName);
+                if (name == "file_id") hasFileIdInTrash = true;
+                if (name == "created_at") hasCreatedAtInTrash = true;
+            }
+        }
+        sqlite3_finalize(trashCheckStmt);
+    }
+    if (!hasFileIdInTrash) {
+        sqlite3_exec(conn.memDb, "ALTER TABLE disk_trash ADD COLUMN file_id TEXT DEFAULT ''", nullptr, nullptr, nullptr);
+    }
+    if (!hasCreatedAtInTrash) {
+        sqlite3_exec(conn.memDb, "ALTER TABLE disk_trash ADD COLUMN created_at INTEGER DEFAULT 0", nullptr, nullptr, nullptr);
+    }
+
+
 
     // 2026-08-xx 新增字段：持久化基名与后缀名，避免每次启动现算并优化回填
     bool hasBaseNameColumn = false;
