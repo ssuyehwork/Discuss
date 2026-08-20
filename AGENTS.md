@@ -49,7 +49,12 @@ QuarkMeta-Architecture-Planning.md 只是用来记录设计理念，不可将相
 
 ---
 
-## 5. 实施方案标准规范 (Implementation Plan Standard Specification)
+## 5. 实施方案全局审视与标准规范 (Implementation Plan Specification & Global Vision)
+
+### 5.0 全局审视与架构一致性硬性铁律（全局视角约束）
+1. **强制事先读取设计理念**：在创建任何无脑实施方案（Implementation Plan）之前，**必须首先读取并深入分析 `QuarkMeta-Architecture-Planning.md`**，只有在充分理解整体架构设计理念之后，才可以去创建无脑实施方案。
+2. **强制围绕核心基准方案**：重构或修改代码时，**必须围绕 `DiskTrashFileIdIsolationAndRestorePlan.md` 来创建实施方案**，严禁碎片化、头痛医头脚痛医脚地乱建实施方案。
+3. **强制事先读取基准方案**：在创建任何涉及回收站、文件移动、还原或元数据重构的实施方案之前，**必须首先完整读取 `QuarkMeta Architecture/Implementation Plan/DiskTrashFileIdIsolationAndRestorePlan.md`**，必须从全局系统架构的视角去审视与排查，确保新方案与基准架构 100% 匹配融合，绝不进行漏洞百出的局部小修小补。
 
 在生成“无脑实施方案”（ Implementation Plan ）时，必须严格遵守以下 5 大硬性标准，确保执行者无需猜测即可无缝实施且 100% 编译通过：
 
