@@ -44,10 +44,12 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **中央神经调度中枢与底层洗髓重构无脑实施方案**：详见 `Implementation Plan/CentralDispatcherArchitecture.md`
 - **五栏视图布局与伸缩因子修复方案**：详见 `Implementation Plan/FiveColumnLayoutFix.md`
 - **根目录/盘符元数据 global.db 持久化方案**：详见 `Implementation Plan/DriveRootMetaInGlobalDb.md`
-- **盘符栏清理、自动导入根除与“标签管理”实用按钮引入方案**：详见 `Implementation Plan/TagManagerAndLegacyCodePurge.md`
+- **盘符栏清理、自动导入根除与“标签管理”实用按钮引入方案**：详见 `Implementation Plan/tag_manager_and_drive_bar_purge.md`
 - **收藏夹独占第二栏重构方案**：详见 `Implementation Plan/FavoritePanel.md`
 - **`.arc` 胶囊文件夹磁盘纯只读直通预览实施方案**：详见 `Implementation Plan/ArcCapsuleReadOnlyPreview.md`
 - **回收站与 File_ID 隔离盒实施方案**：详见 `Implementation Plan/trash.md`
+- **右键菜单调整、Base36 ID 彻底根除与 LoadingWindow 引入实施方案**：详见 `Implementation Plan/menu_and_base36_purge.md`
+- **Undo/Redo 核心 ActionCommand 指令体系实施方案**：详见 `Implementation Plan/action_commands.md`
 
 ---
 
@@ -63,7 +65,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
    - QuarkMeta 核心架构禁止保留任何历史僵尸逻辑与监控：
      1. IOCP 监控与自动导入剪切逻辑；
      2. 标题栏同步按钮 `m_btnSync` 及 `SyncStatusService` 提示；
-     3. `.arc` 胶囊容器、`Base36 ID` 等历史判定代码。
+     3. `.arc` 胶囊容器、`Base36 ID` 等历史判定代码（Base36 ID 必须彻底根除）。
    - `DatabaseManager` 强制采用分库递归互斥锁，杜绝跨线程 sqlite3 锁争抢。
    - 为后台耗时流水线引入原子化可中断的 `CancellationToken`，防止线程雪崩。
 
@@ -104,9 +106,46 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 
 ---
 
-## 7. 基于 File_ID 隔离盒与创建时间权威判别回收站规范 (File_ID Trash & Creation Time Restore Specification)
+## 8. Undo/Redo 核心 ActionCommand 规范 (Move / Rename / Metadata / SecureDelete Command Specification)
 
-### 7.1 设计理念
+### 8.1 MoveCommand (移动命令)
+1. **核心职责与逆向控制**：
+   - **Execute**：将文件/文件夹从 `oldPath` 移动到 `newPath`。
+   - **Undo (Ctrl+Z)**：逆向搬回，从 `newPath` 恢复到 `oldPath`。
+   - **Redo (Ctrl+Shift+Z)**：再次从 `oldPath` 移动到 `newPath`。
+2. **纯磁盘 JSON 元数据原子同步**：
+   - 在物理移动文件的同时，将源目录 `.QuarkMeta.json` 中的元数据条目原子迁移至目标目录的 `.QuarkMeta.json`。撤销时逆向搬回，确保移动撤销后属性 100% 完好无损。
+
+### 8.2 RenameCommand (重命名命令)
+1. **核心职责与逆向改名**：
+   - 处理单项与批量重命名及其逆向改回。
+2. **`.QuarkMeta.json` 键名同步**：
+   - 离散 JSON 元数据以“文件名”为 Key 存储。物理改名时同步将 JSON 中的旧 Key 替换为新 Key；撤销时将新 Key 改回旧 Key。
+3. **缓存平滑迁移**：
+   - 同步迁移缩略图缓存 Key，防止改名或撤销改名后卡片闪烁或白图。
+
+### 8.3 MetadataCommand (元数据变更命令)
+1. **属性修改逆向还原**：
+   - 记录修改前后的 OldState 与 NewState 快照（支持星级、颜色、标签、备注、置顶等）。
+   - **Execute**：将 NewState 写入 `.QuarkMeta.json`。
+   - **Undo (Ctrl+Z)**：将 OldState 写回 `.QuarkMeta.json`，秒级回退属性。
+2. **批量操作原子化**：
+   - 批量修改多项属性时，必须打包为唯一一个历史原子命令，单次 `Ctrl+Z` 即可批量撤销。
+
+### 8.4 SecureDeleteCommand (粉碎删除命令)
+1. **底层物理粉碎**：
+   - 调用深层数据抹除算法，覆写物理扇区后销毁文件指针。
+2. **元数据与缩略图彻底抹除**：
+   - 物理抹除 `.QuarkMeta.json` 中该文件对应的所有属性条目，并清退磁盘缩略图缓存。
+3. **不可撤销与撤销栈清退铁律**：
+   - **绝对不可撤销 (No Undo)**。
+   - 文件粉碎后，`UndoManager` 必须销毁并清退所有与该路径相关的历史命令（如之前的改名或修改元数据指令），杜绝悬空指针与崩溃。
+
+---
+
+## 9. 基于 File_ID 隔离盒与创建时间权威判别回收站规范 (File_ID Trash & Creation Time Restore Specification)
+
+### 9.1 设计理念
 在 QuarkMeta 纯磁盘直连模式下，回收站彻底废除原有粗暴改名与容易冲突的直接位移逻辑，采用 **“基于项目自身 File_ID 独立盒隔离 + 原始名称 100% 保持 + 创建时间权威判别 + 连字符 `-N` 还原重命名避让”** 架构：
 
 1. **入库隔离与零名改动**：
