@@ -196,8 +196,6 @@ set(SOURCES
     src/ui/SearchHistoryPanel.h
     src/ui/AddressHistoryPanel.cpp
     src/ui/AddressHistoryPanel.h
-    src/ui/TagManagerView.cpp
-    src/ui/TagManagerView.h
     src/ui/TagManagerController.cpp
     src/ui/TagManagerController.h
     src/core/ActionCommand.h

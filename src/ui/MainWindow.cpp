@@ -21,7 +21,6 @@
 #include "../core/CentralEventHub.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
-#include "TagManagerView.h"
 #include "../core/NavigationHistoryService.h"
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
@@ -558,11 +557,6 @@ void MainWindow::initUi() {
 
     // 回车搜索核心逻辑 (2026-07-xx 定点修复：搜索框作为筛选器的一个输入组件，走本地过滤引擎)
     auto doSearch = [this](const QString& keyword) {
-        if (m_isTagManagerMode) {
-            m_tagManagerView->search(keyword);
-            return;
-        }
-
         // 2026-07-xx 按照 Plan-118：搜索行为回归筛选流。
         // 搜索框作为当前视图的本地过滤器，不再执行外部 fs 拼装，直接驱动 ContentPanel。
         m_contentPanel->search(keyword);
@@ -1171,9 +1165,6 @@ void MainWindow::setupSplitters() {
     m_filterPanel = new FilterPanel(this);
     m_filterPanel->setObjectName("FilterContainer");
 
-    m_tagManagerView = new TagManagerView(this);
-    m_tagManagerView->hide();
-
     // 2026-05-07 按照用户要求：焦点线持久化显示，基于数据来源而非焦点位置
     connect(m_contentPanel, &ContentPanel::dataSourceChanged, this, [this](const QString& source) {
         m_currentDataSource = source;
@@ -1188,15 +1179,6 @@ void MainWindow::setupSplitters() {
     m_mainSplitter->addWidget(m_contentPanel);
     m_mainSplitter->addWidget(m_metaPanel);
     m_mainSplitter->addWidget(m_filterPanel);
-    m_mainSplitter->addWidget(m_tagManagerView);
-
-    // 2026-07-xx 按照用户要求：标签搜索联动
-    connect(m_tagManagerView, &TagManagerView::requestSearchTag, this, [this](const QString& tag) {
-        if (m_searchEdit) m_searchEdit->setText(tag);
-        
-        // 【修复】走统一异步搜索管线，避免主线程 SQLite 查询卡顿
-        CoreController::instance().performSearch(tag, "global", 0, "");
-    });
 
     m_bodyLayout->addWidget(m_mainSplitter);
 
@@ -1707,7 +1689,6 @@ void MainWindow::populatePanelMenu(QMenu* menu) {
 void MainWindow::resetSplitterLayout() {
     // 1. 物理恢复可见性并退出特殊模式
     m_isTagManagerMode = false;
-    m_tagManagerView->hide();
 
     m_navPanel->show();
     m_favoritePanel->show();
@@ -1718,7 +1699,6 @@ void MainWindow::resetSplitterLayout() {
     // 2. 物理恢复 5 栏尺寸比例 (Index 0: NavPanel, Index 1: FavoritePanel, Index 2: ContentPanel, Index 3: MetaPanel, Index 4: FilterPanel)
     QList<int> sizes;
     sizes << 200 << 200 << 550 << 200 << 200;
-    if (m_mainSplitter->count() > 5) sizes << 0; // 索引 5 为隐藏的 TagManagerView
 
     m_mainSplitter->setSizes(sizes);
     
