@@ -50,6 +50,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **回收站与 File_ID 隔离盒实施方案**：详见 `Implementation Plan/trash.md`
 - **右键菜单调整、Base36 ID 彻底根除与 LoadingWindow 引入实施方案**：详见 `Implementation Plan/menu_and_base36_purge.md`
 - **Undo/Redo 核心 ActionCommand 指令体系实施方案**：详见 `Implementation Plan/action_commands.md`
+- **清理 TagManagerDialog 僵尸代码与归一化至 TagManagerView 实施方案**：详见 `Implementation Plan/tag_manager_dialog_purge.md`
 
 ---
 
