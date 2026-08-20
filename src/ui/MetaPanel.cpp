@@ -122,7 +122,6 @@ void MetaPanel::initUi() {
         QPoint globalPos = m_btnAddTag->mapToGlobal(QPoint(0, m_btnAddTag->height() + 4)); 
         QPoint parentPos = this->topLevelWidget()->mapFromGlobal(globalPos); 
         m_tagSelectorOverlay->move(parentPos); 
-        m_tagSelectorOverlay->resize(320, 360); 
         m_tagSelectorOverlay->show(); 
         
         connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& selectedTags) { 
@@ -208,6 +207,54 @@ void MetaPanel::initUi() {
     m_containerLayout->addStretch(1);
     m_scrollArea->setWidget(m_container);
     m_mainLayout->addWidget(m_scrollArea);
+
+    // 初始状态下无选中项，默认禁用所有输入控件
+    updateControlsState(false);
+}
+
+void MetaPanel::setSelectedPaths(const QStringList& paths) {
+    m_selectedPaths = paths;
+    bool hasSelection = !m_selectedPaths.isEmpty();
+    updateControlsState(hasSelection);
+
+    // 未选中时彻底清空并重置输入框内容
+    if (!hasSelection) {
+        m_isInternalUpdating = true;
+        if (m_nameEdit) m_nameEdit->clear();
+        if (m_noteEdit) m_noteEdit->clear();
+        if (m_linkEdit) m_linkEdit->clear();
+        if (m_pathEdit) m_pathEdit->clear();
+        if (lblType) lblType->setText("-");
+        if (lblSize) lblSize->setText("-");
+        if (lblDimensions) lblDimensions->setText("-");
+        if (lblCtime) lblCtime->setText("-");
+        if (lblMtime) lblMtime->setText("-");
+        if (lblAtime) lblAtime->setText("-");
+        if (lblEncrypted) lblEncrypted->setText("-");
+        setTags({});
+        setPalettes({});
+        m_isInternalUpdating = false;
+    }
+}
+
+void MetaPanel::updateControlsState(bool hasSelection) {
+    // 统一管控所有输入与交互控件的可用状态
+    if (m_nameEdit) m_nameEdit->setEnabled(hasSelection);
+    if (m_noteEdit) m_noteEdit->setEnabled(hasSelection);
+    if (m_linkEdit) m_linkEdit->setEnabled(hasSelection);
+    if (m_btnAddTag) m_btnAddTag->setEnabled(hasSelection);
+    if (m_paletteBox) m_paletteBox->setEnabled(hasSelection);
+    if (m_tagBox) m_tagBox->setEnabled(hasSelection);
+    if (m_categoryBox) m_categoryBox->setEnabled(hasSelection);
+
+    // 未选中时应用半透明置灰样式，选中时恢复正常暗黑输入样式
+    QString editStyle = hasSelection
+        ? "QTextEdit { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #EEEEEE; }"
+        : "QTextEdit { background: #1E1E1E; border: 1px solid #2A2A2A; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #555555; }";
+
+    if (m_nameEdit) m_nameEdit->setStyleSheet(editStyle);
+    if (m_noteEdit) m_noteEdit->setStyleSheet(editStyle);
+    if (m_linkEdit) m_linkEdit->setStyleSheet(editStyle);
 }
 
 void MetaPanel::addInfoRow(const QString& label, QLabel*& valueLabel) {
@@ -450,7 +497,7 @@ void MetaPanel::setTags(const QStringList& tags) {
             connect(pill, &TagPill::deleteRequested, this, &MetaPanel::onTagDeleted);
         }
         pill->setProperty("tagText", tag);
-        pill->setStyleSheet("QFrame { background-color: #2D2D30; border: 1px solid #3E3E42; border-radius: 2px; }");
+        pill->setStyleSheet("QFrame { background-color: #2D2D30; border: 1px solid #3E3E42; border-radius: 4px; }");
         pill->show();
         m_tagFlowLayout->addWidget(pill);
     }

@@ -35,12 +35,12 @@ void TagManagerDialog::initContent() {
     mainL->setContentsMargins(0, 0, 0, 0);
     mainL->setSpacing(0);
 
-    // ================= 1. 顶部操作栏（透明搜索框 + 右侧 sidebar 按钮） =================
+    // ================= 1. 顶部操作栏（搜索框占满整行） =================
     QWidget* topBar = new QWidget(this);
     topBar->setFixedHeight(40);
     topBar->setStyleSheet("background: transparent; border-bottom: 1px solid #333;");
     QHBoxLayout* topL = new QHBoxLayout(topBar);
-    topL->setContentsMargins(15, 0, 10, 0);
+    topL->setContentsMargins(15, 0, 15, 0);
     topL->setSpacing(10);
 
     m_searchEdit = new QLineEdit(topBar);
@@ -60,22 +60,30 @@ void TagManagerDialog::initContent() {
         }
     });
     topL->addWidget(m_searchEdit, 1);
+    mainL->addWidget(topBar);
 
-    // 侧边栏折叠按钮
-    m_btnToggleSidebar = new QPushButton(topBar);
-    m_btnToggleSidebar->setFixedSize(24, 24);
+    // ================= 1.1 将侧边栏按钮移至标题栏（置顶按钮左侧，规格 20x20） =================
+    m_btnToggleSidebar = new QPushButton(this);
+    m_btnToggleSidebar->setFixedSize(20, 20);
     m_btnToggleSidebar->setCheckable(true);
     m_btnToggleSidebar->setChecked(true);
-    m_btnToggleSidebar->setIcon(UiHelper::getIcon("sidebar", QColor("#AAAAAA"), 16));
+    m_btnToggleSidebar->setIcon(UiHelper::getIcon("sidebar", QColor("#CCCCCC"), 16));
+    m_btnToggleSidebar->setIconSize(QSize(16, 16));
+    m_btnToggleSidebar->setAutoDefault(false);
     m_btnToggleSidebar->setCursor(Qt::PointingHandCursor);
+    m_btnToggleSidebar->setProperty("tooltipText", "展开/收起侧边栏");
     m_btnToggleSidebar->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-radius: 3px; }"
+        "QPushButton { background-color: transparent; border: none; border-radius: 4px; padding: 0; }"
         "QPushButton:hover { background-color: #3E3E42; }"
+        "QPushButton:pressed { background-color: #555555; }"
     );
+    m_btnToggleSidebar->installEventFilter(this);
     connect(m_btnToggleSidebar, &QPushButton::toggled, this, &TagManagerDialog::onSidebarToggled);
-    topL->addWidget(m_btnToggleSidebar);
 
-    mainL->addWidget(topBar);
+    if (m_titleLayout && m_pinBtn) {
+        int pinIndex = m_titleLayout->indexOf(m_pinBtn);
+        m_titleLayout->insertWidget(pinIndex, m_btnToggleSidebar);
+    }
 
     // ================= 2. 中部核心区域（左侧固定 180px 侧边栏 + 右侧流式内容区） =================
     QWidget* bodyWidget = new QWidget(this);
@@ -295,7 +303,7 @@ void TagManagerDialog::refreshTags() {
             QPushButton* btn = new QPushButton(QString("• %1 (%2)").arg(tag).arg(count), flowContainer);
             btn->setCursor(Qt::PointingHandCursor);
             btn->setStyleSheet(
-                "QPushButton { background: transparent; border: 1px solid #333; color: #3498DB; border-radius: 12px; padding: 3px 10px; font-size: 11px; }"
+                "QPushButton { background: transparent; border: 1px solid #333; color: #3498DB; border-radius: 4px; padding: 3px 8px; font-size: 11px; }"
                 "QPushButton:hover { border-color: #3498DB; background-color: #2D2D30; }"
             );
             connect(btn, &QPushButton::clicked, [this, tag]() {
@@ -352,7 +360,7 @@ void TagManagerDialog::refreshTags() {
             QPushButton* btn = new QPushButton(QString("• %1 (%2)").arg(tag).arg(count), flowContainer);
             btn->setCursor(Qt::PointingHandCursor);
             btn->setStyleSheet(
-                "QPushButton { background: transparent; border: 1px solid #333; color: #BBB; border-radius: 12px; padding: 3px 10px; font-size: 11px; }"
+                "QPushButton { background: transparent; border: 1px solid #333; color: #BBB; border-radius: 4px; padding: 3px 8px; font-size: 11px; }"
                 "QPushButton:hover { border-color: #1ABC9C; color: #1ABC9C; background-color: #252526; }"
             );
             connect(btn, &QPushButton::clicked, [this, tag]() {

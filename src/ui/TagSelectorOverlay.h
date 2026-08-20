@@ -28,6 +28,7 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     void initUi();
@@ -48,6 +49,7 @@ private:
     QMap<QString, int> m_allTagCounts;
 
     QLineEdit* m_searchEdit = nullptr;
+    QPushButton* m_btnToggleSidebar = nullptr; // 搜索框右侧的侧边栏折叠按钮
     QListWidget* m_groupList = nullptr;
     QScrollArea* m_scrollArea = nullptr;
     QWidget* m_tagGridWidget = nullptr;
