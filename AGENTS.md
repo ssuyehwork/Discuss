@@ -19,6 +19,11 @@
 - 达成共识后，经用户需求与批准，才可以去更改 **“QuarkMeta-Architecture-Planning.md”** 文档里的设计理念。  
 - 严格限制：只允许修改 **“QuarkMeta-Architecture-Planning.md”** 文档，不得触碰其他文件。  
 
+### 4.1 `QuarkMeta-Architecture-Planning.md` 纯洁性保护铁律（严禁污染设计理念）
+1. **职责绝对单一**：`QuarkMeta-Architecture-Planning.md` **仅且只能记录应用的高级设计理念、顶层架构规划与全局规范**。
+2. **严禁写入任何实施细节**：任何具体的代码修改点、Search/Replace Diff 替换块、具体代码行号、编译调试命令或局部修复方案，**绝对禁止写入 `QuarkMeta-Architecture-Planning.md`**！
+3. **实施方案必须物理隔离**：所有具体的代码修改与实施方案，必须且只能创建在 `QuarkMeta Architecture/Implementation Plan/` 目录下（采用英文命名），严禁将实施方案与设计理念混为一谈。下一任及所有后续 AI 助手必须严格遵守此防污染铁律！
+
 ---
 
 这样一来，Jules 的流程就是：  
@@ -44,12 +49,18 @@
 // ===================|===================
 
 补充说明：
-QuarkMeta-Architecture-Planning.md 只是用来记录设计理念，不可将相关实施方案记录到该文档里。
-实施方案只能创建在“Implementation Plan”文件夹里，实施方案的命名规则，可以根据事件来命名实施方案，必须采用英文命名。
+1. QuarkMeta-Architecture-Planning.md 只是用来记录设计理念，不可将相关实施方案记录到该文档里。
+2. 实施方案只能创建在“QuarkMeta Architecture/Implementation Plan/”文件夹里。
+3. **实施方案精简主题命名铁律**：实施方案必须采用极其简洁、直观的主题/模块英文小写命名（例如关于回收站的实施方案必须且只能统一命名为 `trash.md`），严禁脑补繁琐冗长的组合文件名，确保任何时候都能从历史记录中快速定位查找！
 
 ---
 
-## 5. 实施方案标准规范 (Implementation Plan Standard Specification)
+## 5. 实施方案全局审视与标准规范 (Implementation Plan Specification & Global Vision)
+
+### 5.0 全局审视与架构一致性硬性铁律（全局视角约束）
+1. **强制围绕核心设计理念**：重构或修改代码时，**必须围绕 `QuarkMeta-Architecture-Planning.md` 来创建无脑实施方案**，因为 `QuarkMeta-Architecture-Planning.md` 记录了整个应用的核心设计理念。严禁碎片化、头痛医头脚痛医脚地盲目创建实施方案。
+2. **强制事先读取设计理念**：在创建任何无脑实施方案（Implementation Plan）之前，**必须首先完整读取并深入分析 `QuarkMeta-Architecture-Planning.md`**，只有从全局系统架构的视角审视并充分理解整个应用的设计理念之后，才可以去创建无脑实施方案，确保所有新方案与整体设计理念 100% 契合融合。
+3. **强制精准对标与复用已有代码（严禁凭空脑补与重复造轮子）**：在编写任何实施方案之前，**必须先查阅并核对现有项目中的类定义、结构体成员（如 `ItemRecord.h`）和作用域变量**。严禁凭空捏造不存在的结构体成员（如凭空脑补 `rec.fileId`）或重复声明已存在的局部变量（如变量重定义），必须坚决复用已有项目架构，杜绝任何低级的脑补与重复造轮子！
 
 在生成“无脑实施方案”（ Implementation Plan ）时，必须严格遵守以下 5 大硬性标准，确保执行者无需猜测即可无缝实施且 100% 编译通过：
 
