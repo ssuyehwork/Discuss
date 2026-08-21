@@ -71,8 +71,6 @@ public:
     };
 
     DataSourceType dataSourceType() const;
-    bool isMirrorSource() const;
-    bool isManagedContext() const;
     int currentCategoryId() const { return m_currentCategoryId; }
     bool isContextMenuActive() const { return m_isContextMenuActive; }
 
@@ -129,7 +127,6 @@ public:
         ActionCopyPath,
         ActionAddToCategory,
         ActionAddToFavorites,
-        ActionRescan,
         ActionRefresh,
         ActionCancelImport,
         ActionBatchCreate

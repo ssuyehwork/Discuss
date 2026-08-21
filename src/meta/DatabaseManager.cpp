@@ -112,9 +112,6 @@ DatabaseManager::~DatabaseManager() {
     }
     stopWorkerThread();
     flushAll(true);
-    for (auto& pair : m_driveDbs) {
-        closeDb(pair.second);
-    }
     closeDb(m_globalDb);
 }
 
@@ -184,35 +181,6 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         CREATE INDEX IF NOT EXISTS idx_path ON metadata(path);
         CREATE INDEX IF NOT EXISTS idx_metadata_added_at ON metadata(added_at);
         CREATE INDEX IF NOT EXISTS idx_metadata_hash ON metadata(file_size, sha256);
-
-        -- 分类定义表
-        CREATE TABLE IF NOT EXISTS categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            parent_id INTEGER DEFAULT 0,
-            name TEXT NOT NULL,
-            color TEXT,
-            preset_tags TEXT,
-            sort_order INTEGER DEFAULT 0,
-            pinned INTEGER DEFAULT 0,
-            encrypted INTEGER DEFAULT 0,
-            encrypt_hint TEXT,
-            physical_frn INTEGER DEFAULT 0,
-            physical_path TEXT,
-            icon TEXT DEFAULT 'folder_filled',
-            category_kind INTEGER DEFAULT 0
-        );
-        CREATE INDEX IF NOT EXISTS idx_categories_frn ON categories(physical_frn);
-        CREATE INDEX IF NOT EXISTS idx_categories_kind ON categories(category_kind);
-
-        -- 分类与项目关联表
-        CREATE TABLE IF NOT EXISTS category_items (
-            category_id INTEGER,
-            folder_id TEXT,
-            path_hint TEXT,
-            added_at REAL,
-            PRIMARY KEY (category_id, folder_id)
-        );
-        CREATE INDEX IF NOT EXISTS idx_category_items_folder_id ON category_items(folder_id);
 
         -- 系统统计表
         CREATE TABLE IF NOT EXISTS system_stats (
@@ -322,25 +290,6 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
 
     if (hasFileIdInMeta && !hasFolderIdInMeta) {
         sqlite3_exec(conn.memDb, "ALTER TABLE metadata RENAME COLUMN file_id TO folder_id;", nullptr, nullptr, nullptr);
-    }
-
-    // 同步迁移 category_items
-    bool hasFileIdInItems = false;
-    bool hasFolderIdInItems = false;
-    if (sqlite3_prepare_v2(conn.memDb, "PRAGMA table_info(category_items)", -1, &checkStmt, nullptr) == SQLITE_OK) {
-        while (sqlite3_step(checkStmt) == SQLITE_ROW) {
-            const char* colName = reinterpret_cast<const char*>(sqlite3_column_text(checkStmt, 1));
-            if (colName) {
-                std::string name(colName);
-                if (name == "file_id") hasFileIdInItems = true;
-                if (name == "folder_id") hasFolderIdInItems = true;
-            }
-        }
-        sqlite3_finalize(checkStmt);
-    }
-
-    if (hasFileIdInItems && !hasFolderIdInItems) {
-        sqlite3_exec(conn.memDb, "ALTER TABLE category_items RENAME COLUMN file_id TO folder_id;", nullptr, nullptr, nullptr);
     }
 
     if (!hasWidthColumn) {
@@ -467,52 +416,6 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
 
     sqlite3_exec(conn.memDb, "CREATE INDEX IF NOT EXISTS idx_metadata_ext ON metadata(ext);", nullptr, nullptr, nullptr);
 
-    // 2026-08-xx 物理同步扩展：迁移 categories 表字段
-    sqlite3_stmt* catCheckStmt;
-    bool hasFrnColumn = false;
-    bool hasPhysicalPathColumn = false;
-    bool hasIconColumn = false;
-    bool hasCategoryKindColumn = false;
-    if (sqlite3_prepare_v2(conn.memDb, "PRAGMA table_info(categories)", -1, &catCheckStmt, nullptr) == SQLITE_OK) {
-        while (sqlite3_step(catCheckStmt) == SQLITE_ROW) {
-            const char* colName = reinterpret_cast<const char*>(sqlite3_column_text(catCheckStmt, 1));
-            if (colName) {
-                std::string name(colName);
-                if (name == "physical_frn") hasFrnColumn = true;
-                if (name == "physical_path") hasPhysicalPathColumn = true;
-                if (name == "icon") hasIconColumn = true;
-                if (name == "category_kind") hasCategoryKindColumn = true;
-            }
-        }
-        sqlite3_finalize(catCheckStmt);
-    }
-
-    if (!hasFrnColumn) {
-        sqlite3_exec(conn.memDb, "ALTER TABLE categories ADD COLUMN physical_frn INTEGER DEFAULT 0", nullptr, nullptr, nullptr);
-    }
-    if (!hasPhysicalPathColumn) {
-        sqlite3_exec(conn.memDb, "ALTER TABLE categories ADD COLUMN physical_path TEXT", nullptr, nullptr, nullptr);
-    }
-    if (!hasIconColumn) {
-        sqlite3_exec(conn.memDb, "ALTER TABLE categories ADD COLUMN icon TEXT DEFAULT 'folder_filled'", nullptr, nullptr, nullptr);
-    }
-    if (!hasCategoryKindColumn) {
-        // 1. 新增字段
-        sqlite3_exec(conn.memDb, "ALTER TABLE categories ADD COLUMN category_kind INTEGER DEFAULT 0", nullptr, nullptr, nullptr);
-        // 2. 根据历史 name 前缀回填 category_kind = 1
-        sqlite3_exec(conn.memDb, "UPDATE categories SET category_kind = 1 WHERE name LIKE 'QuarkMeta.Library_%'", nullptr, nullptr, nullptr);
-        // 3. 创建索引
-        sqlite3_exec(conn.memDb, "CREATE INDEX IF NOT EXISTS idx_categories_kind ON categories(category_kind);", nullptr, nullptr, nullptr);
-    }
-
-    // 2026-08-xx 索引优化
-    sqlite3_exec(conn.memDb, "CREATE INDEX IF NOT EXISTS idx_categories_frn ON categories(physical_frn);", nullptr, nullptr, nullptr);
-    sqlite3_exec(conn.memDb, "CREATE INDEX IF NOT EXISTS idx_categories_kind ON categories(category_kind);", nullptr, nullptr, nullptr);
-    sqlite3_exec(conn.memDb, "CREATE INDEX IF NOT EXISTS idx_category_items_folder_id ON category_items(folder_id);", nullptr, nullptr, nullptr);
-    sqlite3_exec(conn.memDb, "CREATE INDEX IF NOT EXISTS idx_category_items_path_hint ON category_items(path_hint);", nullptr, nullptr, nullptr);
-    sqlite3_exec(conn.memDb, "CREATE INDEX IF NOT EXISTS idx_categories_parent_id ON categories(parent_id);", nullptr, nullptr, nullptr);
-    sqlite3_exec(conn.memDb, "CREATE INDEX IF NOT EXISTS idx_categories_physical_path ON categories(physical_path);", nullptr, nullptr, nullptr);
-
     conn.diskPath = diskPath;
     return true;
 }
@@ -569,9 +472,6 @@ bool DatabaseManager::init() {
     // 初始化盘符元数据表
     DriveMetaDao::initTable();
 
-    // 为每个驱动器加载数据库
-    // 注意：此处实际应遍历当前在线的驱动器，这里先简化逻辑
-    // 实际运行时，MetadataManager 会按需通过 getDriveDb 触发加载或由 init 调用
     return true;
 }
 
@@ -583,21 +483,15 @@ void DatabaseManager::flushAll(bool forceFull) {
         return;
     }
 
-
-    // 1. 锁作用域隔离：仅在提取分库句柄快照时短暂加锁（微秒级）
     DbConnection globalConn;
-    std::vector<std::pair<std::wstring, DbConnection>> driveSnapshot;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         globalConn = m_globalDb;
-        for (const auto& pair : m_driveDbs) {
-            driveSnapshot.push_back(pair);
-        }
-    } // 锁在此处立即释放！后续极耗时的 saveDb 磁盘 I/O 过程绝对不持有 m_mutex！
+    }
 
     bool allSucceeded = true;
     
-    // 2. 全局库独立加锁落盘
+    // 全局库独立加锁落盘
     {
         std::lock_guard<std::mutex> lockGlobal(m_globalDbMutex);
         if (!saveDb(globalConn, forceFull)) {
@@ -605,18 +499,8 @@ void DatabaseManager::flushAll(bool forceFull) {
         }
     }
     
-    // 3. 各驱动分库按需独立递归锁保护落盘（盘与盘之间物理并行）
-    for (auto& pair : driveSnapshot) {
-        auto dbLock = getDriveMutex(pair.first);
-        std::lock_guard<std::recursive_mutex> lockDrive(*dbLock);
-        if (!saveDb(pair.second, forceFull)) {
-            allSucceeded = false;
-        }
-    }
-    
     if (allSucceeded) {
         m_isDirty.store(false);
-    } else {
     }
 }
 
@@ -634,94 +518,11 @@ void DatabaseManager::shutdown() {
     flushAll(true);
 
     std::lock_guard<std::mutex> lock(m_mutex);
-    
-    for (auto& pair : m_driveDbs) {
-        closeDb(pair.second);
-    }
     closeDb(m_globalDb);
-}
-
-sqlite3* DatabaseManager::getDriveDb(const std::wstring& volumeSerial, const QString& driveLetter) {
-    
-    QString cleanLetter = "";
-    if (!driveLetter.isEmpty()) {
-        cleanLetter = driveLetter.at(0).toUpper();
-    }
-
-    // 1. 优先在锁内进行微秒级快速查找
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_driveDbs.find(volumeSerial) != m_driveDbs.end()) {
-            // 2026-07-xx 按照用户要求：若数据库已加载但盘符发生变化，由解耦路由计算新路径
-            if (!cleanLetter.isEmpty()) {
-                QString currentDiskPath = QString::fromStdWString(m_driveDbs[volumeSerial].diskPath);
-                QString resolvedPath = resolveVolumeDrift(volumeSerial, cleanLetter, currentDiskPath, true);
-                
-                if (currentDiskPath != resolvedPath) {
-                    
-                    DbConnection& conn = m_driveDbs[volumeSerial];
-                    saveDb(conn); // 先持久化
-                    
-                    // 关闭句柄以解除占用
-                    if (conn.memDb) sqlite3_close_v2(conn.memDb);
-                    if (conn.diskDb) sqlite3_close_v2(conn.diskDb);
-                    conn.memDb = nullptr;
-                    conn.diskDb = nullptr;
-
-                    conn.diskPath = resolvedPath.toStdWString();
-                    
-                    // 重新加载到内存
-                    loadDb(conn.diskPath, conn);
-                }
-            }
-            return m_driveDbs[volumeSerial].memDb;
-        }
-    }
-
-    // 2. 若未加载，在锁外执行较慢的物理对账和对齐，避免阻塞其他线程
-    QString resolvedPath = resolveVolumeDrift(volumeSerial, cleanLetter, "", false);
-    DbConnection conn;
-    if (loadDb(resolvedPath.toStdWString(), conn)) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_driveDbs[volumeSerial] = conn;
-        return m_driveDbs[volumeSerial].memDb;
-    }
-
-    return nullptr;
 }
 
 sqlite3* DatabaseManager::getGlobalDb() {
     return m_globalDb.memDb;
-}
-
-std::vector<sqlite3*> DatabaseManager::getActiveMemoryDbs() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    std::vector<sqlite3*> dbs;
-    if (m_globalDb.memDb) dbs.push_back(m_globalDb.memDb);
-    for (const auto& pair : m_driveDbs) {
-        if (pair.second.memDb) dbs.push_back(pair.second.memDb);
-    }
-    return dbs;
-}
-
-sqlite3* DatabaseManager::getDiskDb(sqlite3* memDb) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_globalDb.memDb == memDb) return m_globalDb.diskDb;
-    for (auto& pair : m_driveDbs) {
-        if (pair.second.memDb == memDb) return pair.second.diskDb;
-    }
-    return nullptr;
-}
-
-std::shared_ptr<std::recursive_mutex> DatabaseManager::getDriveMutex(const std::wstring& volSerial) {
-    std::lock_guard<std::mutex> lock(m_mapMutex);
-    auto it = m_driveDbMutexMap.find(volSerial);
-    if (it == m_driveDbMutexMap.end()) {
-        auto mtx = std::make_shared<std::recursive_mutex>();
-        m_driveDbMutexMap[volSerial] = mtx;
-        return mtx;
-    }
-    return it->second;
 }
 
 void DatabaseManager::incrementWriteSources() {
@@ -786,103 +587,5 @@ void DatabaseManager::workerLoop() {
     }
 }
 
-QString DatabaseManager::resolveVolumeDrift(const std::wstring& volumeSerial, const QString& driveLetter, const QString& currentDiskPathInConn, bool isLoaded) {
-    QString cleanLetter = "";
-    if (!driveLetter.isEmpty()) {
-        cleanLetter = driveLetter.at(0).toUpper();
-    }
-
-    QString appDir = getAppDir();
-    QString metaDir = appDir + "/.QuarkMeta";
-    QDir().mkpath(metaDir);
-    ensureHidden(metaDir.toStdWString());
-
-    QString serialStr = QString::fromStdWString(volumeSerial).toUpper();
-    QString expectedFileName = QString("QuarkMeta_%1%2.db").arg(serialStr).arg(cleanLetter.isEmpty() ? "" : "_" + cleanLetter);
-    QString targetPath = metaDir + "/" + expectedFileName;
-
-    if (isLoaded) {
-        if (!cleanLetter.isEmpty()) {
-            if (!currentDiskPathInConn.endsWith(expectedFileName)) {
-                
-                // 如果目标已存在且不是自己，先将其移走（按用户规则重命名为无效）
-                if (QFile::exists(targetPath) && targetPath != currentDiskPathInConn) {
-                    QString invalidBase = QString("%1/QuarkMeta_%2_无效").arg(metaDir).arg(serialStr);
-                    QString invalidPath = invalidBase + ".db";
-                    int counter = 1;
-                    while (QFile::exists(invalidPath)) {
-                        invalidPath = QString("%1_%2.db").arg(invalidBase).arg(counter++);
-                    }
-                    QFile::rename(targetPath, invalidPath);
-                }
-
-                if (QFile::rename(currentDiskPathInConn, targetPath)) {
-                    return targetPath;
-                }
-            }
-        }
-        return currentDiskPathInConn;
-    }
-
-    // 未加载时的路由/纠偏
-    if (!QFile::exists(targetPath)) {
-        QDir dir(metaDir);
-        QStringList filters;
-        filters << QString("QuarkMeta_%1*.db").arg(serialStr);
-        QFileInfoList list = dir.entryInfoList(filters, QDir::Files | QDir::Hidden | QDir::System, QDir::Time);
-
-        if (!list.isEmpty()) {
-            // Case A: 有旧文件。选择最近修改的一个作为目标进行重命名。
-            QFileInfo bestInfo = list.first();
-            if (!cleanLetter.isEmpty()) {
-                if (!QFile::rename(bestInfo.absoluteFilePath(), targetPath)) {
-                    targetPath = bestInfo.absoluteFilePath();
-                }
-            } else {
-                targetPath = bestInfo.absoluteFilePath();
-            }
-
-            // 处理冲突的其他旧文件 (Plan-97 补充要求)
-            for (int i = 1; i < list.size(); ++i) {
-                QString conflictPath = list.at(i).absoluteFilePath();
-                QString invalidBase = QString("%1/QuarkMeta_%2_无效").arg(metaDir).arg(serialStr);
-                QString invalidPath = invalidBase + ".db";
-                int counter = 1;
-                while (QFile::exists(invalidPath)) {
-                    invalidPath = QString("%1_%2.db").arg(invalidBase).arg(counter++);
-                }
-                if (QFile::rename(conflictPath, invalidPath)) {
-                    qWarning() << "[DatabaseManager] 冲突库已标注为无效:" << invalidPath;
-                } else {
-                    qWarning() << "[DatabaseManager] 冲突库标注失败，原始路径保留:" << conflictPath;
-                }
-            }
-        }
-    }
-
-    return targetPath;
-}
-
-sqlite3* DatabaseManager::getDbForPath(const std::wstring& path) { 
-    std::wstring nPath = QDir::toNativeSeparators(QString::fromStdWString(path)).toStdWString(); 
-    // 如果是程序安装目录下的全局主配置，或者无法获取卷序列号，则预热并返回全局主配置库 
-    if (nPath.length() == 3 && nPath[1] == L':' && (nPath[2] == L'\\' || nPath[2] == L'/')) { 
-        return getGlobalDb(); 
-    } 
-    std::wstring volSerial = VolumePathResolver::getVolumeSerialNumber(nPath); 
-    if (volSerial == L"UNKNOWN") { 
-        return getGlobalDb(); 
-    } 
-    QString letter = ""; 
-    if (nPath.length() >= 2 && nPath[1] == L':') { 
-        letter = QString::fromWCharArray(&nPath[0], 1); 
-    } 
-    // 100% 保证自动加载、打开、预热该分库，绝不返回 nullptr 
-    sqlite3* db = getDriveDb(volSerial, letter); 
-    if (!db) { 
-        db = getGlobalDb(); 
-    } 
-    return db; 
-} 
 
 } // namespace QuarkMeta

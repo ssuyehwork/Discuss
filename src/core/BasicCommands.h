@@ -15,7 +15,7 @@
 #include <QtConcurrent>
 #include <QCoreApplication>
 #include "../meta/FileOperationHelper.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../ui/DiskBatchRenameService.h"
 
 namespace QuarkMeta {
@@ -261,7 +261,7 @@ public:
                 } else {
                     if (mode == DiskOperationMode::Copy) {
                         QFile::remove(newPathStr);
-                        QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
+                        QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
                         if (QFile::exists(newThumbHashPath)) {
                             QFile::remove(newThumbHashPath);
                         }
@@ -274,8 +274,8 @@ public:
                         }
 
                         if (ok) {
-                            QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPathStr);
-                            QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
+                            QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPathStr);
+                            QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
                             if (QFile::exists(newThumbHashPath)) {
                                 if (mode == DiskOperationMode::Move) {
                                     FileOperationHelper::safeMove(newThumbHashPath, oldThumbHashPath);
@@ -331,8 +331,8 @@ public:
                 } else {
                     if (mode == DiskOperationMode::Copy) {
                         if (QFile::copy(oldPathStr, newPathStr)) {
-                            QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPathStr);
-                            QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
+                            QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPathStr);
+                            QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
                             if (QFile::exists(oldThumbHashPath)) {
                                 QFile::copy(oldThumbHashPath, newThumbHashPath);
                             }
@@ -346,8 +346,8 @@ public:
                         }
 
                         if (ok) {
-                            QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPathStr);
-                            QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
+                            QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPathStr);
+                            QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
                             if (QFile::exists(oldThumbHashPath)) {
                                 if (mode == DiskOperationMode::Move) {
                                     FileOperationHelper::safeMove(oldThumbHashPath, newThumbHashPath);

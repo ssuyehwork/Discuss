@@ -18,8 +18,6 @@
 #include "DropJustifiedView.h"
 #include "BatchProgressDialog.h"
 #include "ThumbnailDelegate.h"
-#include "../util/ImportHelper.h"
-#include "../util/AssetImporter.h"
 #include "../meta/QuarkMetaJson.h"
 #include "../core/NavigationHistoryService.h"
 #include "ToolTipOverlay.h" 
@@ -482,9 +480,8 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     auto* contentPanel = qobject_cast<ContentPanel*>(parent());
     ContentPanel::SortType sType = contentPanel ? contentPanel->currentSortType() : ContentPanel::SortByName;
 
-    bool isMirror = contentPanel ? contentPanel->isMirrorSource() : false;
-    if (sType == ContentPanel::SortByAddedDate && !isMirror) {
-        sType = ContentPanel::SortByName; // 磁盘导航模式下不支持“添加日期”排序，降级退化为名称排序
+    if (sType == ContentPanel::SortByAddedDate) {
+        sType = ContentPanel::SortByName;
     }
 
     auto compareNames = [](const ItemRecord& l, const ItemRecord& r) {
@@ -1759,10 +1756,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
         menu.addAction("刷新")->setData(ActionRefresh); 
 
-        // 2026-07-xx 按照 Development_Plan 2.1：始终显示“重新扫描”选项 (仅限资源库内项目)
-        if (currentIndex.data(ManagedRole).toBool()) {
-            menu.addAction(UiHelper::getIcon("sync", QColor("#378ADD"), 18), "重新扫描")->setData(ActionRescan);
-        }
 
         // 2026-07-27 按照 Plan-107：仅对已在资源库中登记的文件夹，增加“取消导入并清除数据”菜单项
         if (currentIndex.data(TypeRole).toString() == "folder" && currentIndex.data(ManagedRole).toBool()) {
@@ -1834,9 +1827,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     addTypeAct("大小", ContentPanel::SortBySize);
     addTypeAct("尺寸", ContentPanel::SortByDimension);
     addTypeAct("评分", ContentPanel::SortByRating);
-    if (isMirrorSource()) {
-        addTypeAct("添加日期", ContentPanel::SortByAddedDate);
-    }
 
     sortMenu->addSeparator();
 
@@ -1995,14 +1985,18 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             }
 
             if (!paths.isEmpty() && !target.isEmpty()) {
-                // 弱指针安全机制：避免在异步物理移动期间，ContentPanel 析构而导致的非法内存访问
-                QPointer<ContentPanel> weakThis(this);
+                DiskIoContext ioCtx;
+                ioCtx.sources = paths;
+                ioCtx.destination = target;
+                ioCtx.isMove = true;
 
-                // 执行物理迁移，并提供无缝无感刷新执行动作 (对应用户原话："行，试试吧")
-                ImportHelper::importPaths(paths, target, this, [weakThis]() {
-                    if (weakThis) {
-                        weakThis->refreshAll(); 
-                    }
+                QPointer<ContentPanel> weakThis(this);
+                DiskIoService::instance().executeAsync(ioCtx, [weakThis](bool success) {
+                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, success]() {
+                        if (weakThis && success) {
+                            weakThis->refreshAll();
+                        }
+                    });
                 });
             }
             break;
@@ -2011,25 +2005,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         case ActionCopy: performCopy(false); break; 
         case ActionCut: performCopy(true); break; 
         case ActionPaste: performPaste(); break; 
-        case ActionRescan: {
-            auto indexes = view->selectionModel()->selectedIndexes();
-            QStringList targetPaths;
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0) {
-                    QString p = idx.data(PathRole).toString();
-                    if (!p.isEmpty()) targetPaths << p;
-                }
-            }
-            if (targetPaths.isEmpty() && !path.isEmpty()) targetPaths << path;
-
-            if (!targetPaths.isEmpty()) {
-                // 2026-08-xx 按照 Plan-126：用户手动发起的“重新扫描”应属于元数据刷新
-                // 此时依然允许通过 MetadataManager 执行，但不应作为常规“入库”手段
-                MetadataManager::instance().registerItemsAsync(targetPaths, true);
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已启动物理状态同步", 1500, QColor("#378ADD"));
-            }
-            break;
-        }
         case ActionCancelImport: {
             auto indexes = view->selectionModel()->selectedIndexes();
             QStringList targetPaths;
@@ -2433,14 +2408,6 @@ void ContentPanel::performPaste() {
                 }
             });
         });
-    } else {
-        QString msg = QString("确定要将剪贴板中的 %1 个项目分流导入并打包至该分类吗？").arg(fromPaths.size());
-        if (FramelessMessageBox::question(this, "资产导入", msg)) {
-            QPointer<ContentPanel> weakThis(this);
-            AssetImporter::importAssets(fromPaths, targetCatId, this, [weakThis]() {
-                if (weakThis) weakThis->refreshAll();
-            });
-        }
     }
 } 
  
@@ -2500,16 +2467,6 @@ ContentPanel::DataSourceType ContentPanel::dataSourceType() const {
     return DataSourceType::DiskNav;
 }
 
-bool ContentPanel::isMirrorSource() const {
-    return false; // 纯磁盘模式，彻底锁定为 false
-}
-
-bool ContentPanel::isManagedContext() const { 
-    // 🚨 [双轨不隔离违规点-2 物理隔离修复]: 磁盘模式与内存模式 100% 绝对物理隔离。 
-    // 在磁盘模式（isMirrorSource() == false）下直接返回 false，绝不穿透查询资源库，拒绝一切逻辑混叠。 
-    if (isMirrorSource()) return true; 
-    return false; 
-} 
 
 void ContentPanel::onSelectionChanged() { 
     // 1. 初始化 30ms 防抖定时器
@@ -2588,73 +2545,44 @@ void ContentPanel::clearFolderCache(const QString& folderPath) {
 
 void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex) {
     if (paths.isEmpty()) return;
+    if (m_currentPath.isEmpty() || m_currentPath == "computer://") return;
 
-    if (dataSourceType() == DataSourceType::DiskNav) {
-        if (m_currentPath.isEmpty() || m_currentPath == "computer://") return;
-        // 【分流 A：磁盘导航模式】──> 执行标准的操作系统级物理粘贴/复制，绝不调用 AssetImporter！
-        QString destDir = m_currentPath;
-        if (targetIndex.isValid()) {
-            QModelIndex srcIdx = m_proxyModel->mapToSource(targetIndex);
-            if (srcIdx.isValid()) {
-                QString targetPath = srcIdx.data(PathRole).toString();
-                if (!targetPath.isEmpty() && QFileInfo(targetPath).isDir()) {
-                    destDir = targetPath;
-                }
+    QString destDir = m_currentPath;
+    if (targetIndex.isValid()) {
+        QModelIndex srcIdx = m_proxyModel->mapToSource(targetIndex);
+        if (srcIdx.isValid()) {
+            QString targetPath = srcIdx.data(PathRole).toString();
+            if (!targetPath.isEmpty() && QFileInfo(targetPath).isDir()) {
+                destDir = targetPath;
             }
-        }
-
-        // 检查是否在原地投放
-        bool sameDir = true;
-        for (const QString& p : paths) {
-            if (QDir::toNativeSeparators(QFileInfo(p).absolutePath()) != QDir::toNativeSeparators(destDir)) {
-                sameDir = false;
-                break;
-            }
-        }
-        if (sameDir && destDir == m_currentPath) return;
-
-        bool isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
-        
-        // 🚀 【双轨绝对隔离】：DiskNav 磁盘导航模式下直接调用 DiskIoService，绝对禁止穿透调用 MetadataManager！ 
-        DiskIoContext ioCtx; 
-        ioCtx.sources = paths; 
-        ioCtx.destination = destDir; 
-        ioCtx.isMove = isMove; 
- 
-        QPointer<ContentPanel> weakThis(this); 
-        DiskIoService::instance().executeAsync(ioCtx, [weakThis](bool success) { 
-            QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, success]() { 
-                if (weakThis && success) { 
-                    weakThis->loadDirectory(weakThis->m_currentPath, weakThis->m_isRecursive); 
-                } 
-            }); 
-        }); 
-    } else {
-        // 优先尊重"拖拽到具体子分类节点上"这个更精确的用户意图
-        int targetCatId = 0;
-        bool droppedOnCategoryNode = false;
-        if (targetIndex.isValid()) {
-            QModelIndex srcIdx = m_proxyModel->mapToSource(targetIndex);
-            if (srcIdx.isValid() && srcIdx.data(TypeRole).toString() == "category") {
-                targetCatId = srcIdx.data(CategoryIdRole).toInt();
-                droppedOnCategoryNode = true;
-            }
-        }
-
-        if (!droppedOnCategoryNode) {
-            // 没有拖拽到具体子分类节点上，则退回统一的目的地判断规则
-            // （磁盘模式已在上面 return，这里只会命中 UserCategory / 聚合视图 / 回收站三种情形）
-            if (!resolvePasteDestination(targetCatId)) return;
-        }
-
-        QString msg = QString("确定要将选中的 %1 个项目分流导入并打包至资源库吗？").arg(paths.size());
-        if (FramelessMessageBox::question(this, "资产导入", msg)) {
-            QPointer<ContentPanel> weakThis(this);
-            AssetImporter::importAssets(paths, targetCatId, this, [weakThis]() {
-                if (weakThis) weakThis->refreshAll();
-            });
         }
     }
+
+    // 检查是否在原地投放
+    bool sameDir = true;
+    for (const QString& p : paths) {
+        if (QDir::toNativeSeparators(QFileInfo(p).absolutePath()) != QDir::toNativeSeparators(destDir)) {
+            sameDir = false;
+            break;
+        }
+    }
+    if (sameDir && destDir == m_currentPath) return;
+
+    bool isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
+    
+    DiskIoContext ioCtx; 
+    ioCtx.sources = paths; 
+    ioCtx.destination = destDir; 
+    ioCtx.isMove = isMove; 
+
+    QPointer<ContentPanel> weakThis(this); 
+    DiskIoService::instance().executeAsync(ioCtx, [weakThis](bool success) { 
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, success]() { 
+            if (weakThis && success) { 
+                weakThis->loadDirectory(weakThis->m_currentPath, weakThis->m_isRecursive); 
+            } 
+        }); 
+    }); 
 }
 
 void ContentPanel::onDoubleClicked(const QModelIndex& index) { 
@@ -3226,13 +3154,6 @@ void ContentPanel::updateLayersButtonState() {
         return; 
     } 
 
-    // 2026-07-xx 逻辑增强：若处于搜索或其他路径列表模式（即非物理磁盘导航，即镜像源），禁用递归功能
-    if (isMirrorSource()) {
-        m_btnLayers->setEnabled(false);
-        m_btnLayers->setChecked(false);
-        m_btnLayers->setProperty("tooltipText", "当前视图不支持递归显示");
-        return;
-    }
  
     m_btnLayers->setEnabled(true); 
     m_btnLayers->setProperty("tooltipText", "显示子文件夹中的项目"); 

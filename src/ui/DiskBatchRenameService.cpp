@@ -1,6 +1,6 @@
 #include "DiskBatchRenameService.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../meta/FileOperationHelper.h"
 #include <QFileInfo>
 #include <QDir>
@@ -46,8 +46,8 @@ void DiskBatchRenameService::execute(const std::vector<std::wstring>& originalPa
                 successCount++;
 
                 // 同步处理 Hash 缩略图 (后台线程执行)
-                QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPath);
-                QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
+                QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPath);
+                QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
 
                 if (QFile::exists(oldThumbHashPath)) {
                     if (mode == DiskOperationMode::Copy) {

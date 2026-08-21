@@ -5,7 +5,7 @@
 #include "MediaExtractorPipeline.h"
 #include "MetadataManager.h"
 #include "../core/CoreController.h"
-#include "CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../ui/MediaColorExtractor.h"
 #include "../ui/ImageDecoderFacade.h"
 #include "../ui/ColorAlgorithmEngine.h"
@@ -169,7 +169,7 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                     item.height = dec.originalSize.height();
 
                     // 1. 写入 File ID 高清缩略图缓存 (JPEG 85)
-                    CapsuleMediaExtractor::saveDiskThumbnail(qPath, dec.thumbnail512);
+                    DiskMediaExtractor::saveDiskThumbnail(qPath, dec.thumbnail512);
 
                     // 2. 内存 64x64 快速测色 (<0.5ms)
                     auto pal = ColorAlgorithmEngine::extractPaletteFromImage(dec.thumbnail512);
@@ -232,7 +232,7 @@ void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
     
     if (!m_isCanceled.load()) {
         if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
-            QImage thumb = CapsuleMediaExtractor::getCapsuleThumbnail(qPath, 512);
+            QImage thumb = DiskMediaExtractor::getCapsuleThumbnail(qPath, 512);
             if (!thumb.isNull()) {
                 auto pal = ColorAlgorithmEngine::extractPaletteFromImage(thumb);
                 if (!pal.isEmpty()) {
@@ -273,7 +273,7 @@ void MediaExtractorPipeline::extractDimensions(const std::wstring& path, int& ou
     if (!info.isFile()) return;
 
     if (info.suffix().toLower() == "svg") {
-        std::lock_guard<std::mutex> guiLock(CapsuleMediaExtractor::s_qtGuiMutex);
+        std::lock_guard<std::mutex> guiLock(DiskMediaExtractor::s_qtGuiMutex);
         QSvgRenderer renderer(info.absoluteFilePath());
         if (renderer.isValid()) {
             QSize sz = renderer.defaultSize();

@@ -25,7 +25,7 @@
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
 #include "../meta/DuplicateDetectorService.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../util/DiskMediaExtractor.h"
 #include "DuplicateConflictDialog.h"
 #include "TaskProgressToolBar.h"
@@ -1469,46 +1469,27 @@ void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
         }
     }
 
-    // 3. 协议分流加载
-    if (url.startsWith(kProtocolCategory)) {
-        // category://{id}?name={name}
-        QString params = url.mid(kProtocolCategory.length());
-        int qMark = params.indexOf('?');
-        QString rawIds = params.left(qMark == -1 ? params.length() : qMark);
-        QString name = (qMark != -1) ? params.mid(qMark + 6) : rawIds;
+    // 3. 协议加载
+    m_contentPanel->show();
+    loadPanelVisibility();
 
-        QList<int> ids;
-        for (const QString& part : rawIds.split(",", Qt::SkipEmptyParts)) {
-            bool ok;
-            int parsed = part.toInt(&ok);
-            if (ok) ids.append(parsed);
-        }
-
-        m_currentPath = url; // 逻辑路径
-    }
-    else {
-        // 2026-08-xx 按照 Plan-128：常规导航，根据记忆状态恢复显示
-        m_contentPanel->show();
-        loadPanelVisibility();
-
-        // 物理路径 (file:// 或 原生路径)
-        QString path = url;
-        if (path.startsWith(kProtocolFile)) path = path.mid(kProtocolFile.length());
-        
-        if (path == "computer://") {
-            if (m_addressBar) m_addressBar->setPath("computer://");
-            if (m_contentPanel) m_contentPanel->loadDirectory("");
-            if (m_navPanel) m_navPanel->selectPath("computer://");
-            m_currentPath = "computer://";
-        } else {
-            QString normPath = QDir::toNativeSeparators(path);
-            if (m_addressBar) m_addressBar->setPath(normPath);
-            if (m_contentPanel) m_contentPanel->loadDirectory(normPath);
-            if (m_navPanel) m_navPanel->selectPath(normPath);
-            m_currentPath = normPath;
-            // 物理导航历史与业务剥离由 Controller 统一接管
-            NavigationHistoryService::recordRecentVisitedFolder(normPath.toStdWString());
-        }
+    // 物理路径 (file:// 或 原生路径)
+    QString path = url;
+    if (path.startsWith(kProtocolFile)) path = path.mid(kProtocolFile.length());
+    
+    if (path == "computer://") {
+        if (m_addressBar) m_addressBar->setPath("computer://");
+        if (m_contentPanel) m_contentPanel->loadDirectory("");
+        if (m_navPanel) m_navPanel->selectPath("computer://");
+        m_currentPath = "computer://";
+    } else {
+        QString normPath = QDir::toNativeSeparators(path);
+        if (m_addressBar) m_addressBar->setPath(normPath);
+        if (m_contentPanel) m_contentPanel->loadDirectory(normPath);
+        if (m_navPanel) m_navPanel->selectPath(normPath);
+        m_currentPath = normPath;
+        // 物理导航历史与业务剥离由 Controller 统一接管
+        NavigationHistoryService::recordRecentVisitedFolder(normPath.toStdWString());
     }
 
     if (m_filterPanel && m_contentPanel) {

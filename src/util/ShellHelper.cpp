@@ -16,43 +16,12 @@
 #include "../meta/MetadataManager.h"
 #include "../meta/StatisticsService.h"
 #include "../meta/QuarkMetaJson.h"
+#include "../core/DiskTrashService.h"
 
 namespace QuarkMeta {
 
 bool ShellHelper::moveToTrash(const QStringList& paths) {
-    if (paths.isEmpty()) return true;
-    
-    bool allOk = true;
-    for (const QString& p : paths) {
-        QFileInfo info(p);
-        QString drive = info.absolutePath().left(3); // e.g. "C:/"
-        QString trashDir = drive + ".QuarkMeta/trash";
-        QDir().mkpath(trashDir);
-        
-#ifdef Q_OS_WIN
-        // 确保 .QuarkMeta 目录隐藏
-        SetFileAttributesW((drive + ".QuarkMeta").toStdWString().c_str(), FILE_ATTRIBUTE_HIDDEN);
-#endif
-
-        QString dest = trashDir + "/" + info.fileName();
-        // 冲突处理：如果回收站已有同名文件，增加时间戳后缀
-        if (QFile::exists(dest)) {
-            dest = trashDir + "/" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss_") + info.fileName();
-        }
-
-        // 1. 物理移动
-        if (QFile::rename(p, dest)) {
-            // 2. 数据库同步：标记为回收站，记忆原路径
-            MetadataManager::instance().markAsTrash(dest.toStdWString(), true, p.toStdWString());
-        } else {
-            allOk = false;
-        }
-    }
-
-    if (allOk) {
-        StatisticsService::instance().requestFullRecountAsync();
-    }
-    return allOk;
+    return DiskTrashService::moveToDiskTrash(paths);
 }
 
 bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString& destDir, bool isMove) {

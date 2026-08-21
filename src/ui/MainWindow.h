@@ -104,7 +104,6 @@ private:
 
     // 2026-07-xx 导航协议常量
     static inline const QString kProtocolFile     = "file://";
-    static inline const QString kProtocolCategory = "category://";
     static inline const QString kProtocolSystem   = "system://";
 
     /**

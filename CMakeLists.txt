@@ -121,10 +121,6 @@ set(SOURCES
     src/ui/UndoToastOverlay.h
     src/ui/BreadcrumbBar.cpp
     src/ui/BreadcrumbBar.h
-    src/ui/CategoryLockDialog.cpp
-    src/ui/CategoryLockDialog.h
-    src/ui/CategoryLockWidget.cpp
-    src/ui/CategoryLockWidget.h
     src/ui/ColorPicker.cpp
     src/ui/ColorPicker.h
     src/ui/ContentPanel.cpp
@@ -225,14 +221,8 @@ set(SOURCES
     src/ui/ColorAlgorithmEngine.cpp
     src/util/DiskMediaExtractor.h
     src/util/DiskMediaExtractor.cpp
-    src/meta/CapsuleMediaExtractor.h
-    src/meta/CapsuleMediaExtractor.cpp
     src/util/ShellHelper.cpp
     src/util/ShellHelper.h
-    src/util/ImportHelper.cpp
-    src/util/ImportHelper.h
-    src/util/AssetImporter.cpp
-    src/util/AssetImporter.h
     QuarkMeta.rc
     resources/resources.qrc
 )

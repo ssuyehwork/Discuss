@@ -6,7 +6,7 @@
 #include "../meta/MetadataManager.h" 
 #include "../meta/DatabaseManager.h" 
 #include "../ui/MediaColorExtractor.h" 
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../meta/MediaExtractorPipeline.h"
 #include <QDir> 
 #include <QFileInfo> 

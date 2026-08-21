@@ -44,7 +44,6 @@ private:
     void createTag(const QString& tagName);
 
     QString m_currentPath;
-    bool m_isMirrorSource = false;
     QString m_currentFilter = "all"; // "all" | "uncategorized" | "frequent"
 
     // 顶部组件

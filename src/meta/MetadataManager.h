@@ -32,7 +32,6 @@ struct RuntimeMeta {
     bool encrypted;
     bool isFolder; // 2026-06-xx 物理标记：区分文件夹与文件，用于侧边栏精准统计
     bool isTrash;  // 2026-06-xx 状态标记：是否处于回收站
-    bool isManaged; // 2026-06-xx 物理对标：标记该项是否已在数据库中登记
     int ingestionStatus; // 2026-07-xx 状态标记：-1: 未知, 0: 待处理, 1: 已完成
     int width;      // 2026-07-xx 物理尺寸：宽 (像素)
     int height;     // 2026-07-xx 物理尺寸：高 (像素)
@@ -41,7 +40,6 @@ struct RuntimeMeta {
     std::wstring baseName; // 2026-08-xx 持久化基名，避免重复解析计算
     std::wstring ext;      // 2026-08-xx 持久化后缀名，统一小写
     std::string sha256;    // 新增：储存文件的 SHA256 / FastHash 哈希值
-    std::vector<int> categoryIds; // 🚨 SSOT 核心：资产直接在内存中持有其绑定的分类 ID 列表
     
     // 2026-06-xx 物理对标：补充时间戳与大小字段
     long long ctime;
@@ -52,14 +50,13 @@ struct RuntimeMeta {
 
     std::vector<PaletteEntry> palettes;
 
-    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), isTrash(false), isManaged(false), ingestionStatus(-1), width(0), height(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
+    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), isTrash(false), ingestionStatus(-1), width(0), height(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
 
     /**
-     * @brief 判定是否有用户操作过的信息，作为“已录入/受控”状态的感应逻辑
-     * 2026-06-xx 按照用户要求：只要有任何元数据修改或已登记，即视为数据库已录入项
+     * @brief 判定是否有用户操作过的信息
      */
     bool hasUserOperations() const {
-        return isManaged || rating > 0 || !manualColor.empty() || !autoColor.empty() || !tags.isEmpty() || !note.empty() || !url.empty() || pinned || encrypted;
+        return rating > 0 || !manualColor.empty() || !autoColor.empty() || !tags.isEmpty() || !note.empty() || !url.empty() || pinned || encrypted;
     }
 };
 
@@ -117,13 +114,6 @@ public:
     QList<QPair<QString, int>> getTopTags(int limit = 20) const;
 
     /**
-     * @brief 🚨 SSOT 核心：内存分类关联维护接口
-     */
-    void addCategoryToItemMemory(const std::wstring& path, int categoryId);
-    void removeCategoryFromItemMemory(const std::wstring& path, int categoryId);
-    void clearCategoriesFromItemMemory(const std::wstring& path);
-
-    /**
      * @brief 物理刷新级别
      */
     enum class RefreshLevel {
@@ -149,16 +139,6 @@ public:
      * 替代 emit metaChanged("__RELOAD_ALL__")
      */
     void notifyFullUIRebuild();
-
-    /**
-     * @brief 🚨 SSOT 重构核心：单一权威资产入库登记管线
-     */
-    bool registerAsset(const std::string& folderId, const std::wstring& assetPath, int targetCatId);
-
-    /**
-     * @brief 🚨 SSOT 重构核心：跨盘托管库胶囊物理迁移（跨盘 1:1 重锚定）
-     */
-    std::string migrateCapsuleToLibrary(const std::string& assetId, const QString& targetLibraryPath);
 
     /**
      * @brief 一站式项目注册流程（受控模式）
@@ -228,7 +208,6 @@ public:
     void setURL(const std::wstring& path, const std::wstring& url, bool notify = true);
     void setEncrypted(const std::wstring& path, bool encrypted, bool notify = true);
 
-    void setManaged(const std::wstring& path, bool managed, bool notify = true);
     void setPalettes(const std::wstring& path, const QVector<QPair<QColor, float>>& palettes, bool notify = true);
 
     struct ExtractedFeatureItem {
@@ -333,18 +312,6 @@ public:
      * @brief 获取路径所在磁盘的卷序列号
      */
     static std::wstring getVolumeSerialNumber(const std::wstring& path);
-
-    /**
-     * @brief 判定给定路径是否位于任何磁盘的资源库文件夹内部
-     * 2026-07-xx 按照 Plan-117：收拢物理路径归属判定逻辑
-     */
-    static bool isInsideManagedLibrary(const std::wstring& path);
-
-    /**
-     * @brief 获取指定卷的资源库绝对路径
-     * 2026-07-xx 按照 Plan-118：整合配置查询与约定兜底逻辑，确保全系统识别一致性
-     */
-    static std::wstring getManagedLibraryPath(const std::wstring& volSerial, const QString& driveLetter);
 
     /**
      * @brief 物理操作原子事务计数，精确闭锁生命周期

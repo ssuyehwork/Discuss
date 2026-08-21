@@ -13,7 +13,7 @@
 #include "../../util/DiskMediaExtractor.h"
 #include "../DiskBatchRenameService.h"
 #include "../../meta/FileOperationHelper.h"
-#include "../../meta/CapsuleMediaExtractor.h"
+#include "../../util/DiskMediaExtractor.h"
 #include "../../meta/MetadataManager.h"
 
 using namespace QuarkMeta;
@@ -149,8 +149,8 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             success = true;
 
             // 同步对 .QuarkMeta/disk_thumbs/ 中的哈希缩略图进行重命名
-            QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPath);
-            QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
+            QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPath);
+            QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
 
             if (QFile::exists(oldThumbHashPath)) {
                 FileOperationHelper::safeRename(oldThumbHashPath, newThumbHashPath);
@@ -286,7 +286,7 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
         QThreadPool::globalInstance()->start([weakThis, path, thisGen]() {
             if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
-            QImage img = CapsuleMediaExtractor::getCapsuleThumbnail(path, 512);
+            QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, 512);
 
             if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
@@ -391,7 +391,7 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == TagsRole) {
         return record.tags;
     } else if (role == ManagedRole) {
-        return record.isManaged;
+        return false;
     } else if (role == RegistrationProgressRole) {
         return record.registrationProgress;
     } else if (role == CategoryIdRole) {

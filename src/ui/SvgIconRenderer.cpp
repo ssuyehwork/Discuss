@@ -1,6 +1,6 @@
 #include "SvgIconRenderer.h"
 #include "SvgIcons.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include <QSvgRenderer>
 #include <QPainter>
 #include <QBuffer>
@@ -24,7 +24,7 @@ QPixmap SvgIconRenderer::renderIcon(const QString& key, const QSize& size, const
     QString svgData = SvgIcons::icons[key];
     svgData.replace("currentColor", color.name());
 
-    std::lock_guard<std::mutex> guard(CapsuleMediaExtractor::s_qtGuiMutex);
+    std::lock_guard<std::mutex> guard(DiskMediaExtractor::s_qtGuiMutex);
     QPixmap pixmap(size);
     pixmap.fill(Qt::transparent);
     QPainter painter(&pixmap);

@@ -4,7 +4,7 @@
 #include "MediaColorExtractor.h"
 #include "QuickLookMinimap.h"
 #include "../util/DiskMediaExtractor.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "StyleLibrary.h"
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -422,7 +422,7 @@ void QuickLookWindow::renderImage(const QString& path) {
             }
         } else if (ext == "ai" || ext == "eps" || ext == "psd" || ext == "psb") {
             if (isInsideArc) {
-                img = CapsuleMediaExtractor::getCapsuleThumbnail(path, 2048);
+                img = DiskMediaExtractor::getCapsuleThumbnail(path, 2048);
             } else {
                 img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
             }
@@ -430,7 +430,7 @@ void QuickLookWindow::renderImage(const QString& path) {
             img.load(path);
         } else {
             if (isInsideArc) {
-                img = CapsuleMediaExtractor::getCapsuleThumbnail(path, 2048);
+                img = DiskMediaExtractor::getCapsuleThumbnail(path, 2048);
             } else {
                 img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
             }

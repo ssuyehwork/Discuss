@@ -19,7 +19,8 @@ void TagManagerDialog::showDialog(QWidget* parent, const QString& currentPath, b
 }
 
 TagManagerDialog::TagManagerDialog(const QString& currentPath, bool isMirrorSource, QWidget* parent)
-    : FramelessDialog("标签管理", parent), m_currentPath(currentPath), m_isMirrorSource(isMirrorSource) {
+    : FramelessDialog("标签管理", parent), m_currentPath(currentPath) {
+    Q_UNUSED(isMirrorSource);
     
     // 严格锁定：默认 1000x800，最小尺寸限制为 800x600，支持自由拖拽缩放
     setMinimumSize(800, 600);
@@ -221,24 +222,18 @@ void TagManagerDialog::onSearchTextChanged(const QString& text) {
 void TagManagerDialog::createTag(const QString& tagName) {
     if (tagName.isEmpty()) return;
 
-    if (m_isMirrorSource) {
-        // 双轨之一：托管库模式 -> 写入 MetadataManager / SQLite
-        MetadataManager::instance().setTags(m_currentPath.toStdWString(), QStringList() << tagName);
-    } else {
-        // 双轨之二：磁盘导航模式 -> 写入本地 .QuarkMeta.json
-        QFileInfo info(m_currentPath);
-        QuarkMetaJson amJson(info.absolutePath().toStdWString());
-        amJson.load();
-        ItemMeta& item = amJson.items()[info.fileName().toStdWString()];
-        
-        bool exists = false;
-        for (const auto& t : item.tags) {
-            if (QString::fromStdWString(t) == tagName) { exists = true; break; }
-        }
-        if (!exists) {
-            item.tags.push_back(tagName.toStdWString());
-            amJson.save();
-        }
+    QFileInfo info(m_currentPath);
+    QuarkMetaJson amJson(info.absolutePath().toStdWString());
+    amJson.load();
+    ItemMeta& item = amJson.items()[info.fileName().toStdWString()];
+    
+    bool exists = false;
+    for (const auto& t : item.tags) {
+        if (QString::fromStdWString(t) == tagName) { exists = true; break; }
+    }
+    if (!exists) {
+        item.tags.push_back(tagName.toStdWString());
+        amJson.save();
     }
 
     // 实时更新规则：新新增的标签瞬时挂载到“最近使用”区域首位
@@ -249,18 +244,7 @@ void TagManagerDialog::createTag(const QString& tagName) {
 }
 
 void TagManagerDialog::refreshTags() {
-    // 双轨分流拉取标签数据...
-    if (m_isMirrorSource) {
-        m_allTagCounts = MetadataManager::instance().getAllTags();
-    } else {
-        QFileInfo info(m_currentPath);
-        QuarkMetaJson amJson(info.absolutePath().toStdWString());
-        amJson.load();
-        m_allTagCounts.clear();
-        for (const auto& [name, item] : amJson.items()) {
-            for (const auto& t : item.tags) m_allTagCounts[QString::fromStdWString(t)]++;
-        }
-    }
+    m_allTagCounts = MetadataManager::instance().getAllTags();
 
     // 清理标签滚动区域
     while (QLayoutItem* item = m_tagsScrollLayout->takeAt(0)) {

@@ -69,38 +69,14 @@ public:
     void shutdown();
 
     /**
-     * @brief 获取指定磁盘卷序列号对应的内存连接
-     * @param volumeSerial 磁盘卷序列号（如 A1B2C3D4）
-     * @param driveLetter 盘符（如 "D" 或 "D:"），可选。若提供则触发数据库文件名自适应重命名。
-     */
-    sqlite3* getDriveDb(const std::wstring& volumeSerial, const QString& driveLetter = "");
-
-    /**
      * @brief 获取全局数据库内存连接
      */
     sqlite3* getGlobalDb();
 
-    /** 
-     * @brief 统一数据库访问入口：根据路径自动预热并 100% 返回有效数据库连接句柄 
-     * 保证在多线程下也绝不返回 nullptr 且实现同库同连接。 
-     */ 
-    sqlite3* getDbForPath(const std::wstring& path); 
-
     /**
-     * @brief 获取所有当前已加载的内存数据库连接
-     */
-    std::vector<sqlite3*> getActiveMemoryDbs();
-
-    /**
-     * @brief 获取指定内存连接对应的磁盘连接（仅供异步同步使用）
-     */
-    sqlite3* getDiskDb(sqlite3* memDb);
-
-    /**
-     * @brief 2026-08-xx：按盘符/按资源拆分锁粒度，支持高并发 WAL 模式
+     * @brief 支持高并发 WAL 模式
      */
     std::mutex& getGlobalMutex() { return m_globalDbMutex; }
-    std::shared_ptr<std::recursive_mutex> getDriveMutex(const std::wstring& volSerial);
 
     /**
      * @brief 增减并发写入源计数以及控制脏标记
@@ -170,7 +146,6 @@ private:
         bool m_moved = false;
     };
 
-    std::map<std::wstring, DbConnection> m_driveDbs;
     DbConnection m_globalDb;
     std::mutex m_mutex;
     QRecursiveMutex m_dbMutex;
@@ -180,15 +155,10 @@ private:
     std::atomic<bool> m_isDirty{false};
 
     std::mutex m_globalDbMutex;
-    std::mutex m_mapMutex;
-    std::unordered_map<std::wstring, std::shared_ptr<std::recursive_mutex>> m_driveDbMutexMap;
 
     bool loadDb(const std::wstring& diskPath, DbConnection& conn);
     bool saveDb(DbConnection& conn, bool forceFull = false);
     void closeDb(DbConnection& conn);
-
-    QString resolveVolumeDrift(const std::wstring& volumeSerial, const QString& driveLetter,
-                               const QString& currentDiskPathInConn = "", bool isLoaded = false);
 
     QString getAppDir();
 };
