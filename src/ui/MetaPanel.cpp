@@ -10,6 +10,8 @@
 #include <QRegularExpressionValidator>
 #include <QDir>
 #include <QFile>
+#include <QApplication>
+#include <QScreen>
 
 namespace QuarkMeta {
 
@@ -119,7 +121,19 @@ void MetaPanel::initUi() {
         } 
         
         m_tagSelectorOverlay = new TagSelectorOverlay(currentTags, this->topLevelWidget()); 
-        QPoint globalPos = m_btnAddTag->mapToGlobal(QPoint(0, m_btnAddTag->height() + 4)); 
+        int panelLeftX = this->mapToGlobal(QPoint(0, 0)).x();
+        int btnBottomY = m_btnAddTag->mapToGlobal(QPoint(0, m_btnAddTag->height() + 4)).y();
+
+        QScreen* screen = QApplication::screenAt(QPoint(panelLeftX, btnBottomY));
+        if (screen) {
+            QRect screenGeo = screen->availableGeometry();
+            if (btnBottomY + m_tagSelectorOverlay->height() > screenGeo.bottom()) {
+                int btnTopY = m_btnAddTag->mapToGlobal(QPoint(0, 0)).y();
+                btnBottomY = btnTopY - m_tagSelectorOverlay->height() - 4;
+            }
+        }
+
+        QPoint globalPos(panelLeftX, btnBottomY); 
         QPoint parentPos = this->topLevelWidget()->mapFromGlobal(globalPos); 
         m_tagSelectorOverlay->move(parentPos); 
         m_tagSelectorOverlay->show(); 

@@ -1,5 +1,7 @@
 #include "CoreEngine.h"
 #include "../meta/MetadataManager.h"
+#include "../meta/TagRepository.h"
+#include "../meta/QuarkMetaJson.h"
 #include "../util/ShellHelper.h"
 
 namespace QuarkMeta {
@@ -43,7 +45,13 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         break;
     }
     case AppCommandType::AddTag: {
-        QString tag = cmd.params.value("tag").toString();
+        QString tag = cmd.params.value("tag").toString().trimmed();
+        if (tag.isEmpty()) break;
+
+        // 🚨 铁律第一步：先将新标签登记到 global.db 主词典（默认归入未分类/全局）
+        TagRepository::addTagToGroup(tag, -1);
+
+        // 🚨 铁律第二步：再绑定到各个选中项目的 .QuarkMeta.json 与内存
         for (const QString& path : cmd.targetPaths) {
             auto meta = MetadataManager::instance().getMeta(path.toStdWString());
             QStringList curTags = meta.tags;
@@ -59,7 +67,7 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         break;
     }
     case AppCommandType::RemoveTag: {
-        QString tag = cmd.params.value("tag").toString();
+        QString tag = cmd.params.value("tag").toString().trimmed();
         for (const QString& path : cmd.targetPaths) {
             auto meta = MetadataManager::instance().getMeta(path.toStdWString());
             QStringList curTags = meta.tags;
@@ -73,17 +81,32 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         break;
     }
     case AppCommandType::RenameTag: {
-        QString oldTag = cmd.params.value("oldTag").toString();
-        QString newTag = cmd.params.value("newTag").toString();
+        QString oldTag = cmd.params.value("oldTag").toString().trimmed();
+        QString newTag = cmd.params.value("newTag").toString().trimmed();
+        if (oldTag.isEmpty() || newTag.isEmpty() || oldTag == newTag) break;
+
+        // 1. global.db 主词典重命名
+        TagRepository::removeTagFromGroup(oldTag, -1);
+        TagRepository::addTagToGroup(newTag, -1);
+
+        // 2. 内存与磁盘 .QuarkMeta.json 级联更新
         MetadataManager::instance().renameTag(oldTag, newTag);
+
         AppEvent ev;
         ev.type = AppEventType::MetadataUpdated;
         CentralEventHub::instance().publishEvent(ev);
         break;
     }
     case AppCommandType::RemoveGlobalTag: {
-        QString tag = cmd.params.value("tag").toString();
+        QString tag = cmd.params.value("tag").toString().trimmed();
+        if (tag.isEmpty()) break;
+
+        // 1. global.db 主词典彻底擦除
+        TagRepository::removeTagFromGroup(tag, -1);
+
+        // 2. 内存与磁盘 .QuarkMeta.json 级联擦除
         MetadataManager::instance().removeTag(tag);
+
         AppEvent ev;
         ev.type = AppEventType::MetadataUpdated;
         CentralEventHub::instance().publishEvent(ev);
@@ -166,6 +189,15 @@ void CoreEngine::handleSetColor(const QStringList& paths, const QString& color) 
 }
 
 void CoreEngine::handleSetTags(const QStringList& paths, const QStringList& tags) {
+    // 🚨 铁律第一步：确保这一批标签全部已在 global.db 主词典中登记
+    for (const QString& t : tags) {
+        QString cleanTag = t.trimmed();
+        if (!cleanTag.isEmpty()) {
+            TagRepository::addTagToGroup(cleanTag, -1);
+        }
+    }
+
+    // 🚨 铁律第二步：物理落盘到各文件 .QuarkMeta.json
     for (const QString& path : paths) {
         MetadataManager::instance().setTags(path.toStdWString(), tags, false);
         

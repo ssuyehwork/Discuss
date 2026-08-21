@@ -43,6 +43,7 @@ private:
     // 8方向拉伸大小和拖拽移动辅助函数
     void updateCursorShape(const QPoint& pos);
     int getResizeDirection(const QPoint& pos);
+    bool isInteractiveChild(QWidget* child) const;
 
     QStringList m_selectedTags;
     QStringList m_displayedTags;

@@ -863,12 +863,13 @@ void MetadataManager::setRating(const std::wstring& path, int rating, bool notif
         std::unique_lock<std::shared_mutex> lock(m_shards[idx].mutex);
         m_shards[idx].items[nPath].rating = rating;
     }
-    if (notify) {
-        notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
-    }
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
+
+    // 🚨 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [rating](ItemMeta& item) {
+        item.rating = rating;
     });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
 void MetadataManager::setSha256(const std::wstring& path, const std::string& sha256, bool notify) {
@@ -1079,35 +1080,18 @@ void MetadataManager::setColor(const std::wstring& path, const std::wstring& col
         return;
     }
     ensureActivated(nPath);
-    
-    bool changed = false;
-    bool isFolder = false;
-    { 
-        std::unique_lock<std::shared_mutex> lock(m_mutex); 
-        size_t idx = getShardIndex(nPath);
-        {
-            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            auto it = m_shards[idx].items.find(nPath);
-            if (it != m_shards[idx].items.end()) {
-                isFolder = it->second.isFolder;
-                if (it->second.manualColor != normColor) {
-                    it->second.manualColor = normColor;
-                    changed = true;
-                }
-            } else {
-                m_shards[idx].items[nPath].manualColor = normColor;
-                changed = true;
-            }
-        }
+    size_t idx = getShardIndex(nPath);
+    {
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].manualColor = normColor;
     }
-    
-    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 
-    if (changed) {
-        DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-            persistAsync(nPath);
-        });
-    }
+    // 🚨 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [normColor](ItemMeta& item) {
+        item.color = normColor;
+    });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
 void MetadataManager::setPinned(const std::wstring& path, bool pinned, bool notify) {
@@ -1126,33 +1110,18 @@ void MetadataManager::setPinned(const std::wstring& path, bool pinned, bool noti
         std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
         m_shards[idx].items[nPath].pinned = pinned;
     }
-    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
+    // 🚨 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [pinned](ItemMeta& item) {
+        item.pinned = pinned;
     });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
 void MetadataManager::setTags(const std::wstring& path, const QStringList& tags, bool notify) {
     std::wstring nPath = MetadataManager::normalizePath(path);
     ensureActivated(nPath);
-
-    bool oldEmpty = false;
-    QStringList oldTags;
-    bool isFolder = false;
-
-    {
-        size_t idx = getShardIndex(nPath);
-        {
-            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            auto it = m_shards[idx].items.find(nPath);
-            if (it != m_shards[idx].items.end()) {
-                oldEmpty = it->second.tags.isEmpty();
-                oldTags = it->second.tags;
-                isFolder = it->second.isFolder;
-            }
-        }
-    }
 
     {
         size_t idx = getShardIndex(nPath);
@@ -1160,11 +1129,19 @@ void MetadataManager::setTags(const std::wstring& path, const QStringList& tags,
         m_shards[idx].items[nPath].tags = tags;
     }
 
-    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
-
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
+    // 🚨 纯磁盘模式：转换标签并直接原子写入所在物理目录的 .QuarkMeta.json
+    std::vector<std::wstring> wTags;
+    for (const QString& t : tags) {
+        QString trimmed = t.trimmed();
+        if (!trimmed.isEmpty()) {
+            wTags.push_back(trimmed.toStdWString());
+        }
+    }
+    QuarkMetaJson::updateItemMeta(nPath, [wTags](ItemMeta& item) {
+        item.tags = wTags;
     });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
 void MetadataManager::setNote(const std::wstring& path, const std::wstring& note, bool notify) {
@@ -1183,11 +1160,13 @@ void MetadataManager::setNote(const std::wstring& path, const std::wstring& note
         std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
         m_shards[idx].items[nPath].note = note;
     }
-    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
+    // 🚨 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [note](ItemMeta& item) {
+        item.note = note;
     });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
 void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, bool notify) {
@@ -1206,11 +1185,13 @@ void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, 
         std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
         m_shards[idx].items[nPath].url = url;
     }
-    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
+    // 🚨 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [url](ItemMeta& item) {
+        item.url = url;
     });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
 void MetadataManager::setEncrypted(const std::wstring& path, bool encrypted, bool notify) {

@@ -8,6 +8,7 @@
 #include <QKeyEvent>
 #include <QApplication>
 #include <QScreen>
+#include <QScrollBar>
 
 namespace QuarkMeta {
 
@@ -105,7 +106,7 @@ void TagSelectorOverlay::initUi() {
     m_tagGridWidget->setAttribute(Qt::WA_StyledBackground, true);
     m_tagGridWidget->setStyleSheet("background-color: #1E1E1E;");
     m_tagGridWidget->setFocusPolicy(Qt::StrongFocus);
-    m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 0, 4, 4);
+    m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 10, 6, 6);
     m_tagGridWidget->setLayout(m_gridFlowLayout);
 
     m_scrollArea = new QScrollArea(this);
@@ -281,13 +282,24 @@ int TagSelectorOverlay::getResizeDirection(const QPoint& pos) {
     return dir;
 }
 
+bool TagSelectorOverlay::isInteractiveChild(QWidget* child) const {
+    if (!child) return false;
+    if (child == m_searchEdit || (m_searchEdit && m_searchEdit->isAncestorOf(child))) return true;
+    if (child == m_btnToggleSidebar) return true;
+    if (child == m_groupList || (m_groupList && m_groupList->isAncestorOf(child))) return true;
+    if (qobject_cast<QPushButton*>(child)) return true;
+    if (qobject_cast<QScrollBar*>(child)) return true;
+    return false;
+}
+
 void TagSelectorOverlay::updateCursorShape(const QPoint& pos) {
     int dir = getResizeDirection(pos);
     if (dir == 0) {
-        if (pos.y() < 25) { // 顶部手柄区
-            setCursor(Qt::SizeAllCursor);
-        } else {
+        QWidget* child = childAt(pos);
+        if (isInteractiveChild(child)) {
             setCursor(Qt::ArrowCursor);
+        } else {
+            setCursor(Qt::SizeAllCursor);
         }
     } else {
         if (dir == (1 | 4) || dir == (2 | 8)) setCursor(Qt::SizeFDiagCursor); // Top-Left or Bottom-Right
@@ -300,10 +312,15 @@ void TagSelectorOverlay::updateCursorShape(const QPoint& pos) {
 void TagSelectorOverlay::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         m_resizeDir = getResizeDirection(event->pos());
-        m_isDragging = (m_resizeDir == 0 && event->pos().y() < 25);
+        QWidget* child = childAt(event->pos());
+        m_isDragging = (m_resizeDir == 0 && !isInteractiveChild(child));
         m_dragStartPos = event->globalPosition().toPoint();
         m_dragStartGeometry = geometry();
-        event->accept();
+        if (m_resizeDir != 0 || m_isDragging) {
+            event->accept();
+        } else {
+            QFrame::mousePressEvent(event);
+        }
     } else {
         QFrame::mousePressEvent(event);
     }

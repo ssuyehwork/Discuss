@@ -10,6 +10,7 @@
 #include <QSemaphore>
 #include <QRegularExpression>
 #include <QCryptographicHash>
+#include <QImageReader>
 #include <QDebug>
 
 #ifdef Q_OS_WIN
@@ -426,11 +427,14 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
     if (CoreController::isShuttingDown()) return QImage();
 
     QString gsExec = findGhostscriptExecutable();
-    if (gsExec.isEmpty()) return QImage();
+    if (gsExec.isEmpty()) {
+        qWarning() << "[GS诊断] 未找到Ghostscript可执行文件，文件:" << filePath;
+        return QImage();
+    }
 
-    // 尝试获取信号量，若排队超过 100ms 则直接放弃，防止卡死（长效模式下等待更长时间）
     int acqWaitMs = (customTimeoutMs > 0) ? 5000 : 100;
     if (!g_gsConcurrencyLimit.tryAcquire(1, acqWaitMs)) {
+        qWarning() << "[GS诊断] 等待" << acqWaitMs << "ms未抢到并发名额，文件:" << filePath;
         return QImage();
     }
     struct ReleaseGuard {
@@ -440,19 +444,17 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 
     if (CoreController::isShuttingDown()) return QImage();
 
-    // 超时时间计算：如果指定了自定义超时（长效提取模式），则优先使用；否则使用常规分档
     int timeoutMs = 2000;
     if (customTimeoutMs > 0) {
-        timeoutMs = customTimeoutMs; // 长效模式：例如 45000ms
+        timeoutMs = customTimeoutMs;
     } else {
         QFileInfo fi(filePath);
         qint64 fileSizeMB = fi.size() / (1024 * 1024);
-        if (fileSizeMB > 20) {
-            timeoutMs = 10000;
-        } else if (fileSizeMB > 5) {
-            timeoutMs = 8000; // 实测 5~8.8MB 文件耗时集中在 5.0~5.8s（含系统抖动），留约38%安全余量
-        }
+        if (fileSizeMB > 20) timeoutMs = 10000;
+        else if (fileSizeMB > 5) timeoutMs = 8000;
     }
+
+    qWarning() << "[GS诊断] 开始渲染，超时设置:" << timeoutMs << "ms，文件:" << filePath;
 
     QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1.png").arg(QString::number(qHash(filePath), 16));
 
@@ -475,21 +477,31 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 #endif
     process.start(gsExec, args);
 
-    // 按文件大小分级的动态超时（见函数开头 timeoutMs 计算逻辑），替代此前写死的 1200ms
     if (process.waitForFinished(timeoutMs)) {
         if (QFile::exists(tempPng)) {
-            QImage img(tempPng);
+            QImageReader reader(tempPng);
+            reader.setAllocationLimit(512); // 放宽Qt默认256MB安全上限，避免大幅面AI文件渲染出的高分辨率PNG被直接拒收
+            QSize origSize = reader.size();
+            if (origSize.isValid() && (origSize.width() > targetSize || origSize.height() > targetSize)) {
+                reader.setScaledSize(origSize.scaled(targetSize, targetSize, Qt::KeepAspectRatio));
+            }
+            QImage img = reader.read();
             QFile::remove(tempPng);
 
             if (!img.isNull()) {
-                return img.scaled(targetSize, targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                return img;
             }
+            qWarning() << "[GS诊断] 进程正常结束但输出图片解码为空，文件:" << filePath;
+        } else {
+            qWarning() << "[GS诊断] 进程正常结束但输出文件不存在，文件:" << filePath;
         }
+    } else {
+        qWarning() << "[GS诊断] 等待" << timeoutMs << "ms后仍未结束，判定超时，文件:" << filePath;
     }
 
     if (process.state() == QProcess::Running) {
-        process.kill(); // 超时直接物理强杀进程，绝不占资源
-        process.waitForFinished(200); // 等待进程真正终止，避免 QProcess 带着运行中的进程被析构
+        process.kill();
+        process.waitForFinished(200);
     }
 
     if (QFile::exists(tempPng)) QFile::remove(tempPng);
