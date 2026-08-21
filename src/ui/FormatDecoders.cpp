@@ -426,11 +426,15 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
     if (CoreController::isShuttingDown()) return QImage();
 
     QString gsExec = findGhostscriptExecutable();
-    if (gsExec.isEmpty()) return QImage();
+    if (gsExec.isEmpty()) {
+        qWarning() << "[GS诊断] 未找到Ghostscript可执行文件，文件:" << filePath;
+        return QImage();
+    }
 
     // 尝试获取信号量，若排队超过 100ms 则直接放弃，防止卡死（长效模式下等待更长时间）
     int acqWaitMs = (customTimeoutMs > 0) ? 5000 : 100;
     if (!g_gsConcurrencyLimit.tryAcquire(1, acqWaitMs)) {
+        qWarning() << "[GS诊断] 等待" << acqWaitMs << "ms未抢到并发名额，文件:" << filePath;
         return QImage();
     }
     struct ReleaseGuard {
@@ -453,6 +457,8 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
             timeoutMs = 8000; // 实测 5~8.8MB 文件耗时集中在 5.0~5.8s（含系统抖动），留约38%安全余量
         }
     }
+
+    qWarning() << "[GS诊断] 开始渲染，超时设置:" << timeoutMs << "ms，文件:" << filePath;
 
     QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1.png").arg(QString::number(qHash(filePath), 16));
 
@@ -484,7 +490,12 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
             if (!img.isNull()) {
                 return img.scaled(targetSize, targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             }
+            qWarning() << "[GS诊断] 进程正常结束但输出图片解码为空，文件:" << filePath;
+        } else {
+            qWarning() << "[GS诊断] 进程正常结束但输出文件不存在，文件:" << filePath;
         }
+    } else {
+        qWarning() << "[GS诊断] 等待" << timeoutMs << "ms后仍未结束，判定超时，文件:" << filePath;
     }
 
     if (process.state() == QProcess::Running) {
