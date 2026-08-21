@@ -3,6 +3,14 @@
 ## 0. 架构设计理念与总则
 QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存托管库/镜像数据库及全量内存索引，构建轻量、高效、无感落盘的实时磁盘 I/O 浏览与管理体验。
 
+### 0.1 纯磁盘模式数据落盘与内存托管库僵尸彻底根除铁律
+1. **元数据落盘唯一事实源（SSOT）**：磁盘文件的星级、颜色、标签、备注等元数据，**必须且只能**离散落盘持久化至各级目录下的 `.QuarkMeta.json` 文件中（通过 `QuarkMetaJson` 管理类）。严禁将非根目录/非盘符的项目元数据写入 `global.db` 的 `metadata` 数据表中。`global.db` 仅保留 `disk_trash`（回收站）、盘符/根目录系统元数据及 `tag_groups` 全局标签配置。
+2. **全量内存托管库与全盘监控彻底物理清退**：全系统严格清退双模（Dual-mode）与内存托管库时代遗留的一切僵尸架构与数据表，包括但不限于：
+   - `system_stats` 表中的全盘解析进度记录（`PROGRESS:<路径>`）与全盘指标快照；
+   - `CategoryLockManager` 分类锁机制与 `NativeFolderWatcher`（IOCP 全盘自动监控）；
+   - `Base36 ID`、分类树（`CategoryPanel` / `UserCategory` / `SystemCategory`）等历史判定分支；
+   - `global.db` 中的 `metadata` 表与 `metadata_fts` 全文索引双重记账残留。
+
 ---
 
 ## 1. 界面面板与五栏式视图布局规范 (UI Panel & Five-Column View Specification)
