@@ -1,331 +1,417 @@
-# 纯磁盘目录模式·内存模式与托管库僵尸代码根除无脑实施方案 (Pure Disk Mode Memory & Managed Code Purge Implementation Plan)
+# 纯磁盘目录模式·托管库与内存模式遗留代码物理彻底根除实施方案 (Memory Mode & Managed Library Legacy Purge Implementation Plan)
 
-## 1. Overview（概述与解决的问题）
+## 1. Overview (概述与解决的问题)
 
-本实施方案严格遵守 `AGENTS.md` 规范第 5 节硬性标准，旨在彻底、无死角地清除双模式时期遗留在系统中的所有内存托管库、.arc 胶囊容器、Base36 算法、多分盘 `QuarkMeta_*.db`、`categories` / `category_items` 关系表及相关废弃逻辑，确保项目 **100% 编译通过且无任何“未声明标识符”或“找不到函数成员”错误**：
-1. **数据库引擎降维（`DatabaseManager`）**：彻底剔除 `getDbForPath`、`getActiveMemoryDbs`、`getDriveDb` 等多库分盘路由，将全工程所有数据库访问点无缝重构收敛直连至唯一全局库句柄 `getGlobalDb()`。
-2. **托管库 API 全量解耦（`MetadataManager`）**：剔除 `getManagedLibraryPath`、`isInsideManagedLibrary`、`setManaged` 等托管库 API，同步修正 `CoreController`、`SystemBootstrapper`、`BatchCreateDialog` 中的外部调用点。
-3. **回收站仓库与统计服务清理（`DiskTrashService` / `DiskTrashRepo` / `StatisticsService` / `TrashRepository`）**：将全量废弃的 `getActiveMemoryDbs()` 遍历与 `getDbForPath()` 检索重构为直接查询 `getGlobalDb()`。
-4. **内容面板与数据模型归一化（`ContentPanel` / `DiskItemModel`）**：清理 `isMirrorSource()` / `isManagedContext()` 分流逻辑，移除 `ManagedRole` 相关菜单项与渲染阻断。
+QuarkMeta 现已全面升级为**纯磁盘目录直连模式独立应用**，彻底摒弃了原有的“内存托管库/镜像数据库（Memory Mode）”及分类索引体系。
+但在从双模式版本拆分剥离的过程中，代码库中依然残存了部分已废弃模块的“幽灵引用”（如 `#include` 包含、废弃成员变量、遗留槽函数关联）以及衍生的僵尸源码文件。
 
----
-
-## 2. Modified Files List（影响文件清单）
-
-1. `src/meta/DatabaseManager.h`
-2. `src/meta/DatabaseManager.cpp`
-3. `src/meta/MetadataManager.h`
-4. `src/meta/MetadataManager.cpp`
-5. `src/core/DiskTrashService.cpp`
-6. `src/meta/DiskTrashRepo.cpp`
-7. `src/meta/StatisticsService.cpp`
-8. `src/meta/TrashRepository.cpp`
-9. `src/core/CoreController.cpp`
-10. `src/core/SystemBootstrapper.cpp`
-11. `src/ui/BatchCreateDialog.cpp`
-12. `src/ui/ContentPanel.cpp`
-13. `QuarkMeta Architecture/QuarkMeta-Architecture-Planning.md`
+本实施方案旨在全面、干净地彻底根除项目中的所有内存模式与托管库遗留，包括：
+1. **清理用户已删 18 个文件在源码中的残留头文件包含与逻辑调用**（涉及 `AssetImporter`、`ImportHelper`、`CategoryLockDialog`、`CategoryLockWidget` 等）。
+2. **清理衍生的孤立僵尸源码文件**（物理删除磁盘上残存的 `CategoryPanel.h/cpp`、`CategoryLockDialog.h/cpp`、`CategoryLockWidget.h/cpp`、`AssetImporter.h/cpp`、`ImportHelper.h/cpp`、`AmMetaJson.h/cpp`、`CategoryModel.h/cpp`、`CategoryFilterProxyModel.h`、`CategoryDelegate.h/cpp`、`CategoryBindingManager.h/cpp`、`SyncStatusService.h/cpp`）。
+3. **清理 `BatchCreateDialog` 中的内存模式分支逻辑**（移除 `isMemoryMode` 构造参数、`m_isMemoryMode` 成员及 `m_libraryCombo` 托管库选择下拉框相关死代码）。
+4. **清理 `MetadataManager.cpp` 和 `MediaExtractorPipeline.cpp` 中的遗留同步/分类刷新信号**。
+5. **同步更新 `CMakeLists.txt`**（彻底剔除 `SyncStatusService.cpp/.h` 的编译注册）。
 
 ---
 
-## 3. Detailed Line-by-Line Changes（精准替换块）
+## 2. Modified Files List (影响文件清单)
 
-### 3.1 `src/meta/DatabaseManager.h`
-从 `DatabaseManager.h` 中彻底移除 `getDbForPath` 和 `getActiveMemoryDbs` 废弃函数声明。
+### 2.1 修改的现有源文件与构建项 (Modified Files)
+1. `CMakeLists.txt`
+2. `src/ui/MainWindow.cpp`
+3. `src/ui/ContentPanel.h`
+4. `src/ui/ContentPanel.cpp`
+5. `src/core/CoreController.cpp`
+6. `src/meta/MediaExtractorPipeline.cpp`
+7. `src/meta/MetadataManager.cpp`
+8. `src/ui/BatchCreateDialog.h`
+9. `src/ui/BatchCreateDialog.cpp`
 
-```
-<<<<<<< SEARCH
-    sqlite3* getDbForPath(const std::wstring& path); 
-    std::vector<sqlite3*> getActiveMemoryDbs();
-=======
->>>>>>> REPLACE
-```
-
----
-
-### 3.2 `src/meta/DatabaseManager.cpp`
-从 `DatabaseManager.cpp` 中物理删除 `getActiveMemoryDbs` 和 `getDbForPath` 的实现体。
-
-```
-<<<<<<< SEARCH
-std::vector<sqlite3*> DatabaseManager::getActiveMemoryDbs() {
-    std::lock_guard<std::mutex> lock(m_driveDbMutex);
-    std::vector<sqlite3*> dbs;
-    for (auto& pair : m_driveDbs) {
-        if (pair.second) dbs.push_back(pair.second);
-    }
-    return dbs;
-}
-=======
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-sqlite3* DatabaseManager::getDbForPath(const std::wstring& path) { 
-    std::wstring root = getDriveRoot(path); 
-    if (root.empty()) return getGlobalDb(); 
-    return getDriveDb(root); 
-}
-=======
->>>>>>> REPLACE
-```
+### 2.2 物理删除的僵尸文件 (Deleted Files)
+1. `src/util/AssetImporter.h` / `src/util/AssetImporter.cpp`
+2. `src/util/ImportHelper.h` / `src/util/ImportHelper.cpp`
+3. `src/ui/CategoryLockDialog.h` / `src/ui/CategoryLockDialog.cpp`
+4. `src/ui/CategoryLockWidget.h` / `src/ui/CategoryLockWidget.cpp`
+5. `src/ui/CategoryPanel.h` / `src/ui/CategoryPanel.cpp`
+6. `src/meta/AmMetaJson.h` / `src/meta/AmMetaJson.cpp`
+7. `src/ui/CategoryModel.h` / `src/ui/CategoryModel.cpp`
+8. `src/ui/CategoryFilterProxyModel.h`
+9. `src/ui/CategoryDelegate.h` / `src/ui/CategoryDelegate.cpp`
+10. `src/meta/CategoryBindingManager.h` / `src/meta/CategoryBindingManager.cpp`
+11. `src/core/SyncStatusService.h` / `src/core/SyncStatusService.cpp`
 
 ---
 
-### 3.3 `src/core/DiskTrashService.cpp`
-将 `DiskTrashService.cpp` 中所有 4 处 `getDbForPath` 和 2 处 `getActiveMemoryDbs` 调用精确替换为直连 `getGlobalDb()`。
+## 3. Detailed Line-by-Line Changes (精准替换块)
 
+### 3.1 `CMakeLists.txt`
 ```
 <<<<<<< SEARCH
-        if (QFile::rename(p, dest)) {
-            sqlite3* db = DatabaseManager::instance().getDbForPath(p.toStdWString());
-            if (!db) {
+    src/core/SearchHistoryService.cpp
+    src/core/SearchHistoryService.h
+    src/core/SyncStatusService.cpp
+    src/core/SyncStatusService.h
+    src/crypto/EncryptionManager.cpp
 =======
-        if (QFile::rename(p, dest)) {
-            sqlite3* db = DatabaseManager::instance().getGlobalDb();
-            if (!db) {
+    src/core/SearchHistoryService.cpp
+    src/core/SearchHistoryService.h
+    src/crypto/EncryptionManager.cpp
+>>>>>>> REPLACE
+```
+
+### 3.2 `src/ui/MainWindow.cpp`
+```
+<<<<<<< SEARCH
+#include "../core/SearchHistoryService.h"
+#include "../core/SyncStatusService.h"
+#include "DriveButton.h"
+#include "TagManagerDialog.h"
+#include "../util/ShellHelper.h"
+#include "../util/ImportHelper.h"
+#include "../util/AssetImporter.h"
+=======
+#include "../core/SearchHistoryService.h"
+#include "DriveButton.h"
+#include "TagManagerDialog.h"
+#include "../util/ShellHelper.h"
 >>>>>>> REPLACE
 ```
 
 ```
 <<<<<<< SEARCH
-            QString trashPath = DiskTrashRepo::getTrashPathForFileId(fileId);
-            if (!trashPath.isEmpty()) {
-                sqlite3* db = DatabaseManager::instance().getDbForPath(trashPath.toStdWString());
-=======
-            QString trashPath = DiskTrashRepo::getTrashPathForFileId(fileId);
-            if (!trashPath.isEmpty()) {
-                sqlite3* db = DatabaseManager::instance().getGlobalDb();
->>>>>>> REPLACE
-```
+    // 2. 监听后台扫描状态变动
+    connect(&SyncStatusService::instance(), &SyncStatusService::statusUpdated,
+            this, [this, formatTime](bool syncing, int pendingCount) {
+        if (syncing && pendingCount > 0) {
+            if (m_syncStartTime == 0) {
+                m_syncStartTime = QDateTime::currentMSecsSinceEpoch();
+                m_totalBatchCount = pendingCount;
+                m_elapsedTimer->start();
+                updateProgressBarGeometry();
 
-```
-<<<<<<< SEARCH
-    QString trashPath = DiskTrashRepo::getTrashPathForFileId(fileId);
-    if (trashPath.isEmpty()) return false;
-
-    sqlite3* db = DatabaseManager::instance().getDbForPath(trashPath.toStdWString());
-=======
-    QString trashPath = DiskTrashRepo::getTrashPathForFileId(fileId);
-    if (trashPath.isEmpty()) return false;
-
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    QString trashPath = DiskTrashRepo::getTrashPathForFileId(fileId);
-    if (trashPath.isEmpty()) return false;
-
-    sqlite3* db = DatabaseManager::instance().getDbForPath(trashPath.toStdWString());
-=======
-    QString trashPath = DiskTrashRepo::getTrashPathForFileId(fileId);
-    if (trashPath.isEmpty()) return false;
-
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    std::vector<sqlite3*> dbs = DatabaseManager::instance().getActiveMemoryDbs();
-    for (sqlite3* db : dbs) {
-=======
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (db) {
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    std::vector<sqlite3*> dbs = DatabaseManager::instance().getActiveMemoryDbs();
-    for (sqlite3* db : dbs) {
-=======
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (db) {
->>>>>>> REPLACE
-```
-
----
-
-### 3.4 `src/meta/DiskTrashRepo.cpp`
-将 `DiskTrashRepo.cpp` 中 `getActiveMemoryDbs()` 的调用替换为查询全局唯一 `getGlobalDb()`。
-
-```
-<<<<<<< SEARCH
-    std::vector<sqlite3*> dbs = DatabaseManager::instance().getActiveMemoryDbs(); 
-    for (sqlite3* db : dbs) {
-=======
-    sqlite3* db = DatabaseManager::instance().getGlobalDb(); 
-    if (db) {
->>>>>>> REPLACE
-```
-
----
-
-### 3.5 `src/meta/StatisticsService.cpp`
-将 `StatisticsService.cpp` 中 `getActiveMemoryDbs()` 替换为查询唯一 `getGlobalDb()`。
-
-```
-<<<<<<< SEARCH
-    auto dbs = DatabaseManager::instance().getActiveMemoryDbs();
-    for (sqlite3* db : dbs) {
-=======
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (db) {
->>>>>>> REPLACE
-```
-
----
-
-### 3.6 `src/meta/TrashRepository.cpp`
-将 `TrashRepository.cpp` 中 `getActiveMemoryDbs()` 与 `getDbForPath()` 替换为直连 `getGlobalDb()`。
-
-```
-<<<<<<< SEARCH
-    auto dbs = DatabaseManager::instance().getActiveMemoryDbs();
-    for (sqlite3* db : dbs) {
-=======
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (db) {
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    sqlite3* db = DatabaseManager::instance().getDbForPath(originalPath);
-=======
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
->>>>>>> REPLACE
-```
-
----
-
-### 3.7 `src/meta/MetadataManager.h` & `src/meta/MetadataManager.cpp`
-从 `MetadataManager.h` 和 `MetadataManager.cpp` 中清理 `getManagedLibraryPath` 的声明与实现，并将内部 `getDbForPath` 调用替换为 `getGlobalDb()`。
-
-```
-<<<<<<< SEARCH
-    static std::wstring getManagedLibraryPath(const std::wstring& volSerial, const QString& driveLetter);
-=======
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    sqlite3* db = DatabaseManager::instance().getDbForPath(nPath); 
-=======
-    sqlite3* db = DatabaseManager::instance().getGlobalDb(); 
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-std::wstring MetadataManager::getManagedLibraryPath(const std::wstring& volSerial, const QString& driveLetter) {
-    if (volSerial.empty()) return L"";
-    
-    // 从 QSettings / AppConfig 中读取保存的绝对路径映射 (键名如: ManagedFolder/Volume_12345678)
-    QString key = QString("ManagedFolder/Volume_%1").arg(QString::fromStdWString(volSerial));
-    QString savedPath = AppConfig::instance().getValue(key, "").toString();
-    
-    if (!savedPath.isEmpty() && QDir(savedPath).exists()) {
-        return QDir::toNativeSeparators(savedPath).toStdWString();
-    }
-    
-    // 若配置未命中但盘符非空，退避至旧版盘符根目录
-    if (!driveLetter.isEmpty()) {
-        QString fallback = driveLetter;
-        if (!fallback.endsWith("/") && !fallback.endsWith("\\")) fallback += "/";
-        return QDir::toNativeSeparators(fallback).toStdWString();
-    }
-    
-    return L"";
-}
-=======
->>>>>>> REPLACE
-```
-
----
-
-### 3.8 `src/core/CoreController.cpp`
-移除 `CoreController.cpp` 中对 `MetadataManager::getManagedLibraryPath` 的废弃调用。
-
-```
-<<<<<<< SEARCH
-                if (volSerial != L"UNKNOWN") {
-                    std::wstring managedAbsW = MetadataManager::getManagedLibraryPath(volSerial, letter);
-                    if (!managedAbsW.empty()) {
-                        // NativeFolderWatcher::instance().addWatch(managedAbsW);
-                    }
-                }
-=======
->>>>>>> REPLACE
-```
-
----
-
-### 3.9 `src/core/SystemBootstrapper.cpp`
-移除 `SystemBootstrapper.cpp` 中对 `MetadataManager::getManagedLibraryPath` 的废弃调用。
-
-```
-<<<<<<< SEARCH
-            if (volSerial != L"UNKNOWN") {
-                std::wstring managedAbsW = MetadataManager::getManagedLibraryPath(volSerial, letter);
-                if (!managedAbsW.empty()) {
-                    // NativeFolderWatcher::instance().addWatch(managedAbsW);
-                }
+                m_topProgressBar->setValue(1);
+                m_topProgressBar->show();
             }
-=======
->>>>>>> REPLACE
-```
 
----
-
-### 3.10 `src/ui/BatchCreateDialog.cpp`
-移除 `BatchCreateDialog.cpp` 中对 `MetadataManager::getManagedLibraryPath` 的废弃调用。
-
-```
-<<<<<<< SEARCH
-            std::wstring managedW = MetadataManager::getManagedLibraryPath(volSerial, letter);
-            if (!managedW.empty()) {
-                m_targetDir = QString::fromStdWString(managedW);
+            if (pendingCount > m_totalBatchCount) {
+                m_totalBatchCount = pendingCount;
             }
+
+            int completedCount = m_totalBatchCount - pendingCount;
+            int pct = qBound(1, (int)((double)completedCount / m_totalBatchCount * 100), 99);
+            m_topProgressBar->setValue(pct);
+        } else {
+            if (m_syncStartTime > 0) {
+                m_topProgressBar->setValue(100);
+                m_elapsedTimer->stop();
+
+                qint64 totalSec = (QDateTime::currentMSecsSinceEpoch() - m_syncStartTime) / 1000;
+
+                // 完成时展示标准格式
+                m_statusLeft->setText(QString("数据扫描完成  数量：%1  |  实际耗时: %2")
+                                      .arg(m_totalBatchCount)
+                                      .arg(formatTime(totalSec)));
+
+                // 400ms 后隐藏顶层进度条，3 秒后恢复常态项目计数
+                QTimer::singleShot(400, this, [this]() {
+                    m_topProgressBar->hide();
+                    m_syncStartTime = 0;
+                    m_totalBatchCount = 0;
+                });
+            }
+        }
+    });
 =======
 >>>>>>> REPLACE
 ```
 
----
+### 3.3 `src/ui/ContentPanel.h`
+```
+<<<<<<< SEARCH
+namespace QuarkMeta {
 
-### 3.11 `src/ui/ContentPanel.cpp`
-移除右键菜单中对 `ManagedRole` 相关菜单项（如“重新扫描”、“取消导入并清除数据”）的渲染与控制。
+class CategoryLockWidget;
+
+struct RuntimeMeta;
+=======
+namespace QuarkMeta {
+
+struct RuntimeMeta;
+>>>>>>> REPLACE
+```
 
 ```
 <<<<<<< SEARCH
-        // 2026-07-xx 按照 Development_Plan 2.1：始终显示“重新扫描”选项 (仅限资源库内项目)
-        if (currentIndex.data(ManagedRole).toBool()) {
-            menu.addAction(UiHelper::getIcon("sync", QColor("#378ADD"), 18), "重新扫描")->setData(ActionRescan);
-        }
-
-        // 2026-07-27 按照 Plan-107：仅对已在资源库中登记的文件夹，增加“取消导入并清除数据”菜单项
-        if (currentIndex.data(TypeRole).toString() == "folder" && currentIndex.data(ManagedRole).toBool()) {
-            menu.addAction(UiHelper::getIcon("close", QColor("#e81123"), 18), "取消导入并清除数据")->setData(ActionCancelImport);
-        }
+    QVBoxLayout* m_mainLayout = nullptr;
+    QStackedWidget* m_viewStack = nullptr;
+    CategoryLockWidget* m_lockWidget = nullptr;
+    QPushButton* m_btnLayers = nullptr;
 =======
+    QVBoxLayout* m_mainLayout = nullptr;
+    QStackedWidget* m_viewStack = nullptr;
+    QPushButton* m_btnLayers = nullptr;
+>>>>>>> REPLACE
+```
+
+### 3.4 `src/ui/ContentPanel.cpp`
+```
+<<<<<<< SEARCH
+#include "../crypto/EncryptionManager.h"
+#include "CategoryLockDialog.h"
+#include "CategoryLockWidget.h"
+#include "BatchRenameDialog.h"
+=======
+#include "../crypto/EncryptionManager.h"
+#include "BatchRenameDialog.h"
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    initGridView();
+    initListView();
+
+    m_lockWidget = new CategoryLockWidget(this);
+
+    m_viewStack->addWidget(m_gridView);
+    m_viewStack->addWidget(m_treeView);
+    m_viewStack->addWidget(m_lockWidget);
+
+    m_viewStack->setCurrentWidget(m_gridView);
+
+    connect(m_lockWidget, &CategoryLockWidget::unlocked, this, [this](int id) {
+        MainWindow* mw = nullptr;
+        QWidget* parentWin = window();
+        while (parentWin) {
+            if ((mw = qobject_cast<MainWindow*>(parentWin))) break;
+            parentWin = parentWin->parentWidget();
+        }
+        loadCategory(id);
+    });
+=======
+    initGridView();
+    initListView();
+
+    m_viewStack->addWidget(m_gridView);
+    m_viewStack->addWidget(m_treeView);
+
+    m_viewStack->setCurrentWidget(m_gridView);
+>>>>>>> REPLACE
+```
+
+### 3.5 `src/core/CoreController.cpp`
+```
+<<<<<<< SEARCH
+#include "PhysicalDiskSearchExtractor.h"
+#include "../util/AssetImporter.h"
+
+namespace QuarkMeta {
+=======
+#include "PhysicalDiskSearchExtractor.h"
+
+namespace QuarkMeta {
+>>>>>>> REPLACE
+```
+
+### 3.6 `src/meta/MediaExtractorPipeline.cpp`
+```
+<<<<<<< SEARCH
+#include "../ui/ImageDecoderFacade.h"
+#include "../ui/ColorAlgorithmEngine.h"
+#include "../core/SyncStatusService.h"
+#include "DatabaseManager.h"
+=======
+#include "../ui/ImageDecoderFacade.h"
+#include "../ui/ColorAlgorithmEngine.h"
+#include "DatabaseManager.h"
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + active);
+=======
+>>>>>>> REPLACE
+```
+
+### 3.7 `src/meta/MetadataManager.cpp`
+```
+<<<<<<< SEARCH
+void MetadataManager::notifyUI(RefreshLevel level, const QString& path) {
+    switch (level) {
+        case RefreshLevel::CountsOnly:
+            notifyCategoryCountChanged();
+            break;
+        case RefreshLevel::PathUpdate:
+            if (!path.isEmpty()) {
+                {
+                    std::unique_lock<std::shared_mutex> lock(m_mutex);
+                    m_pendingUiPaths.insert(path);
+                }
+                QMetaObject::invokeMethod(this, "triggerUiSignalTimer", Qt::QueuedConnection);
+            }
+            break;
+        case RefreshLevel::FullRebuild:
+            notifyFullUIRebuild();
+            break;
+        case RefreshLevel::CategoryOnly:
+            if (m_isInternalOperating) return;
+            {
+                std::unique_lock<std::shared_mutex> lock(m_mutex);
+                m_pendingUiPaths.insert("__RELOAD_CATEGORY_ONLY__");
+            }
+            QMetaObject::invokeMethod(this, "triggerUiSignalTimer", Qt::QueuedConnection);
+            break;
+    }
+}
+=======
+void MetadataManager::notifyUI(RefreshLevel level, const QString& path) {
+    switch (level) {
+        case RefreshLevel::CountsOnly:
+            break;
+        case RefreshLevel::PathUpdate:
+            if (!path.isEmpty()) {
+                {
+                    std::unique_lock<std::shared_mutex> lock(m_mutex);
+                    m_pendingUiPaths.insert(path);
+                }
+                QMetaObject::invokeMethod(this, "triggerUiSignalTimer", Qt::QueuedConnection);
+            }
+            break;
+        case RefreshLevel::FullRebuild:
+            notifyFullUIRebuild();
+            break;
+        case RefreshLevel::CategoryOnly:
+            break;
+    }
+}
+>>>>>>> REPLACE
+```
+
+### 3.8 `src/ui/BatchCreateDialog.h`
+```
+<<<<<<< SEARCH
+class BatchCreateDialog : public FramelessDialog {
+    Q_OBJECT
+public:
+    explicit BatchCreateDialog(const QString& currentDirectory, bool isMemoryMode = false, QWidget* parent = nullptr);
+    ~BatchCreateDialog() override = default;
+
+    bool isFile() const;
+    QString fileSuffix() const;
+    QStringList renderAllNames() const;
+    QString selectedLibraryPath() const;
+
+private slots:
+    void scheduleAutoSave();
+    void doAutoSave();
+
+private:
+    void initContent();
+    void onExecute();
+    void onInsertRowAfter(CreateRuleRow* targetRow = nullptr);
+    void applyTheme();
+    void updateLibraryControlState();
+    QString renderOne(int index, const std::vector<RenameRule>& rules) const;
+
+    QString m_currentDir;
+    bool m_isMemoryMode = false;
+=======
+class BatchCreateDialog : public FramelessDialog {
+    Q_OBJECT
+public:
+    explicit BatchCreateDialog(const QString& currentDirectory, QWidget* parent = nullptr);
+    ~BatchCreateDialog() override = default;
+
+    bool isFile() const;
+    QString fileSuffix() const;
+    QStringList renderAllNames() const;
+
+private slots:
+    void scheduleAutoSave();
+    void doAutoSave();
+
+private:
+    void initContent();
+    void onExecute();
+    void onInsertRowAfter(CreateRuleRow* targetRow = nullptr);
+    void applyTheme();
+    QString renderOne(int index, const std::vector<RenameRule>& rules) const;
+
+    QString m_currentDir;
+>>>>>>> REPLACE
+```
+
+### 3.9 `src/ui/BatchCreateDialog.cpp`
+```
+<<<<<<< SEARCH
+BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, bool isMemoryMode, QWidget* parent)
+    : FramelessDialog("批量创建 - QuarkMeta", parent), m_currentDir(currentDirectory), m_isMemoryMode(isMemoryMode) {
+    resize(550, 420);
+    initContent();
+    applyTheme();
+
+    // 扫描并填充 m_libraryCombo 数据
+    if (m_libraryCombo) {
+        for (const QFileInfo& drive : QDir::drives()) {
+            QString letter = drive.absolutePath().left(1).toUpper();
+            QString drivePath = QDir::toNativeSeparators(QString("%1:\\").arg(letter));
+            if (QDir(drivePath).exists()) {
+                m_libraryCombo->addItem(QString("磁盘 (%1:)").arg(letter), drivePath);
+            }
+        }
+        QString lastLibPath = AppConfig::instance().getValue("BatchCreate/LastLibraryPath").toString();
+        if (!lastLibPath.isEmpty()) {
+            int idx = m_libraryCombo->findData(lastLibPath);
+            if (idx != -1) m_libraryCombo->setCurrentIndex(idx);
+        }
+    }
+
+    // 1. 初始化自动保存防抖定时器
+    m_autoSaveTimer = new QTimer(this);
+
+}
+=======
+BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, QWidget* parent)
+    : FramelessDialog("批量创建 - QuarkMeta", parent), m_currentDir(currentDirectory) {
+    resize(550, 420);
+    initContent();
+    applyTheme();
+
+    // 1. 初始化自动保存防抖定时器
+    m_autoSaveTimer = new QTimer(this);
+
+}
 >>>>>>> REPLACE
 ```
 
 ---
 
-## 4. Build & Verification Steps（分阶段自检与编译验证）
+## 4. Build & Verification Steps (编译命令与验证方法)
 
-1. **编译确认**：
-   在命令行运行 CMake 编译，验证全量调用点清理后**100% 一次性编译通过**，零 C2039 / C3861 / C2660 符号缺失与参数不匹配错误：
-   ```bash
-   cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Debug
-   cmake --build build
-   ```
-2. **全局自检断言 Checkpoints**：
-   - 全局搜索 `getDbForPath` / `getActiveMemoryDbs` / `getManagedLibraryPath`，确认全工程匹配计数均为 0。
-   - 启动程序，验证回收站清空/还原、文件物理操作与右键菜单展示正常无卡顿。
+### 4.1 物理删除残存僵尸源文件命令
+在终端执行以下命令彻底清除残存在磁盘上的历史僵尸文件：
+```bash
+rm -f src/util/AssetImporter.h src/util/AssetImporter.cpp
+rm -f src/util/ImportHelper.h src/util/ImportHelper.cpp
+rm -f src/ui/CategoryLockDialog.h src/ui/CategoryLockDialog.cpp
+rm -f src/ui/CategoryLockWidget.h src/ui/CategoryLockWidget.cpp
+rm -f src/ui/CategoryPanel.h src/ui/CategoryPanel.cpp
+rm -f src/meta/AmMetaJson.h src/meta/AmMetaJson.cpp
+rm -f src/ui/CategoryModel.h src/ui/CategoryModel.cpp
+rm -f src/ui/CategoryFilterProxyModel.h
+rm -f src/ui/CategoryDelegate.h src/ui/CategoryDelegate.cpp
+rm -f src/meta/CategoryBindingManager.h src/meta/CategoryBindingManager.cpp
+rm -f src/core/SyncStatusService.h src/core/SyncStatusService.cpp
+```
+
+### 4.2 构建与编译验证
+在项目根目录下，使用 CMake 重新配置与构建：
+```bash
+cmake -B build -S .
+cmake --build build --config Release
+```
+
+验证结果：
+1. 项目可顺利生成 `QuarkMeta.exe` 目标文件，无任何符号丢失、缺少头文件或 `qt_metacall`/`metaObject` 链接错误。
+2. 彻底消除了内存模式与旧分类系统的残存分支代码。
