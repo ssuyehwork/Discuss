@@ -2,15 +2,11 @@
 
 ## 1. Overview（概述与解决的问题）
 
-本实施方案旨在全面彻底地消灭双模式时期遗留在系统中的所有内存托管库、.arc 胶囊容器、Base36 算法、多分盘 `QuarkMeta_*.db` 及分类关系表，全面贯彻 QuarkMeta“纯磁盘目录直连”架构。
-
-全方案精细划分为 **6 个递进阶段（Stage 1 ~ 6）**，确保每个阶段均包含确切的影响文件清单、精准替换块与自检验证命令：
-1. **Stage 1**：构建系统治理（`CMakeLists.txt`）—— 彻底剥离 `AssetImporter`、`ImportHelper`、`CapsuleMediaExtractor`、`CategoryLockDialog`、`CategoryLockWidget` 等僵尸源码编译条目。
-2. **Stage 2**：数据库引擎降维（`DatabaseManager`）—— 废除分盘 `QuarkMeta_*.db` 和 `m_driveDbs` 映射，全系统仅保留 `global.db`，删除 `categories` / `category_items` 表与卷漂移逻辑。
-3. **Stage 3**：元数据管理器脱耦（`MetadataManager`）—— 删除 `registerAsset`、`isInsideManagedLibrary`、`getManagedLibraryPath` 等托管库 API，`RuntimeMeta` 结构体移除 `categoryIds` 和 `isManaged` 字段，元数据落盘直连 `.QuarkMeta.json` 与 `global.db`。
-4. **Stage 4**：内容面板与数据模型归一化（`ContentPanel` & `DiskItemModel`）—— 清理 `isMirrorSource` 与 `isManagedContext` 分流逻辑，文件粘贴/拖拽 100% 走 `DiskIoService` 物理操作，删除 `.arc` 胶囊生成与分类绑定右键菜单。
-5. **Stage 5**：系统辅助服务净化（`ShellHelper` & `DuplicateDetectorService`）—— 清理旧版移动到回收站逻辑，统一走 `DiskTrashService`；查重引擎剔除 `CapsuleMediaExtractor`，引入首尾 64KB FastHash 快速预筛。
-6. **Stage 6**：主窗口与对话框协议清理（`MainWindow` & `TagManagerDialog`）—— `unifiedNavigateTo` 彻底删除 `kProtocolCategory` 分流协议；`TagManagerDialog` 彻底剔除镜像源分支，全局标签读取统一直连 `global.db`，节点标签写入当前目录 `.QuarkMeta.json`。
+本实施方案旨在彻底、无死角地清除双模式时期遗留在系统中的所有内存托管库、.arc 胶囊容器、Base36 算法、多分盘 `QuarkMeta_*.db`、`categories` / `category_items` 关系表及相关废弃逻辑，确保项目 100% 编译通过且无任何“未声明标识符”或“找不到函数成员”错误：
+1. **数据库引擎降维（`DatabaseManager`）**：彻底剔除 `getDbForPath`、`getActiveMemoryDbs`、`getDriveDb` 等多库分盘路由，将全工程所有数据库访问点无缝重构收敛直连至唯一全局库句柄 `getGlobalDb()`。
+2. **托管库 API 全量解耦（`MetadataManager`）**：剔除 `getManagedLibraryPath`、`isInsideManagedLibrary`、`setManaged` 等托管库 API，同步修正 `CoreController`、`SystemBootstrapper`、`BatchCreateDialog` 中的外部调用点。
+3. **回收站仓库与统计服务清理（`DiskTrashService` / `DiskTrashRepo` / `StatisticsService` / `TrashRepository`）**：将全量废弃的 `getActiveMemoryDbs()` 遍历重构为直接查询 `getGlobalDb()` 中的 `disk_trash` 表。
+4. **内容面板与数据模型归一化（`ContentPanel` / `DiskItemModel`）**：清理 `isMirrorSource()` / `isManagedContext()` 分流逻辑，移除 `ManagedRole` 相关菜单项与渲染阻断。
 
 ---
 
@@ -21,70 +17,57 @@
 3. `src/meta/DatabaseManager.cpp`
 4. `src/meta/MetadataManager.h`
 5. `src/meta/MetadataManager.cpp`
-6. `src/ui/ContentPanel.h`
-7. `src/ui/ContentPanel.cpp`
-8. `src/ui/models/DiskItemModel.cpp`
-9. `src/util/ShellHelper.cpp`
-10. `src/meta/DuplicateDetectorService.cpp`
-11. `src/ui/MainWindow.cpp`
-12. `src/ui/TagManagerDialog.cpp`
-13. `QuarkMeta Architecture/QuarkMeta-Architecture-Planning.md`
+6. `src/core/DiskTrashService.cpp`
+7. `src/meta/DiskTrashRepo.cpp`
+8. `src/meta/StatisticsService.cpp`
+9. `src/meta/TrashRepository.cpp`
+10. `src/core/CoreController.cpp`
+11. `src/core/SystemBootstrapper.cpp`
+12. `src/ui/BatchCreateDialog.cpp`
+13. `src/ui/ContentPanel.h`
+14. `src/ui/ContentPanel.cpp`
+15. `QuarkMeta Architecture/QuarkMeta-Architecture-Planning.md`
 
 ---
 
 ## 3. Detailed Line-by-Line Changes（精准替换块）
 
-### 3.1 Stage 1：`CMakeLists.txt` 构建系统治理
-在 `CMakeLists.txt` 中彻底删除僵尸源码文件的编译注册路径。
+### 3.1 `src/meta/DatabaseManager.h`
+从 `DatabaseManager.h` 中彻底移除 `getDbForPath` 和 `getActiveMemoryDbs` 废弃函数声明。
 
 ```
 <<<<<<< SEARCH
-    src/util/AssetImporter.cpp
-    src/util/AssetImporter.h
-    src/util/ImportHelper.cpp
-    src/util/ImportHelper.h
-=======
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    src/meta/CapsuleMediaExtractor.cpp
-    src/meta/CapsuleMediaExtractor.h
-=======
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    src/ui/CategoryLockDialog.cpp
-    src/ui/CategoryLockDialog.h
-    src/ui/CategoryLockWidget.cpp
-    src/ui/CategoryLockWidget.h
+    sqlite3* getDbForPath(const std::wstring& path);
+    std::vector<sqlite3*> getActiveMemoryDbs();
 =======
 >>>>>>> REPLACE
 ```
 
 ---
 
-### 3.2 Stage 2：`src/meta/DatabaseManager.h` & `DatabaseManager.cpp` 数据库引擎降维
-废除分盘 `QuarkMeta_*.db` 和 `m_driveDbs` 映射，仅保留唯一 `global.db` 句柄。
+### 3.2 `src/meta/DatabaseManager.cpp`
+从 `DatabaseManager.cpp` 中物理删除 `getDbForPath` 与 `getActiveMemoryDbs` 的实现体。
 
 ```
 <<<<<<< SEARCH
-    sqlite3* getDriveDb(const std::wstring& drivePath);
-    sqlite3* getDbForPath(const std::wstring& absolutePath);
-    std::vector<sqlite3*> getActiveMemoryDbs();
-    sqlite3* getDiskDb(const std::wstring& rootPath);
-    std::recursive_mutex& getDriveMutex(const std::wstring& drivePath);
+std::vector<sqlite3*> DatabaseManager::getActiveMemoryDbs() {
+    std::lock_guard<std::mutex> lock(m_driveDbMutex);
+    std::vector<sqlite3*> dbs;
+    for (auto& pair : m_driveDbs) {
+        if (pair.second) dbs.push_back(pair.second);
+    }
+    return dbs;
+}
 =======
 >>>>>>> REPLACE
 ```
 
 ```
 <<<<<<< SEARCH
-void DatabaseManager::resolveVolumeDrift(const std::wstring& drivePath, const std::wstring& volSerial) {
-    // 卷漂移自愈逻辑...
+sqlite3* DatabaseManager::getDbForPath(const std::wstring& path) {
+    std::wstring root = getDriveRoot(path);
+    if (root.empty()) return getGlobalDb();
+    return getDriveDb(root);
 }
 =======
 >>>>>>> REPLACE
@@ -92,14 +75,87 @@ void DatabaseManager::resolveVolumeDrift(const std::wstring& drivePath, const st
 
 ---
 
-### 3.3 Stage 3：`src/meta/MetadataManager.h` & `MetadataManager.cpp` 元数据脱耦
-彻底清理 `isInsideManagedLibrary` / `getManagedLibraryPath` / `registerAsset` / `migrateCapsuleToLibrary` 等托管 API。
+### 3.3 `src/core/DiskTrashService.cpp`
+将 `DiskTrashService.cpp` 中所有对 `getDbForPath` 和 `getActiveMemoryDbs` 的调用替换为直连 `getGlobalDb()`。
 
 ```
 <<<<<<< SEARCH
-    bool registerAsset(const std::wstring& path, const std::wstring& containerId);
-    bool migrateCapsuleToLibrary(const std::wstring& capsulePath, const std::wstring& targetDir);
-    static bool isInsideManagedLibrary(const std::wstring& path);
+            sqlite3* db = DatabaseManager::instance().getDbForPath(p.toStdWString());
+=======
+            sqlite3* db = DatabaseManager::instance().getGlobalDb();
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    sqlite3* db = DatabaseManager::instance().getDbForPath(trashPath.toStdWString());
+=======
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    std::vector<sqlite3*> dbs = DatabaseManager::instance().getActiveMemoryDbs();
+=======
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+>>>>>>> REPLACE
+```
+
+---
+
+### 3.4 `src/meta/DiskTrashRepo.cpp`
+将 `DiskTrashRepo.cpp` 中 `getActiveMemoryDbs()` 替换为查询唯一全局库 `getGlobalDb()`。
+
+```
+<<<<<<< SEARCH
+    std::vector<sqlite3*> dbs = DatabaseManager::instance().getActiveMemoryDbs();
+=======
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+>>>>>>> REPLACE
+```
+
+---
+
+### 3.5 `src/meta/StatisticsService.cpp`
+将 `StatisticsService.cpp` 中 `getActiveMemoryDbs()` 替换为查询 `getGlobalDb()`。
+
+```
+<<<<<<< SEARCH
+    auto dbs = DatabaseManager::instance().getActiveMemoryDbs();
+=======
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+>>>>>>> REPLACE
+```
+
+---
+
+### 3.6 `src/meta/TrashRepository.cpp`
+将 `TrashRepository.cpp` 中 `getActiveMemoryDbs()` 与 `getDbForPath()` 替换为直连 `getGlobalDb()`。
+
+```
+<<<<<<< SEARCH
+    auto dbs = DatabaseManager::instance().getActiveMemoryDbs();
+=======
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    sqlite3* db = DatabaseManager::instance().getDbForPath(originalPath);
+=======
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+>>>>>>> REPLACE
+```
+
+---
+
+### 3.7 `src/meta/MetadataManager.h` & `src/meta/MetadataManager.cpp`
+移除 `getManagedLibraryPath`、`isInsideManagedLibrary` 声明与实现，并将内部 `getDbForPath` 调用替换为 `getGlobalDb()`。
+
+```
+<<<<<<< SEARCH
     static std::wstring getManagedLibraryPath(const std::wstring& volSerial, const QString& driveLetter);
 =======
 >>>>>>> REPLACE
@@ -107,82 +163,70 @@ void DatabaseManager::resolveVolumeDrift(const std::wstring& drivePath, const st
 
 ```
 <<<<<<< SEARCH
-    std::vector<int> categoryIds;
-    bool isManaged;
+    sqlite3* db = DatabaseManager::instance().getDbForPath(nPath);
+=======
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+std::wstring MetadataManager::getManagedLibraryPath(const std::wstring& volSerial, const QString& driveLetter) {
+    // 历史托管库逻辑...
+}
 =======
 >>>>>>> REPLACE
 ```
 
 ---
 
-### 3.4 Stage 4：`src/ui/ContentPanel.h` & `ContentPanel.cpp` 内容面板归一化
-物理清除 `isMirrorSource()` / `isManagedContext()` 分流以及 `.arc` 胶囊生成和分类右键菜单。
+### 3.8 `src/core/CoreController.cpp`
+移除对 `MetadataManager::getManagedLibraryPath` 的废弃调用。
 
 ```
 <<<<<<< SEARCH
-    bool isMirrorSource() const;
-    bool isManagedContext() const;
+                    std::wstring managedAbsW = MetadataManager::getManagedLibraryPath(volSerial, letter);
 =======
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-        if (currentIndex.data(ManagedRole).toBool()) {
-            menu.addAction(UiHelper::getIcon("sync", QColor("#378ADD"), 18), "重新扫描")->setData(ActionRescan);
-        }
-=======
+                    std::wstring managedAbsW = L"";
 >>>>>>> REPLACE
 ```
 
 ---
 
-### 3.5 Stage 5：`src/util/ShellHelper.cpp` & `DuplicateDetectorService.cpp` 辅助服务净化
-清退旧版移入回收站分支，查重引擎剔除 `CapsuleMediaExtractor.h` 并升级 FastHash 预筛。
+### 3.9 `src/core/SystemBootstrapper.cpp`
+移除对 `MetadataManager::getManagedLibraryPath` 的废弃调用。
 
 ```
 <<<<<<< SEARCH
-#include "CapsuleMediaExtractor.h"
+            std::wstring managedAbsW = MetadataManager::getManagedLibraryPath(volSerial, letter);
 =======
+            std::wstring managedAbsW = L"";
 >>>>>>> REPLACE
 ```
 
 ---
 
-### 3.6 Stage 6：`src/ui/MainWindow.cpp` & `TagManagerDialog.cpp` 导航协议与对话框净化
-彻底删除 `kProtocolCategory` 常量与分类协议分流，`TagManagerDialog` 彻底剔除 `m_isMirrorSource` 分支，全局标签读写直连 `global.db` 与文件 JSON。
+### 3.10 `src/ui/BatchCreateDialog.cpp`
+移除对 `MetadataManager::getManagedLibraryPath` 的废弃调用。
 
 ```
 <<<<<<< SEARCH
-    if (url.startsWith(kProtocolCategory)) {
-        // 分类协议处理...
-    }
+            std::wstring managedW = MetadataManager::getManagedLibraryPath(volSerial, letter);
 =======
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    if (m_isMirrorSource) {
-        // 镜像源历史逻辑...
-    } else {
-        TagRepository::addTagToGroup(tagName, 0);
-    }
-=======
-    TagRepository::addTagToGroup(tagName, 0);
+            std::wstring managedW = L"";
 >>>>>>> REPLACE
 ```
 
 ---
 
-## 4. Build & Verification Steps（分阶段自检与编译验证）
+## 4. Build & Verification Steps（编译命令与验证方法）
 
-1. **Stage 1 自检**：
-   运行 `cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Debug`，确认无文件缺失警报。
-2. **Stage 2 ~ 6 逐级编译**：
+1. **编译确认**：
+   在命令行运行 CMake 编译，验证解耦托管库与数据库降维后**100% 一次性编译通过**，零 C2039/C3861 符号缺失错误：
    ```bash
+   cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Debug
    cmake --build build
    ```
-3. **全局自检断言 Checkpoints**：
-   - 全局搜索 `getDriveDb` / `isInsideManagedLibrary` / `CapsuleMediaExtractor` / `kProtocolCategory`，确保项目内匹配计数均为 0。
-   - 打开应用，测试粘贴、拖拽、创建文件夹、打标签、右键菜单与窗口跳转，确认 100% 直连纯磁盘，无卡顿无报错。
+2. **全局自检断言 Checkpoints**：
+   - 全局搜索 `getDbForPath` / `getActiveMemoryDbs` / `getManagedLibraryPath`，确认全工程匹配技术均为 0。
+   - 启动程序，验证回收站清空/还原、文件操作、磁盘元数据读写流畅无卡顿。
