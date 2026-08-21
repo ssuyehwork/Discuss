@@ -70,20 +70,17 @@ void StatisticsService::notifyAssetAdded(int targetCatId, bool hasTags) {
     m_cachedSnapshot.systemCounts["all"] = m_totalCount.load();
     m_cachedSnapshot.systemCounts["uncategorized"] = m_uncategorizedCount.load();
     m_cachedSnapshot.systemCounts["untagged"] = m_untaggedCount.load();
-    if (targetCatId > 0) {
-        m_cachedSnapshot.userCategoryCounts[targetCatId]++;
-    }
 
     emit statisticsUpdated(m_cachedSnapshot);
 }
 
-void StatisticsService::notifyAssetRemoved(int targetCatId, int libraryCatId, bool hadTags, bool wasTrash) {
+void StatisticsService::notifyAssetRemoved(int targetCatId, bool hadTags, bool wasTrash) {
     std::vector<int> userCatIds;
     if (targetCatId > 0) userCatIds.push_back(targetCatId);
-    purgeAsset(libraryCatId, userCatIds, !hadTags, wasTrash);
+    purgeAsset(userCatIds, !hadTags, wasTrash);
 }
 
-void StatisticsService::purgeAsset(int libraryCatId, const std::vector<int>& userCatIds, bool hasTags, bool isTrash) {
+void StatisticsService::purgeAsset(const std::vector<int>& userCatIds, bool hasTags, bool isTrash) {
     if (isTrash) {
         if (m_trashCount.load() > 0) m_trashCount.fetch_sub(1);
     } else {
@@ -102,19 +99,7 @@ void StatisticsService::purgeAsset(int libraryCatId, const std::vector<int>& use
     m_cachedSnapshot.systemCounts["untagged"] = m_untaggedCount.load();
     m_cachedSnapshot.systemCounts["trash"] = m_trashCount.load();
 
-    // 1. 托管库分类扣减
-    if (libraryCatId > 0 && m_cachedSnapshot.libraryCounts.contains(libraryCatId)) {
-        if (m_cachedSnapshot.libraryCounts[libraryCatId] > 0) {
-            m_cachedSnapshot.libraryCounts[libraryCatId]--;
-        }
-    }
 
-    // 2. 所有挂载过的用户分类全量扣减
-    for (int userCatId : userCatIds) {
-        if (m_cachedSnapshot.userCategoryCounts.contains(userCatId) && m_cachedSnapshot.userCategoryCounts[userCatId] > 0) {
-            m_cachedSnapshot.userCategoryCounts[userCatId]--;
-        }
-    }
 
     emit statisticsUpdated(m_cachedSnapshot);
 }

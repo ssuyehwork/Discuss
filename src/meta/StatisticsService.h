@@ -17,10 +17,6 @@ struct StatisticsSnapshot {
 
     // 1. 静态分类计数 (key -> count)
     QMap<QString, int> systemCounts;
-    // 2. 半静态托管库计数 (categoryId -> count)
-    QMap<int, int> libraryCounts;
-    // 3. 全动态用户分类计数 (categoryId -> count)
-    QMap<int, int> userCategoryCounts;
 
     std::unordered_map<int, int> categoryCounts;
     std::unordered_map<int, int> tagCounts;
@@ -39,8 +35,8 @@ public:
 
     // 3. 增量变更接口（由托管生命周期服务单向驱动原子计数） 
     void notifyAssetAdded(int targetCatId, bool hasTags); 
-    void notifyAssetRemoved(int targetCatId, int libraryCatId, bool hadTags, bool wasTrash); 
-    void purgeAsset(int libraryCatId, const std::vector<int>& userCatIds, bool hasTags, bool isTrash);
+    void notifyAssetRemoved(int targetCatId, bool hadTags, bool wasTrash); 
+    void purgeAsset(const std::vector<int>& userCatIds, bool hasTags, bool isTrash);
     void notifyAssetTrashChanged(bool toTrash, bool hasTags); 
     void notifyDiskTrashCountChanged(int delta); 
 
