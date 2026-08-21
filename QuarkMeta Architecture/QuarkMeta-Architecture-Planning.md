@@ -55,6 +55,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **元数据面板标签按钮化与 TagSelectorOverlay 悬浮选择器实时联动无脑实施方案**：详见 `Implementation Plan/meta_panel_tag_selector_overlay.md`
 - **TagSelectorOverlay 界面精细化改造无脑实施方案**：详见 `Implementation Plan/tag_selector_overlay_refinement.md`
 - **纯磁盘目录模式·内存模式与托管库僵尸代码根除无脑实施方案**：详见 `Implementation Plan/memory_mode_purge.md`
+- **离散 `.QuarkMeta.json` 元数据同步落盘与持久化无脑实施方案**：详见 `Implementation Plan/metadata_json_persistence.md`
 
 ---
 
