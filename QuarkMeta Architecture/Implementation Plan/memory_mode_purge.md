@@ -6,11 +6,11 @@ QuarkMeta 现已全面升级为**纯磁盘目录直连模式独立应用**，彻
 但在从双模式版本拆分剥离的过程中，代码库中依然残存了部分已废弃模块的“幽灵引用”（如 `#include` 包含、废弃成员变量、遗留槽函数关联）以及衍生的僵尸源码文件。
 
 本实施方案旨在全面、干净地彻底根除项目中的所有内存模式与托管库遗留，包括：
-1. **清理用户已删 18 个文件在源码中的残留头文件包含与逻辑调用**（涉及 `AssetImporter`、`ImportHelper`、`CategoryLockDialog`、`CategoryLockWidget` 等）。
-2. **清理衍生的孤立僵尸源码文件**（物理删除磁盘上残存的 `CategoryPanel.h/cpp`、`CategoryLockDialog.h/cpp`、`CategoryLockWidget.h/cpp`、`AssetImporter.h/cpp`、`ImportHelper.h/cpp`、`AmMetaJson.h/cpp`、`CategoryModel.h/cpp`、`CategoryFilterProxyModel.h`、`CategoryDelegate.h/cpp`、`CategoryBindingManager.h/cpp`、`SyncStatusService.h/cpp`）。
+1. **清理用户已删 18 个文件及 `NativeFolderWatcher` (IOCP监控) 在源码中的残留头文件包含与逻辑调用**（涉及 `AssetImporter`、`ImportHelper`、`CategoryLockDialog`、`CategoryLockWidget`、`NativeFolderWatcher` 等）。
+2. **清理衍生的孤立僵尸源码文件**（物理删除磁盘上残存的 `CategoryPanel.h/cpp`、`CategoryLockDialog.h/cpp`、`CategoryLockWidget.h/cpp`、`AssetImporter.h/cpp`、`ImportHelper.h/cpp`、`AmMetaJson.h/cpp`、`CategoryModel.h/cpp`、`CategoryFilterProxyModel.h`、`CategoryDelegate.h/cpp`、`CategoryBindingManager.h/cpp`、`SyncStatusService.h/cpp`、`NativeFolderWatcher.h/cpp`）。
 3. **清理 `BatchCreateDialog` 中的内存模式分支逻辑**（移除 `isMemoryMode` 构造参数、`m_isMemoryMode` 成员及 `m_libraryCombo` 托管库选择下拉框相关死代码）。
 4. **清理 `MetadataManager.cpp` 和 `MediaExtractorPipeline.cpp` 中的遗留同步/分类刷新信号**。
-5. **同步更新 `CMakeLists.txt`**（彻底剔除 `SyncStatusService.cpp/.h` 的编译注册）。
+5. **同步更新 `CMakeLists.txt`**（彻底剔除 `SyncStatusService.cpp/.h` 与 `NativeFolderWatcher.cpp/.h` 的编译注册）。
 
 ---
 
@@ -22,10 +22,11 @@ QuarkMeta 现已全面升级为**纯磁盘目录直连模式独立应用**，彻
 3. `src/ui/ContentPanel.h`
 4. `src/ui/ContentPanel.cpp`
 5. `src/core/CoreController.cpp`
-6. `src/meta/MediaExtractorPipeline.cpp`
-7. `src/meta/MetadataManager.cpp`
-8. `src/ui/BatchCreateDialog.h`
-9. `src/ui/BatchCreateDialog.cpp`
+6. `src/core/SystemBootstrapper.cpp`
+7. `src/meta/MediaExtractorPipeline.cpp`
+8. `src/meta/MetadataManager.cpp`
+9. `src/ui/BatchCreateDialog.h`
+10. `src/ui/BatchCreateDialog.cpp`
 
 ### 2.2 物理删除的僵尸文件 (Deleted Files)
 1. `src/util/AssetImporter.h` / `src/util/AssetImporter.cpp`
@@ -39,12 +40,21 @@ QuarkMeta 现已全面升级为**纯磁盘目录直连模式独立应用**，彻
 9. `src/ui/CategoryDelegate.h` / `src/ui/CategoryDelegate.cpp`
 10. `src/meta/CategoryBindingManager.h` / `src/meta/CategoryBindingManager.cpp`
 11. `src/core/SyncStatusService.h` / `src/core/SyncStatusService.cpp`
+12. `src/core/NativeFolderWatcher.h` / `src/core/NativeFolderWatcher.cpp`
 
 ---
 
 ## 3. Detailed Line-by-Line Changes (精准替换块)
 
 ### 3.1 `CMakeLists.txt`
+```
+<<<<<<< SEARCH
+    src/core/NativeFolderWatcher.cpp
+    src/core/NativeFolderWatcher.h
+=======
+>>>>>>> REPLACE
+```
+
 ```
 <<<<<<< SEARCH
     src/core/SearchHistoryService.cpp
@@ -74,6 +84,17 @@ QuarkMeta 现已全面升级为**纯磁盘目录直连模式独立应用**，彻
 #include "DriveButton.h"
 #include "TagManagerDialog.h"
 #include "../util/ShellHelper.h"
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+#include "../meta/MetadataManager.h"
+#include "../core/NativeFolderWatcher.h"
+#include "FramelessDialog.h"
+=======
+#include "../meta/MetadataManager.h"
+#include "FramelessDialog.h"
 >>>>>>> REPLACE
 ```
 
@@ -202,6 +223,17 @@ struct RuntimeMeta;
 ### 3.5 `src/core/CoreController.cpp`
 ```
 <<<<<<< SEARCH
+#include "CoreController.h"
+#include "NativeFolderWatcher.h"
+#include "AppConfig.h"
+=======
+#include "CoreController.h"
+#include "AppConfig.h"
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
 #include "PhysicalDiskSearchExtractor.h"
 #include "../util/AssetImporter.h"
 
@@ -213,7 +245,19 @@ namespace QuarkMeta {
 >>>>>>> REPLACE
 ```
 
-### 3.6 `src/meta/MediaExtractorPipeline.cpp`
+### 3.6 `src/core/SystemBootstrapper.cpp`
+```
+<<<<<<< SEARCH
+#include "SystemBootstrapper.h"
+#include "NativeFolderWatcher.h"
+#include "AppConfig.h"
+=======
+#include "SystemBootstrapper.h"
+#include "AppConfig.h"
+>>>>>>> REPLACE
+```
+
+### 3.7 `src/meta/MediaExtractorPipeline.cpp`
 ```
 <<<<<<< SEARCH
 #include "../ui/ImageDecoderFacade.h"
@@ -234,7 +278,7 @@ namespace QuarkMeta {
 >>>>>>> REPLACE
 ```
 
-### 3.7 `src/meta/MetadataManager.cpp`
+### 3.8 `src/meta/MetadataManager.cpp`
 ```
 <<<<<<< SEARCH
 void MetadataManager::notifyUI(RefreshLevel level, const QString& path) {
@@ -288,7 +332,7 @@ void MetadataManager::notifyUI(RefreshLevel level, const QString& path) {
 >>>>>>> REPLACE
 ```
 
-### 3.8 `src/ui/BatchCreateDialog.h`
+### 3.9 `src/ui/BatchCreateDialog.h`
 ```
 <<<<<<< SEARCH
 class BatchCreateDialog : public FramelessDialog {
@@ -342,7 +386,7 @@ private:
 >>>>>>> REPLACE
 ```
 
-### 3.9 `src/ui/BatchCreateDialog.cpp`
+### 3.10 `src/ui/BatchCreateDialog.cpp`
 ```
 <<<<<<< SEARCH
 BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, bool isMemoryMode, QWidget* parent)
@@ -390,7 +434,7 @@ BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, QWidget* p
 ## 4. Build & Verification Steps (编译命令与验证方法)
 
 ### 4.1 物理删除残存僵尸源文件命令
-在终端执行以下命令彻底清除残存在磁盘上的历史僵尸文件：
+在终端执行以下命令彻底清除残存在磁盘上的历史僵尸文件（包括 `NativeFolderWatcher` 及其关联分类/导入服务）：
 ```bash
 rm -f src/util/AssetImporter.h src/util/AssetImporter.cpp
 rm -f src/util/ImportHelper.h src/util/ImportHelper.cpp
@@ -403,6 +447,7 @@ rm -f src/ui/CategoryFilterProxyModel.h
 rm -f src/ui/CategoryDelegate.h src/ui/CategoryDelegate.cpp
 rm -f src/meta/CategoryBindingManager.h src/meta/CategoryBindingManager.cpp
 rm -f src/core/SyncStatusService.h src/core/SyncStatusService.cpp
+rm -f src/core/NativeFolderWatcher.h src/core/NativeFolderWatcher.cpp
 ```
 
 ### 4.2 构建与编译验证
@@ -414,4 +459,4 @@ cmake --build build --config Release
 
 验证结果：
 1. 项目可顺利生成 `QuarkMeta.exe` 目标文件，无任何符号丢失、缺少头文件或 `qt_metacall`/`metaObject` 链接错误。
-2. 彻底消除了内存模式与旧分类系统的残存分支代码。
+2. 彻底消除了内存模式、IOCP 实时监控（`NativeFolderWatcher`）与旧分类系统的残存分支代码。
