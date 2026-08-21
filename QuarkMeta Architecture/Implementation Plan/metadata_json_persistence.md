@@ -2,16 +2,18 @@
 
 ## 1. Overview (概述与解决的问题)
 
-QuarkMeta 架构规范明确规定：应用运行于**纯磁盘目录直连模式**，取消任何镜像数据库与托管库。
+QuarkMeta 架构规范明确规定：应用运行于**纯磁盘目录直连模式**，彻底取消任何托管库与镜像数据库。
 在数据持久化规范中：
 - 盘符根节点（如 `C:\`）的元数据持久化在 `global.db` 的 `drive_metadata` 表中；
-- 所有普通物理文件与文件夹的元数据（如备注 Note、链接 URL、评级 Rating、颜色 Color、标签 Tags 等）**唯一且直接持久化写入物理资产所在目录下的离散隐藏配置文件 `.QuarkMeta.json` 中**。
+- 所有普通物理文件与文件夹的元数据（如备注 Note、链接 URL、标签 Tags、评级 Rating、颜色 Color、置顶 Pinned 等）**直接且即时地调用 `QuarkMetaJson::updateItemMeta` 原子化落盘写入物理资产所在目录下的离散隐藏配置文件 `.QuarkMeta.json` 中**。
 
-在之前版本的实现中，`MetadataManager::persistAsync` 遗留了向 SQLite `global.db` 的 `metadata` 表写入的历史代码（即镜像数据库残余），而未调用 `QuarkMetaJson::updateItemMeta` 写入离散 `.QuarkMeta.json` 文件；同时 `ensureActivated` 在激活节点时未加载 `.QuarkMeta.json`。
+在之前版本的实现中：
+1. `MetadataManager` 中的 `setNote`、`setURL`、`setTags`、`setRating`、`setColor`、`setPinned` 等属性方法均异步提交到 `DatabaseManager` 的队列去调用 `persistAsync`，导致严重的落盘滞后与跨线程开销，且并未直接同步更新对应目录下的 `.QuarkMeta.json`；
+2. `ensureActivated` 在首次激活节点时未加载 `.QuarkMeta.json` 离散属性至内存 Shard 中。
 
-本实施方案将彻底清退 `persistAsync` 中的 SQLite 历史冗余写入逻辑，建立单轨、高效、纯洁的离散 `.QuarkMeta.json` 持久化与加载机制：
-1. **彻底物理擦除写入端的历史双写/镜像库冗余**：`persistAsync` 中普通文件与文件夹直接调用 `QuarkMetaJson::updateItemMeta` 写入物理目录 `.QuarkMeta.json`，不再往 `global.db` 写入多余元数据表。
-2. **激活端离散恢复**：在 `ensureActivated` 首次激活项目节点时，优先读取该项目对应目录 `.QuarkMeta.json` 里的属性填入内存 Shard，完成双向闭环。
+本实施方案采用**零延迟直接原子落盘架构**：
+1. **0 延迟物理落盘**：在 `MetadataManager` 的各个属性 setter 方法中，直接原子化调用 `QuarkMetaJson::updateItemMeta` 写入对应物理目录下的 `.QuarkMeta.json` 文件，实现即时落盘与无死锁高并发。
+2. **激活端双向闭环**：在 `ensureActivated` 激活项目节点时，优先读取该项目对应目录 `.QuarkMeta.json` 里的离散属性填入 Shard 内存中，实现全生命周期无缝同步。
 
 ---
 
@@ -64,95 +66,358 @@ QuarkMeta 架构规范明确规定：应用运行于**纯磁盘目录直连模�
 >>>>>>> REPLACE
 ```
 
-**修改点 2：在 `persistAsync` 中彻底清退历史镜像库 SQLite 写入，纯粹收口至 `.QuarkMeta.json`**
+**修改点 2：修改 `setRating` 方法（星标评级直连物理落盘）**
 
 ```
 <<<<<<< SEARCH
-    sqlite3* memDb = DatabaseManager::instance().getGlobalDb();
-    if (!memDb) {
+void MetadataManager::setRating(const std::wstring& path, int rating, bool notify) {
+    std::wstring nPath = normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.rating = rating;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
         return;
     }
-
-    // 1. 内存库操作 (Memory Commit)
-    bool isNew = true;
+    ensureActivated(nPath);
+    size_t idx = getShardIndex(nPath);
     {
-        sqlite3_stmt* checkStmt;
-        if (sqlite3_prepare_v2(memDb, "SELECT 1 FROM metadata WHERE folder_id = ?", -1, &checkStmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(checkStmt, 1, rMeta.folderId.c_str(), -1, SQLITE_TRANSIENT);
-            if (sqlite3_step(checkStmt) == SQLITE_ROW) isNew = false;
-            sqlite3_finalize(checkStmt);
-        }
+        std::unique_lock<std::shared_mutex> lock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].rating = rating;
+    }
+    if (notify) {
+        notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+    }
+    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
+        persistAsync(nPath);
+    });
+}
+=======
+void MetadataManager::setRating(const std::wstring& path, int rating, bool notify) {
+    std::wstring nPath = normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.rating = rating;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
+    size_t idx = getShardIndex(nPath);
+    {
+        std::unique_lock<std::shared_mutex> lock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].rating = rating;
     }
 
-    if (isNew && !authorized) {
-
-    }
-
-    sqlite3_stmt* memStmt;
-    if (sqlite3_prepare_v2(memDb, kSqlInsertMeta, -1, &memStmt, nullptr) == SQLITE_OK) {
-        bindMetaHelper(memStmt, nPath, rMeta);
-        if (sqlite3_step(memStmt) == SQLITE_DONE) {
-            {
-
-                size_t idx = getShardIndex(nPath);
-                std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-                m_shards[idx].items[nPath] = rMeta;
-            }
-        }
-        sqlite3_finalize(memStmt);
-    }
+    // 纯磁盘模式：直接原子化写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [rating](ItemMeta& item) {
+        item.rating = rating;
+    });
 
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
-=======
+>>>>>>> REPLACE
+```
+
+**修改点 3：修改 `setColor` 方法（颜色标记直连物理落盘）**
+
+```
+<<<<<<< SEARCH
+void MetadataManager::setColor(const std::wstring& path, const std::wstring& color, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    std::wstring normColor = UiHelper::normalizeColorHex(QString::fromStdWString(color)).toStdWString();
     QFileInfo info(QString::fromStdWString(nPath));
     if (info.isRoot()) {
-        // 盘符根节点（如 C:\）：写入 global.db 的 drive_metadata 表
-        DriveMetaRec rec;
-        rec.drivePath = nPath;
-        rec.rating = rMeta.rating;
-        rec.color = rMeta.manualColor;
-        rec.pinned = rMeta.pinned;
-        rec.note = rMeta.note;
-        rec.url = rMeta.url;
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.color = normColor;
         DriveMetaDao::saveDriveMeta(rec);
-    } else {
-        // 普通物理文件与文件夹：纯粹且原子化地直接落盘写入所在物理目录下的 .QuarkMeta.json
-        QuarkMetaJson::updateItemMeta(nPath, [&rMeta](ItemMeta& item) {
-            item.type = rMeta.isFolder ? L"folder" : L"file";
-            item.rating = rMeta.rating;
-            item.color = rMeta.manualColor;
-            item.autoColor = rMeta.autoColor;
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
 
-            std::vector<std::wstring> wTags;
-            for (const QString& t : rMeta.tags) {
-                wTags.push_back(t.toStdWString());
+    bool changed = false;
+    bool isFolder = false;
+    {
+        std::unique_lock<std::shared_mutex> lock(m_mutex);
+        size_t idx = getShardIndex(nPath);
+        {
+            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+            auto it = m_shards[idx].items.find(nPath);
+            if (it != m_shards[idx].items.end()) {
+                isFolder = it->second.isFolder;
+                if (it->second.manualColor != normColor) {
+                    it->second.manualColor = normColor;
+                    changed = true;
+                }
+            } else {
+                m_shards[idx].items[nPath].manualColor = normColor;
+                changed = true;
             }
-            item.tags = wTags;
-
-            item.pinned = rMeta.pinned;
-            item.note = rMeta.note;
-            item.url = rMeta.url;
-            item.encrypted = rMeta.encrypted;
-            if (!rMeta.folderId.empty()) item.folderId = rMeta.folderId;
-            item.ingestionStatus = rMeta.ingestionStatus;
-            item.size = rMeta.fileSize;
-            item.creationTime = rMeta.ctime;
-            item.modificationTime = rMeta.mtime;
-            item.accessTime = rMeta.atime;
-            item.addedAt = rMeta.added_at;
-            item.width = rMeta.width;
-            item.height = rMeta.height;
-            item.palettes = rMeta.palettes;
-        });
+        }
     }
 
-    // 内存 Shard 同步更新
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+
+    if (changed) {
+        DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
+            persistAsync(nPath);
+        });
+    }
+}
+=======
+void MetadataManager::setColor(const std::wstring& path, const std::wstring& color, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    std::wstring normColor = UiHelper::normalizeColorHex(QString::fromStdWString(color)).toStdWString();
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.color = normColor;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
+
     size_t idx = getShardIndex(nPath);
     {
         std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath] = rMeta;
+        m_shards[idx].items[nPath].manualColor = normColor;
     }
+
+    // 纯磁盘模式：直接原子化写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [normColor](ItemMeta& item) {
+        item.color = normColor;
+    });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+}
+>>>>>>> REPLACE
+```
+
+**修改点 4：修改 `setPinned` 方法（置顶保存直连物理落盘）**
+
+```
+<<<<<<< SEARCH
+void MetadataManager::setPinned(const std::wstring& path, bool pinned, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.pinned = pinned;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
+    size_t idx = getShardIndex(nPath);
+    {
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].pinned = pinned;
+    }
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+
+    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
+        persistAsync(nPath);
+    });
+}
+=======
+void MetadataManager::setPinned(const std::wstring& path, bool pinned, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.pinned = pinned;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
+    size_t idx = getShardIndex(nPath);
+    {
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].pinned = pinned;
+    }
+
+    // 纯磁盘模式：直接原子化写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [pinned](ItemMeta& item) {
+        item.pinned = pinned;
+    });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+}
+>>>>>>> REPLACE
+```
+
+**修改点 5：修改 `setTags` 方法（标签编辑直连物理落盘）**
+
+```
+<<<<<<< SEARCH
+void MetadataManager::setTags(const std::wstring& path, const QStringList& tags, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    ensureActivated(nPath);
+
+    bool oldEmpty = false;
+    QStringList oldTags;
+    bool isFolder = false;
+
+    {
+        size_t idx = getShardIndex(nPath);
+        {
+            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+            auto it = m_shards[idx].items.find(nPath);
+            if (it != m_shards[idx].items.end()) {
+                oldEmpty = it->second.tags.isEmpty();
+                oldTags = it->second.tags;
+                isFolder = it->second.isFolder;
+            }
+        }
+    }
+
+    {
+        size_t idx = getShardIndex(nPath);
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].tags = tags;
+    }
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+
+    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
+        persistAsync(nPath);
+    });
+}
+=======
+void MetadataManager::setTags(const std::wstring& path, const QStringList& tags, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    ensureActivated(nPath);
+
+    {
+        size_t idx = getShardIndex(nPath);
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].tags = tags;
+    }
+
+    // 纯磁盘模式：转换标签并直接原子化写入所在物理目录的 .QuarkMeta.json
+    std::vector<std::wstring> wTags;
+    for (const QString& t : tags) {
+        QString trimmed = t.trimmed();
+        if (!trimmed.isEmpty()) {
+            wTags.push_back(trimmed.toStdWString());
+        }
+    }
+    QuarkMetaJson::updateItemMeta(nPath, [wTags](ItemMeta& item) {
+        item.tags = wTags;
+    });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+}
+>>>>>>> REPLACE
+```
+
+**修改点 6：修改 `setNote` 方法（备注保存直连物理落盘）**
+
+```
+<<<<<<< SEARCH
+void MetadataManager::setNote(const std::wstring& path, const std::wstring& note, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.note = note;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
+    size_t idx = getShardIndex(nPath);
+    {
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].note = note;
+    }
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+
+    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
+        persistAsync(nPath);
+    });
+}
+=======
+void MetadataManager::setNote(const std::wstring& path, const std::wstring& note, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.note = note;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
+    size_t idx = getShardIndex(nPath);
+    {
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].note = note;
+    }
+
+    // 纯磁盘模式：直接原子化写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [note](ItemMeta& item) {
+        item.note = note;
+    });
+
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+}
+>>>>>>> REPLACE
+```
+
+**修改点 7：修改 `setURL` 方法（链接保存直连物理落盘）**
+
+```
+<<<<<<< SEARCH
+void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.url = url;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
+    size_t idx = getShardIndex(nPath);
+    {
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].url = url;
+    }
+    if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+
+    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
+        persistAsync(nPath);
+    });
+}
+=======
+void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, bool notify) {
+    std::wstring nPath = MetadataManager::normalizePath(path);
+    QFileInfo info(QString::fromStdWString(nPath));
+    if (info.isRoot()) {
+        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        rec.url = url;
+        DriveMetaDao::saveDriveMeta(rec);
+        if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+        return;
+    }
+    ensureActivated(nPath);
+    size_t idx = getShardIndex(nPath);
+    {
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath].url = url;
+    }
+
+    // 纯磁盘模式：直接原子化写入所在物理目录的 .QuarkMeta.json
+    QuarkMetaJson::updateItemMeta(nPath, [url](ItemMeta& item) {
+        item.url = url;
+    });
 
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
@@ -172,8 +437,6 @@ cmake --build build --config Release
 
 ### 4.2 功能验证
 1. 启动应用，在内容视图选中任意物理文件。
-2. 在右侧元数据面板（MetaPanel）为该文件修改备注（Note）、设置评级（Rating）、颜色标记（Color）以及编辑关联标签（Tags）。
-3. 打开对应物理文件所在的磁盘文件夹，检查隐藏的 `.QuarkMeta.json` 文件。
-4. 验证：
-   - 物理文件所在目录下的 `.QuarkMeta.json` 包含该文件的属性，修改被即时原子化保存。
-   - `global.db` 数据库中不再产生冗余的 `metadata` 数据，架构完全恢复单轨纯直连模式。
+2. 在右侧元数据面板（MetaPanel）修改备注（Note）、设置评级（Rating）、颜色标记（Color）、置顶（Pinned）、编辑关联标签（Tags）或链接（URL）。
+3. 观察物理目录下的隐藏文件 `.QuarkMeta.json`，验证修改在 **0 毫秒内同步原子化写入**。
+4. 切换目录或重启应用，确认填写的元数据 100% 完美呈现，无卡顿无延迟。
