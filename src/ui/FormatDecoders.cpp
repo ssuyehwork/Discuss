@@ -439,6 +439,17 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 
     if (CoreController::isShuttingDown()) return QImage();
 
+    // 按文件大小分级动态超时：文件越大矢量内容通常越复杂，渲染越慢，固定短超时会误杀大文件
+    // 阈值为默认经验值，待实际批量测试文件大小分布数据回来后精调
+    QFileInfo fi(filePath);
+    qint64 fileSizeMB = fi.size() / (1024 * 1024);
+    int timeoutMs = 2000;
+    if (fileSizeMB > 20) {
+        timeoutMs = 10000;
+    } else if (fileSizeMB > 5) {
+        timeoutMs = 8000; // 实测 5~8.8MB 文件耗时集中在 5.0~5.8s（含系统抖动），留约38%安全余量
+    }
+
     QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1.png").arg(QString::number(qHash(filePath), 16));
 
     QStringList args;
@@ -460,8 +471,8 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 #endif
     process.start(gsExec, args);
 
-    // 🚨 优化：等待时间从 5000ms 强制压缩为 1200ms
-    if (process.waitForFinished(1200)) {
+    // 按文件大小分级的动态超时（见函数开头 timeoutMs 计算逻辑），替代此前写死的 1200ms
+    if (process.waitForFinished(timeoutMs)) {
         if (QFile::exists(tempPng)) {
             QImage img(tempPng);
             QFile::remove(tempPng);
@@ -474,6 +485,7 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 
     if (process.state() == QProcess::Running) {
         process.kill(); // 超时直接物理强杀进程，绝不占资源
+        process.waitForFinished(200); // 等待进程真正终止，避免 QProcess 带着运行中的进程被析构
     }
 
     if (QFile::exists(tempPng)) QFile::remove(tempPng);

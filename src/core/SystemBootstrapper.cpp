@@ -1,5 +1,4 @@
 #include "SystemBootstrapper.h"
-#include "NativeFolderWatcher.h"
 #include "../meta/MetadataManager.h"
 #include <QDir>
 #include <QDebug>

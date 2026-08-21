@@ -63,8 +63,6 @@ set(SOURCES
     src/core/CoreController.h
     src/core/PhysicalDiskSearchExtractor.cpp
     src/core/PhysicalDiskSearchExtractor.h
-    src/core/NativeFolderWatcher.cpp
-    src/core/NativeFolderWatcher.h
     src/core/IndexedEntry.cpp
     src/core/IndexedEntry.h
     src/core/ItemRecord.cpp

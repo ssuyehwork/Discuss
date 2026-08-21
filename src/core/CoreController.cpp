@@ -1,5 +1,4 @@
 #include "CoreController.h"
-#include "NativeFolderWatcher.h"
 #include "AppConfig.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/DatabaseManager.h"
@@ -42,29 +41,6 @@ uint64_t CoreController::incrementNavigationGeneration() { return ++s_navigation
 uint64_t CoreController::currentNavigationGeneration() { return s_navigationGeneration.load(); }
 
 CoreController::CoreController(QObject* parent) : QObject(parent) {
-    // [Plan-115] 注册 Qt 元类型，防止 QueuedConnection 因未注册自定义类型而分发失败
-    qRegisterMetaType<QList<QuarkMeta::FileWatcherEvent>>("QList<QuarkMeta::FileWatcherEvent>");
-
-    // [Plan-115] 绑定 NativeFolderWatcher 纯净自定义批次变动信号到具体业务单例，彻底断开两端硬编码耦合
-    connect(&NativeFolderWatcher::instance(), &NativeFolderWatcher::filesChanged, this, [this](const QList<QuarkMeta::FileWatcherEvent>& events) {
-        for (const auto& ev : events) {
-            std::wstring normNewPath = MetadataManager::normalizePath(ev.newPath.toStdWString());
-            QString qNewPath = QString::fromStdWString(normNewPath);
-
-            // 常规文件的物理磁盘变动响应逻辑
-            if (ev.action == QuarkMeta::WatcherAction::Added || ev.action == QuarkMeta::WatcherAction::Modified) {
-                if (!ev.isDirectory) {
-                    MetadataManager::instance().registerItemsAsync(QStringList() << ev.newPath, true);
-                }
-            } else if (ev.action == QuarkMeta::WatcherAction::Removed) {
-                emit NativeFolderWatcher::instance().managedFolderRemoved(normNewPath);
-                MetadataManager::instance().removeMetadataSync(normNewPath);
-            } else if (ev.action == QuarkMeta::WatcherAction::Renamed) {
-                std::wstring normOldPath = MetadataManager::normalizePath(ev.oldPath.toStdWString());
-                MetadataManager::instance().syncAfterMove(normOldPath, normNewPath);
-            }
-        }
-    }, Qt::QueuedConnection);
 }
 
 CoreController::~CoreController() {}
