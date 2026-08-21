@@ -2,13 +2,16 @@
 
 ## 1. Overview (概述与解决的问题)
 
-QuarkMeta 架构规范要求在纯磁盘直连模式下，用户操作产生的属性元数据（如备注 Note、链接 URL、评级 Rating、颜色 Color、标签 Tags 等）必须直接持久化写入物理资产所在目录下的离散隐藏配置文件 **`.QuarkMeta.json`** 中。
+QuarkMeta 架构规范明确规定：应用运行于**纯磁盘目录直连模式**，取消任何镜像数据库与托管库。
+在数据持久化规范中：
+- 盘符根节点（如 `C:\`）的元数据持久化在 `global.db` 的 `drive_metadata` 表中；
+- 所有普通物理文件与文件夹的元数据（如备注 Note、链接 URL、评级 Rating、颜色 Color、标签 Tags 等）**唯一且直接持久化写入物理资产所在目录下的离散隐藏配置文件 `.QuarkMeta.json` 中**。
 
-然而在之前版本的实现中，`MetadataManager::persistAsync` 与 `ensureActivated` 存在离散元数据文件同步脱节的问题：
-1. **写入端断层**：用户在元数据面板中编辑备注、链接、标签等数据时，`MetadataManager::persistAsync` 仅将元数据保存到了 SQLite 内存/数据库中，并没有调用 `QuarkMetaJson::updateItemMeta` 实时同步落盘写回 `.QuarkMeta.json` 文件。
-2. **激活端缺漏**：在项目首次激活（`ensureActivated`）时，系统未实时读取磁盘对应物理目录下的 `.QuarkMeta.json` 文件，导致已有的离散 JSON 属性无法自动还原到 Shard 内存中。
+在之前版本的实现中，`MetadataManager::persistAsync` 遗留了向 SQLite `global.db` 的 `metadata` 表写入的历史代码（即镜像数据库残余），而未调用 `QuarkMetaJson::updateItemMeta` 写入离散 `.QuarkMeta.json` 文件；同时 `ensureActivated` 在激活节点时未加载 `.QuarkMeta.json`。
 
-本方案旨在修补此双向同步链路，确保修改属性时实时持久化写入 `.QuarkMeta.json`，并在项目激活时优先自动加载 `.QuarkMeta.json` 里的离散属性。
+本实施方案将彻底清退 `persistAsync` 中的 SQLite 历史冗余写入逻辑，建立单轨、高效、纯洁的离散 `.QuarkMeta.json` 持久化与加载机制：
+1. **彻底物理擦除写入端的历史双写/镜像库冗余**：`persistAsync` 中普通文件与文件夹直接调用 `QuarkMetaJson::updateItemMeta` 写入物理目录 `.QuarkMeta.json`，不再往 `global.db` 写入多余元数据表。
+2. **激活端离散恢复**：在 `ensureActivated` 首次激活项目节点时，优先读取该项目对应目录 `.QuarkMeta.json` 里的属性填入内存 Shard，完成双向闭环。
 
 ---
 
@@ -22,14 +25,14 @@ QuarkMeta 架构规范要求在纯磁盘直连模式下，用户操作产生的�
 
 ### 3.1 `src/meta/MetadataManager.cpp`
 
-**修改点 1：在 `ensureActivated` 激活流程中，自动从所在目录的 `.QuarkMeta.json` 恢复项目元数据**
+**修改点 1：在 `ensureActivated` 激活流程中，优先从所在目录的 `.QuarkMeta.json` 加载还原属性**
 
 ```
 <<<<<<< SEARCH
         // 共享元数据逻辑 (FID 关联)
         if (!rm.folderId.empty() && m_folderIdToPath.count(rm.folderId)) {
 =======
-        // 尝试从磁盘所在目录的 .QuarkMeta.json 中恢复离散元数据
+        // 优先从磁盘所在目录的 .QuarkMeta.json 中恢复离散元数据
         QFileInfo qinfo(QString::fromStdWString(nPath));
         if (!qinfo.isRoot()) {
             std::wstring folderPath = qinfo.absolutePath().toStdWString();
@@ -61,16 +64,60 @@ QuarkMeta 架构规范要求在纯磁盘直连模式下，用户操作产生的�
 >>>>>>> REPLACE
 ```
 
-**修改点 2：在 `persistAsync` 异步持久化流程中，直接同步写入所在目录的 `.QuarkMeta.json` 文件**
+**修改点 2：在 `persistAsync` 中彻底清退历史镜像库 SQLite 写入，纯粹收口至 `.QuarkMeta.json`**
 
 ```
 <<<<<<< SEARCH
+    sqlite3* memDb = DatabaseManager::instance().getGlobalDb();
+    if (!memDb) {
+        return;
+    }
+
+    // 1. 内存库操作 (Memory Commit)
+    bool isNew = true;
+    {
+        sqlite3_stmt* checkStmt;
+        if (sqlite3_prepare_v2(memDb, "SELECT 1 FROM metadata WHERE folder_id = ?", -1, &checkStmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_text(checkStmt, 1, rMeta.folderId.c_str(), -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(checkStmt) == SQLITE_ROW) isNew = false;
+            sqlite3_finalize(checkStmt);
+        }
+    }
+
+    if (isNew && !authorized) {
+
+    }
+
+    sqlite3_stmt* memStmt;
+    if (sqlite3_prepare_v2(memDb, kSqlInsertMeta, -1, &memStmt, nullptr) == SQLITE_OK) {
+        bindMetaHelper(memStmt, nPath, rMeta);
+        if (sqlite3_step(memStmt) == SQLITE_DONE) {
+            {
+
+                size_t idx = getShardIndex(nPath);
+                std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+                m_shards[idx].items[nPath] = rMeta;
+            }
+        }
+        sqlite3_finalize(memStmt);
+    }
+
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 =======
-    // 2. 离散 .QuarkMeta.json 文件持久化
     QFileInfo info(QString::fromStdWString(nPath));
-    if (!info.isRoot()) {
+    if (info.isRoot()) {
+        // 盘符根节点（如 C:\）：写入 global.db 的 drive_metadata 表
+        DriveMetaRec rec;
+        rec.drivePath = nPath;
+        rec.rating = rMeta.rating;
+        rec.color = rMeta.manualColor;
+        rec.pinned = rMeta.pinned;
+        rec.note = rMeta.note;
+        rec.url = rMeta.url;
+        DriveMetaDao::saveDriveMeta(rec);
+    } else {
+        // 普通物理文件与文件夹：纯粹且原子化地直接落盘写入所在物理目录下的 .QuarkMeta.json
         QuarkMetaJson::updateItemMeta(nPath, [&rMeta](ItemMeta& item) {
             item.type = rMeta.isFolder ? L"folder" : L"file";
             item.rating = rMeta.rating;
@@ -100,6 +147,13 @@ QuarkMeta 架构规范要求在纯磁盘直连模式下，用户操作产生的�
         });
     }
 
+    // 内存 Shard 同步更新
+    size_t idx = getShardIndex(nPath);
+    {
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath] = rMeta;
+    }
+
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 >>>>>>> REPLACE
@@ -119,5 +173,7 @@ cmake --build build --config Release
 ### 4.2 功能验证
 1. 启动应用，在内容视图选中任意物理文件。
 2. 在右侧元数据面板（MetaPanel）为该文件修改备注（Note）、设置评级（Rating）、颜色标记（Color）以及编辑关联标签（Tags）。
-3. 使用文件资源管理器或文本编辑器打开该物理文件所在目录下的 `.QuarkMeta.json` 隐藏文件。
-4. 确认 `.QuarkMeta.json` 文件中包含对应文件名的键，且其 `note`、`rating`、`color`、`tags` 等字段均已实时、正确更新落盘。
+3. 打开对应物理文件所在的磁盘文件夹，检查隐藏的 `.QuarkMeta.json` 文件。
+4. 验证：
+   - 物理文件所在目录下的 `.QuarkMeta.json` 包含该文件的属性，修改被即时原子化保存。
+   - `global.db` 数据库中不再产生冗余的 `metadata` 数据，架构完全恢复单轨纯直连模式。
