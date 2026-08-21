@@ -43,7 +43,7 @@ bool DiskTrashService::moveToDiskTrash(const QStringList& paths) {
 
         // 1. 物理同盘位移 (原名直接移动至 FILE_ID 隔离盒)
         if (QFile::rename(p, dest)) {
-            sqlite3* db = DatabaseManager::instance().getDbForPath(p.toStdWString());
+            sqlite3* db = DatabaseManager::instance().getGlobalDb();
             if (!db) {
                 allOk = false;
                 continue;
@@ -86,7 +86,7 @@ bool DiskTrashService::moveToDiskTrash(const QStringList& paths) {
 }
 
 bool DiskTrashService::restoreFromDiskTrash(int id, const QString& trashPath) {
-    sqlite3* db = DatabaseManager::instance().getDbForPath(trashPath.toStdWString());
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
     QString originalPath;
@@ -175,7 +175,7 @@ bool DiskTrashService::restoreFromDiskTrash(int id, const QString& trashPath) {
 }
 
 bool DiskTrashService::restoreToDirectory(const QString& trashPath, const QString& targetDir) {
-    sqlite3* db = DatabaseManager::instance().getDbForPath(trashPath.toStdWString());
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
     QFileInfo info(trashPath);
@@ -213,7 +213,7 @@ bool DiskTrashService::restoreToDirectory(const QString& trashPath, const QStrin
 }
 
 bool DiskTrashService::permanentlyDeleteDiskTrash(int id, const QString& trashPath) {
-    sqlite3* db = DatabaseManager::instance().getDbForPath(trashPath.toStdWString());
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
     // 物理彻底删除 (如果是文件夹则递归删除)
@@ -257,7 +257,7 @@ bool DiskTrashService::permanentlyDeleteDiskTrash(int id, const QString& trashPa
 
 bool DiskTrashService::restoreAllDiskTrash() {
     bool allOk = true;
-    std::vector<sqlite3*> dbs = DatabaseManager::instance().getActiveMemoryDbs();
+    std::vector<sqlite3*> dbs = { DatabaseManager::instance().getGlobalDb() };
     
     for (sqlite3* db : dbs) {
         struct TrashItem {
@@ -290,7 +290,7 @@ bool DiskTrashService::restoreAllDiskTrash() {
 
 bool DiskTrashService::emptyDiskTrash() {
     bool allOk = true;
-    std::vector<sqlite3*> dbs = DatabaseManager::instance().getActiveMemoryDbs();
+    std::vector<sqlite3*> dbs = { DatabaseManager::instance().getGlobalDb() };
 
     for (sqlite3* db : dbs) {
         struct TrashItem {

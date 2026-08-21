@@ -194,7 +194,7 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
 
     // 2. 汇总物理磁盘回收站 (离线盘过滤)
     int diskTrashCount = 0;
-    auto dbs = DatabaseManager::instance().getActiveMemoryDbs();
+    std::vector<sqlite3*> dbs = { DatabaseManager::instance().getGlobalDb() };
     for (sqlite3* db : dbs) {
         if (!db) continue;
         sqlite3_stmt* stmtDisk = nullptr;

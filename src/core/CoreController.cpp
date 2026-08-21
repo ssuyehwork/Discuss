@@ -96,16 +96,6 @@ void CoreController::startSystem() {
             // 资源库无需开启 IOCP 监控（已取消）
             const auto drives = QDir::drives();
             for (const QFileInfo& d : drives) {
-                std::wstring wPath = d.absolutePath().toStdWString();
-                std::wstring volSerial = MetadataManager::getVolumeSerialNumber(wPath);
-                QString letter = d.absolutePath().left(1).toUpper();
-
-                if (volSerial != L"UNKNOWN") {
-                    std::wstring managedAbsW = MetadataManager::getManagedLibraryPath(volSerial, letter);
-                    if (!managedAbsW.empty()) {
-                        // NativeFolderWatcher::instance().addWatch(managedAbsW);
-                    }
-                }
             }
 
             QMetaObject::invokeMethod(this, [this]() {

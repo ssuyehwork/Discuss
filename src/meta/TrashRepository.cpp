@@ -14,7 +14,7 @@ TrashRepository::TrashRepository(QObject* parent)
 }
 
 bool TrashRepository::hasTrashItems() const {
-    auto dbs = DatabaseManager::instance().getActiveMemoryDbs();
+    std::vector<sqlite3*> dbs = { DatabaseManager::instance().getGlobalDb() };
     const char* sql = "SELECT 1 FROM trash_items LIMIT 1";
     
     for (sqlite3* db : dbs) {
@@ -30,7 +30,7 @@ bool TrashRepository::hasTrashItems() const {
 }
 
 bool TrashRepository::getDiskTrashRecordByPath(const std::wstring& originalPath, int& outId, QString& outTrashPath) const {
-    sqlite3* db = DatabaseManager::instance().getDbForPath(originalPath);
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
     const char* sql = "SELECT id, trash_path FROM disk_trash WHERE original_path = ?";

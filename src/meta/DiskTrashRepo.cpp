@@ -11,7 +11,7 @@ std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() {
     // 🚨 核心修复：使用 DatabaseManager 的全局互斥锁，彻底避免并发句柄破坏 
     QMutexLocker locker(DatabaseManager::instance().dbMutex()); 
  
-    std::vector<sqlite3*> dbs = DatabaseManager::instance().getActiveMemoryDbs(); 
+    std::vector<sqlite3*> dbs = { DatabaseManager::instance().getGlobalDb() }; 
     for (sqlite3* db : dbs) { 
         sqlite3_stmt* stmt = nullptr; 
         const char* sql = "SELECT id, file_id, trash_path, original_path, drive_letter, file_name, is_folder, file_size, created_at, deleted_at FROM disk_trash"; 

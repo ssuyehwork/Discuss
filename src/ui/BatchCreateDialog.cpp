@@ -28,17 +28,9 @@ BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, bool isMem
     if (m_libraryCombo) {
         for (const QFileInfo& drive : QDir::drives()) {
             QString letter = drive.absolutePath().left(1).toUpper();
-            std::wstring volSerial = MetadataManager::getVolumeSerialNumber(drive.absolutePath().toStdWString());
-            std::wstring managedW = MetadataManager::getManagedLibraryPath(volSerial, letter);
-            QString managedPath = QString::fromStdWString(managedW);
-            if (managedPath.isEmpty()) {
-                QString defaultRel = QDir::toNativeSeparators(QString("%1:/QuarkMeta.Library_%2").arg(letter).arg(letter));
-                if (QFileInfo::exists(defaultRel)) {
-                    managedPath = defaultRel;
-                }
-            }
-            if (!managedPath.isEmpty() && QDir(managedPath).exists()) {
-                m_libraryCombo->addItem(QString("QuarkMeta.Library_%1").arg(letter), managedPath);
+            QString drivePath = QDir::toNativeSeparators(QString("%1:\\").arg(letter));
+            if (QDir(drivePath).exists()) {
+                m_libraryCombo->addItem(QString("磁盘 (%1:)").arg(letter), drivePath);
             }
         }
         QString lastLibPath = AppConfig::instance().getValue("BatchCreate/LastLibraryPath").toString();
