@@ -13,7 +13,6 @@ SystemBootstrapper& SystemBootstrapper::instance() {
 SystemBootstrapper::SystemBootstrapper(QObject* parent) : QObject(parent) {}
 
 void SystemBootstrapper::bootstrapMonitors() {
-    qDebug() << "[Boot] SystemBootstrapper 开始点火底层 IOCP 监控...";
     const auto drives = QDir::drives();
     for (const QFileInfo& d : drives) {
     }

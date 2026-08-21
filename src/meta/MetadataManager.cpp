@@ -1660,7 +1660,7 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
 
                     if (!it->second.isTrash) {
                         totalDelta--;
-                        StatisticsService::instance().purgeAsset(0, {}, !it->second.tags.isEmpty(), it->second.isTrash); 
+                        StatisticsService::instance().purgeAsset({}, !it->second.tags.isEmpty(), it->second.isTrash);
                     }
                     if (!it->second.folderId.empty()) {
                         std::string fid = it->second.folderId;
