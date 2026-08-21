@@ -9,7 +9,6 @@
 #include "../ui/MediaColorExtractor.h"
 #include "../ui/ImageDecoderFacade.h"
 #include "../ui/ColorAlgorithmEngine.h"
-#include "../core/SyncStatusService.h"
 #include "DatabaseManager.h"
 #include <QImageReader>
 #include <QSvgRenderer>
@@ -53,7 +52,6 @@ void MediaExtractorPipeline::cancelAll() {
         m_queue.clear();
     }
     m_activeCount.store(0);
-    SyncStatusService::instance().updateMediaPending(0);
 }
 
 void MediaExtractorPipeline::cancelBatch(const std::vector<std::wstring>& paths) {
@@ -80,10 +78,6 @@ void MediaExtractorPipeline::cancelBatch(const std::vector<std::wstring>& paths)
     m_queue.erase(std::remove_if(m_queue.begin(), m_queue.end(), isPrefixMatched), m_queue.end());
     int removedFromQueue = originalQueueSize - static_cast<int>(m_queue.size());
     Q_UNUSED(removedFromQueue);
-
-    int remaining = static_cast<int>(m_queue.size()) + m_activeCount.load();
-    if (remaining < 0) remaining = 0;
-    SyncStatusService::instance().updateMediaPending(remaining);
 }
 
 void MediaExtractorPipeline::enqueue(const std::wstring& path) {
@@ -95,7 +89,6 @@ void MediaExtractorPipeline::enqueueBatch(const std::vector<std::wstring>& paths
     {
         std::lock_guard<std::mutex> lock(m_queueMutex);
         m_queue.insert(m_queue.end(), paths.begin(), paths.end());
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + m_activeCount.load());
     }
 
     dispatchWorkersIfNeeded();
@@ -143,7 +136,6 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             m_queue.erase(m_queue.begin(), m_queue.begin() + batchSize);
 
             m_activeCount.fetch_add(static_cast<int>(batch.size()));
-            SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + m_activeCount.load());
         }
 
         std::vector<MetadataManager::ExtractedFeatureItem> results;
@@ -191,7 +183,6 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
         {
             std::lock_guard<std::mutex> lock(m_queueMutex);
             m_activeCount.fetch_sub(static_cast<int>(batch.size()));
-            SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + m_activeCount.load());
         }
     }
 
@@ -207,10 +198,7 @@ void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
         int active = m_activeCount.fetch_sub(1) - 1;
         if (active < 0) {
             m_activeCount.store(0);
-            active = 0;
         }
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + active);
         return;
     }
 
@@ -221,9 +209,7 @@ void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
     extractDimensions(path, w, h);
     if (m_isCanceled.load()) {
         int active = m_activeCount.fetch_sub(1) - 1;
-        if (active < 0) { m_activeCount.store(0); active = 0; }
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + active);
+        if (active < 0) { m_activeCount.store(0); }
         return;
     }
 
@@ -248,23 +234,15 @@ void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
 
     if (m_isCanceled.load()) {
         int active = m_activeCount.fetch_sub(1) - 1;
-        if (active < 0) { m_activeCount.store(0); active = 0; }
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + active);
+        if (active < 0) { m_activeCount.store(0); }
         return;
     }
 
     MetadataManager::instance().updateExtractedMediaFeatures(path, w, h, colorStr, palette, 1);
 
-    // 递减正在处理的计数并实时通知上报，供主界面进度条平滑由左向右推进
     int active = m_activeCount.fetch_sub(1) - 1;
     if (active < 0) {
         m_activeCount.store(0);
-        active = 0;
-    }
-    {
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + active);
     }
 }
 

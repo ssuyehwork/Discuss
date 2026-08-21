@@ -81,8 +81,6 @@
 #include "../meta/BatchRenameEngine.h" 
 #include "../meta/StatisticsService.h"
 #include "../crypto/EncryptionManager.h" 
-#include "CategoryLockDialog.h" 
-#include "CategoryLockWidget.h"
 #include "BatchRenameDialog.h" 
 #include "BatchCreateDialog.h"
 #include "UiHelper.h" 
@@ -759,24 +757,11 @@ void ContentPanel::initUi() {
      
     initGridView(); 
     initListView(); 
-
-    m_lockWidget = new CategoryLockWidget(this);
  
     m_viewStack->addWidget(m_gridView); 
     m_viewStack->addWidget(m_treeView); 
-    m_viewStack->addWidget(m_lockWidget);
 
     m_viewStack->setCurrentWidget(m_gridView); 
-
-    connect(m_lockWidget, &CategoryLockWidget::unlocked, this, [this](int id) { 
-        MainWindow* mw = nullptr; 
-        QWidget* parentWin = window(); 
-        while (parentWin) { 
-            if ((mw = qobject_cast<MainWindow*>(parentWin))) break; 
-            parentWin = parentWin->parentWidget(); 
-        } 
-        loadCategory(id); 
-    }); 
  
     QVBoxLayout* contentWrapper = new QVBoxLayout(); 
     // 2026-06-xx 物理对齐：右侧边距设为 0，使滚动条贴合容器边缘
@@ -2038,7 +2023,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             break;
         }
         case ActionBatchCreate: {
-            BatchCreateDialog dlg(m_currentPath, false, this);
+            BatchCreateDialog dlg(m_currentPath, this);
             if (dlg.exec() == QDialog::Accepted) {
                 refreshAll();
             }
@@ -2632,9 +2617,6 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
 } 
  
 void ContentPanel::restoreActiveView() {
-    if (m_lockWidget) {
-        m_lockWidget->hide();
-    }
     if (m_currentViewMode == ListView) {
         m_viewStack->setCurrentWidget(m_treeView);
     } else {

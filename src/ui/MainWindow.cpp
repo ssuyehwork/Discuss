@@ -58,12 +58,9 @@
 #include "StyleLibrary.h"
 #include "SvgIconRenderer.h"
 #include "../core/SearchHistoryService.h"
-#include "../core/SyncStatusService.h"
 #include "DriveButton.h"
 #include "TagManagerDialog.h"
 #include "../util/ShellHelper.h"
-#include "../util/ImportHelper.h"
-#include "../util/AssetImporter.h"
 using namespace QuarkMeta::Style;
 #include "../core/ModelContract.h"
 #include <QFileInfo>
@@ -760,51 +757,6 @@ void MainWindow::initUi() {
         }
     });
 
-    // 2. 监听后台扫描状态变动
-    connect(&SyncStatusService::instance(), &SyncStatusService::statusUpdated,
-            this, [this, formatTime](bool syncing, int pendingCount) {
-        if (syncing && pendingCount > 0) {
-            if (m_syncStartTime == 0) {
-                m_syncStartTime = QDateTime::currentMSecsSinceEpoch();
-                m_totalBatchCount = pendingCount;
-                m_elapsedTimer->start();
-                updateProgressBarGeometry();
-                
-                m_topProgressBar->setValue(1);
-                m_topProgressBar->show();
-            }
-            
-            if (pendingCount > m_totalBatchCount) {
-                m_totalBatchCount = pendingCount;
-            }
-
-            int completedCount = m_totalBatchCount - pendingCount;
-            int pct = qBound(1, (int)((double)completedCount / m_totalBatchCount * 100), 99);
-            m_topProgressBar->setValue(pct);
-        } else {
-            if (m_syncStartTime > 0) {
-                m_topProgressBar->setValue(100);
-                m_elapsedTimer->stop();
-                
-                qint64 totalSec = (QDateTime::currentMSecsSinceEpoch() - m_syncStartTime) / 1000;
-                
-                // 完成时展示标准格式
-                m_statusLeft->setText(QString("数据扫描完成  数量：%1  |  实际耗时: %2")
-                                      .arg(m_totalBatchCount)
-                                      .arg(formatTime(totalSec)));
-                
-                // 400ms 后隐藏顶层进度条，3 秒后恢复常态项目计数
-                QTimer::singleShot(400, this, [this]() {
-                    m_topProgressBar->hide();
-                    m_syncStartTime = 0;
-                    m_totalBatchCount = 0;
-                    QTimer::singleShot(3000, this, [this]() {
-                        updateStatusBar();
-                    });
-                });
-            }
-        }
-    });
 }
 
 #ifdef Q_OS_WIN

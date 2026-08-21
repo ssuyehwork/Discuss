@@ -18,27 +18,11 @@
 
 namespace QuarkMeta {
 
-BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, bool isMemoryMode, QWidget* parent)
-    : FramelessDialog("批量创建 - QuarkMeta", parent), m_currentDir(currentDirectory), m_isMemoryMode(isMemoryMode) {
+BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, QWidget* parent)
+    : FramelessDialog("批量创建 - QuarkMeta", parent), m_currentDir(currentDirectory) {
     resize(550, 420);
     initContent();
     applyTheme();
-
-    // 扫描并填充 m_libraryCombo 数据
-    if (m_libraryCombo) {
-        for (const QFileInfo& drive : QDir::drives()) {
-            QString letter = drive.absolutePath().left(1).toUpper();
-            QString drivePath = QDir::toNativeSeparators(QString("%1:\\").arg(letter));
-            if (QDir(drivePath).exists()) {
-                m_libraryCombo->addItem(QString("磁盘 (%1:)").arg(letter), drivePath);
-            }
-        }
-        QString lastLibPath = AppConfig::instance().getValue("BatchCreate/LastLibraryPath").toString();
-        if (!lastLibPath.isEmpty()) {
-            int idx = m_libraryCombo->findData(lastLibPath);
-            if (idx != -1) m_libraryCombo->setCurrentIndex(idx);
-        }
-    }
 
     // 1. 初始化自动保存防抖定时器
     m_autoSaveTimer = new QTimer(this);
@@ -93,12 +77,6 @@ BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, bool isMem
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &BatchCreateDialog::scheduleAutoSave);
     connect(m_suffixEdit, &QLineEdit::textChanged, this, &BatchCreateDialog::scheduleAutoSave);
     connect(m_countSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &BatchCreateDialog::scheduleAutoSave);
-    if (m_libraryCombo) {
-        connect(m_libraryCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &BatchCreateDialog::scheduleAutoSave);
-    }
-    connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &BatchCreateDialog::updateLibraryControlState);
-
-    updateLibraryControlState();
 }
 
 void BatchCreateDialog::initContent() {
@@ -154,27 +132,12 @@ void BatchCreateDialog::initContent() {
     countGroupL->addWidget(countLabel);
     countGroupL->addWidget(m_countSpin);
 
-    // ===== 4. 资源库组 (内存模式受控选择) =====
-    m_libraryGroupWidget = new QWidget(this);
-    QHBoxLayout* libraryGroupL = new QHBoxLayout(m_libraryGroupWidget);
-    libraryGroupL->setContentsMargins(0, 0, 0, 0);
-    libraryGroupL->setSpacing(4);
-    QLabel* libraryLabel = new QLabel("资源库:", m_libraryGroupWidget);
-    libraryLabel->setStyleSheet("color: #BBB; font-weight: bold;");
-    m_libraryCombo = new QComboBox(m_libraryGroupWidget);
-    m_libraryCombo->setFixedHeight(25);
-    m_libraryCombo->setFixedWidth(140);
-    libraryGroupL->addWidget(libraryLabel);
-    libraryGroupL->addWidget(m_libraryCombo);
-
     // 组合至主布局，组间间距保持 18px（清晰视觉隔离）
     topSettingsL->addLayout(typeGroupL);
     topSettingsL->addSpacing(18); // 组间距 18px
     topSettingsL->addLayout(suffixGroupL);
     topSettingsL->addSpacing(18); // 组间距 18px
     topSettingsL->addLayout(countGroupL);
-    topSettingsL->addSpacing(18); // 组间距 18px
-    topSettingsL->addWidget(m_libraryGroupWidget);
     topSettingsL->addStretch();
 
     layout->addLayout(topSettingsL);
@@ -299,34 +262,10 @@ void BatchCreateDialog::scheduleAutoSave() {
     }
 }
 
-void BatchCreateDialog::updateLibraryControlState() {
-    if (!m_isMemoryMode) {
-        if (m_libraryGroupWidget) m_libraryGroupWidget->setVisible(false);
-        if (m_btnOk) m_btnOk->setEnabled(true);
-        return;
-    }
-
-    bool isFileMode = (m_typeCombo->currentData().toInt() == 1);
-    if (!isFileMode) {
-        if (m_libraryGroupWidget) m_libraryGroupWidget->setVisible(false);
-        if (m_btnOk) m_btnOk->setEnabled(true);
-    } else {
-        if (m_libraryGroupWidget) m_libraryGroupWidget->setVisible(true);
-        bool hasValidLibrary = (m_libraryCombo && m_libraryCombo->count() > 0);
-        if (m_btnOk) m_btnOk->setEnabled(hasValidLibrary);
-    }
-}
-
-QString BatchCreateDialog::selectedLibraryPath() const {
-    if (!m_isMemoryMode || !m_libraryCombo) return QString();
-    return m_libraryCombo->currentData().toString();
-}
-
 void BatchCreateDialog::doAutoSave() {
     AppConfig::instance().setValue("BatchCreate/LastType", m_typeCombo->currentIndex());
     AppConfig::instance().setValue("BatchCreate/LastSuffix", m_suffixEdit->text());
     AppConfig::instance().setValue("BatchCreate/LastCount", m_countSpin->value());
-    AppConfig::instance().setValue("BatchCreate/LastLibraryPath", selectedLibraryPath());
 
     QJsonArray arr;
     for (auto* row : m_ruleRows) {
@@ -392,55 +331,50 @@ void BatchCreateDialog::onExecute() {
     }
     QString finalSuffix = isFile ? ("." + (rawSuffix.isEmpty() ? "md" : rawSuffix)) : "";
 
-    if (m_isMemoryMode) {
-        // 🚨 内存模式下：严禁在此执行 QFile/QDir 本地物理落盘！
-        // 仅保留序列号递增、doAutoSave() 和 accept()，将物理写入彻底交由 ContentPanel 处理。
-    } else {
-        QDir dir(m_currentDir);
-        int itemsCreated = 0;
+    QDir dir(m_currentDir);
+    int itemsCreated = 0;
 
-        for (int i = 0; i < createCount; ++i) {
-            QString renderedName = renderOne(i, rules);
-            if (renderedName.isEmpty()) {
-                renderedName = QString("NewItem_%1").arg(i + 1);
-            }
-
-            if (isFile) {
-                renderedName += finalSuffix;
-            }
-
-            QString targetPath = dir.absoluteFilePath(renderedName);
-
-            if (isFile) {
-                // 安全防重名覆盖机制
-                QFileInfo fi(targetPath);
-                QString base = fi.completeBaseName();
-                QString ext = fi.suffix();
-                int counter = 1;
-                while (QFile::exists(targetPath)) {
-                    targetPath = dir.absoluteFilePath(QString("%1(%2).%3").arg(base).arg(counter++).arg(ext));
-                }
-                QFile file(targetPath);
-                if (file.open(QIODevice::WriteOnly)) {
-                    file.close();
-                    itemsCreated++;
-                }
-            } else {
-                // 文件夹防重名覆盖
-                int counter = 1;
-                QString baseName = renderedName;
-                while (QDir(targetPath).exists()) {
-                    targetPath = dir.absoluteFilePath(QString("%1(%2)").arg(baseName).arg(counter++));
-                }
-                if (QDir().mkpath(targetPath)) {
-                    itemsCreated++;
-                }
-            }
+    for (int i = 0; i < createCount; ++i) {
+        QString renderedName = renderOne(i, rules);
+        if (renderedName.isEmpty()) {
+            renderedName = QString("NewItem_%1").arg(i + 1);
         }
 
-        QString msg = QString("成功创建 %1 个项目").arg(itemsCreated);
-        ToolTipOverlay::instance()->showText(QCursor::pos(), msg, 2000, Style::SuccessGreen);
+        if (isFile) {
+            renderedName += finalSuffix;
+        }
+
+        QString targetPath = dir.absoluteFilePath(renderedName);
+
+        if (isFile) {
+            // 安全防重名覆盖机制
+            QFileInfo fi(targetPath);
+            QString base = fi.completeBaseName();
+            QString ext = fi.suffix();
+            int counter = 1;
+            while (QFile::exists(targetPath)) {
+                targetPath = dir.absoluteFilePath(QString("%1(%2).%3").arg(base).arg(counter++).arg(ext));
+            }
+            QFile file(targetPath);
+            if (file.open(QIODevice::WriteOnly)) {
+                file.close();
+                itemsCreated++;
+            }
+        } else {
+            // 文件夹防重名覆盖
+            int counter = 1;
+            QString baseName = renderedName;
+            while (QDir(targetPath).exists()) {
+                targetPath = dir.absoluteFilePath(QString("%1(%2)").arg(baseName).arg(counter++));
+            }
+            if (QDir().mkpath(targetPath)) {
+                itemsCreated++;
+            }
+        }
     }
+
+    QString msg = QString("成功创建 %1 个项目").arg(itemsCreated);
+    ToolTipOverlay::instance()->showText(QCursor::pos(), msg, 2000, Style::SuccessGreen);
 
     // 按照用户最新要求：成功创建后，自动递增累加序列数字的起始值，并落盘保存
     for (auto* row : m_ruleRows) {

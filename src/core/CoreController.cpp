@@ -13,7 +13,6 @@
 #include <QtConcurrent>
 #include <unordered_set>
 #include "PhysicalDiskSearchExtractor.h"
-#include "../util/AssetImporter.h"
 
 namespace QuarkMeta {
 
