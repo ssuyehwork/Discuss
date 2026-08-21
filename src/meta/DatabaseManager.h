@@ -6,12 +6,10 @@
 #include <QTimer>
 #include <QRecursiveMutex>
 #include "sqlite3.h"
-#include <map>
 #include <string>
 #include <vector>
 #include <mutex>
 #include <functional>
-#include <unordered_map>
 #include <memory>
 #include <deque>
 #include <thread>
@@ -151,7 +149,6 @@ private:
     QRecursiveMutex m_dbMutex;
 
     std::atomic<int> m_activeWriteSources{0};
-    std::atomic<bool> m_isBackupRunning{false};
     std::atomic<bool> m_isDirty{false};
 
     std::mutex m_globalDbMutex;

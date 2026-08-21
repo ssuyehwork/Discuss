@@ -312,22 +312,6 @@ void MetadataManager::initFromDatabase() {
             sqlite3_finalize(stmt);
         }
 
-        // 2. Plan-124: 加载进度缓存 (正确的闭包内部位置)
-        const char* statsSql = "SELECT key, value FROM system_stats WHERE key LIKE 'PROGRESS:%'";
-        if (sqlite3_prepare_v2(db, statsSql, -1, &stmt, nullptr) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char* key = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                double val = sqlite3_column_double(stmt, 1);
-                if (key) {
-                    std::string sKey(key);
-                    if (sKey.find("PROGRESS:") == 0) {
-                        std::wstring fPath = normalizePath(QString::fromUtf8(key + 9).toStdWString());
-                        tempFolderProgressCache[fPath] = val;
-                    }
-                }
-            }
-            sqlite3_finalize(stmt);
-        }
     }; // 🚨 正确：loadFromDb 闭包在这里统一结束！
 
     // 加载全局库
@@ -630,16 +614,6 @@ void MetadataManager::calculateAndPersistProgress(const std::wstring& folderPath
         progress = (double)count1 / (count0 + count1);
     }
 
-    // 3. 持久化进度到 system_stats 表
-    const char* upsertSql = "INSERT OR REPLACE INTO system_stats (key, value) VALUES (?, ?)";
-    if (sqlite3_prepare_v2(db, upsertSql, -1, &stmt, nullptr) == SQLITE_OK) {
-        std::string key = "PROGRESS:" + QString::fromStdWString(nFolder).toUtf8().toStdString();
-        sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_double(stmt, 2, progress);
-        if (sqlite3_step(stmt) != SQLITE_DONE) {
-        }
-        sqlite3_finalize(stmt);
-    }
 
     // Plan-124: 更新内存缓存
     {
@@ -667,16 +641,6 @@ double MetadataManager::getProgressFromDb(const std::wstring& folderPath) {
     if (!db) return -1.0;
 
     double progress = -1.0;
-    sqlite3_stmt* stmt;
-    const char* sql = "SELECT value FROM system_stats WHERE key = ?";
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-        std::string key = "PROGRESS:" + QString::fromStdWString(nFolder).toUtf8().toStdString();
-        sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_TRANSIENT);
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            progress = sqlite3_column_double(stmt, 0);
-        }
-        sqlite3_finalize(stmt);
-    }
 
     // 回填缓存
     if (progress >= 0) {
@@ -1845,17 +1809,6 @@ void MetadataManager::removeMetadataBatchSync(const QStringList& paths) {
             sqlite3_finalize(memStmt);
         }
 
-        // 🚨 2026-07-27 按照 Plan-107：极速级联清除 system_stats 中的 PROGRESS 进度记录
-        for (const QString& qp : paths) {
-            std::wstring nPath = normalizePath(qp.toStdWString());
-            std::string progressKey = "PROGRESS:" + QString::fromStdWString(nPath).toUtf8().toStdString();
-            sqlite3_stmt* statStmt;
-            if (sqlite3_prepare_v2(db, "DELETE FROM system_stats WHERE key = ?", -1, &statStmt, nullptr) == SQLITE_OK) {
-                sqlite3_bind_text(statStmt, 1, progressKey.c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_step(statStmt);
-                sqlite3_finalize(statStmt);
-            }
-        }
         trans.commit();
     }
 
@@ -2099,21 +2052,13 @@ void MetadataManager::persistBatchAsync(const std::vector<std::wstring>& paths, 
             // 重新解析出最新基名与后缀塞入
             parsePathComponents(p, rMeta.isFolder, rMeta.baseName, rMeta.ext);
 
-            sqlite3_stmt* memStmt;
-            if (sqlite3_prepare_v2(memDb, kSqlInsertMeta, -1, &memStmt, nullptr) == SQLITE_OK) {
-                bindMetaHelper(memStmt, p, rMeta);
-
-                if (sqlite3_step(memStmt) == SQLITE_DONE) {
-                    
-                    {
-                        size_t idx = getShardIndex(p);
-                        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-                        m_shards[idx].items[p] = rMeta;
-                    }
-                    recordsToSync.push_back({p, rMeta});
-                }
-                sqlite3_finalize(memStmt);
+            // Pure disk mode: bypass writing non-root item metadata to global.db's metadata table.
+            {
+                size_t idx = getShardIndex(p);
+                std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+                m_shards[idx].items[p] = rMeta;
             }
+            recordsToSync.push_back({p, rMeta});
         }
         trans.commit();
     }
