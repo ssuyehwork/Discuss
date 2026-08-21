@@ -56,6 +56,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **TagSelectorOverlay 界面精细化改造无脑实施方案**：详见 `Implementation Plan/tag_selector_overlay_refinement.md`
 - **纯磁盘目录模式·内存模式与托管库僵尸代码根除无脑实施方案**：详见 `Implementation Plan/memory_mode_purge.md`
 - **DatabaseManager 与 MetadataManager 废弃 API 移除报错专项修复无脑实施方案**：详见 `Implementation Plan/db_and_managed_api_purge.md`
+- **彻底清除 CategoryLockWidget 残留消灭 3 个 LNK2019 链接错误无脑实施方案**：详见 `Implementation Plan/category_lock_widget_purge.md`
 
 ---
 
