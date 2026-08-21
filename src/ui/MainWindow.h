@@ -15,6 +15,8 @@
 #include <QDateTime>
 
 #include "FramelessDialog.h"
+#include "TagSelectorOverlay.h"
+#include <QPointer>
 
 namespace QuarkMeta {
 

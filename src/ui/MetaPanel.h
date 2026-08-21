@@ -9,9 +9,9 @@
 #include <QResizeEvent>
 #include <QShowEvent>
 #include "components/ElasticEdit.h"
-#include "TagSelectorOverlay.h"
 #include <QPointer>
 #include <QPushButton>
+#include "TagSelectorOverlay.h"
 #include "components/TagPill.h"
 #include "components/FlowLayout.h"
 #include "components/ColorPill.h"

@@ -1,14 +1,8 @@
 # 备份备注
 
-**备份时间**：2026-08-19 17:46:57  
-**备份目录**：Buk_20260819_174652  
+**备份时间**：2026-08-21 19:03:04  
+**备份目录**：Buk_20260821_190301  
 
 ---
 
-更新了 DiskItemModel::loadThumbnailsForRows：
-
-严格限制每批次只处理 2 个条目，并在主线程完成后触发一个 20ms 自驱动链式中继，调用 ContentPanel::refreshVisibleThumbnails。
-
-将 ContentPanel::refreshVisibleThumbnails 改为 public，以便 DiskItemModel 可以访问。
-
-所有后台任务都会验证 generation tokens，在目录导航时能够立即熔断。
+重构 TagPill 标签胶囊控件，绘制 4px 标准圆角，突出“×”关闭按钮并在鼠标悬停时高亮红色（#E81123）；同时确认 MetadataManager::setTags 已完整实现物理落盘更新 .QuarkMeta.json，确保删除后的标签状态不复活。
