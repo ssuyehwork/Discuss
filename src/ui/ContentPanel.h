@@ -126,6 +126,7 @@ public:
         ActionAddToCategory,
         ActionAddToFavorites,
         ActionRefresh,
+        ActionReextractThumbnail,
         ActionCancelImport,
         ActionBatchCreate
     };

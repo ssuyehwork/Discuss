@@ -439,3 +439,20 @@ void DiskItemModel::flushPendingUpdates() {
     }
     m_pendingUpdateRows.clear();
 }
+
+void DiskItemModel::reloadThumbnailForPath(const QString& path) {
+    QString nPath = QDir::toNativeSeparators(path);
+    m_iconCache.remove(nPath);
+    m_iconCache.remove(path);
+    m_aspectRatios.remove(nPath);
+    m_requestedPaths.remove(nPath);
+    m_requestedPaths.remove(path);
+
+    auto it = m_pathToIndex.find(nPath);
+    if (it != m_pathToIndex.end()) {
+        int rIdx = it->second;
+        // 重新异步加载该行的缩略图
+        loadThumbnailsForRows({rIdx});
+        emit dataChanged(index(rIdx, 0), index(rIdx, 0), {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+    }
+}

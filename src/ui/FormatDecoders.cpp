@@ -175,7 +175,7 @@ QImage FormatDecoders::extractPsdHeaderThumbnail(const QString& filePath) {
     return QImage();
 }
 
-QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize) {
+QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize, int customTimeoutMs) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return QImage();
 
@@ -269,7 +269,7 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize)
     }
 
     // 通道 3：Ghostscript 矢量引擎
-    QImage gsImg = renderGhostscriptSafely(filePath, targetSize);
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs);
     if (!gsImg.isNull()) {
         return gsImg;
     }
@@ -311,7 +311,7 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize)
     return WindowsShellThumbnailProvider::getShellThumbnail(filePath, targetSize);
 }
 
-QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize) {
+QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize, int customTimeoutMs) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         return QImage();
@@ -379,7 +379,7 @@ QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize
     }
 
     // Ghostscript 终极矢量引擎
-    QImage gsImg = renderGhostscriptSafely(filePath, targetSize);
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs);
     if (!gsImg.isNull()) {
         return gsImg;
     }
@@ -422,14 +422,15 @@ QString FormatDecoders::findGhostscriptExecutable() {
 
 static QSemaphore g_gsConcurrencyLimit(2); // 最多2个Ghostscript进程并发跑
 
-QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targetSize) {
+QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targetSize, int customTimeoutMs) {
     if (CoreController::isShuttingDown()) return QImage();
 
     QString gsExec = findGhostscriptExecutable();
     if (gsExec.isEmpty()) return QImage();
 
-    // 尝试获取信号量，若排队超过 100ms 则直接放弃，防止卡死
-    if (!g_gsConcurrencyLimit.tryAcquire(1, 100)) {
+    // 尝试获取信号量，若排队超过 100ms 则直接放弃，防止卡死（长效模式下等待更长时间）
+    int acqWaitMs = (customTimeoutMs > 0) ? 5000 : 100;
+    if (!g_gsConcurrencyLimit.tryAcquire(1, acqWaitMs)) {
         return QImage();
     }
     struct ReleaseGuard {
@@ -439,15 +440,18 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 
     if (CoreController::isShuttingDown()) return QImage();
 
-    // 按文件大小分级动态超时：文件越大矢量内容通常越复杂，渲染越慢，固定短超时会误杀大文件
-    // 阈值为默认经验值，待实际批量测试文件大小分布数据回来后精调
-    QFileInfo fi(filePath);
-    qint64 fileSizeMB = fi.size() / (1024 * 1024);
+    // 超时时间计算：如果指定了自定义超时（长效提取模式），则优先使用；否则使用常规分档
     int timeoutMs = 2000;
-    if (fileSizeMB > 20) {
-        timeoutMs = 10000;
-    } else if (fileSizeMB > 5) {
-        timeoutMs = 8000; // 实测 5~8.8MB 文件耗时集中在 5.0~5.8s（含系统抖动），留约38%安全余量
+    if (customTimeoutMs > 0) {
+        timeoutMs = customTimeoutMs; // 长效模式：例如 45000ms
+    } else {
+        QFileInfo fi(filePath);
+        qint64 fileSizeMB = fi.size() / (1024 * 1024);
+        if (fileSizeMB > 20) {
+            timeoutMs = 10000;
+        } else if (fileSizeMB > 5) {
+            timeoutMs = 8000; // 实测 5~8.8MB 文件耗时集中在 5.0~5.8s（含系统抖动），留约38%安全余量
+        }
     }
 
     QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1.png").arg(QString::number(qHash(filePath), 16));

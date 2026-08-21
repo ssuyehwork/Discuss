@@ -14,8 +14,8 @@ struct DecodedMediaResult {
 
 class ImageDecoderFacade {
 public:
-    // 【唯一指定提图接口】单次读盘同时获取原始尺寸与 512 高清图
-    static DecodedMediaResult decodeSinglePass(const QString& filePath, int targetSize = 512);
+    // 【唯一指定提图接口】单次读盘同时获取原始尺寸与 512 高清图 (customTimeoutMs > 0 时透传给长效模式)
+    static DecodedMediaResult decodeSinglePass(const QString& filePath, int targetSize = 512, int customTimeoutMs = 0);
 
     // 保留辅助接口
     static QImage loadScaledImage(const QString& filePath, int targetSize = 512, int maxAllocationMB = 128);

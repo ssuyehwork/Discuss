@@ -26,6 +26,7 @@
 #include "../core/CentralEventHub.h"
 #include "../util/SecureFileEraser.h"
 #include "../util/DiskIoService.h"
+#include "../util/DeepThumbnailExtractor.h"
  
 #include <QVBoxLayout> 
 #include <QHBoxLayout> 
@@ -1741,6 +1742,11 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
         menu.addAction("刷新")->setData(ActionRefresh); 
 
+        // 仅在选中普通文件时展示“重新提取缩略图”
+        if (onItem && !isFolder) {
+            menu.addAction(UiHelper::getIcon("sync", QColor("#3498db"), 18), "重新提取缩略图")->setData(ActionReextractThumbnail);
+        }
+
 
         // 2026-07-27 按照 Plan-107：仅对已在资源库中登记的文件夹，增加“取消导入并清除数据”菜单项
         if (currentIndex.data(TypeRole).toString() == "folder" && currentIndex.data(ManagedRole).toBool()) {
@@ -2288,6 +2294,43 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         }
         case ActionRefresh: {
             refreshAll();
+            break;
+        }
+        case ActionReextractThumbnail: {
+            auto indexes = view->selectionModel()->selectedIndexes();
+            QStringList targetPaths;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0 && !idx.data(PathRole).toString().isEmpty() && idx.data(TypeRole).toString() != "folder") {
+                    targetPaths << idx.data(PathRole).toString();
+                }
+            }
+            if (targetPaths.isEmpty() && !path.isEmpty() && !isFolder) {
+                targetPaths << path;
+            }
+
+            if (!targetPaths.isEmpty()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("正在深度重新提取 %1 个项目的缩略图...").arg(targetPaths.size()), 2000, QColor("#3498db"));
+                
+                QPointer<ContentPanel> weakThis(this);
+                DeepThumbnailExtractor::instance().extractBatchAsync(
+                    targetPaths,
+                    [weakThis](const QString& itemPath, bool success) {
+                        if (weakThis && success && weakThis->m_diskModel) {
+                            weakThis->m_diskModel->reloadThumbnailForPath(itemPath);
+                        }
+                    },
+                    [weakThis](int successCount, int totalCount) {
+                        if (weakThis) {
+                            ToolTipOverlay::instance()->showText(
+                                QCursor::pos(),
+                                QString("缩略图提取完成：成功 %1 / 总计 %2").arg(successCount).arg(totalCount),
+                                2000,
+                                successCount > 0 ? QColor("#2ecc71") : QColor("#e81123")
+                            );
+                        }
+                    }
+                );
+            }
             break;
         }
         default: break; 

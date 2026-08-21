@@ -93,4 +93,14 @@ QImage DiskMediaExtractor::getDiskThumbnail(const QString& path, int size) {
     return getCapsuleThumbnail(path, size);
 }
 
+QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, int size) {
+    // 强制调用单遍解码，且对耗时格式赋予 45 秒超时
+    DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 45000);
+    if (dec.isValid && !dec.thumbnail512.isNull()) {
+        saveDiskThumbnail(filePath, dec.thumbnail512);
+        return dec.thumbnail512;
+    }
+    return QImage();
+}
+
 } // namespace QuarkMeta

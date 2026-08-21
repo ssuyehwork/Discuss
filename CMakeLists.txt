@@ -217,6 +217,8 @@ set(SOURCES
     src/ui/ColorAlgorithmEngine.cpp
     src/util/DiskMediaExtractor.h
     src/util/DiskMediaExtractor.cpp
+    src/util/DeepThumbnailExtractor.h
+    src/util/DeepThumbnailExtractor.cpp
     src/util/ShellHelper.cpp
     src/util/ShellHelper.h
     QuarkMeta.rc

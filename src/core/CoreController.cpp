@@ -69,9 +69,6 @@ void CoreController::startSystem() {
 
             // 启动原生监控服务 (对应用户原话："采用NativeFolderWatcher (IOCP) 机制的方式")
             // 资源库无需开启 IOCP 监控（已取消）
-            const auto drives = QDir::drives();
-            for (const QFileInfo& d : drives) {
-            }
 
             QMetaObject::invokeMethod(this, [this]() {
                 setStatus("系统就绪", false);

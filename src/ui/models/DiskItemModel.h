@@ -36,6 +36,9 @@ public:
     void clearCacheForFolder(const QString& folderPath) override;
     void flushPendingUpdates() override;
 
+    // 强制重载指定路径的内存缩略图与宽高比缓存，并触发视图重绘
+    void reloadThumbnailForPath(const QString& path);
+
 protected:
     bool isSuspended() const;
 
