@@ -57,7 +57,8 @@ void CoreController::startSystem() {
                 setStatus("正在载入元数据缓存...", true);
             }, Qt::QueuedConnection);
             
-            // 纯磁盘直连模式注销全盘 metadata 数据表预训练扫描
+            // 仅执行 SQLite 模式初始化
+            MetadataManager::instance().initFromDatabase();
 
 
             // 在系统顶层统一提取一次“上次是否正常关闭”状态，提取后立刻置脏

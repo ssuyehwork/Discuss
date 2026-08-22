@@ -179,7 +179,6 @@ private:
     static QMap<QString, QColor> s_colorMap();
 
     FilterState m_filter;
-    QString     m_hueSliderColor;
     QStringList m_recentColors; // LRU 缓存
 
     QuarkMeta::ScanStats m_currentStats;
@@ -216,7 +215,6 @@ private:
 
 
     // 2026-xx-xx 新增快速输入框成员
-    QLineEdit*    m_editColor       = nullptr;
     QLineEdit*    m_editType        = nullptr;
     QLineEdit*    m_editCreateDate  = nullptr;
     QLineEdit*    m_editModifyDate  = nullptr;

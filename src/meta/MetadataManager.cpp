@@ -851,23 +851,68 @@ void MetadataManager::setSha256(const std::wstring& path, const std::string& sha
 void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<ExtractedFeatureItem>& items) {
     if (items.empty()) return;
 
+    std::unordered_map<sqlite3*, std::vector<ExtractedFeatureItem>> dbGroupMap;
     for (const auto& item : items) {
         std::wstring nPath = normalizePath(item.path);
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        if (m_shards[idx].items.count(nPath)) {
-            RuntimeMeta& meta = m_shards[idx].items[nPath];
-            meta.width = item.width;
-            meta.height = item.height;
-            if (item.mtime > 0) meta.mtime = item.mtime;
-            if (item.fileSize > 0) meta.fileSize = item.fileSize;
-            meta.autoColor = item.autoColor;
-            meta.ingestionStatus = item.ingestionStatus;
-            meta.palettes.clear();
-            for (const auto& p : item.palettes) {
-                meta.palettes.emplace_back(p.first, p.second);
+        {
+            size_t idx = getShardIndex(nPath);
+            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+            if (m_shards[idx].items.count(nPath)) {
+                RuntimeMeta& meta = m_shards[idx].items[nPath];
+                meta.width = item.width;
+                meta.height = item.height;
+                if (item.mtime > 0) meta.mtime = item.mtime;
+                if (item.fileSize > 0) meta.fileSize = item.fileSize;
+                meta.autoColor = item.autoColor;
+                meta.ingestionStatus = item.ingestionStatus;
+                meta.palettes.clear();
+                for (const auto& p : item.palettes) {
+                    meta.palettes.emplace_back(p.first, p.second);
+                }
             }
         }
+
+        sqlite3* db = DatabaseManager::instance().getGlobalDb();
+        if (db) {
+            dbGroupMap[db].push_back(item);
+        }
+    }
+
+    for (auto& pair : dbGroupMap) {
+        sqlite3* db = pair.first;
+        auto itemList = pair.second;
+        DatabaseManager::instance().enqueueSyncTask([db, itemList]() {
+            SqlTransaction trans(db);
+            const char* sql = "UPDATE metadata SET width = ?, height = ?, auto_color = ?, palettes = ?, ingestion_status = ?, mtime = ?, file_size = ? WHERE path = ?";
+            sqlite3_stmt* stmt = nullptr;
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+                for (const auto& it : itemList) {
+                    sqlite3_bind_int(stmt, 1, it.width);
+                    sqlite3_bind_int(stmt, 2, it.height);
+
+                    QString qColor = QString::fromStdWString(it.autoColor);
+                    sqlite3_bind_text16(stmt, 3, qColor.utf16(), -1, SQLITE_TRANSIENT);
+
+                    QJsonArray arr;
+                    for (const auto& pe : it.palettes) {
+                        QJsonObject obj; obj["color"] = pe.first.name(); obj["ratio"] = (double)pe.second; arr.append(obj);
+                    }
+                    QByteArray ba = QJsonDocument(arr).toJson(QJsonDocument::Compact);
+                    sqlite3_bind_blob(stmt, 4, ba.constData(), ba.size(), SQLITE_TRANSIENT);
+                    sqlite3_bind_int(stmt, 5, it.ingestionStatus);
+                    sqlite3_bind_int64(stmt, 6, it.mtime);
+                    sqlite3_bind_int64(stmt, 7, it.fileSize);
+
+                    QString qPath = QString::fromStdWString(it.path);
+                    sqlite3_bind_text16(stmt, 8, qPath.utf16(), -1, SQLITE_TRANSIENT);
+
+                    sqlite3_step(stmt);
+                    sqlite3_reset(stmt);
+                }
+                sqlite3_finalize(stmt);
+            }
+            trans.commit();
+        });
     }
 }
 

@@ -369,8 +369,7 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
         QLineEdit* edit = qobject_cast<QLineEdit*>(watched);
         if (edit && edit->objectName() == "FilterSearchEdit") {
             QString key;
-            if (edit == m_editColor) key = "Color";
-            else if (edit == m_editType) key = "Type";
+            if (edit == m_editType) key = "Type";
             else if (edit == m_editCreateDate) key = "CreateDate";
             else if (edit == m_editModifyDate) key = "ModifyDate";
 
@@ -384,8 +383,7 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
 
                 connect(m_historyPanel, &SearchHistoryPanel::historyItemClicked, this, [this, edit, key](const QString& text) {
                     edit->setText(text);
-                    if (edit == m_editColor) m_filter.colorFilterText = text;
-                    else if (edit == m_editType) m_filter.typeFilterText = text;
+                    if (edit == m_editType) m_filter.typeFilterText = text;
                     else if (edit == m_editCreateDate) m_filter.createDateFilterText = text;
                     else if (edit == m_editModifyDate) m_filter.modifyDateFilterText = text;
 
@@ -406,7 +404,13 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
             // 2026-07-xx 按照 Plan-65：悬停触发，timeout = 0
             ToolTipOverlay::instance()->showText(QCursor::pos(), text, 0);
         }
-    } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::MouseButtonRelease) {
+    } else if (event->type() == QEvent::MouseMove || event->type() == QEvent::MouseButtonPress) {
+        // 2026-06-23 按照用户要求：滑杆滑动/悬停显示百分比数值
+        if (watched == m_areaSlider) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("%1%").arg(m_areaSlider->value()), 0);
+        }
+    } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::MouseButtonRelease || (event->type() == QEvent::MouseButtonPress && watched != m_areaSlider)) {
+        // 2026-06-23 逻辑修正：滑杆按下时不隐藏（以便滑动回显），离开或释放时隐藏
         ToolTipOverlay::hideTip();
     }
     
@@ -553,12 +557,13 @@ void FilterPanel::rebuildGroups() {
     m_groupHeaders.clear();
 
     // 2026-xx-xx 物理安全：重置快速输入框指针，防止 Directory 切换导致的野指针崩溃
-    m_editColor = nullptr;
     m_editType = nullptr;
     m_editCreateDate = nullptr;
     m_editModifyDate = nullptr;
     m_createDateLayout = nullptr;
     m_modifyDateLayout = nullptr;
+    m_accuracySlider = nullptr;
+    m_areaSlider = nullptr;
 
     // 清空旧内容（保留末尾 stretch，并在删除前显式立刻隐藏和解除父子绑定，杜绝渲染重影）
     while (m_containerLayout->count() > 1) {
@@ -602,139 +607,6 @@ void FilterPanel::rebuildGroups() {
         QWidget* g = buildGroup("颜色标记", gl, &hdrLayout);
         m_groupColor = g;
 
-        // 带有左右 5px 缩进外壳的快速输入框
-        QWidget* wColor = new QWidget(g);
-        QHBoxLayout* lColor = new QHBoxLayout(wColor);
-        lColor->setContentsMargins(5, 6, 5, 4);
-        lColor->setSpacing(0);
-
-        m_editColor = new QLineEdit(wColor);
-        m_editColor->setClearButtonEnabled(true);
-        m_editColor->setPlaceholderText("例： 红 / #E24B4A / 无色标");
-        m_editColor->setText(m_filter.colorFilterText);
-        m_editColor->setObjectName("FilterSearchEdit");
-        m_editColor->setFixedHeight(22);
-        m_editColor->setStyleSheet(
-            "QLineEdit#FilterSearchEdit {"
-            "  background: #2D2D2D;"
-            "  color: #CCCCCC;"
-            "  border: 1px solid #444444;"
-            "  border-radius: 4px;"
-            "  padding: 0px 6px;"
-            "  font-size: 11px;"
-            "}"
-            "QLineEdit#FilterSearchEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
-        );
-        m_editColor->installEventFilter(this);
-        connect(m_editColor, &QLineEdit::returnPressed, this, [this]() {
-            m_filter.colorFilterText = m_editColor->text();
-            saveFilterHistory("Color", m_filter.colorFilterText);
-            emit filterChanged(m_filter);
-        });
-        connect(m_editColor, &QLineEdit::textChanged, this, [this](const QString& text) {
-            if (text.isEmpty() && !m_filter.colorFilterText.isEmpty()) {
-                m_filter.colorFilterText = "";
-                emit filterChanged(m_filter);
-            }
-        });
-        lColor->addWidget(m_editColor);
-        gl->addWidget(wColor);
-
-
-        // 2.2 标准色矩阵 (12色)
-        // 2026-06-xx 物理对齐：设置左边距 8px 以对齐下方的复选框视觉线
-        QLabel* lblStatic = new QLabel("标准色系", g);
-        lblStatic->setStyleSheet("color: #666; font-size: 10px; margin-top: 4px; margin-left: 5px;");
-        gl->addWidget(lblStatic);
-
-        QWidget* staticGrid = new QWidget(g);
-        staticGrid->setContentsMargins(5, 0, 5, 0); 
-        // 2026-06-xx 物理微调：间距从 4px 缩减至 2px
-        FlowLayout* staticFlow = new FlowLayout(staticGrid, 0, 2, 2);
-        staticGrid->setLayout(staticFlow);
-        
-        QStringList standardHex = {
-            "#E24B4A", "#EF9F27", "#FECF0E", "#639922", 
-            "#1D9E75", "#378ADD", "#7F77DD", "#E91E63",
-            "#000000", "#808080", "#FFFFFF", "#795548"
-        };
-
-        for (const QString& hex : standardHex) {
-            ColorBlock* block = new ColorBlock(QColor(hex), staticGrid);
-            block->setChecked(m_filter.colors.contains(hex));
-            
-            // 异步统计对账 (模拟：此处可后续接入真正的数据查询)
-            int count = 0;
-            for (auto it = m_colorCounts.begin(); it != m_colorCounts.end(); ++it) {
-                if (UiHelper::calculateDeltaE(QColor(hex), UiHelper::parseColorName(it.key())) < 10.0) {
-                    count += it.value();
-                }
-            }
-            block->setCount(count);
-
-            connect(block, &ColorBlock::clicked, this, [this, hex](const QColor& /*c*/) {
-                if (m_filter.colors.contains(hex)) {
-                    m_filter.colors.removeAll(hex);
-                } else {
-                    m_filter.colors.clear(); // 单选模式
-                    m_filter.colors.append(hex);
-                    
-                    // LRU 更新
-                    m_recentColors.removeAll(hex);
-                    m_recentColors.prepend(hex);
-                    if (m_recentColors.size() > 50) m_recentColors.removeLast();
-                    AppConfig::instance().setValue("Filter/RecentColors", m_recentColors);
-                }
-                emit filterChanged(m_filter);
-                rebuildGroups();
-            });
-            staticFlow->addWidget(block);
-        }
-        gl->addWidget(staticGrid);
-
-        // 2.3 最近筛选 (LRU)
-        if (!m_recentColors.isEmpty()) {
-            QLabel* lblRecent = new QLabel("最近筛选", g);
-            lblRecent->setStyleSheet("color: #666; font-size: 10px; margin-top: 8px; margin-left: 5px;");
-            gl->addWidget(lblRecent);
-
-            QWidget* recentGrid = new QWidget(g);
-            recentGrid->setContentsMargins(5, 0, 5, 0);
-            // 2026-06-xx 物理微调：间距从 4px 缩减至 2px
-            FlowLayout* recentFlow = new FlowLayout(recentGrid, 0, 2, 2);
-            recentGrid->setLayout(recentFlow);
-
-            for (const QString& hex : m_recentColors) {
-                ColorBlock* block = new ColorBlock(QColor(hex), recentGrid);
-                block->setChecked(m_filter.colors.contains(hex));
-                
-                int count = 0;
-                for (auto it = m_colorCounts.begin(); it != m_colorCounts.end(); ++it) {
-                    if (UiHelper::calculateDeltaE(QColor(hex), UiHelper::parseColorName(it.key())) < 10.0) {
-                        count += it.value();
-                    }
-                }
-                block->setCount(count);
-
-                connect(block, &ColorBlock::clicked, this, [this, hex](const QColor& /*c*/) {
-                    if (m_filter.colors.contains(hex)) {
-                        m_filter.colors.removeAll(hex);
-                    } else {
-                        m_filter.colors.clear();
-                        m_filter.colors.append(hex);
-                        
-                        // 即使是在最近面板中点击，也应更新排序使其置顶
-                        m_recentColors.removeAll(hex);
-                        m_recentColors.prepend(hex);
-                        AppConfig::instance().setValue("Filter/RecentColors", m_recentColors);
-                    }
-                    emit filterChanged(m_filter);
-                    rebuildGroups();
-                });
-                recentFlow->addWidget(block);
-            }
-            gl->addWidget(recentGrid);
-        }
 
         // 2.4 无色标处理
         if (m_colorCounts.contains("")) {
@@ -1355,10 +1227,8 @@ void FilterPanel::clearAllFilters(bool force) {
     m_filter = FilterState{};
     m_filter.manualExactColors.clear();
     m_filter.duplicatePresence = FilterState::DupAll;
-    m_hueSliderColor.clear();
 
     // 2026-xx-xx 按照用户要求：清空剩余输入框的文字
-    if (m_editColor) m_editColor->clear();
     if (m_editType) m_editType->clear();
     if (m_editCreateDate) m_editCreateDate->clear();
     if (m_editModifyDate) m_editModifyDate->clear();
