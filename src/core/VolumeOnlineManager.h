@@ -17,7 +17,7 @@ public:
     // 获取当前物理在线的托管盘符集合 (如 {"C", "D", "Z"})
     QSet<QString> getOnlineDrives() const;
 
-    // 校验特定托管库 (如 "QuarkMeta.library_g" 或 "G:\...") 是否处于在线状态
+    // 校验特定盘符/路径是否处于在线状态
     bool isLibraryOnline(const QString& libraryNameOrPath) const;
 
     // 提取盘符 (例如 "QuarkMeta.library_g" -> "G", "G:/abc" -> "G", "g:" -> "G")

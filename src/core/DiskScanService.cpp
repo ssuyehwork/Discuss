@@ -24,7 +24,7 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
             // 🚨 统一调用文件过滤服务（归一化处理所有辅助文件、.arc、.QuarkMeta） 
             if (FileFilterService::isAuxiliaryFile(absPath)) continue; 
  
-            ItemRecord itemRec = ItemRecord::create(absPath, nullptr, false); 
+            ItemRecord itemRec = ItemRecord::create(absPath, nullptr); 
             allItems.push_back(itemRec); 
  
             if (rec && info.isDir()) { 

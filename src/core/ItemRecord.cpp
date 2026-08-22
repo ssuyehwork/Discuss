@@ -27,7 +27,7 @@ void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
     }
 }
 
-ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMeta, bool isFromMemory) {
+ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMeta) {
     ItemRecord r;
     std::wstring wPath = MetadataManager::normalizePath(path.toStdWString());
     QString nPath = QString::fromStdWString(wPath);
@@ -40,40 +40,6 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
     RuntimeMeta meta;
     if (providedMeta) {
         meta = *providedMeta;
-    } else if (isFromMemory) {
-        meta = MetadataManager::instance().getMeta(wPath);
-    }
-
-    if (isFromMemory) {
-        // 🚨【真·纯内存模式】：100% 从内存 RuntimeMeta 镜像读取，严禁任何物理磁盘 I/O
-        r.size = meta.fileSize;
-        r.ctime = meta.ctime;
-        r.mtime = meta.mtime;
-        r.atime = meta.atime;
-        r.isDir = meta.isFolder;
-        r.isManaged = true;
-        r.isEmpty = false;
-        r.path = nPath;
-
-        // 直接从内存元数据注入真实素材文件名与后缀
-        if (!meta.baseName.empty()) {
-            QString baseNameStr = QString::fromStdWString(meta.baseName);
-            r.suffix = QString::fromStdWString(meta.ext);
-            // 严禁对已包含扩展名的文件名进行二次拼接（消除 .svg.svg 双后缀 Bug）
-            if (!r.suffix.isEmpty() && !baseNameStr.endsWith("." + r.suffix, Qt::CaseInsensitive)) {
-                r.filename = baseNameStr + "." + r.suffix;
-            } else {
-                r.filename = baseNameStr;
-            }
-        } else {
-            int lastSlash = std::max(nPath.lastIndexOf('\\'), nPath.lastIndexOf('/'));
-            r.filename = (lastSlash != -1) ? nPath.mid(lastSlash + 1) : nPath;
-            int lastDot = r.filename.lastIndexOf('.');
-            r.suffix = (lastDot != -1) ? r.filename.mid(lastDot + 1) : "";
-        }
-
-        ItemRecord::fromMetadata(r, meta);
-        return r;
     }
 
     // 磁盘模式分支（保持原有 Win32 探测）
