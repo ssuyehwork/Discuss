@@ -15,10 +15,18 @@
 #include "../DiskBatchRenameService.h"
 #include "FileOperationHelper.h"
 #include "MetadataManager.h"
+#include <QtConcurrent>
 
 namespace QuarkMeta {
 
-#include <QtConcurrent>
+QThreadPool* DiskItemModel::thumbnailPool() {
+    static QThreadPool pool;
+    static std::once_flag flag;
+    std::call_once(flag, []() {
+        pool.setMaxThreadCount(4);
+    });
+    return &pool;
+}
 
 DiskItemModel::DiskItemModel(QObject* parent) : ItemModelBase(parent) {
     m_iconCache.setMaxCost(500);
