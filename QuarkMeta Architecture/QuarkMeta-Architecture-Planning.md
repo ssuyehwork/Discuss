@@ -63,6 +63,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **元数据面板标签按钮化与 TagSelectorOverlay 悬浮选择器实时联动无脑实施方案**：详见 `Implementation Plan/meta_panel_tag_selector_overlay.md`
 - **TagSelectorOverlay 界面精细化改造无脑实施方案**：详见 `Implementation Plan/tag_selector_overlay_refinement.md`
 - **纯磁盘目录模式·内存模式与托管库僵尸代码根除无脑实施方案**：详见 `Implementation Plan/memory_mode_purge.md`
+- **筛选面板颜色高级筛选复合控件清退与纯净化方案**：详见 `Implementation Plan/filter_color_purge.md`
 
 ---
 
@@ -186,3 +187,15 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 3. **“无缩略图 (失败/跳过)” 筛选扩展**：
    - 在第五栏筛选面板的“文件类型”或专用条件组中新增“无缩略图 (失败/跳过)”复选选项。
    - 筛选逻辑：当勾选该复选框时，依据 `thumbStatus == 1`（缩略图提取失败/跳过）进行匹配过滤，便于用户一键定位破坏损坏的图片或渲染失败的格式文件。
+
+---
+
+## 14. 筛选面板界面纯净化与颜色高级筛选复合组件清退规范 (Filter Panel UI Simplification & Color Selector Purge Specification)
+
+### 14.1 设计理念与控件纯洁性铁律
+1. **筛选面板五栏布局风格统一铁律**：
+   - 第五栏筛选面板（Filter Panel）所有条件分组（包含评级、颜色标记、文件类型、日期、链接/备注等）**必须统一保持极其简洁、高密度、直观的分类复选框列表形式**。
+2. **严禁过度设计与复合控件堆叠**：
+   - 严禁在筛选面板中引入或复原任何过度设计的复杂复合控件，包括但不限于：色相/渐变滑块（`InlineHueSlider`）、准确度/容差滑块（`m_accuracySlider`）、颜色占比滑块（`m_areaSlider`）、快速颜色文本输入框（`m_editColor`）、标准 12 色矩阵网格以及最近筛选颜色历史块网格（`m_recentColors`）。
+3. **颜色标记分组表现形式**：
+   - “颜色标记”分组必须恢复为与其他分组完全一致的标准纵向复选框列表（例如“无色标”、“红色”、“黄色”等基础类别），确保右侧筛选面板纵向布局平整高效、无冗余留白、性能极其轻量。
