@@ -404,13 +404,7 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
             // 2026-07-xx 按照 Plan-65：悬停触发，timeout = 0
             ToolTipOverlay::instance()->showText(QCursor::pos(), text, 0);
         }
-    } else if (event->type() == QEvent::MouseMove || event->type() == QEvent::MouseButtonPress) {
-        // 2026-06-23 按照用户要求：滑杆滑动/悬停显示百分比数值
-        if (watched == m_areaSlider) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("%1%").arg(m_areaSlider->value()), 0);
-        }
-    } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::MouseButtonRelease || (event->type() == QEvent::MouseButtonPress && watched != m_areaSlider)) {
-        // 2026-06-23 逻辑修正：滑杆按下时不隐藏（以便滑动回显），离开或释放时隐藏
+    } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::MouseButtonRelease) {
         ToolTipOverlay::hideTip();
     }
     
@@ -562,8 +556,6 @@ void FilterPanel::rebuildGroups() {
     m_editModifyDate = nullptr;
     m_createDateLayout = nullptr;
     m_modifyDateLayout = nullptr;
-    m_accuracySlider = nullptr;
-    m_areaSlider = nullptr;
 
     // 清空旧内容（保留末尾 stretch，并在删除前显式立刻隐藏和解除父子绑定，杜绝渲染重影）
     while (m_containerLayout->count() > 1) {
