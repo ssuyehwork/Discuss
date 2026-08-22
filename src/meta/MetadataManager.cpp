@@ -2082,7 +2082,7 @@ void MetadataManager::persistAsync(const std::wstring& path, bool notify, bool a
         return;
     }
 
-    // 1. 内存库操作 (Memory Commit)
+    // 1. 数据库记录操作
     bool isNew = true;
     {
         sqlite3_stmt* checkStmt;
