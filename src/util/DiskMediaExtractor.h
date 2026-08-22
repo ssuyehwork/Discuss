@@ -11,6 +11,8 @@
 
 namespace QuarkMeta {
 
+class CancellationToken;
+
 class DiskMediaExtractor {
 public:
     static std::mutex s_qtGuiMutex;

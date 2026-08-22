@@ -5,9 +5,15 @@
 #include <QCache>
 #include <QMap>
 #include <QIcon>
+#include <QMutex>
+#include <memory>
 
 #include <unordered_map>
 #include <QSet>
+
+namespace QuarkMeta {
+class CancellationToken;
+}
 
 class DiskItemModel : public ItemModelBase {
     Q_OBJECT
