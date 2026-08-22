@@ -5,6 +5,11 @@
 #include <QCache>
 #include <QMap>
 #include <QIcon>
+#include <QThreadPool>
+#include <QMutex>
+#include <QHash>
+#include <memory>
+#include "../core/CoreEngine.h"
 
 #include <unordered_map>
 #include <QSet>
@@ -22,8 +27,10 @@ public:
     Qt::ItemFlags flags(const QModelIndex& index) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
-    // 切换目录/清空数据时调用，使所有已派发的旧任务瞬间失效
-    void incrementGeneration() { m_currentGen.fetch_add(1, std::memory_order_relaxed); }
+    static QThreadPool* thumbnailPool();
+
+    // 切换目录/清空数据时调用，使所有已派发的旧任务瞬间失效并主动触发 Token 取消
+    void incrementGeneration();
     uint64_t currentGeneration() const { return m_currentGen.load(std::memory_order_relaxed); }
 
     const std::vector<QuarkMeta::ItemRecord>& allRecords() const override { return m_allRecords; }
@@ -52,6 +59,9 @@ protected:
 
     QSet<int> m_pendingUpdateRows;
     std::atomic<uint64_t> m_currentGen{0};
+
+    QMutex m_genTokenMutex;
+    QHash<uint64_t, std::shared_ptr<QuarkMeta::CancellationToken>> m_genTokens;
 };
 
 #endif // DISKITEMMODEL_H

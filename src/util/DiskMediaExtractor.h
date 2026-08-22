@@ -6,6 +6,8 @@
 #include <QString>
 #include <mutex>
 #include <cstdint>
+#include <memory>
+#include "../core/CoreEngine.h"
 
 namespace QuarkMeta {
 
@@ -16,8 +18,8 @@ public:
     static QString getDiskThumbCachePathByFileId(uint32_t volSerial, uint64_t fileId);
     static QString getDiskThumbCachePath(const QString& filePath);
     static QImage getCapsuleThumbnailReadOnly(const QString& filePath);
-    static QImage getCapsuleThumbnail(const QString& filePath, int size = 512);
-    static QImage getDiskThumbnail(const QString& path, int size = 512);
+    static QImage getCapsuleThumbnail(const QString& filePath, int size = 512, std::shared_ptr<CancellationToken> token = nullptr);
+    static QImage getDiskThumbnail(const QString& path, int size = 512, std::shared_ptr<CancellationToken> token = nullptr);
     static bool saveDiskThumbnail(const QString& filePath, const QImage& img512);
 
     struct ExtractResult {
@@ -26,10 +28,10 @@ public:
         bool   isValid = false;
     };
 
-    static ExtractResult getCapsuleExtractResult(const QString& filePath, int size = 512);
+    static ExtractResult getCapsuleExtractResult(const QString& filePath, int size = 512, std::shared_ptr<CancellationToken> token = nullptr);
 
     // 强制执行深度长效提取（不走只读缓存，超时放宽至 45 秒）
-    static QImage forceExtractDeepThumbnail(const QString& filePath, int size = 512);
+    static QImage forceExtractDeepThumbnail(const QString& filePath, int size = 512, std::shared_ptr<CancellationToken> token = nullptr);
 };
 
 } // namespace QuarkMeta

@@ -8,7 +8,7 @@
 
 namespace QuarkMeta {
 
-DecodedMediaResult ImageDecoderFacade::decodeSinglePass(const QString& filePath, int targetSize, int customTimeoutMs) {
+DecodedMediaResult ImageDecoderFacade::decodeSinglePass(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
     DecodedMediaResult result;
     QFileInfo info(filePath);
     QString ext = info.suffix().toLower();
@@ -37,13 +37,13 @@ DecodedMediaResult ImageDecoderFacade::decodeSinglePass(const QString& filePath,
         return result;
     }
     if (ext == "ai" || ext == "pdf") {
-        result.thumbnail512 = FormatDecoders::extractAiPreview(filePath, targetSize, customTimeoutMs);
+        result.thumbnail512 = FormatDecoders::extractAiPreview(filePath, targetSize, customTimeoutMs, token);
         result.originalSize = result.thumbnail512.size();
         result.isValid = !result.thumbnail512.isNull();
         return result;
     }
     if (ext == "eps") {
-        result.thumbnail512 = FormatDecoders::extractEpsPreview(filePath, targetSize, customTimeoutMs);
+        result.thumbnail512 = FormatDecoders::extractEpsPreview(filePath, targetSize, customTimeoutMs, token);
         result.originalSize = result.thumbnail512.size();
         result.isValid = !result.thumbnail512.isNull();
         return result;

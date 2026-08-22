@@ -20,6 +20,29 @@ using namespace QuarkMeta;
 
 #include <QtConcurrent>
 
+QThreadPool* DiskItemModel::thumbnailPool() {
+    static QThreadPool pool;
+    static std::once_flag flag;
+    std::call_once(flag, []() {
+        pool.setMaxThreadCount(2);
+        pool.setThreadPriority(QThread::LowestPriority);
+    });
+    return &pool;
+}
+
+void DiskItemModel::incrementGeneration() {
+    uint64_t oldGen = m_currentGen.load(std::memory_order_relaxed);
+    {
+        QMutexLocker locker(&m_genTokenMutex);
+        auto it = m_genTokens.find(oldGen);
+        if (it != m_genTokens.end()) {
+            if (it.value()) it.value()->cancel();
+            m_genTokens.erase(it);
+        }
+    }
+    m_currentGen.fetch_add(1, std::memory_order_relaxed);
+}
+
 DiskItemModel::DiskItemModel(QObject* parent) : ItemModelBase(parent) {
     m_iconCache.setMaxCost(500);
 }
@@ -279,16 +302,28 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
     // 如果视口内没有需要加载的，直接退出
     if (pathsToLoad.isEmpty()) return;
 
+    std::shared_ptr<QuarkMeta::CancellationToken> token;
+    {
+        QMutexLocker locker(&m_genTokenMutex);
+        auto it = m_genTokens.find(thisGen);
+        if (it == m_genTokens.end()) {
+            token = std::make_shared<QuarkMeta::CancellationToken>();
+            m_genTokens[thisGen] = token;
+        } else {
+            token = it.value();
+        }
+    }
+
     QPointer<DiskItemModel> weakThis(this);
 
-    // 2. 并发处理这 2 张
+    // 2. 并发处理这 2 张 (使用专属独立低优先级线程池)
     for (const QString& path : pathsToLoad) {
-        QThreadPool::globalInstance()->start([weakThis, path, thisGen]() {
-            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+        thumbnailPool()->start([weakThis, path, thisGen, token]() {
+            if (!weakThis || weakThis->currentGeneration() != thisGen || (token && token->isCanceled()) || CoreController::isShuttingDown()) return;
 
-            DiskMediaExtractor::ExtractResult res = DiskMediaExtractor::getCapsuleExtractResult(path, 512);
+            DiskMediaExtractor::ExtractResult res = DiskMediaExtractor::getCapsuleExtractResult(path, 512, token);
 
-            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+            if (!weakThis || weakThis->currentGeneration() != thisGen || (token && token->isCanceled()) || CoreController::isShuttingDown()) return;
 
             QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, res, thisGen]() {
                 if (weakThis && weakThis->currentGeneration() == thisGen) {

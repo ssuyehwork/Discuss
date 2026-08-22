@@ -78,8 +78,10 @@ QImage DiskMediaExtractor::getCapsuleThumbnailReadOnly(const QString& filePath) 
     return QImage();
 }
 
-DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(const QString& filePath, int size) {
+DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(const QString& filePath, int size, std::shared_ptr<CancellationToken> token) {
     ExtractResult res;
+    if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return res;
+
     res.thumbnail512 = getCapsuleThumbnailReadOnly(filePath);
 
     QFileInfo fi(filePath);
@@ -102,8 +104,10 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
         }
     }
 
+    if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return res;
+
     // 2. 解码路径：单次解码同时获取原始分辨率与 512px 缩略图
-    DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size);
+    DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 0, token);
     if (dec.isValid) {
         res.originalSize = dec.originalSize;
         if (res.thumbnail512.isNull() && !dec.thumbnail512.isNull()) {
@@ -139,18 +143,18 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
     return res;
 }
 
-QImage DiskMediaExtractor::getCapsuleThumbnail(const QString& filePath, int size) {
-    ExtractResult res = getCapsuleExtractResult(filePath, size);
+QImage DiskMediaExtractor::getCapsuleThumbnail(const QString& filePath, int size, std::shared_ptr<CancellationToken> token) {
+    ExtractResult res = getCapsuleExtractResult(filePath, size, token);
     return res.thumbnail512;
 }
 
-QImage DiskMediaExtractor::getDiskThumbnail(const QString& path, int size) {
-    return getCapsuleThumbnail(path, size);
+QImage DiskMediaExtractor::getDiskThumbnail(const QString& path, int size, std::shared_ptr<CancellationToken> token) {
+    return getCapsuleThumbnail(path, size, token);
 }
 
-QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, int size) {
+QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, int size, std::shared_ptr<CancellationToken> token) {
     // 强制调用单遍解码，且对耗时格式赋予 45 秒超时
-    DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 45000);
+    DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 45000, token);
     if (dec.isValid && !dec.thumbnail512.isNull()) {
         saveDiskThumbnail(filePath, dec.thumbnail512);
         return dec.thumbnail512;
