@@ -7,16 +7,16 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QThreadPool>
-#include "../../meta/QuarkMetaJson.h"
+#include "QuarkMetaJson.h"
+#include "MetadataDefs.h"
 #include "../MediaColorExtractor.h"
-#include "../../core/CoreController.h"
-#include "../../util/DiskMediaExtractor.h"
+#include "CoreController.h"
+#include "DiskMediaExtractor.h"
 #include "../DiskBatchRenameService.h"
-#include "../../meta/FileOperationHelper.h"
-#include "../../util/DiskMediaExtractor.h"
-#include "../../meta/MetadataManager.h"
+#include "FileOperationHelper.h"
+#include "MetadataManager.h"
 
-using namespace QuarkMeta;
+namespace QuarkMeta {
 
 #include <QtConcurrent>
 
@@ -115,13 +115,15 @@ void DiskItemModel::preloadDimensionsAsync() {
         static std::mutex s_jsonSaveMutex;
         {
             std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
-            QuarkMetaJson jsonCache(parentDir.toStdWString());
+            QuarkMeta::QuarkMetaJson jsonCache(parentDir.toStdWString());
             jsonCache.load();
             auto& cachedItems = jsonCache.items();
 
-            for (const auto& [fileName, dims] : dimMap) {
+            for (const auto& pair : dimMap) {
+                const std::wstring& fileName = pair.first;
+                const auto& dims = pair.second;
                 if (cachedItems.find(fileName) == cachedItems.end()) {
-                    ItemMeta emptyMeta;
+                    QuarkMeta::ItemMeta emptyMeta;
                     emptyMeta.type = L"file";
                     cachedItems[fileName] = emptyMeta;
                 }
@@ -554,3 +556,5 @@ void DiskItemModel::reloadThumbnailForPath(const QString& path) {
         );
     }
 }
+
+} // namespace QuarkMeta
