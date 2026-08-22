@@ -295,6 +295,15 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
         QString path = rec.path;
         if (m_iconCache.contains(path) || m_requestedPaths.contains(path)) continue;
 
+        if (rec.thumbStatus == 1) {
+            // 🚨 失败状态快速避让：对于历史记录已标记为提取失败的文件，不二次拉起耗时解码
+            QIcon shellIcon = ShellIconManager::getFileIcon(path, 128);
+            m_iconCache.insert(path, new QIcon(shellIcon));
+            m_aspectRatios[QDir::toNativeSeparators(path)] = -1.0;
+            emit dataChanged(index(r, 0), index(r, columnCount() - 1), {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+            continue;
+        }
+
         m_requestedPaths.insert(path);
         pathsToLoad << path;
     }
