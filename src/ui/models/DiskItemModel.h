@@ -9,8 +9,8 @@
 #include <QThreadPool>
 #include <memory>
 #include "CoreEngine.h"
-#include "MetadataDefs.h"
-#include "QuarkMetaJson.h"
+#include "../../meta/MetadataDefs.h"
+#include "../../meta/QuarkMetaJson.h"
 
 #include <unordered_map>
 #include <QSet>

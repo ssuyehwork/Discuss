@@ -7,8 +7,8 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QThreadPool>
-#include "QuarkMetaJson.h"
-#include "MetadataDefs.h"
+#include "../../meta/QuarkMetaJson.h"
+#include "../../meta/MetadataDefs.h"
 #include "../MediaColorExtractor.h"
 #include "CoreController.h"
 #include "DiskMediaExtractor.h"
@@ -18,9 +18,6 @@
 #include <QtConcurrent>
 
 namespace QuarkMeta {
-
-using QuarkMeta::QuarkMetaJson;
-using QuarkMeta::ItemMeta;
 
 QThreadPool* DiskItemModel::thumbnailPool() {
     static QThreadPool pool;
@@ -126,7 +123,7 @@ void DiskItemModel::preloadDimensionsAsync() {
         static std::mutex s_jsonSaveMutex;
         {
             std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
-            QuarkMeta::QuarkMetaJson jsonCache(parentDir.toStdWString());
+            QuarkMetaJson jsonCache(parentDir.toStdWString());
             jsonCache.load();
             auto& cachedItems = jsonCache.items();
 
@@ -134,7 +131,7 @@ void DiskItemModel::preloadDimensionsAsync() {
                 const std::wstring& fileName = pair.first;
                 const auto& dims = pair.second;
                 if (cachedItems.find(fileName) == cachedItems.end()) {
-                    QuarkMeta::ItemMeta emptyMeta;
+                    ItemMeta emptyMeta;
                     emptyMeta.type = L"file";
                     cachedItems[fileName] = emptyMeta;
                 }
