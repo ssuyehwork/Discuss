@@ -20,29 +20,6 @@ using namespace QuarkMeta;
 
 #include <QtConcurrent>
 
-QThreadPool* DiskItemModel::thumbnailPool() {
-    static QThreadPool pool;
-    static std::once_flag flag;
-    std::call_once(flag, []() {
-        pool.setMaxThreadCount(2);
-        pool.setThreadPriority(QThread::LowestPriority);
-    });
-    return &pool;
-}
-
-void DiskItemModel::incrementGeneration() {
-    uint64_t oldGen = m_currentGen.load(std::memory_order_relaxed);
-    {
-        QMutexLocker locker(&m_genTokenMutex);
-        auto it = m_genTokens.find(oldGen);
-        if (it != m_genTokens.end()) {
-            if (it.value()) it.value()->cancel();
-            m_genTokens.erase(it);
-        }
-    }
-    m_currentGen.fetch_add(1, std::memory_order_relaxed);
-}
-
 DiskItemModel::DiskItemModel(QObject* parent) : ItemModelBase(parent) {
     m_iconCache.setMaxCost(500);
 }
@@ -99,7 +76,6 @@ struct SizeTarget {
 void DiskItemModel::preloadDimensionsAsync() {
     uint64_t thisGen = m_currentGen.load(std::memory_order_relaxed);
 
-    // 主线程构建 SizeTarget 拷贝，规避多线程引用 m_allRecords 导致的竞态与崩溃
     std::vector<SizeTarget> targets;
     targets.reserve(m_allRecords.size());
     for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
@@ -108,7 +84,6 @@ void DiskItemModel::preloadDimensionsAsync() {
             targets.push_back({i, rec.path, rec.suffix});
         }
     }
-
     if (targets.empty()) return;
 
     QPointer<DiskItemModel> weakThis(this);
@@ -116,47 +91,73 @@ void DiskItemModel::preloadDimensionsAsync() {
     thumbnailPool()->start([weakThis, targets = std::move(targets), thisGen]() {
         if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
+        // 1. 内存批量收集尺寸（避免每张图都写盘）
+        std::unordered_map<std::wstring, std::pair<int, int>> dimMap;
+        std::vector<std::pair<QString, QSize>> resolvedSizes;
+
         for (const auto& target : targets) {
             if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
             QSize sz = DiskMediaExtractor::fastExtractImageSize(target.path);
             if (sz.isValid() && sz.width() > 0) {
                 QFileInfo fi(target.path);
-                QString parentDir = QDir::toNativeSeparators(fi.absolutePath());
-                QString fileName = fi.fileName();
-
-                static std::mutex s_jsonSaveMutex;
-                std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
-
-                QuarkMetaJson jsonCache(parentDir.toStdWString());
-                jsonCache.load();
-                auto& cachedItems = jsonCache.items();
-                std::wstring wFileName = fileName.toStdWString();
-                if (cachedItems.find(wFileName) == cachedItems.end()) {
-                    ItemMeta emptyMeta;
-                    emptyMeta.type = L"file";
-                    cachedItems[wFileName] = emptyMeta;
-                }
-                auto& fileMeta = cachedItems[wFileName];
-                if (fileMeta.width != sz.width() || fileMeta.height != sz.height()) {
-                    fileMeta.width = sz.width();
-                    fileMeta.height = sz.height();
-                    jsonCache.save();
-                }
-
-                int i = target.index;
-                QString targetPath = target.path;
-                QMetaObject::invokeMethod(weakThis.data(), [weakThis, i, targetPath, sz, thisGen]() {
-                    if (weakThis && weakThis->currentGeneration() == thisGen && i < static_cast<int>(weakThis->m_allRecords.size())) {
-                        if (weakThis->m_allRecords[i].path == targetPath) {
-                            weakThis->m_allRecords[i].width = sz.width();
-                            weakThis->m_allRecords[i].height = sz.height();
-                            emit weakThis->dataChanged(weakThis->index(i, 3), weakThis->index(i, 3));
-                        }
-                    }
-                }, Qt::QueuedConnection);
+                dimMap[fi.fileName().toStdWString()] = {sz.width(), sz.height()};
+                resolvedSizes.push_back({target.path, sz});
             }
         }
+
+        if (dimMap.empty() || !weakThis || weakThis->currentGeneration() != thisGen) return;
+
+        // 2. 一次性批量落盘（仅写 1 次 JSON！）
+        QFileInfo firstFi(targets.front().path);
+        QString parentDir = QDir::toNativeSeparators(firstFi.absolutePath());
+
+        static std::mutex s_jsonSaveMutex;
+        {
+            std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
+            QuarkMetaJson jsonCache(parentDir.toStdWString());
+            jsonCache.load();
+            auto& cachedItems = jsonCache.items();
+
+            for (const auto& [fileName, dims] : dimMap) {
+                if (cachedItems.find(fileName) == cachedItems.end()) {
+                    ItemMeta emptyMeta;
+                    emptyMeta.type = L"file";
+                    cachedItems[fileName] = emptyMeta;
+                }
+                auto& fileMeta = cachedItems[fileName];
+                fileMeta.width = dims.first;
+                fileMeta.height = dims.second;
+            }
+            jsonCache.save(); // 🚨 全批次合并为 1 次原子落盘
+        }
+
+        // 3. 回到主线程通过 m_pathToIndex 精准更新并刷新表格
+        QMetaObject::invokeMethod(weakThis.data(), [weakThis, resolvedSizes = std::move(resolvedSizes), thisGen]() {
+            if (!weakThis || weakThis->currentGeneration() != thisGen) return;
+
+            for (const auto& item : resolvedSizes) {
+                const QString& path = item.first;
+                const QSize& sz = item.second;
+
+                auto it = weakThis->m_pathToIndex.find(path);
+                if (it != weakThis->m_pathToIndex.end()) {
+                    int rIdx = it->second;
+                    if (rIdx >= 0 && rIdx < static_cast<int>(weakThis->m_allRecords.size())) {
+                        auto& rec = weakThis->m_allRecords[rIdx];
+                        rec.width = sz.width();
+                        rec.height = sz.height();
+                        weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = (double)sz.width() / sz.height();
+                        // 刷新整行 (包含第 3 列尺寸文本和自适应卡片)
+                        emit weakThis->dataChanged(
+                            weakThis->index(rIdx, 0),
+                            weakThis->index(rIdx, weakThis->columnCount() - 1),
+                            {Qt::DisplayRole, AspectRatioRole}
+                        );
+                    }
+                }
+            }
+        }, Qt::QueuedConnection);
     });
 }
 
@@ -374,57 +375,39 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
     // 如果视口内没有需要加载的，直接退出
     if (pathsToLoad.isEmpty()) return;
 
-    std::shared_ptr<QuarkMeta::CancellationToken> token;
-    {
-        QMutexLocker locker(&m_genTokenMutex);
-        auto it = m_genTokens.find(thisGen);
-        if (it == m_genTokens.end()) {
-            token = std::make_shared<QuarkMeta::CancellationToken>();
-            m_genTokens[thisGen] = token;
-        } else {
-            token = it.value();
-        }
-    }
-
     QPointer<DiskItemModel> weakThis(this);
 
-    // 2. 并发处理这 2 张 (使用专属独立低优先级线程池)
+    // 2. 并发处理这 2 张
     for (const QString& path : pathsToLoad) {
-        thumbnailPool()->start([weakThis, path, thisGen, token]() {
-            if (!weakThis || weakThis->currentGeneration() != thisGen || (token && token->isCanceled()) || CoreController::isShuttingDown()) return;
+        QThreadPool::globalInstance()->start([weakThis, path, thisGen]() {
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
-            DiskMediaExtractor::ExtractResult res = DiskMediaExtractor::getCapsuleExtractResult(path, 512, token);
+            QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, 512);
 
-            if (!weakThis || weakThis->currentGeneration() != thisGen || (token && token->isCanceled()) || CoreController::isShuttingDown()) return;
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
-            QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, res, thisGen]() {
+            double ar = 1.0;
+            bool hasThumb = false;
+            if (!img.isNull()) {
+                ar = (double)img.width() / img.height();
+                hasThumb = true;
+            }
+
+            QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, img, ar, hasThumb, thisGen]() {
                 if (weakThis && weakThis->currentGeneration() == thisGen) {
-                    QIcon icon = res.thumbnail512.isNull() ? ShellIconManager::getFileIcon(path, 128) : QIcon(QPixmap::fromImage(res.thumbnail512));
+                    QIcon icon = img.isNull() ? ShellIconManager::getFileIcon(path, 128) : QIcon(QPixmap::fromImage(img));
                     weakThis->m_iconCache.insert(path, new QIcon(icon));
+                    weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = hasThumb ? ar : -1.0;
+                    weakThis->m_requestedPaths.remove(path);
 
                     auto it = weakThis->m_pathToIndex.find(path);
                     if (it != weakThis->m_pathToIndex.end()) {
                         int rIdx = it->second;
-                        if (rIdx >= 0 && rIdx < static_cast<int>(weakThis->m_allRecords.size())) {
-                            auto& rec = weakThis->m_allRecords[rIdx];
-                            if (res.originalSize.isValid() && res.originalSize.width() > 0) {
-                                rec.width = res.originalSize.width();
-                                rec.height = res.originalSize.height();
-                                weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = (double)rec.width / rec.height;
-                            } else if (!res.thumbnail512.isNull()) {
-                                weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = (double)res.thumbnail512.width() / res.thumbnail512.height();
-                            } else {
-                                weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = -1.0;
-                            }
-                        }
-
-                        weakThis->m_requestedPaths.remove(path);
-
                         if (weakThis->isSuspended()) {
                             weakThis->m_pendingUpdateRows.insert(rIdx);
                         } else {
-                            emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, weakThis->columnCount() - 1),
-                                                      {Qt::DecorationRole, Qt::DisplayRole, AspectRatioRole, HasThumbnailRole});
+                            emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0),
+                                                      {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
                         }
                     }
 
@@ -564,6 +547,10 @@ void DiskItemModel::reloadThumbnailForPath(const QString& path) {
         int rIdx = it->second;
         // 重新异步加载该行的缩略图
         loadThumbnailsForRows({rIdx});
-        emit dataChanged(index(rIdx, 0), index(rIdx, 0), {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+        emit dataChanged(
+            index(rIdx, 0),
+            index(rIdx, columnCount() - 1),
+            {Qt::DecorationRole, Qt::DisplayRole, AspectRatioRole, HasThumbnailRole}
+        );
     }
 }
