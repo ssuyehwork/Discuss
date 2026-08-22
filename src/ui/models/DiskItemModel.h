@@ -8,10 +8,14 @@
 #include <QMutex>
 #include <QThreadPool>
 #include <memory>
-#include "../../core/CoreEngine.h"
+#include "CoreEngine.h"
+#include "../../meta/MetadataDefs.h"
+#include "../../meta/QuarkMetaJson.h"
 
 #include <unordered_map>
 #include <QSet>
+
+namespace QuarkMeta {
 
 class DiskItemModel : public ItemModelBase {
     Q_OBJECT
@@ -27,7 +31,9 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
     // 切换目录/清空数据时调用，使所有已派发的旧任务瞬间失效
-    void incrementGeneration();
+    void incrementGeneration() {
+        m_currentGen.fetch_add(1, std::memory_order_relaxed);
+    }
     uint64_t currentGeneration() const { return m_currentGen.load(std::memory_order_relaxed); }
 
     const std::vector<QuarkMeta::ItemRecord>& allRecords() const override { return m_allRecords; }
@@ -61,9 +67,8 @@ protected:
 
     QSet<int> m_pendingUpdateRows;
     std::atomic<uint64_t> m_currentGen{0};
-
-    QMutex m_genTokenMutex;
-    QMap<uint64_t, std::shared_ptr<QuarkMeta::CancellationToken>> m_genTokens;
 };
+
+} // namespace QuarkMeta
 
 #endif // DISKITEMMODEL_H
