@@ -63,6 +63,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **元数据面板标签按钮化与 TagSelectorOverlay 悬浮选择器实时联动无脑实施方案**：详见 `Implementation Plan/meta_panel_tag_selector_overlay.md`
 - **TagSelectorOverlay 界面精细化改造无脑实施方案**：详见 `Implementation Plan/tag_selector_overlay_refinement.md`
 - **纯磁盘目录模式·内存模式与托管库僵尸代码根除无脑实施方案**：详见 `Implementation Plan/memory_mode_purge.md`
+- **FilterPanel 颜色筛选器精简与内存模式遗毒物理清退实施方案**：详见 `Implementation Plan/filter_panel_color_purge.md`
 
 ---
 
@@ -173,3 +174,15 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
      - 若 $T_{\text{trash}} < T_{\text{disk}}$（被还原项目创建更早）：被还原项目作为“最早创建权威”占用原始名称 `A.txt`，磁盘上较晚创建的现有项目被自动递增重命名避让为 **`A-1.txt`**（如存在顺延至 `A-2.txt`）。
      - 若 $T_{\text{disk}} \le T_{\text{trash}}$（磁盘现有项目创建更早）：磁盘现有项目保持原名 `A.txt`，被还原项目重命名为 **`A-1.txt`** 还原移出。
    - 格式强制要求：连字符 `-` 命名避让（如 `A-1.txt` / `Folder-1`），严格禁止使用圆括号 `(1)`。
+
+---
+
+## 10. 第五栏条件筛选器（Filter Panel）纯磁盘离散色标重构规范 (Filter Panel Direct Disk Discrete Color Specification)
+
+### 10.1 设计理念与内存模式遗毒彻底物理清退
+1. **彻底物理清退内存模式色彩感知计算残留**：
+   - QuarkMeta 纯磁盘直连模式不依赖全盘全量图像色彩索引。彻底清退原内存模式依赖全盘调色板（`palettes`）与 CIELAB Delta E 色差算法的“色相连续条”（`InlineHueSlider`）、“准确度/容差滑块”（`m_accuracySlider`）及“占比/面积滑块”（`m_areaSlider`）。
+2. **聚焦离散色标与极简交互**：
+   - 第五栏（Filter Panel）颜色筛选器全面回归 QuarkMeta 的 **“手动离散色标（manualColor）与标注状态”**：
+     - **标准色系网格**：提供红、橙、黄、绿、青、蓝、紫、灰、黑、白等标准离散色块点选过滤（单选/多选）；
+     - **文本搜索与未标记筛选**：保留按色名/色值文本搜索，以及“无色标项目”快速过滤，保持 UI 轻量直观与高响应速度。
