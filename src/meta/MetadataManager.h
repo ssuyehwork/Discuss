@@ -35,7 +35,6 @@ struct RuntimeMeta {
     int ingestionStatus; // 2026-07-xx 状态标记：-1: 未知, 0: 待处理, 1: 已完成
     int width;      // 2026-07-xx 物理尺寸：宽 (像素)
     int height;     // 2026-07-xx 物理尺寸：高 (像素)
-    int thumbStatus; // 2026-08-xx 0: 正常/未处理, 1: 提取失败/跳过
     std::wstring originalPath; // 2026-06-xx 路径记忆：用于回收站还原
     std::string folderId; // 2026-06-xx 物理关联：缓存 ID 以供反向查询分类
     std::wstring baseName; // 2026-08-xx 持久化基名，避免重复解析计算
@@ -51,7 +50,7 @@ struct RuntimeMeta {
 
     std::vector<PaletteEntry> palettes;
 
-    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), isTrash(false), ingestionStatus(-1), width(0), height(0), thumbStatus(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
+    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), isTrash(false), ingestionStatus(-1), width(0), height(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
 
     /**
      * @brief 判定是否有用户操作过的信息

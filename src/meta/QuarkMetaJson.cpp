@@ -293,7 +293,6 @@ QJsonObject QuarkMetaJson::itemToEntry(const ItemMeta& meta) {
     obj.insert("height", meta.height);
     obj.insert("auto_color", toQString(meta.autoColor));
     obj.insert("added_at", meta.addedAt);
-    if (meta.thumbStatus > 0) obj.insert("thumb_status", meta.thumbStatus);
 
     QJsonArray tagsArr; for (const auto& t : meta.tags) tagsArr.append(toQString(t));
     obj.insert("tags", tagsArr);
@@ -334,7 +333,6 @@ ItemMeta QuarkMetaJson::entryToItem(const QJsonObject& obj) {
     meta.height = obj.value("height").toInt(0);
     meta.autoColor = toStdWString(obj.value("auto_color").toString());
     meta.addedAt = obj.value("added_at").toVariant().toLongLong();
-    meta.thumbStatus = obj.value("thumb_status").toInt(0);
 
     if (obj.contains("tags") && obj.value("tags").isArray()) {
         for (const auto& v : obj.value("tags").toArray()) meta.tags.push_back(toStdWString(v.toString()));

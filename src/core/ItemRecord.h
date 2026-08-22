@@ -42,7 +42,6 @@ struct ItemRecord {
     QString sha256;
     int width = 0;
     int height = 0;
-    int thumbStatus = 0; // 0: 正常/未处理, 1: 提取失败/跳过
 
     // 2026-06-xx 极致优化：预取物理属性，实现渲染零 I/O
     long long size = 0;
