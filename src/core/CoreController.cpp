@@ -47,7 +47,7 @@ CoreController::~CoreController() {}
 
 /**
  * @brief 启动系统初始化链条
- * 彻底废除分布式文件模式，全面转向 SQLite 内存模式 (One-Drive-One-DB)
+ * 运行核心控制逻辑
  */
 void CoreController::startSystem() {
     QThreadPool::globalInstance()->start([this]() {

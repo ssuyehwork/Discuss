@@ -392,7 +392,7 @@ public slots:
 
 signals:
     /**
-     * @brief 在内存模式下，请求在指定分类下创建 logical 子分类（对应用户原话：“在内存模式下，请求在指定分类下创建逻辑子分类”）
+     * @brief 请求在指定分类下创建 logical 子分类
      */
     void requestCreateSubCategory(int parentCategoryId);
 
