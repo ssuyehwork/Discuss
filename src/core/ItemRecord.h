@@ -20,10 +20,6 @@ struct ItemRecord {
     QString frn;
     QString path; 
     bool isDir = false;
-    bool isCategory = false;
-    int categoryId = 0;
-    QString categoryName;
-    QString categoryColor;
 
     // 双轨回收站与分组展示专属字段
     bool isGroupHeader = false;
@@ -38,7 +34,6 @@ struct ItemRecord {
     QString manualColor;
     QString autoColor;
     QStringList tags;
-    std::string folderId;
     bool pinned = false;
     bool encrypted = false;
     double registrationProgress = -1.0; // 初始为 -1.0 表示未计算

@@ -18,8 +18,6 @@ void MetaCacheDecorator::decorate(std::vector<ItemRecord>& records) {
     std::unordered_map<std::wstring, std::shared_ptr<QuarkMetaJson>> jsonCacheMap; 
  
     for (auto& itemRec : records) { 
-        if (itemRec.isCategory) continue; 
-
         // 【盘符特殊处理】：如果是驱动器根目录（如 C:\、D:\）
         std::wstring normWPath = MetadataManager::normalizePath(itemRec.path.toStdWString());
         QFileInfo info(itemRec.path);

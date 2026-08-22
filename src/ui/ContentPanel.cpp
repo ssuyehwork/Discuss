@@ -116,7 +116,7 @@ void FilterProxyModel::recomputeDuplicateCache() {
     // 按照 (文件大小 + SHA256 / 文件名) 进行内存桶聚合
     std::unordered_map<std::string, std::vector<QString>> hashBucket;
     for (const auto& rec : records) {
-        if (rec.isDir || rec.isCategory) continue; // 排除目录与分类卡片
+        if (rec.isDir) continue; // 排除目录
         
         // 构造唯一指纹键
         std::string key;
@@ -162,7 +162,7 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
 
     // 1. 文件夹与分类卡片控制 (回收站视图下不执行“显示/隐藏文件和文件夹”过滤限制，确保双轨资产百分百正常呈现)
     if (!isTrashView) {
-        if (record.isCategory || record.isDir) { 
+        if (record.isDir) { 
             bool isDiskMode = contentPanel && (contentPanel->dataSourceType() == ContentPanel::DataSourceType::DiskNav); 
             bool isEmptyFolder = isDiskMode && record.isDir && record.isEmpty; 
      
@@ -297,8 +297,8 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
  
     // 4. 类型过滤 
     if (!currentFilter.types.isEmpty() || !currentFilter.typeFilterText.isEmpty()) { 
-        QString type = (record.isDir || record.isCategory) ? "folder" : "file";
-        QString ext = record.isCategory ? "" : record.suffix.toUpper();
+        QString type = record.isDir ? "folder" : "file";
+        QString ext = record.suffix.toUpper();
         bool matchType = false; 
 
         if (!currentFilter.typeFilterText.isEmpty()) {
@@ -404,7 +404,7 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
  
     // 11. 重复状态过滤 (O(1) 瞬时判定)
     if (currentFilter.duplicatePresence != FilterState::DupAll) {
-        if (record.isDir || record.isCategory) {
+        if (record.isDir) {
             return false; // 处于重复项/未重复筛选时，自动排除文件夹
         }
         bool isDuplicate = (m_cachedDuplicatePaths.count(record.path) > 0);
@@ -460,8 +460,8 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     }
 
     // 🚀 【绝对结构权重 1】：文件夹/分类 永远排在 文件 前面（物理隔绝，不受用户升降序取反下沉影响，实现无缝上下两区！） 
-    bool leftIsDir  = (leftRec.isDir || leftRec.isCategory); 
-    bool rightIsDir = (rightRec.isDir || rightRec.isCategory); 
+    bool leftIsDir  = leftRec.isDir; 
+    bool rightIsDir = rightRec.isDir; 
  
     if (leftIsDir != rightIsDir) { 
         return (sortOrder() == Qt::AscendingOrder) ? leftIsDir : !leftIsDir; 
@@ -484,8 +484,8 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     }
 
     auto compareNames = [](const ItemRecord& l, const ItemRecord& r) {
-        const QString& lName = l.isCategory ? l.categoryName : l.filename;
-        const QString& rName = r.isCategory ? r.categoryName : r.filename;
+        const QString& lName = l.filename;
+        const QString& rName = r.filename;
         return lName.localeAwareCompare(rName) < 0;
     };
 
@@ -513,8 +513,8 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
             return compareNames(leftRec, rightRec);
         }
         case ContentPanel::SortBySize: {
-            long long lSize = (leftRec.isCategory || leftRec.isDir) ? -1 : leftRec.size;
-            long long rSize = (rightRec.isCategory || rightRec.isDir) ? -1 : rightRec.size;
+            long long lSize = leftRec.isDir ? -1 : leftRec.size;
+            long long rSize = rightRec.isDir ? -1 : rightRec.size;
             if (lSize != rSize) {
                 return lSize < rSize;
             }
@@ -597,8 +597,6 @@ ContentPanel::ContentPanel(QWidget* parent)
     // 2026-06-05 按照要求：从配置中加载上次保存的缩放比例 
     m_zoomLevel = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt(); 
     m_isRecursive = false; 
-    // 2026-07-xx 物理同步：从配置中加载分类递归显示状态
-    m_isCategoryRecursive = AppConfig::instance().getValue("ContentPanel/IsCategoryRecursive", false).toBool();
     // 2026-07-xx 按照用户要求：文件夹默认设为隐藏 (false)
     m_showFolders = AppConfig::instance().getValue("ContentPanel/ShowFolders", false).toBool();
     m_showFiles = AppConfig::instance().getValue("ContentPanel/ShowFiles", true).toBool();
@@ -702,13 +700,6 @@ void ContentPanel::initUi() {
         "QPushButton:pressed { background: #4E4E52; }"
         "QPushButton:disabled { opacity: 0.3; }"
     );
-    connect(m_btnLayersBlue, &QPushButton::clicked, [this]() {
-        m_isCategoryRecursive = m_btnLayersBlue->isChecked();
-        AppConfig::instance().setValue("ContentPanel/IsCategoryRecursive", m_isCategoryRecursive);
-        if (m_currentCategoryId != -1) {
-            loadCategory(m_currentCategoryId);
-        }
-    });
 
     m_btnLayers = new QPushButton(titleBar); 
     m_btnLayers->setCheckable(true); 
@@ -1205,16 +1196,11 @@ void ContentPanel::selectAndScrollToPath(const QString& path) {
     }
 }
 
-void ContentPanel::selectAndScrollToItem(const QString& type, const QString& path, int categoryId) {
-    if (!m_proxyModel) return;
+void ContentPanel::selectAndScrollToItem(const QString& path) {
+    if (!m_proxyModel || path.isEmpty()) return;
     for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
         QModelIndex proxyIdx = m_proxyModel->index(i, 0);
-        bool match = false;
-        if (type == "category") {
-            match = (proxyIdx.data(TypeRole).toString() == "category" && proxyIdx.data(CategoryIdRole).toInt() == categoryId);
-        } else {
-            match = (!path.isEmpty() && proxyIdx.data(PathRole).toString() == path);
-        }
+        bool match = (proxyIdx.data(PathRole).toString() == path);
 
         if (match) {
             QAbstractItemView* view = (m_viewStack->currentWidget() == m_treeView) ? 
@@ -1679,20 +1665,11 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         menu.addAction(pickerAction);
 
         connect(pickerWidget, &ColorStripPicker::colorSelected, this, [this, view, &menu](const QString& hexColor) {
-            struct SelectedItemInfo {
-                QString type;
-                QString path;
-                int categoryId = 0;
-            };
-            QList<SelectedItemInfo> selectedItems;
+            QStringList selectedPaths;
             auto indexes = view->selectionModel()->selectedIndexes();  
             for (const auto& idx : indexes) {  
                 if (idx.column() == 0) {  
-                    SelectedItemInfo info;
-                    info.type = idx.data(TypeRole).toString();
-                    info.path = idx.data(PathRole).toString();
-                    info.categoryId = idx.data(CategoryIdRole).toInt();
-                    selectedItems.append(info);
+                    selectedPaths.append(idx.data(PathRole).toString());
                 }  
             }
 
@@ -1702,8 +1679,8 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                 }  
             } 
 
-            for (const auto& info : selectedItems) {
-                selectAndScrollToItem(info.type, info.path, info.categoryId);
+            for (const auto& path : selectedPaths) {
+                selectAndScrollToItem(path);
             }
             menu.close(); 
         });
@@ -2619,13 +2596,6 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
     // 双轨回收站与分组展示：双击组标题不执行任何操作
     if (index.data(IsGroupHeaderRole).toBool()) return;
 
-    // 2026-06-xx 重构逻辑：优先处理子分类跳转 
-    int catId = index.data(CategoryIdRole).toInt(); 
-    if (catId > 0) { 
-        emit categoryClicked(catId); 
-        return; 
-    } 
- 
     QString path = index.data(PathRole).toString(); 
     if (path.isEmpty()) return; 
  
@@ -3057,7 +3027,7 @@ void ContentPanel::recalculateAndEmitStats() {
         // 1. 预统计重复项（内存快速桶）
         std::unordered_map<std::string, int> hashCounts;
         for (const auto& record : records) {
-            if (record.isDir || record.isCategory) continue;
+            if (record.isDir) continue;
             std::string key = std::to_string(record.size) + "_" + std::to_string(record.width) + "_" + std::to_string(record.height) + "_" + record.filename.toLower().toStdString();
             hashCounts[key]++;
         }
@@ -3070,7 +3040,7 @@ void ContentPanel::recalculateAndEmitStats() {
             QString normHex = UiHelper::normalizeColorHex(record.manualColor);
             stats.colorCounts[normHex]++;
             
-            if (record.isDir || record.isCategory) {
+            if (record.isDir) {
                 stats.typeCounts["folder"]++;
                 if (isDiskMode && record.isDir && record.isEmpty) {
                     stats.emptyFolderCount++;
@@ -3160,17 +3130,8 @@ void ContentPanel::createNewItem(const QString& type) {
 void ContentPanel::updateLayersButtonState() { 
     if (!m_btnLayers || !m_btnLayersBlue) return; 
  
-    // 2026-07-xx 互斥逻辑：分类视图下显示蓝按钮，物理路径下显示绿按钮
-    bool isCategoryMode = (m_currentCategoryType == "user_category");
-    m_btnLayers->setVisible(!isCategoryMode);
-    m_btnLayersBlue->setVisible(isCategoryMode);
-
-    if (isCategoryMode) {
-        m_btnLayersBlue->setEnabled(true);
-        m_btnLayersBlue->setChecked(m_isCategoryRecursive);
-        m_btnLayersBlue->setProperty("tooltipText", "显示子分类中的项目");
-        return;
-    }
+    m_btnLayers->setVisible(true);
+    if (m_btnLayersBlue) m_btnLayersBlue->setVisible(false);
 
     if (m_currentPath.isEmpty() || m_currentPath == "computer://") { 
         m_btnLayers->setEnabled(false); 

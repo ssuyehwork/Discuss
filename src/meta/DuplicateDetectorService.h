@@ -7,7 +7,6 @@
 namespace QuarkMeta {
 
 struct DuplicateItemInfo {
-    QString folderId;
     QString path;
     QString filename;
     int width = 0;

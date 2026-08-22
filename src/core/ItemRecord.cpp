@@ -21,9 +21,6 @@ void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
     r.height = meta.height;
     r.added_at = meta.added_at;
     r.isManaged = meta.hasUserOperations();
-    if (!meta.folderId.empty()) {
-        r.folderId = meta.folderId;
-    }
     r.palettes.clear();
     for (const auto& pe : meta.palettes) {
         r.palettes.push_back({pe.color, pe.ratio});
@@ -53,7 +50,6 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
         r.ctime = meta.ctime;
         r.mtime = meta.mtime;
         r.atime = meta.atime;
-        r.folderId = meta.folderId;
         r.isDir = meta.isFolder;
         r.isManaged = true;
         r.isEmpty = false;
@@ -88,7 +84,6 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
     r.ctime = ctime;
     r.mtime = mtime;
     r.atime = atime;
-    r.folderId = fid;
     r.isDir = QFileInfo(nPath).isDir();
     r.path = nPath;
 

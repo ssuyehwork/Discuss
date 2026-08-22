@@ -394,8 +394,6 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         return false;
     } else if (role == RegistrationProgressRole) {
         return record.registrationProgress;
-    } else if (role == CategoryIdRole) {
-        return 0; 
     } else if (role == IsEmptyRole) {
         return record.isDir && record.isEmpty; // 磁盘模式专享：物理判断是否为空文件夹
     } else if (role == AspectRatioRole) {
