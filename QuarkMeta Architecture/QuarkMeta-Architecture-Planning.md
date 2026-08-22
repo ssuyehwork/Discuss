@@ -63,7 +63,6 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **元数据面板标签按钮化与 TagSelectorOverlay 悬浮选择器实时联动无脑实施方案**：详见 `Implementation Plan/meta_panel_tag_selector_overlay.md`
 - **TagSelectorOverlay 界面精细化改造无脑实施方案**：详见 `Implementation Plan/tag_selector_overlay_refinement.md`
 - **纯磁盘目录模式·内存模式与托管库僵尸代码根除无脑实施方案**：详见 `Implementation Plan/memory_mode_purge.md`
-- **FilterPanel 颜色筛选器精简与内存模式遗毒物理清退实施方案**：详见 `Implementation Plan/filter_panel_color_purge.md`
 
 ---
 
@@ -177,12 +176,18 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 
 ---
 
-## 10. 第五栏条件筛选器（Filter Panel）纯磁盘离散色标重构规范 (Filter Panel Direct Disk Discrete Color Specification)
+## 11. 图形图像缩略图提取状态与失败标记规范 (Thumbnail Status & Failure Marking Specification)
 
-### 10.1 设计理念与内存模式遗毒彻底物理清退
-1. **彻底物理清退内存模式色彩感知计算残留**：
-   - QuarkMeta 纯磁盘直连模式不依赖全盘全量图像色彩索引。彻底清退原内存模式依赖全盘调色板（`palettes`）与 CIELAB Delta E 色差算法的“色相连续条”（`InlineHueSlider`）、“准确度/容差滑块”（`m_accuracySlider`）及“占比/面积滑块”（`m_areaSlider`）。
-2. **聚焦离散色标与极简交互**：
-   - 第五栏（Filter Panel）颜色筛选器全面回归 QuarkMeta 的 **“手动离散色标（manualColor）与标注状态”**：
-     - **标准色系网格**：提供红、橙、黄、绿、青、蓝、紫、灰、黑、白等标准离散色块点选过滤（单选/多选）；
-     - **文本搜索与未标记筛选**：保留按色名/色值文本搜索，以及“无色标项目”快速过滤，保持 UI 轻量直观与高响应速度。
+### 11.1 设计理念
+在 QuarkMeta 纯磁盘直连模式下，图形/图像文件的缩略图生成与解码尝试可能因文件损坏、不支持的编解码器或渲染报错（如 Ghostscript 失败）而无法成功提取。为了避免重复进行无意义的后台密集解码消耗，并支持后续通过筛选器快速定位异常文件，全系统统一采用以下标记规范：
+
+1. **持久化落盘机制 (`thumb_status`)**：
+   - 当 `DiskMediaExtractor` 尝试对文件进行缩略图提取并遭遇明确解码失败/报错（且非中途主动取消）时，系统自动将该文件在离散元数据文件 `.QuarkMeta.json` 中的 `"thumb_status"` 字段更新标记为 **`1`**（表示失败/跳过）。
+   - 正常解析或未处理的项目默认为 **`0`**。
+
+2. **高性能避让与二次渲染跳过**：
+   - 当 `DiskItemModel` 加载目录项并调度缩略图提取流水线前，优先检索对应 `.QuarkMeta.json` 中的 `thumb_status`。
+   - 若 `thumb_status == 1`，则系统直接使用预设的失败/占位图标，不再重复拉起解码服务（如 Ghostscript/QImageReader），显著降低系统 CPU/Disk 负载。
+
+3. **第五栏筛选器 (Filter Panel) 联动支持**：
+   - 条件筛选器支持通过 `thumb_status == 1` 过滤模式，精准将当前目录下所有提取缩略图失败或跳过的文件一次性批量筛选显示，便于用户定位损坏图片或手动重试。

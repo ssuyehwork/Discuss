@@ -140,6 +140,27 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
         }
     } else if (!res.thumbnail512.isNull()) {
         res.isValid = true;
+    } else {
+        // 4. 解码与现有缩略图缓存均失败：在非中途取消情况下持久化标记 thumb_status = 1
+        if (!token || !token->isCanceled()) {
+            static std::mutex s_jsonSaveMutex;
+            std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
+
+            QuarkMetaJson jsonCache(parentDir.toStdWString());
+            jsonCache.load();
+            auto& cachedItems = jsonCache.items();
+            std::wstring wFileName = fileName.toStdWString();
+            if (cachedItems.find(wFileName) == cachedItems.end()) {
+                ItemMeta emptyMeta;
+                emptyMeta.type = L"file";
+                cachedItems[wFileName] = emptyMeta;
+            }
+            auto& fileMeta = cachedItems[wFileName];
+            if (fileMeta.thumbStatus != 1) {
+                fileMeta.thumbStatus = 1;
+                jsonCache.save();
+            }
+        }
     }
     return res;
 }
