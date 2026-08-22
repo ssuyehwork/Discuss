@@ -1,6 +1,7 @@
 #include "FormatDecoders.h"
 #include "WindowsShellThumbnailProvider.h"
 #include "../core/CoreController.h"
+#include <QUuid>
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
@@ -176,7 +177,7 @@ QImage FormatDecoders::extractPsdHeaderThumbnail(const QString& filePath) {
     return QImage();
 }
 
-QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize, int customTimeoutMs) {
+QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return QImage();
 
@@ -270,7 +271,7 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
     }
 
     // 通道 3：Ghostscript 矢量引擎
-    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs);
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token);
     if (!gsImg.isNull()) {
         return gsImg;
     }
@@ -312,7 +313,7 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
     return WindowsShellThumbnailProvider::getShellThumbnail(filePath, targetSize);
 }
 
-QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize, int customTimeoutMs) {
+QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         return QImage();
@@ -380,7 +381,7 @@ QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize
     }
 
     // Ghostscript 终极矢量引擎
-    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs);
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token);
     if (!gsImg.isNull()) {
         return gsImg;
     }
@@ -421,10 +422,10 @@ QString FormatDecoders::findGhostscriptExecutable() {
     return cachedPath;
 }
 
-static QSemaphore g_gsConcurrencyLimit(2); // 最多2个Ghostscript进程并发跑
+static QSemaphore g_gsConcurrencyLimit(1); // 最多1个Ghostscript进程并发跑，避免多进程抢占CPU导致切换文件夹卡顿
 
-QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targetSize, int customTimeoutMs) {
-    if (CoreController::isShuttingDown()) return QImage();
+QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return QImage();
 
     QString gsExec = findGhostscriptExecutable();
     if (gsExec.isEmpty()) {
@@ -456,7 +457,7 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 
     qWarning() << "[GS诊断] 开始渲染，超时设置:" << timeoutMs << "ms，文件:" << filePath;
 
-    QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1.png").arg(QString::number(qHash(filePath), 16));
+    QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1_%2.png").arg(QUuid::createUuid().toString(QUuid::WithoutBraces)).arg(QString::number(qHash(filePath), 16));
 
     QStringList args;
     args << "-dNOPAUSE"
@@ -477,26 +478,45 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 #endif
     process.start(gsExec, args);
 
-    if (process.waitForFinished(timeoutMs)) {
-        if (QFile::exists(tempPng)) {
-            QImageReader reader(tempPng);
-            reader.setAllocationLimit(512); // 放宽Qt默认256MB安全上限，避免大幅面AI文件渲染出的高分辨率PNG被直接拒收
-            QSize origSize = reader.size();
-            if (origSize.isValid() && (origSize.width() > targetSize || origSize.height() > targetSize)) {
-                reader.setScaledSize(origSize.scaled(targetSize, targetSize, Qt::KeepAspectRatio));
+    qint64 elapsed = 0;
+    bool finished = false;
+    while (elapsed < timeoutMs) {
+        if ((token && token->isCanceled()) || CoreController::isShuttingDown()) {
+            qWarning() << "[GS诊断] 收到取消信号，主动杀死 Ghostscript 进程，文件:" << filePath;
+            if (process.state() == QProcess::Running) {
+                process.kill();
+                process.waitForFinished(200);
             }
-            QImage img = reader.read();
-            QFile::remove(tempPng);
-
-            if (!img.isNull()) {
-                return img;
-            }
-            qWarning() << "[GS诊断] 进程正常结束但输出图片解码为空，文件:" << filePath;
-        } else {
-            qWarning() << "[GS诊断] 进程正常结束但输出文件不存在，文件:" << filePath;
+            if (QFile::exists(tempPng)) QFile::remove(tempPng);
+            return QImage();
         }
-    } else {
+        if (process.state() == QProcess::NotRunning || process.waitForFinished(50)) {
+            finished = true;
+            break;
+        }
+        elapsed += 50;
+    }
+
+    if (finished && QFile::exists(tempPng)) {
+        QImageReader reader(tempPng);
+        reader.setAllocationLimit(512); // 放宽Qt默认256MB安全上限，避免大幅面AI文件渲染出的高分辨率PNG被直接拒收
+        QSize origSize = reader.size();
+        if (origSize.isValid() && (origSize.width() > targetSize || origSize.height() > targetSize)) {
+            reader.setScaledSize(origSize.scaled(targetSize, targetSize, Qt::KeepAspectRatio));
+        }
+        QImage img = reader.read();
+        QFile::remove(tempPng);
+
+        if (!img.isNull()) {
+            return img;
+        }
+        qWarning() << "[GS诊断] 进程正常结束但输出图片解码为空，文件:" << filePath;
+    } else if (!finished) {
         qWarning() << "[GS诊断] 等待" << timeoutMs << "ms后仍未结束，判定超时，文件:" << filePath;
+        if (process.state() == QProcess::Running) {
+            process.kill();
+            process.waitForFinished(200);
+        }
     }
 
     if (process.state() == QProcess::Running) {
