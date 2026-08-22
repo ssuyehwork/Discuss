@@ -1,24 +1,18 @@
-# FilterPanel 颜色筛选器精简与内存模式遗毒物理清退实施方案 (Filter Panel Color Filter Purge Implementation Plan)
+# FilterPanel 颜色筛选器精简与无用控件物理拔除实施方案 (Filter Panel Specific Color Controls Purge Implementation Plan)
 
 ## Overview
-在 QuarkMeta 纯磁盘直连架构下，全盘图像色彩预扫描与 central `metadata` 数据表索引已彻底废除。
-原 `FilterPanel` 中继承自内存模式（Memory Mode）的连续色相滑块（`InlineHueSlider`）、准确度/容差滑块（`m_accuracySlider`）以及占比滑块（`m_areaSlider`）缺乏全量色彩数据库支撑，拖动后无法精准匹配文件，且引发了 `ContentPanel` 中繁复的 CIELAB Delta-E 计算开销。
+根据架构优化规范与指令，在 `FilterPanel` 的“颜色标记”筛选分组中，精简拔除以下三个无用/冗余控件与区域：
+1. **颜色文本输入框** (`m_editColor`，即“例：红 / #E24B4A / 无色标”搜索输入框)；
+2. **标准色系网格** (`standardGrid` 及其 12 色 `ColorBlock` 网格)；
+3. **最近筛选区域** (`m_recentColors` 及其对应 LRU 色块展示)。
 
-本方案旨在：
-1. **UI 面板精简**：从 `FilterPanel.h`/`FilterPanel.cpp` 中彻底物理剔除 `InlineHueSlider`、`m_accuracySlider` 和 `m_areaSlider` 控件，收拢颜色筛选器至手动离散色标过滤（标准色块网格及色名/无色标搜索）。
-2. **过滤逻辑优化**：简化 `ContentPanel.cpp` 中依赖 Delta-E 调色板百分比判断的复杂逻辑，回归离散色标直接高效匹配。
-3. **空转扫描与幽灵 SQL 修复**：注销 `CoreController` 在启动时对 `global.db` `metadata` 表的空转扫描 `initFromDatabase()`，并修正 `MediaExtractorPipeline` 与 `MetadataManager` 中命中 0 行的幽灵 SQL `UPDATE`，确保元数据更新直接落盘至 `.QuarkMeta.json`。
+拔除后，“颜色标记”分组保留“无色标”与 8 种离散手动色标（红、橙、黄、绿、青、蓝、紫、灰）复选行，保持界面极致清晰直观。
 
 ---
 
 ## Modified Files List
 - `src/ui/FilterPanel.h`
 - `src/ui/FilterPanel.cpp`
-- `src/ui/ContentPanel.h`
-- `src/ui/ContentPanel.cpp`
-- `src/core/CoreController.cpp`
-- `src/meta/MediaExtractorPipeline.cpp`
-- `src/meta/MetadataManager.cpp`
 
 ---
 
@@ -26,40 +20,75 @@
 
 ### 1. `src/ui/FilterPanel.h`
 <<<<<<< SEARCH
-// ─── 色相滑块 (内嵌版) ─────────────────────────────────────────────
-class InlineHueSlider : public QWidget {
-    Q_OBJECT
-public:
-    explicit InlineHueSlider(QWidget* parent = nullptr);
-    void setHue(int h);
-    int hue() const { return m_h; }
-
-signals:
-    void hueChanged(int h);
-    void sliderReleased();
-
-protected:
-    void paintEvent(QPaintEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseMoveEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
-
-private:
-    int m_h = 0; // 0..359
-    bool m_dragging = false;
-    void updateFromPos(int x);
-};
+    // 2026-xx-xx 新增快速输入框成员
+    QLineEdit*    m_editColor       = nullptr;
+    QLineEdit*    m_editType        = nullptr;
 =======
->>>>>>> REPLACE
-
-<<<<<<< SEARCH
-    QSlider*      m_accuracySlider  = nullptr; // 2026-07-xx 按照用户要求：还原颜色准确度控制条
-    QSlider*      m_areaSlider      = nullptr; // 2026-06-23 按照用户要求：新增颜色面积占比滑条
-=======
+    // 2026-xx-xx 新增快速输入框成员
+    QLineEdit*    m_editType        = nullptr;
 >>>>>>> REPLACE
 
 ### 2. `src/ui/FilterPanel.cpp`
 <<<<<<< SEARCH
+            if (edit == m_editColor) key = "Color";
+            else if (edit == m_editType) key = "Type";
+=======
+            if (edit == m_editType) key = "Type";
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+                    if (edit == m_editColor) m_filter.colorFilterText = text;
+                    else if (edit == m_editType) m_filter.typeFilterText = text;
+=======
+                    if (edit == m_editType) m_filter.typeFilterText = text;
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+    m_editColor = nullptr;
+    m_editType = nullptr;
+=======
+    m_editType = nullptr;
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+        // 带有左右 5px 缩进外壳的快速输入框
+        QWidget* wColor = new QWidget(g);
+        QHBoxLayout* lColor = new QHBoxLayout(wColor);
+        lColor->setContentsMargins(5, 6, 5, 4);
+        lColor->setSpacing(0);
+
+        m_editColor = new QLineEdit(wColor);
+        m_editColor->setClearButtonEnabled(true);
+        m_editColor->setPlaceholderText("例： 红 / #E24B4A / 无色标");
+        m_editColor->setText(m_filter.colorFilterText);
+        m_editColor->setObjectName("FilterSearchEdit");
+        m_editColor->setFixedHeight(22);
+        m_editColor->setStyleSheet(
+            "QLineEdit#FilterSearchEdit {"
+            "  background: #2D2D2D;"
+            "  color: #CCCCCC;"
+            "  border: 1px solid #444444;"
+            "  border-radius: 4px;"
+            "  padding: 0px 6px;"
+            "  font-size: 11px;"
+            "}"
+            "QLineEdit#FilterSearchEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
+        );
+        m_editColor->installEventFilter(this);
+        connect(m_editColor, &QLineEdit::returnPressed, this, [this]() {
+            m_filter.colorFilterText = m_editColor->text();
+            saveFilterHistory("Color", m_filter.colorFilterText);
+            emit filterChanged(m_filter);
+        });
+        connect(m_editColor, &QLineEdit::textChanged, this, [this](const QString& text) {
+            if (text.isEmpty() && !m_filter.colorFilterText.isEmpty()) {
+                m_filter.colorFilterText = "";
+                emit filterChanged(m_filter);
+            }
+        });
+        lColor->addWidget(m_editColor);
+        gl->addWidget(wColor);
+
         // 2.1 顶部色相滑块
         // 2026-06-xx 物理对齐：滑块及其容器增加 4px 左右边距（相对于 gl 的 0 边距），实现视觉平衡
         QWidget* hueContainer = new QWidget(g);
@@ -151,195 +180,109 @@ private:
         });
 
         gl->addWidget(areaContainer);
-=======
->>>>>>> REPLACE
 
-### 3. `src/ui/ContentPanel.h`
-<<<<<<< SEARCH
-    void loadCategory(int categoryId);
-    void loadCategory(const QString& categoryType);
-    void loadCategories(const QList<int>& categoryIds);
-    void categoryClicked(int categoryId);
-=======
-    void loadCategory(const QString& categoryType);
->>>>>>> REPLACE
+        // 2.2 标准色矩阵 (12色)
+        // 2026-06-xx 物理对齐：设置左边距 8px 以对齐下方的复选框视觉线
+        QLabel* lblStatic = new QLabel("标准色系", g);
+        lblStatic->setStyleSheet("color: #666; font-size: 10px; margin-top: 4px; margin-left: 5px;");
+        gl->addWidget(lblStatic);
 
-### 4. `src/ui/ContentPanel.cpp`
-<<<<<<< SEARCH
-void ContentPanel::loadCategories(const QList<int>& categoryIds) {
-    Q_UNUSED(categoryIds);
-}
+        QWidget* staticGrid = new QWidget(g);
+        staticGrid->setContentsMargins(5, 0, 5, 0); 
+        // 2026-06-xx 物理微调：间距从 4px 缩减至 2px
+        FlowLayout* staticFlow = new FlowLayout(staticGrid, 0, 2, 2);
+        staticGrid->setLayout(staticFlow);
+        
+        QStringList standardHex = {
+            "#E24B4A", "#EF9F27", "#FECF0E", "#639922", 
+            "#1D9E75", "#378ADD", "#7F77DD", "#E91E63",
+            "#000000", "#808080", "#FFFFFF", "#795548"
+        };
 
-void ContentPanel::loadCategory(int categoryId) { 
-    Q_UNUSED(categoryId);
-}
-=======
->>>>>>> REPLACE
-
-### 5. `src/core/CoreController.cpp`
-<<<<<<< SEARCH
-            // 仅执行 SQLite 模式初始化
-            MetadataManager::instance().initFromDatabase();
-=======
-            // 纯磁盘模式注销全盘 metadata 数据表预加载
->>>>>>> REPLACE
-
-### 6. `src/meta/MediaExtractorPipeline.cpp`
-<<<<<<< SEARCH
-            if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
-                // 单次读盘：同时拿到【原始尺寸】和【512 高清图】
-                DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(qPath, 512);
-                if (dec.isValid) {
-                    item.width = dec.originalSize.width();
-                    item.height = dec.originalSize.height();
-
-                    // 1. 写入 File ID 高清缩略图缓存 (JPEG 85)
-                    DiskMediaExtractor::saveDiskThumbnail(qPath, dec.thumbnail512);
-
-                    // 2. 内存 64x64 快速测色 (<0.5ms)
-                    auto pal = ColorAlgorithmEngine::extractPaletteFromImage(dec.thumbnail512);
-                    if (!pal.isEmpty()) {
-                        QColor dominant = MediaColorExtractor::quantizeColor(pal.first().first);
-                        item.autoColor = dominant.name().toUpper().toStdWString();
-                        item.palettes = pal;
-                    }
+        for (const QString& hex : standardHex) {
+            ColorBlock* block = new ColorBlock(QColor(hex), staticGrid);
+            block->setChecked(m_filter.colors.contains(hex));
+            
+            // 异步统计对账 (模拟：此处可后续接入真正的数据查询)
+            int count = 0;
+            for (auto it = m_colorCounts.begin(); it != m_colorCounts.end(); ++it) {
+                if (UiHelper::calculateDeltaE(QColor(hex), UiHelper::parseColorName(it.key())) < 10.0) {
+                    count += it.value();
                 }
             }
+            block->setCount(count);
 
-            results.push_back(item);
+            connect(block, &ColorBlock::clicked, this, [this, hex](const QColor& /*c*/) {
+                if (m_filter.colors.contains(hex)) {
+                    m_filter.colors.removeAll(hex);
+                } else {
+                    m_filter.colors.clear(); // 单选模式
+                    m_filter.colors.append(hex);
+                    
+                    // LRU 更新
+                    m_recentColors.removeAll(hex);
+                    m_recentColors.prepend(hex);
+                    if (m_recentColors.size() > 50) m_recentColors.removeLast();
+                    AppConfig::instance().setValue("Filter/RecentColors", m_recentColors);
+                }
+                emit filterChanged(m_filter);
+                rebuildGroups();
+            });
+            staticFlow->addWidget(block);
         }
+        gl->addWidget(staticGrid);
 
-        if (!results.empty() && !m_isCanceled.load() && !CoreController::isShuttingDown()) {
-            MetadataManager::instance().updateExtractedMediaFeaturesBatch(results);
+        // 2.3 最近筛选 (LRU)
+        if (!m_recentColors.isEmpty()) {
+            QLabel* lblRecent = new QLabel("最近筛选", g);
+            lblRecent->setStyleSheet("color: #666; font-size: 10px; margin-top: 8px; margin-left: 5px;");
+            gl->addWidget(lblRecent);
+
+            QWidget* recentGrid = new QWidget(g);
+            recentGrid->setContentsMargins(5, 0, 5, 0);
+            // 2026-06-xx 物理微调：间距从 4px 缩减至 2px
+            FlowLayout* recentFlow = new FlowLayout(recentGrid, 0, 2, 2);
+            recentGrid->setLayout(recentFlow);
+
+            for (const QString& hex : m_recentColors) {
+                ColorBlock* block = new ColorBlock(QColor(hex), recentGrid);
+                block->setChecked(m_filter.colors.contains(hex));
+                
+                int count = 0;
+                for (auto it = m_colorCounts.begin(); it != m_colorCounts.end(); ++it) {
+                    if (UiHelper::calculateDeltaE(QColor(hex), UiHelper::parseColorName(it.key())) < 10.0) {
+                        count += it.value();
+                    }
+                }
+                block->setCount(count);
+
+                connect(block, &ColorBlock::clicked, this, [this, hex](const QColor& /*c*/) {
+                    if (m_filter.colors.contains(hex)) {
+                        m_filter.colors.removeAll(hex);
+                    } else {
+                        m_filter.colors.clear();
+                        m_filter.colors.append(hex);
+                        
+                        // 即使是在最近面板中点击，也应更新排序使其置顶
+                        m_recentColors.removeAll(hex);
+                        m_recentColors.prepend(hex);
+                        AppConfig::instance().setValue("Filter/RecentColors", m_recentColors);
+                    }
+                    emit filterChanged(m_filter);
+                    rebuildGroups();
+                });
+                recentFlow->addWidget(block);
+            }
+            gl->addWidget(recentGrid);
         }
 =======
-            if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
-                // 单次读盘：同时拿到【原始尺寸】和【512 高清图】
-                DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(qPath, 512);
-                if (dec.isValid) {
-                    item.width = dec.originalSize.width();
-                    item.height = dec.originalSize.height();
-
-                    // 1. 写入 File ID 高清缩略图缓存 (JPEG 85)
-                    DiskMediaExtractor::saveDiskThumbnail(qPath, dec.thumbnail512);
-
-                    // 2. 内存 64x64 快速测色 (<0.5ms)
-                    auto pal = ColorAlgorithmEngine::extractPaletteFromImage(dec.thumbnail512);
-                    if (!pal.isEmpty()) {
-                        QColor dominant = MediaColorExtractor::quantizeColor(pal.first().first);
-                        item.autoColor = dominant.name().toUpper().toStdWString();
-                        item.palettes = pal;
-                    }
-
-                    // 3. 纯磁盘直连模式：元数据更新直接离散落盘至 per-directory .QuarkMeta.json
-                    QString parentDir = QDir::toNativeSeparators(info.absolutePath());
-                    QString fileName = info.fileName();
-                    QuarkMetaJson jsonCache(parentDir.toStdWString());
-                    jsonCache.load();
-                    auto& cachedItems = jsonCache.items();
-                    std::wstring wFileName = fileName.toStdWString();
-                    if (cachedItems.find(wFileName) == cachedItems.end()) {
-                        ItemMeta emptyMeta;
-                        emptyMeta.type = L"file";
-                        cachedItems[wFileName] = emptyMeta;
-                    }
-                    auto& fileMeta = cachedItems[wFileName];
-                    fileMeta.width = item.width;
-                    fileMeta.height = item.height;
-                    fileMeta.autoColor = item.autoColor;
-                    fileMeta.palettes = item.palettes;
-                    jsonCache.save();
-                }
-            }
-
-            results.push_back(item);
-        }
 >>>>>>> REPLACE
 
-### 7. `src/meta/MetadataManager.cpp`
 <<<<<<< SEARCH
-void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<ExtractedFeatureItem>& items) {
-    if (items.empty()) return;
-
-    std::unordered_map<sqlite3*, std::vector<ExtractedFeatureItem>> dbGroupMap;
-    for (const auto& item : items) {
-        std::wstring nPath = normalizePath(item.path);
-        {
-            size_t idx = getShardIndex(nPath);
-            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            if (m_shards[idx].items.count(nPath)) {
-                RuntimeMeta& meta = m_shards[idx].items[nPath];
-                meta.width = item.width;
-                meta.height = item.height;
-                if (item.mtime > 0) meta.mtime = item.mtime;
-                if (item.fileSize > 0) meta.fileSize = item.fileSize;
-                meta.autoColor = item.autoColor;
-                meta.ingestionStatus = item.ingestionStatus;
-                meta.palettes.clear();
-                for (const auto& p : item.palettes) {
-                    meta.palettes.emplace_back(p.first, p.second);
-                }
-            }
-        }
-
-        sqlite3* db = DatabaseManager::instance().getGlobalDb();
-        if (db) {
-            dbGroupMap[db].push_back(item);
-        }
-    }
-
-    for (auto& pair : dbGroupMap) {
-        sqlite3* db = pair.first;
-        auto itemList = pair.second;
-        DatabaseManager::instance().enqueueSyncTask([db, itemList]() {
-            SqlTransaction trans(db);
-            const char* sql = "UPDATE metadata SET width = ?, height = ?, auto_color = ?, palettes = ?, ingestion_status = ?, mtime = ?, file_size = ? WHERE path = ?";
-            sqlite3_stmt* stmt = nullptr;
-            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-                for (const auto& it : itemList) {
-                    sqlite3_bind_int(stmt, 1, it.width);
-                    sqlite3_bind_int(stmt, 2, it.height);
-                    sqlite3_bind_text16(stmt, 3, it.autoColor.c_str(), -1, SQLITE_TRANSIENT);
-                    std::string palStr;
-                    for (const auto& pe : it.palettes) {
-                        palStr += pe.first.name().toStdString() + ":" + std::to_string(pe.second) + ";";
-                    }
-                    sqlite3_bind_text(stmt, 4, palStr.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_bind_int(stmt, 5, it.ingestionStatus);
-                    sqlite3_bind_int64(stmt, 6, it.mtime);
-                    sqlite3_bind_int64(stmt, 7, it.fileSize);
-                    sqlite3_bind_text16(stmt, 8, it.path.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_step(stmt);
-                    sqlite3_reset(stmt);
-                }
-                sqlite3_finalize(stmt);
-            }
-        });
-    }
-}
+    if (m_editColor) m_editColor->clear();
+    if (m_editType) m_editType->clear();
 =======
-void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<ExtractedFeatureItem>& items) {
-    if (items.empty()) return;
-
-    for (const auto& item : items) {
-        std::wstring nPath = normalizePath(item.path);
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        if (m_shards[idx].items.count(nPath)) {
-            RuntimeMeta& meta = m_shards[idx].items[nPath];
-            meta.width = item.width;
-            meta.height = item.height;
-            if (item.mtime > 0) meta.mtime = item.mtime;
-            if (item.fileSize > 0) meta.fileSize = item.fileSize;
-            meta.autoColor = item.autoColor;
-            meta.ingestionStatus = item.ingestionStatus;
-            meta.palettes.clear();
-            for (const auto& p : item.palettes) {
-                meta.palettes.emplace_back(p.first, p.second);
-            }
-        }
-    }
-}
+    if (m_editType) m_editType->clear();
 >>>>>>> REPLACE
 
 ---
@@ -349,7 +292,6 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
    ```bash
    cmake --build build --config Release
    ```
-2. **Functional Verification**:
-   - Verify `FilterPanel` UI renders cleanly without `InlineHueSlider`, `m_accuracySlider`, or `m_areaSlider`.
-   - Verify discrete color filters (standard color blocks and text color filters) work as expected.
-   - Verify `.QuarkMeta.json` receives extracted image metadata directly during thumbnail generation.
+2. **UI Verification**:
+   - Verify `FilterPanel` "颜色标记" section renders only "无色标" and the 8 manual color checkbox rows.
+   - Verify color input line edit, standard color block grid, and recent filter block grid are completely removed.
