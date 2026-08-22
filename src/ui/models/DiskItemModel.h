@@ -15,6 +15,8 @@
 #include <unordered_map>
 #include <QSet>
 
+namespace QuarkMeta {
+
 class DiskItemModel : public ItemModelBase {
     Q_OBJECT
 public:
@@ -66,5 +68,7 @@ protected:
     QSet<int> m_pendingUpdateRows;
     std::atomic<uint64_t> m_currentGen{0};
 };
+
+} // namespace QuarkMeta
 
 #endif // DISKITEMMODEL_H
