@@ -7,13 +7,10 @@
 #include <QIcon>
 #include <QMutex>
 #include <memory>
+#include "../../core/CoreEngine.h"
 
 #include <unordered_map>
 #include <QSet>
-
-namespace QuarkMeta {
-class CancellationToken;
-}
 
 class DiskItemModel : public ItemModelBase {
     Q_OBJECT

@@ -8,10 +8,9 @@
 #include <cstdint>
 #include <memory>
 #include "../core/CoreController.h"
+#include "../core/CoreEngine.h"
 
 namespace QuarkMeta {
-
-class CancellationToken;
 
 class DiskMediaExtractor {
 public:
