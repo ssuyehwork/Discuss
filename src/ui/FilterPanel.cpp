@@ -161,112 +161,6 @@ void ColorBlock::leaveEvent(QEvent*) {
     ToolTipOverlay::hideTip();
 }
 
-// ─── InlineHueSlider ─────────────────────────────────────────────
-InlineHueSlider::InlineHueSlider(QWidget* parent) : QWidget(parent) {
-    setFixedHeight(28); 
-    setCursor(Qt::PointingHandCursor);
-}
-
-void InlineHueSlider::setHue(int h) {
-    m_h = h;
-    update();
-}
-
-void InlineHueSlider::paintEvent(QPaintEvent*) {
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-
-    int margin = 10; 
-    int bwgWidth = 42; // 黑白灰区域总宽
-    int gap = 6;
-    int barHeight = 12;
-    int barY = (height() - barHeight) / 2;
-
-    // 1. 绘制黑白灰特殊色块 (3个 14px 宽度的色块)
-    QRectF blackRect(margin, barY, 14, barHeight);
-    QRectF grayRect(margin + 14, barY, 14, barHeight);
-    QRectF whiteRect(margin + 28, barY, 14, barHeight);
-
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(Qt::black);
-    painter.drawRect(blackRect);
-    painter.setBrush(QColor("#808080"));
-    painter.drawRect(grayRect);
-    painter.setBrush(Qt::white);
-    painter.drawRect(whiteRect);
-    
-    // 给无色系区域加一个极细的边框，防止白色溢出
-    painter.setPen(QPen(QColor(80, 80, 80, 100), 1));
-    painter.setBrush(Qt::NoBrush);
-    painter.drawRect(margin, barY, bwgWidth, barHeight);
-
-    // 2. 绘制色相渐变区
-    int hueStartX = margin + bwgWidth + gap;
-    int hueWidth = width() - hueStartX - margin;
-    if (hueWidth > 0) {
-        QRectF hueRect(hueStartX, barY, hueWidth, barHeight);
-        QLinearGradient grad(hueRect.left(), 0, hueRect.right(), 0);
-        grad.setColorAt(0.0/6.0, QColor::fromHsv(0, 220, 220));
-        grad.setColorAt(1.0/6.0, QColor::fromHsv(60, 220, 220));
-        grad.setColorAt(2.0/6.0, QColor::fromHsv(120, 220, 220));
-        grad.setColorAt(3.0/6.0, QColor::fromHsv(180, 220, 220));
-        grad.setColorAt(4.0/6.0, QColor::fromHsv(240, 220, 220));
-        grad.setColorAt(5.0/6.0, QColor::fromHsv(300, 220, 220));
-        grad.setColorAt(6.0/6.0, QColor::fromHsv(359, 220, 220));
-
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(grad);
-        painter.drawRoundedRect(hueRect, 2, 2);
-    }
-
-    // 3. 绘制游标 (Thumb)
-    int tx = 0;
-    if (m_h == 1000) tx = blackRect.center().x();
-    else if (m_h == 1001) tx = grayRect.center().x();
-    else if (m_h == 1002) tx = whiteRect.center().x();
-    else {
-        double ratio = qBound(0, m_h, 359) / 359.0;
-        tx = hueStartX + ratio * hueWidth;
-    }
-    
-    painter.setBrush(Qt::white);
-    painter.setPen(QPen(QColor(50, 50, 50), 1));
-    painter.drawEllipse(QPoint(tx, height() / 2), 8, 8);
-}
-
-void InlineHueSlider::updateFromPos(int x) {
-    int margin = 10;
-    int bwgWidth = 42;
-    int gap = 6;
-    int hueStartX = margin + bwgWidth + gap;
-
-    if (x < margin + 14) {
-        m_h = 1000; // Black
-    } else if (x < margin + 28) {
-        m_h = 1001; // Gray
-    } else if (x < margin + 42) {
-        m_h = 1002; // White
-    } else {
-        int hueWidth = width() - hueStartX - margin;
-        if (hueWidth <= 0) return;
-        int lx = qBound(0, x - hueStartX, hueWidth);
-        m_h = (lx * 359) / hueWidth;
-    }
-    update();
-    emit hueChanged(m_h);
-}
-
-void InlineHueSlider::mousePressEvent(QMouseEvent* event) {
-    if (event->button() == Qt::LeftButton) updateFromPos(event->pos().x());
-}
-
-void InlineHueSlider::mouseMoveEvent(QMouseEvent* event) {
-    if (event->buttons() & Qt::LeftButton) updateFromPos(event->pos().x());
-}
-
-void InlineHueSlider::mouseReleaseEvent(QMouseEvent* event) {
-    if (event->button() == Qt::LeftButton) emit sliderReleased();
-}
 
 // ─── FilterPanel ──────────────────────────────────────────────────
 
@@ -512,13 +406,7 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
             // 2026-07-xx 按照 Plan-65：悬停触发，timeout = 0
             ToolTipOverlay::instance()->showText(QCursor::pos(), text, 0);
         }
-    } else if (event->type() == QEvent::MouseMove || event->type() == QEvent::MouseButtonPress) {
-        // 2026-06-23 按照用户要求：滑杆滑动/悬停显示百分比数值
-        if (watched == m_areaSlider) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("%1%").arg(m_areaSlider->value()), 0);
-        }
-    } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::MouseButtonRelease || (event->type() == QEvent::MouseButtonPress && watched != m_areaSlider)) {
-        // 2026-06-23 逻辑修正：滑杆按下时不隐藏（以便滑动回显），离开或释放时隐藏
+    } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::MouseButtonRelease) {
         ToolTipOverlay::hideTip();
     }
     
@@ -671,8 +559,6 @@ void FilterPanel::rebuildGroups() {
     m_editModifyDate = nullptr;
     m_createDateLayout = nullptr;
     m_modifyDateLayout = nullptr;
-    m_accuracySlider = nullptr;
-    m_areaSlider = nullptr;
 
     // 清空旧内容（保留末尾 stretch，并在删除前显式立刻隐藏和解除父子绑定，杜绝渲染重影）
     while (m_containerLayout->count() > 1) {
@@ -754,97 +640,6 @@ void FilterPanel::rebuildGroups() {
         lColor->addWidget(m_editColor);
         gl->addWidget(wColor);
 
-        // 2.1 顶部色相滑块
-        // 2026-06-xx 物理对齐：滑块及其容器增加 4px 左右边距（相对于 gl 的 0 边距），实现视觉平衡
-        QWidget* hueContainer = new QWidget(g);
-        QHBoxLayout* hueLayout = new QHBoxLayout(hueContainer);
-        hueLayout->setContentsMargins(5, 0, 5, 0);
-        hueLayout->setSpacing(0);
-        
-        InlineHueSlider* hueSlider = new InlineHueSlider(hueContainer);
-        hueLayout->addWidget(hueSlider);
-        connect(hueSlider, &InlineHueSlider::sliderReleased, this, [this, hueSlider]() {
-            int h = hueSlider->hue();
-            QColor c;
-            if (h == 1000) c = Qt::black;
-            else if (h == 1001) c = QColor("#808080");
-            else if (h == 1002) c = Qt::white;
-            else c = QColor::fromHsv(h, 220, 220);
-
-            QString hex = c.name().toUpper();
-            m_filter.colors.clear();
-            m_filter.colors.append(hex);
-            
-            // LRU 更新 (2026-06-xx: 容量扩展至 50 个，且由左上向右下按时间排布)
-            m_recentColors.removeAll(hex);
-            m_recentColors.prepend(hex);
-            if (m_recentColors.size() > 50) m_recentColors.removeLast();
-            AppConfig::instance().setValue("Filter/RecentColors", m_recentColors);
-
-            emit filterChanged(m_filter);
-            rebuildGroups();
-        });
-        gl->addWidget(hueContainer);
-
-        // 2.1.5 颜色准确度 (容差) 滑块 ─────────────────────────
-        // 2026-07-xx 按照用户要求：还原此前被误删的准确度控制条
-        QWidget* accContainer = new QWidget(g);
-        QHBoxLayout* accLayout = new QHBoxLayout(accContainer);
-        accLayout->setContentsMargins(10, 4, 10, 4);
-        accLayout->setSpacing(8);
-
-        QLabel* lblAcc = new QLabel("准确度:", accContainer);
-        lblAcc->setStyleSheet("color: #AAAAAA; font-size: 11px;");
-        accLayout->addWidget(lblAcc);
-
-        m_accuracySlider = new QSlider(Qt::Horizontal, accContainer);
-        m_accuracySlider->setRange(0, 100);
-        m_accuracySlider->setValue(m_filter.colorTolerance);
-        m_accuracySlider->setCursor(Qt::PointingHandCursor);
-        m_accuracySlider->setStyleSheet(
-            "QSlider::groove:horizontal { height: 2px; background: #444; border-radius: 1px; }"
-            "QSlider::handle:horizontal { background: #EEE; border: 1px solid #777; width: 10px; height: 10px; margin: -4px 0; border-radius: 5px; }"
-            "QSlider::handle:horizontal:hover { background: #FFF; border-color: #378ADD; }"
-        );
-        accLayout->addWidget(m_accuracySlider, 1);
-
-        connect(m_accuracySlider, &QSlider::valueChanged, this, [this](int val) {
-            m_filter.colorTolerance = val;
-            emit filterChanged(m_filter);
-        });
-
-        gl->addWidget(accContainer);
-
-        // 2.1.6 颜色占比滑块 ─────────────────────────────────
-        // 2026-06-23 按照用户要求：新增颜色面积占比过滤逻辑
-        QWidget* areaContainer = new QWidget(g);
-        QHBoxLayout* areaLayout = new QHBoxLayout(areaContainer);
-        areaLayout->setContentsMargins(10, 4, 10, 4);
-        areaLayout->setSpacing(8);
-
-        QLabel* lblArea = new QLabel("占比:", areaContainer);
-        lblArea->setStyleSheet("color: #AAAAAA; font-size: 11px;");
-        areaLayout->addWidget(lblArea);
-
-        m_areaSlider = new QSlider(Qt::Horizontal, areaContainer);
-        m_areaSlider->setRange(0, 100);
-        m_areaSlider->setValue(m_filter.minColorArea);
-        m_areaSlider->setCursor(Qt::PointingHandCursor);
-        m_areaSlider->setMouseTracking(true); // 2026-06-23 按照用户要求：支持悬停/滑动实时回显百分比
-        m_areaSlider->installEventFilter(this);
-        m_areaSlider->setStyleSheet(
-            "QSlider::groove:horizontal { height: 2px; background: #444; border-radius: 1px; }"
-            "QSlider::handle:horizontal { background: #EEE; border: 1px solid #777; width: 10px; height: 10px; margin: -4px 0; border-radius: 5px; }"
-            "QSlider::handle:horizontal:hover { background: #FFF; border-color: #378ADD; }"
-        );
-        areaLayout->addWidget(m_areaSlider, 1);
-
-        connect(m_areaSlider, &QSlider::valueChanged, this, [this](int val) {
-            m_filter.minColorArea = val;
-            emit filterChanged(m_filter);
-        });
-
-        gl->addWidget(areaContainer);
 
         // 2.2 标准色矩阵 (12色)
         // 2026-06-xx 物理对齐：设置左边距 8px 以对齐下方的复选框视觉线

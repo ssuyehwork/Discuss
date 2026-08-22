@@ -10,6 +10,7 @@
 #include "../ui/ImageDecoderFacade.h"
 #include "../ui/ColorAlgorithmEngine.h"
 #include "DatabaseManager.h"
+#include "QuarkMetaJson.h"
 #include <QImageReader>
 #include <QSvgRenderer>
 #include <QFileInfo>
@@ -170,6 +171,25 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                         item.autoColor = dominant.name().toUpper().toStdWString();
                         item.palettes = pal;
                     }
+
+                    // 3. 纯磁盘直连模式：元数据更新直接落盘至 per-directory .QuarkMeta.json
+                    QString parentDir = QDir::toNativeSeparators(info.absolutePath());
+                    QString fileName = info.fileName();
+                    QuarkMetaJson jsonCache(parentDir.toStdWString());
+                    jsonCache.load();
+                    auto& cachedItems = jsonCache.items();
+                    std::wstring wFileName = fileName.toStdWString();
+                    if (cachedItems.find(wFileName) == cachedItems.end()) {
+                        ItemMeta emptyMeta;
+                        emptyMeta.type = L"file";
+                        cachedItems[wFileName] = emptyMeta;
+                    }
+                    auto& fileMeta = cachedItems[wFileName];
+                    fileMeta.width = item.width;
+                    fileMeta.height = item.height;
+                    fileMeta.autoColor = item.autoColor;
+                    fileMeta.palettes = item.palettes;
+                    jsonCache.save();
                 }
             }
 

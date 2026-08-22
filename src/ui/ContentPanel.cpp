@@ -2833,13 +2833,6 @@ void ContentPanel::previewFile(const QString& path) {
     } 
 } 
  
-void ContentPanel::loadCategories(const QList<int>& categoryIds) {
-    Q_UNUSED(categoryIds);
-}
-
-void ContentPanel::loadCategory(int categoryId) { 
-    Q_UNUSED(categoryId);
-}
 
 void ContentPanel::loadCategory(const QString& categoryType) {
     m_currentCategoryType = categoryType;
