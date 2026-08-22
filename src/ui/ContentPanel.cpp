@@ -2880,15 +2880,6 @@ static std::vector<ItemRecord> loadTrashItemsInternal() {
         records.push_back(rec);
     }
 
-    // 2. 扫描内存缓存中的 isTrash 项
-    MetadataManager::instance().forEachCachedItem([&](const std::wstring& wpath, const RuntimeMeta& meta) {
-        if (meta.isTrash) {
-            ItemRecord rec = ItemRecord::create(QString::fromStdWString(wpath), &meta, true);
-            rec.originalPath = QString::fromStdWString(meta.originalPath);
-            records.push_back(rec);
-        }
-    });
-
     MetaCacheDecorator::decorate(records);
     return records;
 }

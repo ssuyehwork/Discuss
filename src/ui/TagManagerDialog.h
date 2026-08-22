@@ -24,7 +24,7 @@ public:
      * @brief 全局统一模块化静态调用入口
      * @param parent 父窗口指针
      * @param currentPath 当前操作的文件/目录绝对路径
-     * @param isMirrorSource 是否处于托管库模式 (true: 托管库, false: 磁盘导航模式)
+     * @param isMirrorSource 视图标记源
      */
     static void showDialog(QWidget* parent, const QString& currentPath, bool isMirrorSource);
 
