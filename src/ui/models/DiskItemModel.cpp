@@ -113,7 +113,7 @@ void DiskItemModel::preloadDimensionsAsync() {
 
     QPointer<DiskItemModel> weakThis(this);
 
-    QtConcurrent::run([weakThis, targets = std::move(targets), thisGen]() {
+    thumbnailPool()->start([weakThis, targets = std::move(targets), thisGen]() {
         if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
         for (const auto& target : targets) {
