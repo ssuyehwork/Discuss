@@ -7,6 +7,7 @@
 #include <deque>
 #include <vector>
 #include <QCache>
+#include <QList>
 #include <QStringList>
 #include <QTimer>
 #include <QWidget>

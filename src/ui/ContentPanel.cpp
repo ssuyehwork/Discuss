@@ -183,117 +183,25 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         if (!currentFilter.ratings.contains(r)) return false; 
     } 
  
-    // 🚨 2.5 手动标准色系精准筛选（1:1 硬核比对，不走色差与调色盘算法）
-    if (!currentFilter.manualExactColors.isEmpty()) {
-        if (record.manualColor.isEmpty()) {
-            return false; // 没有手动色标直接排除
-        }
-
-        QString itemManualHex = record.manualColor.toUpper();
-        bool exactMatched = false;
-
-        for (const QString& targetHex : currentFilter.manualExactColors) {
-            if (itemManualHex.compare(targetHex, Qt::CaseInsensitive) == 0) {
-                exactMatched = true;
-                break;
-            }
-        }
-
-        if (!exactMatched) return false; // 色值不完全相等直接排除
-    }
-
-    // 2. 颜色过滤 (Plan-18: 基于 CIELAB Delta E 的感知筛选逻辑)
-    if (!currentFilter.colors.isEmpty() || !currentFilter.colorFilterText.isEmpty()) { 
+    // 2. 颜色标记过滤（基础名称/标签精准匹配）
+    if (!currentFilter.colors.isEmpty()) {
         bool matchColor = false;
-
-        // 计算自动提取色的匹配面积占比
-        auto calculateAutoColorMatchedArea = [&](const QColor& targetCol) -> float {
-            if (!targetCol.isValid()) return 0.0f;
-            float totalMatchedArea = 0.0f;
-
-            // Case A: 有调色盘数据，累加所有符合色差要求的色块占比
-            if (!record.palettes.empty()) {
-                for (const auto& pe : record.palettes) {
-                    if (UiHelper::calculateDeltaE(targetCol, pe.first) < currentFilter.colorTolerance) {
-                        totalMatchedArea += pe.second;
-                    }
+        for (const QString& colName : currentFilter.colors) {
+            if (colName == "无色标" || colName.isEmpty()) {
+                if (record.manualColor.isEmpty() && record.autoColor.isEmpty()) {
+                    matchColor = true;
+                    break;
                 }
-            } else if (!record.autoColor.isEmpty()) {
-                // Case B: 仅有自动主色调数据，若自动主色匹配则占比视为 100%
-                QColor recordCol = UiHelper::parseColorName(record.autoColor);
-                if (UiHelper::calculateDeltaE(targetCol, recordCol) < currentFilter.colorTolerance) {
-                    totalMatchedArea = 1.0f;
-                }
-            }
-            return totalMatchedArea;
-        };
-
-        // 判断特定的 targetCol 是否与当前记录匹配（结合手动色与自动色）
-        auto isColorMatched = [&](const QColor& targetCol) -> bool {
-            if (!targetCol.isValid()) return false;
-
-            // 1. 检查手动色：单一颜色值匹配，不受最小面积占比限制
-            if (!record.manualColor.isEmpty()) {
-                QColor recordCol = UiHelper::parseColorName(record.manualColor);
-                if (UiHelper::calculateDeltaE(targetCol, recordCol) < currentFilter.colorTolerance) {
-                    return true;
-                }
-            }
-
-            // 2. 检查自动色：利用 palettes 占比及 minColorArea 限制
-            float area = calculateAutoColorMatchedArea(targetCol);
-            if (area > 0.0f && area * 100.0f >= (float)currentFilter.minColorArea) {
-                return true;
-            }
-
-            return false;
-        };
-
-        // 2.0 文本过滤逻辑 (如果存在文本)
-        if (!currentFilter.colorFilterText.isEmpty()) {
-            QString searchText = currentFilter.colorFilterText.trimmed();
-            // 物理规则：支持名称、色值或“无色标”
-            if (searchText == "无色标") {
-                if (record.manualColor.isEmpty() && record.autoColor.isEmpty()) matchColor = true;
-            } else if (searchText.startsWith("#")) {
-                QColor targetCol = UiHelper::parseColorName(searchText);
-                if (isColorMatched(targetCol)) matchColor = true;
             } else {
-                // 模糊匹配颜色名称 (通过反查 colorMap)
-                static const QMap<QString, QString> nameToHex = {
-                    {"红", "#E24B4A"}, {"橙", "#EF9F27"}, {"黄", "#FECF0E"}, {"绿", "#639922"},
-                    {"青", "#1D9E75"}, {"蓝", "#378ADD"}, {"紫", "#7F77DD"}, {"灰", "#5F5E5A"},
-                    {"黑", "#000000"}, {"白", "#FFFFFF"}
-                };
-                for (auto it = nameToHex.begin(); it != nameToHex.end(); ++it) {
-                    if (it.key().contains(searchText)) {
-                        QColor targetCol = QColor(it.value());
-                        if (isColorMatched(targetCol)) { matchColor = true; break; }
-                    }
-                }
-            }
-            if (!matchColor) return false; // 文本过滤不通过
-        }
-
-        // 2.1 勾选框过滤 (如果存在勾选)
-        if (!currentFilter.colors.isEmpty()) {
-            matchColor = false;
-            for (const QString& fc : currentFilter.colors) {
-                // 特殊情况：无色标 (不涉及占比逻辑)
-                if (fc.isEmpty()) {
-                    if (record.manualColor.isEmpty() && record.autoColor.isEmpty()) { matchColor = true; break; }
-                    continue;
-                }
-
-                QColor targetCol = UiHelper::parseColorName(fc);
-                if (isColorMatched(targetCol)) {
+                if (record.manualColor.contains(colName, Qt::CaseInsensitive) ||
+                    record.autoColor.contains(colName, Qt::CaseInsensitive)) {
                     matchColor = true;
                     break;
                 }
             }
         }
-        if (!matchColor) return false; 
-    } 
+        if (!matchColor) return false;
+    }
  
     // 4. 类型过滤 
     if (!currentFilter.types.isEmpty() || !currentFilter.typeFilterText.isEmpty()) { 
@@ -402,6 +310,11 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         }
     } 
  
+    // 10.5 无缩略图 (失败/跳过) 过滤
+    if (currentFilter.noThumbnailOnly) {
+        if (record.thumbStatus != 1) return false;
+    }
+
     // 11. 重复状态过滤 (O(1) 瞬时判定)
     if (currentFilter.duplicatePresence != FilterState::DupAll) {
         if (record.isDir) {
@@ -2833,7 +2746,6 @@ void ContentPanel::previewFile(const QString& path) {
     } 
 } 
  
-
 void ContentPanel::loadCategory(const QString& categoryType) {
     m_currentCategoryType = categoryType;
     if (categoryType == "trash") {
@@ -3056,6 +2968,11 @@ void ContentPanel::recalculateAndEmitStats() {
                     stats.duplicateCount++;
                 } else {
                     stats.uniqueCount++;
+                }
+
+                // 无缩略图 (失败/跳过) 统计
+                if (record.thumbStatus == 1) {
+                    stats.noThumbnailCount++;
                 }
             }
             

@@ -26,6 +26,7 @@ struct ScanStats {
     int ratio169Count = 0;
     int duplicateCount = 0;
     int uniqueCount = 0;
+    int noThumbnailCount = 0;
 };
 
 } // namespace QuarkMeta

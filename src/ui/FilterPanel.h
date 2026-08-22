@@ -40,43 +40,13 @@ private:
     StyledCheckBox* m_cb;
 };
 
-// ─── 物理色块控件 (ColorBlock) ─────────────────────────────────────
-class ColorBlock : public QWidget {
-    Q_OBJECT
-public:
-    explicit ColorBlock(const QColor& color, QWidget* parent = nullptr);
-    void setCount(int count);
-    void setChecked(bool checked);
-    bool isChecked() const { return m_checked; }
-    QColor color() const { return m_color; }
-
-signals:
-    void clicked(const QColor& color);
-
-protected:
-    void paintEvent(QPaintEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void enterEvent(QEnterEvent* event) override;
-    void leaveEvent(QEvent*) override;
-
-private:
-    QColor m_color;
-    int    m_count = 0;
-    bool   m_checked = false;
-    bool   m_hovered = false;
-};
-
-
 struct FilterState {
     QList<int>   ratings;
     QStringList  colors;
-    QStringList  manualExactColors; // 🚨 标准色系：手动色标 1:1 精准过滤字段
-    QString      keyword; // 2026-07-xx 按照 Plan-92：合并搜索关键词入 FilterState
+    QString      keyword;
     QStringList  types;
     QStringList  createDates;   // "YYYY-MM-DD"
     QStringList  modifyDates;
-    int          colorTolerance = 30; // 2026-05-17 按照用户要求：自定义颜色相近色容差（0~100），由 ColorPicker 准确度滑条驱动
-    int          minColorArea = 0;   // 2026-06-23 按照用户要求：颜色面积最小占比阈值 (0-100)
 
     // 2026-07-xx 按照 Plan-30：链接、备注及大小筛选
     enum Presence { All, Yes, No };
@@ -89,8 +59,6 @@ struct FilterState {
     long long minSize = -1; // 字节单位，-1 表示不限制
     long long maxSize = -1;
 
-    // 2026-xx-xx 按照用户要求：新增 5 个主选项的快速文本过滤字段
-    QString colorFilterText;
     QString typeFilterText;
     QString createDateFilterText;
     QString modifyDateFilterText;
@@ -101,14 +69,16 @@ struct FilterState {
     enum DuplicatePresence { DupAll, DuplicateOnly, UniqueOnly };
     DuplicatePresence duplicatePresence = DupAll;
 
+    bool noThumbnailOnly = false;
+
     bool isEmpty() const {
-        return ratings.isEmpty() && colors.isEmpty() && manualExactColors.isEmpty() && keyword.isEmpty() && types.isEmpty() &&
+        return ratings.isEmpty() && colors.isEmpty() && keyword.isEmpty() && types.isEmpty() &&
                createDates.isEmpty() && modifyDates.isEmpty() &&
                linkPresence == All && notePresence == All && ratio == AspectAny &&
-               minSize == -1 && maxSize == -1 && minColorArea == 0 &&
-               colorFilterText.trimmed().isEmpty() &&
+               minSize == -1 && maxSize == -1 &&
                typeFilterText.trimmed().isEmpty() && createDateFilterText.trimmed().isEmpty() &&
-               modifyDateFilterText.trimmed().isEmpty() && duplicatePresence == DupAll;
+               modifyDateFilterText.trimmed().isEmpty() && duplicatePresence == DupAll &&
+               !noThumbnailOnly;
     }
 };
 
@@ -179,7 +149,6 @@ private:
     static QMap<QString, QColor> s_colorMap();
 
     FilterState m_filter;
-    QStringList m_recentColors; // LRU 缓存
 
     QuarkMeta::ScanStats m_currentStats;
 
@@ -214,7 +183,6 @@ private:
     QWidget* m_groupDuplicate = nullptr;
 
 
-    // 2026-xx-xx 新增快速输入框成员
     QLineEdit*    m_editType        = nullptr;
     QLineEdit*    m_editCreateDate  = nullptr;
     QLineEdit*    m_editModifyDate  = nullptr;

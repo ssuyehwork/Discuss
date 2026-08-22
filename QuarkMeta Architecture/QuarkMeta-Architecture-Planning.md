@@ -63,6 +63,7 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 - **元数据面板标签按钮化与 TagSelectorOverlay 悬浮选择器实时联动无脑实施方案**：详见 `Implementation Plan/meta_panel_tag_selector_overlay.md`
 - **TagSelectorOverlay 界面精细化改造无脑实施方案**：详见 `Implementation Plan/tag_selector_overlay_refinement.md`
 - **纯磁盘目录模式·内存模式与托管库僵尸代码根除无脑实施方案**：详见 `Implementation Plan/memory_mode_purge.md`
+- **筛选面板颜色高级筛选复合控件清退与纯净化方案**：详见 `Implementation Plan/filter_color_purge.md`
 
 ---
 
@@ -176,18 +177,25 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 
 ---
 
-## 12. 文件头优先速读与图片尺寸独立提取规范 (Header-First Image Size Fast Extraction Specification)
+## 13. 筛选面板全多维统计真实同步与无缩略图过滤规范 (Filter Panel Multi-dimension Stats & Thumbnail Failure Filter Specification)
 
-### 12.1 设计理念
-在 QuarkMeta 纯磁盘直连模式下，“图片尺寸提取”与“缩略图生成解码”属于两条彻底解耦的流水线。过去将尺寸提取绑定在耗时的缩略图生成流水线中，会导致未滚动到视口区域的文件以及缩略图提取失败的文件永远显示尺寸为 `-`。为此，系统建立 **“文件头极速读（Header Fast Read）优先提取”** 架构：
+### 13.1 设计理念与真实统计同步
+1. **图像比例（Aspect Ratio）真实统计**：
+   - 图像比例（横图/竖图/方形/16:9）依赖于项目的物理尺寸信息 (`width` 和 `height`)。在纯磁盘模式下，`DiskItemModel::preloadDimensionsAsync` 快速提取文件头并实时更新记录，`recalculateAndEmitStats()` 实时同步计算并在目录加载或数据变更时触发 `directoryStatsReady` 信号，确保筛选面板各比例计数不再归零。
+2. **重复状态（Duplicate Status）信号与 UI 真实绑定**：
+   - `ContentPanel` 计算 `duplicateCount`（重复项）与 `uniqueCount`（未重复项）并填充至 `ScanStats`，传递给 `FilterPanel` 的 `populateStats` / `populate` 方法，同步更新界面标签（Label），消除数据传递到 UI 呈现层之间的绑定断层。
+3. **“无缩略图 (失败/跳过)” 筛选扩展**：
+   - 在第五栏筛选面板的“文件类型”或专用条件组中新增“无缩略图 (失败/跳过)”复选选项。
+   - 筛选逻辑：当勾选该复选框时，依据 `thumbStatus == 1`（缩略图提取失败/跳过）进行匹配过滤，便于用户一键定位破坏损坏的图片或渲染失败的格式文件。
 
-1. **秒速 Header 预读（0.1ms/文件，解耦解码）**：
-   - 进驻任何物理文件夹时，优先通过极速文件头解析（`QImageReader::size()` / 文件头前几百字节 Header 正则提取）快速获取全文件夹图形/图像文件的真实原始分辨率（`width` x `height`）。
-   - 极速预读仅需读取文件头部极少字节，绝不进行全图像素解码重采样，全过程无卡顿。
+---
 
-2. **尺寸原子化预先刷盘与 Model 刷屏**：
-   - 文件头预读获取到尺寸后，第一时间原子化回写持久化至 `.QuarkMeta.json`，并刷新列表/网格 Model 第 3 列（尺寸）。
-   - 确保用户进入文件夹后，**即使是视口屏外尚未加载缩略图的文件，或缩略图提取失败的文件，其尺寸依然能够 100% 瞬间全部精准显示**。
+## 14. 筛选面板界面纯净化与颜色高级筛选复合组件清退规范 (Filter Panel UI Simplification & Color Selector Purge Specification)
 
-3. **视口懒加载缩略图流水线（按需接力）**：
-   - 尺寸提取完毕后，缩略图后台任务仅需专注于 512px 缩略图的按需解码渲染。无论缩略图成功还是失败（`thumb_status: 1`），均不影响尺寸数据的持久性与正确展示。
+### 14.1 设计理念与控件纯洁性铁律
+1. **筛选面板五栏布局风格统一铁律**：
+   - 第五栏筛选面板（Filter Panel）所有条件分组（包含评级、颜色标记、文件类型、日期、链接/备注等）**必须统一保持极其简洁、高密度、直观的分类复选框列表形式**。
+2. **严禁过度设计与复合控件堆叠**：
+   - 严禁在筛选面板中引入或复原任何过度设计的复杂复合控件，包括但不限于：色相/渐变滑块（`InlineHueSlider`）、准确度/容差滑块（`m_accuracySlider`）、颜色占比滑块（`m_areaSlider`）、快速颜色文本输入框（`m_editColor`）、标准 12 色矩阵网格以及最近筛选颜色历史块网格（`m_recentColors`）。
+3. **颜色标记分组表现形式**：
+   - “颜色标记”分组必须恢复为与其他分组完全一致的标准纵向复选框列表（例如“无色标”、“红色”、“黄色”等基础类别），确保右侧筛选面板纵向布局平整高效、无冗余留白、性能极其轻量。
