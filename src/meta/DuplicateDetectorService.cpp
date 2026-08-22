@@ -112,7 +112,6 @@ std::vector<DuplicateConflictGroup> DuplicateDetectorService::detectDuplicates(c
 
                 if (!existSha.isEmpty() && existSha == newFullSha256) {
                     DuplicateConflictGroup group;
-                    group.existingItem.folderId = QString::fromStdString(meta.folderId);
                     group.existingItem.path = existPathStr;
                     group.existingItem.filename = QFileInfo(existPathStr).fileName();
                     group.existingItem.width = meta.width;
@@ -148,7 +147,6 @@ std::vector<DuplicateConflictGroup> DuplicateDetectorService::detectDuplicates(c
                     if (meta.width > 0 && meta.height > 0 && meta.width == newWidth && meta.height == newHeight) {
                         DuplicateConflictGroup group;
                         
-                        group.existingItem.folderId = QString::fromStdString(meta.folderId);
                         group.existingItem.path = existPathStr;
                         group.existingItem.filename = QFileInfo(existPathStr).fileName();
                         group.existingItem.width = meta.width;

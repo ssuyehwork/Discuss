@@ -307,7 +307,6 @@ void MainWindow::initUi() {
             m_metaPanel->setTags(QStringList());
             m_metaPanel->setNote(L"");
             m_metaPanel->setURL(L"");
-            m_metaPanel->setCategory("-");
         } else {
             auto indexes = m_contentPanel->getSelectedIndexes();
             if (indexes.isEmpty()) return;
@@ -353,9 +352,6 @@ void MainWindow::initUi() {
             RuntimeMeta rm = MetadataManager::instance().getMeta(path.toStdWString());
             m_metaPanel->setNote(rm.note);
             m_metaPanel->setURL(rm.url);
-
-            bool isDiskMode = true;
-            m_metaPanel->setDiskPathMode(isDiskMode, path);
 
             // 将色板数据转换为 QVector<QPair<QColor, float>>
             QVector<QPair<QColor, float>> pal;

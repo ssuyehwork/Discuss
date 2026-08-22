@@ -142,7 +142,7 @@ public:
      * @param path 绝对物理路径
      */
     void selectAndScrollToPath(const QString& path);
-    void selectAndScrollToItem(const QString& type, const QString& path, int categoryId);
+    void selectAndScrollToItem(const QString& path);
 
     /**
      * @brief 切换视图模式
@@ -255,7 +255,6 @@ public:
     int m_currentCategoryId = -1;
     QString m_currentCategoryType; // 用于驱动差异化右键菜单
     bool m_isRecursive = false;
-    bool m_isCategoryRecursive = false;
     bool m_showFolders = true;
     bool m_showFiles = true;
     ViewMode m_currentViewMode = GridView;
