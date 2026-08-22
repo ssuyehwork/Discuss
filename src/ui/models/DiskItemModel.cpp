@@ -86,6 +86,78 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     m_requestedIcons.clear();
     endResetModel();
+
+    preloadDimensionsAsync();
+}
+
+struct SizeTarget {
+    int index;
+    QString path;
+    QString suffix;
+};
+
+void DiskItemModel::preloadDimensionsAsync() {
+    uint64_t thisGen = m_currentGen.load(std::memory_order_relaxed);
+
+    // 主线程构建 SizeTarget 拷贝，规避多线程引用 m_allRecords 导致的竞态与崩溃
+    std::vector<SizeTarget> targets;
+    targets.reserve(m_allRecords.size());
+    for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
+        const auto& rec = m_allRecords[i];
+        if (!rec.isDir && rec.width == 0 && UiHelper::isGraphicsFile(rec.suffix)) {
+            targets.push_back({i, rec.path, rec.suffix});
+        }
+    }
+
+    if (targets.empty()) return;
+
+    QPointer<DiskItemModel> weakThis(this);
+
+    thumbnailPool()->start([weakThis, targets = std::move(targets), thisGen]() {
+        if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+
+        for (const auto& target : targets) {
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+
+            QSize sz = DiskMediaExtractor::fastExtractImageSize(target.path);
+            if (sz.isValid() && sz.width() > 0) {
+                QFileInfo fi(target.path);
+                QString parentDir = QDir::toNativeSeparators(fi.absolutePath());
+                QString fileName = fi.fileName();
+
+                static std::mutex s_jsonSaveMutex;
+                std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
+
+                QuarkMetaJson jsonCache(parentDir.toStdWString());
+                jsonCache.load();
+                auto& cachedItems = jsonCache.items();
+                std::wstring wFileName = fileName.toStdWString();
+                if (cachedItems.find(wFileName) == cachedItems.end()) {
+                    ItemMeta emptyMeta;
+                    emptyMeta.type = L"file";
+                    cachedItems[wFileName] = emptyMeta;
+                }
+                auto& fileMeta = cachedItems[wFileName];
+                if (fileMeta.width != sz.width() || fileMeta.height != sz.height()) {
+                    fileMeta.width = sz.width();
+                    fileMeta.height = sz.height();
+                    jsonCache.save();
+                }
+
+                int i = target.index;
+                QString targetPath = target.path;
+                QMetaObject::invokeMethod(weakThis.data(), [weakThis, i, targetPath, sz, thisGen]() {
+                    if (weakThis && weakThis->currentGeneration() == thisGen && i < static_cast<int>(weakThis->m_allRecords.size())) {
+                        if (weakThis->m_allRecords[i].path == targetPath) {
+                            weakThis->m_allRecords[i].width = sz.width();
+                            weakThis->m_allRecords[i].height = sz.height();
+                            emit weakThis->dataChanged(weakThis->index(i, 3), weakThis->index(i, 3));
+                        }
+                    }
+                }, Qt::QueuedConnection);
+            }
+        }
+    });
 }
 
 void DiskItemModel::clear() {
@@ -294,15 +366,6 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
 
         QString path = rec.path;
         if (m_iconCache.contains(path) || m_requestedPaths.contains(path)) continue;
-
-        if (rec.thumbStatus == 1) {
-            // 🚨 失败状态快速避让：对于历史记录已标记为提取失败的文件，不二次拉起耗时解码
-            QIcon shellIcon = ShellIconManager::getFileIcon(path, 128);
-            m_iconCache.insert(path, new QIcon(shellIcon));
-            m_aspectRatios[QDir::toNativeSeparators(path)] = -1.0;
-            emit dataChanged(index(r, 0), index(r, columnCount() - 1), {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
-            continue;
-        }
 
         m_requestedPaths.insert(path);
         pathsToLoad << path;

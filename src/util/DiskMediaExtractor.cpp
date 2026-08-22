@@ -5,6 +5,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>
+#include <QImageReader>
 #include <QCoreApplication>
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -77,6 +78,15 @@ QImage DiskMediaExtractor::getCapsuleThumbnailReadOnly(const QString& filePath) 
         if (img.load(diskCachePath)) return img;
     }
     return QImage();
+}
+
+QSize DiskMediaExtractor::fastExtractImageSize(const QString& filePath) {
+    QImageReader reader(filePath);
+    QSize sz = reader.size();
+    if (sz.isValid() && sz.width() > 0 && sz.height() > 0) {
+        return sz;
+    }
+    return QSize();
 }
 
 DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(const QString& filePath, int size, std::shared_ptr<CancellationToken> token) {

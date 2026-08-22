@@ -5,11 +5,10 @@
 #include <QCache>
 #include <QMap>
 #include <QIcon>
-#include <QThreadPool>
 #include <QMutex>
-#include <QHash>
+#include <QThreadPool>
 #include <memory>
-#include "../core/CoreEngine.h"
+#include "../../core/CoreEngine.h"
 
 #include <unordered_map>
 #include <QSet>
@@ -27,9 +26,7 @@ public:
     Qt::ItemFlags flags(const QModelIndex& index) const override;
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
-    static QThreadPool* thumbnailPool();
-
-    // 切换目录/清空数据时调用，使所有已派发的旧任务瞬间失效并主动触发 Token 取消
+    // 切换目录/清空数据时调用，使所有已派发的旧任务瞬间失效
     void incrementGeneration();
     uint64_t currentGeneration() const { return m_currentGen.load(std::memory_order_relaxed); }
 
@@ -43,8 +40,13 @@ public:
     void clearCacheForFolder(const QString& folderPath) override;
     void flushPendingUpdates() override;
 
+    // 异步全文件夹文件头极速尺寸提取流水线
+    void preloadDimensionsAsync();
+
     // 强制重载指定路径的内存缩略图与宽高比缓存，并触发视图重绘
     void reloadThumbnailForPath(const QString& path);
+
+    static QThreadPool* thumbnailPool();
 
 protected:
     bool isSuspended() const;
@@ -61,7 +63,7 @@ protected:
     std::atomic<uint64_t> m_currentGen{0};
 
     QMutex m_genTokenMutex;
-    QHash<uint64_t, std::shared_ptr<QuarkMeta::CancellationToken>> m_genTokens;
+    QMap<uint64_t, std::shared_ptr<QuarkMeta::CancellationToken>> m_genTokens;
 };
 
 #endif // DISKITEMMODEL_H
