@@ -24,8 +24,6 @@
 #include "MetadataDefs.h"
 #include "DatabaseManager.h"
 #include "DriveMetaDao.h"
-#include "PhysicalDataExtractor.h"
-#include "IngestionProgressEngine.h"
 #include "../core/AppConfig.h"
 #include "../ui/MediaColorExtractor.h"
 #include "StatisticsService.h"
@@ -2082,7 +2080,7 @@ void MetadataManager::persistAsync(const std::wstring& path, bool notify, bool a
         return;
     }
 
-    // 1. 内存库操作 (Memory Commit)
+    // 1. 数据库记录操作
     bool isNew = true;
     {
         sqlite3_stmt* checkStmt;

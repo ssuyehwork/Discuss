@@ -1484,8 +1484,6 @@ void MainWindow::updateNavButtons() {
 }
 
 void MainWindow::onVolumeUnplugged(const QString& driveLetter) {
-    QString targetLib = "QuarkMeta.library_" + driveLetter.toLower();
-    
     bool isCurrentOnUnpluggedDrive = false;
     if (m_currentPath.contains(driveLetter + ":", Qt::CaseInsensitive)) {
         isCurrentOnUnpluggedDrive = true;
