@@ -66,6 +66,28 @@ private:
     bool   m_hovered = false;
 };
 
+// ─── 色相滑块 (内嵌版) ─────────────────────────────────────────────
+class InlineHueSlider : public QWidget {
+    Q_OBJECT
+public:
+    explicit InlineHueSlider(QWidget* parent = nullptr);
+    void setHue(int h);
+    int hue() const { return m_h; }
+
+signals:
+    void hueChanged(int h);
+    void sliderReleased();
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+
+private:
+    void updateFromPos(int x);
+    int m_h = 0;
+};
 
 struct FilterState {
     QList<int>   ratings;
@@ -179,6 +201,7 @@ private:
     static QMap<QString, QColor> s_colorMap();
 
     FilterState m_filter;
+    QString     m_hueSliderColor;
     QStringList m_recentColors; // LRU 缓存
 
     QuarkMeta::ScanStats m_currentStats;
@@ -215,11 +238,14 @@ private:
 
 
     // 2026-xx-xx 新增快速输入框成员
+    QLineEdit*    m_editColor       = nullptr;
     QLineEdit*    m_editType        = nullptr;
     QLineEdit*    m_editCreateDate  = nullptr;
     QLineEdit*    m_editModifyDate  = nullptr;
     QVBoxLayout*  m_createDateLayout = nullptr; // 2026-07-xx Plan-92: 日期布局指针
     QVBoxLayout*  m_modifyDateLayout = nullptr;
+    QSlider*      m_accuracySlider  = nullptr; // 2026-07-xx 按照用户要求：还原颜色准确度控制条
+    QSlider*      m_areaSlider      = nullptr; // 2026-06-23 按照用户要求：新增颜色面积占比滑条
 
     bool          m_isFilterPinned = false;    // 2026-06-23 按照用户要求：筛选器锁定状态
 

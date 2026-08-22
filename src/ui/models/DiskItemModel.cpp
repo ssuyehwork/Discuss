@@ -286,32 +286,38 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
         QThreadPool::globalInstance()->start([weakThis, path, thisGen]() {
             if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
-            QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, 512);
+            DiskMediaExtractor::ExtractResult res = DiskMediaExtractor::getCapsuleExtractResult(path, 512);
 
             if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
-            double ar = 1.0;
-            bool hasThumb = false;
-            if (!img.isNull()) {
-                ar = (double)img.width() / img.height();
-                hasThumb = true;
-            }
-
-            QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, img, ar, hasThumb, thisGen]() {
+            QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, res, thisGen]() {
                 if (weakThis && weakThis->currentGeneration() == thisGen) {
-                    QIcon icon = img.isNull() ? ShellIconManager::getFileIcon(path, 128) : QIcon(QPixmap::fromImage(img));
+                    QIcon icon = res.thumbnail512.isNull() ? ShellIconManager::getFileIcon(path, 128) : QIcon(QPixmap::fromImage(res.thumbnail512));
                     weakThis->m_iconCache.insert(path, new QIcon(icon));
-                    weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = hasThumb ? ar : -1.0;
-                    weakThis->m_requestedPaths.remove(path);
 
                     auto it = weakThis->m_pathToIndex.find(path);
                     if (it != weakThis->m_pathToIndex.end()) {
                         int rIdx = it->second;
+                        if (rIdx >= 0 && rIdx < static_cast<int>(weakThis->m_allRecords.size())) {
+                            auto& rec = weakThis->m_allRecords[rIdx];
+                            if (res.originalSize.isValid() && res.originalSize.width() > 0) {
+                                rec.width = res.originalSize.width();
+                                rec.height = res.originalSize.height();
+                                weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = (double)rec.width / rec.height;
+                            } else if (!res.thumbnail512.isNull()) {
+                                weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = (double)res.thumbnail512.width() / res.thumbnail512.height();
+                            } else {
+                                weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = -1.0;
+                            }
+                        }
+
+                        weakThis->m_requestedPaths.remove(path);
+
                         if (weakThis->isSuspended()) {
                             weakThis->m_pendingUpdateRows.insert(rIdx);
                         } else {
-                            emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), 
-                                                      {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+                            emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, weakThis->columnCount() - 1),
+                                                      {Qt::DecorationRole, Qt::DisplayRole, AspectRatioRole, HasThumbnailRole});
                         }
                     }
 
