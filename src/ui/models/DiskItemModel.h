@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QIcon>
 #include <QMutex>
+#include <QThreadPool>
 #include <memory>
 #include "../../core/CoreEngine.h"
 
@@ -26,7 +27,7 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
     // 切换目录/清空数据时调用，使所有已派发的旧任务瞬间失效
-    void incrementGeneration() { m_currentGen.fetch_add(1, std::memory_order_relaxed); }
+    void incrementGeneration();
     uint64_t currentGeneration() const { return m_currentGen.load(std::memory_order_relaxed); }
 
     const std::vector<QuarkMeta::ItemRecord>& allRecords() const override { return m_allRecords; }
