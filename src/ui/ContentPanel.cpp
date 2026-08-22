@@ -402,6 +402,11 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         }
     } 
  
+    // 10.5 无缩略图 (失败/跳过) 过滤
+    if (currentFilter.noThumbnailOnly) {
+        if (record.thumbStatus != 1) return false;
+    }
+
     // 11. 重复状态过滤 (O(1) 瞬时判定)
     if (currentFilter.duplicatePresence != FilterState::DupAll) {
         if (record.isDir) {
@@ -3063,6 +3068,11 @@ void ContentPanel::recalculateAndEmitStats() {
                     stats.duplicateCount++;
                 } else {
                     stats.uniqueCount++;
+                }
+
+                // 无缩略图 (失败/跳过) 统计
+                if (record.thumbStatus == 1) {
+                    stats.noThumbnailCount++;
                 }
             }
             

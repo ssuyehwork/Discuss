@@ -319,6 +319,7 @@ void FilterPanel::syncUIFromFilterState() {
         else if (text == "竖图") shouldCheck = (m_filter.ratio == FilterState::Vertical);
         else if (text == "方形") shouldCheck = (m_filter.ratio == FilterState::Square);
         else if (text == "16:9") shouldCheck = (m_filter.ratio == FilterState::Ratio169);
+        else if (text == "无缩略图 (失败/跳过)") shouldCheck = m_filter.noThumbnailOnly;
 
         cb->blockSignals(true);
         cb->setChecked(shouldCheck);
@@ -613,7 +614,10 @@ void FilterPanel::populate(
                  else if (name == "紫色") count = m_colorCounts.value("#7F77DD", 0);
                  else if (name == "灰色") count = m_colorCounts.value("#5F5E5A", 0);
                  else if (name == "无色标") count = m_colorCounts.value("", 0);
-                 
+                 else if (name == "未重复") count = m_currentStats.uniqueCount;
+                 else if (name == "重复项") count = m_currentStats.duplicateCount;
+                 else if (name == "无缩略图 (失败/跳过)") count = m_currentStats.noThumbnailCount;
+
                  cntLabel->setText(QString::number(count));
              }
         }
@@ -702,6 +706,17 @@ void FilterPanel::rebuildGroups() {
             connect(cb, &QCheckBox::toggled, this, [this, r](bool on) {
                 if (on) { if (!m_filter.ratings.contains(r)) m_filter.ratings.append(r); }
                 else m_filter.ratings.removeAll(r);
+                emit filterChanged(m_filter);
+            });
+        }
+
+        if (m_currentStats.noThumbnailCount > 0 || m_filter.noThumbnailOnly) {
+            QCheckBox* cb = addFilterRow(gl, "无缩略图 (失败/跳过)", m_currentStats.noThumbnailCount);
+            cb->blockSignals(true);
+            cb->setChecked(m_filter.noThumbnailOnly);
+            cb->blockSignals(false);
+            connect(cb, &QCheckBox::toggled, this, [this](bool on) {
+                m_filter.noThumbnailOnly = on;
                 emit filterChanged(m_filter);
             });
         }

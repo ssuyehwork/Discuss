@@ -77,108 +77,25 @@ QImage DiskMediaExtractor::getCapsuleThumbnailReadOnly(const QString& filePath) 
     return QImage();
 }
 
-QSize DiskMediaExtractor::fastExtractImageSize(const QString& filePath) {
-    return ImageDecoderFacade::readImageDimensions(filePath);
-}
+QImage DiskMediaExtractor::getCapsuleThumbnail(const QString& filePath, int size) {
+    QImage cached = getCapsuleThumbnailReadOnly(filePath);
+    if (!cached.isNull()) return cached;
 
-DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(const QString& filePath, int size, std::shared_ptr<CancellationToken> token) {
-    ExtractResult res;
-    if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return res;
-
-    res.thumbnail512 = getCapsuleThumbnailReadOnly(filePath);
-
-    QFileInfo fi(filePath);
-    QString parentDir = QDir::toNativeSeparators(fi.absolutePath());
-    QString fileName = fi.fileName();
-
-    // 1. 极速缓存命中路径：若磁盘已存在缩略图缓存且 .QuarkMeta.json 中已记录尺寸，免解码瞬间返回
-    if (!res.thumbnail512.isNull()) {
-        static std::mutex s_jsonSaveMutex;
-        std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
-        QuarkMetaJson jsonCache(parentDir.toStdWString());
-        jsonCache.load();
-        const auto& cachedItems = jsonCache.items();
-        std::wstring wFileName = fileName.toStdWString();
-        auto it = cachedItems.find(wFileName);
-        if (it != cachedItems.end() && it->second.width > 0 && it->second.height > 0) {
-            res.originalSize = QSize(it->second.width, it->second.height);
-            res.isValid = true;
-            return res;
-        }
+    DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size);
+    if (dec.isValid && !dec.thumbnail512.isNull()) {
+        saveDiskThumbnail(filePath, dec.thumbnail512);
+        return dec.thumbnail512;
     }
-
-    if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return res;
-
-    // 2. 解码路径：单次解码同时获取原始分辨率与 512px 缩略图
-    DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 0, token);
-    if (dec.isValid) {
-        res.originalSize = dec.originalSize;
-        if (res.thumbnail512.isNull() && !dec.thumbnail512.isNull()) {
-            saveDiskThumbnail(filePath, dec.thumbnail512);
-            res.thumbnail512 = dec.thumbnail512;
-        }
-        res.isValid = true;
-
-        // 3. 线程安全原子落盘尺寸数据至 .QuarkMeta.json
-        if (res.originalSize.isValid() && res.originalSize.width() > 0) {
-            static std::mutex s_jsonSaveMutex;
-            std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
-
-            QuarkMetaJson jsonCache(parentDir.toStdWString());
-            jsonCache.load();
-            auto& cachedItems = jsonCache.items();
-            std::wstring wFileName = fileName.toStdWString();
-            if (cachedItems.find(wFileName) == cachedItems.end()) {
-                ItemMeta emptyMeta;
-                emptyMeta.type = L"file";
-                cachedItems[wFileName] = emptyMeta;
-            }
-            auto& fileMeta = cachedItems[wFileName];
-            if (fileMeta.width != res.originalSize.width() || fileMeta.height != res.originalSize.height()) {
-                fileMeta.width = res.originalSize.width();
-                fileMeta.height = res.originalSize.height();
-                jsonCache.save();
-            }
-        }
-    } else if (!res.thumbnail512.isNull()) {
-        res.isValid = true;
-    } else {
-        // 4. 解码与现有缩略图缓存均失败：在非中途取消情况下持久化标记 thumb_status = 1
-        if (!token || !token->isCanceled()) {
-            static std::mutex s_jsonSaveMutex;
-            std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
-
-            QuarkMetaJson jsonCache(parentDir.toStdWString());
-            jsonCache.load();
-            auto& cachedItems = jsonCache.items();
-            std::wstring wFileName = fileName.toStdWString();
-            if (cachedItems.find(wFileName) == cachedItems.end()) {
-                ItemMeta emptyMeta;
-                emptyMeta.type = L"file";
-                cachedItems[wFileName] = emptyMeta;
-            }
-            auto& fileMeta = cachedItems[wFileName];
-            if (fileMeta.thumbStatus != 1) {
-                fileMeta.thumbStatus = 1;
-                jsonCache.save();
-            }
-        }
-    }
-    return res;
+    return QImage();
 }
 
-QImage DiskMediaExtractor::getCapsuleThumbnail(const QString& filePath, int size, std::shared_ptr<CancellationToken> token) {
-    ExtractResult res = getCapsuleExtractResult(filePath, size, token);
-    return res.thumbnail512;
+QImage DiskMediaExtractor::getDiskThumbnail(const QString& path, int size) {
+    return getCapsuleThumbnail(path, size);
 }
 
-QImage DiskMediaExtractor::getDiskThumbnail(const QString& path, int size, std::shared_ptr<CancellationToken> token) {
-    return getCapsuleThumbnail(path, size, token);
-}
-
-QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, int size, std::shared_ptr<CancellationToken> token) {
+QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, int size) {
     // 强制调用单遍解码，且对耗时格式赋予 45 秒超时
-    DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 45000, token);
+    DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 45000);
     if (dec.isValid && !dec.thumbnail512.isNull()) {
         saveDiskThumbnail(filePath, dec.thumbnail512);
         return dec.thumbnail512;

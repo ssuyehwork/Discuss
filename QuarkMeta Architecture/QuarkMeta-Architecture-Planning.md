@@ -173,3 +173,16 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
      - 若 $T_{\text{trash}} < T_{\text{disk}}$（被还原项目创建更早）：被还原项目作为“最早创建权威”占用原始名称 `A.txt`，磁盘上较晚创建的现有项目被自动递增重命名避让为 **`A-1.txt`**（如存在顺延至 `A-2.txt`）。
      - 若 $T_{\text{disk}} \le T_{\text{trash}}$（磁盘现有项目创建更早）：磁盘现有项目保持原名 `A.txt`，被还原项目重命名为 **`A-1.txt`** 还原移出。
    - 格式强制要求：连字符 `-` 命名避让（如 `A-1.txt` / `Folder-1`），严格禁止使用圆括号 `(1)`。
+
+---
+
+## 13. 筛选面板全多维统计真实同步与无缩略图过滤规范 (Filter Panel Multi-dimension Stats & Thumbnail Failure Filter Specification)
+
+### 13.1 设计理念与真实统计同步
+1. **图像比例（Aspect Ratio）真实统计**：
+   - 图像比例（横图/竖图/方形/16:9）依赖于项目的物理尺寸信息 (`width` 和 `height`)。在纯磁盘模式下，`DiskItemModel::preloadDimensionsAsync` 快速提取文件头并实时更新记录，`recalculateAndEmitStats()` 实时同步计算并在目录加载或数据变更时触发 `directoryStatsReady` 信号，确保筛选面板各比例计数不再归零。
+2. **重复状态（Duplicate Status）信号与 UI 真实绑定**：
+   - `ContentPanel` 计算 `duplicateCount`（重复项）与 `uniqueCount`（未重复项）并填充至 `ScanStats`，传递给 `FilterPanel` 的 `populateStats` / `populate` 方法，同步更新界面标签（Label），消除数据传递到 UI 呈现层之间的绑定断层。
+3. **“无缩略图 (失败/跳过)” 筛选扩展**：
+   - 在第五栏筛选面板的“文件类型”或专用条件组中新增“无缩略图 (失败/跳过)”复选选项。
+   - 筛选逻辑：当勾选该复选框时，依据 `thumbStatus == 1`（缩略图提取失败/跳过）进行匹配过滤，便于用户一键定位破坏损坏的图片或渲染失败的格式文件。

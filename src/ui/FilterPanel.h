@@ -123,6 +123,8 @@ struct FilterState {
     enum DuplicatePresence { DupAll, DuplicateOnly, UniqueOnly };
     DuplicatePresence duplicatePresence = DupAll;
 
+    bool noThumbnailOnly = false;
+
     bool isEmpty() const {
         return ratings.isEmpty() && colors.isEmpty() && manualExactColors.isEmpty() && keyword.isEmpty() && types.isEmpty() &&
                createDates.isEmpty() && modifyDates.isEmpty() &&
@@ -130,7 +132,8 @@ struct FilterState {
                minSize == -1 && maxSize == -1 && minColorArea == 0 &&
                colorFilterText.trimmed().isEmpty() &&
                typeFilterText.trimmed().isEmpty() && createDateFilterText.trimmed().isEmpty() &&
-               modifyDateFilterText.trimmed().isEmpty() && duplicatePresence == DupAll;
+               modifyDateFilterText.trimmed().isEmpty() && duplicatePresence == DupAll &&
+               !noThumbnailOnly;
     }
 };
 
