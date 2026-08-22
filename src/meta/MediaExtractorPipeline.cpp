@@ -169,7 +169,7 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                     if (!pal.isEmpty()) {
                         QColor dominant = MediaColorExtractor::quantizeColor(pal.first().first);
                         item.autoColor = dominant.name().toUpper().toStdWString();
-                        item.palettes = pal;
+                        item.palettes.assign(pal.begin(), pal.end());
                     }
 
                     // 3. 纯磁盘直连模式：元数据更新直接落盘至 per-directory .QuarkMeta.json
@@ -188,7 +188,10 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                     fileMeta.width = item.width;
                     fileMeta.height = item.height;
                     fileMeta.autoColor = item.autoColor;
-                    fileMeta.palettes = item.palettes;
+                    fileMeta.palettes.clear();
+                    for (const auto& pe : item.palettes) {
+                        fileMeta.palettes.push_back(PaletteEntry(pe.first, pe.second));
+                    }
                     jsonCache.save();
                 }
             }
