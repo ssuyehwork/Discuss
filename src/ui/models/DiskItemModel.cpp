@@ -142,7 +142,7 @@ void DiskItemModel::preloadDimensionsAsync() {
             jsonCache.save(); // 🚨 全批次合并为 1 次原子落盘
         }
 
-        // 3. 回到主线程通过 m_pathToIndex 精准更新并刷新表格
+        // 3. 回到主线程：一次性批量回填内存，且全局只 emit 1 次 dataChanged！
         QMetaObject::invokeMethod(weakThis.data(), [weakThis, resolvedSizes = std::move(resolvedSizes), thisGen]() {
             if (!weakThis || weakThis->currentGeneration() != thisGen) return;
 
@@ -158,14 +158,17 @@ void DiskItemModel::preloadDimensionsAsync() {
                         rec.width = sz.width();
                         rec.height = sz.height();
                         weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = (double)sz.width() / sz.height();
-                        // 刷新整行 (包含第 3 列尺寸文本和自适应卡片)
-                        emit weakThis->dataChanged(
-                            weakThis->index(rIdx, 0),
-                            weakThis->index(rIdx, weakThis->columnCount() - 1),
-                            {Qt::DisplayRole, AspectRatioRole}
-                        );
                     }
                 }
+            }
+
+            // 🚨 核心止血点：循环结束后，全表只发射 1 次数据刷新信号！
+            if (!weakThis->m_allRecords.empty()) {
+                emit weakThis->dataChanged(
+                    weakThis->index(0, 0),
+                    weakThis->index(static_cast<int>(weakThis->m_allRecords.size()) - 1, weakThis->columnCount() - 1),
+                    {Qt::DisplayRole, AspectRatioRole}
+                );
             }
         }, Qt::QueuedConnection);
     });

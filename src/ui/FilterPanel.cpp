@@ -317,14 +317,9 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
 // ─── populate ─────────────────────────────────────────────────────
 void FilterPanel::populateStats(const QuarkMeta::ScanStats& stats) {
     m_currentStats = stats;
-    m_ratingCounts = stats.ratingCounts;
-    m_colorCounts = stats.colorCounts;
-    m_typeCounts = stats.typeCounts;
-    m_createDateCounts = stats.createDateCounts;
-    m_modifyDateCounts = stats.modifyDateCounts;
-    m_emptyFolderCount = stats.emptyFolderCount;
-
-    rebuildGroups();
+    // 直接转调增量刷新逻辑，避免每次都暴力销毁重建全部控件
+    populate(stats.ratingCounts, stats.colorCounts, stats.typeCounts,
+             stats.createDateCounts, stats.modifyDateCounts, stats.emptyFolderCount);
 }
 
 void FilterPanel::populate(
@@ -919,7 +914,7 @@ void FilterPanel::rebuildGroups() {
         QButtonGroup* ratioGroup = new QButtonGroup(g);
         ratioGroup->setExclusive(false);
 
-        static const QList<std::tuple<FilterState::AspectRatio, QString, int>> ratioItems = {
+        const QList<std::tuple<FilterState::AspectRatio, QString, int>> ratioItems = {
             {FilterState::Horizontal, "横图", m_currentStats.ratioHorizontalCount},
             {FilterState::Vertical, "竖图", m_currentStats.ratioVerticalCount},
             {FilterState::Square, "方形", m_currentStats.ratioSquareCount},
@@ -949,7 +944,7 @@ void FilterPanel::rebuildGroups() {
         QButtonGroup* dupGroup = new QButtonGroup(g);
         dupGroup->setExclusive(false);
 
-        static const QList<std::tuple<FilterState::DuplicatePresence, QString, int>> dupItems = {
+        const QList<std::tuple<FilterState::DuplicatePresence, QString, int>> dupItems = {
             {FilterState::DuplicateOnly, "重复项", m_currentStats.duplicateCount},
             {FilterState::UniqueOnly, "未重复", m_currentStats.uniqueCount}
         };
