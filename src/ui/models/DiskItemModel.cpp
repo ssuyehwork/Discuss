@@ -19,6 +19,9 @@
 
 namespace QuarkMeta {
 
+using QuarkMeta::QuarkMetaJson;
+using QuarkMeta::ItemMeta;
+
 QThreadPool* DiskItemModel::thumbnailPool() {
     static QThreadPool pool;
     static std::once_flag flag;
