@@ -1,6 +1,7 @@
 #include "DiskMediaExtractor.h"
 #include "../ui/ImageDecoderFacade.h"
 #include "../meta/QuarkMetaJson.h"
+#include "../core/CoreController.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>
