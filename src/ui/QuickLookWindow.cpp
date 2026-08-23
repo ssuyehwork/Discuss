@@ -411,7 +411,6 @@ void QuickLookWindow::renderImage(const QString& path) {
         if (!weakThis) return;
         
         QImage img;
-        bool isInsideArc = path.contains(".arc", Qt::CaseInsensitive);
         if (ext == "svg") {
             QSvgRenderer renderer(path);
             if (renderer.isValid()) {
@@ -421,19 +420,11 @@ void QuickLookWindow::renderImage(const QString& path) {
                 renderer.render(&painter);
             }
         } else if (ext == "ai" || ext == "eps" || ext == "psd" || ext == "psb") {
-            if (isInsideArc) {
-                img = DiskMediaExtractor::getCapsuleThumbnail(path, 2048);
-            } else {
-                img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
-            }
+            img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
         } else if (QT_NATIVE_FORMATS.contains(ext)) {
             img.load(path);
         } else {
-            if (isInsideArc) {
-                img = DiskMediaExtractor::getCapsuleThumbnail(path, 2048);
-            } else {
-                img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
-            }
+            img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
             if (img.isNull()) {
                 img = ShellIconManager::getShellThumbnail(path, 4096);
                 if (img.isNull()) {

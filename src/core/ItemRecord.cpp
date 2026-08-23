@@ -40,10 +40,8 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
         meta = *providedMeta;
     }
 
-    // 磁盘模式分支（保持原有 Win32 探测）
-    std::string fid;
     long long size = 0, ctime = 0, mtime = 0, atime = 0;
-    MetadataManager::fetchWinApiMetadataDirect(wPath, fid, nullptr, &size, nullptr, &ctime, &mtime, &atime);
+    MetadataManager::fetchWinApiMetadataDirect(wPath, &size, nullptr, &ctime, &mtime, &atime);
     r.size = size;
     r.ctime = ctime;
     r.mtime = mtime;
