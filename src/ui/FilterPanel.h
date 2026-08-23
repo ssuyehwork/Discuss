@@ -65,6 +65,7 @@ struct FilterState {
 
     bool showFolders = true; // 2026-07-xx 按照 Plan-73：显示/隐藏文件夹
     bool showFiles = true;   // 2026-07-xx 按照 Plan-73：显示/隐藏文件
+    bool showHidden = false; // 默认不显示操作系统隐藏属性项目
 
     enum DuplicatePresence { DupAll, DuplicateOnly, UniqueOnly };
     DuplicatePresence duplicatePresence = DupAll;

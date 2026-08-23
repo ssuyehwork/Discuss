@@ -405,7 +405,7 @@ void FilterPanel::populate(
                  else if (name == "无链接") count = m_currentStats.noLinkCount;
                  else if (name == "有备注") count = m_currentStats.hasNoteCount;
                  else if (name == "无备注") count = m_currentStats.noNoteCount;
-                 else if (name == "无缩略图 (失败/跳过)") count = m_currentStats.noThumbnailCount;
+                 else if (name == "无缩略图 (提取失败)" || name == "无缩略图 (失败/跳过)") count = m_currentStats.noThumbnailCount;
 
                  cntLabel->setText(QString::number(count));
              }
@@ -488,16 +488,6 @@ void FilterPanel::rebuildGroups() {
             });
         }
 
-        if (m_currentStats.noThumbnailCount > 0 || m_filter.noThumbnailOnly) {
-            QCheckBox* cb = addFilterRow(gl, "无缩略图 (失败/跳过)", m_currentStats.noThumbnailCount);
-            cb->blockSignals(true);
-            cb->setChecked(m_filter.noThumbnailOnly);
-            cb->blockSignals(false);
-            connect(cb, &QCheckBox::toggled, this, [this](bool on) {
-                m_filter.noThumbnailOnly = on;
-                emit filterChanged(m_filter);
-            });
-        }
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
@@ -965,6 +955,23 @@ void FilterPanel::rebuildGroups() {
             });
             dupGroup->addButton(cb);
         }
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+    // ── 13. 缩略图状态 (独立主选项，常驻显示) ───────────────────────────
+    {
+        QVBoxLayout* gl = nullptr;
+        QWidget* g = buildGroup("缩略图状态", gl);
+
+        QCheckBox* cb = addFilterRow(gl, "无缩略图 (提取失败)", m_currentStats.noThumbnailCount);
+        cb->blockSignals(true);
+        cb->setChecked(m_filter.noThumbnailOnly);
+        cb->blockSignals(false);
+        connect(cb, &QCheckBox::toggled, this, [this](bool on) {
+            m_filter.noThumbnailOnly = on;
+            emit filterChanged(m_filter);
+        });
+
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 }

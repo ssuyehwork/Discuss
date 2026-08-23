@@ -228,6 +228,7 @@ private:
     QStackedWidget* m_viewStack = nullptr;
     QPushButton* m_btnLayers = nullptr;
     QPushButton* m_btnLayersBlue = nullptr;
+    QPushButton* m_btnToggleHidden = nullptr;  // 🚨 左侧：显示/隐藏属性为隐藏的项目
     QPushButton* m_btnToggleFolders = nullptr; // 2026-07-xx 按照 Plan-73：显示/隐藏文件夹切换
     QPushButton* m_btnToggleFiles = nullptr;   // 2026-07-xx 按照 Plan-73：显示/隐藏文件切换
     QTextBrowser* m_textPreview = nullptr;
@@ -257,6 +258,7 @@ public:
     bool m_isRecursive = false;
     bool m_showFolders = true;
     bool m_showFiles = true;
+    bool m_showHidden = false;
     ViewMode m_currentViewMode = GridView;
     SortType m_sortType = SortByName;
     Qt::SortOrder m_sortOrder = Qt::AscendingOrder;

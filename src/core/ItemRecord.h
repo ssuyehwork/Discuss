@@ -52,6 +52,7 @@ struct ItemRecord {
     long long added_at = 0;
     bool isEmpty = false;
     bool isManaged = false; // 预存受控状态
+    bool isHidden = false;  // 记录物理操作系统是否带有隐藏属性
     QString suffix;
     QString filename; // 缓存文件名以供排序时 O(1) 提取，消除高频 QFileInfo 构造开销
     std::vector<std::pair<QColor, float>> palettes; // 烘焙物理色板，消除 filterAcceptsRow 锁争抢

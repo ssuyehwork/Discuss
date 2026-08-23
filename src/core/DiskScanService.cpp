@@ -15,7 +15,7 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
         QDir dir(p); 
         if (!dir.exists()) return; 
  
-        QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot, QDir::DirsFirst | QDir::Name); 
+        QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden, QDir::DirsFirst | QDir::Name); 
         for (const QFileInfo& info : entries) { 
             if (shouldContinue && !shouldContinue()) return; 
  

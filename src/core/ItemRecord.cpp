@@ -57,6 +57,7 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
     r.isDir = info.isDir();
     r.path = nPath;
     r.filename = info.fileName();
+    r.isHidden = info.isHidden();
 
     if (r.isDir) {
         QDir sub(nPath);

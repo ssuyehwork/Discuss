@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include "ContentPanel.h"
+#include "ThumbnailDelegate.h"
 #include "../meta/MetadataManager.h"
 #include "../core/ModelContract.h"
 #include "UiHelper.h"
@@ -255,8 +256,7 @@ public:
 public:
     QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         Q_UNUSED(option);
-        Q_UNUSED(index);
-        QLineEdit* editor = new QLineEdit(parent);
+        FileNameLineEdit* editor = new FileNameLineEdit(parent);
         // 2026-07-26 极致重构：应用精致的暗黑带蓝边框样式（背景 `#2D2D2D`，外框 `#3498db`，圆角 `4px`），消除默认白色粗糙样式
         editor->setStyleSheet(
             "QLineEdit {"
@@ -270,6 +270,8 @@ public:
             "  font-size: 8pt;"
             "}"
         );
+        bool isFolder = (index.data(TypeRole).toString() == "folder" || index.data(TypeRole).toString() == "category");
+        editor->setIsFolder(isFolder);
         editor->installEventFilter(const_cast<TreeItemDelegate*>(this));
         return editor;
     }
@@ -340,23 +342,10 @@ public:
 
     void setEditorData(QWidget* editor, const QModelIndex& index) const override {
         QString value = index.model()->data(index, Qt::EditRole).toString();
-        QLineEdit* lineEdit = qobject_cast<QLineEdit*>(editor);
-        if (!lineEdit) return;
-
-        lineEdit->setText(value);
-
-        // 🚀 【拔除 0ms 补丁】：同步精准设定选区，无需使用 QTimer 在下一个事件循环中强行覆盖 
-        bool isFolder = (index.data(TypeRole).toString() == "folder" || index.data(TypeRole).toString() == "category"); 
-        if (isFolder) { 
-            lineEdit->selectAll(); 
-        } else { 
-            int lastDot = value.lastIndexOf('.'); 
-            if (lastDot > 0) { 
-                lineEdit->setSelection(0, lastDot); 
-            } else { 
-                lineEdit->selectAll(); 
-            } 
-        } 
+        FileNameLineEdit* lineEdit = qobject_cast<FileNameLineEdit*>(editor);
+        if (lineEdit) {
+            lineEdit->setText(value);
+        }
     }
 
 private:
