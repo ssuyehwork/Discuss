@@ -23,9 +23,22 @@ QThreadPool* DiskItemModel::thumbnailPool() {
     static QThreadPool pool;
     static std::once_flag flag;
     std::call_once(flag, []() {
-        pool.setMaxThreadCount(4);
+        pool.setMaxThreadCount(qMax(2, QThread::idealThreadCount() / 2));
     });
     return &pool;
+}
+
+void DiskItemModel::incrementGeneration() {
+    uint64_t oldGen = m_currentGen.load(std::memory_order_relaxed);
+    {
+        QMutexLocker locker(&m_genTokenMutex);
+        auto it = m_genTokens.find(oldGen);
+        if (it != m_genTokens.end()) {
+            if (it.value()) it.value()->cancel();
+            m_genTokens.erase(it);
+        }
+    }
+    m_currentGen.fetch_add(1, std::memory_order_relaxed);
 }
 
 DiskItemModel::DiskItemModel(QObject* parent) : ItemModelBase(parent) {
@@ -390,14 +403,30 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
 
     QPointer<DiskItemModel> weakThis(this);
 
+    std::shared_ptr<CancellationToken> token;
+    {
+        QMutexLocker locker(&m_genTokenMutex);
+        auto it = m_genTokens.find(thisGen);
+        if (it != m_genTokens.end()) {
+            token = it.value();
+        } else {
+            token = std::make_shared<CancellationToken>();
+            m_genTokens[thisGen] = token;
+        }
+    }
+
     // 2. 并发处理这 2 张
     for (const QString& path : pathsToLoad) {
-        QThreadPool::globalInstance()->start([weakThis, path, thisGen]() {
-            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+        QFileInfo fi(path);
+        QString ext = fi.suffix().toLower();
+        int priority = (ext == "ai" || ext == "eps" || ext == "pdf") ? -10 : 0;
 
-            QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, 512);
+        thumbnailPool()->start([weakThis, path, thisGen, token]() {
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown() || (token && token->isCanceled())) return;
 
-            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+            QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, 512, token);
+
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown() || (token && token->isCanceled())) return;
 
             double ar = 1.0;
             bool hasThumb = false;
@@ -435,7 +464,7 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
                     }
                 }
             }, Qt::QueuedConnection);
-        });
+        }, priority);
     }
 }
 

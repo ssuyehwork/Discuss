@@ -151,7 +151,36 @@ QSize ImageDecoderFacade::readImageDimensions(const QString& filePath) {
         }
     }
 
-    // 3. 普通图像走 QImageReader
+    // 3. PSD / PSB 文件头尺寸嗅探
+    if (ext == "psd" || ext == "psb") {
+        QFile file(filePath);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray header = file.read(26);
+            file.close();
+            if (header.size() == 26 && header.startsWith("8BPS")) {
+                auto be32 = [](const uchar* p) {
+                    return (quint32(p[0]) << 24) | (quint32(p[1]) << 16) | (quint32(p[2]) << 8) | quint32(p[3]);
+                };
+                const uchar* data = reinterpret_cast<const uchar*>(header.constData());
+                quint32 height = be32(data + 14);
+                quint32 width  = be32(data + 18);
+                if (width > 0 && height > 0) return QSize(width, height);
+            }
+        }
+    }
+
+    // 4. SVG 文件尺寸嗅探
+    if (ext == "svg") {
+        QSvgRenderer renderer(filePath);
+        if (renderer.isValid()) {
+            QRectF vb = renderer.viewBoxF();
+            QSize sz = vb.isValid() ? vb.size().toSize() : renderer.defaultSize();
+            if (!sz.isEmpty()) return sz;
+            return QSize(512, 512);
+        }
+    }
+
+    // 5. 普通图像走 QImageReader
     QImageReader reader(filePath);
     if (!reader.canRead()) return QSize();
     return reader.size();
