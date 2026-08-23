@@ -32,6 +32,14 @@ public:
     static bool migrateItemMetadata(const QString& oldFilePath, const QString& newFilePath);
 
     /**
+     * @brief 物理漫游元数据包：支持文件/文件夹的移动转移与复制克隆
+     * @param oldFilePath 源路径
+     * @param newFilePath 目标路径
+     * @param isMove true 为剪切/移动（抹除源数据）；false 为复制（深克隆副本）
+     */
+    static bool roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove);
+
+    /**
      * @param folderPath 目标物理文件夹的完整路径
      */
     explicit QuarkMetaJson(const std::wstring& folderPath);

@@ -4,6 +4,9 @@
 #include <QImage>
 #include <QString>
 #include <QSize>
+#include <QMutex>
+#include <QHash>
+#include <QSet>
 #include <mutex>
 #include <cstdint>
 #include <memory>
@@ -13,8 +16,15 @@
 namespace QuarkMeta {
 
 class DiskMediaExtractor {
+private:
+    static QMutex s_pendingFailureMutex;
+    static QHash<QString, QSet<QString>> s_pendingFailures;
+
 public:
     static std::mutex s_qtGuiMutex;
+
+    static void scheduleFailureMark(const QString& folderPath, const QString& fileName);
+    static void flushPendingFailures();
 
     struct ExtractResult {
         QImage thumbnail512;
@@ -30,6 +40,7 @@ public:
     static QImage getCapsuleThumbnail(const QString& filePath, int size = 512, std::shared_ptr<CancellationToken> token = {});
     static QImage getDiskThumbnail(const QString& path, int size = 512, std::shared_ptr<CancellationToken> token = {});
     static bool saveDiskThumbnail(const QString& filePath, const QImage& img512);
+    static void roamThumbnailCache(const QString& oldFilePath, const QString& newFilePath, bool isMove);
 
     // 强制执行深度长效提取（不走只读缓存，超时放宽至 45 秒）
     static QImage forceExtractDeepThumbnail(const QString& filePath, int size = 512, std::shared_ptr<CancellationToken> token = {});

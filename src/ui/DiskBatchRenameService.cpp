@@ -1,5 +1,6 @@
 #include "DiskBatchRenameService.h"
 #include "../meta/MetadataManager.h"
+#include "../meta/QuarkMetaJson.h"
 #include "../util/DiskMediaExtractor.h"
 #include "../meta/FileOperationHelper.h"
 #include <QFileInfo>
@@ -44,6 +45,11 @@ void DiskBatchRenameService::execute(const std::vector<std::wstring>& originalPa
 
             if (ok) {
                 successCount++;
+
+                // 🚨 触发元数据与缩略图全量漫游
+                bool isMoveOperation = (mode != DiskOperationMode::Copy);
+                QuarkMetaJson::roamItemMetadata(oldPath, newPathStr, isMoveOperation);
+                DiskMediaExtractor::roamThumbnailCache(oldPath, newPathStr, isMoveOperation);
 
                 // 同步处理 Hash 缩略图 (后台线程执行)
                 QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPath);

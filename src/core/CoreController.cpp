@@ -3,6 +3,7 @@
 #include "../meta/MetadataManager.h"
 #include "../meta/DatabaseManager.h"
 #include "../meta/MediaExtractorPipeline.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../ui/Logger.h"
 #include <QThreadPool>
 #include <QDebug>
@@ -33,6 +34,13 @@ void CoreController::initializeCoreComponents() {
     // 3. 后台提取特征管道、定时器及事件队列预热
     QuarkMeta::MediaExtractorPipeline::instance();
     
+    // 4. 定时合并刷新缩略图提取失败标记落盘
+    QTimer* failureFlushTimer = new QTimer(QCoreApplication::instance());
+    failureFlushTimer->setInterval(1000);
+    QObject::connect(failureFlushTimer, &QTimer::timeout, []() {
+        (void)QtConcurrent::run(DiskMediaExtractor::flushPendingFailures);
+    });
+    failureFlushTimer->start();
 }
 
 void CoreController::requestShutdown() { s_isShuttingDown.store(true); }

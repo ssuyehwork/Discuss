@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDir>
+#include <mutex>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -154,38 +155,48 @@ void QuarkMetaJson::updateItemMeta(const std::wstring& filePath, std::function<v
 }
 
 bool QuarkMetaJson::migrateItemMetadata(const QString& oldFilePath, const QString& newFilePath) { 
-    if (oldFilePath == newFilePath) return true; 
- 
-    QFileInfo oldInfo(oldFilePath); 
-    QFileInfo newInfo(newFilePath); 
- 
-    QString oldParent = QDir::toNativeSeparators(oldInfo.absolutePath()); 
-    QString newParent = QDir::toNativeSeparators(newInfo.absolutePath()); 
-    std::wstring oldFileName = oldInfo.fileName().toStdWString(); 
-    std::wstring newFileName = newInfo.fileName().toStdWString(); 
- 
-    // 1. 从源目录的 .QuarkMeta.json 读取元数据 
-    QuarkMetaJson oldJson(oldParent.toStdWString()); 
-    if (!oldJson.load()) return false; 
- 
-    auto& oldItems = oldJson.items(); 
-    auto it = oldItems.find(oldFileName); 
-    if (it == oldItems.end()) { 
-        // 源目录无特殊元数据，无需迁移 
-        return true; 
-    } 
- 
-    ItemMeta metaCopy = it->second; // 完整复制元数据（星级、颜色、标签、备注等） 
- 
-    // 2. 从源目录抹除该条目并物理保存 
-    oldItems.erase(it); 
-    oldJson.save(); 
- 
-    // 3. 将元数据注入到目标目录的 .QuarkMeta.json 
-    QuarkMetaJson newJson(newParent.toStdWString()); 
-    newJson.load(); // 加载或自动初始化 
-    newJson.items()[newFileName] = metaCopy; 
-    return newJson.save(); // 100% 物理落盘并保持隐藏属性 
+    return roamItemMetadata(oldFilePath, newFilePath, true);
+}
+
+bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove) {
+    if (oldFilePath == newFilePath) return true;
+
+    QFileInfo oldInfo(oldFilePath);
+    QFileInfo newInfo(newFilePath);
+
+    QString oldParent = QDir::toNativeSeparators(oldInfo.absolutePath());
+    QString newParent = QDir::toNativeSeparators(newInfo.absolutePath());
+    std::wstring oldFileName = oldInfo.fileName().toStdWString();
+    std::wstring newFileName = newInfo.fileName().toStdWString();
+
+    static std::mutex s_jsonRoamMutex;
+    std::lock_guard<std::mutex> lock(s_jsonRoamMutex);
+
+    // 1. 从源目录 .QuarkMeta.json 提取完整元数据包
+    QuarkMetaJson oldJson(oldParent.toStdWString());
+    if (!oldJson.load()) return false;
+
+    auto& oldItems = oldJson.items();
+    auto it = oldItems.find(oldFileName);
+    if (it == oldItems.end()) {
+        // 源文件无任何用户标记或尺寸，无需转移
+        return true;
+    }
+
+    // 2. 整包深拷贝（星级、颜色、标签、尺寸、宽高比、备注、链接、失败状态等 100% 完整继承）
+    ItemMeta metaPackage = it->second;
+
+    // 3. 如果是【移动 (Move)】，从源 JSON 中抹除该条目并落盘
+    if (isMove) {
+        oldItems.erase(it);
+        oldJson.save();
+    }
+
+    // 4. 写入目标目录 .QuarkMeta.json 并物理原子落盘
+    QuarkMetaJson newJson(newParent.toStdWString());
+    newJson.load();
+    newJson.items()[newFileName] = metaPackage;
+    return newJson.save();
 }
 
 bool QuarkMetaJson::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
