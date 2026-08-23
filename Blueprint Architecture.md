@@ -56,6 +56,9 @@ QuarkMeta 成功从 ArcMeta 双轨机制（托管库模式 + 磁盘直连模式�
 1. **`BatchRenameCommand` 中的 `m_isCapsule` 分支**
    - **不可达依据**：`src/core/BasicCommands.h`（第 222-397 行）保留了 `if (isCapsule)` 的重命名逻辑分支。但全系统中调用 `BatchRenameCommand` 的唯一入口 `src/ui/BatchRenameDialog.cpp` 第 338 行明确写死 `bool isCapsule = false;`，且 `BatchRenameDialog` 界面完全没有胶囊模式复选框。该 `if (isCapsule)` 分支物理不可达。
    - **依据**：`src/core/BasicCommands.h`（第 245, 316, 376 行）；`src/ui/BatchRenameDialog.cpp`（第 338, 380 行）。
+2. **右键菜单项 `ActionCancelImport`（“取消导入并清除数据”）与 `MetadataManager::removeMetadataBatchSync`**
+   - **不可达依据**：`src/ui/ContentPanel.cpp`（第 1660 行）仅当 `currentIndex.data(ManagedRole).toBool()` 为真时添加该菜单项。而在纯磁盘模式下，`ManagedRole` 已经被借用为“项目是否有用户标注操作”，不再代表“是否已导入托管库数据库”。当点击该菜单时，底层触发 `CoreEngine::executeCommand` 投递 `AppCommandType::RemoveBatchSync`（`src/core/CoreEngine.cpp` 第 146 行），进而调用 `MetadataManager::removeMetadataBatchSync`（`src/meta/MetadataManager.cpp` 第 1673 行）试图从 SQLite 数据库中执行 `DELETE FROM metadata WHERE folder_id = ?`。在纯磁盘直连模式下，系统根本不向 SQLite 的 `metadata` 数据表写入任何非根目录文件属性，该物理 SQL 删除动作 100% 属于对空数据库表操作的僵尸死逻辑，且无法清理磁盘上的 `.QuarkMeta.json`。
+   - **依据**：`src/ui/ContentPanel.cpp`（第 1660, 1907-1935 行）；`src/core/CoreEngine.cpp`（第 146 行）；`src/meta/MetadataManager.cpp`（第 1673-1760 行）。
 
 ### 2.3 涉及历史数据兼容/纯只读预览的保留代码
 1. **`.arc` 胶囊文件夹磁盘纯只读直通预览分支**
