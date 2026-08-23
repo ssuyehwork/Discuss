@@ -1699,11 +1699,6 @@ QStringList MetadataManager::searchInCache(const QString& keyword, const QString
     // [Plan-26] 彻底废除 O(N) 全量内存线性遍历，全面拥抱 FTS5 trigram 模糊检索引擎 + 内存 O(1) 快速反查
     QStringList results; if (keyword.isEmpty()) return results;
     
-    // 2026-07-xx 按照方案计划：实现范围感知搜索
-    std::unordered_set<std::string> scopeFids;
-    bool hasScope = false;
-
-
     // 2026-07-xx 物理对账：规范化父路径前缀用于导航范围搜索
     std::wstring wParentPath = (scopeSource == "nav" && !parentPath.isEmpty()) ? normalizePath(parentPath.toStdWString()) : L"";
     if (!wParentPath.empty()) {
