@@ -21,6 +21,7 @@ void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
     r.height = meta.height;
     r.added_at = meta.added_at;
     r.thumbStatus = meta.thumbStatus;
+    r.isManaged = meta.hasUserOperations();
     r.palettes.clear();
     for (const auto& pe : meta.palettes) {
         r.palettes.push_back({pe.color, pe.ratio});
@@ -33,12 +34,6 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
 
     QString nPath = QDir::toNativeSeparators(info.absoluteFilePath());
     std::wstring wPath = nPath.toStdWString();
-
-    bool isArcEnd = nPath.endsWith(".arc", Qt::CaseInsensitive) || nPath.endsWith(".arc/", Qt::CaseInsensitive) || nPath.endsWith(".arc\\", Qt::CaseInsensitive);
-    if (isArcEnd && (nPath.endsWith("/") || nPath.endsWith("\\"))) {
-        nPath = nPath.left(nPath.length() - 1);
-        wPath = nPath.toStdWString();
-    }
 
     RuntimeMeta meta;
     if (providedMeta) {

@@ -20,8 +20,7 @@ public:
     static void drawCardBorder(QPainter* painter, const QRect& cardRect, bool isSelected);
 
     // 3. 绘制置顶状态标记
-    static void drawStatusIndicators(QPainter* painter, const QRect& cardRect, 
-                                     bool isPinned);
+    static void drawStatusIndicators(QPainter* painter, const QRect& cardRect, bool isPinned);
 
     // 4. 绘制自适应扩展名徽章
     static void drawExtensionBadge(QPainter* painter, const QRect& cardRect, 

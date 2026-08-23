@@ -26,6 +26,7 @@ void ThumbnailDelegate::setHasThumbnailRole(int role) { m_hasThumbnailRole = rol
 void ThumbnailDelegate::setRatingRole(int role) { m_ratingRole = role; }
 void ThumbnailDelegate::setPathRole(int role) { m_pathRole = role; }
 void ThumbnailDelegate::setPinnedRole(int role) { m_pinnedRole = role; }
+void ThumbnailDelegate::setManagedRole(int role) { m_managedRole = role; }
 void ThumbnailDelegate::setTypeRole(int role) { m_typeRole = role; }
 void ThumbnailDelegate::setIsEmptyRole(int role) { m_isEmptyRole = role; }
 void ThumbnailDelegate::setColorRole(int role) { m_colorRole = role; }
@@ -33,27 +34,34 @@ void ThumbnailDelegate::setColorRole(int role) { m_colorRole = role; }
 ThumbnailDelegate::Metrics ThumbnailDelegate::calculateMetrics(const QStyleOptionViewItem& option) const {
     Metrics m;
     const int textHeight = 36;
-    const int ratingHeight = 20;
+    const int ratingHeight = 24;
     const int gap = 4;
 
     m.ratingH = ratingHeight;
-    // 底部预留高度，包含星级区域和间隙
+    // 底部预留高度增加，包含星级区域和间隙
     m.cardRect = option.rect.adjusted(3, 3, -3, -(textHeight + m.ratingH + gap + 3));
     
     // 星级坐标脱离卡片范围
     m.ratingY = m.cardRect.bottom() + gap;
 
     m.textRect = QRect(option.rect.left() + 3,
-                       m.ratingY + m.ratingH - 1,
+                       m.ratingY + m.ratingH - 5,
                        option.rect.width() - 6,
                        textHeight);
     
-    Q_UNUSED(option.decorationSize);
+    int zoom = option.decorationSize.width(); // 物理缩放级别
 
-    // 强制色条胶囊上限不超过 20px (starSize = 18px, roundedRect adjusted top -1 / bottom +1 => 20px)
-    m.starSize = 18;
-    m.starSpacing = -4;
-    int banW = 12;
+    m.starSize = 22;
+    m.starSpacing = -4; // 2026-06-08 优化：默认间距调紧
+    int banW = 14;
+
+    // 2026-06-08 按照调试增强版 V2 优化：实现“动态比例星级”
+    // 虽然底限是 96，但在接近极限 (100) 时提前缩小星级，确保视觉紧凑感
+    if (zoom < 100) {
+        m.starSize = 18; 
+        m.starSpacing = -4;
+        banW = 12;
+    }
 
     int banGap = 2; // 保持间隙一致性
     int infoTotalW = banW + banGap + (5 * m.starSize) + (4 * m.starSpacing);
@@ -68,6 +76,29 @@ ThumbnailDelegate::Metrics ThumbnailDelegate::calculateMetrics(const QStyleOptio
 void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
     if (!index.isValid()) return;
 
+    // 双轨回收站与分组展示：如果该项为组标题，独立精美绘制
+    if (index.data(IsGroupHeaderRole).toBool()) {
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+
+        QRect rect = option.rect;
+        
+        // 绘制一条精美的分界线
+        painter->setPen(QPen(QColor("#333333"), 1, Qt::SolidLine));
+        painter->drawLine(rect.left(), rect.bottom() - 2, rect.right(), rect.bottom() - 2);
+
+        // 绘制大标题文字，使用青蓝色/青绿色以突出主题
+        QFont font("Microsoft YaHei", 11, QFont::Bold);
+        painter->setFont(font);
+        painter->setPen(QColor("#1abc9c"));
+
+        QString text = index.data(Qt::DisplayRole).toString();
+        // 缩进 10 像素避免紧贴边缘
+        painter->drawText(rect.adjusted(10, 0, 0, 0), Qt::AlignVCenter | Qt::AlignLeft, text);
+
+        painter->restore();
+        return;
+    }
 
     Metrics m = calculateMetrics(option);
     bool isSelected = (option.state & QStyle::State_Selected);
@@ -103,10 +134,9 @@ void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
     // ② 绘制卡片边框
     CardPainterHelper::drawCardBorder(painter, m.cardRect, isSelected);
 
-    // ③ 绘制置顶状态标记
+    // ③ 绘制状态互斥标记
     if (m_pinnedRole != -1) {
         bool isPinned = index.data(m_pinnedRole).toBool();
-
         CardPainterHelper::drawStatusIndicators(painter, m.cardRect, isPinned);
     }
 
@@ -114,7 +144,7 @@ void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
     if (m_pathRole != -1) {
         QString type = (m_typeRole != -1) ? index.data(m_typeRole).toString() : "";
         QString ext;
-        if (type == "category" || type == "folder") {
+        if (type == "folder") {
             ext = "DIR";
         } else {
             QString path = index.data(m_pathRole).toString();
@@ -155,6 +185,10 @@ void ThumbnailDelegate::drawFileNameText(QPainter* painter, const QRect& textRec
     QString name = index.data(Qt::DisplayRole).toString();
     painter->setPen(isSelected ? QColor("#3498db") : QColor("#EEEEEE"));
 
+    // 针对未录入项目应用半透明效果
+    if (m_managedRole != -1 && !isSelected && !index.data(m_managedRole).toBool()) {
+        painter->setPen(QColor(238, 238, 238, 120));
+    }
 
     QFont textFont = painter->font();
     textFont.setPointSize(8);
@@ -185,7 +219,7 @@ QWidget* ThumbnailDelegate::createEditor(QWidget* parent, const QStyleOptionView
         "}" 
     ); 
  
-    bool isFolder = (index.data(m_typeRole).toString() == "folder" || index.data(m_typeRole).toString() == "category"); 
+    bool isFolder = (index.data(m_typeRole).toString() == "folder"); 
     editor->setIsFolder(isFolder); 
     editor->installEventFilter(const_cast<ThumbnailDelegate*>(this)); 
     return editor; 
@@ -262,6 +296,9 @@ bool ThumbnailDelegate::eventFilter(QObject* obj, QEvent* event) {
 
 bool ThumbnailDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view, 
                                 const QStyleOptionViewItem& option, const QModelIndex& index) {
+    Metrics m = calculateMetrics(option);
+    QRect statusRect(m.cardRect.right() - 22, m.cardRect.top() + 8, 16, 16);
+
     return QStyledItemDelegate::helpEvent(event, view, option, index);
 }
 

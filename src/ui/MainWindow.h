@@ -169,7 +169,6 @@ private:
     bool m_isPinned = false;
     bool m_isTagManagerMode = false;
     QString m_currentDataSource; // "category" or "nav"
-    int m_currentCategoryId = 0;
     bool m_panelsInitialized = false; // 2026-04-12 状态锁：确保面板仅初始化一次
     QTimer* m_searchTimer = nullptr; // 2026-xx-xx 按照 Plan-106：搜索防抖计时器
     QString m_currentPath;

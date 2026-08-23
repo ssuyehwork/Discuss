@@ -90,10 +90,9 @@ void CardPainterHelper::drawCardBorder(QPainter* painter, const QRect& cardRect,
     painter->restore();
 }
 
-void CardPainterHelper::drawStatusIndicators(QPainter* painter, const QRect& cardRect, 
-                                             bool isPinned) {
-    QRect statusRect(cardRect.right() - 22, cardRect.top() + 8, 16, 16);
+void CardPainterHelper::drawStatusIndicators(QPainter* painter, const QRect& cardRect, bool isPinned) {
     if (isPinned) {
+        QRect statusRect(cardRect.right() - 22, cardRect.top() + 8, 16, 16);
         UiHelper::getIcon("pin_vertical", QColor("#FF551C"), 16).paint(painter, statusRect);
     }
 }

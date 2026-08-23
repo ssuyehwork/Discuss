@@ -18,17 +18,13 @@ AssetItemSnapshot OperationSnapshotEngine::captureSingle(const QString& path) {
     snap.fileName = QFileInfo(path).fileName();
 
     std::wstring wpath = path.toStdWString();
-    std::string fid = MetadataManager::instance().getFolderIdSync(wpath);
-
-    if (!fid.empty()) {
-        // 读取收藏/置顶与元数据属性
-        auto meta = MetadataManager::instance().getMeta(wpath);
-        snap.isPinned = meta.pinned;
-        snap.rating = meta.rating;
-        snap.color = QString::fromStdWString(meta.manualColor);
-        snap.tags = meta.tags;
-        snap.note = QString::fromStdWString(meta.note);
-    }
+    // 读取收藏/置顶与元数据属性
+    auto meta = MetadataManager::instance().getMeta(wpath);
+    snap.isPinned = meta.pinned;
+    snap.rating = meta.rating;
+    snap.color = QString::fromStdWString(meta.manualColor);
+    snap.tags = meta.tags;
+    snap.note = QString::fromStdWString(meta.note);
     return snap;
 }
 

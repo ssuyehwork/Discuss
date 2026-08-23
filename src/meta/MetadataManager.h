@@ -32,11 +32,11 @@ struct RuntimeMeta {
     bool encrypted;
     bool isFolder; // 2026-06-xx 物理标记：区分文件夹与文件，用于侧边栏精准统计
     bool isTrash;  // 2026-06-xx 状态标记：是否处于回收站
+    int ingestionStatus; // 2026-07-xx 状态标记：-1: 未知, 0: 待处理, 1: 已完成
     int width;      // 2026-07-xx 物理尺寸：宽 (像素)
     int height;     // 2026-07-xx 物理尺寸：高 (像素)
     int thumbStatus; // 2026-08-xx 0: 正常/未处理, 1: 提取失败/跳过
     std::wstring originalPath; // 2026-06-xx 路径记忆：用于回收站还原
-    std::string folderId; // 2026-06-xx 物理关联：缓存 ID 以供反向查询分类
     std::wstring baseName; // 2026-08-xx 持久化基名，避免重复解析计算
     std::wstring ext;      // 2026-08-xx 持久化后缀名，统一小写
     std::string sha256;    // 新增：储存文件的 SHA256 / FastHash 哈希值
@@ -50,7 +50,7 @@ struct RuntimeMeta {
 
     std::vector<PaletteEntry> palettes;
 
-    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), isTrash(false), width(0), height(0), thumbStatus(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
+    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), isTrash(false), ingestionStatus(-1), width(0), height(0), thumbStatus(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
 
     /**
      * @brief 判定是否有用户操作过的信息
@@ -62,7 +62,6 @@ struct RuntimeMeta {
 
 struct LightMeta {
     std::wstring path;
-    std::string folderId;
     bool isFolder;
     bool isTrash;
     bool tagsEmpty;
@@ -83,14 +82,10 @@ public:
         return m_loaded;
     }
 
-    static std::string generateFallbackFolderId(const std::wstring& vol, const std::wstring& frn);
-    static std::string generateDeterministicFolderId(const std::wstring& path);
-    static std::wstring generateDeterministicFrn(const std::wstring& path);
     static std::wstring normalizePath(const std::wstring& path);
     
     void initFromDatabase();
     RuntimeMeta getMeta(const std::wstring& path);
-    std::wstring getPathByFolderId(const std::string& fid);
 
     /**
      * @brief 在当前引擎下执行多维搜索
@@ -130,9 +125,71 @@ public:
 
     /**
      * @brief 2026-06-xx 架构重构：语义化通知接口
+     * 替代 emit metaChanged("__RELOAD_COUNT__")
+     */
+    void notifyCategoryCountChanged();
+
+    /**
+     * @brief 2026-06-xx 架构重构：语义化通知接口
      * 替代 emit metaChanged("__RELOAD_ALL__")
      */
     void notifyFullUIRebuild();
+
+    /**
+     * @brief 一站式项目注册流程（受控模式）
+     * 2026-07-xx 仅允许受信任的来源调用
+     * @param path 物理路径
+     * @param authorized 是否经过授权（只有 true 才能创建新记录）
+     */
+    void registerItem(const std::wstring& path, bool authorized = false);
+
+    /**
+     * @brief 异步批量注册项目 (Plan-88 性能重构)
+     * 2026-07-xx 按照 Plan-116：UI 层主动调用的批量注册将受到严格拦截
+     */
+    void registerItemsAsync(const QStringList& paths, bool authorized = false);
+
+    /**
+     * @brief 登记项目（待处理状态 0）
+     * 2026-07-xx 按照 Plan-117：标记项目并递归标记子项
+     */
+    void markAsRegistered(const std::wstring& path);
+
+    /**
+     * @brief 标记项目已完成解析（完成状态 1）
+     */
+    void markAsIngested(const std::wstring& path);
+
+    /**
+     * @brief 原子化更新项目的登记状态并同步父目录进度
+     * 2026-07-xx 按照 Development_Plan 3.3：专属原子函数负责标记值更新与比例值同步
+     * @param path 物理路径
+     * @param newStatus 新状态 (0: 待处理, 1: 已完成)
+     */
+    void updateIngestionStatus(const std::wstring& path, int newStatus);
+
+    /**
+     * @brief 计算并持久化指定目录的进度百分比
+     * 2026-07-xx 按照 Development_Plan 3.1 & 3.2
+     */
+    void calculateAndPersistProgress(const std::wstring& folderPath);
+
+    /**
+     * @brief 从数据库加载持久化的进度值
+     */
+    double getProgressFromDb(const std::wstring& folderPath);
+
+    /**
+     * @brief 判定指定目录在缓存中是否存在子项 (Plan-124)
+     * 依靠 m_parentToChildren 索引实现 O(1) 判定，用于废除物理磁盘空判定
+     */
+    bool hasChildrenInCache(const std::wstring& folderPath);
+
+    /**
+     * @brief 从缓存中获取指定目录的直接子项 (Plan-124)
+     * 返回路径与元数据的副本，调用者无需在耗时操作中持有锁
+     */
+    std::vector<std::pair<std::wstring, RuntimeMeta>> getChildrenFromCache(const std::wstring& folderPath);
 
     void ensureActivated(const std::wstring& nPath);
 
@@ -156,6 +213,7 @@ public:
         int64_t fileSize{0};
         std::wstring autoColor;
         QVector<QPair<QColor, float>> palettes;
+        int ingestionStatus{1};
     };
 
     void updateExtractedMediaFeatures(
@@ -163,7 +221,8 @@ public:
         int width, 
         int height, 
         const std::wstring& autoColor, 
-        const QVector<QPair<QColor, float>>& palettes
+        const QVector<QPair<QColor, float>>& palettes, 
+        int ingestionStatus = 1
     );
 
     void updateExtractedMediaFeaturesBatch(const std::vector<ExtractedFeatureItem>& items);
@@ -228,10 +287,9 @@ public:
 
 
     /**
-     * @brief 同步获取文件的 128-bit File ID (或 Fallback ID)
-     * 2026-06-15 物理加固：确保在建立分类关联前指纹已就绪
+     * @brief 统一注册 .QuarkMeta 目录的 FRN
      */
-    std::string getFolderIdSync(const std::wstring& path);
+    static void registerQuarkMetaFrn(const std::wstring& parentDir);
 
     /**
      * @brief 获取路径所在磁盘的卷序列号
@@ -276,9 +334,14 @@ public:
     void parsePathComponents(const std::wstring& normalizedPath, bool isFolder, std::wstring& outName, std::wstring& outExt);
 
     /**
-     * @brief 从 FID 中提取卷序列号
+     * @brief 卸载指定卷的名称/后缀索引映射（驱动器拔出时）
      */
-    std::wstring getVolumeFromFolderId(const std::string& fid);
+    void unloadVolumeNameCache(const std::wstring& volSerial);
+
+    /**
+     * @brief 加载指定卷的名称/后缀索引映射（驱动器插入或初始化时）
+     */
+    void loadVolumeNameCache(const std::wstring& volSerial);
 
     /**
      * @brief 2026-08-xx Sliding window functions for recently_visited
@@ -307,6 +370,12 @@ public:
      */
     std::vector<LightMeta> getLightweightCacheSnapshot() const;
     std::shared_mutex& getMutex() const { return m_mutex; }
+
+    // 2026-06-xx 废弃接口：保留为空实现以维持二进制/ABI兼容（若需要），或在完成清理后移除
+    bool hasPendingSync() const;
+    QStringList getPendingSyncDirs();
+    void removeFidsFromLog(const QStringList& fids);
+    void addToSyncLog(const std::wstring& dirPath);
 
     /**
      * @brief 内部辅助：通过 WinAPI 获取 File ID 和基础元数据
@@ -356,16 +425,23 @@ private:
         return std::hash<std::wstring>{}(normalizePath(path)) % NUM_SHARDS;
     }
 
-    std::unordered_map<std::string, std::wstring> m_folderIdToPath;
-
     // 2026-xx-xx 按照 Plan-124：快速层级倒排索引与进度缓存
     // Key: 标准化父级目录路径 (结尾不含斜杠), Value: 直接子项的完整标准化路径集合
     std::unordered_map<std::wstring, std::vector<std::wstring>> m_parentToChildren;
+    std::unordered_map<std::wstring, double> m_folderProgressCache;
 
     // 2026-08-xx Sliding window for recently_visited
     std::deque<std::wstring> m_recentVisitedQueue;
     std::unordered_set<std::wstring> m_recentVisitedSet;
     std::mutex m_recentMutex;
+
+    // 2026-07-xx 隔离式倒排索引：物理隔离文件、文件夹及后缀
+    // 1. 仅文件 (Key: L"resume.pdf", Value: file_ids)
+    std::unordered_map<std::wstring, std::vector<std::string>> m_assetNameToFolderIds;
+    // 2. 仅文件夹 (Key: L"projects", Value: folder_ids)
+    std::unordered_map<std::wstring, std::vector<std::string>> m_subFolderNameToFolderIds;
+    // 3. 仅后缀 (Key: L"pdf", Value: file_ids)
+    std::unordered_map<std::wstring, std::vector<std::string>> m_extensionToFolderIds;
 
     mutable std::shared_mutex m_mutex;
     bool m_loaded = false; // 2026-06-xx 物理加固：加载状态标记
