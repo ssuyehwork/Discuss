@@ -1657,12 +1657,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             menu.addAction(UiHelper::getIcon("sync", QColor("#3498db"), 18), "重新提取缩略图")->setData(ActionReextractThumbnail);
         }
 
-
-        // 2026-07-27 按照 Plan-107：仅对已在资源库中登记的文件夹，增加“取消导入并清除数据”菜单项
-        if (currentIndex.data(TypeRole).toString() == "folder" && currentIndex.data(ManagedRole).toBool()) {
-            menu.addAction(UiHelper::getIcon("close", QColor("#e81123"), 18), "取消导入并清除数据")->setData(ActionCancelImport);
-        }
-
         if (!isFolder) { 
             QMenu* cryptoMenu = menu.addMenu("加密保护"); 
             UiHelper::applyMenuStyle(cryptoMenu); 
@@ -1906,38 +1900,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         case ActionCopy: performCopy(false); break; 
         case ActionCut: performCopy(true); break; 
         case ActionPaste: performPaste(); break; 
-        case ActionCancelImport: {
-            auto indexes = view->selectionModel()->selectedIndexes();
-            QStringList targetPaths;
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0) {
-                    QString p = idx.data(PathRole).toString();
-                    if (!p.isEmpty()) targetPaths << p;
-                }
-            }
-            if (targetPaths.isEmpty() && !path.isEmpty()) targetPaths << path;
-
-            if (!targetPaths.isEmpty()) {
-                std::vector<std::wstring> stdPaths;
-                for (const QString& tp : targetPaths) {
-                    stdPaths.push_back(tp.toStdWString());
-                    // 物理清退内容面板缩略图与宽高比缓存
-                    clearFolderCache(tp);
-                }
-
-                // 1. 中止并取消队列中以及正在提取的高级多媒体任务
-                MediaExtractorPipeline::instance().cancelBatch(stdPaths);
-
-                AppCommand cmd;
-                cmd.type = AppCommandType::RemoveBatchSync;
-                cmd.targetPaths = targetPaths;
-                CoreEngine::instance().executeCommand(cmd);
-
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已彻底擦除相关元数据", 2000, QColor("#e81123"));
-                refreshAll();
-            }
-            break;
-        }
         case ActionBatchCreate: {
             BatchCreateDialog dlg(m_currentPath, this);
             if (dlg.exec() == QDialog::Accepted) {

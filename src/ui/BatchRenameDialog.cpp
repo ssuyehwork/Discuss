@@ -377,7 +377,7 @@ void BatchRenameDialog::onExecute() {
             safeThis->doAutoSave();
 
             // 成功物理移动或重命名或复制后，向 UndoManager 推送一次完整的原子 BatchRenameCommand
-            UndoManager::instance().pushCommand(std::make_unique<BatchRenameCommand>(isCapsule, mode, oldPathsSnap, newPathsSnap));
+            UndoManager::instance().pushCommand(std::make_unique<BatchRenameCommand>(mode, oldPathsSnap, newPathsSnap));
         }
 
         std::vector<RenameRule> currentRules;
