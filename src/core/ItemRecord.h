@@ -21,9 +21,7 @@ struct ItemRecord {
     QString path; 
     bool isDir = false;
 
-    // 双轨回收站与分组展示专属字段
-    bool isGroupHeader = false;
-    QString groupName;
+    // 磁盘回收站专属字段
     bool isDiskTrash = false;
     int diskTrashId = 0;
     QString fileId;
@@ -51,7 +49,6 @@ struct ItemRecord {
     long long atime = 0;
     long long added_at = 0;
     bool isEmpty = false;
-    bool isManaged = false; // 预存受控状态
     bool isHidden = false;  // 记录物理操作系统是否带有隐藏属性
     QString suffix;
     QString filename; // 缓存文件名以供排序时 O(1) 提取，消除高频 QFileInfo 构造开销

@@ -21,7 +21,6 @@ void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
     r.height = meta.height;
     r.added_at = meta.added_at;
     r.thumbStatus = meta.thumbStatus;
-    r.isManaged = meta.hasUserOperations();
     r.palettes.clear();
     for (const auto& pe : meta.palettes) {
         r.palettes.push_back({pe.color, pe.ratio});

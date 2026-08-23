@@ -11,6 +11,10 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
    - `Base36 ID`、分类树（`CategoryPanel` / `UserCategory` / `SystemCategory`）等历史判定分支；
    - `global.db` 中的 `metadata` 表与 `metadata_fts` 全文索引双重记账残留。
 
+### 0.2 模型契约与组件数据结构纯洁性规范
+1. **模型契约（ModelContract）纯洁性**：模型契约 `ModelContract` 必须严格反映当前纯磁盘直连架构的物理角色，彻底剔除所有托管库/双轨时代遗留的的角色定义（如 `ManagedRole`、`RegistrationProgressRole`、`IsGroupHeaderRole`、`GroupNameRole`、`IdRole` 等），严禁保留返回假值或无用逻辑的僵尸 Role 分支。
+2. **数据结构与组件瘦身（ItemRecord / ContentPanel / Views）**：`ItemRecord` 与 `ContentPanel` 等视图/模型层必须保持绝对的单一职责与高内聚，物理清除所有悬空无定义的孤儿函数（如 `addItemsFromDirectory`）、无读写逻辑的幽灵缓存（如 `ScanCacheEntry` / `m_recursiveCache`）、已被 QuickLook 替代的悬空内嵌预览组件（`m_textPreview` / `m_imagePreview`），以及文件间的幽灵 `#include` 引用，确保代码库干净纯洁、无任何未引用残留。
+
 ---
 
 ## 1. 界面面板与五栏式视图布局规范 (UI Panel & Five-Column View Specification)

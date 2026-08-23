@@ -1,4 +1,5 @@
 #include "DropTreeView.h"
+#include "../core/ModelContract.h"
 #include "ContentPanel.h"
 #include <QDrag>
 #include <QPainter>

@@ -91,28 +91,10 @@ void CardPainterHelper::drawCardBorder(QPainter* painter, const QRect& cardRect,
 }
 
 void CardPainterHelper::drawStatusIndicators(QPainter* painter, const QRect& cardRect, 
-                                             bool isPinned, bool isManaged, bool isDir, double progress) {
+                                             bool isPinned) {
     QRect statusRect(cardRect.right() - 22, cardRect.top() + 8, 16, 16);
     if (isPinned) {
         UiHelper::getIcon("pin_vertical", QColor("#FF551C"), 16).paint(painter, statusRect);
-    } else if (isDir && progress >= 0.0 && progress < 1.0) {
-        painter->save(); 
-        painter->setRenderHint(QPainter::Antialiasing); 
-         
-        // 1. 底环 
-        painter->setPen(QPen(QColor(60, 60, 60, 180), 2)); 
-        painter->drawEllipse(statusRect.adjusted(1, 1, -1, -1)); 
-         
-        // 2. 进度弧 (品牌蓝 #3498db) 
-        QPen pPen(QColor("#3498db"), 2); 
-        pPen.setCapStyle(Qt::RoundCap); 
-        painter->setPen(pPen); 
-         
-        int spanAngle = -qRound(progress * 360 * 16); // 逆时针计算 
-        painter->drawArc(statusRect.adjusted(1, 1, -1, -1), 90 * 16, spanAngle); 
-        painter->restore(); 
-    } else if (isManaged || (isDir && progress >= 1.0)) {
-        UiHelper::getIcon("check_circle", QColor("#2ecc71"), 16).paint(painter, statusRect);
     }
 }
 

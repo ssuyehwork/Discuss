@@ -31,33 +31,6 @@ public:
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         if (!index.isValid()) return;
 
-        // 双轨回收站与分组展示：如果该项为组标题，在树形/列表模式下独立绘制
-        if (index.data(IsGroupHeaderRole).toBool()) {
-            painter->save();
-            painter->setRenderHint(QPainter::Antialiasing, true);
-
-            // 绘制稍微偏暗或整洁的背景色
-            painter->fillRect(option.rect, QColor("#1c1c1c"));
-
-            // 仅在最左侧第一列绘制大标题文字，其余列只绘制分界线
-            if (index.column() == 0) {
-                painter->setPen(QPen(QColor("#333333"), 1, Qt::SolidLine));
-                painter->drawLine(option.rect.left(), option.rect.bottom() - 1, option.rect.right(), option.rect.bottom() - 1);
-
-                QFont font("Microsoft YaHei", 10, QFont::Bold);
-                painter->setFont(font);
-                painter->setPen(QColor("#1abc9c"));
-
-                QString text = index.data(Qt::DisplayRole).toString();
-                painter->drawText(option.rect.adjusted(10, 0, 0, 0), Qt::AlignVCenter | Qt::AlignLeft, text);
-            } else {
-                painter->setPen(QPen(QColor("#333333"), 1, Qt::SolidLine));
-                painter->drawLine(option.rect.left(), option.rect.bottom() - 1, option.rect.right(), option.rect.bottom() - 1);
-            }
-
-            painter->restore();
-            return;
-        }
 
         bool selected = option.state & QStyle::State_Selected;
         bool hover = option.state & QStyle::State_MouseOver;
@@ -88,13 +61,6 @@ public:
         
         if (selected) {
             opt.palette.setColor(QPalette::Text, Qt::white);
-        } else if (m_showStatus) {
-            // 2026-06-xx 按照视觉要求：未录入项文字半透明暗淡处理
-            // 物理修复：校准作用域
-            bool isManaged = index.data(ManagedRole).toBool();
-            if (!isManaged) {
-                opt.palette.setColor(QPalette::Text, QColor(238, 238, 238, 120));
-            }
         }
 
         // 2026-06-16 按照 8 列架构重构：第 1, 2, 3 列由代理独立绘制；第 0 列作为名称列，具有微型圆角卡片预览（最左侧看片）
@@ -188,9 +154,6 @@ public:
 
             if (col == 1) { // 🚨 物理修复 ①：状态列图标在单元格内部 100% 水平+垂直绝对居中！
                 bool isPinned = idx0.data(IsLockedRole).toBool();
-                bool isManaged = idx0.data(ManagedRole).toBool();
-                bool isDir = idx0.data(TypeRole).toString() == "folder";
-                double progress = idx0.data(RegistrationProgressRole).toDouble();
 
                 int iconSize = 16;
                 // 计算单元格物理中心坐标
@@ -200,19 +163,6 @@ public:
 
                 if (isPinned) {
                     UiHelper::getIcon("pin_vertical", QColor("#FF551C"), 16).paint(painter, centeredRect, Qt::AlignCenter);
-                } else if (isDir && progress >= 0.0 && progress < 1.0) {
-                    painter->save(); 
-                    painter->setRenderHint(QPainter::Antialiasing); 
-                    painter->setPen(QPen(QColor(60, 60, 60, 180), 2)); 
-                    painter->drawEllipse(centeredRect.adjusted(1, 1, -1, -1)); 
-                    QPen pPen(QColor("#3498db"), 2); 
-                    pPen.setCapStyle(Qt::RoundCap); 
-                    painter->setPen(pPen); 
-                    int spanAngle = -qRound(progress * 360 * 16); 
-                    painter->drawArc(centeredRect.adjusted(1, 1, -1, -1), 90 * 16, spanAngle); 
-                    painter->restore(); 
-                } else if (isManaged || (isDir && progress >= 1.0)) {
-                    UiHelper::getIcon("check_circle", QColor("#2ecc71"), 16).paint(painter, centeredRect, Qt::AlignCenter);
                 }
             } else if (col == 2) { // 星级列
                 int rating = idx0.data(RatingRole).toInt();
