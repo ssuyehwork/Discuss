@@ -63,10 +63,9 @@ class ContentPanel : public QFrame {
 
 public:
     enum class DataSourceType {
-        DiskNav,        // 1. 物理磁盘导航模式 (如 D:\Photos，随点随看，离散 JSON 缓存)
-        UserCategory,   // 2. 用户自定义逻辑分类 (如 "商业设计原稿"，ID > 0)
-        SystemCategory, // 3. 系统逻辑桶 (全部数据, 未分类, 垃圾桶, 最近访问)
-        PathList        // 4. 临时路径列表 (搜索结果, 标签筛选)
+        DiskNav,        // 物理磁盘导航模式
+        SystemCategory, // 系统逻辑桶 (全部数据, 未标记, 回收站, 最近访问)
+        PathList        // 临时路径列表 (搜索结果, 标签筛选)
     };
 
     /**

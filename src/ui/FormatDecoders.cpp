@@ -464,7 +464,7 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
          << "-dBATCH"
          << "-dSAFER"
          << "-sDEVICE=pngalpha"
-         << QString("-r%1").arg(150)
+         << QString("-r%1").arg(72)
          << "-dFirstPage=1"
          << "-dLastPage=1"
          << QString("-sOutputFile=%1").arg(tempPng)

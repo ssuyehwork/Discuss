@@ -170,8 +170,7 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     // 1. 文件夹与分类卡片控制 (回收站视图下不执行“显示/隐藏文件和文件夹”过滤限制，确保双轨资产百分百正常呈现)
     if (!isTrashView) {
         if (record.isDir) { 
-            bool isDiskMode = contentPanel && (contentPanel->dataSourceType() == ContentPanel::DataSourceType::DiskNav); 
-            bool isEmptyFolder = isDiskMode && record.isDir && record.isEmpty; 
+            bool isEmptyFolder = record.isEmpty; 
      
             bool isFolderExplicitlySelected = currentFilter.types.contains("folder") ||  
                                              (isEmptyFolder && currentFilter.types.contains("空文件夹")); 
@@ -2453,11 +2452,9 @@ void ContentPanel::performBatchRename() {
 } 
  
 ContentPanel::DataSourceType ContentPanel::dataSourceType() const {
-    if (m_currentCategoryType == "user_category") {
-        return DataSourceType::UserCategory;
-    } else if (m_currentCategoryType == "all" || m_currentCategoryType == "uncategorized" || 
-               m_currentCategoryType == "untagged" || m_currentCategoryType == "recently_visited" || 
-               m_currentCategoryType == "trash" || m_currentCategoryType == "system_category") {
+    if (m_currentCategoryType == "all" || m_currentCategoryType == "uncategorized" || 
+        m_currentCategoryType == "untagged" || m_currentCategoryType == "recently_visited" || 
+        m_currentCategoryType == "trash" || m_currentCategoryType == "system_category") {
         return DataSourceType::SystemCategory;
     } else if (m_currentCategoryType == "path_list" || m_currentCategoryType == "search") {
         return DataSourceType::PathList;
@@ -2977,10 +2974,8 @@ void ContentPanel::recalculateAndEmitStats() {
     const std::vector<ItemRecord>& records = m_model->allRecords();
     if (records.empty()) return;
 
-    bool isDiskMode = (dataSourceType() == DataSourceType::DiskNav);
-
     QPointer<ContentPanel> weakThis(this);
-    (void)QtConcurrent::run([weakThis, records, isDiskMode]() {
+    (void)QtConcurrent::run([weakThis, records]() {
         ScanStats stats;
 
         auto makeDupKey = [](const ItemRecord& rec) -> std::string {
@@ -3010,7 +3005,7 @@ void ContentPanel::recalculateAndEmitStats() {
             
             if (record.isDir) {
                 stats.typeCounts["folder"]++;
-                if (isDiskMode && record.isDir && record.isEmpty) {
+                if (record.isEmpty) {
                     stats.emptyFolderCount++;
                 }
             } else {
