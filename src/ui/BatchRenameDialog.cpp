@@ -149,13 +149,30 @@ void BatchRenameDialog::initContent() {
     rulesGroupL->addWidget(scroll);
     configL->addWidget(rulesGroup, 1);
 
-    // 4. 左侧底部主执行按钮 (水平居中)
+    // 4. 左侧底部主执行按钮 (应用标准 Primary Blue #378ADD 高亮样式)
     QHBoxLayout* execBtnLayout = new QHBoxLayout();
     m_btnExecute = new QPushButton("重命名", leftPanel);
     m_btnExecute->setFixedSize(120, 36);
+    m_btnExecute->setCursor(Qt::PointingHandCursor);
     m_btnExecute->setStyleSheet(
-        "QPushButton { background: #444; color: #EEE; border: 1px solid #666; border-radius: 6px; font-weight: bold; }"
-        "QPushButton:hover { background: #555; }"
+        "QPushButton {"
+        "  background-color: #378ADD;"
+        "  color: #FFFFFF;"
+        "  border: none;"
+        "  border-radius: 6px;"
+        "  font-size: 13px;"
+        "  font-weight: bold;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #4A9BE8;"
+        "}"
+        "QPushButton:pressed {"
+        "  background-color: #2674C2;"
+        "}"
+        "QPushButton:disabled {"
+        "  background-color: #333333;"
+        "  color: #777777;"
+        "}"
     );
     execBtnLayout->addStretch();
     execBtnLayout->addWidget(m_btnExecute);

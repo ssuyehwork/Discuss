@@ -30,8 +30,11 @@ void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
 
 ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMeta) {
     ItemRecord r;
-    std::wstring wPath = MetadataManager::normalizePath(path.toStdWString());
-    QString nPath = QString::fromStdWString(wPath);
+    QFileInfo info(path);
+
+    QString nPath = QDir::toNativeSeparators(info.absoluteFilePath());
+    std::wstring wPath = nPath.toStdWString();
+
     bool isArcEnd = nPath.endsWith(".arc", Qt::CaseInsensitive) || nPath.endsWith(".arc/", Qt::CaseInsensitive) || nPath.endsWith(".arc\\", Qt::CaseInsensitive);
     if (isArcEnd && (nPath.endsWith("/") || nPath.endsWith("\\"))) {
         nPath = nPath.left(nPath.length() - 1);
@@ -51,19 +54,16 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
     r.ctime = ctime;
     r.mtime = mtime;
     r.atime = atime;
-    r.isDir = QFileInfo(nPath).isDir();
+    r.isDir = info.isDir();
     r.path = nPath;
-
-    int lastSlash = std::max(nPath.lastIndexOf('\\'), nPath.lastIndexOf('/'));
-    r.filename = (lastSlash != -1) ? nPath.mid(lastSlash + 1) : nPath;
+    r.filename = info.fileName();
 
     if (r.isDir) {
         QDir sub(nPath);
         r.isEmpty = sub.entryList(QDir::NoDotAndDotDot | QDir::AllEntries).isEmpty();
         r.suffix = "";
     } else {
-        int lastDot = nPath.lastIndexOf('.');
-        r.suffix = (lastDot != -1) ? nPath.mid(lastDot + 1) : "";
+        r.suffix = info.suffix();
     }
 
     return r;
