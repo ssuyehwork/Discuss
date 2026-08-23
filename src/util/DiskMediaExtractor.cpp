@@ -13,6 +13,7 @@
 namespace QuarkMeta {
 
 std::mutex DiskMediaExtractor::s_qtGuiMutex;
+std::mutex DiskMediaExtractor::s_jsonSaveMutex;
 QMutex DiskMediaExtractor::s_pendingFailureMutex;
 QHash<QString, QSet<QString>> DiskMediaExtractor::s_pendingFailures;
 
@@ -30,6 +31,7 @@ void DiskMediaExtractor::flushPendingFailures() {
         s_pendingFailures.clear();
     }
 
+    std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
     for (auto it = toFlush.begin(); it != toFlush.end(); ++it) {
         QuarkMetaJson jsonCache(it.key().toStdWString());
         jsonCache.load();
@@ -154,7 +156,6 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
 
     // 1. 极速缓存命中路径：若磁盘已存在缩略图缓存且 .QuarkMeta.json 中已记录尺寸，免解码瞬间返回
     if (!res.thumbnail512.isNull()) {
-        static std::mutex s_jsonSaveMutex;
         std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
         QuarkMetaJson jsonCache(parentDir.toStdWString());
         jsonCache.load();
@@ -182,7 +183,6 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
 
         // 3. 线程安全原子落盘尺寸数据至 .QuarkMeta.json
         if (res.originalSize.isValid() && res.originalSize.width() > 0) {
-            static std::mutex s_jsonSaveMutex;
             std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
 
             QuarkMetaJson jsonCache(parentDir.toStdWString());
@@ -232,7 +232,6 @@ QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, in
         QString parentDir = QDir::toNativeSeparators(fi.absolutePath());
         std::wstring wFileName = fi.fileName().toStdWString();
 
-        static std::mutex s_jsonSaveMutex;
         std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
         QuarkMetaJson jsonCache(parentDir.toStdWString());
         jsonCache.load();

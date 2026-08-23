@@ -22,6 +22,7 @@ private:
 
 public:
     static std::mutex s_qtGuiMutex;
+    static std::mutex s_jsonSaveMutex;
 
     static void scheduleFailureMark(const QString& folderPath, const QString& fileName);
     static void flushPendingFailures();

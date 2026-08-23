@@ -133,9 +133,8 @@ void DiskItemModel::preloadDimensionsAsync() {
         QFileInfo firstFi(targets.front().path);
         QString parentDir = QDir::toNativeSeparators(firstFi.absolutePath());
 
-        static std::mutex s_jsonSaveMutex;
         {
-            std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
+            std::lock_guard<std::mutex> lock(DiskMediaExtractor::s_jsonSaveMutex);
             QuarkMetaJson jsonCache(parentDir.toStdWString());
             jsonCache.load();
             auto& cachedItems = jsonCache.items();
