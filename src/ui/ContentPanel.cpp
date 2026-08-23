@@ -113,17 +113,19 @@ void FilterProxyModel::recomputeDuplicateCache() {
 
     const auto& records = sourceModelPtr->allRecords();
 
-    // 按照 (文件大小 + SHA256 / 文件名) 进行内存桶聚合
+    // 按照 (SHA256 或 文件大小 + 宽x高) 进行内存桶聚合（排除文件名，实现真实副本判重）
     std::unordered_map<std::string, std::vector<QString>> hashBucket;
     for (const auto& rec : records) {
         if (rec.isDir) continue; // 排除目录
         
-        // 构造唯一指纹键
+        // 构造唯一指纹键：优先 SHA256，其次 大小 + 尺寸，兜底 纯大小
         std::string key;
         if (!rec.sha256.isEmpty()) {
             key = rec.sha256.toStdString();
+        } else if (rec.width > 0 && rec.height > 0) {
+            key = std::to_string(rec.size) + "_" + std::to_string(rec.width) + "x" + std::to_string(rec.height);
         } else {
-            key = std::to_string(rec.size) + "_" + rec.filename.toLower().toStdString();
+            key = std::to_string(rec.size);
         }
         hashBucket[key].push_back(rec.path);
     }
@@ -2938,12 +2940,21 @@ void ContentPanel::recalculateAndEmitStats() {
     (void)QtConcurrent::run([weakThis, records, isDiskMode]() {
         ScanStats stats;
 
-        // 1. 预统计重复项（内存快速桶）
+        auto makeDupKey = [](const ItemRecord& rec) -> std::string {
+            if (!rec.sha256.isEmpty()) {
+                return rec.sha256.toStdString();
+            }
+            if (rec.width > 0 && rec.height > 0) {
+                return std::to_string(rec.size) + "_" + std::to_string(rec.width) + "x" + std::to_string(rec.height);
+            }
+            return std::to_string(rec.size);
+        };
+
+        // 1. 预统计重复项（内存快速桶，去文件名化判重）
         std::unordered_map<std::string, int> hashCounts;
         for (const auto& record : records) {
             if (record.isDir) continue;
-            std::string key = std::to_string(record.size) + "_" + std::to_string(record.width) + "_" + std::to_string(record.height) + "_" + record.filename.toLower().toStdString();
-            hashCounts[key]++;
+            hashCounts[makeDupKey(record)]++;
         }
 
         // 2. 遍历全量记录进行多维统计
@@ -2981,8 +2992,7 @@ void ContentPanel::recalculateAndEmitStats() {
                 }
 
                 // 重复状态统计
-                std::string key = std::to_string(record.size) + "_" + std::to_string(record.width) + "_" + std::to_string(record.height) + "_" + record.filename.toLower().toStdString();
-                if (hashCounts[key] > 1) {
+                if (hashCounts[makeDupKey(record)] > 1) {
                     stats.duplicateCount++;
                 } else {
                     stats.uniqueCount++;
