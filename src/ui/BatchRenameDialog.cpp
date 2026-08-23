@@ -335,12 +335,13 @@ void BatchRenameDialog::onExecute() {
     m_btnExecute->setEnabled(false);
 
     // 记录本次执行所操作的旧路径、旧物理目标及新物理目标
+    bool isCapsule = false;
     DiskOperationMode mode = DiskOperationMode::Rename;
     if (m_rbMove->isChecked()) mode = DiskOperationMode::Move;
     else if (m_rbCopy->isChecked()) mode = DiskOperationMode::Copy;
 
     QString targetDir = m_targetPathEdit->text();
-    if (mode != DiskOperationMode::Rename && targetDir.isEmpty()) {
+    if (!isCapsule && mode != DiskOperationMode::Rename && targetDir.isEmpty()) {
         FramelessMessageBox::warning(this, "错误", "请先选择目标文件夹");
         m_btnExecute->setEnabled(true);
         return;
@@ -353,13 +354,13 @@ void BatchRenameDialog::onExecute() {
     for (size_t i = 0; i < m_originalPaths.size(); ++i) {
         QString oldPath = QString::fromStdWString(m_originalPaths[i]);
         QFileInfo oldInfo(oldPath);
-        QString destDir = (mode == DiskOperationMode::Rename) ? oldInfo.absolutePath() : targetDir;
+        QString destDir = (mode == DiskOperationMode::Rename || isCapsule) ? oldInfo.absolutePath() : targetDir;
         QString newPathStr = QDir(destDir).absoluteFilePath(QString::fromStdWString(newNames[i]));
         newPathsSnap.push_back(QDir::toNativeSeparators(newPathStr).toStdWString());
     }
 
     QPointer<BatchRenameDialog> safeThis(this);
-    auto onCompletedCallback = [safeThis, mode, oldPathsSnap, newPathsSnap](int successCount) {
+    auto onCompletedCallback = [safeThis, isCapsule, mode, oldPathsSnap, newPathsSnap](int successCount) {
         if (!safeThis) return;
         // 确保回到 UI 主线程
         safeThis->m_btnExecute->setEnabled(true);
@@ -376,7 +377,7 @@ void BatchRenameDialog::onExecute() {
             safeThis->doAutoSave();
 
             // 成功物理移动或重命名或复制后，向 UndoManager 推送一次完整的原子 BatchRenameCommand
-            UndoManager::instance().pushCommand(std::make_unique<BatchRenameCommand>(mode, oldPathsSnap, newPathsSnap));
+            UndoManager::instance().pushCommand(std::make_unique<BatchRenameCommand>(isCapsule, mode, oldPathsSnap, newPathsSnap));
         }
 
         std::vector<RenameRule> currentRules;

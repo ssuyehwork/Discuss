@@ -143,6 +143,14 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         CentralEventHub::instance().publishEvent(ev);
         break;
     }
+    case AppCommandType::RemoveBatchSync: {
+        MetadataManager::instance().removeMetadataBatchSync(cmd.targetPaths);
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        ev.paths = cmd.targetPaths;
+        CentralEventHub::instance().publishEvent(ev);
+        break;
+    }
     case AppCommandType::RecordAccess: {
         handleRecordAccess(cmd.targetPaths);
         break;
