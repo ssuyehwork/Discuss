@@ -154,8 +154,10 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
     QString parentDir = QDir::toNativeSeparators(fi.absolutePath());
     QString fileName = fi.fileName();
 
-    // 1. 极速缓存命中路径：若磁盘已存在缩略图缓存且 .QuarkMeta.json 中已记录尺寸，免解码瞬间返回
+    // 1. 极速缓存命中路径：若磁盘已存在缩略图缓存，免解码瞬间返回
     if (!res.thumbnail512.isNull()) {
+        res.isValid = true;
+
         std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
         QuarkMetaJson jsonCache(parentDir.toStdWString());
         jsonCache.load();
@@ -164,9 +166,8 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
         auto it = cachedItems.find(wFileName);
         if (it != cachedItems.end() && it->second.width > 0 && it->second.height > 0) {
             res.originalSize = QSize(it->second.width, it->second.height);
-            res.isValid = true;
-            return res;
         }
+        return res;
     }
 
     if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return res;
