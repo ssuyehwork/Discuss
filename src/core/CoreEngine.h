@@ -27,7 +27,6 @@ enum class AppCommandType {
     SetPinned,         // 置顶/取消置顶
     RenameItems,       // 重命名文件/文件夹
     DeletePermanently, // 物理删除文件
-    RemoveBatchSync,   // 批量移除元数据
     RecordAccess       // 记录访问历史
 };
 
