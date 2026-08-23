@@ -41,7 +41,8 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
     fileOp.wFunc = isMove ? FO_MOVE : FO_COPY;
     fileOp.pFrom = from.c_str();
     fileOp.pTo = to.c_str();
-    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR;
+    // 🚨 核心改动：移除 FOF_NOCONFIRMATION，遇到同名冲突由系统弹出确认或允许用户选择保留两者，绝不静默覆写！
+    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR;
     bool ok = (SHFileOperationW(&fileOp) == 0 && !fileOp.fAnyOperationsAborted);
 
     if (ok) {

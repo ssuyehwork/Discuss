@@ -69,6 +69,11 @@ public:
         PathList        // 4. 临时路径列表 (搜索结果, 标签筛选)
     };
 
+    /**
+     * @brief 判定当前上下文是否允许执行粘贴操作（用于菜单置灰与快捷键拦截）
+     */
+    bool canPaste() const;
+
     DataSourceType dataSourceType() const;
     int currentCategoryId() const { return m_currentCategoryId; }
     bool isContextMenuActive() const { return m_isContextMenuActive; }

@@ -827,6 +827,60 @@ void ContentPanel::updateGridSize() {
     AppConfig::instance().setValue("UI/GridZoomLevel", m_zoomLevel);
 } 
  
+bool ContentPanel::canPaste() const {
+    // 1. 目标目录必须是真实物理目录，且不是“此电脑”、“回收站”或“搜索结果”
+    if (m_currentPath.isEmpty() || m_currentPath == "computer://" || m_currentPath == "trash://" ||
+        m_currentCategoryType == "trash" || m_currentCategoryType == "path_list") {
+        return false;
+    }
+
+    // 2. 目标目录必须在物理磁盘上存在且具备写入权限
+    QFileInfo destInfo(m_currentPath);
+    if (!destInfo.exists() || !destInfo.isDir() || !destInfo.isWritable()) {
+        return false;
+    }
+
+    // 3. 检查系统剪贴板是否有有效的文件 URL
+    const QMimeData* mime = QApplication::clipboard()->mimeData();
+    if (!mime || !mime->hasUrls() || mime->urls().isEmpty()) {
+        return false;
+    }
+
+    // 4. 提取剪贴板来源路径，确保至少有 1 个真实物理文件存在
+    bool isCut = false;
+    if (mime->hasFormat("Preferred DropEffect")) {
+        QByteArray effect = mime->data("Preferred DropEffect");
+        if (!effect.isEmpty() && (effect.at(0) & 0x02)) isCut = true;
+    }
+
+    QString nativeDest = QDir::toNativeSeparators(m_currentPath);
+    bool hasValidSource = false;
+    bool isSameDirCut = true;
+
+    for (const QUrl& url : mime->urls()) {
+        QString localPath = QDir::toNativeSeparators(url.toLocalFile());
+        if (localPath.isEmpty()) continue;
+
+        QFileInfo srcInfo(localPath);
+        if (srcInfo.exists()) {
+            hasValidSource = true;
+            // 如果存在剪切且来源父目录与当前目录不同，则不是原地剪切
+            if (QDir::toNativeSeparators(srcInfo.absolutePath()) != nativeDest) {
+                isSameDirCut = false;
+            }
+        }
+    }
+
+    if (!hasValidSource) return false;
+
+    // 5. 如果是剪切操作，且所有文件都在当前目录内（原地剪切），则禁用粘贴
+    if (isCut && isSameDirCut) {
+        return false;
+    }
+
+    return true;
+}
+
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) { 
     if (event->type() == QEvent::Wheel) {
         QWheelEvent* wEvent = static_cast<QWheelEvent*>(event);
@@ -1087,7 +1141,9 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                 } 
                 // 2026-03-xx 按照用户要求：逻辑重构，统一调用 performPaste 业务函数 
                 if (keyEvent->key() == Qt::Key_V) { 
-                    performPaste(); 
+                    if (canPaste()) {
+                        performPaste(); 
+                    }
                     return true; 
                 } 
             } 
@@ -1661,7 +1717,9 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
         menu.addAction("复制")->setData(ActionCopy); 
         menu.addAction("剪切")->setData(ActionCut); 
-        menu.addAction("粘贴")->setData(ActionPaste); 
+        QAction* actItemPaste = menu.addAction("粘贴"); 
+        actItemPaste->setData(ActionPaste); 
+        actItemPaste->setEnabled(canPaste()); 
         menu.addAction("复制名称")->setData(ActionCopyName); 
         menu.addAction("复制路径")->setData(ActionCopyPath); 
 
@@ -1718,9 +1776,15 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         menu.addSeparator(); 
         QAction* actPaste = menu.addAction("粘贴"); 
         actPaste->setData(ActionPaste); 
-        actPaste->setEnabled(!m_currentPath.isEmpty() && m_currentPath != "computer://"); 
+        actPaste->setEnabled(canPaste()); 
  
         menu.addSeparator(); 
+
+        bool isPhysicalPath = !m_currentPath.isEmpty() && !m_currentPath.contains("://") && QDir(m_currentPath).exists();
+        QAction* actShowInExp = menu.addAction("在“资源管理器”中显示");
+        actShowInExp->setData(ActionShowInExplorer);
+        actShowInExp->setEnabled(isPhysicalPath);
+
         menu.addAction("刷新")->setData(ActionRefresh);
     } 
 
@@ -1824,7 +1888,10 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             break; 
         }
         case ActionShowInExplorer: { 
-            ShellHelper::openInExplorer(onItem ? path : m_currentPath); 
+            QString targetPath = onItem ? path : m_currentPath;
+            if (!targetPath.isEmpty() && !targetPath.contains("://")) {
+                ShellHelper::openInExplorer(targetPath); 
+            }
             break; 
         } 
         case ActionNewFolder: createNewItem("folder"); break; 
