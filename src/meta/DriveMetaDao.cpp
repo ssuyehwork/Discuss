@@ -10,6 +10,8 @@ bool DriveMetaDao::initTable() {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
     const char* sql = 
         "CREATE TABLE IF NOT EXISTS drive_metadata ("
         "  drive_path TEXT PRIMARY KEY,"
@@ -34,6 +36,8 @@ std::unordered_map<std::wstring, DriveMetaRecord> DriveMetaDao::getAllDriveMeta(
     std::unordered_map<std::wstring, DriveMetaRecord> result;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return result;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
     const char* sql = "SELECT drive_path, rating, color, pinned, note, url FROM drive_metadata;";
     sqlite3_stmt* stmt = nullptr;
@@ -73,6 +77,7 @@ bool DriveMetaDao::saveDriveMeta(const DriveMetaRecord& record) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
     std::wstring normPath = MetadataManager::normalizePath(record.drivePath);
 
     const char* sql = 
@@ -101,14 +106,7 @@ bool DriveMetaDao::saveDriveMeta(const DriveMetaRecord& record) {
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
-    if (rc == SQLITE_DONE) {
-        DatabaseManager::instance().setDirty(true);
-        DatabaseManager::instance().enqueueSyncTask([]() {
-            DatabaseManager::instance().flushAll();
-        });
-        return true;
-    }
-    return false;
+    return (rc == SQLITE_DONE);
 }
 
 } // namespace QuarkMeta

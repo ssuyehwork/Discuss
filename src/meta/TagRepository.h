@@ -27,8 +27,6 @@ public:
     static bool addTagToGroup(const QString& tagName, int groupId);
     static bool removeTagFromGroup(const QString& tagName, int groupId = -1);
 
-    // 数据迁移接口
-    static void checkAndMigrate();
 };
 
 } // namespace QuarkMeta

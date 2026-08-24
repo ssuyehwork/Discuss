@@ -21,9 +21,7 @@ struct ItemRecord {
     QString path; 
     bool isDir = false;
 
-    // 双轨回收站与分组展示专属字段
-    bool isGroupHeader = false;
-    QString groupName;
+    // 磁盘回收站专属字段
     bool isDiskTrash = false;
     int diskTrashId = 0;
     QString fileId;

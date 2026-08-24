@@ -448,37 +448,8 @@ void JustifiedView::doLayout() {
         while (i < count) {
             int rowStart = i;
             
-            // 0. 特异处理：如果本行首个元素是组标题
-            QModelIndex firstIdx = model()->index(rowStart, 0);
-            if (model()->data(firstIdx, IsGroupHeaderRole).toBool()) {
-                int headerHeight = 40;
-                m_geometries[rowStart] = { QRect(margin, currentY, containerWidth, headerHeight), rowStart };
-                currentY += headerHeight + spacing;
-                i++;
-                continue;
-            }
 
-            // 1. 获取本行第一个元素的类型 (是否是文件夹)
-            QString firstType = model()->data(firstIdx, TypeRole).toString();
-            bool isFirstDir = (firstType == "folder");
-
-            // 2. 循环塞入元素，一旦遇到类型变动 (例如从文件夹突变为普通文件)，立即在这里截断退出当前行，强制折行
-            int numInRow = 0;
-            while (numInRow < maxNumInRow && (rowStart + numInRow) < count) {
-                int nextIdx = rowStart + numInRow;
-                QModelIndex idx = model()->index(nextIdx, 0);
-                QString nextType = model()->data(idx, TypeRole).toString();
-                bool isNextDir = (nextType == "folder");
-                bool isNextHeader = model()->data(idx, IsGroupHeaderRole).toBool();
-
-                if (isNextHeader) {
-                    break; // 遇到了下一个组标题，强制折行
-                }
-                if (isNextDir != isFirstDir) {
-                    break; // 类型改变，立即断开，不允许继续混排同行
-                }
-                numInRow++;
-            }
+            int numInRow = std::min(maxNumInRow, count - rowStart);
 
             int currentX = margin;
             for (int j = 0; j < numInRow; ++j) {
@@ -495,15 +466,6 @@ void JustifiedView::doLayout() {
         while (i < count) {
             int rowStart = i;
 
-            // 0. 特异处理：如果行首元素是组标题
-            QModelIndex firstIdx = model()->index(rowStart, 0);
-            if (model()->data(firstIdx, IsGroupHeaderRole).toBool()) {
-                int headerHeight = 40;
-                m_geometries[rowStart] = { QRect(margin, currentY, containerWidth, headerHeight), rowStart };
-                currentY += headerHeight + spacing;
-                i++;
-                continue;
-            }
 
             double rowAspectRatioSum = 0;
             std::vector<double> aspectRatios;
@@ -517,12 +479,6 @@ void JustifiedView::doLayout() {
                 // 2026-07-xx 物理分离逻辑：如果当前项是文件，但行首是文件夹（或反之），强制换行
                 QString type = model()->data(idx, TypeRole).toString();
                 bool isCurrentDir = (type == "folder");
-                bool isCurrentHeader = model()->data(idx, IsGroupHeaderRole).toBool();
-                
-                if (isCurrentHeader) {
-                    forceBreak = true;
-                    break; // 遇到了下一个组标题，强制折行
-                }
 
                 if (i > rowStart) {
                     QModelIndex prevIdx = model()->index(i - 1, 0);
