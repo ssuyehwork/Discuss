@@ -5,6 +5,7 @@
 #include "PresetManager.h"
 #include "UndoToastOverlay.h"
 #include "ShellIconManager.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../meta/BatchRenameEngine.h"
 #include "../meta/MetadataManager.h"
 #include <QHeaderView>
@@ -195,6 +196,7 @@ void BatchRenameDialog::initContent() {
     m_table->setShowGrid(false);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setIconSize(QSize(20, 20)); // 最左侧微型缩略图/图标尺寸
+    m_table->setFocusPolicy(Qt::NoFocus); // 彻底消除选中单元格四周的虚线焦点框
 
     rootL->addWidget(m_table, 0);
 
@@ -225,7 +227,9 @@ void BatchRenameDialog::applyTheme() {
         "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
         "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; selection-color: white; color: #EEE; outline: 0; }"
         "QComboBox QAbstractItemView::item { height: 22px; padding: 2px; }" 
-        "QTableWidget { background-color: #1E1E1E; alternate-background-color: #252526; color: #EEEEEE; border: 1px solid #333333; gridline-color: transparent; selection-background-color: rgba(52, 152, 219, 0.2); }"
+        "QTableWidget { background-color: #1E1E1E; alternate-background-color: #252526; color: #EEEEEE; border: 1px solid #333333; gridline-color: transparent; selection-background-color: rgba(52, 152, 219, 0.2); outline: none; }"
+        "QTableWidget::item { outline: none; border: none; }"
+        "QTableWidget::item:focus { outline: none; border: none; }"
         "QHeaderView::section { background-color: #2D2D2D; color: #888888; border: none; height: 30px; font-weight: bold; font-size: 11px; }"
     ).arg(arrowPath));
 }
@@ -264,8 +268,18 @@ void BatchRenameDialog::updatePreview() {
         QString oldPath = QString::fromStdWString(m_originalPaths[static_cast<size_t>(i)]);
         QFileInfo info(oldPath);
 
-        // 1. 左侧原文件名（带微型缩略图/文件关联图标）
-        QIcon fileIcon = ShellIconManager::getFileIcon(oldPath, 20);
+        // 1. 左侧原文件名（优先读取真实缩略图，无缩略图时显示系统图标）
+        QIcon fileIcon;
+        if (UiHelper::isGraphicsFile(info.suffix().toLower())) {
+            QImage thumbImg = DiskMediaExtractor::getCapsuleThumbnail(oldPath, 64);
+            if (!thumbImg.isNull()) {
+                fileIcon = QIcon(QPixmap::fromImage(thumbImg));
+            }
+        }
+        if (fileIcon.isNull()) {
+            fileIcon = ShellIconManager::getFileIcon(oldPath, 20);
+        }
+
         auto* itemOld = new QTableWidgetItem(fileIcon, info.fileName());
         itemOld->setForeground(QColor("#B0B0B0"));
         m_table->setItem(i, 0, itemOld);
