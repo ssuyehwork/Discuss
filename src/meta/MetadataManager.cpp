@@ -31,7 +31,6 @@
 #include "../ui/UiHelper.h"
 #include "MediaExtractorPipeline.h"
 #include "../util/ShellHelper.h"
-#include "sqlite3.h"
 #include "QuarkMetaJson.h"
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -45,7 +44,6 @@
 #include <winnt.h>
 #include <sddl.h>
 
-
 #include <cstdio>
 #include <cwchar>
 #include <sstream>
@@ -56,65 +54,12 @@
 
 namespace QuarkMeta {
 
-static const char* kSqlSelectAllMeta = 
-    "SELECT path, is_folder, rating, color, tags, note, url, "
-    "ctime, mtime, atime, file_size, palettes, is_trash, original_path, "
-    "width, height, auto_color, base_name, ext, added_at, sha256 "
-    "FROM metadata";
-
-static const char* kSqlInsertMeta = 
-    "INSERT OR REPLACE INTO metadata (path, is_folder, rating, color, tags, note, url, "
-    "ctime, mtime, atime, file_size, palettes, is_trash, original_path, "
-    "width, height, auto_color, base_name, ext, added_at, sha256) "
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-static void bindMetaHelper(sqlite3_stmt* stmt, const std::wstring& path, const RuntimeMeta& meta) {
-    sqlite3_bind_text16(stmt, 1, path.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 2, meta.isFolder ? 1 : 0);
-    sqlite3_bind_int(stmt, 3, meta.rating);
-    sqlite3_bind_text16(stmt, 4, meta.manualColor.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 5, meta.tags.join(",").toStdWString().c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 6, meta.note.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 7, meta.url.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 8, meta.ctime);
-    sqlite3_bind_int64(stmt, 9, meta.mtime);
-    sqlite3_bind_int64(stmt, 10, meta.atime);
-    sqlite3_bind_int64(stmt, 11, meta.fileSize);
-
-    QJsonArray arr;
-    for (const auto& pe : meta.palettes) {
-        QJsonObject obj;
-        obj["color"] = pe.color.name();
-        obj["ratio"] = (double)pe.ratio;
-        arr.append(obj);
-    }
-    QByteArray ba = QJsonDocument(arr).toJson(QJsonDocument::Compact);
-    sqlite3_bind_blob(stmt, 12, ba.constData(), ba.size(), SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 13, meta.isTrash ? 1 : 0);
-    sqlite3_bind_text16(stmt, 14, meta.originalPath.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 15, meta.width);
-    sqlite3_bind_int(stmt, 16, meta.height);
-    sqlite3_bind_text16(stmt, 17, meta.autoColor.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 18, meta.baseName.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text16(stmt, 19, meta.ext.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 20, meta.added_at);
-    sqlite3_bind_text(stmt, 21, meta.sha256.c_str(), -1, SQLITE_TRANSIENT);
-}
-
-// --- Helper Functions ---
-
-
 std::wstring MetadataManager::normalizePath(const std::wstring& path) {
     if (path.empty()) return L"";
-    // 2026-06-xx 物理对账优化：Windows 环境下路径不区分大小写，
-    // 统一转换为全小写以确保内存缓存 (std::unordered_map) 的 Key 匹配一致性，彻底消除“幽灵项”。
     QString qp = QDir::toNativeSeparators(QDir::cleanPath(QString::fromStdWString(path))).toLower();
     if (qp.length() == 2 && qp.endsWith(':')) qp += '\\';
     return qp.toStdWString();
 }
-
-
-// --- MetadataManager Implementation ---
 
 MetadataManager& MetadataManager::instance() {
     static MetadataManager inst;
@@ -122,10 +67,8 @@ MetadataManager& MetadataManager::instance() {
 }
 
 MetadataManager::MetadataManager(QObject* parent) : QObject(parent) {
-    // [RCU 内存快照初始化]：分配空快照，防空指针异常
-    // m_shards auto initialized
     m_uiSignalTimer = new QTimer(this);
-    m_uiSignalTimer->setInterval(200); // 200ms 时间窗口
+    m_uiSignalTimer->setInterval(200);
     m_uiSignalTimer->setSingleShot(true);
 
     connect(m_uiSignalTimer, &QTimer::timeout, [this]() {
@@ -151,140 +94,24 @@ MetadataManager::MetadataManager(QObject* parent) : QObject(parent) {
         }
     });
 
-    // 2026-06-xx 物理加固：监听程序退出信号
     connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, [this]() {
-        // 2026-06-xx 物理切换：强制刷新 SQLite 到磁盘
         DatabaseManager::instance().shutdown();
         AppConfig::instance().setValue("System/LastCleanShutdown", true);
         AppConfig::instance().sync();
     });
 }
 
-
 void MetadataManager::initFromDatabase() {
-    // 2026-06-xx 物理加固：防止重复初始化
     {
         std::shared_lock<std::shared_mutex> lock(m_mutex);
         if (m_loaded) return;
     }
 
     DatabaseManager::instance().init();
-    
-    std::unordered_map<std::wstring, RuntimeMeta> tempCache;
-    std::unordered_map<std::wstring, std::vector<std::wstring>> tempParentToChildren;
-
-    auto loadFromDb = [&](sqlite3* db) {
-        if (!db) return;
-        sqlite3_stmt* stmt = nullptr;
-
-        // 1. 读取主元数据表
-        if (sqlite3_prepare_v2(db, kSqlSelectAllMeta, -1, &stmt, nullptr) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                RuntimeMeta rm;
-                const wchar_t* wpath = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 0));
-                std::wstring path = normalizePath(wpath ? wpath : L"");
-
-                rm.isFolder = sqlite3_column_int(stmt, 1) != 0;
-                rm.rating = sqlite3_column_int(stmt, 2);
-                
-                const wchar_t* color = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 3));
-                if (color) rm.manualColor = color;
-
-                const wchar_t* wtags = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 4));
-                QString tagsStr = wtags ? QString::fromWCharArray(wtags) : "";
-                QStringList rawTags = tagsStr.split(",", Qt::SkipEmptyParts);
-                QStringList cleanTags;
-
-                for (const QString& t : rawTags) {
-                    QString trimmed = t.trimmed();
-                    if (trimmed.contains(":\\") || trimmed.contains(":/")) {
-                        continue;
-                    }
-                    cleanTags.append(trimmed);
-                }
-                rm.tags = cleanTags;
-
-                // Column 5 ~ 21 严格按 kSqlSelectAllMeta 顺序列提取
-                const wchar_t* note = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 5));
-                if (note) rm.note = note;
-                
-                const wchar_t* url = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 6));
-                if (url) rm.url = url;
-
-                rm.ctime = sqlite3_column_int64(stmt, 7);
-                rm.mtime = sqlite3_column_int64(stmt, 8);
-                rm.atime = sqlite3_column_int64(stmt, 9);
-                rm.fileSize = sqlite3_column_int64(stmt, 10);
-
-                const void* paletteBlob = sqlite3_column_blob(stmt, 11);
-                int paletteSize = sqlite3_column_bytes(stmt, 11);
-                if (paletteBlob && paletteSize > 0) {
-                    QByteArray ba(reinterpret_cast<const char*>(paletteBlob), paletteSize);
-                    QJsonDocument doc = QJsonDocument::fromJson(ba);
-                    QJsonArray arr = doc.array();
-                    for (const auto& v : arr) {
-                        QJsonObject obj = v.toObject();
-                        PaletteEntry pe;
-                        pe.color = QColor(obj["color"].toString());
-                        pe.ratio = (float)obj["ratio"].toDouble();
-                        rm.palettes.push_back(pe);
-                    }
-                }
-
-                rm.isTrash = sqlite3_column_int(stmt, 12) != 0;
-                const wchar_t* wOrigPath = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 13));
-                if (wOrigPath) rm.originalPath = wOrigPath;
-
-                rm.width = sqlite3_column_int(stmt, 14);
-                rm.height = sqlite3_column_int(stmt, 15);
-
-                const wchar_t* autoColor = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 16));
-                if (autoColor) rm.autoColor = autoColor;
-
-                const wchar_t* wBaseName = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 17));
-                if (wBaseName) rm.baseName = wBaseName;
-
-                const wchar_t* wExt = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 18));
-                if (wExt) rm.ext = wExt;
-
-                rm.added_at = sqlite3_column_int64(stmt, 19);
-
-                const char* hash = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 20));
-                if (hash) rm.sha256 = hash;
-
-                tempCache[path] = rm;
-
-                // 维护树级索引...
-                std::wstring parentPath = QDir::toNativeSeparators(QFileInfo(QString::fromStdWString(path)).absolutePath()).toStdWString();
-                parentPath = normalizePath(parentPath);
-                if (parentPath != path) {
-                    tempParentToChildren[parentPath].push_back(path);
-                }
-            }
-            sqlite3_finalize(stmt);
-        }
-
-    };
-
-    // 加载全局库
-    loadFromDb(DatabaseManager::instance().getGlobalDb());
 
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
-        m_parentToChildren = tempParentToChildren;
-
-        for (auto& entry : m_parentToChildren) {
-            std::sort(entry.second.begin(), entry.second.end());
-            entry.second.erase(std::unique(entry.second.begin(), entry.second.end()), entry.second.end());
-        }
-
-
         m_loaded = true;
-        for (const auto& pair : tempCache) {
-            size_t idx = getShardIndex(pair.first);
-            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            m_shards[idx].items[pair.first] = pair.second;
-        }
     }
 
     notifyUI(RefreshLevel::FullRebuild);
@@ -426,14 +253,12 @@ RuntimeMeta MetadataManager::getMeta(const std::wstring& path) {
 }
 
 void MetadataManager::ensureActivated(const std::wstring& nPath) {
-    // 1. 读锁检查 (快速路径)
     {
         size_t idx = getShardIndex(nPath);
         std::shared_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
         if (m_shards[idx].items.find(nPath) != m_shards[idx].items.end()) return;
     }
 
-    // 2. 锁外同步获取物理属性 (耗时 I/O 操作)
     RuntimeMeta rm;
     std::wstring type;
     
@@ -453,16 +278,14 @@ void MetadataManager::ensureActivated(const std::wstring& nPath) {
     }
 
     if (success) {
-        // 3. 写锁写入缓存
         std::unique_lock<std::shared_mutex> lock(m_mutex);
         size_t idx = getShardIndex(nPath);
         {
             std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            if (m_shards[idx].items.count(nPath)) return; // 二次检查防止竞态
+            if (m_shards[idx].items.count(nPath)) return;
             m_shards[idx].items[nPath] = rm;
         }
 
-        // Plan-124: 维护树级索引
         std::wstring parentPath = QDir::toNativeSeparators(QFileInfo(QString::fromStdWString(nPath)).absolutePath()).toStdWString();
         parentPath = normalizePath(parentPath);
         if (parentPath != nPath) {
@@ -473,7 +296,6 @@ void MetadataManager::ensureActivated(const std::wstring& nPath) {
         }
     }
 }
-
 
 void MetadataManager::setRating(const std::wstring& path, int rating, bool notify) {
     std::wstring nPath = normalizePath(path);
@@ -492,7 +314,6 @@ void MetadataManager::setRating(const std::wstring& path, int rating, bool notif
         m_shards[idx].items[nPath].rating = rating;
     }
 
-    // 🚨 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
     QuarkMetaJson::updateItemMeta(nPath, [rating](ItemMeta& item) {
         item.rating = rating;
     });
@@ -509,9 +330,6 @@ void MetadataManager::setSha256(const std::wstring& path, const std::string& sha
         m_shards[idx].items[nPath].sha256 = sha256;
     }
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
-    });
 }
 
 void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<ExtractedFeatureItem>& items) {
@@ -544,7 +362,6 @@ void MetadataManager::updateExtractedMediaFeatures(
     const QVector<QPair<QColor, float>>& palettes)  
 { 
     std::wstring nPath = normalizePath(path); 
-    RuntimeMeta metaCopy; 
     { 
         size_t idx = getShardIndex(nPath);
         std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
@@ -559,36 +376,7 @@ void MetadataManager::updateExtractedMediaFeatures(
         for (const auto& p : palettes) { 
             meta.palettes.emplace_back(p.first, p.second); 
         } 
-        metaCopy = meta; 
     } 
-
-    // 仅发起 1 次数据库事务 
-    DatabaseManager::instance().enqueueSyncTask([this, nPath, metaCopy]() { 
-        sqlite3* db = DatabaseManager::instance().getGlobalDb(); 
-        if (!db) return; 
-
-        SqlTransaction trans(db); 
-        const char* sql = "UPDATE metadata SET width = ?, height = ?, auto_color = ?, palettes = ? WHERE path = ?"; 
-        sqlite3_stmt* stmt = nullptr; 
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) { 
-            sqlite3_bind_int(stmt, 1, metaCopy.width); 
-            sqlite3_bind_int(stmt, 2, metaCopy.height); 
-            sqlite3_bind_text16(stmt, 3, metaCopy.autoColor.c_str(), -1, SQLITE_TRANSIENT); 
-             
-            // 序列化调色盘 JSON 
-            QJsonArray arr; 
-            for (const auto& pe : metaCopy.palettes) { 
-                QJsonObject obj; obj["color"] = pe.color.name(); obj["ratio"] = (double)pe.ratio; arr.append(obj); 
-            } 
-            QByteArray ba = QJsonDocument(arr).toJson(QJsonDocument::Compact); 
-            sqlite3_bind_blob(stmt, 4, ba.constData(), ba.size(), SQLITE_TRANSIENT); 
-            sqlite3_bind_text16(stmt, 5, nPath.c_str(), -1, SQLITE_TRANSIENT); 
-
-            sqlite3_step(stmt); 
-            sqlite3_finalize(stmt); 
-        } 
-        trans.commit(); 
-    }); 
 
     notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath)); 
 }
@@ -602,13 +390,7 @@ void MetadataManager::setAddedAt(const std::wstring& path, long long addedAt, bo
         m_shards[idx].items[nPath].added_at = addedAt;
     }
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
-    });
 }
-
-
-
 
 void MetadataManager::renameTag(const QString& oldName, const QString& newName) {
     if (oldName == newName) return;
@@ -627,7 +409,6 @@ void MetadataManager::renameTag(const QString& oldName, const QString& newName) 
         }
     }
     
-    persistBatchAsync(affectedPaths);
     notifyFullUIRebuild();
 }
 
@@ -643,7 +424,6 @@ void MetadataManager::removeTag(const QString& tagName) {
         }
     }
     
-    persistBatchAsync(affectedPaths);
     notifyFullUIRebuild();
 }
 
@@ -665,7 +445,6 @@ void MetadataManager::setColor(const std::wstring& path, const std::wstring& col
         m_shards[idx].items[nPath].manualColor = normColor;
     }
 
-    // 🚨 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
     QuarkMetaJson::updateItemMeta(nPath, [normColor](ItemMeta& item) {
         item.color = normColor;
     });
@@ -690,7 +469,6 @@ void MetadataManager::setPinned(const std::wstring& path, bool pinned, bool noti
         m_shards[idx].items[nPath].pinned = pinned;
     }
 
-    // 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
     QuarkMetaJson::updateItemMeta(nPath, [pinned](ItemMeta& item) {
         item.pinned = pinned;
     });
@@ -708,7 +486,6 @@ void MetadataManager::setTags(const std::wstring& path, const QStringList& tags,
         m_shards[idx].items[nPath].tags = tags;
     }
 
-    // 纯磁盘模式：转换标签并直接原子写入所在物理目录的 .QuarkMeta.json
     std::vector<std::wstring> wTags;
     for (const QString& t : tags) {
         QString trimmed = t.trimmed();
@@ -740,7 +517,6 @@ void MetadataManager::setNote(const std::wstring& path, const std::wstring& note
         m_shards[idx].items[nPath].note = note;
     }
 
-    // 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
     QuarkMetaJson::updateItemMeta(nPath, [note](ItemMeta& item) {
         item.note = note;
     });
@@ -765,7 +541,6 @@ void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, 
         m_shards[idx].items[nPath].url = url;
     }
 
-    // 纯磁盘模式：直接原子写入所在物理目录的 .QuarkMeta.json
     QuarkMetaJson::updateItemMeta(nPath, [url](ItemMeta& item) {
         item.url = url;
     });
@@ -782,11 +557,7 @@ void MetadataManager::setEncrypted(const std::wstring& path, bool encrypted, boo
         m_shards[idx].items[nPath].encrypted = encrypted;
     }
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
-    });
 }
-
 
 void MetadataManager::setPalettes(const std::wstring& path, const QVector<QPair<QColor, float>>& palettes, bool notify) {
     std::wstring nPath = MetadataManager::normalizePath(path);
@@ -799,9 +570,6 @@ void MetadataManager::setPalettes(const std::wstring& path, const QVector<QPair<
         m_shards[idx].items[nPath].palettes = entries;
     }
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
-    });
 }
 
 void MetadataManager::setItemVisualMetadata(const std::wstring& path, const std::wstring& color, const QVector<QPair<QColor, float>>& palettes, bool notify) {
@@ -810,21 +578,15 @@ void MetadataManager::setItemVisualMetadata(const std::wstring& path, const std:
     std::vector<PaletteEntry> entries;
     for (int i = 0; i < palettes.size(); ++i) { entries.push_back(PaletteEntry(palettes[i].first, palettes[i].second)); }
     
-    bool isFolder = false;
     {
         size_t idx = getShardIndex(nPath);
         std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
         RuntimeMeta& meta = m_shards[idx].items[nPath];
         meta.autoColor = color;
         meta.palettes = entries;
-        isFolder = meta.isFolder;
     }
     
-    
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath);
-    });
 }
 
 void MetadataManager::setItemDimensions(const std::wstring& path, int width, int height) {
@@ -837,9 +599,6 @@ void MetadataManager::setItemDimensions(const std::wstring& path, int width, int
         meta.width = width;
         meta.height = height;
     }
-    DatabaseManager::instance().enqueueSyncTask([this, nPath]() {
-        persistAsync(nPath, false);
-    });
 }
 
 QVector<QColor> MetadataManager::getPalettes(const std::wstring& path) {
@@ -855,7 +614,6 @@ QVector<QColor> MetadataManager::getPalettes(const std::wstring& path) {
     return {};
 }
 
-
 void MetadataManager::renameBatchAsync(
     const std::vector<std::pair<std::wstring, std::wstring>>& rawPathPairs,
     std::function<void(int successCount)> onCompleted) 
@@ -865,14 +623,11 @@ void MetadataManager::renameBatchAsync(
         return;
     }
 
-    // 1. 全局开启信号锁，挂起并发 UI 刷新
     setInternalOperating(true);
 
-    // 2. 将全量改名合并为【唯一 1 个后台异步线程】
     (void)QtConcurrent::run([this, rawPathPairs, onCompleted]() {
         int successCount = 0;
 
-        // A. 路径归一化预处理（解决 Windows 斜杠/盘符大小写造成的幽灵数据）
         std::vector<std::pair<std::wstring, std::wstring>> normalizedPairs;
         normalizedPairs.reserve(rawPathPairs.size());
         for (const auto& pair : rawPathPairs) {
@@ -891,7 +646,6 @@ void MetadataManager::renameBatchAsync(
             return;
         }
 
-        // B. 内存分片节点批量替换
         std::vector<std::pair<std::wstring, std::wstring>> ioTasks;
         {
             std::unique_lock<std::shared_mutex> lock(m_mutex);
@@ -935,7 +689,6 @@ void MetadataManager::renameBatchAsync(
             }
         }
 
-        // B2. 在锁外执行磁盘元数据文件的重命名与迁移
         for (const auto& pair : ioTasks) {
             QFileInfo oldFileInfo(QString::fromStdWString(pair.first));
             QFileInfo newFileInfo(QString::fromStdWString(pair.second));
@@ -946,80 +699,26 @@ void MetadataManager::renameBatchAsync(
             }
         }
 
-        // C. SQLite 数据库分库批量提交大事务
-        struct DbBatchRenameTask {
-            std::wstring oldPath;
-            std::wstring newPath;
-            std::wstring newName;
-            std::wstring newExt;
-        };
-        std::map<sqlite3*, std::vector<DbBatchRenameTask>> groupedTasks;
-        for (const auto& pair : normalizedPairs) {
-            const std::wstring& curOld = pair.first;
-            const std::wstring& curNew = pair.second;
-            std::wstring newName, newExt;
-            {
-                size_t idx = getShardIndex(curNew);
-                std::shared_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-                auto it = m_shards[idx].items.find(curNew);
-                if (it != m_shards[idx].items.end()) {
-                    newName = it->second.baseName;
-                    newExt = it->second.ext;
-                }
-            }
-
-            sqlite3* db = DatabaseManager::instance().getGlobalDb();
-            if (db) {
-                groupedTasks[db].push_back({curOld, curNew, newName, newExt});
-            }
-        }
-
-        const char* updSql = "UPDATE metadata SET path = ?, base_name = ?, ext = ? WHERE path = ?";
-        for (auto& entry : groupedTasks) {
-            sqlite3* targetDb = entry.first;
-            const auto& tasks = entry.second;
-
-            SqlTransaction trans(targetDb); // 【仅开启 1 次事务】
-            sqlite3_stmt* stmt = nullptr;
-            if (sqlite3_prepare_v2(targetDb, updSql, -1, &stmt, nullptr) == SQLITE_OK) {
-                for (const auto& task : tasks) {
-                    sqlite3_bind_text16(stmt, 1, task.newPath.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_bind_text16(stmt, 2, task.newName.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_bind_text16(stmt, 3, task.newExt.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_bind_text16(stmt, 4, task.oldPath.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_step(stmt);
-                    sqlite3_reset(stmt);
-                }
-                sqlite3_finalize(stmt);
-            }
-            trans.commit(); // 【仅提交 1 次事务】
-        }
-
-
-        // E. 清理操作标志位，安全回到 UI 主线程通知
         setInternalOperating(false);
 
         QMetaObject::invokeMethod(qApp, [this, successCount, onCompleted]() {
-            notifyFullUIRebuild(); // 【仅发射 1 次全量 UI 刷新信号】
+            notifyFullUIRebuild();
             if (onCompleted) onCompleted(successCount);
         }, Qt::QueuedConnection);
     });
 }
-
 
 void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring& newPath) {
     std::wstring nOld = normalizePath(oldPath);
     std::wstring nNew = normalizePath(newPath);
     if (nOld == nNew) return;
 
-    // 将级联更名逻辑移至后台线程，杜绝大目录重命名阻塞主线程
     (void)QtConcurrent::run([this, nOld, nNew]() {
         std::vector<std::pair<std::wstring, std::wstring>> itemsToRename;
         std::vector<std::pair<std::wstring, std::wstring>> ioTasks;
         
         {
             std::unique_lock<std::shared_mutex> lock(m_mutex);
-            // 1. 深度收集所有子孙路径
             forEachCachedItem([&](const std::wstring& p, const RuntimeMeta&) {
                 if (p == nOld) {
                     itemsToRename.push_back({p, nNew});
@@ -1031,7 +730,6 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
 
             if (itemsToRename.empty()) return;
 
-            // 2. 优化：先一次性切断根级树索引关系，防止循环内 O(K^2) 的 std::remove 开销
             std::wstring rootOldParent = normalizePath(QDir::toNativeSeparators(QFileInfo(QString::fromStdWString(nOld)).absolutePath()).toStdWString());
             if (m_parentToChildren.count(rootOldParent)) {
                 auto& children = m_parentToChildren[rootOldParent];
@@ -1060,12 +758,10 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
 
                 bool isFolder = meta.isFolder;
 
-                // [树级索引维护] - 内部项仅移除
                 if (curOld != nOld) {
                     m_parentToChildren.erase(curOld); 
                 }
 
-                // 3. 缓存迁移
                 std::wstring newName, newExt;
                 parsePathComponents(curNew, isFolder, newName, newExt);
                 meta.baseName = newName;
@@ -1085,12 +781,10 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
                     }
                 }
 
-
                 ioTasks.push_back(pair);
             }
         }
 
-        // 在全局锁外安全执行磁盘 JSON 重命名与迁移
         for (const auto& pair : ioTasks) {
             QFileInfo oldFileInfo(QString::fromStdWString(pair.first));
             QFileInfo newFileInfo(QString::fromStdWString(pair.second));
@@ -1099,59 +793,6 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
             } else {
                 QuarkMetaJson::renameItem(oldFileInfo.absolutePath(), oldFileInfo.fileName(), newFileInfo.fileName());
             }
-        }
-
-        // 4. 物理数据库批量同步 (引入事务保护)
-        // 极致优化：预取根路径的卷信息，避免在循环中重复执行耗时的 Win32 磁盘查询
-        std::wstring volSerial = getVolumeSerialNumber(nNew);
-        QString letter = (nNew.length() >= 2 && nNew[1] == L':') ? QString::fromWCharArray(&nNew[0], 1) : "";
-        sqlite3* memDb = DatabaseManager::instance().getGlobalDb();
-        
-        struct DbItemRenameTask {
-            std::wstring oldPath;
-            std::wstring newPath;
-            std::wstring newName;
-            std::wstring newExt;
-        };
-        std::map<sqlite3*, std::vector<DbItemRenameTask>> groupedSyncTasks;
-        for (const auto& pair : itemsToRename) {
-            const std::wstring& curOld = pair.first;
-            const std::wstring& curNew = pair.second;
-            std::wstring newName, newExt;
-            {
-                size_t idx = getShardIndex(curNew);
-                std::shared_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-                auto it = m_shards[idx].items.find(curNew);
-                if (it != m_shards[idx].items.end()) {
-                    newName = it->second.baseName;
-                    newExt = it->second.ext;
-                }
-            }
-
-            if (memDb) {
-                groupedSyncTasks[memDb].push_back({curOld, curNew, newName, newExt});
-            }
-        }
-
-        const char* updSql = "UPDATE metadata SET path = ?, base_name = ?, ext = ? WHERE path = ?";
-        for (auto& entry : groupedSyncTasks) {
-            sqlite3* targetDb = entry.first;
-            auto& tasks = entry.second;
-
-            SqlTransaction trans(targetDb);
-            sqlite3_stmt* memStmt;
-            if (sqlite3_prepare_v2(targetDb, updSql, -1, &memStmt, nullptr) == SQLITE_OK) {
-                for (const auto& task : tasks) {
-                    sqlite3_bind_text16(memStmt, 1, task.newPath.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_bind_text16(memStmt, 2, task.newName.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_bind_text16(memStmt, 3, task.newExt.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_bind_text16(memStmt, 4, task.oldPath.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_step(memStmt);
-                    sqlite3_reset(memStmt);
-                }
-                sqlite3_finalize(memStmt);
-            }
-            trans.commit();
         }
 
         notifyFullUIRebuild();
@@ -1172,7 +813,6 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
 
-        // 1. 优化：先从父级索引中一次性移除根路径，避免循环内 O(K^2)
         std::wstring rootParent = normalizePath(QDir::toNativeSeparators(QFileInfo(QString::fromStdWString(nPath)).absolutePath()).toStdWString());
         if (m_parentToChildren.count(rootParent)) {
             auto& children = m_parentToChildren[rootParent];
@@ -1199,7 +839,6 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
         }
     }
 }
-
 
 void MetadataManager::markAsTrash(const std::wstring& path, bool isTrash, const std::wstring& origPath) {
     std::wstring nPath = MetadataManager::normalizePath(path);
@@ -1243,7 +882,7 @@ void MetadataManager::setTrash(const std::wstring& path, bool isTrash) {
                 if (it->second.isTrash != isTrash) {
                     it->second.isTrash = isTrash;
                     if (!isTrash) {
-                        it->second.originalPath = L""; // Clear on restore
+                        it->second.originalPath = L"";
                     }
                     changed = true;
                     oldEmpty = it->second.tags.isEmpty();
@@ -1260,11 +899,7 @@ void MetadataManager::setTrash(const std::wstring& path, bool isTrash) {
 
 void MetadataManager::deletePermanently(const std::wstring& path) {
     std::wstring nPath = MetadataManager::normalizePath(path);
-
-    // 执行彻底根除 (removeMetadataSync 会级联擦除 SQLite metadata 与 category_items)
     removeMetadataSync(nPath);
-
-    // 广播 UI 全量刷新信号
     notifyUI(RefreshLevel::FullRebuild);
 }
 
@@ -1277,8 +912,6 @@ std::wstring MetadataManager::getVolumeSerialNumber(const std::wstring& path) {
     }
     return L"UNKNOWN";
 }
-
-
 
 bool MetadataManager::fetchWinApiMetadataDirect(const std::wstring& path, long long* outSize, std::wstring* outType, long long* outCtime, long long* outMtime, long long* outAtime) {
     HANDLE hFile = CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
@@ -1310,68 +943,28 @@ void MetadataManager::activateItem(const std::wstring& path) {
 }
 
 void MetadataManager::persistBatchAsync(const std::vector<std::wstring>& paths) {
-    WriteGuard guard;
     if (paths.empty()) return;
 
-    struct BatchTask {
-        sqlite3* memDb;
-        std::vector<std::wstring> groupPaths;
-    };
-    std::map<sqlite3*, std::vector<std::wstring>> groups;
+    for (const auto& p : paths) {
+        RuntimeMeta rMeta = getMeta(p);
+        parsePathComponents(p, rMeta.isFolder, rMeta.baseName, rMeta.ext);
 
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (db) groups[db] = paths;
-
-    for (auto& entry : groups) {
-        sqlite3* memDb = entry.first;
-        const auto& groupPaths = entry.second;
-
-        SqlTransaction trans(memDb);
-        std::vector<std::pair<std::wstring, RuntimeMeta>> recordsToSync;
-
-        for (const auto& p : groupPaths) {
-            RuntimeMeta rMeta = getMeta(p);
-
-            parsePathComponents(p, rMeta.isFolder, rMeta.baseName, rMeta.ext);
-
-            {
-                size_t idx = getShardIndex(p);
-                std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-                m_shards[idx].items[p] = rMeta;
-            }
-            recordsToSync.push_back({p, rMeta});
-        }
-        trans.commit();
+        size_t idx = getShardIndex(p);
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[p] = rMeta;
     }
-
-    DatabaseManager::instance().enqueueSyncTask([]() {
-        DatabaseManager::instance().flushAll();
-    });
 }
 
 void MetadataManager::persistAsync(const std::wstring& path, bool notify) {
-    WriteGuard guard;
     std::wstring nPath = MetadataManager::normalizePath(path);
     
     RuntimeMeta rMeta = getMeta(nPath);
     parsePathComponents(nPath, rMeta.isFolder, rMeta.baseName, rMeta.ext);
-    
-    sqlite3* memDb = DatabaseManager::instance().getGlobalDb();
-    if (!memDb) {
-        return;
-    }
 
-    sqlite3_stmt* memStmt;
-    if (sqlite3_prepare_v2(memDb, kSqlInsertMeta, -1, &memStmt, nullptr) == SQLITE_OK) {
-        bindMetaHelper(memStmt, nPath, rMeta);
-        if (sqlite3_step(memStmt) == SQLITE_DONE) {
-            {
-                size_t idx = getShardIndex(nPath);
-                std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-                m_shards[idx].items[nPath] = rMeta;
-            }
-        }
-        sqlite3_finalize(memStmt);
+    {
+        size_t idx = getShardIndex(nPath);
+        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
+        m_shards[idx].items[nPath] = rMeta;
     }
         
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
@@ -1398,83 +991,30 @@ void MetadataManager::parsePathComponents(const std::wstring& normalizedPath, bo
 
 QStringList MetadataManager::searchInCache(const QString& keyword, const QString& scopeSource, int categoryId, const QString& parentPath) {
     Q_UNUSED(categoryId);
-    // FTS5 trigram 模糊检索引擎 + 内存 O(1) 快速反查
-    QStringList results; if (keyword.isEmpty()) return results;
+    QStringList results;
+    if (keyword.isEmpty()) return results;
     
     std::wstring wParentPath = (scopeSource == "nav" && !parentPath.isEmpty()) ? normalizePath(parentPath.toStdWString()) : L"";
     if (!wParentPath.empty()) {
-        bool endsWithSlash = false;
-        if (wParentPath.back() == L'\\' || wParentPath.back() == L'/') endsWithSlash = true;
+        bool endsWithSlash = (wParentPath.back() == L'\\' || wParentPath.back() == L'/');
         if (!endsWithSlash) {
             wParentPath += L'\\';
         }
     }
 
-    // 2. 区分检索词长度获取匹配路径，避开 O(N) 扫描
-    std::vector<std::wstring> matchedPaths;
-    std::vector<sqlite3*> dbs = { DatabaseManager::instance().getGlobalDb() };
+    std::wstring lowerKeyword = keyword.toLower().toStdWString();
 
-    if (keyword.length() >= 3) {
-        // FTS5 trigram 快速 Match 路径：通过倒排索引实现 O(log N) 模糊检索分流，彻底释解读写锁
-        QString cleanKeyword = keyword;
-        cleanKeyword.replace("\"", "");
-        QString ftsQuery = "\"" + cleanKeyword + "\"";
-        std::string utf8Query = ftsQuery.toUtf8().toStdString();
-
-        const char* sql = "SELECT path FROM metadata WHERE rowid IN (SELECT rowid FROM metadata_fts WHERE metadata_fts MATCH ?)";
-        for (sqlite3* db : dbs) {
-            sqlite3_stmt* stmt = nullptr;
-            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-                sqlite3_bind_text(stmt, 1, utf8Query.c_str(), -1, SQLITE_TRANSIENT);
-                while (sqlite3_step(stmt) == SQLITE_ROW) {
-                    const wchar_t* wpath = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 0));
-                    if (wpath) {
-                        matchedPaths.push_back(normalizePath(wpath));
-                    }
-                }
-                sqlite3_finalize(stmt);
-            }
+    forEachCachedItem([&](const std::wstring& path, const RuntimeMeta& meta) {
+        if (!wParentPath.empty() && path.find(wParentPath) != 0) {
+            return;
         }
-    } else {
-        // LIKE 模糊匹配降级路径 (使用高性能 UTF-8 绑定以避免 SQLite 内部编码转换开销)
-        QString likeQueryStr = "%" + keyword + "%";
-        std::string utf8LikeQuery = likeQueryStr.toUtf8().toStdString();
 
-        const char* sql = "SELECT path FROM metadata WHERE path LIKE ? OR note LIKE ? OR tags LIKE ?";
-        for (sqlite3* db : dbs) {
-            sqlite3_stmt* stmt = nullptr;
-            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-                sqlite3_bind_text(stmt, 1, utf8LikeQuery.c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_bind_text(stmt, 2, utf8LikeQuery.c_str(), -1, SQLITE_TRANSIENT);
-                sqlite3_bind_text(stmt, 3, utf8LikeQuery.c_str(), -1, SQLITE_TRANSIENT);
-                while (sqlite3_step(stmt) == SQLITE_ROW) {
-                    const char* utf8Path = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                    if (utf8Path) {
-                        matchedPaths.push_back(normalizePath(QString::fromUtf8(utf8Path).toStdWString()));
-                    }
-                }
-                sqlite3_finalize(stmt);
-            }
-        }
-    }
-
-    // 去重
-    std::sort(matchedPaths.begin(), matchedPaths.end());
-    matchedPaths.erase(std::unique(matchedPaths.begin(), matchedPaths.end()), matchedPaths.end());
-
-    // 3. 关联内存缓存并执行 Scope 过滤
-    for (const auto& path : matchedPaths) {
-        size_t idx = getShardIndex(path);
-        std::shared_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        auto it = m_shards[idx].items.find(path);
-        if (it != m_shards[idx].items.end()) {
-            if (!wParentPath.empty()) {
-                if (path.find(wParentPath) != 0) continue;
-            }
-
+        if (meta.baseName.find(lowerKeyword) != std::wstring::npos ||
+            meta.note.find(lowerKeyword) != std::wstring::npos ||
+            meta.tags.contains(keyword, Qt::CaseInsensitive)) {
             results << QString::fromStdWString(path);
         }
-    }
+    });
 
     return results;
 }
@@ -1530,8 +1070,6 @@ void MetadataManager::recordAccess(const std::wstring& path) {
             m_shards[idx].items[nPath].atime = static_cast<long long>(now);
         }
     }
-    
-    // 2. 纯内存更新访问时间，取消隐式数据库持久化写库任务
 }
 
 double MetadataManager::getCachedAtime(const std::wstring& path) {
@@ -1547,27 +1085,24 @@ double MetadataManager::getCachedAtime(const std::wstring& path) {
 void MetadataManager::slideRecentWindow() {
     double expireThreshold = static_cast<double>(QDateTime::currentMSecsSinceEpoch()) - 86400000.0;
 
-    // 第一步：只在 m_recentMutex 保护下取快照
     std::deque<std::wstring> snapshot;
     {
         std::lock_guard<std::mutex> lock(m_recentMutex);
-        snapshot = m_recentVisitedQueue; // 拷贝一份，立即释放锁
+        snapshot = m_recentVisitedQueue;
     }
 
-    // 第二步：在锁外计算哪些需要过期剔除（getCachedAtime 内部自己的 m_mutex 与本函数无嵌套关系）
     std::vector<std::wstring> toErase;
     for (const auto& path : snapshot) {
         double itemAtime = getCachedAtime(path);
         if (itemAtime < expireThreshold) {
             toErase.push_back(path);
         } else {
-            break; // 队首往后都在窗口内，跳出
+            break;
         }
     }
 
     if (toErase.empty()) return;
 
-    // 第三步：只在真正要修改队列时，再次短暂加锁做剔除，持锁时间同样是微秒级
     std::lock_guard<std::mutex> lock(m_recentMutex);
     for (const auto& path : toErase) {
         if (!m_recentVisitedQueue.empty() && m_recentVisitedQueue.front() == path) {
