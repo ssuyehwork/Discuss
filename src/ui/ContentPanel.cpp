@@ -797,12 +797,15 @@ bool ContentPanel::canPaste(const QString& targetOverride) const {
     const QMimeData* mime = QApplication::clipboard()->mimeData(); 
     if (!mime) return false; 
  
-    // 5. 支持图片截图直粘：如果剪贴板中存在系统截图/图像数据，只要目标可写立即启用 
+    // 5. 图像截图直粘支持：必须真正能够提取出非空且有效像素的图片数据（杜绝纯文本/富文本剪贴板被 hasImage 误判）
     if (mime->hasImage()) { 
-        return true; 
+        QImage img = qvariant_cast<QImage>(mime->imageData());
+        if (!img.isNull() && img.width() > 0 && img.height() > 0) {
+            return true; 
+        }
     } 
  
-    // 6. 若非图像且不包含文件链接，直接置灰 
+    // 6. 若不包含物理文件链接，直接置灰（内容面板不支持粘贴纯文字）
     if (!mime->hasUrls() || mime->urls().isEmpty()) { 
         return false; 
     } 
@@ -821,6 +824,7 @@ bool ContentPanel::canPaste(const QString& targetOverride) const {
     bool isSameDirForCut = true; 
  
     for (const QUrl& url : mime->urls()) { 
+        if (!url.isLocalFile()) continue;
         QString localPath = url.toLocalFile(); 
         if (localPath.isEmpty()) continue; 
  
