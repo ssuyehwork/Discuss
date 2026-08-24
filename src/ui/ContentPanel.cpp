@@ -7,7 +7,7 @@
 #include "ColorPicker.h"
 #include "../core/DiskTrashService.h"
 #include <QWidgetAction>
-#include "../meta/MetadataManager.h" 
+#include "../meta/MetadataManager.h"
 #include "../meta/MediaExtractorPipeline.h"
 #include <algorithm>
 #include "Logger.h"
@@ -62,11 +62,9 @@
 #include <QClipboard> 
 #include <QMimeData> 
 #include <QLineEdit> 
-#include <QTextBrowser> 
 #include "FramelessDialog.h"
 #include <memory>
 #include <QRandomGenerator>
-#include <QAbstractItemView> 
 #include <QtConcurrent> 
 #include <QThreadPool> 
 #include <QTimer> 
@@ -78,7 +76,6 @@
 #include <objbase.h>
 #include <shellapi.h> 
 #include <io.h>
-#include "../meta/MetadataManager.h" 
 #include "../meta/BatchRenameEngine.h" 
 #include "../meta/StatisticsService.h"
 #include "../crypto/EncryptionManager.h" 
@@ -389,10 +386,6 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     // 5. 物理第三权重：具体的排序类型逻辑，平局时统一追加二级决胜键 (localeAwareCompare 拼音/文件名)
     auto* contentPanel = qobject_cast<ContentPanel*>(parent());
     ContentPanel::SortType sType = contentPanel ? contentPanel->currentSortType() : ContentPanel::SortByName;
-
-    if (sType == ContentPanel::SortByAddedDate) {
-        sType = ContentPanel::SortByName;
-    }
 
     auto compareNames = [](const ItemRecord& l, const ItemRecord& r) {
         const QString& lName = l.filename;
@@ -2275,8 +2268,7 @@ void ContentPanel::performPaste() {
      
     if (fromPaths.isEmpty()) return; 
 
-    int targetCatId = 0;
-    if (!resolvePasteDestination(targetCatId)) return; // 内部已完成提示/取消处理
+    if (!resolvePasteDestination()) return; // 内部已完成提示/取消处理
 
     if (dataSourceType() == DataSourceType::DiskNav) {
         bool isMove = false; 
@@ -2648,10 +2640,6 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
 void ContentPanel::search(const QString& query) { 
     // 2026-07-xx 按照 Plan-118：搜索行为回归筛选流。
     // 搜索框仅作为当前视图的本地过滤器，禁止切换 m_currentCategoryType 为 "search"。
-    
-    if (m_model) {
-        m_model->setQuery(query);
-    }
 
     // 1. 同步关键词到当前筛选状态
     m_currentFilter.keyword = query;
@@ -2816,8 +2804,7 @@ void ContentPanel::appendPaths(const QStringList& paths, int reqId) {
     });
 }
  
-bool ContentPanel::resolvePasteDestination(int& outCatId) {
-    Q_UNUSED(outCatId);
+bool ContentPanel::resolvePasteDestination() {
     if (m_currentCategoryType == "trash") {
         ToolTipOverlay::instance()->showText(QCursor::pos(), "当前视图为回收站，不支持粘贴或拖拽导入新项目", 2000, QColor("#e81123"));
         return false;

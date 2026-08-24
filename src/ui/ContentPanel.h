@@ -4,9 +4,7 @@
 #include "../core/ItemRecord.h"
 #include <QMap>
 #include <unordered_map>
-#include <deque>
 #include <vector>
-#include <QCache>
 #include <QList>
 #include <QStringList>
 #include <QTimer>
@@ -15,8 +13,6 @@
 #include <QTreeView>
 #include <QStackedWidget>
 #include <QPushButton>
-#include <QTextBrowser>
-#include <QStandardItemModel>
 #include <QSortFilterProxyModel>
 #include <QVBoxLayout>
 #include <QStyledItemDelegate>
@@ -30,8 +26,6 @@
 #include "../core/ModelContract.h"
 
 namespace QuarkMeta {
-
-struct RuntimeMeta;
 
 /**
  * @brief 内部代理类：专门处理高级筛选逻辑 (2026-05-25 物理化以修复 static_cast 编译报错)
@@ -64,7 +58,6 @@ class ContentPanel : public QFrame {
 public:
     enum class DataSourceType {
         DiskNav,        // 物理磁盘导航模式
-        SystemCategory, // 系统逻辑桶 (全部数据, 未标记, 回收站, 最近访问)
         PathList        // 临时路径列表 (搜索结果, 标签筛选)
     };
 
@@ -215,7 +208,6 @@ private:
     void restoreActiveView();
     void restoreSelections();
     void initListView();
-    void setupContextMenu();
     void updateLayersButtonState();
 
     /**
@@ -270,10 +262,9 @@ public:
 
     /**
      * @brief 统一判断粘贴/拖拽导入的目的地。
-     * @param outCatId 输出参数：解析出的目标分类 ID（DiskNav 场景下无意义，忽略）
      * @return true 表示可以继续执行导入；false 表示应终止（已在内部完成提示或已被用户取消）
      */
-    bool resolvePasteDestination(int& outCatId);
+    bool resolvePasteDestination();
 
 public slots:
     /**

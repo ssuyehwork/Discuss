@@ -1,8 +1,6 @@
 #include "CoreEngine.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/TagRepository.h"
-#include "../meta/QuarkMetaJson.h"
-#include "../util/ShellHelper.h"
 
 namespace QuarkMeta {
 
@@ -135,8 +133,9 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
     }
     case AppCommandType::DeletePermanently: {
         for (const QString& path : cmd.targetPaths) {
-            MetadataManager::instance().deletePermanently(path.toStdWString());
+            MetadataManager::instance().removeMetadataSync(path.toStdWString());
         }
+        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
         AppEvent ev;
         ev.type = AppEventType::ItemsDeleted;
         ev.paths = cmd.targetPaths;

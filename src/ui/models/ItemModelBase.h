@@ -24,7 +24,6 @@ public:
     virtual const std::vector<QuarkMeta::ItemRecord>& allRecords() const = 0;
     virtual void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) = 0;
     virtual void clear() = 0;
-    virtual void setQuery(const QString& query) = 0;
     virtual void updateRecordMetadata(const QString& path) = 0;
     virtual void loadThumbnailsForRows(const QList<int>& rows) = 0;
     virtual void migrateCache(const QString& oldPath, const QString& newPath) = 0;

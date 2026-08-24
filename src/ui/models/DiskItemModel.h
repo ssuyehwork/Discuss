@@ -8,12 +8,13 @@
 #include <QMutex>
 #include <QThreadPool>
 #include <memory>
-#include "../../core/CoreEngine.h"
 #include "../../meta/MetadataDefs.h"
 #include "../../meta/QuarkMetaJson.h"
 
 #include <unordered_map>
 #include <QSet>
+#include <QPointer>
+#include "../../core/CoreEngine.h"
 
 namespace QuarkMeta {
 
@@ -37,7 +38,6 @@ public:
     const std::vector<QuarkMeta::ItemRecord>& allRecords() const override { return m_allRecords; }
     void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) override;
     void clear() override;
-    void setQuery(const QString& query) override { m_query = query; }
     void updateRecordMetadata(const QString& path) override;
     void loadThumbnailsForRows(const QList<int>& rows) override;
     void migrateCache(const QString& oldPath, const QString& newPath) override;
@@ -58,10 +58,8 @@ protected:
     std::vector<QuarkMeta::ItemRecord> m_allRecords;
     std::unordered_map<QString, int, QuarkMeta::QStringHash> m_pathToIndex;
     mutable QCache<QString, QIcon> m_iconCache;
-    mutable QSet<QString> m_requestedIcons;
     QSet<QString> m_requestedPaths; // 🚨 核心防爆锁：记录已经在排队/处理中的任务路径
     mutable QMap<QString, double> m_aspectRatios;
-    QString m_query;
 
     std::atomic<uint64_t> m_currentGen{0};
 

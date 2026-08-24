@@ -8,14 +8,11 @@
 #include <QThreadPool>
 #include "../../meta/QuarkMetaJson.h"
 #include "../../meta/MetadataDefs.h"
-#include "../MediaColorExtractor.h"
 #include "CoreController.h"
 #include "DiskMediaExtractor.h"
-#include "../DiskBatchRenameService.h"
 #include "FileOperationHelper.h"
 #include "MetadataManager.h"
 #include "DriveMetaDao.h"
-#include <QtConcurrent>
 
 namespace QuarkMeta {
 
@@ -82,7 +79,6 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
         m_pathToIndex[m_allRecords[i].path] = i;
     }
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
-    m_requestedIcons.clear();
     endResetModel();
 
     preloadDimensionsAsync();
@@ -188,8 +184,6 @@ void DiskItemModel::clear() {
     m_allRecords.clear();
     m_pathToIndex.clear();
     m_requestedPaths.clear();
-    m_query.clear();
-    m_requestedIcons.clear();
     m_aspectRatios.clear();
     endResetModel();
 }
