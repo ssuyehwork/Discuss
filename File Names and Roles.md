@@ -218,11 +218,11 @@
 
 ### ` src/meta/MetadataManager.cpp `
 - **文件职责**：离散元数据统一入口管理器，协调磁盘 `.QuarkMeta.json` 与 `global.db` 盘符表。
-- **僵尸代码**：包含分类树时代遗留的 `notifyCategoryCountChanged()` 僵尸函数；包含历史分类刷新的 `RefreshLevel::CategoryOnly` 枚举残留；违反三条交互铁律：包含 `notifyFullUIRebuild()` 全屏强刷强耦合调用
+- **僵尸代码**：包含分类树时代遗留的 `notifyCategoryCountChanged()` 僵尸函数；包含历史分类刷新的 `RefreshLevel::CategoryOnly` 枚举残留
 
 ### ` src/meta/MetadataManager.h `
 - **文件职责**：离散元数据统一入口管理器，协调磁盘 `.QuarkMeta.json` 与 `global.db` 盘符表。
-- **僵尸代码**：包含分类树时代遗留的 `notifyCategoryCountChanged()` 僵尸函数；包含历史分类刷新的 `RefreshLevel::CategoryOnly` 枚举残留；违反三条交互铁律：包含 `notifyFullUIRebuild()` 全屏强刷强耦合调用
+- **僵尸代码**：包含分类树时代遗留的 `notifyCategoryCountChanged()` 僵尸函数；包含历史分类刷新的 `RefreshLevel::CategoryOnly` 枚举残留
 
 ### ` src/meta/QuarkMetaJson.cpp `
 - **文件职责**：磁盘离散 JSON 元数据管理类，负责读写各目录下 `.QuarkMeta.json` 文件中的元数据条目。
@@ -233,12 +233,12 @@
 - **僵尸代码**：无
 
 ### ` src/meta/StatisticsService.cpp `
-- **文件职责**：当前目录与文件集合的分类统计服务，汇总星级、颜色、文件类型与文件大小分布。
-- **僵尸代码**：无
+- **文件职责**：全局/目录统计服务类，计算资产与回收站计数汇总。
+- **僵尸代码**：包含分类树时代遗留的 `uncategorizedCount`（未分类资产计数）历史逻辑残留；包含历史托管库旧版 `.QuarkMeta/trash` 路径判定及 `libraryTrashCount` 僵尸计数逻辑
 
 ### ` src/meta/StatisticsService.h `
-- **文件职责**：当前目录与文件集合的分类统计服务，汇总星级、颜色、文件类型与文件大小分布。
-- **僵尸代码**：无
+- **文件职责**：全局/目录统计服务类，计算资产与回收站计数汇总。
+- **僵尸代码**：包含分类树时代遗留的 `uncategorizedCount`（未分类资产计数）历史逻辑残留
 
 ### ` src/meta/TagRepository.cpp `
 - **文件职责**：全局标签管理仓储类，增删改查 `global.db` 中的 `tag_groups` 与标签元数据。
