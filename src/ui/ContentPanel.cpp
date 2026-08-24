@@ -2640,10 +2640,6 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
 void ContentPanel::search(const QString& query) { 
     // 2026-07-xx 按照 Plan-118：搜索行为回归筛选流。
     // 搜索框仅作为当前视图的本地过滤器，禁止切换 m_currentCategoryType 为 "search"。
-    
-    if (m_model) {
-        m_model->setQuery(query);
-    }
 
     // 1. 同步关键词到当前筛选状态
     m_currentFilter.keyword = query;

@@ -13,6 +13,8 @@
 
 #include <unordered_map>
 #include <QSet>
+#include <QPointer>
+#include "../../core/CoreEngine.h"
 
 namespace QuarkMeta {
 
