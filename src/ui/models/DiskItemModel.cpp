@@ -2,7 +2,6 @@
 #include "UiHelper.h"
 #include "ShellIconManager.h"
 #include "ModelContract.h"
-#include "../ContentPanel.h"
 #include <QDateTime>
 #include <QFileInfo>
 #include <QDir>
@@ -444,22 +443,9 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
                     auto it = weakThis->m_pathToIndex.find(path);
                     if (it != weakThis->m_pathToIndex.end()) {
                         int rIdx = it->second;
-                        if (weakThis->isSuspended()) {
-                            weakThis->m_pendingUpdateRows.insert(rIdx);
-                        } else {
-                            emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), 
-                                                      {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
-                        }
-                    }
-
-                    // 🚨【核心自驱动接力】：解完这一张后，如果还没切走目录，自动触发一个 20ms 延时去接力解下 2 张！
-                    auto* panel = qobject_cast<ContentPanel*>(weakThis->parent());
-                    if (panel && !CoreController::isShuttingDown()) {
-                        QTimer::singleShot(20, panel, [panel, thisGen, weakThis]() {
-                            if (weakThis && weakThis->currentGeneration() == thisGen) {
-                                panel->refreshVisibleThumbnails();
-                            }
-                        });
+                        emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), 
+                                                  {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+                        emit weakThis->thumbnailLoaded(rIdx);
                     }
                 }
             }, Qt::QueuedConnection);
@@ -527,8 +513,6 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         return record.encrypted;
     } else if (role == TagsRole) {
         return record.tags;
-    } else if (role == ManagedRole) {
-        return false;
     } else if (role == IsEmptyRole) {
         return record.isDir && record.isEmpty; // 磁盘模式专享：物理判断是否为空文件夹
     } else if (role == AspectRatioRole) {
@@ -558,19 +542,6 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     }
 
     return QVariant();
-}
-
-bool DiskItemModel::isSuspended() const {
-    auto* cp = qobject_cast<ContentPanel*>(parent());
-    return cp && cp->isContextMenuActive();
-}
-
-void DiskItemModel::flushPendingUpdates() {
-    if (m_pendingUpdateRows.isEmpty()) return;
-    for (int rIdx : m_pendingUpdateRows) {
-        emit dataChanged(index(rIdx, 0), index(rIdx, 0), {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
-    }
-    m_pendingUpdateRows.clear();
 }
 
 void DiskItemModel::reloadThumbnailForPath(const QString& path) {

@@ -152,9 +152,6 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     const auto* sourceModelPtr = qobject_cast<const ItemModelBase*>(sourceModel()); 
     if (!sourceModelPtr) return true; 
 
-    // 双轨回收站与分组展示：组标题项始终展示，不被任何检索或过滤排除
-    if (idx.data(IsGroupHeaderRole).toBool()) return true;
- 
     const auto& records = sourceModelPtr->allRecords(); 
     if (sourceRow < 0 || sourceRow >= (int)records.size()) return false; 
     const auto& record = records[sourceRow]; 
@@ -373,23 +370,6 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     const auto& leftRec = records[leftRow];
     const auto& rightRec = records[rightRow];
 
-    // 2. 双轨隔离与分组展示：在任何排序逻辑下，优先保持 Library 在前，DiskNav 在后；组标题绝对在最前面。
-    // 强制无状态（不掺杂 sortOrder），交给代理模型本身反转
-    if (!leftRec.groupName.isEmpty() || !rightRec.groupName.isEmpty()) {
-        if (leftRec.groupName != rightRec.groupName) {
-            auto getGroupPriority = [](const QString& g) {
-                if (g == "Library") return 1;
-                if (g == "DiskNav") return 2;
-                return 0; // 非垃圾箱普通项或空分组排最前
-            };
-            return getGroupPriority(leftRec.groupName) < getGroupPriority(rightRec.groupName);
-        }
-        // 在同一分组内，组标题置顶
-        if (leftRec.isGroupHeader != rightRec.isGroupHeader) {
-            return leftRec.isGroupHeader;
-        }
-    }
-
     // 🚀 【绝对结构权重 1】：文件夹/分类 永远排在 文件 前面（物理隔绝，不受用户升降序取反下沉影响，实现无缝上下两区！） 
     bool leftIsDir  = leftRec.isDir; 
     bool rightIsDir = rightRec.isDir; 
@@ -502,6 +482,7 @@ ContentPanel::ContentPanel(QWidget* parent)
  
     m_diskModel = new DiskItemModel(this);
     m_model = m_diskModel; // 默认挂载纯物理磁盘导航模型
+    connect(m_diskModel, &DiskItemModel::thumbnailLoaded, this, &ContentPanel::refreshVisibleThumbnails);
 
     m_proxyModel = new FilterProxyModel(this); 
     m_proxyModel->setSourceModel(m_model); 
@@ -650,20 +631,6 @@ void ContentPanel::initUi() {
         applyFilters();
     });
 
-    m_btnLayersBlue = new QPushButton(titleBar);
-    m_btnLayersBlue->setCheckable(true);
-    m_btnLayersBlue->setFixedSize(24, 24);
-    m_btnLayersBlue->setIcon(UiHelper::getIcon("layers", QColor("#3498db"), 18));
-    m_btnLayersBlue->setProperty("tooltipText", "显示子分类中的项目");
-    m_btnLayersBlue->installEventFilter(this);
-    m_btnLayersBlue->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-        "QPushButton:hover { background: #3E3E42; }"
-        "QPushButton:checked { background: #3E3E42; border: none; }" 
-        "QPushButton:pressed { background: #4E4E52; }"
-        "QPushButton:disabled { opacity: 0.3; }"
-    );
-
     m_btnLayers = new QPushButton(titleBar); 
     m_btnLayers->setCheckable(true); 
     m_btnLayers->setFixedSize(24, 24); 
@@ -704,7 +671,6 @@ void ContentPanel::initUi() {
     titleL->addWidget(m_btnToggleHidden, 0, Qt::AlignVCenter);
     titleL->addWidget(m_btnToggleFolders, 0, Qt::AlignVCenter);
     titleL->addWidget(m_btnToggleFiles, 0, Qt::AlignVCenter);
-    titleL->addWidget(m_btnLayersBlue, 0, Qt::AlignVCenter);
     titleL->addWidget(m_btnLayers, 0, Qt::AlignVCenter); 
  
     m_mainLayout->addWidget(titleBar); 
@@ -726,21 +692,6 @@ void ContentPanel::initUi() {
     contentWrapper->addWidget(m_viewStack); 
      
     m_mainLayout->addLayout(contentWrapper); 
- 
-    m_textPreview = new QTextBrowser(this); 
-    m_textPreview->setStyleSheet("background-color: #1E1E1E; color: #EEEEEE; border: none; padding: 20px; font-family: 'Segoe UI'; font-size: 14px;"); 
-    m_textPreview->hide(); 
-    m_mainLayout->addWidget(m_textPreview, 1); 
- 
-    m_imagePreview = new QLabel(this); 
-    m_imagePreview->setStyleSheet("background-color: #1E1E1E; border: none;"); 
-    m_imagePreview->setAlignment(Qt::AlignCenter); 
-    m_imagePreview->hide(); 
-    m_mainLayout->addWidget(m_imagePreview, 1); 
- 
-    // 2026-04-11 按照用户要求：为预览控件安装拦截器，实现空格键关闭功能 
-    m_textPreview->installEventFilter(this); 
-    m_imagePreview->installEventFilter(this); 
  
     m_gridView->installEventFilter(this); 
     m_treeView->installEventFilter(this);
@@ -897,9 +848,7 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
     if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) { 
         QString text = obj->property("tooltipText").toString(); 
         if (!text.isEmpty()) { 
-            int timeout = (obj == m_btnLayers || obj == m_btnLayersBlue || 
-                       obj == m_btnToggleFolders || obj == m_btnToggleFiles ||
-                       obj == m_btnLayersBlue) ? 0 : 700;
+            int timeout = (obj == m_btnLayers || obj == m_btnToggleFolders || obj == m_btnToggleFiles) ? 0 : 700;
             ToolTipOverlay::instance()->showText(QCursor::pos(), text, timeout); 
         } 
     } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::Leave || event->type() == QEvent::MouseButtonPress) { 
@@ -1027,18 +976,7 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
 
  
     if (event->type() == QEvent::KeyPress) { 
-        // 2026-05-25 物理修复：改用 reinterpret_cast 避开 QEvent 到 QKeyEvent 的 static_cast 歧义 
         QKeyEvent* keyEvent = reinterpret_cast<QKeyEvent*>(event); 
- 
-        // 2026-04-11 按照用户要求：如果当前正在显示文本/图片预览，按下空格键则关闭预览 
-        if ((obj == m_textPreview || obj == m_imagePreview) && keyEvent->key() == Qt::Key_Space) { 
-            m_textPreview->hide(); 
-            m_imagePreview->hide(); 
-            m_viewStack->show(); 
-            // 恢复焦点到主视图，确保后续交互连续 
-            if (m_viewStack->currentWidget()) m_viewStack->currentWidget()->setFocus(); 
-            return true; 
-        } 
  
         QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj); 
         if (!view) view = qobject_cast<QAbstractItemView*>(obj->parent()); 
@@ -1363,7 +1301,6 @@ void ContentPanel::initGridView() {
         delegate->setRatingRole(RatingRole);
         delegate->setPathRole(PathRole);
         delegate->setPinnedRole(PinnedRole);
-        delegate->setManagedRole(ManagedRole);
         delegate->setTypeRole(TypeRole);
         delegate->setIsEmptyRole(IsEmptyRole);
         delegate->setColorRole(ColorRole);
@@ -1480,10 +1417,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
  
     QModelIndex currentIndex = view->indexAt(pos); 
     bool onItem = currentIndex.isValid(); 
-    // 双轨回收站与分组展示：右键组标题视为空白处点击，避免触发文件操作
-    if (onItem && currentIndex.data(IsGroupHeaderRole).toBool()) {
-        onItem = false;
-    }
     bool isFolder = onItem && (currentIndex.data(TypeRole).toString() == "folder"); 
     QString path = onItem ? currentIndex.data(PathRole).toString() : ""; 
  
@@ -1517,9 +1450,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         m_isContextMenuActive = true;
         QAction* selectedAction = menu.exec(view->viewport()->mapToGlobal(pos));
         m_isContextMenuActive = false;
-        if (m_model) {
-            m_model->flushPendingUpdates();
-        }
 
         if (!selectedAction || !selectedAction->data().isValid()) return;
 
@@ -1529,22 +1459,10 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
                 auto indexes = view->selectionModel()->selectedIndexes();
                 for (const auto& idx : indexes) {
                     if (idx.column() == 0) {
-                        if (idx.data(IsGroupHeaderRole).toBool()) continue;
-
                         if (idx.data(IsDiskTrashRole).toBool()) {
                             int id = idx.data(DiskTrashIdRole).toInt();
                             QString trashPath = idx.data(PathRole).toString();
                             DiskTrashService::restoreFromDiskTrash(id, trashPath);
-                        } else {
-                            QString itemPath = idx.data(PathRole).toString();
-                            auto meta = MetadataManager::instance().getMeta(itemPath.toStdWString());
-                            if (meta.isTrash && !meta.originalPath.empty()) {
-                                QString dest = QString::fromStdWString(meta.originalPath);
-                                QDir().mkpath(QFileInfo(dest).absolutePath());
-                                if (QFile::rename(itemPath, dest)) {
-                                    MetadataManager::instance().markAsTrash(dest.toStdWString(), false);
-                                }
-                            }
                         }
                     }
                 }
@@ -1563,8 +1481,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
                 for (const auto& idx : indexes) {
                     if (idx.column() == 0) {
-                        if (idx.data(IsGroupHeaderRole).toBool()) continue;
-
                         if (idx.data(IsDiskTrashRole).toBool()) {
                             int id = idx.data(DiskTrashIdRole).toInt();
                             QString p = idx.data(PathRole).toString();
@@ -1856,9 +1772,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     m_isContextMenuActive = true;
     QAction* selectedAction = menu.exec(view->viewport()->mapToGlobal(pos)); 
     m_isContextMenuActive = false;
-    if (m_model) {
-        m_model->flushPendingUpdates();
-    }
 
     if (!selectedAction || !selectedAction->data().isValid()) return; 
  
@@ -1954,45 +1867,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             break; 
         } 
         case ActionBatchRename: performBatchRename(); break; 
-        case ActionAddToCategory: {
-            QStringList paths;
-            auto indexes = view->selectionModel()->selectedIndexes();
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0) {
-                    QString p = idx.data(PathRole).toString();
-                    if (!p.isEmpty()) paths << p;
-                }
-            }
-            
-            if (paths.isEmpty() && !path.isEmpty()) paths << path;
-
-            QString target = selectedAction->property("targetPath").toString();
-            if (target.isEmpty()) {
-                // 兜底逻辑：获取当前盘符资源库根目录
-                std::wstring wp = path.toStdWString();
-                std::wstring volSerial = MetadataManager::getVolumeSerialNumber(wp);
-                QString key = QString("ManagedFolder/Volume_%1").arg(QString::fromStdWString(volSerial));
-                QString relPath = AppConfig::instance().getValue(key, "").toString();
-                target = QDir::toNativeSeparators(path.left(3) + relPath);
-            }
-
-            if (!paths.isEmpty() && !target.isEmpty()) {
-                DiskIoContext ioCtx;
-                ioCtx.sources = paths;
-                ioCtx.destination = target;
-                ioCtx.isMove = true;
-
-                QPointer<ContentPanel> weakThis(this);
-                DiskIoService::instance().executeAsync(ioCtx, [weakThis](bool success) {
-                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, success]() {
-                        if (weakThis && success) {
-                            weakThis->refreshAll();
-                        }
-                    });
-                });
-            }
-            break;
-        }
         case ActionRename: view->edit(currentIndex); break; 
         case ActionCopy: performCopy(false); break; 
         case ActionCut: performCopy(true); break; 
@@ -2008,23 +1882,10 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             auto indexes = view->selectionModel()->selectedIndexes();
             for (const auto& idx : indexes) {
                 if (idx.column() == 0) {
-                    // 跳过组标题
-                    if (idx.data(IsGroupHeaderRole).toBool()) continue;
-
                     if (idx.data(IsDiskTrashRole).toBool()) {
                         int id = idx.data(DiskTrashIdRole).toInt();
                         QString trashPath = idx.data(PathRole).toString();
                         DiskTrashService::restoreFromDiskTrash(id, trashPath);
-                    } else {
-                        QString itemPath = idx.data(PathRole).toString();
-                        auto meta = MetadataManager::instance().getMeta(itemPath.toStdWString());
-                        if (meta.isTrash && !meta.originalPath.empty()) {
-                            QString dest = QString::fromStdWString(meta.originalPath);
-                            QDir().mkpath(QFileInfo(dest).absolutePath());
-                            if (QFile::rename(itemPath, dest)) {
-                                MetadataManager::instance().markAsTrash(dest.toStdWString(), false);
-                            }
-                        }
                     }
                 }
             }
@@ -2041,8 +1902,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
             for (const auto& idx : indexes) {
                 if (idx.column() == 0) {
-                    if (idx.data(IsGroupHeaderRole).toBool()) continue; // 跳过组标题
-
                     if (idx.data(IsDiskTrashRole).toBool()) {
                         int id = idx.data(DiskTrashIdRole).toInt();
                         QString p = idx.data(PathRole).toString();
@@ -2452,11 +2311,7 @@ void ContentPanel::performBatchRename() {
 } 
  
 ContentPanel::DataSourceType ContentPanel::dataSourceType() const {
-    if (m_currentCategoryType == "all" || m_currentCategoryType == "uncategorized" || 
-        m_currentCategoryType == "untagged" || m_currentCategoryType == "recently_visited" || 
-        m_currentCategoryType == "trash" || m_currentCategoryType == "system_category") {
-        return DataSourceType::SystemCategory;
-    } else if (m_currentCategoryType == "path_list" || m_currentCategoryType == "search") {
+    if (m_currentCategoryType == "path_list" || m_currentCategoryType == "search") {
         return DataSourceType::PathList;
     }
     return DataSourceType::DiskNav;
@@ -2479,9 +2334,6 @@ void ContentPanel::onSelectionChanged() {
             QModelIndexList indices = selectionModel->selectedIndexes();
             for (const QModelIndex& index : indices) {
                 if (index.column() == 0) {
-                    // 跳过组标题
-                    if (index.data(IsGroupHeaderRole).toBool()) continue;
-
                     QString path = index.data(PathRole).toString();
                     if (!path.isEmpty()) selectedPaths.append(path);
                 }
@@ -2583,9 +2435,6 @@ void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& t
 void ContentPanel::onDoubleClicked(const QModelIndex& index) { 
     if (!index.isValid()) return; 
  
-    // 双轨回收站与分组展示：双击组标题不执行任何操作
-    if (index.data(IsGroupHeaderRole).toBool()) return;
-
     QString path = index.data(PathRole).toString(); 
     if (path.isEmpty()) return; 
  
@@ -2678,8 +2527,6 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     m_currentCategoryType = ""; // 物理导航模式下清除系统类型
     emit dataSourceChanged("nav"); 
     if (m_viewStack) m_viewStack->show(); 
-    if (m_textPreview) m_textPreview->hide(); 
-    if (m_imagePreview) m_imagePreview->hide(); 
  
     m_isRecursive = recursive; 
     if (m_btnLayers) m_btnLayers->setChecked(recursive); 
@@ -2756,8 +2603,6 @@ void ContentPanel::search(const QString& query) {
     applyFilters();
 
     // 3. 视觉状态同步
-    if (m_textPreview) m_textPreview->hide(); 
-    if (m_imagePreview) m_imagePreview->hide(); 
     if (m_viewStack) m_viewStack->show(); 
 } 
  
@@ -2785,45 +2630,6 @@ void ContentPanel::applyFilters() {
     m_visibleTimer->start();
 } 
  
-void ContentPanel::previewFile(const QString& path) { 
-    // 2026-03-xx 按照用户要求：全能预览实现，支持图片与多种文本格式，破除 .md 局限 
-    QFileInfo info(path); 
-    QString ext = info.suffix().toLower(); 
- 
-    // 1. 图片格式识别 
-    static const QStringList imageExts = {"jpg", "jpeg", "png", "bmp", "webp", "gif", "ico"}; 
-    if (imageExts.contains(ext)) { 
-        QPixmap pix(path); 
-        if (!pix.isNull()) { 
-            m_viewStack->hide(); 
-            m_textPreview->hide(); 
-             
-            // 保持比例缩放显示 
-            m_imagePreview->setPixmap(pix.scaled(m_imagePreview->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation)); 
-            m_imagePreview->show(); 
-            return; 
-        } 
-    } 
- 
-    // 2. 文本格式识别 (参考版本A 扩展识别) 
-    // 此处可根据需要进一步细化，目前先处理常规文本 
-    QFile file(path); 
-    if (file.open(QIODevice::ReadOnly)) { 
-        m_viewStack->hide(); 
-        m_imagePreview->hide(); 
- 
-        // 针对 Markdown 特殊渲染 
-        if (ext == "md" || ext == "markdown") { 
-             m_textPreview->setMarkdown(file.readAll()); 
-        } else { 
-             // 针对其他代码或文本，直接显示原文 
-             // 限制读取前 1MB 以防大文件卡死 
-             m_textPreview->setPlainText(QString::fromUtf8(file.read(1024 * 1024))); 
-        } 
-        m_textPreview->show(); 
-        file.close(); 
-    } 
-} 
  
 void ContentPanel::loadCategory(const QString& categoryType) {
     m_currentCategoryType = categoryType;
@@ -2896,8 +2702,6 @@ void ContentPanel::loadPaths(const QStringList& paths, int reqId) {
     updateLayersButtonState();
     
     m_viewStack->show(); 
-    if (m_textPreview) m_textPreview->hide(); 
-    if (m_imagePreview) m_imagePreview->hide(); 
     
     emit dataSourceChanged("category"); 
     
@@ -3092,10 +2896,9 @@ void ContentPanel::createNewItem(const QString& type) {
 } 
  
 void ContentPanel::updateLayersButtonState() { 
-    if (!m_btnLayers || !m_btnLayersBlue) return; 
+    if (!m_btnLayers) return; 
  
     m_btnLayers->setVisible(true);
-    if (m_btnLayersBlue) m_btnLayersBlue->setVisible(false);
 
     if (m_currentPath.isEmpty() || m_currentPath == "computer://") { 
         m_btnLayers->setEnabled(false); 
@@ -3104,7 +2907,6 @@ void ContentPanel::updateLayersButtonState() {
         return; 
     } 
 
- 
     m_btnLayers->setEnabled(true); 
     m_btnLayers->setProperty("tooltipText", "显示子文件夹中的项目"); 
 } 

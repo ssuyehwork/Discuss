@@ -107,7 +107,6 @@ public:
         ActionNewFolder,
         ActionNewMd,
         ActionNewTxt,
-        ActionCategorize,
         ActionPin,
         ActionUnpin,
         ActionColorTag,
@@ -127,7 +126,6 @@ public:
         ActionEmptyTrash,
         ActionCopyName,
         ActionCopyPath,
-        ActionAddToCategory,
         ActionAddToFavorites,
         ActionRefresh,
         ActionReextractThumbnail,
@@ -230,12 +228,9 @@ private:
     QVBoxLayout* m_mainLayout = nullptr;
     QStackedWidget* m_viewStack = nullptr;
     QPushButton* m_btnLayers = nullptr;
-    QPushButton* m_btnLayersBlue = nullptr;
-    QPushButton* m_btnToggleHidden = nullptr;  // 🚨 左侧：显示/隐藏属性为隐藏的项目
-    QPushButton* m_btnToggleFolders = nullptr; // 2026-07-xx 按照 Plan-73：显示/隐藏文件夹切换
-    QPushButton* m_btnToggleFiles = nullptr;   // 2026-07-xx 按照 Plan-73：显示/隐藏文件切换
-    QTextBrowser* m_textPreview = nullptr;
-    QLabel* m_imagePreview = nullptr;
+    QPushButton* m_btnToggleHidden = nullptr;  // 左侧：显示/隐藏属性为隐藏的项目
+    QPushButton* m_btnToggleFolders = nullptr; // 显示/隐藏文件夹切换
+    QPushButton* m_btnToggleFiles = nullptr;   // 显示/隐藏文件切换
 
     // 视图组件
     QAbstractItemView* m_gridView = nullptr;
@@ -268,12 +263,6 @@ public:
     bool m_isContextMenuActive = false;
     std::atomic<int> m_loadRequestId{0}; // 2026-07-xx 物理请求 ID：防止异步回调导致的视图内容乱跳
 
-    // --- 2026-06-xx 性能优化：递归扫描指纹缓存 ---
-    struct ScanCacheEntry {
-        qint64 lastModified; // 根目录的时间戳
-        std::vector<ItemRecord> records;
-    };
-    QMap<QString, ScanCacheEntry> m_recursiveCache; 
     QTimer* m_selectionTimer = nullptr; // 选中防抖定时器
     void updateGridSize();
     void updateStatusBarStats();
@@ -285,15 +274,6 @@ public:
      * @return true 表示可以继续执行导入；false 表示应终止（已在内部完成提示或已被用户取消）
      */
     bool resolvePasteDestination(int& outCatId);
-
-    void addItemsFromDirectory(const QString& path, bool recursive,
-                               QMap<int, int>& ratingCounts,
-                               QMap<QString, int>& colorCounts,
-                               QMap<QString, int>& tagCounts,
-                               QMap<QString, int>& typeCounts,
-                               QMap<QString, int>& createDateCounts,
-                               QMap<QString, int>& modifyDateCounts,
-                               int& noTagCount);
 
 public slots:
     /**
@@ -358,11 +338,6 @@ public slots:
      * @brief 创建新条目（文件夹/Markdown/Txt）
      */
     void createNewItem(const QString& type);
-
-    /**
-     * @brief 预览文件内容 (支持文本、Markdown、图片等)
-     */
-    void previewFile(const QString& path);
 
     /**
      * @brief 加载指定路径列表 (分类联动使用)

@@ -42,7 +42,6 @@ public:
     void loadThumbnailsForRows(const QList<int>& rows) override;
     void migrateCache(const QString& oldPath, const QString& newPath) override;
     void clearCacheForFolder(const QString& folderPath) override;
-    void flushPendingUpdates() override;
 
     // 异步全文件夹文件头极速尺寸提取流水线
     void preloadDimensionsAsync();
@@ -52,9 +51,10 @@ public:
 
     static QThreadPool* thumbnailPool();
 
-protected:
-    bool isSuspended() const;
+signals:
+    void thumbnailLoaded(int rowIndex);
 
+protected:
     std::vector<QuarkMeta::ItemRecord> m_allRecords;
     std::unordered_map<QString, int, QuarkMeta::QStringHash> m_pathToIndex;
     mutable QCache<QString, QIcon> m_iconCache;
@@ -63,7 +63,6 @@ protected:
     mutable QMap<QString, double> m_aspectRatios;
     QString m_query;
 
-    QSet<int> m_pendingUpdateRows;
     std::atomic<uint64_t> m_currentGen{0};
 
     QMutex m_genTokenMutex;
