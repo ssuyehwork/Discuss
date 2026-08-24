@@ -777,58 +777,81 @@ void ContentPanel::updateGridSize() {
     AppConfig::instance().setValue("UI/GridZoomLevel", m_zoomLevel);
 } 
  
-bool ContentPanel::canPaste() const {
-    // 1. 目标目录必须是真实物理目录，且不是“此电脑”、“回收站”或“搜索结果”
-    if (m_currentPath.isEmpty() || m_currentPath == "computer://" || m_currentPath == "trash://" ||
-        m_currentCategoryType == "trash" || m_currentCategoryType == "path_list") {
-        return false;
-    }
-
-    // 2. 目标目录必须在物理磁盘上存在且具备写入权限
-    QFileInfo destInfo(m_currentPath);
-    if (!destInfo.exists() || !destInfo.isDir() || !destInfo.isWritable()) {
-        return false;
-    }
-
-    // 3. 检查系统剪贴板是否有有效的文件 URL
-    const QMimeData* mime = QApplication::clipboard()->mimeData();
-    if (!mime || !mime->hasUrls() || mime->urls().isEmpty()) {
-        return false;
-    }
-
-    // 4. 提取剪贴板来源路径，确保至少有 1 个真实物理文件存在
-    bool isCut = false;
-    if (mime->hasFormat("Preferred DropEffect")) {
-        QByteArray effect = mime->data("Preferred DropEffect");
-        if (!effect.isEmpty() && (effect.at(0) & 0x02)) isCut = true;
-    }
-
-    QString nativeDest = QDir::toNativeSeparators(m_currentPath);
-    bool hasValidSource = false;
-    bool isSameDirCut = true;
-
-    for (const QUrl& url : mime->urls()) {
-        QString localPath = QDir::toNativeSeparators(url.toLocalFile());
-        if (localPath.isEmpty()) continue;
-
-        QFileInfo srcInfo(localPath);
-        if (srcInfo.exists()) {
-            hasValidSource = true;
-            // 如果存在剪切且来源父目录与当前目录不同，则不是原地剪切
-            if (QDir::toNativeSeparators(srcInfo.absolutePath()) != nativeDest) {
-                isSameDirCut = false;
-            }
-        }
-    }
-
-    if (!hasValidSource) return false;
-
-    // 5. 如果是剪切操作，且所有文件都在当前目录内（原地剪切），则禁用粘贴
-    if (isCut && isSameDirCut) {
-        return false;
-    }
-
-    return true;
+bool ContentPanel::canPaste(const QString& targetOverride) const { 
+    // 1. 动态决议本次粘贴的实际物理落脚点（右键点击文件夹时以该文件夹为目标，否则以当前路径为目标） 
+    QString destDir = targetOverride.isEmpty() ? m_currentPath : targetOverride; 
+ 
+    // 2. 回收站与虚拟路径全局拦截 
+    if (m_currentCategoryType == "trash" || destDir.isEmpty() ||  
+        destDir == "computer://" || destDir == "trash://" || destDir.contains("://")) { 
+        return false; 
+    } 
+ 
+    // 3. 目标必须是物理磁盘上真实存在且具备写入权限的文件夹 
+    QFileInfo destInfo(destDir); 
+    if (!destInfo.exists() || !destInfo.isDir() || !destInfo.isWritable()) { 
+        return false; 
+    } 
+ 
+    // 4. 提取系统剪贴板 
+    const QMimeData* mime = QApplication::clipboard()->mimeData(); 
+    if (!mime) return false; 
+ 
+    // 5. 支持图片截图直粘：如果剪贴板中存在系统截图/图像数据，只要目标可写立即启用 
+    if (mime->hasImage()) { 
+        return true; 
+    } 
+ 
+    // 6. 若非图像且不包含文件链接，直接置灰 
+    if (!mime->hasUrls() || mime->urls().isEmpty()) { 
+        return false; 
+    } 
+ 
+    // 7. 检测剪贴板操作模式（复制 vs 剪切） 
+    bool isCut = false; 
+    if (mime->hasFormat("Preferred DropEffect")) { 
+        QByteArray effect = mime->data("Preferred DropEffect"); 
+        if (!effect.isEmpty() && (effect.at(0) & 0x02)) { 
+            isCut = true; 
+        } 
+    } 
+ 
+    QString cleanDest = QDir::toNativeSeparators(QDir::cleanPath(destDir)).toLower(); 
+    bool hasValidPhysicalSource = false; 
+    bool isSameDirForCut = true; 
+ 
+    for (const QUrl& url : mime->urls()) { 
+        QString localPath = url.toLocalFile(); 
+        if (localPath.isEmpty()) continue; 
+ 
+        QFileInfo srcInfo(localPath); 
+        if (!srcInfo.exists()) continue; 
+ 
+        hasValidPhysicalSource = true; 
+        QString cleanSrc = QDir::toNativeSeparators(QDir::cleanPath(localPath)).toLower(); 
+ 
+        // 🚨 循环嵌套防爆：绝对禁止将父文件夹粘贴到其自身或其子文件夹内部 
+        if (srcInfo.isDir()) { 
+            if (cleanDest == cleanSrc || cleanDest.startsWith(cleanSrc + "\\") || cleanDest.startsWith(cleanSrc + "/")) { 
+                return false; 
+            } 
+        } 
+ 
+        // 检查来源父目录是否与目标一致 
+        QString srcParent = QDir::toNativeSeparators(QDir::cleanPath(srcInfo.absolutePath())).toLower(); 
+        if (srcParent != cleanDest) { 
+            isSameDirForCut = false; 
+        } 
+    } 
+ 
+    if (!hasValidPhysicalSource) return false; 
+ 
+    // 🚨 原地剪切拦截：只有在【剪切模式】且【所有文件均处于目标目录下】时才置灰；普通复制即使同目录也允许（生成副本） 
+    if (isCut && isSameDirForCut) { 
+        return false; 
+    } 
+ 
+    return true; 
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) { 
@@ -1414,38 +1437,34 @@ void ContentPanel::initListView() {
 void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) { 
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(sender()); 
     if (!view) return; 
- 
+
     QModelIndex currentIndex = view->indexAt(pos); 
     bool onItem = currentIndex.isValid(); 
-    bool isFolder = onItem && (currentIndex.data(TypeRole).toString() == "folder"); 
     QString path = onItem ? currentIndex.data(PathRole).toString() : ""; 
- 
+    QFileInfo itemInfo(path);
+
+    bool isComputerRoot = (m_currentPath.isEmpty() || m_currentPath == "computer://");
+    bool isTrashView = (m_currentCategoryType == "trash" || m_currentPath == "trash://");
+
+    // 权威判定：是否为物理驱动器/盘符（如 C:/、D:\）
+    bool isDriveRoot = onItem && (itemInfo.isRoot() || path.endsWith(":\\") || path.endsWith(":/") || (path.length() == 2 && path.endsWith(':')));
+    bool isFolder = onItem && (isDriveRoot || currentIndex.data(TypeRole).toString() == "folder");
+
     QMenu menu(this); 
     UiHelper::applyMenuStyle(&menu); 
 
-    if (m_currentCategoryType == "trash") {
+    // =========================================================================
+    // 场景 1：回收站视图（全场景独立接管）
+    // =========================================================================
+    if (isTrashView) {
         if (onItem) {
-            // 1. 【还原】
             menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原")->setData(ActionRestore);
-            
-            // 2. 【剪切】
             menu.addAction(UiHelper::getIcon("cut", QColor("#EEEEEE"), 18), "剪切")->setData(ActionCut);
-            
-            // 3. 【永久删除】
             menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "永久删除")->setData(ActionSecureDelete);
-            
             menu.addSeparator();
-            
-            // 4. 【还原全部】
-            menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原全部")->setData(ActionRestoreAll);
-            
-            // 5. 【清空回收站】
-            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "清空回收站")->setData(ActionEmptyTrash);
-        } else {
-            // 空白处菜单：还原全部、清空回收站
-            menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原全部")->setData(ActionRestoreAll);
-            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "清空回收站")->setData(ActionEmptyTrash);
         }
+        menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原全部")->setData(ActionRestoreAll);
+        menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "清空回收站")->setData(ActionEmptyTrash);
 
         m_isContextMenuActive = true;
         QAction* selectedAction = menu.exec(view->viewport()->mapToGlobal(pos));
@@ -1574,132 +1593,157 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         }
         return;
     } 
- 
+
+    // =========================================================================
+    // 场景 2：选中具体项目（右键点击某个项目）
+    // =========================================================================
     if (onItem) { 
-        // 2026-06-xx 物理修复：在回收站分类中，顶部增加“还原”选项
-        if (m_currentCategoryType == "trash") {
-            menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原")->setData(ActionRestore);
+        // -------------------------------------------------------------
+        // 分支 2.A：选中的是【物理驱动器/盘符】（C:、D: 等）
+        // -------------------------------------------------------------
+        if (isDriveRoot) {
+            menu.addAction("打开")->setData(ActionOpen);
+            menu.addAction("在“资源管理器”中显示")->setData(ActionShowInExplorer);
+
+            // 颜色条
+            QString currentColorStr = currentIndex.data(ColorRole).toString();
+            QWidgetAction* pickerAction = new QWidgetAction(&menu);
+            ColorStripPicker* pickerWidget = new ColorStripPicker(currentColorStr, &menu);
+            pickerAction->setDefaultWidget(pickerWidget);
+            menu.addAction(pickerAction);
+
+            connect(pickerWidget, &ColorStripPicker::colorSelected, this, [this, view, &menu](const QString& hexColor) {
+                auto indexes = view->selectionModel()->selectedIndexes();  
+                for (const auto& idx : indexes) {  
+                    if (idx.column() == 0) m_proxyModel->setData(idx, hexColor, ColorRole);  
+                } 
+                menu.close(); 
+            });
+
+            // 置顶 / 取消置顶
+            bool isPinned = currentIndex.data(IsLockedRole).toBool(); 
+            menu.addAction(isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ActionUnpin : ActionPin); 
+            menu.addAction("添加至收藏夹")->setData(ActionAddToFavorites); 
+
             menu.addSeparator();
-        }
 
-        // ==================== 1. 打开与资产归属组 ====================
-        QAction* actOpen = menu.addAction(isFolder ? "打开文件夹" : "打开"); 
-        actOpen->setData(ActionOpen); 
-        if (!isFolder) { 
-            menu.addAction("用系统默认程序打开")->setData(ActionOpenDefault); 
+            // 允许向该盘根目录直接粘贴内容（智能受控）
+            QAction* actItemPaste = menu.addAction("粘贴");
+            actItemPaste->setData(ActionPaste);
+            actItemPaste->setEnabled(canPaste(path)); 
+
+            menu.addAction("复制名称")->setData(ActionCopyName); 
+            menu.addAction("复制路径")->setData(ActionCopyPath); 
+
+            menu.addSeparator();
+            menu.addAction("刷新")->setData(ActionRefresh);
+            // 🚨 严禁挂载：删除、重命名、剪切、复制、加密保护、重新提取缩略图！
         } 
-        menu.addAction("在“资源管理器”中显示")->setData(ActionShowInExplorer); 
- 
-
-        // 🚨 无论磁盘模式还是受控库模式，统一展现 ColorStripPicker 颜色选择条！
-        QString currentColorStr = currentIndex.data(ColorRole).toString();
-
-        QWidgetAction* pickerAction = new QWidgetAction(&menu);
-        ColorStripPicker* pickerWidget = new ColorStripPicker(currentColorStr, &menu);
-        pickerAction->setDefaultWidget(pickerWidget);
-        menu.addAction(pickerAction);
-
-        connect(pickerWidget, &ColorStripPicker::colorSelected, this, [this, view, &menu](const QString& hexColor) {
-            QStringList selectedPaths;
-            auto indexes = view->selectionModel()->selectedIndexes();  
-            for (const auto& idx : indexes) {  
-                if (idx.column() == 0) {  
-                    selectedPaths.append(idx.data(PathRole).toString());
-                }  
-            }
-
-            for (const auto& idx : indexes) {  
-                if (idx.column() == 0) {  
-                    m_proxyModel->setData(idx, hexColor, ColorRole);  
-                }  
+        // -------------------------------------------------------------
+        // 分支 2.B：选中的是【常规文件 / 普通文件夹】
+        // -------------------------------------------------------------
+        else {
+            menu.addAction(isFolder ? "打开文件夹" : "打开")->setData(ActionOpen); 
+            if (!isFolder) { 
+                menu.addAction("用系统默认程序打开")->setData(ActionOpenDefault); 
             } 
+            menu.addAction("在“资源管理器”中显示")->setData(ActionShowInExplorer); 
 
-            for (const auto& path : selectedPaths) {
-                selectAndScrollToItem(path);
+            // 颜色条
+            QString currentColorStr = currentIndex.data(ColorRole).toString();
+            QWidgetAction* pickerAction = new QWidgetAction(&menu);
+            ColorStripPicker* pickerWidget = new ColorStripPicker(currentColorStr, &menu);
+            pickerAction->setDefaultWidget(pickerWidget);
+            menu.addAction(pickerAction);
+
+            connect(pickerWidget, &ColorStripPicker::colorSelected, this, [this, view, &menu](const QString& hexColor) {
+                auto indexes = view->selectionModel()->selectedIndexes();  
+                for (const auto& idx : indexes) {  
+                    if (idx.column() == 0) m_proxyModel->setData(idx, hexColor, ColorRole);  
+                } 
+                menu.close(); 
+            });
+
+            bool isPinned = currentIndex.data(IsLockedRole).toBool(); 
+            menu.addAction(isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ActionUnpin : ActionPin); 
+            menu.addAction("添加至收藏夹")->setData(ActionAddToFavorites); 
+
+            menu.addSeparator(); 
+
+            menu.addAction("复制")->setData(ActionCopy); 
+            menu.addAction("剪切")->setData(ActionCut); 
+            
+            QAction* actItemPaste = menu.addAction("粘贴"); 
+            actItemPaste->setData(ActionPaste); 
+            actItemPaste->setEnabled(canPaste(isFolder ? path : m_currentPath)); 
+
+            menu.addAction("复制名称")->setData(ActionCopyName); 
+            menu.addAction("复制路径")->setData(ActionCopyPath); 
+
+            int selectedCount = 0;
+            for (const auto& selIdx : view->selectionModel()->selectedIndexes()) {
+                if (selIdx.column() == 0 && !selIdx.data(PathRole).toString().isEmpty()) selectedCount++;
             }
-            menu.close(); 
-        });
 
-        // 🚨【置顶 / 取消置顶】：全模式解锁！磁盘模式下写入 .QuarkMeta.json，重排置顶！
-        bool isPinned = currentIndex.data(IsLockedRole).toBool(); 
-        menu.addAction(isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ActionUnpin : ActionPin); 
+            if (selectedCount <= 1) {
+                menu.addAction("重命名")->setData(ActionRename); 
+            }
+            if (isFolder || selectedCount > 1) { 
+                menu.addAction("批量重命名 (Ctrl+Shift+R)")->setData(ActionBatchRename); 
+            }
 
-        menu.addAction("添加至收藏夹")->setData(ActionAddToFavorites); 
+            menu.addSeparator(); 
+            menu.addAction("刷新")->setData(ActionRefresh); 
 
-        // ==================== 2. 剪贴板与命名编辑组 ====================
-        menu.addSeparator(); 
+            if (!isFolder) {
+                menu.addAction(UiHelper::getIcon("sync", QColor("#3498db"), 18), "重新提取缩略图")->setData(ActionReextractThumbnail);
 
-        menu.addAction("复制")->setData(ActionCopy); 
-        menu.addAction("剪切")->setData(ActionCut); 
-        QAction* actItemPaste = menu.addAction("粘贴"); 
-        actItemPaste->setData(ActionPaste); 
-        actItemPaste->setEnabled(canPaste()); 
-        menu.addAction("复制名称")->setData(ActionCopyName); 
-        menu.addAction("复制路径")->setData(ActionCopyPath); 
-
-        int selectedCount = 0;
-        for (const auto& selIdx : view->selectionModel()->selectedIndexes()) {
-            if (selIdx.column() == 0 && !selIdx.data(PathRole).toString().isEmpty()) {
-                selectedCount++;
+                QMenu* cryptoMenu = menu.addMenu("加密保护"); 
+                UiHelper::applyMenuStyle(cryptoMenu); 
+                cryptoMenu->addAction("执行加密保护")->setData(ActionEncrypt); 
+                cryptoMenu->addAction("解除加密")->setData(ActionDecrypt); 
+                cryptoMenu->addAction("修改加密密码")->setData(ActionChangePwd); 
             }
         }
-
-        if (selectedCount <= 1) {
-            menu.addAction("重命名")->setData(ActionRename); 
-        }
-        if (isFolder || selectedCount > 1) { 
-            menu.addAction("批量重命名 (Ctrl+Shift+R)")->setData(ActionBatchRename); 
-        }
-
-        // ==================== 3. 系统与数据管理组 ====================
-        menu.addSeparator(); 
-
-        menu.addAction("刷新")->setData(ActionRefresh); 
-
-        // 仅在选中普通文件时展示“重新提取缩略图”
-        if (onItem && !isFolder) {
-            menu.addAction(UiHelper::getIcon("sync", QColor("#3498db"), 18), "重新提取缩略图")->setData(ActionReextractThumbnail);
-        }
-
-        if (!isFolder) { 
-            QMenu* cryptoMenu = menu.addMenu("加密保护"); 
-            UiHelper::applyMenuStyle(cryptoMenu); 
-            cryptoMenu->addAction("执行加密保护")->setData(ActionEncrypt); 
-            cryptoMenu->addAction("解除加密")->setData(ActionDecrypt); 
-            cryptoMenu->addAction("修改加密密码")->setData(ActionChangePwd); 
+    } 
+    // =========================================================================
+    // 场景 3：点击空白处（未选中任何项目）
+    // =========================================================================
+    else { 
+        // -------------------------------------------------------------
+        // 分支 3.A：“此电脑”（computer://）空白处
+        // -------------------------------------------------------------
+        if (isComputerRoot) {
+            menu.addAction("在“资源管理器”中显示")->setData(ActionShowInExplorer);
+            menu.addAction("刷新")->setData(ActionRefresh);
+            // 🚨 严禁挂载：新建、批量创建、粘贴！
         } 
- 
-    } else { 
-        // [空白处菜单] 
-        QMenu* newMenu = menu.addMenu("新建..."); 
-        UiHelper::applyMenuStyle(newMenu); 
-        newMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹")->setData(ActionNewFolder); 
-        newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown")->setData(ActionNewMd); 
-        newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建纯文本文件 (txt)")->setData(ActionNewTxt); 
- 
-        menu.addSeparator(); 
+        // -------------------------------------------------------------
+        // 分支 3.B：常规物理目录空白处
+        // -------------------------------------------------------------
+        else {
+            QMenu* newMenu = menu.addMenu("新建..."); 
+            UiHelper::applyMenuStyle(newMenu); 
+            newMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹")->setData(ActionNewFolder); 
+            newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown")->setData(ActionNewMd); 
+            newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建纯文本文件 (txt)")->setData(ActionNewTxt); 
 
-        QAction* actBatchCreate = menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE")), "批量创建项目...");
-        actBatchCreate->setData(ActionBatchCreate);
-        // 6.1 磁盘目录模式独占 改为 全模式解锁（回收站除外）
-        if (m_currentCategoryType == "trash") {
-            actBatchCreate->setEnabled(false);
-            actBatchCreate->setToolTip("回收站中不支持批量创建");
+            menu.addSeparator(); 
+            menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE")), "批量创建项目...")->setData(ActionBatchCreate);
+
+            menu.addSeparator(); 
+            QAction* actPaste = menu.addAction("粘贴"); 
+            actPaste->setData(ActionPaste); 
+            actPaste->setEnabled(canPaste(m_currentPath)); 
+
+            menu.addSeparator(); 
+            bool isPhysicalPath = !m_currentPath.isEmpty() && !m_currentPath.contains("://") && QDir(m_currentPath).exists();
+            QAction* actShowInExp = menu.addAction("在“资源管理器”中显示");
+            actShowInExp->setData(ActionShowInExplorer);
+            actShowInExp->setEnabled(isPhysicalPath);
+
+            menu.addAction("刷新")->setData(ActionRefresh);
         }
-
-        menu.addSeparator(); 
-        QAction* actPaste = menu.addAction("粘贴"); 
-        actPaste->setData(ActionPaste); 
-        actPaste->setEnabled(canPaste()); 
- 
-        menu.addSeparator(); 
-
-        bool isPhysicalPath = !m_currentPath.isEmpty() && !m_currentPath.contains("://") && QDir(m_currentPath).exists();
-        QAction* actShowInExp = menu.addAction("在“资源管理器”中显示");
-        actShowInExp->setData(ActionShowInExplorer);
-        actShowInExp->setEnabled(isPhysicalPath);
-
-        menu.addAction("刷新")->setData(ActionRefresh);
     } 
 
     menu.addSeparator();
@@ -1754,17 +1798,15 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     addOrderAct("升序", Qt::AscendingOrder);
     addOrderAct("降序", Qt::DescendingOrder);
 
-    // 🚨 按照用户要求：确保“删除”选项严格位于右键菜单的最下方（仅在选中项目时显示）
-    if (currentIndex.isValid()) {
+    // =========================================================================
+    // 🚨 全局唯一位置：“删除”子菜单（严格位于排序之后，且仅在选中常规文件/目录时呈现）
+    // =========================================================================
+    if (onItem && !isDriveRoot) {
         menu.addSeparator();
-        if (m_currentCategoryType != "trash") {
-            QMenu* delMenu = menu.addMenu("删除");
-            UiHelper::applyMenuStyle(delMenu);
-            delMenu->addAction("移入回收站")->setData(ActionDelete);
-            delMenu->addAction("永久删除")->setData(ActionSecureDelete);
-        } else {
-            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "永久删除")->setData(ActionSecureDelete);
-        }
+        QMenu* delMenu = menu.addMenu("删除");
+        UiHelper::applyMenuStyle(delMenu);
+        delMenu->addAction("移入回收站")->setData(ActionDelete);
+        delMenu->addAction("永久删除")->setData(ActionSecureDelete);
     }
 
     // 🚀 【补丁彻底根除】：废除硬锁信号与物理禁用绘制！
@@ -2194,8 +2236,33 @@ void ContentPanel::performCopy(bool cutMode) {
  
 void ContentPanel::performPaste() { 
     const QMimeData* mime = QApplication::clipboard()->mimeData(); 
-    if (!mime || !mime->hasUrls()) return; 
- 
+    if (!mime) return; 
+
+    // 1. 如果剪贴板是截图/图片：直接保存为新 PNG 文件 
+    if (mime->hasImage() && (!mime->hasUrls() || mime->urls().isEmpty())) { 
+        QImage img = qvariant_cast<QImage>(mime->imageData()); 
+        if (!img.isNull() && !m_currentPath.isEmpty() && QDir(m_currentPath).exists()) { 
+            QString timeStr = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"); 
+            QString baseName = QString("贴图_%1").arg(timeStr); 
+            QString fileName = baseName + ".png"; 
+            QString fullPath = QDir(m_currentPath).filePath(fileName); 
+
+            int counter = 1; 
+            while (QFile::exists(fullPath)) { 
+                fileName = QString("%1_(%2).png").arg(baseName).arg(counter++); 
+                fullPath = QDir(m_currentPath).filePath(fileName); 
+            } 
+
+            if (img.save(fullPath, "PNG")) { 
+                loadDirectory(m_currentPath, m_isRecursive); 
+                setPendingSelectName(fileName, false); 
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已将剪贴板图片粘贴为新文件", 1500, QColor("#2ecc71")); 
+            } 
+            return; 
+        } 
+    } 
+
+    // 2. 常规文件与目录的粘贴（原有流程） 
     QList<QUrl> urls = mime->urls(); 
     QStringList fromPaths;
     for (const QUrl& url : urls) {

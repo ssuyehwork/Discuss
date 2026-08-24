@@ -71,7 +71,7 @@ public:
     /**
      * @brief 判定当前上下文是否允许执行粘贴操作（用于菜单置灰与快捷键拦截）
      */
-    bool canPaste() const;
+    bool canPaste(const QString& targetOverride = QString()) const;
 
     DataSourceType dataSourceType() const;
     bool isContextMenuActive() const { return m_isContextMenuActive; }
