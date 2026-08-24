@@ -34,9 +34,29 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
     
     m_searchEdit->installEventFilter(this);
     m_tagGridWidget->installEventFilter(this);
+
+    // 🚨 无论在任何时候任何情况下，一旦失去焦点或外部发生点击，立即关闭浮层
+    qApp->installEventFilter(this);
+    connect(qApp, &QApplication::focusChanged, this, [this](QWidget* old, QWidget* now) {
+        Q_UNUSED(old);
+        if (!m_isClosing && isVisible() && now && now != this && !this->isAncestorOf(now)) {
+            closeOverlay();
+        }
+    });
 }
 
 TagSelectorOverlay::~TagSelectorOverlay() {
+    if (qApp) {
+        qApp->removeEventFilter(this);
+    }
+}
+
+void TagSelectorOverlay::closeOverlay() {
+    if (m_isClosing) return;
+    m_isClosing = true;
+    emit overlayClosed();
+    close();
+    deleteLater();
 }
 
 void TagSelectorOverlay::initUi() {
@@ -375,26 +395,29 @@ void TagSelectorOverlay::resizeEvent(QResizeEvent* event) {
 }
 
 void TagSelectorOverlay::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::ActivationChange) {
-        if (isActiveWindow()) {
-            m_wasActivated = true;
-        } else if (m_wasActivated) {
-            emit overlayClosed();
-            close();
-            deleteLater();
+    if (event->type() == QEvent::ActivationChange || event->type() == QEvent::WindowDeactivate) {
+        if (!isActiveWindow() && !this->isAncestorOf(QApplication::focusWidget())) {
+            closeOverlay();
         }
     }
     QFrame::changeEvent(event);
 }
 
 bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
+    // 1. 全局鼠标点击检测：若在浮层外部区域点击，立刻关闭
+    if (event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent* me = static_cast<QMouseEvent*>(event);
+        if (isVisible() && !geometry().contains(me->globalPosition().toPoint())) {
+            closeOverlay();
+            return false; // 不拦截，允许底层控件正常响应点击
+        }
+    }
+
     if (event->type() == QEvent::KeyPress) {
         QKeyEvent* ke = static_cast<QKeyEvent*>(event);
         
         if (ke->key() == Qt::Key_Escape) {
-            emit overlayClosed();
-            close();
-            deleteLater();
+            closeOverlay();
             ke->accept();
             return true;
         }

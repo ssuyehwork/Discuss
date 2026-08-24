@@ -41,6 +41,8 @@ private:
     void handleGridNavigation(int key);
     void handleGroupNavigation(int key);
 
+    void closeOverlay();
+
     void updateCursorShape(const QPoint& pos);
     int getResizeDirection(const QPoint& pos);
     bool isInteractiveChild(QWidget* child) const;
@@ -65,6 +67,7 @@ private:
     int m_resizeDir = 0;
     const int m_margin = 6;
     bool m_wasActivated = false;
+    bool m_isClosing = false;
 };
 
 } // namespace QuarkMeta
