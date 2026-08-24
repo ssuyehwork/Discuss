@@ -22,7 +22,6 @@ enum CommonRole {
     IsLockedRole        = Qt::UserRole + 102, // 锁定/置顶状态 (列表显示)
     EncryptedRole       = Qt::UserRole + 103, // 是否加密
     EncryptHintRole     = Qt::UserRole + 104, // 加密提示
-    ManagedRole         = Qt::UserRole + 105, // 是否受控 (已在索引中登记)
     IsEmptyRole         = Qt::UserRole + 106, // 是否为空目录
     
     // UI/渲染角色 (UserRole + 201..300)

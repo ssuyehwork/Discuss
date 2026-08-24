@@ -26,7 +26,6 @@ void ThumbnailDelegate::setHasThumbnailRole(int role) { m_hasThumbnailRole = rol
 void ThumbnailDelegate::setRatingRole(int role) { m_ratingRole = role; }
 void ThumbnailDelegate::setPathRole(int role) { m_pathRole = role; }
 void ThumbnailDelegate::setPinnedRole(int role) { m_pinnedRole = role; }
-void ThumbnailDelegate::setManagedRole(int role) { m_managedRole = role; }
 void ThumbnailDelegate::setTypeRole(int role) { m_typeRole = role; }
 void ThumbnailDelegate::setIsEmptyRole(int role) { m_isEmptyRole = role; }
 void ThumbnailDelegate::setColorRole(int role) { m_colorRole = role; }
@@ -161,11 +160,6 @@ void ThumbnailDelegate::drawFileNameText(QPainter* painter, const QRect& textRec
     painter->setRenderHint(QPainter::Antialiasing);
     QString name = index.data(Qt::DisplayRole).toString();
     painter->setPen(isSelected ? QColor("#3498db") : QColor("#EEEEEE"));
-
-    // 针对未录入项目应用半透明效果
-    if (m_managedRole != -1 && !isSelected && !index.data(m_managedRole).toBool()) {
-        painter->setPen(QColor(238, 238, 238, 120));
-    }
 
     QFont textFont = painter->font();
     textFont.setPointSize(8);

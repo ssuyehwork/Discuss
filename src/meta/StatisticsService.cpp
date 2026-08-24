@@ -128,8 +128,6 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
 
     int allCount = 0;
     int untaggedCount = 0;
-    int uncategorizedCount = 0;
-    int libraryTrashCount = 0;
 
     // 1. 纯内存 0ms 秒级核算（绝对真相源）
     MetadataManager::instance().forEachCachedItem([&](const std::wstring& path, const RuntimeMeta& meta) {
@@ -144,15 +142,6 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
                     return; // 🚨 盘符离线直接排除该资产，不参与全库任何计数！
                 }
             }
-        }
-
-        // 🛡️ 第一防线：强力回收站拦截 (物理路径特征)
-        bool isInTrash = (path.find(L"/.QuarkMeta/trash") != std::wstring::npos) ||
-                         (path.find(L"\\.QuarkMeta\\trash") != std::wstring::npos);
-
-        if (isInTrash) {
-            libraryTrashCount++;
-            return; // 🚨 绝对提前退出！绝不参与 全部数据、未分类 的任何计数！
         }
 
         // 全部有效数据
@@ -186,12 +175,10 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
 
     snapshot.totalCount = allCount;
     snapshot.untaggedCount = untaggedCount;
-    snapshot.uncategorizedCount = uncategorizedCount;
-    snapshot.trashCount = libraryTrashCount + diskTrashCount;
+    snapshot.trashCount = diskTrashCount;
 
     // 3. 同步原子内存缓存
     m_totalCount.store(allCount);
-    m_uncategorizedCount.store(uncategorizedCount);
     m_untaggedCount.store(untaggedCount);
     m_trashCount.store(snapshot.trashCount);
 
