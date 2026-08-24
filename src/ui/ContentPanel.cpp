@@ -7,6 +7,7 @@
 #include "ColorPicker.h"
 #include "../core/DiskTrashService.h"
 #include <QWidgetAction>
+#include "../meta/MetadataManager.h"
 #include "../meta/MediaExtractorPipeline.h"
 #include <algorithm>
 #include "Logger.h"
