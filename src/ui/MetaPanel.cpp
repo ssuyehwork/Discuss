@@ -373,8 +373,13 @@ void MetaPanel::adjustFlowHeights() {
     }
     if (m_tagContainer && m_tagFlowLayout) {
         int contentH = m_tagFlowLayout->heightForWidth(m_tagContainer->width());
-        if (m_tagContainer->height() != contentH) {
+        if (m_tagFlowLayout->count() > 0) {
+            contentH = qMax(26, contentH);
+            m_tagContainer->show();
             m_tagContainer->setFixedHeight(contentH);
+        } else {
+            m_tagContainer->setFixedHeight(0);
+            m_tagContainer->hide();
         }
         m_tagFlowLayout->activate();
     }
@@ -446,6 +451,8 @@ void MetaPanel::setTags(const QStringList& tags) {
         pill->show();
         m_tagFlowLayout->addWidget(pill);
     }
+    adjustFlowHeights();
+    if (m_container) m_container->adjustSize();
     m_adjustTimer->start();
 }
 

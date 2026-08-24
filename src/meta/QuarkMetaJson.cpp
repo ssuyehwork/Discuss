@@ -48,7 +48,26 @@ bool QuarkMetaJson::load() {
     if (root.contains("items") && root.value("items").isObject()) {
         QJsonObject itemsObj = root.value("items").toObject();
         for (auto it = itemsObj.begin(); it != itemsObj.end(); ++it) {
-            m_items[toStdWString(it.key())] = entryToItem(it.value().toObject());
+            std::wstring key = toStdWString(it.key());
+            ItemMeta item = entryToItem(it.value().toObject());
+            auto existingIt = m_items.find(key);
+            if (existingIt != m_items.end()) {
+                if (item.rating > 0) existingIt->second.rating = item.rating;
+                if (!item.color.empty()) existingIt->second.color = item.color;
+                if (!item.autoColor.empty()) existingIt->second.autoColor = item.autoColor;
+                if (!item.tags.empty()) existingIt->second.tags = item.tags;
+                if (item.pinned) existingIt->second.pinned = item.pinned;
+                if (!item.note.empty()) existingIt->second.note = item.note;
+                if (!item.url.empty()) existingIt->second.url = item.url;
+                if (item.encrypted) existingIt->second.encrypted = item.encrypted;
+                if (item.width > 0) existingIt->second.width = item.width;
+                if (item.height > 0) existingIt->second.height = item.height;
+                if (item.thumbStatus > 0) existingIt->second.thumbStatus = item.thumbStatus;
+                if (item.addedAt > 0) existingIt->second.addedAt = item.addedAt;
+                if (!item.palettes.empty()) existingIt->second.palettes = item.palettes;
+            } else {
+                m_items[key] = item;
+            }
         }
     }
     return true;

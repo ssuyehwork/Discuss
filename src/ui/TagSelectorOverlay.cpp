@@ -1,6 +1,5 @@
 #include "TagSelectorOverlay.h"
 #include "UiHelper.h"
-#include "../meta/MetadataManager.h"
 #include "../meta/TagRepository.h"
 #include "../core/AppConfig.h"
 #include <QVBoxLayout>
@@ -72,7 +71,6 @@ void TagSelectorOverlay::initUi() {
     m_btnToggleSidebar->setStyleSheet(
         "QPushButton { background: transparent; border: none; border-radius: 4px; padding: 0; }"
         "QPushButton:hover { background-color: #3E3E42; }"
-        "QPushButton:pressed { background-color: #4E4E52; }"
     );
     connect(m_btnToggleSidebar, &QPushButton::toggled, this, [this](bool checked) {
         m_groupList->setVisible(checked);
@@ -107,12 +105,7 @@ void TagSelectorOverlay::initUi() {
 
     m_scrollArea = new QScrollArea(this);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet(
-        "QScrollArea { border: 1px solid #333; background-color: #1E1E1E; border-radius: 4px; }"
-        "QScrollBar:vertical { border: none; background: transparent; width: 6px; }"
-        "QScrollBar::handle:vertical { background: #333333; min-height: 15px; border-radius: 3px; }"
-        "QScrollBar::handle:vertical:hover { background: #444444; }"
-    );
+    m_scrollArea->setStyleSheet("QScrollArea { border: 1px solid #333; background-color: #1E1E1E; border-radius: 4px; }");
     if (m_scrollArea->viewport()) {
         m_scrollArea->viewport()->setStyleSheet("background-color: #1E1E1E; border: none;");
     }
@@ -126,16 +119,6 @@ void TagSelectorOverlay::initUi() {
 }
 
 void TagSelectorOverlay::loadTagsAndGroups() {
-    // 1. 双轨合并：全盘文件引用统计 + global.db 独立主标签表
-    m_allTagCounts = MetadataManager::instance().getAllTags();
-    QStringList masterTags = TagRepository::getAllMasterTags();
-    for (const QString& tag : masterTags) {
-        if (!m_allTagCounts.contains(tag)) {
-            m_allTagCounts.insert(tag, 0);
-        }
-    }
-
-    // 2. 加载真实数据库分组列表
     m_allGroups = TagRepository::getAllGroups();
     
     m_groupList->clear();
@@ -157,25 +140,23 @@ void TagSelectorOverlay::filterTags() {
     m_displayedTags.clear();
 
     if (currentGrp == "最近使用") {
-        QStringList recentDbTags = TagRepository::getRecentTags(30);
-        for (const QString& tag : recentDbTags) {
+        QStringList recent = TagRepository::getRecentTags(30);
+        for (const QString& tag : recent) {
             if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
             m_displayedTags.append(tag);
         }
     } else if (currentGrp == "未分类") {
-        // 收集所有已归组标签
         QSet<QString> groupedTags;
         for (const auto& grp : m_allGroups) {
             for (const auto& t : grp.tags) groupedTags.insert(t);
         }
-        for (auto it = m_allTagCounts.begin(); it != m_allTagCounts.end(); ++it) {
-            QString tag = it.key();
+        QStringList allMaster = TagRepository::getAllMasterTags();
+        for (const QString& tag : allMaster) {
             if (groupedTags.contains(tag)) continue;
             if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
             m_displayedTags.append(tag);
         }
     } else if (currentGrp.startsWith("📁 ")) {
-        // 自定义分组
         QString pureGroupName = currentGrp.mid(3);
         for (const auto& grp : m_allGroups) {
             if (grp.name == pureGroupName) {
@@ -187,15 +168,13 @@ void TagSelectorOverlay::filterTags() {
             }
         }
     } else {
-        // 全部
-        for (auto it = m_allTagCounts.begin(); it != m_allTagCounts.end(); ++it) {
-            QString tag = it.key();
+        QStringList allMaster = TagRepository::getAllMasterTags();
+        for (const QString& tag : allMaster) {
             if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
             m_displayedTags.append(tag);
         }
     }
 
-    // 搜索框有内容且尚未存在该标签时，首项展示待新建胶囊
     if (!kw.isEmpty() && !m_displayedTags.contains(kw, Qt::CaseInsensitive)) {
         m_displayedTags.prepend(kw);
     }
@@ -235,7 +214,7 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
     QString cleanTag = tag.trimmed();
     if (cleanTag.isEmpty()) return;
 
-    // 🚨 核心持久化：只要点击或选定，100% 写入 global.db 并刷新最近使用！
+    // 写入 global.db 词库
     TagRepository::createTag(cleanTag);
     TagRepository::recordTagUsage(cleanTag);
 
@@ -243,9 +222,6 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
         m_selectedTags.removeAll(cleanTag);
     } else {
         m_selectedTags.append(cleanTag);
-        if (!m_allTagCounts.contains(cleanTag)) {
-            m_allTagCounts[cleanTag] = 1;
-        }
     }
     updateSelectionHighlight();
     emit selectionChanged(m_selectedTags);
@@ -254,18 +230,13 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
 void TagSelectorOverlay::updateSelectionHighlight() {
     for (int i = 0; i < m_displayedTags.size(); ++i) {
         QString tag = m_displayedTags[i];
-        int count = m_allTagCounts.value(tag, 0);
         QPushButton* btn = m_tagButtons[i];
 
         bool isSelected = m_selectedTags.contains(tag);
         bool isFocused = (i == m_currentTagIndex);
 
         QString prefix = isSelected ? "✓ " : "• ";
-        if (!m_allTagCounts.contains(tag) && tag == m_searchEdit->text().trimmed()) {
-            btn->setText(QString("+ 新建 \"%1\"").arg(tag));
-        } else {
-            btn->setText(QString("%1%2 (%3)").arg(prefix).arg(tag).arg(count));
-        }
+        btn->setText(prefix + tag);
 
         QString style;
         if (isSelected) {

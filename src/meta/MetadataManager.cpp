@@ -493,7 +493,7 @@ void MetadataManager::setTags(const std::wstring& path, const QStringList& tags,
             wTags.push_back(trimmed.toStdWString());
         }
     }
-    QuarkMetaJson::updateItemMeta(nPath, [wTags](ItemMeta& item) {
+    QuarkMetaJson::updateItemMeta(path, [wTags](ItemMeta& item) {
         item.tags = wTags;
     });
 
@@ -517,7 +517,7 @@ void MetadataManager::setNote(const std::wstring& path, const std::wstring& note
         m_shards[idx].items[nPath].note = note;
     }
 
-    QuarkMetaJson::updateItemMeta(nPath, [note](ItemMeta& item) {
+    QuarkMetaJson::updateItemMeta(path, [note](ItemMeta& item) {
         item.note = note;
     });
 
@@ -541,7 +541,7 @@ void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, 
         m_shards[idx].items[nPath].url = url;
     }
 
-    QuarkMetaJson::updateItemMeta(nPath, [url](ItemMeta& item) {
+    QuarkMetaJson::updateItemMeta(path, [url](ItemMeta& item) {
         item.url = url;
     });
 

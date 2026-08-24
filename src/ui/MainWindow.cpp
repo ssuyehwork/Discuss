@@ -297,69 +297,126 @@ void MainWindow::initUi() {
     // 2026-03-xx 按照高性能要求，优先从模型 Role 读取元数据缓存，避免频繁磁盘 IO
     // 2026-05-27 物理加固：补全 this 上下文
     // 🚨 2026-11-xx 极速极简重构：直接从 Model 中读取已缓存的数据，彻底阻断主线程 5 次连续磁盘 IO 及与后台提图线程的读写锁竞争，单击响应速度提升至 0 毫秒！
+    // 2. 内容面板选中项改变 -> 元数据面板全要素精准刷新
     connect(m_contentPanel, &ContentPanel::selectionChanged, this, [this](const QStringList& paths) {
         m_metaPanel->setSelectedPaths(paths);
         if (paths.isEmpty()) {
-            m_metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false);
+            m_metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false, 0, 0);
             m_metaPanel->setRating(0);
             m_metaPanel->setColor(L"");
             m_metaPanel->setPinned(false);
             m_metaPanel->setTags(QStringList());
             m_metaPanel->setNote(L"");
             m_metaPanel->setURL(L"");
+            m_metaPanel->setPalettes({});
         } else {
             auto indexes = m_contentPanel->getSelectedIndexes();
             if (indexes.isEmpty()) return;
             
             QModelIndex idx = indexes.first();
             QString path = paths.first();
+            QFileInfo fi(path);
             
-            // 🚨 核心优化 1：直接从 Model 已有缓存拿数据，拒绝在主线程调 QFileInfo 连刷 5 次磁盘 IO！
+            // 基础显示属性
             QString name = idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString();
+            if (name.isEmpty()) name = fi.fileName();
             QString type = (idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件";
             QString sizeStr = idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString();
             QString mtimeStr = idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString();
-            
-            // 1. 基础信息展示（0 Win32 磁盘 Blocking）
+
+            int width = 0;
+            int height = 0;
+            QString ctimeStr = "-";
+            QString atimeStr = "-";
+            QString noteStr;
+            QString urlStr;
+            QStringList cleanTags;
+            QVector<QPair<QColor, float>> palettes;
+
+            // 1. 直接从内存已装配好的 ItemRecord 高速直取（0 毫秒响应）
+            if (m_contentPanel && m_contentPanel->model()) {
+                const auto* diskModel = qobject_cast<const DiskItemModel*>(m_contentPanel->model());
+                if (diskModel) {
+                    const auto& allRecs = diskModel->allRecords();
+                    int srcRow = m_contentPanel->getProxyModel()->mapToSource(idx).row();
+                    if (srcRow >= 0 && srcRow < static_cast<int>(allRecs.size())) {
+                        const auto& rec = allRecs[srcRow];
+                        width = rec.width;
+                        height = rec.height;
+                        if (rec.ctime > 0) {
+                            ctimeStr = QDateTime::fromMSecsSinceEpoch(rec.ctime).toString("dd-MM-yyyy HH:mm");
+                        }
+                        if (rec.atime > 0) {
+                            atimeStr = QDateTime::fromMSecsSinceEpoch(rec.atime).toString("dd-MM-yyyy HH:mm");
+                        }
+                        noteStr = rec.note;
+                        urlStr = rec.url;
+                        for (const QString& t : rec.tags) {
+                            QString cleanT = t.trimmed();
+                            if (!cleanT.isEmpty() && !cleanT.contains(":\\") && !cleanT.contains(":/") && cleanT != path) {
+                                cleanTags.append(cleanT);
+                            }
+                        }
+                        for (const auto& p : rec.palettes) {
+                            palettes.append({p.first, p.second});
+                        }
+                    }
+                }
+            }
+
+            // 2. 兜底保护：若时间戳或色板未在内存就绪，直接从物理 .QuarkMeta.json 补齐
+            if (ctimeStr == "-" && fi.exists()) {
+                ctimeStr = fi.birthTime().isValid() ? fi.birthTime().toString("dd-MM-yyyy HH:mm") : fi.lastModified().toString("dd-MM-yyyy HH:mm");
+            }
+            if (atimeStr == "-" && fi.exists()) {
+                atimeStr = fi.lastRead().isValid() ? fi.lastRead().toString("dd-MM-yyyy HH:mm") : "-";
+            }
+
+            if (width <= 0 || height <= 0 || palettes.isEmpty()) {
+                QuarkMetaJson json(fi.absolutePath().toStdWString());
+                if (json.load()) {
+                    auto it = json.items().find(fi.fileName().toStdWString());
+                    if (it != json.items().end()) {
+                        if (width <= 0) width = it->second.width;
+                        if (height <= 0) height = it->second.height;
+                        if (noteStr.isEmpty()) noteStr = QString::fromStdWString(it->second.note);
+                        if (urlStr.isEmpty()) urlStr = QString::fromStdWString(it->second.url);
+                        if (cleanTags.isEmpty()) {
+                            for (const auto& t : it->second.tags) cleanTags << QString::fromStdWString(t);
+                        }
+                        if (palettes.isEmpty()) {
+                            for (const auto& pe : it->second.palettes) palettes.append({pe.color, pe.ratio});
+                        }
+                    }
+                }
+            }
+
+            // 3. 完整传递全量参数（🚨 重点传入真实 ctime、atime、width、height！）
             m_metaPanel->updateInfo(
-                name.isEmpty() ? QFileInfo(path).fileName() : name, 
+                name, 
                 type,
                 sizeStr,
-                "-", // ctime 懒加载
+                ctimeStr,
                 mtimeStr,
-                "-", // atime 懒加载
+                atimeStr,
                 path,
-                idx.data(EncryptedRole).toBool()
+                idx.data(EncryptedRole).toBool(),
+                width,
+                height
             );
 
-            // 2. 状态信息展示（直接读 Model Role，0 锁竞争！）
+            // 4. 状态属性展示
             m_metaPanel->setRating(idx.data(RatingRole).toInt());
             m_metaPanel->setColor(idx.data(ColorRole).toString().toStdWString());
             m_metaPanel->setPinned(idx.data(IsLockedRole).toBool());
             
-            QStringList rawTags = idx.data(TagsRole).toStringList(); 
-            QStringList cleanTags; 
-            for (const QString& t : rawTags) { 
-                QString cleanT = t.trimmed(); 
-                // 物理防御：严禁将路径或包含盘符冒号的内容当标签渲染 
-                if (!cleanT.isEmpty() && !cleanT.contains(":\\") && !cleanT.contains(":/") && cleanT != path) { 
-                    cleanTags.append(cleanT); 
-                } 
-            } 
+            // 5. 标签、备注、链接与色板展示
             m_metaPanel->setTags(cleanTags); 
-            
-            // 3. 极速读取备注与链接（非阻塞读）
-            RuntimeMeta rm = MetadataManager::instance().getMeta(path.toStdWString());
-            m_metaPanel->setNote(rm.note);
-            m_metaPanel->setURL(rm.url);
-
-            // 将色板数据转换为 QVector<QPair<QColor, float>>
-            QVector<QPair<QColor, float>> pal;
-            for (const auto& p : rm.palettes) pal.append({p.color, p.ratio});
-            m_metaPanel->setPalettes(pal);
+            m_metaPanel->setNote(noteStr);
+            m_metaPanel->setURL(urlStr);
+            m_metaPanel->setPalettes(palettes);
         }
         
-        // 触发状态栏更新以显示选中状态
         int totalCount = m_contentPanel->getProxyModel()->rowCount();
         onStatusBarStatsUpdated(0, 0, totalCount);
     });
@@ -645,6 +702,13 @@ void MainWindow::initUi() {
             }
         }
     }); 
+
+    // 标签批量更新（TagSelectorOverlay 关闭时）：同步刷新 Model 内存镜像，防止 rec.tags 过期导致下次选中时被空值覆盖
+    connect(m_metaPanel, &MetaPanel::tagsChanged, this, [this](const QStringList& paths, const QStringList&) {
+        for (const QString& p : paths) {
+            m_contentPanel->updateItemMetadata(p);
+        }
+    });
 
     // 2026-06-xx调色盘搜索联动：将颜色喂给筛选器，由筛选器驱动过滤
     connect(m_metaPanel, &MetaPanel::searchByColor, this, [this](const QColor& color) {
