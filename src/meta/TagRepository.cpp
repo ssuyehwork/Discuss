@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QFileInfo>
 #include <QDir>
+#include <QDateTime>
 #include <vector>
 #include <string>
 #include <mutex>
@@ -160,6 +161,106 @@ bool TagRepository::removeTagFromGroup(const QString& tagName, int groupId) {
         }
     }
     return success;
+}
+
+// -------------------------------------------------------------
+// 🚨 全局独立标签主表实现（持久化到 global.db）
+// -------------------------------------------------------------
+
+bool TagRepository::createTag(const QString& tagName, const QString& color) {
+    if (tagName.trimmed().isEmpty()) return false;
+
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const char* sql = 
+        "INSERT INTO tags (name, color, last_used, use_count) VALUES (?, ?, ?, 1) "
+        "ON CONFLICT(name) DO UPDATE SET last_used = excluded.last_used, use_count = use_count + 1;";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text16(stmt, 1, tagName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text16(stmt, 2, color.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmt, 3, now);
+        int rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        if (rc == SQLITE_DONE) {
+            sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool TagRepository::deleteTag(const QString& tagName) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    SqlTransaction trans(db);
+
+    sqlite3_stmt* stmt1 = nullptr;
+    sqlite3_stmt* stmt2 = nullptr;
+
+    if (sqlite3_prepare_v2(db, "DELETE FROM tags WHERE name = ?", -1, &stmt1, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text16(stmt1, 1, tagName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt1);
+        sqlite3_finalize(stmt1);
+    }
+
+    if (sqlite3_prepare_v2(db, "DELETE FROM tag_group_items WHERE tag_name = ?", -1, &stmt2, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text16(stmt2, 1, tagName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt2);
+        sqlite3_finalize(stmt2);
+    }
+
+    return trans.commit();
+}
+
+QStringList TagRepository::getAllMasterTags() {
+    QStringList result;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return result;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT name FROM tags ORDER BY last_used DESC";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const wchar_t* wname = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 0));
+            if (wname) result << QString::fromWCharArray(wname);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return result;
+}
+
+QStringList TagRepository::getRecentTags(int limit) {
+    QStringList result;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return result;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT name FROM tags WHERE last_used > 0 ORDER BY last_used DESC LIMIT ?";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, limit);
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const wchar_t* wname = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 0));
+            if (wname) result << QString::fromWCharArray(wname);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return result;
+}
+
+void TagRepository::recordTagUsage(const QString& tagName) {
+    createTag(tagName);
 }
 
 } // namespace QuarkMeta

@@ -1,6 +1,7 @@
 #include "TagSelectorOverlay.h"
 #include "UiHelper.h"
 #include "../meta/MetadataManager.h"
+#include "../meta/TagRepository.h"
 #include "../core/AppConfig.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -27,12 +28,11 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
     );
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
-    setAttribute(Qt::WA_DeleteOnClose, false); // 让调用者决定生命周期或通过失焦安全销毁
+    setAttribute(Qt::WA_DeleteOnClose, false);
 
     initUi();
     loadTagsAndGroups();
     
-    // 安装事件过滤器
     m_searchEdit->installEventFilter(this);
     m_tagGridWidget->installEventFilter(this);
 }
@@ -45,7 +45,6 @@ void TagSelectorOverlay::initUi() {
     mainL->setContentsMargins(10, 10, 10, 10);
     mainL->setSpacing(8);
 
-    // 1. 顶部操作栏（搜索框 + 右侧侧边栏折叠按钮）
     QHBoxLayout* topSearchLayout = new QHBoxLayout();
     topSearchLayout->setContentsMargins(0, 0, 0, 0);
     topSearchLayout->setSpacing(6);
@@ -82,11 +81,9 @@ void TagSelectorOverlay::initUi() {
 
     mainL->addLayout(topSearchLayout);
 
-    // 2. 中部双视口（左侧群组、右侧标签）
     QHBoxLayout* bodyL = new QHBoxLayout();
     bodyL->setSpacing(8);
 
-    // 左侧群组列表
     m_groupList = new QListWidget(this);
     m_groupList->setFixedWidth(110);
     m_groupList->setFocusPolicy(Qt::StrongFocus);
@@ -101,7 +98,6 @@ void TagSelectorOverlay::initUi() {
     });
     bodyL->addWidget(m_groupList);
 
-    // 右侧标签面板（彻底锁定暗黑背景，杜绝系统白底穿透）
     m_tagGridWidget = new QWidget(this);
     m_tagGridWidget->setAttribute(Qt::WA_StyledBackground, true);
     m_tagGridWidget->setStyleSheet("background-color: #1E1E1E;");
@@ -125,18 +121,31 @@ void TagSelectorOverlay::initUi() {
 
     mainL->addLayout(bodyL, 1);
 
-    // 从配置中恢复持久化的窗口尺寸
     QSize savedSize = AppConfig::instance().getValue("TagSelectorOverlay/Size", QSize(400, 240)).toSize();
     resize(savedSize.expandedTo(QSize(250, 150)));
 }
 
 void TagSelectorOverlay::loadTagsAndGroups() {
+    // 1. 双轨合并：全盘文件引用统计 + global.db 独立主标签表
     m_allTagCounts = MetadataManager::instance().getAllTags();
+    QStringList masterTags = TagRepository::getAllMasterTags();
+    for (const QString& tag : masterTags) {
+        if (!m_allTagCounts.contains(tag)) {
+            m_allTagCounts.insert(tag, 0);
+        }
+    }
+
+    // 2. 加载真实数据库分组列表
+    m_allGroups = TagRepository::getAllGroups();
     
     m_groupList->clear();
     m_groupList->addItem("全部");
-    m_groupList->addItem("未分类");
     m_groupList->addItem("最近使用");
+    m_groupList->addItem("未分类");
+
+    for (const auto& grp : m_allGroups) {
+        m_groupList->addItem("📁 " + grp.name);
+    }
 
     m_groupList->setCurrentRow(0);
 }
@@ -146,28 +155,55 @@ void TagSelectorOverlay::filterTags() {
     QString currentGrp = m_groupList->currentItem() ? m_groupList->currentItem()->text() : "全部";
 
     m_displayedTags.clear();
-    for (auto it = m_allTagCounts.begin(); it != m_allTagCounts.end(); ++it) {
-        QString tag = it.key();
-        int count = it.value();
 
-        if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
-
-        if (currentGrp == "未分类" && count > 2) continue;
-        if (currentGrp == "最近使用" && count < 3) continue;
-
-        m_displayedTags.append(tag);
+    if (currentGrp == "最近使用") {
+        QStringList recentDbTags = TagRepository::getRecentTags(30);
+        for (const QString& tag : recentDbTags) {
+            if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
+            m_displayedTags.append(tag);
+        }
+    } else if (currentGrp == "未分类") {
+        // 收集所有已归组标签
+        QSet<QString> groupedTags;
+        for (const auto& grp : m_allGroups) {
+            for (const auto& t : grp.tags) groupedTags.insert(t);
+        }
+        for (auto it = m_allTagCounts.begin(); it != m_allTagCounts.end(); ++it) {
+            QString tag = it.key();
+            if (groupedTags.contains(tag)) continue;
+            if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
+            m_displayedTags.append(tag);
+        }
+    } else if (currentGrp.startsWith("📁 ")) {
+        // 自定义分组
+        QString pureGroupName = currentGrp.mid(3);
+        for (const auto& grp : m_allGroups) {
+            if (grp.name == pureGroupName) {
+                for (const auto& t : grp.tags) {
+                    if (!kw.isEmpty() && !t.toLower().contains(kw.toLower())) continue;
+                    m_displayedTags.append(t);
+                }
+                break;
+            }
+        }
+    } else {
+        // 全部
+        for (auto it = m_allTagCounts.begin(); it != m_allTagCounts.end(); ++it) {
+            QString tag = it.key();
+            if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
+            m_displayedTags.append(tag);
+        }
     }
 
-    // 如果搜索框不为空且当前不存在完全一样的标签，则支持回车新建
+    // 搜索框有内容且尚未存在该标签时，首项展示待新建胶囊
     if (!kw.isEmpty() && !m_displayedTags.contains(kw, Qt::CaseInsensitive)) {
-        m_displayedTags.prepend(kw); // 放在第一位作为待建/候选
+        m_displayedTags.prepend(kw);
     }
 
     populateGrid();
 }
 
 void TagSelectorOverlay::populateGrid() {
-    // 清理旧网格
     QLayoutItem* item;
     while ((item = m_gridFlowLayout->takeAt(0)) != nullptr) {
         delete item->widget();
@@ -199,11 +235,14 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
     QString cleanTag = tag.trimmed();
     if (cleanTag.isEmpty()) return;
 
+    // 🚨 核心持久化：只要点击或选定，100% 写入 global.db 并刷新最近使用！
+    TagRepository::createTag(cleanTag);
+    TagRepository::recordTagUsage(cleanTag);
+
     if (m_selectedTags.contains(cleanTag)) {
         m_selectedTags.removeAll(cleanTag);
     } else {
         m_selectedTags.append(cleanTag);
-        // 如果是新建的标签，顺便加入内存，使其能出现在“最近使用”或“全部”中
         if (!m_allTagCounts.contains(cleanTag)) {
             m_allTagCounts[cleanTag] = 1;
         }
@@ -222,7 +261,7 @@ void TagSelectorOverlay::updateSelectionHighlight() {
         bool isFocused = (i == m_currentTagIndex);
 
         QString prefix = isSelected ? "✓ " : "• ";
-        if (count == 0) {
+        if (!m_allTagCounts.contains(tag) && tag == m_searchEdit->text().trimmed()) {
             btn->setText(QString("+ 新建 \"%1\"").arg(tag));
         } else {
             btn->setText(QString("%1%2 (%3)").arg(prefix).arg(tag).arg(count));
@@ -269,16 +308,13 @@ void TagSelectorOverlay::handleGroupNavigation(int key) {
     }
 }
 
-// -------------------------------------------------------------------------
-// 8方向拉伸大小和拖拽移动实现
-// -------------------------------------------------------------------------
 int TagSelectorOverlay::getResizeDirection(const QPoint& pos) {
     int dir = 0;
-    if (pos.x() < m_margin) dir |= 1; // Left
-    else if (pos.x() > width() - m_margin) dir |= 2; // Right
+    if (pos.x() < m_margin) dir |= 1;
+    else if (pos.x() > width() - m_margin) dir |= 2;
     
-    if (pos.y() < m_margin) dir |= 4; // Top
-    else if (pos.y() > height() - m_margin) dir |= 8; // Bottom
+    if (pos.y() < m_margin) dir |= 4;
+    else if (pos.y() > height() - m_margin) dir |= 8;
     return dir;
 }
 
@@ -302,10 +338,10 @@ void TagSelectorOverlay::updateCursorShape(const QPoint& pos) {
             setCursor(Qt::SizeAllCursor);
         }
     } else {
-        if (dir == (1 | 4) || dir == (2 | 8)) setCursor(Qt::SizeFDiagCursor); // Top-Left or Bottom-Right
-        else if (dir == (2 | 4) || dir == (1 | 8)) setCursor(Qt::SizeBDiagCursor); // Top-Right or Bottom-Left
-        else if (dir == 1 || dir == 2) setCursor(Qt::SizeHorCursor); // Left or Right
-        else if (dir == 4 || dir == 8) setCursor(Qt::SizeVerCursor); // Top or Bottom
+        if (dir == (1 | 4) || dir == (2 | 8)) setCursor(Qt::SizeFDiagCursor);
+        else if (dir == (2 | 4) || dir == (1 | 8)) setCursor(Qt::SizeBDiagCursor);
+        else if (dir == 1 || dir == 2) setCursor(Qt::SizeHorCursor);
+        else if (dir == 4 || dir == 8) setCursor(Qt::SizeVerCursor);
     }
 }
 
@@ -333,19 +369,12 @@ void TagSelectorOverlay::mouseMoveEvent(QMouseEvent* event) {
             move(m_dragStartGeometry.topLeft() + delta);
         } else if (m_resizeDir != 0) {
             QRect newGeom = m_dragStartGeometry;
-            if (m_resizeDir & 1) { // Left
-                newGeom.setLeft(m_dragStartGeometry.left() + delta.x());
-            } else if (m_resizeDir & 2) { // Right
-                newGeom.setRight(m_dragStartGeometry.right() + delta.x());
-            }
+            if (m_resizeDir & 1) newGeom.setLeft(m_dragStartGeometry.left() + delta.x());
+            else if (m_resizeDir & 2) newGeom.setRight(m_dragStartGeometry.right() + delta.x());
 
-            if (m_resizeDir & 4) { // Top
-                newGeom.setTop(m_dragStartGeometry.top() + delta.y());
-            } else if (m_resizeDir & 8) { // Bottom
-                newGeom.setBottom(m_dragStartGeometry.bottom() + delta.y());
-            }
+            if (m_resizeDir & 4) newGeom.setTop(m_dragStartGeometry.top() + delta.y());
+            else if (m_resizeDir & 8) newGeom.setBottom(m_dragStartGeometry.bottom() + delta.y());
 
-            // 限制最小尺寸
             if (newGeom.width() >= 250 && newGeom.height() >= 150) {
                 setGeometry(newGeom);
             }
@@ -374,15 +403,11 @@ void TagSelectorOverlay::resizeEvent(QResizeEvent* event) {
     }
 }
 
-// -------------------------------------------------------------------------
-// 核心交互：失焦关闭与回车防击穿
-// -------------------------------------------------------------------------
 void TagSelectorOverlay::changeEvent(QEvent* event) {
     if (event->type() == QEvent::ActivationChange) {
         if (isActiveWindow()) {
-            m_wasActivated = true; // 真正获得焦点，进入监控态
+            m_wasActivated = true;
         } else if (m_wasActivated) {
-            // 只有曾经激活过、后来失去焦点时，才允许自毁！
             emit overlayClosed();
             close();
             deleteLater();
@@ -395,7 +420,6 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
     if (event->type() == QEvent::KeyPress) {
         QKeyEvent* ke = static_cast<QKeyEvent*>(event);
         
-        // 1. ESC 关闭
         if (ke->key() == Qt::Key_Escape) {
             emit overlayClosed();
             close();
@@ -404,7 +428,6 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
             return true;
         }
 
-        // 2. Tab 切换焦点
         if (ke->key() == Qt::Key_Tab) {
             if (m_searchEdit->hasFocus()) {
                 m_groupList->setFocus();
@@ -418,7 +441,6 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
             return true;
         }
 
-        // 3. 方向键导航
         if (ke->key() == Qt::Key_Up || ke->key() == Qt::Key_Down || ke->key() == Qt::Key_Left || ke->key() == Qt::Key_Right) {
             if (m_tagGridWidget->hasFocus() || obj == m_tagGridWidget) {
                 handleGridNavigation(ke->key());
@@ -431,7 +453,6 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
             }
         }
 
-        // 4. 回车事件严格物理吞噬（防双闪退/击穿连选）
         if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) {
             if (m_searchEdit->hasFocus()) {
                 QString kw = m_searchEdit->text().trimmed();
@@ -445,7 +466,7 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
                 }
             }
             ke->accept();
-            return true; // 彻底阻断任何键盘事件向上冒泡到父窗口
+            return true;
         }
     }
     return QFrame::eventFilter(obj, event);

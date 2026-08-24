@@ -27,6 +27,12 @@ public:
     static bool addTagToGroup(const QString& tagName, int groupId);
     static bool removeTagFromGroup(const QString& tagName, int groupId = -1);
 
+    // 🚨 全局独立标签主表管理（持久化保障）
+    static bool createTag(const QString& tagName, const QString& color = "");
+    static bool deleteTag(const QString& tagName);
+    static QStringList getAllMasterTags();
+    static QStringList getRecentTags(int limit = 20);
+    static void recordTagUsage(const QString& tagName);
 };
 
 } // namespace QuarkMeta

@@ -2,10 +2,12 @@
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "../meta/QuarkMetaJson.h"
+#include "../meta/TagRepository.h"
 #include "components/FlowLayout.h"
 #include <QApplication>
 #include <QScreen>
 #include <QFileInfo>
+#include <QDir>
 
 namespace QuarkMeta {
 
@@ -220,33 +222,47 @@ void TagManagerDialog::onSearchTextChanged(const QString& text) {
 }
 
 void TagManagerDialog::createTag(const QString& tagName) {
-    if (tagName.isEmpty()) return;
+    if (tagName.trimmed().isEmpty()) return;
 
-    QFileInfo info(m_currentPath);
-    QuarkMetaJson amJson(info.absolutePath().toStdWString());
-    amJson.load();
-    ItemMeta& item = amJson.items()[info.fileName().toStdWString()];
-    
-    bool exists = false;
-    for (const auto& t : item.tags) {
-        if (QString::fromStdWString(t) == tagName) { exists = true; break; }
-    }
-    if (!exists) {
-        item.tags.push_back(tagName.toStdWString());
-        amJson.save();
-    }
+    QString cleanTag = tagName.trimmed();
 
-    // 实时更新规则：新新增的标签瞬时挂载到“最近使用”区域首位
-    s_sessionRecentTags.removeAll(tagName);
-    s_sessionRecentTags.prepend(tagName);
+    // 🚨 1. 核心持久化：无论有无选中文件，100% 写入 global.db 的 tags 主表中！
+    TagRepository::createTag(cleanTag);
+    TagRepository::recordTagUsage(cleanTag);
+
+    // 🚨 2. 如果存在具体操作目标文件，写入对应文件的 .QuarkMeta.json
+    if (!m_currentPath.isEmpty() && QFileInfo::exists(m_currentPath)) {
+        QFileInfo info(m_currentPath);
+        if (!info.isRoot()) {
+            QuarkMetaJson amJson(info.absolutePath().toStdWString());
+            amJson.load();
+            ItemMeta& item = amJson.items()[info.fileName().toStdWString()];
+            
+            bool exists = false;
+            for (const auto& t : item.tags) {
+                if (QString::fromStdWString(t) == cleanTag) { exists = true; break; }
+            }
+            if (!exists) {
+                item.tags.push_back(cleanTag.toStdWString());
+                amJson.save();
+                MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, m_currentPath);
+            }
+        }
+    }
 
     refreshTags();
 }
 
 void TagManagerDialog::refreshTags() {
+    // 1. 双轨拉取：合并全盘物理文件已打标签与 global.db 独立主标签库
     m_allTagCounts = MetadataManager::instance().getAllTags();
+    QStringList masterTags = TagRepository::getAllMasterTags();
+    for (const QString& tag : masterTags) {
+        if (!m_allTagCounts.contains(tag)) {
+            m_allTagCounts.insert(tag, 0); // 刚建但尚未打在文件上的标签展示为 (0)
+        }
+    }
 
-    // 清理标签滚动区域
     while (QLayoutItem* item = m_tagsScrollLayout->takeAt(0)) {
         delete item->widget();
         delete item;
@@ -254,7 +270,6 @@ void TagManagerDialog::refreshTags() {
 
     QString searchKeyword = m_searchEdit->text().trimmed().toLower();
 
-    // 过滤出符合搜索关键字的标签
     QMap<QString, int> filteredTagCounts;
     for (auto it = m_allTagCounts.begin(); it != m_allTagCounts.end(); ++it) {
         if (searchKeyword.isEmpty() || it.key().toLower().contains(searchKeyword)) {
@@ -262,9 +277,10 @@ void TagManagerDialog::refreshTags() {
         }
     }
 
-    // 1. 最近使用标签组
+    // 2. 权威加载“最近使用”：从 global.db 中读取真实使用历史！
+    QStringList recentFromDb = TagRepository::getRecentTags(20);
     QStringList filteredRecent;
-    for (const QString& tag : s_sessionRecentTags) {
+    for (const QString& tag : recentFromDb) {
         if (searchKeyword.isEmpty() || tag.toLower().contains(searchKeyword)) {
             filteredRecent.append(tag);
         }
@@ -299,19 +315,14 @@ void TagManagerDialog::refreshTags() {
         m_tagsScrollLayout->addWidget(groupWidget);
     }
 
-    // 2. 字母与其它 A-Z 分组标签
+    // 3. 字母 A-Z 分组
     QMap<QString, QMap<QString, int>> alphabetGroups;
     for (auto it = filteredTagCounts.begin(); it != filteredTagCounts.end(); ++it) {
         QString tag = it.key();
         int count = it.value();
 
-        // 筛选逻辑
-        if (m_currentFilter == "uncategorized" && count > 2) {
-            continue; // 未分类标签：展现轻量/低频标签
-        }
-        if (m_currentFilter == "frequent" && count < 3) {
-            continue; // 常用标签：展现高频标签
-        }
+        if (m_currentFilter == "uncategorized" && count > 2) continue;
+        if (m_currentFilter == "frequent" && count < 3) continue;
 
         QChar firstChar = tag.at(0).toUpper();
         QString groupKey = "其它";
@@ -321,7 +332,6 @@ void TagManagerDialog::refreshTags() {
         alphabetGroups[groupKey][tag] = count;
     }
 
-    // 排序并绘制分组
     for (auto git = alphabetGroups.begin(); git != alphabetGroups.end(); ++git) {
         QString groupName = git.key();
         const auto& tagMap = git.value();

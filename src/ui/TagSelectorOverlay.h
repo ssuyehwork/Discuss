@@ -9,6 +9,7 @@
 #include <QMap>
 #include <QStringList>
 #include "components/FlowLayout.h"
+#include "../meta/TagRepository.h"
 
 namespace QuarkMeta {
 
@@ -40,7 +41,6 @@ private:
     void handleGridNavigation(int key);
     void handleGroupNavigation(int key);
 
-    // 8方向拉伸大小和拖拽移动辅助函数
     void updateCursorShape(const QPoint& pos);
     int getResizeDirection(const QPoint& pos);
     bool isInteractiveChild(QWidget* child) const;
@@ -48,9 +48,10 @@ private:
     QStringList m_selectedTags;
     QStringList m_displayedTags;
     QMap<QString, int> m_allTagCounts;
+    QList<TagRepository::TagGroup> m_allGroups;
 
     QLineEdit* m_searchEdit = nullptr;
-    QPushButton* m_btnToggleSidebar = nullptr; // 搜索框右侧的侧边栏折叠按钮
+    QPushButton* m_btnToggleSidebar = nullptr;
     QListWidget* m_groupList = nullptr;
     QScrollArea* m_scrollArea = nullptr;
     QWidget* m_tagGridWidget = nullptr;
@@ -58,13 +59,12 @@ private:
     QList<QPushButton*> m_tagButtons;
     int m_currentTagIndex = -1;
 
-    // 拖拽与缩放状态
     QPoint m_dragStartPos;
     QRect m_dragStartGeometry;
     bool m_isDragging = false;
-    int m_resizeDir = 0; // 0=None, 1=Left, 2=Right, 4=Top, 8=Bottom, etc.
+    int m_resizeDir = 0;
     const int m_margin = 6;
-    bool m_wasActivated = false; // 是否已经完成首次激活
+    bool m_wasActivated = false;
 };
 
 } // namespace QuarkMeta

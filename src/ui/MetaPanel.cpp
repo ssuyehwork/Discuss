@@ -2,6 +2,8 @@
 #include "SvgIcons.h"
 #include "ToolTipOverlay.h"
 #include "UiHelper.h"
+#include "../meta/MetadataManager.h"
+#include "../meta/QuarkMetaJson.h"
 #include <QVBoxLayout>
 #include <QPushButton>
 #include <QHBoxLayout>
@@ -94,7 +96,6 @@ void MetaPanel::initUi() {
     tagL->setContentsMargins(0, 0, 0, 0); 
     tagL->setSpacing(6); 
  
-    // 1. 上半部分：添加标签矢量按钮 
     m_btnAddTag = new QPushButton(UiHelper::getIcon("add", QColor("#AAAAAA"), 14), " 添加标签", m_tagBox); 
     m_btnAddTag->setFixedHeight(28); 
     m_btnAddTag->setCursor(Qt::PointingHandCursor); 
@@ -104,13 +105,13 @@ void MetaPanel::initUi() {
         "QPushButton:pressed { background-color: #333333; }" 
     )); 
     
+    // 🚨 核心逻辑重构：勾选仅更新 UI，失焦关闭浮层时 1 次性合并写入 .QuarkMeta.json！
     connect(m_btnAddTag, &QPushButton::clicked, this, [this]() {
         if (m_tagSelectorOverlay) {
             m_tagSelectorOverlay->close();
             return;
         }
 
-        // 收集当前已有标签
         QStringList currentTags;
         for (int i = 0; i < m_tagFlowLayout->count(); ++i) {
             TagPill* pill = qobject_cast<TagPill*>(m_tagFlowLayout->itemAt(i)->widget());
@@ -123,11 +124,9 @@ void MetaPanel::initUi() {
         QWidget* topWidget = this->topLevelWidget();
         m_tagSelectorOverlay = new TagSelectorOverlay(currentTags, topWidget);
 
-        // 计算定位点：确保左边缘与内容面板/主窗口最靠左的位置保持对齐，或者紧贴按钮下沿
         QPoint globalPos = m_btnAddTag->mapToGlobal(QPoint(0, m_btnAddTag->height() + 4));
         QPoint parentPos = topWidget ? topWidget->mapFromGlobal(globalPos) : globalPos;
 
-        // 屏幕底部防溢出保护
         QScreen* screen = QApplication::screenAt(globalPos);
         if (!screen) screen = QApplication::primaryScreen();
         if (screen) {
@@ -141,42 +140,40 @@ void MetaPanel::initUi() {
         m_tagSelectorOverlay->move(parentPos);
         m_tagSelectorOverlay->show();
 
+        // 1. 用户在浮层勾选时：0 毫秒实时更新元数据面板的胶囊 UI，绝不触发写盘！
         connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& selectedTags) {
-            // 实时对比与渲染更新
-            QStringList oldTags;
+            setTags(selectedTags);
+        });
+
+        // 2. 🚨 浮层失焦自动关闭的瞬间：一次性将最终结果落盘到所有选中文件的 .QuarkMeta.json！
+        connect(m_tagSelectorOverlay, &TagSelectorOverlay::overlayClosed, this, [this]() {
+            if (m_selectedPaths.isEmpty()) return;
+
+            QStringList finalTags;
             for (int i = 0; i < m_tagFlowLayout->count(); ++i) {
                 TagPill* pill = qobject_cast<TagPill*>(m_tagFlowLayout->itemAt(i)->widget());
-                if (pill) oldTags.append(pill->property("tagText").toString());
+                if (pill) {
+                    QString tagStr = pill->property("tagText").toString();
+                    if (!tagStr.isEmpty()) finalTags.append(tagStr);
+                }
             }
 
-            // 找出新增与删除的标签
-            for (const QString& tag : selectedTags) {
-                if (!oldTags.contains(tag)) {
-                    TagPill* pill = new TagPill(tag, m_tagContainer);
-                    pill->setProperty("tagText", tag);
-                    connect(pill, &TagPill::deleteRequested, this, &MetaPanel::onTagDeleted);
-                    m_tagFlowLayout->addWidget(pill);
-                    emit tagAddRequested(m_selectedPaths, tag);
-                }
+            // 写入物理磁盘与内存镜像
+            for (const QString& path : m_selectedPaths) {
+                std::wstring wpath = path.toStdWString();
+                MetadataManager::instance().setTags(wpath, finalTags, true);
             }
-            for (const QString& oldTag : oldTags) {
-                if (!selectedTags.contains(oldTag)) {
-                    onTagDeleted(oldTag);
-                }
-            }
-            adjustFlowHeights();
-            if (m_container) m_container->adjustSize();
+
+            emit tagsChanged(m_selectedPaths, finalTags);
         });
     });
     tagL->addWidget(m_btnAddTag); 
  
-    // 2. 下半部分：已打上的标签展示区 
     m_tagContainer = new QWidget(m_tagBox); 
     m_tagFlowLayout = new FlowLayout(m_tagContainer, 0, 4, 4); 
     tagL->addWidget(m_tagContainer); 
  
     m_containerLayout->addWidget(m_tagBox); 
-
     m_containerLayout->addWidget(createSeparator());
 
     addInfoRow("类型", lblType); 
@@ -207,7 +204,6 @@ void MetaPanel::initUi() {
     m_scrollArea->setWidget(m_container);
     m_mainLayout->addWidget(m_scrollArea);
 
-    // 初始状态下无选中项，默认禁用所有输入控件
     updateControlsState(false);
 }
 
@@ -216,7 +212,6 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
     bool hasSelection = !m_selectedPaths.isEmpty();
     updateControlsState(hasSelection);
 
-    // 未选中时彻底清空并重置输入框内容
     if (!hasSelection) {
         m_isInternalUpdating = true;
         if (m_nameEdit) m_nameEdit->clear();
@@ -233,11 +228,23 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
         setTags({});
         setPalettes({});
         m_isInternalUpdating = false;
+    } else if (m_selectedPaths.size() == 1) {
+        // 单选时直接从物理磁盘 JSON 读取已有标签并回显展示
+        QString p = m_selectedPaths.first();
+        QFileInfo fi(p);
+        QuarkMetaJson json(fi.absolutePath().toStdWString());
+        if (json.load()) {
+            auto it = json.items().find(fi.fileName().toStdWString());
+            if (it != json.items().end()) {
+                QStringList loadedTags;
+                for (const auto& t : it->second.tags) loadedTags << QString::fromStdWString(t);
+                setTags(loadedTags);
+            }
+        }
     }
 }
 
 void MetaPanel::updateControlsState(bool hasSelection) {
-    // 统一管控所有输入与交互控件的可用状态
     if (m_nameEdit) m_nameEdit->setEnabled(hasSelection);
     if (m_noteEdit) m_noteEdit->setEnabled(hasSelection);
     if (m_linkEdit) m_linkEdit->setEnabled(hasSelection);
@@ -245,7 +252,6 @@ void MetaPanel::updateControlsState(bool hasSelection) {
     if (m_paletteBox) m_paletteBox->setEnabled(hasSelection);
     if (m_tagBox) m_tagBox->setEnabled(hasSelection);
 
-    // 未选中时应用半透明置灰样式，选中时恢复正常暗黑输入样式
     QString editStyle = hasSelection
         ? "QTextEdit { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #EEEEEE; }"
         : "QTextEdit { background: #1E1E1E; border: 1px solid #2A2A2A; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #555555; }";
@@ -284,7 +290,6 @@ QFrame* MetaPanel::createSeparator() {
     return l; 
 }
 
- 
 void MetaPanel::onTagDeleted(const QString& text) { 
     if (m_selectedPaths.isEmpty()) return; 
  
@@ -301,8 +306,20 @@ void MetaPanel::onTagDeleted(const QString& text) {
  
     adjustFlowHeights(); 
     if (m_container) m_container->adjustSize(); 
+
+    // 面板直接点击 × 删除标签：即时写入磁盘 .QuarkMeta.json
+    QStringList remainingTags;
+    for (int i = 0; i < m_tagFlowLayout->count(); ++i) {
+        TagPill* pill = qobject_cast<TagPill*>(m_tagFlowLayout->itemAt(i)->widget());
+        if (pill) remainingTags.append(pill->property("tagText").toString());
+    }
+
+    for (const QString& path : m_selectedPaths) {
+        MetadataManager::instance().setTags(path.toStdWString(), remainingTags, true);
+    }
  
     emit tagRemoveRequested(m_selectedPaths, text); 
+    emit tagsChanged(m_selectedPaths, remainingTags);
 } 
 
 void MetaPanel::resizeEvent(QResizeEvent* event) {
@@ -405,7 +422,6 @@ void MetaPanel::updateInfo(const QString& n, const QString& t, const QString& s,
     m_isInternalUpdating = false;
 }
 
-
 void MetaPanel::setTags(const QStringList& tags) {
     while (QLayoutItem* item = m_tagFlowLayout->takeAt(0)) {
         TagPill* pill = qobject_cast<TagPill*>(item->widget());
@@ -456,7 +472,6 @@ void MetaPanel::setURL(const QString& url) {
 void MetaPanel::setURL(const std::wstring& url) {
     setURL(QString::fromStdWString(url));
 }
-
 
 void MetaPanel::setPalettes(const QVector<QPair<QColor, float>>& palette) {
     if (!m_paletteFlowLayout) return;

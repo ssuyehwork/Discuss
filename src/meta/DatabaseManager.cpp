@@ -132,6 +132,15 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
             url TEXT DEFAULT '',
             updated_at INTEGER DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS tags (
+            name TEXT PRIMARY KEY,
+            color TEXT DEFAULT '',
+            pinned INTEGER DEFAULT 0,
+            use_count INTEGER DEFAULT 0,
+            last_used INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_tags_last_used ON tags(last_used DESC);
     )";
 
     char* errMsg = nullptr;
