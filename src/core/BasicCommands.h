@@ -269,11 +269,6 @@ public:
 
             if (!rawPairs.empty()) {
                 MetadataManager::instance().renameBatchAsync(rawPairs);
-            } else if (mode == DiskOperationMode::Copy) {
-                // Copy 模式下虽然不修改 metadata，但删除文件后需要通知 UI 全局重建/刷新
-                QMetaObject::invokeMethod(qApp, []() {
-                    MetadataManager::instance().notifyFullUIRebuild();
-                }, Qt::QueuedConnection);
             }
         });
     }
@@ -323,11 +318,6 @@ public:
 
             if (!rawPairs.empty()) {
                 MetadataManager::instance().renameBatchAsync(rawPairs);
-            } else if (mode == DiskOperationMode::Copy) {
-                // Copy 模式重新生成物理文件后也需要通知 UI 刷新
-                QMetaObject::invokeMethod(qApp, []() {
-                    MetadataManager::instance().notifyFullUIRebuild();
-                }, Qt::QueuedConnection);
             }
         });
     }
