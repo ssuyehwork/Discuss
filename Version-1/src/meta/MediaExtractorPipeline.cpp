@@ -4,11 +4,11 @@
 
 #include "MediaExtractorPipeline.h"
 #include "MetadataManager.h"
-#include "CapsuleMediaExtractor.h"
+#include "../core/CoreController.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../ui/MediaColorExtractor.h"
 #include "../ui/ImageDecoderFacade.h"
 #include "../ui/ColorAlgorithmEngine.h"
-#include "../core/SyncStatusService.h"
 #include "DatabaseManager.h"
 #include <QImageReader>
 #include <QSvgRenderer>
@@ -24,7 +24,7 @@
 #include <objbase.h>
 #endif
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 MediaExtractorPipeline& MediaExtractorPipeline::instance() {
     static MediaExtractorPipeline inst;
@@ -52,7 +52,6 @@ void MediaExtractorPipeline::cancelAll() {
         m_queue.clear();
     }
     m_activeCount.store(0);
-    SyncStatusService::instance().updateMediaPending(0);
 }
 
 void MediaExtractorPipeline::cancelBatch(const std::vector<std::wstring>& paths) {
@@ -79,77 +78,119 @@ void MediaExtractorPipeline::cancelBatch(const std::vector<std::wstring>& paths)
     m_queue.erase(std::remove_if(m_queue.begin(), m_queue.end(), isPrefixMatched), m_queue.end());
     int removedFromQueue = originalQueueSize - static_cast<int>(m_queue.size());
     Q_UNUSED(removedFromQueue);
-
-    int remaining = static_cast<int>(m_queue.size()) + m_activeCount.load();
-    if (remaining < 0) remaining = 0;
-    SyncStatusService::instance().updateMediaPending(remaining);
 }
 
 void MediaExtractorPipeline::enqueue(const std::wstring& path) {
-    m_isCanceled.store(false); // 投递新任务时自动重置取消状态
-    std::lock_guard<std::mutex> lock(m_queueMutex);
-    m_queue.push_back(path);
-    
-    // 🚨 联动通知：特征待提取总项数（排队 + 正在解析数）
-    SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + m_activeCount.load());
-
-    QMetaObject::invokeMethod(m_timer, "start", Qt::QueuedConnection);
+    enqueueBatch({path});
 }
 
 void MediaExtractorPipeline::enqueueBatch(const std::vector<std::wstring>& paths) {
     m_isCanceled.store(false); // 投递新任务时自动重置取消状态
-    std::lock_guard<std::mutex> lock(m_queueMutex);
-    m_queue.insert(m_queue.end(), paths.begin(), paths.end());
-    
-    // 🚨 联动通知：特征待提取总项数（排队 + 正在解析数）
-    SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + m_activeCount.load());
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_queue.insert(m_queue.end(), paths.begin(), paths.end());
+    }
 
+    dispatchWorkersIfNeeded();
     QMetaObject::invokeMethod(m_timer, "start", Qt::QueuedConnection);
 }
 
-void MediaExtractorPipeline::processNextBatch() {
-    std::vector<std::wstring> chunk;
-    const size_t CHUNK_SIZE = 16; // 强行规定每批次最多处理 16 个文件
-     
+void MediaExtractorPipeline::dispatchWorkersIfNeeded() {
+    size_t qSize = 0;
     {
         std::lock_guard<std::mutex> lock(m_queueMutex);
-        if (m_queue.empty() || m_isCanceled.load()) {
-            m_timer->stop();
-            return;
+        qSize = m_queue.size();
+    }
+    if (qSize == 0) return;
+
+    int maxWorkers = std::max(2, QThread::idealThreadCount());
+    int targetWorkers = std::min(maxWorkers, static_cast<int>((qSize + 31) / 32));
+
+    while (m_activeWorkers.load() < targetWorkers) {
+        int current = m_activeWorkers.load();
+        if (m_activeWorkers.compare_exchange_strong(current, current + 1)) {
+            (void)QtConcurrent::run([this]() {
+                dispatchWorkerLoop();
+            });
         }
-         
-        size_t count = std::min(m_queue.size(), CHUNK_SIZE);
-        chunk.assign(m_queue.begin(), m_queue.begin() + count);
-        m_queue.erase(m_queue.begin(), m_queue.begin() + count);
+    }
+}
+
+void MediaExtractorPipeline::processNextBatch() {
+    // 1500ms 定时器作为心跳兜底调度，防止在边缘并发场景下工作线程挂起导致队列未消费完
+    dispatchWorkersIfNeeded();
+}
+
+void MediaExtractorPipeline::dispatchWorkerLoop() {
+#ifdef Q_OS_WIN
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+#endif
+
+    while (!m_isCanceled.load() && !CoreController::isShuttingDown()) {
+        std::vector<std::wstring> batch;
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            if (m_queue.empty()) break;
+            size_t batchSize = std::min(m_queue.size(), static_cast<size_t>(32));
+            batch.assign(m_queue.begin(), m_queue.begin() + batchSize);
+            m_queue.erase(m_queue.begin(), m_queue.begin() + batchSize);
+
+            m_activeCount.fetch_add(static_cast<int>(batch.size()));
+        }
+
+        std::vector<MetadataManager::ExtractedFeatureItem> results;
+        results.reserve(batch.size());
+
+        for (const auto& path : batch) {
+            if (m_isCanceled.load() || CoreController::isShuttingDown()) break;
+
+            QString qPath = QString::fromStdWString(path);
+            QFileInfo info(qPath);
+
+            MetadataManager::ExtractedFeatureItem item;
+            item.path = path;
+            item.mtime = info.lastModified().toMSecsSinceEpoch();
+            item.fileSize = info.size();
+            item.ingestionStatus = 1;
+
+            if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
+                // 单次读盘：同时拿到【原始尺寸】和【512 高清图】
+                DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(qPath, 512);
+                if (dec.isValid) {
+                    item.width = dec.originalSize.width();
+                    item.height = dec.originalSize.height();
+
+                    // 1. 写入 File ID 高清缩略图缓存 (JPEG 85)
+                    DiskMediaExtractor::saveDiskThumbnail(qPath, dec.thumbnail512);
+
+                    // 2. 内存 64x64 快速测色 (<0.5ms)
+                    auto pal = ColorAlgorithmEngine::extractPaletteFromImage(dec.thumbnail512);
+                    if (!pal.isEmpty()) {
+                        QColor dominant = MediaColorExtractor::quantizeColor(pal.first().first);
+                        item.autoColor = dominant.name().toUpper().toStdWString();
+                        item.palettes = pal;
+                    }
+                }
+            }
+
+            results.push_back(item);
+        }
+
+        if (!results.empty() && !m_isCanceled.load() && !CoreController::isShuttingDown()) {
+            MetadataManager::instance().updateExtractedMediaFeaturesBatch(results);
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_queueMutex);
+            m_activeCount.fetch_sub(static_cast<int>(batch.size()));
+        }
     }
 
-    m_activeCount.fetch_add(static_cast<int>(chunk.size()));
-    {
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + m_activeCount.load());
-    }
-     
-    // 异步分片执行
-    (void)QtConcurrent::run([this, chunk]() {
+    m_activeWorkers.fetch_sub(1);
+
 #ifdef Q_OS_WIN
-        CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    CoUninitialize();
 #endif
-        for (const auto& path : chunk) {
-            if (m_isCanceled.load()) {
-                int active = m_activeCount.fetch_sub(1) - 1;
-                if (active < 0) {
-                    m_activeCount.store(0);
-                    active = 0;
-                }
-                SyncStatusService::instance().updateMediaPending(active);
-                continue;
-            }
-            processItemDirect(path);
-        }
-#ifdef Q_OS_WIN
-        CoUninitialize();
-#endif
-    });
 }
 
 void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
@@ -157,10 +198,7 @@ void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
         int active = m_activeCount.fetch_sub(1) - 1;
         if (active < 0) {
             m_activeCount.store(0);
-            active = 0;
         }
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + active);
         return;
     }
 
@@ -171,64 +209,40 @@ void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
     extractDimensions(path, w, h);
     if (m_isCanceled.load()) {
         int active = m_activeCount.fetch_sub(1) - 1;
-        if (active < 0) { m_activeCount.store(0); active = 0; }
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + active);
+        if (active < 0) { m_activeCount.store(0); }
         return;
-    }
-
-    if (w > 0 && h > 0) {
-        MetadataManager::instance().setItemDimensions(path, w, h);
     }
 
     std::wstring colorStr;
     QVector<QPair<QColor, float>> palette;
-    bool success = false;
     
     if (!m_isCanceled.load()) {
         if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
-            // 步骤一：调用 ImageDecoderFacade::loadScaledImage(qPath, 512) 获取 QImage thumb。
-            QImage thumb = ImageDecoderFacade::loadScaledImage(qPath, 512);
+            QImage thumb = DiskMediaExtractor::getCapsuleThumbnail(qPath, 512);
             if (!thumb.isNull()) {
-                // 步骤三：将 thumb 直接（或通过 thumb.scaled(200, 200)）传给 ColorAlgorithmEngine::extractPaletteFromImage(thumb)。
-                // 彻底禁止再次发起磁盘读取。
                 auto pal = ColorAlgorithmEngine::extractPaletteFromImage(thumb);
                 if (!pal.isEmpty()) {
                     QColor dominant = MediaColorExtractor::quantizeColor(pal.first().first);
                     colorStr = dominant.name().toUpper().toStdWString();
                     palette = pal;
-                    success = true;
                 }
             }
         } else if (info.isDir()) {
-            success = extractColor(path, colorStr, palette);
+            extractColor(path, colorStr, palette);
         }
     }
 
     if (m_isCanceled.load()) {
         int active = m_activeCount.fetch_sub(1) - 1;
-        if (active < 0) { m_activeCount.store(0); active = 0; }
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + active);
+        if (active < 0) { m_activeCount.store(0); }
         return;
     }
 
-    if (success) {
-        MetadataManager::instance().setItemVisualMetadata(path, colorStr, palette, false);
-    }
+    MetadataManager::instance().updateExtractedMediaFeatures(path, w, h, colorStr, palette, 1);
 
-    MetadataManager::instance().updateIngestionStatus(path, 1);
-    MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, QString::fromStdWString(path));
-
-    // 递减正在处理的计数并实时通知上报，供主界面进度条平滑由左向右推进
     int active = m_activeCount.fetch_sub(1) - 1;
     if (active < 0) {
         m_activeCount.store(0);
-        active = 0;
-    }
-    {
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        SyncStatusService::instance().updateMediaPending(static_cast<int>(m_queue.size()) + active);
     }
 }
 
@@ -237,12 +251,23 @@ void MediaExtractorPipeline::extractDimensions(const std::wstring& path, int& ou
     if (!info.isFile()) return;
 
     if (info.suffix().toLower() == "svg") {
-        std::lock_guard<std::mutex> guiLock(CapsuleMediaExtractor::s_qtGuiMutex);
+        std::lock_guard<std::mutex> guiLock(DiskMediaExtractor::s_qtGuiMutex);
         QSvgRenderer renderer(info.absoluteFilePath());
         if (renderer.isValid()) {
             QSize sz = renderer.defaultSize();
+            if (sz.isEmpty() || sz.width() <= 0 || sz.height() <= 0) {
+                // defaultSize() 依赖显式 width/height 属性，部分SVG（尤其Illustrator导出）只有viewBox没有该属性会返回0x0
+                // 改用 viewBox 尺寸兜底，viewBox 是矢量图形合法性的必要条件，一定存在
+                QRectF vb = renderer.viewBoxF();
+                sz = vb.size().toSize();
+            }
             outW = sz.width();
             outH = sz.height();
+        }
+        // 若经过 defaultSize 和 viewBox 解析后宽高仍无效，设置 512x512 保底尺寸，防止 0x0 脏数据落库
+        if (outW <= 0 || outH <= 0) {
+            outW = 512;
+            outH = 512;
         }
     } else {
         QSize sz = ImageDecoderFacade::readImageDimensions(info.absoluteFilePath());
@@ -318,4 +343,4 @@ bool MediaExtractorPipeline::extractColor(const std::wstring& path, std::wstring
     return success;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

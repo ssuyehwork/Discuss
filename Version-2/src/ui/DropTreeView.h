@@ -7,7 +7,7 @@
 #include <QMimeData>
 #include <QTimer>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class DropTreeView : public QTreeView {
     Q_OBJECT
@@ -44,6 +44,6 @@ private:
     QString m_emptyHint;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
 #endif // DROPTREEVIEW_H

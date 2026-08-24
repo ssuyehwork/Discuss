@@ -3,7 +3,7 @@
 #include "MetadataManager.h"
 #include <QDebug>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 bool MetadataDao::insertOrUpdateMetadata(const std::wstring& path, const std::string& fid) {
     std::wstring volSerial = MetadataManager::getVolumeSerialNumber(path);
@@ -22,4 +22,4 @@ bool MetadataDao::deleteMetadataByPath(const std::wstring& path) {
     return true;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

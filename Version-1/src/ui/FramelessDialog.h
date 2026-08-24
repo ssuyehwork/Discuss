@@ -13,11 +13,11 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 无边框对话框基类，自带标题栏、关闭按钮（扁平化设计）
- * 适配 ArcMeta 风格，参考旧版 RapidNotes 基因实现
+ * 适配 QuarkMeta 风格，参考旧版 RapidNotes 基因实现
  */
 class FramelessDialog : public QDialog {
     Q_OBJECT
@@ -40,6 +40,7 @@ protected:
     QWidget* m_contentArea;
     QVBoxLayout* m_mainLayout;
     QVBoxLayout* m_outerLayout;
+    QHBoxLayout* m_titleLayout; // 暴露标题栏横向布局，支持子窗口插入自定义功能按钮
     QWidget* m_container;
     QLabel* m_titleLabel;
     QPushButton* m_pinBtn;
@@ -109,6 +110,6 @@ public:
     static void critical(QWidget* parent, const QString& title, const QString& text);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
 #endif // FRAMELESSDIALOG_H

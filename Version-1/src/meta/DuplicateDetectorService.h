@@ -4,7 +4,7 @@
 #include <QImage>
 #include <vector>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 struct DuplicateItemInfo {
     QString folderId;
@@ -28,4 +28,4 @@ public:
     static std::vector<DuplicateConflictGroup> detectDuplicates(const QStringList& newImportedPaths);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

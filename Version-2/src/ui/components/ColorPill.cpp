@@ -7,7 +7,7 @@
 #include <QClipboard>
 #include <QApplication>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 ColorPill::ColorPill(const QColor& color, float ratio, QWidget* parent) : QWidget(parent) {
     setFixedSize(16, 16);
@@ -68,4 +68,4 @@ void ColorPill::mousePressEvent(QMouseEvent* event) {
     QWidget::mousePressEvent(event);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

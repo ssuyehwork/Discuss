@@ -11,7 +11,7 @@
 #include <QScrollArea>
 #include <QTimer>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class BatchCreateDialog : public FramelessDialog {
     Q_OBJECT
@@ -39,6 +39,8 @@ private:
     QSpinBox* m_countSpin = nullptr;
     QComboBox* m_typeCombo = nullptr; // 文件夹 / 文件
     QLineEdit* m_suffixEdit = nullptr; // 后缀名
+
+    QPushButton* m_btnOk = nullptr;          // 确定按钮
     
     QWidget* m_rulesContainer = nullptr;
     QVBoxLayout* m_rulesLayout = nullptr;
@@ -47,4 +49,4 @@ private:
     QTimer* m_autoSaveTimer = nullptr;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

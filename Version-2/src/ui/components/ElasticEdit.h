@@ -3,7 +3,7 @@
 #include <QKeyEvent>
 #include <QResizeEvent>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class ElasticEdit : public QTextEdit {
     Q_OBJECT
@@ -17,4 +17,4 @@ protected:
     void resizeEvent(QResizeEvent* e) override;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

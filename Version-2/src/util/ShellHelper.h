@@ -2,7 +2,7 @@
 #include <QString>
 #include <QStringList>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 系统服务层工具类 (ShellHelper)
@@ -10,11 +10,6 @@ namespace ArcMeta {
  */
 class ShellHelper {
 public:
-    /**
-     * @brief 生成 13 位唯一 Base36 ID (基于毫秒时间戳 + 计数器)
-     */
-    static QString generateBase36Id();
-
     /**
      * @brief 移入回收站
      */
@@ -52,4 +47,4 @@ public:
 
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

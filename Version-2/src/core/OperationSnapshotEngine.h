@@ -7,7 +7,7 @@
 #include <memory>
 #include <QWidget>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 // 1. 支持的操作类型枚举（对应用户原话：“重命名 批量重命名 拖拽分类 删除 添加至收藏 归类到...”）
 enum class SnapshotOperationType {
@@ -15,16 +15,13 @@ enum class SnapshotOperationType {
     BatchRename,       // 批量重命名
     DragCategorize,    // 拖拽分类
     DeleteToTrash,     // 移入回收站/删除
-    ToggleFavorite,    // 添加/取消收藏
-    AssignToCategory   // 归类到...
+    ToggleFavorite     // 添加/取消收藏
 };
 
 // 2. 单个资产项的状态快照原子数据
 struct AssetItemSnapshot {
     QString path;                 // 绝对物理路径
     QString fileName;             // 文件名
-    int primaryCategoryCatId = 0; // 主分类 ID
-    QVector<int> categoryIds;     // 挂载的所有分类 ID 列表
     bool isPinned = false;        // 是否置顶/收藏
     int rating = 0;               // 星级
     QString color;                // 标记颜色
@@ -67,4 +64,4 @@ private:
     OperationSnapshotEngine& operator=(const OperationSnapshotEngine&) = delete;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

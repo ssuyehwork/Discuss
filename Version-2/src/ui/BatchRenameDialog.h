@@ -12,11 +12,12 @@
 #include <QGroupBox>
 #include <QList>
 #include <QTimer>
+#include <QTableWidget>
 #include <vector>
 #include <string>
 #include "../meta/BatchRenameEngine.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class RuleRow;
 
@@ -26,7 +27,7 @@ class RuleRow;
 class BatchRenameDialog : public FramelessDialog {
     Q_OBJECT
 public:
-    explicit BatchRenameDialog(const std::vector<std::wstring>& originalPaths, bool isMirrorSource, QWidget* parent = nullptr);
+    explicit BatchRenameDialog(const std::vector<std::wstring>& originalPaths, QWidget* parent = nullptr);
     ~BatchRenameDialog() override = default;
 
     QString getFirstNewName() const { return m_firstNewName; }
@@ -35,7 +36,6 @@ private slots:
     void onAddRow();
     void updatePreview();
     void onExecute();
-    void onPreview();
     void onBrowseTarget();
     void onImportPreset();
     void onExportPreset();
@@ -48,7 +48,6 @@ private:
     void applyTheme();
 
     std::vector<std::wstring> m_originalPaths;
-    bool m_isMirrorSource = false;
     
     // 预设相关
     QComboBox* m_presetCombo = nullptr;
@@ -70,12 +69,13 @@ private:
     QVBoxLayout* m_rulesLayout = nullptr;
     QList<RuleRow*> m_ruleRows;
     
-    // 动作按钮 (右侧栏)
+    // 右侧实时预览表格 (700px 宽度)
+    QTableWidget* m_table = nullptr;
+
+    // 左侧底部主执行按钮 (水平居中)
     QPushButton* m_btnExecute = nullptr;
-    QPushButton* m_btnCancel = nullptr;
-    QPushButton* m_btnPreview = nullptr;
 
     QString m_firstNewName;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

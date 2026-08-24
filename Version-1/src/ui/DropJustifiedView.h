@@ -5,7 +5,7 @@
 #include <QDropEvent>
 #include <QMimeData>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class DropJustifiedView : public JustifiedView {
     Q_OBJECT
@@ -22,4 +22,4 @@ protected:
     void startDrag(Qt::DropActions supportedActions) override;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

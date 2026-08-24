@@ -12,7 +12,7 @@
 #include <QFrame>
 #include <QButtonGroup>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 高级标签管理弹窗 (模块化组件，对应图二/图三规范)
@@ -44,7 +44,6 @@ private:
     void createTag(const QString& tagName);
 
     QString m_currentPath;
-    bool m_isMirrorSource = false;
     QString m_currentFilter = "all"; // "all" | "uncategorized" | "frequent"
 
     // 顶部组件
@@ -73,4 +72,4 @@ private:
     QMap<QString, int> m_allTagCounts;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

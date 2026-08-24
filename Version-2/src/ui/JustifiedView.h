@@ -4,7 +4,7 @@
 #include <QList>
 #include <vector>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class JustifiedView : public QAbstractItemView {
     Q_OBJECT
@@ -70,4 +70,4 @@ private:
     bool m_layoutDirty = false;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

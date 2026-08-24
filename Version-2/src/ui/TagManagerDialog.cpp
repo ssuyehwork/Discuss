@@ -1,14 +1,13 @@
 #include "TagManagerDialog.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
-#include "../meta/CategoryRepo.h"
-#include "../meta/AmMetaJson.h"
+#include "../meta/QuarkMetaJson.h"
 #include "components/FlowLayout.h"
 #include <QApplication>
 #include <QScreen>
 #include <QFileInfo>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 // 初始化静态会话级最近使用标签队列
 QStringList TagManagerDialog::s_sessionRecentTags;
@@ -20,11 +19,12 @@ void TagManagerDialog::showDialog(QWidget* parent, const QString& currentPath, b
 }
 
 TagManagerDialog::TagManagerDialog(const QString& currentPath, bool isMirrorSource, QWidget* parent)
-    : FramelessDialog("标签管理", parent), m_currentPath(currentPath), m_isMirrorSource(isMirrorSource) {
+    : FramelessDialog("标签管理", parent), m_currentPath(currentPath) {
+    Q_UNUSED(isMirrorSource);
     
-    // 尺寸硬性约束：显示 180px 侧边栏时最小宽度 400px
-    setMinimumSize(400, 350);
-    resize(580, 480);
+    // 严格锁定：默认 1000x800，最小尺寸限制为 800x600，支持自由拖拽缩放
+    setMinimumSize(800, 600);
+    resize(1000, 800);
 
     initContent();
     applyTheme();
@@ -36,12 +36,12 @@ void TagManagerDialog::initContent() {
     mainL->setContentsMargins(0, 0, 0, 0);
     mainL->setSpacing(0);
 
-    // ================= 1. 顶部操作栏（透明搜索框 + 右侧 sidebar 按钮） =================
+    // ================= 1. 顶部操作栏（搜索框占满整行） =================
     QWidget* topBar = new QWidget(this);
     topBar->setFixedHeight(40);
     topBar->setStyleSheet("background: transparent; border-bottom: 1px solid #333;");
     QHBoxLayout* topL = new QHBoxLayout(topBar);
-    topL->setContentsMargins(15, 0, 10, 0);
+    topL->setContentsMargins(15, 0, 15, 0);
     topL->setSpacing(10);
 
     m_searchEdit = new QLineEdit(topBar);
@@ -61,22 +61,30 @@ void TagManagerDialog::initContent() {
         }
     });
     topL->addWidget(m_searchEdit, 1);
+    mainL->addWidget(topBar);
 
-    // 侧边栏折叠按钮
-    m_btnToggleSidebar = new QPushButton(topBar);
-    m_btnToggleSidebar->setFixedSize(24, 24);
+    // ================= 1.1 将侧边栏按钮移至标题栏（置顶按钮左侧，规格 20x20） =================
+    m_btnToggleSidebar = new QPushButton(this);
+    m_btnToggleSidebar->setFixedSize(20, 20);
     m_btnToggleSidebar->setCheckable(true);
     m_btnToggleSidebar->setChecked(true);
-    m_btnToggleSidebar->setIcon(UiHelper::getIcon("sidebar", QColor("#AAAAAA"), 16));
+    m_btnToggleSidebar->setIcon(UiHelper::getIcon("sidebar", QColor("#CCCCCC"), 16));
+    m_btnToggleSidebar->setIconSize(QSize(16, 16));
+    m_btnToggleSidebar->setAutoDefault(false);
     m_btnToggleSidebar->setCursor(Qt::PointingHandCursor);
+    m_btnToggleSidebar->setProperty("tooltipText", "展开/收起侧边栏");
     m_btnToggleSidebar->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-radius: 3px; }"
+        "QPushButton { background-color: transparent; border: none; border-radius: 4px; padding: 0; }"
         "QPushButton:hover { background-color: #3E3E42; }"
+        "QPushButton:pressed { background-color: #555555; }"
     );
+    m_btnToggleSidebar->installEventFilter(this);
     connect(m_btnToggleSidebar, &QPushButton::toggled, this, &TagManagerDialog::onSidebarToggled);
-    topL->addWidget(m_btnToggleSidebar);
 
-    mainL->addWidget(topBar);
+    if (m_titleLayout && m_pinBtn) {
+        int pinIndex = m_titleLayout->indexOf(m_pinBtn);
+        m_titleLayout->insertWidget(pinIndex, m_btnToggleSidebar);
+    }
 
     // ================= 2. 中部核心区域（左侧固定 180px 侧边栏 + 右侧流式内容区） =================
     QWidget* bodyWidget = new QWidget(this);
@@ -126,12 +134,22 @@ void TagManagerDialog::initContent() {
     m_sidebarLayout->addStretch();
     bodyL->addWidget(m_sidebar);
 
-    // B. 右侧标签流式容器区
+    // B. 右侧标签流式容器区（彻底锁定暗黑背景，杜绝系统白底穿透）
     m_scrollArea = new QScrollArea(bodyWidget);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet("QScrollArea { border: none; background: transparent; }");
+    m_scrollArea->setStyleSheet(
+        "QScrollArea { border: none; background-color: #1E1E1E; }"
+        "QScrollBar:vertical { border: none; background: transparent; width: 8px; }"
+        "QScrollBar::handle:vertical { background: #333333; min-height: 20px; border-radius: 4px; }"
+        "QScrollBar::handle:vertical:hover { background: #444444; }"
+    );
+    if (m_scrollArea->viewport()) {
+        m_scrollArea->viewport()->setStyleSheet("background-color: #1E1E1E; border: none;");
+    }
 
     m_contentWidget = new QWidget();
+    m_contentWidget->setAttribute(Qt::WA_StyledBackground, true);
+    m_contentWidget->setStyleSheet("background-color: #1E1E1E;");
     m_contentLayout = new QVBoxLayout(m_contentWidget);
     m_contentLayout->setContentsMargins(15, 15, 15, 15);
     m_contentLayout->setSpacing(15);
@@ -173,11 +191,8 @@ void TagManagerDialog::initContent() {
 
 void TagManagerDialog::onSidebarToggled(bool checked) {
     m_sidebar->setVisible(checked);
-    if (checked) {
-        setMinimumWidth(400); // 180px 侧边栏 + >=220px 内容区
-    } else {
-        setMinimumWidth(200); // 隐藏侧边栏后，最小宽度可缩小至 200px
-    }
+    // 侧边栏折叠/展开时，统一锁定全局最小宽度 800 像素，防止窗口被过度挤压变形
+    setMinimumSize(800, 600);
 }
 
 void TagManagerDialog::onSidebarItemClicked(int id) {
@@ -207,24 +222,18 @@ void TagManagerDialog::onSearchTextChanged(const QString& text) {
 void TagManagerDialog::createTag(const QString& tagName) {
     if (tagName.isEmpty()) return;
 
-    if (m_isMirrorSource) {
-        // 双轨之一：托管库模式 -> 写入 MetadataManager / SQLite
-        MetadataManager::instance().setTags(m_currentPath.toStdWString(), QStringList() << tagName);
-    } else {
-        // 双轨之二：磁盘导航模式 -> 写入本地 .ArcMeta.json
-        QFileInfo info(m_currentPath);
-        AmMetaJson amJson(info.absolutePath().toStdWString());
-        amJson.load();
-        ItemMeta& item = amJson.items()[info.fileName().toStdWString()];
-        
-        bool exists = false;
-        for (const auto& t : item.tags) {
-            if (QString::fromStdWString(t) == tagName) { exists = true; break; }
-        }
-        if (!exists) {
-            item.tags.push_back(tagName.toStdWString());
-            amJson.save();
-        }
+    QFileInfo info(m_currentPath);
+    QuarkMetaJson amJson(info.absolutePath().toStdWString());
+    amJson.load();
+    ItemMeta& item = amJson.items()[info.fileName().toStdWString()];
+    
+    bool exists = false;
+    for (const auto& t : item.tags) {
+        if (QString::fromStdWString(t) == tagName) { exists = true; break; }
+    }
+    if (!exists) {
+        item.tags.push_back(tagName.toStdWString());
+        amJson.save();
     }
 
     // 实时更新规则：新新增的标签瞬时挂载到“最近使用”区域首位
@@ -235,18 +244,7 @@ void TagManagerDialog::createTag(const QString& tagName) {
 }
 
 void TagManagerDialog::refreshTags() {
-    // 双轨分流拉取标签数据...
-    if (m_isMirrorSource) {
-        m_allTagCounts = MetadataManager::instance().getAllTags();
-    } else {
-        QFileInfo info(m_currentPath);
-        AmMetaJson amJson(info.absolutePath().toStdWString());
-        amJson.load();
-        m_allTagCounts.clear();
-        for (const auto& [name, item] : amJson.items()) {
-            for (const auto& t : item.tags) m_allTagCounts[QString::fromStdWString(t)]++;
-        }
-    }
+    m_allTagCounts = MetadataManager::instance().getAllTags();
 
     // 清理标签滚动区域
     while (QLayoutItem* item = m_tagsScrollLayout->takeAt(0)) {
@@ -289,7 +287,7 @@ void TagManagerDialog::refreshTags() {
             QPushButton* btn = new QPushButton(QString("• %1 (%2)").arg(tag).arg(count), flowContainer);
             btn->setCursor(Qt::PointingHandCursor);
             btn->setStyleSheet(
-                "QPushButton { background: transparent; border: 1px solid #333; color: #3498DB; border-radius: 12px; padding: 3px 10px; font-size: 11px; }"
+                "QPushButton { background: transparent; border: 1px solid #333; color: #3498DB; border-radius: 4px; padding: 3px 8px; font-size: 11px; }"
                 "QPushButton:hover { border-color: #3498DB; background-color: #2D2D30; }"
             );
             connect(btn, &QPushButton::clicked, [this, tag]() {
@@ -346,7 +344,7 @@ void TagManagerDialog::refreshTags() {
             QPushButton* btn = new QPushButton(QString("• %1 (%2)").arg(tag).arg(count), flowContainer);
             btn->setCursor(Qt::PointingHandCursor);
             btn->setStyleSheet(
-                "QPushButton { background: transparent; border: 1px solid #333; color: #BBB; border-radius: 12px; padding: 3px 10px; font-size: 11px; }"
+                "QPushButton { background: transparent; border: 1px solid #333; color: #BBB; border-radius: 4px; padding: 3px 8px; font-size: 11px; }"
                 "QPushButton:hover { border-color: #1ABC9C; color: #1ABC9C; background-color: #252526; }"
             );
             connect(btn, &QPushButton::clicked, [this, tag]() {
@@ -365,7 +363,16 @@ void TagManagerDialog::resizeEvent(QResizeEvent* event) {
 }
 
 void TagManagerDialog::applyTheme() {
-    setStyleSheet("QDialog { background-color: #1E1E1E; color: #BBB; }");
+    // 全窗口无死角应用深色主题，覆盖所有子容器与视口
+    setStyleSheet(
+        "TagManagerDialog, QDialog, QWidget#CentralWidget {"
+        "  background-color: #1E1E1E;"
+        "  color: #EEEEEE;"
+        "}"
+        "QFrame#TagDialogBody, QWidget#TagScrollContainer {"
+        "  background-color: #1E1E1E;"
+        "}"
+    );
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

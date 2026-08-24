@@ -4,7 +4,7 @@
 #include "MainWindow.h"
 #include <QDateTime>
 #include <algorithm>
-#include "../meta/AmMetaJson.h"
+#include "../meta/DiskNavigatorService.h"
 #include "Logger.h"
 #include "../core/UndoManager.h"
 #include "../core/BasicCommands.h"
@@ -13,29 +13,27 @@
 #include "ResizeEventFilter.h"
 #include "AddressBar.h"
 #include "../core/CoreController.h"
-#include "CategoryPanel.h"
 #include "ColorPicker.h"
-#include "CategoryModel.h"
 #include "NavPanel.h"
+#include "FavoritePanel.h"
 #include "ContentPanel.h"
+#include "../core/CoreEngine.h"
+#include "../core/CentralEventHub.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
-#include "TagManagerView.h"
 #include "../core/NavigationHistoryService.h"
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
 #include "../meta/DuplicateDetectorService.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../util/DiskMediaExtractor.h"
 #include "DuplicateConflictDialog.h"
 #include "TaskProgressToolBar.h"
-#include "../core/CategoryDropProcessor.h"
+#include "../core/VolumeOnlineManager.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
-#include "../mft/MftReader.h"
-#include "../meta/CategoryRepo.h"
 
 #include "SearchHistoryPanel.h"
 #include "SvgIcons.h"
@@ -60,18 +58,14 @@
 #include "StyleLibrary.h"
 #include "SvgIconRenderer.h"
 #include "../core/SearchHistoryService.h"
-#include "../core/SyncStatusService.h"
 #include "DriveButton.h"
+#include "TagManagerDialog.h"
 #include "../util/ShellHelper.h"
-#include "../util/ImportHelper.h"
-#include "../util/AssetImporter.h"
-using namespace ArcMeta::Style;
+using namespace QuarkMeta::Style;
 #include "../core/ModelContract.h"
 #include <QFileInfo>
 #include <QDir>
 #include "../meta/MetadataManager.h"
-#include "../core/AutoImportManager.h"
-#include "../core/NativeFolderWatcher.h"
 #include "FramelessDialog.h"
 #include "FramelessFileDialog.h"
 #include <QSlider>
@@ -86,98 +80,8 @@ using namespace ArcMeta::Style;
 
 #include <QtConcurrent>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
-CustomFolderImportDialog::CustomFolderImportDialog(QWidget* parent)
-    : FramelessDialog("自动导入", parent) {
-    setFixedWidth(500);
-     
-    QWidget* content = getContentArea();
-    QVBoxLayout* layout = new QVBoxLayout(content);
-    layout->setContentsMargins(20, 15, 20, 20);
-    layout->setSpacing(15);
-
-    QHBoxLayout* pathL = new QHBoxLayout();
-    pathL->setSpacing(8);
-
-    m_edit = new QLineEdit(this);
-    m_edit->setPlaceholderText("请输入或选择文件夹路径...");
-    m_edit->setClearButtonEnabled(true); // 唯一指定清除实现
-    m_edit->setStyleSheet(
-        "QLineEdit { "
-        "  background-color: #252526; "
-        "  color: #F1F1F1; "
-        "  border: 1px solid #3E3E42; "
-        "  border-radius: 4px; "
-        "  padding: 6px 10px; "
-        "  font-family: 'Segoe UI', Microsoft YaHei; "
-        "  font-size: 12px; "
-        "}"
-        "QLineEdit:focus { border: 1px solid #007ACC; }"
-    );
-    pathL->addWidget(m_edit);
-
-    QPushButton* btnBrowse = new QPushButton("浏览", this);
-    btnBrowse->setCursor(Qt::PointingHandCursor);
-    btnBrowse->setStyleSheet(
-        "QPushButton { "
-        "  background-color: #3E3E42; "
-        "  color: #F1F1F1; "
-        "  border: 1px solid #555555; "
-        "  border-radius: 4px; "
-        "  padding: 6px 14px; "
-        "  font-size: 12px; "
-        "}"
-        "QPushButton:hover { background-color: #4E4E52; }"
-    );
-    pathL->addWidget(btnBrowse);
-    layout->addLayout(pathL);
-
-    QHBoxLayout* bottomL = new QHBoxLayout();
-    bottomL->addStretch();
-
-    QPushButton* btnOk = new QPushButton("完成", this);
-    btnOk->setCursor(Qt::PointingHandCursor);
-    btnOk->setStyleSheet(
-        "QPushButton { "
-        "  background-color: #007ACC; "
-        "  color: #FFFFFF; "
-        "  border: none; "
-        "  border-radius: 4px; "
-        "  padding: 6px 20px; "
-        "  font-weight: bold; "
-        "  font-size: 12px; "
-        "}"
-        "QPushButton:hover { background-color: #1C97EA; }"
-    );
-    bottomL->addWidget(btnOk);
-    layout->addLayout(bottomL);
-
-    connect(btnBrowse, &QPushButton::clicked, this, &CustomFolderImportDialog::onBrowse);
-    connect(btnOk, &QPushButton::clicked, this, [this]() {
-        QString path = m_edit->text().trimmed();
-        if (path.isEmpty()) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "路径不能为空！", 1500, QColor("#E81123"));
-            return;
-        }
-        if (!QDir(path).exists()) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "无效的文件夹路径！", 1500, QColor("#E81123"));
-            return;
-        }
-        accept();
-    });
-}
-
-QString CustomFolderImportDialog::selectedPath() const {
-    return m_edit->text().trimmed();
-}
-
-void CustomFolderImportDialog::onBrowse() {
-    QString dir = FramelessFileDialog::getExistingDirectory(this, "选择自动导入文件夹");
-    if (!dir.isEmpty()) {
-        m_edit->setText(QDir::toNativeSeparators(dir));
-    }
-}
 
 
 // 【物理护栏-禁止修改/禁止改为0】全局边缘留白基准值，统一应用于标题栏/导航栏/主体容器右侧
@@ -205,7 +109,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     resize(1200, 800);
     setMinimumSize(1180, 653); // 物理对齐：5x230px面板 + 20px分割手柄 + 10px全局边距
-    setWindowTitle("ArcMeta");
+    setWindowTitle("QuarkMeta");
 
     // ============================================================
     // 【物理护栏 - 禁止移动】事件过滤器必须在 initUi() 之前创建
@@ -315,12 +219,13 @@ void MainWindow::initUi() {
 
     setupCustomTitleBarButtons();
     
-    // 2026-04-11 按照用户要求：物理锁定侧边栏宽度，最大化时仅“内容”区拉伸
-    m_mainSplitter->setStretchFactor(0, 0); // 分类
-    m_mainSplitter->setStretchFactor(1, 0); // 目录导航
-    m_mainSplitter->setStretchFactor(2, 1); // 内容 (主拉伸区)
-    m_mainSplitter->setStretchFactor(3, 0); // 元数据
-    m_mainSplitter->setStretchFactor(4, 0); // 筛选
+    // 物理锁定：主界面从左到右共 5 栏（索引 0:目录导航, 1:收藏夹, 2:内容展示区, 3:元数据, 4:筛选）
+    // 严格确保仅有第三栏“内容展示区”（索引 2）具备拉伸系数 1，其余 4 栏全部锁定为 0！
+    m_mainSplitter->setStretchFactor(0, 0); // 第一栏：目录导航 (NavPanel) -> 固定不拉伸
+    m_mainSplitter->setStretchFactor(1, 0); // 第二栏：收藏夹 (FavoritePanel) -> 严格固定不拉伸！
+    m_mainSplitter->setStretchFactor(2, 1); // 第三栏：内容展示区 (ContentPanel) -> 全界面唯一核心主拉伸区！
+    m_mainSplitter->setStretchFactor(3, 0); // 第四栏：元数据属性栏 (MetaPanel) -> 固定不拉伸
+    m_mainSplitter->setStretchFactor(4, 0); // 第五栏：条件筛选栏 (FilterPanel) -> 固定不拉伸
 
     // 1. 先应用面板显隐状态
     loadPanelVisibility();
@@ -332,9 +237,9 @@ void MainWindow::initUi() {
             m_mainSplitter->restoreState(state);
         });
     } else {
-        // 初始默认分配: 230 | 230 | 600 | 230 | 230
+        // 初始默认分配: 200 << 200 << 550 << 200 << 200
         QList<int> sizes;
-        sizes << 230 << 230 << 600 << 230 << 230;
+        sizes << 200 << 200 << 550 << 200 << 200;
         m_mainSplitter->setSizes(sizes);
     }
 
@@ -345,180 +250,46 @@ void MainWindow::initUi() {
         unifiedNavigateTo(path);
     });
 
-    // 2026-xx-xx 按照 Plan-95：实现收藏文件定位逻辑
-    connect(m_navPanel, &NavPanel::requestLocateFile, this, [this](const QString& path) {
-        QFileInfo fi(path);
-        QString parentDir = fi.absolutePath();
-        
-        // 1. 设置待定位的文件名 (不开启编辑模式)
-        m_contentPanel->setPendingSelectName(fi.fileName(), false);
+    connect(m_navPanel, &NavPanel::requestOpenTrash, this, [this]() {
+        if (m_contentPanel) {
+            m_contentPanel->loadCategory("trash");
+        }
+        if (m_addressBar) {
+            m_addressBar->setPath("trash://");
+        }
+        m_currentPath = "trash://";
+        updateNavButtons();
+        updateStatusBar();
+    });
 
-        // 2. 跳转到父目录
-        unifiedNavigateTo(parentDir);
+    connect(m_favoritePanel, &FavoritePanel::directorySelected, this, [this](const QString& path) {
+        unifiedNavigateTo(path);
+    });
+
+    connect(m_favoritePanel, &FavoritePanel::requestLocateFile, this, [this](const QString& path) {
+        QFileInfo fi(path);
+        m_contentPanel->setPendingSelectName(fi.fileName(), false);
+        unifiedNavigateTo(fi.absolutePath());
     });
 
     connect(m_contentPanel, &ContentPanel::directorySelected, this, [this](const QString& path) {
         unifiedNavigateTo(path);
     });
 
-    // 监听内容容器的右键添加至收藏夹信号 (对应用户原话：“选中某个项目单击右键选择该选项“添加至收藏夹”时，则把选中的项目收藏到收藏区里”)
+    // 监听内容容器的右键添加至收藏夹信号
     connect(m_contentPanel, &ContentPanel::requestAddFavorite, this, [this](const QStringList& paths) {
-        if (m_navPanel) {
+        if (m_favoritePanel) {
             for (const QString& p : paths) {
-                m_navPanel->addFavoriteItem(p);
+                m_favoritePanel->addFavoriteItem(p);
             }
-            m_navPanel->saveFavorites();
+            m_favoritePanel->saveFavorites();
         }
     });
 
-    // 1a. 分类选择多选与单选并存联动 -> 统一导航中枢 (Plan-56)
-    connect(m_categoryPanel, &CategoryPanel::categoriesSelected, this, [this](const QList<int>& ids, const QStringList& /*names*/, const QString& type) {
-        if (type == "category") {
-            QStringList idStrs;
-            for (int id : ids) idStrs.append(QString::number(id));
-            QString compoundId = idStrs.join(",");
-            QString compoundName = QString("已选择 %1 个分类").arg(ids.size());
-            unifiedNavigateTo(kProtocolCategory + compoundId + "?name=" + compoundName);
-        }
-    });
-
-    connect(m_categoryPanel, &CategoryPanel::categorySelected, this, [this](int id, const QString& name, const QString& type, const QString& path) {
-        m_currentCategoryId = id;
-        
-        // 标签管理模式属于特殊 UI 模式，暂时保持独立
-        if (type == "tags") {
-            m_navPanel->hide(); m_contentPanel->hide(); m_metaPanel->hide(); m_filterPanel->hide();
-            m_tagManagerView->refresh(); m_tagManagerView->show();
-            m_isTagManagerMode = true;
-            if (m_addressBar) m_addressBar->setPath("标签管理");
-            if (m_searchEdit && !m_searchEdit->text().isEmpty()) m_tagManagerView->search(m_searchEdit->text().trimmed());
-            return;
-        } else if (m_isTagManagerMode) {
-            m_tagManagerView->hide(); m_navPanel->show(); m_contentPanel->show(); m_metaPanel->show(); m_filterPanel->show();
-            m_isTagManagerMode = false;
-        }
-
-        // 构建协议 URL 并跳转
-        if (type == "category") {
-            unifiedNavigateTo(kProtocolCategory + QString::number(id) + "?name=" + name);
-        } else if (type == "bookmark" && !path.isEmpty()) {
-            unifiedNavigateTo(path);
-        } else if (type == "all" || type == "uncategorized" || type == "untagged" || 
-                   type == "recently_visited" || type == "trash") {
-            unifiedNavigateTo(kProtocolSystem + type);
-        } else {
-            // 回滚：对于未识别的系统项，仅执行搜索展示
-            if (m_searchEdit) { m_searchEdit->blockSignals(true); m_searchEdit->clear(); m_searchEdit->blockSignals(false); }
-            if (m_addressBar) m_addressBar->setPath("分类: " + name);
-            if (!name.isEmpty()) m_contentPanel->search(name);
-        }
-    });
-
-    // 监听侧边栏分类拖拽事件，交由专用的 CategoryDropProcessor 进行后台处理与三大件协同
-    connect(m_categoryPanel, &CategoryPanel::pathsDroppedToCategory, this, [this](const QStringList& paths, int targetCatId) { 
-        if (paths.isEmpty()) return; 
- 
-        CategoryDropProcessor* processor = new CategoryDropProcessor(this); 
-        
-        // 1. 响应进度更新并展现底栏工具栏
-        connect(processor, &CategoryDropProcessor::progressUpdated, this, [this](int processed, int total, int remainingSeconds) {
-            if (m_statusBarWidget) m_statusBarWidget->hide();
-            if (m_taskProgressToolBar) {
-                m_taskProgressToolBar->show();
-                m_taskProgressToolBar->updateProgress(processed, total, remainingSeconds);
-            }
-        });
-
-        // 2. 点击底栏 '×' 触发取消
-        connect(m_taskProgressToolBar, &TaskProgressToolBar::cancelRequested, this, [processor]() {
-            processor->cancel();
-        });
-
-        // 3. 异步处理完成回调：刷新 UI，展示完成状态并启动后台查重
-        connect(processor, &CategoryDropProcessor::processingFinished, this, [this, processor, targetCatId](bool success, int itemCount, const QStringList& newlyImportedPaths) { 
-            Q_UNUSED(success); 
-            
-            CategoryRepo::s_countsDirty.store(true); 
-            m_categoryPanel->requestRefresh(true); 
-            m_contentPanel->refreshAll(); 
-             
-            if (m_taskProgressToolBar) {
-                m_taskProgressToolBar->showCompleted(itemCount, itemCount);
-            }
-
-            // 延迟 3 秒后隐藏进度条并切回常规状态栏
-            QTimer::singleShot(3000, this, [this]() {
-                if (m_taskProgressToolBar) m_taskProgressToolBar->hide();
-                if (m_statusBarWidget) m_statusBarWidget->show();
-            });
-
-            // 启动后台查重管网：
-            if (!newlyImportedPaths.isEmpty()) {
-                (void)QtConcurrent::run([this, newlyImportedPaths, targetCatId]() {
-                    auto conflicts = DuplicateDetectorService::detectDuplicates(newlyImportedPaths);
-                    if (!conflicts.empty()) {
-                        QMetaObject::invokeMethod(this, [this, conflicts, targetCatId]() {
-                            int totalCount = static_cast<int>(conflicts.size());
-                            bool batchApplied = false;
-                            DuplicateResolveAction batchAction = DuplicateResolveAction::UseExisting;
-
-                            for (auto group : conflicts) {
-                                DuplicateResolveAction chosenAction;
-                                if (batchApplied) {
-                                    chosenAction = batchAction;
-                                } else {
-                                    // 按需延迟加载缩略图及宽高特征
-                                    group.existingItem.thumbnail = CapsuleMediaExtractor::getCapsuleThumbnailReadOnly(group.existingItem.path);
-                                    group.newItem.thumbnail = DiskMediaExtractor::getDiskThumbnail(group.newItem.path, 256);
-                                    group.newItem.width = group.newItem.thumbnail.width();
-                                    group.newItem.height = group.newItem.thumbnail.height();
-
-                                    DuplicateConflictDialog dlg(group, totalCount, this);
-                                    if (dlg.exec() != QDialog::Accepted) break;
-
-                                    chosenAction = dlg.selectedAction();
-                                    if (dlg.applyToAll()) {
-                                        batchApplied = true;
-                                        batchAction = chosenAction;
-                                    }
-                                }
-
-                                if (chosenAction == DuplicateResolveAction::UseExisting) {
-                                    // 清理新文件并关联已有资产到目标分类
-                                    QFile::remove(group.newItem.path);
-                                    MetadataManager::instance().removeMetadataSync(group.newItem.path.toStdWString());
-                                    CategoryRepo::addItemToCategory(targetCatId, group.existingItem.folderId.toStdString(), group.existingItem.path.toStdWString());
-                                }
-                            }
-                            CategoryRepo::s_countsDirty.store(true);
-                            m_categoryPanel->requestRefresh(true);
-                            m_contentPanel->refreshAll();
-                        });
-                    }
-                });
-            }
-
-            processor->deleteLater(); 
-        }); 
-         
-        processor->processDroppedPathsAsync(paths, targetCatId); 
-    });
-
-    // 1b. 内容面板内部跳转分类 (双击同步) -> 统一导航中枢 (Plan-56)
-    connect(m_contentPanel, &ContentPanel::categoryClicked, this, [this](int id) {
-        // 通过 Repo 获取分类名称以构建完整的协议 URL
-        auto all = CategoryRepo::getAll();
-        QString name = QString::number(id);
-        for(const auto& cat : all) if(cat.id == id) { name = QString::fromStdWString(cat.name); break; }
-        unifiedNavigateTo(kProtocolCategory + QString::number(id) + "?name=" + name);
-    });
-
-    // 2026-11-xx: 当用户点击新建逻辑子文件夹时，由此信号驱动侧边栏进行无缝联动
-    // 绑定 requestCreateSubCategory 信号到侧边栏 CategoryPanel 的创建方法（对应用户原话：“绑定 requestCreateSubCategory 信号到侧边栏 CategoryPanel 的创建方法”）
-    connect(m_contentPanel, &ContentPanel::requestCreateSubCategory, this, [this](int parentCatId) {
-        if (m_categoryPanel) {
-            m_categoryPanel->selectCategory(parentCatId);
-            m_categoryPanel->onCreateSubCategory();
+    connect(&VolumeOnlineManager::instance(), &VolumeOnlineManager::volumeStateChanged,
+            this, [this](const QString& driveLetter, bool isOnline) {
+        if (!isOnline) {
+            onVolumeUnplugged(driveLetter);
         }
     });
 
@@ -583,23 +354,8 @@ void MainWindow::initUi() {
             m_metaPanel->setNote(rm.note);
             m_metaPanel->setURL(rm.url);
 
-            bool isDiskMode = !m_contentPanel->isMirrorSource() && !MetadataManager::isInsideManagedLibrary(path.toStdWString());
+            bool isDiskMode = true;
             m_metaPanel->setDiskPathMode(isDiskMode, path);
-
-            if (!isDiskMode) {
-                // 托管库模式：拉取文件绑定的真实分类列表并转为胶囊展示
-                std::string fid = MetadataManager::instance().getFolderIdSync(path.toStdWString());
-                std::vector<int> catIds = CategoryRepo::getItemCategoryIds(fid, path.toStdWString());
-                std::vector<std::pair<int, QString>> catPills;
-                
-                for (int cid : catIds) {
-                    Category c = CategoryRepo::getById(cid);
-                    if (c.id > 0) {
-                        catPills.push_back({c.id, QString::fromStdWString(c.name)});
-                    }
-                }
-                m_metaPanel->setCategoryPills(catPills);
-            }
 
             // 将色板数据转换为 QVector<QPair<QColor, float>>
             QVector<QPair<QColor, float>> pal;
@@ -643,12 +399,15 @@ void MainWindow::initUi() {
         }
     });
 
-    // 4. 元数据变化 -> 同步元数据面板
+    // 4. 元数据变化 -> 通过 CoreEngine 指令中心提交持久化，驱动 CentralEventHub 广播
     connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this](int rating) {
         if (m_currentQuickLookPath.isEmpty()) return;
 
-        // 2026-04-11 按照用户要求：补全物理持久化逻辑 (MetadataManager 直接入库)
-        MetadataManager::instance().setRating(m_currentQuickLookPath.toStdWString(), rating);
+        AppCommand cmd;
+        cmd.type = AppCommandType::SetRating;
+        cmd.targetPaths << m_currentQuickLookPath;
+        cmd.params["rating"] = rating;
+        CoreEngine::instance().executeCommand(cmd);
 
         m_metaPanel->setRating(rating);
         
@@ -687,8 +446,11 @@ void MainWindow::initUi() {
     connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this](const QString& color) {
         if (m_currentQuickLookPath.isEmpty()) return;
 
-        // 2026-04-11 按照用户要求：补全物理持久化逻辑 (MetadataManager 直接入库)
-        MetadataManager::instance().setColor(m_currentQuickLookPath.toStdWString(), color.toStdWString());
+        AppCommand cmd;
+        cmd.type = AppCommandType::SetColor;
+        cmd.targetPaths << m_currentQuickLookPath;
+        cmd.params["color"] = color;
+        CoreEngine::instance().executeCommand(cmd);
 
         m_metaPanel->setColor(color.toStdWString());
         
@@ -741,21 +503,22 @@ void MainWindow::initUi() {
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::favoriteRequested, this, [this](const QString& path) {
-        if (!path.isEmpty() && m_navPanel) {
-            m_navPanel->addFavoriteItem(path);
-            m_navPanel->saveFavorites();
+        if (!path.isEmpty() && m_favoritePanel) {
+            m_favoritePanel->addFavoriteItem(path);
+            m_favoritePanel->saveFavorites();
             ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, Style::SuccessGreen);
         }
     });
 
-    // 5a. 目录装载完成 -> FilterPanel 动态填充 (六参数版本: 移除标签统计)
-    connect(m_contentPanel, &ContentPanel::directoryStatsReady, this,
-        [this](const QMap<int,int>& r, const QMap<QString,int>& c,
-               const QMap<QString,int>& tp,
-               const QMap<QString,int>& cd, const QMap<QString,int>& md,
-               int ef) {
-            m_filterPanel->populate(r, c, tp, cd, md, ef);
-        });
+    // 5a. 目录装载完成 -> 通过事件中枢触发 FilterPanel 动态填充
+    connect(m_contentPanel, &ContentPanel::directoryStatsReady, this, [this](const ScanStats& stats) {
+        if (m_filterPanel) {
+            m_filterPanel->populateStats(stats);
+        }
+        AppEvent ev;
+        ev.type = AppEventType::FilterStateChanged;
+        CentralEventHub::instance().publishEvent(ev);
+    });
 
     // 5b. FilterPanel 状态变化 -> 内容面板过滤 (Plan-92: 统一搜索词合并)
     // 2026-05-27 物理加固：补全 this 上下文
@@ -790,11 +553,6 @@ void MainWindow::initUi() {
 
     // 回车搜索核心逻辑 (2026-07-xx 定点修复：搜索框作为筛选器的一个输入组件，走本地过滤引擎)
     auto doSearch = [this](const QString& keyword) {
-        if (m_isTagManagerMode) {
-            m_tagManagerView->search(keyword);
-            return;
-        }
-
         // 2026-07-xx 按照 Plan-118：搜索行为回归筛选流。
         // 搜索框作为当前视图的本地过滤器，不再执行外部 fs 拼装，直接驱动 ContentPanel。
         m_contentPanel->search(keyword);
@@ -841,91 +599,55 @@ void MainWindow::initUi() {
     // 2026-05-27 物理加固：补全 this 上下文
     connect(m_metaPanel, &MetaPanel::metadataChanged, this, [this](int rating, const std::wstring& color) {
         auto indexes = m_contentPanel->getSelectedIndexes();
+        QStringList paths;
         for (const auto& idx : indexes) {
             QString path = idx.data(PathRole).toString(); 
-            if(path.isEmpty()) continue;
-            
-            if (rating != -1) {
-                // 2026-05-24：改为中心化异步持久化
-                MetadataManager::instance().setRating(path.toStdWString(), rating);
-            }
-            if (color != L"__NO_CHANGE__") {
-                MetadataManager::instance().setColor(path.toStdWString(), color);
-            }
+            if(!path.isEmpty()) paths << path;
+        }
+        if (paths.isEmpty()) return;
+
+        if (rating != -1) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetRating;
+            cmd.targetPaths = paths;
+            cmd.params["rating"] = rating;
+            CoreEngine::instance().executeCommand(cmd);
+        }
+        if (color != L"__NO_CHANGE__") {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetColor;
+            cmd.targetPaths = paths;
+            cmd.params["color"] = QString::fromStdWString(color);
+            CoreEngine::instance().executeCommand(cmd);
         }
     });
 
     // 添加标签管网 
     connect(m_metaPanel, &MetaPanel::tagAddRequested, this, [this](const QStringList& paths, const QString& newTag) { 
-        for (const QString& p : paths) { 
-            if (p.isEmpty()) continue; 
-            std::wstring wPath = p.toStdWString(); 
-            bool isManaged = MetadataManager::isInsideManagedLibrary(wPath); 
- 
-            if (isManaged) { 
-                auto meta = MetadataManager::instance().getMeta(wPath); 
-                QStringList curTags = meta.tags; 
-                if (!curTags.contains(newTag)) { 
-                    curTags.append(newTag); 
-                    MetadataManager::instance().setTags(wPath, curTags, false); 
-                } 
-            } else { 
-                QFileInfo info(p); 
-                QString parentDir = QDir::toNativeSeparators(info.absolutePath()); 
-                QString fileName = info.fileName(); 
- 
-                AmMetaJson jsonCache(parentDir.toStdWString()); 
-                jsonCache.load(); 
-                auto& cachedItems = jsonCache.items(); 
-                std::wstring wFileName = fileName.toStdWString(); 
- 
-                if (cachedItems.find(wFileName) == cachedItems.end()) { 
-                    ItemMeta emptyMeta; 
-                    emptyMeta.type = info.isDir() ? L"folder" : L"file"; 
-                    cachedItems[wFileName] = emptyMeta; 
-                } 
-                auto& fileMeta = cachedItems[wFileName]; 
-                std::wstring wNewTag = newTag.toStdWString(); 
-                if (std::find(fileMeta.tags.begin(), fileMeta.tags.end(), wNewTag) == fileMeta.tags.end()) { 
-                    fileMeta.tags.push_back(wNewTag); 
-                    jsonCache.save(); // 物理写入 .ArcMeta.json 
-                } 
-            } 
-            m_contentPanel->updateItemMetadata(p); 
-        } 
+        if (!paths.isEmpty() && !newTag.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::AddTag;
+            cmd.targetPaths = paths;
+            cmd.params["tag"] = newTag;
+            CoreEngine::instance().executeCommand(cmd);
+            for (const QString& p : paths) {
+                m_contentPanel->updateItemMetadata(p);
+            }
+        }
     }); 
  
     // 删除标签管网 
     connect(m_metaPanel, &MetaPanel::tagRemoveRequested, this, [this](const QStringList& paths, const QString& removeTag) { 
-        for (const QString& p : paths) { 
-            if (p.isEmpty()) continue; 
-            std::wstring wPath = p.toStdWString(); 
-            bool isManaged = MetadataManager::isInsideManagedLibrary(wPath); 
- 
-            if (isManaged) { 
-                auto meta = MetadataManager::instance().getMeta(wPath); 
-                QStringList curTags = meta.tags; 
-                curTags.removeAll(removeTag); 
-                MetadataManager::instance().setTags(wPath, curTags, false); 
-            } else { 
-                QFileInfo info(p); 
-                QString parentDir = QDir::toNativeSeparators(info.absolutePath()); 
-                QString fileName = info.fileName(); 
- 
-                AmMetaJson jsonCache(parentDir.toStdWString()); 
-                jsonCache.load(); 
-                auto& cachedItems = jsonCache.items(); 
-                std::wstring wFileName = fileName.toStdWString(); 
- 
-                if (cachedItems.find(wFileName) != cachedItems.end()) { 
-                    auto& fileMeta = cachedItems[wFileName]; 
-                    std::wstring wRemoveTag = removeTag.toStdWString(); 
-                    fileMeta.tags.erase(std::remove(fileMeta.tags.begin(), fileMeta.tags.end(), wRemoveTag), fileMeta.tags.end()); 
-                    jsonCache.save(); // 物理写入 .ArcMeta.json 
-                } 
-            } 
-            m_contentPanel->updateItemMetadata(p); 
-        } 
+        if (!paths.isEmpty() && !removeTag.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::RemoveTag;
+            cmd.targetPaths = paths;
+            cmd.params["tag"] = removeTag;
+            CoreEngine::instance().executeCommand(cmd);
+            for (const QString& p : paths) {
+                m_contentPanel->updateItemMetadata(p);
+            }
+        }
     }); 
 
     // 2026-06-xx调色盘搜索联动：将颜色喂给筛选器，由筛选器驱动过滤
@@ -942,8 +664,6 @@ void MainWindow::initUi() {
             m_contentPanel->migrateModelCache(oldPath, newPath);
             // 重命名成功，同步刷新当前目录
             m_contentPanel->refreshAll();
-            // 同时刷新侧边栏统计计数
-            if (m_categoryPanel) m_categoryPanel->requestRefresh(true);
         } else {
             // 重命名失败，利用 Model 的 updateRecordMetadata 将原先状态重新拉回面板
             m_contentPanel->updateItemMetadata(oldPath);
@@ -951,162 +671,91 @@ void MainWindow::initUi() {
     });
 
     connect(m_metaPanel, &MetaPanel::noteEdited, this, [](const QStringList& paths, const QString& newNote) {
-        for (const QString& path : paths) {
-            MetadataManager::instance().setNote(path.toStdWString(), newNote.toStdWString());
+        if (!paths.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetNote;
+            cmd.targetPaths = paths;
+            cmd.params["note"] = newNote;
+            CoreEngine::instance().executeCommand(cmd);
         }
     });
 
     connect(m_metaPanel, &MetaPanel::linkEdited, this, [](const QStringList& paths, const QString& newLink) {
-        for (const QString& path : paths) {
-            MetadataManager::instance().setURL(path.toStdWString(), newLink.toStdWString());
+        if (!paths.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetURL;
+            cmd.targetPaths = paths;
+            cmd.params["url"] = newLink;
+            CoreEngine::instance().executeCommand(cmd);
         }
     });
 
-    // 解绑分类事件响应
-    connect(m_metaPanel, &MetaPanel::unbindCategoryRequested, this, [this](const QString& path, int catId) {
-        std::string fid = MetadataManager::instance().getFolderIdSync(path.toStdWString());
-        if (!fid.empty()) {
-            CategoryRepo::removeItemFromCategory(catId, fid);
-            CategoryRepo::s_countsDirty.store(true);
-            if (m_categoryPanel) m_categoryPanel->requestRefresh(true);
-            m_contentPanel->updateItemMetadata(path);
-        }
-    });
 
-    // 绑定分类事件响应
-    connect(m_metaPanel, &MetaPanel::bindCategoryRequested, this, [this](const QString& path) {
-        // 触发绑定逻辑，弹出分类选择列表
-        Q_UNUSED(path);
-    });
-
-    // 9. 2026-03-xx 响应元数据全局变更，同步刷新 UI (合并优化，消除重复连接与性能损耗)
-    m_sidebarRefreshTimer = new QTimer(this);
-    m_sidebarRefreshTimer->setInterval(800);
-    m_sidebarRefreshTimer->setSingleShot(true);
-
-    connect(m_sidebarRefreshTimer, &QTimer::timeout, this, [this]() {
-        if (m_categoryPanel) m_categoryPanel->requestRefresh();
-    });
-
-    connect(&MetadataManager::instance(), &MetadataManager::metaChanged, this, [this](const QString& path) {
-        // 1. 全局内容区与侧边栏同步
-        if (path == "__RELOAD_ALL__") {
+    // 9. 响应中央中枢事件，解耦驱动 UI 局部或全局同步
+    connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [this](const QuarkMeta::AppEvent& event) {
+        if (event.type == QuarkMeta::AppEventType::MetadataUpdated) {
+            if (!event.targetPath.isEmpty()) {
+                m_contentPanel->updateItemMetadata(event.targetPath);
+            } else if (!event.paths.isEmpty()) {
+                for (const QString& p : event.paths) {
+                    m_contentPanel->updateItemMetadata(p);
+                }
+            } else {
+                m_contentPanel->refreshAll();
+            }
+        } else if (event.type == QuarkMeta::AppEventType::ItemsDeleted || event.type == QuarkMeta::AppEventType::ItemsRenamed) {
             m_contentPanel->refreshAll();
-            if (m_categoryPanel) {
-                m_categoryPanel->requestRefresh(true);
-            }
-            return;
-        }
-
-        if (path == "__RELOAD_CATEGORY_ONLY__") {
-            if (m_categoryPanel) {
-                m_categoryPanel->requestRefresh(true);
-            }
-            return;
-        }
-
-        // 2. 局部路径更新
-        m_contentPanel->updateItemMetadata(path);
-
-        // 🚨 3. 彻底删掉实时选择反馈：不要在 metaChanged 里重新触发 selectionChanged！防止连锁反馈死循环和抢锁导致的假死
-        /*
-        auto indexes = m_contentPanel->getSelectedIndexes();
-        if (!indexes.isEmpty()) {
-            if (indexes.first().data(PathRole).toString() == path) {
-                emit m_contentPanel->selectionChanged({path});
-            }
-        }
-        */
-
-        // 4. 侧边栏防抖刷新
-        if (m_categoryPanel) {
-            m_sidebarRefreshTimer->start(); // 重置计时器
-        }
-    });
-
-    // 10. 侧边栏点击物理项（文件预览或文件夹跳转）
-    // 2026-05-27 物理加固：补全 this 上下文
-    connect(m_categoryPanel, &CategoryPanel::fileSelected, this, [this](const QString& path) {
-        QFileInfo fi(path);
-        if (fi.isDir()) {
-            // 如果是文件夹，执行界面跳转联动
-            unifiedNavigateTo(path);
-        } else {
-            // 2026-03-xx 按照用户要求：侧边栏选中任何物理文件，立即执行即时全能预览
-            m_contentPanel->previewFile(path);
         }
     });
 
     m_elapsedTimer = new QTimer(this);
     m_elapsedTimer->setInterval(100); // 100ms 动态刷新率
 
-    // 100ms 刷新率计算预计耗时与文案
-    connect(m_elapsedTimer, &QTimer::timeout, this, [this]() {
-        if (m_syncStartTime > 0) {
+    // 时间格式化辅助函数 (秒 -> 00:00 或 00:00:00)
+    auto formatTime = [](qint64 totalSeconds) -> QString {
+        if (totalSeconds < 0) totalSeconds = 0;
+        qint64 hours = totalSeconds / 3600;
+        qint64 mins = (totalSeconds % 3600) / 60;
+        qint64 secs = totalSeconds % 60;
+        if (hours > 0) {
+            return QString("%1:%2:%3")
+                .arg(hours, 2, 10, QChar('0'))
+                .arg(mins, 2, 10, QChar('0'))
+                .arg(secs, 2, 10, QChar('0'));
+        }
+        return QString("%1:%2")
+            .arg(mins, 2, 10, QChar('0'))
+            .arg(secs, 2, 10, QChar('0'));
+    };
+
+    // 1. 扫描进行中定时刷新
+    connect(m_elapsedTimer, &QTimer::timeout, this, [this, formatTime]() {
+        if (m_syncStartTime > 0 && m_totalBatchCount > 0) {
             double elapsedSec = (QDateTime::currentMSecsSinceEpoch() - m_syncStartTime) / 1000.0;
             int currentPct = m_topProgressBar->value();
             
-            // 动态推算预计剩余耗时 (ETA)
-            QString etaStr = "计算中...";
+            int completedCount = qBound(0, (int)((double)currentPct / 100.0 * m_totalBatchCount), m_totalBatchCount);
+
+            QString countdownStr = "00:00";
+            QString totalEstStr = "00:00";
+
             if (currentPct >= 5) {
-                double estRemainingSec = elapsedSec * (100.0 - currentPct) / (double)currentPct;
-                etaStr = QString("%1s").arg(QString::number(estRemainingSec, 'f', 1));
+                qint64 remainingSec = static_cast<qint64>(elapsedSec * (100.0 - currentPct) / (double)currentPct);
+                qint64 totalEstSec = static_cast<qint64>(elapsedSec) + remainingSec;
+                countdownStr = formatTime(remainingSec);
+                totalEstStr = formatTime(totalEstSec);
             }
 
-            // 1. 文案更正为“扫描数据中...”
-            // 2. 耗词更正为“预计耗时”
-            m_statusLeft->setText(QString("扫描数据中... %1%  |  预计耗时: %2")
+            // 统一展示为标准格式
+            m_statusLeft->setText(QString("扫描数据中... %1%  数量：%2/%3  |  倒计时分 %4 / 预计时分: %5")
                                   .arg(currentPct)
-                                  .arg(etaStr));
+                                  .arg(completedCount)
+                                  .arg(m_totalBatchCount)
+                                  .arg(countdownStr)
+                                  .arg(totalEstStr));
         }
     });
 
-    // 监听后台数据感知与扫描变动
-    connect(&SyncStatusService::instance(), &SyncStatusService::statusUpdated,
-            this, [this](bool syncing, int pendingCount) {
-        if (syncing && pendingCount > 0) {
-            // --- 扫描任务启动 ---
-            if (m_syncStartTime == 0) {
-                m_syncStartTime = QDateTime::currentMSecsSinceEpoch();
-                m_totalBatchCount = pendingCount; // 锁定初始任务总量
-                m_elapsedTimer->start();
-                updateProgressBarGeometry();
-                
-                m_topProgressBar->setValue(1); // 从左侧 1% 开始
-                m_topProgressBar->show();
-            }
-            
-            // 动态修正总量（防止扫描过程中新追加任务导致溢出）
-            if (pendingCount > m_totalBatchCount) {
-                m_totalBatchCount = pendingCount;
-            }
-
-            // 3. 严格计算【由左向右】递增的百分比：已完成 / 总项数
-            int completedCount = m_totalBatchCount - pendingCount;
-            int pct = qBound(1, (int)((double)completedCount / m_totalBatchCount * 100), 99);
-            
-            m_topProgressBar->setValue(pct); // 百分比递增，推动进度条从 Left -> Right
-        } else {
-            // --- 扫描任务完成 ---
-            if (m_syncStartTime > 0) {
-                m_topProgressBar->setValue(100); // 光条拉满至最右侧 100%
-                m_elapsedTimer->stop();
-                
-                double totalSec = (QDateTime::currentMSecsSinceEpoch() - m_syncStartTime) / 1000.0;
-                m_statusLeft->setText(QString("数据扫描完成  |  实际耗时: %1s").arg(QString::number(totalSec, 'f', 1)));
-                
-                // 400ms 后平滑淡出隐藏，3 秒后恢复常规项目计数
-                QTimer::singleShot(400, this, [this]() {
-                    m_topProgressBar->hide();
-                    m_syncStartTime = 0;
-                    m_totalBatchCount = 0;
-                    QTimer::singleShot(3000, this, [this]() {
-                        updateStatusBar(); // 恢复常态“10 个项目, 已选中 1 个”
-                    });
-                });
-            }
-        }
-    });
 }
 
 #ifdef Q_OS_WIN
@@ -1129,16 +778,12 @@ void MainWindow::showEvent(QShowEvent* event) {
     if (!m_panelsInitialized) {
         m_panelsInitialized = true;
         QTimer::singleShot(0, [this]() {
-            if (m_categoryPanel) {
-                m_categoryPanel->deferredInit();
-            }
             if (m_navPanel) {
                 m_navPanel->deferredInit();
             }
             if (m_contentPanel) {
                 m_contentPanel->deferredInit();
             }
-            // MetaPanel 和 FilterPanel 暂时不需要延迟数据加载，因为它们通常随选中项动态刷新
         });
     }
     
@@ -1412,7 +1057,7 @@ void MainWindow::setupSplitters() {
     m_logoLabel->setStyleSheet("background: transparent; border: none;");
     m_titleBarLayout->addWidget(m_logoLabel);
 
-    m_appNameLabel = new QLabel("ArcMeta", m_titleBarWidget);
+    m_appNameLabel = new QLabel("QuarkMeta", m_titleBarWidget);
     m_appNameLabel->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold;").arg(BrandOrange.name()));
     m_titleBarLayout->addWidget(m_appNameLabel);
     m_titleBarLayout->addStretch();
@@ -1456,11 +1101,11 @@ void MainWindow::setupSplitters() {
         "QSplitter::handle:hover { background-color: %2; }" 
     ).arg(qssColor(BackgroundDeep)).arg(qssColor(BackgroundHover)));
 
-    m_categoryPanel = new CategoryPanel(this);
-    m_categoryPanel->setObjectName("SidebarContainer");
-    
     m_navPanel = new NavPanel(this);
-    m_navPanel->setObjectName("ListContainer");
+    m_navPanel->setObjectName("SidebarContainer");
+
+    m_favoritePanel = new FavoritePanel(this);
+    m_favoritePanel->setObjectName("FavoriteContainer");
     
     m_contentPanel = new ContentPanel(this);
     m_contentPanel->setObjectName("EditorContainer");
@@ -1471,42 +1116,20 @@ void MainWindow::setupSplitters() {
     m_filterPanel = new FilterPanel(this);
     m_filterPanel->setObjectName("FilterContainer");
 
-    m_tagManagerView = new TagManagerView(this);
-    m_tagManagerView->hide();
-
     // 2026-05-07 按照用户要求：焦点线持久化显示，基于数据来源而非焦点位置
     connect(m_contentPanel, &ContentPanel::dataSourceChanged, this, [this](const QString& source) {
         m_currentDataSource = source;
-        // 重置所有面板高亮
-        if (m_navPanel)      m_navPanel->setFocusHighlight(false);
-        if (m_categoryPanel) m_categoryPanel->setFocusHighlight(false);
-
-        // 根据数据来源显示焦点线
-        if (source == "category") {
-            if (m_categoryPanel) m_categoryPanel->setFocusHighlight(true);
-        } else if (source == "nav") {
-            if (m_navPanel) m_navPanel->setFocusHighlight(true);
-        }
+        // 重置面板高亮
+        if (m_navPanel) m_navPanel->setFocusHighlight(source == "nav");
         // 其他来源（搜索、筛选等）不显示焦点线
     });
 
-    m_mainSplitter->addWidget(m_categoryPanel);
+    // 5栏平铺布局：1. 目录导航 | 2. 收藏夹 | 3. 内容展示区 | 4. 元数据属性栏 | 5. 条件筛选栏
     m_mainSplitter->addWidget(m_navPanel);
+    m_mainSplitter->addWidget(m_favoritePanel);
     m_mainSplitter->addWidget(m_contentPanel);
     m_mainSplitter->addWidget(m_metaPanel);
     m_mainSplitter->addWidget(m_filterPanel);
-    m_mainSplitter->addWidget(m_tagManagerView);
-
-    // 2026-07-xx 按照用户要求：标签搜索联动
-    connect(m_tagManagerView, &TagManagerView::requestSearchTag, this, [this](const QString& tag) {
-        // 自动切回正常模式并搜索
-        if (m_categoryPanel) m_categoryPanel->selectCategory(-1); // 选中“全部数据”
-        if (m_searchEdit) m_searchEdit->setText(tag);
-        
-        // 标签跳转默认作为全局搜索处理 (不限范围)
-        QStringList paths = MetadataManager::instance().searchInCache(tag);
-        m_contentPanel->loadPaths(paths);
-    });
 
     m_bodyLayout->addWidget(m_mainSplitter);
 
@@ -1673,29 +1296,6 @@ void MainWindow::setupCustomTitleBarButtons() {
         }
     });
 
-    m_btnSync = createTitleBtn("sync");
-    m_btnSync->setProperty("tooltipText", "元数据已同步至物理文件");
-    m_btnSync->installEventFilter(m_hoverFilter);
-
-    // 2026-07-xx 按照用户要求 (Plan-121)：通过试点服务解耦同步状态展示
-    connect(&SyncStatusService::instance(), &SyncStatusService::statusUpdated, this, [this](bool syncing, int count) {
-        if (syncing) {
-            m_btnSync->setIcon(UiHelper::getIcon("sync", ErrorRed)); // 强制红色
-            m_btnSync->setProperty("tooltipText", QString("正在同步元数据 (%1 项待落盘)...").arg(count));
-        } else {
-            m_btnSync->setIcon(UiHelper::getIcon("sync", TextMain)); // 恢复正常
-            m_btnSync->setProperty("tooltipText", "元数据已同步至物理文件");
-        }
-    });
-
-    // 2026-06-15 按照用户要求：手动点击同步 (仅作交互反馈)
-    connect(m_btnSync, &QPushButton::clicked, this, [this]() {
-        if (SyncStatusService::instance().isSyncing()) {
-            ToolTipOverlay::instance()->showText(m_btnSync->mapToGlobal(QPoint(0,0)), "同步正在进行中...", 1500);
-        } else {
-            ToolTipOverlay::instance()->showText(m_btnSync->mapToGlobal(QPoint(0,0)), "元数据已全部落地", 1500);
-        }
-    });
 
     m_btnLayout = createTitleBtn("layout");
     m_btnLayout->setProperty("tooltipText", "布局管理与重置");
@@ -1763,7 +1363,6 @@ void MainWindow::setupCustomTitleBarButtons() {
 
     // 右侧功能按钮组容器（内部维护 5px 严格按钮间距）
     layout->addWidget(m_btnToggleDriveBar, 0, Qt::AlignVCenter);
-    layout->addWidget(m_btnSync, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnLayout, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnCreate, 0, Qt::AlignVCenter);
     layout->addWidget(m_btnPinTop, 0, Qt::AlignVCenter);
@@ -1794,7 +1393,6 @@ void MainWindow::setupCustomTitleBarButtons() {
 
 void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
     if (url.isEmpty()) return;
-    ArcMeta::Logger::log(QString("[Main] 统一导航调度 -> %1 %2").arg(url).arg(record ? "(记录历史)" : "(不记录)"));
 
     // 1. 物理重置搜索与筛选状态
     if (m_searchEdit) {
@@ -1822,88 +1420,31 @@ void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
         }
     }
 
-    // 3. 协议分流加载
-    if (url.startsWith(kProtocolCategory)) {
-        // category://{id}?name={name}
-        QString params = url.mid(kProtocolCategory.length());
-        int qMark = params.indexOf('?');
-        QString rawIds = params.left(qMark == -1 ? params.length() : qMark);
-        QString name = (qMark != -1) ? params.mid(qMark + 6) : rawIds;
+    // 3. 协议加载
+    m_contentPanel->show();
+    loadPanelVisibility();
 
-        QList<int> ids;
-        for (const QString& part : rawIds.split(",", Qt::SkipEmptyParts)) {
-            bool ok;
-            int parsed = part.toInt(&ok);
-            if (ok) ids.append(parsed);
-        }
-
-        if (ids.size() == 1) {
-            int id = ids.first();
-            if (m_categoryPanel) {
-                m_categoryPanel->blockSignals(true);
-                m_categoryPanel->selectCategory(id);
-                m_categoryPanel->blockSignals(false);
-            }
-            if (m_contentPanel) m_contentPanel->loadCategory(id);
-            if (m_addressBar) m_addressBar->setPath("分类: " + name);
-        } else if (!ids.isEmpty()) {
-            // 多选场景，批量加载分类列表
-            if (m_contentPanel) m_contentPanel->loadCategories(ids);
-            if (m_addressBar) m_addressBar->setPath(name);
-        }
-        m_currentPath = url; // 逻辑路径
-    }
-    else if (url.startsWith(kProtocolSystem)) {
-        // system://all | trash | etc.
-        QString type = url.mid(kProtocolSystem.length());
-        
-        m_contentPanel->show(); // 基础显示
-        loadPanelVisibility();
-
-        if (m_categoryPanel) {
-            m_categoryPanel->blockSignals(true);
-            m_categoryPanel->selectCategoryByType(type);
-            m_categoryPanel->blockSignals(false);
-        }
-        if (m_contentPanel) {
-            m_contentPanel->setCurrentCategoryType(type);
-            m_contentPanel->loadPaths(CategoryRepo::getSystemCategoryPaths(type));
-        }
-        if (m_addressBar) m_addressBar->setPath("系统: " + type);
-        m_currentPath = url;
-    }
-    else {
-        // 2026-08-xx 按照 Plan-128：常规导航，根据记忆状态恢复显示
-        m_contentPanel->show();
-        loadPanelVisibility();
-
-        // 物理路径 (file:// 或 原生路径)
-        QString path = url;
-        if (path.startsWith(kProtocolFile)) path = path.mid(kProtocolFile.length());
-        
-        if (path == "computer://") {
-            if (m_addressBar) m_addressBar->setPath("computer://");
-            if (m_contentPanel) m_contentPanel->loadDirectory("");
-            if (m_navPanel) m_navPanel->selectPath("computer://");
-            m_currentPath = "computer://";
-        } else {
-            QString normPath = QDir::toNativeSeparators(path);
-            if (m_addressBar) m_addressBar->setPath(normPath);
-            if (m_contentPanel) m_contentPanel->loadDirectory(normPath);
-            if (m_navPanel) m_navPanel->selectPath(normPath);
-            m_currentPath = normPath;
-            // 物理导航历史与业务剥离由 Controller 统一接管
-            NavigationHistoryService::recordRecentVisitedFolder(normPath.toStdWString());
-        }
+    // 物理路径 (file:// 或 原生路径)
+    QString path = url;
+    if (path.startsWith(kProtocolFile)) path = path.mid(kProtocolFile.length());
+    
+    if (path == "computer://") {
+        if (m_addressBar) m_addressBar->setPath("computer://");
+        if (m_contentPanel) m_contentPanel->loadDirectory("");
+        if (m_navPanel) m_navPanel->selectPath("computer://");
+        m_currentPath = "computer://";
+    } else {
+        QString normPath = QDir::toNativeSeparators(path);
+        if (m_addressBar) m_addressBar->setPath(normPath);
+        if (m_contentPanel) m_contentPanel->loadDirectory(normPath);
+        if (m_navPanel) m_navPanel->selectPath(normPath);
+        m_currentPath = normPath;
+        // 物理导航历史与业务剥离由 Controller 统一接管
+        NavigationHistoryService::recordRecentVisitedFolder(normPath.toStdWString());
     }
 
-    // 2026-07-xx 按照 Plan-118：通知筛选面板当前数据源性质
     if (m_filterPanel && m_contentPanel) {
-        bool isMirror = m_contentPanel->isMirrorSource();
-        if (!isMirror && !m_currentPath.isEmpty() && m_currentPath != "computer://") {
-            isMirror = MetadataManager::isInsideManagedLibrary(m_currentPath.toStdWString());
-        }
-        m_filterPanel->setMirrorSource(isMirror);
+        m_filterPanel->setMirrorSource(false);
     }
 
     updateNavButtons();
@@ -1944,6 +1485,19 @@ void MainWindow::updateNavButtons() {
     bool isLogic = m_currentPath.contains("://");
     bool atRoot = (m_currentPath == "computer://" || (!isLogic && QDir(m_currentPath).isRoot()));
     m_btnUp->setEnabled(!atRoot && !m_currentPath.isEmpty());
+}
+
+void MainWindow::onVolumeUnplugged(const QString& driveLetter) {
+    QString targetLib = "QuarkMeta.library_" + driveLetter.toLower();
+    
+    bool isCurrentOnUnpluggedDrive = false;
+    if (m_currentPath.contains(driveLetter + ":", Qt::CaseInsensitive)) {
+        isCurrentOnUnpluggedDrive = true;
+    }
+
+    if (isCurrentOnUnpluggedDrive) {
+        unifiedNavigateTo("computer://");
+    }
 }
 
 void MainWindow::onStatusBarStatsUpdated(int fileCount, int folderCount, int totalCount) {
@@ -2029,8 +1583,6 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     }
     AppConfig::instance().sync();
 
-    // 2026-06-xx 物理加固：退出前强制所有分类数据落盘，彻底解决因防抖计时器导致的重启回滚问题
-    CategoryRepo::saveImmediately();
 
     QMainWindow::closeEvent(event);
 }
@@ -2054,8 +1606,8 @@ void MainWindow::populatePanelMenu(QMenu* menu) {
         });
     };
 
-    addToggleAction("显示分类栏", m_categoryPanel);
     addToggleAction("显示目录导航", m_navPanel);
+    addToggleAction("显示收藏夹", m_favoritePanel);
     addToggleAction("显示内容区", m_contentPanel, false); // 核心区锁定不可隐藏
     addToggleAction("显示元数据栏", m_metaPanel);
     addToggleAction("显示筛选栏", m_filterPanel);
@@ -2069,21 +1621,25 @@ void MainWindow::populatePanelMenu(QMenu* menu) {
 void MainWindow::resetSplitterLayout() {
     // 1. 物理恢复可见性并退出特殊模式
     m_isTagManagerMode = false;
-    m_tagManagerView->hide();
 
-    m_categoryPanel->show();
     m_navPanel->show();
+    m_favoritePanel->show();
     m_contentPanel->show();
     m_metaPanel->show();
     m_filterPanel->show();
 
-    // 2. 物理恢复尺寸比例 (索引 0-4)
+    // 2. 物理恢复 5 栏尺寸比例 (Index 0: NavPanel, Index 1: FavoritePanel, Index 2: ContentPanel, Index 3: MetaPanel, Index 4: FilterPanel)
     QList<int> sizes;
-    sizes << 230 << 230 << 600 << 230 << 230;
-    // 如果 TagManagerView 在索引 5，需确保其 size 为 0 或处于 hide 状态
-    if (m_mainSplitter->count() > 5) sizes << 0;
+    sizes << 200 << 200 << 550 << 200 << 200;
 
     m_mainSplitter->setSizes(sizes);
+    
+    // 重新强制刷新 stretchFactor，确保无脑切回标准
+    m_mainSplitter->setStretchFactor(0, 0);
+    m_mainSplitter->setStretchFactor(1, 0);
+    m_mainSplitter->setStretchFactor(2, 1);
+    m_mainSplitter->setStretchFactor(3, 0);
+    m_mainSplitter->setStretchFactor(4, 0);
 
     // 3. 清除持久化状态，防止重启后回滚旧布局
     AppConfig::instance().remove("MainWindow/SplitterState");
@@ -2098,22 +1654,20 @@ void MainWindow::loadPanelVisibility() {
     if (!val.isValid()) return;
 
     QStringList hiddenPanels = val.toStringList();
-    if (hiddenPanels.contains("category")) m_categoryPanel->hide();
     if (hiddenPanels.contains("nav"))      m_navPanel->hide();
+    if (hiddenPanels.contains("favorite")) m_favoritePanel->hide();
     if (hiddenPanels.contains("meta"))     m_metaPanel->hide();
     if (hiddenPanels.contains("filter"))   m_filterPanel->hide();
 }
 
 void MainWindow::savePanelVisibility() {
-    // 2026-08-xx 物理回避：在标签管理等收敛模式下，禁止保存当前布局状态，
-    // 防止覆盖用户正常的日常分栏配置。
     if (m_isTagManagerMode) {
         return;
     }
 
     QStringList hiddenPanels;
-    if (!m_categoryPanel->isVisible()) hiddenPanels << "category";
     if (!m_navPanel->isVisible())      hiddenPanels << "nav";
+    if (!m_favoritePanel->isVisible()) hiddenPanels << "favorite";
     if (!m_metaPanel->isVisible())     hiddenPanels << "meta";
     if (!m_filterPanel->isVisible())   hiddenPanels << "filter";
     
@@ -2134,391 +1688,31 @@ void MainWindow::initDriveBar() {
     m_driveBarLayout->setContentsMargins(15, 5, 15, 5);
     m_driveBarLayout->setSpacing(8);
 
-    auto drives = QDir::drives();
-    for (const QFileInfo& drive : drives) {
-        QString letter = drive.absolutePath().left(2);
-        if (letter.endsWith("/")) letter = letter.left(1) + ":";
-        
-        DriveButton* btn = new DriveButton(letter, m_driveBarWidget);
-        m_driveButtons[letter] = btn;
-        m_driveBarLayout->addWidget(btn);
+    // 🚨 按照用户要求：彻底根除盘符按钮生成逻辑，替换为使用 SVG 矢量图标的“标签管理”按钮
+    m_btnTagManager = new QPushButton(UiHelper::getIcon("tag", QColor("#1abc9c"), 18), " 标签管理", m_driveBarWidget);
+    m_btnTagManager->setFixedHeight(28); // 由 32px 缩减为 28px，确保在 42px 容器内留有呼吸空间，彻底消除边框截断
+    m_btnTagManager->setCursor(Qt::PointingHandCursor);
+    m_btnTagManager->setStyleSheet(QString(
+        "QPushButton { background-color: %1; border: 1px solid %2; border-radius: 4px; padding: 0 12px; color: %3; font-weight: bold; font-size: 13px; }"
+        "QPushButton:hover { background-color: %4; border-color: #1abc9c; color: #FFFFFF; }"
+        "QPushButton:pressed { background-color: %5; }"
+    ).arg(qssColor(BackgroundHeader))
+     .arg(qssColor(BorderColor))
+     .arg(qssColor(TextMain))
+     .arg(qssColor(BackgroundHover))
+     .arg(qssColor(PressedBackground)));
 
-        connect(btn, &QPushButton::clicked, this, &MainWindow::onDriveButtonClicked);
-        btn->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(btn, &QWidget::customContextMenuRequested, this, &MainWindow::onDriveButtonContextMenu);
-        
-        // 根据资源库是否存在初始化状态
-        QString managedPath = drive.absolutePath() + "ArcMeta.Library_" + letter.left(1);
-        if (QDir(managedPath).exists()) {
-            btn->setState(DriveButton::Active);
-        } else {
-            btn->setState(DriveButton::Inactive);
-        }
-    }
+    connect(m_btnTagManager, &QPushButton::clicked, this, [this]() {
+        TagManagerDialog::showDialog(this, m_currentPath, false);
+    });
+
+    m_driveBarLayout->addWidget(m_btnTagManager);
     m_driveBarLayout->addStretch();
 
-    // 自动追加加载自定义 monitored buttons
-    updateCustomFolderButtons();
-
-    // 连接文件监视信号，当发现第三方删除资源库或自定义监控文件夹时安全更新 UI 与底层除账
-    connect(&NativeFolderWatcher::instance(), &NativeFolderWatcher::managedFolderRemoved, this, [this](const std::wstring& path) {
-        QString qPath = QString::fromStdWString(path);
-        std::wstring normPath = MetadataManager::normalizePath(path);
-        QString finalPath = QString::fromStdWString(normPath);
-
-        QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-
-        // 如果被移动/删除的是自定义监控文件夹，自动触发注销逻辑
-        if (customFolders.contains(finalPath) || customFolders.contains(qPath)) {
-            removeCustomMonitoredFolder(qPath);
-        } else {
-            // 默认资源库清退逻辑
-            QFileInfo info(qPath);
-            QString letter = info.absolutePath().left(2).toUpper(); // "D:"
-            if (m_driveButtons.contains(letter)) {
-                m_driveButtons[letter]->setState(DriveButton::Inactive); // 蓝色打勾变灰色
-            }
-            // 底层数据物理除账
-            MetadataManager::instance().removeMetadataSync(path);
-        }
-    });
-}
-
-void MainWindow::onDriveButtonClicked() {
-    // TODO: 盘符点击逻辑待后期安排
-}
-
-void MainWindow::onDriveButtonContextMenu(const QPoint& pos) {
-    DriveButton* btn = qobject_cast<DriveButton*>(sender());
-    if (!btn) return;
-    QString letter = btn->driveLetter();
-    QString managedPath = letter + "/ArcMeta.Library_" + letter.left(1);
-
-    QMenu menu(this);
-    UiHelper::applyMenuStyle(&menu);
-    if (!QDir(managedPath).exists()) {
-        menu.addAction("创建资源库")->setData(1);
-    } else {
-        menu.addAction("打开资源库")->setData(2);
-        menu.addAction("重新扫描该库")->setData(3);
-    }
-
-    QAction* act = menu.exec(btn->mapToGlobal(pos));
-    if (!act) return;
-    int val = act->data().toInt();
-    if (val == 1) {
-        if (QDir().mkpath(managedPath)) {
-            btn->setState(DriveButton::Active);
-            
-            // 2026-08-xx 物理同步：创建资源库时，同步注册逻辑分类并锚定 FRN
-            std::wstring wPath = QDir::toNativeSeparators(managedPath).toStdWString();
-            std::string fid;
-            std::wstring frnStr;
-            if (MetadataManager::fetchWinApiMetadataDirect(wPath, fid, &frnStr)) {
-                try {
-                    Category cat;
-                    cat.name = QFileInfo(managedPath).fileName().toStdWString();
-                    cat.physicalFrn = std::stoull(frnStr, nullptr, 16);
-                    cat.physicalPath = wPath;
-                    cat.color = CategoryRepo::getDefaultColor();
-                    if (CategoryRepo::add(cat)) {
-                        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
-                    }
-                } catch (...) {}
-            }
-
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "资源库创建成功", 1500, Style::SuccessGreen);
-        }
-    } else if (val == 2) {
-        ShellHelper::openInExplorer(managedPath);
-    } else if (val == 3) {
-        rescanManagedLibrary(managedPath);
-    }
-}
-
-void MainWindow::rescanManagedLibrary(const QString& libraryPath) {
-    if (!QDir(libraryPath).exists()) return;
-
-    ToolTipOverlay::instance()->showText(QCursor::pos(), "正在扫描托管库并重新提取元数据...", 2000, QColor("#378ADD"));
-
-    // 在后台线程执行物理扫描与元数据重提取
-    (void)QtConcurrent::run([libraryPath]() {
-        std::wstring wLibPath = QDir::toNativeSeparators(libraryPath).toStdWString();
-        
-        // 1. 深入物理目录，注册/修复库内所有文件的基本信息
-        MetadataManager::instance().markAsRegistered(wLibPath);
-
-        // 2. 重新扫描并驱动 MediaExtractorPipeline 提取高级多媒体特征（分辨率、主色调、调色盘）
-        MetadataManager::instance().notifyFullUIRebuild();
-    });
-}
-
-void MainWindow::updateCustomFolderButtons() {
-    // 清除既有 custom folder 按钮
-    for (FolderButton* btn : m_folderButtons) {
-        m_driveBarLayout->removeWidget(btn);
-        btn->deleteLater();
-    }
-    m_folderButtons.clear();
-
-    // 载入配置并追加
-    QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-    int insertIndex = m_driveBarLayout->count() - 1; // 插入在末尾 stretch spacer 之前
-    if (insertIndex < 0) insertIndex = 0;
-
-    QStringList validFolders;
-    bool hasInvalid = false;
-
-    for (const QString& path : customFolders) {
-        std::wstring normPath = MetadataManager::normalizePath(path.toStdWString());
-        QString finalPath = QString::fromStdWString(normPath);
-
-        // 🚨 核心自愈逻辑：如果在物理磁盘上文件夹已经不存在（被移走或删除），自动触发数据清洗与自动解绑！
-        if (!QDir(finalPath).exists()) {
-            qWarning() << "[DriveBar] 检测到监控文件夹在硬盘上已失效，自动清退:" << finalPath;
-            
-            // 1. 从 NativeFolderWatcher 监控中注销此路径
-            NativeFolderWatcher::instance().removeWatch(normPath);
-
-            // 2. 彻底清洗数据库元数据
-            MetadataManager::instance().removeMetadataSync(normPath);
-
-            // 3. 清除相关配置
-            AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(path), QVariant());
-            AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(path), QVariant());
-            AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(finalPath), QVariant());
-            AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(finalPath), QVariant());
-            
-            hasInvalid = true;
-            continue; // 跳过，不进行 UI 按钮绘制
-        }
-
-        validFolders.append(finalPath);
-
-        FolderButton* btn = new FolderButton(finalPath, m_driveBarWidget);
-        btn->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(btn, &QWidget::customContextMenuRequested, this, &MainWindow::onFolderButtonContextMenu);
-        
-        // 单击该文件夹按钮，自动将内容导航面板重定向至此物理路径
-        connect(btn, &QPushButton::clicked, this, [this, finalPath]() {
-            m_navPanel->setRootPath(finalPath);
-            unifiedNavigateTo(finalPath);
-        });
-
-        m_driveBarLayout->insertWidget(insertIndex++, btn);
-        m_folderButtons.push_back(btn);
-    }
-
-    // 配置回写与同步
-    if (hasInvalid) {
-        AppConfig::instance().setValue("DriveBar/CustomMonitoredFolders", validFolders);
-        AppConfig::instance().sync();
-    }
 }
 
 void MainWindow::onDriveBarContextMenu(const QPoint& pos) {
-    QMenu menu(this);
-    UiHelper::applyMenuStyle(&menu);
-    QAction* act = menu.addAction("自动导入");
-    
-    QAction* selectedAct = menu.exec(m_driveBarWidget->mapToGlobal(pos));
-    if (selectedAct == act) {
-        showNewAutoImportDialog();
-    }
-}
-
-void MainWindow::showNewAutoImportDialog() {
-    CustomFolderImportDialog dlg(this);
-    if (dlg.exec() == QDialog::Accepted) {
-        QString path = dlg.selectedPath();
-        if (!path.isEmpty()) {
-            QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-            std::wstring normPath = MetadataManager::normalizePath(path.toStdWString());
-            QString finalPath = QString::fromStdWString(normPath);
-
-            if (customFolders.contains(finalPath)) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "该文件夹已在监控列表中！", 1500, QColor("#E81123"));
-                return;
-            }
-
-            // 1. 记入 AppConfig 并持久化
-            customFolders.append(finalPath);
-            AppConfig::instance().setValue("DriveBar/CustomMonitoredFolders", customFolders);
-            AppConfig::instance().sync();
-
-            // 2. 动态点火 NativeFolderWatcher 的监控
-            NativeFolderWatcher::instance().addWatch(normPath);
-
-            // 2a. 自动同步对账整改：立即扫描外部目录中既有的所有文件/文件夹并迁移
-            QDir importDir(finalPath);
-            QStringList entries = importDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-            if (!entries.isEmpty()) {
-                QString drive = finalPath.left(3);
-                QString managedRoot = drive + "ArcMeta.Library_" + drive.at(0).toUpper();
-                QDir().mkpath(managedRoot);
-
-                QStringList pathsToImport;
-                for (const QString& entryName : entries) {
-                    pathsToImport << QDir::toNativeSeparators(importDir.absoluteFilePath(entryName));
-                }
-
-                // 统一调用 AssetImporter::importAssets 搬运，targetCatId = 0，不弹窗问询
-                AssetImporter::importAssets(pathsToImport, 0, nullptr, [this]() {
-                    MetadataManager::instance().notifyFullUIRebuild();
-                }, true);
-            }
-
-            // 3. 重新加载渲染盘符栏 FolderButtons
-            updateCustomFolderButtons();
-
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "已开始自动监控该文件夹", 1500, Style::SuccessGreen);
-        }
-    }
-}
-
-void MainWindow::onFolderButtonContextMenu(const QPoint& pos) {
-    FolderButton* btn = qobject_cast<FolderButton*>(sender());
-    if (!btn) return;
-    QString path = btn->folderPath();
-
-    QMenu menu(this);
-    UiHelper::applyMenuStyle(&menu);
-    QAction* actNew = menu.addAction("自动导入");
-    QAction* actRemove = menu.addAction("解除监控");
-
-    menu.addSeparator();
-
-    QString colorStr = AppConfig::instance().getValue(QString("DriveBar/FolderColor_%1").arg(path), "#FFFFFF").toString();
-    QColor folderColor = QColor(colorStr);
-    if (!folderColor.isValid()) {
-        folderColor = Style::TextMain;
-    }
-
-    // 1. 新增 “设定分类色” 水平色块，直接展露在主菜单上
-    QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
-    ColorStripPicker* colorPickerWidget = new ColorStripPicker(colorStr, &menu);
-    colorPickerAction->setDefaultWidget(colorPickerWidget);
-    menu.addAction(colorPickerAction);
-
-    connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [btn, path, &menu](const QString& hexColor) {
-        AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(path), hexColor.toUpper());
-        AppConfig::instance().sync();
-        
-        // 如果此物理路径在资源库内已被入库标记为分类，同时也应同步存入 categories 表
-        std::wstring normPath = MetadataManager::normalizePath(path.toStdWString());
-        MetadataManager::instance().setColor(normPath, hexColor.toUpper().toStdWString(), true);
-        
-        btn->update();
-        menu.close();
-    });
-
-    // 3. 新增 “文件夹图标” 二级子菜单
-    QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", WarningOrange, 18), "文件夹图标");
-    UiHelper::applyMenuStyle(iconMenu);
-
-    QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
-    QWidget* pickerWidget = new QWidget(iconMenu);
-    QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
-    pickerLayout->setContentsMargins(6, 6, 6, 6);
-    pickerLayout->setSpacing(6);
-
-    static const QList<QPair<QString, QString>> builtInIcons = {
-        {"默认文件夹", "folder_filled"},
-        {"层级分类", "category"},
-        {"照片媒体", "image_filled"},
-        {"时钟历史", "clock_filled"},
-        {"星标收藏", "star_filled"},
-        {"爱心常用", "heart_filled"},
-        {"加密安全", "lock_filled"},
-        {"图书文档", "book"},
-        {"配置管理", "settings_filled"},
-        {"网络球体", "globe_filled"}
-    };
-
-    int row = 0;
-    int col = 0;
-    for (const auto& pair : builtInIcons) {
-        QString label = pair.first;
-        QString iconKey = pair.second;
-
-        QPushButton* btnIcon = new QPushButton(pickerWidget);
-        btnIcon->setFixedSize(28, 28);
-        btnIcon->setCursor(Qt::PointingHandCursor);
-        btnIcon->setStyleSheet(
-            "QPushButton { "
-            "  background-color: transparent; "
-            "  border: 1px solid transparent; "
-            "  border-radius: 4px; "
-            "}"
-            "QPushButton:hover { "
-            "  background-color: #3E3E42; "
-            "  border: 1px solid #555555; "
-            "}"
-            "QPushButton:pressed { "
-            "  background-color: #4E4E52; "
-            "}"
-        );
-        btnIcon->setIcon(UiHelper::getIcon(iconKey, folderColor, 18));
-        btnIcon->setIconSize(QSize(18, 18));
-        btnIcon->setToolTip(label);
-
-        pickerLayout->addWidget(btnIcon, row, col);
-
-        connect(btnIcon, &QPushButton::clicked, this, [btn, path, iconKey, iconMenu]() {
-            AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(path), iconKey);
-            AppConfig::instance().sync();
-            btn->update(); // 触发 FolderButton 的更新重绘
-            iconMenu->close(); // 选中后关闭菜单
-        });
-
-        col++;
-        if (col >= 5) {
-            col = 0;
-            row++;
-        }
-    }
-
-    pickerWidget->setLayout(pickerLayout);
-    pickerAction->setDefaultWidget(pickerWidget);
-    iconMenu->addAction(pickerAction);
-
-    QAction* selectedAct = menu.exec(btn->mapToGlobal(pos));
-    if (selectedAct == actNew) {
-        showNewAutoImportDialog();
-    } else if (selectedAct == actRemove) {
-        removeCustomMonitoredFolder(path);
-    }
-}
-
-void MainWindow::removeCustomMonitoredFolder(const QString& path) {
-    QStringList customFolders = AppConfig::instance().getValue("DriveBar/CustomMonitoredFolders").toStringList();
-    std::wstring normPath = MetadataManager::normalizePath(path.toStdWString());
-    QString finalPath = QString::fromStdWString(normPath);
-
-    if (customFolders.contains(finalPath)) {
-        // 1. 从 AppConfig 中移除
-        customFolders.removeAll(finalPath);
-        AppConfig::instance().setValue("DriveBar/CustomMonitoredFolders", customFolders);
-        
-        // 1a. 清除颜色和图标配置
-        AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(path), QVariant());
-        AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(path), QVariant());
-        AppConfig::instance().setValue(QString("DriveBar/FolderColor_%1").arg(finalPath), QVariant());
-        AppConfig::instance().setValue(QString("DriveBar/FolderIcon_%1").arg(finalPath), QVariant());
-        
-        AppConfig::instance().sync();
-
-        // 2. 从 NativeFolderWatcher 监控中注销此路径
-        NativeFolderWatcher::instance().removeWatch(normPath);
-
-        // 2a. 强力数据根除：清理该目录下所有注册的文件、子项元数据
-        MetadataManager::instance().removeMetadataSync(normPath);
-
-        // 3. 动态刷新盘符栏
-        updateCustomFolderButtons();
-
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "已停止监控该文件夹", 1500, QColor("#FECF0E"));
-    }
+    Q_UNUSED(pos);
 }
 
 void MainWindow::resizeEvent(QResizeEvent* event) {
@@ -2543,4 +1737,4 @@ void MainWindow::updateProgressBarGeometry() {
     }
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

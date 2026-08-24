@@ -4,7 +4,7 @@
 #include <QItemSelection> 
 #include <QAbstractItemModel> 
  
-namespace ArcMeta { 
+namespace QuarkMeta { 
  
 class IScanResultView : public QObject { 
     Q_OBJECT 
@@ -27,4 +27,4 @@ public:
     virtual void refreshLayout() = 0; 
 }; 
  
-} // namespace ArcMeta 
+} // namespace QuarkMeta 

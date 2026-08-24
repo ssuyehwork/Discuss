@@ -4,7 +4,7 @@
 #include <QString>
 #include <string>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class TrashRepository : public QObject {
     Q_OBJECT
@@ -21,4 +21,4 @@ private:
     explicit TrashRepository(QObject* parent = nullptr);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -5,7 +5,7 @@
 #include <QVector>
 #include <QPair>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 struct LabColor {
     double l, a, b;
@@ -21,4 +21,4 @@ public:
     static QColor extractDominantColorFromImage(const QImage& preScaledImage);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

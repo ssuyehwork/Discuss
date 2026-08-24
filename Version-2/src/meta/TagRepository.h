@@ -1,12 +1,12 @@
-#ifndef ARCMETA_TAG_REPOSITORY_H
-#define ARCMETA_TAG_REPOSITORY_H
+#ifndef QuarkMeta_TAG_REPOSITORY_H
+#define QuarkMeta_TAG_REPOSITORY_H
 
 #include <QString>
 #include <QStringList>
 #include <QList>
 #include "sqlite3.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class TagRepository {
 public:
@@ -31,6 +31,6 @@ public:
     static void checkAndMigrate();
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
-#endif // ARCMETA_TAG_REPOSITORY_H
+#endif // QuarkMeta_TAG_REPOSITORY_H

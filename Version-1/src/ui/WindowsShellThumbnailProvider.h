@@ -8,7 +8,7 @@
 #include <QSet>
 #include <QMap>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class IconLoadNotifier : public QObject {
     Q_OBJECT
@@ -49,4 +49,4 @@ private:
     static QSet<QString>& loadingKeys();
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

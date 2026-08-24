@@ -4,7 +4,7 @@
 #include <vector>
 #include "../meta/BatchRenameEngine.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 预设管理器，仅负责重命名规则与 JSON 之间的序列化与反序列化
@@ -17,4 +17,4 @@ public:
     static std::vector<RenameRule> importFromFile(const QString& filePath);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

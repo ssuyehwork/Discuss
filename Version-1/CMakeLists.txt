@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ArcMeta)
+project(QuarkMeta)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,10 +31,10 @@ if(CMAKE_BINARY_DIR MATCHES "/out/")
     message(WARNING "⚠️ 检测到非法构建路径 [out]！请在 VS 工具栏切换至 [x64-release] 预设以符合《源码纯净》规范。")
 endif()
 
-# 2026-03-xx 按照用户要求：将可执行文件直接输出到指定项目子目录 ArcMeta 下，解决 \out 文件夹查找不便的问题
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/ArcMeta")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/ArcMeta")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/ArcMeta")
+# 2026-03-xx 将 QuarkMeta 可执行文件直接输出到项目子目录 QuarkMeta 下
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/QuarkMeta")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/QuarkMeta")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/QuarkMeta")
 
 # 自动生成 MOC/UIC/RCC
 set(CMAKE_AUTOMOC ON)
@@ -47,42 +47,36 @@ set(SOURCES
     src/main.cpp
     src/meta/sqlite3.c
     src/meta/sqlite3.h
-    src/meta/AmMetaJson.cpp
-    src/meta/AmMetaJson.h
+    src/meta/QuarkMetaJson.cpp
+    src/meta/QuarkMetaJson.h
+    src/meta/DiskNavigatorService.cpp
+    src/meta/DiskNavigatorService.h
+    src/meta/StatisticsService.cpp
+    src/meta/StatisticsService.h
     src/meta/MetaCacheDecorator.cpp
     src/meta/MetaCacheDecorator.h
+    src/core/CentralEventHub.cpp
+    src/core/CentralEventHub.h
+    src/core/CoreEngine.cpp
+    src/core/CoreEngine.h
     src/core/CoreController.cpp
     src/core/CoreController.h
     src/core/PhysicalDiskSearchExtractor.cpp
     src/core/PhysicalDiskSearchExtractor.h
-    src/core/NativeFolderWatcher.cpp
-    src/core/NativeFolderWatcher.h
-    src/core/CacheManager.cpp
-    src/core/CacheManager.h
     src/core/IndexedEntry.cpp
     src/core/IndexedEntry.h
     src/core/ItemRecord.cpp
     src/core/ItemRecord.h
-    src/core/DatabaseSynchronizer.cpp
-    src/core/DatabaseSynchronizer.h
     src/core/DiskScanService.cpp
     src/core/DiskScanService.h
     src/core/FileFilterService.cpp
     src/core/FileFilterService.h
-    src/core/CategoryLoadService.cpp
-    src/core/CategoryLoadService.h
-    src/core/LibraryMaintenanceService.cpp
-    src/core/LibraryMaintenanceService.h
+    src/core/VolumeOnlineManager.cpp
+    src/core/VolumeOnlineManager.h
     src/core/DiskTrashService.cpp
     src/core/DiskTrashService.h
-    src/core/SyncStatusService.cpp
-    src/core/SyncStatusService.h
     src/core/OperationSnapshotEngine.h
     src/core/OperationSnapshotEngine.cpp
-    src/core/CategoryDropProcessor.h
-    src/core/CategoryDropProcessor.cpp
-    src/core/AutoImportManager.cpp
-    src/core/AutoImportManager.h
     src/core/AppConfig.h
     src/core/NavigationHistoryService.cpp
     src/core/NavigationHistoryService.h
@@ -90,12 +84,14 @@ set(SOURCES
     src/core/SearchHistoryService.h
     src/crypto/EncryptionManager.cpp
     src/crypto/EncryptionManager.h
-    src/meta/CategoryRepo.cpp
-    src/meta/CategoryRepo.h
     src/meta/DiskTrashRepo.cpp
     src/meta/DiskTrashRepo.h
+    src/meta/DriveMetaDao.cpp
+    src/meta/DriveMetaDao.h
     src/meta/TagRepository.cpp
     src/meta/TagRepository.h
+    src/meta/TrashRepository.cpp
+    src/meta/TrashRepository.h
     src/meta/DatabaseManager.cpp
     src/meta/DatabaseManager.h
     src/meta/DatabaseMigrator.h
@@ -108,38 +104,19 @@ set(SOURCES
     src/meta/MetadataManager.h
     src/meta/MediaExtractorPipeline.cpp
     src/meta/MediaExtractorPipeline.h
-    src/mft/MftReader.cpp
-    src/mft/MftReader.h
-    src/mft/ScchCache.cpp
-    src/mft/ScchCache.h
     src/ui/BatchRenameDialog.cpp
     src/ui/BatchRenameDialog.h
-    src/ui/BatchRenamePreviewDialog.cpp
-    src/ui/BatchRenamePreviewDialog.h
+    src/ui/BatchProgressDialog.h
     src/ui/DuplicateConflictDialog.h
     src/ui/DuplicateConflictDialog.cpp
-    src/ui/MemoryBatchRenameService.cpp
-    src/ui/MemoryBatchRenameService.h
     src/ui/PresetManager.cpp
     src/ui/PresetManager.h
     src/ui/DiskBatchRenameService.cpp
     src/ui/DiskBatchRenameService.h
     src/ui/UndoToastOverlay.cpp
     src/ui/UndoToastOverlay.h
-    src/ui/CategoryFilterProxyModel.h
     src/ui/BreadcrumbBar.cpp
     src/ui/BreadcrumbBar.h
-    src/ui/CategoryDelegate.h
-    src/ui/CategoryLockDialog.cpp
-    src/ui/CategoryLockDialog.h
-    src/ui/CategoryModel.cpp
-    src/ui/CategoryModel.h
-    src/ui/CategoryPanel.cpp
-    src/ui/CategoryPanel.h
-    src/ui/CategorySetPasswordDialog.cpp
-    src/ui/CategorySetPasswordDialog.h
-    src/ui/CategoryLockWidget.cpp
-    src/ui/CategoryLockWidget.h
     src/ui/ColorPicker.cpp
     src/ui/ColorPicker.h
     src/ui/ContentPanel.cpp
@@ -153,12 +130,6 @@ set(SOURCES
     src/ui/DropTreeView.cpp
     src/ui/DropTreeView.h
     src/ui/IScanResultView.h
-    src/ui/ListResultView.cpp
-    src/ui/ListResultView.h
-    src/ui/GridResultView.cpp
-    src/ui/GridResultView.h
-    src/ui/JustifiedResultView.cpp
-    src/ui/JustifiedResultView.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
     src/ui/FramelessDialog.cpp
@@ -172,8 +143,6 @@ set(SOURCES
     src/ui/CardPainterHelper.h
     src/ui/ThumbnailDelegate.cpp
     src/ui/ThumbnailDelegate.h
-    src/ui/LoadingWindow.cpp
-    src/ui/LoadingWindow.h
     src/ui/Logger.h
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
@@ -187,11 +156,8 @@ set(SOURCES
     src/ui/AddressBar.h
     src/ui/MetaPanel.cpp
     src/ui/MetaPanel.h
-    src/ui/TagManagerDialog.h
-    src/ui/PresetTagsDialog.cpp
     src/ui/TagSelectorOverlay.h
     src/ui/TagSelectorOverlay.cpp
-    src/ui/TagManagerDialog.cpp
     src/ui/TaskProgressToolBar.h
     src/ui/TaskProgressToolBar.cpp
     src/ui/components/ElasticEdit.h
@@ -204,7 +170,8 @@ set(SOURCES
     src/ui/components/ColorPill.cpp
     src/ui/NavPanel.cpp
     src/ui/NavPanel.h
-    src/ui/BatchProgressDialog.h
+    src/ui/FavoritePanel.cpp
+    src/ui/FavoritePanel.h
     src/ui/QuickLookWindow.cpp
     src/ui/QuickLookWindow.h
     src/ui/QuickLookMinimap.cpp
@@ -215,12 +182,12 @@ set(SOURCES
     src/ui/CreateRuleRow.h
     src/ui/BatchCreateDialog.cpp
     src/ui/BatchCreateDialog.h
+    src/ui/TagManagerDialog.cpp
+    src/ui/TagManagerDialog.h
     src/ui/SearchHistoryPanel.cpp
     src/ui/SearchHistoryPanel.h
     src/ui/AddressHistoryPanel.cpp
     src/ui/AddressHistoryPanel.h
-    src/ui/TagManagerView.cpp
-    src/ui/TagManagerView.h
     src/ui/TagManagerController.cpp
     src/ui/TagManagerController.h
     src/core/ActionCommand.h
@@ -232,9 +199,9 @@ set(SOURCES
     src/ui/models/ItemModelBase.h
     src/ui/models/DiskItemModel.h
     src/ui/models/DiskItemModel.cpp
-    src/ui/models/LibraryAssetModel.h
-    src/ui/models/LibraryAssetModel.cpp
     src/ui/UiHelper.h
+    src/ui/IconCacheManager.h
+    src/ui/IconCacheManager.cpp
     src/ui/ShellIconManager.h
     src/ui/SvgIconRenderer.h
     src/ui/SvgIconRenderer.cpp
@@ -250,15 +217,9 @@ set(SOURCES
     src/ui/ColorAlgorithmEngine.cpp
     src/util/DiskMediaExtractor.h
     src/util/DiskMediaExtractor.cpp
-    src/meta/CapsuleMediaExtractor.h
-    src/meta/CapsuleMediaExtractor.cpp
     src/util/ShellHelper.cpp
     src/util/ShellHelper.h
-    src/util/ImportHelper.cpp
-    src/util/ImportHelper.h
-    src/util/AssetImporter.cpp
-    src/util/AssetImporter.h
-    ArcMeta.rc
+    QuarkMeta.rc
     resources/resources.qrc
 )
 
@@ -305,13 +266,13 @@ set(LIBTIFF_SOURCES
 list(APPEND SOURCES ${LIBTIFF_SOURCES})
 
 # 可执行文件 (添加 WIN32 属性以消除控制台黑框)
-# 修复：移除直接引用的 "ArcMeta.manifest"，改由 ArcMeta.rc 引入以杜绝 mt.exe 冲突
-add_executable(ArcMeta WIN32 ${SOURCES})
+# 修复：改由 QuarkMeta.rc 引入以杜绝 mt.exe 冲突
+add_executable(QuarkMeta WIN32 ${SOURCES})
 
 # 链接库 (文档红线列表: ole32, bcrypt)
 # 2026-04-14 按照用户要求：恢复 MFT 逻辑，重新引入 ntdll 依赖
 # 2026-05-10 修复：添加缺失的Qt6::Core和Qt6::Gui库
-target_link_libraries(ArcMeta PRIVATE
+target_link_libraries(QuarkMeta PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
@@ -323,12 +284,11 @@ target_link_libraries(ArcMeta PRIVATE
     psapi
 )
 
-target_include_directories(ArcMeta PRIVATE
+target_include_directories(QuarkMeta PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/meta
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/models
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/mft
     ${CMAKE_CURRENT_SOURCE_DIR}/src/crypto
     ${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/libtiff
 )
@@ -336,6 +296,6 @@ target_include_directories(ArcMeta PRIVATE
 # 2026-07-20 按照用户最新要求：
 # 彻底去除强制管理员权限，改为普通权限 (asInvoker)
 if(MSVC)
-    target_link_options(ArcMeta PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
+    target_link_options(QuarkMeta PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
 endif()
 # Force Refresh CMake: 2026-06-xx 11:30 (Removed AmMetaJson & SyncQueue, switched to DB-only)

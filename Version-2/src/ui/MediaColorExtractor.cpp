@@ -6,7 +6,7 @@
 #include <QHash>
 #include <QMap>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 bool MediaColorExtractor::isGraphicsFile(const QString& ext) {
     static const QStringList graphicsExts = {
@@ -66,4 +66,4 @@ QColor MediaColorExtractor::extractDominantColor(const QString& targetFile) {
     return palette.isEmpty() ? QColor() : palette.first().first;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

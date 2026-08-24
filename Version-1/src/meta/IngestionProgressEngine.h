@@ -1,10 +1,10 @@
-#ifndef ARCMETA_INGESTION_PROGRESS_ENGINE_H
-#define ARCMETA_INGESTION_PROGRESS_ENGINE_H
+#ifndef QuarkMeta_INGESTION_PROGRESS_ENGINE_H
+#define QuarkMeta_INGESTION_PROGRESS_ENGINE_H
 
 #include <string>
 #include <QObject>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 专职负责多级目录自动导入与级联对账进度 (Percentage) 原子化计算的独立服务
@@ -29,6 +29,6 @@ private:
     ~IngestionProgressEngine() override = default;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
-#endif // ARCMETA_INGESTION_PROGRESS_ENGINE_H
+#endif // QuarkMeta_INGESTION_PROGRESS_ENGINE_H

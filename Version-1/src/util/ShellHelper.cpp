@@ -14,65 +14,14 @@
 #endif
 
 #include "../meta/MetadataManager.h"
-#include "../meta/CategoryRepo.h"
-#include "../meta/AmMetaJson.h"
+#include "../meta/StatisticsService.h"
+#include "../meta/QuarkMetaJson.h"
+#include "../core/DiskTrashService.h"
 
-namespace ArcMeta {
-
-QString ShellHelper::generateBase36Id() {
-    static std::atomic<unsigned int> counter(0);
-    qint64 msecs = QDateTime::currentMSecsSinceEpoch();
-    unsigned int count = counter.fetch_add(1) % 46656; // 36^3 = 46656
-    
-    auto toBase36 = [](qint64 val, int width) -> QString {
-        const char chars[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-        QString res;
-        while (val > 0) {
-            res.prepend(chars[val % 36]);
-            val /= 36;
-        }
-        while (res.length() < width) {
-            res.prepend('0');
-        }
-        return res;
-    };
-    
-    return toBase36(msecs, 10) + toBase36(count, 3);
-}
+namespace QuarkMeta {
 
 bool ShellHelper::moveToTrash(const QStringList& paths) {
-    if (paths.isEmpty()) return true;
-    
-    bool allOk = true;
-    for (const QString& p : paths) {
-        QFileInfo info(p);
-        QString drive = info.absolutePath().left(3); // e.g. "C:/"
-        QString trashDir = drive + ".arcmeta/trash";
-        QDir().mkpath(trashDir);
-        
-#ifdef Q_OS_WIN
-        // 确保 .arcmeta 目录隐藏
-        SetFileAttributesW((drive + ".arcmeta").toStdWString().c_str(), FILE_ATTRIBUTE_HIDDEN);
-#endif
-
-        QString dest = trashDir + "/" + info.fileName();
-        // 冲突处理：如果回收站已有同名文件，增加时间戳后缀
-        if (QFile::exists(dest)) {
-            dest = trashDir + "/" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss_") + info.fileName();
-        }
-
-        // 1. 物理移动
-        if (QFile::rename(p, dest)) {
-            // 2. 数据库同步：标记为回收站，记忆原路径
-            MetadataManager::instance().markAsTrash(dest.toStdWString(), true, p.toStdWString());
-            // 3. 解除所有分类关联
-            std::string fid = MetadataManager::instance().getFolderIdSync(dest.toStdWString());
-            CategoryRepo::removeAllCategories(fid);
-        } else {
-            allOk = false;
-        }
-    }
-    return allOk;
+    return DiskTrashService::moveToDiskTrash(paths);
 }
 
 bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString& destDir, bool isMove) {
@@ -97,8 +46,8 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
         for (const QString& p : sourcePaths) {
             QFileInfo info(p);
             QString newPath = QDir(destDir).filePath(info.fileName());
-            // 1. 物理漫游迁移 .ArcMeta.json 元数据 
-            AmMetaJson::migrateItemMetadata(p, newPath); 
+            // 1. 物理漫游迁移 .QuarkMeta.json 元数据 
+            QuarkMetaJson::migrateItemMetadata(p, newPath); 
             // 2. 同步内存/数据库缓存 
             MetadataManager::instance().renameItem(p.toStdWString(), newPath.toStdWString());
         }
@@ -138,8 +87,8 @@ void ShellHelper::openInExplorer(const QString& path) {
 
 bool ShellHelper::renameItem(const QString& oldPath, const QString& newPath) {
     if (QFile::rename(oldPath, newPath)) {
-        // 1. 物理漫游迁移 .ArcMeta.json 元数据 
-        AmMetaJson::migrateItemMetadata(oldPath, newPath);
+        // 1. 物理漫游迁移 .QuarkMeta.json 元数据 
+        QuarkMetaJson::migrateItemMetadata(oldPath, newPath);
         // 同步数据库
         MetadataManager::instance().renameItem(oldPath.toStdWString(), newPath.toStdWString());
         return true;
@@ -162,87 +111,4 @@ void ShellHelper::ensureHidden(const std::wstring& path) {
 #endif
 }
 
-QString ShellHelper::resolveAndAlignDatabasePath(const std::wstring& volumeSerial, const QString& driveLetter, const QString& currentDiskPathInConn, bool isLoaded) {
-    QString cleanLetter = "";
-    if (!driveLetter.isEmpty()) {
-        cleanLetter = driveLetter.at(0).toUpper();
-    }
-
-    QString appDir = QCoreApplication::applicationDirPath();
-    QString metaDir = appDir + "/.arcmeta";
-    QDir().mkpath(metaDir);
-    ensureHidden(metaDir.toStdWString());
-
-    QString serialStr = QString::fromStdWString(volumeSerial).toUpper();
-    QString expectedFileName = QString("Arcmeta_%1%2.db").arg(serialStr).arg(cleanLetter.isEmpty() ? "" : "_" + cleanLetter);
-    QString targetPath = metaDir + "/" + expectedFileName;
-
-    if (isLoaded) {
-        if (!cleanLetter.isEmpty()) {
-            if (!currentDiskPathInConn.endsWith(expectedFileName)) {
-                qWarning() << "[ShellHelper] 检测到盘符漂移，执行物理纠偏重命名:" << currentDiskPathInConn << " -> " << targetPath;
-                
-                // 如果目标已存在且不是自己，先将其移走（按用户规则重命名为无效）
-                if (QFile::exists(targetPath) && targetPath != currentDiskPathInConn) {
-                    QString invalidBase = QString("%1/Arcmeta_%2_无效").arg(metaDir).arg(serialStr);
-                    QString invalidPath = invalidBase + ".db";
-                    int counter = 1;
-                    while (QFile::exists(invalidPath)) {
-                        invalidPath = QString("%1_%2.db").arg(invalidBase).arg(counter++);
-                    }
-                    qWarning() << "[ShellHelper] 目标文件已存在，先将其重命名为无效:" << invalidPath;
-                    QFile::rename(targetPath, invalidPath);
-                }
-
-                if (QFile::rename(currentDiskPathInConn, targetPath)) {
-                    qWarning() << "[ShellHelper] 物理重命名成功";
-                    return targetPath;
-                } else {
-                    qWarning() << "[ShellHelper] 物理重命名失败";
-                }
-            }
-        }
-        return currentDiskPathInConn;
-    }
-
-    // 未加载时的路由/纠偏
-    if (!QFile::exists(targetPath)) {
-        QDir dir(metaDir);
-        QStringList filters;
-        filters << QString("Arcmeta_%1*.db").arg(serialStr);
-        QFileInfoList list = dir.entryInfoList(filters, QDir::Files | QDir::Hidden | QDir::System, QDir::Time);
-
-        if (!list.isEmpty()) {
-            // Case A: 有旧文件。选择最近修改的一个作为目标进行重命名。
-            QFileInfo bestInfo = list.first();
-            if (!cleanLetter.isEmpty()) {
-                if (QFile::rename(bestInfo.absoluteFilePath(), targetPath)) {
-                    qWarning() << "[ShellHelper] 自动纠偏：重命名数据库" << bestInfo.fileName() << "->" << expectedFileName;
-                } else {
-                    qWarning() << "[ShellHelper] 重命名失败，降级使用原文件加载:" << bestInfo.absoluteFilePath();
-                    targetPath = bestInfo.absoluteFilePath();
-                }
-            } else {
-                targetPath = bestInfo.absoluteFilePath();
-            }
-
-            // 处理冲突的其他旧文件 (Plan-97 补充要求)
-            for (int i = 1; i < list.size(); ++i) {
-                QString conflictPath = list.at(i).absoluteFilePath();
-                QString invalidBase = QString("%1/Arcmeta_%2_无效").arg(metaDir).arg(serialStr);
-                QString invalidPath = invalidBase + ".db";
-                int counter = 1;
-                while (QFile::exists(invalidPath)) {
-                    invalidPath = QString("%1_%2.db").arg(invalidBase).arg(counter++);
-                }
-                if (QFile::rename(conflictPath, invalidPath)) {
-                    qWarning() << "[ShellHelper] 冲突处理：将冗余数据库标记为无效" << list.at(i).fileName() << "->" << QFileInfo(invalidPath).fileName();
-                }
-            }
-        }
-    }
-
-    return targetPath;
-}
-
-} // namespace ArcMeta
+} // namespace QuarkMeta

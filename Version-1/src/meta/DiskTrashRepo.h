@@ -2,15 +2,17 @@
 #include <vector> 
 #include <string> 
  
-namespace ArcMeta { 
+namespace QuarkMeta { 
  
 struct DiskTrashRawItem { 
     int id; 
+    std::wstring fileId;
     std::wstring trashPath; 
     std::wstring originalPath; 
     std::wstring fileName; 
     bool isFolder; 
     long long fileSize; 
+    long long createdAt;
     long long deletedAt; 
 }; 
  

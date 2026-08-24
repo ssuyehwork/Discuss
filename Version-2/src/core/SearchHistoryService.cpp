@@ -1,7 +1,7 @@
 #include "SearchHistoryService.h"
 #include "AppConfig.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 SearchHistoryService& SearchHistoryService::instance() {
     static SearchHistoryService inst;
@@ -45,4 +45,4 @@ void SearchHistoryService::clearAll(const QString& category) {
     emit searchHistoryChanged(category, QStringList());
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

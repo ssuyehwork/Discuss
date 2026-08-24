@@ -2,7 +2,7 @@
 #include <QLayout>
 #include <QList>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class FlowLayout : public QLayout {
 public:
@@ -27,4 +27,4 @@ private:
     int m_vSpace;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

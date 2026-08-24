@@ -24,7 +24,7 @@
 #endif
 #endif
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 WindowsShellThumbnailProvider& WindowsShellThumbnailProvider::instance() {
     static WindowsShellThumbnailProvider inst;
@@ -261,4 +261,4 @@ QImage WindowsShellThumbnailProvider::getShellThumbnail(const QString& path, int
     return QImage();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

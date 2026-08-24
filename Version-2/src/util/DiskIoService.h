@@ -14,7 +14,7 @@
 #include "../core/BasicCommands.h"
 #include "ShellHelper.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 struct DiskIoContext {
     QStringList sources;
@@ -115,4 +115,4 @@ public:
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

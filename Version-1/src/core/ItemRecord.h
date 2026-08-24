@@ -7,7 +7,7 @@
 #include <utility>
 #include <string>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 // 前置声明 RuntimeMeta，避免循环依赖
 struct RuntimeMeta;
@@ -30,6 +30,7 @@ struct ItemRecord {
     QString groupName;
     bool isDiskTrash = false;
     int diskTrashId = 0;
+    QString fileId;
     QString originalPath;
 
     // 2026-06-xx 物理对标：注入核心元数据，杜绝 UI 渲染时的同步 I/O
@@ -43,6 +44,7 @@ struct ItemRecord {
     double registrationProgress = -1.0; // 初始为 -1.0 表示未计算
     QString url;  // 2026-07-xx 支撑筛选：链接
     QString note; // 2026-07-xx 支撑筛选：备注
+    QString sha256;
     int width = 0;
     int height = 0;
 
@@ -62,4 +64,4 @@ struct ItemRecord {
     static void fromMetadata(ItemRecord& r, const RuntimeMeta& meta);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

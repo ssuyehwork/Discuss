@@ -2,7 +2,7 @@
 #include <QtConcurrent>
 #include "../meta/TagRepository.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 TagManagerController::TagManagerController(QObject* parent) : QObject(parent) {}
 
@@ -38,4 +38,4 @@ void TagManagerController::removeTagFromGroupAsync(const QString& tagName, int g
     });
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

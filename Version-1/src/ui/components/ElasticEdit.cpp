@@ -6,7 +6,7 @@
 #include <QtMath>
 #include <QLayout>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 ElasticEdit::ElasticEdit(QWidget* parent) : QTextEdit(parent) {
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -58,4 +58,4 @@ void ElasticEdit::keyPressEvent(QKeyEvent* e) {
     QTextEdit::keyPressEvent(e);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

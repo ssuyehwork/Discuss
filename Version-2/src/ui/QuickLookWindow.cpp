@@ -4,7 +4,7 @@
 #include "MediaColorExtractor.h"
 #include "QuickLookMinimap.h"
 #include "../util/DiskMediaExtractor.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "StyleLibrary.h"
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -36,7 +36,7 @@
 #include <windows.h>
 #endif
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 // 静态文件分类后缀定义 (音视频格式并入黑名单进行系统大图标降级预览，不直接播放)
 static const QSet<QString> UNPREVIEWABLE_EXTS = {
@@ -411,7 +411,6 @@ void QuickLookWindow::renderImage(const QString& path) {
         if (!weakThis) return;
         
         QImage img;
-        bool isInsideArc = path.contains(".arc", Qt::CaseInsensitive);
         if (ext == "svg") {
             QSvgRenderer renderer(path);
             if (renderer.isValid()) {
@@ -421,19 +420,11 @@ void QuickLookWindow::renderImage(const QString& path) {
                 renderer.render(&painter);
             }
         } else if (ext == "ai" || ext == "eps" || ext == "psd" || ext == "psb") {
-            if (isInsideArc) {
-                img = CapsuleMediaExtractor::getCapsuleThumbnail(path, 2048);
-            } else {
-                img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
-            }
+            img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
         } else if (QT_NATIVE_FORMATS.contains(ext)) {
             img.load(path);
         } else {
-            if (isInsideArc) {
-                img = CapsuleMediaExtractor::getCapsuleThumbnail(path, 2048);
-            } else {
-                img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
-            }
+            img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
             if (img.isNull()) {
                 img = ShellIconManager::getShellThumbnail(path, 4096);
                 if (img.isNull()) {
@@ -737,4 +728,4 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     }
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

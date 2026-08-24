@@ -8,7 +8,7 @@
 #include <QStringList>
 #include <QModelIndex>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class DropListView : public QListView {
     Q_OBJECT
@@ -25,6 +25,6 @@ signals:
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
 #endif // DROPLISTVIEW_H

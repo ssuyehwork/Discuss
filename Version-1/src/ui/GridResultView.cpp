@@ -1,7 +1,7 @@
 #include "GridResultView.h"
 #include "DropJustifiedView.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 GridResultView::GridResultView(DropJustifiedView* view, QWidget* parent) 
     : IScanResultView(parent), m_view(view) {
@@ -31,4 +31,4 @@ void GridResultView::refreshLayout() {
     m_view->doItemsLayout();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

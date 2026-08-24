@@ -15,9 +15,9 @@
 #include "UiHelper.h"
 #include "CardPainterHelper.h"
 #include "StyleLibrary.h"
-using namespace ArcMeta::Style;
+using namespace QuarkMeta::Style;
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 通用树形视图代理，提供圆角高亮效果
@@ -364,4 +364,4 @@ private:
     bool m_drawMiniCards;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

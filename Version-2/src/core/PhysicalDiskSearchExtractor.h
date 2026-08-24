@@ -7,7 +7,7 @@
 #include <functional>
 #include <atomic>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class PhysicalDiskSearchExtractor {
 public:
@@ -26,4 +26,4 @@ public:
     );
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

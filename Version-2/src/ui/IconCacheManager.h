@@ -6,7 +6,7 @@
 #include <QString>
 #include <QReadWriteLock>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class IconCacheManager : public QObject {
     Q_OBJECT
@@ -22,4 +22,4 @@ private:
     QHash<QString, QIcon> m_iconCache;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

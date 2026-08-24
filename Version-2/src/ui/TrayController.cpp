@@ -6,7 +6,7 @@
 #include "../meta/DatabaseManager.h"
 #include "BatchProgressDialog.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 TrayController::TrayController(QMainWindow* mainWindow)
     : QObject(mainWindow), m_mainWindow(mainWindow) {
@@ -14,7 +14,7 @@ TrayController::TrayController(QMainWindow* mainWindow)
     
     // 2026-04-14 物理加固：锁定图标来源为 Qt 资源系统中的标准 ico
     m_trayIcon->setIcon(QIcon(":/app_icon.ico"));
-    m_trayIcon->setToolTip("ArcMeta");
+    m_trayIcon->setToolTip("QuarkMeta");
 
     m_trayMenu = new QMenu(mainWindow);
     m_trayMenu->setStyleSheet(
@@ -25,7 +25,7 @@ TrayController::TrayController(QMainWindow* mainWindow)
 
     QAction* showAction = m_trayMenu->addAction("显示主界面");
     m_trayMenu->addSeparator();
-    QAction* quitAction = m_trayMenu->addAction("退出 ArcMeta");
+    QAction* quitAction = m_trayMenu->addAction("退出 QuarkMeta");
 
     connect(showAction, &QAction::triggered, this, &TrayController::onShowMainWindow);
     connect(quitAction, &QAction::triggered, this, &TrayController::onQuitApp);
@@ -65,14 +65,9 @@ void TrayController::onShowMainWindow() {
 }
 
 void TrayController::onQuitApp() {
-    // 2026-07-xx 按照用户要求 (Plan-119)：秒退出架构实现
     if (m_trayIcon) m_trayIcon->hide();
-
-    // 2. 调用 DatabaseManager 停用异步同步队列并释放句柄
-    // 数据已在运行期通过增量任务实时落地，此处仅执行排空队列动作，通常为毫秒级。
-    DatabaseManager::instance().shutdown();
-
+    // 严禁在此处调用 DatabaseManager::shutdown()，统一交给 main.cpp 集中调度
     QApplication::quit();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

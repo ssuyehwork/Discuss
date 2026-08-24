@@ -20,7 +20,7 @@
 #include <QRectF>
 #include <QPropertyAnimation>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief ToolTipOverlay: 全局统一的自定义 Tooltip
@@ -70,6 +70,6 @@ private:
     QPropertyAnimation* m_fadeAnim = nullptr;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
 #endif // TOOLTIPOVERLAY_H

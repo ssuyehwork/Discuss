@@ -1,7 +1,7 @@
 #include "FlowLayout.h"
 #include <QWidget>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 FlowLayout::FlowLayout(QWidget *parent, int margin, int hSpacing, int vSpacing)
     : QLayout(parent), m_hSpace(hSpacing), m_vSpace(vSpacing) { setContentsMargins(margin, margin, margin, margin); }
@@ -47,4 +47,4 @@ int FlowLayout::doLayout(const QRect &rect, bool testOnly) const {
     return y + lineHeight - rect.y() + bottom;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

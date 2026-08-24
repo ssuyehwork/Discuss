@@ -4,7 +4,7 @@
 #include <QFont>
 #include <QtMath>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 void CardPainterHelper::drawCardCover(QPainter* painter, const QRect& cardRect, bool isSelected, 
                                      bool hasThumb, const QPixmap& thumb, const QIcon& defaultIcon, 
@@ -32,11 +32,13 @@ void CardPainterHelper::drawCardCover(QPainter* painter, const QRect& cardRect, 
     }
 
     if (hasThumb && !thumb.isNull()) {
-        // 图片/视频缩略图：按原比例 Contain 居中展示，完好保留长宽比
-        QPixmap scaled = thumb.scaled(cardRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        int x = cardRect.center().x() - scaled.width() / 2;
-        int y = cardRect.center().y() - scaled.height() / 2;
-        painter->drawPixmap(x, y, scaled);
+        // 硬件加速原生绘制：按比例计算目标区域，零 CPU 图像重采样与内存分配
+        QSize imgSize = thumb.size();
+        QSize targetSize = imgSize.scaled(cardRect.size(), Qt::KeepAspectRatio);
+        QRect targetRect(cardRect.center().x() - targetSize.width() / 2,
+                         cardRect.center().y() - targetSize.height() / 2,
+                         targetSize.width(), targetSize.height());
+        painter->drawPixmap(targetRect, thumb);
     } else if (!defaultIcon.isNull()) {
         // 非图片文件图标：65% 比例居中悬浮展示
         int iconSize = qMin(cardRect.width(), cardRect.height()) * 0.65;
@@ -225,4 +227,4 @@ void CardPainterHelper::drawCategoryBackground(QPainter* painter, const QRect& c
     painter->restore();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

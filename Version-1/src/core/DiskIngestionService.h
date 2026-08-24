@@ -1,10 +1,10 @@
-#ifndef ARCMETA_DISK_INGESTION_SERVICE_H
-#define ARCMETA_DISK_INGESTION_SERVICE_H
+#ifndef QuarkMeta_DISK_INGESTION_SERVICE_H
+#define QuarkMeta_DISK_INGESTION_SERVICE_H
 
 #include <string>
 #include <QObject>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 专职负责物理磁盘深度级联递归扫描与对账的高性能后台服务
@@ -15,7 +15,7 @@ public:
     static DiskIngestionService& instance();
 
     /**
-     * @brief 对指定根物理目录开展 1:1 的全量异步深度扫描 (从 AutoImportManager 物理移入)
+     * @brief 对指定根物理目录开展 1:1 的全量异步深度扫描
      */
     void handleRecursiveIngestion(const std::wstring& rootPath);
 
@@ -24,6 +24,6 @@ private:
     ~DiskIngestionService() override = default;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
-#endif // ARCMETA_DISK_INGESTION_SERVICE_H
+#endif // QuarkMeta_DISK_INGESTION_SERVICE_H

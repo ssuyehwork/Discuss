@@ -4,7 +4,7 @@
 #include <QWindow>
 #include <QApplication>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 ResizeEventFilter::ResizeEventFilter(QMainWindow* window) 
     : QObject(window), m_window(window) {}
@@ -59,4 +59,4 @@ void ResizeEventFilter::updateCursorShape(ResizeDirection dir) {
     }
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

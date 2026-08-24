@@ -3,7 +3,7 @@
 #include <QDir> 
 #include <QFileInfo> 
  
-namespace ArcMeta { 
+namespace QuarkMeta { 
  
 std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path, 
                                                         bool recursive, 
@@ -15,16 +15,16 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
         QDir dir(p); 
         if (!dir.exists()) return; 
  
-        QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot, QDir::DirsFirst | QDir::Name); 
+        QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden, QDir::DirsFirst | QDir::Name); 
         for (const QFileInfo& info : entries) { 
             if (shouldContinue && !shouldContinue()) return; 
  
             QString absPath = info.absoluteFilePath(); 
              
-            // 🚨 统一调用文件过滤服务（归一化处理所有辅助文件、.arc、.arcmeta） 
+            // 🚨 统一调用文件过滤服务（归一化处理所有辅助文件、.arc、.QuarkMeta） 
             if (FileFilterService::isAuxiliaryFile(absPath)) continue; 
  
-            ItemRecord itemRec = ItemRecord::create(absPath, nullptr, false); 
+            ItemRecord itemRec = ItemRecord::create(absPath, nullptr); 
             allItems.push_back(itemRec); 
  
             if (rec && info.isDir()) { 
@@ -37,4 +37,12 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
     return allItems; 
 }
 
-} // namespace ArcMeta
+std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path, 
+                                                        bool recursive, 
+                                                        std::shared_ptr<CancellationToken> token) { 
+    return scanDirectory(path, recursive, [token]() {
+        return token ? !token->isCanceled() : true;
+    });
+}
+
+} // namespace QuarkMeta

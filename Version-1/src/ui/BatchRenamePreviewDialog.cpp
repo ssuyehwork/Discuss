@@ -3,7 +3,7 @@
 #include <QFileInfo>
 #include <QTableWidgetItem>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 BatchRenamePreviewDialog::BatchRenamePreviewDialog(QWidget* parent)
     : FramelessDialog("批量重命名预览 - 高清对比模式", parent) {
@@ -69,4 +69,4 @@ void BatchRenamePreviewDialog::applyTheme() {
     );
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

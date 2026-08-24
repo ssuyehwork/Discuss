@@ -10,7 +10,7 @@
 #include <windows.h>
 #endif
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class FileOperationHelper {
 public:
@@ -60,4 +60,4 @@ public:
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

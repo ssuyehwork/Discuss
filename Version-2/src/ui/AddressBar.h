@@ -7,7 +7,7 @@
 #include "BreadcrumbBar.h"
 #include "AddressHistoryPanel.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 复合地址栏控件
@@ -45,4 +45,4 @@ private:
     QString         m_currentPath;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

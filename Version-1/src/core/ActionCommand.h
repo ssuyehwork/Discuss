@@ -2,7 +2,7 @@
 
 #include <QString>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 2026-06-xx 按照分析计划 #8：全局指令抽象基类
@@ -23,4 +23,4 @@ public:
     virtual bool affectsPath(const QString& path) const = 0;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

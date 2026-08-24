@@ -8,7 +8,7 @@
 #include <QTimer>
 #include "../core/AppConfig.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 DriveButton::DriveButton(const QString& driveLetter, QWidget* parent)
     : QPushButton(parent), m_driveLetter(driveLetter) {
@@ -186,4 +186,4 @@ void FolderButton::leaveEvent(QEvent* event) {
     ToolTipOverlay::hideTip();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

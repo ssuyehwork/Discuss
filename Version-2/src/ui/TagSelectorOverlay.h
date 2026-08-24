@@ -10,7 +10,7 @@
 #include <QStringList>
 #include "components/FlowLayout.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class TagSelectorOverlay : public QFrame {
     Q_OBJECT
@@ -28,6 +28,7 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     void initUi();
@@ -42,12 +43,14 @@ private:
     // 8方向拉伸大小和拖拽移动辅助函数
     void updateCursorShape(const QPoint& pos);
     int getResizeDirection(const QPoint& pos);
+    bool isInteractiveChild(QWidget* child) const;
 
     QStringList m_selectedTags;
     QStringList m_displayedTags;
     QMap<QString, int> m_allTagCounts;
 
     QLineEdit* m_searchEdit = nullptr;
+    QPushButton* m_btnToggleSidebar = nullptr; // 搜索框右侧的侧边栏折叠按钮
     QListWidget* m_groupList = nullptr;
     QScrollArea* m_scrollArea = nullptr;
     QWidget* m_tagGridWidget = nullptr;
@@ -64,4 +67,4 @@ private:
     bool m_wasActivated = false; // 是否已经完成首次激活
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

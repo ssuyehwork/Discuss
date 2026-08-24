@@ -26,6 +26,7 @@
 #include "../core/AppConfig.h"
 #include "../core/UndoManager.h"
 #include "../core/BasicCommands.h"
+#include "../core/OperationSnapshotEngine.h"
 
 namespace QuarkMeta {
 
@@ -456,7 +457,22 @@ void BatchRenameDialog::onExecute() {
         safeThis->accept();
     };
 
-    DiskBatchRenameService::execute(m_originalPaths, newNames, mode, targetDir, onCompletedCallback);
+    QStringList targetPaths;
+    for (const auto& wp : m_originalPaths) {
+        targetPaths << QString::fromStdWString(wp);
+    }
+
+    OperationSnapshotEngine::instance().executeWithSnapshot(
+        this->parentWidget(),
+        SnapshotOperationType::BatchRename,
+        targetPaths,
+        QString("成功处理 %1 个项目").arg(m_originalPaths.size()),
+        [this, mode, targetDir, onCompletedCallback, newNames]() {
+            DiskBatchRenameService::execute(m_originalPaths, newNames, mode, targetDir, onCompletedCallback);
+            return true;
+        },
+        nullptr
+    );
 }
 
 } // namespace QuarkMeta

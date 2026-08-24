@@ -1,5 +1,5 @@
-#ifndef ARCMETA_METADATA_MANAGER_H
-#define ARCMETA_METADATA_MANAGER_H
+#ifndef QuarkMeta_METADATA_MANAGER_H
+#define QuarkMeta_METADATA_MANAGER_H
 
 #include "MetadataDefs.h"
 #include <QObject>
@@ -14,8 +14,9 @@
 #include <deque>
 #include <mutex>
 #include <memory>
+#include <array>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 内存元数据镜像结构
@@ -31,7 +32,6 @@ struct RuntimeMeta {
     bool encrypted;
     bool isFolder; // 2026-06-xx 物理标记：区分文件夹与文件，用于侧边栏精准统计
     bool isTrash;  // 2026-06-xx 状态标记：是否处于回收站
-    bool isManaged; // 2026-06-xx 物理对标：标记该项是否已在数据库中登记
     int ingestionStatus; // 2026-07-xx 状态标记：-1: 未知, 0: 待处理, 1: 已完成
     int width;      // 2026-07-xx 物理尺寸：宽 (像素)
     int height;     // 2026-07-xx 物理尺寸：高 (像素)
@@ -50,14 +50,13 @@ struct RuntimeMeta {
 
     std::vector<PaletteEntry> palettes;
 
-    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), isTrash(false), isManaged(false), ingestionStatus(-1), width(0), height(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
+    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), isTrash(false), ingestionStatus(-1), width(0), height(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
 
     /**
-     * @brief 判定是否有用户操作过的信息，作为“已录入/受控”状态的感应逻辑
-     * 2026-06-xx 按照用户要求：只要有任何元数据修改或已登记，即视为数据库已录入项
+     * @brief 判定是否有用户操作过的信息
      */
     bool hasUserOperations() const {
-        return isManaged || rating > 0 || !manualColor.empty() || !autoColor.empty() || !tags.isEmpty() || !note.empty() || !url.empty() || pinned || encrypted;
+        return rating > 0 || !manualColor.empty() || !autoColor.empty() || !tags.isEmpty() || !note.empty() || !url.empty() || pinned || encrypted;
     }
 };
 
@@ -89,7 +88,7 @@ public:
     static std::wstring generateDeterministicFrn(const std::wstring& path);
     static std::wstring normalizePath(const std::wstring& path);
     
-    void initFromScchMode();
+    void initFromDatabase();
     RuntimeMeta getMeta(const std::wstring& path);
     std::wstring getPathByFolderId(const std::string& fid);
 
@@ -142,18 +141,8 @@ public:
     void notifyFullUIRebuild();
 
     /**
-     * @brief 🚨 SSOT 重构核心：单一权威资产入库登记管线
-     */
-    bool registerAsset(const std::string& folderId, const std::wstring& assetPath, int targetCatId);
-
-    /**
-     * @brief 🚨 SSOT 重构核心：跨盘托管库胶囊物理迁移（跨盘 1:1 重锚定）
-     */
-    std::string migrateCapsuleToLibrary(const std::string& assetId, const QString& targetLibraryPath);
-
-    /**
      * @brief 一站式项目注册流程（受控模式）
-     * 2026-07-xx 按照 Plan-116：仅允许受信任的来源（如 AutoImportManager）调用
+     * 2026-07-xx 仅允许受信任的来源调用
      * @param path 物理路径
      * @param authorized 是否经过授权（只有 true 才能创建新记录）
      */
@@ -219,12 +208,29 @@ public:
     void setURL(const std::wstring& path, const std::wstring& url, bool notify = true);
     void setEncrypted(const std::wstring& path, bool encrypted, bool notify = true);
 
-    void saveToDiskModeJson(const std::wstring& nPath, std::function<void(ItemMeta&)> updater);
-    void loadDiskModeJsonForDirectory(const std::wstring& folderPath);
-
-
-    void setManaged(const std::wstring& path, bool managed, bool notify = true);
     void setPalettes(const std::wstring& path, const QVector<QPair<QColor, float>>& palettes, bool notify = true);
+
+    struct ExtractedFeatureItem {
+        std::wstring path;
+        int width{0};
+        int height{0};
+        int64_t mtime{0};
+        int64_t fileSize{0};
+        std::wstring autoColor;
+        QVector<QPair<QColor, float>> palettes;
+        int ingestionStatus{1};
+    };
+
+    void updateExtractedMediaFeatures(
+        const std::wstring& path, 
+        int width, 
+        int height, 
+        const std::wstring& autoColor, 
+        const QVector<QPair<QColor, float>>& palettes, 
+        int ingestionStatus = 1
+    );
+
+    void updateExtractedMediaFeaturesBatch(const std::vector<ExtractedFeatureItem>& items);
 
     /**
      * @brief 全局重命名标签
@@ -292,9 +298,9 @@ public:
 
 
     /**
-     * @brief 统一注册 .arcmeta 目录的 FRN
+     * @brief 统一注册 .QuarkMeta 目录的 FRN
      */
-    static void registerArcmetaFrn(const std::wstring& parentDir);
+    static void registerQuarkMetaFrn(const std::wstring& parentDir);
 
     /**
      * @brief 同步获取文件的 128-bit File ID (或 Fallback ID)
@@ -306,18 +312,6 @@ public:
      * @brief 获取路径所在磁盘的卷序列号
      */
     static std::wstring getVolumeSerialNumber(const std::wstring& path);
-
-    /**
-     * @brief 判定给定路径是否位于任何磁盘的资源库文件夹内部
-     * 2026-07-xx 按照 Plan-117：收拢物理路径归属判定逻辑
-     */
-    static bool isInsideManagedLibrary(const std::wstring& path);
-
-    /**
-     * @brief 获取指定卷的资源库绝对路径
-     * 2026-07-xx 按照 Plan-118：整合配置查询与约定兜底逻辑，确保全系统识别一致性
-     */
-    static std::wstring getManagedLibraryPath(const std::wstring& volSerial, const QString& driveLetter);
 
     /**
      * @brief 物理操作原子事务计数，精确闭锁生命周期
@@ -391,10 +385,12 @@ public:
      */
     template<typename Func>
     void forEachCachedItem(Func&& fn) const {
-        auto currentSnapshot = std::atomic_load(&m_snapshot);
-        if (!currentSnapshot) return;
-        for (auto it = currentSnapshot->begin(); it != currentSnapshot->end(); ++it) {
-            fn(it->first, it->second);
+        // [1.1.4 规范] 256分片弱一致性遍历：逐分片获取 shared_lock 读取，读毕即释
+        for (size_t i = 0; i < NUM_SHARDS; ++i) {
+            std::shared_lock<std::shared_mutex> lock(m_shards[i].mutex);
+            for (const auto& pair : m_shards[i].items) {
+                fn(pair.first, pair.second);
+            }
         }
     }
 
@@ -446,8 +442,18 @@ private:
     MetadataManager(QObject* parent = nullptr);
     ~MetadataManager() override = default;
 
-    // [RCU 内存快照设计]：将缓存升级为原子共享智能指针快照，实现 Lock-Free 共享读取
-    std::shared_ptr<const std::unordered_map<std::wstring, RuntimeMeta>> m_snapshot;
+    // 256 分片并发哈希容器：替代全量深拷贝 COW 快照
+    struct MetaShard {
+        mutable std::shared_mutex mutex;
+        std::unordered_map<std::wstring, RuntimeMeta> items;
+    };
+    static constexpr size_t NUM_SHARDS = 256;
+    std::array<MetaShard, NUM_SHARDS> m_shards;
+
+    inline size_t getShardIndex(const std::wstring& path) const {
+        return std::hash<std::wstring>{}(normalizePath(path)) % NUM_SHARDS;
+    }
+
     std::unordered_map<std::string, std::wstring> m_folderIdToPath;
 
     // 2026-xx-xx 按照 Plan-124：快速层级倒排索引与进度缓存
@@ -484,6 +490,6 @@ private:
     void persistBatchAsync(const std::vector<std::wstring>& paths, bool authorized = false);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
-#endif // ARCMETA_METADATA_MANAGER_H
+#endif // QuarkMeta_METADATA_MANAGER_H

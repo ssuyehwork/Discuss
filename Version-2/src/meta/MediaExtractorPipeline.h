@@ -9,9 +9,9 @@
 #include <string>
 #include <mutex>
 #include <atomic>
-#include "CapsuleMediaExtractor.h"  // 复用其中声明的 s_qtGuiMutex
+#include "../util/DiskMediaExtractor.h"  // 复用其中声明的 s_qtGuiMutex
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class MediaExtractorPipeline : public QObject {
     Q_OBJECT
@@ -47,4 +47,4 @@ private:
     std::atomic<bool> m_isCanceled{false}; // 2026-07-27 按照 Plan-107：原子取消中止标记
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

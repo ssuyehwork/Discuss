@@ -3,7 +3,7 @@
 #include <QStyledItemDelegate>
 #include <QLineEdit> 
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class FileNameLineEdit : public QLineEdit { 
     Q_OBJECT 
@@ -43,7 +43,6 @@ public:
     void setTypeRole(int role);
     void setIsEmptyRole(int role);
     void setColorRole(int role);
-    void setRegistrationProgressRole(int role);
 
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
@@ -83,7 +82,6 @@ private:
     int m_typeRole = -1;
     int m_isEmptyRole = -1;
     int m_colorRole = -1;
-    int m_registrationProgressRole = -1;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

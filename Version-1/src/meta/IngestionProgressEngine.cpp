@@ -3,7 +3,7 @@
 #include "DatabaseManager.h"
 #include <QDebug>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 IngestionProgressEngine& IngestionProgressEngine::instance() {
     static IngestionProgressEngine inst;
@@ -66,4 +66,4 @@ double IngestionProgressEngine::getProgressFromDb(const std::wstring& folderPath
     return progress;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

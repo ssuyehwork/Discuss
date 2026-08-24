@@ -3,7 +3,7 @@
 #include <QString>
 #include <QFontMetrics>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class ElidedTextUtility {
 public:
@@ -27,4 +27,4 @@ public:
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

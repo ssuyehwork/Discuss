@@ -4,7 +4,7 @@
 #include <QPainter>
 #include <QFontMetrics>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 TagPill::TagPill(const QString& text, QWidget* parent) : QWidget(parent), m_text(text) {
     setFixedHeight(22);
@@ -41,4 +41,4 @@ void TagPill::paintEvent(QPaintEvent*) {
     painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 2, 2);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -7,7 +7,7 @@
 #include <QString>
 #include <QColor>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class CardPainterHelper {
 public:
@@ -39,4 +39,4 @@ public:
     static void drawCategoryBackground(QPainter* painter, const QRect& contentRect, bool isSelected, bool isHover, const QString& colorHex);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -7,7 +7,7 @@
 #include <QString>
 #include <QDateTime>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 批量操作进度对话框
@@ -85,4 +85,4 @@ private:
     qint64 m_lastUpdateTime = 0;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

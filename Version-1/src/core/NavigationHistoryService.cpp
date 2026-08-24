@@ -1,9 +1,8 @@
 #include "NavigationHistoryService.h"
 #include "AppConfig.h"
-#include "AutoImportManager.h"
 #include "../meta/MetadataManager.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 NavigationHistoryService& NavigationHistoryService::instance() {
     static NavigationHistoryService inst;
@@ -45,10 +44,6 @@ void NavigationHistoryService::clearAll() {
 
 void NavigationHistoryService::recordRecentVisitedFolder(const std::wstring& path) {
     if (path.empty()) return;
-    std::wstring managedAbs = AutoImportManager::getManagedLibraryPath(path);
-    if (!managedAbs.empty() && path.size() >= managedAbs.size() && _wcsnicmp(path.c_str(), managedAbs.c_str(), managedAbs.size()) == 0) {
-        return; // 在资源库内部，不作为物理最近文件夹记录
-    }
 
     std::wstring volSerial = MetadataManager::getVolumeSerialNumber(path);
     if (volSerial.empty()) return;
@@ -70,4 +65,4 @@ QStringList NavigationHistoryService::getRecentVisitedFolders(const std::wstring
     return AppConfig::instance().getValue(key, QStringList()).toStringList();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -22,15 +22,13 @@
 #include <QPersistentModelIndex>
 #include <QDebug>
 #include <QIcon>
+#include "ScanStats.h"
 #include "FilterPanel.h"
 #include "models/DiskItemModel.h"
-#include "models/LibraryAssetModel.h"
 
 #include "../core/ModelContract.h"
 
-namespace ArcMeta {
-
-class CategoryLockWidget;
+namespace QuarkMeta {
 
 struct RuntimeMeta;
 
@@ -49,13 +47,11 @@ public:
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
     bool lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const override;
+
+private:
+    void recomputeDuplicateCache();
+    std::unordered_set<QString> m_cachedDuplicatePaths; // 缓存当前所有重复项的路径集合
 };
-
-/**
- * @brief 虚拟化数据库模型：支持百万级条目瞬时加载 (2026-06-xx 重构)
- */
-// 🚨 极致物理重构：ArcMetaVirtualDbModel 已彻底退役并被 DiskItemModel / LibraryAssetModel 继承平替，在此安全移除
-
 
 /**
  * @brief 内容面板（面板四）：核心业务展示区
@@ -73,8 +69,6 @@ public:
     };
 
     DataSourceType dataSourceType() const;
-    bool isMirrorSource() const;
-    bool isManagedContext() const;
     int currentCategoryId() const { return m_currentCategoryId; }
     bool isContextMenuActive() const { return m_isContextMenuActive; }
 
@@ -92,17 +86,6 @@ public:
     SortType currentSortType() const { return m_sortType; }
     Qt::SortOrder currentSortOrder() const { return m_sortOrder; }
 
-    /**
-     * @brief 统计结构
-     */
-    struct ScanStats {
-        QMap<int, int> ratingCounts;
-        QMap<QString, int> colorCounts;
-        QMap<QString, int> typeCounts;
-        QMap<QString, int> createDateCounts;
-        QMap<QString, int> modifyDateCounts;
-        int emptyFolderCount = 0;
-    };
 
     enum ViewMode {
         ListView,
@@ -136,11 +119,12 @@ public:
         ActionPermanentDelete,
         ActionSecureDelete,
         ActionRestore,
+        ActionRestoreAll,
+        ActionEmptyTrash,
         ActionCopyName,
         ActionCopyPath,
         ActionAddToCategory,
         ActionAddToFavorites,
-        ActionRescan,
         ActionRefresh,
         ActionCancelImport,
         ActionBatchCreate
@@ -221,18 +205,13 @@ signals:
     /**
      * @brief 目录装载完成后发出，携带统计数据供 FilterPanel 填充
      */
-    void directoryStatsReady(
-        const QMap<int, int>&     ratingCounts,
-        const QMap<QString, int>& colorCounts,
-        const QMap<QString, int>& typeCounts,
-        const QMap<QString, int>& createDateCounts,
-        const QMap<QString, int>& modifyDateCounts,
-        int emptyFolderCount);
+    void directoryStatsReady(const QuarkMeta::ScanStats& stats);
 
 private:
     void initUi();
     void initGridView();
     void restoreActiveView();
+    void restoreSelections();
     void initListView();
     void setupContextMenu();
     void updateLayersButtonState();
@@ -246,7 +225,6 @@ private:
 
     QVBoxLayout* m_mainLayout = nullptr;
     QStackedWidget* m_viewStack = nullptr;
-    CategoryLockWidget* m_lockWidget = nullptr;
     QPushButton* m_btnLayers = nullptr;
     QPushButton* m_btnLayersBlue = nullptr;
     QPushButton* m_btnToggleFolders = nullptr; // 2026-07-xx 按照 Plan-73：显示/隐藏文件夹切换
@@ -257,20 +235,21 @@ private:
     // 视图组件
     QAbstractItemView* m_gridView = nullptr;
     QTreeView* m_treeView = nullptr;
-    DiskItemModel* m_diskModel = nullptr;       // 负责纯物理磁盘导航模型 (0)
-    LibraryAssetModel* m_libraryModel = nullptr; // 负责内存托管逻辑资产模型 (1)
+    DiskItemModel* m_diskModel = nullptr;       // 负责纯物理磁盘导航模型
     ItemModelBase* m_model = nullptr;           // 当前多态激活指针合约
 
     QTimer* m_visibleTimer = nullptr;
-    void refreshVisibleThumbnails();
     QSortFilterProxyModel* m_proxyModel = nullptr;
+
+public:
+    void refreshVisibleThumbnails();
 
 
     FilterState m_currentFilter;
 
     int m_zoomLevel = 64;
     QString m_currentPath;
-    QString m_pendingSelectName;
+    QSet<QString> m_pendingSelectNames;
     bool m_isPendingEdit = false;
     int m_currentCategoryId = -1;
     QString m_currentCategoryType; // 用于驱动差异化右键菜单
@@ -335,7 +314,8 @@ public slots:
      * @param edit 是否进入编辑模式
      */
     void setPendingSelectName(const QString& name, bool edit = false) { 
-        m_pendingSelectName = name; 
+        m_pendingSelectNames.clear();
+        if (!name.isEmpty()) m_pendingSelectNames.insert(name);
         m_isPendingEdit = edit;
     }
 
@@ -401,6 +381,7 @@ public slots:
      * @brief 2026-06-xx 彻底重构：加载分类及其子项 (分类 ID 联动)
      */
     void loadCategory(int categoryId);
+    void loadCategory(const QString& categoryType);
     void loadCategories(const QList<int>& categoryIds);
 
     /**
@@ -434,4 +415,4 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

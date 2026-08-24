@@ -5,7 +5,7 @@
 #include <QLabel>
 #include <QButtonGroup>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 static QWidget* createCard(const DuplicateItemInfo& item, const QString& badgeText, bool isExisting) {
     QWidget* card = new QWidget();
@@ -129,4 +129,4 @@ bool DuplicateConflictDialog::applyToAll() const {
     return m_chkApplyToAll->isChecked();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -8,7 +8,7 @@
 #include <windows.h>
 #endif
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class DatabaseMigrator {
 public:
@@ -45,4 +45,4 @@ public:
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

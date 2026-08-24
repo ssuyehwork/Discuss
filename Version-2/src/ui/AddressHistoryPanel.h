@@ -7,7 +7,7 @@
 #include <QPushButton>
 #include <QStringList>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 地址栏历史路径悬浮面板
@@ -37,4 +37,4 @@ private:
     QStringList  m_history;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

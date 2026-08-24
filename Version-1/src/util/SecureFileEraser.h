@@ -9,7 +9,7 @@
 #include <io.h>
 #endif
 
-namespace ArcMeta {
+namespace QuarkMeta {
 class SecureFileEraser {
 public:
     static bool shredFile(const QString& path) {

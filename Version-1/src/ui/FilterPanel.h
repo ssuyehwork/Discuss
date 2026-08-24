@@ -11,9 +11,10 @@
 #include <QSlider>
 #include <QMap>
 #include <QStringList>
+#include "ScanStats.h"
 #include "MetaPanel.h" // 引用 FlowLayout
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class SearchHistoryPanel;
 
@@ -119,6 +120,9 @@ struct FilterState {
     bool showFolders = true; // 2026-07-xx 按照 Plan-73：显示/隐藏文件夹
     bool showFiles = true;   // 2026-07-xx 按照 Plan-73：显示/隐藏文件
 
+    enum DuplicatePresence { DupAll, DuplicateOnly, UniqueOnly };
+    DuplicatePresence duplicatePresence = DupAll;
+
     bool isEmpty() const {
         return ratings.isEmpty() && colors.isEmpty() && manualExactColors.isEmpty() && keyword.isEmpty() && types.isEmpty() &&
                createDates.isEmpty() && modifyDates.isEmpty() &&
@@ -126,7 +130,7 @@ struct FilterState {
                minSize == -1 && maxSize == -1 && minColorArea == 0 &&
                colorFilterText.trimmed().isEmpty() &&
                typeFilterText.trimmed().isEmpty() && createDateFilterText.trimmed().isEmpty() &&
-               modifyDateFilterText.trimmed().isEmpty();
+               modifyDateFilterText.trimmed().isEmpty() && duplicatePresence == DupAll;
     }
 };
 
@@ -144,6 +148,8 @@ public:
     ~FilterPanel() override = default;
 
 
+    void populateStats(const QuarkMeta::ScanStats& stats);
+    void populate(const QuarkMeta::ScanStats& stats) { populateStats(stats); }
     void populate(
         const QMap<int, int>&        ratingCounts,
         const QMap<QString, int>&    colorCounts,
@@ -198,6 +204,8 @@ private:
     QString     m_hueSliderColor;
     QStringList m_recentColors; // LRU 缓存
 
+    QuarkMeta::ScanStats m_currentStats;
+
     QMap<int, int>      m_ratingCounts;
     QMap<QString, int>  m_colorCounts;
     QMap<QString, int>  m_typeCounts;
@@ -226,8 +234,8 @@ private:
     QWidget* m_groupLink = nullptr;
     QWidget* m_groupNote = nullptr;
     QWidget* m_groupRatio = nullptr;
+    QWidget* m_groupDuplicate = nullptr;
 
-    bool m_isMirrorSource = true;
 
     // 2026-xx-xx 新增快速输入框成员
     QLineEdit*    m_editColor       = nullptr;
@@ -251,4 +259,4 @@ private slots:
     void onToggleAllGroupsClicked();
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

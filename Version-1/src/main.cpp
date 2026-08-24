@@ -26,12 +26,9 @@
 #include "ui/MainWindow.h"
 
 #include "meta/MetadataManager.h"
-#include "meta/CategoryRepo.h"
 #include "meta/MediaExtractorPipeline.h"
 #include "meta/DatabaseManager.h"
-#include "mft/MftReader.h"
 #include "core/CoreController.h"
-#include "core/AutoImportManager.h"
 
 /**
  * @brief 自定义日志重定向。极速格式化日志内容后投递到异步缓冲区，杜绝同步磁盘等待。
@@ -47,27 +44,28 @@ void customMessageHandler(QtMsgType type, const QMessageLogContext &context, con
         case QtFatalMsg:    level = "FATAL";    break;
     }
     // 投递至异步 RingBuffer 日志引擎写出，线程安全且极其高效
-    ArcMeta::Logger::log(QString("[%1] %2").arg(level, msg));
+    QuarkMeta::Logger::log(QString("[%1] %2").arg(level, msg));
 }
 
 /**
  * @brief 退出时调用的清场函数，优雅停止各子系统线程、确保数据完整落盘不损坏。
  */
 void onApplicationAboutToQuit(HANDLE hMutex) {
-    // 1. 阻塞等待全局工作线程池中所有子任务退场，防止多线程写冲突与硬截断
-    QThreadPool::globalInstance()->waitForDone();
+    // 1. 立即设置停机原子标记
+    QuarkMeta::CoreController::requestShutdown();
 
-    // 2. 将高频落盘缓存中的所有待写数据同步强力落盘写入，安全闭卷
-    ArcMeta::DatabaseManager::instance().flushAll(true);
+    // 2. 立即熔断提图后台流水线
+    QuarkMeta::MediaExtractorPipeline::instance().cancelAll();
 
-    // 3. 挂起并关闭异步日志写出线程，使其后续降级同步写
-    ArcMeta::Logger::stopAsyncLogger();
+    // 3. 限时 200ms 排空线程池，绝不无限期死等
+    QThreadPool::globalInstance()->waitForDone(200);
 
-    // 4. 释放 COM 套间环境
+    // 4. 全系统唯一权威的数据库安全落盘与闭卷
+    QuarkMeta::DatabaseManager::instance().shutdown();
+
 #ifdef Q_OS_WIN
     CoUninitialize();
 
-    // 5. 释放单实例互斥量锁
     if (hMutex) {
         ReleaseMutex(hMutex);
         CloseHandle(hMutex);
@@ -81,22 +79,20 @@ int main(int argc, char *argv[]) {
     // -------------------------------------------------------------
     HANDLE hMutex = nullptr;
 #ifdef Q_OS_WIN
-    hMutex = CreateMutexA(NULL, TRUE, "ArcMeta_SingleInstance_Mutex");
+    hMutex = CreateMutexA(NULL, TRUE, "QuarkMeta_SingleInstance_Mutex");
     if (hMutex == NULL || GetLastError() == ERROR_ALREADY_EXISTS) {
         if (hMutex) CloseHandle(hMutex);
         // 单实例检测失败，由于尚未影响任何运行状态及日志，直接优雅退出
         return 0;
     }
 #else
-    QString lockPath = QDir::tempPath() + "/ArcMeta_SingleInstance.lock";
+    QString lockPath = QDir::tempPath() + "/QuarkMeta_SingleInstance.lock";
     static QLockFile lockFile(lockPath);
     if (!lockFile.tryLock(100)) {
         return 0;
     }
 #endif
 
-    // 单实例锁定成功，安全哨兵放行。此时再执行日志容量哨兵轮转切片
-    ArcMeta::Logger::rotateLogFiles("arcmeta_debug.log");
 
     // 1. 安装自定义日志处理器（使用超高吞吐无阻塞的内存队列异步写入）
     qInstallMessageHandler(customMessageHandler);
@@ -120,8 +116,8 @@ int main(int argc, char *argv[]) {
     // 杜绝相对路径幻觉，强制使用 Qt 资源系统 (:/) 加载 app_icon.ico，确保托盘显示不失效
     a.setWindowIcon(QIcon(":/app_icon.ico"));
 
-    a.setApplicationName("ArcMeta");
-    a.setOrganizationName("ArcMetaTeam");
+    a.setApplicationName("QuarkMeta");
+    a.setOrganizationName("QuarkMeta");
 
     // -------------------------------------------------------------
     // 重构 4：COM 亲和性。在 QApplication 实例化后，安全初始化 COM 环境
@@ -133,16 +129,15 @@ int main(int argc, char *argv[]) {
     // -------------------------------------------------------------
     // 重构 3：生命期。引入 AppCoreController 统一拓扑预热
     // -------------------------------------------------------------
-    ArcMeta::CoreController::initializeCoreComponents();
+    QuarkMeta::CoreController::initializeCoreComponents();
 
     // -------------------------------------------------------------
     // 重构 5：多段启动。MainWindow 放置于栈上局部作用域，利用 RAII 自动且安全析构，规避 Double Free
     // -------------------------------------------------------------
-    ArcMeta::MainWindow w;
+    QuarkMeta::MainWindow w;
     
     // 启动异步系统扫描与监控监听
-    ArcMeta::CoreController::instance().startSystem();
-    ArcMeta::AutoImportManager::instance().startListening();
+    QuarkMeta::CoreController::instance().startSystem();
 
     // 利用主线程第一个 Tick 调度，平滑显示窗口，消解首帧信号洪暴导致的渲染卡顿
     QTimer::singleShot(0, [&w]() {

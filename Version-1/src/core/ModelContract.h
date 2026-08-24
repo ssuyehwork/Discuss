@@ -1,7 +1,7 @@
 #pragma once
 #include <Qt>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 工业级模型契约 (ModelContract)
@@ -41,4 +41,4 @@ enum CommonRole {
     DiskTrashIdRole     = Qt::UserRole + 209  // 磁盘回收站表 ID
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

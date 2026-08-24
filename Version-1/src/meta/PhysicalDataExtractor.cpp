@@ -2,7 +2,7 @@
 #include <QFileInfo>
 #include <QDebug>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 bool PhysicalDataExtractor::fetchWinApiMetadataDirect(
     const std::wstring& path, 
@@ -93,4 +93,4 @@ bool PhysicalDataExtractor::fetchWinApiMetadataDirect(
     return true;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

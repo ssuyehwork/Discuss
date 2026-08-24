@@ -4,15 +4,16 @@
 #include <vector>
 #include <functional>
 #include "ItemRecord.h"
+#include "CoreEngine.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 【物理隔离模块一】纯磁盘导航扫描服务
  *
  * 红线：本文件绝不允许 #include MetadataManager.h / CategoryRepo.h / AssetImporter.h。
  * 只使用 QDir / QFileInfo 做原始文件系统遍历，原样展示物理文件夹与文件名，
- * 绝不对 .arc 容器做任何解包翻译——这是磁盘模式与内存数据库模式 100% 隔离的物理保证。
+ * 绝不对 .arc 容器做任何解包翻译——确保磁盘直连浏览体验。
  */
 class DiskScanService {
 public:
@@ -25,6 +26,10 @@ public:
     static std::vector<ItemRecord> scanDirectory(const QString& path,
                                                   bool recursive,
                                                   const std::function<bool()>& shouldContinue);
+
+    static std::vector<ItemRecord> scanDirectory(const QString& path,
+                                                  bool recursive,
+                                                  std::shared_ptr<CancellationToken> token);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

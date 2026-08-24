@@ -6,16 +6,17 @@
 #include <QDateTime>
 #include <QFileInfo>
 #include <QDir>
-#include "../meta/AmMetaJson.h"
-#include "../ui/MediaColorExtractor.h" // 🚨 补全头文件引入
+#include <QThreadPool>
+#include "../../meta/QuarkMetaJson.h"
+#include "../MediaColorExtractor.h"
+#include "../../core/CoreController.h"
 #include "../../util/DiskMediaExtractor.h"
 #include "../DiskBatchRenameService.h"
 #include "../../meta/FileOperationHelper.h"
-#include "../../meta/CapsuleMediaExtractor.h"
+#include "../../util/DiskMediaExtractor.h"
 #include "../../meta/MetadataManager.h"
-#include "../../meta/CategoryRepo.h"
 
-using namespace ArcMeta;
+using namespace QuarkMeta;
 
 #include <QtConcurrent>
 
@@ -51,6 +52,7 @@ QVariant DiskItemModel::headerData(int section, Qt::Orientation orientation, int
 }
 
 void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
+    incrementGeneration(); // 🚨 代际递增：瞬间废除上一目录的所有在途任务！
     beginResetModel();
     m_allRecords = records;
     m_pathToIndex.clear();
@@ -64,6 +66,7 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
 }
 
 void DiskItemModel::clear() {
+    incrementGeneration(); // 🚨 代际递增
     beginResetModel();
     m_allRecords.clear();
     m_pathToIndex.clear();
@@ -85,7 +88,7 @@ void DiskItemModel::updateRecordMetadata(const QString& path) {
             QString parentDir = QDir::toNativeSeparators(fileInfo.absolutePath());
             QString fileName = fileInfo.fileName();
 
-            AmMetaJson jsonCache(parentDir.toStdWString());
+            QuarkMetaJson jsonCache(parentDir.toStdWString());
             jsonCache.load();
             const auto& cachedItems = jsonCache.items();
             auto cachedIt = cachedItems.find(fileName.toStdWString());
@@ -145,9 +148,9 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
         } else if (FileOperationHelper::safeRename(oldPath, newPathStr)) {
             success = true;
 
-            // 同步对 .arcmeta/disk_thumbs/ 中的哈希缩略图进行重命名
-            QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPath);
-            QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
+            // 同步对 .QuarkMeta/disk_thumbs/ 中的哈希缩略图进行重命名
+            QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPath);
+            QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
 
             if (QFile::exists(oldThumbHashPath)) {
                 FileOperationHelper::safeRename(oldThumbHashPath, newThumbHashPath);
@@ -157,7 +160,6 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             std::wstring newW = QDir(destDir).absoluteFilePath(newPathStr).toStdWString();
 
             MetadataManager::instance().renameItem(oldW, newW);
-            CategoryRepo::renamePhysicalCategoryPath(oldW, newW);
         }
 
         if (success) {
@@ -183,7 +185,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
 
     bool metaUpdated = false;
 
-    AmMetaJson jsonCache(parentDir.toStdWString());
+    QuarkMetaJson jsonCache(parentDir.toStdWString());
     jsonCache.load();
     auto& cachedItems = jsonCache.items();
     
@@ -254,34 +256,39 @@ void DiskItemModel::clearCacheForFolder(const QString& folderPath) {
 }
 
 void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
-    // 磁盘模型：缩略图提取流 100% 盲区拦截：对 .arc、文件夹和非标准图形直接忽略，不生成 any _thumbnail.png，不穿透
-    std::vector<std::pair<QString, QString>> newQueue;
+    if (rows.isEmpty() || CoreController::isShuttingDown()) return;
+
+    uint64_t thisGen = m_currentGen.load(std::memory_order_relaxed);
+
+    // 1. 严格锁定单批次只取 2 张！
+    QStringList pathsToLoad;
     for (int r : rows) {
+        if (pathsToLoad.size() >= 2) break; // 🚨 物理红线：严格死锁 2 张！
+
         if (r < 0 || r >= static_cast<int>(m_allRecords.size())) continue;
         const auto& rec = m_allRecords[r];
-        if (rec.isDir) continue; // 绝对不穿透文件夹
-        
-        QString path = rec.path;
-        if (!UiHelper::isGraphicsFile(rec.suffix)) continue;
+        if (rec.isDir || !UiHelper::isGraphicsFile(rec.suffix)) continue;
 
-        // 🚨 核心防爆锁：如果已经在缓存中，或者【已经在后台处理排队中】，立刻 0 毫秒跳过！
+        QString path = rec.path;
         if (m_iconCache.contains(path) || m_requestedPaths.contains(path)) continue;
 
-        // 🚨 0 毫秒瞬间上锁！阻断后续 100ms 高频定时器重复开启进程！
         m_requestedPaths.insert(path);
-        newQueue.push_back({path, path});
+        pathsToLoad << path;
     }
 
-    if (newQueue.empty()) return;
+    // 如果视口内没有需要加载的，直接退出
+    if (pathsToLoad.isEmpty()) return;
 
     QPointer<DiskItemModel> weakThis(this);
-    (void)QtConcurrent::run([weakThis, newQueue]() {
-        for (const auto& task : newQueue) {
-            if (!weakThis) break;
-            QString path = task.first;
 
-            // 🚨 单线直达：直接调用 DiskMediaExtractor，零分支判断！
-            QImage img = DiskMediaExtractor::getDiskThumbnail(path, 512);
+    // 2. 并发处理这 2 张
+    for (const QString& path : pathsToLoad) {
+        QThreadPool::globalInstance()->start([weakThis, path, thisGen]() {
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+
+            QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, 512);
+
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
 
             double ar = 1.0;
             bool hasThumb = false;
@@ -290,12 +297,12 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
                 hasThumb = true;
             }
 
-            QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, img, ar, hasThumb]() {
-                if (weakThis) {
+            QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, img, ar, hasThumb, thisGen]() {
+                if (weakThis && weakThis->currentGeneration() == thisGen) {
                     QIcon icon = img.isNull() ? ShellIconManager::getFileIcon(path, 128) : QIcon(QPixmap::fromImage(img));
                     weakThis->m_iconCache.insert(path, new QIcon(icon));
                     weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = hasThumb ? ar : -1.0;
-                    weakThis->m_requestedPaths.remove(path); // 任务完成，释放防抖锁，保持其内存占用完全有界！
+                    weakThis->m_requestedPaths.remove(path);
 
                     auto it = weakThis->m_pathToIndex.find(path);
                     if (it != weakThis->m_pathToIndex.end()) {
@@ -303,13 +310,24 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
                         if (weakThis->isSuspended()) {
                             weakThis->m_pendingUpdateRows.insert(rIdx);
                         } else {
-                            emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+                            emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), 
+                                                      {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
                         }
                     }
+
+                    // 🚨【核心自驱动接力】：解完这一张后，如果还没切走目录，自动触发一个 20ms 延时去接力解下 2 张！
+                    auto* panel = qobject_cast<ContentPanel*>(weakThis->parent());
+                    if (panel && !CoreController::isShuttingDown()) {
+                        QTimer::singleShot(20, panel, [panel, thisGen, weakThis]() {
+                            if (weakThis && weakThis->currentGeneration() == thisGen) {
+                                panel->refreshVisibleThumbnails();
+                            }
+                        });
+                    }
                 }
-            });
-        }
-    });
+            }, Qt::QueuedConnection);
+        });
+    }
 }
 
 Qt::ItemFlags DiskItemModel::flags(const QModelIndex& index) const {
@@ -373,7 +391,7 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == TagsRole) {
         return record.tags;
     } else if (role == ManagedRole) {
-        return record.isManaged;
+        return false;
     } else if (role == RegistrationProgressRole) {
         return record.registrationProgress;
     } else if (role == CategoryIdRole) {

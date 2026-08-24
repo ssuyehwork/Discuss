@@ -1,11 +1,11 @@
-#ifndef ARCMETA_PHYSICAL_DATA_EXTRACTOR_H
-#define ARCMETA_PHYSICAL_DATA_EXTRACTOR_H
+#ifndef QuarkMeta_PHYSICAL_DATA_EXTRACTOR_H
+#define QuarkMeta_PHYSICAL_DATA_EXTRACTOR_H
 
 #include <string>
 #include <QString>
 #include <windows.h>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 专职负责 Windows 物理磁盘 I/O 元数据与 FRN 指纹直接获取的静态纯函数服务
@@ -27,6 +27,6 @@ public:
     );
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
-#endif // ARCMETA_PHYSICAL_DATA_EXTRACTOR_H
+#endif // QuarkMeta_PHYSICAL_DATA_EXTRACTOR_H

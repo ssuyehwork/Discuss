@@ -1,9 +1,9 @@
-#ifndef ARCMETA_SYSTEM_BOOTSTRAPPER_H
-#define ARCMETA_SYSTEM_BOOTSTRAPPER_H
+#ifndef QuarkMeta_SYSTEM_BOOTSTRAPPER_H
+#define QuarkMeta_SYSTEM_BOOTSTRAPPER_H
 
 #include <QObject>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 专职负责底盘级硬件热插拔、IOCP 多维监控智能点火的纯无头（Headless）服务类
@@ -23,6 +23,6 @@ private:
     ~SystemBootstrapper() override = default;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
-#endif // ARCMETA_SYSTEM_BOOTSTRAPPER_H
+#endif // QuarkMeta_SYSTEM_BOOTSTRAPPER_H

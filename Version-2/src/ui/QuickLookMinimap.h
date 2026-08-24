@@ -4,7 +4,7 @@
 #include <QPixmap>
 #include <QRectF>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class QuickLookMinimap : public QWidget {
     Q_OBJECT
@@ -34,4 +34,4 @@ private:
     bool m_isDragging = false;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

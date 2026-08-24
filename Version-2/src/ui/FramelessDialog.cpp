@@ -11,7 +11,7 @@
 #pragma comment(lib, "dwmapi.lib")
 #endif
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 // ============================================================================
 // FramelessDialog 基类实现
@@ -53,14 +53,14 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     titleBar->setFixedHeight(34);
     // 移除 border-bottom 以防止穿透组件，改为使用独立的物理分割线
     titleBar->setStyleSheet("background-color: transparent; border: none;");
-    auto* titleLayout = new QHBoxLayout(titleBar);
-    titleLayout->setContentsMargins(12, 0, 5, 0); // 右侧对齐 5px 物理边距
-    titleLayout->setSpacing(4);
+    m_titleLayout = new QHBoxLayout(titleBar);
+    m_titleLayout->setContentsMargins(12, 0, 5, 0); // 右侧对齐 5px 物理边距
+    m_titleLayout->setSpacing(4);
 
     m_titleLabel = new QLabel(title);
     m_titleLabel->setStyleSheet("color: #AAAAAA; font-size: 12px; font-weight: bold; border: none;");
-    titleLayout->addWidget(m_titleLabel);
-    titleLayout->addStretch();
+    m_titleLayout->addWidget(m_titleLabel);
+    m_titleLayout->addStretch();
 
     auto createTitleBtn = [this](const QString& iconName, const QString& tooltip, const QString& hoverColor) {
         QPushButton* btn = new QPushButton();
@@ -132,10 +132,10 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::reject);
 
     // 2026-05-10 对标规范：从右到左排列 (布局顺序: pin -> min -> max -> close)
-    titleLayout->addWidget(m_pinBtn);
-    titleLayout->addWidget(m_minBtn);
-    titleLayout->addWidget(m_maxBtn);
-    titleLayout->addWidget(m_closeBtn);
+    m_titleLayout->addWidget(m_pinBtn);
+    m_titleLayout->addWidget(m_minBtn);
+    m_titleLayout->addWidget(m_maxBtn);
+    m_titleLayout->addWidget(m_closeBtn);
 
     m_mainLayout->addWidget(titleBar);
 
@@ -441,4 +441,4 @@ void FramelessMessageBox::critical(QWidget* parent, const QString& title, const 
     dlg.exec();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

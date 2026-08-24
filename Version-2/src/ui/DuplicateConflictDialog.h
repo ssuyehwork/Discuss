@@ -9,7 +9,7 @@
 
 class QWidget;
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 enum class DuplicateResolveAction {
     UseExisting, // 使用已存在文件导入
@@ -33,4 +33,4 @@ private:
     QPushButton* m_btnSubmit = nullptr;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

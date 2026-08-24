@@ -11,7 +11,7 @@
 #include <QFrame>
 #include <QPointer>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class PresetTagsDialog : public FramelessDialog {
     Q_OBJECT
@@ -47,4 +47,4 @@ private:
     QPointer<TagSelectorOverlay> m_selectorOverlay;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -10,14 +10,15 @@
 #include <QFile>
 #include <QFileInfo>
 #include "ContentPanel.h"
+#include "ThumbnailDelegate.h"
 #include "../meta/MetadataManager.h"
 #include "../core/ModelContract.h"
 #include "UiHelper.h"
 #include "CardPainterHelper.h"
 #include "StyleLibrary.h"
-using namespace ArcMeta::Style;
+using namespace QuarkMeta::Style;
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 通用树形视图代理，提供圆角高亮效果
@@ -188,8 +189,6 @@ public:
             if (col == 1) { // 🚨 物理修复 ①：状态列图标在单元格内部 100% 水平+垂直绝对居中！
                 bool isPinned = idx0.data(IsLockedRole).toBool();
                 bool isManaged = idx0.data(ManagedRole).toBool();
-                bool isDir = idx0.data(TypeRole).toString() == "folder";
-                double progress = idx0.data(RegistrationProgressRole).toDouble();
 
                 int iconSize = 16;
                 // 计算单元格物理中心坐标
@@ -199,18 +198,7 @@ public:
 
                 if (isPinned) {
                     UiHelper::getIcon("pin_vertical", QColor("#FF551C"), 16).paint(painter, centeredRect, Qt::AlignCenter);
-                } else if (isDir && progress >= 0.0 && progress < 1.0) {
-                    painter->save(); 
-                    painter->setRenderHint(QPainter::Antialiasing); 
-                    painter->setPen(QPen(QColor(60, 60, 60, 180), 2)); 
-                    painter->drawEllipse(centeredRect.adjusted(1, 1, -1, -1)); 
-                    QPen pPen(QColor("#3498db"), 2); 
-                    pPen.setCapStyle(Qt::RoundCap); 
-                    painter->setPen(pPen); 
-                    int spanAngle = -qRound(progress * 360 * 16); 
-                    painter->drawArc(centeredRect.adjusted(1, 1, -1, -1), 90 * 16, spanAngle); 
-                    painter->restore(); 
-                } else if (isManaged || (isDir && progress >= 1.0)) {
+                } else if (isManaged) {
                     UiHelper::getIcon("check_circle", QColor("#2ecc71"), 16).paint(painter, centeredRect, Qt::AlignCenter);
                 }
             } else if (col == 2) { // 星级列
@@ -255,8 +243,7 @@ public:
 public:
     QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         Q_UNUSED(option);
-        Q_UNUSED(index);
-        QLineEdit* editor = new QLineEdit(parent);
+        FileNameLineEdit* editor = new FileNameLineEdit(parent);
         // 2026-07-26 极致重构：应用精致的暗黑带蓝边框样式（背景 `#2D2D2D`，外框 `#3498db`，圆角 `4px`），消除默认白色粗糙样式
         editor->setStyleSheet(
             "QLineEdit {"
@@ -270,6 +257,8 @@ public:
             "  font-size: 8pt;"
             "}"
         );
+        bool isFolder = (index.data(TypeRole).toString() == "folder");
+        editor->setIsFolder(isFolder);
         editor->installEventFilter(const_cast<TreeItemDelegate*>(this));
         return editor;
     }
@@ -340,23 +329,10 @@ public:
 
     void setEditorData(QWidget* editor, const QModelIndex& index) const override {
         QString value = index.model()->data(index, Qt::EditRole).toString();
-        QLineEdit* lineEdit = qobject_cast<QLineEdit*>(editor);
-        if (!lineEdit) return;
-
-        lineEdit->setText(value);
-
-        // 🚀 【拔除 0ms 补丁】：同步精准设定选区，无需使用 QTimer 在下一个事件循环中强行覆盖 
-        bool isFolder = (index.data(TypeRole).toString() == "folder" || index.data(TypeRole).toString() == "category"); 
-        if (isFolder) { 
-            lineEdit->selectAll(); 
-        } else { 
-            int lastDot = value.lastIndexOf('.'); 
-            if (lastDot > 0) { 
-                lineEdit->setSelection(0, lastDot); 
-            } else { 
-                lineEdit->selectAll(); 
-            } 
-        } 
+        FileNameLineEdit* lineEdit = qobject_cast<FileNameLineEdit*>(editor);
+        if (lineEdit) {
+            lineEdit->setText(value);
+        }
     }
 
 private:
@@ -364,4 +340,4 @@ private:
     bool m_drawMiniCards;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

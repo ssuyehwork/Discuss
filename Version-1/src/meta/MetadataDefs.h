@@ -1,5 +1,5 @@
-#ifndef ARCMETA_METADATA_DEFS_H
-#define ARCMETA_METADATA_DEFS_H
+#ifndef QuarkMeta_METADATA_DEFS_H
+#define QuarkMeta_METADATA_DEFS_H
 
 #include <string>
 #include <vector>
@@ -7,7 +7,7 @@
 
 #include <QColor>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 struct PaletteEntry {
     QColor color;
@@ -102,6 +102,6 @@ struct ItemMeta {
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
-#endif // ARCMETA_METADATA_DEFS_H
+#endif // QuarkMeta_METADATA_DEFS_H

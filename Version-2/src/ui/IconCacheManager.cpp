@@ -2,7 +2,7 @@
 #include <QFileIconProvider>
 #include <QFileInfo>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 IconCacheManager& IconCacheManager::instance() {
     static IconCacheManager inst;
@@ -38,4 +38,4 @@ QIcon IconCacheManager::getCachedIcon(const QString& ext, bool isDir) {
     return icon;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

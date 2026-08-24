@@ -10,8 +10,10 @@
 #include <QRegularExpressionValidator>
 #include <QDir>
 #include <QFile>
+#include <QApplication>
+#include <QScreen>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 MetaPanel::MetaPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("MetadataContainer"); 
@@ -92,13 +94,81 @@ void MetaPanel::initUi() {
     tagL->setContentsMargins(0, 0, 0, 0); 
     tagL->setSpacing(6); 
  
-    // 1. 上半部分：输入框 
-    m_tagEdit = new ElasticEdit(m_tagBox); 
-    m_tagEdit->setPlaceholderText("输入标签..."); 
-    m_tagEdit->setStyleSheet("QTextEdit { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #AAAAAA; font-weight: normal; }"); 
-    connect(m_tagEdit, &ElasticEdit::returnPressed, this, &MetaPanel::onTagAdded); 
-    m_tagEdit->installEventFilter(this); 
-    tagL->addWidget(m_tagEdit); 
+    // 1. 上半部分：添加标签矢量按钮 
+    m_btnAddTag = new QPushButton(UiHelper::getIcon("add", QColor("#AAAAAA"), 14), " 添加标签", m_tagBox); 
+    m_btnAddTag->setFixedHeight(28); 
+    m_btnAddTag->setCursor(Qt::PointingHandCursor); 
+    m_btnAddTag->setStyleSheet(QString( 
+        "QPushButton { background-color: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding: 0 10px; color: #AAAAAA; font-size: 12px; text-align: left; }" 
+        "QPushButton:hover { background-color: #2a2d2e; border-color: #1abc9c; color: #FFFFFF; }" 
+        "QPushButton:pressed { background-color: #333333; }" 
+    )); 
+    
+    connect(m_btnAddTag, &QPushButton::clicked, this, [this]() {
+        if (m_tagSelectorOverlay) {
+            m_tagSelectorOverlay->close();
+            return;
+        }
+
+        // 收集当前已有标签
+        QStringList currentTags;
+        for (int i = 0; i < m_tagFlowLayout->count(); ++i) {
+            TagPill* pill = qobject_cast<TagPill*>(m_tagFlowLayout->itemAt(i)->widget());
+            if (pill) {
+                QString tagStr = pill->property("tagText").toString();
+                if (!tagStr.isEmpty()) currentTags.append(tagStr);
+            }
+        }
+
+        QWidget* topWidget = this->topLevelWidget();
+        m_tagSelectorOverlay = new TagSelectorOverlay(currentTags, topWidget);
+
+        // 计算定位点：确保左边缘与内容面板/主窗口最靠左的位置保持对齐，或者紧贴按钮下沿
+        QPoint globalPos = m_btnAddTag->mapToGlobal(QPoint(0, m_btnAddTag->height() + 4));
+        QPoint parentPos = topWidget ? topWidget->mapFromGlobal(globalPos) : globalPos;
+
+        // 屏幕底部防溢出保护
+        QScreen* screen = QApplication::screenAt(globalPos);
+        if (!screen) screen = QApplication::primaryScreen();
+        if (screen) {
+            int overlayH = m_tagSelectorOverlay->height();
+            int screenBottom = screen->availableGeometry().bottom();
+            if (globalPos.y() + overlayH > screenBottom) {
+                parentPos.setY(parentPos.y() - overlayH - m_btnAddTag->height() - 8);
+            }
+        }
+
+        m_tagSelectorOverlay->move(parentPos);
+        m_tagSelectorOverlay->show();
+
+        connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& selectedTags) {
+            // 实时对比与渲染更新
+            QStringList oldTags;
+            for (int i = 0; i < m_tagFlowLayout->count(); ++i) {
+                TagPill* pill = qobject_cast<TagPill*>(m_tagFlowLayout->itemAt(i)->widget());
+                if (pill) oldTags.append(pill->property("tagText").toString());
+            }
+
+            // 找出新增与删除的标签
+            for (const QString& tag : selectedTags) {
+                if (!oldTags.contains(tag)) {
+                    TagPill* pill = new TagPill(tag, m_tagContainer);
+                    pill->setProperty("tagText", tag);
+                    connect(pill, &TagPill::deleteRequested, this, &MetaPanel::onTagDeleted);
+                    m_tagFlowLayout->addWidget(pill);
+                    emit tagAddRequested(m_selectedPaths, tag);
+                }
+            }
+            for (const QString& oldTag : oldTags) {
+                if (!selectedTags.contains(oldTag)) {
+                    onTagDeleted(oldTag);
+                }
+            }
+            adjustFlowHeights();
+            if (m_container) m_container->adjustSize();
+        });
+    });
+    tagL->addWidget(m_btnAddTag); 
  
     // 2. 下半部分：已打上的标签展示区 
     m_tagContainer = new QWidget(m_tagBox); 
@@ -106,24 +176,6 @@ void MetaPanel::initUi() {
     tagL->addWidget(m_tagContainer); 
  
     m_containerLayout->addWidget(m_tagBox); 
-
-    m_categoryEdit = new ElasticEdit(m_container);
-    m_categoryEdit->setReadOnly(true);
-    m_categoryEdit->setPlaceholderText("所属分类...");
-    m_categoryEdit->setStyleSheet("QTextEdit { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px 8px; font-size: 12px; color: #EEEEEE; font-weight: normal; }");
-    m_containerLayout->addWidget(m_categoryEdit);
-
-    m_categoryBox = new QWidget(m_container);
-    QVBoxLayout* catBoxL = new QVBoxLayout(m_categoryBox);
-    catBoxL->setContentsMargins(0, 0, 0, 0);
-    catBoxL->setSpacing(4);
-
-    m_categoryContainer = new QWidget(m_categoryBox);
-    m_categoryFlowLayout = new FlowLayout(m_categoryContainer, 0, 4, 4);
-    catBoxL->addWidget(m_categoryContainer);
-
-    m_categoryLayoutBox = catBoxL;
-    m_containerLayout->addWidget(m_categoryBox);
 
     m_containerLayout->addWidget(createSeparator());
 
@@ -154,6 +206,53 @@ void MetaPanel::initUi() {
     m_containerLayout->addStretch(1);
     m_scrollArea->setWidget(m_container);
     m_mainLayout->addWidget(m_scrollArea);
+
+    // 初始状态下无选中项，默认禁用所有输入控件
+    updateControlsState(false);
+}
+
+void MetaPanel::setSelectedPaths(const QStringList& paths) {
+    m_selectedPaths = paths;
+    bool hasSelection = !m_selectedPaths.isEmpty();
+    updateControlsState(hasSelection);
+
+    // 未选中时彻底清空并重置输入框内容
+    if (!hasSelection) {
+        m_isInternalUpdating = true;
+        if (m_nameEdit) m_nameEdit->clear();
+        if (m_noteEdit) m_noteEdit->clear();
+        if (m_linkEdit) m_linkEdit->clear();
+        if (m_pathEdit) m_pathEdit->clear();
+        if (lblType) lblType->setText("-");
+        if (lblSize) lblSize->setText("-");
+        if (lblDimensions) lblDimensions->setText("-");
+        if (lblCtime) lblCtime->setText("-");
+        if (lblMtime) lblMtime->setText("-");
+        if (lblAtime) lblAtime->setText("-");
+        if (lblEncrypted) lblEncrypted->setText("-");
+        setTags({});
+        setPalettes({});
+        m_isInternalUpdating = false;
+    }
+}
+
+void MetaPanel::updateControlsState(bool hasSelection) {
+    // 统一管控所有输入与交互控件的可用状态
+    if (m_nameEdit) m_nameEdit->setEnabled(hasSelection);
+    if (m_noteEdit) m_noteEdit->setEnabled(hasSelection);
+    if (m_linkEdit) m_linkEdit->setEnabled(hasSelection);
+    if (m_btnAddTag) m_btnAddTag->setEnabled(hasSelection);
+    if (m_paletteBox) m_paletteBox->setEnabled(hasSelection);
+    if (m_tagBox) m_tagBox->setEnabled(hasSelection);
+
+    // 未选中时应用半透明置灰样式，选中时恢复正常暗黑输入样式
+    QString editStyle = hasSelection
+        ? "QTextEdit { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #EEEEEE; }"
+        : "QTextEdit { background: #1E1E1E; border: 1px solid #2A2A2A; border-radius: 4px; padding: 4px 10px; font-size: 12px; color: #555555; }";
+
+    if (m_nameEdit) m_nameEdit->setStyleSheet(editStyle);
+    if (m_noteEdit) m_noteEdit->setStyleSheet(editStyle);
+    if (m_linkEdit) m_linkEdit->setStyleSheet(editStyle);
 }
 
 void MetaPanel::addInfoRow(const QString& label, QLabel*& valueLabel) {
@@ -185,34 +284,6 @@ QFrame* MetaPanel::createSeparator() {
     return l; 
 }
 
-void MetaPanel::onTagAdded() { 
-    QString text = m_tagEdit->toPlainText().trimmed(); 
-    if (text.isEmpty() || m_selectedPaths.isEmpty()) return; 
- 
-    // 查重 
-    for (int i = 0; i < m_tagFlowLayout->count(); ++i) { 
-        TagPill* pill = qobject_cast<TagPill*>(m_tagFlowLayout->itemAt(i)->widget()); 
-        if (pill && pill->property("tagText").toString() == text) { 
-            m_tagEdit->clear(); 
-            m_tagEdit->adjustHeight(); 
-            return; 
-        } 
-    } 
- 
-    // 本地 0 毫秒瞬时生成 2px 胶囊 
-    TagPill* pill = new TagPill(text, m_tagContainer); 
-    pill->setProperty("tagText", text); 
-    pill->setStyleSheet("QFrame { background-color: #2D2D30; border: 1px solid #3E3E42; border-radius: 2px; }"); 
-    connect(pill, &TagPill::deleteRequested, this, &MetaPanel::onTagDeleted); 
-    m_tagFlowLayout->addWidget(pill); 
- 
-    m_tagEdit->clear(); 
-    m_tagEdit->adjustHeight(); 
-    adjustFlowHeights(); 
-    if (m_container) m_container->adjustSize(); 
- 
-    emit tagAddRequested(m_selectedPaths, text); 
-} 
  
 void MetaPanel::onTagDeleted(const QString& text) { 
     if (m_selectedPaths.isEmpty()) return; 
@@ -257,9 +328,7 @@ void MetaPanel::resizeEvent(QResizeEvent* event) {
             syncWidthAndHeight(m_nameEdit);
             syncWidthAndHeight(m_noteEdit);
             syncWidthAndHeight(m_linkEdit);
-            syncWidthAndHeight(m_tagEdit);
-            syncWidthAndHeight(m_categoryEdit);
-            
+            if (m_btnAddTag && m_btnAddTag->width() != maxW) m_btnAddTag->setFixedWidth(maxW);
             int pathW = maxW - 88;
             if (m_pathEdit && pathW > 0) {
                 m_pathEdit->setFixedWidth(pathW);
@@ -269,8 +338,6 @@ void MetaPanel::resizeEvent(QResizeEvent* event) {
             if (m_paletteBox) m_paletteBox->setFixedWidth(maxW);
             if (m_tagBox) m_tagBox->setFixedWidth(maxW);
             if (m_tagContainer) m_tagContainer->setFixedWidth(maxW);
-            if (m_categoryBox) m_categoryBox->setFixedWidth(maxW);
-            if (m_categoryContainer) m_categoryContainer->setFixedWidth(maxW);
             
             adjustFlowHeights();
             m_container->adjustSize();
@@ -293,13 +360,6 @@ void MetaPanel::adjustFlowHeights() {
             m_tagContainer->setFixedHeight(contentH);
         }
         m_tagFlowLayout->activate();
-    }
-    if (m_categoryContainer && m_categoryFlowLayout) {
-        int contentH = m_categoryFlowLayout->heightForWidth(m_categoryContainer->width());
-        if (m_categoryContainer->height() != contentH) {
-            m_categoryContainer->setFixedHeight(contentH);
-        }
-        m_categoryFlowLayout->activate();
     }
 }
 
@@ -345,64 +405,6 @@ void MetaPanel::updateInfo(const QString& n, const QString& t, const QString& s,
     m_isInternalUpdating = false;
 }
 
-void MetaPanel::setDiskPathMode(bool isDiskMode, const QString& rawPath) {
-    m_isDiskNavMode = isDiskMode;
-    if (m_isDiskNavMode) {
-        // 磁盘导航模式：清空胶囊，直接渲染纯文本物理路径
-        while (QLayoutItem* item = m_categoryFlowLayout->takeAt(0)) {
-            delete item->widget();
-            delete item;
-        }
-        m_categoryEdit->setVisible(true);
-        m_categoryEdit->setPlainText(rawPath);
-        m_categoryEdit->adjustHeight();
-        m_categoryBox->setVisible(false);
-    } else {
-        // 托管库模式：隐藏原始路径框，展示胶囊布局
-        m_categoryEdit->setVisible(false);
-        m_categoryBox->setVisible(true);
-    }
-}
-
-void MetaPanel::setCategoryPills(const std::vector<std::pair<int, QString>>& categories) {
-    if (m_isDiskNavMode) return;
-
-    while (QLayoutItem* item = m_categoryFlowLayout->takeAt(0)) {
-        delete item->widget();
-        delete item;
-    }
-
-    for (const auto& cat : categories) {
-        int catId = cat.first;
-        QString catName = cat.second;
-
-        TagPill* pill = new TagPill(catName, m_categoryBox);
-        pill->setStyleSheet("background: #2D2D30; border: 1px solid #3E3E42; color: #EEE; border-radius: 4px;");
-        
-        connect(pill, &TagPill::deleteRequested, [this, catId]() {
-            if (!m_selectedPaths.isEmpty()) {
-                emit unbindCategoryRequested(m_selectedPaths.first(), catId);
-            }
-        });
-        m_categoryFlowLayout->addWidget(pill);
-    }
-
-    // 追加 "+" 绑定按钮
-    QPushButton* btnAddCat = new QPushButton("+", m_categoryBox);
-    btnAddCat->setFixedSize(20, 20);
-    btnAddCat->setCursor(Qt::PointingHandCursor);
-    btnAddCat->setStyleSheet(
-        "QPushButton { background: #3E3E42; color: #888; border: none; border-radius: 4px; font-weight: bold; }"
-        "QPushButton:hover { background: #4E4E52; color: #FFF; }"
-    );
-    connect(btnAddCat, &QPushButton::clicked, [this]() {
-        if (!m_selectedPaths.isEmpty()) {
-            emit bindCategoryRequested(m_selectedPaths.first());
-        }
-    });
-    m_categoryFlowLayout->addWidget(btnAddCat);
-    m_adjustTimer->start();
-}
 
 void MetaPanel::setTags(const QStringList& tags) {
     while (QLayoutItem* item = m_tagFlowLayout->takeAt(0)) {
@@ -424,7 +426,7 @@ void MetaPanel::setTags(const QStringList& tags) {
             connect(pill, &TagPill::deleteRequested, this, &MetaPanel::onTagDeleted);
         }
         pill->setProperty("tagText", tag);
-        pill->setStyleSheet("QFrame { background-color: #2D2D30; border: 1px solid #3E3E42; border-radius: 2px; }");
+        pill->setStyleSheet("QFrame { background-color: #2D2D30; border: 1px solid #3E3E42; border-radius: 4px; }");
         pill->show();
         m_tagFlowLayout->addWidget(pill);
     }
@@ -455,13 +457,6 @@ void MetaPanel::setURL(const std::wstring& url) {
     setURL(QString::fromStdWString(url));
 }
 
-void MetaPanel::setCategory(const QString& category) { 
-    m_isInternalUpdating = true;
-    m_categoryEdit->setPlainText(category); 
-    m_categoryEdit->adjustHeight();
-    if (m_container) m_container->adjustSize();
-    m_isInternalUpdating = false;
-}
 
 void MetaPanel::setPalettes(const QVector<QPair<QColor, float>>& palette) {
     if (!m_paletteFlowLayout) return;
@@ -499,11 +494,11 @@ bool MetaPanel::eventFilter(QObject* watched, QEvent* event) {
     if (m_isInternalUpdating) return QFrame::eventFilter(watched, event);
 
     if (event->type() == QEvent::FocusIn) {
-        if (watched == m_noteEdit || watched == m_linkEdit || watched == m_nameEdit || watched == m_tagEdit) {
+        if (watched == m_noteEdit || watched == m_linkEdit || watched == m_nameEdit) {
             m_isUserEditing = true;
         }
     } else if (event->type() == QEvent::FocusOut) {
-        if (watched == m_noteEdit || watched == m_linkEdit || watched == m_nameEdit || watched == m_tagEdit) {
+        if (watched == m_noteEdit || watched == m_linkEdit || watched == m_nameEdit) {
             m_isUserEditing = false;
         }
     }
@@ -552,4 +547,4 @@ void MetaPanel::setAsPrimaryColor(const QColor& color) {
     }
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

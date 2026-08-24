@@ -1,7 +1,7 @@
 #include "TaskProgressToolBar.h"
 #include <QHBoxLayout>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 TaskProgressToolBar::TaskProgressToolBar(QWidget* parent) : QWidget(parent) {
     setFixedHeight(28);
@@ -57,4 +57,4 @@ void TaskProgressToolBar::showCompleted(int processed, int total) {
     m_lblTime->setText("已就绪");
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

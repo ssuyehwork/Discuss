@@ -17,9 +17,9 @@
 #include <QComboBox>
 #include <QButtonGroup>
 
-using namespace ArcMeta::Style;
+using namespace QuarkMeta::Style;
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 // ─── 颜色映射表 ────────────────────────────────────────────────────
 QMap<QString, QColor> FilterPanel::s_colorMap() {
@@ -312,6 +312,8 @@ void FilterPanel::syncUIFromFilterState() {
         else if (text == "有链接") shouldCheck = (m_filter.linkPresence == FilterState::Yes);
         else if (text == "无链接") shouldCheck = (m_filter.linkPresence == FilterState::No);
         else if (text == "有备注") shouldCheck = (m_filter.notePresence == FilterState::Yes);
+        else if (text == "重复项") shouldCheck = (m_filter.duplicatePresence == FilterState::DuplicateOnly);
+        else if (text == "未重复") shouldCheck = (m_filter.duplicatePresence == FilterState::UniqueOnly);
         else if (text == "无备注") shouldCheck = (m_filter.notePresence == FilterState::No);
         else if (text == "横图") shouldCheck = (m_filter.ratio == FilterState::Horizontal);
         else if (text == "竖图") shouldCheck = (m_filter.ratio == FilterState::Vertical);
@@ -525,6 +527,18 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
 }
 
 // ─── populate ─────────────────────────────────────────────────────
+void FilterPanel::populateStats(const QuarkMeta::ScanStats& stats) {
+    m_currentStats = stats;
+    m_ratingCounts = stats.ratingCounts;
+    m_colorCounts = stats.colorCounts;
+    m_typeCounts = stats.typeCounts;
+    m_createDateCounts = stats.createDateCounts;
+    m_modifyDateCounts = stats.modifyDateCounts;
+    m_emptyFolderCount = stats.emptyFolderCount;
+
+    rebuildGroups();
+}
+
 void FilterPanel::populate(
     const QMap<int, int>&       ratingCounts,
     const QMap<QString, int>&   colorCounts,
@@ -1204,40 +1218,31 @@ void FilterPanel::rebuildGroups() {
 
         QButtonGroup* linkGroup = new QButtonGroup(g);
         linkGroup->setExclusive(false); // 改为非排他性，允许取消勾选
-        for (auto p : {FilterState::Yes, FilterState::No}) {
-            QString label = (p == FilterState::Yes ? "有链接" : "无链接");
-            
-            StyledCheckBox* cb = new StyledCheckBox();
-            ClickableRow* row = new ClickableRow(cb);
-            row->setFixedHeight(24);
-            QHBoxLayout* rl = new QHBoxLayout(row);
-            rl->setContentsMargins(5, 0, 5, 0);
-            rl->setSpacing(5);
-            rl->addWidget(cb);
-            QLabel* lbl = new QLabel(label, row);
-            lbl->setStyleSheet("font-size: 12px; color: #CCCCCC; background: transparent;");
-            rl->addWidget(lbl, 1);
-            gl->addWidget(row);
 
-            if (m_filter.linkPresence == p) cb->setChecked(true);
-            connect(cb, &QCheckBox::toggled, this, [this, p, linkGroup, cb](bool on) {
-                if (on) {
-                    // 手动实现单选逻辑：勾选当前项时，取消同组其他项
-                    for (QAbstractButton* b : linkGroup->buttons()) {
-                        if (b != cb && b->isChecked()) {
-                            b->blockSignals(true);
-                            b->setChecked(false);
-                            b->blockSignals(false);
-                        }
-                    }
-                    m_filter.linkPresence = p;
-                } else {
-                    m_filter.linkPresence = FilterState::All;
-                }
-                emit filterChanged(m_filter);
-            });
-            linkGroup->addButton(cb);
-        }
+        // 有链接
+        QCheckBox* cbYes = addFilterRow(gl, "有链接", m_currentStats.hasLinkCount);
+        if (m_filter.linkPresence == FilterState::Yes) cbYes->setChecked(true);
+        connect(cbYes, &QCheckBox::toggled, this, [this, linkGroup, cbYes](bool on) {
+            if (on) {
+                for (QAbstractButton* b : linkGroup->buttons()) if (b != cbYes && b->isChecked()) b->setChecked(false);
+                m_filter.linkPresence = FilterState::Yes;
+            } else m_filter.linkPresence = FilterState::All;
+            emit filterChanged(m_filter);
+        });
+        linkGroup->addButton(cbYes);
+
+        // 无链接
+        QCheckBox* cbNo = addFilterRow(gl, "无链接", m_currentStats.noLinkCount);
+        if (m_filter.linkPresence == FilterState::No) cbNo->setChecked(true);
+        connect(cbNo, &QCheckBox::toggled, this, [this, linkGroup, cbNo](bool on) {
+            if (on) {
+                for (QAbstractButton* b : linkGroup->buttons()) if (b != cbNo && b->isChecked()) b->setChecked(false);
+                m_filter.linkPresence = FilterState::No;
+            } else m_filter.linkPresence = FilterState::All;
+            emit filterChanged(m_filter);
+        });
+        linkGroup->addButton(cbNo);
+
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
@@ -1249,39 +1254,31 @@ void FilterPanel::rebuildGroups() {
 
         QButtonGroup* noteGroup = new QButtonGroup(g);
         noteGroup->setExclusive(false); // 改为非排他性
-        for (auto p : {FilterState::Yes, FilterState::No}) {
-            QString label = (p == FilterState::Yes ? "有备注" : "无备注");
-            
-            StyledCheckBox* cb = new StyledCheckBox();
-            ClickableRow* row = new ClickableRow(cb);
-            row->setFixedHeight(24);
-            QHBoxLayout* rl = new QHBoxLayout(row);
-            rl->setContentsMargins(5, 0, 5, 0);
-            rl->setSpacing(5);
-            rl->addWidget(cb);
-            QLabel* lbl = new QLabel(label, row);
-            lbl->setStyleSheet("font-size: 12px; color: #CCCCCC; background: transparent;");
-            rl->addWidget(lbl, 1);
-            gl->addWidget(row);
 
-            if (m_filter.notePresence == p) cb->setChecked(true);
-            connect(cb, &QCheckBox::toggled, this, [this, p, noteGroup, cb](bool on) {
-                if (on) {
-                    for (QAbstractButton* b : noteGroup->buttons()) {
-                        if (b != cb && b->isChecked()) {
-                            b->blockSignals(true);
-                            b->setChecked(false);
-                            b->blockSignals(false);
-                        }
-                    }
-                    m_filter.notePresence = p;
-                } else {
-                    m_filter.notePresence = FilterState::All;
-                }
-                emit filterChanged(m_filter);
-            });
-            noteGroup->addButton(cb);
-        }
+        // 有备注
+        QCheckBox* cbYes = addFilterRow(gl, "有备注", m_currentStats.hasNoteCount);
+        if (m_filter.notePresence == FilterState::Yes) cbYes->setChecked(true);
+        connect(cbYes, &QCheckBox::toggled, this, [this, noteGroup, cbYes](bool on) {
+            if (on) {
+                for (QAbstractButton* b : noteGroup->buttons()) if (b != cbYes && b->isChecked()) b->setChecked(false);
+                m_filter.notePresence = FilterState::Yes;
+            } else m_filter.notePresence = FilterState::All;
+            emit filterChanged(m_filter);
+        });
+        noteGroup->addButton(cbYes);
+
+        // 无备注
+        QCheckBox* cbNo = addFilterRow(gl, "无备注", m_currentStats.noNoteCount);
+        if (m_filter.notePresence == FilterState::No) cbNo->setChecked(true);
+        connect(cbNo, &QCheckBox::toggled, this, [this, noteGroup, cbNo](bool on) {
+            if (on) {
+                for (QAbstractButton* b : noteGroup->buttons()) if (b != cbNo && b->isChecked()) b->setChecked(false);
+                m_filter.notePresence = FilterState::No;
+            } else m_filter.notePresence = FilterState::All;
+            emit filterChanged(m_filter);
+        });
+        noteGroup->addButton(cbNo);
+
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
@@ -1363,42 +1360,54 @@ void FilterPanel::rebuildGroups() {
         QWidget* g = buildGroup("图像比例", gl);
         m_groupRatio = g;
 
-        static const QList<QPair<FilterState::AspectRatio, QString>> ratios = {
-            {FilterState::Horizontal, "横图"}, {FilterState::Vertical, "竖图"},
-            {FilterState::Square, "方形"}, {FilterState::Ratio169, "16:9"}
-        };
         QButtonGroup* ratioGroup = new QButtonGroup(g);
         ratioGroup->setExclusive(false); // 改为非排他性
-        for (const auto& pair : ratios) {
-            StyledCheckBox* cb = new StyledCheckBox();
-            ClickableRow* row = new ClickableRow(cb);
-            row->setFixedHeight(24);
-            QHBoxLayout* rl = new QHBoxLayout(row);
-            rl->setContentsMargins(5, 0, 5, 0);
-            rl->setSpacing(5);
-            rl->addWidget(cb);
-            QLabel* lbl = new QLabel(pair.second, row);
-            lbl->setStyleSheet("font-size: 12px; color: #CCCCCC; background: transparent;");
-            rl->addWidget(lbl, 1);
-            gl->addWidget(row);
 
-            if (m_filter.ratio == pair.first) cb->setChecked(true);
-            connect(cb, &QCheckBox::toggled, this, [this, pair, ratioGroup, cb](bool on) {
+        static const QList<std::tuple<FilterState::AspectRatio, QString, int>> ratioItems = {
+            {FilterState::Horizontal, "横图", m_currentStats.ratioHorizontalCount},
+            {FilterState::Vertical, "竖图", m_currentStats.ratioVerticalCount},
+            {FilterState::Square, "方形", m_currentStats.ratioSquareCount},
+            {FilterState::Ratio169, "16:9", m_currentStats.ratio169Count}
+        };
+        for (const auto& [ratio, label, count] : ratioItems) {
+            QCheckBox* cb = addFilterRow(gl, label, count);
+            if (m_filter.ratio == ratio) cb->setChecked(true);
+            connect(cb, &QCheckBox::toggled, this, [this, ratio, ratioGroup, cb](bool on) {
                 if (on) {
-                    for (QAbstractButton* b : ratioGroup->buttons()) {
-                        if (b != cb && b->isChecked()) {
-                            b->blockSignals(true);
-                            b->setChecked(false);
-                            b->blockSignals(false);
-                        }
-                    }
-                    m_filter.ratio = pair.first;
-                } else {
-                    m_filter.ratio = FilterState::AspectAny;
-                }
+                    for (QAbstractButton* b : ratioGroup->buttons()) if (b != cb && b->isChecked()) b->setChecked(false);
+                    m_filter.ratio = ratio;
+                } else m_filter.ratio = FilterState::AspectAny;
                 emit filterChanged(m_filter);
             });
             ratioGroup->addButton(cb);
+        }
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+    // ── 12. 重复状态 (最底部独立主选项) ───────────────────────────
+    {
+        QVBoxLayout* gl = nullptr;
+        QWidget* g = buildGroup("重复状态", gl);
+        m_groupDuplicate = g;
+
+        QButtonGroup* dupGroup = new QButtonGroup(g);
+        dupGroup->setExclusive(false); // 允许取消勾选
+
+        static const QList<std::tuple<FilterState::DuplicatePresence, QString, int>> dupItems = {
+            {FilterState::DuplicateOnly, "重复项", m_currentStats.duplicateCount},
+            {FilterState::UniqueOnly, "未重复", m_currentStats.uniqueCount}
+        };
+        for (const auto& [presence, label, count] : dupItems) {
+            QCheckBox* cb = addFilterRow(gl, label, count);
+            if (m_filter.duplicatePresence == presence) cb->setChecked(true);
+            connect(cb, &QCheckBox::toggled, this, [this, presence, dupGroup, cb](bool on) {
+                if (on) {
+                    for (QAbstractButton* b : dupGroup->buttons()) if (b != cb && b->isChecked()) b->setChecked(false);
+                    m_filter.duplicatePresence = presence;
+                } else m_filter.duplicatePresence = FilterState::DupAll;
+                emit filterChanged(m_filter);
+            });
+            dupGroup->addButton(cb);
         }
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
@@ -1445,7 +1454,11 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
     // 2026-05-17 终极修复：parent 改为 hdrRow，背景 transparent（由 hdrRow 统一提供）
     QPushButton* hdr = new QPushButton(title, hdrRow);
     hdr->setCheckable(true);
-    hdr->setChecked(true);
+
+    // 🚨 核心改动：读取该分组独立持久化的折叠状态
+    bool isCollapsed = AppConfig::instance().getValue(QString("FilterPanel/Collapsed_%1").arg(title), false).toBool();
+    hdr->setChecked(!isCollapsed);
+
     hdr->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     hdr->setFixedHeight(24);
     hdr->setStyleSheet(
@@ -1474,8 +1487,12 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
     outContentLayout = new QVBoxLayout(content);
     outContentLayout->setContentsMargins(0, 0, 0, 0);
     outContentLayout->setSpacing(0);
+    content->setVisible(!isCollapsed);
 
-    connect(hdr, &QPushButton::toggled, content, &QWidget::setVisible);
+    connect(hdr, &QPushButton::toggled, this, [title, content](bool checked) {
+        content->setVisible(checked);
+        AppConfig::instance().setValue(QString("FilterPanel/Collapsed_%1").arg(title), !checked);
+    });
 
     m_groupHeaders.append(hdr);
     // 2026-07-xx 按照 Plan-77：应用全局持久化折叠状态
@@ -1542,6 +1559,7 @@ void FilterPanel::clearAllFilters(bool force) {
     // 2026-06-xx 物理修复：重置所有筛选内存状态
     m_filter = FilterState{};
     m_filter.manualExactColors.clear();
+    m_filter.duplicatePresence = FilterState::DupAll;
     m_hueSliderColor.clear();
 
     // 2026-xx-xx 按照用户要求：清空剩余输入框的文字
@@ -1567,6 +1585,9 @@ void FilterPanel::updateHeaderStatus() {
     QColor brandYellow = QColor("#f1c40f");
     m_iconLabel->setPixmap(UiHelper::getIcon("filter_funnel_outline", brandYellow, 18).pixmap(18, 18));
     m_titleLabel->setStyleSheet(QString("font-size: 13px; font-weight: bold; color: %1; background: transparent; border: none;").arg(brandYellow.name()));
+    m_titleLabel->style()->unpolish(m_titleLabel);
+    m_titleLabel->style()->polish(m_titleLabel);
+    m_titleLabel->update();
 
     // 标记 ②：根据筛选状态动态切换颜色（激活为彩色，空闲为灰色）
     QColor btnColor = active ? brandYellow : QColor("#B0B0B0");
@@ -1592,12 +1613,7 @@ void FilterPanel::onToggleAllGroupsClicked() {
 }
 
 void FilterPanel::setMirrorSource(bool isMirror) {
-    if (m_isMirrorSource == isMirror) return;
-    m_isMirrorSource = isMirror;
-    
-    // 🚨 三大组件解封后，评级、颜色标记、链接、备注、图像比例不再有 m_isMirrorSource 的显隐限制，
-    // 但如果有其他专属托管源的分组（如果有的话），依然可以刷新。为了保持体验一致性，此处执行重绘。
-    rebuildGroups();
+    Q_UNUSED(isMirror);
 }
 
 void FilterPanel::selectColor(const QColor& color) {
@@ -1622,5 +1638,5 @@ void FilterPanel::selectColor(const QColor& color) {
     emit filterChanged(m_filter);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 

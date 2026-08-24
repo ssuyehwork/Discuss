@@ -3,7 +3,7 @@
 #include <QMap>
 #include <QString>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 全局统一的检索与统计快照结构体
@@ -26,6 +26,7 @@ struct ScanStats {
     int ratio169Count = 0;
     int duplicateCount = 0;
     int uniqueCount = 0;
+    int noThumbnailCount = 0;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

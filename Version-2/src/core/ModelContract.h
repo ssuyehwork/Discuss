@@ -1,7 +1,7 @@
 #pragma once
 #include <Qt>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 工业级模型契约 (ModelContract)
@@ -24,9 +24,6 @@ enum CommonRole {
     EncryptHintRole     = Qt::UserRole + 104, // 加密提示
     ManagedRole         = Qt::UserRole + 105, // 是否受控 (已在索引中登记)
     IsEmptyRole         = Qt::UserRole + 106, // 是否为空目录
-    CategoryIdRole      = Qt::UserRole + 107, // 所属分类 ID
-    CategoryKindRole    = Qt::UserRole + 110, // 分类类型 (0=User, 1=SystemLibrary)
-    RegistrationProgressRole = Qt::UserRole + 205, // 文件夹入库进度 (double, 0.0 ~ 1.0)
     
     // UI/渲染角色 (UserRole + 201..300)
     AspectRatioRole     = Qt::UserRole + 201, // 图像宽高比
@@ -41,4 +38,4 @@ enum CommonRole {
     DiskTrashIdRole     = Qt::UserRole + 209  // 磁盘回收站表 ID
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

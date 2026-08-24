@@ -6,7 +6,7 @@
 #include <QApplication>
 #include <QScreen>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 UndoToastOverlay* UndoToastOverlay::instance() {
     static UndoToastOverlay* inst = new UndoToastOverlay(nullptr);
@@ -151,4 +151,4 @@ void UndoToastOverlay::paintEvent(QPaintEvent*) {
     p.drawRoundedRect(rect, 6, 6);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

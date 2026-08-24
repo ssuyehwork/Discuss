@@ -5,7 +5,7 @@
 #include <QFile>
 #include "../core/AppConfig.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 QString PresetManager::serializeRules(const std::vector<RenameRule>& rules) {
     QJsonArray arr;
@@ -83,4 +83,4 @@ std::vector<RenameRule> PresetManager::importFromFile(const QString& filePath) {
     return rules;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

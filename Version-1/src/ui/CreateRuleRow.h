@@ -9,7 +9,7 @@
 #include <QHBoxLayout>
 #include "../meta/BatchRenameEngine.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 批量创建专属规则行组件（无原文件名选项）
@@ -47,4 +47,4 @@ private:
     QPushButton* m_btnRemove = nullptr;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -1,5 +1,5 @@
 #include "DropTreeView.h"
-#include "CategoryModel.h"
+#include "../core/ModelContract.h"
 #include "ContentPanel.h"
 #include <QDrag>
 #include <QPainter>
@@ -15,7 +15,7 @@
 #include <QFileInfo>
 #include "Logger.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     setAcceptDrops(true);
@@ -62,7 +62,7 @@ void DropTreeView::startDrag(Qt::DropActions supportedActions) {
     QModelIndexList indexes = selectedIndexes();
     if (indexes.isEmpty()) return;
 
-    // 核心增强：拦截并注入物理路径 QUrl，确保 CategoryPanel 接收校验通过
+    // 核心增强：拦截并注入物理路径 QUrl
     QMimeData* mimeData = model()->mimeData(indexes);
     if (!mimeData) {
         mimeData = new QMimeData();
@@ -117,4 +117,4 @@ void DropTreeView::paintEvent(QPaintEvent* event) {
     }
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

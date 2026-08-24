@@ -6,7 +6,7 @@
 #include <QEnterEvent>
 #include <QMouseEvent>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class ColorPill : public QWidget {
     Q_OBJECT
@@ -27,4 +27,4 @@ private:
     bool m_hovered = false;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

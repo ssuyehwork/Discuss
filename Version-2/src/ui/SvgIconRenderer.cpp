@@ -1,13 +1,13 @@
 #include "SvgIconRenderer.h"
 #include "SvgIcons.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include <QSvgRenderer>
 #include <QPainter>
 #include <QBuffer>
 #include <QDir>
 #include <QMutexLocker>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 QMap<QString, QPixmap>& SvgIconRenderer::iconPixmapCache() {
     static QMap<QString, QPixmap> cache;
@@ -24,7 +24,7 @@ QPixmap SvgIconRenderer::renderIcon(const QString& key, const QSize& size, const
     QString svgData = SvgIcons::icons[key];
     svgData.replace("currentColor", color.name());
 
-    std::lock_guard<std::mutex> guard(CapsuleMediaExtractor::s_qtGuiMutex);
+    std::lock_guard<std::mutex> guard(DiskMediaExtractor::s_qtGuiMutex);
     QPixmap pixmap(size);
     pixmap.fill(Qt::transparent);
     QPainter painter(&pixmap);
@@ -73,7 +73,7 @@ QString SvgIconRenderer::getSvgTempFilePath(const QString& key, const QColor& co
     if (pix.isNull()) return QString();
 
     QString tmpPath = QDir::temp().filePath(
-        QString("arcmeta_%1_%2_v3.png").arg(key).arg(color.name().mid(1))
+        QString("QuarkMeta_%1_%2_v3.png").arg(key).arg(color.name().mid(1))
     );
     pix.save(tmpPath, "PNG");
     return QDir::fromNativeSeparators(tmpPath);
@@ -100,4 +100,4 @@ void SvgIconRenderer::applyMenuStyle(QWidget* menu) {
     ).arg(arrowPath));
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

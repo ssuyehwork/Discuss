@@ -2,7 +2,7 @@
 #include "UiHelper.h"
 #include <QLabel>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 CreateRuleRow::CreateRuleRow(QWidget* parent) : QWidget(parent) {
     initUi();
@@ -159,4 +159,4 @@ void CreateRuleRow::setRule(const RenameRule& rule) {
     emit changed();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

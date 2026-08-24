@@ -1,7 +1,7 @@
 #pragma once
 #include "IScanResultView.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class DropJustifiedView;
 
@@ -21,4 +21,4 @@ private:
     DropJustifiedView* m_view = nullptr;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

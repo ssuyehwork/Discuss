@@ -5,7 +5,7 @@
 #include <QImage>
 #include "WindowsShellThumbnailProvider.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 系统图标及缩略图提取核心管理器
@@ -35,4 +35,4 @@ public:
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

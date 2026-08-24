@@ -5,7 +5,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class TaskProgressToolBar : public QWidget {
     Q_OBJECT
@@ -25,4 +25,4 @@ private:
     QPushButton* m_btnCancel = nullptr;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

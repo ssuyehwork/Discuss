@@ -8,7 +8,7 @@
 #include <QMutex>
 #include <QWidget>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class SvgIconRenderer {
 public:
@@ -23,4 +23,4 @@ public:
     static void applyMenuStyle(QWidget* menu);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

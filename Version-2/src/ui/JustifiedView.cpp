@@ -11,7 +11,7 @@
 #include <QTimer>
 #include <algorithm>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     m_layoutTimer = new QTimer(this);
@@ -458,9 +458,9 @@ void JustifiedView::doLayout() {
                 continue;
             }
 
-            // 1. 获取本行第一个元素的类型 (是否是文件夹/分类)
+            // 1. 获取本行第一个元素的类型 (是否是文件夹)
             QString firstType = model()->data(firstIdx, TypeRole).toString();
-            bool isFirstDir = (firstType == "folder" || firstType == "category");
+            bool isFirstDir = (firstType == "folder");
 
             // 2. 循环塞入元素，一旦遇到类型变动 (例如从文件夹突变为普通文件)，立即在这里截断退出当前行，强制折行
             int numInRow = 0;
@@ -468,7 +468,7 @@ void JustifiedView::doLayout() {
                 int nextIdx = rowStart + numInRow;
                 QModelIndex idx = model()->index(nextIdx, 0);
                 QString nextType = model()->data(idx, TypeRole).toString();
-                bool isNextDir = (nextType == "folder" || nextType == "category");
+                bool isNextDir = (nextType == "folder");
                 bool isNextHeader = model()->data(idx, IsGroupHeaderRole).toBool();
 
                 if (isNextHeader) {
@@ -516,7 +516,7 @@ void JustifiedView::doLayout() {
                 
                 // 2026-07-xx 物理分离逻辑：如果当前项是文件，但行首是文件夹（或反之），强制换行
                 QString type = model()->data(idx, TypeRole).toString();
-                bool isCurrentDir = (type == "folder" || type == "category");
+                bool isCurrentDir = (type == "folder");
                 bool isCurrentHeader = model()->data(idx, IsGroupHeaderRole).toBool();
                 
                 if (isCurrentHeader) {
@@ -527,7 +527,7 @@ void JustifiedView::doLayout() {
                 if (i > rowStart) {
                     QModelIndex prevIdx = model()->index(i - 1, 0);
                     QString prevType = model()->data(prevIdx, TypeRole).toString();
-                    bool isPrevDir = (prevType == "folder" || prevType == "category");
+                    bool isPrevDir = (prevType == "folder");
                     
                     if (isCurrentDir != isPrevDir) {
                         forceBreak = true;
@@ -599,4 +599,4 @@ void JustifiedView::doLayout() {
     viewport()->update();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

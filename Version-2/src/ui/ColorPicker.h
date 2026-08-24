@@ -9,7 +9,7 @@
 #include <QString>
 #include <QEnterEvent>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 // --- SV (饱和度/亮度) 拾取区域 ---
 class SvPicker : public QWidget {
@@ -108,4 +108,4 @@ private:
     int m_spacing = 5;       // 间隔 5
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

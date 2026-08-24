@@ -4,8 +4,9 @@
 #include <vector>
 #include <functional>
 #include "ItemRecord.h"
+#include "CoreEngine.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 【物理隔离模块一】纯磁盘导航扫描服务
@@ -25,6 +26,10 @@ public:
     static std::vector<ItemRecord> scanDirectory(const QString& path,
                                                   bool recursive,
                                                   const std::function<bool()>& shouldContinue);
+
+    static std::vector<ItemRecord> scanDirectory(const QString& path,
+                                                  bool recursive,
+                                                  std::shared_ptr<CancellationToken> token);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

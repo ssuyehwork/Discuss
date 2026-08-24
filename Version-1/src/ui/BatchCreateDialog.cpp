@@ -3,6 +3,7 @@
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "../core/AppConfig.h"
+#include "../meta/MetadataManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -15,10 +16,10 @@
 #include <QJsonArray>
 #include <QJsonObject>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, QWidget* parent)
-    : FramelessDialog("批量创建 - ArcMeta", parent), m_currentDir(currentDirectory) {
+    : FramelessDialog("批量创建 - QuarkMeta", parent), m_currentDir(currentDirectory) {
     resize(550, 420);
     initContent();
     applyTheme();
@@ -170,11 +171,11 @@ void BatchCreateDialog::initContent() {
     btnCancel->setStyleSheet("QPushButton { background: transparent; color: #BBB; border: 1px solid #444; border-radius: 4px; } QPushButton:hover { background: #3E3E42; }");
     bottomL->addWidget(btnCancel);
 
-    QPushButton* btnOk = new QPushButton("开始创建", this);
-    btnOk->setCursor(Qt::PointingHandCursor);
-    btnOk->setFixedSize(100, 28);
-    btnOk->setStyleSheet("QPushButton { background: #007ACC; color: white; border: none; border-radius: 4px; font-weight: bold; } QPushButton:hover { background: #1C97EA; }");
-    bottomL->addWidget(btnOk);
+    m_btnOk = new QPushButton("开始创建", this);
+    m_btnOk->setCursor(Qt::PointingHandCursor);
+    m_btnOk->setFixedSize(100, 28);
+    m_btnOk->setStyleSheet("QPushButton { background: #007ACC; color: white; border: none; border-radius: 4px; font-weight: bold; } QPushButton:hover { background: #1C97EA; } QPushButton:disabled { background: #333333; color: #666666; }");
+    bottomL->addWidget(m_btnOk);
     layout->addLayout(bottomL);
 
     // 触发联动：类型切换控制后缀可用性
@@ -183,7 +184,7 @@ void BatchCreateDialog::initContent() {
     });
 
     connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
-    connect(btnOk, &QPushButton::clicked, this, &BatchCreateDialog::onExecute);
+    connect(m_btnOk, &QPushButton::clicked, this, &BatchCreateDialog::onExecute);
 }
 
 void BatchCreateDialog::onInsertRowAfter(CreateRuleRow* targetRow) {
@@ -372,6 +373,9 @@ void BatchCreateDialog::onExecute() {
         }
     }
 
+    QString msg = QString("成功创建 %1 个项目").arg(itemsCreated);
+    ToolTipOverlay::instance()->showText(QCursor::pos(), msg, 2000, Style::SuccessGreen);
+
     // 按照用户最新要求：成功创建后，自动递增累加序列数字的起始值，并落盘保存
     for (auto* row : m_ruleRows) {
         RenameRule r = row->getRule();
@@ -381,11 +385,8 @@ void BatchCreateDialog::onExecute() {
         }
     }
 
-    QString msg = QString("成功创建 %1 个项目").arg(itemsCreated);
-    ToolTipOverlay::instance()->showText(QCursor::pos(), msg, 2000, Style::SuccessGreen);
-    
     doAutoSave();
     accept();
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

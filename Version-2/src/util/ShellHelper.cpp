@@ -14,70 +14,15 @@
 #endif
 
 #include "../meta/MetadataManager.h"
-#include "../meta/CategoryRepo.h"
 #include "../meta/StatisticsService.h"
-#include "../meta/AmMetaJson.h"
+#include "../meta/QuarkMetaJson.h"
+#include "../core/DiskTrashService.h"
+#include "DiskMediaExtractor.h"
 
-namespace ArcMeta {
-
-QString ShellHelper::generateBase36Id() {
-    static std::atomic<unsigned int> counter(0);
-    qint64 msecs = QDateTime::currentMSecsSinceEpoch();
-    unsigned int count = counter.fetch_add(1) % 46656; // 36^3 = 46656
-    
-    auto toBase36 = [](qint64 val, int width) -> QString {
-        const char chars[] = "0123456789abcdefghijklmnopqrstuvwxyz";
-        QString res;
-        while (val > 0) {
-            res.prepend(chars[val % 36]);
-            val /= 36;
-        }
-        while (res.length() < width) {
-            res.prepend('0');
-        }
-        return res;
-    };
-    
-    return toBase36(msecs, 10) + toBase36(count, 3);
-}
+namespace QuarkMeta {
 
 bool ShellHelper::moveToTrash(const QStringList& paths) {
-    if (paths.isEmpty()) return true;
-    
-    bool allOk = true;
-    for (const QString& p : paths) {
-        QFileInfo info(p);
-        QString drive = info.absolutePath().left(3); // e.g. "C:/"
-        QString trashDir = drive + ".arcmeta/trash";
-        QDir().mkpath(trashDir);
-        
-#ifdef Q_OS_WIN
-        // 确保 .arcmeta 目录隐藏
-        SetFileAttributesW((drive + ".arcmeta").toStdWString().c_str(), FILE_ATTRIBUTE_HIDDEN);
-#endif
-
-        QString dest = trashDir + "/" + info.fileName();
-        // 冲突处理：如果回收站已有同名文件，增加时间戳后缀
-        if (QFile::exists(dest)) {
-            dest = trashDir + "/" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss_") + info.fileName();
-        }
-
-        // 1. 物理移动
-        if (QFile::rename(p, dest)) {
-            // 2. 数据库同步：标记为回收站，记忆原路径
-            MetadataManager::instance().markAsTrash(dest.toStdWString(), true, p.toStdWString());
-            // 3. 解除所有分类关联
-            std::string fid = MetadataManager::instance().getFolderIdSync(dest.toStdWString());
-            CategoryRepo::removeAllCategories(fid);
-        } else {
-            allOk = false;
-        }
-    }
-
-    if (allOk) {
-        StatisticsService::instance().requestFullRecountAsync();
-    }
-    return allOk;
+    return DiskTrashService::moveToDiskTrash(paths);
 }
 
 bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString& destDir, bool isMove) {
@@ -96,16 +41,18 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
     fileOp.wFunc = isMove ? FO_MOVE : FO_COPY;
     fileOp.pFrom = from.c_str();
     fileOp.pTo = to.c_str();
-    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR;
-    bool ok = (SHFileOperationW(&fileOp) == 0);
-    if (ok && isMove) {
+    // 🚨 核心改动：移除 FOF_NOCONFIRMATION，遇到同名冲突由系统弹出确认或允许用户选择保留两者，绝不静默覆写！
+    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR;
+    bool ok = (SHFileOperationW(&fileOp) == 0 && !fileOp.fAnyOperationsAborted);
+
+    if (ok) {
         for (const QString& p : sourcePaths) {
             QFileInfo info(p);
             QString newPath = QDir(destDir).filePath(info.fileName());
-            // 1. 物理漫游迁移 .ArcMeta.json 元数据 
-            AmMetaJson::migrateItemMetadata(p, newPath); 
-            // 2. 同步内存/数据库缓存 
-            MetadataManager::instance().renameItem(p.toStdWString(), newPath.toStdWString());
+
+            // 🚨 无论 Copy 还是 Move，自动触发整包元数据与缩略图原子漫游！
+            QuarkMetaJson::roamItemMetadata(p, newPath, isMove);
+            DiskMediaExtractor::roamThumbnailCache(p, newPath, isMove);
         }
     }
     return ok;
@@ -143,8 +90,8 @@ void ShellHelper::openInExplorer(const QString& path) {
 
 bool ShellHelper::renameItem(const QString& oldPath, const QString& newPath) {
     if (QFile::rename(oldPath, newPath)) {
-        // 1. 物理漫游迁移 .ArcMeta.json 元数据 
-        AmMetaJson::migrateItemMetadata(oldPath, newPath);
+        // 1. 物理漫游迁移 .QuarkMeta.json 元数据 
+        QuarkMetaJson::migrateItemMetadata(oldPath, newPath);
         // 同步数据库
         MetadataManager::instance().renameItem(oldPath.toStdWString(), newPath.toStdWString());
         return true;
@@ -167,4 +114,4 @@ void ShellHelper::ensureHidden(const std::wstring& path) {
 #endif
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

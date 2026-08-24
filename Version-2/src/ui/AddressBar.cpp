@@ -8,7 +8,7 @@
 #include <QTimer>
 #include <QStyle>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     QHBoxLayout* layout = new QHBoxLayout(this);
@@ -161,4 +161,4 @@ bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
     return QWidget::eventFilter(obj, event);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

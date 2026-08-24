@@ -15,31 +15,23 @@
 #include <QDateTime>
 
 #include "FramelessDialog.h"
+#include "TagSelectorOverlay.h"
+#include <QPointer>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class TrayController;
 class HoverEventFilter;
 class ResizeEventFilter;
 class AddressBar;
 class TaskProgressToolBar;
-class CategoryPanel;
 class NavPanel;
+class FavoritePanel;
 class ContentPanel;
 class MetaPanel;
 class FilterPanel;
 class SearchHistoryPanel;
 
-class CustomFolderImportDialog : public FramelessDialog {
-    Q_OBJECT
-public:
-    explicit CustomFolderImportDialog(QWidget* parent = nullptr);
-    QString selectedPath() const;
-
-private:
-    void onBrowse();
-    QLineEdit* m_edit = nullptr;
-};
 
 /**
  * @brief 主窗口类
@@ -76,9 +68,6 @@ private slots:
     void onForwardClicked();
     void onUpClicked();
     void onStatusBarStatsUpdated(int fileCount, int folderCount, int totalCount);
-    void onDriveButtonClicked();
-    void onDriveButtonContextMenu(const QPoint& pos);
-    void rescanManagedLibrary(const QString& libraryPath);
     void onVolumeUnplugged(const QString& driveLetter);
 
 protected:
@@ -117,7 +106,6 @@ private:
 
     // 2026-07-xx 导航协议常量
     static inline const QString kProtocolFile     = "file://";
-    static inline const QString kProtocolCategory = "category://";
     static inline const QString kProtocolSystem   = "system://";
 
     /**
@@ -135,16 +123,15 @@ private:
     AddressBar* m_addressBar = nullptr;
 
     // 六个面板
-    CategoryPanel* m_categoryPanel = nullptr;
     // 2026-04-11 按照用户要求：记录当前预览的文件路径，用于驱动方向键切图
     QString m_currentQuickLookPath;
     
     // UI Panels
     NavPanel* m_navPanel = nullptr;
+    FavoritePanel* m_favoritePanel = nullptr;
     ContentPanel* m_contentPanel = nullptr;
     MetaPanel* m_metaPanel = nullptr;
     FilterPanel* m_filterPanel = nullptr;
-    class TagManagerView* m_tagManagerView = nullptr;
 
     QSplitter* m_mainSplitter = nullptr;
 
@@ -165,7 +152,6 @@ private:
 
     // 标题栏按钮组 (用于 frameless 时的模拟，此处作为标准按钮展示)
     QPushButton* m_btnToggleDriveBar = nullptr;
-    QPushButton* m_btnSync   = nullptr;
     QPushButton* m_btnLayout = nullptr;
     QPushButton* m_btnCreate = nullptr;
     QPushButton* m_btnPinTop = nullptr;
@@ -176,20 +162,13 @@ private:
     // 盘符管理栏组件
     QWidget* m_driveBarWidget = nullptr;
     QHBoxLayout* m_driveBarLayout = nullptr;
-    QMap<QString, class DriveButton*> m_driveButtons;
-    QVector<class FolderButton*> m_folderButtons;
-    
-    void updateCustomFolderButtons();
-    void showNewAutoImportDialog();
-    void removeCustomMonitoredFolder(const QString& path);
+    QPushButton* m_btnTagManager = nullptr;
     void onDriveBarContextMenu(const QPoint& pos);
-    void onFolderButtonContextMenu(const QPoint& pos);
 
     // 状态管理
     bool m_isPinned = false;
     bool m_isTagManagerMode = false;
     QString m_currentDataSource; // "category" or "nav"
-    int m_currentCategoryId = 0;
     bool m_panelsInitialized = false; // 2026-04-12 状态锁：确保面板仅初始化一次
     QTimer* m_searchTimer = nullptr; // 2026-xx-xx 按照 Plan-106：搜索防抖计时器
     QString m_currentPath;
@@ -234,4 +213,4 @@ private:
     void savePanelVisibility();
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

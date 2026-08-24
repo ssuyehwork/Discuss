@@ -3,7 +3,7 @@
 #include "../meta/MetadataManager.h"
 #include "Logger.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 int PhysicalDiskSearchExtractor::performDiskSearch(
     const QString& parentPath,
@@ -48,4 +48,4 @@ int PhysicalDiskSearchExtractor::performDiskSearch(
     return foundCount;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

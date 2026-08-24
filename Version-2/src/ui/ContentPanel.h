@@ -7,6 +7,7 @@
 #include <deque>
 #include <vector>
 #include <QCache>
+#include <QList>
 #include <QStringList>
 #include <QTimer>
 #include <QWidget>
@@ -25,13 +26,10 @@
 #include "ScanStats.h"
 #include "FilterPanel.h"
 #include "models/DiskItemModel.h"
-#include "models/LibraryAssetModel.h"
 
 #include "../core/ModelContract.h"
 
-namespace ArcMeta {
-
-class CategoryLockWidget;
+namespace QuarkMeta {
 
 struct RuntimeMeta;
 
@@ -57,12 +55,6 @@ private:
 };
 
 /**
- * @brief 虚拟化数据库模型：支持百万级条目瞬时加载 (2026-06-xx 重构)
- */
-// 🚨 极致物理重构：ArcMetaVirtualDbModel 已彻底退役并被 DiskItemModel / LibraryAssetModel 继承平替，在此安全移除
-
-
-/**
  * @brief 内容面板（面板四）：核心业务展示区
  * 支持网格视图（QListView）与列表视图（QTreeView）切换
  */
@@ -71,16 +63,17 @@ class ContentPanel : public QFrame {
 
 public:
     enum class DataSourceType {
-        DiskNav,        // 1. 物理磁盘导航模式 (如 D:\Photos，随点随看，离散 JSON 缓存)
-        UserCategory,   // 2. 用户自定义逻辑分类 (如 "商业设计原稿"，ID > 0)
-        SystemCategory, // 3. 系统逻辑桶 (全部数据, 未分类, 垃圾桶, 最近访问)
-        PathList        // 4. 临时路径列表 (搜索结果, 标签筛选)
+        DiskNav,        // 物理磁盘导航模式
+        SystemCategory, // 系统逻辑桶 (全部数据, 未标记, 回收站, 最近访问)
+        PathList        // 临时路径列表 (搜索结果, 标签筛选)
     };
 
+    /**
+     * @brief 判定当前上下文是否允许执行粘贴操作（用于菜单置灰与快捷键拦截）
+     */
+    bool canPaste() const;
+
     DataSourceType dataSourceType() const;
-    bool isMirrorSource() const;
-    bool isManagedContext() const;
-    int currentCategoryId() const { return m_currentCategoryId; }
     bool isContextMenuActive() const { return m_isContextMenuActive; }
 
     enum SortType {
@@ -130,13 +123,14 @@ public:
         ActionPermanentDelete,
         ActionSecureDelete,
         ActionRestore,
+        ActionRestoreAll,
+        ActionEmptyTrash,
         ActionCopyName,
         ActionCopyPath,
         ActionAddToCategory,
         ActionAddToFavorites,
-        ActionRescan,
         ActionRefresh,
-        ActionCancelImport,
+        ActionReextractThumbnail,
         ActionBatchCreate
     };
 
@@ -151,7 +145,7 @@ public:
      * @param path 绝对物理路径
      */
     void selectAndScrollToPath(const QString& path);
-    void selectAndScrollToItem(const QString& type, const QString& path, int categoryId);
+    void selectAndScrollToItem(const QString& path);
 
     /**
      * @brief 切换视图模式
@@ -215,7 +209,7 @@ signals:
     /**
      * @brief 目录装载完成后发出，携带统计数据供 FilterPanel 填充
      */
-    void directoryStatsReady(const ArcMeta::ScanStats& stats);
+    void directoryStatsReady(const QuarkMeta::ScanStats& stats);
 
 private:
     void initUi();
@@ -235,9 +229,9 @@ private:
 
     QVBoxLayout* m_mainLayout = nullptr;
     QStackedWidget* m_viewStack = nullptr;
-    CategoryLockWidget* m_lockWidget = nullptr;
     QPushButton* m_btnLayers = nullptr;
     QPushButton* m_btnLayersBlue = nullptr;
+    QPushButton* m_btnToggleHidden = nullptr;  // 🚨 左侧：显示/隐藏属性为隐藏的项目
     QPushButton* m_btnToggleFolders = nullptr; // 2026-07-xx 按照 Plan-73：显示/隐藏文件夹切换
     QPushButton* m_btnToggleFiles = nullptr;   // 2026-07-xx 按照 Plan-73：显示/隐藏文件切换
     QTextBrowser* m_textPreview = nullptr;
@@ -246,13 +240,14 @@ private:
     // 视图组件
     QAbstractItemView* m_gridView = nullptr;
     QTreeView* m_treeView = nullptr;
-    DiskItemModel* m_diskModel = nullptr;       // 负责纯物理磁盘导航模型 (0)
-    LibraryAssetModel* m_libraryModel = nullptr; // 负责内存托管逻辑资产模型 (1)
+    DiskItemModel* m_diskModel = nullptr;       // 负责纯物理磁盘导航模型
     ItemModelBase* m_model = nullptr;           // 当前多态激活指针合约
 
     QTimer* m_visibleTimer = nullptr;
-    void refreshVisibleThumbnails();
     QSortFilterProxyModel* m_proxyModel = nullptr;
+
+public:
+    void refreshVisibleThumbnails();
 
 
     FilterState m_currentFilter;
@@ -261,12 +256,11 @@ private:
     QString m_currentPath;
     QSet<QString> m_pendingSelectNames;
     bool m_isPendingEdit = false;
-    int m_currentCategoryId = -1;
     QString m_currentCategoryType; // 用于驱动差异化右键菜单
     bool m_isRecursive = false;
-    bool m_isCategoryRecursive = false;
     bool m_showFolders = true;
     bool m_showFiles = true;
+    bool m_showHidden = false;
     ViewMode m_currentViewMode = GridView;
     SortType m_sortType = SortByName;
     Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
@@ -390,8 +384,7 @@ public slots:
     /**
      * @brief 2026-06-xx 彻底重构：加载分类及其子项 (分类 ID 联动)
      */
-    void loadCategory(int categoryId);
-    void loadCategories(const QList<int>& categoryIds);
+    void loadCategory(const QString& categoryType);
 
     /**
      * @brief 获取/设置当前分类类型，用于驱动右键菜单差异化
@@ -400,17 +393,6 @@ public slots:
     void setCurrentCategoryType(const QString& type) { m_currentCategoryType = type; }
 
 signals:
-    /**
-     * @brief 在内存模式下，请求在指定分类下创建 logical 子分类（对应用户原话：“在内存模式下，请求在指定分类下创建逻辑子分类”）
-     */
-    void requestCreateSubCategory(int parentCategoryId);
-
-signals:
-    /**
-     * @brief 当在内容区点击子分类时触发，告知 MainWindow 切换侧边栏选中状态
-     */
-    void categoryClicked(int categoryId);
-
     /**
      * @brief 状态栏统计信息信号
      * @param fileCount 文件数量
@@ -424,4 +406,4 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

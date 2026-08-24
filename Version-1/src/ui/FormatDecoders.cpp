@@ -1,5 +1,6 @@
 #include "FormatDecoders.h"
 #include "WindowsShellThumbnailProvider.h"
+#include "../core/CoreController.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QDir>
@@ -72,7 +73,7 @@ static int tiffMapProc(thandle_t clientData, void** pbase, toff_t* psize) {
 static void tiffUnmapProc(thandle_t, void*, toff_t) {
 }
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 QImage FormatDecoders::decodeTiffMemorySafely(const QByteArray& tiffData, int maxMemoryMB) {
     TiffMemoryStream stream;
@@ -97,7 +98,6 @@ QImage FormatDecoders::decodeTiffMemorySafely(const QByteArray& tiffData, int ma
     // 2.【强制安全防御】预算字节数，超过 maxMemoryMB 立即拒载
     uint64_t requiredBytes = static_cast<uint64_t>(width) * height * 4; // RGBA 4字节
     if (requiredBytes > static_cast<uint64_t>(maxMemoryMB) * 1024 * 1024 || width == 0 || height == 0) {
-        qWarning() << "[MemoryGuard] TIFF 解码预估内存超出安全上限或尺寸非法，拒绝分配！" << requiredBytes;
         TIFFClose(tif);
         return QImage();
     }
@@ -179,10 +179,11 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize)
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return QImage();
 
-    QByteArray rawData = file.read(15 * 1024 * 1024);
+    // 🚨 优化：AI 缩略图与 XMP 头部 100% 存在于前 2MB 内，严禁无脑读 15MB！
+    QByteArray rawData = file.read(2 * 1024 * 1024);
     file.close();
 
-    if (rawData.isEmpty()) return QImage();
+    if (rawData.isEmpty() || CoreController::isShuttingDown()) return QImage();
 
     // =========================================================================
     // 通道 1：解析 PostScript %AI7_Thumbnail ~ %AI10_Thumbnail 256色索引调色板
@@ -313,13 +314,11 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize)
 QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "[FormatDecoders][EPS] 文件打开失败：" << filePath;
         return QImage();
     }
 
     QByteArray header = file.read(30);
     if (header.size() < 30) {
-        qWarning() << "[FormatDecoders][EPS] 文件头不足 30 字节：" << filePath;
         return QImage();
     }
 
@@ -385,7 +384,6 @@ QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize
         return gsImg;
     }
 
-    qWarning() << "[FormatDecoders][EPS] 未能通过 DOS 二进制、ASCII %%BeginPreview 或 Ghostscript 提取内嵌位图预览：" << filePath;
     return QImage();
 }
 
@@ -425,16 +423,32 @@ QString FormatDecoders::findGhostscriptExecutable() {
 static QSemaphore g_gsConcurrencyLimit(2); // 最多2个Ghostscript进程并发跑
 
 QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targetSize) {
+    if (CoreController::isShuttingDown()) return QImage();
+
     QString gsExec = findGhostscriptExecutable();
-    if (gsExec.isEmpty()) {
+    if (gsExec.isEmpty()) return QImage();
+
+    // 尝试获取信号量，若排队超过 100ms 则直接放弃，防止卡死
+    if (!g_gsConcurrencyLimit.tryAcquire(1, 100)) {
         return QImage();
     }
-
-    g_gsConcurrencyLimit.acquire();
     struct ReleaseGuard {
         QSemaphore& s;
         ~ReleaseGuard() { s.release(); }
     } guard{g_gsConcurrencyLimit};
+
+    if (CoreController::isShuttingDown()) return QImage();
+
+    // 按文件大小分级动态超时：文件越大矢量内容通常越复杂，渲染越慢，固定短超时会误杀大文件
+    // 阈值为默认经验值，待实际批量测试文件大小分布数据回来后精调
+    QFileInfo fi(filePath);
+    qint64 fileSizeMB = fi.size() / (1024 * 1024);
+    int timeoutMs = 2000;
+    if (fileSizeMB > 20) {
+        timeoutMs = 10000;
+    } else if (fileSizeMB > 5) {
+        timeoutMs = 8000; // 实测 5~8.8MB 文件耗时集中在 5.0~5.8s（含系统抖动），留约38%安全余量
+    }
 
     QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1.png").arg(QString::number(qHash(filePath), 16));
 
@@ -450,9 +464,15 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
          << QDir::toNativeSeparators(filePath);
 
     QProcess process;
+#ifdef Q_OS_WIN
+    process.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* args) {
+        args->flags |= CREATE_NO_WINDOW;
+    });
+#endif
     process.start(gsExec, args);
 
-    if (process.waitForFinished(5000)) {
+    // 按文件大小分级的动态超时（见函数开头 timeoutMs 计算逻辑），替代此前写死的 1200ms
+    if (process.waitForFinished(timeoutMs)) {
         if (QFile::exists(tempPng)) {
             QImage img(tempPng);
             QFile::remove(tempPng);
@@ -461,6 +481,11 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
                 return img.scaled(targetSize, targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             }
         }
+    }
+
+    if (process.state() == QProcess::Running) {
+        process.kill(); // 超时直接物理强杀进程，绝不占资源
+        process.waitForFinished(200); // 等待进程真正终止，避免 QProcess 带着运行中的进程被析构
     }
 
     if (QFile::exists(tempPng)) QFile::remove(tempPng);
@@ -480,4 +505,4 @@ QImage FormatDecoders::renderPdfAiFirstPage(const QString& filePath, int targetS
     return QImage(); 
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

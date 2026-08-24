@@ -17,7 +17,7 @@
 #include "SvgIconRenderer.h"
 #include "MediaColorExtractor.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief UI 辅助兼容及转发层 (完全解耦重构版)
@@ -104,4 +104,4 @@ public:
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

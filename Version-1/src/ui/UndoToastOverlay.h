@@ -8,7 +8,7 @@
 #include <QPropertyAnimation>
 #include <functional>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 可撤销操作反馈 Toast 浮窗 (Snackbar 风格)
@@ -48,4 +48,4 @@ private:
     std::function<void()> m_undoCallback = nullptr;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

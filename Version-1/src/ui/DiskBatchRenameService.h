@@ -3,7 +3,7 @@
 #include <string>
 #include <QString>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 enum class DiskOperationMode {
     Rename,
@@ -25,4 +25,4 @@ public:
                         std::function<void(int successCount)> callback = nullptr);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -5,7 +5,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class ProgressDialog : public FramelessDialog {
     Q_OBJECT
@@ -66,4 +66,4 @@ private:
     QProgressBar* m_progressBar = nullptr;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

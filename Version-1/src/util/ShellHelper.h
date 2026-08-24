@@ -2,7 +2,7 @@
 #include <QString>
 #include <QStringList>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 系统服务层工具类 (ShellHelper)
@@ -10,11 +10,6 @@ namespace ArcMeta {
  */
 class ShellHelper {
 public:
-    /**
-     * @brief 生成 13 位唯一 Base36 ID (基于毫秒时间戳 + 计数器)
-     */
-    static QString generateBase36Id();
-
     /**
      * @brief 移入回收站
      */
@@ -50,10 +45,6 @@ public:
      */
     static void ensureHidden(const std::wstring& path);
 
-    /**
-     * @brief 盘符漂移与冗余数据库物理纠偏路由 (解耦自 DatabaseManager)
-     */
-    static QString resolveAndAlignDatabasePath(const std::wstring& volumeSerial, const QString& driveLetter, const QString& currentDiskPathInConn = "", bool isLoaded = false);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -3,7 +3,7 @@
 #include <QMouseEvent>
 #include <algorithm>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 QuickLookMinimap::QuickLookMinimap(QWidget* parent) : QWidget(parent) {
     setFixedSize(140, 90); // 极简小地图尺寸
@@ -117,4 +117,4 @@ void QuickLookMinimap::mouseReleaseEvent(QMouseEvent* event) {
     }
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

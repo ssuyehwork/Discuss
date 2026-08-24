@@ -1,7 +1,6 @@
 #include "PresetTagsDialog.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
-#include "../meta/CategoryRepo.h"
 #include "../meta/MetadataManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -13,7 +12,7 @@
 #include <QListWidget>
 #include <QScrollArea>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 // ==========================================
 // 设置自动标签对话框主实现 (PresetTagsDialog)
@@ -105,14 +104,8 @@ void PresetTagsDialog::initUi() {
 }
 
 void PresetTagsDialog::loadTags() {
-    Category cat = CategoryRepo::getById(m_categoryId);
-    m_categoryName = QString::fromStdWString(cat.name);
     m_folderNameEdit->setText(m_categoryName);
-
     m_presetTags.clear();
-    for (const auto& ws : cat.presetTags) {
-        m_presetTags.append(QString::fromStdWString(ws));
-    }
 }
 
 void PresetTagsDialog::populateTagPills() {
@@ -157,17 +150,23 @@ void PresetTagsDialog::onTagContainerClicked() {
         return;
     }
 
-    m_selectorOverlay = new TagSelectorOverlay(m_presetTags, nullptr); // 作为独立 Window 弹出
-    m_selectorOverlay->setAttribute(Qt::WA_DeleteOnClose);
+    // 实例化独立窗口，父对象传 nullptr 确保作为独立顶层 Tool 弹出
+    m_selectorOverlay = new TagSelectorOverlay(m_presetTags, nullptr);
     
+    // 计算弹出在红框正下方
     QPoint globalPos = m_tagContainer->mapToGlobal(QPoint(0, m_tagContainer->height() + 4));
     m_selectorOverlay->move(globalPos);
     m_selectorOverlay->show();
-    m_selectorOverlay->activateWindow();
+    m_selectorOverlay->raise();
+    m_selectorOverlay->activateWindow(); // 显式夺取焦点
 
     connect(m_selectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& selected) {
         m_presetTags = selected;
         populateTagPills(); // 内部自动触发 recalculateAdaptiveHeight()
+    });
+
+    connect(m_selectorOverlay, &TagSelectorOverlay::overlayClosed, this, [this]() {
+        m_selectorOverlay = nullptr;
     });
 }
 
@@ -186,15 +185,7 @@ void PresetTagsDialog::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void PresetTagsDialog::onSaveClicked() {
-    Category cat = CategoryRepo::getById(m_categoryId);
-    cat.presetTags.clear();
-    for (const QString& tag : m_presetTags) {
-        cat.presetTags.push_back(tag.toStdWString());
-    }
-    
-    if (CategoryRepo::update(cat)) {
-        accept();
-    }
+    accept();
 }
 
 void PresetTagsDialog::onCancelClicked() {
@@ -212,4 +203,4 @@ bool PresetTagsDialog::eventFilter(QObject* obj, QEvent* event) {
     return FramelessDialog::eventFilter(obj, event);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

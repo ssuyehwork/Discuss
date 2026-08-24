@@ -1,14 +1,16 @@
 #include "TagSelectorOverlay.h"
 #include "UiHelper.h"
 #include "../meta/MetadataManager.h"
+#include "../core/AppConfig.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QApplication>
 #include <QScreen>
+#include <QScrollBar>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent)
     : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), 
@@ -43,13 +45,11 @@ void TagSelectorOverlay::initUi() {
     mainL->setContentsMargins(10, 10, 10, 10);
     mainL->setSpacing(8);
 
-    // 顶部拖拽手柄栏
-    QWidget* topHandle = new QWidget(this);
-    topHandle->setFixedHeight(8);
-    topHandle->setStyleSheet("background: transparent;");
-    mainL->addWidget(topHandle);
+    // 1. 顶部操作栏（搜索框 + 右侧侧边栏折叠按钮）
+    QHBoxLayout* topSearchLayout = new QHBoxLayout();
+    topSearchLayout->setContentsMargins(0, 0, 0, 0);
+    topSearchLayout->setSpacing(6);
 
-    // 搜索与创建栏
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setPlaceholderText("搜索或新建标签...");
     m_searchEdit->setClearButtonEnabled(true);
@@ -61,9 +61,28 @@ void TagSelectorOverlay::initUi() {
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this]() {
         filterTags();
     });
-    mainL->addWidget(m_searchEdit);
+    topSearchLayout->addWidget(m_searchEdit, 1);
 
-    // 中部双视口（左侧群组、右侧标签）
+    m_btnToggleSidebar = new QPushButton(this);
+    m_btnToggleSidebar->setFixedSize(26, 26);
+    m_btnToggleSidebar->setCheckable(true);
+    m_btnToggleSidebar->setChecked(true);
+    m_btnToggleSidebar->setIcon(UiHelper::getIcon("sidebar", QColor("#AAAAAA"), 16));
+    m_btnToggleSidebar->setIconSize(QSize(16, 16));
+    m_btnToggleSidebar->setCursor(Qt::PointingHandCursor);
+    m_btnToggleSidebar->setStyleSheet(
+        "QPushButton { background: transparent; border: none; border-radius: 4px; padding: 0; }"
+        "QPushButton:hover { background-color: #3E3E42; }"
+        "QPushButton:pressed { background-color: #4E4E52; }"
+    );
+    connect(m_btnToggleSidebar, &QPushButton::toggled, this, [this](bool checked) {
+        m_groupList->setVisible(checked);
+    });
+    topSearchLayout->addWidget(m_btnToggleSidebar);
+
+    mainL->addLayout(topSearchLayout);
+
+    // 2. 中部双视口（左侧群组、右侧标签）
     QHBoxLayout* bodyL = new QHBoxLayout();
     bodyL->setSpacing(8);
 
@@ -82,41 +101,33 @@ void TagSelectorOverlay::initUi() {
     });
     bodyL->addWidget(m_groupList);
 
-    // 右侧标签面板 (支持纯键盘操作网格)
+    // 右侧标签面板（彻底锁定暗黑背景，杜绝系统白底穿透）
     m_tagGridWidget = new QWidget(this);
+    m_tagGridWidget->setAttribute(Qt::WA_StyledBackground, true);
+    m_tagGridWidget->setStyleSheet("background-color: #1E1E1E;");
     m_tagGridWidget->setFocusPolicy(Qt::StrongFocus);
-    m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 0, 4, 4);
+    m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 10, 6, 6);
     m_tagGridWidget->setLayout(m_gridFlowLayout);
 
     m_scrollArea = new QScrollArea(this);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet("QScrollArea { border: 1px solid #333; background: transparent; border-radius: 4px; }");
+    m_scrollArea->setStyleSheet(
+        "QScrollArea { border: 1px solid #333; background-color: #1E1E1E; border-radius: 4px; }"
+        "QScrollBar:vertical { border: none; background: transparent; width: 6px; }"
+        "QScrollBar::handle:vertical { background: #333333; min-height: 15px; border-radius: 3px; }"
+        "QScrollBar::handle:vertical:hover { background: #444444; }"
+    );
+    if (m_scrollArea->viewport()) {
+        m_scrollArea->viewport()->setStyleSheet("background-color: #1E1E1E; border: none;");
+    }
     m_scrollArea->setWidget(m_tagGridWidget);
     bodyL->addWidget(m_scrollArea, 1);
 
     mainL->addLayout(bodyL, 1);
 
-    // 底部快捷键提示栏
-    QWidget* bottomBar = new QWidget(this);
-    bottomBar->setFixedHeight(22);
-    bottomBar->setStyleSheet("background-color: #151515; border-radius: 3px;");
-    QHBoxLayout* bottomL = new QHBoxLayout(bottomBar);
-    bottomL->setContentsMargins(8, 0, 8, 0);
-
-    QLabel* helpTips = new QLabel(bottomBar);
-    helpTips->setText("切换 <font color='#1C97EA'><b>Tab</b></font>    移动 <font color='#1C97EA'><b>↑↓←→</b></font>    选中/新建 <font color='#1C97EA'><b>⏎</b></font>");
-    helpTips->setStyleSheet("color: #888; font-size: 10px;");
-    bottomL->addWidget(helpTips);
-
-    bottomL->addStretch();
-
-    QLabel* closeTips = new QLabel("关闭 ESC", bottomBar);
-    closeTips->setStyleSheet("color: #888; font-size: 10px;");
-    bottomL->addWidget(closeTips);
-
-    mainL->addWidget(bottomBar);
-
-    resize(400, 240); // 初始大小
+    // 从配置中恢复持久化的窗口尺寸
+    QSize savedSize = AppConfig::instance().getValue("TagSelectorOverlay/Size", QSize(400, 240)).toSize();
+    resize(savedSize.expandedTo(QSize(250, 150)));
 }
 
 void TagSelectorOverlay::loadTagsAndGroups() {
@@ -219,9 +230,9 @@ void TagSelectorOverlay::updateSelectionHighlight() {
 
         QString style;
         if (isSelected) {
-            style = "QPushButton { background-color: #1C97EA; color: #FFF; border: 1px solid #1C97EA; border-radius: 11px; padding: 0 10px; font-size: 11px; }";
+            style = "QPushButton { background-color: #1C97EA; color: #FFF; border: 1px solid #1C97EA; border-radius: 4px; padding: 0 8px; font-size: 11px; }";
         } else {
-            style = "QPushButton { background-color: transparent; color: #BBB; border: 1px solid #333; border-radius: 11px; padding: 0 10px; font-size: 11px; }";
+            style = "QPushButton { background-color: transparent; color: #BBB; border: 1px solid #333; border-radius: 4px; padding: 0 8px; font-size: 11px; }";
         }
 
         if (isFocused) {
@@ -271,13 +282,24 @@ int TagSelectorOverlay::getResizeDirection(const QPoint& pos) {
     return dir;
 }
 
+bool TagSelectorOverlay::isInteractiveChild(QWidget* child) const {
+    if (!child) return false;
+    if (child == m_searchEdit || (m_searchEdit && m_searchEdit->isAncestorOf(child))) return true;
+    if (child == m_btnToggleSidebar) return true;
+    if (child == m_groupList || (m_groupList && m_groupList->isAncestorOf(child))) return true;
+    if (qobject_cast<QPushButton*>(child)) return true;
+    if (qobject_cast<QScrollBar*>(child)) return true;
+    return false;
+}
+
 void TagSelectorOverlay::updateCursorShape(const QPoint& pos) {
     int dir = getResizeDirection(pos);
     if (dir == 0) {
-        if (pos.y() < 25) { // 顶部手柄区
-            setCursor(Qt::SizeAllCursor);
-        } else {
+        QWidget* child = childAt(pos);
+        if (isInteractiveChild(child)) {
             setCursor(Qt::ArrowCursor);
+        } else {
+            setCursor(Qt::SizeAllCursor);
         }
     } else {
         if (dir == (1 | 4) || dir == (2 | 8)) setCursor(Qt::SizeFDiagCursor); // Top-Left or Bottom-Right
@@ -290,10 +312,15 @@ void TagSelectorOverlay::updateCursorShape(const QPoint& pos) {
 void TagSelectorOverlay::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         m_resizeDir = getResizeDirection(event->pos());
-        m_isDragging = (m_resizeDir == 0 && event->pos().y() < 25);
+        QWidget* child = childAt(event->pos());
+        m_isDragging = (m_resizeDir == 0 && !isInteractiveChild(child));
         m_dragStartPos = event->globalPosition().toPoint();
         m_dragStartGeometry = geometry();
-        event->accept();
+        if (m_resizeDir != 0 || m_isDragging) {
+            event->accept();
+        } else {
+            QFrame::mousePressEvent(event);
+        }
     } else {
         QFrame::mousePressEvent(event);
     }
@@ -331,10 +358,20 @@ void TagSelectorOverlay::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void TagSelectorOverlay::mouseReleaseEvent(QMouseEvent* event) {
+    if (m_resizeDir != 0) {
+        AppConfig::instance().setValue("TagSelectorOverlay/Size", size());
+    }
     m_isDragging = false;
     m_resizeDir = 0;
     setCursor(Qt::ArrowCursor);
     QFrame::mouseReleaseEvent(event);
+}
+
+void TagSelectorOverlay::resizeEvent(QResizeEvent* event) {
+    QFrame::resizeEvent(event);
+    if (isVisible()) {
+        AppConfig::instance().setValue("TagSelectorOverlay/Size", size());
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -414,4 +451,4 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
     return QFrame::eventFilter(obj, event);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

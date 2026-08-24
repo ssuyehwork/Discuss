@@ -13,7 +13,7 @@
 #include <QToolTip>
 #include "UiHelper.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 // --- SvPicker ---
 SvPicker::SvPicker(QWidget* parent) : QWidget(parent) {
@@ -424,4 +424,4 @@ void ColorStripPicker::mousePressEvent(QMouseEvent* event) {
     QWidget::mousePressEvent(event);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

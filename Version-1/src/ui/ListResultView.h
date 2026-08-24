@@ -1,7 +1,7 @@
 #pragma once
 #include "IScanResultView.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class DropTreeView;
 
@@ -21,4 +21,4 @@ private:
     DropTreeView* m_treeView = nullptr;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -3,7 +3,7 @@
 #include <QObject>
 #include <QStringList>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class SearchHistoryService : public QObject {
     Q_OBJECT
@@ -25,4 +25,4 @@ private:
     const int m_maxLimit = 10;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -2,7 +2,7 @@
 #include "DropTreeView.h"
 #include <QHeaderView>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 ListResultView::ListResultView(DropTreeView* treeView, QWidget* parent) 
     : IScanResultView(parent), m_treeView(treeView) {
@@ -31,4 +31,4 @@ void ListResultView::setIconSize(int size) {
 void ListResultView::refreshLayout() {
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -3,7 +3,7 @@
 #include <QTimer>
 #include "StyleLibrary.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class DriveButton : public QPushButton {
     Q_OBJECT
@@ -55,4 +55,4 @@ private:
     QString m_folderName;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

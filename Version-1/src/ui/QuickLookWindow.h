@@ -13,7 +13,7 @@
 #include <QHBoxLayout>
 #include <QContextMenuEvent>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class QuickLookMinimap;
 
@@ -92,4 +92,4 @@ private:
     bool m_ignoreDeactivate = false;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

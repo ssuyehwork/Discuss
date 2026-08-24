@@ -3,7 +3,7 @@
 #include <QStyledItemDelegate>
 #include <QLineEdit> 
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class FileNameLineEdit : public QLineEdit { 
     Q_OBJECT 
@@ -86,4 +86,4 @@ private:
     int m_registrationProgressRole = -1;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

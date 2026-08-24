@@ -9,7 +9,7 @@
 #include <QComboBox>
 #include <QLineEdit>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class FramelessFileDialog : public FramelessDialog {
     Q_OBJECT
@@ -49,6 +49,6 @@ private:
     QString m_selectedPath;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
 #endif // FRAMELESSFILEDIALOG_H

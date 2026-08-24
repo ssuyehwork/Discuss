@@ -9,7 +9,7 @@
 #include "ImageDecoderFacade.h"
 #include "ColorAlgorithmEngine.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class MediaColorExtractor {
 public:
@@ -47,4 +47,4 @@ public:
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

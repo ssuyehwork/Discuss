@@ -1,5 +1,5 @@
-#ifndef ARCMETA_METADATA_DEFS_H
-#define ARCMETA_METADATA_DEFS_H
+#ifndef QuarkMeta_METADATA_DEFS_H
+#define QuarkMeta_METADATA_DEFS_H
 
 #include <string>
 #include <vector>
@@ -7,7 +7,7 @@
 
 #include <QColor>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 struct PaletteEntry {
     QColor color;
@@ -68,7 +68,6 @@ struct ItemMeta {
     std::wstring volume;
     std::wstring frn;
     std::string folderId; // 128-bit Folder ID (Hex string)
-    int ingestionStatus;   // -1: 未知/非托管, 0: 已登记/待处理, 1: 已完成解析
     long long size;
     long long creationTime;   // ctime (毫秒)
     long long modificationTime; // mtime (毫秒)
@@ -79,13 +78,13 @@ struct ItemMeta {
     long long addedAt;      // 2026-07-xx 1:1对等：添加/导入日期 (时间戳)
     int width;              // 2026-07-xx 1:1对等：图像宽度
     int height;             // 2026-07-xx 1:1对等：图像高度
+    int thumbStatus;        // 0: 正常/未处理, 1: 提取失败/跳过
 
     ItemMeta()
         : type(L"file")
         , rating(0)
         , pinned(false)
         , encrypted(false)
-        , ingestionStatus(-1)
         , size(0)
         , creationTime(0)
         , modificationTime(0)
@@ -93,15 +92,16 @@ struct ItemMeta {
         , addedAt(0)
         , width(0)
         , height(0)
+        , thumbStatus(0)
     {}
 
     bool hasUserOperations() const {
         return rating > 0 || !color.empty() || !tags.empty() || pinned ||
                !note.empty() || !url.empty() || encrypted || !folderId.empty() || !palettes.empty() ||
-               !autoColor.empty() || addedAt > 0 || width > 0 || height > 0;
+               !autoColor.empty() || addedAt > 0 || width > 0 || height > 0 || thumbStatus > 0;
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
 
-#endif // ARCMETA_METADATA_DEFS_H
+#endif // QuarkMeta_METADATA_DEFS_H

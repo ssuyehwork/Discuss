@@ -1,7 +1,6 @@
 #pragma once
 #include "ActionCommand.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/CategoryRepo.h"
 #include "../meta/DatabaseManager.h"
 #include "sqlite3.h"
 #include "../util/ShellHelper.h"
@@ -16,10 +15,10 @@
 #include <QtConcurrent>
 #include <QCoreApplication>
 #include "../meta/FileOperationHelper.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../ui/DiskBatchRenameService.h"
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 重命名指令
@@ -139,141 +138,6 @@ private:
     QVariant m_newVal;
 };
 
-/**
- * @brief 分类关联指令
- */
-class CategorizeCommand : public ActionCommand {
-public:
-    CategorizeCommand(const QString& path, const std::string& fid, int categoryId, bool isAdd)
-        : m_path(path), m_fid(fid), m_categoryId(categoryId), m_isAdd(isAdd) {}
-
-    void execute() override {}
-
-    void undo() override {
-        if (m_isAdd) {
-            CategoryRepo::removeItemFromCategory(m_categoryId, m_fid);
-        } else {
-            CategoryRepo::addItemToCategory(m_categoryId, m_fid, m_path.toStdWString());
-        }
-        MetadataManager::instance().notifyCategoryCountChanged();
-    }
-
-    void redo() override {
-        if (m_isAdd) {
-            CategoryRepo::addItemToCategory(m_categoryId, m_fid, m_path.toStdWString());
-        } else {
-            CategoryRepo::removeItemFromCategory(m_categoryId, m_fid);
-        }
-        MetadataManager::instance().notifyCategoryCountChanged();
-    }
-
-    QString description() const override { return m_isAdd ? "添加分类" : "移除分类"; }
-
-    bool affectsPath(const QString& path) const override {
-        return m_path == path;
-    }
-
-private:
-    QString m_path;
-    std::string m_fid;
-    int m_categoryId;
-    bool m_isAdd;
-};
-
-/**
- * @brief 批量取消分类指令 (Plan-83)
- */
-class BulkUncategorizeCommand : public ActionCommand {
-public:
-    BulkUncategorizeCommand(const QString& path, const std::string& fid, const std::vector<int>& oldCatIds)
-        : m_path(path), m_fid(fid), m_oldCatIds(oldCatIds) {}
-
-    void execute() override {}
-
-    void undo() override {
-        for (int catId : m_oldCatIds) {
-            CategoryRepo::addItemToCategory(catId, m_fid, m_path.toStdWString());
-        }
-        MetadataManager::instance().notifyCategoryCountChanged();
-    }
-
-    void redo() override {
-        CategoryRepo::removeAllCategories(m_fid);
-        MetadataManager::instance().notifyCategoryCountChanged();
-    }
-
-    QString description() const override { return "回归未分类"; }
-
-    bool affectsPath(const QString& path) const override {
-        return m_path == path;
-    }
-
-private:
-    QString m_path;
-    std::string m_fid;
-    std::vector<int> m_oldCatIds;
-};
-
-/**
- * @brief 2026-07-xx 按照用户要求 (1.19)：导入任务指令
- * 支持一键撤销整个导入任务产生的分类节点与关联
- */
-class ImportCommand : public ActionCommand {
-public:
-    ImportCommand(const std::vector<int>& createdCatIds, 
-                  const std::vector<std::pair<int, std::string>>& createdAssociations,
-                  const std::vector<std::wstring>& registeredPaths)
-        : m_createdCatIds(createdCatIds), 
-          m_createdAssociations(createdAssociations),
-          m_registeredPaths(registeredPaths) {}
-
-    void execute() override {}
-
-    void undo() override {
-        // 1. 移除分类关联
-        for (const auto& assoc : m_createdAssociations) {
-            CategoryRepo::removeItemFromCategory(assoc.first, assoc.second);
-        }
-        // 2. 物理删除创建的分类节点 (逆序删除以处理父子关系)
-        for (auto it = m_createdCatIds.rbegin(); it != m_createdCatIds.rend(); ++it) {
-            // 此处直接操作 DB 物理删除，不走 CategoryRepo::remove 的移入回收站逻辑
-            sqlite3* db = DatabaseManager::instance().getGlobalDb();
-            if (db) {
-                sqlite3_stmt* stmt;
-                if (sqlite3_prepare_v2(db, "DELETE FROM categories WHERE id = ?", -1, &stmt, nullptr) == SQLITE_OK) {
-                    sqlite3_bind_int(stmt, 1, *it);
-                    sqlite3_step(stmt);
-                    sqlite3_finalize(stmt);
-                }
-            }
-        }
-        // 3. 将新注册的项目标记回非受控状态 (Managed = false)
-        for (const auto& wp : m_registeredPaths) {
-            MetadataManager::instance().setManaged(wp, false, false);
-        }
-
-        // 4. 物理落盘并刷新 UI
-        CategoryRepo::saveImmediately();
-        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
-    }
-
-    void redo() override {
-        // 由于导入涉及物理扫描，REDO 逻辑较为复杂，暂时保留空实现或提示用户重新导入
-    }
-
-    QString description() const override { return "撤销导入任务"; }
-
-    bool affectsPath(const QString& path) const override {
-        std::wstring wp = QDir::toNativeSeparators(path).toStdWString();
-        for (const auto& p : m_registeredPaths) if (p == wp) return true;
-        return false;
-    }
-
-private:
-    std::vector<int> m_createdCatIds;
-    std::vector<std::pair<int, std::string>> m_createdAssociations;
-    std::vector<std::wstring> m_registeredPaths;
-};
 
 /**
  * @brief 安全物理删除指令
@@ -355,11 +219,10 @@ private:
  */
 class BatchRenameCommand : public ActionCommand {
 public:
-    BatchRenameCommand(bool isCapsule,
-                       DiskOperationMode mode,
+    BatchRenameCommand(DiskOperationMode mode,
                        const std::vector<std::wstring>& oldPaths,
                        const std::vector<std::wstring>& newPaths)
-        : m_isCapsule(isCapsule), m_mode(mode), m_oldPaths(oldPaths), m_newPaths(newPaths) {}
+        : m_mode(mode), m_oldPaths(oldPaths), m_newPaths(newPaths) {}
 
     void execute() override {
         // 第一次 execute 已由 BatchRenameDialog 直接执行，无需重复操作
@@ -369,58 +232,39 @@ public:
         // 进行安全的局部变量值捕获，彻底避免 Lambda 后台线程运行期间 "this" 被释放析构带来的 Use-After-Free 悬空崩溃隐患
         std::vector<std::wstring> oldPaths = m_oldPaths;
         std::vector<std::wstring> newPaths = m_newPaths;
-        bool isCapsule = m_isCapsule;
         DiskOperationMode mode = m_mode;
 
-        (void)QtConcurrent::run([oldPaths, newPaths, isCapsule, mode]() {
+        (void)QtConcurrent::run([oldPaths, newPaths, mode]() {
             std::vector<std::pair<std::wstring, std::wstring>> rawPairs;
             for (size_t i = 0; i < oldPaths.size(); ++i) {
                 QString oldPathStr = QString::fromStdWString(oldPaths[i]);
                 QString newPathStr = QString::fromStdWString(newPaths[i]);
 
-                if (isCapsule) {
-                    QFileInfo newInfo(newPathStr);
-                    QFileInfo oldInfo(oldPathStr);
-                    QDir arcDir = newInfo.absoluteDir();
-                    QString oldBaseName = oldInfo.completeBaseName();
-                    QString newBaseName = newInfo.completeBaseName();
-                    QString oldThumbPath = arcDir.filePath(oldBaseName + "_thumbnail.png");
-                    QString newThumbPath = arcDir.filePath(newBaseName + "_thumbnail.png");
-
-                    // 物理重命名主资产
-                    if (FileOperationHelper::safeRename(newPathStr, oldPathStr)) {
-                        if (QFile::exists(newThumbPath)) {
-                            FileOperationHelper::safeRename(newThumbPath, oldThumbPath);
-                        }
-                        rawPairs.push_back({newPaths[i], oldPaths[i]});
+                if (mode == DiskOperationMode::Copy) {
+                    QFile::remove(newPathStr);
+                    QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
+                    if (QFile::exists(newThumbHashPath)) {
+                        QFile::remove(newThumbHashPath);
                     }
                 } else {
-                    if (mode == DiskOperationMode::Copy) {
-                        QFile::remove(newPathStr);
-                        QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
-                        if (QFile::exists(newThumbHashPath)) {
-                            QFile::remove(newThumbHashPath);
-                        }
+                    bool ok = false;
+                    if (mode == DiskOperationMode::Move) {
+                        ok = FileOperationHelper::safeMove(newPathStr, oldPathStr);
                     } else {
-                        bool ok = false;
-                        if (mode == DiskOperationMode::Move) {
-                            ok = FileOperationHelper::safeMove(newPathStr, oldPathStr);
-                        } else {
-                            ok = FileOperationHelper::safeRename(newPathStr, oldPathStr);
-                        }
+                        ok = FileOperationHelper::safeRename(newPathStr, oldPathStr);
+                    }
 
-                        if (ok) {
-                            QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPathStr);
-                            QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
-                            if (QFile::exists(newThumbHashPath)) {
-                                if (mode == DiskOperationMode::Move) {
-                                    FileOperationHelper::safeMove(newThumbHashPath, oldThumbHashPath);
-                                } else {
-                                    FileOperationHelper::safeRename(newThumbHashPath, oldThumbHashPath);
-                                }
+                    if (ok) {
+                        QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPathStr);
+                        QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
+                        if (QFile::exists(newThumbHashPath)) {
+                            if (mode == DiskOperationMode::Move) {
+                                FileOperationHelper::safeMove(newThumbHashPath, oldThumbHashPath);
+                            } else {
+                                FileOperationHelper::safeRename(newThumbHashPath, oldThumbHashPath);
                             }
-                            rawPairs.push_back({newPaths[i], oldPaths[i]});
                         }
+                        rawPairs.push_back({newPaths[i], oldPaths[i]});
                     }
                 }
             }
@@ -440,59 +284,41 @@ public:
         // 进行安全的局部变量值捕获，彻底避免 Lambda 后台线程运行期间 "this" 被释放析构带来的 Use-After-Free 悬空崩溃隐患
         std::vector<std::wstring> oldPaths = m_oldPaths;
         std::vector<std::wstring> newPaths = m_newPaths;
-        bool isCapsule = m_isCapsule;
         DiskOperationMode mode = m_mode;
 
-        (void)QtConcurrent::run([oldPaths, newPaths, isCapsule, mode]() {
+        (void)QtConcurrent::run([oldPaths, newPaths, mode]() {
             std::vector<std::pair<std::wstring, std::wstring>> rawPairs;
             for (size_t i = 0; i < oldPaths.size(); ++i) {
                 QString oldPathStr = QString::fromStdWString(oldPaths[i]);
                 QString newPathStr = QString::fromStdWString(newPaths[i]);
 
-                if (isCapsule) {
-                    QFileInfo newInfo(newPathStr);
-                    QFileInfo oldInfo(oldPathStr);
-                    QDir arcDir = oldInfo.absoluteDir();
-                    QString oldBaseName = oldInfo.completeBaseName();
-                    QString newBaseName = newInfo.completeBaseName();
-                    QString oldThumbPath = arcDir.filePath(oldBaseName + "_thumbnail.png");
-                    QString newThumbPath = arcDir.filePath(newBaseName + "_thumbnail.png");
-
-                    if (FileOperationHelper::safeRename(oldPathStr, newPathStr)) {
-                        if (QFile::exists(oldThumbPath)) {
-                            FileOperationHelper::safeRename(oldThumbPath, newThumbPath);
+                if (mode == DiskOperationMode::Copy) {
+                    if (QFile::copy(oldPathStr, newPathStr)) {
+                        QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPathStr);
+                        QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
+                        if (QFile::exists(oldThumbHashPath)) {
+                            QFile::copy(oldThumbHashPath, newThumbHashPath);
                         }
-                        rawPairs.push_back({oldPaths[i], newPaths[i]});
                     }
                 } else {
-                    if (mode == DiskOperationMode::Copy) {
-                        if (QFile::copy(oldPathStr, newPathStr)) {
-                            QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPathStr);
-                            QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
-                            if (QFile::exists(oldThumbHashPath)) {
-                                QFile::copy(oldThumbHashPath, newThumbHashPath);
-                            }
-                        }
+                    bool ok = false;
+                    if (mode == DiskOperationMode::Move) {
+                        ok = FileOperationHelper::safeMove(oldPathStr, newPathStr);
                     } else {
-                        bool ok = false;
-                        if (mode == DiskOperationMode::Move) {
-                            ok = FileOperationHelper::safeMove(oldPathStr, newPathStr);
-                        } else {
-                            ok = FileOperationHelper::safeRename(oldPathStr, newPathStr);
-                        }
+                        ok = FileOperationHelper::safeRename(oldPathStr, newPathStr);
+                    }
 
-                        if (ok) {
-                            QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPathStr);
-                            QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
-                            if (QFile::exists(oldThumbHashPath)) {
-                                if (mode == DiskOperationMode::Move) {
-                                    FileOperationHelper::safeMove(oldThumbHashPath, newThumbHashPath);
-                                } else {
-                                    FileOperationHelper::safeRename(oldThumbHashPath, newThumbHashPath);
-                                }
+                    if (ok) {
+                        QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPathStr);
+                        QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
+                        if (QFile::exists(oldThumbHashPath)) {
+                            if (mode == DiskOperationMode::Move) {
+                                FileOperationHelper::safeMove(oldThumbHashPath, newThumbHashPath);
+                            } else {
+                                FileOperationHelper::safeRename(oldThumbHashPath, newThumbHashPath);
                             }
-                            rawPairs.push_back({oldPaths[i], newPaths[i]});
                         }
+                        rawPairs.push_back({oldPaths[i], newPaths[i]});
                     }
                 }
             }
@@ -509,7 +335,6 @@ public:
     }
 
     QString description() const override {
-        if (m_isCapsule) return "批量重命名 (胶囊)";
         switch (m_mode) {
             case DiskOperationMode::Rename: return "批量重命名 (磁盘)";
             case DiskOperationMode::Move: return "批量移动";
@@ -536,4 +361,4 @@ private:
     std::vector<std::wstring> m_newPaths;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

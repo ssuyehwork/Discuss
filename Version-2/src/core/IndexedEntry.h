@@ -6,7 +6,7 @@
 #include <QColor>
 #include <utility>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 工业级索引条目
@@ -24,14 +24,14 @@ struct IndexedEntry {
 
     /**
      * @brief 获取文件后缀名
-     * @return 小写的后缀名，无后缀时返回空字符串
+     * @return 原始大小写的后缀名，无后缀时返回空字符串
      */
     QString suffix() const {
         if (isDir) return QString();
         int dotIdx = name.lastIndexOf('.');
         if (dotIdx == -1) return QString();
-        return name.mid(dotIdx + 1).toLower();
+        return name.mid(dotIdx + 1);
     }
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

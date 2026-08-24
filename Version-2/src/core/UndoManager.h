@@ -7,7 +7,7 @@
 #include <QMutex>
 #include <QMutexLocker>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 /**
  * @brief 撤销栈管理器 (Undo Stack Manager)
@@ -99,4 +99,4 @@ private:
     QMutex m_mutex;
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

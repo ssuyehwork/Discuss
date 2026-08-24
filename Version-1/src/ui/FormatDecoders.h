@@ -4,7 +4,7 @@
 #include <QString>
 #include <QByteArray>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 class FormatDecoders {
 public:
@@ -28,4 +28,4 @@ private:
     static QImage renderPdfAiFirstPage(const QString& filePath, int targetSize = 512);
 };
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

@@ -1,5 +1,5 @@
 #include "DropJustifiedView.h"
-#include "ContentPanel.h"
+#include "../core/ModelContract.h"
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -10,7 +10,7 @@
 #include <QDir>
 #include <QFileInfo>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 DropJustifiedView::DropJustifiedView(QWidget* parent) : JustifiedView(parent) {
     setDragEnabled(true);
@@ -87,4 +87,4 @@ void DropJustifiedView::startDrag(Qt::DropActions supportedActions) {
     drag->exec(supportedActions, Qt::MoveAction);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

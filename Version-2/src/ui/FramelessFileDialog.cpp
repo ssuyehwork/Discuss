@@ -11,7 +11,7 @@
 #include <QItemSelectionModel>
 #include <QFile>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 FramelessFileDialog::FramelessFileDialog(const QString& title, const QString& dir, 
                                          FileMode mode, const QString& filter, QWidget* parent)
@@ -234,4 +234,4 @@ QString FramelessFileDialog::getSaveFileName(QWidget* parent, const QString& cap
     return "";
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

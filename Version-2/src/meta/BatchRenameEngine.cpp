@@ -4,7 +4,7 @@
 #include <QDateTime>
 #include <filesystem>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 BatchRenameEngine& BatchRenameEngine::instance() {
     static BatchRenameEngine inst;
@@ -40,7 +40,7 @@ QString BatchRenameEngine::processOne(const std::wstring& path, int index, const
                 newName += info.baseName();
                 break;
             case RenameComponentType::Metadata:
-                newName += "[ArcMeta]"; 
+                newName += "[QuarkMeta]"; 
                 break;
         }
     }
@@ -70,4 +70,4 @@ bool BatchRenameEngine::execute(const std::vector<std::wstring>& originalPaths, 
     return true;
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

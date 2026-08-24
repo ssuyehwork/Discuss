@@ -1,7 +1,6 @@
 #include "DiskBatchRenameService.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/CategoryRepo.h"
-#include "../meta/CapsuleMediaExtractor.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../meta/FileOperationHelper.h"
 #include <QFileInfo>
 #include <QDir>
@@ -9,7 +8,7 @@
 #include <QCoreApplication>
 #include <QtConcurrent>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 void DiskBatchRenameService::execute(const std::vector<std::wstring>& originalPaths, 
                                      const std::vector<std::wstring>& newNames,
@@ -39,6 +38,7 @@ void DiskBatchRenameService::execute(const std::vector<std::wstring>& originalPa
             } else if (mode == DiskOperationMode::Move) {
                 ok = FileOperationHelper::safeMove(oldPath, newPathStr);
             } else { // Rename
+                // 强制调用 safeRename 进行两阶段 UUID 中转改名，解决 Windows NTFS 大小写不敏感缺陷
                 ok = FileOperationHelper::safeRename(oldPath, newPathStr);
             }
 
@@ -46,8 +46,8 @@ void DiskBatchRenameService::execute(const std::vector<std::wstring>& originalPa
                 successCount++;
 
                 // 同步处理 Hash 缩略图 (后台线程执行)
-                QString oldThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(oldPath);
-                QString newThumbHashPath = CapsuleMediaExtractor::getDiskThumbCachePath(newPathStr);
+                QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPath);
+                QString newThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(newPathStr);
 
                 if (QFile::exists(oldThumbHashPath)) {
                     if (mode == DiskOperationMode::Copy) {
@@ -77,4 +77,4 @@ void DiskBatchRenameService::execute(const std::vector<std::wstring>& originalPa
     });
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta

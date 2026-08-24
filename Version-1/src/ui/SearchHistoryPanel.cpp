@@ -7,7 +7,7 @@
 #include <QApplication>
 #include <QMouseEvent>
 
-namespace ArcMeta {
+namespace QuarkMeta {
 
 SearchHistoryPanel::SearchHistoryPanel(QWidget* parent)
     : QFrame(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint)
@@ -165,4 +165,4 @@ bool SearchHistoryPanel::eventFilter(QObject* obj, QEvent* event) {
     return QFrame::eventFilter(obj, event);
 }
 
-} // namespace ArcMeta
+} // namespace QuarkMeta
