@@ -2286,28 +2286,14 @@ void ContentPanel::performBatchRename() {
         return; 
     } 
  
-    OperationSnapshotEngine::instance().executeWithSnapshot(
-        this,
-        SnapshotOperationType::BatchRename,
-        selectedPaths,
-        QString("成功处理 %1 个项目").arg(selectedPaths.size()),
-        [this, originalPaths]() {
-            BatchRenameDialog dlg(originalPaths, this); 
-            if (dlg.exec() == QDialog::Accepted) { 
-                // 🚨 极致自愈高亮：如果对话框成功重命名，将其返回的首个新名称作为 pendingSelectName
-                QString firstNew = dlg.getFirstNewName();
-                if (!firstNew.isEmpty()) {
-                    setPendingSelectName(firstNew, false);
-                }
-                // 🚨 联动支持：不应强绑定物理 loadDirectory，统一调用 refreshAll 以自适应数据库 and 系统分类下的异步刷新，
-                // 并实现完美的选中态无缝自愈高亮！
-                refreshAll(); 
-                return true;
-            }
-            return false;
-        },
-        nullptr // 传入 nullptr 防止 executeWithSnapshot 弹出重复的多余的 showToast 覆盖，直接使用 BatchRenameDialog 内精准的带有真实成功数 successCount 的 showToast 提示！
-    );
+    BatchRenameDialog dlg(originalPaths, this); 
+    if (dlg.exec() == QDialog::Accepted) { 
+        QString firstNew = dlg.getFirstNewName();
+        if (!firstNew.isEmpty()) {
+            setPendingSelectName(firstNew, false);
+        }
+        refreshAll(); 
+    }
 } 
  
 ContentPanel::DataSourceType ContentPanel::dataSourceType() const {

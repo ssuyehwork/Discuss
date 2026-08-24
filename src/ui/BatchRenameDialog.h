@@ -46,6 +46,8 @@ private slots:
 private:
     void initContent();
     void applyTheme();
+    void initTableItems();
+    bool m_isInitializing = false;
 
     std::vector<std::wstring> m_originalPaths;
     
