@@ -31,7 +31,6 @@ struct RuntimeMeta {
     bool pinned;
     bool encrypted;
     bool isFolder; // 区分文件夹与文件，用于侧边栏精准统计
-    bool isTrash;  // 是否处于回收站
     int width;      // 物理尺寸：宽 (像素)
     int height;     // 物理尺寸：高 (像素)
     int thumbStatus; // 0: 正常/未处理, 1: 提取失败/跳过
@@ -49,7 +48,7 @@ struct RuntimeMeta {
 
     std::vector<PaletteEntry> palettes;
 
-    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), isTrash(false), width(0), height(0), thumbStatus(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
+    RuntimeMeta() : rating(0), pinned(false), encrypted(false), isFolder(false), width(0), height(0), thumbStatus(0), ctime(0), mtime(0), atime(0), fileSize(0), added_at(0) {}
 
     /**
      * @brief 判定是否有用户操作过的信息
@@ -62,7 +61,6 @@ struct RuntimeMeta {
 struct LightMeta {
     std::wstring path;
     bool isFolder;
-    bool isTrash;
     bool tagsEmpty;
     double atime;
     QStringList tags;
@@ -140,17 +138,6 @@ public:
      */
     void registerItemsAsync(const QStringList& paths);
 
-    /**
-     * @brief 判定指定目录在缓存中是否存在子项
-     * 依靠 m_parentToChildren 索引实现 O(1) 判定，用于废除物理磁盘空判定
-     */
-    bool hasChildrenInCache(const std::wstring& folderPath);
-
-    /**
-     * @brief 从缓存中获取指定目录的直接子项
-     * 返回路径与元数据的副本，调用者无需在耗时操作中持有锁
-     */
-    std::vector<std::pair<std::wstring, RuntimeMeta>> getChildrenFromCache(const std::wstring& folderPath);
 
     void ensureActivated(const std::wstring& nPath);
 
@@ -225,9 +212,6 @@ public:
      */
     void syncAfterMove(const std::wstring& oldPath, const std::wstring& newPath);
 
-    void markAsTrash(const std::wstring& path, bool isTrash, const std::wstring& origPath = L"");
-    void setTrash(const std::wstring& path, bool isTrash);
-    void deletePermanently(const std::wstring& path);
 
     /**
      * @brief 物理同步元数据
@@ -346,8 +330,6 @@ private:
         return std::hash<std::wstring>{}(normalizePath(path)) % NUM_SHARDS;
     }
 
-    // Key: 标准化父级目录路径 (结尾不含斜杠), Value: 直接子项的完整标准化路径集合
-    std::unordered_map<std::wstring, std::vector<std::wstring>> m_parentToChildren;
 
     std::deque<std::wstring> m_recentVisitedQueue;
     std::unordered_set<std::wstring> m_recentVisitedSet;

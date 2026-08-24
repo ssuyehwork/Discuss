@@ -255,8 +255,6 @@ QJsonObject QuarkMetaJson::folderToEntry(const FolderMeta& meta) {
     obj.insert("note", toQString(meta.note));
     obj.insert("url", toQString(meta.url));
     obj.insert("encrypted", meta.encrypted);
-    // 🚨 保持兼容性：磁盘上存储的旧版 JSON 配置文件依然使用 "file_id_128"，内存映射使用统一的 folderId
-    obj.insert("file_id_128", QString::fromStdString(meta.folderId));
     QJsonArray tagsArr; for (const auto& t : meta.tags) tagsArr.append(toQString(t));
     obj.insert("tags", tagsArr);
     if (!meta.palettes.empty()) {
@@ -284,7 +282,6 @@ FolderMeta QuarkMetaJson::entryToFolder(const QJsonObject& obj) {
     meta.note = toStdWString(obj.value("note").toString());
     meta.url = toStdWString(obj.value("url").toString());
     meta.encrypted = obj.value("encrypted").toBool();
-    meta.folderId = obj.value("file_id_128").toString().toStdString();
     if (obj.contains("tags") && obj.value("tags").isArray()) {
         for (const auto& v : obj.value("tags").toArray()) meta.tags.push_back(toStdWString(v.toString()));
     }
@@ -309,15 +306,10 @@ QJsonObject QuarkMetaJson::itemToEntry(const ItemMeta& meta) {
     obj.insert("note", toQString(meta.note));
     obj.insert("url", toQString(meta.url));
     obj.insert("encrypted", meta.encrypted);
-    obj.insert("encrypt_salt", QString::fromStdString(meta.encryptSalt));
-    obj.insert("encrypt_iv", QString::fromLatin1(QByteArray::fromStdString(meta.encryptIv).toBase64()));
-    obj.insert("encrypt_verify_hash", QString::fromStdString(meta.encryptVerifyHash));
     obj.insert("original_name", toQString(meta.originalName));
     obj.insert("volume", toQString(meta.volume));
     obj.insert("frn", toQString(meta.frn));
-    // 🚨 保持兼容性：磁盘上存储的旧版 JSON 配置文件依然使用 "file_id_128"，内存映射使用统一的 folderId
-    obj.insert("file_id_128", QString::fromStdString(meta.folderId));
-    
+
     // 2026-07-xx 1:1对等字段写入
     obj.insert("width", meta.width);
     obj.insert("height", meta.height);
@@ -351,13 +343,9 @@ ItemMeta QuarkMetaJson::entryToItem(const QJsonObject& obj) {
     meta.note = toStdWString(obj.value("note").toString());
     meta.url = toStdWString(obj.value("url").toString());
     meta.encrypted = obj.value("encrypted").toBool();
-    meta.encryptSalt = obj.value("encrypt_salt").toString().toStdString();
-    meta.encryptIv = QByteArray::fromBase64(obj.value("encrypt_iv").toString().toLatin1()).toStdString();
-    meta.encryptVerifyHash = obj.value("encrypt_verify_hash").toString().toStdString();
     meta.originalName = toStdWString(obj.value("original_name").toString());
     meta.volume = toStdWString(obj.value("volume").toString());
     meta.frn = toStdWString(obj.value("frn").toString());
-    meta.folderId = obj.value("file_id_128").toString().toStdString();
 
     // 2026-07-xx 1:1对等字段读取
     meta.width = obj.value("width").toInt(0);

@@ -158,9 +158,8 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
             }
         }
 
-        // 🛡️ 第一防线：强力回收站拦截 (兼顾标志位与物理路径特征)
-        bool isInTrash = meta.isTrash || 
-                         (path.find(L"/.QuarkMeta/trash") != std::wstring::npos) ||
+        // 🛡️ 第一防线：强力回收站拦截 (物理路径特征)
+        bool isInTrash = (path.find(L"/.QuarkMeta/trash") != std::wstring::npos) ||
                          (path.find(L"\\.QuarkMeta\\trash") != std::wstring::npos);
 
         if (isInTrash) {

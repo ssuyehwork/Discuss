@@ -51,7 +51,7 @@ std::vector<DuplicateConflictGroup> DuplicateDetectorService::detectDuplicates(c
     std::unordered_map<std::wstring, std::vector<std::pair<std::wstring, RuntimeMeta>>> nameIndexMap;
 
     MetadataManager::instance().forEachCachedItem([&](const std::wstring& existPathW, const RuntimeMeta& meta) {
-        if (meta.isFolder || meta.isTrash) return;
+        if (meta.isFolder) return;
 
         sizeIndexMap[meta.fileSize].push_back({existPathW, meta});
 

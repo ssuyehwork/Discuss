@@ -91,7 +91,8 @@ public:
                 }
 
                 if (physicalOk) {
-                    MetadataManager::instance().deletePermanently(wp);
+                    MetadataManager::instance().removeMetadataSync(wp);
+                    MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
                     UndoManager::instance().removeCommandsForPath(p);
                 }
 

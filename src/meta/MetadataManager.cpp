@@ -1,5 +1,4 @@
 #include <QFileInfo>
-#include <QCryptographicHash>
 #include <QRandomGenerator>
 #include <QtConcurrent>
 #include <QThreadPool>
@@ -9,9 +8,6 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QCoreApplication>
-#include <QRegularExpression>
-#include <QImageReader>
-#include <QSvgRenderer>
 #include <QUuid>
 #ifdef Q_OS_WIN
 #include <objbase.h>
@@ -200,32 +196,6 @@ void MetadataManager::registerItem(const std::wstring& path) {
     MediaExtractorPipeline::instance().enqueue(nPath);
 }
 
-bool MetadataManager::hasChildrenInCache(const std::wstring& folderPath) {
-    std::wstring nFolder = normalizePath(folderPath);
-    std::shared_lock<std::shared_mutex> lock(m_mutex);
-    auto it = m_parentToChildren.find(nFolder);
-    return it != m_parentToChildren.end() && !it->second.empty();
-}
-
-std::vector<std::pair<std::wstring, RuntimeMeta>> MetadataManager::getChildrenFromCache(const std::wstring& folderPath) {
-    std::wstring nFolder = normalizePath(folderPath);
-    std::vector<std::pair<std::wstring, RuntimeMeta>> results;
-
-    std::shared_lock<std::shared_mutex> lock(m_mutex);
-    auto it = m_parentToChildren.find(nFolder);
-    if (it != m_parentToChildren.end()) {
-        results.reserve(it->second.size());
-        for (const auto& childPath : it->second) {
-            size_t idx = getShardIndex(childPath);
-            std::shared_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            auto itMeta = m_shards[idx].items.find(childPath);
-            if (itMeta != m_shards[idx].items.end()) {
-                results.push_back({childPath, itMeta->second});
-            }
-        }
-    }
-    return results;
-}
 
 void MetadataManager::registerItemsAsync(const QStringList& paths) {
     if (paths.isEmpty()) return;
@@ -286,14 +256,6 @@ void MetadataManager::ensureActivated(const std::wstring& nPath) {
             m_shards[idx].items[nPath] = rm;
         }
 
-        std::wstring parentPath = QDir::toNativeSeparators(QFileInfo(QString::fromStdWString(nPath)).absolutePath()).toStdWString();
-        parentPath = normalizePath(parentPath);
-        if (parentPath != nPath) {
-            auto& children = m_parentToChildren[parentPath];
-            if (std::find(children.begin(), children.end(), nPath) == children.end()) {
-                children.push_back(nPath);
-            }
-        }
     }
 }
 
@@ -730,13 +692,6 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
 
             if (itemsToRename.empty()) return;
 
-            std::wstring rootOldParent = normalizePath(QDir::toNativeSeparators(QFileInfo(QString::fromStdWString(nOld)).absolutePath()).toStdWString());
-            if (m_parentToChildren.count(rootOldParent)) {
-                auto& children = m_parentToChildren[rootOldParent];
-                children.erase(std::remove(children.begin(), children.end(), nOld), children.end());
-                if (children.empty()) m_parentToChildren.erase(rootOldParent);
-            }
-
             for (const auto& pair : itemsToRename) {
                 const std::wstring& curOld = pair.first;
                 const std::wstring& curNew = pair.second;
@@ -758,10 +713,6 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
 
                 bool isFolder = meta.isFolder;
 
-                if (curOld != nOld) {
-                    m_parentToChildren.erase(curOld); 
-                }
-
                 std::wstring newName, newExt;
                 parsePathComponents(curNew, isFolder, newName, newExt);
                 meta.baseName = newName;
@@ -771,14 +722,6 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
                 {
                     std::unique_lock<std::shared_mutex> shardLock(m_shards[newIdx].mutex);
                     m_shards[newIdx].items[curNew] = meta;
-                }
-
-                std::wstring curNewParent = normalizePath(QDir::toNativeSeparators(QFileInfo(QString::fromStdWString(curNew)).absolutePath()).toStdWString());
-                if (curNewParent != curNew) {
-                    auto& children = m_parentToChildren[curNewParent];
-                    if (std::find(children.begin(), children.end(), curNew) == children.end()) {
-                        children.push_back(curNew);
-                    }
                 }
 
                 ioTasks.push_back(pair);
@@ -808,29 +751,15 @@ void MetadataManager::syncAfterMove(const std::wstring& oldPath, const std::wstr
 
 void MetadataManager::removeMetadataSync(const std::wstring& path) {
     std::wstring nPath = MetadataManager::normalizePath(path);
-    int totalDelta = 0;
     
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
-
-        std::wstring rootParent = normalizePath(QDir::toNativeSeparators(QFileInfo(QString::fromStdWString(nPath)).absolutePath()).toStdWString());
-        if (m_parentToChildren.count(rootParent)) {
-            auto& children = m_parentToChildren[rootParent];
-            children.erase(std::remove(children.begin(), children.end(), nPath), children.end());
-            if (children.empty()) m_parentToChildren.erase(rootParent);
-        }
 
         for (size_t i = 0; i < NUM_SHARDS; ++i) {
             std::unique_lock<std::shared_mutex> shardLock(m_shards[i].mutex);
             for (auto it = m_shards[i].items.begin(); it != m_shards[i].items.end(); ) {
                 if (it->first == nPath || it->first.find(nPath + L"\\") == 0 || it->first.find(nPath + L"/") == 0) {
-                    std::wstring curPath = it->first;
-
-                    if (!it->second.isTrash) {
-                        totalDelta--;
-                        StatisticsService::instance().purgeAsset({}, !it->second.tags.isEmpty(), it->second.isTrash); 
-                    }
-                    m_parentToChildren.erase(curPath);
+                    StatisticsService::instance().purgeAsset({}, !it->second.tags.isEmpty(), false);
                     it = m_shards[i].items.erase(it);
                 } else {
                     ++it;
@@ -838,69 +767,6 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
             }
         }
     }
-}
-
-void MetadataManager::markAsTrash(const std::wstring& path, bool isTrash, const std::wstring& origPath) {
-    std::wstring nPath = MetadataManager::normalizePath(path);
-    ensureActivated(nPath); 
-
-    bool changed = false;
-    bool oldEmpty = false;
-    {
-        std::unique_lock<std::shared_mutex> lock(m_mutex);
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        auto it = m_shards[idx].items.find(nPath);
-        if (it != m_shards[idx].items.end()) {
-            if (it->second.isTrash != isTrash) {
-                it->second.isTrash = isTrash;
-                if (isTrash && !origPath.empty()) it->second.originalPath = origPath;
-                changed = true;
-                oldEmpty = it->second.tags.isEmpty();
-            }
-        }
-    }
-    
-    if (changed) {
-        StatisticsService::instance().notifyAssetTrashChanged(isTrash, oldEmpty); 
-        persistAsync(nPath);
-        notifyUI(RefreshLevel::FullRebuild);
-    }
-}
-
-void MetadataManager::setTrash(const std::wstring& path, bool isTrash) {
-    std::wstring nPath = normalizePath(path);
-    bool changed = false;
-    bool oldEmpty = false;
-    {
-        std::unique_lock<std::shared_mutex> lock(m_mutex);
-        size_t idx = getShardIndex(nPath);
-        {
-            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            auto it = m_shards[idx].items.find(nPath);
-            if (it != m_shards[idx].items.end()) {
-                if (it->second.isTrash != isTrash) {
-                    it->second.isTrash = isTrash;
-                    if (!isTrash) {
-                        it->second.originalPath = L"";
-                    }
-                    changed = true;
-                    oldEmpty = it->second.tags.isEmpty();
-                }
-            }
-        }
-    }
-    if (changed) {
-        StatisticsService::instance().notifyAssetTrashChanged(isTrash, oldEmpty);
-        persistAsync(nPath);
-        notifyUI(RefreshLevel::FullRebuild);
-    }
-}
-
-void MetadataManager::deletePermanently(const std::wstring& path) {
-    std::wstring nPath = MetadataManager::normalizePath(path);
-    removeMetadataSync(nPath);
-    notifyUI(RefreshLevel::FullRebuild);
 }
 
 std::wstring MetadataManager::getVolumeSerialNumber(const std::wstring& path) {
@@ -1022,10 +888,8 @@ QStringList MetadataManager::searchInCache(const QString& keyword, const QString
 QMap<QString, int> MetadataManager::getAllTags() const {
     QMap<QString, int> tagCounts;
     forEachCachedItem([&](const std::wstring&, const RuntimeMeta& meta) {
-        if (!meta.isTrash) {
-            for (const QString& tag : meta.tags) {
-                tagCounts[tag]++;
-            }
+        for (const QString& tag : meta.tags) {
+            tagCounts[tag]++;
         }
     });
     return tagCounts;
@@ -1118,7 +982,6 @@ std::vector<LightMeta> MetadataManager::getLightweightCacheSnapshot() const {
         result.push_back({
             path,
             meta.isFolder,
-            meta.isTrash,
             meta.tags.isEmpty(),
             static_cast<double>(meta.atime),
             meta.tags
