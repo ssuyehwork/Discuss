@@ -1,8 +1,6 @@
 #include "CoreEngine.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/TagRepository.h"
-#include "../meta/QuarkMetaJson.h"
-#include "../util/ShellHelper.h"
 
 namespace QuarkMeta {
 

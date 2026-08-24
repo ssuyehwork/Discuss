@@ -1,8 +1,6 @@
 #pragma once
 #include "ActionCommand.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/DatabaseManager.h"
-#include "sqlite3.h"
 #include "../util/ShellHelper.h"
 #include <QString>
 #include <QVariant>
@@ -355,7 +353,6 @@ public:
     }
 
 private:
-    bool m_isCapsule;
     DiskOperationMode m_mode;
     std::vector<std::wstring> m_oldPaths;
     std::vector<std::wstring> m_newPaths;

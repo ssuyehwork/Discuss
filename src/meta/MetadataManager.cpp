@@ -759,7 +759,7 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
             std::unique_lock<std::shared_mutex> shardLock(m_shards[i].mutex);
             for (auto it = m_shards[i].items.begin(); it != m_shards[i].items.end(); ) {
                 if (it->first == nPath || it->first.find(nPath + L"\\") == 0 || it->first.find(nPath + L"/") == 0) {
-                    StatisticsService::instance().purgeAsset({}, !it->second.tags.isEmpty(), false);
+                    StatisticsService::instance().purgeAsset(!it->second.tags.isEmpty(), false);
                     it = m_shards[i].items.erase(it);
                 } else {
                     ++it;

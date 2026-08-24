@@ -57,37 +57,28 @@ void StatisticsService::requestFullRecountAsync(std::function<void(const Statist
     QThreadPool::globalInstance()->start(new RecountTask(callback));
 }
 
-void StatisticsService::notifyAssetAdded(int targetCatId, bool hasTags) {
+void StatisticsService::notifyAssetAdded(bool hasTags) {
     m_totalCount.fetch_add(1);
-    if (targetCatId <= 0) {
-        m_uncategorizedCount.fetch_add(1);
-    }
     if (!hasTags) {
         m_untaggedCount.fetch_add(1);
     }
 
     std::lock_guard<std::mutex> lock(m_snapshotMutex);
     m_cachedSnapshot.systemCounts["all"] = m_totalCount.load();
-    m_cachedSnapshot.systemCounts["uncategorized"] = m_uncategorizedCount.load();
     m_cachedSnapshot.systemCounts["untagged"] = m_untaggedCount.load();
 
     emit statisticsUpdated(m_cachedSnapshot);
 }
 
-void StatisticsService::notifyAssetRemoved(int targetCatId, bool hadTags, bool wasTrash) {
-    std::vector<int> userCatIds;
-    if (targetCatId > 0) userCatIds.push_back(targetCatId);
-    purgeAsset(userCatIds, !hadTags, wasTrash);
+void StatisticsService::notifyAssetRemoved(bool hadTags, bool wasTrash) {
+    purgeAsset(hadTags, wasTrash);
 }
 
-void StatisticsService::purgeAsset(const std::vector<int>& userCatIds, bool hasTags, bool isTrash) {
+void StatisticsService::purgeAsset(bool hasTags, bool isTrash) {
     if (isTrash) {
         if (m_trashCount.load() > 0) m_trashCount.fetch_sub(1);
     } else {
         if (m_totalCount.load() > 0) m_totalCount.fetch_sub(1);
-        if (userCatIds.empty() && m_uncategorizedCount.load() > 0) {
-            m_uncategorizedCount.fetch_sub(1);
-        }
         if (!hasTags && m_untaggedCount.load() > 0) {
             m_untaggedCount.fetch_sub(1);
         }
@@ -95,11 +86,8 @@ void StatisticsService::purgeAsset(const std::vector<int>& userCatIds, bool hasT
 
     std::lock_guard<std::mutex> lock(m_snapshotMutex);
     m_cachedSnapshot.systemCounts["all"] = m_totalCount.load();
-    m_cachedSnapshot.systemCounts["uncategorized"] = m_uncategorizedCount.load();
     m_cachedSnapshot.systemCounts["untagged"] = m_untaggedCount.load();
     m_cachedSnapshot.systemCounts["trash"] = m_trashCount.load();
-
-
 
     emit statisticsUpdated(m_cachedSnapshot);
 }
@@ -178,9 +166,8 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
 
     // 2. 汇总物理磁盘回收站 (离线盘过滤)
     int diskTrashCount = 0;
-    std::vector<sqlite3*> dbs = { DatabaseManager::instance().getGlobalDb() };
-    for (sqlite3* db : dbs) {
-        if (!db) continue;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (db) {
         sqlite3_stmt* stmtDisk = nullptr;
         if (sqlite3_prepare_v2(db, "SELECT original_path FROM disk_trash", -1, &stmtDisk, nullptr) == SQLITE_OK) {
             while (sqlite3_step(stmtDisk) == SQLITE_ROW) {
