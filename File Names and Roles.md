@@ -1,6 +1,6 @@
 # QuarkMeta 项目代码文件与职责清单 (File Names and Roles)
 
-本文档记录 QuarkMeta 项目中自身源码目录下所有真实存在的代码文件及其明确、可验证的职责描述与僵尸代码排查结果（已排除第三方 LibTIFF）。
+本文档记录 QuarkMeta 项目中自身源码目录下所有真实存在的代码文件及其明确、可验证的职责描述与深度僵尸代码/幽灵代码/架构违规项排查结果（已排除第三方 LibTIFF）。
 
 ---
 
@@ -14,7 +14,7 @@
 
 ### ` src/core/BasicCommands.h `
 - **文件职责**：实现基础的 ActionCommand 操作，如 `MoveCommand`、`RenameCommand`、`MetadataCommand` 与 `SecureDeleteCommand`。
-- **僵尸代码**：无
+- **僵尸代码**：违反三条交互铁律：包含 `notifyFullUIRebuild()` 全屏强刷强耦合调用
 
 ### ` src/core/CentralEventHub.cpp `
 - **文件职责**：中央消息事件总线（传声筒），解耦 UI 与底层业务，通过 Qt 信号槽分发系统级增量事件。
@@ -74,15 +74,15 @@
 
 ### ` src/core/ItemRecord.cpp `
 - **文件职责**：磁盘文件/目录的核心元数据记录结构体 `ItemRecord`，承载路径、尺寸、星级、颜色、标签、时间及缩略图状态等。
-- **僵尸代码**：包含内存托管库 (Managed Library / Managed Role) 残留代码
+- **僵尸代码**：无
 
 ### ` src/core/ItemRecord.h `
 - **文件职责**：磁盘文件/目录的核心元数据记录结构体 `ItemRecord`，承载路径、尺寸、星级、颜色、标签、时间及缩略图状态等。
-- **僵尸代码**：包含内存托管库 (Managed Library / Managed Role) 残留代码
+- **僵尸代码**：无
 
 ### ` src/core/ModelContract.h `
 - **文件职责**：定义数据模型与视图交互的 Role 契约枚举（如 `PathRole`, `NameRole`, `RatingRole` 等）。
-- **僵尸代码**：包含内存托管库 (Managed Library / Managed Role) 残留代码
+- **僵尸代码**：包含内存托管库时代遗留的 `ManagedRole` 角色定义或判定分支
 
 ### ` src/core/NavigationHistoryService.cpp `
 - **文件职责**：目录导航历史记录服务，维护前进、后退的历史路径栈。
@@ -218,11 +218,11 @@
 
 ### ` src/meta/MetadataManager.cpp `
 - **文件职责**：离散元数据统一入口管理器，协调磁盘 `.QuarkMeta.json` 与 `global.db` 盘符表。
-- **僵尸代码**：无
+- **僵尸代码**：包含分类树时代遗留的 `notifyCategoryCountChanged()` 僵尸函数；包含历史分类刷新的 `RefreshLevel::CategoryOnly` 枚举残留；违反三条交互铁律：包含 `notifyFullUIRebuild()` 全屏强刷强耦合调用
 
 ### ` src/meta/MetadataManager.h `
 - **文件职责**：离散元数据统一入口管理器，协调磁盘 `.QuarkMeta.json` 与 `global.db` 盘符表。
-- **僵尸代码**：无
+- **僵尸代码**：包含分类树时代遗留的 `notifyCategoryCountChanged()` 僵尸函数；包含历史分类刷新的 `RefreshLevel::CategoryOnly` 枚举残留；违反三条交互铁律：包含 `notifyFullUIRebuild()` 全屏强刷强耦合调用
 
 ### ` src/meta/QuarkMetaJson.cpp `
 - **文件职责**：磁盘离散 JSON 元数据管理类，负责读写各目录下 `.QuarkMeta.json` 文件中的元数据条目。
@@ -626,11 +626,11 @@
 
 ### ` src/ui/ThumbnailDelegate.cpp `
 - **文件职责**：缩略图视图渲染 Delegate（委托），负责网格卡片的绘制与文件名编辑。
-- **僵尸代码**：无
+- **僵尸代码**：包含内存托管库时代遗留的 `ManagedRole` 角色定义或判定分支；包含托管库判定逻辑或成员变量 `m_managedRole` / `IsManaged`
 
 ### ` src/ui/ThumbnailDelegate.h `
 - **文件职责**：缩略图视图渲染 Delegate（委托），负责网格卡片的绘制与文件名编辑。
-- **僵尸代码**：无
+- **僵尸代码**：包含内存托管库时代遗留的 `ManagedRole` 角色定义或判定分支；包含托管库判定逻辑或成员变量 `m_managedRole` / `IsManaged`
 
 ### ` src/ui/ToolTipOverlay.cpp `
 - **文件职责**：自定义悬浮 ToolTip 消息气泡控件。
@@ -650,7 +650,7 @@
 
 ### ` src/ui/TreeItemDelegate.h `
 - **文件职责**：目录树节点自定义绘制与高亮 Delegate。
-- **僵尸代码**：包含内存托管库 (Managed Library / Managed Role) 残留代码
+- **僵尸代码**：包含内存托管库时代遗留的 `ManagedRole` 角色定义或判定分支
 
 ### ` src/ui/UiHelper.h `
 - **文件职责**：UI 辅助绘制工具与 DPI 缩放换算静态函数库。
