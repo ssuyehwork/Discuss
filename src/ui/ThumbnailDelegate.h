@@ -39,7 +39,6 @@ public:
     void setRatingRole(int role);
     void setPathRole(int role);
     void setPinnedRole(int role);
-    void setManagedRole(int role);
     void setTypeRole(int role);
     void setIsEmptyRole(int role);
     void setColorRole(int role);
@@ -78,7 +77,6 @@ private:
     int m_ratingRole = -1;
     int m_pathRole = -1;
     int m_pinnedRole = -1;
-    int m_managedRole = -1;
     int m_typeRole = -1;
     int m_isEmptyRole = -1;
     int m_colorRole = -1;
