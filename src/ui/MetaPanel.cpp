@@ -163,32 +163,41 @@ void MetaPanel::initUi() {
     m_containerLayout->addWidget(createCollapsibleSection("备注说明", m_noteEdit, true));
 
     // =========================================================================
-    // 顺序 4: 关联网址区 (可折叠：▼ 关联网址)
+    // 顺序 4: 关联网址区 (一体化容器 + 无边框输入框 + 独立分割线跳转按钮)
     // =========================================================================
     m_linkBox = new QWidget(m_container);
+    m_linkBox->setObjectName("LinkBoxContainer");
+    m_linkBox->setFixedHeight(28);
+    m_linkBox->setStyleSheet(
+        "QWidget#LinkBoxContainer { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }"
+        "QWidget#LinkBoxContainer[focused='true'] { border: 1px solid #378ADD; }"
+    );
     QHBoxLayout* linkL = new QHBoxLayout(m_linkBox);
     linkL->setContentsMargins(0, 0, 0, 0);
     linkL->setSpacing(0);
 
     m_linkEdit = new QLineEdit(m_linkBox);
     m_linkEdit->setPlaceholderText("添加关联网址...");
-    m_linkEdit->setFixedHeight(28);
+    m_linkEdit->setFixedHeight(26);
     m_linkEdit->setStyleSheet(
-        "QLineEdit { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding-left: 8px; padding-right: 26px; font-size: 12px; color: #378ADD; }"
-        "QLineEdit:focus { border-color: #378ADD; }"
+        "QLineEdit { background: transparent; border: none; padding-left: 8px; padding-right: 6px; font-size: 12px; color: #378ADD; }"
     );
     m_linkEdit->installEventFilter(this);
 
-    m_actOpenLink = m_linkEdit->addAction(UiHelper::getIcon("link", QColor("#378ADD"), 14), QLineEdit::TrailingPosition);
-    m_actOpenLink->setVisible(false);
+    m_btnOpenLink = new QPushButton(m_linkBox);
+    m_btnOpenLink->setFixedSize(26, 26);
+    m_btnOpenLink->setCursor(Qt::PointingHandCursor);
+    m_btnOpenLink->setIcon(UiHelper::getIcon("link", QColor("#378ADD"), 14));
+    m_btnOpenLink->setIconSize(QSize(14, 14));
+    m_btnOpenLink->setProperty("tooltipText", "打开链接");
+    m_btnOpenLink->installEventFilter(this);
+    m_btnOpenLink->setStyleSheet(
+        "QPushButton { border: none; border-left: 1px solid #3c3c3c; background: transparent; border-top-right-radius: 3px; border-bottom-right-radius: 3px; }"
+        "QPushButton:hover { background: #333333; }"
+    );
+    m_btnOpenLink->setVisible(false);
 
-    for (QToolButton* btn : m_linkEdit->findChildren<QToolButton*>()) {
-        if (btn->defaultAction() == m_actOpenLink) {
-            btn->setCursor(Qt::PointingHandCursor);
-        }
-    }
-
-    connect(m_actOpenLink, &QAction::triggered, this, [this]() {
+    connect(m_btnOpenLink, &QPushButton::clicked, this, [this]() {
         QString urlStr = m_linkEdit->text().trimmed();
         if (!urlStr.isEmpty()) {
             if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
@@ -200,10 +209,11 @@ void MetaPanel::initUi() {
 
     connect(m_linkEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
         bool hasText = !text.trimmed().isEmpty();
-        if (m_actOpenLink) m_actOpenLink->setVisible(hasText);
+        if (m_btnOpenLink) m_btnOpenLink->setVisible(hasText);
     });
 
-    linkL->addWidget(m_linkEdit);
+    linkL->addWidget(m_linkEdit, 1);
+    linkL->addWidget(m_btnOpenLink);
     m_containerLayout->addWidget(createCollapsibleSection("关联网址", m_linkBox, true));
 
     // =========================================================================
@@ -822,8 +832,8 @@ void MetaPanel::setURL(const QString& url) {
     m_isInternalUpdating = true;
     m_linkEdit->setText(url); 
     m_linkEdit->setCursorPosition(0);
-    if (m_actOpenLink) {
-        m_actOpenLink->setVisible(!url.trimmed().isEmpty());
+    if (m_btnOpenLink) {
+        m_btnOpenLink->setVisible(!url.trimmed().isEmpty());
     }
     if (m_container) m_container->adjustSize();
     m_isInternalUpdating = false;
@@ -879,12 +889,28 @@ bool MetaPanel::eventFilter(QObject* watched, QEvent* event) {
 
     if (m_isInternalUpdating) return QFrame::eventFilter(watched, event);
 
-    if (event->type() == QEvent::FocusIn) {
-        if (watched == m_noteEdit || watched == m_linkEdit || watched == m_nameEdit) {
+    if (watched == m_linkEdit) {
+        if (event->type() == QEvent::FocusIn) {
+            m_isUserEditing = true;
+            if (m_linkBox) {
+                m_linkBox->setProperty("focused", true);
+                m_linkBox->style()->unpolish(m_linkBox);
+                m_linkBox->style()->polish(m_linkBox);
+            }
+        } else if (event->type() == QEvent::FocusOut) {
+            m_isUserEditing = false;
+            if (m_linkBox) {
+                m_linkBox->setProperty("focused", false);
+                m_linkBox->style()->unpolish(m_linkBox);
+                m_linkBox->style()->polish(m_linkBox);
+            }
+        }
+    } else if (event->type() == QEvent::FocusIn) {
+        if (watched == m_noteEdit || watched == m_nameEdit) {
             m_isUserEditing = true;
         }
     } else if (event->type() == QEvent::FocusOut) {
-        if (watched == m_noteEdit || watched == m_linkEdit || watched == m_nameEdit) {
+        if (watched == m_noteEdit || watched == m_nameEdit) {
             m_isUserEditing = false;
         }
     }
