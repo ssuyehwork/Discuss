@@ -215,13 +215,13 @@ void MetaPanel::initUi() {
     starLayout->setSpacing(6);
 
     QPushButton* btnClearStar = new QPushButton(ratingRow);
-    btnClearStar->setFixedSize(20, 20);
+    btnClearStar->setFixedSize(22, 22);
     btnClearStar->setCursor(Qt::PointingHandCursor);
-    btnClearStar->setIcon(UiHelper::getIcon("prohibit", QColor("#666666"), 14));
-    btnClearStar->setIconSize(QSize(14, 14));
+    btnClearStar->setIcon(UiHelper::getIcon("no_color", QColor("#888888"), 16));
+    btnClearStar->setIconSize(QSize(16, 16));
     btnClearStar->setProperty("tooltipText", "清除评级");
     btnClearStar->installEventFilter(this);
-    btnClearStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 3px; }");
+    btnClearStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 4px; }");
     connect(btnClearStar, &QPushButton::clicked, this, [this]() {
         setRating(0);
     });
@@ -229,10 +229,10 @@ void MetaPanel::initUi() {
 
     for (int i = 1; i <= 5; ++i) {
         QPushButton* btnStar = new QPushButton(ratingRow);
-        btnStar->setFixedSize(20, 20);
+        btnStar->setFixedSize(22, 22);
         btnStar->setCursor(Qt::PointingHandCursor);
-        btnStar->setIcon(UiHelper::getIcon("star", QColor("#555555"), 16));
-        btnStar->setIconSize(QSize(16, 16));
+        btnStar->setIcon(UiHelper::getIcon("star", QColor("#555555"), 18));
+        btnStar->setIconSize(QSize(18, 18));
         btnStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 3px; }");
         
         connect(btnStar, &QPushButton::clicked, this, [this, i]() {
@@ -307,12 +307,16 @@ void MetaPanel::initUi() {
     m_tagContainer = new QWidget(m_tagBox);
     m_tagFlowLayout = new FlowLayout(m_tagContainer, 0, 4, 4);
 
-    m_btnAddTagSmall = new QPushButton("+", m_tagContainer);
+    m_btnAddTagSmall = new QPushButton(m_tagContainer);
     m_btnAddTagSmall->setFixedSize(22, 22);
     m_btnAddTagSmall->setCursor(Qt::PointingHandCursor);
+    m_btnAddTagSmall->setIcon(UiHelper::getIcon("add", QColor("#CCCCCC"), 12));
+    m_btnAddTagSmall->setIconSize(QSize(12, 12));
+    m_btnAddTagSmall->setProperty("tooltipText", "添加标签");
+    m_btnAddTagSmall->installEventFilter(this);
     m_btnAddTagSmall->setStyleSheet(
-        "QPushButton { background-color: #2D2D30; border: 1px dashed #555555; border-radius: 4px; padding: 0; color: #CCCCCC; font-size: 14px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #378ADD; border-color: #378ADD; color: #FFFFFF; }"
+        "QPushButton { background-color: #2D2D30; border: 1px solid #555555; border-radius: 4px; padding: 0; }"
+        "QPushButton:hover { background-color: #378ADD; border-color: #378ADD; }"
     );
     connect(m_btnAddTagSmall, &QPushButton::clicked, this, [this]() {
         openTagSelectorOverlay(m_btnAddTagSmall);
@@ -627,12 +631,12 @@ void MetaPanel::resizeEvent(QResizeEvent* event) {
 void MetaPanel::adjustFlowHeights() {
     if (m_topPreviewBox && m_paletteFlowLayout) {
         int contentH = m_paletteFlowLayout->heightForWidth(m_topPreviewBox->width());
-        bool hasPreview = (m_lblImagePreview && m_lblImagePreview->isVisible() && !m_lblImagePreview->pixmap().isNull());
+        bool hasPreview = (m_lblImagePreview && !m_lblImagePreview->pixmap().isNull());
         bool hasPalette = (m_paletteFlowLayout->count() > 0);
         if (hasPreview || hasPalette) {
             m_topPreviewBox->show();
             int previewH = hasPreview ? m_lblImagePreview->pixmap().height() : 0;
-            m_topPreviewBox->setFixedHeight(qMax(32, contentH + previewH + 16));
+            m_topPreviewBox->setFixedHeight(contentH + previewH + 16);
         } else {
             m_topPreviewBox->hide();
             m_topPreviewBox->setFixedHeight(0);
@@ -745,8 +749,9 @@ void MetaPanel::setRating(int rating) {
         m_starBtns[i]->setIcon(UiHelper::getIcon(
             active ? "star_filled" : "star",
             active ? QColor("#FF551C") : QColor("#555555"),
-            16
+            18
         ));
+        m_starBtns[i]->setIconSize(QSize(18, 18));
     }
 
     if (!m_isInternalUpdating && !m_selectedPaths.isEmpty()) {
