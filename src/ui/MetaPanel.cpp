@@ -115,15 +115,15 @@ void MetaPanel::initUi() {
     // =========================================================================
     m_topPreviewBox = new QWidget(m_container);
     m_topPreviewBox->setObjectName("TopPreviewBox");
-    m_topPreviewBox->setStyleSheet("QWidget#TopPreviewBox { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }");
+    m_topPreviewBox->setStyleSheet("QWidget#TopPreviewBox { background: transparent; border: none; }");
     QVBoxLayout* previewLayout = new QVBoxLayout(m_topPreviewBox);
-    previewLayout->setContentsMargins(6, 6, 6, 6);
+    previewLayout->setContentsMargins(0, 0, 0, 0);
     previewLayout->setSpacing(6);
 
     m_lblImagePreview = new QLabel(m_topPreviewBox);
     m_lblImagePreview->setAlignment(Qt::AlignCenter);
     m_lblImagePreview->setMinimumHeight(60);
-    m_lblImagePreview->setStyleSheet("background: #1E1E1E; border-radius: 2px;");
+    m_lblImagePreview->setStyleSheet("background: transparent;");
     m_lblImagePreview->hide();
     previewLayout->addWidget(m_lblImagePreview);
 
@@ -167,7 +167,7 @@ void MetaPanel::initUi() {
     m_linkBox = new QWidget(m_container);
     QHBoxLayout* linkL = new QHBoxLayout(m_linkBox);
     linkL->setContentsMargins(0, 0, 0, 0);
-    linkL->setSpacing(0);
+    linkL->setSpacing(6);
 
     m_linkEdit = new QLineEdit(m_linkBox);
     m_linkEdit->setPlaceholderText("添加关联网址...");
@@ -180,7 +180,8 @@ void MetaPanel::initUi() {
 
     m_actOpenLink = m_linkEdit->addAction(UiHelper::getIcon("link", QColor("#378ADD"), 14), QLineEdit::TrailingPosition);
     m_actOpenLink->setVisible(false);
-    connect(m_actOpenLink, &QAction::triggered, this, [this]() {
+
+    auto handleOpenLink = [this]() {
         QString urlStr = m_linkEdit->text().trimmed();
         if (!urlStr.isEmpty()) {
             if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
@@ -188,19 +189,36 @@ void MetaPanel::initUi() {
             }
             QDesktopServices::openUrl(QUrl(urlStr));
         }
-    });
+    };
+
+    connect(m_actOpenLink, &QAction::triggered, this, handleOpenLink);
+
+    m_btnOpenLink = new QPushButton(m_linkBox);
+    m_btnOpenLink->setFixedSize(28, 28);
+    m_btnOpenLink->setCursor(Qt::PointingHandCursor);
+    m_btnOpenLink->setIcon(UiHelper::getIcon("link", QColor("#378ADD"), 14));
+    m_btnOpenLink->setIconSize(QSize(14, 14));
+    m_btnOpenLink->setProperty("tooltipText", "打开链接");
+    m_btnOpenLink->installEventFilter(this);
+    m_btnOpenLink->setStyleSheet(
+        "QPushButton { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }"
+        "QPushButton:hover { background: #333333; border-color: #378ADD; }"
+    );
+    m_btnOpenLink->setVisible(false);
+    connect(m_btnOpenLink, &QPushButton::clicked, this, handleOpenLink);
 
     connect(m_linkEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
-        if (m_actOpenLink) {
-            m_actOpenLink->setVisible(!text.trimmed().isEmpty());
-        }
+        bool hasText = !text.trimmed().isEmpty();
+        if (m_actOpenLink) m_actOpenLink->setVisible(hasText);
+        if (m_btnOpenLink) m_btnOpenLink->setVisible(hasText);
     });
 
     linkL->addWidget(m_linkEdit);
+    linkL->addWidget(m_btnOpenLink);
     m_containerLayout->addWidget(createCollapsibleSection("关联网址", m_linkBox, true));
 
     // =========================================================================
-    // 顺序 5: 星级评级 + 颜色色标条 (星级 + 8 纯色圆点，彻底移除无色标按钮)
+    // 顺序 5: 星级评级 + 颜色色标条 (星级行 + 颜色行，均包含清除 ⊘ 按钮)
     // =========================================================================
     m_ratingColorBox = new QWidget(m_container);
     QVBoxLayout* ratingColorLayout = new QVBoxLayout(m_ratingColorBox);
@@ -209,9 +227,9 @@ void MetaPanel::initUi() {
 
     // 星级行 (清除 ⊘ + 5 星)
     QWidget* ratingRow = new QWidget(m_ratingColorBox);
-    ratingRow->setStyleSheet("QWidget { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }");
+    ratingRow->setStyleSheet("QWidget { background: transparent; border: none; }");
     QHBoxLayout* starLayout = new QHBoxLayout(ratingRow);
-    starLayout->setContentsMargins(8, 4, 8, 4);
+    starLayout->setContentsMargins(0, 2, 0, 2);
     starLayout->setSpacing(6);
 
     QPushButton* btnClearStar = new QPushButton(ratingRow);
@@ -245,12 +263,25 @@ void MetaPanel::initUi() {
     starLayout->addStretch();
     ratingColorLayout->addWidget(ratingRow);
 
-    // 颜色标记行 (仅 8 基础纯色圆点)
+    // 颜色标记行 (无色标 ⊘ + 8 基础纯色圆点)
     QWidget* colorRow = new QWidget(m_ratingColorBox);
-    colorRow->setStyleSheet("QWidget { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }");
+    colorRow->setStyleSheet("QWidget { background: transparent; border: none; }");
     QHBoxLayout* colorLayout = new QHBoxLayout(colorRow);
-    colorLayout->setContentsMargins(8, 4, 8, 4);
+    colorLayout->setContentsMargins(0, 2, 0, 2);
     colorLayout->setSpacing(6);
+
+    QPushButton* btnNoColor = new QPushButton(colorRow);
+    btnNoColor->setFixedSize(22, 22);
+    btnNoColor->setCursor(Qt::PointingHandCursor);
+    btnNoColor->setIcon(UiHelper::getIcon("no_color", QColor("#888888"), 16));
+    btnNoColor->setIconSize(QSize(16, 16));
+    btnNoColor->setProperty("tooltipText", "无色标");
+    btnNoColor->installEventFilter(this);
+    btnNoColor->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 4px; }");
+    connect(btnNoColor, &QPushButton::clicked, this, [this]() {
+        setColor(L"");
+    });
+    colorLayout->addWidget(btnNoColor);
 
     static const QVector<QPair<QString, QString>> s_colorMap = {
         {"红色", "#E24B4A"}, {"橙色", "#EF9F27"}, {"黄色", "#FECF0E"}, {"绿色", "#639922"},
@@ -516,6 +547,7 @@ void MetaPanel::updateControlsState(bool hasSelection) {
     if (m_nameEdit) m_nameEdit->setEnabled(hasSelection);
     if (m_noteEdit) m_noteEdit->setEnabled(hasSelection);
     if (m_linkEdit) m_linkEdit->setEnabled(hasSelection);
+    if (m_btnOpenLink) m_btnOpenLink->setEnabled(hasSelection);
     if (m_btnAddTagBig) m_btnAddTagBig->setEnabled(hasSelection);
     if (m_btnAddTagSmall) m_btnAddTagSmall->setEnabled(hasSelection);
     if (m_ratingColorBox) m_ratingColorBox->setEnabled(hasSelection);
@@ -636,7 +668,8 @@ void MetaPanel::adjustFlowHeights() {
         if (hasPreview || hasPalette) {
             m_topPreviewBox->show();
             int previewH = hasPreview ? m_lblImagePreview->pixmap().height() : 0;
-            m_topPreviewBox->setFixedHeight(contentH + previewH + 16);
+            int totalSpacing = (hasPreview && hasPalette) ? 6 : 0;
+            m_topPreviewBox->setFixedHeight(contentH + previewH + totalSpacing);
         } else {
             m_topPreviewBox->hide();
             m_topPreviewBox->setFixedHeight(0);
