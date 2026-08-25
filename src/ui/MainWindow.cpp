@@ -26,7 +26,7 @@
 #include "ToolTipOverlay.h"
 #include "../meta/DuplicateDetectorService.h"
 #include "../util/DiskMediaExtractor.h"
-#include "../util/DiskMediaExtractor.h"
+#include "ShellIconManager.h"
 #include "DuplicateConflictDialog.h"
 #include "TaskProgressToolBar.h"
 #include "../core/VolumeOnlineManager.h"
@@ -310,6 +310,7 @@ void MainWindow::initUi() {
     connect(m_contentPanel, &ContentPanel::selectionChanged, this, [this](const QStringList& paths) {
         m_metaPanel->setSelectedPaths(paths);
         if (paths.isEmpty()) {
+            m_metaPanel->setImagePreview(QPixmap());
             m_metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false, 0, 0);
             m_metaPanel->setRating(0);
             m_metaPanel->setColor(L"");
@@ -419,11 +420,33 @@ void MainWindow::initUi() {
             m_metaPanel->setColor(idx.data(ColorRole).toString().toStdWString());
             m_metaPanel->setPinned(idx.data(IsLockedRole).toBool());
             
-            // 5. 标签、备注、链接与色板展示
+            // 5. 标签、备注、链接、图片预览与色板展示
             m_metaPanel->setTags(cleanTags); 
             m_metaPanel->setNote(noteStr);
             m_metaPanel->setURL(urlStr);
             m_metaPanel->setPalettes(palettes);
+
+            QModelIndex idxPreview = indexes.first();
+            QPixmap previewPixmap;
+            QVariant decData = idxPreview.data(Qt::DecorationRole);
+            if (decData.canConvert<QIcon>()) {
+                QIcon icon = decData.value<QIcon>();
+                if (!icon.isNull()) {
+                    previewPixmap = icon.pixmap(128, 128);
+                }
+            } else if (decData.canConvert<QPixmap>()) {
+                previewPixmap = decData.value<QPixmap>();
+            }
+
+            if (previewPixmap.isNull()) {
+                QImage img = DiskMediaExtractor::getCapsuleThumbnailReadOnly(paths.first());
+                if (!img.isNull()) {
+                    previewPixmap = QPixmap::fromImage(img);
+                } else {
+                    previewPixmap = ShellIconManager::getFileIcon(paths.first(), 128).pixmap(128, 128);
+                }
+            }
+            m_metaPanel->setImagePreview(previewPixmap);
         }
         
         int totalCount = m_contentPanel->getProxyModel()->rowCount();

@@ -9,10 +9,11 @@
 #include <QEvent>
 #include <QResizeEvent>
 #include <QShowEvent>
-#include "components/ElasticEdit.h"
-#include <QPointer>
+#include <QLineEdit>
 #include <QPushButton>
-#include <QToolButton>
+#include <QPointer>
+#include <QAction>
+#include "components/ElasticEdit.h"
 #include "TagSelectorOverlay.h"
 #include "components/TagPill.h"
 #include "components/FlowLayout.h"
@@ -30,6 +31,7 @@ public:
                     const QString& ctime, const QString& mtime, const QString& atime,
                     const QString& path, bool encrypted, int width = 0, int height = 0);
 
+    void setImagePreview(const QPixmap& pixmap);
     void setSelectedPaths(const QStringList& paths);
     void setPalettes(const QVector<QPair<QColor, float>>& palette);
     void setTags(const QStringList& tags);
@@ -58,13 +60,10 @@ protected:
     void showEvent(QShowEvent* event) override;
 
 private:
-    void updateControlsState(bool hasSelection);
     void initUi();
+    void updateControlsState(bool hasSelection);
     void adjustFlowHeights();
     void addInfoRow(QVBoxLayout* layout, const QString& label, QLabel*& valueLabel);
-    QFrame* createSeparator();
-    
-    // Collapsible Section Builder
     QWidget* createCollapsibleSection(const QString& title, QWidget* contentWidget, bool defaultExpanded = true);
 
     QVBoxLayout* m_mainLayout = nullptr;
@@ -72,22 +71,31 @@ private:
     QWidget* m_container = nullptr;
     QVBoxLayout* m_containerLayout = nullptr;
 
-    // 1. 顶部预览与色板区
+    // 1. 顶部预览与色板区 (有则显，无则完全隐藏)
     QWidget* m_topPreviewBox = nullptr;
     QLabel* m_lblImagePreview = nullptr;
     FlowLayout* m_paletteFlowLayout = nullptr;
 
-    // 2. 文件名大字高亮编辑框
+    // 2. 文件名编辑区 (大字高亮)
     ElasticEdit* m_nameEdit = nullptr;
 
-    // 3. 星级评级 + 颜色色标条
+    // 3. 备注说明区 (可折叠)
+    ElasticEdit* m_noteEdit = nullptr;
+
+    // 4. 关联网址区 (可折叠，内置跳转图标与独立按钮)
+    QWidget* m_linkBox = nullptr;
+    QLineEdit* m_linkEdit = nullptr;
+    QAction* m_actOpenLink = nullptr;
+    QPushButton* m_btnOpenLink = nullptr;
+
+    // 5. 星级评级 + 颜色色标条 (8 色圆点)
     QWidget* m_ratingColorBox = nullptr;
     QList<QPushButton*> m_starBtns;
+    QList<QPushButton*> m_colorBtns;
     int m_currentRating = 0;
     std::wstring m_currentColor;
-    QList<QPushButton*> m_colorBtns;
 
-    // 4. 标签管理区
+    // 6. 标签管理区 (可折叠)
     QWidget* m_tagBox = nullptr;
     QWidget* m_tagContainer = nullptr;
     FlowLayout* m_tagFlowLayout = nullptr;
@@ -95,22 +103,18 @@ private:
     QPushButton* m_btnAddTagSmall = nullptr;
     QPointer<TagSelectorOverlay> m_tagSelectorOverlay;
 
-    // 5. 备注说明区
-    ElasticEdit* m_noteEdit = nullptr;
-
-    // 6. 关联网址区
-    QWidget* m_linkBox = nullptr;
-    ElasticEdit* m_linkEdit = nullptr;
-    QPushButton* m_btnOpenLink = nullptr;
-
-    // 7. 基础物理属性区
+    // 7. 基础物理属性区 (可折叠)
     QWidget* m_infoSectionWidget = nullptr;
-    QLabel* lblType = nullptr, *lblSize = nullptr, *lblDimensions = nullptr;
-    QLabel* lblCtime = nullptr, *lblMtime = nullptr, *lblAtime = nullptr;
+    QLabel* lblType = nullptr;
+    QLabel* lblSize = nullptr;
+    QLabel* lblDimensions = nullptr;
+    QLabel* lblCtime = nullptr;
+    QLabel* lblMtime = nullptr;
+    QLabel* lblAtime = nullptr;
     QLabel* lblEncrypted = nullptr;
 
-    // 8. 物理路径区
-    ElasticEdit* m_pathEdit = nullptr;
+    // 8. 物理路径区 (可折叠)
+    QLineEdit* m_pathEdit = nullptr;
     QPushButton* m_btnCopyPath = nullptr;
     QPushButton* m_btnOpenLocation = nullptr;
 

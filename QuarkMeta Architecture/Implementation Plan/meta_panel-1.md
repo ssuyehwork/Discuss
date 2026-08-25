@@ -1,173 +1,160 @@
-# Implementation Plan - MetaPanel Star Rating UI Visual Balance Refactoring
+# Implementation Plan - MetaPanel Link Edit Internal Action & Star Spacing Fix (meta_panel-1.md)
 
-## 1. Overview
-The star rating section in `MetaPanel.cpp` appeared visually smaller and imbalanced compared to the 8-color mark row directly beneath it. This was caused by two issues:
-1. Star icons were 16x16 with 20x20 button fixed sizes and 4px spacing, whereas star vector graphics have hollow spaces and lower pixel fill density than solid 16x16 color dots.
-2. The rating row contained 6 elements with shorter total width (~140px) compared to 9 elements (~178px) in the color row, leaving noticeable blank space.
+This implementation plan refactors `MetaPanel` UI components to move the link action button exclusively inside the `QLineEdit` input control, enforces leading-edge text visibility for long URLs, reduces star rating spacing, and unifies clear rating and no-color icon buttons.
 
-This plan refactors `MetaPanel.cpp` by:
-- Increasing star icon size from `16x16` to `18x18` and button fixed size from `20x20` to `22x22`.
-- Updating `setRating()` to use `18x18` icon size for both active and inactive states.
-- Increasing star layout spacing from `4px` to `6px` for a balanced layout.
-- Standardizing the clear rating (`btnClearStar`) and no color (`btnNoColor`) buttons to matching proportions.
+## Overview
+1. **Move Open Link Button Inside LineEdit**: Remove external `m_btnOpenLink` from `linkL` layout. Keep only `m_actOpenLink` inside `m_linkEdit` using `QLineEdit::TrailingPosition`.
+2. **Display Leading Edge for Long URLs**: Call `m_linkEdit->setCursorPosition(0)` after setting URL text so long link strings begin at the head (left).
+3. **Tighten Star Rating Spacing**: Change `starLayout` spacing from `6px` to `2px`.
+4. **Unify Clear Rating & No-Color Buttons**: Standardize `btnClearStar` and `btnNoColor` fixed size to `22x22` with `16x16` SVG icons.
 
-## 2. Modified Files List
-- `src/ui/MetaPanel.cpp`
+---
 
-## 3. Detailed Line-by-Line Changes
+## Modified Files List
+1. `src/ui/MetaPanel.h`
+2. `src/ui/MetaPanel.cpp`
 
-### `src/ui/MetaPanel.cpp`
+---
 
-```diff
+## Detailed Line-by-Line Changes
+
+### 1. `src/ui/MetaPanel.h`
+Remove `m_btnOpenLink` declaration as it is no longer placed outside `m_linkEdit`.
+
+```git
 <<<<<<< SEARCH
-    // 评级行（无评级 SVG + 5 星 SVG）
-    QWidget* ratingRow = new QWidget(m_ratingColorBox);
-    ratingRow->setStyleSheet("QWidget { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }");
-    QHBoxLayout* starLayout = new QHBoxLayout(ratingRow);
-    starLayout->setContentsMargins(8, 4, 8, 4);
-    starLayout->setSpacing(4);
-
-    QPushButton* btnClearStar = new QPushButton(ratingRow);
-    btnClearStar->setFixedSize(20, 20);
-    btnClearStar->setCursor(Qt::PointingHandCursor);
-    btnClearStar->setIcon(UiHelper::getIcon("prohibit", QColor("#888888"), 14));
-    btnClearStar->setIconSize(QSize(14, 14));
-    btnClearStar->setProperty("tooltipText", "清除评级");
-    btnClearStar->installEventFilter(this);
-    btnClearStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333; border-radius: 3px; }");
-    connect(btnClearStar, &QPushButton::clicked, this, [this]() {
-        setRating(0);
-        emit metadataChanged(m_currentRating, m_currentColor);
-    });
-    starLayout->addWidget(btnClearStar);
-
-    for (int i = 1; i <= 5; ++i) {
-        QPushButton* btnStar = new QPushButton(ratingRow);
-        btnStar->setFixedSize(20, 20);
-        btnStar->setCursor(Qt::PointingHandCursor);
-        btnStar->setIcon(UiHelper::getIcon("star", QColor("#555555"), 16));
-        btnStar->setIconSize(QSize(16, 16));
-        btnStar->setStyleSheet("QPushButton { border: none; background: transparent; }");
-
-        connect(btnStar, &QPushButton::clicked, this, [this, i]() {
-            int newRating = (m_currentRating == i) ? 0 : i;
-            setRating(newRating);
-            emit metadataChanged(m_currentRating, m_currentColor);
-        });
-        m_starBtns.append(btnStar);
-        starLayout->addWidget(btnStar);
-    }
+    // 6. 关联网址区
+    QWidget* m_linkBox = nullptr;
+    ElasticEdit* m_linkEdit = nullptr;
+    QPushButton* m_btnOpenLink = nullptr;
 =======
-    // 评级行（无评级 SVG + 5 星 SVG）
+    // 6. 关联网址区
+    QWidget* m_linkBox = nullptr;
+    QLineEdit* m_linkEdit = nullptr;
+    QAction* m_actOpenLink = nullptr;
+>>>>>>> REPLACE
+```
+
+---
+
+### 2. `src/ui/MetaPanel.cpp`
+
+#### 2.1 Remove External `m_btnOpenLink` and Retain Internal `m_actOpenLink`
+Remove creation, layout adding, and signal connections of external `m_btnOpenLink`.
+
+```git
+<<<<<<< SEARCH
+    m_actOpenLink = m_linkEdit->addAction(UiHelper::getIcon("link", QColor("#378ADD"), 14), QLineEdit::TrailingPosition);
+    m_actOpenLink->setVisible(false);
+
+    auto handleOpenLink = [this]() {
+        QString urlStr = m_linkEdit->text().trimmed();
+        if (!urlStr.isEmpty()) {
+            if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
+                urlStr = "https://" + urlStr;
+            }
+            QDesktopServices::openUrl(QUrl(urlStr));
+        }
+    };
+
+    connect(m_actOpenLink, &QAction::triggered, this, handleOpenLink);
+
+    m_btnOpenLink = new QPushButton(m_linkBox);
+    m_btnOpenLink->setFixedSize(28, 28);
+    m_btnOpenLink->setCursor(Qt::PointingHandCursor);
+    m_btnOpenLink->setIcon(UiHelper::getIcon("link", QColor("#378ADD"), 14));
+    m_btnOpenLink->setIconSize(QSize(14, 14));
+    m_btnOpenLink->setProperty("tooltipText", "打开链接");
+    m_btnOpenLink->installEventFilter(this);
+    m_btnOpenLink->setStyleSheet(
+        "QPushButton { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }"
+        "QPushButton:hover { background: #333333; border-color: #378ADD; }"
+    );
+    m_btnOpenLink->setVisible(false);
+    connect(m_btnOpenLink, &QPushButton::clicked, this, handleOpenLink);
+
+    connect(m_linkEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
+        bool hasText = !text.trimmed().isEmpty();
+        if (m_actOpenLink) m_actOpenLink->setVisible(hasText);
+        if (m_btnOpenLink) m_btnOpenLink->setVisible(hasText);
+    });
+
+    linkL->addWidget(m_linkEdit);
+    linkL->addWidget(m_btnOpenLink);
+=======
+    m_actOpenLink = m_linkEdit->addAction(UiHelper::getIcon("link", QColor("#378ADD"), 14), QLineEdit::TrailingPosition);
+    m_actOpenLink->setVisible(false);
+
+    connect(m_actOpenLink, &QAction::triggered, this, [this]() {
+        QString urlStr = m_linkEdit->text().trimmed();
+        if (!urlStr.isEmpty()) {
+            if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
+                urlStr = "https://" + urlStr;
+            }
+            QDesktopServices::openUrl(QUrl(urlStr));
+        }
+    });
+
+    connect(m_linkEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
+        bool hasText = !text.trimmed().isEmpty();
+        if (m_actOpenLink) m_actOpenLink->setVisible(hasText);
+    });
+
+    linkL->addWidget(m_linkEdit);
+>>>>>>> REPLACE
+```
+
+#### 2.2 Reduce Star Rating Spacing
+Change `starLayout->setSpacing(6)` to `starLayout->setSpacing(2)`:
+
+```git
+<<<<<<< SEARCH
+    // 星级行 (清除 ⊘ + 5 星)
     QWidget* ratingRow = new QWidget(m_ratingColorBox);
-    ratingRow->setStyleSheet("QWidget { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }");
+    ratingRow->setStyleSheet("QWidget { background: transparent; border: none; }");
     QHBoxLayout* starLayout = new QHBoxLayout(ratingRow);
-    starLayout->setContentsMargins(8, 4, 8, 4);
+    starLayout->setContentsMargins(0, 2, 0, 2);
     starLayout->setSpacing(6);
-
-    QPushButton* btnClearStar = new QPushButton(ratingRow);
-    btnClearStar->setFixedSize(22, 22);
-    btnClearStar->setCursor(Qt::PointingHandCursor);
-    btnClearStar->setIcon(UiHelper::getIcon("prohibit", QColor("#888888"), 14));
-    btnClearStar->setIconSize(QSize(14, 14));
-    btnClearStar->setProperty("tooltipText", "清除评级");
-    btnClearStar->installEventFilter(this);
-    btnClearStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333; border-radius: 3px; }");
-    connect(btnClearStar, &QPushButton::clicked, this, [this]() {
-        setRating(0);
-        emit metadataChanged(m_currentRating, m_currentColor);
-    });
-    starLayout->addWidget(btnClearStar);
-
-    for (int i = 1; i <= 5; ++i) {
-        QPushButton* btnStar = new QPushButton(ratingRow);
-        btnStar->setFixedSize(22, 22);
-        btnStar->setCursor(Qt::PointingHandCursor);
-        btnStar->setIcon(UiHelper::getIcon("star", QColor("#555555"), 18));
-        btnStar->setIconSize(QSize(18, 18));
-        btnStar->setStyleSheet("QPushButton { border: none; background: transparent; }");
-
-        connect(btnStar, &QPushButton::clicked, this, [this, i]() {
-            int newRating = (m_currentRating == i) ? 0 : i;
-            setRating(newRating);
-            emit metadataChanged(m_currentRating, m_currentColor);
-        });
-        m_starBtns.append(btnStar);
-        starLayout->addWidget(btnStar);
-    }
->>>>>>> REPLACE
-```
-
-```diff
-<<<<<<< SEARCH
-    // 颜色标记行（无色标 SVG + 8 基础色）
-    QWidget* colorRow = new QWidget(m_ratingColorBox);
-    colorRow->setStyleSheet("QWidget { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }");
-    QHBoxLayout* colorLayout = new QHBoxLayout(colorRow);
-    colorLayout->setContentsMargins(8, 4, 8, 4);
-    colorLayout->setSpacing(4);
-
-    QPushButton* btnNoColor = new QPushButton(colorRow);
-    btnNoColor->setFixedSize(18, 18);
-    btnNoColor->setCursor(Qt::PointingHandCursor);
-    btnNoColor->setIcon(UiHelper::getIcon("no_color", QColor("#888888"), 14));
-    btnNoColor->setIconSize(QSize(14, 14));
-    btnNoColor->setProperty("tooltipText", "无色标");
-    btnNoColor->installEventFilter(this);
-    btnNoColor->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333; border-radius: 9px; }");
 =======
-    // 颜色标记行（无色标 SVG + 8 基础色）
-    QWidget* colorRow = new QWidget(m_ratingColorBox);
-    colorRow->setStyleSheet("QWidget { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }");
-    QHBoxLayout* colorLayout = new QHBoxLayout(colorRow);
-    colorLayout->setContentsMargins(8, 4, 8, 4);
-    colorLayout->setSpacing(4);
-
-    QPushButton* btnNoColor = new QPushButton(colorRow);
-    btnNoColor->setFixedSize(20, 20);
-    btnNoColor->setCursor(Qt::PointingHandCursor);
-    btnNoColor->setIcon(UiHelper::getIcon("no_color", QColor("#888888"), 14));
-    btnNoColor->setIconSize(QSize(14, 14));
-    btnNoColor->setProperty("tooltipText", "无色标");
-    btnNoColor->installEventFilter(this);
-    btnNoColor->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333; border-radius: 10px; }");
+    // 星级行 (清除 + 5 星)
+    QWidget* ratingRow = new QWidget(m_ratingColorBox);
+    ratingRow->setStyleSheet("QWidget { background: transparent; border: none; }");
+    QHBoxLayout* starLayout = new QHBoxLayout(ratingRow);
+    starLayout->setContentsMargins(0, 2, 0, 2);
+    starLayout->setSpacing(2);
 >>>>>>> REPLACE
 ```
 
-```diff
+#### 2.3 Force URL Text to Display Head/Left First
+Call `m_linkEdit->setCursorPosition(0)` in `MetaPanel::setURL`:
+
+```git
 <<<<<<< SEARCH
-void MetaPanel::setRating(int rating) {
-    m_currentRating = rating;
-    for (int i = 0; i < m_starBtns.size(); ++i) {
-        bool active = (i < rating);
-        m_starBtns[i]->setIcon(UiHelper::getIcon(
-            active ? "star_filled" : "star",
-            active ? QColor("#FF551C") : QColor("#555555"),
-            16
-        ));
+void MetaPanel::setURL(const QString& url) {
+    m_isInternalUpdating = true;
+    m_linkEdit->setText(url);
+    if (m_actOpenLink) {
+        m_actOpenLink->setVisible(!url.trimmed().isEmpty());
     }
+    if (m_container) m_container->adjustSize();
+    m_isInternalUpdating = false;
 }
 =======
-void MetaPanel::setRating(int rating) {
-    m_currentRating = rating;
-    for (int i = 0; i < m_starBtns.size(); ++i) {
-        bool active = (i < rating);
-        m_starBtns[i]->setIcon(UiHelper::getIcon(
-            active ? "star_filled" : "star",
-            active ? QColor("#FF551C") : QColor("#555555"),
-            18
-        ));
-        m_starBtns[i]->setIconSize(QSize(18, 18));
+void MetaPanel::setURL(const QString& url) {
+    m_isInternalUpdating = true;
+    m_linkEdit->setText(url);
+    m_linkEdit->setCursorPosition(0);
+    if (m_actOpenLink) {
+        m_actOpenLink->setVisible(!url.trimmed().isEmpty());
     }
+    if (m_container) m_container->adjustSize();
+    m_isInternalUpdating = false;
 }
 >>>>>>> REPLACE
 ```
 
-## 4. Build & Verification Steps
-1. Configure and build the CMake target:
-   ```bash
-   cmake -B build
-   cmake --build build --config Release
-   ```
-2. Launch the application and select any item to populate `MetaPanel`.
-3. Verify visually that the star icons are balanced in proportion relative to the color dot row and alignment is harmonious.
+---
+
+## Build & Verification Steps
+1. Verify `meta_panel-1.md` adheres to strict Git Merge Diff syntax.
+2. Confirm no modification of source files directly during the planning phase.
