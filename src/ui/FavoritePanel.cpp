@@ -1,6 +1,7 @@
 #include "FavoritePanel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
+#include <QPainter>
 #include "../core/AppConfig.h"
 #include <QLabel>
 #include <QPushButton>
@@ -11,6 +12,45 @@
 #include <QJsonDocument>
 
 namespace QuarkMeta {
+
+void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
+    QStyleOptionViewItem opt = option;
+    initStyleOption(&opt, index);
+
+    // Draw selection/hover background and text
+    painter->save();
+    
+    // Custom background fill if selected or hovered
+    if (opt.state & QStyle::State_Selected) {
+        painter->fillRect(opt.rect, QColor("#37373D"));
+    } else if (opt.state & QStyle::State_MouseOver) {
+        painter->fillRect(opt.rect, QColor("#2A2D2E"));
+    } else {
+        painter->fillRect(opt.rect, Qt::transparent);
+    }
+
+    // Calculate layout geometries for icon and text
+    int leftMargin = 10;
+    int iconSize = 18;
+    int spacing = 6;
+
+    QRect iconRect(opt.rect.left() + leftMargin, opt.rect.top() + (opt.rect.height() - iconSize) / 2, iconSize, iconSize);
+    QRect textRect(iconRect.right() + spacing, opt.rect.top(), opt.rect.width() - leftMargin - iconSize - spacing, opt.rect.height());
+
+    // Paint Icon in QIcon::Normal mode (prevents Qt selected state darkening mask)
+    QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
+    if (!icon.isNull()) {
+        icon.paint(painter, iconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+    }
+
+    // Paint Text
+    QString text = index.data(Qt::DisplayRole).toString();
+    painter->setPen((opt.state & QStyle::State_Selected) ? QColor("#FFFFFF") : QColor("#EEEEEE"));
+    painter->setFont(opt.font);
+    painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, text);
+
+    painter->restore();
+}
 
 FavoritePanel::FavoritePanel(QWidget* parent)
     : QFrame(parent) {
@@ -80,6 +120,7 @@ void FavoritePanel::initUi() {
 
     m_favoriteModel = new QStandardItemModel(this);
     m_favoriteView->setModel(m_favoriteModel);
+    m_favoriteView->setItemDelegate(new FavoriteItemDelegate(this));
 
     // 树视图 QSS 样式
     QString treeStyle = QString(

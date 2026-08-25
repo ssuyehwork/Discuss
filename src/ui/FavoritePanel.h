@@ -3,9 +3,18 @@
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QStandardItemModel>
+#include <QStyledItemDelegate>
 #include "DropTreeView.h"
 
 namespace QuarkMeta {
+
+class FavoriteItemDelegate : public QStyledItemDelegate {
+    Q_OBJECT
+public:
+    explicit FavoriteItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+};
 
 /**
  * @brief 独立收藏夹面板（主界面第二栏）
