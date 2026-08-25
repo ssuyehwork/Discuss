@@ -7,6 +7,7 @@
 #include "../util/ShellHelper.h"
 #include <QVBoxLayout>
 #include <QPushButton>
+#include <QToolButton>
 #include <QHBoxLayout>
 #include <QFileInfo>
 #include <QLabel>
@@ -167,7 +168,7 @@ void MetaPanel::initUi() {
     m_linkBox = new QWidget(m_container);
     QHBoxLayout* linkL = new QHBoxLayout(m_linkBox);
     linkL->setContentsMargins(0, 0, 0, 0);
-    linkL->setSpacing(6);
+    linkL->setSpacing(0);
 
     m_linkEdit = new QLineEdit(m_linkBox);
     m_linkEdit->setPlaceholderText("添加关联网址...");
@@ -181,7 +182,13 @@ void MetaPanel::initUi() {
     m_actOpenLink = m_linkEdit->addAction(UiHelper::getIcon("link", QColor("#378ADD"), 14), QLineEdit::TrailingPosition);
     m_actOpenLink->setVisible(false);
 
-    auto handleOpenLink = [this]() {
+    for (QToolButton* btn : m_linkEdit->findChildren<QToolButton*>()) {
+        if (btn->defaultAction() == m_actOpenLink) {
+            btn->setCursor(Qt::PointingHandCursor);
+        }
+    }
+
+    connect(m_actOpenLink, &QAction::triggered, this, [this]() {
         QString urlStr = m_linkEdit->text().trimmed();
         if (!urlStr.isEmpty()) {
             if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
@@ -189,32 +196,14 @@ void MetaPanel::initUi() {
             }
             QDesktopServices::openUrl(QUrl(urlStr));
         }
-    };
-
-    connect(m_actOpenLink, &QAction::triggered, this, handleOpenLink);
-
-    m_btnOpenLink = new QPushButton(m_linkBox);
-    m_btnOpenLink->setFixedSize(28, 28);
-    m_btnOpenLink->setCursor(Qt::PointingHandCursor);
-    m_btnOpenLink->setIcon(UiHelper::getIcon("link", QColor("#378ADD"), 14));
-    m_btnOpenLink->setIconSize(QSize(14, 14));
-    m_btnOpenLink->setProperty("tooltipText", "打开链接");
-    m_btnOpenLink->installEventFilter(this);
-    m_btnOpenLink->setStyleSheet(
-        "QPushButton { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; }"
-        "QPushButton:hover { background: #333333; border-color: #378ADD; }"
-    );
-    m_btnOpenLink->setVisible(false);
-    connect(m_btnOpenLink, &QPushButton::clicked, this, handleOpenLink);
+    });
 
     connect(m_linkEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
         bool hasText = !text.trimmed().isEmpty();
         if (m_actOpenLink) m_actOpenLink->setVisible(hasText);
-        if (m_btnOpenLink) m_btnOpenLink->setVisible(hasText);
     });
 
     linkL->addWidget(m_linkEdit);
-    linkL->addWidget(m_btnOpenLink);
     m_containerLayout->addWidget(createCollapsibleSection("关联网址", m_linkBox, true));
 
     // =========================================================================
@@ -230,7 +219,7 @@ void MetaPanel::initUi() {
     ratingRow->setStyleSheet("QWidget { background: transparent; border: none; }");
     QHBoxLayout* starLayout = new QHBoxLayout(ratingRow);
     starLayout->setContentsMargins(0, 2, 0, 2);
-    starLayout->setSpacing(6);
+    starLayout->setSpacing(2);
 
     QPushButton* btnClearStar = new QPushButton(ratingRow);
     btnClearStar->setFixedSize(22, 22);
@@ -547,7 +536,6 @@ void MetaPanel::updateControlsState(bool hasSelection) {
     if (m_nameEdit) m_nameEdit->setEnabled(hasSelection);
     if (m_noteEdit) m_noteEdit->setEnabled(hasSelection);
     if (m_linkEdit) m_linkEdit->setEnabled(hasSelection);
-    if (m_btnOpenLink) m_btnOpenLink->setEnabled(hasSelection);
     if (m_btnAddTagBig) m_btnAddTagBig->setEnabled(hasSelection);
     if (m_btnAddTagSmall) m_btnAddTagSmall->setEnabled(hasSelection);
     if (m_ratingColorBox) m_ratingColorBox->setEnabled(hasSelection);
@@ -833,6 +821,7 @@ void MetaPanel::setNote(const std::wstring& note) {
 void MetaPanel::setURL(const QString& url) { 
     m_isInternalUpdating = true;
     m_linkEdit->setText(url); 
+    m_linkEdit->setCursorPosition(0);
     if (m_actOpenLink) {
         m_actOpenLink->setVisible(!url.trimmed().isEmpty());
     }

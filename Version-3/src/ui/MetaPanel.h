@@ -3,17 +3,14 @@
 #include <QFrame>
 #include <QLabel>
 #include <QVBoxLayout>
-#include <QHBoxLayout>
 #include <QScrollArea>
 #include <QTimer>
 #include <QEvent>
 #include <QResizeEvent>
 #include <QShowEvent>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QPointer>
-#include <QAction>
 #include "components/ElasticEdit.h"
+#include <QPointer>
+#include <QPushButton>
 #include "TagSelectorOverlay.h"
 #include "components/TagPill.h"
 #include "components/FlowLayout.h"
@@ -31,7 +28,6 @@ public:
                     const QString& ctime, const QString& mtime, const QString& atime,
                     const QString& path, bool encrypted, int width = 0, int height = 0);
 
-    void setImagePreview(const QPixmap& pixmap);
     void setSelectedPaths(const QStringList& paths);
     void setPalettes(const QVector<QPair<QColor, float>>& palette);
     void setTags(const QStringList& tags);
@@ -39,8 +35,10 @@ public:
     void setNote(const std::wstring& note);
     void setURL(const QString& url);
     void setURL(const std::wstring& url);
-    void setRating(int rating);
-    void setColor(const std::wstring& color);
+
+    // 兼容层占位
+    void setRating(int rating) { Q_UNUSED(rating); }
+    void setColor(const std::wstring& color) { Q_UNUSED(color); }
     void setPinned(bool pinned) { Q_UNUSED(pinned); }
 
 signals:
@@ -60,74 +58,45 @@ protected:
     void showEvent(QShowEvent* event) override;
 
 private:
-    void initUi();
     void updateControlsState(bool hasSelection);
+    void initUi();
     void adjustFlowHeights();
-    void addInfoRow(QVBoxLayout* layout, const QString& label, QLabel*& valueLabel);
-    QWidget* createCollapsibleSection(const QString& title, QWidget* contentWidget, bool defaultExpanded = true);
+    void addInfoRow(const QString& label, QLabel*& valueLabel);
+    QFrame* createSeparator();
 
     QVBoxLayout* m_mainLayout = nullptr;
     QScrollArea* m_scrollArea = nullptr;
     QWidget* m_container = nullptr;
     QVBoxLayout* m_containerLayout = nullptr;
-
-    // 1. 顶部预览与色板区 (有则显，无则完全隐藏)
-    QWidget* m_topPreviewBox = nullptr;
-    QLabel* m_lblImagePreview = nullptr;
-    FlowLayout* m_paletteFlowLayout = nullptr;
-
-    // 2. 文件名编辑区 (大字高亮)
+    
     ElasticEdit* m_nameEdit = nullptr;
-
-    // 3. 备注说明区 (可折叠)
-    ElasticEdit* m_noteEdit = nullptr;
-
-    // 4. 关联网址区 (可折叠，内置跳转图标)
-    QWidget* m_linkBox = nullptr;
-    QLineEdit* m_linkEdit = nullptr;
-    QAction* m_actOpenLink = nullptr;
-
-    // 5. 星级评级 + 颜色色标条 (8 色圆点)
-    QWidget* m_ratingColorBox = nullptr;
-    QList<QPushButton*> m_starBtns;
-    QList<QPushButton*> m_colorBtns;
-    int m_currentRating = 0;
-    std::wstring m_currentColor;
-
-    // 6. 标签管理区 (可折叠)
+    QLabel* lblType = nullptr, *lblSize = nullptr, *lblDimensions = nullptr;
+    QLabel* lblCtime = nullptr, *lblMtime = nullptr, *lblAtime = nullptr;
+    ElasticEdit* m_pathEdit = nullptr;
+    QLabel* lblEncrypted = nullptr;
+    
+    QWidget* m_paletteBox = nullptr;
+    FlowLayout* m_paletteFlowLayout = nullptr;
+    
     QWidget* m_tagBox = nullptr;
     QWidget* m_tagContainer = nullptr;
     FlowLayout* m_tagFlowLayout = nullptr;
-    QPushButton* m_btnAddTagBig = nullptr;
-    QPushButton* m_btnAddTagSmall = nullptr;
+    QPushButton* m_btnAddTag = nullptr;
     QPointer<TagSelectorOverlay> m_tagSelectorOverlay;
-
-    // 7. 基础物理属性区 (可折叠)
-    QWidget* m_infoSectionWidget = nullptr;
-    QLabel* lblType = nullptr;
-    QLabel* lblSize = nullptr;
-    QLabel* lblDimensions = nullptr;
-    QLabel* lblCtime = nullptr;
-    QLabel* lblMtime = nullptr;
-    QLabel* lblAtime = nullptr;
-    QLabel* lblEncrypted = nullptr;
-
-    // 8. 物理路径区 (可折叠)
-    QLineEdit* m_pathEdit = nullptr;
-    QPushButton* m_btnCopyPath = nullptr;
-    QPushButton* m_btnOpenLocation = nullptr;
+    
+    ElasticEdit* m_noteEdit = nullptr;
+    ElasticEdit* m_linkEdit = nullptr;
 
     QStringList m_selectedPaths;
     QList<TagPill*> m_tagPool;
     QList<ColorPill*> m_colorPool;
     QTimer* m_adjustTimer = nullptr;
     bool m_isInternalUpdating = false;
-    bool m_isUserEditing = false;
+    bool m_isUserEditing = false; // 增加编辑态锁，防护焦点与异步刷新冲刷
 
 private slots:
     void onTagDeleted(const QString& text);
     void setAsPrimaryColor(const QColor& color);
-    void openTagSelectorOverlay(QWidget* targetAnchor);
 };
 
 } // namespace QuarkMeta
