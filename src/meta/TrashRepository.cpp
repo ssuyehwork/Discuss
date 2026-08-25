@@ -13,6 +13,22 @@ TrashRepository::TrashRepository(QObject* parent)
     : QObject(parent) {
 }
 
+bool TrashRepository::hasTrashItems() const {
+    std::vector<sqlite3*> dbs = { DatabaseManager::instance().getGlobalDb() };
+    const char* sql = "SELECT 1 FROM trash_items LIMIT 1";
+
+    for (sqlite3* db : dbs) {
+        if (!db) continue;
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            bool hasItems = (sqlite3_step(stmt) == SQLITE_ROW);
+            sqlite3_finalize(stmt);
+            if (hasItems) return true;
+        }
+    }
+    return false;
+}
+
 bool TrashRepository::getDiskTrashRecordByPath(const std::wstring& originalPath, int& outId, QString& outTrashPath) const {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;

@@ -111,13 +111,16 @@ public:
     enum class RefreshLevel {
         CountsOnly,   // 仅刷新侧边栏计数
         PathUpdate,   // 刷新特定文件
-        FullRebuild   // 全量 UI 重建
+        FullRebuild,  // 全量 UI 重建
+        CategoryOnly  // 仅物理更新分类，避免数据全量重载
     };
 
     /**
      * @brief 语义化 UI 信号通知
      */
     void notifyUI(RefreshLevel level, const QString& path = "");
+
+    void notifyCategoryCountChanged();
 
     /**
      * @brief 语义化通知接口

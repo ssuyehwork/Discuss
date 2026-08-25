@@ -11,6 +11,7 @@ namespace QuarkMeta {
 
 struct StatisticsSnapshot {
     int totalCount = 0;
+    int uncategorizedCount = 0;
     int untaggedCount = 0;
     int trashCount = 0;
 
@@ -48,6 +49,7 @@ public:
     StatisticsSnapshot m_cachedSnapshot; 
 
     std::atomic<int> m_totalCount{0}; 
+    std::atomic<int> m_uncategorizedCount{0};
     std::atomic<int> m_untaggedCount{0}; 
     std::atomic<int> m_trashCount{0}; 
 
