@@ -17,25 +17,25 @@ TagPill::TagPill(const QString& text, QWidget* parent) : QWidget(parent), m_text
     m_label = new QLabel(text, this);
     m_label->setStyleSheet("color: #EEEEEE; font-size: 12px; border: none; background: transparent;");
     
-    // 显眼突出“×”号，并实现悬停红色高亮样式
-    m_closeBtn = new QPushButton(this);
-    m_closeBtn->setFixedSize(16, 16);
-    m_closeBtn->setCursor(Qt::PointingHandCursor);
-    m_closeBtn->setIcon(UiHelper::getIcon("close", QColor("#EEEEEE"), 12));
-    m_closeBtn->setIconSize(QSize(10, 10));
-    m_closeBtn->setStyleSheet(
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "  border-radius: 3px;"
-        "  padding: 0px;"
-        "}"
-        "QPushButton:hover {"
-        "  background-color: #E81123;"
-        "}"
-        "QPushButton:pressed {"
-        "  background-color: #A50000;"
-        "}"
+    // 显眼突出“×”号：增大图标、提升常规状态对比度与悬停反馈 
+    m_closeBtn = new QPushButton(this); 
+    m_closeBtn->setFixedSize(16, 16); 
+    m_closeBtn->setCursor(Qt::PointingHandCursor); 
+    m_closeBtn->setIcon(UiHelper::getIcon("close", QColor("#FFFFFF"), 14)); 
+    m_closeBtn->setIconSize(QSize(12, 12)); 
+    m_closeBtn->setStyleSheet( 
+        "QPushButton {" 
+        "  border: none;" 
+        "  background: rgba(255, 255, 255, 0.1);" 
+        "  border-radius: 8px;" 
+        "  padding: 0px;" 
+        "}" 
+        "QPushButton:hover {" 
+        "  background-color: #E81123;" 
+        "}" 
+        "QPushButton:pressed {" 
+        "  background-color: #A50000;" 
+        "}" 
     );
 
     layout->addWidget(m_label);
