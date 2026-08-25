@@ -132,6 +132,8 @@ void FilterPanel::syncUIFromFilterState() {
         else if (text == "有链接") shouldCheck = (m_filter.linkPresence == FilterState::Yes);
         else if (text == "无链接") shouldCheck = (m_filter.linkPresence == FilterState::No);
         else if (text == "有备注") shouldCheck = (m_filter.notePresence == FilterState::Yes);
+        else if (text == "已标签") shouldCheck = (m_filter.tagPresence == FilterState::Yes);
+        else if (text == "未标签") shouldCheck = (m_filter.tagPresence == FilterState::No);
         else if (text == "重复项") shouldCheck = (m_filter.duplicatePresence == FilterState::DuplicateOnly);
         else if (text == "未重复") shouldCheck = (m_filter.duplicatePresence == FilterState::UniqueOnly);
         else if (text == "无备注") shouldCheck = (m_filter.notePresence == FilterState::No);
@@ -139,7 +141,8 @@ void FilterPanel::syncUIFromFilterState() {
         else if (text == "竖图") shouldCheck = (m_filter.ratio == FilterState::Vertical);
         else if (text == "方形") shouldCheck = (m_filter.ratio == FilterState::Square);
         else if (text == "16:9") shouldCheck = (m_filter.ratio == FilterState::Ratio169);
-        else if (text == "无缩略图 (失败/跳过)") shouldCheck = m_filter.noThumbnailOnly;
+        else if (text == "有缩略图") shouldCheck = (m_filter.thumbnailPresence == FilterState::HasThumbnail);
+        else if (text == "无缩略图 (提取失败)" || text == "无缩略图 (失败/跳过)") shouldCheck = (m_filter.thumbnailPresence == FilterState::NoThumbnail);
 
         cb->blockSignals(true);
         cb->setChecked(shouldCheck);
@@ -405,6 +408,9 @@ void FilterPanel::populate(
                  else if (name == "无链接") count = m_currentStats.noLinkCount;
                  else if (name == "有备注") count = m_currentStats.hasNoteCount;
                  else if (name == "无备注") count = m_currentStats.noNoteCount;
+                 else if (name == "已标签") count = m_currentStats.hasTagCount;
+                 else if (name == "未标签") count = m_currentStats.noTagCount;
+                 else if (name == "有缩略图") count = m_currentStats.hasThumbnailCount;
                  else if (name == "无缩略图 (提取失败)" || name == "无缩略图 (失败/跳过)") count = m_currentStats.noThumbnailCount;
 
                  cntLabel->setText(QString::number(count));
@@ -470,7 +476,41 @@ void FilterPanel::rebuildGroups() {
         delete item;
     }
 
-    // ── 1. 评级 ──────────────────────────────────────────────
+    // ── 1. 标签 (独立主选项，位于最顶部) ──────────────────────────────
+    {
+        QVBoxLayout* gl = nullptr;
+        QWidget* g = buildGroup("标签", gl);
+        m_groupTag = g;
+
+        QButtonGroup* tagGroup = new QButtonGroup(g);
+        tagGroup->setExclusive(false);
+
+        QCheckBox* cbYes = addFilterRow(gl, "已标签", m_currentStats.hasTagCount);
+        if (m_filter.tagPresence == FilterState::Yes) cbYes->setChecked(true);
+        connect(cbYes, &QCheckBox::toggled, this, [this, tagGroup, cbYes](bool on) {
+            if (on) {
+                for (QAbstractButton* b : tagGroup->buttons()) if (b != cbYes && b->isChecked()) b->setChecked(false);
+                m_filter.tagPresence = FilterState::Yes;
+            } else m_filter.tagPresence = FilterState::All;
+            emit filterChanged(m_filter);
+        });
+        tagGroup->addButton(cbYes);
+
+        QCheckBox* cbNo = addFilterRow(gl, "未标签", m_currentStats.noTagCount);
+        if (m_filter.tagPresence == FilterState::No) cbNo->setChecked(true);
+        connect(cbNo, &QCheckBox::toggled, this, [this, tagGroup, cbNo](bool on) {
+            if (on) {
+                for (QAbstractButton* b : tagGroup->buttons()) if (b != cbNo && b->isChecked()) b->setChecked(false);
+                m_filter.tagPresence = FilterState::No;
+            } else m_filter.tagPresence = FilterState::All;
+            emit filterChanged(m_filter);
+        });
+        tagGroup->addButton(cbNo);
+
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+    // ── 2. 评级 ──────────────────────────────────────────────
     if (!m_ratingCounts.isEmpty()) {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("评级", gl);
@@ -490,6 +530,7 @@ void FilterPanel::rebuildGroups() {
 
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
+
 
     // ── 2. 颜色标记 (动态呈现：有对应文件时才显示) ────────────
     {
@@ -963,14 +1004,30 @@ void FilterPanel::rebuildGroups() {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("缩略图状态", gl);
 
-        QCheckBox* cb = addFilterRow(gl, "无缩略图 (提取失败)", m_currentStats.noThumbnailCount);
-        cb->blockSignals(true);
-        cb->setChecked(m_filter.noThumbnailOnly);
-        cb->blockSignals(false);
-        connect(cb, &QCheckBox::toggled, this, [this](bool on) {
-            m_filter.noThumbnailOnly = on;
+        QButtonGroup* thumbGroup = new QButtonGroup(g);
+        thumbGroup->setExclusive(false);
+
+        QCheckBox* cbYes = addFilterRow(gl, "有缩略图", m_currentStats.hasThumbnailCount);
+        if (m_filter.thumbnailPresence == FilterState::HasThumbnail) cbYes->setChecked(true);
+        connect(cbYes, &QCheckBox::toggled, this, [this, thumbGroup, cbYes](bool on) {
+            if (on) {
+                for (QAbstractButton* b : thumbGroup->buttons()) if (b != cbYes && b->isChecked()) b->setChecked(false);
+                m_filter.thumbnailPresence = FilterState::HasThumbnail;
+            } else m_filter.thumbnailPresence = FilterState::ThumbAll;
             emit filterChanged(m_filter);
         });
+        thumbGroup->addButton(cbYes);
+
+        QCheckBox* cbNo = addFilterRow(gl, "无缩略图 (提取失败)", m_currentStats.noThumbnailCount);
+        if (m_filter.thumbnailPresence == FilterState::NoThumbnail) cbNo->setChecked(true);
+        connect(cbNo, &QCheckBox::toggled, this, [this, thumbGroup, cbNo](bool on) {
+            if (on) {
+                for (QAbstractButton* b : thumbGroup->buttons()) if (b != cbNo && b->isChecked()) b->setChecked(false);
+                m_filter.thumbnailPresence = FilterState::NoThumbnail;
+            } else m_filter.thumbnailPresence = FilterState::ThumbAll;
+            emit filterChanged(m_filter);
+        });
+        thumbGroup->addButton(cbNo);
 
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }

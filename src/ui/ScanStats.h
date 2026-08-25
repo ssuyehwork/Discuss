@@ -20,6 +20,8 @@ struct ScanStats {
     int noLinkCount = 0;
     int hasNoteCount = 0;
     int noNoteCount = 0;
+    int hasTagCount = 0;
+    int noTagCount = 0;
     int ratioHorizontalCount = 0;
     int ratioVerticalCount = 0;
     int ratioSquareCount = 0;
@@ -27,6 +29,7 @@ struct ScanStats {
     int duplicateCount = 0;
     int uniqueCount = 0;
     int noThumbnailCount = 0;
+    int hasThumbnailCount = 0;
 };
 
 } // namespace QuarkMeta

@@ -282,6 +282,13 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         if (currentFilter.notePresence == FilterState::No && hasNote) return false;
     }
 
+    // 8.5. 标签过滤
+    if (currentFilter.tagPresence != FilterState::All) {
+        bool hasTags = !record.tags.isEmpty();
+        if (currentFilter.tagPresence == FilterState::Yes && !hasTags) return false;
+        if (currentFilter.tagPresence == FilterState::No && hasTags) return false;
+    }
+
     // 9. 文件大小过滤 (Plan-30)
     if (currentFilter.minSize != -1 && record.size < currentFilter.minSize) return false;
     if (currentFilter.maxSize != -1 && record.size > currentFilter.maxSize) return false;
@@ -320,11 +327,13 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         }
     } 
  
-    // 10.5 无缩略图过滤（只要是图形格式且无物理缩略图缓存，即判定为无缩略图）
-    if (currentFilter.noThumbnailOnly) {
+    // 10.5 缩略图状态过滤
+    if (currentFilter.thumbnailPresence != FilterState::ThumbAll) {
         if (record.isDir || !UiHelper::isGraphicsFile(record.suffix)) return false;
         QString thumbPath = DiskMediaExtractor::getDiskThumbCachePath(record.path);
-        if (QFile::exists(thumbPath)) return false;
+        bool hasThumb = QFile::exists(thumbPath);
+        if (currentFilter.thumbnailPresence == FilterState::HasThumbnail && !hasThumb) return false;
+        if (currentFilter.thumbnailPresence == FilterState::NoThumbnail && hasThumb) return false;
     }
 
     // 11. 重复状态过滤 (O(1) 瞬时判定)
@@ -341,12 +350,31 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         }
     }
 
-    // 2026-07-xx Plan-92: 统一使用 FilterState 中的 keyword 进行文件名过滤
+    // 统一支持：文件名/文件夹名、已绑定标签、备注说明 多维度命中搜索
     if (!currentFilter.keyword.isEmpty()) {
-        QString fileName = idx.data(Qt::DisplayRole).toString(); 
-        if (!fileName.contains(currentFilter.keyword, Qt::CaseInsensitive)) {
-            return false;
+        const QString& kw = currentFilter.keyword;
+        
+        // 1. 匹配文件名/文件夹名
+        bool match = record.filename.contains(kw, Qt::CaseInsensitive);
+
+        // 2. 匹配绑定的标签 (Tags)
+        if (!match) {
+            for (const QString& tag : record.tags) {
+                if (tag.contains(kw, Qt::CaseInsensitive)) {
+                    match = true;
+                    break;
+                }
+            }
         }
+
+        // 3. 匹配备注说明 (Note)
+        if (!match && !record.note.isEmpty()) {
+            if (record.note.contains(kw, Qt::CaseInsensitive)) {
+                match = true;
+            }
+        }
+
+        if (!match) return false;
     }
 
     return true;
@@ -2591,8 +2619,8 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
         } 
         MetaCacheDecorator::decorate(driveRecords);
         m_model->setRecords(driveRecords);
-        // 2026-05-29 物理对齐：在加载“此电脑”后显式触发一次排序，确保置顶硬盘排在首位
-        m_proxyModel->sort(0, Qt::AscendingOrder);
+        // 2026-05-29 物理对齐：在加载“此电脑”后显式触发一次排序，使用持久化的 m_sortOrder
+        m_proxyModel->sort(0, m_sortOrder);
         m_isLoading = false;
         recalculateAndEmitStats();
         return; 
@@ -2620,7 +2648,7 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [panelPtr, path, allItems, reqId]() { 
             if (panelPtr && panelPtr->m_loadRequestId == reqId) { 
                 panelPtr->m_model->setRecords(allItems);
-                panelPtr->m_proxyModel->sort(0, Qt::AscendingOrder);
+                panelPtr->m_proxyModel->sort(0, panelPtr->m_sortOrder);
                 panelPtr->m_isLoading = false;
                 panelPtr->recalculateAndEmitStats();
                 // 2026-06-xx 物理同步：数据加载完成后强制重新应用筛选，防止显示已过滤掉的占位符记录
@@ -2764,7 +2792,7 @@ void ContentPanel::loadPaths(const QStringList& paths, int reqId) {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, records, reqId]() {
             if (weakThis && weakThis->m_loadRequestId == reqId) {
                 weakThis->m_model->setRecords(records);
-                weakThis->m_proxyModel->sort(0, Qt::AscendingOrder);
+                weakThis->m_proxyModel->sort(0, weakThis->m_sortOrder);
                 weakThis->m_isLoading = false;
                 weakThis->recalculateAndEmitStats();
                 weakThis->applyFilters(); 
@@ -2847,6 +2875,11 @@ void ContentPanel::recalculateAndEmitStats() {
         for (const auto& record : records) {
             if (!weakThis) return;
 
+            // 0. 隐藏属性过滤（关闭隐藏项显示时，隐藏属性文件不参与筛选面板统计）
+            if (record.isHidden && !weakThis->m_currentFilter.showHidden) {
+                continue;
+            }
+
             stats.ratingCounts[record.rating]++;
             QString normHex = UiHelper::normalizeColorHex(record.manualColor);
             stats.colorCounts[normHex]++;
@@ -2868,6 +2901,10 @@ void ContentPanel::recalculateAndEmitStats() {
                 if (!record.note.isEmpty()) stats.hasNoteCount++;
                 else stats.noNoteCount++;
 
+                // 标签存在性统计
+                if (!record.tags.isEmpty()) stats.hasTagCount++;
+                else stats.noTagCount++;
+
                 // 图像比例统计
                 if (record.width > 0 && record.height > 0) {
                     double r = (double)record.width / record.height;
@@ -2884,10 +2921,12 @@ void ContentPanel::recalculateAndEmitStats() {
                     stats.uniqueCount++;
                 }
 
-                // 无缩略图 (提取失败/缺失) 统计
+                // 缩略图状态 (提取成功/缺失) 统计
                 if (UiHelper::isGraphicsFile(record.suffix)) {
                     QString thumbPath = DiskMediaExtractor::getDiskThumbCachePath(record.path);
-                    if (!QFile::exists(thumbPath)) {
+                    if (QFile::exists(thumbPath)) {
+                        stats.hasThumbnailCount++;
+                    } else {
                         stats.noThumbnailCount++;
                     }
                 }

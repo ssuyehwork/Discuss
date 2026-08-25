@@ -74,7 +74,6 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
-    // 2026-05-08 按照用户要求：添加边缘resize相关成员变量
     enum ResizeDirection {
         None = 0,
         Left, Right, Top, Bottom,
@@ -85,9 +84,9 @@ private:
     bool m_isResizing = false;
     QPoint m_resizeStartGlobal;
     QRect  m_resizeStartGeometry;
-    
+
     static constexpr int kResizeMargin = 6; // 边缘热区宽度（像素）
-    
+
     ResizeDirection getResizeDirection(const QPoint& localPos) const;
     void updateCursorShape(ResizeDirection dir);
 
@@ -211,6 +210,7 @@ public slots:
 private:
     void loadPanelVisibility();
     void savePanelVisibility();
+    void updateDynamicMinimumSize();
 };
 
 } // namespace QuarkMeta

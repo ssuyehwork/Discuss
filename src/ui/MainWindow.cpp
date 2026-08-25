@@ -107,8 +107,8 @@ MainWindow::MainWindow(QWidget* parent)
     // 配合 ToolTipOverlay 内部的 winId() 强行预热，消除初次显示延迟
     ToolTipOverlay::instance();
 
-    resize(1200, 800);
-    setMinimumSize(1180, 653); // 物理对齐：5x230px面板 + 20px分割手柄 + 10px全局边距
+    // 锁定物理保底：最小宽度 465px（防止顶栏控件重叠），最小高度 400px
+    setMinimumSize(465, 400); 
     setWindowTitle("QuarkMeta");
 
     // ============================================================
@@ -229,6 +229,15 @@ void MainWindow::initUi() {
 
     // 1. 先应用面板显隐状态
     loadPanelVisibility();
+
+    // 恢复用户上一次的窗口几何位置、大小与最大化状态
+    QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
+    if (!savedGeom.isEmpty()) {
+        restoreGeometry(savedGeom);
+    } else {
+        // 首次打开默认尺寸（大屏推荐 1400x850）
+        resize(1400, 850);
+    }
 
     // 2. 延迟至下一个事件循环（等窗口 geometry 稳定后）再恢复 SplitterState
     QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
@@ -871,7 +880,6 @@ void MainWindow::mousePressEvent(QMouseEvent* event) {
     ResizeDirection dir = getResizeDirection(localPos);
 
     if (dir != None) {
-        // 2026-05-08 按照用户要求：进入 Resize 模式
         m_isResizing = true;
         m_isDragging = false;
         m_resizeDir = dir;
@@ -881,7 +889,7 @@ void MainWindow::mousePressEvent(QMouseEvent* event) {
         return;
     }
 
-    // 原有拖动逻辑：仅标题栏区域
+    // 拖动逻辑：仅标题栏区域
     if (localPos.y() <= 34) {
         m_isDragging = true;
         m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
@@ -903,7 +911,6 @@ void MainWindow::mouseMoveEvent(QMouseEvent* event) {
         if (m_resizeDir == Bottom || m_resizeDir == BottomLeft || m_resizeDir == BottomRight)
             r.setBottom(r.bottom() + delta.y());
 
-        // 尊重最小尺寸约束
         if (r.width() >= minimumWidth() && r.height() >= minimumHeight())
             setGeometry(r);
 
@@ -917,15 +924,12 @@ void MainWindow::mouseMoveEvent(QMouseEvent* event) {
         return;
     }
 
-    // 2026-05-08 按照用户要求：悬停时动态更新光标（未按下状态）
     if (!m_isDragging) {
         updateCursorShape(getResizeDirection(event->position().toPoint()));
     }
 }
 
-// 2026-05-08 按照用户要求：实现边缘resize方向检测函数
 MainWindow::ResizeDirection MainWindow::getResizeDirection(const QPoint& pos) const {
-    // 按照用户建议：将感应宽度改为根据 DPI 动态计算
     int m = kResizeMargin;
     if (windowHandle()) {
         m = qRound(screen()->logicalDotsPerInch() / 96.0 * (double)kResizeMargin);
@@ -947,7 +951,6 @@ MainWindow::ResizeDirection MainWindow::getResizeDirection(const QPoint& pos) co
     return None;
 }
 
-// 2026-05-08 按照用户要求：实现光标形状更新函数
 void MainWindow::updateCursorShape(ResizeDirection dir) {
     switch (dir) {
         case Left:        case Right:       setCursor(Qt::SizeHorCursor);  break;
@@ -1633,6 +1636,10 @@ void MainWindow::changeEvent(QEvent* event) {
 
 void MainWindow::closeEvent(QCloseEvent* event) {
     AppConfig::instance().setValue("MainWindow/LastPath", m_currentPath);
+    
+    // 🚨 物理持久化当前窗口大小、屏幕位置与最大化/正常状态
+    AppConfig::instance().setValue("MainWindow/Geometry", saveGeometry());
+
     // 2026-04-11 按照用户要求：物理保存各容器宽度状态
     if (m_mainSplitter) {
         AppConfig::instance().setValue("MainWindow/SplitterState", m_mainSplitter->saveState());
@@ -1659,8 +1666,9 @@ void MainWindow::populatePanelMenu(QMenu* menu) {
         action->setChecked(panel->isVisible());
         action->setEnabled(canHide);
         // 使用 Lambda 捕获成员变量，确保连接有效
-        connect(action, &QAction::toggled, panel, [panel](bool visible) {
+        connect(action, &QAction::toggled, panel, [this, panel](bool visible) {
             panel->setVisible(visible);
+            updateDynamicMinimumSize(); // 🚨 用户右键切换面板显隐时实时刷新最小宽度
         });
     };
 
@@ -1705,17 +1713,38 @@ void MainWindow::resetSplitterLayout() {
     AppConfig::instance().sync();
 
     ToolTipOverlay::instance()->showText(QCursor::pos(), "布局已重置为默认值", 1500);
+    updateDynamicMinimumSize();
 }
 
 void MainWindow::loadPanelVisibility() {
     QVariant val = AppConfig::instance().getValue("MainWindow/PanelVisibility");
-    if (!val.isValid()) return;
+    if (val.isValid()) {
+        QStringList hiddenPanels = val.toStringList();
+        if (hiddenPanels.contains("nav"))      m_navPanel->hide();
+        if (hiddenPanels.contains("favorite")) m_favoritePanel->hide();
+        if (hiddenPanels.contains("meta"))     m_metaPanel->hide();
+        if (hiddenPanels.contains("filter"))   m_filterPanel->hide();
+    }
+    updateDynamicMinimumSize(); // 🚨 每次加载面板显隐后，立即刷新最小宽度约束
+}
 
-    QStringList hiddenPanels = val.toStringList();
-    if (hiddenPanels.contains("nav"))      m_navPanel->hide();
-    if (hiddenPanels.contains("favorite")) m_favoritePanel->hide();
-    if (hiddenPanels.contains("meta"))     m_metaPanel->hide();
-    if (hiddenPanels.contains("filter"))   m_filterPanel->hide();
+void MainWindow::updateDynamicMinimumSize() {
+    int visibleCount = 0;
+    if (m_navPanel && m_navPanel->isVisible()) visibleCount++;
+    if (m_favoritePanel && m_favoritePanel->isVisible()) visibleCount++;
+    if (m_contentPanel && m_contentPanel->isVisible()) visibleCount++;
+    if (m_metaPanel && m_metaPanel->isVisible()) visibleCount++;
+    if (m_filterPanel && m_filterPanel->isVisible()) visibleCount++;
+
+    if (visibleCount <= 0) visibleCount = 1;
+
+    // 单面板计算值：(面板数 * 230) + (分割条 * 5) + (外边距 10)
+    int calculatedMinW = (visibleCount * 230) + ((visibleCount - 1) * 5) + 10;
+    
+    // 🚨 核心约束：无论隐藏了多少栏，窗口宽度绝对不低于 465px，彻底杜绝顶栏重叠
+    int finalMinW = qMax(465, calculatedMinW);
+    
+    setMinimumWidth(finalMinW);
 }
 
 void MainWindow::savePanelVisibility() {
