@@ -9,6 +9,31 @@
 2. **严禁写入实施细节**：具体的代码修改点、Search/Replace Diff 替换块、代码行号、调试命令等，绝对禁止写入本文档。
 3. **实施方案物理隔离**：所有具体的代码修改与实施方案，必须且只能创建在 `QuarkMeta Architecture/Implementation Plan/` 目录下（采用简洁英文小写命名）。
 
+### 收藏夹（FavoritePanel）物理路径唯一性与 Drop 防重顶层规范
+1. **物理路径绝对唯一性红线**：收藏夹面板（FavoritePanel）作为第二栏固定快捷通道，其保存与呈现的每一个条目必须且仅能对应一个唯一的本地物理路径，严禁允许重复收藏相同的物理文件夹或文件。
+2. **强路径归一化约束**：在任何路径进入收藏夹模型（Model）之前，必须强制进行物理路径标准化与格式归一化（包含盘符大写规范、分隔符统一及消除相对路径符号），杜绝因路径表示格式差异导致的防重判断失效。
+3. **视图 Drop 插入拦截与校验**：接管与拦截视图层的默认拖放插入行为，防止 Qt 原生 Model/View 拖放逻辑绕过模型层防重校验规则直接插入节点。
+4. **磁盘持久化双重去重校验**：在磁盘配置持久化读取（Load）与落盘（Save）环节，必须维持强去重幂等机制，防止由于异常退出或跨模块调用写入重复配置项。
+5. **上下文菜单收藏状态动态双向切换红线**：右键呼出上下文菜单（包括 `ContentPanel` 内容区及 `QuickLookWindow` 预览窗口）时，系统必须实时校验选中项的收藏状态。当项目未被收藏时显示“添加至收藏夹”；当项目已被收藏时，菜单项必须动态切换为“取消收藏”（或“从收藏夹中移除”），严禁出现硬编码写死单一静态菜单项的架构缺陷。
+
+### 全局操作反馈 Toast (UndoToastOverlay) 停留时长规范
+1. **统一 7 秒停留时长红线**：全局所有基于 `UndoToastOverlay` 弹出的轻量级操作反馈、状态通知与可撤销 Snackbar 提示，默认停留时间统一固定为 **7 秒（7000 ms）**，确保用户具备充足的提示阅读与撤销交互响应时间窗口。
+
+### 地址栏面包屑（BreadcrumbBar）矢量图标分隔符顶层规范
+1. **硬编码文本符号剔除红线**：地址栏面包屑控件（BreadcrumbBar）文件夹层级之间严禁使用低字号文本字符 `">"` 或硬编码符号作为分隔符，杜绝模糊与字体抗锯齿渲染发虚现象。
+2. **矢量 SVG 箭头渲染标准**：层级分隔符必须统一采用标准的矢量 SVG 箭头图标（如 `chevron_right` 图标，图形尺寸 12x12），搭配高对比度前景色（如 `#AAAAAA`），确保在深色背景下保持极佳的清晰度与高质感 UI 风格。
+3. **面包屑层级右键菜单快捷收藏规范**：地址栏面包屑中的每一个层级文件夹按钮必须支持右键上下文菜单。右键点击特定层级文件夹时，系统必须基于该文件夹当前在 `FavoritePanel` 中的收藏状态，动态提供“添加至收藏夹”或“取消收藏”选项，实现快捷路径的无缝收藏管理。
+
+### 内容面板（ContentPanel）模块化拆分与高并发选中性能防卡死顶层规范
+1. **上帝类拆分解耦红线**：内容面板（ContentPanel）必须遵循单一职责原则，严禁过度堆砌跨领域业务。主面板仅保留视图栈管理与子控制器调度职责，右键上下文菜单构建、物理文件系统操作（复制/剪切/粘贴/删除/重命名）以及选择状态与统计运算必须物理解耦拆分为独立控制器模块。
+2. **高并发选中索引计算防卡死规范**：在处理大目录全选与批量取消选中操作时，必须严格禁止调用获取全列单元格索引的高开销 API（如 `getSelectedIndexes()`）；统一约束仅获取首列行索引（`selectedRows(0)`），杜绝在成千上万条记录场景下因遍历多列生成巨量 QModelIndex 导致主 UI 线程假死卡顿。
+
+### 核心解耦与单一职责架构顶层规范 (MainWindow, FilterPanel, MetaPanel, MetadataManager)
+1. **主窗口 (MainWindow) 拆分规范**：主窗口仅允许承载顶层 UI 布局构建与 QSS 样式加载。全局快捷键捕获与事件分发必须解耦至 `GlobalShortcutController`；多面板（ContentPanel、MetaPanel、FavoritePanel）之间的联动逻辑必须解耦至中介者 `PanelMediator`。
+2. **筛选面板 (FilterPanel) 拆分规范**：筛选面板仅保留纯 UI 控件渲染职责。筛选状态管理（`FilterState`）解耦至 `FilterStateModel`；后台文件数量聚合与分类统计解耦至 `ScanStatsEngine`。
+3. **属性面板 (MetaPanel) 拆分规范**：属性面板作为宿主容器仅负责纵向 Layout 布局与子 Section 的显示控制。缩略图预览解耦为 `MetaPreviewWidget`；打星与颜色标记解耦为 `MetaRatingColorWidget`；标签与 Overlay 解耦为 `MetaTagSection`；文件属性与 Explorer 跳转解耦为 `MetaInfoSection`。
+4. **元数据中心 (MetadataManager) 门面模式规范**：元数据中心作为对外统一门面（Facade），不再直接混合磁盘 IO 与数据库存取。`.QuarkMeta.json` 序列化由 `QuarkMetaJsonStore` 承载；SQLite `global.db` 持久化由 `MetaDbRepository` 承载；内存 LRU 缓存由 `MetaMemoryCache` 承载。
+
 ---
 
 ## 2. 自研代码文件职责与功能深度剖析 (Self-Developed Source File Responsibilities)
