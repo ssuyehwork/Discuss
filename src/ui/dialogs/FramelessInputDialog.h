@@ -1,5 +1,5 @@
 #pragma once
-#include "FramelessDialog.h"
+#include "../FramelessDialogBase.h"
 #include <QLineEdit>
 
 namespace QuarkMeta {

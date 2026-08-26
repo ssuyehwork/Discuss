@@ -132,6 +132,7 @@ set(SOURCES
     src/ui/IScanResultView.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
+    src/ui/FramelessDialogBase.h
     src/ui/FramelessDialog.cpp
     src/ui/FramelessDialog.h
     src/ui/FramelessFileDialog.cpp

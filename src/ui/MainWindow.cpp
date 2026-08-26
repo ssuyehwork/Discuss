@@ -391,12 +391,8 @@ void MainWindow::initUi() {
             m_metaPanel->setImagePreview(previewPixmap);
         }
 
-        // 状态栏更新：直接传递总数与选区大小，避免二次全量遍历
-        if (m_statusLeft && m_contentPanel && m_contentPanel->getProxyModel()) {
-            int totalCount = m_contentPanel->getProxyModel()->rowCount();
-            int selectedCount = paths.size();
-            m_statusLeft->setText(QString("%1 个项目, 已选中 %2 个").arg(totalCount).arg(selectedCount));
-        }
+        // 状态栏更新：触发统一带隐藏项计数的 onStatusBarStatsUpdated
+        onStatusBarStatsUpdated(0, 0, 0);
     });
 
     // 3. 内容面板请求预览 -> QuickLook

@@ -1123,7 +1123,12 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                         if (!targetPaths.isEmpty()) {
                             if (FramelessMessageBox::question(this, "确认删除", "确定要永久删除选中的项目吗？数据将被物理覆写并彻底抹除，此操作不可恢复。")) {
                                 for (const QString& p : targetPaths) {
-                                    QFile::remove(p);
+                                    QFileInfo info(p);
+                                    if (info.isDir()) {
+                                        QDir(p).removeRecursively();
+                                    } else {
+                                        QFile::remove(p);
+                                    }
                                     MetadataManager::instance().removeMetadataSync(p.toStdWString());
                                 }
                                 refreshAll();

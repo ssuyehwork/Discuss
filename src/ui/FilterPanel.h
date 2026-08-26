@@ -1,8 +1,6 @@
 #pragma once
 
 #include <QWidget>
-#include "components/StyledCheckBox.h"
-#include "components/ClickableRow.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>

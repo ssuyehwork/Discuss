@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QWidget>
-#include "QuickLookGraphicsView.h"
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
