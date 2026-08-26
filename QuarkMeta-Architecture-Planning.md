@@ -278,3 +278,30 @@
 - `src/ui/models/DiskItemModel.h`
 - `src/ui/models/DiskItemModel.cpp`
 - `src/ui/models/ItemModelBase.h`
+
+---
+
+## 3. 第三方库与嵌入式组件排查与架构定位 (Third-Party Components & Dependencies)
+
+为了实现轻量级架构与高可用性，系统针对第三方依赖采用了**“源码嵌入”**与**“显式剪裁”**结合的策略。
+
+### 3.1 嵌入式第三方源码组件 (Embedded Third-Party Source Components)
+
+1. **`libtiff` 图像解码库 (`src/third_party/libtiff/`)**
+   - **架构定位**：位于 `src/third_party/libtiff` 目录，专用于 TIFF 格式深层图像数据的底层解析与解码。
+   - **编译排查**：共有 **36 个** 核心 C 源文件通过 CMake (`LIBTIFF_SOURCES`) 显式注册并参与编译。
+   - **剪裁与防冲突策略**：为了避免引用繁重的第三方依赖，系统对 libtiff 进行了严格的轻量化剪裁，排除了独立的工具可执行文件 (`tiff2pdf`, `tiffinfo` 等)、格式扩展组件 (`tif_webp`, `tif_zstd`, `tif_lzma`, `tif_jpeg` 等) 以及非 Windows 平台的构建文件。
+
+2. **`SQLite3` 数据库引擎 (`src/meta/sqlite3.c`, `src/meta/sqlite3.h`)**
+   - **架构定位**：位于 `src/meta/` 模块，作为本地元数据缓存、文件索引、标签映射与回收站记录的底层嵌入式关系型数据库引擎。
+   - **编译排查**：以单文件 C Amalgamation 形式直接注册在 CMake 的 `SOURCES` 中参与编译。
+
+### 3.2 系统与框架动态依赖 (Framework & System Libraries)
+
+系统在顶层 CMake 配置中引入了以下框架与原生动态库：
+- **Qt 6 Framework (`Qt6::Core`, `Qt6::Gui`, `Qt6::Widgets`, `Qt6::Svg`, `Qt6::Concurrent`)**：核心 UI 界面框架、并发计算与图形渲染支持。
+- **Windows System Native DLLs**：
+  - `ntdll` — 低层系统 API 支持（包含 MFT 磁盘快照与文件系统底层结构访问）。
+  - `ole32` — Windows COM 组件接口（用于 Shell 缩略图获取与系统文件右键菜单集成）。
+  - `bcrypt` — 系统级密码学与加密算法支持（供 `EncryptionManager` 调用）。
+  - `psapi` — Windows 进程与系统状态信息提取。
