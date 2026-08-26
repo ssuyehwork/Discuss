@@ -33,6 +33,16 @@ public:
     void setFocusHighlight(bool visible);
 
     /**
+     * @brief 检查路径是否已在收藏夹中
+     */
+    bool containsPath(const QString& path) const;
+
+    /**
+     * @brief 从收藏夹中移除指定路径项目
+     */
+    void removeFavoriteItem(const QString& path);
+
+    /**
      * @brief 向收藏夹追加项目并防重
      */
     void addFavoriteItem(const QString& path);

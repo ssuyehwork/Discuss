@@ -31,7 +31,8 @@ class ContentPanel;
 class MetaPanel;
 class FilterPanel;
 class SearchHistoryPanel;
-
+class GlobalShortcutController;
+class PanelMediator;
 
 /**
  * @brief 主窗口类
@@ -39,6 +40,9 @@ class SearchHistoryPanel;
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
+
+    friend class GlobalShortcutController;
+    friend class PanelMediator;
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
@@ -188,6 +192,10 @@ private:
     HoverEventFilter* m_hoverFilter = nullptr;
     ResizeEventFilter* m_resizeFilter = nullptr;
     QTimer* m_sidebarRefreshTimer = nullptr;
+
+    // 模块化控制器与中介者
+    GlobalShortcutController* m_shortcutController = nullptr;
+    PanelMediator* m_panelMediator = nullptr;
 
     void updateProgressBarGeometry(); // 实时计算 5px 悬浮位置函数
 

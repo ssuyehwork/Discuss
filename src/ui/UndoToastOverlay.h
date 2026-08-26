@@ -28,7 +28,7 @@ public:
     void showToast(QWidget* parent, 
                    const QString& message, 
                    std::function<void()> undoCallback, 
-                   int durationMs = 5000);
+                   int durationMs = 7000);
 
     void hideToast();
 

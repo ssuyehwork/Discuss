@@ -35,6 +35,11 @@ signals:
      */
     void blankAreaClicked();
 
+    /**
+     * @brief 用户右键点击某个层级按钮时发出，用于告知外部触发收藏菜单
+     */
+    void favoriteToggleRequested(const QString& fullPath, const QPoint& globalPos);
+
 protected:
     void mousePressEvent(QMouseEvent* event) override;
 

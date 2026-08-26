@@ -100,6 +100,12 @@ set(SOURCES
     src/meta/DuplicateDetectorService.h
     src/meta/DuplicateDetectorService.cpp
     src/meta/MetadataDefs.h
+    src/meta/QuarkMetaJsonStore.h
+    src/meta/QuarkMetaJsonStore.cpp
+    src/meta/MetaDbRepository.h
+    src/meta/MetaDbRepository.cpp
+    src/meta/MetaMemoryCache.h
+    src/meta/MetaMemoryCache.cpp
     src/meta/MetadataManager.cpp
     src/meta/MetadataManager.h
     src/meta/MediaExtractorPipeline.cpp
@@ -130,6 +136,10 @@ set(SOURCES
     src/ui/DropTreeView.cpp
     src/ui/DropTreeView.h
     src/ui/IScanResultView.h
+    src/ui/FilterStateModel.h
+    src/ui/FilterStateModel.cpp
+    src/ui/ScanStatsEngine.h
+    src/ui/ScanStatsEngine.cpp
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
     src/ui/FramelessDialogBase.h
@@ -145,6 +155,10 @@ set(SOURCES
     src/ui/ThumbnailDelegate.cpp
     src/ui/ThumbnailDelegate.h
     src/ui/Logger.h
+    src/ui/GlobalShortcutController.h
+    src/ui/GlobalShortcutController.cpp
+    src/ui/PanelMediator.h
+    src/ui/PanelMediator.cpp
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
     src/ui/TrayController.cpp
@@ -155,6 +169,14 @@ set(SOURCES
     src/ui/ResizeEventFilter.h
     src/ui/AddressBar.cpp
     src/ui/AddressBar.h
+    src/ui/MetaPreviewWidget.h
+    src/ui/MetaPreviewWidget.cpp
+    src/ui/MetaRatingColorWidget.h
+    src/ui/MetaRatingColorWidget.cpp
+    src/ui/MetaTagSection.h
+    src/ui/MetaTagSection.cpp
+    src/ui/MetaInfoSection.h
+    src/ui/MetaInfoSection.cpp
     src/ui/MetaPanel.cpp
     src/ui/MetaPanel.h
     src/ui/TagSelectorOverlay.h

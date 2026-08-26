@@ -20,7 +20,6 @@ using namespace QuarkMeta::Style;
 
 namespace QuarkMeta {
 
-// ─── 颜色映射表 ────────────────────────────────────────────────────
 QMap<QString, QColor> FilterPanel::s_colorMap() {
     return {
         { "",        QColor("#888780") },
@@ -41,12 +40,11 @@ static QString ratingDisplayName(int r) {
     return r == 0 ? "无评级" : QString("★").repeated(r);
 }
 
-
-// ─── FilterPanel ──────────────────────────────────────────────────
-
 void FilterPanel::syncUIFromFilterState() {
     updateHeaderStatus();
     
+    FilterState currentSt = currentFilter();
+
     QList<StyledCheckBox*> allCheckBoxes = findChildren<StyledCheckBox*>();
     for (auto* cb : allCheckBoxes) {
         ClickableRow* row = qobject_cast<ClickableRow*>(cb->parentWidget());
@@ -58,34 +56,30 @@ void FilterPanel::syncUIFromFilterState() {
         QString text = labelWidget->text();
         bool shouldCheck = false;
         
-        // 1. 评级匹配
-        if (text == "无评级") shouldCheck = m_filter.ratings.contains(0);
-        else if (text.contains("★")) shouldCheck = m_filter.ratings.contains(text.count("★"));
+        if (text == "无评级") shouldCheck = currentSt.ratings.contains(0);
+        else if (text.contains("★")) shouldCheck = currentSt.ratings.contains(text.count("★"));
         
-        // 2. 颜色匹配
-        else if (text == "无色标") shouldCheck = (m_filter.colors.contains("无色标") || m_filter.colors.contains(""));
-        else if (m_filter.colors.contains(text)) shouldCheck = true;
+        else if (text == "无色标") shouldCheck = (currentSt.colors.contains("无色标") || currentSt.colors.contains(""));
+        else if (currentSt.colors.contains(text)) shouldCheck = true;
 
-        // 3. 类型/日期匹配
-        else if (m_filter.types.contains(text)) shouldCheck = true;
-        else if (m_filter.createDates.contains(text)) shouldCheck = true;
-        else if (m_filter.modifyDates.contains(text)) shouldCheck = true;
+        else if (currentSt.types.contains(text)) shouldCheck = true;
+        else if (currentSt.createDates.contains(text)) shouldCheck = true;
+        else if (currentSt.modifyDates.contains(text)) shouldCheck = true;
         
-        // 4. 链接/备注/比例匹配
-        else if (text == "有链接") shouldCheck = (m_filter.linkPresence == FilterState::Yes);
-        else if (text == "无链接") shouldCheck = (m_filter.linkPresence == FilterState::No);
-        else if (text == "有备注") shouldCheck = (m_filter.notePresence == FilterState::Yes);
-        else if (text == "已标签") shouldCheck = (m_filter.tagPresence == FilterState::Yes);
-        else if (text == "未标签") shouldCheck = (m_filter.tagPresence == FilterState::No);
-        else if (text == "重复项") shouldCheck = (m_filter.duplicatePresence == FilterState::DuplicateOnly);
-        else if (text == "未重复") shouldCheck = (m_filter.duplicatePresence == FilterState::UniqueOnly);
-        else if (text == "无备注") shouldCheck = (m_filter.notePresence == FilterState::No);
-        else if (text == "横图") shouldCheck = (m_filter.ratio == FilterState::Horizontal);
-        else if (text == "竖图") shouldCheck = (m_filter.ratio == FilterState::Vertical);
-        else if (text == "方形") shouldCheck = (m_filter.ratio == FilterState::Square);
-        else if (text == "16:9") shouldCheck = (m_filter.ratio == FilterState::Ratio169);
-        else if (text == "有缩略图") shouldCheck = (m_filter.thumbnailPresence == FilterState::HasThumbnail);
-        else if (text == "无缩略图 (提取失败)" || text == "无缩略图 (失败/跳过)") shouldCheck = (m_filter.thumbnailPresence == FilterState::NoThumbnail);
+        else if (text == "有链接") shouldCheck = (currentSt.linkPresence == FilterState::Yes);
+        else if (text == "无链接") shouldCheck = (currentSt.linkPresence == FilterState::No);
+        else if (text == "有备注") shouldCheck = (currentSt.notePresence == FilterState::Yes);
+        else if (text == "已标签") shouldCheck = (currentSt.tagPresence == FilterState::Yes);
+        else if (text == "未标签") shouldCheck = (currentSt.tagPresence == FilterState::No);
+        else if (text == "重复项") shouldCheck = (currentSt.duplicatePresence == FilterState::DuplicateOnly);
+        else if (text == "未重复") shouldCheck = (currentSt.duplicatePresence == FilterState::UniqueOnly);
+        else if (text == "无备注") shouldCheck = (currentSt.notePresence == FilterState::No);
+        else if (text == "横图") shouldCheck = (currentSt.ratio == FilterState::Horizontal);
+        else if (text == "竖图") shouldCheck = (currentSt.ratio == FilterState::Vertical);
+        else if (text == "方形") shouldCheck = (currentSt.ratio == FilterState::Square);
+        else if (text == "16:9") shouldCheck = (currentSt.ratio == FilterState::Ratio169);
+        else if (text == "有缩略图") shouldCheck = (currentSt.thumbnailPresence == FilterState::HasThumbnail);
+        else if (text == "无缩略图 (提取失败)" || text == "无缩略图 (失败/跳过)") shouldCheck = (currentSt.thumbnailPresence == FilterState::NoThumbnail);
 
         cb->blockSignals(true);
         cb->setChecked(shouldCheck);
@@ -94,6 +88,15 @@ void FilterPanel::syncUIFromFilterState() {
 }
 
 FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
+    m_filterModel = new FilterStateModel(this);
+    m_statsEngine = new ScanStatsEngine(this);
+
+    connect(m_filterModel, &FilterStateModel::stateChanged, this, [this](const FilterState& st) {
+        m_filter = st;
+        emit filterChanged(st);
+        updateHeaderStatus();
+    });
+
     setContextMenuPolicy(Qt::CustomContextMenu);
 
     setObjectName("FilterContainer");
@@ -105,7 +108,6 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
 
-    // 顶部标题栏
     QWidget* topBar = new QWidget(this);
     topBar->setObjectName("ContainerHeader");
     topBar->setFixedHeight(32);
@@ -181,7 +183,6 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
 
     updateHeaderStatus();
 
-    // 滚动内容区
     m_scrollArea = new QScrollArea(this);
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -233,12 +234,13 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
 
                 connect(m_historyPanel, &SearchHistoryPanel::historyItemClicked, this, [this, edit, key](const QString& text) {
                     edit->setText(text);
-                    if (edit == m_editType) m_filter.typeFilterText = text;
-                    else if (edit == m_editCreateDate) m_filter.createDateFilterText = text;
-                    else if (edit == m_editModifyDate) m_filter.modifyDateFilterText = text;
+                    FilterState st = m_filterModel->state();
+                    if (edit == m_editType) st.typeFilterText = text;
+                    else if (edit == m_editCreateDate) st.createDateFilterText = text;
+                    else if (edit == m_editModifyDate) st.modifyDateFilterText = text;
 
                     saveFilterHistory(key, text);
-                    emit filterChanged(m_filter);
+                    m_filterModel->setState(st);
                     m_historyPanel->hide();
                 });
 
@@ -260,8 +262,10 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
     return QWidget::eventFilter(watched, event);
 }
 
-// ─── populate ─────────────────────────────────────────────────────
 void FilterPanel::populateStats(const QuarkMeta::ScanStats& stats) {
+    if (m_statsEngine) {
+        m_statsEngine->updateStats(stats);
+    }
     m_currentStats = stats;
     m_ratingCounts = stats.ratingCounts;
     m_colorCounts = stats.colorCounts;
@@ -377,7 +381,8 @@ void FilterPanel::rebuildDateCheckboxes(bool isCreateDate, bool descending) {
     }
 
     const QMap<QString, int>& counts = isCreateDate ? m_createDateCounts : m_modifyDateCounts;
-    QStringList& selected = isCreateDate ? m_filter.createDates : m_filter.modifyDates;
+    FilterState currentSt = m_filterModel->state();
+    QStringList& selected = isCreateDate ? currentSt.createDates : currentSt.modifyDates;
 
     QStringList dates = counts.keys();
     std::sort(dates.begin(), dates.end(), [descending](const QString& a, const QString& b) {
@@ -390,15 +395,15 @@ void FilterPanel::rebuildDateCheckboxes(bool isCreateDate, bool descending) {
         cb->setChecked(selected.contains(d));
         cb->blockSignals(false);
         connect(cb, &QCheckBox::toggled, this, [this, isCreateDate, d](bool on) {
-            QStringList& targetList = isCreateDate ? m_filter.createDates : m_filter.modifyDates;
+            FilterState st = m_filterModel->state();
+            QStringList& targetList = isCreateDate ? st.createDates : st.modifyDates;
             if (on) { if (!targetList.contains(d)) targetList.append(d); }
             else targetList.removeAll(d);
-            emit filterChanged(m_filter);
+            m_filterModel->setState(st);
         });
     }
 }
 
-// ─── rebuildGroups ────────────────────────────────────────────────
 void FilterPanel::rebuildGroups() {
     updateHeaderStatus();
     m_groupHeaders.clear();
@@ -419,7 +424,9 @@ void FilterPanel::rebuildGroups() {
         delete item;
     }
 
-    // ── 1. 标签 (独立主选项，位于最顶部) ──────────────────────────────
+    FilterState currentSt = m_filterModel->state();
+
+    // ── 1. 标签 ──────────────────────────────
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("标签", gl);
@@ -429,24 +436,26 @@ void FilterPanel::rebuildGroups() {
         tagGroup->setExclusive(false);
 
         QCheckBox* cbYes = addFilterRow(gl, "已标签", m_currentStats.hasTagCount);
-        if (m_filter.tagPresence == FilterState::Yes) cbYes->setChecked(true);
+        if (currentSt.tagPresence == FilterState::Yes) cbYes->setChecked(true);
         connect(cbYes, &QCheckBox::toggled, this, [this, tagGroup, cbYes](bool on) {
+            FilterState st = m_filterModel->state();
             if (on) {
                 for (QAbstractButton* b : tagGroup->buttons()) if (b != cbYes && b->isChecked()) b->setChecked(false);
-                m_filter.tagPresence = FilterState::Yes;
-            } else m_filter.tagPresence = FilterState::All;
-            emit filterChanged(m_filter);
+                st.tagPresence = FilterState::Yes;
+            } else st.tagPresence = FilterState::All;
+            m_filterModel->setState(st);
         });
         tagGroup->addButton(cbYes);
 
         QCheckBox* cbNo = addFilterRow(gl, "未标签", m_currentStats.noTagCount);
-        if (m_filter.tagPresence == FilterState::No) cbNo->setChecked(true);
+        if (currentSt.tagPresence == FilterState::No) cbNo->setChecked(true);
         connect(cbNo, &QCheckBox::toggled, this, [this, tagGroup, cbNo](bool on) {
+            FilterState st = m_filterModel->state();
             if (on) {
                 for (QAbstractButton* b : tagGroup->buttons()) if (b != cbNo && b->isChecked()) b->setChecked(false);
-                m_filter.tagPresence = FilterState::No;
-            } else m_filter.tagPresence = FilterState::All;
-            emit filterChanged(m_filter);
+                st.tagPresence = FilterState::No;
+            } else st.tagPresence = FilterState::All;
+            m_filterModel->setState(st);
         });
         tagGroup->addButton(cbNo);
 
@@ -462,20 +471,20 @@ void FilterPanel::rebuildGroups() {
             if (!m_ratingCounts.contains(r) || m_ratingCounts[r] <= 0) continue;
             QCheckBox* cb = addFilterRow(gl, ratingDisplayName(r), m_ratingCounts[r]);
             cb->blockSignals(true);
-            cb->setChecked(m_filter.ratings.contains(r));
+            cb->setChecked(currentSt.ratings.contains(r));
             cb->blockSignals(false);
             connect(cb, &QCheckBox::toggled, this, [this, r](bool on) {
-                if (on) { if (!m_filter.ratings.contains(r)) m_filter.ratings.append(r); }
-                else m_filter.ratings.removeAll(r);
-                emit filterChanged(m_filter);
+                FilterState st = m_filterModel->state();
+                if (on) { if (!st.ratings.contains(r)) st.ratings.append(r); }
+                else st.ratings.removeAll(r);
+                m_filterModel->setState(st);
             });
         }
 
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-
-    // ── 2. 颜色标记 (动态呈现：有对应文件时才显示) ────────────
+    // ── 3. 颜色标记 ────────────
     {
         static const struct { QString name; QString hex; QColor color; } colorsList[] = {
             {"无色标", "",        QColor("#808080")},
@@ -492,7 +501,7 @@ void FilterPanel::rebuildGroups() {
         bool hasAnyColor = false;
         for (const auto& item : colorsList) {
             int cnt = m_colorCounts.value(item.hex, m_colorCounts.value(item.name, 0));
-            bool isChecked = (m_filter.colors.contains(item.name) || m_filter.colors.contains(item.hex));
+            bool isChecked = (currentSt.colors.contains(item.name) || currentSt.colors.contains(item.hex));
             if (cnt > 0 || isChecked) {
                 hasAnyColor = true;
                 break;
@@ -507,9 +516,8 @@ void FilterPanel::rebuildGroups() {
 
             for (const auto& item : colorsList) {
                 int cnt = m_colorCounts.value(item.hex, m_colorCounts.value(item.name, 0));
-                bool isChecked = (m_filter.colors.contains(item.name) || m_filter.colors.contains(item.hex));
+                bool isChecked = (currentSt.colors.contains(item.name) || currentSt.colors.contains(item.hex));
 
-                // 🚨 动态规则：仅在有对应文件或当前已勾选时才显示！
                 if (cnt == 0 && !isChecked) {
                     continue;
                 }
@@ -517,13 +525,14 @@ void FilterPanel::rebuildGroups() {
                 QCheckBox* cb = addFilterRow(gl, item.name, cnt, item.color);
                 cb->setChecked(isChecked);
                 connect(cb, &QCheckBox::checkStateChanged, this, [this, name = item.name, hex = item.hex](Qt::CheckState state) {
+                    FilterState st = m_filterModel->state();
                     if (state == Qt::Checked) {
-                        if (!m_filter.colors.contains(name)) m_filter.colors.append(name);
+                        if (!st.colors.contains(name)) st.colors.append(name);
                     } else {
-                        m_filter.colors.removeAll(name);
-                        m_filter.colors.removeAll(hex);
+                        st.colors.removeAll(name);
+                        st.colors.removeAll(hex);
                     }
-                    emit filterChanged(m_filter);
+                    m_filterModel->setState(st);
                 });
             }
 
@@ -532,7 +541,7 @@ void FilterPanel::rebuildGroups() {
     }
 
     // ── 4. 文件类型 ──────────────────────────────────────────
-    if (!m_typeCounts.isEmpty() || !m_filter.typeFilterText.isEmpty() || m_emptyFolderCount > 0) {
+    if (!m_typeCounts.isEmpty() || !currentSt.typeFilterText.isEmpty() || m_emptyFolderCount > 0) {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("文件类型", gl);
 
@@ -544,7 +553,7 @@ void FilterPanel::rebuildGroups() {
         m_editType = new QLineEdit(wType);
         m_editType->setClearButtonEnabled(true);
         m_editType->setPlaceholderText("例： png / 文件夹...");
-        m_editType->setText(m_filter.typeFilterText);
+        m_editType->setText(currentSt.typeFilterText);
         m_editType->setObjectName("FilterSearchEdit");
         m_editType->setFixedHeight(22);
         m_editType->setStyleSheet(
@@ -560,14 +569,16 @@ void FilterPanel::rebuildGroups() {
         );
         m_editType->installEventFilter(this);
         connect(m_editType, &QLineEdit::returnPressed, this, [this]() {
-            m_filter.typeFilterText = m_editType->text();
-            saveFilterHistory("Type", m_filter.typeFilterText);
-            emit filterChanged(m_filter);
+            FilterState st = m_filterModel->state();
+            st.typeFilterText = m_editType->text();
+            saveFilterHistory("Type", st.typeFilterText);
+            m_filterModel->setState(st);
         });
         connect(m_editType, &QLineEdit::textChanged, this, [this](const QString& text) {
-            if (text.isEmpty() && !m_filter.typeFilterText.isEmpty()) {
-                m_filter.typeFilterText = "";
-                emit filterChanged(m_filter);
+            FilterState st = m_filterModel->state();
+            if (text.isEmpty() && !st.typeFilterText.isEmpty()) {
+                st.typeFilterText = "";
+                m_filterModel->setState(st);
             }
         });
         lType->addWidget(m_editType);
@@ -576,35 +587,38 @@ void FilterPanel::rebuildGroups() {
         if (m_emptyFolderCount > 0) {
             QCheckBox* cb = addFilterRow(gl, "空文件夹", m_emptyFolderCount);
             cb->blockSignals(true);
-            cb->setChecked(m_filter.types.contains("空文件夹"));
+            cb->setChecked(currentSt.types.contains("空文件夹"));
             cb->blockSignals(false);
             connect(cb, &QCheckBox::toggled, this, [this](bool on) {
-                if (on) { if (!m_filter.types.contains("空文件夹")) m_filter.types.append("空文件夹"); }
-                else    m_filter.types.removeAll("空文件夹");
-                emit filterChanged(m_filter);
+                FilterState st = m_filterModel->state();
+                if (on) { if (!st.types.contains("空文件夹")) st.types.append("空文件夹"); }
+                else    st.types.removeAll("空文件夹");
+                m_filterModel->setState(st);
             });
         }
 
         if (m_typeCounts.contains("folder") && m_typeCounts["folder"] > 0) {
             QCheckBox* cb = addFilterRow(gl, "文件夹", m_typeCounts["folder"]);
             cb->blockSignals(true);
-            cb->setChecked(m_filter.types.contains("folder"));
+            cb->setChecked(currentSt.types.contains("folder"));
             cb->blockSignals(false);
             connect(cb, &QCheckBox::toggled, this, [this](bool on) {
-                if (on) { if (!m_filter.types.contains("folder")) m_filter.types.append("folder"); }
-                else    m_filter.types.removeAll("folder");
-                emit filterChanged(m_filter);
+                FilterState st = m_filterModel->state();
+                if (on) { if (!st.types.contains("folder")) st.types.append("folder"); }
+                else    st.types.removeAll("folder");
+                m_filterModel->setState(st);
             });
         }
         if (m_typeCounts.contains("file") && m_typeCounts["file"] > 0) {
             QCheckBox* cb = addFilterRow(gl, "文件", m_typeCounts["file"]);
             cb->blockSignals(true);
-            cb->setChecked(m_filter.types.contains("file"));
+            cb->setChecked(currentSt.types.contains("file"));
             cb->blockSignals(false);
             connect(cb, &QCheckBox::toggled, this, [this](bool on) {
-                if (on) { if (!m_filter.types.contains("file")) m_filter.types.append("file"); }
-                else    m_filter.types.removeAll("file");
-                emit filterChanged(m_filter);
+                FilterState st = m_filterModel->state();
+                if (on) { if (!st.types.contains("file")) st.types.append("file"); }
+                else    st.types.removeAll("file");
+                m_filterModel->setState(st);
             });
         }
         QStringList exts = m_typeCounts.keys(); exts.sort();
@@ -613,19 +627,20 @@ void FilterPanel::rebuildGroups() {
             QString label = ext.isEmpty() ? "无扩展名" : ext;
             QCheckBox* cb = addFilterRow(gl, label, m_typeCounts[ext]);
             cb->blockSignals(true);
-            cb->setChecked(m_filter.types.contains(ext));
+            cb->setChecked(currentSt.types.contains(ext));
             cb->blockSignals(false);
             connect(cb, &QCheckBox::toggled, this, [this, ext](bool on) {
-                if (on) { if (!m_filter.types.contains(ext)) m_filter.types.append(ext); }
-                else m_filter.types.removeAll(ext);
-                emit filterChanged(m_filter);
+                FilterState st = m_filterModel->state();
+                if (on) { if (!st.types.contains(ext)) st.types.append(ext); }
+                else st.types.removeAll(ext);
+                m_filterModel->setState(st);
             });
         }
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 5. 创建日期 (Plan-92: 排序支持) ──────────────────────────
-    if (!m_createDateCounts.isEmpty() || !m_filter.createDateFilterText.isEmpty()) {
+    // ── 5. 创建日期 ──────────────────────────
+    if (!m_createDateCounts.isEmpty() || !currentSt.createDateFilterText.isEmpty()) {
         QVBoxLayout* gl = nullptr;
         QHBoxLayout* hdrLayout = nullptr;
         QWidget* g = buildGroup("创建日期", gl, &hdrLayout);
@@ -652,7 +667,7 @@ void FilterPanel::rebuildGroups() {
         m_editCreateDate = new QLineEdit(wCreateDate);
         m_editCreateDate->setClearButtonEnabled(true);
         m_editCreateDate->setPlaceholderText("例： 2025 / 03-2025...");
-        m_editCreateDate->setText(m_filter.createDateFilterText);
+        m_editCreateDate->setText(currentSt.createDateFilterText);
         m_editCreateDate->setObjectName("FilterSearchEdit");
         m_editCreateDate->setFixedHeight(22);
         m_editCreateDate->setStyleSheet(
@@ -668,14 +683,16 @@ void FilterPanel::rebuildGroups() {
         );
         m_editCreateDate->installEventFilter(this);
         connect(m_editCreateDate, &QLineEdit::returnPressed, this, [this]() {
-            m_filter.createDateFilterText = m_editCreateDate->text();
-            saveFilterHistory("CreateDate", m_filter.createDateFilterText);
-            emit filterChanged(m_filter);
+            FilterState st = m_filterModel->state();
+            st.createDateFilterText = m_editCreateDate->text();
+            saveFilterHistory("CreateDate", st.createDateFilterText);
+            m_filterModel->setState(st);
         });
         connect(m_editCreateDate, &QLineEdit::textChanged, this, [this](const QString& text) {
-            if (text.isEmpty() && !m_filter.createDateFilterText.isEmpty()) {
-                m_filter.createDateFilterText = "";
-                emit filterChanged(m_filter);
+            FilterState st = m_filterModel->state();
+            if (text.isEmpty() && !st.createDateFilterText.isEmpty()) {
+                st.createDateFilterText = "";
+                m_filterModel->setState(st);
             }
         });
         lCreateDate->addWidget(m_editCreateDate);
@@ -685,8 +702,8 @@ void FilterPanel::rebuildGroups() {
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 6. 修改日期 (Plan-92: 排序支持) ──────────────────────────
-    if (!m_modifyDateCounts.isEmpty() || !m_filter.modifyDateFilterText.isEmpty()) {
+    // ── 6. 修改日期 ──────────────────────────
+    if (!m_modifyDateCounts.isEmpty() || !currentSt.modifyDateFilterText.isEmpty()) {
         QVBoxLayout* gl = nullptr;
         QHBoxLayout* hdrLayout = nullptr;
         QWidget* g = buildGroup("修改日期", gl, &hdrLayout);
@@ -713,7 +730,7 @@ void FilterPanel::rebuildGroups() {
         m_editModifyDate = new QLineEdit(wModifyDate);
         m_editModifyDate->setClearButtonEnabled(true);
         m_editModifyDate->setPlaceholderText("例： 2025 / 03-2025...");
-        m_editModifyDate->setText(m_filter.modifyDateFilterText);
+        m_editModifyDate->setText(currentSt.modifyDateFilterText);
         m_editModifyDate->setObjectName("FilterSearchEdit");
         m_editModifyDate->setFixedHeight(22);
         m_editModifyDate->setStyleSheet(
@@ -729,14 +746,16 @@ void FilterPanel::rebuildGroups() {
         );
         m_editModifyDate->installEventFilter(this);
         connect(m_editModifyDate, &QLineEdit::returnPressed, this, [this]() {
-            m_filter.modifyDateFilterText = m_editModifyDate->text();
-            saveFilterHistory("ModifyDate", m_filter.modifyDateFilterText);
-            emit filterChanged(m_filter);
+            FilterState st = m_filterModel->state();
+            st.modifyDateFilterText = m_editModifyDate->text();
+            saveFilterHistory("ModifyDate", st.modifyDateFilterText);
+            m_filterModel->setState(st);
         });
         connect(m_editModifyDate, &QLineEdit::textChanged, this, [this](const QString& text) {
-            if (text.isEmpty() && !m_filter.modifyDateFilterText.isEmpty()) {
-                m_filter.modifyDateFilterText = "";
-                emit filterChanged(m_filter);
+            FilterState st = m_filterModel->state();
+            if (text.isEmpty() && !st.modifyDateFilterText.isEmpty()) {
+                st.modifyDateFilterText = "";
+                m_filterModel->setState(st);
             }
         });
         lModifyDate->addWidget(m_editModifyDate);
@@ -746,7 +765,7 @@ void FilterPanel::rebuildGroups() {
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 7. 链接 (独立主选项) ──────────────────────────────────────────
+    // ── 7. 链接 ──────────────────────────────────────────
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("链接", gl);
@@ -756,31 +775,33 @@ void FilterPanel::rebuildGroups() {
         linkGroup->setExclusive(false);
 
         QCheckBox* cbYes = addFilterRow(gl, "有链接", m_currentStats.hasLinkCount);
-        if (m_filter.linkPresence == FilterState::Yes) cbYes->setChecked(true);
+        if (currentSt.linkPresence == FilterState::Yes) cbYes->setChecked(true);
         connect(cbYes, &QCheckBox::toggled, this, [this, linkGroup, cbYes](bool on) {
+            FilterState st = m_filterModel->state();
             if (on) {
                 for (QAbstractButton* b : linkGroup->buttons()) if (b != cbYes && b->isChecked()) b->setChecked(false);
-                m_filter.linkPresence = FilterState::Yes;
-            } else m_filter.linkPresence = FilterState::All;
-            emit filterChanged(m_filter);
+                st.linkPresence = FilterState::Yes;
+            } else st.linkPresence = FilterState::All;
+            m_filterModel->setState(st);
         });
         linkGroup->addButton(cbYes);
 
         QCheckBox* cbNo = addFilterRow(gl, "无链接", m_currentStats.noLinkCount);
-        if (m_filter.linkPresence == FilterState::No) cbNo->setChecked(true);
+        if (currentSt.linkPresence == FilterState::No) cbNo->setChecked(true);
         connect(cbNo, &QCheckBox::toggled, this, [this, linkGroup, cbNo](bool on) {
+            FilterState st = m_filterModel->state();
             if (on) {
                 for (QAbstractButton* b : linkGroup->buttons()) if (b != cbNo && b->isChecked()) b->setChecked(false);
-                m_filter.linkPresence = FilterState::No;
-            } else m_filter.linkPresence = FilterState::All;
-            emit filterChanged(m_filter);
+                st.linkPresence = FilterState::No;
+            } else st.linkPresence = FilterState::All;
+            m_filterModel->setState(st);
         });
         linkGroup->addButton(cbNo);
 
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 8. 备注 (独立主选项) ──────────────────────────────────────────
+    // ── 8. 备注 ──────────────────────────────────────────
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("备注", gl);
@@ -790,31 +811,33 @@ void FilterPanel::rebuildGroups() {
         noteGroup->setExclusive(false);
 
         QCheckBox* cbYes = addFilterRow(gl, "有备注", m_currentStats.hasNoteCount);
-        if (m_filter.notePresence == FilterState::Yes) cbYes->setChecked(true);
+        if (currentSt.notePresence == FilterState::Yes) cbYes->setChecked(true);
         connect(cbYes, &QCheckBox::toggled, this, [this, noteGroup, cbYes](bool on) {
+            FilterState st = m_filterModel->state();
             if (on) {
                 for (QAbstractButton* b : noteGroup->buttons()) if (b != cbYes && b->isChecked()) b->setChecked(false);
-                m_filter.notePresence = FilterState::Yes;
-            } else m_filter.notePresence = FilterState::All;
-            emit filterChanged(m_filter);
+                st.notePresence = FilterState::Yes;
+            } else st.notePresence = FilterState::All;
+            m_filterModel->setState(st);
         });
         noteGroup->addButton(cbYes);
 
         QCheckBox* cbNo = addFilterRow(gl, "无备注", m_currentStats.noNoteCount);
-        if (m_filter.notePresence == FilterState::No) cbNo->setChecked(true);
+        if (currentSt.notePresence == FilterState::No) cbNo->setChecked(true);
         connect(cbNo, &QCheckBox::toggled, this, [this, noteGroup, cbNo](bool on) {
+            FilterState st = m_filterModel->state();
             if (on) {
                 for (QAbstractButton* b : noteGroup->buttons()) if (b != cbNo && b->isChecked()) b->setChecked(false);
-                m_filter.notePresence = FilterState::No;
-            } else m_filter.notePresence = FilterState::All;
-            emit filterChanged(m_filter);
+                st.notePresence = FilterState::No;
+            } else st.notePresence = FilterState::All;
+            m_filterModel->setState(st);
         });
         noteGroup->addButton(cbNo);
 
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 9. 文件大小 (独立主选项) ──────────────────────────────────────────
+    // ── 9. 文件大小 ──────────────────────────────────────────
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("文件大小", gl);
@@ -866,9 +889,10 @@ void FilterPanel::rebuildGroups() {
                 else if (unit == "GB") factor = 1024 * 1024 * 1024;
                 return (long long)(val * factor);
             };
-            m_filter.minSize = toBytes(minEdit->text(), unitCombo->currentText());
-            m_filter.maxSize = toBytes(maxEdit->text(), unitCombo->currentText());
-            emit filterChanged(m_filter);
+            FilterState st = m_filterModel->state();
+            st.minSize = toBytes(minEdit->text(), unitCombo->currentText());
+            st.maxSize = toBytes(maxEdit->text(), unitCombo->currentText());
+            m_filterModel->setState(st);
         };
 
         connect(minEdit, &QLineEdit::editingFinished, this, updateSizeFilter);
@@ -884,7 +908,7 @@ void FilterPanel::rebuildGroups() {
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 11. 图像比例 (独立主选项) ──────────────────────────────────────────
+    // ── 11. 图像比例 ──────────────────────────────────────────
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("图像比例", gl);
@@ -901,20 +925,21 @@ void FilterPanel::rebuildGroups() {
         };
         for (const auto& [ratio, label, count] : ratioItems) {
             QCheckBox* cb = addFilterRow(gl, label, count);
-            if (m_filter.ratio == ratio) cb->setChecked(true);
+            if (currentSt.ratio == ratio) cb->setChecked(true);
             connect(cb, &QCheckBox::toggled, this, [this, ratio, ratioGroup, cb](bool on) {
+                FilterState st = m_filterModel->state();
                 if (on) {
                     for (QAbstractButton* b : ratioGroup->buttons()) if (b != cb && b->isChecked()) b->setChecked(false);
-                    m_filter.ratio = ratio;
-                } else m_filter.ratio = FilterState::AspectAny;
-                emit filterChanged(m_filter);
+                    st.ratio = ratio;
+                } else st.ratio = FilterState::AspectAny;
+                m_filterModel->setState(st);
             });
             ratioGroup->addButton(cb);
         }
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 12. 重复状态 (最底部独立主选项) ───────────────────────────
+    // ── 12. 重复状态 ───────────────────────────
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("重复状态", gl);
@@ -929,20 +954,21 @@ void FilterPanel::rebuildGroups() {
         };
         for (const auto& [presence, label, count] : dupItems) {
             QCheckBox* cb = addFilterRow(gl, label, count);
-            if (m_filter.duplicatePresence == presence) cb->setChecked(true);
+            if (currentSt.duplicatePresence == presence) cb->setChecked(true);
             connect(cb, &QCheckBox::toggled, this, [this, presence, dupGroup, cb](bool on) {
+                FilterState st = m_filterModel->state();
                 if (on) {
                     for (QAbstractButton* b : dupGroup->buttons()) if (b != cb && b->isChecked()) b->setChecked(false);
-                    m_filter.duplicatePresence = presence;
-                } else m_filter.duplicatePresence = FilterState::DupAll;
-                emit filterChanged(m_filter);
+                    st.duplicatePresence = presence;
+                } else st.duplicatePresence = FilterState::DupAll;
+                m_filterModel->setState(st);
             });
             dupGroup->addButton(cb);
         }
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 13. 缩略图状态 (独立主选项，常驻显示) ───────────────────────────
+    // ── 13. 缩略图状态 ───────────────────────────
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("缩略图状态", gl);
@@ -951,24 +977,26 @@ void FilterPanel::rebuildGroups() {
         thumbGroup->setExclusive(false);
 
         QCheckBox* cbYes = addFilterRow(gl, "有缩略图", m_currentStats.hasThumbnailCount);
-        if (m_filter.thumbnailPresence == FilterState::HasThumbnail) cbYes->setChecked(true);
+        if (currentSt.thumbnailPresence == FilterState::HasThumbnail) cbYes->setChecked(true);
         connect(cbYes, &QCheckBox::toggled, this, [this, thumbGroup, cbYes](bool on) {
+            FilterState st = m_filterModel->state();
             if (on) {
                 for (QAbstractButton* b : thumbGroup->buttons()) if (b != cbYes && b->isChecked()) b->setChecked(false);
-                m_filter.thumbnailPresence = FilterState::HasThumbnail;
-            } else m_filter.thumbnailPresence = FilterState::ThumbAll;
-            emit filterChanged(m_filter);
+                st.thumbnailPresence = FilterState::HasThumbnail;
+            } else st.thumbnailPresence = FilterState::ThumbAll;
+            m_filterModel->setState(st);
         });
         thumbGroup->addButton(cbYes);
 
         QCheckBox* cbNo = addFilterRow(gl, "无缩略图 (提取失败)", m_currentStats.noThumbnailCount);
-        if (m_filter.thumbnailPresence == FilterState::NoThumbnail) cbNo->setChecked(true);
+        if (currentSt.thumbnailPresence == FilterState::NoThumbnail) cbNo->setChecked(true);
         connect(cbNo, &QCheckBox::toggled, this, [this, thumbGroup, cbNo](bool on) {
+            FilterState st = m_filterModel->state();
             if (on) {
                 for (QAbstractButton* b : thumbGroup->buttons()) if (b != cbNo && b->isChecked()) b->setChecked(false);
-                m_filter.thumbnailPresence = FilterState::NoThumbnail;
-            } else m_filter.thumbnailPresence = FilterState::ThumbAll;
-            emit filterChanged(m_filter);
+                st.thumbnailPresence = FilterState::NoThumbnail;
+            } else st.thumbnailPresence = FilterState::ThumbAll;
+            m_filterModel->setState(st);
         });
         thumbGroup->addButton(cbNo);
 
@@ -976,7 +1004,6 @@ void FilterPanel::rebuildGroups() {
     }
 }
 
-// ─── buildGroup ───────────────────────────────────────────────────
 QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentLayout,
                                   QHBoxLayout** outHdrLayout) {
     QWidget* wrapper = new QWidget(m_container);
@@ -1052,7 +1079,6 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
     return wrapper;
 }
 
-// ─── addFilterRow ─────────────────────────────────────────────────
 QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, int count, const QColor& dotColor) {
     StyledCheckBox* cb = new StyledCheckBox();
 
@@ -1084,7 +1110,6 @@ QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, 
     return cb;
 }
 
-// ─── clearAllFilters ──────────────────────────────────────────────
 void FilterPanel::clearAllFilters(bool force) {
     if (!force && m_isFilterPinned) {
         return;
@@ -1098,21 +1123,21 @@ void FilterPanel::clearAllFilters(bool force) {
         }
     }
 
-    m_filter = FilterState{};
-    m_filter.duplicatePresence = FilterState::DupAll;
+    if (m_filterModel) {
+        m_filterModel->reset(force);
+    }
 
     if (m_editType) m_editType->clear();
     if (m_editCreateDate) m_editCreateDate->clear();
     if (m_editModifyDate) m_editModifyDate->clear();
     
     rebuildGroups();
-    emit filterChanged(m_filter);
 }
 
 void FilterPanel::updateHeaderStatus() {
     if (!m_iconLabel || !m_titleLabel || !m_btnClearAll || !m_btnToggleGroups) return;
     
-    bool active = !m_filter.isEmpty();
+    bool active = m_filterModel ? !m_filterModel->state().isEmpty() : !m_filter.isEmpty();
     
     QColor brandYellow = QColor("#f1c40f");
     m_iconLabel->setPixmap(UiHelper::getIcon("filter_funnel_outline", brandYellow, 18).pixmap(18, 18));
@@ -1148,11 +1173,12 @@ void FilterPanel::setMirrorSource(bool isMirror) {
 void FilterPanel::selectColor(const QColor& color) {
     QString hex = color.name().toUpper();
     
-    m_filter.colors.clear();
-    m_filter.colors.append(hex);
+    FilterState st = m_filterModel->state();
+    st.colors.clear();
+    st.colors.append(hex);
 
+    m_filterModel->setState(st);
     rebuildGroups();
-    emit filterChanged(m_filter);
 }
 
 } // namespace QuarkMeta

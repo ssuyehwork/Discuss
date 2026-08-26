@@ -19,7 +19,9 @@
 #include "MetadataManager.h"
 #include "MetadataDefs.h"
 #include "DatabaseManager.h"
-#include "DriveMetaDao.h"
+#include "QuarkMetaJsonStore.h"
+#include "MetaDbRepository.h"
+#include "MetaMemoryCache.h"
 #include "../core/AppConfig.h"
 #include "../ui/MediaColorExtractor.h"
 #include "StatisticsService.h"
@@ -27,10 +29,6 @@
 #include "../ui/UiHelper.h"
 #include "MediaExtractorPipeline.h"
 #include "../util/ShellHelper.h"
-#include "QuarkMetaJson.h"
-#include <QJsonDocument>
-#include <QJsonArray>
-#include <QJsonObject>
 
 #include <windows.h>
 #include <objbase.h>
@@ -103,7 +101,7 @@ void MetadataManager::initFromDatabase() {
         if (m_loaded) return;
     }
 
-    DatabaseManager::instance().init();
+    MetaDbRepository::instance().initDatabase();
 
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
@@ -152,38 +150,31 @@ void MetadataManager::registerItem(const std::wstring& path) {
 
     long long pSize = 0, pMtime = 0;
     if (fetchWinApiMetadataDirect(nPath, &pSize, nullptr, nullptr, &pMtime, nullptr)) {
-        size_t idx = getShardIndex(nPath);
-        {
-            std::shared_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            auto it = m_shards[idx].items.find(nPath);
-            if (it != m_shards[idx].items.end()) {
-                bool metadataValid = true;
-                QFileInfo info(QString::fromStdWString(nPath));
-                if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
-                    if (it->second.width <= 0 || it->second.height <= 0 || it->second.autoColor.empty()) {
-                        metadataValid = false;
-                    }
+        if (MetaMemoryCache::instance().contains(nPath)) {
+            RuntimeMeta meta = MetaMemoryCache::instance().getMeta(nPath);
+            bool metadataValid = true;
+            QFileInfo info(QString::fromStdWString(nPath));
+            if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
+                if (meta.width <= 0 || meta.height <= 0 || meta.autoColor.empty()) {
+                    metadataValid = false;
                 }
-                if (it->second.fileSize == pSize && it->second.mtime == pMtime && metadataValid) {
-                    return;
-                }
+            }
+            if (meta.fileSize == pSize && meta.mtime == pMtime && metadataValid) {
+                return;
             }
         }
     }
 
-    {
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        if (m_shards[idx].items.count(nPath)) {
-            m_shards[idx].items[nPath].fileSize = pSize;
-            m_shards[idx].items[nPath].mtime = pMtime;
-        }
+    if (MetaMemoryCache::instance().contains(nPath)) {
+        MetaMemoryCache::instance().update(nPath, [pSize, pMtime](RuntimeMeta& m) {
+            m.fileSize = pSize;
+            m.mtime = pMtime;
+        });
     }
-    ensureActivated(nPath);
 
+    ensureActivated(nPath);
     MediaExtractorPipeline::instance().enqueue(nPath);
 }
-
 
 void MetadataManager::registerItemsAsync(const QStringList& paths) {
     if (paths.isEmpty()) return;
@@ -201,21 +192,11 @@ void MetadataManager::registerItemsAsync(const QStringList& paths) {
 
 RuntimeMeta MetadataManager::getMeta(const std::wstring& path) {
     std::wstring nPath = normalizePath(path);
-    size_t idx = getShardIndex(nPath);
-    std::shared_lock<std::shared_mutex> lock(m_shards[idx].mutex);
-    auto it = m_shards[idx].items.find(nPath);
-    if (it != m_shards[idx].items.end()) {
-        return it->second;
-    }
-    return RuntimeMeta();
+    return MetaMemoryCache::instance().getMeta(nPath);
 }
 
 void MetadataManager::ensureActivated(const std::wstring& nPath) {
-    {
-        size_t idx = getShardIndex(nPath);
-        std::shared_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        if (m_shards[idx].items.find(nPath) != m_shards[idx].items.end()) return;
-    }
+    if (MetaMemoryCache::instance().contains(nPath)) return;
 
     RuntimeMeta rm;
     std::wstring type;
@@ -236,14 +217,7 @@ void MetadataManager::ensureActivated(const std::wstring& nPath) {
     }
 
     if (success) {
-        std::unique_lock<std::shared_mutex> lock(m_mutex);
-        size_t idx = getShardIndex(nPath);
-        {
-            std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-            if (m_shards[idx].items.count(nPath)) return;
-            m_shards[idx].items[nPath] = rm;
-        }
-
+        MetaMemoryCache::instance().put(nPath, rm);
     }
 }
 
@@ -251,20 +225,19 @@ void MetadataManager::setRating(const std::wstring& path, int rating, bool notif
     std::wstring nPath = normalizePath(path);
     QFileInfo info(QString::fromStdWString(nPath));
     if (info.isRoot()) {
-        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        auto rec = MetaDbRepository::instance().getDriveMeta(nPath);
         rec.rating = rating;
-        DriveMetaDao::saveDriveMeta(rec);
+        MetaDbRepository::instance().saveDriveMeta(rec);
         if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
         return;
     }
     ensureActivated(nPath);
-    size_t idx = getShardIndex(nPath);
-    {
-        std::unique_lock<std::shared_mutex> lock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].rating = rating;
-    }
 
-    QuarkMetaJson::updateItemMeta(nPath, [rating](ItemMeta& item) {
+    MetaMemoryCache::instance().update(nPath, [rating](RuntimeMeta& m) {
+        m.rating = rating;
+    });
+
+    QuarkMetaJsonStore::instance().updateItemMeta(nPath, [rating](ItemMeta& item) {
         item.rating = rating;
     });
 
@@ -274,11 +247,11 @@ void MetadataManager::setRating(const std::wstring& path, int rating, bool notif
 void MetadataManager::setSha256(const std::wstring& path, const std::string& sha256, bool notify) {
     std::wstring nPath = MetadataManager::normalizePath(path);
     ensureActivated(nPath);
-    size_t idx = getShardIndex(nPath);
-    {
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].sha256 = sha256;
-    }
+
+    MetaMemoryCache::instance().update(nPath, [sha256](RuntimeMeta& m) {
+        m.sha256 = sha256;
+    });
+
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
@@ -287,10 +260,7 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
 
     for (const auto& item : items) {
         std::wstring nPath = normalizePath(item.path);
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        if (m_shards[idx].items.count(nPath)) {
-            RuntimeMeta& meta = m_shards[idx].items[nPath];
+        MetaMemoryCache::instance().update(nPath, [&item](RuntimeMeta& meta) {
             meta.width = item.width;
             meta.height = item.height;
             if (item.mtime > 0) meta.mtime = item.mtime;
@@ -300,7 +270,7 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
             for (const auto& p : item.palettes) {
                 meta.palettes.emplace_back(p.first, p.second);
             }
-        }
+        });
     }
 }
 
@@ -312,12 +282,7 @@ void MetadataManager::updateExtractedMediaFeatures(
     const QVector<QPair<QColor, float>>& palettes)  
 { 
     std::wstring nPath = normalizePath(path); 
-    { 
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        if (!m_shards[idx].items.count(nPath)) return;
-
-        RuntimeMeta& meta = m_shards[idx].items[nPath]; 
+    MetaMemoryCache::instance().update(nPath, [width, height, &autoColor, &palettes](RuntimeMeta& meta) {
         meta.width = width; 
         meta.height = height; 
         meta.autoColor = autoColor; 
@@ -326,7 +291,7 @@ void MetadataManager::updateExtractedMediaFeatures(
         for (const auto& p : palettes) { 
             meta.palettes.emplace_back(p.first, p.second); 
         } 
-    } 
+    });
 
     notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath)); 
 }
@@ -334,45 +299,33 @@ void MetadataManager::updateExtractedMediaFeatures(
 void MetadataManager::setAddedAt(const std::wstring& path, long long addedAt, bool notify) {
     std::wstring nPath = MetadataManager::normalizePath(path);
     ensureActivated(nPath);
-    size_t idx = getShardIndex(nPath);
-    {
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].added_at = addedAt;
-    }
+    MetaMemoryCache::instance().update(nPath, [addedAt](RuntimeMeta& m) {
+        m.added_at = addedAt;
+    });
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
 void MetadataManager::renameTag(const QString& oldName, const QString& newName) {
     if (oldName == newName) return;
     
-    std::vector<std::wstring> affectedPaths;
-    for (size_t i = 0; i < NUM_SHARDS; ++i) {
-        std::unique_lock<std::shared_mutex> lock(m_shards[i].mutex);
-        for (auto& pair : m_shards[i].items) {
-            if (pair.second.tags.contains(oldName)) {
-                pair.second.tags.removeAll(oldName);
-                if (!newName.isEmpty() && !pair.second.tags.contains(newName)) {
-                    pair.second.tags.append(newName);
-                }
-                affectedPaths.push_back(pair.first);
+    MetaMemoryCache::instance().forEachItemMut([&oldName, &newName](const std::wstring&, RuntimeMeta& meta) {
+        if (meta.tags.contains(oldName)) {
+            meta.tags.removeAll(oldName);
+            if (!newName.isEmpty() && !meta.tags.contains(newName)) {
+                meta.tags.append(newName);
             }
         }
-    }
+    });
     
     notifyFullUIRebuild();
 }
 
 void MetadataManager::removeTag(const QString& tagName) {
-    std::vector<std::wstring> affectedPaths;
-    for (size_t i = 0; i < NUM_SHARDS; ++i) {
-        std::unique_lock<std::shared_mutex> lock(m_shards[i].mutex);
-        for (auto& pair : m_shards[i].items) {
-            if (pair.second.tags.contains(tagName)) {
-                pair.second.tags.removeAll(tagName);
-                affectedPaths.push_back(pair.first);
-            }
+    MetaMemoryCache::instance().forEachItemMut([&tagName](const std::wstring&, RuntimeMeta& meta) {
+        if (meta.tags.contains(tagName)) {
+            meta.tags.removeAll(tagName);
         }
-    }
+    });
     
     notifyFullUIRebuild();
 }
@@ -382,20 +335,19 @@ void MetadataManager::setColor(const std::wstring& path, const std::wstring& col
     std::wstring normColor = UiHelper::normalizeColorHex(QString::fromStdWString(color)).toStdWString();
     QFileInfo info(QString::fromStdWString(nPath));
     if (info.isRoot()) {
-        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        auto rec = MetaDbRepository::instance().getDriveMeta(nPath);
         rec.color = normColor;
-        DriveMetaDao::saveDriveMeta(rec);
+        MetaDbRepository::instance().saveDriveMeta(rec);
         if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
         return;
     }
     ensureActivated(nPath);
-    size_t idx = getShardIndex(nPath);
-    {
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].manualColor = normColor;
-    }
 
-    QuarkMetaJson::updateItemMeta(nPath, [normColor](ItemMeta& item) {
+    MetaMemoryCache::instance().update(nPath, [&normColor](RuntimeMeta& m) {
+        m.manualColor = normColor;
+    });
+
+    QuarkMetaJsonStore::instance().updateItemMeta(nPath, [normColor](ItemMeta& item) {
         item.color = normColor;
     });
 
@@ -406,20 +358,19 @@ void MetadataManager::setPinned(const std::wstring& path, bool pinned, bool noti
     std::wstring nPath = MetadataManager::normalizePath(path);
     QFileInfo info(QString::fromStdWString(nPath));
     if (info.isRoot()) {
-        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        auto rec = MetaDbRepository::instance().getDriveMeta(nPath);
         rec.pinned = pinned;
-        DriveMetaDao::saveDriveMeta(rec);
+        MetaDbRepository::instance().saveDriveMeta(rec);
         if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
         return;
     }
     ensureActivated(nPath);
-    size_t idx = getShardIndex(nPath);
-    {
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].pinned = pinned;
-    }
 
-    QuarkMetaJson::updateItemMeta(nPath, [pinned](ItemMeta& item) {
+    MetaMemoryCache::instance().update(nPath, [pinned](RuntimeMeta& m) {
+        m.pinned = pinned;
+    });
+
+    QuarkMetaJsonStore::instance().updateItemMeta(nPath, [pinned](ItemMeta& item) {
         item.pinned = pinned;
     });
 
@@ -430,11 +381,9 @@ void MetadataManager::setTags(const std::wstring& path, const QStringList& tags,
     std::wstring nPath = MetadataManager::normalizePath(path);
     ensureActivated(nPath);
 
-    {
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].tags = tags;
-    }
+    MetaMemoryCache::instance().update(nPath, [&tags](RuntimeMeta& m) {
+        m.tags = tags;
+    });
 
     std::vector<std::wstring> wTags;
     for (const QString& t : tags) {
@@ -443,7 +392,7 @@ void MetadataManager::setTags(const std::wstring& path, const QStringList& tags,
             wTags.push_back(trimmed.toStdWString());
         }
     }
-    QuarkMetaJson::updateItemMeta(path, [wTags](ItemMeta& item) {
+    QuarkMetaJsonStore::instance().updateItemMeta(path, [wTags](ItemMeta& item) {
         item.tags = wTags;
     });
 
@@ -454,20 +403,19 @@ void MetadataManager::setNote(const std::wstring& path, const std::wstring& note
     std::wstring nPath = MetadataManager::normalizePath(path);
     QFileInfo info(QString::fromStdWString(nPath));
     if (info.isRoot()) {
-        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        auto rec = MetaDbRepository::instance().getDriveMeta(nPath);
         rec.note = note;
-        DriveMetaDao::saveDriveMeta(rec);
+        MetaDbRepository::instance().saveDriveMeta(rec);
         if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
         return;
     }
     ensureActivated(nPath);
-    size_t idx = getShardIndex(nPath);
-    {
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].note = note;
-    }
 
-    QuarkMetaJson::updateItemMeta(path, [note](ItemMeta& item) {
+    MetaMemoryCache::instance().update(nPath, [&note](RuntimeMeta& m) {
+        m.note = note;
+    });
+
+    QuarkMetaJsonStore::instance().updateItemMeta(path, [note](ItemMeta& item) {
         item.note = note;
     });
 
@@ -478,20 +426,19 @@ void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, 
     std::wstring nPath = MetadataManager::normalizePath(path);
     QFileInfo info(QString::fromStdWString(nPath));
     if (info.isRoot()) {
-        auto rec = DriveMetaDao::getDriveMeta(nPath);
+        auto rec = MetaDbRepository::instance().getDriveMeta(nPath);
         rec.url = url;
-        DriveMetaDao::saveDriveMeta(rec);
+        MetaDbRepository::instance().saveDriveMeta(rec);
         if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
         return;
     }
     ensureActivated(nPath);
-    size_t idx = getShardIndex(nPath);
-    {
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].url = url;
-    }
 
-    QuarkMetaJson::updateItemMeta(path, [url](ItemMeta& item) {
+    MetaMemoryCache::instance().update(nPath, [&url](RuntimeMeta& m) {
+        m.url = url;
+    });
+
+    QuarkMetaJsonStore::instance().updateItemMeta(path, [url](ItemMeta& item) {
         item.url = url;
     });
 
@@ -501,11 +448,9 @@ void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, 
 void MetadataManager::setEncrypted(const std::wstring& path, bool encrypted, bool notify) {
     std::wstring nPath = MetadataManager::normalizePath(path);
     ensureActivated(nPath);
-    size_t idx = getShardIndex(nPath);
-    {
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].encrypted = encrypted;
-    }
+    MetaMemoryCache::instance().update(nPath, [encrypted](RuntimeMeta& m) {
+        m.encrypted = encrypted;
+    });
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
@@ -514,11 +459,9 @@ void MetadataManager::setPalettes(const std::wstring& path, const QVector<QPair<
     ensureActivated(nPath);
     std::vector<PaletteEntry> entries;
     for (int i = 0; i < palettes.size(); ++i) { entries.push_back(PaletteEntry(palettes[i].first, palettes[i].second)); }
-    size_t idx = getShardIndex(nPath);
-    {
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath].palettes = entries;
-    }
+    MetaMemoryCache::instance().update(nPath, [&entries](RuntimeMeta& m) {
+        m.palettes = entries;
+    });
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
@@ -528,13 +471,10 @@ void MetadataManager::setItemVisualMetadata(const std::wstring& path, const std:
     std::vector<PaletteEntry> entries;
     for (int i = 0; i < palettes.size(); ++i) { entries.push_back(PaletteEntry(palettes[i].first, palettes[i].second)); }
     
-    {
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        RuntimeMeta& meta = m_shards[idx].items[nPath];
+    MetaMemoryCache::instance().update(nPath, [&color, &entries](RuntimeMeta& meta) {
         meta.autoColor = color;
         meta.palettes = entries;
-    }
+    });
     
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
@@ -542,23 +482,18 @@ void MetadataManager::setItemVisualMetadata(const std::wstring& path, const std:
 void MetadataManager::setItemDimensions(const std::wstring& path, int width, int height) {
     std::wstring nPath = MetadataManager::normalizePath(path);
     ensureActivated(nPath);
-    {
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        RuntimeMeta& meta = m_shards[idx].items[nPath];
+    MetaMemoryCache::instance().update(nPath, [width, height](RuntimeMeta& meta) {
         meta.width = width;
         meta.height = height;
-    }
+    });
 }
 
 QVector<QColor> MetadataManager::getPalettes(const std::wstring& path) {
     std::wstring nPath = MetadataManager::normalizePath(path);
-    size_t idx = getShardIndex(nPath);
-    std::shared_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-    auto it = m_shards[idx].items.find(nPath);
-    if (it != m_shards[idx].items.end() && !it->second.palettes.empty()) {
+    RuntimeMeta meta = MetaMemoryCache::instance().getMeta(nPath);
+    if (!meta.palettes.empty()) {
         QVector<QColor> colors;
-        for (const auto& entry : it->second.palettes) colors << entry.color;
+        for (const auto& entry : meta.palettes) colors << entry.color;
         return colors;
     }
     return {};
@@ -603,20 +538,10 @@ void MetadataManager::renameBatchAsync(
                 const std::wstring& curOld = pair.first;
                 const std::wstring& curNew = pair.second;
 
-                size_t oldIdx = getShardIndex(curOld);
-                RuntimeMeta meta;
-                bool found = false;
-                {
-                    std::unique_lock<std::shared_mutex> shardLock(m_shards[oldIdx].mutex);
-                    auto it = m_shards[oldIdx].items.find(curOld);
-                    if (it != m_shards[oldIdx].items.end()) {
-                        meta = it->second;
-                        m_shards[oldIdx].items.erase(it);
-                        found = true;
-                    }
-                }
+                if (!MetaMemoryCache::instance().contains(curOld)) continue;
 
-                if (!found) continue;
+                RuntimeMeta meta = MetaMemoryCache::instance().getMeta(curOld);
+                MetaMemoryCache::instance().remove(curOld);
 
                 bool isFolder = meta.isFolder;
 
@@ -628,11 +553,7 @@ void MetadataManager::renameBatchAsync(
                 meta.baseName = newName;
                 meta.ext = newExt;
 
-                size_t newIdx = getShardIndex(curNew);
-                {
-                    std::unique_lock<std::shared_mutex> shardLock(m_shards[newIdx].mutex);
-                    m_shards[newIdx].items[curNew] = meta;
-                }
+                MetaMemoryCache::instance().put(curNew, meta);
 
                 ioTasks.push_back(pair);
                 successCount++;
@@ -643,9 +564,9 @@ void MetadataManager::renameBatchAsync(
             QFileInfo oldFileInfo(QString::fromStdWString(pair.first));
             QFileInfo newFileInfo(QString::fromStdWString(pair.second));
             if (oldFileInfo.isDir()) {
-                QuarkMetaJson::migrateFolderCache(oldFileInfo.absoluteFilePath(), newFileInfo.absoluteFilePath());
+                QuarkMetaJsonStore::instance().migrateFolderCache(oldFileInfo.absoluteFilePath(), newFileInfo.absoluteFilePath());
             } else {
-                QuarkMetaJson::renameItem(oldFileInfo.absolutePath(), oldFileInfo.fileName(), newFileInfo.fileName());
+                QuarkMetaJsonStore::instance().renameItem(oldFileInfo.absolutePath(), oldFileInfo.fileName(), newFileInfo.fileName());
             }
         }
 
@@ -684,20 +605,10 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
                 const std::wstring& curOld = pair.first;
                 const std::wstring& curNew = pair.second;
 
-                size_t oldIdx = getShardIndex(curOld);
-                RuntimeMeta meta;
-                bool found = false;
-                {
-                    std::unique_lock<std::shared_mutex> shardLock(m_shards[oldIdx].mutex);
-                    auto it = m_shards[oldIdx].items.find(curOld);
-                    if (it != m_shards[oldIdx].items.end()) {
-                        meta = it->second;
-                        m_shards[oldIdx].items.erase(it);
-                        found = true;
-                    }
-                }
+                if (!MetaMemoryCache::instance().contains(curOld)) continue;
 
-                if (!found) continue;
+                RuntimeMeta meta = MetaMemoryCache::instance().getMeta(curOld);
+                MetaMemoryCache::instance().remove(curOld);
 
                 bool isFolder = meta.isFolder;
 
@@ -706,11 +617,7 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
                 meta.baseName = newName;
                 meta.ext = newExt;
 
-                size_t newIdx = getShardIndex(curNew);
-                {
-                    std::unique_lock<std::shared_mutex> shardLock(m_shards[newIdx].mutex);
-                    m_shards[newIdx].items[curNew] = meta;
-                }
+                MetaMemoryCache::instance().put(curNew, meta);
 
                 ioTasks.push_back(pair);
             }
@@ -720,9 +627,9 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
             QFileInfo oldFileInfo(QString::fromStdWString(pair.first));
             QFileInfo newFileInfo(QString::fromStdWString(pair.second));
             if (oldFileInfo.isDir()) {
-                QuarkMetaJson::migrateFolderCache(oldFileInfo.absoluteFilePath(), newFileInfo.absoluteFilePath());
+                QuarkMetaJsonStore::instance().migrateFolderCache(oldFileInfo.absoluteFilePath(), newFileInfo.absoluteFilePath());
             } else {
-                QuarkMetaJson::renameItem(oldFileInfo.absolutePath(), oldFileInfo.fileName(), newFileInfo.fileName());
+                QuarkMetaJsonStore::instance().renameItem(oldFileInfo.absolutePath(), oldFileInfo.fileName(), newFileInfo.fileName());
             }
         }
 
@@ -743,12 +650,12 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
     {
         std::unique_lock<std::shared_mutex> lock(m_mutex);
 
-        for (size_t i = 0; i < NUM_SHARDS; ++i) {
-            std::unique_lock<std::shared_mutex> shardLock(m_shards[i].mutex);
-            for (auto it = m_shards[i].items.begin(); it != m_shards[i].items.end(); ) {
+        for (size_t i = 0; i < MetaMemoryCache::NUM_SHARDS; ++i) {
+            std::unique_lock<std::shared_mutex> shardLock(MetaMemoryCache::instance().shards()[i].mutex);
+            for (auto it = MetaMemoryCache::instance().shards()[i].items.begin(); it != MetaMemoryCache::instance().shards()[i].items.end(); ) {
                 if (it->first == nPath || it->first.find(nPath + L"\\") == 0 || it->first.find(nPath + L"/") == 0) {
                     StatisticsService::instance().purgeAsset(!it->second.tags.isEmpty(), false); 
-                    it = m_shards[i].items.erase(it);
+                    it = MetaMemoryCache::instance().shards()[i].items.erase(it);
                 } else {
                     ++it;
                 }
@@ -802,10 +709,7 @@ void MetadataManager::persistBatchAsync(const std::vector<std::wstring>& paths) 
     for (const auto& p : paths) {
         RuntimeMeta rMeta = getMeta(p);
         parsePathComponents(p, rMeta.isFolder, rMeta.baseName, rMeta.ext);
-
-        size_t idx = getShardIndex(p);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[p] = rMeta;
+        MetaMemoryCache::instance().put(p, rMeta);
     }
 }
 
@@ -815,11 +719,7 @@ void MetadataManager::persistAsync(const std::wstring& path, bool notify) {
     RuntimeMeta rMeta = getMeta(nPath);
     parsePathComponents(nPath, rMeta.isFolder, rMeta.baseName, rMeta.ext);
 
-    {
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        m_shards[idx].items[nPath] = rMeta;
-    }
+    MetaMemoryCache::instance().put(nPath, rMeta);
         
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
@@ -915,23 +815,15 @@ void MetadataManager::recordAccess(const std::wstring& path) {
     }
     
     double now = static_cast<double>(QDateTime::currentMSecsSinceEpoch());
-    {
-        size_t idx = getShardIndex(nPath);
-        std::unique_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-        if (m_shards[idx].items.count(nPath)) {
-            m_shards[idx].items[nPath].atime = static_cast<long long>(now);
-        }
-    }
+    MetaMemoryCache::instance().update(nPath, [now](RuntimeMeta& meta) {
+        meta.atime = static_cast<long long>(now);
+    });
 }
 
 double MetadataManager::getCachedAtime(const std::wstring& path) {
-    size_t idx = getShardIndex(path);
-    std::shared_lock<std::shared_mutex> shardLock(m_shards[idx].mutex);
-    auto it = m_shards[idx].items.find(path);
-    if (it != m_shards[idx].items.end()) {
-        return static_cast<double>(it->second.atime);
-    }
-    return 0.0;
+    std::wstring nPath = normalizePath(path);
+    RuntimeMeta meta = MetaMemoryCache::instance().getMeta(nPath);
+    return static_cast<double>(meta.atime);
 }
 
 void MetadataManager::slideRecentWindow() {

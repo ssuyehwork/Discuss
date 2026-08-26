@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QMenu>
 #include <QFileInfo>
+#include <QDir>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonDocument>
@@ -220,19 +221,48 @@ void FavoritePanel::saveFavorites() {
     AppConfig::instance().setValue("FavoritePanel/Favorites", doc.toJson(QJsonDocument::Compact));
 }
 
-void FavoritePanel::addFavoriteItem(const QString& path) {
+bool FavoritePanel::containsPath(const QString& path) const {
+    if (!m_favoriteModel || path.isEmpty()) return false;
+    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
     for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
-        if (m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString() == path) {
+        QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
+        if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void FavoritePanel::removeFavoriteItem(const QString& path) {
+    if (!m_favoriteModel || path.isEmpty()) return;
+    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
+    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+        QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
+        if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
+            m_favoriteModel->removeRow(i);
+            saveFavorites();
+            return;
+        }
+    }
+}
+
+void FavoritePanel::addFavoriteItem(const QString& path) {
+    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
+    if (cleanPath.isEmpty()) return;
+
+    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+        QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
+        if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
             return;
         }
     }
 
-    QFileInfo fi(path);
+    QFileInfo fi(cleanPath);
     if (!fi.exists()) return;
 
-    QIcon icon = ShellIconManager::getFileIcon(path, 18);
-    QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? path : fi.fileName());
-    item->setData(path, Qt::UserRole + 1);
+    QIcon icon = ShellIconManager::getFileIcon(cleanPath, 18);
+    QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? cleanPath : fi.fileName());
+    item->setData(cleanPath, Qt::UserRole + 1);
 
     m_favoriteModel->appendRow(item);
 }

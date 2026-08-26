@@ -12,6 +12,8 @@
 #include <QMap>
 #include <QStringList>
 #include "ScanStats.h"
+#include "FilterStateModel.h"
+#include "ScanStatsEngine.h"
 #include "MetaPanel.h"
 #include "components/StyledCheckBox.h"
 #include "components/ClickableRow.h"
@@ -19,50 +21,6 @@
 namespace QuarkMeta {
 
 class SearchHistoryPanel;
-
-struct FilterState {
-    QList<int>   ratings;
-    QStringList  colors;
-    QString      keyword;
-    QStringList  types;
-    QStringList  createDates;   // "YYYY-MM-DD"
-    QStringList  modifyDates;
-
-    enum Presence { All, Yes, No };
-    Presence linkPresence = All;
-    Presence notePresence = All;
-    Presence tagPresence = All;
-
-    enum AspectRatio { AspectAny, Horizontal, Vertical, Square, Ratio169 };
-    AspectRatio ratio = AspectAny;
-
-    long long minSize = -1;
-    long long maxSize = -1;
-
-    QString typeFilterText;
-    QString createDateFilterText;
-    QString modifyDateFilterText;
-
-    bool showFolders = true;
-    bool showFiles = true;
-    bool showHidden = false;
-
-    enum DuplicatePresence { DupAll, DuplicateOnly, UniqueOnly };
-    DuplicatePresence duplicatePresence = DupAll;
-
-    enum ThumbnailPresence { ThumbAll, HasThumbnail, NoThumbnail };
-    ThumbnailPresence thumbnailPresence = ThumbAll;
-
-    bool isEmpty() const {
-        return ratings.isEmpty() && colors.isEmpty() && keyword.isEmpty() && types.isEmpty() &&
-               createDates.isEmpty() && modifyDates.isEmpty() &&
-               linkPresence == All && notePresence == All && tagPresence == All && ratio == AspectAny &&
-               minSize == -1 && maxSize == -1 &&
-               typeFilterText.trimmed().isEmpty() && createDateFilterText.trimmed().isEmpty() &&
-               modifyDateFilterText.trimmed().isEmpty() && duplicatePresence == DupAll &&
-               thumbnailPresence == ThumbAll;
-    }
-};
 
 class FilterPanel : public QFrame {
     Q_OBJECT
@@ -82,7 +40,7 @@ public:
         int                          emptyFolderCount
     );
 
-    FilterState currentFilter() const { return m_filter; }
+    FilterState currentFilter() const { return m_filterModel ? m_filterModel->state() : m_filter; }
 
     void syncUIFromFilterState();
     void selectColor(const QColor& color);
@@ -109,8 +67,10 @@ private:
 
     static QMap<QString, QColor> s_colorMap();
 
-    FilterState m_filter;
+    FilterStateModel* m_filterModel = nullptr;
+    ScanStatsEngine*  m_statsEngine = nullptr;
 
+    FilterState m_filter;
     QuarkMeta::ScanStats m_currentStats;
 
     QMap<int, int>      m_ratingCounts;
