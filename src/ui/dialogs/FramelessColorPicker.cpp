@@ -1,5 +1,5 @@
 #include "dialogs/FramelessColorPicker.h"
-#include "ColorPicker.h"
+#include "../ColorPicker.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>

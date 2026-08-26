@@ -1,6 +1,6 @@
 #pragma once
 #include "ActionCommand.h"
-#include "../util/ShellHelper.h"
+#include "../../util/ShellHelper.h"
 #include <QString>
 
 namespace QuarkMeta {

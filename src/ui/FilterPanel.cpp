@@ -41,63 +41,6 @@ static QString ratingDisplayName(int r) {
     return r == 0 ? "无评级" : QString("★").repeated(r);
 }
 
-// ─── 自定义勾选框 ──────────────────────────────────────────────────
-StyledCheckBox::StyledCheckBox(QWidget* parent) : QCheckBox(parent) {
-    setFixedSize(15, 15);
-}
-
-void StyledCheckBox::paintEvent(QPaintEvent*) {
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-
-    bool checked = isChecked();
-    
-    // 使用 QRectF + 0.5px 内缩，确保笔触四边粗细完全一致
-    QRectF rect(0.5, 0.5, width() - 1.0, height() - 1.0);
-    QColor borderColor = checked ? QColor("#378ADD") : QColor("#444444");
-    
-    painter.setPen(QPen(borderColor, 1.0));
-    painter.setBrush(QColor("#1E1E1E"));
-    painter.drawRoundedRect(rect, 2.0, 2.0);
-
-    if (checked) {
-        QPen pen(QColor("#378ADD"), 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-        painter.setPen(pen);
-        painter.setBrush(Qt::NoBrush);
-        QPolygonF checkMark;
-        checkMark << QPointF(2.5, 7.5)
-                  << QPointF(5.5, 11.0)
-                  << QPointF(12.0, 3.5);
-        painter.drawPolyline(checkMark);
-    }
-}
-
-// ─── 可整行点击的行控件 ────────────────────────────────────────────
-ClickableRow::ClickableRow(StyledCheckBox* cb, QWidget* parent)
-    : QWidget(parent), m_cb(cb) {
-    setCursor(Qt::PointingHandCursor);
-    setAttribute(Qt::WA_StyledBackground);
-}
-
-void ClickableRow::mousePressEvent(QMouseEvent* e) {
-    if (e->button() == Qt::LeftButton) {
-        QPoint local = m_cb->mapFromGlobal(e->globalPosition().toPoint());
-        if (!m_cb->rect().contains(local)) {
-            m_cb->setChecked(!m_cb->isChecked());
-        }
-    }
-    QWidget::mousePressEvent(e);
-}
-
-void ClickableRow::enterEvent(QEnterEvent* e) {
-    setStyleSheet("QWidget { background: #2A2A2A; border-radius: 4px; }");
-    QWidget::enterEvent(e);
-}
-
-void ClickableRow::leaveEvent(QEvent* e) {
-    setStyleSheet("");
-    QWidget::leaveEvent(e);
-}
 
 // ─── FilterPanel ──────────────────────────────────────────────────
 

@@ -8,6 +8,9 @@
 #include <QPoint>
 #include <QColor>
 #include <QShowEvent>
+#include <QMouseEvent>
+#include <QKeyEvent>
+#include <QEvent>
 
 namespace QuarkMeta {
 

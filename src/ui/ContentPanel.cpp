@@ -1110,10 +1110,6 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
             } 
             if (keyEvent->key() == Qt::Key_Delete) { 
                 if (keyEvent->modifiers() & Qt::ShiftModifier) {
-                    QMenu fakeMenu(this);
-                    QAction* fakeAct = new QAction(this);
-                    fakeAct->setData(ActionSecureDelete);
-                    // 触发 ActionSecureDelete 逻辑分支
                     QList<QModelIndex> selectedIndexes = view->selectionModel()->selectedIndexes();
                     if (!selectedIndexes.isEmpty()) {
                         QStringList targetPaths;
