@@ -335,6 +335,13 @@ void QuickLookWindow::setupUi() {
     m_textEdit->viewport()->installEventFilter(this);
     layout->addWidget(m_textEdit);
 
+    // 空文本提示标签
+    m_lblEmptyPrompt = new QLabel(m_container);
+    m_lblEmptyPrompt->setAlignment(Qt::AlignCenter);
+    m_lblEmptyPrompt->setStyleSheet("color: #888888; font-size: 16px; font-weight: bold; background: transparent;");
+    m_lblEmptyPrompt->hide();
+    layout->addWidget(m_lblEmptyPrompt);
+
     // 状态与信息标签
     m_infoLabel = new QLabel(m_container);
     m_infoLabel->setStyleSheet("color: #777;");
@@ -396,6 +403,7 @@ void QuickLookWindow::closePreview() {
 
 void QuickLookWindow::renderImage(const QString& path) {
     m_textEdit->hide();
+    if (m_lblEmptyPrompt) m_lblEmptyPrompt->hide();
     m_graphicsView->show();
     m_graphicsView->clear();
     m_infoLabel->setText("正在加载预览...");
@@ -461,6 +469,7 @@ void QuickLookWindow::renderImage(const QString& path) {
 
 void QuickLookWindow::renderText(const QString& path) {
     m_graphicsView->hide();
+    m_lblEmptyPrompt->hide();
     m_textEdit->show();
     m_textEdit->setPlainText("正在读取文件...");
 
@@ -472,6 +481,14 @@ void QuickLookWindow::renderText(const QString& path) {
 
     QByteArray fileData = file.read(128 * 1024);
     file.close();
+
+    if (file.size() == 0 || fileData.trimmed().isEmpty()) {
+        m_textEdit->hide();
+        m_lblEmptyPrompt->setText("该项目内容为空");
+        m_lblEmptyPrompt->show();
+        m_infoLabel->setText(QString("大小: 0 KB | %1").arg(path));
+        return;
+    }
 
     bool potentialUtf16 = fileData.startsWith("\xFF\xFE") || fileData.startsWith("\xFE\xFF");
     if (!potentialUtf16 && isBinary(fileData)) {

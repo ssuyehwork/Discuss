@@ -2,23 +2,20 @@
 #define FRAMELESSDIALOG_H
 
 #include <QDialog>
+#include "dialogs/FramelessInputDialog.h"
+#include "dialogs/FramelessColorPicker.h"
+#include "dialogs/FramelessConfirmDialog.h"
+#include "dialogs/FramelessMessageBox.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QLabel>
-#include <QLineEdit>
 #include <QFrame>
 #include <QPoint>
 #include <QColor>
-#include <QMouseEvent>
-#include <QKeyEvent>
 
 namespace QuarkMeta {
 
-/**
- * @brief 无边框对话框基类，自带标题栏、关闭按钮（扁平化设计）
- * 适配 QuarkMeta 风格，参考旧版 RapidNotes 基因实现
- */
 class FramelessDialog : public QDialog {
     Q_OBJECT
 public:
@@ -40,7 +37,7 @@ protected:
     QWidget* m_contentArea;
     QVBoxLayout* m_mainLayout;
     QVBoxLayout* m_outerLayout;
-    QHBoxLayout* m_titleLayout; // 暴露标题栏横向布局，支持子窗口插入自定义功能按钮
+    QHBoxLayout* m_titleLayout;
     QWidget* m_container;
     QLabel* m_titleLabel;
     QPushButton* m_pinBtn;
@@ -51,63 +48,6 @@ protected:
 private:
     QPoint m_dragPos;
     bool m_isDragging = false;
-};
-
-/**
- * @brief 无边框文本输入对话框
- */
-class FramelessInputDialog : public FramelessDialog {
-    Q_OBJECT
-public:
-    explicit FramelessInputDialog(const QString& title, const QString& label, 
-                                  const QString& initial = "", QWidget* parent = nullptr);
-    QString text() const { return m_edit->text().trimmed(); }
-    void setEchoMode(QLineEdit::EchoMode mode);
-
-protected:
-    void showEvent(QShowEvent* event) override;
-
-private:
-    QLineEdit* m_edit;
-};
-
-/**
- * @brief 无边框颜色选择对话框
- */
-class ColorPicker;
-class FramelessColorPicker : public FramelessDialog {
-    Q_OBJECT
-public:
-    explicit FramelessColorPicker(const QString& title, QWidget* parent = nullptr);
-    void setCurrentColor(const QColor& color);
-    QColor selectedColor() const { return m_selectedColor; }
-
-private:
-    ColorPicker* m_picker;
-    QColor m_selectedColor;
-};
-
-/**
- * @brief 无边框确认/消息对话框
- */
-class FramelessConfirmDialog : public FramelessDialog {
-    Q_OBJECT
-public:
-    enum ButtonType { OkOnly, OkCancel };
-    explicit FramelessConfirmDialog(const QString& title, const QString& message, 
-                                   ButtonType type = OkCancel, const QString& iconName = "", 
-                                   const QColor& iconColor = Qt::white, QWidget* parent = nullptr);
-};
-
-/**
- * @brief 静态工具类，提供类似 QMessageBox 的便捷调用
- */
-class FramelessMessageBox {
-public:
-    static void information(QWidget* parent, const QString& title, const QString& text);
-    static void warning(QWidget* parent, const QString& title, const QString& text);
-    static bool question(QWidget* parent, const QString& title, const QString& text); 
-    static void critical(QWidget* parent, const QString& title, const QString& text);
 };
 
 } // namespace QuarkMeta
