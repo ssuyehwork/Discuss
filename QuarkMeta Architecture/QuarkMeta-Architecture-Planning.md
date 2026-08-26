@@ -75,16 +75,10 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 
 ### 3.1 面板 / 视图层通信规范与调度体系
 1. **双核调度中枢体系**：全系统建立唯一双核中央调度中枢——传声筒 `CentralEventHub`（纯消息事件分发、无数据逻辑）与中央大脑 `CoreEngine`（业务决策与逻辑编排）。
-2. **物理四层解耦架构与四大交互铁律**：
-   - **第一层（UI 视图层 Pure View）**：UI 控件（如 `ContentPanel`、`MetaPanel`、`MainWindow` 等）仅负责界面渲染与事件拾取。**绝对禁止在 UI 内部包含物理抹除、AES 加解密、多线程 QThreadPool/QtConcurrent 调度或直接读写磁盘 `.QuarkMeta.json` 与数据库**。
-   - **第二层（Controller 调度层）**：专职 Controller 接管 UI 与后台服务之间的沟通桥梁，中转用户指令与处理多线程响应。
-   - **第三层（Service 业务服务层）**：物理粉碎抹除（`FileErasureService`）、AES 文件安全加解密（`FileSecurityService`）、卷标硬件轮询等逻辑下沉为纯粹的 Service 服务类，被 Controller 或 Command 调用。
-   - **第四层（DAO 持久层）**：元数据持久化统一归口 `MetadataManager` 与 `QuarkMetaJson`，严禁 UI 视图越权读写磁盘。
-3. **遵守四大交互铁律**：
-   - **铁律一**：UI 视图与控件绝对禁止直接调用 `MetadataManager`、`DatabaseManager`、`DiskIoService`、`SecureFileEraser`、`EncryptionManager` 等底层服务与物理 I/O。
-   - **铁律二**：UI 上的所有用户操作必须封装为 Command 提交给 `CoreEngine` 或交由对应的 Controller 处理。
+2. **遵守三条交互铁律**：
+   - **铁律一**：UI 视图与控件绝对禁止直接调用 `MetadataManager`、`DatabaseManager`、`DiskIoService` 等底层服务。
+   - **铁律二**：UI 上的所有用户操作必须封装为 Command 提交给 `CoreEngine`。
    - **铁律三**：UI 只能订阅 `CentralEventHub` 的增量 Event 进行局部刷新，严格禁止调用 `notifyFullUIRebuild()` 强刷全屏。
-   - **铁律四（头文件单一职责）**：严禁在一个头文件中集中定义多个无共享状态的具体 ActionCommand 派生类、独立对话框类或无关联的工具类。一律实行“一类一头文件”与“主题独立头文件”物理拆分，杜绝集中式过载依赖。
 3. **底层数据纯净化与并发锁**：
    - QuarkMeta 核心架构禁止保留任何历史僵尸逻辑与监控：
      1. IOCP 监控与自动导入剪切逻辑；
@@ -209,3 +203,19 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
    - 严禁在筛选面板中引入或复原任何过度设计的复杂复合控件，包括但不限于：色相/渐变滑块（`InlineHueSlider`）、准确度/容差滑块（`m_accuracySlider`）、颜色占比滑块（`m_areaSlider`）、快速颜色文本输入框（`m_editColor`）、标准 12 色矩阵网格以及最近筛选颜色历史块网格（`m_recentColors`）。
 3. **颜色标记分组表现形式**：
    - “颜色标记”分组必须恢复为与其他分组完全一致的标准纵向复选框列表（例如“无色标”、“红色”、“黄色”等基础类别），确保右侧筛选面板纵向布局平整高效、无冗余留白、性能极其轻量。
+
+---
+
+## 15. 单一职责物理拆分与功能扩展架构规范 (Single Responsibility Principle & Feature Expansion Specification)
+
+### 15.1 单一职责物理隔离 5 大铁律
+1. **一文件一类一职责（头文件彻底解耦）**：
+   - 严禁在同一个 `.h` / `.cpp` 中定义多个独立的类。如 `BasicCommands.h` 拆分为独立的命令文件；`FramelessDialog.h` 拆分为独立的对话框文件；`DriveButton.h` 拆分为 `DriveButton` 与 `FolderButton`。
+2. **视图只管 UI，不碰业务与磁盘（UI 纯粹化）**：
+   - UI 控件仅负责界面布局、样式绘制和事件接收。所有磁盘 I/O、JSON 解析、文件加解密、物理粉碎、后台线程调度，统一移入 Core 控制层与 Service 服务层。
+3. **数据管理与模型过滤解耦（MVC 职责清界）**：
+   - 状态栏统计、文件隐藏过滤、排序逻辑完全由 `QSortFilterProxyModel` 与 `DiskItemModel` 处理，UI 控件仅监听模型信号。
+4. **系统原生消息与应用逻辑剥离（平台解耦）**：
+   - Win32 原生硬件消息（`WM_DEVICECHANGE`）剥离至独立的设备监听器，`MainWindow` 不再直接处理平台底层硬件消息。
+5. **未开发功能与扩展接口留白**：
+   - 右键菜单“外壳保护”（旧“加密”）及快捷键系统通过统一的 `ActionCommand` 中枢解耦挂载，确保未来功能扩充物理隔离。
