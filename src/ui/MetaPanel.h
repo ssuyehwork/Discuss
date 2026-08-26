@@ -85,7 +85,7 @@ private:
     // 4. 关联网址区 (可折叠，一体化容器与独立跳转按钮)
     QWidget* m_linkBox = nullptr;
     QLineEdit* m_linkEdit = nullptr;
-    QPushButton* m_btnOpenLink = nullptr;
+    QAction* m_actOpenLink = nullptr;
 
     // 5. 星级评级 + 颜色色标条 (8 色圆点)
     QWidget* m_ratingColorBox = nullptr;
