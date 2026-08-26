@@ -102,47 +102,15 @@ namespace QuarkMeta {
 // --- FilterProxyModel 实现 --- 
 FilterProxyModel::FilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {} 
 
-void FilterProxyModel::recomputeDuplicateCache() {
-    m_cachedDuplicatePaths.clear();
-    if (currentFilter.duplicatePresence == FilterState::DupAll) return;
-
-    const auto* sourceModelPtr = qobject_cast<const ItemModelBase*>(sourceModel());
-    if (!sourceModelPtr) return;
-
-    const auto& records = sourceModelPtr->allRecords();
-
-    // 按照 (SHA256 或 文件大小 + 宽x高) 进行内存桶聚合（排除文件名，实现真实副本判重）
-    std::unordered_map<std::string, std::vector<QString>> hashBucket;
-    for (const auto& rec : records) {
-        if (rec.isDir) continue; // 排除目录
-        
-        // 构造唯一指纹键：优先 SHA256，其次 大小 + 尺寸，兜底 纯大小
-        std::string key;
-        if (!rec.sha256.isEmpty()) {
-            key = rec.sha256.toStdString();
-        } else if (rec.width > 0 && rec.height > 0) {
-            key = std::to_string(rec.size) + "_" + std::to_string(rec.width) + "x" + std::to_string(rec.height);
-        } else {
-            key = std::to_string(rec.size);
-        }
-        hashBucket[key].push_back(rec.path);
-    }
-
-    // 凡是数量 >= 2 的桶，全部标记为重复项
-    for (const auto& pair : hashBucket) {
-        if (pair.second.size() > 1) {
-            for (const auto& path : pair.second) {
-                m_cachedDuplicatePaths.insert(path);
-            }
-        }
-    }
-}
- 
 void FilterProxyModel::updateFilter() { 
-    recomputeDuplicateCache(); // 预建缓存，保证 filterAcceptsRow 为 O(1) 瞬时响应
     beginFilterChange(); 
     endFilterChange(); 
 } 
+
+void FilterProxyModel::setCachedDuplicatePaths(const std::unordered_set<QString>& paths) {
+    m_cachedDuplicatePaths = paths;
+    invalidateFilter();
+}
  
 bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {  
     QModelIndex idx = sourceModel()->index(sourceRow, 0, sourceParent);  
@@ -2926,28 +2894,14 @@ void ContentPanel::recalculateAndEmitStats() {
     (void)QtConcurrent::run([weakThis, records]() {
         ScanStats stats;
 
-        auto makeDupKey = [](const ItemRecord& rec) -> std::string {
-            if (!rec.sha256.isEmpty()) {
-                return rec.sha256.toStdString();
-            }
-            if (rec.width > 0 && rec.height > 0) {
-                return std::to_string(rec.size) + "_" + std::to_string(rec.width) + "x" + std::to_string(rec.height);
-            }
-            return std::to_string(rec.size);
-        };
-
-        // 1. 预统计重复项（内存快速桶，去文件名化判重）
-        std::unordered_map<std::string, int> hashCounts;
-        for (const auto& record : records) {
-            if (record.isDir) continue;
-            hashCounts[makeDupKey(record)]++;
-        }
+        // 🚨 1. 在后台子线程完成三阶哈希验重（0 阻塞 UI 主线程）
+        stats.duplicatePaths = DuplicateDetectorService::findDuplicatePaths(records);
+        stats.duplicateCount = static_cast<int>(stats.duplicatePaths.size());
 
         // 2. 遍历全量记录进行多维统计
         for (const auto& record : records) {
             if (!weakThis) return;
 
-            // 0. 隐藏属性过滤（关闭隐藏项显示时，隐藏属性文件不参与筛选面板统计）
             if (record.isHidden && !weakThis->m_currentFilter.showHidden) {
                 continue;
             }
@@ -2965,19 +2919,15 @@ void ContentPanel::recalculateAndEmitStats() {
                 stats.typeCounts["file"]++;
                 stats.typeCounts[record.suffix.toUpper()]++;
 
-                // 链接统计
                 if (!record.url.isEmpty()) stats.hasLinkCount++;
                 else stats.noLinkCount++;
 
-                // 备注统计
                 if (!record.note.isEmpty()) stats.hasNoteCount++;
                 else stats.noNoteCount++;
 
-                // 标签存在性统计
                 if (!record.tags.isEmpty()) stats.hasTagCount++;
                 else stats.noTagCount++;
 
-                // 图像比例统计
                 if (record.width > 0 && record.height > 0) {
                     double r = (double)record.width / record.height;
                     if (record.width > record.height) stats.ratioHorizontalCount++;
@@ -2986,14 +2936,11 @@ void ContentPanel::recalculateAndEmitStats() {
                     if (std::abs(r - 1.77) <= 0.05) stats.ratio169Count++;
                 }
 
-                // 重复状态统计
-                if (hashCounts[makeDupKey(record)] > 1) {
-                    stats.duplicateCount++;
-                } else {
+                // 判重统计基于真实 Hash 结果
+                if (stats.duplicatePaths.count(record.path) == 0) {
                     stats.uniqueCount++;
                 }
 
-                // 缩略图状态 (提取成功/缺失) 统计
                 if (UiHelper::isGraphicsFile(record.suffix)) {
                     QString thumbPath = DiskMediaExtractor::getDiskThumbCachePath(record.path);
                     if (QFile::exists(thumbPath)) {
@@ -3011,8 +2958,13 @@ void ContentPanel::recalculateAndEmitStats() {
             stats.modifyDateCounts[dateKey(record.mtime)]++;
         }
 
+        // 异步把判重集合与统计数据安全交付给主线程
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, stats]() {
             if (weakThis) {
+                auto* proxy = qobject_cast<FilterProxyModel*>(weakThis->m_proxyModel);
+                if (proxy) {
+                    proxy->setCachedDuplicatePaths(stats.duplicatePaths);
+                }
                 emit weakThis->directoryStatsReady(stats);
             }
         });

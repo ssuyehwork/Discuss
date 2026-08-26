@@ -30,6 +30,8 @@ struct ScanStats {
     int uniqueCount = 0;
     int noThumbnailCount = 0;
     int hasThumbnailCount = 0;
+
+    std::unordered_set<QString> duplicatePaths;
 };
 
 } // namespace QuarkMeta
