@@ -180,6 +180,10 @@ void MetaPanel::initUi() {
 
     for (QToolButton* btn : m_linkEdit->findChildren<QToolButton*>()) {
         btn->setCursor(Qt::PointingHandCursor);
+        btn->setStyleSheet(
+            "QToolButton { border: none; border-left: 1px solid #3c3c3c; background: transparent; padding-left: 4px; padding-right: 4px; }"
+            "QToolButton:hover { background: #3E3E42; }"
+        );
     }
 
     connect(m_actOpenLink, &QAction::triggered, this, [this]() {
@@ -675,6 +679,7 @@ void MetaPanel::updateInfo(const QString& n, const QString& t, const QString& s,
     lblAtime->setText(at);
 
     m_pathEdit->setText(p);
+    m_pathEdit->setCursorPosition(0);
 
     lblEncrypted->setText(e ? "已加密" : "未加密");
 
