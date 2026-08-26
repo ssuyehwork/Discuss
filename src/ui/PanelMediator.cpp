@@ -109,10 +109,15 @@ void PanelMediator::setupConnections() {
                 metaPanel->setURL(L"");
                 metaPanel->setPalettes({});
             } else {
-                auto indexes = contentPanel->getSelectedIndexes();
                 QModelIndex idx;
-                if (!indexes.isEmpty()) {
-                    idx = indexes.first();
+                if (contentPanel->model()) {
+                    for (int i = 0; i < contentPanel->getProxyModel()->rowCount(); ++i) {
+                        QModelIndex proxyIdx = contentPanel->getProxyModel()->index(i, 0);
+                        if (proxyIdx.data(PathRole).toString() == paths.first()) {
+                            idx = proxyIdx;
+                            break;
+                        }
+                    }
                 }
                 QString path = paths.first();
                 QFileInfo fi(path);

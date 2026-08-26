@@ -273,6 +273,7 @@ public:
     std::atomic<int> m_loadRequestId{0}; // 2026-07-xx 物理请求 ID：防止异步回调导致的视图内容乱跳
 
     QTimer* m_selectionTimer = nullptr; // 选中防抖定时器
+    void emitSelectionChangedSignal();
     void updateGridSize();
     void updateStatusBarStats();
     void recalculateAndEmitStats();

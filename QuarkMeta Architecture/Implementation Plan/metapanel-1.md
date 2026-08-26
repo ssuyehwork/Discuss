@@ -23,7 +23,13 @@ It eliminates illegal text symbols (`[+]`), restores missing `no_color` clearanc
 
 ## 3. Detailed Line-by-Line Changes
 
-Replaces `src/ui/MetaPanel.h` and `src/ui/MetaPanel.cpp` with the Version-5 compliant implementation, integrating all SVG icon helpers and proper signal connections.
+### 3.1 `src/ui/MetaPanel.h`
+```
+<<<<<<< SEARCH
+    QPushButton* m_btnAddTag = nullptr;
+=======
+    QPushButton* m_btnAddTag = nullptr;
+    QPushButton* m_btnNoColor = nullptr;
 
 ---
 

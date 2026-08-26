@@ -2462,34 +2462,40 @@ ContentPanel::DataSourceType ContentPanel::dataSourceType() const {
 
 
 void ContentPanel::onSelectionChanged() { 
-    // 1. 初始化 100ms 防抖定时器，防止高速拖选与全选操作触发频繁全量遍历
+    // 1. 初始化 30ms 响应防抖定时器，防止高速拖选与全选操作触发频繁全量遍历
     if (!m_selectionTimer) {
         m_selectionTimer = new QTimer(this);
         m_selectionTimer->setSingleShot(true);
-        m_selectionTimer->setInterval(100);
+        m_selectionTimer->setInterval(30);
 
-        connect(m_selectionTimer, &QTimer::timeout, this, [this]() {
-            QItemSelectionModel* selectionModel = (m_viewStack->currentWidget() == m_gridView) ? 
-                m_gridView->selectionModel() : m_treeView->selectionModel();
-            if (!selectionModel) return;
-
-            QStringList selectedPaths;
-            QModelIndexList indices = selectionModel->selectedIndexes();
-            for (const QModelIndex& index : indices) {
-                if (index.column() == 0) {
-                    QString path = index.data(PathRole).toString();
-                    if (!path.isEmpty()) selectedPaths.append(path);
-                }
-            }
-
-            // 🚨 防抖时间到达后，只向外发射 1 次选中信号！彻底消灭信号风暴！
-            emit selectionChanged(selectedPaths);
-        });
+        connect(m_selectionTimer, &QTimer::timeout, this, &ContentPanel::emitSelectionChangedSignal);
     }
 
     // 🚨 2. 每次鼠标快速点击/滑动，仅重置防抖定时器，不阻塞 UI 线程！
     m_selectionTimer->start();
 } 
+
+void ContentPanel::emitSelectionChangedSignal() {
+    QList<QModelIndex> indexes = getSelectedIndexes();
+    QStringList paths;
+
+    // 大选区（> 50 项）熔断保护，防止主线程深拷贝数千个字符串造成假死
+    if (indexes.size() > 50) {
+        if (!indexes.isEmpty() && indexes.first().isValid()) {
+            paths.append(indexes.first().data(PathRole).toString());
+        }
+    } else {
+        paths.reserve(indexes.size());
+        for (const auto& idx : indexes) {
+            if (idx.isValid()) {
+                paths.append(idx.data(PathRole).toString());
+            }
+        }
+    }
+
+    emit selectionChanged(paths);
+    updateStatusBarStats();
+}
  
 void ContentPanel::refreshAll() {
     // 1. 批量暂存所有当前选中项的文件名，杜绝多选丢失！
