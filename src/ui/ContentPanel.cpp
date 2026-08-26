@@ -1109,11 +1109,50 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                 return true; 
             } 
             if (keyEvent->key() == Qt::Key_Delete) { 
-                onCustomContextMenuRequested(view->mapFromGlobal(QCursor::pos())); 
+                if (keyEvent->modifiers() & Qt::ShiftModifier) {
+                    QList<QModelIndex> selectedIndexes = view->selectionModel()->selectedIndexes();
+                    if (!selectedIndexes.isEmpty()) {
+                        QStringList targetPaths;
+                        for (const auto& idx : selectedIndexes) {
+                            if (idx.column() == 0) targetPaths << idx.data(PathRole).toString();
+                        }
+                        if (!targetPaths.isEmpty()) {
+                            if (FramelessMessageBox::question(this, "确认删除", "确定要永久删除选中的项目吗？数据将被物理覆写并彻底抹除，此操作不可恢复。")) {
+                                for (const QString& p : targetPaths) {
+                                    QFileInfo info(p);
+                                    if (info.isDir()) {
+                                        QDir(p).removeRecursively();
+                                    } else {
+                                        QFile::remove(p);
+                                    }
+                                    MetadataManager::instance().removeMetadataSync(p.toStdWString());
+                                }
+                                refreshAll();
+                            }
+                        }
+                    }
+                } else {
+                    // Del 键：移入回收站
+                    QList<QModelIndex> selectedIndexes = view->selectionModel()->selectedIndexes();
+                    if (!selectedIndexes.isEmpty()) {
+                        QStringList targetPaths;
+                        for (const auto& idx : selectedIndexes) {
+                            if (idx.column() == 0) targetPaths << idx.data(PathRole).toString();
+                        }
+                        if (!targetPaths.isEmpty()) {
+                            DiskTrashService::moveToDiskTrash(targetPaths);
+                            refreshAll();
+                        }
+                    }
+                }
                 return true; 
             } 
              
             if (keyEvent->modifiers() & Qt::ControlModifier) { 
+                if ((keyEvent->modifiers() & Qt::ShiftModifier) && keyEvent->key() == Qt::Key_N) {
+                    createNewItem("folder");
+                    return true;
+                }
                 // 2026-03-xx 按照用户要求：逻辑重构，统一调用 performCopy 业务函数 
                 if (keyEvent->key() == Qt::Key_C && !(keyEvent->modifiers() & Qt::ShiftModifier)) { 
                     performCopy(false); 
@@ -1723,11 +1762,11 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             if (!isFolder) {
                 menu.addAction(UiHelper::getIcon("sync", QColor("#3498db"), 18), "重新提取缩略图")->setData(ActionReextractThumbnail);
 
-                QMenu* cryptoMenu = menu.addMenu("加密保护"); 
+                QMenu* cryptoMenu = menu.addMenu("外壳保护"); 
                 UiHelper::applyMenuStyle(cryptoMenu); 
-                cryptoMenu->addAction("执行加密保护")->setData(ActionEncrypt); 
-                cryptoMenu->addAction("解除加密")->setData(ActionDecrypt); 
-                cryptoMenu->addAction("修改加密密码")->setData(ActionChangePwd); 
+                cryptoMenu->addAction("执行外壳保护")->setData(ActionEncrypt); 
+                cryptoMenu->addAction("解除保护")->setData(ActionDecrypt); 
+                cryptoMenu->addAction("修改保护密码")->setData(ActionChangePwd); 
             }
         }
     } 

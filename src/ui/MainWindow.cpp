@@ -391,12 +391,8 @@ void MainWindow::initUi() {
             m_metaPanel->setImagePreview(previewPixmap);
         }
 
-        // 状态栏更新：直接传递总数与选区大小，避免二次全量遍历
-        if (m_statusLeft && m_contentPanel && m_contentPanel->getProxyModel()) {
-            int totalCount = m_contentPanel->getProxyModel()->rowCount();
-            int selectedCount = paths.size();
-            m_statusLeft->setText(QString("%1 个项目, 已选中 %2 个").arg(totalCount).arg(selectedCount));
-        }
+        // 状态栏更新：触发统一带隐藏项计数的 onStatusBarStatsUpdated
+        onStatusBarStatsUpdated(0, 0, 0);
     });
 
     // 3. 内容面板请求预览 -> QuickLook
@@ -1531,28 +1527,31 @@ void MainWindow::onVolumeUnplugged(const QString& driveLetter) {
 }
 
 void MainWindow::onStatusBarStatsUpdated(int fileCount, int folderCount, int totalCount) {
-    if (!m_statusLeft) return;
-    
-    // 2026-05-08 按照用户要求：只显示总项目数量和选中数量，不区分文件/文件夹
-    auto selectedIndexes = m_contentPanel->getSelectedIndexes();
-    QSet<int> uniqueRows;
-    for (const QModelIndex& index : selectedIndexes) {
-        uniqueRows.insert(index.row());
+    if (!m_statusLeft || !m_contentPanel || !m_contentPanel->getProxyModel()) return;
+
+    int visibleCount = m_contentPanel->getProxyModel()->rowCount();
+    int fullCount = m_contentPanel->model() ? m_contentPanel->model()->rowCount() : visibleCount;
+    int hiddenCount = fullCount - visibleCount;
+    int selectedCount = m_contentPanel->getSelectedIndexes().size();
+
+    QString statusText;
+    if (hiddenCount > 0) {
+        statusText = QString("%1个项目，%2个已隐藏，选中了%3个")
+                     .arg(visibleCount).arg(hiddenCount).arg(selectedCount);
+    } else {
+        statusText = QString("%1个项目，选中了%2个")
+                     .arg(visibleCount).arg(selectedCount);
     }
-    int selectedCount = uniqueRows.size();
-    
-    m_statusLeft->setText(QString("%1 个项目, 已选中 %2 个").arg(QString::number(totalCount)).arg(QString::number(selectedCount)));
-    
+
+    m_statusLeft->setText(statusText);
+
     Q_UNUSED(fileCount);
     Q_UNUSED(folderCount);
+    Q_UNUSED(totalCount);
 }
 
 void MainWindow::updateStatusBar() {
-    if (!m_statusLeft) return;
-    
-    // 修正：显示经过过滤后的可见项目总数
-    int visibleCount = m_contentPanel->getProxyModel()->rowCount();
-    m_statusLeft->setText(QString("%1 个项目").arg(visibleCount));
+    onStatusBarStatsUpdated(0, 0, 0);
 }
 
 void MainWindow::onPinToggled(bool checked) {

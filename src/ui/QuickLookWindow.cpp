@@ -44,221 +44,6 @@ static const QSet<QString> UNPREVIEWABLE_EXTS = {
     "mp4", "m4v", "mov", "avi", "mkv", "wmv", "flv", "webm", "3gp", "mp3", "wav", "wma", "flac", "aac", "ogg", "m4a", "ape"
 };
 
-// ==========================================
-// QuickLookGraphicsView 实现
-// ==========================================
-
-QuickLookGraphicsView::QuickLookGraphicsView(QWidget* parent) : QGraphicsView(parent) {
-    m_scene = new QGraphicsScene(this);
-    setScene(m_scene);
-    
-    m_pixmapItem = new QGraphicsPixmapItem();
-    m_pixmapItem->setTransformationMode(Qt::SmoothTransformation);
-    m_scene->addItem(m_pixmapItem);
-
-    setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
-    setResizeAnchor(QGraphicsView::AnchorUnderMouse);
-    setDragMode(QGraphicsView::ScrollHandDrag);
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    setStyleSheet("background: transparent; border: none;");
-    
-    // 美化滚动条，对齐系统考古全局规范：宽度 10px、圆角 3px、背景透明、Handle 颜色对齐 #333333
-    horizontalScrollBar()->setStyleSheet(R"(
-        QScrollBar:horizontal { height: 10px; background: transparent; }
-        QScrollBar::handle:horizontal { background: #333333; border-radius: 3px; }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { border: none; background: none; }
-        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }
-    )");
-    verticalScrollBar()->setStyleSheet(R"(
-        QScrollBar:vertical { width: 10px; background: transparent; }
-        QScrollBar::handle:vertical { background: #333333; border-radius: 3px; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { border: none; background: none; }
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
-    )");
-
-    // 创建右下角小地图
-    m_minimap = new QuickLookMinimap(this);
-    
-    // 小地图点击/拖拽 ➔ 驱动主视口平移中心点
-    connect(m_minimap, &QuickLookMinimap::centerRequested, this, [this](double xRatio, double yRatio) {
-        if (!m_pixmapItem || m_pixmapItem->pixmap().isNull()) return;
-        QRectF totalRect = m_pixmapItem->boundingRect();
-        QPointF targetCenter(xRatio * totalRect.width(), yRatio * totalRect.height());
-        centerOn(targetCenter);
-        updateMinimap();
-    });
-}
-
-void QuickLookGraphicsView::setPixmap(const QPixmap& pixmap) {
-    m_pixmapItem->setPixmap(pixmap);
-    m_scene->setSceneRect(m_pixmapItem->boundingRect());
-    
-    if (m_minimap) {
-        m_minimap->setPixmap(pixmap);
-    }
-    
-    setZoomOriginal(); // 2026-11-xx：将“原始大小模式（100% 比例）”作为默认
-    updateMinimap();   // 计算是否显示小地图
-}
-
-void QuickLookGraphicsView::clear() {
-    m_pixmapItem->setPixmap(QPixmap());
-    m_scene->setSceneRect(QRectF());
-    resetTransform();
-    m_currentScale = 1.0;
-    m_isFitMode = false; // 2026-11-xx：默认模式设定为原始大小模式（false）
-    if (m_minimap) m_minimap->clear();
-    updateCursor();
-}
-
-void QuickLookGraphicsView::fitImage() {
-    if (!m_pixmapItem || m_pixmapItem->pixmap().isNull()) return;
-    
-    resetTransform();
-    m_scene->setSceneRect(m_pixmapItem->boundingRect());
-    fitInView(m_pixmapItem, Qt::KeepAspectRatio);
-    
-    m_currentScale = transform().m11();
-    m_isFitMode = true;
-    updateCursor();
-}
-
-void QuickLookGraphicsView::setZoomOriginal() {
-    if (!m_pixmapItem || m_pixmapItem->pixmap().isNull()) return;
-    
-    resetTransform();
-    m_scene->setSceneRect(m_pixmapItem->boundingRect());
-    m_currentScale = 1.0;
-    m_isFitMode = false;
-    updateCursor();
-}
-
-void QuickLookGraphicsView::rotateClockwise() {
-    rotate(90);
-    updateCursor();
-}
-
-void QuickLookGraphicsView::flipHorizontal() {
-    scale(-1, 1);
-    updateCursor();
-}
-
-void QuickLookGraphicsView::wheelEvent(QWheelEvent* event) {
-    if (!m_pixmapItem || m_pixmapItem->pixmap().isNull()) {
-        QGraphicsView::wheelEvent(event);
-        return;
-    }
-
-    double factor = 1.15;
-    if (event->angleDelta().y() < 0) {
-        factor = 1.0 / factor;
-    }
-
-    double newScale = m_currentScale * factor;
-    if (newScale < 0.1) {
-        factor = 0.1 / m_currentScale;
-        newScale = 0.1;
-    } else if (newScale > 10.0) {
-        factor = 10.0 / m_currentScale;
-        newScale = 10.0;
-    }
-
-    if (qFuzzyCompare(newScale, m_currentScale)) {
-        return;
-    }
-
-    m_isFitMode = false;
-    scale(factor, factor);
-    m_currentScale = newScale;
-    updateCursor();
-    updateMinimap(); // 缩放后刷新小地图
-}
-
-void QuickLookGraphicsView::mouseDoubleClickEvent(QMouseEvent* event) {
-    if (event->button() == Qt::LeftButton) {
-        // 2026-11-xx：放弃当前双击切换自适应/原始像素功能，双击时直接关闭预览
-        QuickLookWindow::instance().closePreview();
-        event->accept();
-    } else {
-        QGraphicsView::mouseDoubleClickEvent(event);
-    }
-}
-
-void QuickLookGraphicsView::resizeEvent(QResizeEvent* event) {
-    QGraphicsView::resizeEvent(event);
-    if (m_isFitMode) {
-        fitImage();
-    }
-    updateMinimap(); // 调整窗口大小后刷新小地图
-}
-
-void QuickLookGraphicsView::mousePressEvent(QMouseEvent* event) {
-    if (event->button() == Qt::LeftButton) {
-        bool exceeds = (m_pixmapItem->boundingRect().width() * m_currentScale > viewport()->width()) ||
-                       (m_pixmapItem->boundingRect().height() * m_currentScale > viewport()->height());
-        if (exceeds) {
-            setCursor(Qt::ClosedHandCursor);
-        }
-    }
-    QGraphicsView::mousePressEvent(event);
-}
-
-void QuickLookGraphicsView::mouseReleaseEvent(QMouseEvent* event) {
-    QGraphicsView::mouseReleaseEvent(event);
-    updateCursor();
-}
-
-void QuickLookGraphicsView::mouseMoveEvent(QMouseEvent* event) {
-    QGraphicsView::mouseMoveEvent(event);
-    if (event->buttons() & Qt::LeftButton) {
-        updateMinimap(); // 按住抓手拖拽时实时刷新小地图！
-    }
-}
-
-void QuickLookGraphicsView::updateMinimap() {
-    if (!m_minimap || !m_pixmapItem || m_pixmapItem->pixmap().isNull()) {
-        if (m_minimap) m_minimap->hide();
-        return;
-    }
-
-    QRectF totalRect = m_pixmapItem->boundingRect();
-    QRectF visibleRect = mapToScene(viewport()->rect()).boundingRect();
-
-    // 判定条件：只有当图片物理尺寸超出了当前视口（视口看的是局部）时才展示小地图
-    bool exceedsHorizontal = visibleRect.width() < totalRect.width() * 0.99;
-    bool exceedsVertical = visibleRect.height() < totalRect.height() * 0.99;
-
-    if (exceedsHorizontal || exceedsVertical) {
-        m_minimap->updateViewportRect(visibleRect, totalRect);
-        
-        // 精确定位在右下角 (右边距 20px，底边距 20px)
-        int mx = viewport()->width() - m_minimap->width() - 20;
-        int my = viewport()->height() - m_minimap->height() - 20;
-        m_minimap->move(mx, my);
-        
-        m_minimap->show();
-        m_minimap->raise(); // 悬浮在画面上方
-    } else {
-        m_minimap->hide(); // 完整展示时隐去
-    }
-}
-
-void QuickLookGraphicsView::updateCursor() {
-    if (!m_pixmapItem || m_pixmapItem->pixmap().isNull()) {
-        setCursor(Qt::ArrowCursor);
-        return;
-    }
-    
-    bool exceedsHorizontal = m_pixmapItem->boundingRect().width() * m_currentScale > viewport()->width();
-    bool exceedsVertical = m_pixmapItem->boundingRect().height() * m_currentScale > viewport()->height();
-    
-    if (exceedsHorizontal || exceedsVertical) {
-        setCursor(Qt::OpenHandCursor);
-    } else {
-        setCursor(Qt::ArrowCursor);
-    }
-}
 
 
 // ==========================================
@@ -335,6 +120,13 @@ void QuickLookWindow::setupUi() {
     m_textEdit->viewport()->installEventFilter(this);
     layout->addWidget(m_textEdit);
 
+    // 空文本提示标签
+    m_lblEmptyPrompt = new QLabel(m_container);
+    m_lblEmptyPrompt->setAlignment(Qt::AlignCenter);
+    m_lblEmptyPrompt->setStyleSheet("color: #888888; font-size: 16px; font-weight: bold; background: transparent;");
+    m_lblEmptyPrompt->hide();
+    layout->addWidget(m_lblEmptyPrompt);
+
     // 状态与信息标签
     m_infoLabel = new QLabel(m_container);
     m_infoLabel->setStyleSheet("color: #777;");
@@ -396,6 +188,7 @@ void QuickLookWindow::closePreview() {
 
 void QuickLookWindow::renderImage(const QString& path) {
     m_textEdit->hide();
+    if (m_lblEmptyPrompt) m_lblEmptyPrompt->hide();
     m_graphicsView->show();
     m_graphicsView->clear();
     m_infoLabel->setText("正在加载预览...");
@@ -461,6 +254,7 @@ void QuickLookWindow::renderImage(const QString& path) {
 
 void QuickLookWindow::renderText(const QString& path) {
     m_graphicsView->hide();
+    m_lblEmptyPrompt->hide();
     m_textEdit->show();
     m_textEdit->setPlainText("正在读取文件...");
 
@@ -472,6 +266,14 @@ void QuickLookWindow::renderText(const QString& path) {
 
     QByteArray fileData = file.read(128 * 1024);
     file.close();
+
+    if (file.size() == 0 || fileData.trimmed().isEmpty()) {
+        m_textEdit->hide();
+        m_lblEmptyPrompt->setText("该项目内容为空");
+        m_lblEmptyPrompt->show();
+        m_infoLabel->setText(QString("大小: 0 KB | %1").arg(path));
+        return;
+    }
 
     bool potentialUtf16 = fileData.startsWith("\xFF\xFE") || fileData.startsWith("\xFE\xFF");
     if (!potentialUtf16 && isBinary(fileData)) {

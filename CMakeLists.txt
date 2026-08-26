@@ -132,6 +132,7 @@ set(SOURCES
     src/ui/IScanResultView.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
+    src/ui/FramelessDialogBase.h
     src/ui/FramelessDialog.cpp
     src/ui/FramelessDialog.h
     src/ui/FramelessFileDialog.cpp
@@ -193,6 +194,30 @@ set(SOURCES
     src/core/ActionCommand.h
     src/core/UndoManager.h
     src/core/BasicCommands.h
+    src/core/commands/RenameCommand.h
+    src/core/commands/MoveCommand.h
+    src/core/commands/MetadataCommand.h
+    src/core/commands/SecureDeleteCommand.h
+    src/core/commands/ShellProtectionCommand.h
+    src/core/commands/BatchRenameCommand.h
+    src/util/VolumePathResolver.h
+    src/util/VolumePathResolver.cpp
+    src/ui/FolderButton.h
+    src/ui/FolderButton.cpp
+    src/ui/QuickLookGraphicsView.h
+    src/ui/QuickLookGraphicsView.cpp
+    src/ui/components/StyledCheckBox.h
+    src/ui/components/StyledCheckBox.cpp
+    src/ui/components/ClickableRow.h
+    src/ui/components/ClickableRow.cpp
+    src/ui/dialogs/FramelessInputDialog.h
+    src/ui/dialogs/FramelessInputDialog.cpp
+    src/ui/dialogs/FramelessColorPicker.h
+    src/ui/dialogs/FramelessColorPicker.cpp
+    src/ui/dialogs/FramelessConfirmDialog.h
+    src/ui/dialogs/FramelessConfirmDialog.cpp
+    src/ui/dialogs/FramelessMessageBox.h
+    src/ui/dialogs/FramelessMessageBox.cpp
     src/ui/ToolTipOverlay.cpp
     src/ui/ToolTipOverlay.h
     src/ui/TreeItemDelegate.h
