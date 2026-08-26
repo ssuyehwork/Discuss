@@ -538,6 +538,7 @@ void MainWindow::setupSplitters() {
     m_titleBarWidget->setObjectName("TitleBar");
     m_titleBarWidget->setStyleSheet(QString("QWidget#TitleBar { border: none; border-bottom: 1px solid %1; background: transparent; }").arg(qssColor(BorderColor)));
     m_titleBarWidget->setFixedHeight(34);
+    m_titleBarWidget->installEventFilter(this);
     m_titleBarLayout = new QHBoxLayout(m_titleBarWidget);
     m_titleBarLayout->setContentsMargins(5, 0, kEdgeMargin, 0); 
     m_titleBarLayout->setSpacing(8);
@@ -547,10 +548,12 @@ void MainWindow::setupSplitters() {
     m_logoLabel->setPixmap(UiHelper::getIcon("ferrex", BrandOrange).pixmap(16, 16));
     m_logoLabel->setAlignment(Qt::AlignCenter);
     m_logoLabel->setStyleSheet("background: transparent; border: none;");
+    m_logoLabel->installEventFilter(this);
     m_titleBarLayout->addWidget(m_logoLabel);
 
     m_appNameLabel = new QLabel("QuarkMeta", m_titleBarWidget);
     m_appNameLabel->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold;").arg(BrandOrange.name()));
+    m_appNameLabel->installEventFilter(this);
     m_titleBarLayout->addWidget(m_appNameLabel);
     m_titleBarLayout->addStretch();
 
