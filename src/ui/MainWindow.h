@@ -23,6 +23,7 @@ namespace QuarkMeta {
 class TrayController;
 class HoverEventFilter;
 class ResizeEventFilter;
+class TitleBarEventFilter;
 class AddressBar;
 class TaskProgressToolBar;
 class NavPanel;
@@ -189,8 +190,9 @@ private:
 
     // 系统托盘控制器
     TrayController* m_trayController = nullptr;
-    HoverEventFilter* m_hoverFilter = nullptr;
-    ResizeEventFilter* m_resizeFilter = nullptr;
+    HoverEventFilter*     m_hoverFilter     = nullptr;
+    ResizeEventFilter*    m_resizeFilter    = nullptr;
+    TitleBarEventFilter* m_titleBarFilter  = nullptr;
     QTimer* m_sidebarRefreshTimer = nullptr;
 
     // 模块化控制器与中介者
