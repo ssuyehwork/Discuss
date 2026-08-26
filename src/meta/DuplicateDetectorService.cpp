@@ -49,8 +49,8 @@ QString DuplicateDetectorService::computeFullSha256(const QString& filePath) {
     return QString(hash.result().toHex()).toLower();
 }
 
-std::unordered_set<QString> DuplicateDetectorService::findDuplicatePaths(const std::vector<ItemRecord>& records) {
-    std::unordered_set<QString> duplicatePaths;
+QSet<QString> DuplicateDetectorService::findDuplicatePaths(const std::vector<ItemRecord>& records) {
+    QSet<QString> duplicatePaths;
     if (records.size() < 2) return duplicatePaths;
 
     // 1. 一阶：按文件大小聚合（零 I/O）

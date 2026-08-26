@@ -38,14 +38,14 @@ public:
     FilterState currentFilter;
 
     void updateFilter();
-    void setCachedDuplicatePaths(const std::unordered_set<QString>& paths);
+    void setCachedDuplicatePaths(const QSet<QString>& paths);
 
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
     bool lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const override;
 
 private:
-    std::unordered_set<QString> m_cachedDuplicatePaths; // 纯内存集合，主线程 0 磁盘 I/O
+    QSet<QString> m_cachedDuplicatePaths; // 纯内存集合，主线程 0 磁盘 I/O
 };
 
 /**

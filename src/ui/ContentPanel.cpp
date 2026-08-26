@@ -3,6 +3,7 @@
 #endif
 #include "ContentPanel.h"
 #include "FavoritePanel.h"
+#include "../meta/DuplicateDetectorService.h"
 #include "../meta/TrashRepository.h" 
 #include "../meta/DiskTrashRepo.h"
 #include "ColorPicker.h"
@@ -107,7 +108,7 @@ void FilterProxyModel::updateFilter() {
     endFilterChange(); 
 } 
 
-void FilterProxyModel::setCachedDuplicatePaths(const std::unordered_set<QString>& paths) {
+void FilterProxyModel::setCachedDuplicatePaths(const QSet<QString>& paths) {
     m_cachedDuplicatePaths = paths;
     invalidateFilter();
 }
