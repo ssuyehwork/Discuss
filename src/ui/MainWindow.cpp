@@ -396,9 +396,6 @@ void MainWindow::mouseMoveEvent(QMouseEvent* event) {
         return;
     }
 
-    if (!m_isDragging) {
-        updateCursorShape(getResizeDirection(event->position().toPoint()));
-    }
 }
 
 MainWindow::ResizeDirection MainWindow::getResizeDirection(const QPoint& pos) const {

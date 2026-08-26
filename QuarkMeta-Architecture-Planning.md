@@ -41,7 +41,7 @@
 2. **UI 主线程零 I/O 判重保护红线**：哈希计算与全量判重集合（`duplicatePaths`）生成必须全权移交至 `QtConcurrent` 后台工作线程处理。判重结果通过 `ScanStats` 信号异步注入主线程 `FilterProxyModel` 纯内存缓存，主线程仅进行 $O(1)$ 内存哈希集合查询，绝不阻塞 UI 主线程事件循环。
 
 ### 核心解耦与单一职责架构顶层规范 (MainWindow, FilterPanel, MetaPanel, MetadataManager)
-1. **主窗口 (MainWindow) 拆分与 TitleBar 交互规范**：主窗口仅允许承载顶层 UI 布局构建与 QSS 样式加载。顶层无边框标题栏（TitleBar）必须支持标准桌面级交互：双击标题栏或空白区域触发最大化/还原切换（`isMaximized()` ? `showNormal()` : `showMaximized()`）；最大化状态下按住标题栏拖拽必须自动还原窗口并顺畅跟随鼠标移动。全局快捷键捕获与事件分发必须解耦至 `GlobalShortcutController`；多面板之间的联动逻辑解耦至 `PanelMediator`。
+1. **主窗口 (MainWindow) 拆分与 TitleBar 交互规范**：主窗口仅允许承载顶层 UI 布局构建与 QSS 样式加载。无边框窗口边缘 Hover 光标改变全权交由 `ResizeEventFilter` 统一维护，严禁在 `MainWindow` 内部重复编写光标判定逻辑（方案 A 架构拆分）。顶层无边框标题栏（TitleBar）必须支持标准桌面级交互：双击标题栏或空白区域触发最大化/还原切换（`isMaximized()` ? `showNormal()` : `showMaximized()`）；最大化状态下按住标题栏拖拽必须自动还原窗口并顺畅跟随鼠标移动。全局快捷键捕获与事件分发必须解耦至 `GlobalShortcutController`；多面板之间的联动逻辑解耦至 `PanelMediator`。
 2. **筛选面板 (FilterPanel) 拆分规范**：筛选面板仅保留纯 UI 控件渲染职责。筛选状态管理（`FilterState`）解耦至 `FilterStateModel`；后台文件数量聚合与分类统计解耦至 `ScanStatsEngine`。
 3. **属性面板 (MetaPanel) 拆分与 UI 布局架构规范**：属性面板（MetaPanel）头部标题必须保持“元数据属性”并使用 `#4a90e2` 数据库风格；纵向布局必须严格从上至下保持物理顺序：1. 顶部预览与调色板 -> 2. 文件名编辑框 -> 3. 备注说明 -> 4. 关联网址（右侧链接图标必须具备独立的左侧 1px 垂直分隔线 `border-left`）-> 5. 星级评级与颜色标记（必须配备 `no_color` 清除 ⊘ 图标与全矢量 SVG 图标）-> 6. 标签管理（使用纯矢量 `add` 按钮，严禁使用 `[+]` 文本符号）-> 7. 基础属性（包含加密状态）-> 8. 物理路径（必须强制 `setCursorPosition(0)` 优先呈现路径头部盘符，包含“复制路径”与“打开位置”独立物理按钮）。
 4. **元数据中心 (MetadataManager) 门面模式规范**：元数据中心作为对外统一门面（Facade），不再直接混合磁盘 IO 与数据库存取。`.QuarkMeta.json` 序列化由 `QuarkMetaJsonStore` 承载；SQLite `global.db` 持久化由 `MetaDbRepository` 承载；内存 LRU 缓存由 `MetaMemoryCache` 承载。
