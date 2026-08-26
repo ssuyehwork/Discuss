@@ -154,11 +154,25 @@ public:
     QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
     QModelIndexList getSelectedIndexes() const {
         if (!m_viewStack) return {};
-        QItemSelectionModel* selModel = (m_viewStack->currentWidget() == m_gridView) ?
-                m_gridView->selectionModel() : m_treeView->selectionModel();
+        bool isGrid = (m_viewStack->currentWidget() == m_gridView);
+        QItemSelectionModel* selModel = isGrid ? m_gridView->selectionModel() : m_treeView->selectionModel();
         if (!selModel) return {};
-        // 核心优化：高并发防卡死，仅获取第 0 列单元格索引（而非全列索引集合），性能提升数十倍
-        return selModel->selectedRows(0);
+
+        if (isGrid) {
+            // 网格视图 (GridView/JustifiedView): 提取 column == 0 的单元格索引，保证在卡片模式下正确获取选中项
+            QModelIndexList result;
+            const QModelIndexList selected = selModel->selectedIndexes();
+            result.reserve(selected.size());
+            for (const QModelIndex& idx : selected) {
+                if (idx.column() == 0) {
+                    result.append(idx);
+                }
+            }
+            return result;
+        } else {
+            // 列表视图 (TreeView): 高并发防卡死，仅获取第 0 列行索引
+            return selModel->selectedRows(0);
+        }
     }
 
     /**
