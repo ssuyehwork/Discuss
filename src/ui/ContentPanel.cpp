@@ -1343,8 +1343,8 @@ void ContentPanel::initGridView() {
     m_gridView->setAcceptDrops(true);
     m_gridView->setDragDropMode(QAbstractItemView::DragDrop); 
  
-    // 2026-06-xx 物理纠偏：移除 SelectedClicked，防止单击项目时意外触发重命名，确保交互稳健
-    m_gridView->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::EditKeyPressed); 
+    // 2026-06-xx 物理纠偏：移除 SelectedClicked 与 DoubleClicked，防止双击项目时意外触发重命名框，确保交互稳健
+    m_gridView->setEditTriggers(QAbstractItemView::EditKeyPressed);
  
     m_gridView->setModel(m_proxyModel); 
 
