@@ -212,7 +212,7 @@ void MainWindow::initUi() {
         });
     } else {
         QList<int> sizes;
-        sizes << 200 << 200 << 550 << 200 << 200;
+        sizes << 230 << 230 << 550 << 230 << 230;
         m_mainSplitter->setSizes(sizes);
     }
 
