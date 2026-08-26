@@ -2,6 +2,7 @@
 
 #include <QMap>
 #include <QString>
+#include <QSet>
 
 namespace QuarkMeta {
 
@@ -30,6 +31,8 @@ struct ScanStats {
     int uniqueCount = 0;
     int noThumbnailCount = 0;
     int hasThumbnailCount = 0;
+
+    QSet<QString> duplicatePaths;
 };
 
 } // namespace QuarkMeta

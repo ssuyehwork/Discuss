@@ -35,6 +35,10 @@
 4. **元数据面板被动展示与物理写盘严格隔离红线**：元数据属性面板（MetaPanel）在接收来自 PanelMediator 的选中项更新（如星级、颜色）时，必须明确区分“外部被动 UI 渲染”与“用户主动交互修改”（通过 `fromUser = false` 隐式约束）。被动更新渲染时绝对禁止触发任何磁盘 `.QuarkMeta.json` 写入或持久化事件广播，防止在多选/框选场景下将全选记录误判为用户主动修改而引发巨量物理磁盘 I/O 覆写与事件风暴。
 5. **中介者 $O(1)$ 常数级选区同步红线**：PanelMediator 在响应选区改变信号时，严禁在主 UI 线程中对当前视图模型进行线性遍历比对（如 $O(N)$ 字符串匹配），必须直接通过 `ContentPanel::getSelectedIndexes()` 提取首项索引进行 $O(1)$ 瞬时数据绑定。
 
+### 严谨三阶哈希验重与 UI 线程 0 阻塞顶层规范 (DuplicateDetectorService, FilterProxyModel)
+1. **三阶哈希判重红线**：文件判重必须严格采用三阶流水线算法：一阶依物理尺寸粗滤 -> 二阶对相同尺寸项做 FastHash（首尾 64KB 哈希） -> 三阶对冲突项做全量 SHA-256 校验。严禁仅仅依据文件名或简陋尺寸进行粗暴判重，彻底杜绝误判。
+2. **UI 主线程零 I/O 判重保护红线**：哈希计算与全量判重集合（`duplicatePaths`）生成必须全权移交至 `QtConcurrent` 后台工作线程处理。判重结果通过 `ScanStats` 信号异步注入主线程 `FilterProxyModel` 纯内存缓存，主线程仅进行 $O(1)$ 内存哈希集合查询，绝不阻塞 UI 主线程事件循环。
+
 ### 核心解耦与单一职责架构顶层规范 (MainWindow, FilterPanel, MetaPanel, MetadataManager)
 1. **主窗口 (MainWindow) 拆分规范**：主窗口仅允许承载顶层 UI 布局构建与 QSS 样式加载。全局快捷键捕获与事件分发必须解耦至 `GlobalShortcutController`；多面板（ContentPanel、MetaPanel、FavoritePanel）之间的联动逻辑必须解耦至中介者 `PanelMediator`。
 2. **筛选面板 (FilterPanel) 拆分规范**：筛选面板仅保留纯 UI 控件渲染职责。筛选状态管理（`FilterState`）解耦至 `FilterStateModel`；后台文件数量聚合与分类统计解耦至 `ScanStatsEngine`。
