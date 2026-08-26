@@ -167,6 +167,8 @@ set(SOURCES
     src/ui/HoverEventFilter.h
     src/ui/ResizeEventFilter.cpp
     src/ui/ResizeEventFilter.h
+    src/ui/TitleBarEventFilter.cpp
+    src/ui/TitleBarEventFilter.h
     src/ui/AddressBar.cpp
     src/ui/AddressBar.h
     src/ui/MetaPreviewWidget.h
