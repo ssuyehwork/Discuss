@@ -110,17 +110,27 @@ void PanelMediator::setupConnections() {
                 metaPanel->setPalettes({});
             } else {
                 auto indexes = contentPanel->getSelectedIndexes();
-                if (indexes.isEmpty()) return;
-
-                QModelIndex idx = indexes.first();
+                QModelIndex idx;
+                if (!indexes.isEmpty()) {
+                    idx = indexes.first();
+                }
                 QString path = paths.first();
                 QFileInfo fi(path);
 
-                QString name = idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString();
+                QString name;
+                QString type;
+                QString sizeStr;
+                QString mtimeStr;
+
+                if (idx.isValid()) {
+                    name = idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString();
+                    type = (idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件";
+                    sizeStr = idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString();
+                    mtimeStr = idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString();
+                }
+
                 if (name.isEmpty()) name = fi.fileName();
-                QString type = (idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件";
-                QString sizeStr = idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString();
-                QString mtimeStr = idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString();
+                if (type.isEmpty()) type = fi.isDir() ? "文件夹" : fi.suffix().toUpper() + " 文件";
 
                 int width = 0;
                 int height = 0;

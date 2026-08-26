@@ -26,7 +26,7 @@
 
 ### 内容面板（ContentPanel）模块化拆分与高并发选中性能防卡死顶层规范
 1. **上帝类拆分解耦红线**：内容面板（ContentPanel）必须遵循单一职责原则，严禁过度堆砌跨领域业务。主面板仅保留视图栈管理与子控制器调度职责，右键上下文菜单构建、物理文件系统操作（复制/剪切/粘贴/删除/重命名）以及选择状态与统计运算必须物理解耦拆分为独立控制器模块。
-2. **高并发选中索引计算防卡死规范**：在处理大目录全选与批量取消选中操作时，必须严格禁止调用获取全列单元格索引的高开销 API（如 `getSelectedIndexes()`）；统一约束仅获取首列行索引（`selectedRows(0)`），杜绝在成千上万条记录场景下因遍历多列生成巨量 QModelIndex 导致主 UI 线程假死卡顿。
+2. **高并发选中索引计算防卡死与多视图兼容规范**：在处理选中项获取（如 `getSelectedIndexes()`）时，必须兼顾高并发防卡死与视图模式兼容性。在列表视图（QTreeView）下获取 `selectedRows(0)`；在网格视图（QListView/JustifiedView）下仅提取 `column == 0` 的首列单元格索引，严禁因直接返回空列表导致面板间联动中断（如元数据面板无数据），杜绝在成千上万条记录场景下因遍历多列生成巨量 QModelIndex 导致主 UI 线程假死卡顿。
 
 ### 核心解耦与单一职责架构顶层规范 (MainWindow, FilterPanel, MetaPanel, MetadataManager)
 1. **主窗口 (MainWindow) 拆分规范**：主窗口仅允许承载顶层 UI 布局构建与 QSS 样式加载。全局快捷键捕获与事件分发必须解耦至 `GlobalShortcutController`；多面板（ContentPanel、MetaPanel、FavoritePanel）之间的联动逻辑必须解耦至中介者 `PanelMediator`。
