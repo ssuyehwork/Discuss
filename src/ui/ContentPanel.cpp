@@ -110,7 +110,7 @@ void FilterProxyModel::updateFilter() {
 
 void FilterProxyModel::setCachedDuplicatePaths(const QSet<QString>& paths) {
     m_cachedDuplicatePaths = paths;
-    invalidateFilter();
+    updateFilter();
 }
  
 bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {  
