@@ -102,25 +102,33 @@ void PanelMediator::setupConnections() {
             if (paths.isEmpty()) {
                 metaPanel->setImagePreview(QPixmap());
                 metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false, 0, 0);
-                metaPanel->setRating(0);
-                metaPanel->setColor(L"");
+                metaPanel->setRating(0, false);
+                metaPanel->setColor(L"", false);
                 metaPanel->setTags(QStringList());
                 metaPanel->setNote(L"");
                 metaPanel->setURL(L"");
                 metaPanel->setPalettes({});
             } else {
-                auto indexes = contentPanel->getSelectedIndexes();
-                if (indexes.isEmpty()) return;
+                QModelIndexList selectedIndices = contentPanel->getSelectedIndexes();
+                QModelIndex idx = selectedIndices.isEmpty() ? QModelIndex() : selectedIndices.first();
 
-                QModelIndex idx = indexes.first();
                 QString path = paths.first();
                 QFileInfo fi(path);
 
-                QString name = idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString();
+                QString name;
+                QString type;
+                QString sizeStr;
+                QString mtimeStr;
+
+                if (idx.isValid()) {
+                    name = idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString();
+                    type = (idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件";
+                    sizeStr = idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString();
+                    mtimeStr = idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString();
+                }
+
                 if (name.isEmpty()) name = fi.fileName();
-                QString type = (idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件";
-                QString sizeStr = idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString();
-                QString mtimeStr = idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString();
+                if (type.isEmpty()) type = fi.isDir() ? "文件夹" : fi.suffix().toUpper() + " 文件";
 
                 int width = 0;
                 int height = 0;
@@ -161,8 +169,8 @@ void PanelMediator::setupConnections() {
                     name, type, sizeStr, ctimeStr, mtimeStr, atimeStr,
                     path, idx.data(EncryptedRole).toBool(), width, height
                 );
-                metaPanel->setRating(idx.data(RatingRole).toInt());
-                metaPanel->setColor(idx.data(ColorRole).toString().toStdWString());
+                metaPanel->setRating(idx.data(RatingRole).toInt(), false);
+                metaPanel->setColor(idx.data(ColorRole).toString().toStdWString(), false);
                 metaPanel->setTags(cleanTags); 
                 metaPanel->setNote(noteStr);
                 metaPanel->setURL(urlStr);
