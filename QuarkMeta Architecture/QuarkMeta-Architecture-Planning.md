@@ -75,10 +75,16 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
 
 ### 3.1 面板 / 视图层通信规范与调度体系
 1. **双核调度中枢体系**：全系统建立唯一双核中央调度中枢——传声筒 `CentralEventHub`（纯消息事件分发、无数据逻辑）与中央大脑 `CoreEngine`（业务决策与逻辑编排）。
-2. **遵守三条交互铁律**：
-   - **铁律一**：UI 视图与控件绝对禁止直接调用 `MetadataManager`、`DatabaseManager`、`DiskIoService` 等底层服务。
-   - **铁律二**：UI 上的所有用户操作必须封装为 Command 提交给 `CoreEngine`。
+2. **物理四层解耦架构与四大交互铁律**：
+   - **第一层（UI 视图层 Pure View）**：UI 控件（如 `ContentPanel`、`MetaPanel`、`MainWindow` 等）仅负责界面渲染与事件拾取。**绝对禁止在 UI 内部包含物理抹除、AES 加解密、多线程 QThreadPool/QtConcurrent 调度或直接读写磁盘 `.QuarkMeta.json` 与数据库**。
+   - **第二层（Controller 调度层）**：专职 Controller 接管 UI 与后台服务之间的沟通桥梁，中转用户指令与处理多线程响应。
+   - **第三层（Service 业务服务层）**：物理粉碎抹除（`FileErasureService`）、AES 文件安全加解密（`FileSecurityService`）、卷标硬件轮询等逻辑下沉为纯粹的 Service 服务类，被 Controller 或 Command 调用。
+   - **第四层（DAO 持久层）**：元数据持久化统一归口 `MetadataManager` 与 `QuarkMetaJson`，严禁 UI 视图越权读写磁盘。
+3. **遵守四大交互铁律**：
+   - **铁律一**：UI 视图与控件绝对禁止直接调用 `MetadataManager`、`DatabaseManager`、`DiskIoService`、`SecureFileEraser`、`EncryptionManager` 等底层服务与物理 I/O。
+   - **铁律二**：UI 上的所有用户操作必须封装为 Command 提交给 `CoreEngine` 或交由对应的 Controller 处理。
    - **铁律三**：UI 只能订阅 `CentralEventHub` 的增量 Event 进行局部刷新，严格禁止调用 `notifyFullUIRebuild()` 强刷全屏。
+   - **铁律四（头文件单一职责）**：严禁在一个头文件中集中定义多个无共享状态的具体 ActionCommand 派生类、独立对话框类或无关联的工具类。一律实行“一类一头文件”与“主题独立头文件”物理拆分，杜绝集中式过载依赖。
 3. **底层数据纯净化与并发锁**：
    - QuarkMeta 核心架构禁止保留任何历史僵尸逻辑与监控：
      1. IOCP 监控与自动导入剪切逻辑；
