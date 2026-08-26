@@ -11,195 +11,961 @@
 
 ---
 
-## 2. `src` 目录参与编译的代码架构与逐文件职责规划 (Compiled Code File Responsibilities)
+## 2. 代码文件职责与功能深度剖析 (File Responsibilities & Functions)
 
-根据 CMake 构建系统 (`CMakeLists.txt`) 的显式注册配置，`src` 目录下共有 **238 个** 代码文件参与实际构建与编译。以下逐文件梳理其承载的核心职责与功能定位：
+根据 CMake 构建系统 (`CMakeLists.txt`) 的显式注册配置，以下为 `src` 目录下 238 个参与编译的代码文件的详细职责说明：
 
-### 2.1 应用程序入口 (Root Entry) [1]
-- **`src/main.cpp`** — 应用程序主入口。负责初始化 Qt 环境（高 DPI 缩放、QApplication 示例拉起）、全局样式表加载、日志拦截注册以及 MainWindow 主界面的构建与显示。
+## ` src/core/ActionCommand.h `
+- **职责数量**：2
+- **文件职责**：定义全局可撤销/重做的操作命令抽象基类 `ActionCommand`；提供 Command 模式统一接口规范。
 
-### 2.2 核心逻辑与控制层 (Core Module - `src/core/`) [36]
-负责底层事件调度、磁盘扫描、检索、撤销/重做管理以及操作命令封装。
+## ` src/core/AppConfig.h `
+- **职责数量**：3
+- **文件职责**：工业级全局配置管理单例 `AppConfig`；物理隔离 QSettings 并解决配置读取身份分裂问题；统一组织与应用配置项。
 
-- **`src/core/ActionCommand.h`** — 定义全局可撤销/重做的操作命令抽象基类 `ActionCommand`。
-- **`src/core/AppConfig.h`** — 应用程序工业级全局配置管理单例 `AppConfig`，物理隔离 QSettings 并统一配置项。
-- **`src/core/BasicCommands.h`** — 封装系统基础原子命令（新建文件夹、单文件删除、文件剪切/粘贴等）。
-- **`src/core/CentralEventHub.h` / `.cpp`** — 全局强类型解耦事件总线 `CentralEventHub`，负责模块间的异步信号广播与事件分发。
-- **`src/core/CoreController.h` / `.cpp`** — 核心中控类 `CoreController`，作为 UI 与底层 Core/Meta 服务交互的总枢纽。
-- **`src/core/CoreEngine.h` / `.cpp`** — 核心逻辑引擎 `CoreEngine`，负责处理资产流转、应用命令调度与任务执行。
-- **`src/core/DiskScanService.h` / `.cpp`** — 纯磁盘文件系统深度导航扫描服务 `DiskScanService`，支持并行文件系统遍历。
-- **`src/core/DiskTrashService.h` / `.cpp`** — 磁盘导航模式下的物理回收站服务 `DiskTrashService`，接管双轨物理隔离删除与还原。
-- **`src/core/FileFilterService.h` / `.cpp`** — 全局文件与目录过滤服务 `FileFilterService`，排除系统隐藏文件及日志缓存。
-- **`src/core/IndexedEntry.h` / `.cpp`** — 内存级磁盘条目索引结构 `IndexedEntry`，支持极速 MFT 扫描与高速搜索。
-- **`src/core/ItemRecord.h` / `.cpp`** — 统一文件/资产数据结构 `ItemRecord`，封装路径、尺寸、修改时间、元数据及 UI 标记。
-- **`src/core/NavigationHistoryService.h` / `.cpp`** — 路径导航历史纪录服务 `NavigationHistoryService`，管理路径的前进/后退堆栈。
-- **`src/core/OperationSnapshotEngine.h` / `.cpp`** — 批量操作快照引擎 `OperationSnapshotEngine`，记录批量重命名与分类的状态快照。
-- **`src/core/PhysicalDiskSearchExtractor.h` / `.cpp`** — 物理磁盘文件搜索与提取引擎 `PhysicalDiskSearchExtractor`，实现攒批限速与异步搜索。
-- **`src/core/SearchHistoryService.h` / `.cpp`** — 搜索历史持久化与检索服务 `SearchHistoryService`。
-- **`src/core/UndoManager.h`** — 全局撤销/重做栈管理器 `UndoManager`，采用双栈结构响应全局 Ctrl+Z/Ctrl+Y 操作。
-- **`src/core/VolumeOnlineManager.h` / `.cpp`** — 物理在线盘符监听与托管服务 `VolumeOnlineManager`，感知热插拔与盘符状态。
-- **`src/core/commands/BatchRenameCommand.h`** — 批量文件重命名撤销命令封装。
-- **`src/core/commands/MetadataCommand.h`** — 文件元数据/标签修改撤销命令封装。
-- **`src/core/commands/MoveCommand.h`** — 文件物理移动/归类撤销命令封装。
-- **`src/core/commands/RenameCommand.h`** — 单文件重命名撤销命令封装。
-- **`src/core/commands/SecureDeleteCommand.h`** — 文件粉碎/安全彻底删除命令封装。
-- **`src/core/commands/ShellProtectionCommand.h`** — 系统 Shell 文件保护与安全防误删命令封装。
+## ` src/core/BasicCommands.h `
+- **职责数量**：3
+- **文件职责**：封装系统基础原子操作命令；包含新建文件夹、单文件物理删除、剪切/粘贴等命令逻辑；支持撤销/重做堆栈。
 
-### 2.3 元数据与数据持久化层 (Meta Module - `src/meta/`) [30]
-负责 SQLite 数据库交互、元数据解析提取、标签库、重命名引擎以及重复文件检测。
+## ` src/core/CentralEventHub.cpp `
+- **职责数量**：2
+- **文件职责**：全局解耦事件总线 `CentralEventHub` 的实现；负责模块间的异步信号广播、监听绑定与事件分发。
 
-- **`src/meta/BatchRenameEngine.h` / `.cpp`** — 表达式重命名与正则替换引擎 `BatchRenameEngine`，计算新文件名序列。
-- **`src/meta/DatabaseManager.h` / `.cpp`** — SQLite3 数据库连接池与事务管理器 `DatabaseManager`。
-- **`src/meta/DatabaseMigrator.h`** — 数据库 Schema 版本迁移与自动升级器 `DatabaseMigrator`。
-- **`src/meta/DiskNavigatorService.h` / `.cpp`** — 磁盘导航与元数据映射服务 `DiskNavigatorService`。
-- **`src/meta/DiskTrashRepo.h` / `.cpp`** — 回收站元数据仓储 `DiskTrashRepo`，持久化物理删除条目的原始路径信息。
-- **`src/meta/DriveMetaDao.h` / `.cpp`** — 驱动器与卷标元数据 DAO 层 `DriveMetaDao`。
-- **`src/meta/DuplicateDetectorService.h` / `.cpp`** — 重复文件高效检测服务 `DuplicateDetectorService`，通过文件哈希与尺寸快速判重。
-- **`src/meta/MediaExtractorPipeline.h` / `.cpp`** — 多媒体元数据异步提取流水线 `MediaExtractorPipeline`。
-- **`src/meta/MetaCacheDecorator.h` / `.cpp`** — 元数据内存缓存装饰器 `MetaCacheDecorator`，提供二次查询加速。
-- **`src/meta/MetadataDefs.h`** — 元数据类型定义、分类常量与 EXIF/ID3 字段映射标准。
-- **`src/meta/MetadataManager.h` / `.cpp`** — 全局元数据中心管理者 `MetadataManager`，调度提取、缓存与更新。
-- **`src/meta/QuarkMetaJson.h` / `.cpp`** — 应用程序 JSON 导入导出与配置序列化工具 `QuarkMetaJson`。
-- **`src/meta/sqlite3.h` / `.c`** — 嵌入式关系型数据库 SQLite3 引擎核心源码（Amalgamation 单文件库）。
-- **`src/meta/StatisticsService.h` / `.cpp`** — 存储空间、文件类型分布及资产分析统计服务 `StatisticsService`。
-- **`src/meta/TagRepository.h` / `.cpp`** — 标签与颜色标注仓储 `TagRepository`，管理标签 CRUD 与文件绑定关系。
-- **`src/meta/TrashRepository.h` / `.cpp`** — 物理/逻辑回收站条目持久化仓储 `TrashRepository`。
+## ` src/core/CentralEventHub.h `
+- **职责数量**：2
+- **文件职责**：定义全局强类型应用程序事件枚举与事件结构体；提供事件总线结构规范。
 
-### 2.4 数据安全与加密层 (Crypto Module - `src/crypto/`) [2]
-负责数据的加解密与安全管理。
+## ` src/core/CoreController.cpp `
+- **职责数量**：3
+- **文件职责**：核心中控类 `CoreController` 的实现；连接 UI 视图与底层 Core/Meta 服务；为前端提供统一的异步通知与中控调度接口。
 
-- **`src/crypto/EncryptionManager.h` / `.cpp`** — 文件加解密与敏感资产安全管理引擎 `EncryptionManager`，支持密码与密钥管理。
+## ` src/core/CoreController.h `
+- **职责数量**：2
+- **文件职责**：核心中控类 `CoreController` 的头文件；负责协调底层服务初始化与全局状态管理。
 
-### 2.5 系统工具与通用服务 (Util Module - `src/util/`) [8]
-提供系统 Shell 对接、深层缩略图提取及卷路径解析服务。
+## ` src/core/CoreEngine.cpp `
+- **职责数量**：3
+- **文件职责**：核心业务大脑 `CoreEngine` 的实现；统筹资产流转、应用命令封装与调度后台多线程任务。
 
-- **`src/util/DeepThumbnailExtractor.h` / `.cpp`** — 深层缩略图与大图异步提取工具 `DeepThumbnailExtractor`。
-- **`src/util/DiskMediaExtractor.h` / `.cpp`** — 视频/音频媒体主色调与缩略图提取服务 `DiskMediaExtractor`。
-- **`src/util/ShellHelper.h` / `.cpp`** — Windows OS Shell 系统原生 API 封装 `ShellHelper`（如打开文件位置、右键菜单拉起、系统关联打开）。
-- **`src/util/VolumePathResolver.h` / `.cpp`** — 盘符 GUID、UNC 路径与卷标绝对路径解析器 `VolumePathResolver`。
+## ` src/core/CoreEngine.h `
+- **职责数量**：2
+- **文件职责**：定义强类型应用程序命令类型枚举与 `CoreEngine` 核心引擎头文件。
 
-### 2.6 第三方图像解码库 (Third Party Module - `src/third_party/libtiff/`) [36]
-嵌入式 libtiff 核心图像解码组件。
+## ` src/core/DiskScanService.cpp `
+- **职责数量**：3
+- **文件职责**：纯磁盘物理扫描服务 `DiskScanService` 的实现；高效遍历文件系统目录；攒批输出扫描结果并推送到视图层。
 
-- **`src/third_party/libtiff/tif_aux.c`** — TIFF 辅助解析工具与数据类型支持。
-- **`src/third_party/libtiff/tif_close.c`** — TIFF句柄释放与文件关闭清理。
-- **`src/third_party/libtiff/tif_codec.c`** — 编解码器注册与调度接口。
-- **`src/third_party/libtiff/tif_color.c`** — YCbCr 与 RGB 颜色空间转换实现。
-- **`src/third_party/libtiff/tif_compress.c`** — 压缩算法调度与缓冲区处理。
-- **`src/third_party/libtiff/tif_dir.c`** — Directory (IFD) 目录项读取与修改。
-- **`src/third_party/libtiff/tif_dirinfo.c`** — IFD Tag 信息注册与字典管理。
-- **`src/third_party/libtiff/tif_dirread.c`** — IFD 目录与标签解包读取逻辑。
-- **`src/third_party/libtiff/tif_dirwrite.c`** — IFD 目录写入与结构生成。
-- **`src/third_party/libtiff/tif_dumpmode.c`** — 原始未压缩 (Dump Mode) 编码器。
-- **`src/third_party/libtiff/tif_error.c`** — 错误日志与异常回调处理。
-- **`src/third_party/libtiff/tif_extension.c`** — 扩展 Tag 字段定制。
-- **`src/third_party/libtiff/tif_fax3.c`** — Group 3 / Group 4 传真图像解码器。
-- **`src/third_party/libtiff/tif_fax3sm.c`** — 传真解码状态机。
-- **`src/third_party/libtiff/tif_flush.c`** — 文件刷盘与写入缓冲区同步。
-- **`src/third_party/libtiff/tif_getimage.c`** — RGBA 图像解码核心转换逻辑。
-- **`src/third_party/libtiff/tif_hash_set.c`** — 内存哈希集合，加速 Tag 检索。
-- **`src/third_party/libtiff/tif_luv.c`** — LogL/LogLuv 高动态范围颜色编码。
-- **`src/third_party/libtiff/tif_lzw.c`** — LZW 无损压缩与解压实现。
-- **`src/third_party/libtiff/tif_next.c`** — NeXT 图像格式解压。
-- **`src/third_party/libtiff/tif_ojpeg.c`** — Old JPEG 格式相容性解码。
-- **`src/third_party/libtiff/tif_open.c`** — TIFF 打开与模式匹配。
-- **`src/third_party/libtiff/tif_packbits.c`** — PackBits 游程编码解压。
-- **`src/third_party/libtiff/tif_pixarlog.c`** — Pixar Log11 编码解压。
-- **`src/third_party/libtiff/tif_predict.c`** — 差分预测器。
-- **`src/third_party/libtiff/tif_print.c`** — TIFF 结构控制台与调试打印。
-- **`src/third_party/libtiff/tif_read.c`** — 基础 Strip / Tile 像素数据读取。
-- **`src/third_party/libtiff/tif_strip.c`** — Strip 分块索引计算与管理。
-- **`src/third_party/libtiff/tif_swab.c`** — 大小端字节序转换。
-- **`src/third_party/libtiff/tif_thunder.c`** — ThunderScan 游程解码。
-- **`src/third_party/libtiff/tif_tile.c`** — Tile 瓦片索引计算与切片读取。
-- **`src/third_party/libtiff/tif_version.c`** — LibTIFF 版本信息查询。
-- **`src/third_party/libtiff/tif_warning.c`** — 警告日志回调机制。
-- **`src/third_party/libtiff/tif_win32.c`** — Windows Win32 平台 I/O 句柄实现。
-- **`src/third_party/libtiff/tif_write.c`** — 基础 Strip / Tile 写入实现。
-- **`src/third_party/libtiff/tif_zip.c`** — Deflate / ZIP 解压支持。
+## ` src/core/DiskScanService.h `
+- **职责数量**：2
+- **文件职责**：纯磁盘物理扫描服务 `DiskScanService` 的头文件；规范磁盘导航扫描的物理隔离红线。
 
-### 2.7 视图与用户交互界面层 (UI Module - `src/ui/`) [125]
-实现基于 Qt 的自定 UI 控件、对话框、布局引擎与渲染代理。
+## ` src/core/DiskTrashService.cpp `
+- **职责数量**：3
+- **文件职责**：磁盘模式物理回收站服务 `DiskTrashService` 的实现；接管磁盘文件安全删除；管理本地回收站元数据仓储并支持物理还原。
 
-- **导航与地址栏关联控件**：
-  - `src/ui/AddressBar.h` / `.cpp` — 交互式地址栏控件 `AddressBar`，支持路径点击分节、路径输入与自动补全。
-  - `src/ui/AddressHistoryPanel.h` / `.cpp` — 地址历史下拉面板 `AddressHistoryPanel`。
-  - `src/ui/BreadcrumbBar.h` / `.cpp` — 面包屑路径导航栏 `BreadcrumbBar`。
-  - `src/ui/NavPanel.h` / `.cpp` — 主界面左侧导航树面板 `NavPanel`，包含磁盘列表、快捷分类与收藏夹。
-  - `src/ui/FavoritePanel.h` / `.cpp` — 收藏夹快捷管理面板 `FavoritePanel`。
+## ` src/core/DiskTrashService.h `
+- **职责数量**：2
+- **文件职责**：磁盘模式物理回收站服务 `DiskTrashService` 的头文件；声明双轨隔离的删除、还原与粉碎接口。
 
-- **视图展示与自定义布局组件**：
-  - `src/ui/ContentPanel.h` / `.cpp` — 主内容展示面板 `ContentPanel`，调度列表、树形与瀑布流模式。
-  - `src/ui/JustifiedView.h` / `.cpp` — 瀑布流/等高自适应图像网格视图 `JustifiedView`。
-  - `src/ui/DropJustifiedView.h` / `.cpp` — 支持文件拖拽放落的等高瀑布流视图 `DropJustifiedView`。
-  - `src/ui/DropListView.h` / `.cpp` — 支持拖拽放落的列表视图 `DropListView`。
-  - `src/ui/DropTreeView.h` / `.cpp` — 支持拖拽放落的树形目录视图 `DropTreeView`。
-  - `src/ui/MetaPanel.h` / `.cpp` — 侧边栏文件元数据与 EXIF 信息显示面板 `MetaPanel`。
-  - `src/ui/FilterPanel.h` / `.cpp` — 文件类型、尺寸与时间筛选过滤器面板 `FilterPanel`。
-  - `src/ui/SearchHistoryPanel.h` / `.cpp` — 历史搜索词弹出面板 `SearchHistoryPanel`。
+## ` src/core/FileFilterService.cpp `
+- **职责数量**：2
+- **文件职责**：文件过滤服务 `FileFilterService` 的实现；统一过滤系统隐藏文件、临时缓存及缩略图数据库。
 
-- **QuickLook 快速预览组件**：
-  - `src/ui/QuickLookWindow.h` / `.cpp` — 按空格键拉起的高清快速预览窗口 `QuickLookWindow`。
-  - `src/ui/QuickLookGraphicsView.h` / `.cpp` — 预览窗口图形缩放与交互视图 `QuickLookGraphicsView`。
-  - `src/ui/QuickLookMinimap.h` / `.cpp` — 预览大图的缩略导航小地图 `QuickLookMinimap`。
+## ` src/core/FileFilterService.h `
+- **职责数量**：2
+- **文件职责**：文件过滤服务 `FileFilterService` 的头文件；定义配置与辅助文件排除规则。
 
-- **对话框与无边框原生弹窗类**：
-  - `src/ui/FramelessDialogBase.h` — 无边框通用对话框基类接口 `FramelessDialogBase`。
-  - `src/ui/FramelessDialog.h` / `.cpp` — 阴影与无边框效果标准对话框 `FramelessDialog`。
-  - `src/ui/FramelessFileDialog.h` / `.cpp` — 应用风格物理文件选择对话框 `FramelessFileDialog`。
-  - `src/ui/BatchRenameDialog.h` / `.cpp` — 批量文件重命名规则编辑对话框 `BatchRenameDialog`。
-  - `src/ui/BatchProgressDialog.h` — 批量文件处理进度显示弹窗 `BatchProgressDialog`。
-  - `src/ui/BatchCreateDialog.h` / `.cpp` — 批量新建文件夹/文件生成器对话框 `BatchCreateDialog`。
-  - `src/ui/DuplicateConflictDialog.h` / `.cpp` — 重复文件冲突解决与比对对话框 `DuplicateConflictDialog`。
-  - `src/ui/TagManagerDialog.h` / `.cpp` — 标签管理者界面对话框 `TagManagerDialog`。
-  - `src/ui/dialogs/FramelessColorPicker.h` / `.cpp` — 无边框拾色器对话框 `FramelessColorPicker`。
-  - `src/ui/dialogs/FramelessConfirmDialog.h` / `.cpp` — 操作确认与提示对话框 `FramelessConfirmDialog`。
-  - `src/ui/dialogs/FramelessInputDialog.h` / `.cpp` — 单行文本/数值输入对话框 `FramelessInputDialog`。
-  - `src/ui/dialogs/FramelessMessageBox.h` / `.cpp` — 消息弹窗 `FramelessMessageBox`。
+## ` src/core/IndexedEntry.cpp `
+- **职责数量**：2
+- **文件职责**：内存级磁盘条目结构 `IndexedEntry` 的逻辑实现与辅助转换方法。
 
-- **控件粒度扩展组件 (`src/ui/components/`)**：
-  - `src/ui/components/ClickableRow.h` / `.cpp` — 支持全行点击与 Hover 态的列表行组件 `ClickableRow`。
-  - `src/ui/components/ColorPill.h` / `.cpp` — 颜色标记小圆点组件 `ColorPill`。
-  - `src/ui/components/TagPill.h` / `.cpp` — 标签药丸状圆角按钮组件 `TagPill`。
-  - `src/ui/components/FlowLayout.h` / `.cpp` — 流式自适应换行布局引擎 `FlowLayout`。
-  - `src/ui/components/ElasticEdit.h` / `.cpp` — 内容宽度自伸缩编辑框 `ElasticEdit`。
-  - `src/ui/components/StyledCheckBox.h` / `.cpp` — 包含主题样式的复选框 `StyledCheckBox`。
+## ` src/core/IndexedEntry.h `
+- **职责数量**：2
+- **文件职责**：内存级磁盘条目结构 `IndexedEntry` 的声明；定义 MFT 高速扫描与条目索引字段。
 
-- **模型与数据委托层 (`src/ui/models/`)**：
-  - `src/ui/models/ItemModelBase.h` — Qt AbstractItemModel 抽象基类封装。
-  - `src/ui/models/DiskItemModel.h` / `.cpp` — 磁盘文件数据 Model 模型 `DiskItemModel`，供 ListView/TreeView 绑定。
-  - `src/ui/ThumbnailDelegate.h` / `.cpp` — 网格/列表缩略图自绘 Delegate 代理 `ThumbnailDelegate`。
-  - `src/ui/TreeItemDelegate.h` — 树形目录绘制代理 `TreeItemDelegate`。
+## ` src/core/ItemRecord.cpp `
+- **职责数量**：2
+- **文件职责**：统一文件/资产记录结构体 `ItemRecord` 的方法实现与数据格式化处理。
 
-- **UI 逻辑控制器、服务与辅助引擎**：
-  - `src/ui/MainWindow.h` / `.cpp` — 应用主窗口类 `MainWindow`，调度各 UI 面板与交互事件。
-  - `src/ui/TrayController.h` / `.cpp` — 托盘图标与后台常驻控制器 `TrayController`。
-  - `src/ui/TaskProgressToolBar.h` / `.cpp` — 顶部/底部任务进度状态栏 `TaskProgressToolBar`。
-  - `src/ui/TagManagerController.h` / `.cpp` — 标签 UI 业务控制器 `TagManagerController`。
-  - `src/ui/DiskBatchRenameService.h` / `.cpp` — 磁盘模式下的批量重命名 UI 服务桥梁 `DiskBatchRenameService`。
-  - `src/ui/ColorAlgorithmEngine.h` / `.cpp` — 主色提取算法引擎 `ColorAlgorithmEngine`，计算图片/视频的主导色彩。
-  - `src/ui/ColorPicker.h` / `.cpp` — 颜色选择小部件 `ColorPicker`。
-  - `src/ui/FormatDecoders.h` / `.cpp` — 自定义多媒体解码器注册表 `FormatDecoders`。
-  - `src/ui/ImageDecoderFacade.h` / `.cpp` — 图像解码统一门面 `ImageDecoderFacade`（整合 Qt / LibTIFF）。
-  - `src/ui/MediaColorExtractor.h` / `.cpp` — 多媒体主色调提取服务代理 `MediaColorExtractor`。
-  - `src/ui/IconCacheManager.h` / `.cpp` — 内存图标高速缓存管理器 `IconCacheManager`。
-  - `src/ui/ShellIconManager.h` — 系统原生文件关联图标获取管理器 `ShellIconManager`。
-  - `src/ui/SvgIconRenderer.h` / `.cpp` — SVG 矢量图标高质量渲染器 `SvgIconRenderer`。
-  - `src/ui/WindowsShellThumbnailProvider.h` / `.cpp` — Windows 原生 Shell 缩略图提供者 `WindowsShellThumbnailProvider`。
-  - `src/ui/PresetManager.h` / `.cpp` — 规则预设管理器 `PresetManager`。
-  - `src/ui/RuleRow.h` / `.cpp` / `CreateRuleRow.h` / `.cpp` — 规则编辑单行控件与新建规则控件。
-  - `src/ui/TagSelectorOverlay.h` / `.cpp` — 快速标记标签悬浮浮层 `TagSelectorOverlay`。
-  - `src/ui/ToolTipOverlay.h` / `.cpp` — 自定义浮动提示气泡浮层 `ToolTipOverlay`。
-  - `src/ui/UndoToastOverlay.h` / `.cpp` — Ctrl+Z/Ctrl+Y 操作撤销 Toast 提示浮层 `UndoToastOverlay`。
-  - `src/ui/DriveButton.h` / `.cpp` — 盘符选择快捷按钮 `DriveButton`。
-  - `src/ui/FolderButton.h` / `.cpp` — 文件夹快捷按钮 `FolderButton`。
-  - `src/ui/HoverEventFilter.h` / `.cpp` — 全局 Hover 悬停悬浮事件过滤器 `HoverEventFilter`。
-  - `src/ui/ResizeEventFilter.h` / `.cpp` — 窗口尺寸调整事件过滤器 `ResizeEventFilter`。
-  - `src/ui/CardPainterHelper.h` / `.cpp` — 网格卡片 Painter 自绘辅助器 `CardPainterHelper`。
-  - `src/ui/ElidedTextUtility.h` — 文本省略号算法工具 `ElidedTextUtility`。
-  - `src/ui/IScanResultView.h` — 扫描结果视图纯虚接口 `IScanResultView`。
-  - `src/ui/Logger.h` — UI 界面日志与调试打印宏工具 `Logger`。
-  - `src/ui/UiHelper.h` — 通用 DPI 缩放与 UI 样式工具 `UiHelper`。
+## ` src/core/ItemRecord.h `
+- **职责数量**：2
+- **文件职责**：统一文件/资产记录结构体 `ItemRecord` 的声明；包含路径、尺寸、修改时间及元数据扩展字段。
+
+## ` src/core/NavigationHistoryService.cpp `
+- **职责数量**：3
+- **文件职责**：路径导航历史纪录服务 `NavigationHistoryService` 的实现；记录用户访问路径；维护历史堆栈并广播路径变更信号。
+
+## ` src/core/NavigationHistoryService.h `
+- **职责数量**：2
+- **文件职责**：路径导航历史纪录服务 `NavigationHistoryService` 的头文件；管理前进/后退堆栈。
+
+## ` src/core/OperationSnapshotEngine.cpp `
+- **职责数量**：3
+- **文件职责**：批量操作快照引擎 `OperationSnapshotEngine` 的实现；记录批量重命名与归类前后的原子快照；支持一键全盘恢复。
+
+## ` src/core/OperationSnapshotEngine.h `
+- **职责数量**：2
+- **文件职责**：批量操作快照引擎 `OperationSnapshotEngine` 的头文件；定义状态快照数据结构。
+
+## ` src/core/PhysicalDiskSearchExtractor.cpp `
+- **职责数量**：3
+- **文件职责**：物理磁盘搜索提取器 `PhysicalDiskSearchExtractor` 的实现；通过 QDirIterator 执行高并发磁盘搜索；支持攒批限速推送到 UI。
+
+## ` src/core/PhysicalDiskSearchExtractor.h `
+- **职责数量**：2
+- **文件职责**：物理磁盘搜索提取器 `PhysicalDiskSearchExtractor` 的头文件；定义搜索参数与接口。
+
+## ` src/core/SearchHistoryService.cpp `
+- **职责数量**：2
+- **文件职责**：搜索历史服务 `SearchHistoryService` 的实现；持久化存储搜索关键词历史；提供模糊匹配与热词推荐。
+
+## ` src/core/SearchHistoryService.h `
+- **职责数量**：2
+- **文件职责**：搜索历史服务 `SearchHistoryService` 的头文件；管理搜索关键词历史记录。
+
+## ` src/core/UndoManager.h `
+- **职责数量**：3
+- **文件职责**：全局撤销/重做管理器 `UndoManager`；采用双栈结构响应全局 Ctrl+Z / Ctrl+Y 操作；管理命令生命周期。
+
+## ` src/core/VolumeOnlineManager.cpp `
+- **职责数量**：3
+- **文件职责**：物理在线盘符管理器 `VolumeOnlineManager` 的实现；实时感知系统盘符热插拔；维护物理在线托管盘符集合。
+
+## ` src/core/VolumeOnlineManager.h `
+- **职责数量**：2
+- **文件职责**：物理在线盘符管理器 `VolumeOnlineManager` 的头文件；声明盘符状态监听接口。
+
+## ` src/core/commands/BatchRenameCommand.h `
+- **职责数量**：2
+- **文件职责**：批量重命名撤销命令 `BatchRenameCommand`；封装批量文件名变更的反向恢复逻辑。
+
+## ` src/core/commands/MetadataCommand.h `
+- **职责数量**：2
+- **文件职责**：元数据修改撤销命令 `MetadataCommand`；封装文件标签与属性修改的恢复逻辑。
+
+## ` src/core/commands/MoveCommand.h `
+- **职责数量**：2
+- **文件职责**：文件移动撤销命令 `MoveCommand`；封装文件/目录跨路径归类移动的反向恢复逻辑。
+
+## ` src/core/commands/RenameCommand.h `
+- **职责数量**：2
+- **文件职责**：单文件重命名撤销命令 `RenameCommand`；封装单个文件名修改的撤销/重做逻辑。
+
+## ` src/core/commands/SecureDeleteCommand.h `
+- **职责数量**：2
+- **文件职责**：文件粉碎/彻底删除命令 `SecureDeleteCommand`；封装不可逆数据覆写与彻底删除逻辑。
+
+## ` src/core/commands/ShellProtectionCommand.h `
+- **职责数量**：2
+- **文件职责**：系统 Shell 文件保护命令 `ShellProtectionCommand`；防止误删系统关键目录与保护受限制文件。
+
+## ` src/crypto/EncryptionManager.cpp `
+- **职责数量**：3
+- **文件职责**：文件加解密管理器 `EncryptionManager` 的实现；调用 Windows BCrypt 对敏感情报/资产进行加密落盘；支持密码校验。
+
+## ` src/crypto/EncryptionManager.h `
+- **职责数量**：2
+- **文件职责**：文件加解密管理器 `EncryptionManager` 的头文件；声明对称加解密算法与密钥管理规范。
+
+## ` src/main.cpp `
+- **职责数量**：3
+- **文件职责**：应用程序主入口。负责初始化 Qt 高 DPI 环境与 QApplication 实例、加载全局 QSS 样式表与日志拦截注册、构建并拉起 MainWindow 主界面。
+
+## ` src/meta/BatchRenameEngine.cpp `
+- **职责数量**：3
+- **文件职责**：表达式重命名引擎 `BatchRenameEngine` 的实现；计算批量文件的预览新路径；校验重名冲突与非法字符。
+
+## ` src/meta/BatchRenameEngine.h `
+- **职责数量**：2
+- **文件职责**：表达式重命名引擎 `BatchRenameEngine` 的头文件；定义正则替换与序列生成规则。
+
+## ` src/meta/DatabaseManager.cpp `
+- **职责数量**：3
+- **文件职责**：数据库管理器 `DatabaseManager` 的实现；管理 SQLite3 数据库连接与线程安全读写；控制事务提交与回滚。
+
+## ` src/meta/DatabaseManager.h `
+- **职责数量**：2
+- **文件职责**：数据库管理器 `DatabaseManager` 的头文件；声明连接池与事务管理接口。
+
+## ` src/meta/DatabaseMigrator.h `
+- **职责数量**：2
+- **文件职责**：数据库版本迁移器 `DatabaseMigrator`；检测 Schema 版本并自动执行数据库表结构升级脚本。
+
+## ` src/meta/DiskNavigatorService.cpp `
+- **职责数量**：2
+- **文件职责**：磁盘元数据导航服务 `DiskNavigatorService` 的实现；将物理磁盘条目与 SQLite 元数据进行快速映射关联。
+
+## ` src/meta/DiskNavigatorService.h `
+- **职责数量**：2
+- **文件职责**：磁盘元数据导航服务 `DiskNavigatorService` 的头文件；声明磁盘元数据绑定接口。
+
+## ` src/meta/DiskTrashRepo.cpp `
+- **职责数量**：2
+- **文件职责**：磁盘回收站仓储 `DiskTrashRepo` 的实现；负责回收站物理条目的数据库 CRUD 操作。
+
+## ` src/meta/DiskTrashRepo.h `
+- **职责数量**：2
+- **文件职责**：磁盘回收站仓储 `DiskTrashRepo` 的头文件；定义物理删除条目的持久化映射结构。
+
+## ` src/meta/DriveMetaDao.cpp `
+- **职责数量**：2
+- **文件职责**：驱动器元数据 DAO 层 `DriveMetaDao` 的实现；读写 SQLite 中的驱动器卷标与空间使用元数据。
+
+## ` src/meta/DriveMetaDao.h `
+- **职责数量**：2
+- **文件职责**：驱动器元数据 DAO 层 `DriveMetaDao` 的头文件；声明盘符信息持久化接口。
+
+## ` src/meta/DuplicateDetectorService.cpp `
+- **职责数量**：3
+- **文件职责**：重复文件检测服务 `DuplicateDetectorService` 的实现；利用文件尺寸与分块哈希算法高效判定重复资产；分组输出冲突列表。
+
+## ` src/meta/DuplicateDetectorService.h `
+- **职责数量**：2
+- **文件职责**：重复文件检测服务 `DuplicateDetectorService` 的头文件；声明排重匹配策略。
+
+## ` src/meta/MediaExtractorPipeline.cpp `
+- **职责数量**：3
+- **文件职责**：多媒体元数据提取流水线 `MediaExtractorPipeline` 的实现；并发调度图片 EXIF / 音视频 ID3 元数据提取逻辑；批量更新数据库。
+
+## ` src/meta/MediaExtractorPipeline.h `
+- **职责数量**：2
+- **文件职责**：多媒体元数据提取流水线 `MediaExtractorPipeline` 的头文件；定义异步提取任务链。
+
+## ` src/meta/MetaCacheDecorator.cpp `
+- **职责数量**：2
+- **文件职责**：元数据缓存装饰器 `MetaCacheDecorator` 的实现；在 DAO 层之上增加 LRU 内存缓存；显著提升频繁读取性能。
+
+## ` src/meta/MetaCacheDecorator.h `
+- **职责数量**：2
+- **文件职责**：元数据缓存装饰器 `MetaCacheDecorator` 的头文件；定义内存缓存装饰策略。
+
+## ` src/meta/MetadataDefs.h `
+- **职责数量**：3
+- **文件职责**：元数据全局定义头文件 `MetadataDefs.h`；定义元数据枚举类型；提供标准元数据 Tag 键值常量声明。
+
+## ` src/meta/MetadataManager.cpp `
+- **职责数量**：3
+- **文件职责**：元数据中心管理者 `MetadataManager` 的实现；协调数据库读写、缓存更新与提取流水线；提供统一元数据查询 API。
+
+## ` src/meta/MetadataManager.h `
+- **职责数量**：2
+- **文件职责**：元数据中心管理者 `MetadataManager` 的头文件；声明元数据调度总枢纽。
+
+## ` src/meta/QuarkMetaJson.cpp `
+- **职责数量**：2
+- **文件职责**：JSON 序列化工具 `QuarkMetaJson` 的实现；将元数据与项目规则导出为格式化 JSON 文件或反序列化导入。
+
+## ` src/meta/QuarkMetaJson.h `
+- **职责数量**：2
+- **文件职责**：JSON 序列化工具 `QuarkMetaJson` 的头文件；声明配置与资产导出接口。
+
+## ` src/meta/StatisticsService.cpp `
+- **职责数量**：3
+- **文件职责**：统计分析服务 `StatisticsService` 的实现；聚合计算文件类型分布、空间占用趋势与分类占比数据。
+
+## ` src/meta/StatisticsService.h `
+- **职责数量**：2
+- **文件职责**：统计分析服务 `StatisticsService` 的头文件；声明空间与类型分析接口。
+
+## ` src/meta/TagRepository.cpp `
+- **职责数量**：3
+- **文件职责**：标签仓储 `TagRepository` 的实现；管理自定义标签库；读写文件与标签的关联映射关系。
+
+## ` src/meta/TagRepository.h `
+- **职责数量**：2
+- **文件职责**：标签仓储 `TagRepository` 的头文件；声明标签与颜色标注数据库 CRUD 接口。
+
+## ` src/meta/TrashRepository.cpp `
+- **职责数量**：2
+- **文件职责**：回收站仓储 `TrashRepository` 的实现；持久化存储已被放入回收站资产的原路径与删除时间信息。
+
+## ` src/meta/TrashRepository.h `
+- **职责数量**：2
+- **文件职责**：回收站仓储 `TrashRepository` 的头文件；声明回收站物理条目与元数据映射。
+
+## ` src/meta/sqlite3.c `
+- **职责数量**：3
+- **文件职责**：SQLite3 嵌入式数据库核心引擎 C 实现源码（Amalgamation 单文件）；提供高性能本地 SQL 引擎支持。
+
+## ` src/meta/sqlite3.h `
+- **职责数量**：2
+- **文件职责**：SQLite3 嵌入式关系型数据库 C 接口头文件；定义原生 C API 与结构体。
+
+## ` src/third_party/libtiff/tif_aux.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_aux.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_close.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_close.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_codec.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_codec.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_color.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_color.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_compress.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_compress.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_dir.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_dir.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_dirinfo.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_dirinfo.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_dirread.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_dirread.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_dirwrite.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_dirwrite.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_dumpmode.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_dumpmode.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_error.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_error.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_extension.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_extension.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_fax3.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_fax3.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_fax3sm.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_fax3sm.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_flush.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_flush.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_getimage.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_getimage.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_hash_set.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_hash_set.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_luv.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_luv.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_lzw.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_lzw.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_next.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_next.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_ojpeg.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_ojpeg.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_open.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_open.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_packbits.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_packbits.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_pixarlog.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_pixarlog.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_predict.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_predict.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_print.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_print.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_read.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_read.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_strip.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_strip.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_swab.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_swab.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_thunder.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_thunder.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_tile.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_tile.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_version.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_version.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_warning.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_warning.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_win32.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_win32.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_write.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_write.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/third_party/libtiff/tif_zip.c `
+- **职责数量**：2
+- **文件职责**：嵌入式 libtiff 图像解码库核心源文件 `tif_zip.c`；负责 TIFF 图像特定编解码、格式解析或文件 I/O 逻辑。
+
+## ` src/ui/AddressBar.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `AddressBar` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/AddressBar.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `AddressBar` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/AddressHistoryPanel.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `AddressHistoryPanel` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/AddressHistoryPanel.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `AddressHistoryPanel` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/BatchCreateDialog.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `BatchCreateDialog` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/BatchCreateDialog.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `BatchCreateDialog` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/BatchProgressDialog.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `BatchProgressDialog` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/BatchRenameDialog.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `BatchRenameDialog` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/BatchRenameDialog.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `BatchRenameDialog` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/BreadcrumbBar.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `BreadcrumbBar` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/BreadcrumbBar.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `BreadcrumbBar` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/CardPainterHelper.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `CardPainterHelper` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/CardPainterHelper.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `CardPainterHelper` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/ColorAlgorithmEngine.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ColorAlgorithmEngine` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/ColorAlgorithmEngine.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ColorAlgorithmEngine` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/ColorPicker.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ColorPicker` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/ColorPicker.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ColorPicker` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/ContentPanel.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ContentPanel` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/ContentPanel.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ContentPanel` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/CreateRuleRow.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `CreateRuleRow` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/CreateRuleRow.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `CreateRuleRow` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/DiskBatchRenameService.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DiskBatchRenameService` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/DiskBatchRenameService.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DiskBatchRenameService` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/DriveButton.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DriveButton` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/DriveButton.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DriveButton` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/DropJustifiedView.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DropJustifiedView` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/DropJustifiedView.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DropJustifiedView` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/DropListView.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DropListView` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/DropListView.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DropListView` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/DropTreeView.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DropTreeView` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/DropTreeView.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DropTreeView` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/DuplicateConflictDialog.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DuplicateConflictDialog` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/DuplicateConflictDialog.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DuplicateConflictDialog` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/ElidedTextUtility.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ElidedTextUtility` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/FavoritePanel.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FavoritePanel` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/FavoritePanel.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FavoritePanel` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/FilterPanel.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FilterPanel` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/FilterPanel.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FilterPanel` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/FolderButton.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FolderButton` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/FolderButton.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FolderButton` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/FormatDecoders.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FormatDecoders` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/FormatDecoders.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FormatDecoders` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/FramelessDialog.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessDialog` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/FramelessDialog.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessDialog` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/FramelessDialogBase.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessDialogBase` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/FramelessFileDialog.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessFileDialog` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/FramelessFileDialog.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessFileDialog` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/HoverEventFilter.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `HoverEventFilter` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/HoverEventFilter.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `HoverEventFilter` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/IScanResultView.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `IScanResultView` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/IconCacheManager.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `IconCacheManager` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/IconCacheManager.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `IconCacheManager` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/ImageDecoderFacade.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ImageDecoderFacade` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/ImageDecoderFacade.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ImageDecoderFacade` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/JustifiedView.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `JustifiedView` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/JustifiedView.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `JustifiedView` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/Logger.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `Logger` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/MainWindow.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `MainWindow` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/MainWindow.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `MainWindow` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/MediaColorExtractor.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `MediaColorExtractor` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/MediaColorExtractor.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `MediaColorExtractor` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/MetaPanel.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `MetaPanel` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/MetaPanel.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `MetaPanel` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/NavPanel.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `NavPanel` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/NavPanel.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `NavPanel` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/PresetManager.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `PresetManager` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/PresetManager.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `PresetManager` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/QuickLookGraphicsView.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `QuickLookGraphicsView` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/QuickLookGraphicsView.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `QuickLookGraphicsView` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/QuickLookMinimap.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `QuickLookMinimap` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/QuickLookMinimap.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `QuickLookMinimap` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/QuickLookWindow.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `QuickLookWindow` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/QuickLookWindow.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `QuickLookWindow` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/ResizeEventFilter.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ResizeEventFilter` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/ResizeEventFilter.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ResizeEventFilter` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/RuleRow.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `RuleRow` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/RuleRow.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `RuleRow` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/SearchHistoryPanel.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `SearchHistoryPanel` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/SearchHistoryPanel.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `SearchHistoryPanel` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/ShellIconManager.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ShellIconManager` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/SvgIconRenderer.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `SvgIconRenderer` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/SvgIconRenderer.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `SvgIconRenderer` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/TagManagerController.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TagManagerController` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/TagManagerController.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TagManagerController` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/TagManagerDialog.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TagManagerDialog` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/TagManagerDialog.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TagManagerDialog` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/TagSelectorOverlay.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TagSelectorOverlay` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/TagSelectorOverlay.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TagSelectorOverlay` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/TaskProgressToolBar.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TaskProgressToolBar` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/TaskProgressToolBar.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TaskProgressToolBar` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/ThumbnailDelegate.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ThumbnailDelegate` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/ThumbnailDelegate.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ThumbnailDelegate` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/ToolTipOverlay.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ToolTipOverlay` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/ToolTipOverlay.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ToolTipOverlay` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/TrayController.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TrayController` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/TrayController.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TrayController` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/TreeItemDelegate.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TreeItemDelegate` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/UiHelper.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `UiHelper` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/UndoToastOverlay.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `UndoToastOverlay` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/UndoToastOverlay.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `UndoToastOverlay` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/WindowsShellThumbnailProvider.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `WindowsShellThumbnailProvider` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/WindowsShellThumbnailProvider.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `WindowsShellThumbnailProvider` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/components/ClickableRow.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ClickableRow` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/components/ClickableRow.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ClickableRow` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/components/ColorPill.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ColorPill` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/components/ColorPill.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ColorPill` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/components/ElasticEdit.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ElasticEdit` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/components/ElasticEdit.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ElasticEdit` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/components/FlowLayout.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FlowLayout` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/components/FlowLayout.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FlowLayout` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/components/StyledCheckBox.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `StyledCheckBox` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/components/StyledCheckBox.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `StyledCheckBox` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/components/TagPill.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TagPill` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/components/TagPill.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `TagPill` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/dialogs/FramelessColorPicker.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessColorPicker` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/dialogs/FramelessColorPicker.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessColorPicker` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/dialogs/FramelessConfirmDialog.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessConfirmDialog` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/dialogs/FramelessConfirmDialog.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessConfirmDialog` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/dialogs/FramelessInputDialog.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessInputDialog` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/dialogs/FramelessInputDialog.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessInputDialog` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/dialogs/FramelessMessageBox.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessMessageBox` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/dialogs/FramelessMessageBox.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `FramelessMessageBox` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/models/DiskItemModel.cpp `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DiskItemModel` 的逻辑实现；处理界面渲染代理、用户输入及信号槽响应。
+
+## ` src/ui/models/DiskItemModel.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `DiskItemModel` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/ui/models/ItemModelBase.h `
+- **职责数量**：2
+- **文件职责**：UI 视图或组件控件 `ItemModelBase` 的头文件声明；负责定义界面布局、属性及交互信号。
+
+## ` src/util/DeepThumbnailExtractor.cpp `
+- **职责数量**：3
+- **文件职责**：深层缩略图提取器 `DeepThumbnailExtractor` 的实现；利用 ImageDecoderFacade 提取大图及特定格式的高清缩略图缓存。
+
+## ` src/util/DeepThumbnailExtractor.h `
+- **职责数量**：2
+- **文件职责**：深层缩略图提取器 `DeepThumbnailExtractor` 的头文件；声明高清缩略图生成规范。
+
+## ` src/util/DiskMediaExtractor.cpp `
+- **职责数量**：3
+- **文件职责**：媒体色调与信息提取服务 `DiskMediaExtractor` 的实现；分析图片/音视频色彩分布；提取并计算主导调色板。
+
+## ` src/util/DiskMediaExtractor.h `
+- **职责数量**：2
+- **文件职责**：媒体色调与信息提取服务 `DiskMediaExtractor` 的头文件；声明图像主色与色彩代理。
+
+## ` src/util/ShellHelper.cpp `
+- **职责数量**：3
+- **文件职责**：Windows Shell 系统工具类 `ShellHelper` 的实现；调用 Win32 Shell API 拉起系统关联程序、定位文件资源管理器及呼出右键菜单。
+
+## ` src/util/ShellHelper.h `
+- **职责数量**：2
+- **文件职责**：Windows Shell 系统工具类 `ShellHelper` 的头文件；声明 OS 原生交互 API。
+
+## ` src/util/VolumePathResolver.cpp `
+- **职责数量**：3
+- **文件职责**：卷路径解析器 `VolumePathResolver` 的实现；解析盘符 GUID、UNC 网络路径与本地卷标路径之间的互相映射。
+
+## ` src/util/VolumePathResolver.h `
+- **职责数量**：2
+- **文件职责**：卷路径解析器 `VolumePathResolver` 的头文件；声明盘符路径转换规范。
 
 ---
 
