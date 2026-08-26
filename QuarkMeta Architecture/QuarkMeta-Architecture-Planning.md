@@ -203,3 +203,19 @@ QuarkMeta 为纯磁盘目录直连模式独立应用。通过彻底剔除内存�
    - 严禁在筛选面板中引入或复原任何过度设计的复杂复合控件，包括但不限于：色相/渐变滑块（`InlineHueSlider`）、准确度/容差滑块（`m_accuracySlider`）、颜色占比滑块（`m_areaSlider`）、快速颜色文本输入框（`m_editColor`）、标准 12 色矩阵网格以及最近筛选颜色历史块网格（`m_recentColors`）。
 3. **颜色标记分组表现形式**：
    - “颜色标记”分组必须恢复为与其他分组完全一致的标准纵向复选框列表（例如“无色标”、“红色”、“黄色”等基础类别），确保右侧筛选面板纵向布局平整高效、无冗余留白、性能极其轻量。
+
+---
+
+## 15. 单一职责物理拆分与功能扩展架构规范 (Single Responsibility Principle & Feature Expansion Specification)
+
+### 15.1 单一职责物理隔离 5 大铁律
+1. **一文件一类一职责（头文件彻底解耦）**：
+   - 严禁在同一个 `.h` / `.cpp` 中定义多个独立的类。如 `BasicCommands.h` 拆分为独立的命令文件；`FramelessDialog.h` 拆分为独立的对话框文件；`DriveButton.h` 拆分为 `DriveButton` 与 `FolderButton`。
+2. **视图只管 UI，不碰业务与磁盘（UI 纯粹化）**：
+   - UI 控件仅负责界面布局、样式绘制和事件接收。所有磁盘 I/O、JSON 解析、文件加解密、物理粉碎、后台线程调度，统一移入 Core 控制层与 Service 服务层。
+3. **数据管理与模型过滤解耦（MVC 职责清界）**：
+   - 状态栏统计、文件隐藏过滤、排序逻辑完全由 `QSortFilterProxyModel` 与 `DiskItemModel` 处理，UI 控件仅监听模型信号。
+4. **系统原生消息与应用逻辑剥离（平台解耦）**：
+   - Win32 原生硬件消息（`WM_DEVICECHANGE`）剥离至独立的设备监听器，`MainWindow` 不再直接处理平台底层硬件消息。
+5. **未开发功能与扩展接口留白**：
+   - 右键菜单“外壳保护”（旧“加密”）及快捷键系统通过统一的 `ActionCommand` 中枢解耦挂载，确保未来功能扩充物理隔离。
