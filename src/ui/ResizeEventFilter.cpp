@@ -10,18 +10,56 @@ ResizeEventFilter::ResizeEventFilter(QMainWindow* window)
     : QObject(window), m_window(window) {}
 
 bool ResizeEventFilter::eventFilter(QObject* watched, QEvent* event) {
-    if (m_window->isMaximized()) return QObject::eventFilter(watched, event);
+    if (!m_window || m_window->isMaximized()) return QObject::eventFilter(watched, event);
 
-    if (event->type() == QEvent::MouseMove) {
+    if (event->type() == QEvent::MouseButtonPress) {
         QMouseEvent* me = static_cast<QMouseEvent*>(event);
-        // 如果正在调整大小，不在此处处理光标，交由 MainWindow 自己的逻辑或继续透传
-        // 但根据需求，这里只负责“光标更新”
-        QPoint localPos = m_window->mapFromGlobal(me->globalPosition().toPoint());
-        ResizeDirection dir = getResizeDirection(localPos);
-        updateCursorShape(dir);
-    } else if (event->type() == QEvent::Leave && watched == m_window) {
+        if (me->button() == Qt::LeftButton) {
+            QPoint localPos = m_window->mapFromGlobal(me->globalPosition().toPoint());
+            ResizeDirection dir = getResizeDirection(localPos);
+            if (dir != None) {
+                m_isResizing = true;
+                m_resizeDir = dir;
+                m_resizeStartGlobal = me->globalPosition().toPoint();
+                m_resizeStartGeometry = m_window->geometry();
+                return true; // 拦截按键，执行真实拉伸
+            }
+        }
+    } else if (event->type() == QEvent::MouseMove) {
+        QMouseEvent* me = static_cast<QMouseEvent*>(event);
+        if (m_isResizing && (me->buttons() & Qt::LeftButton)) {
+            const QPoint delta = me->globalPosition().toPoint() - m_resizeStartGlobal;
+            QRect r = m_resizeStartGeometry;
+
+            if (m_resizeDir == Left || m_resizeDir == TopLeft || m_resizeDir == BottomLeft)
+                r.setLeft(r.left() + delta.x());
+            if (m_resizeDir == Right || m_resizeDir == TopRight || m_resizeDir == BottomRight)
+                r.setRight(r.right() + delta.x());
+            if (m_resizeDir == Top || m_resizeDir == TopLeft || m_resizeDir == TopRight)
+                r.setTop(r.top() + delta.y());
+            if (m_resizeDir == Bottom || m_resizeDir == BottomLeft || m_resizeDir == BottomRight)
+                r.setBottom(r.bottom() + delta.y());
+
+            if (r.width() >= m_window->minimumWidth() && r.height() >= m_window->minimumHeight())
+                m_window->setGeometry(r);
+
+            return true; // 拦截 Move，推进拉伸
+        } else if (!m_isResizing) {
+            QPoint localPos = m_window->mapFromGlobal(me->globalPosition().toPoint());
+            ResizeDirection dir = getResizeDirection(localPos);
+            updateCursorShape(dir);
+        }
+    } else if (event->type() == QEvent::MouseButtonRelease) {
+        if (m_isResizing) {
+            m_isResizing = false;
+            m_resizeDir = None;
+            m_window->setCursor(Qt::ArrowCursor);
+            return true;
+        }
+    } else if (event->type() == QEvent::Leave && watched == m_window && !m_isResizing) {
         m_window->setCursor(Qt::ArrowCursor);
     }
+
     return QObject::eventFilter(watched, event);
 }
 
