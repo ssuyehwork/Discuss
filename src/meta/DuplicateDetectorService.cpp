@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QCryptographicHash>
 #include <QImageReader>
+#include <QHash>
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
@@ -65,7 +66,7 @@ QSet<QString> DuplicateDetectorService::findDuplicatePaths(const std::vector<Ite
         if (list.size() < 2) continue; // 大小唯一，绝对不重复
 
         // 二阶：FastHash 聚合
-        std::unordered_map<QString, std::vector<const ItemRecord*>> fastHashBuckets;
+        QHash<QString, std::vector<const ItemRecord*>> fastHashBuckets;
         for (const auto* rec : list) {
             QString fastHash = computeFastHash(rec->path, rec->size);
             if (!fastHash.isEmpty()) {
@@ -74,7 +75,8 @@ QSet<QString> DuplicateDetectorService::findDuplicatePaths(const std::vector<Ite
         }
 
         // 三阶：全量 SHA-256 严谨决胜
-        for (const auto& [fastHashKey, fastList] : fastHashBuckets) {
+        for (auto it = fastHashBuckets.begin(); it != fastHashBuckets.end(); ++it) {
+            const auto& fastList = it.value();
             if (fastList.size() < 2) continue;
 
             if (fileSize <= 128 * 1024) {
@@ -84,7 +86,7 @@ QSet<QString> DuplicateDetectorService::findDuplicatePaths(const std::vector<Ite
                 continue;
             }
 
-            std::unordered_map<QString, std::vector<const ItemRecord*>> fullShaBuckets;
+            QHash<QString, std::vector<const ItemRecord*>> fullShaBuckets;
             for (const auto* r : fastList) {
                 QString fullSha = r->sha256.isEmpty() ? computeFullSha256(r->path) : r->sha256.toLower();
                 if (!fullSha.isEmpty()) {
@@ -92,7 +94,8 @@ QSet<QString> DuplicateDetectorService::findDuplicatePaths(const std::vector<Ite
                 }
             }
 
-            for (const auto& [shaKey, fullList] : fullShaBuckets) {
+            for (auto shaIt = fullShaBuckets.begin(); shaIt != fullShaBuckets.end(); ++shaIt) {
+                const auto& fullList = shaIt.value();
                 if (fullList.size() >= 2) {
                     for (const auto* r : fullList) {
                         duplicatePaths.insert(r->path);

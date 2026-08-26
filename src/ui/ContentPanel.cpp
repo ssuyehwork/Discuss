@@ -311,7 +311,7 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         if (record.isDir) {
             return false; // 处于重复项/未重复筛选时，自动排除文件夹
         }
-        bool isDuplicate = (m_cachedDuplicatePaths.count(record.path) > 0);
+        bool isDuplicate = m_cachedDuplicatePaths.contains(record.path);
         if (currentFilter.duplicatePresence == FilterState::DuplicateOnly && !isDuplicate) {
             return false;
         }
@@ -2938,7 +2938,7 @@ void ContentPanel::recalculateAndEmitStats() {
                 }
 
                 // 判重统计基于真实 Hash 结果
-                if (stats.duplicatePaths.count(record.path) == 0) {
+                if (!stats.duplicatePaths.contains(record.path)) {
                     stats.uniqueCount++;
                 }
 
