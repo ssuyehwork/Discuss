@@ -11,6 +11,15 @@ bool TitleBarEventFilter::eventFilter(QObject* watched, QEvent* event) {
     Q_UNUSED(watched);
     if (!m_window) return false;
 
+    if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick) {
+        QMouseEvent* mouseEv = static_cast<QMouseEvent*>(event);
+        QPoint localPos = m_window->mapFromGlobal(mouseEv->globalPosition().toPoint());
+        int margin = 6;
+        if (localPos.y() < margin || localPos.x() < margin || localPos.x() > m_window->width() - margin) {
+            return false; // 放行给 MainWindow 边缘拉伸
+        }
+    }
+
     if (event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent* mouseEv = static_cast<QMouseEvent*>(event);
         if (mouseEv->button() == Qt::LeftButton) {
