@@ -1,13 +1,13 @@
 # QuarkMeta 源文件综合审查报告 (File Names and Roles)
 
-本文档针对 `src/` 目录下（排除 `third_party`）的全部 186 个源文件（`.cpp`/`.h`）进行了逐一深度审查。针对每个文件，分别给出**文件职责**、**僵尸代码**和**职责单一性**三项判定及真实代码依据。
+本文档针对 `src/` 目录下（排除 `third_party`）的全部 186 个源文件（`.cpp`/`.h`）进行了逐一深入的**物理代码行级穿透排查**。针对每一个文件，严谨对照真实代码中的依赖（`#include`）、成员变量定义与跨层物理 I/O / 数据库访问情况，给出了**文件职责**、**僵尸代码排查**和**职责单一性判定**。
 
 ---
 
 # 一、 `src/` 根目录文件
 
 ## `src/main.cpp`
-- **文件职责**：应用程序唯一的入口点，负责单实例检测、全局日志重定向、高 DPI 策略配置、COM 亲和性初始化、核心拓扑预热、主窗口创建与退出会话清场落盘。
+- **文件职责**：应用程序唯一的入口点，负责 Win32 单实例互斥量检测、全局异步日志重定向、高 DPI 策略配置、COM 线程亲和性初始化、核心拓扑预热、主窗口创建与退出会话清场落盘。
 - **僵尸代码**：无
 - **职责单一性**：是（单一）
 
@@ -26,9 +26,9 @@
 - **职责单一性**：是（单一）
 
 ## `src/core/BasicCommands.h`
-- **文件职责**：提供重命名、移入回收站、置顶/取消置顶等具体原子 ActionCommand 的派生实现，供 UndoManager 执行与撤销。
+- **文件职责**：定义重命名、移动、元数据修改、安全物理删除、加密及批量重命名的 ActionCommand 派生类。
 - **僵尸代码**：无
-- **职责单一性**：否（不单一，理由：将 RenameCommand、TrashCommand、FavoriteCommand 等多个不共享状态的具体操作命令强行写在同一个头文件中，应按操作命令拆分为独立定义或合并至对应业务模块）
+- **职责单一性**：否（不单一，理由：在同一个头文件中同时定义了 RenameCommand、MoveCommand、MetadataCommand、SecureDeleteCommand、EncryptCommand、BatchRenameCommand 等 6 个互相无共享变量、不同触发场景的具体操作命令类，且强行引入了 QtConcurrent, FileOperationHelper, DiskMediaExtractor 等重型依赖）
 
 ## `src/core/CentralEventHub.cpp`
 - **文件职责**：实现 CentralEventHub 事件总线单例，负责全应用跨组件解耦信号的接收、调度与二次广播转发。
@@ -92,7 +92,7 @@
 
 ## `src/core/IndexedEntry.cpp`
 - **文件职责**：提供 IndexedEntry 工业级索引条目结构体的实现存根文件。
-- **僵尸代码**：无（仅包含 `#include "IndexedEntry.h"`，属于标准 C++ 结构体存根，无冗余逻辑）
+- **僵尸代码**：无
 - **职责单一性**：是（单一）
 
 ## `src/core/IndexedEntry.h`
@@ -211,7 +211,7 @@
 ## `src/meta/DatabaseMigrator.h`
 - **文件职责**：提供 SQLite3 数据库建表 SQL 自动升级迁移静态函数，以及获取 Windows 物理卷序列号（VolumeSerialNumber）的辅助函数。
 - **僵尸代码**：无
-- **职责单一性**：否（不单一，理由：将 SQLite3 数据库建表迁移逻辑 DatabaseMigrator 与 Windows 物理卷序列号解析逻辑 VolumePathResolver 两个完全无共享数据与业务关联的类写在同一个头文件中）
+- **职责单一性**：否（不单一，理由：在同一个头文件中同时包含了 SQLite3 建表升级 DatabaseMigrator 与 Windows API 物理卷序列号解析 VolumePathResolver 两个完全无共享数据与业务关联的类）
 
 ## `src/meta/DiskNavigatorService.cpp`
 - **文件职责**：实现磁盘导航模式下目录元数据合成逻辑，结合物理磁盘遍历结果与全局数据库元数据生成最终呈现列表。
@@ -428,19 +428,19 @@
 - **职责单一性**：是（单一）
 
 ## `src/ui/ColorPicker.h`
-- **文件职责**：声明 ColorPicker 控件类，定义颜色选择与广播信号 API。
+- **文件职责**：定义色块选择器 UI 控件头文件。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：在同一个头文件中集中输出了 SvPicker、HueSlider、ColorPicker、ColorStripPicker 和 ColorItem 等 5 个互相独立的颜色选择子控件类）
 
 ## `src/ui/ContentPanel.cpp`
-- **文件职责**：主内容面板 UI 实现，接管网格视图、列表视图与瀑布流视图的切换、数据加载、快捷键绑定与右键上下文菜单。
+- **文件职责**：主内容面板 UI 视图实现类，负责多视图（网格/列表/瀑布流）调度管理。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：作为 UI 视图管理容器，内部跨层直接调用 SecureFileEraser 物理磁盘粉碎抹除、EncryptionManager 文件 AES 加解密、QtConcurrent 多线程并发调度以及剪贴板数据序列化，严重违反分层架构与职责单一原则）
 
 ## `src/ui/ContentPanel.h`
-- **文件职责**：声明 ContentPanel 类，定义主内容区域视图模型绑定、多视图协同与文件操作信号。
+- **文件职责**：声明 ContentPanel 类，定义主内容区域视图模型绑定与交互信号。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：作为 UI 视图头文件，直接暴露及耦合了底层加密、粉碎抹除与多线程过滤模型等不相关的业务接口）
 
 ## `src/ui/CreateRuleRow.cpp`
 - **文件职责**：实现批量创建对话框中的单行规则输入控件 UI。
@@ -468,9 +468,9 @@
 - **职责单一性**：是（单一）
 
 ## `src/ui/DriveButton.h`
-- **文件职责**：声明 DriveButton 按钮控件类，定义盘符状态绘制与点击导航信号。
+- **文件职责**：定义侧边栏驱动器按钮与常用文件夹按钮头文件。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：在同一个头文件中同时定义了物理磁盘驱动器按钮 DriveButton 与常用文件夹按钮 FolderButton 两个完全独立的 UI 控件类）
 
 ## `src/ui/DropJustifiedView.cpp`
 - **文件职责**：支持拖拽放置（Drag & Drop）的自适应瀑布流视图类，处理外部/内部文件拖入与放置操作。
@@ -533,9 +533,9 @@
 - **职责单一性**：是（单一）
 
 ## `src/ui/FilterPanel.h`
-- **文件职责**：声明 FilterPanel 类及 FilterCriteria 条件结构体，定义筛选条件变更广播信号。
+- **文件职责**：定义多维筛选面板及相关子控件头文件。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：在同一个头文件中混杂了自定义复选框 StyledCheckBox、可点击行 ClickableRow、筛选状态 FilterState 与面板主类 FilterPanel）
 
 ## `src/ui/FormatDecoders.cpp`
 - **文件职责**：扩展图片格式解码器实现，提供 WebP、HEIC、AVIF、PSD 等特殊格式的 QImage 解码。
@@ -553,9 +553,9 @@
 - **职责单一性**：是（单一）
 
 ## `src/ui/FramelessDialog.h`
-- **文件职责**：声明 FramelessDialog 对话框基类，提供统一风格的无边框窗口容器框架。
+- **文件职责**：定义无边框窗口基类及多种弹窗头文件。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：在同一个头文件中内联强行揉入了通用无边框基类 FramelessDialog、输入框 FramelessInputDialog、颜色选择 FramelessColorPicker、确认框 FramelessConfirmDialog 和消息框 FramelessMessageBox 多个独立对话框类）
 
 ## `src/ui/FramelessFileDialog.cpp`
 - **文件职责**：自定义无边框文件/目录选择对话框 UI 实现，替换系统自带标准文件对话框。
@@ -618,14 +618,14 @@
 - **职责单一性**：是（单一）
 
 ## `src/ui/MainWindow.cpp`
-- **文件职责**：应用主窗口 UI 实现，负责组装导航侧边栏 NavPanel、主内容区 ContentPanel、元数据面板 MetaPanel、地址栏与工具栏，处理全局快捷键与窗口状态恢复。
+- **文件职责**：应用主窗口 UI 组装实现类。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：主窗口内部高度混杂 Windows 原生 Win32 消息钩子 (WM_COPYDATA/nativeEvent) 拦截、散装业务数据拼装、全局面板显隐穿透控制与线程池清场，职责严重过载）
 
 ## `src/ui/MainWindow.h`
-- **文件职责**：声明 MainWindow 主窗口类，定义核心组件装配与全局响应槽函数。
+- **文件职责**：声明 MainWindow 主窗口类。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：头文件中聚合了全应用所有子面板、窗口事件过滤器、托盘控制器与原生 Win32 消息过滤头文件，属于典型的巨大耦合头文件）
 
 ## `src/ui/MediaColorExtractor.cpp`
 - **文件职责**：媒体色彩异步提取协同类实现，调用 ColorAlgorithmEngine 并将计算结果更新至元数据服务。
@@ -638,19 +638,19 @@
 - **职责单一性**：是（单一）
 
 ## `src/ui/MetaPanel.cpp`
-- **文件职责**：实现右侧元数据检查器面板 UI，动态展示并允许用户编辑当前选中文件的星级、颜色、标签、备注与 EXIF 维度属性。
+- **文件职责**：右侧元数据检查器面板 UI 实现类。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：作为右侧元数据展示与编辑 UI，越过 Controller 和 Model 服务层，在内部直接越权读写磁盘 `.QuarkMeta.json` 物理文件，严重破坏了分层架构与单一职责）
 
 ## `src/ui/MetaPanel.h`
-- **文件职责**：声明 MetaPanel 面板类，定义选中项变更数据刷新与元数据编辑广播 API。
+- **文件职责**：声明 MetaPanel 面板类。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：头文件中直接绑定了底层物理 JSON 解析与硬编码文件 I/O 的私有依赖）
 
 ## `src/ui/NavPanel.cpp`
 - **文件职责**：实现左侧导航面板 UI，管理快捷访问、磁盘驱动器列表、标签分类树及物理回收站入口。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：导航侧边栏 UI 组件内部直接跨层启动 QtConcurrent 异步线程池扫描物理磁盘驱动器序列号与卷标，混合了 UI 展示与底层硬件扫描职责）
 
 ## `src/ui/NavPanel.h`
 - **文件职责**：声明 NavPanel 面板类，定义导航节点选择与驱动器状态刷新 API。
@@ -669,7 +669,7 @@
 
 ## `src/ui/ProgressDialog.h`
 - **文件职责**：定义并内联实现 FramelessDialog 的派生类 ProgressDialog，提供通用的进度条与状态文本提示对话框。
-- **僵尸代码**：无（虽然全局引用计数较少，但作为基础设施通用进度对话框存在，并非僵尸代码）
+- **僵尸代码**：无
 - **职责单一性**：是（单一）
 
 ## `src/ui/QuickLookMinimap.cpp`
@@ -688,9 +688,9 @@
 - **职责单一性**：是（单一）
 
 ## `src/ui/QuickLookWindow.h`
-- **文件职责**：声明 QuickLookWindow 窗口类，定义文件预览展示与键盘事件处理 API。
+- **文件职责**：声明 QuickLookWindow 预览窗口头文件。
 - **僵尸代码**：无
-- **职责单一性**：是（单一）
+- **职责单一性**：否（不单一，理由：在同一个头文件中强行聚合了 QuickLookMinimap 地图、QuickLookGraphicsView 绘图视图与 QuickLookWindow 主预览窗口三个独立的类）
 
 ## `src/ui/ResizeEventFilter.cpp`
 - **文件职责**：无边框窗口八向拖拽缩放尺寸事件过滤器实现，赋予无边框窗口原生级别的边缘拖拽调整大小能力。
@@ -968,15 +968,40 @@
 
 # 九、 汇总
 
-### 1. 判定为“职责不单一”的文件清单
+### 1. 判定为“职责不单一”的文件清单（基于物理代码行穿透排查）
+
 - **`src/core/BasicCommands.h`**
-  - **理由**：将 `RenameCommand`、`TrashCommand`、`FavoriteCommand` 等多个无共享数据、无共同触发逻辑的具体操作命令强行写入同一头文件中，属于多命令混合定义。
+  - **理由**：在同一个头文件中同时定义了 RenameCommand、MoveCommand、MetadataCommand、SecureDeleteCommand、EncryptCommand、BatchRenameCommand 等 6 个互相无共享变量、不同触发场景的具体操作命令类，且强行引入了 QtConcurrent, FileOperationHelper, DiskMediaExtractor 等重型依赖。
 - **`src/meta/DatabaseMigrator.h`**
-  - **理由**：在一个头文件中同时包含了 SQLite3 数据库建表迁移 `DatabaseMigrator` 与 Windows 物理卷序列号解析 `VolumePathResolver` 两个完全无关、无共享数据的类。
+  - **理由**：在同一个头文件中同时包含了 SQLite3 建表升级 DatabaseMigrator 与 Windows API 物理卷序列号解析 VolumePathResolver 两个完全无共享数据与业务关联的类。
+- **`src/ui/ContentPanel.cpp`**
+  - **理由**：作为 UI 视图管理容器，内部跨层直接调用 SecureFileEraser 物理磁盘粉碎抹除、EncryptionManager 文件 AES 加解密、QtConcurrent 多线程并发调度以及剪贴板数据序列化，严重违反分层架构与职责单一原则。
+- **`src/ui/ContentPanel.h`**
+  - **理由**：作为 UI 视图头文件，直接暴露及耦合了底层加密、粉碎抹除与多线程过滤模型等不相关的业务接口。
+- **`src/ui/MetaPanel.cpp`**
+  - **理由**：作为右侧元数据展示与编辑 UI，越过 Controller 和 Model 服务层，在内部直接越权读写磁盘 `.QuarkMeta.json` 物理文件，严重破坏了分层架构与单一职责。
+- **`src/ui/MetaPanel.h`**
+  - **理由**：头文件中直接绑定了底层物理 JSON 解析与硬编码文件 I/O 的私有依赖。
+- **`src/ui/MainWindow.cpp`**
+  - **理由**：主窗口内部高度混杂 Windows 原生 Win32 消息钩子 (WM_COPYDATA/nativeEvent) 拦截、散装业务数据拼装、全局面板显隐穿透控制与线程池清场，职责严重过载。
+- **`src/ui/MainWindow.h`**
+  - **理由**：头文件中聚合了全应用所有子面板、窗口事件过滤器、托盘控制器与原生 Win32 消息过滤头文件，属于典型的巨大耦合头文件。
+- **`src/ui/FramelessDialog.h`**
+  - **理由**：在同一个头文件中内联强行揉入了通用无边框基类 FramelessDialog、输入框 FramelessInputDialog、颜色选择 FramelessColorPicker、确认框 FramelessConfirmDialog 和消息框 FramelessMessageBox 多个独立对话框类。
+- **`src/ui/DriveButton.h`**
+  - **理由**：在同一个头文件中同时定义了物理磁盘驱动器按钮 DriveButton 与常用文件夹按钮 FolderButton 两个完全独立的 UI 控件类。
+- **`src/ui/ColorPicker.h`**
+  - **理由**：在同一个头文件中集中输出了 SvPicker、HueSlider、ColorPicker、ColorStripPicker 和 ColorItem 等 5 个互相独立的颜色选择子控件类。
+- **`src/ui/QuickLookWindow.h`**
+  - **理由**：在同一个头文件中强行聚合了 QuickLookMinimap 地图、QuickLookGraphicsView 绘图视图与 QuickLookWindow 主预览窗口三个独立的类。
+- **`src/ui/FilterPanel.h`**
+  - **理由**：在同一个头文件中混杂了自定义复选框 StyledCheckBox、可点击行 ClickableRow、筛选状态 FilterState 与面板主类 FilterPanel。
+- **`src/ui/NavPanel.cpp`**
+  - **理由**：导航侧边栏 UI 组件内部直接跨层启动 QtConcurrent 异步线程池扫描物理磁盘驱动器序列号与卷标，混合了 UI 展示与底层硬件扫描职责。
 
 ### 2. 判定为存在僵尸代码的文件清单
 - **无**
-  - 说明：经全仓库符号全局引用检索与执行链路追踪，当前 `src/` 目录下（排除 `third_party`）所有 186 个源文件中的类与方法均在系统运行、初始化、事件监听或撤销恢复机制中被真实调用，未发现零引用的死代码或残留的历史废弃概念代码。
+  - 说明：经全仓库符号全局引用检索与执行链路追踪，当前 `src/` 目录下（排除 `third_party`）所有 186 个源文件中的类与方法均在系统运行、初始化、事件监听或撤销恢复机制中被真实调用，未发现零引用的死代码。
 
 ### 3. 无法确认调用关系、需要人工介入核实的文件清单
 - **无**
