@@ -102,23 +102,16 @@ void PanelMediator::setupConnections() {
             if (paths.isEmpty()) {
                 metaPanel->setImagePreview(QPixmap());
                 metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false, 0, 0);
-                metaPanel->setRating(0);
-                metaPanel->setColor(L"");
+                metaPanel->setRating(0, false);
+                metaPanel->setColor(L"", false);
                 metaPanel->setTags(QStringList());
                 metaPanel->setNote(L"");
                 metaPanel->setURL(L"");
                 metaPanel->setPalettes({});
             } else {
-                QModelIndex idx;
-                if (contentPanel->model()) {
-                    for (int i = 0; i < contentPanel->getProxyModel()->rowCount(); ++i) {
-                        QModelIndex proxyIdx = contentPanel->getProxyModel()->index(i, 0);
-                        if (proxyIdx.data(PathRole).toString() == paths.first()) {
-                            idx = proxyIdx;
-                            break;
-                        }
-                    }
-                }
+                QModelIndexList selectedIndices = contentPanel->getSelectedIndexes();
+                QModelIndex idx = selectedIndices.isEmpty() ? QModelIndex() : selectedIndices.first();
+
                 QString path = paths.first();
                 QFileInfo fi(path);
 
@@ -176,8 +169,8 @@ void PanelMediator::setupConnections() {
                     name, type, sizeStr, ctimeStr, mtimeStr, atimeStr,
                     path, idx.data(EncryptedRole).toBool(), width, height
                 );
-                metaPanel->setRating(idx.data(RatingRole).toInt());
-                metaPanel->setColor(idx.data(ColorRole).toString().toStdWString());
+                metaPanel->setRating(idx.data(RatingRole).toInt(), false);
+                metaPanel->setColor(idx.data(ColorRole).toString().toStdWString(), false);
                 metaPanel->setTags(cleanTags); 
                 metaPanel->setNote(noteStr);
                 metaPanel->setURL(urlStr);

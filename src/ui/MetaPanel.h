@@ -39,8 +39,8 @@ public:
     void setNote(const std::wstring& note);
     void setURL(const QString& url);
     void setURL(const std::wstring& url);
-    void setRating(int rating);
-    void setColor(const std::wstring& color);
+    void setRating(int rating, bool fromUser = false);
+    void setColor(const std::wstring& color, bool fromUser = false);
     void setPinned(bool pinned) { Q_UNUSED(pinned); }
 
 signals:

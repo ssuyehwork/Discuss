@@ -223,7 +223,7 @@ void MetaPanel::initUi() {
     btnClearStar->installEventFilter(this);
     btnClearStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 4px; }");
     connect(btnClearStar, &QPushButton::clicked, this, [this]() {
-        setRating(0);
+        setRating(0, true);
     });
     starLayout->addWidget(btnClearStar);
 
@@ -237,7 +237,7 @@ void MetaPanel::initUi() {
 
         connect(btnStar, &QPushButton::clicked, this, [this, i]() {
             int newRating = (m_currentRating == i) ? 0 : i;
-            setRating(newRating);
+            setRating(newRating, true);
         });
         m_starBtns.append(btnStar);
         starLayout->addWidget(btnStar);
@@ -261,7 +261,7 @@ void MetaPanel::initUi() {
     btnNoColor->installEventFilter(this);
     btnNoColor->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 4px; }");
     connect(btnNoColor, &QPushButton::clicked, this, [this]() {
-        setColor(L"");
+        setColor(L"", true);
     });
     colorLayout->addWidget(btnNoColor);
 
@@ -285,9 +285,9 @@ void MetaPanel::initUi() {
         std::wstring colorName = pair.first.toStdWString();
         connect(btnColor, &QPushButton::clicked, this, [this, colorName]() {
             if (m_currentColor == colorName) {
-                setColor(L""); // 反选清除
+                setColor(L"", true); // 反选清除
             } else {
-                setColor(colorName);
+                setColor(colorName, true);
             }
         });
         m_colorBtns.append(btnColor);
@@ -729,7 +729,7 @@ void MetaPanel::setTags(const QStringList& tags) {
     m_adjustTimer->start();
 }
 
-void MetaPanel::setRating(int rating) {
+void MetaPanel::setRating(int rating, bool fromUser) {
     m_currentRating = rating;
     for (int i = 0; i < m_starBtns.size(); ++i) {
         bool active = (i < rating);
@@ -741,7 +741,7 @@ void MetaPanel::setRating(int rating) {
         m_starBtns[i]->setIconSize(QSize(18, 18));
     }
 
-    if (!m_isInternalUpdating && !m_selectedPaths.isEmpty()) {
+    if (fromUser && !m_selectedPaths.isEmpty()) {
         for (const QString& p : m_selectedPaths) {
             MetadataManager::instance().setRating(p.toStdWString(), rating, true);
         }
@@ -749,7 +749,7 @@ void MetaPanel::setRating(int rating) {
     }
 }
 
-void MetaPanel::setColor(const std::wstring& color) {
+void MetaPanel::setColor(const std::wstring& color, bool fromUser) {
     m_currentColor = color;
     QString colorStr = QString::fromStdWString(color);
 
@@ -764,7 +764,7 @@ void MetaPanel::setColor(const std::wstring& color) {
         ).arg(hex).arg(active ? "2px solid #FFFFFF" : "1px solid transparent"));
     }
 
-    if (!m_isInternalUpdating && !m_selectedPaths.isEmpty()) {
+    if (fromUser && !m_selectedPaths.isEmpty()) {
         for (const QString& p : m_selectedPaths) {
             MetadataManager::instance().setColor(p.toStdWString(), color, true);
         }
