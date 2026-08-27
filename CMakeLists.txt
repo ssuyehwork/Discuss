@@ -146,6 +146,8 @@ set(SOURCES
     src/ui/IScanResultView.h
     src/ui/FilterStateModel.h
     src/ui/FilterStateModel.cpp
+    src/ui/models/FilterProxyModel.h
+    src/ui/models/FilterProxyModel.cpp
     src/ui/ScanStatsEngine.h
     src/ui/ScanStatsEngine.cpp
     src/ui/FilterPanel.cpp

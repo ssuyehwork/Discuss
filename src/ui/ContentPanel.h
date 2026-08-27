@@ -22,31 +22,11 @@
 #include "ScanStats.h"
 #include "FilterPanel.h"
 #include "models/DiskItemModel.h"
+#include "models/FilterProxyModel.h"
 
 #include "../core/ModelContract.h"
 
 namespace QuarkMeta {
-
-/**
- * @brief 内部代理类：专门处理高级筛选逻辑 (2026-05-25 物理化以修复 static_cast 编译报错)
- */
-class FilterProxyModel : public QSortFilterProxyModel {
-    Q_OBJECT
-public:
-    explicit FilterProxyModel(QObject* parent = nullptr);
-
-    FilterState currentFilter;
-
-    void updateFilter();
-    void setCachedDuplicatePaths(const QSet<QString>& paths);
-
-protected:
-    bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
-    bool lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const override;
-
-private:
-    QSet<QString> m_cachedDuplicatePaths; // 纯内存集合，主线程 0 磁盘 I/O
-};
 
 /**
  * @brief 内容面板（面板四）：核心业务展示区

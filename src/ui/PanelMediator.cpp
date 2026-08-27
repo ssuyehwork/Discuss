@@ -263,12 +263,8 @@ void PanelMediator::setupConnections() {
             CentralEventHub::instance().publishEvent(ev);
         });
 
-        connect(filterPanel, &FilterPanel::filterChanged, contentPanel, [contentPanel, searchController](const FilterState& state) {
-            FilterState mergedState = state;
-            if (searchController && searchController->searchEdit()) {
-                mergedState.keyword = searchController->searchEdit()->text().trimmed();
-            }
-            contentPanel->applyFilters(mergedState);
+        connect(filterPanel, &FilterPanel::filterChanged, contentPanel, [contentPanel](const FilterState& state) {
+            contentPanel->applyFilters(state);
         });
     }
 
