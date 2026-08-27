@@ -116,8 +116,8 @@ MainWindow::MainWindow(QWidget* parent)
     } else {
         QString qss = QString(R"(
             QMainWindow { background-color: %1; }
-            #SidebarContainer, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
-                background-color: %1; border: 1px solid %2; border-radius: 0px;
+            #SidebarContainer, #FavoriteContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
+                background-color: %1; border: none; border-radius: 0px;
             }
             #ContainerHeader {
                 background-color: %3; border-bottom: 1px solid %2;
@@ -362,13 +362,13 @@ void MainWindow::setupSplitters() {
     m_bodyLayout->setSpacing(0);
 
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
-    m_mainSplitter->setHandleWidth(5); 
+    m_mainSplitter->setHandleWidth(1); 
     m_mainSplitter->setChildrenCollapsible(false);
     m_mainSplitter->setStyleSheet(QString(
         "QSplitter { background: transparent; border: none; }"
-        "QSplitter::handle { background-color: %1; width: 5px; }"
-        "QSplitter::handle:hover { background-color: %2; }" 
-    ).arg(qssColor(BackgroundDeep)).arg(qssColor(BackgroundHover)));
+        "QSplitter::handle { background-color: %1; width: 1px; }"
+        "QSplitter::handle:hover { background-color: %2; }"
+    ).arg(qssColor(BorderColor)).arg(qssColor(PrimaryBlue)));
 
     m_navPanel = new NavPanel(this);
     m_navPanel->setObjectName("SidebarContainer");

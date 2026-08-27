@@ -145,6 +145,10 @@ void NavPanel::initUi() {
     m_treeView = new DropTreeView(this);
     m_treeView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_treeView->setHeaderHidden(true);
+    if (m_treeView->header()) {
+        m_treeView->header()->setStretchLastSection(true);
+        m_treeView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    }
     m_treeView->setAnimated(true);
     m_treeView->setIndentation(20);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);

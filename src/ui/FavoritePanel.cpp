@@ -8,6 +8,7 @@
 #include <QMenu>
 #include <QFileInfo>
 #include <QDir>
+#include <QHeaderView>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonDocument>
@@ -107,6 +108,10 @@ void FavoritePanel::initUi() {
     // 收藏夹树视图
     m_favoriteView = new DropTreeView(this);
     m_favoriteView->setHeaderHidden(true);
+    if (m_favoriteView->header()) {
+        m_favoriteView->header()->setStretchLastSection(true);
+        m_favoriteView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    }
     m_favoriteView->setIndentation(0);
     m_favoriteView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_favoriteView->setContextMenuPolicy(Qt::CustomContextMenu);

@@ -79,21 +79,6 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
-    enum ResizeDirection {
-        None = 0,
-        Left, Right, Top, Bottom,
-        TopLeft, TopRight, BottomLeft, BottomRight
-    };
-
-    ResizeDirection m_resizeDir = None;
-    bool m_isResizing = false;
-    QPoint m_resizeStartGlobal;
-    QRect  m_resizeStartGeometry;
-
-    static constexpr int kResizeMargin = 6; // 边缘热区宽度（像素）
-
-    ResizeDirection getResizeDirection(const QPoint& localPos) const;
-    void updateCursorShape(ResizeDirection dir);
 
     QWidget* m_titleBarWidget = nullptr;
     QHBoxLayout* m_titleBarLayout = nullptr;
@@ -180,9 +165,6 @@ private:
     QWidget* m_statusBarWidget = nullptr;
     TaskProgressToolBar* m_taskProgressToolBar = nullptr;
 
-    // 窗口拖动
-    bool m_isDragging = false;
-    QPoint m_dragPosition;
 
     // 系统托盘控制器
     TrayController* m_trayController = nullptr;

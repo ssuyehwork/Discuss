@@ -58,7 +58,7 @@ private:
     bool m_isTagManagerMode = false;
     static constexpr int kBasePanelWidth = 230;
     static constexpr int kContentBaseWidth = 550;
-    static constexpr int kSplitterHandleWidth = 5;
+    static constexpr int kSplitterHandleWidth = 1;
 };
 
 } // namespace QuarkMeta

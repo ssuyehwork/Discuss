@@ -147,11 +147,11 @@ void PanelLayoutManager::updateDynamicMinimumSize() {
     if (!m_mainWindow) return;
 
     int visibleCount = 0;
-    if (m_navPanel && m_navPanel->isVisible()) visibleCount++;
-    if (m_favoritePanel && m_favoritePanel->isVisible()) visibleCount++;
-    if (m_contentPanel && m_contentPanel->isVisible()) visibleCount++;
-    if (m_metaPanel && m_metaPanel->isVisible()) visibleCount++;
-    if (m_filterPanel && m_filterPanel->isVisible()) visibleCount++;
+    if (m_navPanel && !m_navPanel->isHidden()) visibleCount++;
+    if (m_favoritePanel && !m_favoritePanel->isHidden()) visibleCount++;
+    if (m_contentPanel && !m_contentPanel->isHidden()) visibleCount++;
+    if (m_metaPanel && !m_metaPanel->isHidden()) visibleCount++;
+    if (m_filterPanel && !m_filterPanel->isHidden()) visibleCount++;
 
     if (visibleCount <= 0) visibleCount = 1;
 
@@ -165,10 +165,10 @@ void PanelLayoutManager::loadPanelVisibility() {
     QVariant val = AppConfig::instance().getValue("MainWindow/PanelVisibility");
     if (val.isValid()) {
         QStringList hiddenPanels = val.toStringList();
-        if (hiddenPanels.contains("nav") && m_navPanel)           m_navPanel->hide();
-        if (hiddenPanels.contains("favorite") && m_favoritePanel) m_favoritePanel->hide();
-        if (hiddenPanels.contains("meta") && m_metaPanel)         m_metaPanel->hide();
-        if (hiddenPanels.contains("filter") && m_filterPanel)     m_filterPanel->hide();
+        if (m_navPanel)      m_navPanel->setHidden(hiddenPanels.contains("nav"));
+        if (m_favoritePanel) m_favoritePanel->setHidden(hiddenPanels.contains("favorite"));
+        if (m_metaPanel)     m_metaPanel->setHidden(hiddenPanels.contains("meta"));
+        if (m_filterPanel)   m_filterPanel->setHidden(hiddenPanels.contains("filter"));
     }
     updateDynamicMinimumSize();
 }
