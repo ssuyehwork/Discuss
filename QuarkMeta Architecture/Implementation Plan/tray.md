@@ -1,20 +1,24 @@
-# Implementation Plan - TrayController Menu Fix (tray.md)
+# Implementation Plan - TrayController Context Menu Refactoring (tray.md)
 
 ## 1. Overview
-This implementation plan addresses the issue where system tray context menu items ("Show Main Window" / "Exit QuarkMeta") become non-responsive or fail to activate properly when clicked.
+This implementation plan addresses the systemic issue where system tray context menu items ("显示主界面" / "退出 QuarkMeta") fail to activate, become un-clickable, or break main window visibility logic.
 
-Key causes and resolution:
-1. **Menu Ownership Issue**: `m_trayMenu` was parented to `mainWindow` (`new QMenu(mainWindow)`). When `mainWindow` is hidden or has active event filters (`TitleBarEventFilter`/`ResizeEventFilter`), actions in `m_trayMenu` fail to dispatch `triggered` signals properly.
-   - **Fix**: Remove `mainWindow` as `QMenu` parent (`new QMenu()`), making it a standalone context menu owned and cleaned up explicitly by `TrayController`.
-2. **Window Activation Robustness**: `onShowMainWindow()` previously only called `showNormal()`, which fails to un-minimize or bring frameless windows to the front when hidden/minimized.
-   - **Fix**: Update `onShowMainWindow()` to handle window state un-minimization (`setWindowState`), `show()`, `raise()`, and `activateWindow()`.
-3. **Tray Icon Lifecycle**: Explicitly delete `m_trayMenu` in `TrayController` destructor to prevent memory leaks.
+Root Cause Analysis:
+1. **Ownership Collision**: `m_trayMenu = new QMenu(mainWindow)` bound the context menu's lifecycle and Qt event dispatching to `mainWindow`. When `mainWindow` is hidden (`hide()`), Qt suppresses action events on its child widgets, causing clicks on tray actions to be silently ignored.
+2. **Win32 Focus Loss**: Windows tray guidelines require calling `SetForegroundWindow` before displaying a popup context menu. Without this, Windows drops mouse click messages on tray popup menus.
+3. **Signal & ContextMenu Conflict**: Calling `setContextMenu(m_trayMenu)` simultaneously with `activated` signal handler created event collisions on Windows platform.
+4. **Window Activation State**: Calling only `showNormal()` fails to restore un-minimized frameless windows to front Z-order.
+
+Resolution:
+- Change `m_trayMenu` to an unparented `QMenu(nullptr)` managed explicitly by `TrayController`.
+- Remove `setContextMenu(m_trayMenu)` binding. Manually popup context menu on `QSystemTrayIcon::Context` activation reason after invoking `SetForegroundWindow` on Windows.
+- Update `onShowMainWindow()` to handle un-minimization, `show()`, `raise()`, and `activateWindow()`.
 
 ---
 
 ## 2. Modified Files List
-1. `src/ui/TrayController.h` (No member changes needed, destructor cleanup)
-2. `src/ui/TrayController.cpp` (Update `m_trayMenu` construction, cleanup in destructor, update `onShowMainWindow()` activation logic)
+1. `src/ui/TrayController.h` (No member changes required)
+2. `src/ui/TrayController.cpp` (Update menu parent, remove `setContextMenu`, update `onTrayActivated` for manual popup, update `onShowMainWindow`, add destructor cleanup)
 
 ---
 
@@ -24,6 +28,16 @@ Key causes and resolution:
 
 ```diff
 <<<<<<< SEARCH
+#include "TrayController.h"
+#include <QApplication>
+#include <QIcon>
+#include <QDebug>
+#include <QProgressDialog>
+#include "../meta/DatabaseManager.h"
+#include "BatchProgressDialog.h"
+
+namespace QuarkMeta {
+
 TrayController::TrayController(QMainWindow* mainWindow)
     : QObject(mainWindow), m_mainWindow(mainWindow) {
     m_trayIcon = new QSystemTrayIcon(this);
@@ -33,7 +47,46 @@ TrayController::TrayController(QMainWindow* mainWindow)
     m_trayIcon->setToolTip("QuarkMeta");
 
     m_trayMenu = new QMenu(mainWindow);
+    m_trayMenu->setStyleSheet(
+        "QMenu { background-color: #2D2D2D; color: #EEE; border: 1px solid #444; padding: 4px; border-radius: 8px; }"
+        "QMenu::item { padding: 6px 25px 6px 10px; border-radius: 4px; font-size: 12px; color: #EEE; }"
+        "QMenu::item:selected { background-color: #3E3E42; color: white; }"
+        "QMenu::item:disabled { color: #666666; background-color: transparent; }"
+    );
+
+    QAction* showAction = m_trayMenu->addAction("显示主界面");
+    m_trayMenu->addSeparator();
+    QAction* quitAction = m_trayMenu->addAction("退出 QuarkMeta");
+
+    connect(showAction, &QAction::triggered, this, &TrayController::onShowMainWindow);
+    connect(quitAction, &QAction::triggered, this, &TrayController::onQuitApp);
+
+    m_trayIcon->setContextMenu(m_trayMenu);
+
+    connect(m_trayIcon, &QSystemTrayIcon::activated, this, &TrayController::onTrayActivated);
+}
+
+TrayController::~TrayController() {
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+    }
+}
 =======
+#include "TrayController.h"
+#include <QApplication>
+#include <QIcon>
+#include <QDebug>
+#include <QCursor>
+#include <QProgressDialog>
+#include "../meta/DatabaseManager.h"
+#include "BatchProgressDialog.h"
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
+namespace QuarkMeta {
+
 TrayController::TrayController(QMainWindow* mainWindow)
     : QObject(mainWindow), m_mainWindow(mainWindow) {
     m_trayIcon = new QSystemTrayIcon(this);
@@ -42,18 +95,24 @@ TrayController::TrayController(QMainWindow* mainWindow)
     m_trayIcon->setIcon(QIcon(":/app_icon.ico"));
     m_trayIcon->setToolTip("QuarkMeta");
 
-    m_trayMenu = new QMenu();
->>>>>>> REPLACE
-```
+    m_trayMenu = new QMenu(nullptr);
+    m_trayMenu->setStyleSheet(
+        "QMenu { background-color: #2D2D2D; color: #EEE; border: 1px solid #444; padding: 4px; border-radius: 8px; }"
+        "QMenu::item { padding: 6px 25px 6px 10px; border-radius: 4px; font-size: 12px; color: #EEE; }"
+        "QMenu::item:selected { background-color: #3E3E42; color: white; }"
+        "QMenu::item:disabled { color: #666666; background-color: transparent; }"
+    );
 
-```diff
-<<<<<<< SEARCH
-TrayController::~TrayController() {
-    if (m_trayIcon) {
-        m_trayIcon->hide();
-    }
+    QAction* showAction = m_trayMenu->addAction("显示主界面");
+    m_trayMenu->addSeparator();
+    QAction* quitAction = m_trayMenu->addAction("退出 QuarkMeta");
+
+    connect(showAction, &QAction::triggered, this, &TrayController::onShowMainWindow);
+    connect(quitAction, &QAction::triggered, this, &TrayController::onQuitApp);
+
+    connect(m_trayIcon, &QSystemTrayIcon::activated, this, &TrayController::onTrayActivated);
 }
-=======
+
 TrayController::~TrayController() {
     if (m_trayIcon) {
         m_trayIcon->hide();
@@ -68,18 +127,44 @@ TrayController::~TrayController() {
 
 ```diff
 <<<<<<< SEARCH
+void TrayController::onTrayActivated(QSystemTrayIcon::ActivationReason reason) {
+    if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) {
+        if (m_mainWindow->isVisible()) {
+            m_mainWindow->hide();
+        } else {
+            onShowMainWindow();
+        }
+    }
+}
+
 void TrayController::onShowMainWindow() {
     m_mainWindow->showNormal();
     m_mainWindow->activateWindow();
 }
 =======
+void TrayController::onTrayActivated(QSystemTrayIcon::ActivationReason reason) {
+    if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) {
+        if (m_mainWindow && m_mainWindow->isVisible() && !m_mainWindow->isMinimized()) {
+            m_mainWindow->hide();
+        } else {
+            onShowMainWindow();
+        }
+    } else if (reason == QSystemTrayIcon::Context) {
+        if (m_trayMenu && m_mainWindow) {
+#ifdef Q_OS_WIN
+            SetForegroundWindow(reinterpret_cast<HWND>(m_mainWindow->winId()));
+#endif
+            m_trayMenu->exec(QCursor::pos());
+        }
+    }
+}
+
 void TrayController::onShowMainWindow() {
     if (!m_mainWindow) return;
     if (m_mainWindow->isMinimized()) {
         m_mainWindow->showNormal();
     }
     m_mainWindow->show();
-    m_mainWindow->setWindowState((m_mainWindow->windowState() & ~Qt::WindowMinimized) | Qt::WindowActive);
     m_mainWindow->raise();
     m_mainWindow->activateWindow();
 }
@@ -91,14 +176,14 @@ void TrayController::onShowMainWindow() {
 ## 4. Build & Verification Steps
 
 ### 4.1 Build Verification
-Execute CMake build:
+Execute standard CMake build:
 ```bash
 cmake --build build --config Debug
 ```
-Confirm clean build with zero warnings/errors.
+Confirm zero compilation errors and zero MOC linkage errors.
 
 ### 4.2 Behavior Verification
-1. Launch application and minimize or hide main window to system tray.
-2. Right-click system tray icon to pop up context menu.
-3. Click "显示主界面" (Show Main Window); verify main window immediately shows, restores from minimized state if necessary, and gains focus in foreground.
-4. Right-click system tray icon and click "退出 QuarkMeta" (Exit QuarkMeta); verify tray icon hides immediately and application exits cleanly with code 0.
+1. Launch app, minimize or hide main window to tray.
+2. Right-click tray icon: confirm popup menu appears reliably.
+3. Click "显示主界面" (Show Main Window): confirm main window is immediately un-minimized, brought to front, and receives focus.
+4. Right-click tray icon and click "退出 QuarkMeta": confirm tray icon hides and app terminates with code 0 while saving configuration to disk.
