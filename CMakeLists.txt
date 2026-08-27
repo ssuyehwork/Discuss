@@ -84,6 +84,8 @@ set(SOURCES
     src/core/ClipboardService.h
     src/core/ClipboardService.cpp
     src/core/AppConfig.h
+    src/core/NavigationService.cpp
+    src/core/NavigationService.h
     src/core/NavigationHistoryService.cpp
     src/core/NavigationHistoryService.h
     src/core/SearchHistoryService.cpp
@@ -161,8 +163,8 @@ set(SOURCES
     src/ui/ThumbnailDelegate.cpp
     src/ui/ThumbnailDelegate.h
     src/ui/Logger.h
-    src/ui/GlobalShortcutController.h
-    src/ui/GlobalShortcutController.cpp
+    src/ui/AppShortcutController.h
+    src/ui/AppShortcutController.cpp
     src/ui/PanelMediator.h
     src/ui/PanelMediator.cpp
     src/ui/MainWindow.cpp

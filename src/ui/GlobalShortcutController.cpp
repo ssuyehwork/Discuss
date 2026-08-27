@@ -29,8 +29,8 @@ bool GlobalShortcutController::handleKeyPress(QKeyEvent* event) {
 
     // 1. F5: 刷新当前目录
     if (event->key() == Qt::Key_F5) {
-        if (m_mainWindow->m_contentPanel) {
-            m_mainWindow->m_contentPanel->refreshAll();
+        if (m_mainWindow->contentPanel()) {
+            m_mainWindow->contentPanel()->refreshAll();
         }
         event->accept();
         return true;
@@ -49,8 +49,8 @@ bool GlobalShortcutController::handleKeyPress(QKeyEvent* event) {
 
     // 3. Alt+Q: 切换窗口置顶状态
     if (event->key() == Qt::Key_Q && (event->modifiers() & Qt::AltModifier)) {
-        if (m_mainWindow->m_btnPinTop) {
-            m_mainWindow->m_btnPinTop->setChecked(!m_mainWindow->m_btnPinTop->isChecked());
+        if (m_mainWindow->btnPinTop()) {
+            m_mainWindow->btnPinTop()->setChecked(!m_mainWindow->btnPinTop()->isChecked());
         }
         event->accept();
         return true;
@@ -58,9 +58,9 @@ bool GlobalShortcutController::handleKeyPress(QKeyEvent* event) {
 
     // 4. Ctrl+F: 聚焦搜索过滤框
     if (event->key() == Qt::Key_F && (event->modifiers() & Qt::ControlModifier)) {
-        if (m_mainWindow->m_searchController && m_mainWindow->m_searchController->searchEdit()) {
-            m_mainWindow->m_searchController->searchEdit()->setFocus(Qt::ShortcutFocusReason);
-            m_mainWindow->m_searchController->searchEdit()->selectAll();
+        if (m_mainWindow->searchController() && m_mainWindow->searchController()->searchEdit()) {
+            m_mainWindow->searchController()->searchEdit()->setFocus(Qt::ShortcutFocusReason);
+            m_mainWindow->searchController()->searchEdit()->selectAll();
         }
         event->accept();
         return true;
