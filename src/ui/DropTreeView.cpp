@@ -18,6 +18,7 @@
 namespace QuarkMeta {
 
 DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
+    setHeader(new ContentHeaderView(Qt::Horizontal, this));
     setAcceptDrops(true);
     setDropIndicatorShown(true);
 }

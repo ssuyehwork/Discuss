@@ -5,6 +5,7 @@
 #include "PresetManager.h"
 #include "UndoToastOverlay.h"
 #include "ShellIconManager.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../meta/BatchRenameEngine.h"
 #include "../meta/MetadataManager.h"
 #include <QHeaderView>
@@ -25,6 +26,7 @@
 #include "../core/AppConfig.h"
 #include "../core/UndoManager.h"
 #include "../core/BasicCommands.h"
+#include "../core/OperationSnapshotEngine.h"
 
 namespace QuarkMeta {
 
@@ -38,7 +40,9 @@ BatchRenameDialog::BatchRenameDialog(const std::vector<std::wstring>& originalPa
     m_autoSaveTimer->setSingleShot(true);
     connect(m_autoSaveTimer, &QTimer::timeout, this, &BatchRenameDialog::doAutoSave);
 
-    // 还原上次规则
+    initTableItems(); // 仅在初始化时加载 1 次左侧原始文件名和图标！
+
+    m_isInitializing = true;
     QString lastRules = AppConfig::instance().getValue("LastBatchRenameRules").toString();
     if (!lastRules.isEmpty()) {
         auto rules = PresetManager::deserializeRules(lastRules);
@@ -50,9 +54,10 @@ BatchRenameDialog::BatchRenameDialog(const std::vector<std::wstring>& originalPa
 
     if (m_ruleRows.isEmpty()) {
         onAddRow(); 
-    } else {
-        updatePreview();
     }
+    m_isInitializing = false;
+
+    updatePreview(); // 全局仅在此时执行 1 次预览刷新！
 }
 
 void BatchRenameDialog::initContent() {
@@ -149,13 +154,30 @@ void BatchRenameDialog::initContent() {
     rulesGroupL->addWidget(scroll);
     configL->addWidget(rulesGroup, 1);
 
-    // 4. 左侧底部主执行按钮 (水平居中)
+    // 4. 左侧底部主执行按钮 (应用标准 Primary Blue #378ADD 高亮样式)
     QHBoxLayout* execBtnLayout = new QHBoxLayout();
     m_btnExecute = new QPushButton("重命名", leftPanel);
     m_btnExecute->setFixedSize(120, 36);
+    m_btnExecute->setCursor(Qt::PointingHandCursor);
     m_btnExecute->setStyleSheet(
-        "QPushButton { background: #444; color: #EEE; border: 1px solid #666; border-radius: 6px; font-weight: bold; }"
-        "QPushButton:hover { background: #555; }"
+        "QPushButton {"
+        "  background-color: #378ADD;"
+        "  color: #FFFFFF;"
+        "  border: none;"
+        "  border-radius: 6px;"
+        "  font-size: 13px;"
+        "  font-weight: bold;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #4A9BE8;"
+        "}"
+        "QPushButton:pressed {"
+        "  background-color: #2674C2;"
+        "}"
+        "QPushButton:disabled {"
+        "  background-color: #333333;"
+        "  color: #777777;"
+        "}"
     );
     execBtnLayout->addStretch();
     execBtnLayout->addWidget(m_btnExecute);
@@ -178,6 +200,7 @@ void BatchRenameDialog::initContent() {
     m_table->setShowGrid(false);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setIconSize(QSize(20, 20)); // 最左侧微型缩略图/图标尺寸
+    m_table->setFocusPolicy(Qt::NoFocus); // 彻底消除选中单元格四周的虚线焦点框
 
     rootL->addWidget(m_table, 0);
 
@@ -208,19 +231,34 @@ void BatchRenameDialog::applyTheme() {
         "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
         "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; selection-color: white; color: #EEE; outline: 0; }"
         "QComboBox QAbstractItemView::item { height: 22px; padding: 2px; }" 
-        "QTableWidget { background-color: #1E1E1E; alternate-background-color: #252526; color: #EEEEEE; border: 1px solid #333333; gridline-color: transparent; selection-background-color: rgba(52, 152, 219, 0.2); }"
+        "QTableWidget { background-color: #1E1E1E; alternate-background-color: #252526; color: #EEEEEE; border: 1px solid #333333; gridline-color: transparent; selection-background-color: rgba(52, 152, 219, 0.2); outline: none; }"
+        "QTableWidget::item { outline: none; border: none; }"
+        "QTableWidget::item:focus { outline: none; border: none; }"
         "QHeaderView::section { background-color: #2D2D2D; color: #888888; border: none; height: 30px; font-weight: bold; font-size: 11px; }"
     ).arg(arrowPath));
 }
 
-void BatchRenameDialog::onAddRow() {
+void BatchRenameDialog::onAddRow(RuleRow* targetRow) {
     RuleRow* row = new RuleRow(m_rulesContainer);
-    m_rulesLayout->addWidget(row);
-    m_ruleRows.append(row);
+
+    int insertIndex = -1;
+    if (targetRow) {
+        insertIndex = m_ruleRows.indexOf(targetRow);
+    }
+
+    if (insertIndex >= 0 && insertIndex < m_ruleRows.size()) {
+        m_rulesLayout->insertWidget(insertIndex + 1, row);
+        m_ruleRows.insert(insertIndex + 1, row);
+    } else {
+        m_rulesLayout->addWidget(row);
+        m_ruleRows.append(row);
+    }
     
     connect(row, &RuleRow::changed, this, &BatchRenameDialog::updatePreview);
     connect(row, &RuleRow::changed, this, &BatchRenameDialog::scheduleAutoSave);
-    connect(row, &RuleRow::addRequested, this, &BatchRenameDialog::onAddRow);
+    connect(row, &RuleRow::addRequested, this, [this, row]() {
+        onAddRow(row);
+    });
     connect(row, &RuleRow::addRequested, this, &BatchRenameDialog::scheduleAutoSave);
     connect(row, &RuleRow::removeRequested, [this, row]() {
         if (m_ruleRows.size() > 1) {
@@ -234,30 +272,52 @@ void BatchRenameDialog::onAddRow() {
     updatePreview();
 }
 
+void BatchRenameDialog::initTableItems() {
+    m_table->setRowCount(static_cast<int>(m_originalPaths.size()));
+    for (int i = 0; i < static_cast<int>(m_originalPaths.size()); ++i) {
+        QString oldPath = QString::fromStdWString(m_originalPaths[static_cast<size_t>(i)]);
+        QFileInfo info(oldPath);
+
+        // 恢复老版本高速机制：直接加载现成的缩略图缓存小图（微秒级），没有才退避为文件图标
+        QIcon fileIcon;
+        QString thumbPath = DiskMediaExtractor::getDiskThumbCachePath(oldPath);
+        if (QFile::exists(thumbPath)) {
+            QPixmap pix(thumbPath);
+            if (!pix.isNull()) {
+                fileIcon = QIcon(pix);
+            }
+        }
+        if (fileIcon.isNull()) {
+            fileIcon = ShellIconManager::getFileIconFast(oldPath, info.isDir(), info.suffix().toLower());
+        }
+
+        auto* itemOld = new QTableWidgetItem(fileIcon, info.fileName());
+        itemOld->setForeground(QColor("#B0B0B0"));
+        m_table->setItem(i, 0, itemOld);
+
+        auto* itemNew = new QTableWidgetItem();
+        itemNew->setForeground(QColor("#2ecc71"));
+        m_table->setItem(i, 1, itemNew);
+    }
+}
+
 void BatchRenameDialog::updatePreview() {
+    if (m_isInitializing) return; // 初始化加载规则期间直接拦截，不跑无用计算
+
     std::vector<RenameRule> rules;
     for (auto* row : m_ruleRows) {
         if (row) rules.push_back(row->getRule());
     }
 
     auto newNames = BatchRenameEngine::instance().preview(m_originalPaths, rules);
-    m_table->setRowCount(static_cast<int>(m_originalPaths.size()));
+    int total = static_cast<int>(newNames.size());
 
-    for (int i = 0; i < static_cast<int>(m_originalPaths.size()); ++i) {
-        QString oldPath = QString::fromStdWString(m_originalPaths[static_cast<size_t>(i)]);
-        QFileInfo info(oldPath);
-
-        // 1. 左侧原文件名（带微型缩略图/文件关联图标）
-        QIcon fileIcon = ShellIconManager::getFileIcon(oldPath, 20);
-        auto* itemOld = new QTableWidgetItem(fileIcon, info.fileName());
-        itemOld->setForeground(QColor("#B0B0B0"));
-        m_table->setItem(i, 0, itemOld);
-
-        // 2. 右侧重命名后新名称 (绿色高亮显示新名称)
-        QString newName = QString::fromStdWString(newNames[static_cast<size_t>(i)]);
-        auto* itemNew = new QTableWidgetItem(newName);
-        itemNew->setForeground(QColor("#2ecc71"));
-        m_table->setItem(i, 1, itemNew);
+    // 仅更新第 1 列的新名称文本，耗时 < 0.1ms，打字极度丝滑！
+    for (int i = 0; i < total; ++i) {
+        QTableWidgetItem* itemNew = m_table->item(i, 1);
+        if (itemNew) {
+            itemNew->setText(QString::fromStdWString(newNames[static_cast<size_t>(i)]));
+        }
     }
 }
 
@@ -377,7 +437,7 @@ void BatchRenameDialog::onExecute() {
             safeThis->doAutoSave();
 
             // 成功物理移动或重命名或复制后，向 UndoManager 推送一次完整的原子 BatchRenameCommand
-            UndoManager::instance().pushCommand(std::make_unique<BatchRenameCommand>(isCapsule, mode, oldPathsSnap, newPathsSnap));
+            UndoManager::instance().pushCommand(std::make_unique<BatchRenameCommand>(mode, oldPathsSnap, newPathsSnap));
         }
 
         std::vector<RenameRule> currentRules;
@@ -410,7 +470,22 @@ void BatchRenameDialog::onExecute() {
         safeThis->accept();
     };
 
-    DiskBatchRenameService::execute(m_originalPaths, newNames, mode, targetDir, onCompletedCallback);
+    QStringList targetPaths;
+    for (const auto& wp : m_originalPaths) {
+        targetPaths << QString::fromStdWString(wp);
+    }
+
+    OperationSnapshotEngine::instance().executeWithSnapshot(
+        this->parentWidget(),
+        SnapshotOperationType::BatchRename,
+        targetPaths,
+        QString("成功处理 %1 个项目").arg(m_originalPaths.size()),
+        [this, mode, targetDir, onCompletedCallback, newNames]() {
+            DiskBatchRenameService::execute(m_originalPaths, newNames, mode, targetDir, onCompletedCallback);
+            return true;
+        },
+        nullptr
+    );
 }
 
 } // namespace QuarkMeta

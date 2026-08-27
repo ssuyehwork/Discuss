@@ -2,9 +2,15 @@
 #include <QApplication>
 #include <QIcon>
 #include <QDebug>
+#include <QCursor>
 #include <QProgressDialog>
 #include "../meta/DatabaseManager.h"
 #include "BatchProgressDialog.h"
+#include "UiHelper.h"
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace QuarkMeta {
 
@@ -16,12 +22,8 @@ TrayController::TrayController(QMainWindow* mainWindow)
     m_trayIcon->setIcon(QIcon(":/app_icon.ico"));
     m_trayIcon->setToolTip("QuarkMeta");
 
-    m_trayMenu = new QMenu(mainWindow);
-    m_trayMenu->setStyleSheet(
-        "QMenu { background-color: #2D2D2D; color: #EEE; border: 1px solid #444; padding: 4px; border-radius: 8px; }"
-        "QMenu::item { padding: 6px 25px 6px 10px; border-radius: 4px; font-size: 12px; }"
-        "QMenu::item:selected { background-color: #3E3E42; color: white; }"
-    );
+    m_trayMenu = new QMenu(nullptr);
+    UiHelper::applyMenuStyle(m_trayMenu);
 
     QAction* showAction = m_trayMenu->addAction("显示主界面");
     m_trayMenu->addSeparator();
@@ -39,6 +41,10 @@ TrayController::~TrayController() {
     if (m_trayIcon) {
         m_trayIcon->hide();
     }
+    if (m_trayMenu) {
+        delete m_trayMenu;
+        m_trayMenu = nullptr;
+    }
 }
 
 void TrayController::show() {
@@ -51,7 +57,7 @@ void TrayController::hide() {
 
 void TrayController::onTrayActivated(QSystemTrayIcon::ActivationReason reason) {
     if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) {
-        if (m_mainWindow->isVisible()) {
+        if (m_mainWindow && m_mainWindow->isVisible() && !m_mainWindow->isMinimized()) {
             m_mainWindow->hide();
         } else {
             onShowMainWindow();
@@ -60,14 +66,24 @@ void TrayController::onTrayActivated(QSystemTrayIcon::ActivationReason reason) {
 }
 
 void TrayController::onShowMainWindow() {
-    m_mainWindow->showNormal();
+    if (!m_mainWindow) return;
+    if (m_mainWindow->isMinimized()) {
+        m_mainWindow->showNormal();
+    }
+    m_mainWindow->show();
+    m_mainWindow->raise();
     m_mainWindow->activateWindow();
 }
 
 void TrayController::onQuitApp() {
-    if (m_trayIcon) m_trayIcon->hide();
-    // 严禁在此处调用 DatabaseManager::shutdown()，统一交给 main.cpp 集中调度
-    QApplication::quit();
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+    }
+    if (m_mainWindow) {
+        m_mainWindow->close();
+    }
+    // 强制通知 Qt 主事件循环以状态码 0 顺畅退出，触发现发 aboutToQuit 数据库与线程池清场机制
+    QApplication::exit(0);
 }
 
 } // namespace QuarkMeta

@@ -5,47 +5,13 @@
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
 #include <QPropertyAnimation>
-#include <QGraphicsView>
-#include <QGraphicsScene>
-#include <QGraphicsPixmapItem>
 #include <QPushButton>
 #include <QSlider>
 #include <QHBoxLayout>
 #include <QContextMenuEvent>
+#include "QuickLookGraphicsView.h"
 
 namespace QuarkMeta {
-
-class QuickLookMinimap;
-
-class QuickLookGraphicsView : public QGraphicsView {
-    Q_OBJECT
-public:
-    explicit QuickLookGraphicsView(QWidget* parent = nullptr);
-    void setPixmap(const QPixmap& pixmap);
-    void fitImage();
-    void setZoomOriginal();
-    void rotateClockwise();
-    void flipHorizontal();
-    void clear();
-
-protected:
-    void wheelEvent(QWheelEvent* event) override;
-    void mouseDoubleClickEvent(QMouseEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
-    void mouseMoveEvent(QMouseEvent* event) override;
-
-private:
-    void updateCursor();
-    void updateMinimap();
-
-    QGraphicsScene* m_scene = nullptr;
-    QGraphicsPixmapItem* m_pixmapItem = nullptr;
-    double m_currentScale = 1.0;
-    bool m_isFitMode = true;
-    QuickLookMinimap* m_minimap = nullptr;
-};
 
 class QuickLookWindow : public QWidget {
     Q_OBJECT
@@ -84,6 +50,7 @@ private:
 
     QuickLookGraphicsView* m_graphicsView = nullptr;
     QPlainTextEdit* m_textEdit = nullptr;
+    QLabel* m_lblEmptyPrompt = nullptr;
     QLabel* m_titleLabel = nullptr;
     QLabel* m_infoLabel = nullptr;
     QWidget* m_container = nullptr;

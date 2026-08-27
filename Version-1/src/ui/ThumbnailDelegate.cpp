@@ -26,11 +26,9 @@ void ThumbnailDelegate::setHasThumbnailRole(int role) { m_hasThumbnailRole = rol
 void ThumbnailDelegate::setRatingRole(int role) { m_ratingRole = role; }
 void ThumbnailDelegate::setPathRole(int role) { m_pathRole = role; }
 void ThumbnailDelegate::setPinnedRole(int role) { m_pinnedRole = role; }
-void ThumbnailDelegate::setManagedRole(int role) { m_managedRole = role; }
 void ThumbnailDelegate::setTypeRole(int role) { m_typeRole = role; }
 void ThumbnailDelegate::setIsEmptyRole(int role) { m_isEmptyRole = role; }
 void ThumbnailDelegate::setColorRole(int role) { m_colorRole = role; }
-void ThumbnailDelegate::setRegistrationProgressRole(int role) { m_registrationProgressRole = role; }
 
 ThumbnailDelegate::Metrics ThumbnailDelegate::calculateMetrics(const QStyleOptionViewItem& option) const {
     Metrics m;
@@ -77,29 +75,6 @@ ThumbnailDelegate::Metrics ThumbnailDelegate::calculateMetrics(const QStyleOptio
 void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
     if (!index.isValid()) return;
 
-    // 双轨回收站与分组展示：如果该项为组标题，独立精美绘制
-    if (index.data(IsGroupHeaderRole).toBool()) {
-        painter->save();
-        painter->setRenderHint(QPainter::Antialiasing, true);
-
-        QRect rect = option.rect;
-        
-        // 绘制一条精美的分界线
-        painter->setPen(QPen(QColor("#333333"), 1, Qt::SolidLine));
-        painter->drawLine(rect.left(), rect.bottom() - 2, rect.right(), rect.bottom() - 2);
-
-        // 绘制大标题文字，使用青蓝色/青绿色以突出主题
-        QFont font("Microsoft YaHei", 11, QFont::Bold);
-        painter->setFont(font);
-        painter->setPen(QColor("#1abc9c"));
-
-        QString text = index.data(Qt::DisplayRole).toString();
-        // 缩进 10 像素避免紧贴边缘
-        painter->drawText(rect.adjusted(10, 0, 0, 0), Qt::AlignVCenter | Qt::AlignLeft, text);
-
-        painter->restore();
-        return;
-    }
 
     Metrics m = calculateMetrics(option);
     bool isSelected = (option.state & QStyle::State_Selected);
@@ -135,21 +110,17 @@ void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
     // ② 绘制卡片边框
     CardPainterHelper::drawCardBorder(painter, m.cardRect, isSelected);
 
-    // ③ 绘制状态互斥标记及进度环
-    if (m_pinnedRole != -1 && m_managedRole != -1) {
+    // ③ 绘制状态互斥标记
+    if (m_pinnedRole != -1) {
         bool isPinned = index.data(m_pinnedRole).toBool();
-        bool isManaged = index.data(m_managedRole).toBool();
-        bool isDir = index.data(m_typeRole).toString() == "folder";
-        double progress = (m_registrationProgressRole != -1) ? index.data(m_registrationProgressRole).toDouble() : -1.0;
-
-        CardPainterHelper::drawStatusIndicators(painter, m.cardRect, isPinned, isManaged, isDir, progress);
+        CardPainterHelper::drawStatusIndicators(painter, m.cardRect, isPinned);
     }
 
     // ④ 绘制自适应扩展名徽章（直接从内存模型取值，零 QFileInfo 磁盘 I/O）
     if (m_pathRole != -1) {
         QString type = (m_typeRole != -1) ? index.data(m_typeRole).toString() : "";
         QString ext;
-        if (type == "category" || type == "folder") {
+        if (type == "folder") {
             ext = "DIR";
         } else {
             QString path = index.data(m_pathRole).toString();
@@ -190,11 +161,6 @@ void ThumbnailDelegate::drawFileNameText(QPainter* painter, const QRect& textRec
     QString name = index.data(Qt::DisplayRole).toString();
     painter->setPen(isSelected ? QColor("#3498db") : QColor("#EEEEEE"));
 
-    // 针对未录入项目应用半透明效果
-    if (m_managedRole != -1 && !isSelected && !index.data(m_managedRole).toBool()) {
-        painter->setPen(QColor(238, 238, 238, 120));
-    }
-
     QFont textFont = painter->font();
     textFont.setPointSize(8);
     painter->setFont(textFont);
@@ -224,7 +190,7 @@ QWidget* ThumbnailDelegate::createEditor(QWidget* parent, const QStyleOptionView
         "}" 
     ); 
  
-    bool isFolder = (index.data(m_typeRole).toString() == "folder" || index.data(m_typeRole).toString() == "category"); 
+    bool isFolder = (index.data(m_typeRole).toString() == "folder"); 
     editor->setIsFolder(isFolder); 
     editor->installEventFilter(const_cast<ThumbnailDelegate*>(this)); 
     return editor; 
@@ -304,14 +270,6 @@ bool ThumbnailDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view,
     Metrics m = calculateMetrics(option);
     QRect statusRect(m.cardRect.right() - 22, m.cardRect.top() + 8, 16, 16);
 
-    if (statusRect.contains(event->pos())) {
-        double p = (m_registrationProgressRole != -1) ? index.data(m_registrationProgressRole).toDouble() : -1.0;
-        if (p >= 0.0) {
-            ToolTipOverlay::instance()->showText(event->globalPos(), 
-                QString("登记进度: %1%").arg(qRound(p * 100)), 0);
-            return true;
-        }
-    }
     return QStyledItemDelegate::helpEvent(event, view, option, index);
 }
 

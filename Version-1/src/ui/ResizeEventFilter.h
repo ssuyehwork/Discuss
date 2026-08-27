@@ -26,8 +26,12 @@ private:
         TopLeft, TopRight, BottomLeft, BottomRight
     };
 
-    QMainWindow* m_window;
-    
+    QMainWindow* m_window = nullptr;
+    bool m_isResizing = false;
+    ResizeDirection m_resizeDir = None;
+    QPoint m_resizeStartGlobal;
+    QRect m_resizeStartGeometry;
+
     ResizeDirection getResizeDirection(const QPoint& pos) const;
     void updateCursorShape(ResizeDirection dir);
 };

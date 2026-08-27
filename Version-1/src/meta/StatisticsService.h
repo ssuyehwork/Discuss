@@ -11,19 +11,11 @@ namespace QuarkMeta {
 
 struct StatisticsSnapshot {
     int totalCount = 0;
-    int uncategorizedCount = 0;
     int untaggedCount = 0;
     int trashCount = 0;
 
     // 1. 静态分类计数 (key -> count)
     QMap<QString, int> systemCounts;
-    // 2. 半静态托管库计数 (categoryId -> count)
-    QMap<int, int> libraryCounts;
-    // 3. 全动态用户分类计数 (categoryId -> count)
-    QMap<int, int> userCategoryCounts;
-
-    std::unordered_map<int, int> categoryCounts;
-    std::unordered_map<int, int> tagCounts;
 };
 
 class StatisticsService : public QObject { 
@@ -38,9 +30,9 @@ public:
     void requestFullRecountAsync(std::function<void(const StatisticsSnapshot&)> callback = nullptr); 
 
     // 3. 增量变更接口（由托管生命周期服务单向驱动原子计数） 
-    void notifyAssetAdded(int targetCatId, bool hasTags); 
-    void notifyAssetRemoved(int targetCatId, int libraryCatId, bool hadTags, bool wasTrash); 
-    void purgeAsset(int libraryCatId, const std::vector<int>& userCatIds, bool hasTags, bool isTrash);
+    void notifyAssetAdded(bool hasTags); 
+    void notifyAssetRemoved(bool hadTags, bool wasTrash); 
+    void purgeAsset(bool hasTags, bool isTrash);
     void notifyAssetTrashChanged(bool toTrash, bool hasTags); 
     void notifyDiskTrashCountChanged(int delta); 
 
@@ -56,13 +48,8 @@ public:
     StatisticsSnapshot m_cachedSnapshot; 
 
     std::atomic<int> m_totalCount{0}; 
-    std::atomic<int> m_uncategorizedCount{0}; 
     std::atomic<int> m_untaggedCount{0}; 
     std::atomic<int> m_trashCount{0}; 
-
-    // 增量账本分类与标签映射表
-    std::unordered_map<int, int> m_categoryCounts;
-    std::unordered_map<int, int> m_tagCounts;
 
     QTimer* m_debounceTimer{nullptr};
 }; 

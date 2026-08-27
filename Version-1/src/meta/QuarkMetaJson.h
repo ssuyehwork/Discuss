@@ -17,8 +17,20 @@ namespace QuarkMeta {
  * 1. 全面采用纯粹、高效、结构化的 JSON 规范。
  * 2. 磁盘模式下采用标准的 .QuarkMeta.json 隐藏文件直接保存在物理目录中。
  */
+struct CaseInsensitiveWStringLess {
+    bool operator()(const std::wstring& a, const std::wstring& b) const {
+#ifdef _WIN32
+        return _wcsicmp(a.c_str(), b.c_str()) < 0;
+#else
+        return wcscasecmp(a.c_str(), b.c_str()) < 0;
+#endif
+    }
+};
+
 class QuarkMetaJson {
 public:
+    using ItemMap = std::map<std::wstring, ItemMeta, CaseInsensitiveWStringLess>;
+
     /**
      * @brief 物理整体迁移/重命名文件夹缓存接口（历史兼容，在直接保存模式下，重命名会自动由操作系统物理转移子文件）
      */
@@ -30,6 +42,14 @@ public:
      * @param newFilePath 移动后的物理绝对路径
      */
     static bool migrateItemMetadata(const QString& oldFilePath, const QString& newFilePath);
+
+    /**
+     * @brief 物理漫游元数据包：支持文件/文件夹的移动转移与复制克隆
+     * @param oldFilePath 源路径
+     * @param newFilePath 目标路径
+     * @param isMove true 为剪切/移动（抹除源数据）；false 为复制（深克隆副本）
+     */
+    static bool roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove);
 
     /**
      * @param folderPath 目标物理文件夹的完整路径
@@ -50,8 +70,8 @@ public:
     FolderMeta& folder() { return m_folder; }
     const FolderMeta& folder() const { return m_folder; }
 
-    std::map<std::wstring, ItemMeta>& items() { return m_items; }
-    const std::map<std::wstring, ItemMeta>& items() const { return m_items; }
+    ItemMap& items() { return m_items; }
+    const ItemMap& items() const { return m_items; }
 
     /**
      * @brief 移除指定文件名的元数据条目
@@ -78,7 +98,7 @@ private:
     std::wstring m_filePath; // 映射到物理文件夹中的 .QuarkMeta.json 路径
     
     FolderMeta m_folder;
-    std::map<std::wstring, ItemMeta> m_items;
+    ItemMap m_items;
 
     static QJsonObject folderToEntry(const FolderMeta& meta);
     static FolderMeta entryToFolder(const QJsonObject& obj);

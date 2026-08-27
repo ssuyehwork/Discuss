@@ -100,6 +100,12 @@ set(SOURCES
     src/meta/DuplicateDetectorService.h
     src/meta/DuplicateDetectorService.cpp
     src/meta/MetadataDefs.h
+    src/meta/QuarkMetaJsonStore.h
+    src/meta/QuarkMetaJsonStore.cpp
+    src/meta/MetaDbRepository.h
+    src/meta/MetaDbRepository.cpp
+    src/meta/MetaMemoryCache.h
+    src/meta/MetaMemoryCache.cpp
     src/meta/MetadataManager.cpp
     src/meta/MetadataManager.h
     src/meta/MediaExtractorPipeline.cpp
@@ -130,8 +136,13 @@ set(SOURCES
     src/ui/DropTreeView.cpp
     src/ui/DropTreeView.h
     src/ui/IScanResultView.h
+    src/ui/FilterStateModel.h
+    src/ui/FilterStateModel.cpp
+    src/ui/ScanStatsEngine.h
+    src/ui/ScanStatsEngine.cpp
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
+    src/ui/FramelessDialogBase.h
     src/ui/FramelessDialog.cpp
     src/ui/FramelessDialog.h
     src/ui/FramelessFileDialog.cpp
@@ -144,16 +155,34 @@ set(SOURCES
     src/ui/ThumbnailDelegate.cpp
     src/ui/ThumbnailDelegate.h
     src/ui/Logger.h
+    src/ui/GlobalShortcutController.h
+    src/ui/GlobalShortcutController.cpp
+    src/ui/PanelMediator.h
+    src/ui/PanelMediator.cpp
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
+    src/ui/TaskProgressController.h
+    src/ui/TaskProgressController.cpp
+    src/ui/SearchController.h
+    src/ui/SearchController.cpp
     src/ui/TrayController.cpp
     src/ui/TrayController.h
     src/ui/HoverEventFilter.cpp
     src/ui/HoverEventFilter.h
     src/ui/ResizeEventFilter.cpp
     src/ui/ResizeEventFilter.h
+    src/ui/TitleBarEventFilter.cpp
+    src/ui/TitleBarEventFilter.h
     src/ui/AddressBar.cpp
     src/ui/AddressBar.h
+    src/ui/MetaPreviewWidget.h
+    src/ui/MetaPreviewWidget.cpp
+    src/ui/MetaRatingColorWidget.h
+    src/ui/MetaRatingColorWidget.cpp
+    src/ui/MetaTagSection.h
+    src/ui/MetaTagSection.cpp
+    src/ui/MetaInfoSection.h
+    src/ui/MetaInfoSection.cpp
     src/ui/MetaPanel.cpp
     src/ui/MetaPanel.h
     src/ui/TagSelectorOverlay.h
@@ -193,6 +222,30 @@ set(SOURCES
     src/core/ActionCommand.h
     src/core/UndoManager.h
     src/core/BasicCommands.h
+    src/core/commands/RenameCommand.h
+    src/core/commands/MoveCommand.h
+    src/core/commands/MetadataCommand.h
+    src/core/commands/SecureDeleteCommand.h
+    src/core/commands/ShellProtectionCommand.h
+    src/core/commands/BatchRenameCommand.h
+    src/util/VolumePathResolver.h
+    src/util/VolumePathResolver.cpp
+    src/ui/FolderButton.h
+    src/ui/FolderButton.cpp
+    src/ui/QuickLookGraphicsView.h
+    src/ui/QuickLookGraphicsView.cpp
+    src/ui/components/StyledCheckBox.h
+    src/ui/components/StyledCheckBox.cpp
+    src/ui/components/ClickableRow.h
+    src/ui/components/ClickableRow.cpp
+    src/ui/dialogs/FramelessInputDialog.h
+    src/ui/dialogs/FramelessInputDialog.cpp
+    src/ui/dialogs/FramelessColorPicker.h
+    src/ui/dialogs/FramelessColorPicker.cpp
+    src/ui/dialogs/FramelessConfirmDialog.h
+    src/ui/dialogs/FramelessConfirmDialog.cpp
+    src/ui/dialogs/FramelessMessageBox.h
+    src/ui/dialogs/FramelessMessageBox.cpp
     src/ui/ToolTipOverlay.cpp
     src/ui/ToolTipOverlay.h
     src/ui/TreeItemDelegate.h
@@ -217,6 +270,8 @@ set(SOURCES
     src/ui/ColorAlgorithmEngine.cpp
     src/util/DiskMediaExtractor.h
     src/util/DiskMediaExtractor.cpp
+    src/util/DeepThumbnailExtractor.h
+    src/util/DeepThumbnailExtractor.cpp
     src/util/ShellHelper.cpp
     src/util/ShellHelper.h
     QuarkMeta.rc
@@ -290,6 +345,8 @@ target_include_directories(QuarkMeta PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/models
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/src/crypto
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/util
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/meta
     ${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/libtiff
 )
 

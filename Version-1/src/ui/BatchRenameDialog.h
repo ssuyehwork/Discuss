@@ -33,7 +33,7 @@ public:
     QString getFirstNewName() const { return m_firstNewName; }
 
 private slots:
-    void onAddRow();
+    void onAddRow(RuleRow* targetRow = nullptr);
     void updatePreview();
     void onExecute();
     void onBrowseTarget();
@@ -46,6 +46,8 @@ private slots:
 private:
     void initContent();
     void applyTheme();
+    void initTableItems();
+    bool m_isInitializing = false;
 
     std::vector<std::wstring> m_originalPaths;
     

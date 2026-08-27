@@ -15,7 +15,7 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
         QDir dir(p); 
         if (!dir.exists()) return; 
  
-        QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot, QDir::DirsFirst | QDir::Name); 
+        QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden, QDir::DirsFirst | QDir::Name); 
         for (const QFileInfo& info : entries) { 
             if (shouldContinue && !shouldContinue()) return; 
  
@@ -24,7 +24,7 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
             // 🚨 统一调用文件过滤服务（归一化处理所有辅助文件、.arc、.QuarkMeta） 
             if (FileFilterService::isAuxiliaryFile(absPath)) continue; 
  
-            ItemRecord itemRec = ItemRecord::create(absPath, nullptr, false); 
+            ItemRecord itemRec = ItemRecord::create(absPath, nullptr); 
             allItems.push_back(itemRec); 
  
             if (rec && info.isDir()) { 

@@ -19,9 +19,8 @@ public:
     // 2. 绘制卡片圆角边框 (选中 3px 蓝色，未选中 1px #4a4a4a)
     static void drawCardBorder(QPainter* painter, const QRect& cardRect, bool isSelected);
 
-    // 3. 绘制状态互斥标记及进度环
-    static void drawStatusIndicators(QPainter* painter, const QRect& cardRect, 
-                                     bool isPinned, bool isManaged, bool isDir, double progress);
+    // 3. 绘制置顶状态标记
+    static void drawStatusIndicators(QPainter* painter, const QRect& cardRect, bool isPinned);
 
     // 4. 绘制自适应扩展名徽章
     static void drawExtensionBadge(QPainter* painter, const QRect& cardRect, 

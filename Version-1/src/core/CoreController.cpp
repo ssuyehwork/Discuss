@@ -3,6 +3,7 @@
 #include "../meta/MetadataManager.h"
 #include "../meta/DatabaseManager.h"
 #include "../meta/MediaExtractorPipeline.h"
+#include "../util/DiskMediaExtractor.h"
 #include "../ui/Logger.h"
 #include <QThreadPool>
 #include <QDebug>
@@ -33,6 +34,13 @@ void CoreController::initializeCoreComponents() {
     // 3. 后台提取特征管道、定时器及事件队列预热
     QuarkMeta::MediaExtractorPipeline::instance();
     
+    // 4. 定时合并刷新缩略图提取失败标记落盘
+    QTimer* failureFlushTimer = new QTimer(QCoreApplication::instance());
+    failureFlushTimer->setInterval(1000);
+    QObject::connect(failureFlushTimer, &QTimer::timeout, []() {
+        (void)QtConcurrent::run(DiskMediaExtractor::flushPendingFailures);
+    });
+    failureFlushTimer->start();
 }
 
 void CoreController::requestShutdown() { s_isShuttingDown.store(true); }
@@ -47,7 +55,7 @@ CoreController::~CoreController() {}
 
 /**
  * @brief 启动系统初始化链条
- * 彻底废除分布式文件模式，全面转向 SQLite 内存模式 (One-Drive-One-DB)
+ * 运行核心控制逻辑
  */
 void CoreController::startSystem() {
     QThreadPool::globalInstance()->start([this]() {
@@ -57,8 +65,7 @@ void CoreController::startSystem() {
                 setStatus("正在载入元数据缓存...", true);
             }, Qt::QueuedConnection);
             
-            // 仅执行 SQLite 模式初始化
-            MetadataManager::instance().initFromDatabase();
+            // 纯磁盘直连模式注销全盘 metadata 数据表预训练扫描
 
 
             // 在系统顶层统一提取一次“上次是否正常关闭”状态，提取后立刻置脏
@@ -67,11 +74,6 @@ void CoreController::startSystem() {
             AppConfig::instance().setValue("System/LastCleanShutdown", false);
             AppConfig::instance().sync();
 
-            // 启动原生监控服务 (对应用户原话："采用NativeFolderWatcher (IOCP) 机制的方式")
-            // 资源库无需开启 IOCP 监控（已取消）
-            const auto drives = QDir::drives();
-            for (const QFileInfo& d : drives) {
-            }
 
             QMetaObject::invokeMethod(this, [this]() {
                 setStatus("系统就绪", false);

@@ -10,6 +10,8 @@ bool DriveMetaDao::initTable() {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
     const char* sql = 
         "CREATE TABLE IF NOT EXISTS drive_metadata ("
         "  drive_path TEXT PRIMARY KEY,"
@@ -34,6 +36,8 @@ std::unordered_map<std::wstring, DriveMetaRecord> DriveMetaDao::getAllDriveMeta(
     std::unordered_map<std::wstring, DriveMetaRecord> result;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return result;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
     const char* sql = "SELECT drive_path, rating, color, pinned, note, url FROM drive_metadata;";
     sqlite3_stmt* stmt = nullptr;
@@ -73,6 +77,7 @@ bool DriveMetaDao::saveDriveMeta(const DriveMetaRecord& record) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
     std::wstring normPath = MetadataManager::normalizePath(record.drivePath);
 
     const char* sql = 
@@ -102,10 +107,8 @@ bool DriveMetaDao::saveDriveMeta(const DriveMetaRecord& record) {
     sqlite3_finalize(stmt);
 
     if (rc == SQLITE_DONE) {
-        DatabaseManager::instance().setDirty(true);
-        DatabaseManager::instance().enqueueSyncTask([]() {
-            DatabaseManager::instance().flushAll();
-        });
+        // 🚨 核心保障：写完立即触发 PASSIVE 检查点，确保持久化写入 global.db 主文件！
+        sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
         return true;
     }
     return false;

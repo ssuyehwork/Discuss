@@ -162,7 +162,7 @@ void NavPanel::initUi() {
     m_mainLayout->addWidget(m_treeView, 1);
 
     // 样式美化
-    QString arrowRight = UiHelper::getSvgTempFilePath("arrow_right", QColor("#3498db"));
+    QString arrowRight = UiHelper::getSvgTempFilePath("chevron_right", QColor("#3498db"));
     QString arrowDown  = UiHelper::getSvgTempFilePath("arrow_down",  QColor("#3498db"));
     QString treeStyle = QString(
         "QTreeView { background-color: transparent; border: none; font-size: 12px; outline: none; padding-left: 15px; }"

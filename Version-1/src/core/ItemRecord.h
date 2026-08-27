@@ -20,14 +20,8 @@ struct ItemRecord {
     QString frn;
     QString path; 
     bool isDir = false;
-    bool isCategory = false;
-    int categoryId = 0;
-    QString categoryName;
-    QString categoryColor;
 
-    // 双轨回收站与分组展示专属字段
-    bool isGroupHeader = false;
-    QString groupName;
+    // 磁盘回收站专属字段
     bool isDiskTrash = false;
     int diskTrashId = 0;
     QString fileId;
@@ -38,15 +32,14 @@ struct ItemRecord {
     QString manualColor;
     QString autoColor;
     QStringList tags;
-    std::string folderId;
     bool pinned = false;
     bool encrypted = false;
-    double registrationProgress = -1.0; // 初始为 -1.0 表示未计算
     QString url;  // 2026-07-xx 支撑筛选：链接
     QString note; // 2026-07-xx 支撑筛选：备注
     QString sha256;
     int width = 0;
     int height = 0;
+    int thumbStatus = 0; // 0: 正常/未处理, 1: 提取失败/跳过
 
     // 2026-06-xx 极致优化：预取物理属性，实现渲染零 I/O
     long long size = 0;
@@ -56,11 +49,12 @@ struct ItemRecord {
     long long added_at = 0;
     bool isEmpty = false;
     bool isManaged = false; // 预存受控状态
+    bool isHidden = false;  // 记录物理操作系统是否带有隐藏属性
     QString suffix;
     QString filename; // 缓存文件名以供排序时 O(1) 提取，消除高频 QFileInfo 构造开销
     std::vector<std::pair<QColor, float>> palettes; // 烘焙物理色板，消除 filterAcceptsRow 锁争抢
 
-    static ItemRecord create(const QString& path, const RuntimeMeta* providedMeta = nullptr, bool isFromMemory = false);
+    static ItemRecord create(const QString& path, const RuntimeMeta* providedMeta = nullptr);
     static void fromMetadata(ItemRecord& r, const RuntimeMeta& meta);
 };
 

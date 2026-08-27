@@ -1,36 +1,38 @@
-#ifndef QuarkMeta_TAG_REPOSITORY_H
-#define QuarkMeta_TAG_REPOSITORY_H
+#pragma once
 
 #include <QString>
 #include <QStringList>
 #include <QList>
-#include "sqlite3.h"
+#include <QMap>
 
 namespace QuarkMeta {
 
 class TagRepository {
 public:
     struct TagGroup {
-        int id;
+        int id = 0;
         QString name;
         QString color;
         QStringList tags;
     };
 
-    // 标签组核心 CRUD
+    // --- 1. 分组管理 (Group CRUD) ---
     static QList<TagGroup> getAllGroups();
     static int createGroup(const QString& name, const QString& color = "#3498db");
     static bool renameGroup(int groupId, const QString& newName);
     static bool deleteGroup(int groupId);
 
-    // 标签组子项（关系映射表）管理
+    // --- 2. 标签与分组关联 ---
     static bool addTagToGroup(const QString& tagName, int groupId);
     static bool removeTagFromGroup(const QString& tagName, int groupId = -1);
 
-    // 数据迁移接口
-    static void checkAndMigrate();
+    // --- 3. 标签词库本体管理 (Tag Master Dictionary) ---
+    static bool createTag(const QString& tagName, const QString& color = "");
+    static bool deleteTag(const QString& tagName);
+    static bool renameTag(const QString& oldName, const QString& newName);
+    static QStringList getAllMasterTags();
+    static QStringList getRecentTags(int limit = 30);
+    static void recordTagUsage(const QString& tagName);
 };
 
 } // namespace QuarkMeta
-
-#endif // QuarkMeta_TAG_REPOSITORY_H

@@ -15,21 +15,27 @@
 #include <QDateTime>
 
 #include "FramelessDialog.h"
+#include "TagSelectorOverlay.h"
+#include <QPointer>
 
 namespace QuarkMeta {
 
 class TrayController;
 class HoverEventFilter;
 class ResizeEventFilter;
+class TitleBarEventFilter;
 class AddressBar;
 class TaskProgressToolBar;
+class TaskProgressController;
+class SearchController; 
 class NavPanel;
 class FavoritePanel;
 class ContentPanel;
 class MetaPanel;
 class FilterPanel;
 class SearchHistoryPanel;
-
+class GlobalShortcutController;
+class PanelMediator;
 
 /**
  * @brief 主窗口类
@@ -37,6 +43,9 @@ class SearchHistoryPanel;
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
+
+    friend class GlobalShortcutController;
+    friend class PanelMediator;
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
@@ -72,7 +81,6 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
-    // 2026-05-08 按照用户要求：添加边缘resize相关成员变量
     enum ResizeDirection {
         None = 0,
         Left, Right, Top, Bottom,
@@ -83,9 +91,9 @@ private:
     bool m_isResizing = false;
     QPoint m_resizeStartGlobal;
     QRect  m_resizeStartGeometry;
-    
+
     static constexpr int kResizeMargin = 6; // 边缘热区宽度（像素）
-    
+
     ResizeDirection getResizeDirection(const QPoint& localPos) const;
     void updateCursorShape(ResizeDirection dir);
 
@@ -135,14 +143,11 @@ private:
 
     // 工具栏组件
     QToolBar* m_toolbar    = nullptr;
-    QLineEdit* m_searchEdit = nullptr;
     QPushButton* m_btnBack    = nullptr;
     QPushButton* m_btnForward = nullptr;
     QPushButton* m_btnUp      = nullptr;
 
-    // 2026-04-12 按照用户要求：搜索历史悬浮面板及历史记录
-    QWidget* m_searchContainer = nullptr; // 搜索框容器
-    SearchHistoryPanel* m_searchHistoryPanel = nullptr;
+    SearchController* m_searchController = nullptr;
     
     // 排列方式视图按钮及中性缩放滑杆 (Modification_Plan-47)
     QPushButton* m_btnViewMenu = nullptr;
@@ -167,9 +172,7 @@ private:
     bool m_isPinned = false;
     bool m_isTagManagerMode = false;
     QString m_currentDataSource; // "category" or "nav"
-    int m_currentCategoryId = 0;
     bool m_panelsInitialized = false; // 2026-04-12 状态锁：确保面板仅初始化一次
-    QTimer* m_searchTimer = nullptr; // 2026-xx-xx 按照 Plan-106：搜索防抖计时器
     QString m_currentPath;
     QStringList m_history;
     int m_historyIndex = -1;
@@ -185,16 +188,15 @@ private:
 
     // 系统托盘控制器
     TrayController* m_trayController = nullptr;
-    HoverEventFilter* m_hoverFilter = nullptr;
-    ResizeEventFilter* m_resizeFilter = nullptr;
+    HoverEventFilter*     m_hoverFilter     = nullptr;
+    ResizeEventFilter*    m_resizeFilter    = nullptr;
+    TitleBarEventFilter* m_titleBarFilter  = nullptr;
     QTimer* m_sidebarRefreshTimer = nullptr;
 
-    void updateProgressBarGeometry(); // 实时计算 5px 悬浮位置函数
-
-    QProgressBar* m_topProgressBar = nullptr; // 悬浮覆盖层进度条
-    QTimer* m_elapsedTimer = nullptr;         // 耗时刷新定时器
-    qint64 m_syncStartTime = 0;               // 任务开始毫秒时间戳
-    int m_totalBatchCount = 0;                // 当前批次扫描的任务总项数
+    // 模块化控制器与中介者
+    GlobalShortcutController* m_shortcutController = nullptr;
+    PanelMediator* m_panelMediator = nullptr;
+    TaskProgressController* m_taskProgressController = nullptr;
 
 public slots:
     /**
@@ -210,6 +212,7 @@ public slots:
 private:
     void loadPanelVisibility();
     void savePanelVisibility();
+    void updateDynamicMinimumSize();
 };
 
 } // namespace QuarkMeta

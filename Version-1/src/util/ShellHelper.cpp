@@ -17,6 +17,7 @@
 #include "../meta/StatisticsService.h"
 #include "../meta/QuarkMetaJson.h"
 #include "../core/DiskTrashService.h"
+#include "DiskMediaExtractor.h"
 
 namespace QuarkMeta {
 
@@ -40,16 +41,18 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
     fileOp.wFunc = isMove ? FO_MOVE : FO_COPY;
     fileOp.pFrom = from.c_str();
     fileOp.pTo = to.c_str();
-    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOCONFIRMMKDIR;
-    bool ok = (SHFileOperationW(&fileOp) == 0);
-    if (ok && isMove) {
+    // 🚨 核心改动：移除 FOF_NOCONFIRMATION，遇到同名冲突由系统弹出确认或允许用户选择保留两者，绝不静默覆写！
+    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR;
+    bool ok = (SHFileOperationW(&fileOp) == 0 && !fileOp.fAnyOperationsAborted);
+
+    if (ok) {
         for (const QString& p : sourcePaths) {
             QFileInfo info(p);
             QString newPath = QDir(destDir).filePath(info.fileName());
-            // 1. 物理漫游迁移 .QuarkMeta.json 元数据 
-            QuarkMetaJson::migrateItemMetadata(p, newPath); 
-            // 2. 同步内存/数据库缓存 
-            MetadataManager::instance().renameItem(p.toStdWString(), newPath.toStdWString());
+
+            // 🚨 无论 Copy 还是 Move，自动触发整包元数据与缩略图原子漫游！
+            QuarkMetaJson::roamItemMetadata(p, newPath, isMove);
+            DiskMediaExtractor::roamThumbnailCache(p, newPath, isMove);
         }
     }
     return ok;

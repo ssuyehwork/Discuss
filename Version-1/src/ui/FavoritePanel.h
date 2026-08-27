@@ -3,9 +3,18 @@
 #include <QFrame>
 #include <QVBoxLayout>
 #include <QStandardItemModel>
+#include <QStyledItemDelegate>
 #include "DropTreeView.h"
 
 namespace QuarkMeta {
+
+class FavoriteItemDelegate : public QStyledItemDelegate {
+    Q_OBJECT
+public:
+    explicit FavoriteItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+};
 
 /**
  * @brief 独立收藏夹面板（主界面第二栏）
@@ -22,6 +31,16 @@ public:
      * @brief 物理还原：设置 1px 高亮线的显隐状态
      */
     void setFocusHighlight(bool visible);
+
+    /**
+     * @brief 检查路径是否已在收藏夹中
+     */
+    bool containsPath(const QString& path) const;
+
+    /**
+     * @brief 从收藏夹中移除指定路径项目
+     */
+    void removeFavoriteItem(const QString& path);
 
     /**
      * @brief 向收藏夹追加项目并防重

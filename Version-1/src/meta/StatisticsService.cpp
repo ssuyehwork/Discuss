@@ -57,40 +57,28 @@ void StatisticsService::requestFullRecountAsync(std::function<void(const Statist
     QThreadPool::globalInstance()->start(new RecountTask(callback));
 }
 
-void StatisticsService::notifyAssetAdded(int targetCatId, bool hasTags) {
+void StatisticsService::notifyAssetAdded(bool hasTags) {
     m_totalCount.fetch_add(1);
-    if (targetCatId <= 0) {
-        m_uncategorizedCount.fetch_add(1);
-    }
     if (!hasTags) {
         m_untaggedCount.fetch_add(1);
     }
 
     std::lock_guard<std::mutex> lock(m_snapshotMutex);
     m_cachedSnapshot.systemCounts["all"] = m_totalCount.load();
-    m_cachedSnapshot.systemCounts["uncategorized"] = m_uncategorizedCount.load();
     m_cachedSnapshot.systemCounts["untagged"] = m_untaggedCount.load();
-    if (targetCatId > 0) {
-        m_cachedSnapshot.userCategoryCounts[targetCatId]++;
-    }
 
     emit statisticsUpdated(m_cachedSnapshot);
 }
 
-void StatisticsService::notifyAssetRemoved(int targetCatId, int libraryCatId, bool hadTags, bool wasTrash) {
-    std::vector<int> userCatIds;
-    if (targetCatId > 0) userCatIds.push_back(targetCatId);
-    purgeAsset(libraryCatId, userCatIds, !hadTags, wasTrash);
+void StatisticsService::notifyAssetRemoved(bool hadTags, bool wasTrash) {
+    purgeAsset(hadTags, wasTrash);
 }
 
-void StatisticsService::purgeAsset(int libraryCatId, const std::vector<int>& userCatIds, bool hasTags, bool isTrash) {
+void StatisticsService::purgeAsset(bool hasTags, bool isTrash) {
     if (isTrash) {
         if (m_trashCount.load() > 0) m_trashCount.fetch_sub(1);
     } else {
         if (m_totalCount.load() > 0) m_totalCount.fetch_sub(1);
-        if (userCatIds.empty() && m_uncategorizedCount.load() > 0) {
-            m_uncategorizedCount.fetch_sub(1);
-        }
         if (!hasTags && m_untaggedCount.load() > 0) {
             m_untaggedCount.fetch_sub(1);
         }
@@ -98,23 +86,8 @@ void StatisticsService::purgeAsset(int libraryCatId, const std::vector<int>& use
 
     std::lock_guard<std::mutex> lock(m_snapshotMutex);
     m_cachedSnapshot.systemCounts["all"] = m_totalCount.load();
-    m_cachedSnapshot.systemCounts["uncategorized"] = m_uncategorizedCount.load();
     m_cachedSnapshot.systemCounts["untagged"] = m_untaggedCount.load();
     m_cachedSnapshot.systemCounts["trash"] = m_trashCount.load();
-
-    // 1. 托管库分类扣减
-    if (libraryCatId > 0 && m_cachedSnapshot.libraryCounts.contains(libraryCatId)) {
-        if (m_cachedSnapshot.libraryCounts[libraryCatId] > 0) {
-            m_cachedSnapshot.libraryCounts[libraryCatId]--;
-        }
-    }
-
-    // 2. 所有挂载过的用户分类全量扣减
-    for (int userCatId : userCatIds) {
-        if (m_cachedSnapshot.userCategoryCounts.contains(userCatId) && m_cachedSnapshot.userCategoryCounts[userCatId] > 0) {
-            m_cachedSnapshot.userCategoryCounts[userCatId]--;
-        }
-    }
 
     emit statisticsUpdated(m_cachedSnapshot);
 }
@@ -155,8 +128,6 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
 
     int allCount = 0;
     int untaggedCount = 0;
-    int uncategorizedCount = 0;
-    int libraryTrashCount = 0;
 
     // 1. 纯内存 0ms 秒级核算（绝对真相源）
     MetadataManager::instance().forEachCachedItem([&](const std::wstring& path, const RuntimeMeta& meta) {
@@ -173,16 +144,6 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
             }
         }
 
-        // 🛡️ 第一防线：强力回收站拦截 (兼顾标志位与物理路径特征)
-        bool isInTrash = meta.isTrash || 
-                         (path.find(L"/.QuarkMeta/trash") != std::wstring::npos) ||
-                         (path.find(L"\\.QuarkMeta\\trash") != std::wstring::npos);
-
-        if (isInTrash) {
-            libraryTrashCount++;
-            return; // 🚨 绝对提前退出！绝不参与 全部数据、未分类 的任何计数！
-        }
-
         // 全部有效数据
         allCount++;
 
@@ -194,9 +155,8 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
 
     // 2. 汇总物理磁盘回收站 (离线盘过滤)
     int diskTrashCount = 0;
-    std::vector<sqlite3*> dbs = { DatabaseManager::instance().getGlobalDb() };
-    for (sqlite3* db : dbs) {
-        if (!db) continue;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (db) {
         sqlite3_stmt* stmtDisk = nullptr;
         if (sqlite3_prepare_v2(db, "SELECT original_path FROM disk_trash", -1, &stmtDisk, nullptr) == SQLITE_OK) {
             while (sqlite3_step(stmtDisk) == SQLITE_ROW) {
@@ -215,12 +175,10 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
 
     snapshot.totalCount = allCount;
     snapshot.untaggedCount = untaggedCount;
-    snapshot.uncategorizedCount = uncategorizedCount;
-    snapshot.trashCount = libraryTrashCount + diskTrashCount;
+    snapshot.trashCount = diskTrashCount;
 
     // 3. 同步原子内存缓存
     m_totalCount.store(allCount);
-    m_uncategorizedCount.store(uncategorizedCount);
     m_untaggedCount.store(untaggedCount);
     m_trashCount.store(snapshot.trashCount);
 

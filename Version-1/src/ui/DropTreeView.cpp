@@ -1,4 +1,5 @@
 #include "DropTreeView.h"
+#include "../core/ModelContract.h"
 #include "ContentPanel.h"
 #include <QDrag>
 #include <QPainter>
@@ -17,6 +18,7 @@
 namespace QuarkMeta {
 
 DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
+    setHeader(new ContentHeaderView(Qt::Horizontal, this));
     setAcceptDrops(true);
     setDropIndicatorShown(true);
 }

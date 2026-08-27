@@ -9,7 +9,6 @@
 #include "../ui/MediaColorExtractor.h"
 #include "../ui/ImageDecoderFacade.h"
 #include "../ui/ColorAlgorithmEngine.h"
-#include "DatabaseManager.h"
 #include <QImageReader>
 #include <QSvgRenderer>
 #include <QFileInfo>
@@ -151,7 +150,6 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             item.path = path;
             item.mtime = info.lastModified().toMSecsSinceEpoch();
             item.fileSize = info.size();
-            item.ingestionStatus = 1;
 
             if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
                 // 单次读盘：同时拿到【原始尺寸】和【512 高清图】
@@ -168,7 +166,7 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                     if (!pal.isEmpty()) {
                         QColor dominant = MediaColorExtractor::quantizeColor(pal.first().first);
                         item.autoColor = dominant.name().toUpper().toStdWString();
-                        item.palettes = pal;
+                        item.palettes.assign(pal.begin(), pal.end());
                     }
                 }
             }
@@ -238,7 +236,7 @@ void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
         return;
     }
 
-    MetadataManager::instance().updateExtractedMediaFeatures(path, w, h, colorStr, palette, 1);
+    MetadataManager::instance().updateExtractedMediaFeatures(path, w, h, colorStr, palette);
 
     int active = m_activeCount.fetch_sub(1) - 1;
     if (active < 0) {

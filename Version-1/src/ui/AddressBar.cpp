@@ -1,12 +1,17 @@
 #include "AddressBar.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
+#include "FavoritePanel.h"
+#include "StyleLibrary.h"
 #include "../core/NavigationHistoryService.h"
 #include <QHBoxLayout>
 #include <QDir>
 #include <QPushButton>
 #include <QTimer>
 #include <QStyle>
+#include <QMenu>
+#include <QAction>
+#include <QApplication>
 
 namespace QuarkMeta {
 
@@ -76,6 +81,35 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
         }
     });
     connect(m_breadcrumbBar, &BreadcrumbBar::pathClicked, this, &AddressBar::onBreadcrumbClicked);
+    connect(m_breadcrumbBar, &BreadcrumbBar::favoriteToggleRequested, this, [this](const QString& fullPath, const QPoint& globalPos) {
+        if (fullPath.isEmpty() || fullPath == "computer://") return;
+
+        FavoritePanel* favoritePanel = nullptr;
+        for (QWidget* topWidget : QApplication::topLevelWidgets()) {
+            if (topWidget) {
+                favoritePanel = topWidget->findChild<FavoritePanel*>();
+                if (favoritePanel) break;
+            }
+        }
+
+        QMenu menu(this);
+        UiHelper::applyMenuStyle(&menu);
+
+        bool isFav = favoritePanel ? favoritePanel->containsPath(fullPath) : false;
+        QAction* actFav = menu.addAction(isFav ? "取消收藏" : "添加至收藏夹");
+
+        QAction* selected = menu.exec(globalPos);
+        if (selected == actFav && favoritePanel) {
+            if (isFav) {
+                favoritePanel->removeFavoriteItem(fullPath);
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e81123"));
+            } else {
+                favoritePanel->addFavoriteItem(fullPath);
+                favoritePanel->saveFavorites();
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, Style::SuccessGreen);
+            }
+        }
+    });
 
     m_pathStack->installEventFilter(this);
     m_breadcrumbBar->installEventFilter(this);

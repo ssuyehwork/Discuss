@@ -748,6 +748,11 @@ void ContentPanel::updateGridSize() {
         int iconSize = qMax(16, m_zoomLevel - 8);
         m_treeView->setIconSize(QSize(iconSize, iconSize));
 
+        // 缩放时同步通知自定义 Header 更新缩略图对齐基准
+        if (auto* customHeader = qobject_cast<ContentHeaderView*>(m_treeView->header())) {
+            customHeader->setZoomLevel(m_zoomLevel);
+        }
+
         // 动态设置列表项的物理行高为 m_zoomLevel (范围：30px ~ 230px)
         static int lastTreeHeight = -1;
         if (lastTreeHeight != m_zoomLevel) {
@@ -1430,35 +1435,32 @@ void ContentPanel::initListView() {
         "QTreeView QLineEdit { background-color: #2D2D2D; color: #FFFFFF; border: 1px solid #378ADD; border-radius: 6px; padding: 2px; selection-background-color: #378ADD; selection-color: #FFFFFF; }" 
     ); 
  
-    m_treeView->header()->setDefaultAlignment(Qt::AlignCenter);
-    m_treeView->header()->setStyleSheet( 
-        "QHeaderView::section { background-color: #252525; color: #B0B0B0; border: none; border-right: 1px solid #333333; height: 32px; font-size: 11px; }" 
-    ); 
-    
-    // --- 列表表头（Header）列宽固定化重构 ---
     auto* header = m_treeView->header();
-    header->setStretchLastSection(false); // 禁止末端强行拉伸
-    header->setCascadingSectionResizes(false);
+    header->setFixedHeight(32);
+    header->setStretchLastSection(false);
 
-    // 1. 确保所有 7 列均可见，并且彻底隐藏或移除多余的第 7 列（原本的第 7 列已被前移）
     for (int i = 0; i <= 6; ++i) {
         header->setSectionHidden(i, false);
     }
     header->setSectionHidden(7, true);
 
-    // 2. 精确设置各列固定像素宽度（彻底移除“颜色”列，平移后续所有列宽度）
-    header->resizeSection(1, 50);   // 状态 (固定 50px 图标区)
-    header->resizeSection(2, 120);  // 星级 (固定 120px 图标区)
-    header->resizeSection(3, 120);  // 尺寸 (固定 120px)
-    header->resizeSection(4, 80);   // 类型 (固定 80px)
-    header->resizeSection(5, 100);  // 大小 (固定 100px)
-    header->resizeSection(6, 120);  // 修改日期 (固定 120px)
-
-    // 3. 锁定调整模式：第 0 列（名称）弹性自适应拉伸，第 1~6 列物理固定禁止拖拽
+    // 1. 第 0 列（名称）：设为 Stretch，最大化时自动占满所有富余空间，彻底消灭右侧大面积死黑区！
     header->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int i = 1; i <= 6; ++i) {
-        header->setSectionResizeMode(i, QHeaderView::Fixed);
-    }
+
+    // 2. 第 1~6 列（元数据）：设为固定宽度，紧凑排布在最右侧
+    header->setSectionResizeMode(1, QHeaderView::Fixed);
+    header->setSectionResizeMode(2, QHeaderView::Fixed);
+    header->setSectionResizeMode(3, QHeaderView::Fixed);
+    header->setSectionResizeMode(4, QHeaderView::Fixed);
+    header->setSectionResizeMode(5, QHeaderView::Fixed);
+    header->setSectionResizeMode(6, QHeaderView::Fixed);
+
+    header->resizeSection(1, 40);   // 状态
+    header->resizeSection(2, 90);   // 评分
+    header->resizeSection(3, 100);  // 尺寸
+    header->resizeSection(4, 60);   // 类型
+    header->resizeSection(5, 80);   // 大小
+    header->resizeSection(6, 130);  // 修改日期
  
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged); 
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested); 

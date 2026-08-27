@@ -44,9 +44,10 @@ void BreadcrumbBar::setPath(const QString& path) {
     }
 
     for (qsizetype i = 0; i < parts.size(); ++i) {
-        // 添加箭头/分隔符
-        QLabel* sep = new QLabel(">", this);
-        sep->setStyleSheet("color: #555; font-size: 10px; padding: 0 2px;");
+        // 添加箭头/分隔符 (统一采用矢量 SVG 箭头图标)
+        QLabel* sep = new QLabel(this);
+        sep->setPixmap(UiHelper::getIcon("chevron_right", QColor("#AAAAAA"), 12).pixmap(12, 12));
+        sep->setStyleSheet("background: transparent; border: none; padding: 0 1px;");
         m_layout->addWidget(sep);
 
         if (!currentBuildPath.endsWith(QDir::separator())) {
@@ -83,8 +84,12 @@ void BreadcrumbBar::addLevel(const QString& name, const QString& fullPath) {
         "QPushButton:pressed { background: #4E4E52; }"
     );
 
+    btn->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(btn, &QPushButton::clicked, [this, fullPath]() {
         emit pathClicked(fullPath);
+    });
+    connect(btn, &QPushButton::customContextMenuRequested, [this, btn, fullPath](const QPoint& pos) {
+        emit favoriteToggleRequested(fullPath, btn->mapToGlobal(pos));
     });
 
     m_layout->addWidget(btn);

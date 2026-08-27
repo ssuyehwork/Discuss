@@ -1,9 +1,6 @@
 #include "TagRepository.h"
 #include "DatabaseManager.h"
-#include "MetadataManager.h"
-#include <QDebug>
-#include <QFileInfo>
-#include <QDir>
+#include <QDateTime>
 #include <vector>
 #include <string>
 #include <mutex>
@@ -11,16 +8,14 @@
 namespace QuarkMeta {
 
 QList<TagRepository::TagGroup> TagRepository::getAllGroups() {
-    // 确保数据已自动检查与迁移
-    static std::once_flag s_migrateOnce;
-    std::call_once(s_migrateOnce, []() { checkAndMigrate(); });
-
     QList<TagGroup> results;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return results;
 
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
     sqlite3_stmt* stmt = nullptr;
-    const char* sql = "SELECT id, name, color FROM tag_groups ORDER BY sort_order ASC";
+    const char* sql = "SELECT id, name, color FROM tag_groups ORDER BY sort_order ASC, id ASC";
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             TagGroup tg;
@@ -31,9 +26,8 @@ QList<TagRepository::TagGroup> TagRepository::getAllGroups() {
             if (wname) tg.name = QString::fromWCharArray(wname);
             if (wcolor) tg.color = QString::fromWCharArray(wcolor);
 
-            // 读取组内的 tags
             sqlite3_stmt* itemStmt = nullptr;
-            const char* itemSql = "SELECT tag_name FROM tag_group_items WHERE group_id = ?";
+            const char* itemSql = "SELECT tag_name FROM tag_group_items WHERE group_id = ? ORDER BY tag_name ASC";
             if (sqlite3_prepare_v2(db, itemSql, -1, &itemStmt, nullptr) == SQLITE_OK) {
                 sqlite3_bind_int(itemStmt, 1, tg.id);
                 while (sqlite3_step(itemStmt) == SQLITE_ROW) {
@@ -50,18 +44,21 @@ QList<TagRepository::TagGroup> TagRepository::getAllGroups() {
 }
 
 int TagRepository::createGroup(const QString& name, const QString& color) {
-    WriteGuard guard;
+    if (name.trimmed().isEmpty()) return -1;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return -1;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
     sqlite3_stmt* stmt = nullptr;
     const char* sql = "INSERT INTO tag_groups (name, color, sort_order) VALUES (?, ?, (SELECT IFNULL(MAX(sort_order), 0) + 1 FROM tag_groups))";
     int groupId = -1;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text16(stmt, 1, name.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text16(stmt, 1, name.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text16(stmt, 2, color.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
         if (sqlite3_step(stmt) == SQLITE_DONE) {
             groupId = static_cast<int>(sqlite3_last_insert_rowid(db));
+            sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
         }
         sqlite3_finalize(stmt);
     }
@@ -69,28 +66,34 @@ int TagRepository::createGroup(const QString& name, const QString& color) {
 }
 
 bool TagRepository::renameGroup(int groupId, const QString& newName) {
-    WriteGuard guard;
+    if (newName.trimmed().isEmpty()) return false;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
     sqlite3_stmt* stmt = nullptr;
     const char* sql = "UPDATE tag_groups SET name = ? WHERE id = ?";
     bool success = false;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text16(stmt, 1, newName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text16(stmt, 1, newName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 2, groupId);
         success = (sqlite3_step(stmt) == SQLITE_DONE);
         sqlite3_finalize(stmt);
+        if (success) {
+            sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+        }
     }
     return success;
 }
 
 bool TagRepository::deleteGroup(int groupId) {
-    WriteGuard guard;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
     SqlTransaction trans(db);
+
     sqlite3_stmt* stmt1 = nullptr;
     sqlite3_stmt* stmt2 = nullptr;
     bool ok1 = false;
@@ -109,41 +112,48 @@ bool TagRepository::deleteGroup(int groupId) {
     }
 
     if (ok1 && ok2) {
-        return trans.commit();
+        bool res = trans.commit();
+        if (res) sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+        return res;
     }
     return false;
 }
 
 bool TagRepository::addTagToGroup(const QString& tagName, int groupId) {
-    WriteGuard guard;
+    if (tagName.trimmed().isEmpty() || groupId <= 0) return false;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
+    // 先确保该标签在 tags 主表中存在
+    createTag(tagName.trimmed());
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
     sqlite3_stmt* stmt = nullptr;
-    const char* sql = "INSERT INTO tag_group_items (group_id, tag_name) SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM tag_group_items WHERE group_id = ? AND tag_name = ?)";
+    const char* sql = "INSERT INTO tag_group_items (group_id, tag_name) VALUES (?, ?) ON CONFLICT(group_id, tag_name) DO NOTHING;";
     bool success = false;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
         sqlite3_bind_int(stmt, 1, groupId);
-        sqlite3_bind_text16(stmt, 2, tagName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 3, groupId);
-        sqlite3_bind_text16(stmt, 4, tagName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text16(stmt, 2, tagName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
         success = (sqlite3_step(stmt) == SQLITE_DONE);
         sqlite3_finalize(stmt);
+        if (success) sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
     }
     return success;
 }
 
 bool TagRepository::removeTagFromGroup(const QString& tagName, int groupId) {
-    WriteGuard guard;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
     sqlite3_stmt* stmt = nullptr;
     bool success = false;
-    if (groupId == -1) {
+    if (groupId <= 0) {
         const char* sql = "DELETE FROM tag_group_items WHERE tag_name = ?";
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text16(stmt, 1, tagName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text16(stmt, 1, tagName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
             success = (sqlite3_step(stmt) == SQLITE_DONE);
             sqlite3_finalize(stmt);
         }
@@ -151,55 +161,141 @@ bool TagRepository::removeTagFromGroup(const QString& tagName, int groupId) {
         const char* sql = "DELETE FROM tag_group_items WHERE group_id = ? AND tag_name = ?";
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
             sqlite3_bind_int(stmt, 1, groupId);
-            sqlite3_bind_text16(stmt, 2, tagName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text16(stmt, 2, tagName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
             success = (sqlite3_step(stmt) == SQLITE_DONE);
             sqlite3_finalize(stmt);
         }
     }
+    if (success) sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
     return success;
 }
 
-void TagRepository::checkAndMigrate() {
-    sqlite3* globalDb = DatabaseManager::instance().getGlobalDb();
-    if (!globalDb) return;
+bool TagRepository::createTag(const QString& tagName, const QString& color) {
+    if (tagName.trimmed().isEmpty()) return false;
 
-    // 1. 优先强标记检查
-    bool migrationCompleted = false;
-    sqlite3_stmt* checkStmt = nullptr;
-    const char* checkSql = "SELECT value FROM system_stats WHERE key = 'tag_migration_completed'";
-    if (sqlite3_prepare_v2(globalDb, checkSql, -1, &checkStmt, nullptr) == SQLITE_OK) {
-        if (sqlite3_step(checkStmt) == SQLITE_ROW) {
-            migrationCompleted = (sqlite3_column_int(checkStmt, 0) == 1);
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const char* sql = 
+        "INSERT INTO tags (name, color, last_used, use_count) VALUES (?, ?, ?, 1) "
+        "ON CONFLICT(name) DO UPDATE SET last_used = excluded.last_used, use_count = use_count + 1;";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text16(stmt, 1, tagName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text16(stmt, 2, color.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmt, 3, now);
+        int rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        if (rc == SQLITE_DONE) {
+            sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+            return true;
         }
-        sqlite3_finalize(checkStmt);
+    }
+    return false;
+}
+
+bool TagRepository::deleteTag(const QString& tagName) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    SqlTransaction trans(db);
+
+    sqlite3_stmt* stmt1 = nullptr;
+    sqlite3_stmt* stmt2 = nullptr;
+
+    if (sqlite3_prepare_v2(db, "DELETE FROM tags WHERE name = ?", -1, &stmt1, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text16(stmt1, 1, tagName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt1);
+        sqlite3_finalize(stmt1);
     }
 
-    if (migrationCompleted) {
-        return; // 已完成迁移，直接跳过
+    if (sqlite3_prepare_v2(db, "DELETE FROM tag_group_items WHERE tag_name = ?", -1, &stmt2, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text16(stmt2, 1, tagName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt2);
+        sqlite3_finalize(stmt2);
     }
 
-    // 2. 检查全局库中是否已有数据，以防止覆盖
-    bool globalHasGroups = false;
-    sqlite3_stmt* gGroupStmt = nullptr;
-    if (sqlite3_prepare_v2(globalDb, "SELECT 1 FROM tag_groups LIMIT 1", -1, &gGroupStmt, nullptr) == SQLITE_OK) {
-        if (sqlite3_step(gGroupStmt) == SQLITE_ROW) {
-            globalHasGroups = true;
+    bool res = trans.commit();
+    if (res) sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+    return res;
+}
+
+bool TagRepository::renameTag(const QString& oldName, const QString& newName) {
+    if (oldName.trimmed().isEmpty() || newName.trimmed().isEmpty() || oldName == newName) return false;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    SqlTransaction trans(db);
+
+    sqlite3_stmt* stmt1 = nullptr;
+    sqlite3_stmt* stmt2 = nullptr;
+
+    if (sqlite3_prepare_v2(db, "UPDATE tags SET name = ? WHERE name = ?", -1, &stmt1, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text16(stmt1, 1, newName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text16(stmt1, 2, oldName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt1);
+        sqlite3_finalize(stmt1);
+    }
+
+    if (sqlite3_prepare_v2(db, "UPDATE tag_group_items SET tag_name = ? WHERE tag_name = ?", -1, &stmt2, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text16(stmt2, 1, newName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text16(stmt2, 2, oldName.trimmed().toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt2);
+        sqlite3_finalize(stmt2);
+    }
+
+    bool res = trans.commit();
+    if (res) sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+    return res;
+}
+
+QStringList TagRepository::getAllMasterTags() {
+    QStringList result;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return result;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT name FROM tags ORDER BY last_used DESC, name ASC";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const wchar_t* wname = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 0));
+            if (wname) result << QString::fromWCharArray(wname);
         }
-        sqlite3_finalize(gGroupStmt);
+        sqlite3_finalize(stmt);
     }
+    return result;
+}
 
-    (void)globalHasGroups;
+QStringList TagRepository::getRecentTags(int limit) {
+    QStringList result;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return result;
 
-    // 4. 写入强标记，即使没有历史数据
-    sqlite3_stmt* markerStmt = nullptr;
-    const char* markerSql = "INSERT OR REPLACE INTO system_stats (key, value) VALUES ('tag_migration_completed', 1)";
-    if (sqlite3_prepare_v2(globalDb, markerSql, -1, &markerStmt, nullptr) == SQLITE_OK) {
-        sqlite3_step(markerStmt);
-        sqlite3_finalize(markerStmt);
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT name FROM tags WHERE last_used > 0 ORDER BY last_used DESC LIMIT ?";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, limit);
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const wchar_t* wname = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 0));
+            if (wname) result << QString::fromWCharArray(wname);
+        }
+        sqlite3_finalize(stmt);
     }
-    // 并写入脏标记确保落盘
-    DatabaseManager::instance().setDirty(true);
-    DatabaseManager::instance().flushAll();
+    return result;
+}
+
+void TagRepository::recordTagUsage(const QString& tagName) {
+    createTag(tagName);
 }
 
 } // namespace QuarkMeta

@@ -4,9 +4,8 @@
 #include "../core/ItemRecord.h"
 #include <QMap>
 #include <unordered_map>
-#include <deque>
 #include <vector>
-#include <QCache>
+#include <QList>
 #include <QStringList>
 #include <QTimer>
 #include <QWidget>
@@ -14,8 +13,6 @@
 #include <QTreeView>
 #include <QStackedWidget>
 #include <QPushButton>
-#include <QTextBrowser>
-#include <QStandardItemModel>
 #include <QSortFilterProxyModel>
 #include <QVBoxLayout>
 #include <QStyledItemDelegate>
@@ -30,8 +27,6 @@
 
 namespace QuarkMeta {
 
-struct RuntimeMeta;
-
 /**
  * @brief 内部代理类：专门处理高级筛选逻辑 (2026-05-25 物理化以修复 static_cast 编译报错)
  */
@@ -43,14 +38,14 @@ public:
     FilterState currentFilter;
 
     void updateFilter();
+    void setCachedDuplicatePaths(const QSet<QString>& paths);
 
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
     bool lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const override;
 
 private:
-    void recomputeDuplicateCache();
-    std::unordered_set<QString> m_cachedDuplicatePaths; // 缓存当前所有重复项的路径集合
+    QSet<QString> m_cachedDuplicatePaths; // 纯内存集合，主线程 0 磁盘 I/O
 };
 
 /**
@@ -62,14 +57,16 @@ class ContentPanel : public QFrame {
 
 public:
     enum class DataSourceType {
-        DiskNav,        // 1. 物理磁盘导航模式 (如 D:\Photos，随点随看，离散 JSON 缓存)
-        UserCategory,   // 2. 用户自定义逻辑分类 (如 "商业设计原稿"，ID > 0)
-        SystemCategory, // 3. 系统逻辑桶 (全部数据, 未分类, 垃圾桶, 最近访问)
-        PathList        // 4. 临时路径列表 (搜索结果, 标签筛选)
+        DiskNav,        // 物理磁盘导航模式
+        PathList        // 临时路径列表 (搜索结果, 标签筛选)
     };
 
+    /**
+     * @brief 判定当前上下文是否允许执行粘贴操作（用于菜单置灰与快捷键拦截）
+     */
+    bool canPaste(const QString& targetOverride = QString()) const;
+
     DataSourceType dataSourceType() const;
-    int currentCategoryId() const { return m_currentCategoryId; }
     bool isContextMenuActive() const { return m_isContextMenuActive; }
 
     enum SortType {
@@ -103,7 +100,6 @@ public:
         ActionNewFolder,
         ActionNewMd,
         ActionNewTxt,
-        ActionCategorize,
         ActionPin,
         ActionUnpin,
         ActionColorTag,
@@ -123,10 +119,9 @@ public:
         ActionEmptyTrash,
         ActionCopyName,
         ActionCopyPath,
-        ActionAddToCategory,
         ActionAddToFavorites,
         ActionRefresh,
-        ActionCancelImport,
+        ActionReextractThumbnail,
         ActionBatchCreate
     };
 
@@ -141,7 +136,7 @@ public:
      * @param path 绝对物理路径
      */
     void selectAndScrollToPath(const QString& path);
-    void selectAndScrollToItem(const QString& type, const QString& path, int categoryId);
+    void selectAndScrollToItem(const QString& path);
 
     /**
      * @brief 切换视图模式
@@ -158,9 +153,26 @@ public:
     QAbstractItemModel* model() const { return m_model; }
     QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
     QModelIndexList getSelectedIndexes() const {
-        return (m_viewStack->currentWidget() == m_gridView) ? 
-                m_gridView->selectionModel()->selectedIndexes() : 
-                m_treeView->selectionModel()->selectedIndexes();
+        if (!m_viewStack) return {};
+        bool isGrid = (m_viewStack->currentWidget() == m_gridView);
+        QItemSelectionModel* selModel = isGrid ? m_gridView->selectionModel() : m_treeView->selectionModel();
+        if (!selModel) return {};
+
+        if (isGrid) {
+            // 网格视图 (GridView/JustifiedView): 提取 column == 0 的单元格索引，保证在卡片模式下正确获取选中项
+            QModelIndexList result;
+            const QModelIndexList selected = selModel->selectedIndexes();
+            result.reserve(selected.size());
+            for (const QModelIndex& idx : selected) {
+                if (idx.column() == 0) {
+                    result.append(idx);
+                }
+            }
+            return result;
+        } else {
+            // 列表视图 (TreeView): 高并发防卡死，仅获取第 0 列行索引
+            return selModel->selectedRows(0);
+        }
     }
 
     /**
@@ -213,7 +225,6 @@ private:
     void restoreActiveView();
     void restoreSelections();
     void initListView();
-    void setupContextMenu();
     void updateLayersButtonState();
 
     /**
@@ -226,11 +237,9 @@ private:
     QVBoxLayout* m_mainLayout = nullptr;
     QStackedWidget* m_viewStack = nullptr;
     QPushButton* m_btnLayers = nullptr;
-    QPushButton* m_btnLayersBlue = nullptr;
-    QPushButton* m_btnToggleFolders = nullptr; // 2026-07-xx 按照 Plan-73：显示/隐藏文件夹切换
-    QPushButton* m_btnToggleFiles = nullptr;   // 2026-07-xx 按照 Plan-73：显示/隐藏文件切换
-    QTextBrowser* m_textPreview = nullptr;
-    QLabel* m_imagePreview = nullptr;
+    QPushButton* m_btnToggleHidden = nullptr;  // 左侧：显示/隐藏属性为隐藏的项目
+    QPushButton* m_btnToggleFolders = nullptr; // 显示/隐藏文件夹切换
+    QPushButton* m_btnToggleFiles = nullptr;   // 显示/隐藏文件切换
 
     // 视图组件
     QAbstractItemView* m_gridView = nullptr;
@@ -251,12 +260,11 @@ public:
     QString m_currentPath;
     QSet<QString> m_pendingSelectNames;
     bool m_isPendingEdit = false;
-    int m_currentCategoryId = -1;
     QString m_currentCategoryType; // 用于驱动差异化右键菜单
     bool m_isRecursive = false;
-    bool m_isCategoryRecursive = false;
     bool m_showFolders = true;
     bool m_showFiles = true;
+    bool m_showHidden = false;
     ViewMode m_currentViewMode = GridView;
     SortType m_sortType = SortByName;
     Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
@@ -264,32 +272,17 @@ public:
     bool m_isContextMenuActive = false;
     std::atomic<int> m_loadRequestId{0}; // 2026-07-xx 物理请求 ID：防止异步回调导致的视图内容乱跳
 
-    // --- 2026-06-xx 性能优化：递归扫描指纹缓存 ---
-    struct ScanCacheEntry {
-        qint64 lastModified; // 根目录的时间戳
-        std::vector<ItemRecord> records;
-    };
-    QMap<QString, ScanCacheEntry> m_recursiveCache; 
     QTimer* m_selectionTimer = nullptr; // 选中防抖定时器
+    void emitSelectionChangedSignal();
     void updateGridSize();
     void updateStatusBarStats();
     void recalculateAndEmitStats();
 
     /**
      * @brief 统一判断粘贴/拖拽导入的目的地。
-     * @param outCatId 输出参数：解析出的目标分类 ID（DiskNav 场景下无意义，忽略）
      * @return true 表示可以继续执行导入；false 表示应终止（已在内部完成提示或已被用户取消）
      */
-    bool resolvePasteDestination(int& outCatId);
-
-    void addItemsFromDirectory(const QString& path, bool recursive,
-                               QMap<int, int>& ratingCounts,
-                               QMap<QString, int>& colorCounts,
-                               QMap<QString, int>& tagCounts,
-                               QMap<QString, int>& typeCounts,
-                               QMap<QString, int>& createDateCounts,
-                               QMap<QString, int>& modifyDateCounts,
-                               int& noTagCount);
+    bool resolvePasteDestination();
 
 public slots:
     /**
@@ -356,11 +349,6 @@ public slots:
     void createNewItem(const QString& type);
 
     /**
-     * @brief 预览文件内容 (支持文本、Markdown、图片等)
-     */
-    void previewFile(const QString& path);
-
-    /**
      * @brief 加载指定路径列表 (分类联动使用)
      * @param reqId 可选的请求 ID。若为 0，则自动生成新 ID。
      */
@@ -380,9 +368,7 @@ public slots:
     /**
      * @brief 2026-06-xx 彻底重构：加载分类及其子项 (分类 ID 联动)
      */
-    void loadCategory(int categoryId);
     void loadCategory(const QString& categoryType);
-    void loadCategories(const QList<int>& categoryIds);
 
     /**
      * @brief 获取/设置当前分类类型，用于驱动右键菜单差异化
@@ -391,17 +377,6 @@ public slots:
     void setCurrentCategoryType(const QString& type) { m_currentCategoryType = type; }
 
 signals:
-    /**
-     * @brief 在内存模式下，请求在指定分类下创建 logical 子分类（对应用户原话：“在内存模式下，请求在指定分类下创建逻辑子分类”）
-     */
-    void requestCreateSubCategory(int parentCategoryId);
-
-signals:
-    /**
-     * @brief 当在内容区点击子分类时触发，告知 MainWindow 切换侧边栏选中状态
-     */
-    void categoryClicked(int categoryId);
-
     /**
      * @brief 状态栏统计信息信号
      * @param fileCount 文件数量

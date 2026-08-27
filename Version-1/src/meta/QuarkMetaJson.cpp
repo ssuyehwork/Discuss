@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDir>
+#include <mutex>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -47,7 +48,26 @@ bool QuarkMetaJson::load() {
     if (root.contains("items") && root.value("items").isObject()) {
         QJsonObject itemsObj = root.value("items").toObject();
         for (auto it = itemsObj.begin(); it != itemsObj.end(); ++it) {
-            m_items[toStdWString(it.key())] = entryToItem(it.value().toObject());
+            std::wstring key = toStdWString(it.key());
+            ItemMeta item = entryToItem(it.value().toObject());
+            auto existingIt = m_items.find(key);
+            if (existingIt != m_items.end()) {
+                if (item.rating > 0) existingIt->second.rating = item.rating;
+                if (!item.color.empty()) existingIt->second.color = item.color;
+                if (!item.autoColor.empty()) existingIt->second.autoColor = item.autoColor;
+                if (!item.tags.empty()) existingIt->second.tags = item.tags;
+                if (item.pinned) existingIt->second.pinned = item.pinned;
+                if (!item.note.empty()) existingIt->second.note = item.note;
+                if (!item.url.empty()) existingIt->second.url = item.url;
+                if (item.encrypted) existingIt->second.encrypted = item.encrypted;
+                if (item.width > 0) existingIt->second.width = item.width;
+                if (item.height > 0) existingIt->second.height = item.height;
+                if (item.thumbStatus > 0) existingIt->second.thumbStatus = item.thumbStatus;
+                if (item.addedAt > 0) existingIt->second.addedAt = item.addedAt;
+                if (!item.palettes.empty()) existingIt->second.palettes = item.palettes;
+            } else {
+                m_items[key] = item;
+            }
         }
     }
     return true;
@@ -154,38 +174,48 @@ void QuarkMetaJson::updateItemMeta(const std::wstring& filePath, std::function<v
 }
 
 bool QuarkMetaJson::migrateItemMetadata(const QString& oldFilePath, const QString& newFilePath) { 
-    if (oldFilePath == newFilePath) return true; 
- 
-    QFileInfo oldInfo(oldFilePath); 
-    QFileInfo newInfo(newFilePath); 
- 
-    QString oldParent = QDir::toNativeSeparators(oldInfo.absolutePath()); 
-    QString newParent = QDir::toNativeSeparators(newInfo.absolutePath()); 
-    std::wstring oldFileName = oldInfo.fileName().toStdWString(); 
-    std::wstring newFileName = newInfo.fileName().toStdWString(); 
- 
-    // 1. 从源目录的 .QuarkMeta.json 读取元数据 
-    QuarkMetaJson oldJson(oldParent.toStdWString()); 
-    if (!oldJson.load()) return false; 
- 
-    auto& oldItems = oldJson.items(); 
-    auto it = oldItems.find(oldFileName); 
-    if (it == oldItems.end()) { 
-        // 源目录无特殊元数据，无需迁移 
-        return true; 
-    } 
- 
-    ItemMeta metaCopy = it->second; // 完整复制元数据（星级、颜色、标签、备注等） 
- 
-    // 2. 从源目录抹除该条目并物理保存 
-    oldItems.erase(it); 
-    oldJson.save(); 
- 
-    // 3. 将元数据注入到目标目录的 .QuarkMeta.json 
-    QuarkMetaJson newJson(newParent.toStdWString()); 
-    newJson.load(); // 加载或自动初始化 
-    newJson.items()[newFileName] = metaCopy; 
-    return newJson.save(); // 100% 物理落盘并保持隐藏属性 
+    return roamItemMetadata(oldFilePath, newFilePath, true);
+}
+
+bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove) {
+    if (oldFilePath == newFilePath) return true;
+
+    QFileInfo oldInfo(oldFilePath);
+    QFileInfo newInfo(newFilePath);
+
+    QString oldParent = QDir::toNativeSeparators(oldInfo.absolutePath());
+    QString newParent = QDir::toNativeSeparators(newInfo.absolutePath());
+    std::wstring oldFileName = oldInfo.fileName().toStdWString();
+    std::wstring newFileName = newInfo.fileName().toStdWString();
+
+    static std::mutex s_jsonRoamMutex;
+    std::lock_guard<std::mutex> lock(s_jsonRoamMutex);
+
+    // 1. 从源目录 .QuarkMeta.json 提取完整元数据包
+    QuarkMetaJson oldJson(oldParent.toStdWString());
+    if (!oldJson.load()) return false;
+
+    auto& oldItems = oldJson.items();
+    auto it = oldItems.find(oldFileName);
+    if (it == oldItems.end()) {
+        // 源文件无任何用户标记或尺寸，无需转移
+        return true;
+    }
+
+    // 2. 整包深拷贝（星级、颜色、标签、尺寸、宽高比、备注、链接、失败状态等 100% 完整继承）
+    ItemMeta metaPackage = it->second;
+
+    // 3. 如果是【移动 (Move)】，从源 JSON 中抹除该条目并落盘
+    if (isMove) {
+        oldItems.erase(it);
+        oldJson.save();
+    }
+
+    // 4. 写入目标目录 .QuarkMeta.json 并物理原子落盘
+    QuarkMetaJson newJson(newParent.toStdWString());
+    newJson.load();
+    newJson.items()[newFileName] = metaPackage;
+    return newJson.save();
 }
 
 bool QuarkMetaJson::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
@@ -225,8 +255,6 @@ QJsonObject QuarkMetaJson::folderToEntry(const FolderMeta& meta) {
     obj.insert("note", toQString(meta.note));
     obj.insert("url", toQString(meta.url));
     obj.insert("encrypted", meta.encrypted);
-    // 🚨 保持兼容性：磁盘上存储的旧版 JSON 配置文件依然使用 "file_id_128"，内存映射使用统一的 folderId
-    obj.insert("file_id_128", QString::fromStdString(meta.folderId));
     QJsonArray tagsArr; for (const auto& t : meta.tags) tagsArr.append(toQString(t));
     obj.insert("tags", tagsArr);
     if (!meta.palettes.empty()) {
@@ -254,7 +282,6 @@ FolderMeta QuarkMetaJson::entryToFolder(const QJsonObject& obj) {
     meta.note = toStdWString(obj.value("note").toString());
     meta.url = toStdWString(obj.value("url").toString());
     meta.encrypted = obj.value("encrypted").toBool();
-    meta.folderId = obj.value("file_id_128").toString().toStdString();
     if (obj.contains("tags") && obj.value("tags").isArray()) {
         for (const auto& v : obj.value("tags").toArray()) meta.tags.push_back(toStdWString(v.toString()));
     }
@@ -279,20 +306,16 @@ QJsonObject QuarkMetaJson::itemToEntry(const ItemMeta& meta) {
     obj.insert("note", toQString(meta.note));
     obj.insert("url", toQString(meta.url));
     obj.insert("encrypted", meta.encrypted);
-    obj.insert("encrypt_salt", QString::fromStdString(meta.encryptSalt));
-    obj.insert("encrypt_iv", QString::fromLatin1(QByteArray::fromStdString(meta.encryptIv).toBase64()));
-    obj.insert("encrypt_verify_hash", QString::fromStdString(meta.encryptVerifyHash));
     obj.insert("original_name", toQString(meta.originalName));
     obj.insert("volume", toQString(meta.volume));
     obj.insert("frn", toQString(meta.frn));
-    // 🚨 保持兼容性：磁盘上存储的旧版 JSON 配置文件依然使用 "file_id_128"，内存映射使用统一的 folderId
-    obj.insert("file_id_128", QString::fromStdString(meta.folderId));
-    
+
     // 2026-07-xx 1:1对等字段写入
     obj.insert("width", meta.width);
     obj.insert("height", meta.height);
     obj.insert("auto_color", toQString(meta.autoColor));
     obj.insert("added_at", meta.addedAt);
+    if (meta.thumbStatus > 0) obj.insert("thumb_status", meta.thumbStatus);
 
     QJsonArray tagsArr; for (const auto& t : meta.tags) tagsArr.append(toQString(t));
     obj.insert("tags", tagsArr);
@@ -320,19 +343,16 @@ ItemMeta QuarkMetaJson::entryToItem(const QJsonObject& obj) {
     meta.note = toStdWString(obj.value("note").toString());
     meta.url = toStdWString(obj.value("url").toString());
     meta.encrypted = obj.value("encrypted").toBool();
-    meta.encryptSalt = obj.value("encrypt_salt").toString().toStdString();
-    meta.encryptIv = QByteArray::fromBase64(obj.value("encrypt_iv").toString().toLatin1()).toStdString();
-    meta.encryptVerifyHash = obj.value("encrypt_verify_hash").toString().toStdString();
     meta.originalName = toStdWString(obj.value("original_name").toString());
     meta.volume = toStdWString(obj.value("volume").toString());
     meta.frn = toStdWString(obj.value("frn").toString());
-    meta.folderId = obj.value("file_id_128").toString().toStdString();
 
     // 2026-07-xx 1:1对等字段读取
     meta.width = obj.value("width").toInt(0);
     meta.height = obj.value("height").toInt(0);
     meta.autoColor = toStdWString(obj.value("auto_color").toString());
     meta.addedAt = obj.value("added_at").toVariant().toLongLong();
+    meta.thumbStatus = obj.value("thumb_status").toInt(0);
 
     if (obj.contains("tags") && obj.value("tags").isArray()) {
         for (const auto& v : obj.value("tags").toArray()) meta.tags.push_back(toStdWString(v.toString()));

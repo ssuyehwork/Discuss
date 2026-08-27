@@ -13,6 +13,7 @@ class ColorPill : public QWidget {
 public:
     explicit ColorPill(const QColor& color, float ratio, QWidget* parent = nullptr);
     void setData(const QColor& color, float ratio);
+    QColor color() const { return m_color; }
 signals:
     void colorSelected(const QColor& color);
     void requestSetAsPrimary(const QColor& color);

@@ -371,10 +371,15 @@ void ColorStripPicker::paintEvent(QPaintEvent* event) {
     for (int i = 0; i < m_items.size(); ++i) {
         int cx = startX + i * (14 + m_spacing) + m_circleRadius;
         
-        // 1. 绘制色块本身
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(m_items[i].color);
-        painter.drawEllipse(QPoint(cx, y), m_circleRadius, m_circleRadius);
+        // 1. 绘制色块本身（第一个无颜色选项采用标准的 no_color 图标）
+        if (i == 0) {
+            QRect iconRect(cx - m_circleRadius, y - m_circleRadius, m_circleRadius * 2, m_circleRadius * 2);
+            UiHelper::getIcon("no_color", m_items[i].color, m_circleRadius * 2).paint(&painter, iconRect);
+        } else {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(m_items[i].color);
+            painter.drawEllipse(QPoint(cx, y), m_circleRadius, m_circleRadius);
+        }
         
         // 2. 悬停状态：绘制突出亮白圈
         if (i == m_hoveredIndex) {

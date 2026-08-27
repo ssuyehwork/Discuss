@@ -8,20 +8,43 @@ namespace QuarkMeta {
 
 TagPill::TagPill(const QString& text, QWidget* parent) : QWidget(parent), m_text(text) {
     setFixedHeight(22);
+    setAttribute(Qt::WA_StyledBackground, true);
+
     QHBoxLayout* layout = new QHBoxLayout(this);
     layout->setContentsMargins(8, 0, 4, 0);
     layout->setSpacing(4);
+
     m_label = new QLabel(text, this);
     m_label->setStyleSheet("color: #EEEEEE; font-size: 12px; border: none; background: transparent;");
-    m_closeBtn = new QPushButton(this);
-    m_closeBtn->setFixedSize(14, 14);
-    m_closeBtn->setCursor(Qt::PointingHandCursor);
-    m_closeBtn->setIcon(UiHelper::getIcon("close", QColor("#B0B0B0"), 12));
-    m_closeBtn->setIconSize(QSize(10, 10));
-    m_closeBtn->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #3E3E42; border-radius: 2px; }");
+    
+    // 显眼突出“×”号：增大图标、提升常规状态对比度与悬停反馈 
+    m_closeBtn = new QPushButton(this); 
+    m_closeBtn->setFixedSize(16, 16); 
+    m_closeBtn->setCursor(Qt::PointingHandCursor); 
+    m_closeBtn->setIcon(UiHelper::getIcon("close", QColor("#FFFFFF"), 14)); 
+    m_closeBtn->setIconSize(QSize(12, 12)); 
+    m_closeBtn->setStyleSheet( 
+        "QPushButton {" 
+        "  border: none;" 
+        "  background: rgba(255, 255, 255, 0.1);" 
+        "  border-radius: 8px;" 
+        "  padding: 0px;" 
+        "}" 
+        "QPushButton:hover {" 
+        "  background-color: #E81123;" 
+        "}" 
+        "QPushButton:pressed {" 
+        "  background-color: #A50000;" 
+        "}" 
+    );
+
     layout->addWidget(m_label);
     layout->addWidget(m_closeBtn);
-    connect(m_closeBtn, &QPushButton::clicked, [this]() { emit deleteRequested(m_text); });
+
+    connect(m_closeBtn, &QPushButton::clicked, [this]() {
+        emit deleteRequested(m_text);
+    });
+
     setData(text);
 }
 
@@ -30,7 +53,7 @@ void TagPill::setData(const QString& text) {
     setProperty("tagText", text);
     m_label->setText(text);
     QFontMetrics fm(m_label->font());
-    setFixedWidth(fm.horizontalAdvance(text) + 30);
+    setFixedWidth(fm.horizontalAdvance(text) + 32);
 }
 
 void TagPill::paintEvent(QPaintEvent*) {
@@ -38,7 +61,8 @@ void TagPill::paintEvent(QPaintEvent*) {
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setBrush(QColor("#2D2D30"));
     painter.setPen(QPen(QColor("#3E3E42"), 1));
-    painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 2, 2);
+    // 严格绘制 4 像素标准圆角
+    painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 4, 4);
 }
 
 } // namespace QuarkMeta
