@@ -85,11 +85,12 @@ private:
 
 ```cpp
 #include "TaskProgressController.h"
-#include "UiHelper.h"
+#include "StyleLibrary.h"
 #include <QVBoxLayout>
 #include <algorithm>
 
 namespace QuarkMeta {
+using namespace Style;
 
 TaskProgressController::TaskProgressController(QWidget* parentWidget, QWidget* anchorWidget, QLabel* statusLabel, QObject* parent)
     : QObject(parent), m_statusLabel(statusLabel) {

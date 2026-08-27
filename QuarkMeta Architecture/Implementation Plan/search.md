@@ -8,9 +8,10 @@ Key features and strict requirements:
 1. **Two-stage construction**:
    - **Stage 1 (`SearchController(QWidget* parent)`)**: Constructs UI components (`m_searchContainer`, `m_searchEdit`, `m_searchTimer`, `m_searchHistoryPanel`). Called during `initToolbar()`.
    - **Stage 2 (`bindContentPanel(ContentPanel* contentPanel)`)**: Binds `doSearch`, connects signals, and installs event filters after `ContentPanel` is instantiated. Called during `initUi()` after `setupSplitters()`.
-2. Public accessor `searchEdit()` provided for `GlobalShortcutController`, `PanelMediator`, `unifiedNavigateTo()`, and `changeEvent()` to access `QLineEdit*` without breaking existing behavior.
-3. Signal `searchExecuted()` emitted to trigger `MainWindow::updateStatusBar()`, preserving double-status-update behavior exactly as is.
-4. `SearchController` registered in `CMakeLists.txt`.
+2. Public accessor `searchEdit()` provided for `GlobalShortcutController`, `PanelMediator`, `unifiedNavigateTo()`, and `changeEvent()` to access `QLineEdit*` without breaking existing behavior. Includes necessary forward declaration / header includes (`#include "SearchController.h"`) in callers (`GlobalShortcutController.cpp`, `PanelMediator.cpp`).
+3. Correct inclusion of `#include "StyleLibrary.h"` and `using namespace Style;` to resolve `qssColor`, `PrimaryBlue`, `BackgroundDeep`, `BorderColor`, `TextMain`, `TextMuted`.
+4. Signal `searchExecuted()` emitted to trigger `MainWindow::updateStatusBar()`, preserving double-status-update behavior exactly as is.
+5. `SearchController` registered in `CMakeLists.txt`.
 
 ---
 
@@ -20,8 +21,8 @@ Key features and strict requirements:
 3. `src/ui/SearchController.cpp` (New File)
 4. `src/ui/MainWindow.h` (Remove extracted 4 search members, add `SearchController* m_searchController`)
 5. `src/ui/MainWindow.cpp` (Delegate search toolbar creation and binding to `SearchController`, update references to `m_searchEdit` to `m_searchController->searchEdit()`, remove `watched == m_searchEdit` from `eventFilter()`)
-6. `src/ui/GlobalShortcutController.cpp` (Update `m_mainWindow->m_searchEdit` reference to `m_mainWindow->m_searchController->searchEdit()`)
-7. `src/ui/PanelMediator.cpp` (Update `m_mainWindow->m_searchEdit` reference to `m_mainWindow->m_searchController->searchEdit()`)
+6. `src/ui/GlobalShortcutController.cpp` (Include `SearchController.h`, update `m_mainWindow->m_searchEdit` reference to `m_mainWindow->m_searchController->searchEdit()`)
+7. `src/ui/PanelMediator.cpp` (Include `SearchController.h`, update `m_mainWindow->m_searchEdit` reference to `m_mainWindow->m_searchController->searchEdit()`)
 
 ---
 
@@ -100,9 +101,11 @@ private:
 #include "ContentPanel.h"
 #include "SearchHistoryService.h"
 #include "UiHelper.h"
+#include "StyleLibrary.h"
 #include <QHBoxLayout>
 
 namespace QuarkMeta {
+using namespace Style;
 
 SearchController::SearchController(QWidget* parent)
     : QObject(parent) {
@@ -119,7 +122,7 @@ SearchController::SearchController(QWidget* parent)
     m_searchEdit->setStyleSheet(QString(
         "QLineEdit { background-color: %1; border: 1px solid %2; border-radius: 4px; padding-left: 8px; color: %3; font-size: 12px; }"
         "QLineEdit:focus { border-color: %4; }"
-    ).arg(qssColor(BgLayer3), qssColor(BorderColor), qssColor(TextMain), qssColor(PrimaryBlue)));
+    ).arg(qssColor(BackgroundDeep), qssColor(BorderColor), qssColor(TextMain), qssColor(PrimaryBlue)));
 
     searchLayout->addWidget(m_searchEdit);
 
@@ -325,7 +328,7 @@ class SearchController;
     m_searchEdit->setStyleSheet(QString(
         "QLineEdit { background-color: %1; border: 1px solid %2; border-radius: 4px; padding-left: 8px; color: %3; font-size: 12px; }"
         "QLineEdit:focus { border-color: %4; }"
-    ).arg(qssColor(BgLayer3), qssColor(BorderColor), qssColor(TextMain), qssColor(PrimaryBlue)));
+    ).arg(qssColor(BackgroundDeep), qssColor(BorderColor), qssColor(TextMain), qssColor(PrimaryBlue)));
 
     searchLayout->addWidget(m_searchEdit);
 =======
@@ -375,6 +378,17 @@ class SearchController;
 
 ```diff
 <<<<<<< SEARCH
+#include "GlobalShortcutController.h"
+#include "MainWindow.h"
+=======
+#include "GlobalShortcutController.h"
+#include "MainWindow.h"
+#include "SearchController.h"
+>>>>>>> REPLACE
+```
+
+```diff
+<<<<<<< SEARCH
     // 4. Ctrl+F: 聚焦搜索过滤框
     if (event->key() == Qt::Key_F && (event->modifiers() & Qt::ControlModifier)) {
         if (m_mainWindow->m_searchEdit) {
@@ -400,6 +414,17 @@ class SearchController;
 ---
 
 ### 3.7 `src/ui/PanelMediator.cpp`
+
+```diff
+<<<<<<< SEARCH
+#include "PanelMediator.h"
+#include "MainWindow.h"
+=======
+#include "PanelMediator.h"
+#include "MainWindow.h"
+#include "SearchController.h"
+>>>>>>> REPLACE
+```
 
 ```diff
 <<<<<<< SEARCH
