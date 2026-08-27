@@ -66,9 +66,14 @@ void TrayController::onShowMainWindow() {
 }
 
 void TrayController::onQuitApp() {
-    if (m_trayIcon) m_trayIcon->hide();
-    // 严禁在此处调用 DatabaseManager::shutdown()，统一交给 main.cpp 集中调度
-    QApplication::quit();
+    if (m_trayIcon) {
+        m_trayIcon->hide();
+    }
+    if (m_mainWindow) {
+        m_mainWindow->close();
+    }
+    // 强制通知 Qt 主事件循环以状态码 0 顺畅退出，触发现发 aboutToQuit 数据库与线程池清场机制
+    QApplication::exit(0);
 }
 
 } // namespace QuarkMeta
