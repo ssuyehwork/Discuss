@@ -37,17 +37,13 @@
 2. **UI 主线程零 I/O 判重保护红线**：哈希计算与全量判重集合生成全权移交至 `QtConcurrent` 后台工作线程处理。
 
 ### 核心解耦与单一职责架构顶层规范 (MainWindow, FilterPanel, MetaPanel, MetadataManager)
-1. **主窗口 (MainWindow) 拆分与壳体归一化**：主窗口仅允许承载顶层 UI 布局构建与 QSS 样式加载。无边框窗口 8 方向边缘感应、DPI 动态热区、光标切换、边缘拉伸、标题栏拖拽移动、双击最大化/还原及跨平台安全置顶全权交由 `FramelessWindowHelper` 统一收敛承载；彻底清除主窗口中的底层几何算式与裸 Win32 API 杂质；应用内局域快捷键解耦至声明式 `AppShortcutController` (`QShortcut(Qt::WindowShortcut)`)；多面板联动解耦至 `PanelMediator`。
+1. **主窗口 (MainWindow) 拆分与壳体归一化**：主窗口仅允许承载顶层 UI 布局构建与 QSS 样式加载。无边框窗口 8 方向边缘感应、DPI 动态热区、光标切换、边缘拉伸、标题栏拖拽移动、双击最大化/还原及跨平台安全置顶全权交由 `FramelessWindowHelper` 统一收敛承载；彻底清除主窗口中的底层几何算式与裸 Win32 API 杂质；全局快捷键解耦至 `GlobalShortcutController`；多面板联动解耦至 `PanelMediator`。
 2. **筛选面板 (FilterPanel) 拆分规范**：筛选面板仅保留 UI 控件渲染职责。筛选状态管理解耦至 `FilterStateModel`；后台文件数量聚合解耦至 `ScanStatsEngine`。
 3. **属性面板 (MetaPanel) 拆分规范**：属性面板解耦为独立的组件小模块（预览、评分颜色、标签节、基础信息节），结构清晰，职责单一。
 4. **元数据中心 (MetadataManager) 门面模式规范**：元数据中心作为对外统一门面（Facade），不再直接混合磁盘 I/O 与数据库存取。序列化由 `QuarkMetaJsonStore` 承载；SQLite 持久化由 `MetaDbRepository` 承载；内存缓存由 `MetaMemoryCache` 承载。
 
 ### 系统托盘退出生命周期与主进程优雅终结顶层规范 (TrayController)
 1. **标准关闭序列与配置落盘红线**：系统托盘（TrayController）在响应右键“退出”指令时，必须发射退出信号或调用 `qApp->closeAllWindows()` 发起标准的窗口关闭流程，由主窗口 `closeEvent` 统一调度后台工作线程熔断与数据库安全落盘，严禁强杀主事件循环。
-
-### 标准应用局域快捷键控制器顶层规范 (AppShortcutController)
-1. **彻底禁止 eventFilter 按键拦截补丁红线**：严禁采用 `eventFilter` 截获 `QKeyEvent` 原始按键的补丁做法，杜绝输入框（搜索框/重命名文本框）打字按 `Ctrl+Z` 时越权截获误触发文件大撤销的严重漏洞。
-2. **声明式 QShortcut 与 WindowContext 作用域红线**：全系统快捷键统一使用 Qt 官方声明式 `QShortcut` 实现，快捷键 Context 强制指定为 `Qt::WindowShortcut`，确保仅在应用活动窗口内生效，100% 绝不上杀侵入操作系统全局钩子，且 Qt 底层自动处理输入框获焦时的焦点协调。
 
 ### 面板中介者与跨面板事件路由顶层解耦规范 (PanelMediator)
 1. **彻底拔除宿主友元特权与指针依赖红线**：面板中介者（PanelMediator）仅作为独立的跨面板信号路由器，构造函数显式接收各子面板与地址栏指针，绝不保存主窗口（MainWindow）宿主指针。严禁在主窗口或任何视图头文件中使用 `friend class PanelMediator` 伪解耦破坏类封装。

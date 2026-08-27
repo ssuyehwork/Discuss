@@ -1,4 +1,4 @@
-# QuarkMeta 路径导航与历史栈服务无脑实施方案 (navigation.md)
+# QuarkMeta 路径导航与历史栈服务无脑实施方案 (NavigationService.md)
 
 ## 1. Overview（概述与解决的问题）
 
