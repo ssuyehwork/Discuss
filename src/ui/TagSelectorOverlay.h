@@ -9,7 +9,7 @@
 #include <QMap>
 #include <QStringList>
 #include "components/FlowLayout.h"
-#include "../meta/TagRepository.h"
+#include "../core/TagLexiconService.h"
 
 namespace QuarkMeta {
 
@@ -50,7 +50,7 @@ private:
     QStringList m_selectedTags;
     QStringList m_displayedTags;
     QMap<QString, int> m_allTagCounts;
-    QList<TagRepository::TagGroup> m_allGroups;
+    QList<TagLexiconGroup> m_lexiconGroups;
 
     QLineEdit* m_searchEdit = nullptr;
     QPushButton* m_btnToggleSidebar = nullptr;

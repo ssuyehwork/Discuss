@@ -3,6 +3,7 @@
 #include "StyleLibrary.h"
 #include "FramelessDialog.h"
 #include "components/FlowLayout.h"
+#include "../core/TagLexiconService.h"
 #include <QApplication>
 #include <QMenu>
 #include <QAction>
@@ -203,7 +204,7 @@ void TagManagerDialog::refreshSidebar() {
     createSideBtn(-2, "star_filled", "常用标签");
 
     // 动态加载自定义分组
-    m_allGroups = TagRepository::getAllGroups();
+    m_allGroups = TagLexiconService::instance().getAllTagGroups();
     for (const auto& grp : m_allGroups) {
         QPushButton* btn = createSideBtn(grp.id, "folder_filled", grp.name);
         btn->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -226,7 +227,7 @@ void TagManagerDialog::onAddNewGroup() {
     if (dlg.exec() == QDialog::Accepted) {
         QString name = dlg.text().trimmed();
         if (!name.isEmpty()) {
-            TagRepository::createGroup(name);
+            TagLexiconService::instance().createGroup(name);
             refreshSidebar();
         }
     }
@@ -246,13 +247,13 @@ void TagManagerDialog::showGroupContextMenu(int groupId, const QString& groupNam
         if (dlg.exec() == QDialog::Accepted) {
             QString newName = dlg.text().trimmed();
             if (!newName.isEmpty()) {
-                TagRepository::renameGroup(groupId, newName);
+                TagLexiconService::instance().renameGroup(groupId, newName);
                 refreshSidebar();
             }
         }
     } else if (act->data().toInt() == 2) {
         if (FramelessMessageBox::question(this, "确认删除", QString("确定要删除分组 \"%1\" 吗？组内标签将保留并转为未分类。").arg(groupName))) {
-            TagRepository::deleteGroup(groupId);
+            TagLexiconService::instance().deleteGroup(groupId);
             refreshSidebar();
             refreshTags();
         }
@@ -290,13 +291,7 @@ void TagManagerDialog::createTag(const QString& tagName) {
     if (cleanTag.isEmpty()) return;
 
     // 1. 写入 global.db 词库
-    TagRepository::createTag(cleanTag);
-    TagRepository::recordTagUsage(cleanTag);
-
-    // 2. 如果当前在自定义组中，直接绑定到该组
-    if (m_activeGroupId > 0) {
-        TagRepository::addTagToGroup(cleanTag, m_activeGroupId);
-    }
+    TagLexiconService::instance().addTag(cleanTag, m_activeGroupId > 0 ? m_activeGroupId : -1);
 
     refreshSidebar();
     refreshTags();
@@ -312,7 +307,7 @@ void TagManagerDialog::showTagContextMenu(const QString& tagName, const QPoint& 
     for (const auto& grp : m_allGroups) {
         QAction* actGrp = groupSubMenu->addAction(grp.name);
         connect(actGrp, &QAction::triggered, this, [this, tagName, grp]() {
-            TagRepository::addTagToGroup(tagName, grp.id);
+            TagLexiconService::instance().addTagToGroup(tagName, grp.id);
             refreshSidebar();
             refreshTags();
         });
@@ -330,12 +325,12 @@ void TagManagerDialog::showTagContextMenu(const QString& tagName, const QPoint& 
     if (!act) return;
 
     if (act->data().toInt() == 1) {
-        TagRepository::removeTagFromGroup(tagName, m_activeGroupId);
+        TagLexiconService::instance().removeTagFromGroup(tagName, m_activeGroupId);
         refreshSidebar();
         refreshTags();
     } else if (act->data().toInt() == 2) {
         if (FramelessMessageBox::question(this, "确认删除", QString("确定从词库中彻底删除标签 \"%1\" 吗？").arg(tagName))) {
-            TagRepository::deleteTag(tagName);
+            TagLexiconService::instance().deleteTag(tagName);
             refreshSidebar();
             refreshTags();
         }
@@ -343,7 +338,7 @@ void TagManagerDialog::showTagContextMenu(const QString& tagName, const QPoint& 
 }
 
 void TagManagerDialog::refreshTags() {
-    m_masterTags = TagRepository::getAllMasterTags();
+    m_masterTags = TagLexiconService::instance().getAllMasterTags();
 
     while (QLayoutItem* item = m_tagsScrollLayout->takeAt(0)) {
         delete item->widget();
@@ -355,7 +350,7 @@ void TagManagerDialog::refreshTags() {
 
     if (m_activeGroupId == -2) {
         // 常用 / 最近使用
-        filteredTags = TagRepository::getRecentTags(30);
+        filteredTags = TagLexiconService::instance().querySuggestions("", 30);
     } else if (m_activeGroupId == -1) {
         // 未分类
         QSet<QString> groupedTags;

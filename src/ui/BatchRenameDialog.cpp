@@ -1,12 +1,11 @@
 #include "BatchRenameDialog.h"
 #include "RuleRow.h"
 #include "UiHelper.h"
-#include "DiskBatchRenameService.h"
 #include "PresetManager.h"
 #include "UndoToastOverlay.h"
 #include "ShellIconManager.h"
 #include "../util/DiskMediaExtractor.h"
-#include "../meta/BatchRenameEngine.h"
+#include "../core/BatchRenameService.h"
 #include "../meta/MetadataManager.h"
 #include <QHeaderView>
 #include "FramelessFileDialog.h"
@@ -309,7 +308,7 @@ void BatchRenameDialog::updatePreview() {
         if (row) rules.push_back(row->getRule());
     }
 
-    auto newNames = BatchRenameEngine::instance().preview(m_originalPaths, rules);
+    auto newNames = BatchRenameService::instance().computePreview(m_originalPaths, rules);
     int total = static_cast<int>(newNames.size());
 
     // 仅更新第 1 列的新名称文本，耗时 < 0.1ms，打字极度丝滑！
@@ -388,103 +387,46 @@ void BatchRenameDialog::onExecute() {
     std::vector<RenameRule> rules;
     for (auto* row : m_ruleRows) rules.push_back(row->getRule());
     
-    auto newNames = BatchRenameEngine::instance().preview(m_originalPaths, rules);
+    auto newNames = BatchRenameService::instance().computePreview(m_originalPaths, rules);
     if (newNames.empty()) return;
 
-    // 禁用执行按钮以防重复点击
     m_btnExecute->setEnabled(false);
 
-    // 记录本次执行所操作的旧路径、旧物理目标及新物理目标
-    bool isCapsule = false;
     DiskOperationMode mode = DiskOperationMode::Rename;
     if (m_rbMove->isChecked()) mode = DiskOperationMode::Move;
     else if (m_rbCopy->isChecked()) mode = DiskOperationMode::Copy;
 
     QString targetDir = m_targetPathEdit->text();
-    if (!isCapsule && mode != DiskOperationMode::Rename && targetDir.isEmpty()) {
+    if (mode != DiskOperationMode::Rename && targetDir.isEmpty()) {
         FramelessMessageBox::warning(this, "错误", "请先选择目标文件夹");
         m_btnExecute->setEnabled(true);
         return;
     }
 
-    std::vector<std::wstring> oldPathsSnap = m_originalPaths;
-    std::vector<std::wstring> newPathsSnap;
-    newPathsSnap.reserve(m_originalPaths.size());
-
-    for (size_t i = 0; i < m_originalPaths.size(); ++i) {
-        QString oldPath = QString::fromStdWString(m_originalPaths[i]);
-        QFileInfo oldInfo(oldPath);
-        QString destDir = (mode == DiskOperationMode::Rename || isCapsule) ? oldInfo.absolutePath() : targetDir;
-        QString newPathStr = QDir(destDir).absoluteFilePath(QString::fromStdWString(newNames[i]));
-        newPathsSnap.push_back(QDir::toNativeSeparators(newPathStr).toStdWString());
-    }
-
     QPointer<BatchRenameDialog> safeThis(this);
-    auto onCompletedCallback = [safeThis, isCapsule, mode, oldPathsSnap, newPathsSnap](int successCount) {
-        if (!safeThis) return;
-        // 确保回到 UI 主线程
-        safeThis->m_btnExecute->setEnabled(true);
 
-        if (successCount > 0) {
-            // 只有在存在实际成功记录时，才依据真实成功数自增序列号
-            for (auto* row : safeThis->m_ruleRows) {
-                RenameRule rule = row->getRule();
-                if (rule.type == RenameComponentType::Sequence) {
-                    rule.start = rule.start + successCount * rule.step;
-                    row->setRule(rule);
-                }
-            }
-            safeThis->doAutoSave();
-
-            // 成功物理移动或重命名或复制后，向 UndoManager 推送一次完整的原子 BatchRenameCommand
-            UndoManager::instance().pushCommand(std::make_unique<BatchRenameCommand>(mode, oldPathsSnap, newPathsSnap));
-        }
-
-        std::vector<RenameRule> currentRules;
-        for (auto* row : safeThis->m_ruleRows) currentRules.push_back(row->getRule());
-        auto finalNames = BatchRenameEngine::instance().preview(safeThis->m_originalPaths, currentRules);
-        if (!finalNames.empty()) {
-            safeThis->m_firstNewName = QString::fromStdWString(finalNames.front());
-        }
-
-        QWidget* mainWindowPtr = nullptr;
-        QWidget* parentW = safeThis->parentWidget();
-        while (parentW) {
-            if (parentW->inherits("QuarkMeta::MainWindow") || parentW->objectName() == "MainWindow") {
-                mainWindowPtr = parentW;
-                break;
-            }
-            parentW = parentW->parentWidget();
-        }
-
-        UndoToastOverlay::instance()->showToast(
-            mainWindowPtr,
-            QString("成功处理 %1 个项目").arg(successCount),
-            [successCount]() {
-                if (successCount > 0) {
-                    UndoManager::instance().undo();
-                }
-            },
-            5000
-        );
-        safeThis->accept();
-    };
-
-    QStringList targetPaths;
-    for (const auto& wp : m_originalPaths) {
-        targetPaths << QString::fromStdWString(wp);
-    }
-
-    OperationSnapshotEngine::instance().executeWithSnapshot(
+    BatchRenameService::instance().executeAsync(
+        m_originalPaths,
+        newNames,
+        mode,
+        targetDir,
         this->parentWidget(),
-        SnapshotOperationType::BatchRename,
-        targetPaths,
-        QString("成功处理 %1 个项目").arg(m_originalPaths.size()),
-        [this, mode, targetDir, onCompletedCallback, newNames]() {
-            DiskBatchRenameService::execute(m_originalPaths, newNames, mode, targetDir, onCompletedCallback);
-            return true;
-        },
-        nullptr
+        [safeThis](int successCount) {
+            if (!safeThis) return;
+            safeThis->m_btnExecute->setEnabled(true);
+
+            if (successCount > 0) {
+                for (auto* row : safeThis->m_ruleRows) {
+                    RenameRule rule = row->getRule();
+                    if (rule.type == RenameComponentType::Sequence) {
+                        rule.start = rule.start + successCount * rule.step;
+                        row->setRule(rule);
+                    }
+                }
+                safeThis->doAutoSave();
+            }
+            safeThis->accept();
+        }
     );
 }
 

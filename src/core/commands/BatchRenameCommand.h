@@ -3,7 +3,7 @@
 #include "../../meta/MetadataManager.h"
 #include "../../meta/FileOperationHelper.h"
 #include "../../util/DiskMediaExtractor.h"
-#include "../../ui/DiskBatchRenameService.h"
+#include "../BatchRenameService.h"
 #include <QString>
 #include <QFile>
 #include <QDir>

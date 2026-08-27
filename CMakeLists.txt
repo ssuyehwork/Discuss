@@ -90,14 +90,16 @@ set(SOURCES
     src/core/NavigationHistoryService.h
     src/core/SearchHistoryService.cpp
     src/core/SearchHistoryService.h
+    src/core/BatchRenameService.h
+    src/core/BatchRenameService.cpp
+    src/core/TagLexiconService.h
+    src/core/TagLexiconService.cpp
     src/crypto/EncryptionManager.cpp
     src/crypto/EncryptionManager.h
     src/meta/DiskTrashRepo.cpp
     src/meta/DiskTrashRepo.h
     src/meta/DriveMetaDao.cpp
     src/meta/DriveMetaDao.h
-    src/meta/TagRepository.cpp
-    src/meta/TagRepository.h
     src/meta/TrashRepository.cpp
     src/meta/TrashRepository.h
     src/meta/DatabaseManager.cpp
@@ -125,8 +127,6 @@ set(SOURCES
     src/ui/DuplicateConflictDialog.cpp
     src/ui/PresetManager.cpp
     src/ui/PresetManager.h
-    src/ui/DiskBatchRenameService.cpp
-    src/ui/DiskBatchRenameService.h
     src/ui/UndoToastOverlay.cpp
     src/ui/UndoToastOverlay.h
     src/ui/BreadcrumbBar.cpp

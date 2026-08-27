@@ -1,6 +1,6 @@
 #include "TagManagerController.h"
 #include <QtConcurrent>
-#include "../meta/TagRepository.h"
+#include "../core/TagLexiconService.h"
 
 namespace QuarkMeta {
 
@@ -8,7 +8,7 @@ TagManagerController::TagManagerController(QObject* parent) : QObject(parent) {}
 
 void TagManagerController::addTagToGroupAsync(const QString& tagName, int groupId) {
     (void)QtConcurrent::run([this, tagName, groupId]() {
-        if (TagRepository::addTagToGroup(tagName, groupId)) {
+        if (TagLexiconService::instance().addTagToGroup(tagName, groupId)) {
             emit tagGroupStateChanged(); // 成功后发射刷新信号
         }
     });
@@ -16,7 +16,7 @@ void TagManagerController::addTagToGroupAsync(const QString& tagName, int groupI
 
 void TagManagerController::renameGroupAsync(int groupId, const QString& newName) {
     (void)QtConcurrent::run([this, groupId, newName]() {
-        if (TagRepository::renameGroup(groupId, newName)) {
+        if (TagLexiconService::instance().renameGroup(groupId, newName)) {
             emit tagGroupStateChanged();
         }
     });
@@ -24,7 +24,7 @@ void TagManagerController::renameGroupAsync(int groupId, const QString& newName)
 
 void TagManagerController::deleteGroupAsync(int groupId) {
     (void)QtConcurrent::run([this, groupId]() {
-        if (TagRepository::deleteGroup(groupId)) {
+        if (TagLexiconService::instance().deleteGroup(groupId)) {
             emit tagGroupStateChanged();
         }
     });
@@ -32,7 +32,7 @@ void TagManagerController::deleteGroupAsync(int groupId) {
 
 void TagManagerController::removeTagFromGroupAsync(const QString& tagName, int groupId) {
     (void)QtConcurrent::run([this, tagName, groupId]() {
-        if (TagRepository::removeTagFromGroup(tagName, groupId)) {
+        if (TagLexiconService::instance().removeTagFromGroup(tagName, groupId)) {
             emit tagGroupStateChanged();
         }
     });

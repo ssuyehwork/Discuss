@@ -1,6 +1,6 @@
 #include "TagSelectorOverlay.h"
 #include "UiHelper.h"
-#include "../meta/TagRepository.h"
+#include "../core/TagLexiconService.h"
 #include "../core/AppConfig.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -139,14 +139,13 @@ void TagSelectorOverlay::initUi() {
 }
 
 void TagSelectorOverlay::loadTagsAndGroups() {
-    m_allGroups = TagRepository::getAllGroups();
+    m_lexiconGroups = TagLexiconService::instance().getAllTagGroups();
     
     m_groupList->clear();
     m_groupList->addItem("全部");
-    m_groupList->addItem("最近使用");
     m_groupList->addItem("未分类");
 
-    for (const auto& grp : m_allGroups) {
+    for (const auto& grp : m_lexiconGroups) {
         m_groupList->addItem("📁 " + grp.name);
     }
 
@@ -159,18 +158,12 @@ void TagSelectorOverlay::filterTags() {
 
     m_displayedTags.clear();
 
-    if (currentGrp == "最近使用") {
-        QStringList recent = TagRepository::getRecentTags(30);
-        for (const QString& tag : recent) {
-            if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
-            m_displayedTags.append(tag);
-        }
-    } else if (currentGrp == "未分类") {
+    if (currentGrp == "未分类") {
         QSet<QString> groupedTags;
-        for (const auto& grp : m_allGroups) {
+        for (const auto& grp : m_lexiconGroups) {
             for (const auto& t : grp.tags) groupedTags.insert(t);
         }
-        QStringList allMaster = TagRepository::getAllMasterTags();
+        QStringList allMaster = TagLexiconService::instance().getAllMasterTags();
         for (const QString& tag : allMaster) {
             if (groupedTags.contains(tag)) continue;
             if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
@@ -178,7 +171,7 @@ void TagSelectorOverlay::filterTags() {
         }
     } else if (currentGrp.startsWith("📁 ")) {
         QString pureGroupName = currentGrp.mid(3);
-        for (const auto& grp : m_allGroups) {
+        for (const auto& grp : m_lexiconGroups) {
             if (grp.name == pureGroupName) {
                 for (const auto& t : grp.tags) {
                     if (!kw.isEmpty() && !t.toLower().contains(kw.toLower())) continue;
@@ -188,7 +181,7 @@ void TagSelectorOverlay::filterTags() {
             }
         }
     } else {
-        QStringList allMaster = TagRepository::getAllMasterTags();
+        QStringList allMaster = TagLexiconService::instance().getAllMasterTags();
         for (const QString& tag : allMaster) {
             if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
             m_displayedTags.append(tag);
@@ -235,8 +228,7 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
     if (cleanTag.isEmpty()) return;
 
     // 写入 global.db 词库
-    TagRepository::createTag(cleanTag);
-    TagRepository::recordTagUsage(cleanTag);
+    TagLexiconService::instance().addTag(cleanTag);
 
     if (m_selectedTags.contains(cleanTag)) {
         m_selectedTags.removeAll(cleanTag);

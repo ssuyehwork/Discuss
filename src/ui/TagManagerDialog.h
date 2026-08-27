@@ -2,7 +2,7 @@
 
 #include "FramelessDialog.h"
 #include "components/FlowLayout.h"
-#include "../meta/TagRepository.h"
+#include "../core/TagLexiconService.h"
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -58,7 +58,7 @@ private:
 
     QVBoxLayout* m_tagsScrollLayout = nullptr;
 
-    QList<TagRepository::TagGroup> m_allGroups;
+    QList<TagLexiconGroup> m_allGroups;
     QStringList m_masterTags;
 };
 
