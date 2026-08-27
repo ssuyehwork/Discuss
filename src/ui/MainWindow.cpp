@@ -4,6 +4,9 @@
 #include "MainWindow.h"
 #include "GlobalShortcutController.h"
 #include "PanelMediator.h"
+#include "TaskProgressController.h" 
+#include "SearchController.h" 
+#include "SearchHistoryPanel.h" 
 #include <QDateTime>
 #include <algorithm>
 #include "../meta/DiskNavigatorService.h"
@@ -221,93 +224,11 @@ void MainWindow::initUi() {
         m_panelMediator->setupConnections();
     }
 
-    // 搜索框与历史记录
-    m_searchHistoryPanel = new SearchHistoryPanel(this);
-    m_searchHistoryPanel->setCategory("global");
-    m_searchHistoryPanel->setHistory(SearchHistoryService::instance().getHistory("global"));
+    if (m_searchController) {
+        m_searchController->bindContentPanel(m_contentPanel);
+        connect(m_searchController, &SearchController::searchExecuted, this, &MainWindow::updateStatusBar);
+    }
 
-    m_searchTimer = new QTimer(this);
-    m_searchTimer->setSingleShot(true);
-    m_searchTimer->setInterval(300);
-
-    auto doSearch = [this](const QString& keyword) {
-        m_contentPanel->search(keyword);
-        updateStatusBar();
-
-        if (!keyword.isEmpty()) {
-            SearchHistoryService::instance().appendSearch("global", keyword);
-        }
-        m_searchHistoryPanel->hide();
-    };
-
-    connect(m_searchEdit, &QLineEdit::returnPressed, this, [this, doSearch]() {
-        doSearch(m_searchEdit->text().trimmed());
-    });
-
-    connect(m_searchEdit, &QLineEdit::textChanged, this, [this, doSearch](const QString& text) {
-        if (text.isEmpty()) {
-            m_searchTimer->stop();
-            doSearch("");
-            return;
-        }
-        m_searchTimer->start();
-    });
-
-    connect(m_searchTimer, &QTimer::timeout, this, [this, doSearch]() {
-        doSearch(m_searchEdit->text().trimmed());
-    });
-    
-    m_searchEdit->installEventFilter(this);
-
-    connect(m_searchHistoryPanel, &SearchHistoryPanel::historyItemClicked, this, [this, doSearch](const QString& keyword) {
-        m_searchEdit->setText(keyword);
-        doSearch(keyword);
-    });
-
-    m_elapsedTimer = new QTimer(this);
-    m_elapsedTimer->setInterval(100);
-
-    auto formatTime = [](qint64 totalSeconds) -> QString {
-        if (totalSeconds < 0) totalSeconds = 0;
-        qint64 hours = totalSeconds / 3600;
-        qint64 mins = (totalSeconds % 3600) / 60;
-        qint64 secs = totalSeconds % 60;
-        if (hours > 0) {
-            return QString("%1:%2:%3")
-                .arg(hours, 2, 10, QChar('0'))
-                .arg(mins, 2, 10, QChar('0'))
-                .arg(secs, 2, 10, QChar('0'));
-        }
-        return QString("%1:%2")
-            .arg(mins, 2, 10, QChar('0'))
-            .arg(secs, 2, 10, QChar('0'));
-    };
-
-    connect(m_elapsedTimer, &QTimer::timeout, this, [this, formatTime]() {
-        if (m_syncStartTime > 0 && m_totalBatchCount > 0) {
-            double elapsedSec = (QDateTime::currentMSecsSinceEpoch() - m_syncStartTime) / 1000.0;
-            int currentPct = m_topProgressBar->value();
-            
-            int completedCount = qBound(0, (int)((double)currentPct / 100.0 * m_totalBatchCount), m_totalBatchCount);
-
-            QString countdownStr = "00:00";
-            QString totalEstStr = "00:00";
-
-            if (currentPct >= 5) {
-                qint64 remainingSec = static_cast<qint64>(elapsedSec * (100.0 - currentPct) / (double)currentPct);
-                qint64 totalEstSec = static_cast<qint64>(elapsedSec) + remainingSec;
-                countdownStr = formatTime(remainingSec);
-                totalEstStr = formatTime(totalEstSec);
-            }
-
-            m_statusLeft->setText(QString("扫描数据中... %1%  数量：%2/%3  |  倒计时分 %4 / 预计时分: %5")
-                                  .arg(currentPct)
-                                  .arg(completedCount)
-                                  .arg(m_totalBatchCount)
-                                  .arg(countdownStr)
-                                  .arg(totalEstStr));
-        }
-    });
 }
 
 #ifdef Q_OS_WIN
@@ -450,14 +371,6 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
-    if (event->type() == QEvent::MouseButtonDblClick && watched == m_searchEdit) {
-        QStringList history = SearchHistoryService::instance().getHistory("global");
-        if (!history.isEmpty()) {
-            m_searchHistoryPanel->setHistory(history);
-            m_searchHistoryPanel->showBelow(m_searchEdit);
-        }
-    }
-
     return QMainWindow::eventFilter(watched, event);
 }
 
@@ -502,27 +415,7 @@ void MainWindow::initToolbar() {
     m_addressBar = new AddressBar(this);
     m_addressBar->setMinimumWidth(300);
 
-    m_searchContainer = new QWidget(this);
-    m_searchContainer->setStyleSheet("background: transparent;");
-    QHBoxLayout* searchLayout = new QHBoxLayout(m_searchContainer);
-    searchLayout->setContentsMargins(0, 0, 0, 0);
-    searchLayout->setSpacing(0);
-
-    m_searchEdit = new QLineEdit(m_searchContainer);
-    m_searchEdit->setPlaceholderText("搜索...");
-    m_searchEdit->setFixedSize(230, 32);
-    m_searchEdit->addAction(UiHelper::getIcon("search", TextMuted), QLineEdit::LeadingPosition);
-    
-    m_searchEdit->setClearButtonEnabled(true);
-
-    m_searchEdit->setStyleSheet(QString(
-        "QLineEdit { background: %1; border: 1px solid %2;"
-        "  border-radius: 6px;"
-        "  color: %3; padding-left: 5px; padding-right: 5px; }"
-        "QLineEdit:focus { border: 1px solid %4; }"
-    ).arg(qssColor(BackgroundDeep)).arg(qssColor(BorderColor)).arg(qssColor(TextMain)).arg(qssColor(PrimaryBlue)));
-
-    searchLayout->addWidget(m_searchEdit);
+    m_searchController = new SearchController(this);
 }
 
 void MainWindow::setupSplitters() {
@@ -570,7 +463,9 @@ void MainWindow::setupSplitters() {
     m_navBarLayout->addWidget(m_btnForward);
     m_navBarLayout->addWidget(m_btnUp);
     m_navBarLayout->addWidget(m_addressBar, 1);
-    m_navBarLayout->addWidget(m_searchContainer);
+    if (m_searchController && m_searchController->toolbarWidget()) {
+        m_navBarLayout->addWidget(m_searchController->toolbarWidget());
+    }
 
     QWidget* bodyWrapper = new QWidget(centralC);
     bodyWrapper->setStyleSheet("background: transparent;");
@@ -654,16 +549,7 @@ void MainWindow::setupSplitters() {
     mainL->addWidget(m_statusBarWidget);
     mainL->addWidget(m_taskProgressToolBar);
 
-    m_topProgressBar = new QProgressBar(centralC);
-    m_topProgressBar->setFixedHeight(5);
-    m_topProgressBar->setTextVisible(false);
-    m_topProgressBar->setRange(0, 100);
-    m_topProgressBar->setInvertedAppearance(false);
-    m_topProgressBar->setStyleSheet(QString(
-        "QProgressBar { background: transparent; border: none; max-height: 5px; }"
-        "QProgressBar::chunk { background-color: %1; border-radius: 1px; }"
-    ).arg(qssColor(PrimaryBlue)));
-    m_topProgressBar->hide();
+    m_taskProgressController = new TaskProgressController(bodyWrapper, m_statusBarWidget, m_statusLeft, this);
 
     setCentralWidget(centralC);
 }
@@ -853,10 +739,10 @@ void MainWindow::setupCustomTitleBarButtons() {
 void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
     if (url.isEmpty()) return;
 
-    if (m_searchEdit) {
-        m_searchEdit->blockSignals(true);
-        m_searchEdit->clear();
-        m_searchEdit->blockSignals(false);
+    if (m_searchController && m_searchController->searchEdit()) {
+        m_searchController->searchEdit()->blockSignals(true);
+        m_searchController->searchEdit()->clear();
+        m_searchController->searchEdit()->blockSignals(false);
     }
     
     if (m_contentPanel) {
@@ -1001,8 +887,8 @@ void MainWindow::onPinToggled(bool checked) {
 
 void MainWindow::changeEvent(QEvent* event) {
     if (event->type() == QEvent::WindowStateChange) {
-        if (isMinimized() && m_searchHistoryPanel) {
-            m_searchHistoryPanel->hide();
+        if (isMinimized() && m_searchController && m_searchController->historyPanel()) {
+            m_searchController->historyPanel()->hide();
         }
 
         if (m_btnMax) {
@@ -1172,23 +1058,6 @@ void MainWindow::onDriveBarContextMenu(const QPoint& pos) {
 
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
-    updateProgressBarGeometry();
-}
-
-void MainWindow::updateProgressBarGeometry() {
-    if (!m_topProgressBar || !m_mainSplitter || !m_statusLeft) return;
-
-    QWidget* bodyWrapper = m_mainSplitter->parentWidget();
-    QWidget* statusBar = m_statusLeft->parentWidget();
-
-    if (bodyWrapper && statusBar) {
-        int x = bodyWrapper->geometry().left();
-        int y = statusBar->geometry().top() - 5;
-        int width = bodyWrapper->geometry().width();
-
-        m_topProgressBar->setGeometry(x, y, width, 5);
-        m_topProgressBar->raise();
-    }
 }
 
 } // namespace QuarkMeta

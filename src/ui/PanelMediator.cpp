@@ -1,6 +1,7 @@
 #include "PanelMediator.h"
 #include "MainWindow.h"
 #include "NavPanel.h"
+#include "SearchController.h"
 #include "FavoritePanel.h"
 #include "ContentPanel.h"
 #include "MetaPanel.h"
@@ -346,8 +347,8 @@ void PanelMediator::setupConnections() {
     if (filterPanel && contentPanel) {
         connect(filterPanel, &FilterPanel::filterChanged, m_mainWindow, [this, contentPanel](const FilterState& state) {
             FilterState mergedState = state;
-            if (m_mainWindow->m_searchEdit) {
-                mergedState.keyword = m_mainWindow->m_searchEdit->text().trimmed();
+            if (m_mainWindow->m_searchController && m_mainWindow->m_searchController->searchEdit()) {
+                mergedState.keyword = m_mainWindow->m_searchController->searchEdit()->text().trimmed();
             }
             contentPanel->applyFilters(mergedState);
             m_mainWindow->updateStatusBar();
