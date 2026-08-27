@@ -33,7 +33,7 @@ public:
     QString getFirstNewName() const { return m_firstNewName; }
 
 private slots:
-    void onAddRow();
+    void onAddRow(RuleRow* targetRow = nullptr);
     void updatePreview();
     void onExecute();
     void onBrowseTarget();

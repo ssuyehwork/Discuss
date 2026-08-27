@@ -238,14 +238,27 @@ void BatchRenameDialog::applyTheme() {
     ).arg(arrowPath));
 }
 
-void BatchRenameDialog::onAddRow() {
+void BatchRenameDialog::onAddRow(RuleRow* targetRow) {
     RuleRow* row = new RuleRow(m_rulesContainer);
-    m_rulesLayout->addWidget(row);
-    m_ruleRows.append(row);
+
+    int insertIndex = -1;
+    if (targetRow) {
+        insertIndex = m_ruleRows.indexOf(targetRow);
+    }
+
+    if (insertIndex >= 0 && insertIndex < m_ruleRows.size()) {
+        m_rulesLayout->insertWidget(insertIndex + 1, row);
+        m_ruleRows.insert(insertIndex + 1, row);
+    } else {
+        m_rulesLayout->addWidget(row);
+        m_ruleRows.append(row);
+    }
     
     connect(row, &RuleRow::changed, this, &BatchRenameDialog::updatePreview);
     connect(row, &RuleRow::changed, this, &BatchRenameDialog::scheduleAutoSave);
-    connect(row, &RuleRow::addRequested, this, &BatchRenameDialog::onAddRow);
+    connect(row, &RuleRow::addRequested, this, [this, row]() {
+        onAddRow(row);
+    });
     connect(row, &RuleRow::addRequested, this, &BatchRenameDialog::scheduleAutoSave);
     connect(row, &RuleRow::removeRequested, [this, row]() {
         if (m_ruleRows.size() > 1) {
