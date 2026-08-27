@@ -152,6 +152,9 @@ public:
     // --- 业务接口 ---
     QAbstractItemModel* model() const { return m_model; }
     QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
+    QStringList getSelectedPaths() const;
+    QList<int> getSelectedTrashIds() const;
+
     QModelIndexList getSelectedIndexes() const {
         if (!m_viewStack) return {};
         bool isGrid = (m_viewStack->currentWidget() == m_gridView);

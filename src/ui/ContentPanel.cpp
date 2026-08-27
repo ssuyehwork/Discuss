@@ -8,6 +8,9 @@
 #include "../meta/DiskTrashRepo.h"
 #include "ColorPicker.h"
 #include "../core/DiskTrashService.h"
+#include "../core/TrashService.h"
+#include "../core/PermanentDeleteService.h"
+#include "../core/ClipboardService.h"
 #include <QWidgetAction>
 #include "../meta/MetadataManager.h"
 #include "../meta/MediaExtractorPipeline.h"
@@ -516,6 +519,12 @@ ContentPanel::ContentPanel(QWidget* parent)
     // 同步到当前 FilterState
     m_currentFilter.showFolders = m_showFolders;
     m_currentFilter.showFiles = m_showFiles;
+
+    connect(&QuarkMeta::TrashService::instance(), &QuarkMeta::TrashService::trashOperationCompleted, this, &ContentPanel::refreshAll);
+    connect(&QuarkMeta::PermanentDeleteService::instance(), &QuarkMeta::PermanentDeleteService::permanentDeleteCompleted, this, &ContentPanel::refreshAll);
+    connect(&QuarkMeta::ClipboardService::instance(), &QuarkMeta::ClipboardService::pasteCompleted, this, [this](const QString& dir) {
+        if (m_currentPath == dir) refreshAll();
+    });
     m_currentFilter.showHidden = m_showHidden;
  
     // 从配置中恢复排序类型与方向 (对应用户原话："名称、创建日期、修改日期、扩展名、大小、尺寸、评分" 与 "升序、降序")
@@ -1085,40 +1094,9 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
             } 
             if (keyEvent->key() == Qt::Key_Delete) { 
                 if (keyEvent->modifiers() & Qt::ShiftModifier) {
-                    QList<QModelIndex> selectedIndexes = view->selectionModel()->selectedIndexes();
-                    if (!selectedIndexes.isEmpty()) {
-                        QStringList targetPaths;
-                        for (const auto& idx : selectedIndexes) {
-                            if (idx.column() == 0) targetPaths << idx.data(PathRole).toString();
-                        }
-                        if (!targetPaths.isEmpty()) {
-                            if (FramelessMessageBox::question(this, "确认删除", "确定要永久删除选中的项目吗？数据将被物理覆写并彻底抹除，此操作不可恢复。")) {
-                                for (const QString& p : targetPaths) {
-                                    QFileInfo info(p);
-                                    if (info.isDir()) {
-                                        QDir(p).removeRecursively();
-                                    } else {
-                                        QFile::remove(p);
-                                    }
-                                    MetadataManager::instance().removeMetadataSync(p.toStdWString());
-                                }
-                                refreshAll();
-                            }
-                        }
-                    }
+                    QuarkMeta::PermanentDeleteService::instance().execute(getSelectedPaths(), this);
                 } else {
-                    // Del 键：移入回收站
-                    QList<QModelIndex> selectedIndexes = view->selectionModel()->selectedIndexes();
-                    if (!selectedIndexes.isEmpty()) {
-                        QStringList targetPaths;
-                        for (const auto& idx : selectedIndexes) {
-                            if (idx.column() == 0) targetPaths << idx.data(PathRole).toString();
-                        }
-                        if (!targetPaths.isEmpty()) {
-                            DiskTrashService::moveToDiskTrash(targetPaths);
-                            refreshAll();
-                        }
-                    }
+                    QuarkMeta::TrashService::instance().moveToTrash(getSelectedPaths(), this);
                 }
                 return true; 
             } 
@@ -1128,20 +1106,17 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                     createNewItem("folder");
                     return true;
                 }
-                // 2026-03-xx 按照用户要求：逻辑重构，统一调用 performCopy 业务函数 
                 if (keyEvent->key() == Qt::Key_C && !(keyEvent->modifiers() & Qt::ShiftModifier)) { 
-                    performCopy(false); 
+                    QuarkMeta::ClipboardService::instance().copyItems(getSelectedPaths());
                     return true; 
                 } 
-                // 2026-03-xx 按照用户要求：实现剪切逻辑 (Ctrl+X) 
                 if (keyEvent->key() == Qt::Key_X) { 
-                    performCopy(true); 
+                    QuarkMeta::ClipboardService::instance().cutItems(getSelectedPaths());
                     return true; 
                 } 
-                // 2026-03-xx 按照用户要求：逻辑重构，统一调用 performPaste 业务函数 
                 if (keyEvent->key() == Qt::Key_V) { 
-                    if (canPaste()) {
-                        performPaste(); 
+                    if (QuarkMeta::ClipboardService::instance().canPaste(m_currentPath)) {
+                        QuarkMeta::ClipboardService::instance().executePaste(m_currentPath, this);
                     }
                     return true; 
                 } 
@@ -1511,117 +1486,23 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         ContextAction action = static_cast<ContextAction>(selectedAction->data().toInt());
         switch (action) {
             case ActionRestore: {
-                auto indexes = view->selectionModel()->selectedIndexes();
-                for (const auto& idx : indexes) {
-                    if (idx.column() == 0) {
-                        if (idx.data(IsDiskTrashRole).toBool()) {
-                            int id = idx.data(DiskTrashIdRole).toInt();
-                            QString trashPath = idx.data(PathRole).toString();
-                            DiskTrashService::restoreFromDiskTrash(id, trashPath);
-                        }
-                    }
-                }
-                refreshAll();
-                MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
+                QuarkMeta::TrashService::instance().restoreItems(getSelectedTrashIds(), this);
                 break;
             }
             case ActionCut: {
-                performCopy(true);
+                QuarkMeta::ClipboardService::instance().cutItems(getSelectedPaths());
                 break;
             }
             case ActionSecureDelete: {
-                auto indexes = view->selectionModel()->selectedIndexes();
-                QStringList targetPaths;
-                std::vector<std::pair<int, QString>> diskTrashItems;
-
-                for (const auto& idx : indexes) {
-                    if (idx.column() == 0) {
-                        if (idx.data(IsDiskTrashRole).toBool()) {
-                            int id = idx.data(DiskTrashIdRole).toInt();
-                            QString p = idx.data(PathRole).toString();
-                            diskTrashItems.push_back({id, p});
-                        } else {
-                            targetPaths << idx.data(PathRole).toString();
-                        }
-                    }
-                }
-                if (targetPaths.isEmpty() && diskTrashItems.empty() && !path.isEmpty()) {
-                    targetPaths << path;
-                }
-
-                if (targetPaths.isEmpty() && diskTrashItems.empty()) break;
-
-                QString msg = "确定要永久删除选中的项目吗？数据将被物理覆写并彻底抹除，此操作不可恢复。";
-                if (!FramelessMessageBox::question(this, "确认删除", msg)) break;
-
-                BatchProgressDialog* progress = new BatchProgressDialog("正在执行永久删除（深层抹除）...", this);
-                progress->show();
-
-                QPointer<ContentPanel> weakPanel(this);
-                QPointer<BatchProgressDialog> weakProgress(progress);
-
-                MetadataManager::instance().beginInternalOperation();
-
-                (void)QtConcurrent::run([targetPaths, diskTrashItems, weakPanel, weakProgress]() {
-                    int total = static_cast<int>(targetPaths.size() + diskTrashItems.size());
-                    int count = 0;
-
-                    for (const QString& p : targetPaths) {
-                        if (!weakPanel) return;
-                        std::wstring wp = QDir::toNativeSeparators(p).toStdWString();
-                        MetadataManager::instance().setEncrypted(wp, false);
-                        QFile::remove(p);
-                        count++;
-                        if (weakProgress) {
-                            QMetaObject::invokeMethod(weakProgress, "updateProgress",
-                                                      Qt::QueuedConnection,
-                                                      Q_ARG(int, count),
-                                                      Q_ARG(int, total),
-                                                      Q_ARG(QString, QFileInfo(p).fileName()));
-                        }
-                    }
-
-                    for (const auto& item : diskTrashItems) {
-                        if (!weakPanel) return;
-                        DiskTrashService::permanentlyDeleteDiskTrash(item.first, item.second);
-                        count++;
-                        if (weakProgress) {
-                            QMetaObject::invokeMethod(weakProgress, "updateProgress",
-                                                      Qt::QueuedConnection,
-                                                      Q_ARG(int, count),
-                                                      Q_ARG(int, total),
-                                                      Q_ARG(QString, QFileInfo(item.second).fileName()));
-                        }
-                    }
-
-                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, weakProgress]() {
-                        MetadataManager::instance().endInternalOperation();
-                        if (weakProgress) weakProgress->close();
-                        if (weakPanel) {
-                            weakPanel->refreshAll();
-                            MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
-                            ToolTipOverlay::instance()->showText(QCursor::pos(), "选中的回收站项目已彻底永久删除", 1500, QColor("#2ecc71"));
-                        }
-                    });
-                });
+                QuarkMeta::PermanentDeleteService::instance().execute(getSelectedPaths(), this);
                 break;
             }
             case ActionRestoreAll: {
-                if (DiskTrashService::restoreAllDiskTrash()) {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "所有回收站项目已成功还原", 1500, QColor("#2ecc71"));
-                }
-                refreshAll();
-                MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
+                QuarkMeta::TrashService::instance().restoreAll(this);
                 break;
             }
             case ActionEmptyTrash: {
-                if (FramelessMessageBox::question(this, "清空回收站", "确定要清空回收站吗？回收站内的所有文件将被彻底删除，此操作不可撤销。")) {
-                    if (DiskTrashService::emptyDiskTrash()) {
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), "回收站已清空", 1500, QColor("#2ecc71"));
-                    }
-                    refreshAll();
-                    MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
-                }
+                QuarkMeta::TrashService::instance().emptyTrash(this);
                 break;
             }
             default:
@@ -1950,9 +1831,18 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
         } 
         case ActionBatchRename: performBatchRename(); break; 
         case ActionRename: view->edit(currentIndex); break; 
-        case ActionCopy: performCopy(false); break; 
-        case ActionCut: performCopy(true); break; 
-        case ActionPaste: performPaste(); break; 
+        case ActionCopy: {
+            QuarkMeta::ClipboardService::instance().copyItems(getSelectedPaths());
+            break;
+        }
+        case ActionCut: {
+            QuarkMeta::ClipboardService::instance().cutItems(getSelectedPaths());
+            break;
+        }
+        case ActionPaste: {
+            QuarkMeta::ClipboardService::instance().executePaste(isFolder ? path : m_currentPath, this);
+            break;
+        }
         case ActionBatchCreate: {
             BatchCreateDialog dlg(m_currentPath, this);
             if (dlg.exec() == QDialog::Accepted) {
@@ -1976,160 +1866,12 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
             MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild); // 刷新全量统计
             break;
         }
-        case ActionDelete: 
+        case ActionDelete: {
+            QuarkMeta::TrashService::instance().moveToTrash(getSelectedPaths(), this);
+            break;
+        }
         case ActionSecureDelete: {
-            auto indexes = view->selectionModel()->selectedIndexes();
-            QStringList targetPaths;
-            std::vector<std::pair<int, QString>> diskTrashItems; // id, trashPath
-
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0) {
-                    if (idx.data(IsDiskTrashRole).toBool()) {
-                        int id = idx.data(DiskTrashIdRole).toInt();
-                        QString p = idx.data(PathRole).toString();
-                        diskTrashItems.push_back({id, p});
-                    } else {
-                        targetPaths << idx.data(PathRole).toString();
-                    }
-                }
-            }
-            if (targetPaths.isEmpty() && diskTrashItems.empty() && !path.isEmpty()) {
-                targetPaths << path;
-            }
-
-            if (targetPaths.isEmpty() && diskTrashItems.empty()) break;
-
-            if (action == ActionDelete) {
-                OperationSnapshotEngine::instance().executeWithSnapshot(
-                    this,
-                    SnapshotOperationType::DeleteToTrash,
-                    targetPaths,
-                    QString("已将 %1 个项目移入回收站").arg(targetPaths.size()),
-                    [this, targetPaths]() {
-                        // 1. 开启内部操作锁
-                        MetadataManager::instance().beginInternalOperation();
-
-                        bool ok = false;
-                        ok = DiskTrashService::moveToDiskTrash(targetPaths);
-
-                        if (ok) {
-                            refreshAll();
-                        }
-
-                        MetadataManager::instance().endInternalOperation();
-                        return ok;
-                    },
-                    [this](const QVector<AssetItemSnapshot>& beforeState) {
-                        for (const auto& snap : beforeState) {
-                            int trashId = -1;
-                            QString trashPath;
-                            if (QuarkMeta::TrashRepository::instance().getDiskTrashRecordByPath(snap.path.toStdWString(), trashId, trashPath)) {
-                                DiskTrashService::restoreFromDiskTrash(trashId, trashPath);
-                            }
-                        }
-                        refreshAll();
-                        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
-                        return true;
-                    }
-                );
-            } else {
-                QString msg = "确定要永久删除选中的项目吗？数据将被物理覆写并彻底抹除，此操作不可恢复。";
-                if (!FramelessMessageBox::question(this, "确认删除", msg)) break;
-
-                BatchProgressDialog* progress = new BatchProgressDialog("正在执行永久删除（深层抹除）...", this);
-                progress->show();
-
-                // 异步多线程执行物理安全删除与数据库记录清除 (双轨隔离)
-                // 强制使用 QPointer 哨兵保护，防止 ContentPanel 提前析构导致主线程异步回调发生野指针悬空崩溃
-                QPointer<ContentPanel> weakPanel(this);
-                QPointer<BatchProgressDialog> weakProgress(progress);
-
-                // 1. 开启内部操作锁
-                MetadataManager::instance().beginInternalOperation();
-
-                (void)QtConcurrent::run([targetPaths, diskTrashItems, action, weakPanel, weakProgress]() {
-                    int total = static_cast<int>(targetPaths.size() + diskTrashItems.size());
-                    int count = 0;
-
-                    // A. 处理常规项目 (资源库托管或非回收站物理文件)
-                    for (const QString& p : targetPaths) {
-                        if (!weakPanel) return;
-                        std::wstring wp = QDir::toNativeSeparators(p).toStdWString();
-                        
-                        bool physicalOk = false;
-                        if (action == ActionSecureDelete) {
-                            physicalOk = SecureFileEraser::shredFile(p);
-                        } else {
-                            // 普通彻底递归删除
-                            std::function<bool(const QString&)> recursiveRemove;
-                            recursiveRemove = [&](const QString& target) -> bool {
-                                QFileInfo info(target);
-                                bool ok = false;
-                                QDir parentDir = info.dir();
-                                if (info.isDir()) {
-                                    QDir dir(target);
-                                    for (const QString& entry : dir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
-                                        recursiveRemove(target + "/" + entry);
-                                    }
-                                    ok = QDir().rmdir(target);
-                                } else {
-                                    ok = QFile::remove(target);
-                                }
-
-                                return ok;
-                            };
-                            physicalOk = recursiveRemove(p);
-                        }
-
-                        if (physicalOk) {
-                            AppCommand cmd;
-                            cmd.type = AppCommandType::DeletePermanently;
-                            cmd.targetPaths << QString::fromStdWString(wp);
-                            CoreEngine::instance().executeCommand(cmd);
-                            UndoManager::instance().removeCommandsForPath(p);
-                        }
-
-                        count++;
-                        if (weakProgress) {
-                            int percent = (int)((float)count / total * 100);
-                            QMetaObject::invokeMethod(QCoreApplication::instance(), [weakProgress, percent]() {
-                                if (weakProgress) weakProgress->setValue(percent);
-                            });
-                        }
-                    }
-
-                    // B. 处理磁盘回收站中未还原项目 (通过专用表清除)
-                    for (const auto& item : diskTrashItems) {
-                        if (!weakPanel) return;
-                        int id = item.first;
-                        QString p = item.second;
-
-                        DiskTrashService::permanentlyDeleteDiskTrash(id, p);
-
-                        count++;
-                        if (weakProgress) {
-                            int percent = (int)((float)count / total * 100);
-                            QMetaObject::invokeMethod(QCoreApplication::instance(), [weakProgress, percent]() {
-                                if (weakProgress) weakProgress->setValue(percent);
-                            });
-                        }
-                    }
-
-                    // 完成后回到主线程安全执行 UI 级刷新与锁释放
-                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, weakProgress]() {
-                        if (weakProgress) {
-                            weakProgress->accept();
-                            weakProgress->deleteLater();
-                        }
-                        // 无论 UI 控件是否被销毁，操作锁都能被正确安全地释放 (双轨防护)
-                        MetadataManager::instance().endInternalOperation();
-
-                        if (weakPanel) {
-                            weakPanel->refreshAll();
-                        }
-                    });
-                });
-            }
+            QuarkMeta::PermanentDeleteService::instance().execute(getSelectedPaths(), this);
             break;
         }
         case ActionAddToFavorites: {
@@ -2887,6 +2629,30 @@ bool ContentPanel::resolvePasteDestination() {
     }
 
     return true;
+}
+
+QStringList ContentPanel::getSelectedPaths() const {
+    QStringList paths;
+    QModelIndexList indexes = getSelectedIndexes();
+    for (const auto& idx : indexes) {
+        if (idx.column() == 0) {
+            QString p = idx.data(PathRole).toString();
+            if (!p.isEmpty()) paths << p;
+        }
+    }
+    return paths;
+}
+
+QList<int> ContentPanel::getSelectedTrashIds() const {
+    QList<int> trashIds;
+    QModelIndexList indexes = getSelectedIndexes();
+    for (const auto& idx : indexes) {
+        if (idx.column() == 0 && idx.data(IsDiskTrashRole).toBool()) {
+            int id = idx.data(DiskTrashIdRole).toInt();
+            if (id > 0) trashIds << id;
+        }
+    }
+    return trashIds;
 }
 
 void ContentPanel::recalculateAndEmitStats() {

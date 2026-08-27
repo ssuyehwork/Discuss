@@ -15,8 +15,8 @@
 #include "../core/BasicCommands.h"
 #include "TrayController.h"
 #include "HoverEventFilter.h"
-#include "ResizeEventFilter.h"
-#include "TitleBarEventFilter.h"
+#include "FramelessWindowHelper.h"
+#include "PanelLayoutManager.h"
 #include "AddressBar.h"
 #include "../core/CoreController.h"
 #include "ColorPicker.h"
@@ -92,9 +92,6 @@ constexpr int kEdgeMargin = 5;
 constexpr int kStatusBarMargin = 12;
 
 MainWindow::~MainWindow() {
-    if (m_resizeFilter) {
-        QCoreApplication::instance()->removeEventFilter(m_resizeFilter);
-    }
 }
 
 MainWindow::MainWindow(QWidget* parent)
@@ -107,27 +104,11 @@ MainWindow::MainWindow(QWidget* parent)
     setWindowTitle("QuarkMeta");
 
     m_hoverFilter = new HoverEventFilter(this);
-    m_resizeFilter = new ResizeEventFilter(this);
-    m_titleBarFilter = new TitleBarEventFilter(this, this);
-    Q_ASSERT(m_hoverFilter && m_resizeFilter && m_titleBarFilter);
 
     m_shortcutController = new GlobalShortcutController(this, this);
     m_panelMediator = new PanelMediator(this, this);
 
     m_isPinned = AppConfig::instance().getValue("MainWindow/AlwaysOnTop", false).toBool();
-    
-    setWindowFlags(Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
-
-    if (m_isPinned) {
-#ifdef Q_OS_WIN
-        QTimer::singleShot(0, this, [this]() {
-            HWND hwnd = reinterpret_cast<HWND>(winId());
-            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
-        });
-#else
-        setWindowFlag(Qt::WindowStaysOnTopHint, true);
-#endif
-    }
 
     QFile file(":/style.qss");
     if (file.open(QFile::ReadOnly)) {
@@ -167,6 +148,11 @@ MainWindow::MainWindow(QWidget* parent)
 
     initUi();
 
+    FramelessWindowHelper::apply(this, m_titleBarWidget);
+    if (m_isPinned) {
+        FramelessWindowHelper::setAlwaysOnTop(this, true);
+    }
+
     m_trayController = new TrayController(this);
     m_trayController->show();
 
@@ -184,12 +170,10 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 void MainWindow::initUi() {
-    Q_ASSERT(m_hoverFilter && m_resizeFilter && "事件过滤器必须在 initUi() 之前创建");
+    Q_ASSERT(m_hoverFilter && "事件过滤器必须在 initUi() 之前创建");
 
     initToolbar();
     setupSplitters();
-
-    QCoreApplication::instance()->installEventFilter(m_resizeFilter);
 
     setupCustomTitleBarButtons();
 
@@ -198,8 +182,6 @@ void MainWindow::initUi() {
     m_mainSplitter->setStretchFactor(2, 1);
     m_mainSplitter->setStretchFactor(3, 0);
     m_mainSplitter->setStretchFactor(4, 0);
-
-    loadPanelVisibility();
 
     QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
     if (!savedGeom.isEmpty()) {
@@ -269,97 +251,6 @@ void MainWindow::showEvent(QShowEvent* event) {
     }
 }
 
-void MainWindow::mousePressEvent(QMouseEvent* event) {
-    if (event->button() != Qt::LeftButton) return;
-
-    const QPoint localPos = event->position().toPoint();
-    ResizeDirection dir = getResizeDirection(localPos);
-
-    if (dir != None) {
-        m_isResizing = true;
-        m_isDragging = false;
-        m_resizeDir = dir;
-        m_resizeStartGlobal   = event->globalPosition().toPoint();
-        m_resizeStartGeometry = geometry();
-        event->accept();
-        return;
-    }
-
-    if (localPos.y() <= 34) {
-        m_isDragging = true;
-        m_dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
-        event->accept();
-    }
-}
-
-void MainWindow::mouseMoveEvent(QMouseEvent* event) {
-    if (m_isResizing) {
-        const QPoint delta = event->globalPosition().toPoint() - m_resizeStartGlobal;
-        QRect r = m_resizeStartGeometry;
-
-        if (m_resizeDir == Left || m_resizeDir == TopLeft || m_resizeDir == BottomLeft)
-            r.setLeft(r.left() + delta.x());
-        if (m_resizeDir == Right || m_resizeDir == TopRight || m_resizeDir == BottomRight)
-            r.setRight(r.right() + delta.x());
-        if (m_resizeDir == Top || m_resizeDir == TopLeft || m_resizeDir == TopRight)
-            r.setTop(r.top() + delta.y());
-        if (m_resizeDir == Bottom || m_resizeDir == BottomLeft || m_resizeDir == BottomRight)
-            r.setBottom(r.bottom() + delta.y());
-
-        if (r.width() >= minimumWidth() && r.height() >= minimumHeight())
-            setGeometry(r);
-
-        event->accept();
-        return;
-    }
-
-    if (m_isDragging && (event->buttons() & Qt::LeftButton)) {
-        move(event->globalPosition().toPoint() - m_dragPosition);
-        event->accept();
-        return;
-    }
-
-}
-
-MainWindow::ResizeDirection MainWindow::getResizeDirection(const QPoint& pos) const {
-    int m = kResizeMargin;
-    if (windowHandle()) {
-        m = qRound(screen()->logicalDotsPerInch() / 96.0 * (double)kResizeMargin);
-    }
-    const int w = width(), h = height();
-    bool left   = pos.x() < m;
-    bool right  = pos.x() > w - m;
-    bool top    = pos.y() < m;
-    bool bottom = pos.y() > h - m;
-
-    if (top    && left)  return TopLeft;
-    if (top    && right) return TopRight;
-    if (bottom && left)  return BottomLeft;
-    if (bottom && right) return BottomRight;
-    if (left)   return Left;
-    if (right)  return Right;
-    if (top)    return Top;
-    if (bottom) return Bottom;
-    return None;
-}
-
-void MainWindow::updateCursorShape(ResizeDirection dir) {
-    switch (dir) {
-        case Left:        case Right:       setCursor(Qt::SizeHorCursor);  break;
-        case Top:         case Bottom:      setCursor(Qt::SizeVerCursor);  break;
-        case TopLeft:     case BottomRight: setCursor(Qt::SizeFDiagCursor); break;
-        case TopRight:    case BottomLeft:  setCursor(Qt::SizeBDiagCursor); break;
-        default:                            setCursor(Qt::ArrowCursor);    break;
-    }
-}
-
-void MainWindow::mouseReleaseEvent(QMouseEvent* event) {
-    Q_UNUSED(event);
-    m_isDragging  = false;
-    m_isResizing  = false;
-    m_resizeDir   = None;
-    setCursor(Qt::ArrowCursor);
-}
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {
     if (m_shortcutController && m_shortcutController->handleKeyPress(event)) {
@@ -430,7 +321,6 @@ void MainWindow::setupSplitters() {
     m_titleBarWidget->setObjectName("TitleBar");
     m_titleBarWidget->setStyleSheet(QString("QWidget#TitleBar { border: none; border-bottom: 1px solid %1; background: transparent; }").arg(qssColor(BorderColor)));
     m_titleBarWidget->setFixedHeight(34);
-    m_titleBarWidget->installEventFilter(m_titleBarFilter);
     m_titleBarLayout = new QHBoxLayout(m_titleBarWidget);
     m_titleBarLayout->setContentsMargins(5, 0, kEdgeMargin, 0); 
     m_titleBarLayout->setSpacing(8);
@@ -440,12 +330,10 @@ void MainWindow::setupSplitters() {
     m_logoLabel->setPixmap(UiHelper::getIcon("ferrex", BrandOrange).pixmap(16, 16));
     m_logoLabel->setAlignment(Qt::AlignCenter);
     m_logoLabel->setStyleSheet("background: transparent; border: none;");
-    m_logoLabel->installEventFilter(m_titleBarFilter);
     m_titleBarLayout->addWidget(m_logoLabel);
 
     m_appNameLabel = new QLabel("QuarkMeta", m_titleBarWidget);
     m_appNameLabel->setStyleSheet(QString("color: %1; font-size: 12px; font-weight: bold;").arg(BrandOrange.name()));
-    m_appNameLabel->installEventFilter(m_titleBarFilter);
     m_titleBarLayout->addWidget(m_appNameLabel);
     m_titleBarLayout->addStretch();
 
@@ -507,6 +395,13 @@ void MainWindow::setupSplitters() {
     m_mainSplitter->addWidget(m_contentPanel);
     m_mainSplitter->addWidget(m_metaPanel);
     m_mainSplitter->addWidget(m_filterPanel);
+
+    m_panelLayoutManager = new PanelLayoutManager(
+        this, m_mainSplitter,
+        m_navPanel, m_favoritePanel, m_contentPanel, m_metaPanel, m_filterPanel,
+        this
+    );
+    m_panelLayoutManager->initLayout();
 
     m_bodyLayout->addWidget(m_mainSplitter);
 
@@ -658,10 +553,9 @@ void MainWindow::setupCustomTitleBarButtons() {
     m_btnLayout->setProperty("tooltipText", "布局管理与重置");
     m_btnLayout->installEventFilter(m_hoverFilter);
     connect(m_btnLayout, &QPushButton::clicked, this, [this]() {
-        QMenu menu(this);
-        UiHelper::applyMenuStyle(&menu);
-        populatePanelMenu(&menu);
-        menu.exec(m_btnLayout->mapToGlobal(QPoint(0, m_btnLayout->height())));
+        if (m_panelLayoutManager) {
+            m_panelLayoutManager->showPanelContextMenu(m_btnLayout->mapToGlobal(QPoint(0, m_btnLayout->height())));
+        }
     });
 
     m_btnCreate = createTitleBtn("add");
@@ -762,7 +656,6 @@ void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
     }
 
     m_contentPanel->show();
-    loadPanelVisibility();
 
     QString path = url;
     if (path.startsWith(kProtocolFile)) path = path.mid(kProtocolFile.length());
@@ -867,14 +760,7 @@ void MainWindow::onPinToggled(bool checked) {
     if (m_isPinned == checked) return;
     m_isPinned = checked;
 
-#ifdef Q_OS_WIN
-    HWND hwnd = (HWND)winId();
-    SetWindowPos(hwnd, checked ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
-#else
-    setWindowFlag(Qt::WindowStaysOnTopHint, checked);
-    show();
-#endif
+    FramelessWindowHelper::setAlwaysOnTop(this, checked);
 
     if (m_isPinned) {
         m_btnPinTop->setIcon(UiHelper::getIcon("pin_vertical", Style::ActiveOrange));
@@ -907,113 +793,12 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     AppConfig::instance().setValue("MainWindow/LastPath", m_currentPath);
     AppConfig::instance().setValue("MainWindow/Geometry", saveGeometry());
 
-    if (m_mainSplitter) {
-        AppConfig::instance().setValue("MainWindow/SplitterState", m_mainSplitter->saveState());
-        savePanelVisibility();
+    if (m_panelLayoutManager) {
+        m_panelLayoutManager->saveLayoutState();
     }
     AppConfig::instance().sync();
 
     QMainWindow::closeEvent(event);
-}
-
-void MainWindow::showPanelContextMenu(const QPoint& globalPos) {
-    QMenu menu(this);
-    UiHelper::applyMenuStyle(&menu);
-    populatePanelMenu(&menu);
-    menu.exec(globalPos);
-}
-
-void MainWindow::populatePanelMenu(QMenu* menu) {
-    auto addToggleAction = [&](const QString& text, QWidget* panel, bool canHide = true) {
-        QAction* action = menu->addAction(text);
-        action->setCheckable(true);
-        action->setChecked(panel->isVisible());
-        action->setEnabled(canHide);
-        connect(action, &QAction::toggled, panel, [this, panel](bool visible) {
-            panel->setVisible(visible);
-            updateDynamicMinimumSize();
-        });
-    };
-
-    addToggleAction("显示目录导航", m_navPanel);
-    addToggleAction("显示收藏夹", m_favoritePanel);
-    addToggleAction("显示内容区", m_contentPanel, false);
-    addToggleAction("显示元数据栏", m_metaPanel);
-    addToggleAction("显示筛选栏", m_filterPanel);
-
-    menu->addSeparator();
-    QAction* resetAct = menu->addAction("重置分栏");
-    connect(resetAct, &QAction::triggered, this, &MainWindow::resetSplitterLayout);
-}
-
-void MainWindow::resetSplitterLayout() {
-    m_isTagManagerMode = false;
-
-    m_navPanel->show();
-    m_favoritePanel->show();
-    m_contentPanel->show();
-    m_metaPanel->show();
-    m_filterPanel->show();
-
-    QList<int> sizes;
-    sizes << 230 << 230 << 550 << 230 << 230;
-
-    m_mainSplitter->setSizes(sizes);
-    
-    m_mainSplitter->setStretchFactor(0, 0);
-    m_mainSplitter->setStretchFactor(1, 0);
-    m_mainSplitter->setStretchFactor(2, 1);
-    m_mainSplitter->setStretchFactor(3, 0);
-    m_mainSplitter->setStretchFactor(4, 0);
-
-    AppConfig::instance().remove("MainWindow/SplitterState");
-    AppConfig::instance().remove("MainWindow/PanelVisibility");
-    AppConfig::instance().sync();
-
-    ToolTipOverlay::instance()->showText(QCursor::pos(), "布局已重置为默认值", 1500);
-    updateDynamicMinimumSize();
-}
-
-void MainWindow::loadPanelVisibility() {
-    QVariant val = AppConfig::instance().getValue("MainWindow/PanelVisibility");
-    if (val.isValid()) {
-        QStringList hiddenPanels = val.toStringList();
-        if (hiddenPanels.contains("nav"))      m_navPanel->hide();
-        if (hiddenPanels.contains("favorite")) m_favoritePanel->hide();
-        if (hiddenPanels.contains("meta"))     m_metaPanel->hide();
-        if (hiddenPanels.contains("filter"))   m_filterPanel->hide();
-    }
-    updateDynamicMinimumSize();
-}
-
-void MainWindow::updateDynamicMinimumSize() {
-    int visibleCount = 0;
-    if (m_navPanel && m_navPanel->isVisible()) visibleCount++;
-    if (m_favoritePanel && m_favoritePanel->isVisible()) visibleCount++;
-    if (m_contentPanel && m_contentPanel->isVisible()) visibleCount++;
-    if (m_metaPanel && m_metaPanel->isVisible()) visibleCount++;
-    if (m_filterPanel && m_filterPanel->isVisible()) visibleCount++;
-
-    if (visibleCount <= 0) visibleCount = 1;
-
-    int calculatedMinW = (visibleCount * 230) + ((visibleCount - 1) * 5) + 10;
-    int finalMinW = qMax(465, calculatedMinW);
-    
-    setMinimumWidth(finalMinW);
-}
-
-void MainWindow::savePanelVisibility() {
-    if (m_isTagManagerMode) {
-        return;
-    }
-
-    QStringList hiddenPanels;
-    if (!m_navPanel->isVisible())      hiddenPanels << "nav";
-    if (!m_favoritePanel->isVisible()) hiddenPanels << "favorite";
-    if (!m_metaPanel->isVisible())     hiddenPanels << "meta";
-    if (!m_filterPanel->isVisible())   hiddenPanels << "filter";
-    
-    AppConfig::instance().setValue("MainWindow/PanelVisibility", hiddenPanels);
 }
 
 void MainWindow::initDriveBar() {

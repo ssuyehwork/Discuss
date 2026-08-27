@@ -77,6 +77,12 @@ set(SOURCES
     src/core/DiskTrashService.h
     src/core/OperationSnapshotEngine.h
     src/core/OperationSnapshotEngine.cpp
+    src/core/TrashService.h
+    src/core/TrashService.cpp
+    src/core/PermanentDeleteService.h
+    src/core/PermanentDeleteService.cpp
+    src/core/ClipboardService.h
+    src/core/ClipboardService.cpp
     src/core/AppConfig.h
     src/core/NavigationHistoryService.cpp
     src/core/NavigationHistoryService.h
@@ -169,10 +175,10 @@ set(SOURCES
     src/ui/TrayController.h
     src/ui/HoverEventFilter.cpp
     src/ui/HoverEventFilter.h
-    src/ui/ResizeEventFilter.cpp
-    src/ui/ResizeEventFilter.h
-    src/ui/TitleBarEventFilter.cpp
-    src/ui/TitleBarEventFilter.h
+    src/ui/FramelessWindowHelper.cpp
+    src/ui/FramelessWindowHelper.h
+    src/ui/PanelLayoutManager.cpp
+    src/ui/PanelLayoutManager.h
     src/ui/AddressBar.cpp
     src/ui/AddressBar.h
     src/ui/MetaPreviewWidget.h
