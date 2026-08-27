@@ -24,7 +24,6 @@ class TrayController;
 class HoverEventFilter;
 class AddressBar;
 class TaskProgressToolBar;
-class TaskProgressController;
 class SearchController; 
 class NavPanel;
 class FavoritePanel;
@@ -160,7 +159,6 @@ private:
     AppShortcutController* m_shortcutController = nullptr;
     PanelMediator* m_panelMediator = nullptr;
     PanelLayoutManager*       m_panelLayoutManager = nullptr;
-    TaskProgressController* m_taskProgressController = nullptr;
 
 };
 

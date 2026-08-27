@@ -1,27 +1,28 @@
 #pragma once
 
 #include <QWidget>
-#include <QLabel>
 #include <QProgressBar>
+#include <QLabel>
 #include <QPushButton>
+#include <QHBoxLayout>
 
 namespace QuarkMeta {
 
 class TaskProgressToolBar : public QWidget {
     Q_OBJECT
+
 public:
     explicit TaskProgressToolBar(QWidget* parent = nullptr);
-
-    void updateProgress(int processed, int total, int remainingSeconds);
-    void showCompleted(int processed, int total);
-
-signals:
-    void cancelRequested();
+    ~TaskProgressToolBar() override = default;
 
 private:
-    QLabel* m_lblStatus = nullptr;
+    void initUi();
+    void bindService();
+
     QProgressBar* m_progressBar = nullptr;
-    QLabel* m_lblTime = nullptr;
+    QLabel* m_lblTitle = nullptr;
+    QLabel* m_lblDetail = nullptr;
+    QLabel* m_lblCount = nullptr;
     QPushButton* m_btnCancel = nullptr;
 };
 

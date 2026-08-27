@@ -4,7 +4,6 @@
 #include "MainWindow.h"
 #include "AppShortcutController.h"
 #include "PanelMediator.h"
-#include "TaskProgressController.h" 
 #include "SearchController.h" 
 #include "SearchHistoryPanel.h" 
 #include <QDateTime>
@@ -455,8 +454,6 @@ void MainWindow::setupSplitters() {
     mainL->addWidget(bodyWrapper, 1);
     mainL->addWidget(m_statusBarWidget);
     mainL->addWidget(m_taskProgressToolBar);
-
-    m_taskProgressController = new TaskProgressController(bodyWrapper, m_statusBarWidget, m_statusLeft, this);
 
     setCentralWidget(centralC);
 }

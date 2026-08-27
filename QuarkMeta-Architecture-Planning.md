@@ -55,6 +55,11 @@
 3. **属性面板 (MetaPanel) 拆分规范**：属性面板解耦为独立的组件小模块（预览、评分颜色、标签节、基础信息节），结构清晰，职责单一。
 4. **元数据中心 (MetadataManager) 门面模式规范**：元数据中心作为对外统一门面（Facade），不再直接混合磁盘 I/O 与数据库存取。序列化由 `QuarkMetaJsonStore` 承载；SQLite 持久化由 `MetaDbRepository` 承载；内存缓存由 `MetaMemoryCache` 承载。
 
+### 全局任务进度中枢与观察者视图顶层解耦规范 (TaskProgressService & TaskProgressToolBar)
+1. **全局进度中枢线程安全与单例调度红线**：全系统所有后台耗时任务（如扫描、判重、提取缩略图等）的进度管理统一由领域服务 `TaskProgressService` 单例承载。内部状态操作与任务字典管理必须通过锁（`QMutex`）保护，跨线程进度变动与完成信号通知强制采用 `QMetaObject::invokeMethod(..., Qt::QueuedConnection)` 切回主 UI 线程，彻底消除跨线程访问 UI 崩溃漏洞。
+2. **进度工具栏 UI 纯粹观察者模式红线**：底部进度工具栏 (`TaskProgressToolBar`) 仅作为纯粹的观察者（Observer），直接订阅 `TaskProgressService` 信号，根据活动任务状态实现自动显隐与进度条更新。工具栏内部禁止包含任何任务调度、倒计时逻辑或重型计算。
+3. **主窗口宿主与侵入式控制器彻底拔除红线**：彻底物理废除并删除 UI 层侵入式控制器 `TaskProgressController`。主窗口 (`MainWindow`) 仅作为界面装配容器，严禁持有任务进度控制器指针或在主窗口内手动编写进度胶水代码。
+
 ### 系统托盘退出生命周期与主进程优雅终结顶层规范 (TrayController)
 1. **标准关闭序列与配置落盘红线**：系统托盘（TrayController）在响应右键“退出”指令时，必须发射退出信号或调用 `qApp->closeAllWindows()` 发起标准的窗口关闭流程，由主窗口 `closeEvent` 统一调度后台工作线程熔断与数据库安全落盘，严禁强杀主事件循环。
 

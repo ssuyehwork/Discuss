@@ -1,60 +1,64 @@
 #include "TaskProgressToolBar.h"
-#include <QHBoxLayout>
+#include "../core/TaskProgressService.h"
+#include "UiHelper.h"
 
 namespace QuarkMeta {
 
-TaskProgressToolBar::TaskProgressToolBar(QWidget* parent) : QWidget(parent) {
-    setFixedHeight(28);
-    setStyleSheet("background-color: #252526; border-top: 1px solid #333; color: #CCC;");
+TaskProgressToolBar::TaskProgressToolBar(QWidget* parent)
+    : QWidget(parent) {
+    initUi();
+    bindService();
+    hide();
+}
+
+void TaskProgressToolBar::initUi() {
+    setFixedHeight(36);
+    setStyleSheet("QWidget { background-color: #252526; border-top: 1px solid #333333; }");
 
     QHBoxLayout* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(12, 0, 12, 0);
+    layout->setContentsMargins(15, 0, 15, 0);
     layout->setSpacing(10);
 
-    m_lblStatus = new QLabel("正在导入项目...", this);
-    m_lblStatus->setStyleSheet("font-size: 11px;");
-    layout->addWidget(m_lblStatus);
+    m_lblTitle = new QLabel("正在处理任务...", this);
+    m_lblTitle->setStyleSheet("color: #EEEEEE; font-size: 11px; font-weight: bold; background: transparent;");
 
     m_progressBar = new QProgressBar(this);
     m_progressBar->setFixedHeight(6);
     m_progressBar->setRange(0, 100);
     m_progressBar->setTextVisible(false);
     m_progressBar->setStyleSheet(
-        "QProgressBar { background: #333; border: none; border-radius: 3px; }"
-        "QProgressBar::chunk { background: #378ADD; border-radius: 3px; }"
+        "QProgressBar { background-color: #3E3E42; border: none; border-radius: 3px; }"
+        "QProgressBar::chunk { background-color: #378ADD; border-radius: 3px; }"
     );
+
+    m_lblDetail = new QLabel("", this);
+    m_lblDetail->setStyleSheet("color: #888888; font-size: 11px; background: transparent;");
+
+    m_lblCount = new QLabel("", this);
+    m_lblCount->setStyleSheet("color: #378ADD; font-size: 11px; font-weight: bold; background: transparent;");
+
+    layout->addWidget(m_lblTitle);
     layout->addWidget(m_progressBar, 1);
-
-    m_lblTime = new QLabel("计算中...", this);
-    m_lblTime->setStyleSheet("font-size: 11px; color: #888;");
-    layout->addWidget(m_lblTime);
-
-    m_btnCancel = new QPushButton("×", this);
-    m_btnCancel->setFixedSize(16, 16);
-    m_btnCancel->setCursor(Qt::PointingHandCursor);
-    m_btnCancel->setStyleSheet("QPushButton { border: none; color: #888; font-weight: bold; } QPushButton:hover { color: #FFF; }");
-    layout->addWidget(m_btnCancel);
-
-    connect(m_btnCancel, &QPushButton::clicked, this, &TaskProgressToolBar::cancelRequested);
+    layout->addWidget(m_lblDetail);
+    layout->addWidget(m_lblCount);
 }
 
-void TaskProgressToolBar::updateProgress(int processed, int total, int remainingSeconds) {
-    if (total <= 0) return;
-    int pct = static_cast<int>((double)processed / total * 100.0);
-    m_progressBar->setValue(pct);
-    m_lblStatus->setText(QString("正在导入项目 (%1/%2)...").arg(processed).arg(total));
+void TaskProgressToolBar::bindService() {
+    connect(&TaskProgressService::instance(), &TaskProgressService::jobStarted, this, [this](int, const QString& title) {
+        m_lblTitle->setText(title);
+        show();
+    });
 
-    if (remainingSeconds >= 0) {
-        m_lblTime->setText(QString("剩余约 %1 秒").arg(remainingSeconds));
-    } else {
-        m_lblTime->setText("计算中...");
-    }
-}
+    connect(&TaskProgressService::instance(), &TaskProgressService::progressUpdated, this, 
+            [this](int percent, const QString& title, const QString& detail, int activeCount) {
+        m_progressBar->setValue(percent);
+        if (!title.isEmpty()) m_lblTitle->setText(title);
+        m_lblDetail->setText(detail);
+        m_lblCount->setText(activeCount > 1 ? QString("(%1 项并发任务)").arg(activeCount) : "");
+        if (!isVisible()) show();
+    });
 
-void TaskProgressToolBar::showCompleted(int processed, int total) {
-    m_progressBar->setValue(100);
-    m_lblStatus->setText(QString("处理完成 (%1/%2)").arg(processed).arg(total));
-    m_lblTime->setText("已就绪");
+    connect(&TaskProgressService::instance(), &TaskProgressService::allJobsFinished, this, &QWidget::hide);
 }
 
 } // namespace QuarkMeta

@@ -83,6 +83,8 @@ set(SOURCES
     src/core/PermanentDeleteService.cpp
     src/core/ClipboardService.h
     src/core/ClipboardService.cpp
+    src/core/TaskProgressService.h
+    src/core/TaskProgressService.cpp
     src/core/AppConfig.h
     src/core/NavigationService.cpp
     src/core/NavigationService.h
@@ -171,8 +173,6 @@ set(SOURCES
     src/ui/PanelMediator.cpp
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
-    src/ui/TaskProgressController.h
-    src/ui/TaskProgressController.cpp
     src/ui/SearchController.h
     src/ui/SearchController.cpp
     src/ui/TrayController.cpp
