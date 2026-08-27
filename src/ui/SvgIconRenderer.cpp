@@ -82,7 +82,7 @@ QString SvgIconRenderer::getSvgTempFilePath(const QString& key, const QColor& co
 void SvgIconRenderer::applyMenuStyle(QWidget* menu) {
     if (!menu) return;
     menu->setAttribute(Qt::WA_TranslucentBackground);
-    menu->setWindowFlag(Qt::FramelessWindowHint);
+    menu->setWindowFlags(menu->windowFlags() | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
 
     QString arrowPath = getSvgTempFilePath("menu_triangle", QColor("#CCCCCC"));
 

@@ -10,7 +10,7 @@ ResizeEventFilter::ResizeEventFilter(QMainWindow* window)
     : QObject(window), m_window(window) {}
 
 bool ResizeEventFilter::eventFilter(QObject* watched, QEvent* event) {
-    if (!m_window || m_window->isMaximized()) return QObject::eventFilter(watched, event);
+    if (!m_window || watched != m_window || m_window->isMaximized()) return QObject::eventFilter(watched, event);
 
     if (event->type() == QEvent::MouseButtonPress) {
         QMouseEvent* me = static_cast<QMouseEvent*>(event);

@@ -22,7 +22,7 @@ TrayController::TrayController(QMainWindow* mainWindow)
     m_trayIcon->setIcon(QIcon(":/app_icon.ico"));
     m_trayIcon->setToolTip("QuarkMeta");
 
-    m_trayMenu = new QMenu();
+    m_trayMenu = new QMenu(mainWindow);
     UiHelper::applyMenuStyle(m_trayMenu);
 
     QAction* showAction = m_trayMenu->addAction("显示主界面");
@@ -31,6 +31,8 @@ TrayController::TrayController(QMainWindow* mainWindow)
 
     connect(showAction, &QAction::triggered, this, &TrayController::onShowMainWindow);
     connect(quitAction, &QAction::triggered, this, &TrayController::onQuitApp);
+
+    m_trayIcon->setContextMenu(m_trayMenu);
 
     connect(m_trayIcon, &QSystemTrayIcon::activated, this, &TrayController::onTrayActivated);
 }
@@ -59,13 +61,6 @@ void TrayController::onTrayActivated(QSystemTrayIcon::ActivationReason reason) {
             m_mainWindow->hide();
         } else {
             onShowMainWindow();
-        }
-    } else if (reason == QSystemTrayIcon::Context) {
-        if (m_trayMenu && m_mainWindow) {
-#ifdef Q_OS_WIN
-            SetForegroundWindow(reinterpret_cast<HWND>(m_mainWindow->winId()));
-#endif
-            m_trayMenu->exec(QCursor::pos());
         }
     }
 }
