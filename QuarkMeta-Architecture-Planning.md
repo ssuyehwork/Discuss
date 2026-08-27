@@ -46,6 +46,11 @@
 3. **属性面板 (MetaPanel) 拆分与 UI 布局架构规范**：属性面板（MetaPanel）头部标题必须保持“元数据属性”并使用 `#4a90e2` 数据库风格；纵向布局必须严格从上至下保持物理顺序：1. 顶部预览与调色板 -> 2. 文件名编辑框 -> 3. 备注说明 -> 4. 关联网址（右侧链接图标必须具备独立的左侧 1px 垂直分隔线 `border-left`）-> 5. 星级评级与颜色标记（必须配备 `no_color` 清除 ⊘ 图标与全矢量 SVG 图标）-> 6. 标签管理（使用纯矢量 `add` 按钮，严禁使用 `[+]` 文本符号）-> 7. 基础属性（包含加密状态）-> 8. 物理路径（必须强制 `setCursorPosition(0)` 优先呈现路径头部盘符，包含“复制路径”与“打开位置”独立物理按钮）。
 4. **元数据中心 (MetadataManager) 门面模式规范**：元数据中心作为对外统一门面（Facade），不再直接混合磁盘 IO 与数据库存取。`.QuarkMeta.json` 序列化由 `QuarkMetaJsonStore` 承载；SQLite `global.db` 持久化由 `MetaDbRepository` 承载；内存 LRU 缓存由 `MetaMemoryCache` 承载。
 
+### 系统托盘退出生命周期与主进程优雅终结顶层规范 (TrayController)
+1. **显式主窗口关闭与配置落盘红线**：系统托盘（TrayController）在响应右键“退出”指令时，必须优先显式调用主窗口的 `close()` 方法，强制触发主窗口的 `closeEvent` 事件，确保窗口 Geometry 状态、Splitter 比例与最后访问路径等配置安全落盘。
+2. **托盘句柄与资源显式注销红线**：在退出序列发起时，托盘控制器必须显式隐藏托盘图标（`hide()`）并断开相关信号与上下文菜单绑定，防止 Windows 系统托盘句柄残留。
+3. **主事件循环强行终结红线**：由于系统禁用了“最后一个窗口关闭时自动退出”（`setQuitOnLastWindowClosed(false)`），托盘退出指令在关闭主窗口后，必须显式调用 `QCoreApplication::exit(0)` 或 `QApplication::exit(0)`，强制通知 Qt 主事件循环以状态码 0 退出，确保 `a.exec()` 立即结束并顺序执行 `aboutToQuit` 安全清场序列（包括后台流水线熔断与数据库安全落盘）。
+
 ---
 
 ## 2. 自研代码文件职责与功能深度剖析 (Self-Developed Source File Responsibilities)
