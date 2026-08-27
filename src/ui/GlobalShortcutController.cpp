@@ -1,6 +1,7 @@
 #include "GlobalShortcutController.h"
 #include "MainWindow.h"
 #include "ContentPanel.h"
+#include "SearchController.h"
 #include "../core/UndoManager.h"
 #include <QKeyEvent>
 
@@ -57,9 +58,9 @@ bool GlobalShortcutController::handleKeyPress(QKeyEvent* event) {
 
     // 4. Ctrl+F: 聚焦搜索过滤框
     if (event->key() == Qt::Key_F && (event->modifiers() & Qt::ControlModifier)) {
-        if (m_mainWindow->m_searchEdit) {
-            m_mainWindow->m_searchEdit->setFocus(Qt::ShortcutFocusReason);
-            m_mainWindow->m_searchEdit->selectAll();
+        if (m_mainWindow->m_searchController && m_mainWindow->m_searchController->searchEdit()) {
+            m_mainWindow->m_searchController->searchEdit()->setFocus(Qt::ShortcutFocusReason);
+            m_mainWindow->m_searchController->searchEdit()->selectAll();
         }
         event->accept();
         return true;
