@@ -55,6 +55,12 @@
 3. **属性面板 (MetaPanel) 拆分规范**：属性面板解耦为独立的组件小模块（预览、评分颜色、标签节、基础信息节），结构清晰，职责单一。
 4. **元数据中心 (MetadataManager) 门面模式规范**：元数据中心作为对外统一门面（Facade），不再直接混合磁盘 I/O 与数据库存取。序列化由 `QuarkMetaJsonStore` 承载；SQLite 持久化由 `MetaDbRepository` 承载；内存缓存由 `MetaMemoryCache` 承载。
 
+### QuickLook 空格全屏预览与代际熔断/鹰眼小地图双向联动顶层规范 (QuickLookWindow & QuickLookMinimap)
+1. **切图代际号（`previewGeneration`）原子熔断红线**：用户通过空格键呼出或方向键高频连续切换预览文件时，`QuickLookWindow` 必须通过 `std::atomic<uint64_t>` 递增代际号，秒级丢弃前序大图/文本的在途异步解码任务，确保 CPU/GPU 算力 100% 聚焦当前选中的预览文件，彻底消灭连续切图引发的卡顿与线程池阻塞。
+2. **反模式全局顶层窗口搜刮彻底禁止红线**：右键菜单快捷操作（如“添加至收藏夹”）必须严格通过 Qt 信号（`favoriteRequested`）发射给 Controller/PanelMediator 统一调度，彻底禁止在 `QApplication::topLevelWidgets()` 或全局控件树中递归搜刮 `FavoritePanel` 等私有 UI 指针。
+3. **平台置顶统一收拢规范**：预览窗口置顶与焦点夺取统一调用 `FramelessWindowHelper::setAlwaysOnTop(this, true)`，严禁嵌入裸 Win32 `SetWindowPos(HWND_TOPMOST)` 原生 API。
+4. **鹰眼小地图（QuickLookMinimap）防重入与防震荡规范**：小地图拖拽缩略框与主视口 `centerOn` 双向联动必须设置防重入锁，消除主视口滚动与小地图矩形重绘之间的浮点震荡。
+
 ### 缩略图三级缓存流水线与代际号原子熔断顶层规范 (ThumbnailPipelineService)
 1. **三级缓存降级流水线红线**：全系统多媒体缩略图的加载与渲染必须 100% 统一走 `ThumbnailPipelineService`（位于 `src/util/`）的三级缓存流水线——“一级内存 LRU（0ms 耗时直取） -> 二级磁盘持久化 Hash（PNG 固化缓存） -> 三级后台无锁解码（QtConcurrent 异步并发降采样）”。
 2. **原子代际号（`generationId`）即时熔断规范**：引入 `std::atomic<uint64_t>` 代际号机制。当用户在视图中高速滚动或切换目录时，系统强制触发 `cancelAll()` 递增代际号，后台解码线程与 UI 回调函数在执行前必须进行代际号比对，一旦发现代际过期立刻毫秒级放弃任务，确保 CPU/GPU 算力 100% 聚焦当前视口可见区域。

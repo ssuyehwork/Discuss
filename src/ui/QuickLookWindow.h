@@ -9,6 +9,7 @@
 #include <QSlider>
 #include <QHBoxLayout>
 #include <QContextMenuEvent>
+#include <atomic>
 #include "QuickLookGraphicsView.h"
 
 namespace QuarkMeta {
@@ -57,6 +58,8 @@ private:
     
     QString m_currentPath;
     bool m_ignoreDeactivate = false;
+
+    std::atomic<uint64_t> m_previewGeneration{1};
 };
 
 } // namespace QuarkMeta

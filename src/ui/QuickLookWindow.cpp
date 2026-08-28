@@ -2,6 +2,7 @@
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
 #include "ShellIconManager.h"
+#include "FramelessWindowHelper.h"
 #include "../util/ColorPaletteEngine.h"
 #include "QuickLookMinimap.h"
 #include "../util/DiskMediaExtractor.h"
@@ -174,17 +175,18 @@ void QuickLookWindow::preview(const QString& filePath) {
     raise();
     activateWindow();
 
-#ifdef Q_OS_WIN
-    // 强制置顶保护
     m_ignoreDeactivate = true;
     QTimer::singleShot(150, this, [this]() {
         m_ignoreDeactivate = false;
     });
-    SetWindowPos((HWND)winId(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-#endif
+    FramelessWindowHelper::setAlwaysOnTop(this, true);
 }
 
 void QuickLookWindow::closePreview() {
+    m_previewGeneration.fetch_add(1, std::memory_order_relaxed);
+    if (m_graphicsView) {
+        m_graphicsView->clear();
+    }
     hide();
 }
 
@@ -201,9 +203,11 @@ void QuickLookWindow::renderImage(const QString& path) {
     // 优先读取原始像素的本地格式 (由于 Qt 可能未安装/未部署 WebP 图像解码器插件，WebP 格式应交由系统 Shell 提供高分辨率缩略图预览)
     static const QSet<QString> QT_NATIVE_FORMATS = {"png", "jpg", "jpeg", "bmp", "gif"};
 
+    uint64_t taskGen = m_previewGeneration.fetch_add(1, std::memory_order_relaxed) + 1;
+
     QPointer<QuickLookWindow> weakThis(this);
-    (void)QtConcurrent::run([weakThis, path, ext]() {
-        if (!weakThis) return;
+    (void)QtConcurrent::run([weakThis, path, ext, taskGen]() {
+        if (!weakThis || weakThis->m_previewGeneration.load(std::memory_order_relaxed) != taskGen) return;
         
         QImage img;
         if (ext == "svg") {
@@ -228,9 +232,9 @@ void QuickLookWindow::renderImage(const QString& path) {
             }
         }
 
-        if (!weakThis) return;
-        QMetaObject::invokeMethod(weakThis.data(), [weakThis, img, path]() {
-            if (!weakThis || weakThis->m_currentPath != path) return;
+        if (!weakThis || weakThis->m_previewGeneration.load(std::memory_order_relaxed) != taskGen) return;
+        QMetaObject::invokeMethod(weakThis.data(), [weakThis, img, path, taskGen]() {
+            if (!weakThis || weakThis->m_previewGeneration.load(std::memory_order_relaxed) != taskGen || weakThis->m_currentPath != path) return;
             if (!img.isNull()) {
                 qint64 totalPixels = static_cast<qint64>(img.width()) * img.height();
                 bool isHuge = totalPixels > 50000000LL; // 超过 5000 万像素安全降采样
@@ -478,15 +482,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
 
     QAction* actCopyName = menu.addAction("复制文件名");
     QAction* actCopyPath = menu.addAction("复制路径");
-    FavoritePanel* favoritePanel = nullptr;
-    for (QWidget* topWidget : QApplication::topLevelWidgets()) {
-        if (topWidget) {
-            favoritePanel = topWidget->findChild<FavoritePanel*>();
-            if (favoritePanel) break;
-        }
-    }
-    bool isFav = favoritePanel ? favoritePanel->containsPath(m_currentPath) : false;
-    QAction* actFavorite = menu.addAction(isFav ? "取消收藏" : "添加至收藏夹");
+    QAction* actFavorite = menu.addAction("添加至收藏夹 / 切换收藏");
 
     // 根据是否显示图片启用/禁用 旋转、水平翻转、原始、自适应
     bool isImage = m_graphicsView->isVisible();
@@ -536,12 +532,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     } else if (selected == actCopyPath) {
         QApplication::clipboard()->setText(QDir::toNativeSeparators(m_currentPath));
     } else if (selected == actFavorite) {
-        if (favoritePanel && isFav) {
-            favoritePanel->removeFavoriteItem(m_currentPath);
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e81123"));
-        } else {
-            emit favoriteRequested(m_currentPath);
-        }
+        emit favoriteRequested(m_currentPath);
     }
 }
 
