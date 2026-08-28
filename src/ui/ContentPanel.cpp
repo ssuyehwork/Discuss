@@ -98,6 +98,7 @@ using namespace QuarkMeta::Style;
 #include "../util/ShellHelper.h"
 #include "DiskScanService.h"
 #include "../util/ColorPaletteEngine.h"
+#include "../util/ThumbnailPipelineService.h"
 #include "../meta/MetaCacheDecorator.h"
  
 namespace QuarkMeta { 
@@ -380,6 +381,26 @@ void ContentPanel::refreshVisibleThumbnails() {
             visibleRows.append(srcIdx.row());
         }
     }
+
+    QStringList visiblePaths;
+    for (int r = top; r <= bottom; ++r) {
+        QModelIndex proxyIdx = m_proxyModel->index(r, 0);
+        QString path = proxyIdx.data(PathRole).toString();
+        if (!path.isEmpty()) {
+            visiblePaths << path;
+        }
+    }
+
+    QPointer<ContentPanel> weakThis(this);
+    ThumbnailPipelineService::instance().loadBatchAsync(
+        visiblePaths, 
+        m_zoomLevel, 
+        [weakThis](const QString& path, const QPixmap&) {
+            if (weakThis) {
+                weakThis->updateItemMetadata(path);
+            }
+        }
+    );
 
     // 触发本批次加载
     m_model->loadThumbnailsForRows(visibleRows);
@@ -2029,6 +2050,8 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
         m_model = m_diskModel;
         m_proxyModel->setSourceModel(m_model);
     }
+
+    ThumbnailPipelineService::instance().cancelAll();
 
     m_isLoading = true;
     int reqId = ++m_loadRequestId;

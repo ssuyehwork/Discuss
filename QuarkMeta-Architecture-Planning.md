@@ -55,6 +55,11 @@
 3. **属性面板 (MetaPanel) 拆分规范**：属性面板解耦为独立的组件小模块（预览、评分颜色、标签节、基础信息节），结构清晰，职责单一。
 4. **元数据中心 (MetadataManager) 门面模式规范**：元数据中心作为对外统一门面（Facade），不再直接混合磁盘 I/O 与数据库存取。序列化由 `QuarkMetaJsonStore` 承载；SQLite 持久化由 `MetaDbRepository` 承载；内存缓存由 `MetaMemoryCache` 承载。
 
+### 缩略图三级缓存流水线与代际号原子熔断顶层规范 (ThumbnailPipelineService)
+1. **三级缓存降级流水线红线**：全系统多媒体缩略图的加载与渲染必须 100% 统一走 `ThumbnailPipelineService`（位于 `src/util/`）的三级缓存流水线——“一级内存 LRU（0ms 耗时直取） -> 二级磁盘持久化 Hash（PNG 固化缓存） -> 三级后台无锁解码（QtConcurrent 异步并发降采样）”。
+2. **原子代际号（`generationId`）即时熔断规范**：引入 `std::atomic<uint64_t>` 代际号机制。当用户在视图中高速滚动或切换目录时，系统强制触发 `cancelAll()` 递增代际号，后台解码线程与 UI 回调函数在执行前必须进行代际号比对，一旦发现代际过期立刻毫秒级放弃任务，确保 CPU/GPU 算力 100% 聚焦当前视口可见区域。
+3. **主线程 GUI 锁脱钩与 60FPS 丝滑保障红线**：后台子线程提图解码过程绝对禁止包含对 UI 绘图组件的同步等待，纯粹依赖线程安全的 `QImageReader` 与 `QImage` 进行像素运算，解码完成后通过 `QMetaObject::invokeMethod(Qt::QueuedConnection)` 投递给主 UI 线程转换为 `QPixmap` 并填入内存 LRU 缓存，保障视图 60FPS 丝滑无卡顿。
+
 ### 硬件设备监听中枢与主窗口 0 行 Win32 脱敏规范 (DeviceWatcher)
 1. **原生硬件消息监听解耦红线**：全系统 Windows 磁盘与移动设备热插拔消息（`WM_DEVICECHANGE`）的底层捕获与盘符掩码（`dbcv_unitmask`）解析，必须统一由独立的 `DeviceWatcher` 服务（继承自 `QAbstractNativeEventFilter`，位于 `src/core/`）承载，并通过干净的标准 Qt 信号（`driveMounted` / `driveUnmounted`）对外广播。
 2. **领域自治与防护闭环规范**：导航服务（`NavigationService`）直接订阅 `DeviceWatcher::driveUnmounted` 信号。当检测到当前正浏览的物理盘符被拔出时，自动安全回退至“此电脑”（`computer://`），无需任何外部 UI 面板或主窗口书写中间拦截代码。

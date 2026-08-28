@@ -91,3 +91,111 @@ QuickLookWindow.h, QuickLookWindow.cpp, QuickLookGraphicsView.h, QuickLookGraphi
 3. **内容渲染多态化**：图片与文本/Markdown 渲染彻底分离，支持异步大图秒开。
 
 请问您对上述关于 `QuickLook` 子系统的渲染多态化、小地图坐标防抖与直连领域服务的探讨方向是否认可？
+
+// ===================|===================
+
+基于您提供的 `QuickLookWindow.cpp/h`、`QuickLookGraphicsView.cpp/h` 与 `QuickLookMinimap.cpp/h` 源码，我们对 **【QuickLook 大图预览与鹰眼小地图体系】** 进行深入的架构剖析：
+
+---
+
+### 一、 事实：当前 QuickLook 代码中的 4 大核心事实
+
+1. **运行时暴力搜刮顶层窗口树（Anti-Pattern）**：
+   在 `QuickLookWindow::showContextMenu`（第 326~334 行）中：
+   ```cpp
+   // 🚨 违规事实：在全局所有顶级窗口中暴力递归寻找 FavoritePanel 指针！
+   FavoritePanel* favoritePanel = nullptr;
+   for (QWidget* topWidget : QApplication::topLevelWidgets()) {
+       if (topWidget) {
+           favoritePanel = topWidget->findChild<FavoritePanel*>();
+           if (favoritePanel) break;
+       }
+   }
+   bool isFav = favoritePanel ? favoritePanel->containsPath(m_currentPath) : false;
+   ```
+2. **快速连续切图缺乏任务“代际取消”机制（线程池堆积）**：
+   在 `renderImage` 中，每次调用都无条件向 `QtConcurrent::run` 抛入一个解码大图任务；
+   当用户按住 `Left` / `Right` 键快速切换 10 张图片时，**前 9 张已经滑过去的旧图片依然会在后台线程池中全量解码大图**，无法提前中断。
+3. **裸 Win32 置顶 API 侵入**：
+   在 `QuickLookWindow::preview` 中：
+   ```cpp
+   #ifdef Q_OS_WIN
+   SetWindowPos((HWND)winId(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+   #endif
+   ```
+4. **子控件多重事件过滤器硬截按键**：
+   `eventFilter` 对 `m_textEdit`、`m_textEdit->viewport()` 和 `m_graphicsView` 同时安装了按键硬拦截，手动比对 `Space`、`Esc`、`Ctrl+W`、`Up/Down/Left/Right`、`1~5`、`Alt+1~9` 共 10 种按键组合并重定向。
+
+---
+
+### 二、 推断：现有设计的 3 大系统性缺陷（因果链路）
+
+- **[推断 1 - 全局顶层控件搜刮破坏封装且存在偶发崩溃风险]**
+  - **原因**：预览窗口作为独立的 Tool 窗口，不应跨窗口去反查主界面的内部私有控件 `FavoritePanel`。
+  - **影响**：如果主窗口处于最小化、销毁中或重构了面板层级，`findChild` 会产生无谓的遍历开销，甚至在多窗口生命周期切换时访问失效指针。
+  - **结果**：破坏了模块独立性。正确做法应通过信号或领域服务直接判定与执行收藏。
+
+- **[推断 2 - 快速切图导致后台线程池排队雪崩与 CPU 暴涨]**
+  - **原因**：`renderImage` 缺少类似 `ThumbnailPipelineService` 的代际锁（Generation ID）。
+  - **影响**：当用户在 4K/RAW/PSD 等大图目录下快速按方向键切图时，线程池里积压了大量“用户已经跳过不看”的无用解码任务。
+  - **结果**：导致真正想要看的那一张新图片排在队列末尾迟迟出不来（界面卡在“正在加载预览...”达数秒），CPU 占用率短时间内飙升至 100%。
+
+- **[推断 3 - 鹰眼小地图在超大图与极小视口下的边界保护需加固]**
+  - **原因**：在 `QuickLookMinimap::handleMouseInteraction` 中，鼠标点击计算的中心点未对小地图自身的内边距（Padding）做严密防护。
+  - **影响**：在极端缩放比例（10.0x 放大）下，小地图红框会发生微小的浮点四舍五入抖动。
+
+---
+
+### 三、 归一化架构治理方案（四大步彻底纯化）
+
+```
+                            【QuickLook 预览体系标准架构】
+
+    1. 切图代际秒级熔断 (Generation Abort Pipeline)
+    ─────────────────────────────────────────────────────────────────────────────
+    • 引入 `std::atomic<uint64_t> m_previewGeneration`
+    • 每次切图或关闭窗口，代际号 +1；后台解码线程循环中检测代际变化瞬间 return
+    • 保证 CPU 算力 100% 聚焦当前屏幕正展示的唯一文件！
+
+    2. 彻底消灭 `topLevelWidgets` 搜刮
+    ─────────────────────────────────────────────────────────────────────────────
+    • 右键菜单“收藏”与“取消收藏”直接发射 `favoriteRequested(m_currentPath)`
+    • 由 PanelMediator 统一连接，严禁跨窗口搜刮私有控件
+
+    3. 接入统一无边框助手 (消灭 Win32 杂质)
+    ─────────────────────────────────────────────────────────────────────────────
+    • 使用 `FramelessWindowHelper::setAlwaysOnTop(this, true)` 替代裸 `SetWindowPos`
+
+    4. 鹰眼小地图归一化防抖
+    ─────────────────────────────────────────────────────────────────────────────
+    • 引入 `m_isSyncing` 防重入保护，消除主视口与小地图双向信号通信时的微颤抖动
+```
+
+---
+
+### 探讨结论：
+
+1. **切图秒开**：通过引入代际熔断，彻底消灭连续按方向键切图时的后台排队卡顿与 CPU 暴涨；
+2. **架构脱敏**：移除全局窗口搜刮代码与裸 Win32 API，使 `QuickLookWindow` 成为纯净的跨平台全屏预览器；
+3. **小地图平滑稳定**：加入防重入锁，确保 10x 极端放大下鹰眼拖拽 0 抖动。
+
+请问您对上述关于 `QuickLookWindow` 代际熔断、消除窗口搜刮与小地图防抖加固的探讨方向是否认可？
+
+// ===================|===================
+
+共识已锁定。
+
+我们对**【QuickLook 大图预览与鹰眼小地图体系】**达成的标准治理准则如下：
+
+1. **切图代际即时熔断（Generation Abort）**：
+   - 引入 `m_previewGeneration` 原子代际号，快速按左右键切图时瞬间熔断并抛弃前一张大图的在途解码任务，**确保 CPU 算力 100% 聚焦当前画面，大图连续切换 0 掉帧、0 排队**；
+2. **彻底消灭全局窗口搜刮（No Widget Scraping）**：
+   - 彻底删除在 `QApplication::topLevelWidgets()` 中递归查找 `FavoritePanel` 的反模式代码，所有收藏交互纯净交由信号与领域服务处理；
+3. **消除 Win32 平台杂质**：
+   - 使用 `FramelessWindowHelper::setAlwaysOnTop(this, true)` 统一接管全屏预览窗口的置顶保护；
+4. **小地图防重入加固**：
+   - 引入 `m_isSyncing` 状态锁，彻底消除主视口与鹰眼小地图双向坐标联动时的浮点微颤抖动。
+
+---
+
+请问您是否授权现在直接生成**【QuickLook 大图预览与鹰眼小地图实施方案】**？

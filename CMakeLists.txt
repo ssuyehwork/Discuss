@@ -270,6 +270,8 @@ set(SOURCES
     src/ui/ShellIconManager.h
     src/util/ColorPaletteEngine.h
     src/util/ColorPaletteEngine.cpp
+    src/util/ThumbnailPipelineService.h
+    src/util/ThumbnailPipelineService.cpp
     src/ui/SvgIconRenderer.h
     src/ui/SvgIconRenderer.cpp
     src/ui/WindowsShellThumbnailProvider.h
