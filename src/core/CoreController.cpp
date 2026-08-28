@@ -1,5 +1,6 @@
 #include "CoreController.h"
 #include "AppConfig.h"
+#include "DeviceWatcher.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/DatabaseManager.h"
 #include "../meta/MediaExtractorPipeline.h"
@@ -25,6 +26,9 @@ CoreController& CoreController::instance() {
 }
 
 void CoreController::initializeCoreComponents() {
+    // 0. 全局设备监听器启动
+    DeviceWatcher::instance().startListening();
+
     // 1. 底层持久化 SQLite 连接启动与定时机制保障
     QuarkMeta::DatabaseManager::instance();
     
@@ -144,15 +148,6 @@ void CoreController::abortSearch() {
     // 等待现有搜索任务退出的轻量化处理（实际生产环境可能需要更复杂的等待机制）
 }
 
-void CoreController::handleDeviceChange(unsigned long wParam, unsigned long long lParam) {
-#ifdef Q_OS_WIN
-    // 2026-05-24 按照用户要求：捕捉硬件变更，硬盘插入时触发 GLOB 扫描对账
-    // [Plan-131 方案 E] 从 MainWindow 迁移至此
-    if (wParam == 0x8000 /* DBT_DEVICEARRIVAL */ || wParam == 0x8004 /* DBT_DEVICEREMOVECOMPLETE */) {
-    }
-#endif
-    Q_UNUSED(lParam);
-}
 
 void CoreController::setStatus(const QString& text, bool indexing) {
     if (m_statusText != text) {

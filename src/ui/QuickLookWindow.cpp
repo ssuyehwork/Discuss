@@ -2,7 +2,7 @@
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
 #include "ShellIconManager.h"
-#include "MediaColorExtractor.h"
+#include "../util/ColorPaletteEngine.h"
 #include "QuickLookMinimap.h"
 #include "../util/DiskMediaExtractor.h"
 #include "../util/DiskMediaExtractor.h"

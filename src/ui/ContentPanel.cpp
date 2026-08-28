@@ -97,7 +97,7 @@
 using namespace QuarkMeta::Style;
 #include "../util/ShellHelper.h"
 #include "DiskScanService.h"
-#include "../ui/MediaColorExtractor.h"
+#include "../util/ColorPaletteEngine.h"
 #include "../meta/MetaCacheDecorator.h"
  
 namespace QuarkMeta { 

@@ -83,6 +83,8 @@ set(SOURCES
     src/core/PermanentDeleteService.cpp
     src/core/ClipboardService.h
     src/core/ClipboardService.cpp
+    src/core/DeviceWatcher.h
+    src/core/DeviceWatcher.cpp
     src/core/TaskProgressService.h
     src/core/TaskProgressService.cpp
     src/core/AppConfig.h
@@ -266,18 +268,16 @@ set(SOURCES
     src/ui/IconCacheManager.h
     src/ui/IconCacheManager.cpp
     src/ui/ShellIconManager.h
+    src/util/ColorPaletteEngine.h
+    src/util/ColorPaletteEngine.cpp
     src/ui/SvgIconRenderer.h
     src/ui/SvgIconRenderer.cpp
     src/ui/WindowsShellThumbnailProvider.h
     src/ui/WindowsShellThumbnailProvider.cpp
-    src/ui/MediaColorExtractor.h
-    src/ui/MediaColorExtractor.cpp
     src/ui/FormatDecoders.h
     src/ui/FormatDecoders.cpp
     src/ui/ImageDecoderFacade.h
     src/ui/ImageDecoderFacade.cpp
-    src/ui/ColorAlgorithmEngine.h
-    src/ui/ColorAlgorithmEngine.cpp
     src/util/DiskMediaExtractor.h
     src/util/DiskMediaExtractor.cpp
     src/util/DeepThumbnailExtractor.h

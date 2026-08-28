@@ -20,6 +20,7 @@ void FilterProxyModel::setCachedDuplicatePaths(const QSet<QString>& paths) {
 }
 
 bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
+    Q_UNUSED(sourceParent);
     const auto* sourceModelPtr = qobject_cast<const ItemModelBase*>(sourceModel());
     if (!sourceModelPtr) return true;
 

@@ -77,11 +77,6 @@ using namespace QuarkMeta::Style;
 #include <QSlider>
 #include <QSignalBlocker>
 
-#ifdef Q_OS_WIN
-#include <windows.h>
-#include <Dbt.h>
-#include <psapi.h>
-#endif
 
 #include <QtConcurrent>
 
@@ -221,18 +216,6 @@ void MainWindow::initUi() {
 
 }
 
-#ifdef Q_OS_WIN
-bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr* result) {
-    Q_UNUSED(eventType);
-    Q_UNUSED(result);
-
-    MSG* msg = static_cast<MSG*>(message);
-    if (msg->message == WM_DEVICECHANGE) {
-        CoreController::instance().handleDeviceChange(static_cast<unsigned long>(msg->wParam), static_cast<unsigned long long>(msg->lParam));
-    }
-    return false;
-}
-#endif
 
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
@@ -643,12 +626,6 @@ void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
     NavigationService::instance().navigateTo(url, record);
 }
 
-void MainWindow::onVolumeUnplugged(const QString& driveLetter) {
-    QString current = NavigationService::instance().currentUrl();
-    if (current.contains(driveLetter + ":", Qt::CaseInsensitive)) {
-        NavigationService::instance().navigateTo("computer://");
-    }
-}
 
 void MainWindow::onStatusBarStatsUpdated(int fileCount, int folderCount, int totalCount) {
     if (!m_statusLeft || !m_contentPanel || !m_contentPanel->getProxyModel()) return;

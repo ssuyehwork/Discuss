@@ -23,7 +23,7 @@
 #include "MetaDbRepository.h"
 #include "MetaMemoryCache.h"
 #include "../core/AppConfig.h"
-#include "../ui/MediaColorExtractor.h"
+#include "../util/ColorPaletteEngine.h"
 #include "StatisticsService.h"
 #include "../core/VolumeOnlineManager.h"
 #include "../ui/UiHelper.h"
@@ -154,7 +154,7 @@ void MetadataManager::registerItem(const std::wstring& path) {
             RuntimeMeta meta = MetaMemoryCache::instance().getMeta(nPath);
             bool metadataValid = true;
             QFileInfo info(QString::fromStdWString(nPath));
-            if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
+            if (info.isFile() && ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) {
                 if (meta.width <= 0 || meta.height <= 0 || meta.autoColor.empty()) {
                     metadataValid = false;
                 }

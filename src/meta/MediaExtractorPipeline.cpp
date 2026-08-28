@@ -6,9 +6,8 @@
 #include "MetadataManager.h"
 #include "../core/CoreController.h"
 #include "../util/DiskMediaExtractor.h"
-#include "../ui/MediaColorExtractor.h"
 #include "../ui/ImageDecoderFacade.h"
-#include "../ui/ColorAlgorithmEngine.h"
+#include "../util/ColorPaletteEngine.h"
 #include <QImageReader>
 #include <QSvgRenderer>
 #include <QFileInfo>
@@ -151,7 +150,7 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             item.mtime = info.lastModified().toMSecsSinceEpoch();
             item.fileSize = info.size();
 
-            if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
+            if (info.isFile() && ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) {
                 // 单次读盘：同时拿到【原始尺寸】和【512 高清图】
                 DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(qPath, 512);
                 if (dec.isValid) {
@@ -162,9 +161,9 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                     DiskMediaExtractor::saveDiskThumbnail(qPath, dec.thumbnail512);
 
                     // 2. 内存 64x64 快速测色 (<0.5ms)
-                    auto pal = ColorAlgorithmEngine::extractPaletteFromImage(dec.thumbnail512);
+                    auto pal = ColorPaletteEngine::extractPaletteFromImage(dec.thumbnail512);
                     if (!pal.isEmpty()) {
-                        QColor dominant = MediaColorExtractor::quantizeColor(pal.first().first);
+                        QColor dominant = ColorPaletteEngine::quantizeToStandardColor(pal.first().first);
                         item.autoColor = dominant.name().toUpper().toStdWString();
                         item.palettes.assign(pal.begin(), pal.end());
                     }
@@ -215,12 +214,12 @@ void MediaExtractorPipeline::processItemDirect(const std::wstring& path) {
     QVector<QPair<QColor, float>> palette;
     
     if (!m_isCanceled.load()) {
-        if (info.isFile() && MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
+        if (info.isFile() && ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) {
             QImage thumb = DiskMediaExtractor::getCapsuleThumbnail(qPath, 512);
             if (!thumb.isNull()) {
-                auto pal = ColorAlgorithmEngine::extractPaletteFromImage(thumb);
+                auto pal = ColorPaletteEngine::extractPaletteFromImage(thumb);
                 if (!pal.isEmpty()) {
-                    QColor dominant = MediaColorExtractor::quantizeColor(pal.first().first);
+                    QColor dominant = ColorPaletteEngine::quantizeToStandardColor(pal.first().first);
                     colorStr = dominant.name().toUpper().toStdWString();
                     palette = pal;
                 }
@@ -282,12 +281,12 @@ bool MediaExtractorPipeline::extractColor(const std::wstring& path, std::wstring
     bool success = false;
 
     if (info.isFile()) {
-        if (MediaColorExtractor::isGraphicsFile(info.suffix().toLower())) {
+        if (ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) {
             QImage img = ImageDecoderFacade::loadScaledImage(qPath, 512);
             if (!img.isNull()) {
-                auto palette = ColorAlgorithmEngine::extractPaletteFromImage(img);
+                auto palette = ColorPaletteEngine::extractPaletteFromImage(img);
                 if (!palette.isEmpty()) {
-                    QColor dominant = MediaColorExtractor::quantizeColor(palette.first().first);
+                    QColor dominant = ColorPaletteEngine::quantizeToStandardColor(palette.first().first);
                     outColorStr = dominant.name().toUpper().toStdWString();
                     outPalette = palette;
                     success = true;
@@ -302,10 +301,10 @@ bool MediaExtractorPipeline::extractColor(const std::wstring& path, std::wstring
         QVector<Sample> samples;
 
         for (const auto& sf : subFiles) {
-            if (MediaColorExtractor::isGraphicsFile(sf.suffix().toLower())) {
+            if (ColorPaletteEngine::isGraphicsFile(sf.suffix().toLower())) {
                 QImage img = ImageDecoderFacade::loadScaledImage(sf.absoluteFilePath(), 512);
                 if (!img.isNull()) {
-                    auto palette = ColorAlgorithmEngine::extractPaletteFromImage(img);
+                    auto palette = ColorPaletteEngine::extractPaletteFromImage(img);
                     if (!palette.isEmpty()) {
                         samples.append({palette.first().first, palette});
                     }
@@ -320,7 +319,7 @@ bool MediaExtractorPipeline::extractColor(const std::wstring& path, std::wstring
             for (int i = 0; i < samples.size(); ++i) {
                 int votes = 0;
                 for (int j = 0; j < samples.size(); ++j) {
-                    if (ColorAlgorithmEngine::calculateDeltaE(samples[i].dominant, samples[j].dominant) < 20.0) {
+                    if (ColorPaletteEngine::calculateDeltaE(samples[i].dominant, samples[j].dominant) < 20.0) {
                         votes++;
                     }
                 }
@@ -331,7 +330,7 @@ bool MediaExtractorPipeline::extractColor(const std::wstring& path, std::wstring
             }
 
             if (samples.size() == 1 || (maxVotes >= 2 && maxVotes >= samples.size() * 0.3)) {
-                QColor dominant = MediaColorExtractor::quantizeColor(samples[bestIdx].dominant);
+                QColor dominant = ColorPaletteEngine::quantizeToStandardColor(samples[bestIdx].dominant);
                 outColorStr = dominant.name().toUpper().toStdWString();
                 outPalette = samples[bestIdx].palette;
                 success = true;

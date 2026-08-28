@@ -1,5 +1,6 @@
 #include "NavigationService.h"
 #include "NavigationHistoryService.h"
+#include "DeviceWatcher.h"
 #include <QDir>
 #include <QFileInfo>
 
@@ -10,7 +11,13 @@ NavigationService& NavigationService::instance() {
     return s_instance;
 }
 
-NavigationService::NavigationService(QObject* parent) : QObject(parent) {}
+NavigationService::NavigationService(QObject* parent) : QObject(parent) {
+    connect(&DeviceWatcher::instance(), &DeviceWatcher::driveUnmounted, this, [this](const QString& driveLetter) {
+        if (m_currentUrl.contains(driveLetter, Qt::CaseInsensitive)) {
+            navigateTo("computer://");
+        }
+    });
+}
 
 QString NavigationService::normalizeUrl(const QString& rawUrl) const {
     if (rawUrl.isEmpty()) return "computer://";
