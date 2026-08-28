@@ -150,10 +150,6 @@ set(SOURCES
     src/ui/IScanResultView.h
     src/ui/FilterStateModel.h
     src/ui/FilterStateModel.cpp
-    src/ui/models/FolderProxyModel.h
-    src/ui/models/FolderProxyModel.cpp
-    src/ui/models/FileProxyModel.h
-    src/ui/models/FileProxyModel.cpp
     src/ui/models/FilterProxyModel.h
     src/ui/models/FilterProxyModel.cpp
     src/ui/ScanStatsEngine.h
