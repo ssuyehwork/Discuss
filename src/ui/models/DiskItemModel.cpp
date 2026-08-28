@@ -210,33 +210,25 @@ void DiskItemModel::updateRecordMetadata(const QString& path) {
                 return;
             }
 
-            QString parentDir = QDir::toNativeSeparators(fileInfo.absolutePath());
-            QString fileName = fileInfo.fileName();
+            // 🚀【核心根治】：直接从内存缓存真理源 MetadataManager 读取实时最新数据，彻底消灭读脏盘与时序竞态！
+            RuntimeMeta meta = MetadataManager::instance().getMeta(nPath.toStdWString());
 
-            QuarkMetaJson jsonCache(parentDir.toStdWString());
-            jsonCache.load();
-            const auto& cachedItems = jsonCache.items();
-            auto cachedIt = cachedItems.find(fileName.toStdWString());
-            if (cachedIt != cachedItems.end()) {
-                record.rating = cachedIt->second.rating;
-                record.manualColor = QString::fromStdWString(cachedIt->second.color);
-                record.pinned = cachedIt->second.pinned;
-                record.note = QString::fromStdWString(cachedIt->second.note);
-                record.url = QString::fromStdWString(cachedIt->second.url);
-                record.tags.clear();
-                for (const auto& t : cachedIt->second.tags) {
-                    record.tags.append(QString::fromStdWString(t));
-                }
-                record.width = cachedIt->second.width;
-                record.height = cachedIt->second.height;
-                record.autoColor = QString::fromStdWString(cachedIt->second.autoColor);
-                record.added_at = cachedIt->second.addedAt;
+            record.rating = meta.rating;
+            record.manualColor = QString::fromStdWString(meta.manualColor);
+            record.pinned = meta.pinned;
+            record.note = QString::fromStdWString(meta.note);
+            record.url = QString::fromStdWString(meta.url);
+            record.tags = meta.tags;
+            record.width = meta.width;
+            record.height = meta.height;
+            record.autoColor = QString::fromStdWString(meta.autoColor);
+            record.added_at = meta.added_at;
 
-                record.palettes.clear();
-                for (const auto& pe : cachedIt->second.palettes) {
-                    record.palettes.push_back({pe.color, pe.ratio});
-                }
+            record.palettes.clear();
+            for (const auto& pe : meta.palettes) {
+                record.palettes.push_back({pe.color, pe.ratio});
             }
+
             emit dataChanged(index(i, 0), index(i, columnCount() - 1));
         }
     }
@@ -301,7 +293,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
     QString path = record.path;
     QFileInfo fileInfo(path);
 
-    // 🚨 2. 【核心修复】：如果是物理驱动器/盘符根目录（如 C:/, D:/），分流直接写入 global.db
+    // 2. 物理驱动器/盘符根目录（如 C:/, D:/）
     bool isDriveRoot = fileInfo.isRoot() || path.endsWith(":\\") || path.endsWith(":/") || (path.length() == 2 && path.endsWith(':'));
     if (isDriveRoot) {
         std::wstring normWPath = MetadataManager::normalizePath(path.toStdWString());
@@ -339,49 +331,34 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
         return false;
     }
 
-    // 3. 常规普通文件与目录：写入对应物理目录的 .QuarkMeta.json
-    QString parentDir = QDir::toNativeSeparators(fileInfo.absolutePath());
-    QString fileName = fileInfo.fileName();
-
+    // 3. 常规普通文件与目录：统一通过 MetadataManager 内存门面更新
+    std::wstring wpath = path.toStdWString();
     bool metaUpdated = false;
-
-    QuarkMetaJson jsonCache(parentDir.toStdWString());
-    jsonCache.load();
-    auto& cachedItems = jsonCache.items();
-    
-    std::wstring wFileName = fileName.toStdWString();
-    if (cachedItems.find(wFileName) == cachedItems.end()) {
-        ItemMeta emptyMeta;
-        emptyMeta.type = record.isDir ? L"folder" : L"file";
-        cachedItems[wFileName] = emptyMeta;
-    }
-    auto& fileMeta = cachedItems[wFileName];
 
     if (role == RatingRole) {
         int newRating = value.toInt();
         if (record.rating != newRating) {
             record.rating = newRating;
-            fileMeta.rating = newRating;
+            MetadataManager::instance().setRating(wpath, newRating, true);
             metaUpdated = true;
         }
     } else if (role == ColorRole) {
         QString newColor = value.toString();
         if (record.manualColor != newColor) {
             record.manualColor = newColor;
-            fileMeta.color = newColor.toStdWString();
+            MetadataManager::instance().setColor(wpath, newColor.toStdWString(), true);
             metaUpdated = true;
         }
     } else if (role == IsLockedRole || role == PinnedRole) {
         bool pinned = value.toBool();
         if (record.pinned != pinned) {
             record.pinned = pinned;
-            fileMeta.pinned = pinned;
+            MetadataManager::instance().setPinned(wpath, pinned, true);
             metaUpdated = true;
         }
     }
 
     if (metaUpdated) {
-        jsonCache.save();
         emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1));
         return true;
     }
@@ -550,6 +527,10 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         return record.encrypted;
     } else if (role == TagsRole) {
         return record.tags;
+    } else if (role == NoteRole) {
+        return record.note;
+    } else if (role == UrlRole) {
+        return record.url;
     } else if (role == IsEmptyRole) {
         return record.isDir && record.isEmpty;
     } else if (role == AspectRatioRole) {

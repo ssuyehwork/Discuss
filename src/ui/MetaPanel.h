@@ -7,12 +7,14 @@
 #include <QScrollArea>
 #include <QTimer>
 #include <QEvent>
+#include <QKeyEvent>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QPointer>
 #include <QAction>
+#include <QSet>
 #include "components/ElasticEdit.h"
 #include "TagSelectorOverlay.h"
 #include "components/TagPill.h"
@@ -40,19 +42,21 @@ public:
     void setURL(const QString& url);
     void setURL(const std::wstring& url);
     void setRating(int rating, bool fromUser = false);
+    void setColor(const QString& hexColor, bool fromUser = false);
     void setColor(const std::wstring& color, bool fromUser = false);
     void setPinned(bool pinned) { Q_UNUSED(pinned); }
 
 signals:
+    // 解耦且携带路径的纯净领域信号
+    void ratingChanged(const QStringList& paths, int rating);
+    void colorChanged(const QStringList& paths, const QString& hexColor);
     void tagAddRequested(const QStringList& paths, const QString& tag);
     void tagRemoveRequested(const QStringList& paths, const QString& tag);
-    void metadataChanged(int rating, const std::wstring& color);
     void noteEdited(const QStringList& paths, const QString& newNote);
     void linkEdited(const QStringList& paths, const QString& newLink);
     void primaryColorChanged(const QString& path, const QColor& color);
-    void tagsChanged(const QStringList& paths, const QStringList& tags);
-    void searchByColor(const QColor& color);
     void renameRequested(const QString& oldPath, const QString& newPath);
+    void searchByColor(const QColor& color);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -61,7 +65,7 @@ protected:
 
 private:
     void initUi();
-    void updateControlsState(bool hasSelection);
+    void updateControlsState(bool hasSelection, bool isMultiSelection, bool isReadOnly);
     void adjustFlowHeights();
     void addInfoRow(QVBoxLayout* layout, const QString& label, QLabel*& valueLabel);
     QWidget* createCollapsibleSection(const QString& title, QWidget* contentWidget, bool defaultExpanded = true);
@@ -71,30 +75,31 @@ private:
     QWidget* m_container = nullptr;
     QVBoxLayout* m_containerLayout = nullptr;
 
-    // 1. 顶部预览与色板区 (有则显，无则完全隐藏)
+    // 1. 顶部预览与色板区
     QWidget* m_topPreviewBox = nullptr;
     QLabel* m_lblImagePreview = nullptr;
+    QWidget* m_paletteContainer = nullptr;
     FlowLayout* m_paletteFlowLayout = nullptr;
 
-    // 2. 文件名编辑区 (大字高亮)
+    // 2. 文件名编辑区
     ElasticEdit* m_nameEdit = nullptr;
 
-    // 3. 备注说明区 (可折叠)
+    // 3. 备注说明区
     ElasticEdit* m_noteEdit = nullptr;
 
-    // 4. 关联网址区 (可折叠，一体化容器与独立跳转按钮)
+    // 4. 关联网址区
     QWidget* m_linkBox = nullptr;
     QLineEdit* m_linkEdit = nullptr;
     QAction* m_actOpenLink = nullptr;
 
-    // 5. 星级评级 + 颜色色标条 (8 色圆点)
+    // 5. 星级评级 + 颜色色标条
     QWidget* m_ratingColorBox = nullptr;
     QList<QPushButton*> m_starBtns;
     QList<QPushButton*> m_colorBtns;
     int m_currentRating = 0;
-    std::wstring m_currentColor;
+    QString m_currentColorHex;
 
-    // 6. 标签管理区 (可折叠)
+    // 6. 标签管理区
     QWidget* m_tagBox = nullptr;
     QWidget* m_tagContainer = nullptr;
     FlowLayout* m_tagFlowLayout = nullptr;
@@ -102,7 +107,7 @@ private:
     QPushButton* m_btnAddTagSmall = nullptr;
     QPointer<TagSelectorOverlay> m_tagSelectorOverlay;
 
-    // 7. 基础物理属性区 (可折叠)
+    // 7. 基础物理属性区
     QWidget* m_infoSectionWidget = nullptr;
     QLabel* lblType = nullptr;
     QLabel* lblSize = nullptr;
@@ -112,22 +117,23 @@ private:
     QLabel* lblAtime = nullptr;
     QLabel* lblEncrypted = nullptr;
 
-    // 8. 物理路径区 (可折叠)
+    // 8. 物理路径区
     QLineEdit* m_pathEdit = nullptr;
     QPushButton* m_btnCopyPath = nullptr;
     QPushButton* m_btnOpenLocation = nullptr;
 
     QStringList m_selectedPaths;
-    QList<TagPill*> m_tagPool;
-    QList<ColorPill*> m_colorPool;
+    QStringList m_editingPathsSnapshot; // 防失焦时序竞态的路径快照
+    QSet<QString> m_currentTagsSet;
     QTimer* m_adjustTimer = nullptr;
     bool m_isInternalUpdating = false;
     bool m_isUserEditing = false;
+    bool m_isReadOnlyMode = false;
 
 private slots:
     void onTagDeleted(const QString& text);
-    void setAsPrimaryColor(const QColor& color);
     void openTagSelectorOverlay(QWidget* targetAnchor);
+    void setAsPrimaryColor(const QColor& color);
 };
 
 } // namespace QuarkMeta

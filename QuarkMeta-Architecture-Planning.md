@@ -57,7 +57,7 @@
 ### 核心解耦与单一职责架构顶层规范 (MainWindow, FilterPanel, MetaPanel, MetadataManager)
 1. **主窗口 (MainWindow) 拆分与壳体归一化**：主窗口仅允许承载顶层 UI 布局构建与 QSS 样式加载。无边框窗口 8 方向边缘感应、DPI 动态热区、光标切换、边缘拉伸、标题栏拖拽移动、双击最大化/还原及跨平台安全置顶全权交由 `FramelessWindowHelper` 统一收敛承载；彻底清除主窗口中的底层几何算式与裸 Win32 API 杂质；应用内局域快捷键解耦至声明式 `AppShortcutController` (`QShortcut(Qt::WindowShortcut)`)；多面板联动解耦至 `PanelMediator`。
 2. **筛选面板 (FilterPanel) 拆分规范**：筛选面板仅保留 UI 控件渲染职责。筛选状态管理解耦至 `FilterStateModel`；后台文件数量聚合解耦至 `ScanStatsEngine`。
-3. **属性面板 (MetaPanel) 拆分规范**：属性面板解耦为独立的组件小模块（预览、评分颜色、标签节、基础信息节），结构清晰，职责单一。
+3. **属性面板 (MetaPanel) 拆分与纯 View 状态机与 Delta 打标顶层规范**：属性面板作为纯粹 Presentation View，严禁就地调用写盘与数据库存取代码，100% 仅对外发射标准 Qt 信号由 Controller 统一路由。多选打标强约束采用 Delta 差集增量计算，仅针对变动 Tag 发射单点增删信号，严禁全量覆盖清空文件私有标签；多选状态下强制禁用单文件重命名编辑框；针对加密文件与回收站项目触发全量只读守卫；FlowLayout 布局控件严格遵循 Qt 父子对象与 `deleteLater` 内存生命周期管理，彻底根除悬空指针隐患。
 4. **元数据中心 (MetadataManager) 门面模式规范**：元数据中心作为对外统一门面（Facade），不再直接混合磁盘 I/O 与数据库存取。序列化由 `QuarkMetaJsonStore` 承载；SQLite 持久化由 `MetaDbRepository` 承载；内存缓存由 `MetaMemoryCache` 承载。
 5. **元数据持久化脏缓冲合并落盘规范 (QuarkMetaJsonStore)**：`QuarkMetaJsonStore` 引入脏目录缓冲（Dirty Buffer Merge）与 50ms 自动防抖机制，同目录连续元数据修改先在内存中高效合流，防抖期满后执行 1 次原子落盘，且应用退出时触发强制刷盘（`flushAllDirtyBuffers`），彻底消除磁盘高频写盘震荡。
 
