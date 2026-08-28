@@ -15,13 +15,15 @@ struct TagEntry {
     int sortOrder = 0;
 };
 
-struct TagLexiconGroup {
+struct TagGroup {
     int id = -1;
     QString name;
     QString colorHex;
     int sortOrder = 0;
-    QStringList tags;
+    QList<TagEntry> tags;
 };
+
+using TagLexiconGroup = TagGroup;
 
 class TagLexiconService : public QObject {
     Q_OBJECT
@@ -31,7 +33,8 @@ public:
 
     // 1. Fast auto-completion and querying
     QStringList querySuggestions(const QString& prefix = "", int limit = 20) const;
-    QList<TagLexiconGroup> getAllTagGroups() const;
+    QList<TagGroup> getAllTagGroups() const;
+    QStringList getAllTagNames() const;
     QStringList getAllMasterTags() const;
 
     // 2. Lexicon dictionary CRUD
@@ -44,6 +47,7 @@ public:
     int createGroup(const QString& groupName, const QString& colorHex = "");
     bool renameGroup(int groupId, const QString& newName);
     bool deleteGroup(int groupId);
+    bool moveTagToGroup(const QString& tagName, int targetGroupId);
     bool addTagToGroup(const QString& tagName, int targetGroupId);
     bool removeTagFromGroup(const QString& tagName, int groupId = -1);
 

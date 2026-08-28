@@ -55,45 +55,65 @@ bool OperationSnapshotEngine::executeWithSnapshot(
     bool ok = doAction();
     if (!ok) return false;
 
-    // 3. 操作成功：如果外部传入了专用的 undoAction，
-    // 在主线程中生成一个通用快照回滚 ActionCommand 并推送给 UndoManager，实现 100% 物理与虚拟并轨！
+    // 3. 操作成功：如果外部传入了专用的 undoAction，构建双向对称 Command
     if (undoAction) {
         class GeneralSnapshotUndoCommand : public ActionCommand {
         public:
             GeneralSnapshotUndoCommand(QVector<AssetItemSnapshot> before,
-                                       std::function<bool(const QVector<AssetItemSnapshot>& beforeState)> undo)
-                : m_before(before), m_undoFunc(undo) {}
+                                       std::function<bool()> doFunc,
+                                       std::function<bool(const QVector<AssetItemSnapshot>& beforeState)> undoFunc)
+                : m_before(std::move(before)),
+                  m_doFunc(std::move(doFunc)),
+                  m_undoFunc(std::move(undoFunc)) {}
 
-            void execute() override {}
+            void execute() override {
+                // 🚀【Redo 核心闭环】：重新执行正向操作
+                if (m_doFunc) {
+                    m_doFunc();
+                }
+            }
+
             void undo() override {
+                // 🚀【Undo 核心闭环】：基于快照执行逆向回滚
                 if (m_undoFunc) {
                     m_undoFunc(m_before);
                 }
             }
-            void redo() override {}
-            QString description() const override { return "快照撤销"; }
+
+            void redo() override {
+                execute();
+            }
+
+            QString description() const override {
+                return "快照事务撤销/重做";
+            }
+
             bool affectsPath(const QString& path) const override {
                 for (const auto& snap : m_before) {
                     if (snap.path == path) return true;
                 }
                 return false;
             }
+
         private:
             QVector<AssetItemSnapshot> m_before;
+            std::function<bool()> m_doFunc;
             std::function<bool(const QVector<AssetItemSnapshot>& beforeState)> m_undoFunc;
         };
 
-        // 压入全局撤销栈，这样无论是按 Ctrl+Z 还是点击气泡，均能完美统一调用同一个 Command 恢复物理与逻辑状态
-        UndoManager::instance().pushCommand(std::make_unique<GeneralSnapshotUndoCommand>(beforeState, undoAction));
+        // 压入全局撤销栈，实现 Ctrl+Z 与 Ctrl+Y 的 100% 严格时序双向可逆
+        UndoManager::instance().pushCommand(
+            std::make_unique<GeneralSnapshotUndoCommand>(beforeState, doAction, undoAction)
+        );
 
-        // 弹出反馈气泡，点击撤销会直接调用 UndoManager::instance().undo()
+        // 🚀【规范 7000ms 与点击显式绑定】：弹出 7 秒气泡，点击右侧“撤销”按钮直接调用 UndoManager::undo()
         UndoToastOverlay::instance()->showToast(
             parentWidget,
             successToastMsg,
             []() {
-                // 回调闭包留空或传入 dummy 即可，因为在 4.1 节中 UndoToastOverlay 已经并轨至 UndoManager
+                UndoManager::instance().undo();
             },
-            5000
+            7000 // 👈 统一 7 秒停留时长红线
         );
     }
 

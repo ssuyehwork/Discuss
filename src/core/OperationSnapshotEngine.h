@@ -46,8 +46,9 @@ public:
     AssetItemSnapshot captureSingle(const QString& path);
     QVector<AssetItemSnapshot> captureBatch(const QStringList& paths);
 
-    // 执行带快照捕获与 UndoToastOverlay 弹窗提醒的操作
-    // 对应用户原话：“快照结合UndoToastOverlay”
+    /**
+     * @brief 执行带快照捕获、标准 7 秒 Toast 提醒与完美 Redo 支持的事务操作
+     */
     bool executeWithSnapshot(
         QWidget* parentWidget,
         SnapshotOperationType opType,

@@ -18,6 +18,7 @@
 #endif
 #include "MetadataManager.h"
 #include "MetadataDefs.h"
+#include "../util/VolumePathResolver.h"
 #include "DatabaseManager.h"
 #include "QuarkMetaJsonStore.h"
 #include "MetaDbRepository.h"
@@ -665,13 +666,7 @@ void MetadataManager::removeMetadataSync(const std::wstring& path) {
 }
 
 std::wstring MetadataManager::getVolumeSerialNumber(const std::wstring& path) {
-    if (path.length() < 2 || path[1] != L':') return L"UNKNOWN";
-    wchar_t root[4] = { static_cast<wchar_t>(towupper(path[0])), L':', L'\\', L'\0' };
-    DWORD serial = 0;
-    if (GetVolumeInformationW(root, nullptr, 0, &serial, nullptr, nullptr, nullptr, 0)) {
-        wchar_t buf[16]; swprintf(buf, 16, L"%08X", serial); return buf;
-    }
-    return L"UNKNOWN";
+    return VolumePathResolver::getVolumeSerialNumber(path);
 }
 
 bool MetadataManager::fetchWinApiMetadataDirect(const std::wstring& path, long long* outSize, std::wstring* outType, long long* outCtime, long long* outMtime, long long* outAtime) {

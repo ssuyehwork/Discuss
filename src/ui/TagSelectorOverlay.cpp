@@ -142,11 +142,20 @@ void TagSelectorOverlay::loadTagsAndGroups() {
     m_lexiconGroups = TagLexiconService::instance().getAllTagGroups();
     
     m_groupList->clear();
-    m_groupList->addItem("全部");
-    m_groupList->addItem("未分类");
+
+    auto addGroupItem = [this](const QString& name, const QString& iconKey) {
+        QListWidgetItem* item = new QListWidgetItem(name, m_groupList);
+        item->setIcon(UiHelper::getIcon(iconKey, QColor("#AAAAAA"), 14));
+        return item;
+    };
+
+    addGroupItem("全部", "all_data");
+    addGroupItem("未分类", "uncategorized");
 
     for (const auto& grp : m_lexiconGroups) {
-        m_groupList->addItem("📁 " + grp.name);
+        if (grp.id > 0) {
+            addGroupItem(grp.name, "folder_filled");
+        }
     }
 
     m_groupList->setCurrentRow(0);
@@ -161,27 +170,28 @@ void TagSelectorOverlay::filterTags() {
     if (currentGrp == "未分类") {
         QSet<QString> groupedTags;
         for (const auto& grp : m_lexiconGroups) {
-            for (const auto& t : grp.tags) groupedTags.insert(t);
+            if (grp.id > 0) {
+                for (const auto& t : grp.tags) groupedTags.insert(t.name);
+            }
         }
-        QStringList allMaster = TagLexiconService::instance().getAllMasterTags();
+        QStringList allMaster = TagLexiconService::instance().getAllTagNames();
         for (const QString& tag : allMaster) {
             if (groupedTags.contains(tag)) continue;
             if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
             m_displayedTags.append(tag);
         }
-    } else if (currentGrp.startsWith("📁 ")) {
-        QString pureGroupName = currentGrp.mid(3);
+    } else if (currentGrp != "全部" && currentGrp != "未分类") {
         for (const auto& grp : m_lexiconGroups) {
-            if (grp.name == pureGroupName) {
+            if (grp.name == currentGrp) {
                 for (const auto& t : grp.tags) {
-                    if (!kw.isEmpty() && !t.toLower().contains(kw.toLower())) continue;
-                    m_displayedTags.append(t);
+                    if (!kw.isEmpty() && !t.name.toLower().contains(kw.toLower())) continue;
+                    m_displayedTags.append(t.name);
                 }
                 break;
             }
         }
     } else {
-        QStringList allMaster = TagLexiconService::instance().getAllMasterTags();
+        QStringList allMaster = TagLexiconService::instance().getAllTagNames();
         for (const QString& tag : allMaster) {
             if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
             m_displayedTags.append(tag);
@@ -247,14 +257,19 @@ void TagSelectorOverlay::updateSelectionHighlight() {
         bool isSelected = m_selectedTags.contains(tag);
         bool isFocused = (i == m_currentTagIndex);
 
-        QString prefix = isSelected ? "✓ " : "• ";
-        btn->setText(prefix + tag);
+        btn->setText(tag);
+        if (isSelected) {
+            btn->setIcon(UiHelper::getIcon("check", QColor("#FFFFFF"), 12));
+        } else {
+            btn->setIcon(UiHelper::getIcon("tag_pill", QColor("#888888"), 12));
+        }
+        btn->setIconSize(QSize(12, 12));
 
         QString style;
         if (isSelected) {
-            style = "QPushButton { background-color: #1C97EA; color: #FFF; border: 1px solid #1C97EA; border-radius: 4px; padding: 0 8px; font-size: 11px; }";
+            style = "QPushButton { background-color: #1C97EA; color: #FFF; border: 1px solid #1C97EA; border-radius: 4px; padding: 0 8px; font-size: 11px; text-align: left; }";
         } else {
-            style = "QPushButton { background-color: transparent; color: #BBB; border: 1px solid #333; border-radius: 4px; padding: 0 8px; font-size: 11px; }";
+            style = "QPushButton { background-color: transparent; color: #BBB; border: 1px solid #333; border-radius: 4px; padding: 0 8px; font-size: 11px; text-align: left; }";
         }
 
         if (isFocused) {

@@ -45,8 +45,8 @@ QStringList TagLexiconService::querySuggestions(const QString& prefix, int limit
     return results;
 }
 
-QList<TagLexiconGroup> TagLexiconService::getAllTagGroups() const {
-    QList<TagLexiconGroup> results;
+QList<TagGroup> TagLexiconService::getAllTagGroups() const {
+    QList<TagGroup> results;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return results;
 
@@ -56,7 +56,7 @@ QList<TagLexiconGroup> TagLexiconService::getAllTagGroups() const {
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
         while (sqlite3_step(stmt) == SQLITE_ROW) {
-            TagLexiconGroup tg;
+            TagGroup tg;
             tg.id = sqlite3_column_int(stmt, 0);
             const wchar_t* wname = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 1));
             const wchar_t* wcolor = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 2));
@@ -70,7 +70,12 @@ QList<TagLexiconGroup> TagLexiconService::getAllTagGroups() const {
                 sqlite3_bind_int(itemStmt, 1, tg.id);
                 while (sqlite3_step(itemStmt) == SQLITE_ROW) {
                     const wchar_t* wtag = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(itemStmt, 0));
-                    if (wtag) tg.tags << QString::fromWCharArray(wtag);
+                    if (wtag) {
+                        TagEntry te;
+                        te.name = QString::fromWCharArray(wtag);
+                        te.groupId = tg.id;
+                        tg.tags << te;
+                    }
                 }
                 sqlite3_finalize(itemStmt);
             }
@@ -79,6 +84,10 @@ QList<TagLexiconGroup> TagLexiconService::getAllTagGroups() const {
         sqlite3_finalize(stmt);
     }
     return results;
+}
+
+QStringList TagLexiconService::getAllTagNames() const {
+    return getAllMasterTags();
 }
 
 QStringList TagLexiconService::getAllMasterTags() const {
@@ -311,6 +320,14 @@ bool TagLexiconService::deleteGroup(int groupId) {
         return res;
     }
     return false;
+}
+
+bool TagLexiconService::moveTagToGroup(const QString& tagName, int targetGroupId) {
+    removeTagFromGroup(tagName, -1);
+    if (targetGroupId > 0) {
+        return addTagToGroup(tagName, targetGroupId);
+    }
+    return true;
 }
 
 bool TagLexiconService::addTagToGroup(const QString& tagName, int targetGroupId) {

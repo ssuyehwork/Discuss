@@ -16,7 +16,7 @@
 4. **上下文菜单收藏状态动态双向切换红线**：右键呼出上下文菜单时，系统必须实时校验选中项的收藏状态。未收藏时显示“添加至收藏夹”；已收藏时动态切换为“取消收藏”，严禁硬编码写死单一静态菜单项。
 
 ### 全局操作反馈 Toast (UndoToastOverlay) 停留时长规范
-1. **统一停留时长红线**：全局所有基于 `UndoToastOverlay` 弹出的轻量级操作反馈与状态通知提示，默认停留时间统一固定（参考 `UI_DESIGN_SPEC.md`），确保用户具备充足的操作与撤销交互响应窗口。
+1. **统一停留时长红线**：全局所有基于 `UndoToastOverlay` 弹出的轻量级操作反馈与状态通知提示，默认停留时间统一固定为 7000ms（7 秒），确保用户具备充足的操作与撤销交互响应窗口。
 
 ### 地址栏面包屑（BreadcrumbBar）矢量图标分隔符顶层规范
 1. **硬编码文本符号剔除红线**：地址栏面包屑控件（BreadcrumbBar）文件夹层级之间严禁使用低字号文本字符 `">"` 或硬编码符号作为分隔符。
@@ -40,6 +40,11 @@
 1. **三阶哈希判重红线**：文件判重严格采用三阶流水线算法：一阶依物理尺寸粗滤 -> 二阶做 FastHash（首尾分块哈希） -> 三阶做全量 SHA-256 校验。彻底杜绝误判。
 2. **UI 主线程零 I/O 判重保护红线**：哈希计算与全量判重集合生成全权移交至 `QtConcurrent` 后台工作线程处理。
 
+### 多步连续 Undo/Redo 事务快照与撤销栈顶层规范 (OperationSnapshotEngine & UndoManager)
+1. **正反向双向闭环红线**：撤销指令（`GeneralSnapshotUndoCommand`）必须同时封装正向操作（`doAction`）与逆向回滚（`undoAction`），确保全系统批量改名、移入回收站、收藏夹切换等快照事务 100% 具备完美的 `Ctrl + Z`（撤销）与 `Ctrl + Y`（重做）双向可逆能力。
+2. **单一严格时序栈规范**：全系统所有物理文件与元数据变更统一收拢入 `UndoManager` 线程安全单例栈中按时间线性排列，容量控制为 50 步，杜绝多撤销栈并存导致的时序错乱。
+3. **销毁路径自动清洗规范**：当文件被物理粉碎或永久删除时，系统必须自动触发 `UndoManager::removeCommandsForPath` 清洗撤销栈中涉及该路径的 Command，防止针对已销毁路径的回滚造成系统崩溃。
+
 ### 批量重命名服务归一化与两阶段安全重命名顶层规范 (BatchRenameService)
 1. **重命名管道与物理 I/O 归一收敛红线**：全系统批量重命名、移动与复制规则计算（固定文本、序列、日期、原文件名、元数据变量）、同名冲突校验、Windows NTFS 大小写不敏感两阶段 UUID 中转安全重命名、缩略图与元数据 (.QuarkMeta.json) 全量同步漫游统一由 `BatchRenameService` 承载，视图层（`BatchRenameDialog`）与计算引擎（`BatchRenameEngine`）严禁就地执行同步 `std::filesystem::rename` 物理写盘。
 2. **原子撤销与双重撤销消除红线**：批量重命名操作必须生成单一次原子的 `BatchRenameCommand` 并推入全局 `UndoManager`，彻底消除视图层手动二次推入撤销快照引起的双重撤销冲突，撤销完成反馈 Toast 统一固定为 7 秒 (7000ms) 停留机制。
@@ -54,6 +59,16 @@
 2. **筛选面板 (FilterPanel) 拆分规范**：筛选面板仅保留 UI 控件渲染职责。筛选状态管理解耦至 `FilterStateModel`；后台文件数量聚合解耦至 `ScanStatsEngine`。
 3. **属性面板 (MetaPanel) 拆分规范**：属性面板解耦为独立的组件小模块（预览、评分颜色、标签节、基础信息节），结构清晰，职责单一。
 4. **元数据中心 (MetadataManager) 门面模式规范**：元数据中心作为对外统一门面（Facade），不再直接混合磁盘 I/O 与数据库存取。序列化由 `QuarkMetaJsonStore` 承载；SQLite 持久化由 `MetaDbRepository` 承载；内存缓存由 `MetaMemoryCache` 承载。
+5. **元数据持久化脏缓冲合并落盘规范 (QuarkMetaJsonStore)**：`QuarkMetaJsonStore` 引入脏目录缓冲（Dirty Buffer Merge）与 50ms 自动防抖机制，同目录连续元数据修改先在内存中高效合流，防抖期满后执行 1 次原子落盘，且应用退出时触发强制刷盘（`flushAllDirtyBuffers`），彻底消除磁盘高频写盘震荡。
+
+### 系统外壳工具职责纯粹化与两阶段安全重命名规范 (ShellHelper)
+1. **0 重度写盘/删除越权代码红线**：`ShellHelper` 彻底剥离文件传输、删除与移动等业务逻辑，全权委托为 `TrashService` 与 `DiskIoService`；仅保留 Windows 外壳原生关联操作（Explorer 定位高亮、属性框呼出、隐藏属性设置及字节格式化）。
+2. **Windows 两阶段 UUID 安全重命名规范**：`ShellHelper::renameItem` 统一接入 `FileOperationHelper::safeRename`，采用临时 UUID 独立中转文件名，彻底根治 Windows NTFS 文件系统大小写不敏感导致的重命名失败缺陷，并自动保证 `.QuarkMeta.json` 元数据、磁盘 Hash 缩略图与内存/SQLite 索引的全量漫游与同步。
+
+### 对话框与悬浮遮罩纯 UI 职责及纯 SVG 图标化顶层规范 (TagManagerDialog & TagSelectorOverlay)
+1. **词库服务 1:1 契约绝对对齐红线**：所有标签管理对话框（`TagManagerDialog`）与悬浮选择遮罩（`TagSelectorOverlay`）必须 100% 绑定 `TagLexiconService` 标准接口（如 `getAllTagGroups()`、`getAllTagNames()`、`TagGroup`、`moveTagToGroup()`），严禁调用任何废弃的非标方法。
+2. **纯 SVG 图标渲染与文本符号/Emoji 0 容忍红线**：全界面严禁使用硬编码文本字符或 Emoji 符号（如 `"📁 "`、`"• "`、`"+ "` 等），所有分类、层级与按钮图标强制统一使用 `UiHelper::getIcon(...)` 加载标准的矢量 SVG 图标，保障视网膜屏高保真视觉呈现。
+3. **悬浮遮罩视口碰撞防护与失焦自闭环规范**：悬浮遮罩 (`TagSelectorOverlay`) 必须包含屏幕视口边界碰撞检测，支持在靠近屏幕边缘时自动反折缩进；并在焦点转移时安全触发 `closeOverlay()` 优雅自闭环销毁。
 
 ### QuickLook 空格全屏预览与代际熔断/鹰眼小地图双向联动顶层规范 (QuickLookWindow & QuickLookMinimap)
 1. **切图代际号（`previewGeneration`）原子熔断红线**：用户通过空格键呼出或方向键高频连续切换预览文件时，`QuickLookWindow` 必须通过 `std::atomic<uint64_t>` 递增代际号，秒级丢弃前序大图/文本的在途异步解码任务，确保 CPU/GPU 算力 100% 聚焦当前选中的预览文件，彻底消灭连续切图引发的卡顿与线程池阻塞。

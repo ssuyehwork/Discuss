@@ -58,7 +58,8 @@ private:
 
     QVBoxLayout* m_tagsScrollLayout = nullptr;
 
-    QList<TagLexiconGroup> m_allGroups;
+    // 🚀【类型对齐】：采用标准 TagGroup 数据结构
+    QList<TagGroup> m_allGroups;
     QStringList m_masterTags;
 };
 

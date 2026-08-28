@@ -50,7 +50,8 @@ private:
     QStringList m_selectedTags;
     QStringList m_displayedTags;
     QMap<QString, int> m_allTagCounts;
-    QList<TagLexiconGroup> m_lexiconGroups;
+    // 🚀【类型对齐】：对齐标准 TagGroup
+    QList<TagGroup> m_lexiconGroups;
 
     QLineEdit* m_searchEdit = nullptr;
     QPushButton* m_btnToggleSidebar = nullptr;

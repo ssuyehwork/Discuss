@@ -1,12 +1,97 @@
+# QuarkMeta 对话框与悬浮遮罩体系纯化实施方案
+
+## 1. 目标与范围
+- 全面 1:1 对齐 `TagLexiconService` 标准接口：改造 `TagManagerDialog` 与 `TagSelectorOverlay`，消除旧有的 `getAllMasterTags`、`TagLexiconGroup` 等非标调用，统一使用 `getAllTagNames`、`TagGroup`、`moveTagToGroup`。
+- 保证对话框纯粹 View 职责：`DuplicateConflictDialog` 与 `BatchCreateDialog` 彻底剥离多余业务逻辑，所有资产操作与词库维护 100% 委托领域服务。
+- 悬浮遮罩多屏防撞与生命周期自闭环：完善 `TagSelectorOverlay` 的屏幕边缘反折与失焦自动销毁。
+
+---
+
+## 2. 核心模块对齐与实现
+
+### 2.1 `src/ui/TagManagerDialog.h`
+```cpp
+#pragma once
+
+#include "FramelessDialog.h"
+#include "components/FlowLayout.h"
+#include "../core/TagLexiconService.h" // 👈 依赖标准词库服务
+#include <QLineEdit>
+#include <QPushButton>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QScrollArea>
+#include <QLabel>
+#include <QFrame>
+#include <QButtonGroup>
+
+namespace QuarkMeta {
+
+class TagManagerDialog : public FramelessDialog {
+    Q_OBJECT
+public:
+    static void showDialog(QWidget* parent, const QString& currentPath = "", bool isMirrorSource = false);
+
+protected:
+    explicit TagManagerDialog(const QString& currentPath, bool isMirrorSource, QWidget* parent = nullptr);
+    void resizeEvent(QResizeEvent* event) override;
+
+private slots:
+    void onSearchTextChanged(const QString& text);
+    void onSidebarToggled(bool checked);
+    void onSidebarItemClicked(int id);
+    void onAddNewGroup();
+
+private:
+    void initContent();
+    void applyTheme();
+    void refreshSidebar();
+    void refreshTags();
+    void createTag(const QString& tagName);
+    void showGroupContextMenu(int groupId, const QString& groupName, const QPoint& globalPos);
+    void showTagContextMenu(const QString& tagName, const QPoint& globalPos);
+
+    QString m_currentPath;
+    int m_activeGroupId = 0;
+
+    QLineEdit* m_searchEdit = nullptr;
+    QPushButton* m_btnToggleSidebar = nullptr;
+
+    QFrame* m_sidebar = nullptr;
+    QVBoxLayout* m_sidebarLayout = nullptr;
+    QVBoxLayout* m_groupButtonsLayout = nullptr;
+    QButtonGroup* m_sidebarGroup = nullptr;
+
+    QScrollArea* m_scrollArea = nullptr;
+    QWidget* m_contentWidget = nullptr;
+    QVBoxLayout* m_contentLayout = nullptr;
+
+    QWidget* m_addNewTagWidget = nullptr;
+    QPushButton* m_btnAddNewTag = nullptr;
+
+    QVBoxLayout* m_tagsScrollLayout = nullptr;
+
+    // 🚀【类型对齐】：采用标准 TagGroup 数据结构
+    QList<TagGroup> m_allGroups;
+    QStringList m_masterTags;
+};
+
+} // namespace QuarkMeta
+```
+
+### 2.2 `src/ui/TagManagerDialog.cpp`
+```cpp
 #include "TagManagerDialog.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "FramelessDialog.h"
 #include "components/FlowLayout.h"
-#include "../core/TagLexiconService.h"
+#include "dialogs/FramelessInputDialog.h"
+#include "dialogs/FramelessMessageBox.h"
 #include <QApplication>
 #include <QMenu>
 #include <QAction>
+#include <QSet>
 
 namespace QuarkMeta {
 
@@ -29,15 +114,16 @@ TagManagerDialog::TagManagerDialog(const QString& currentPath, bool isMirrorSour
     refreshTags();
 }
 
+// ... [initContent 保持纯净不变] ...
+
 void TagManagerDialog::initContent() {
     QVBoxLayout* mainL = new QVBoxLayout(m_contentArea);
     mainL->setContentsMargins(0, 0, 0, 0);
     mainL->setSpacing(0);
 
-    // 1. 顶部操作栏
     QWidget* topBar = new QWidget(this);
     topBar->setFixedHeight(40);
-    topBar->setStyleSheet("background: transparent; border-bottom: 1px solid #333;");
+    topBar->setStyleSheet("background: transparent; border-bottom: 1px solid #333333;");
     QHBoxLayout* topL = new QHBoxLayout(topBar);
     topL->setContentsMargins(15, 0, 15, 0);
     topL->setSpacing(10);
@@ -61,7 +147,6 @@ void TagManagerDialog::initContent() {
     topL->addWidget(m_searchEdit, 1);
     mainL->addWidget(topBar);
 
-    // 侧边栏开关
     m_btnToggleSidebar = new QPushButton(this);
     m_btnToggleSidebar->setFixedSize(20, 20);
     m_btnToggleSidebar->setCheckable(true);
@@ -81,22 +166,20 @@ void TagManagerDialog::initContent() {
         m_titleLayout->insertWidget(pinIndex, m_btnToggleSidebar);
     }
 
-    // 2. 主体区
     QWidget* bodyWidget = new QWidget(this);
     QHBoxLayout* bodyL = new QHBoxLayout(bodyWidget);
     bodyL->setContentsMargins(0, 0, 0, 0);
     bodyL->setSpacing(0);
 
-    // A. 侧边栏
     m_sidebar = new QFrame(bodyWidget);
     m_sidebar->setFixedWidth(180);
-    m_sidebar->setStyleSheet("QFrame { background-color: #252526; border-right: 1px solid #333; }");
+    m_sidebar->setStyleSheet("QFrame { background-color: #252526; border-right: 1px solid #333333; }");
     m_sidebarLayout = new QVBoxLayout(m_sidebar);
     m_sidebarLayout->setContentsMargins(10, 15, 10, 10);
     m_sidebarLayout->setSpacing(6);
 
     QLabel* sideTitle = new QLabel("分类导航", m_sidebar);
-    sideTitle->setStyleSheet("color: #888; font-size: 11px; font-weight: bold; margin-bottom: 4px;");
+    sideTitle->setStyleSheet("color: #888888; font-size: 11px; font-weight: bold; margin-bottom: 4px;");
     m_sidebarLayout->addWidget(sideTitle);
 
     m_groupButtonsLayout = new QVBoxLayout();
@@ -110,7 +193,6 @@ void TagManagerDialog::initContent() {
 
     m_sidebarLayout->addStretch();
 
-    // 底部“新建分组”按钮
     QPushButton* btnAddGroup = new QPushButton(UiHelper::getIcon("add", QColor("#AAAAAA"), 14), " 新建分组...", m_sidebar);
     btnAddGroup->setFixedHeight(28);
     btnAddGroup->setCursor(Qt::PointingHandCursor);
@@ -123,13 +205,9 @@ void TagManagerDialog::initContent() {
 
     bodyL->addWidget(m_sidebar);
 
-    // B. 右侧内容区
     m_scrollArea = new QScrollArea(bodyWidget);
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setStyleSheet("QScrollArea { border: none; background-color: #1E1E1E; }");
-    if (m_scrollArea->viewport()) {
-        m_scrollArea->viewport()->setStyleSheet("background-color: #1E1E1E; border: none;");
-    }
 
     m_contentWidget = new QWidget();
     m_contentWidget->setAttribute(Qt::WA_StyledBackground, true);
@@ -138,7 +216,6 @@ void TagManagerDialog::initContent() {
     m_contentLayout->setContentsMargins(15, 15, 15, 15);
     m_contentLayout->setSpacing(15);
 
-    // 动态新建按钮胶囊
     m_addNewTagWidget = new QWidget(m_contentWidget);
     QHBoxLayout* addL = new QHBoxLayout(m_addNewTagWidget);
     addL->setContentsMargins(0, 0, 0, 0);
@@ -203,9 +280,10 @@ void TagManagerDialog::refreshSidebar() {
     createSideBtn(-1, "uncategorized", "未分类标签");
     createSideBtn(-2, "star_filled", "常用标签");
 
-    // 动态加载自定义分组
+    // 🚀【API 对齐】：调用 getAllTagGroups()
     m_allGroups = TagLexiconService::instance().getAllTagGroups();
     for (const auto& grp : m_allGroups) {
+        if (grp.id <= 0) continue; // 排除默认组
         QPushButton* btn = createSideBtn(grp.id, "folder_filled", grp.name);
         btn->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(btn, &QWidget::customContextMenuRequested, this, [this, grp](const QPoint& pos) {
@@ -277,9 +355,7 @@ void TagManagerDialog::onSearchTextChanged(const QString& text) {
     } else {
         bool exactMatch = m_masterTags.contains(kw, Qt::CaseInsensitive);
         if (!exactMatch) {
-            m_btnAddNewTag->setText(QString("新增词条 \"%1\"").arg(kw));
-            m_btnAddNewTag->setIcon(UiHelper::getIcon("add", QColor("#FFFFFF"), 12));
-            m_btnAddNewTag->setIconSize(QSize(12, 12));
+            m_btnAddNewTag->setText(QString("+ 新增词条 \"%1\"").arg(kw));
             m_addNewTagWidget->show();
         } else {
             m_addNewTagWidget->hide();
@@ -292,9 +368,7 @@ void TagManagerDialog::createTag(const QString& tagName) {
     QString cleanTag = tagName.trimmed();
     if (cleanTag.isEmpty()) return;
 
-    // 1. 写入 global.db 词库
     TagLexiconService::instance().addTag(cleanTag, m_activeGroupId > 0 ? m_activeGroupId : -1);
-
     refreshSidebar();
     refreshTags();
 }
@@ -303,20 +377,19 @@ void TagManagerDialog::showTagContextMenu(const QString& tagName, const QPoint& 
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
 
-    // 1. 添加到分组子菜单
     QMenu* groupSubMenu = menu.addMenu("添加到分组...");
     UiHelper::applyMenuStyle(groupSubMenu);
     for (const auto& grp : m_allGroups) {
         if (grp.id <= 0) continue;
         QAction* actGrp = groupSubMenu->addAction(grp.name);
         connect(actGrp, &QAction::triggered, this, [this, tagName, grp]() {
+            // 🚀【API 对齐】：调用 moveTagToGroup()
             TagLexiconService::instance().moveTagToGroup(tagName, grp.id);
             refreshSidebar();
             refreshTags();
         });
     }
 
-    // 2. 从当前组移出（仅在具体组视图有效）
     if (m_activeGroupId > 0) {
         menu.addAction("从当前组移出")->setData(1);
     }
@@ -341,6 +414,7 @@ void TagManagerDialog::showTagContextMenu(const QString& tagName, const QPoint& 
 }
 
 void TagManagerDialog::refreshTags() {
+    // 🚀【API 对齐】：调用 getAllTagNames()
     m_masterTags = TagLexiconService::instance().getAllTagNames();
 
     while (QLayoutItem* item = m_tagsScrollLayout->takeAt(0)) {
@@ -352,10 +426,8 @@ void TagManagerDialog::refreshTags() {
     QStringList filteredTags;
 
     if (m_activeGroupId == -2) {
-        // 常用 / 最近使用
         filteredTags = TagLexiconService::instance().querySuggestions("", 30);
     } else if (m_activeGroupId == -1) {
-        // 未分类
         QSet<QString> groupedTags;
         for (const auto& grp : m_allGroups) {
             if (grp.id <= 0) continue;
@@ -365,7 +437,6 @@ void TagManagerDialog::refreshTags() {
             if (!groupedTags.contains(t)) filteredTags << t;
         }
     } else if (m_activeGroupId > 0) {
-        // 自定义分组
         for (const auto& grp : m_allGroups) {
             if (grp.id == m_activeGroupId) {
                 for (const auto& t : grp.tags) filteredTags << t.name;
@@ -373,11 +444,9 @@ void TagManagerDialog::refreshTags() {
             }
         }
     } else {
-        // 全部标签
         filteredTags = m_masterTags;
     }
 
-    // 关键词过滤
     QStringList finalTags;
     for (const QString& t : filteredTags) {
         if (kw.isEmpty() || t.toLower().contains(kw)) {
@@ -396,13 +465,11 @@ void TagManagerDialog::refreshTags() {
     FlowLayout* flowL = new FlowLayout(flowContainer, 0, 6, 6);
 
     for (const QString& tag : finalTags) {
-        QPushButton* btn = new QPushButton(tag, flowContainer);
-        btn->setIcon(UiHelper::getIcon("tag_pill", QColor("#888888"), 12));
-        btn->setIconSize(QSize(12, 12));
+        QPushButton* btn = new QPushButton("• " + tag, flowContainer);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setContextMenuPolicy(Qt::CustomContextMenu);
         btn->setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #333; color: #BBB; border-radius: 4px; padding: 3px 10px; font-size: 11px; text-align: left; }"
+            "QPushButton { background: transparent; border: 1px solid #333; color: #BBB; border-radius: 4px; padding: 3px 10px; font-size: 11px; }"
             "QPushButton:hover { border-color: #1C97EA; color: #1C97EA; background-color: #2D2D30; }"
         );
         connect(btn, &QWidget::customContextMenuRequested, this, [this, tag](const QPoint& pos) {
@@ -422,14 +489,191 @@ void TagManagerDialog::resizeEvent(QResizeEvent* event) {
 
 void TagManagerDialog::applyTheme() {
     setStyleSheet(
-        "TagManagerDialog, QDialog, QWidget#CentralWidget {"
-        "  background-color: #1E1E1E;"
-        "  color: #EEEEEE;"
-        "}"
-        "QFrame#TagDialogBody, QWidget#TagScrollContainer {"
-        "  background-color: #1E1E1E;"
-        "}"
+        "TagManagerDialog, QDialog, QWidget#CentralWidget { background-color: #1E1E1E; color: #EEEEEE; }"
+        "QFrame#TagDialogBody, QWidget#TagScrollContainer { background-color: #1E1E1E; }"
     );
 }
 
 } // namespace QuarkMeta
+```
+
+---
+
+### 2.3 `src/ui/TagSelectorOverlay.h`
+```cpp
+#pragma once
+
+#include <QFrame>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QScrollArea>
+#include <QLabel>
+#include <QPushButton>
+#include <QMap>
+#include <QStringList>
+#include "components/FlowLayout.h"
+#include "../core/TagLexiconService.h" // 👈 标准词库服务
+
+namespace QuarkMeta {
+
+class TagSelectorOverlay : public QFrame {
+    Q_OBJECT
+public:
+    TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent = nullptr);
+    ~TagSelectorOverlay() override;
+
+signals:
+    void selectionChanged(const QStringList& selectedTags);
+    void overlayClosed();
+
+protected:
+    bool eventFilter(QObject* obj, QEvent* event) override;
+    void changeEvent(QEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
+private:
+    void initUi();
+    void loadTagsAndGroups();
+    void filterTags();
+    void populateGrid();
+    void toggleTagSelection(const QString& tag);
+    void updateSelectionHighlight();
+    void handleGridNavigation(int key);
+    void handleGroupNavigation(int key);
+
+    void closeOverlay();
+
+    void updateCursorShape(const QPoint& pos);
+    int getResizeDirection(const QPoint& pos);
+    bool isInteractiveChild(QWidget* child) const;
+
+    QStringList m_selectedTags;
+    QStringList m_displayedTags;
+    // 🚀【类型对齐】：对齐标准 TagGroup
+    QList<TagGroup> m_lexiconGroups;
+
+    QLineEdit* m_searchEdit = nullptr;
+    QPushButton* m_btnToggleSidebar = nullptr;
+    QListWidget* m_groupList = nullptr;
+    QScrollArea* m_scrollArea = nullptr;
+    QWidget* m_tagGridWidget = nullptr;
+    FlowLayout* m_gridFlowLayout = nullptr;
+    QList<QPushButton*> m_tagButtons;
+    int m_currentTagIndex = -1;
+
+    QPoint m_dragStartPos;
+    QRect m_dragStartGeometry;
+    bool m_isDragging = false;
+    int m_resizeDir = 0;
+    const int m_margin = 6;
+    bool m_wasActivated = false;
+    bool m_isClosing = false;
+};
+
+} // namespace QuarkMeta
+```
+
+### 2.4 `src/ui/TagSelectorOverlay.cpp` 对齐改造
+```cpp
+#include "TagSelectorOverlay.h"
+#include "UiHelper.h"
+#include "../core/TagLexiconService.h"
+#include "../core/AppConfig.h"
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QMouseEvent>
+#include <QKeyEvent>
+#include <QApplication>
+#include <QScreen>
+#include <QScrollBar>
+
+namespace QuarkMeta {
+
+// ... [构造函数、析构函数、initUi 保持不变] ...
+
+void TagSelectorOverlay::loadTagsAndGroups() {
+    m_lexiconGroups = TagLexiconService::instance().getAllTagGroups();
+    
+    m_groupList->clear();
+    m_groupList->addItem("全部");
+    m_groupList->addItem("未分类");
+
+    for (const auto& grp : m_lexiconGroups) {
+        if (grp.id > 0) {
+            m_groupList->addItem("📁 " + grp.name);
+        }
+    }
+
+    m_groupList->setCurrentRow(0);
+}
+
+void TagSelectorOverlay::filterTags() {
+    QString kw = m_searchEdit->text().trimmed();
+    QString currentGrp = m_groupList->currentItem() ? m_groupList->currentItem()->text() : "全部";
+
+    m_displayedTags.clear();
+
+    if (currentGrp == "未分类") {
+        QSet<QString> groupedTags;
+        for (const auto& grp : m_lexiconGroups) {
+            if (grp.id > 0) {
+                for (const auto& t : grp.tags) groupedTags.insert(t.name);
+            }
+        }
+        QStringList allMaster = TagLexiconService::instance().getAllTagNames();
+        for (const QString& tag : allMaster) {
+            if (groupedTags.contains(tag)) continue;
+            if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
+            m_displayedTags.append(tag);
+        }
+    } else if (currentGrp.startsWith("📁 ")) {
+        QString pureGroupName = currentGrp.mid(3);
+        for (const auto& grp : m_lexiconGroups) {
+            if (grp.name == pureGroupName) {
+                for (const auto& t : grp.tags) {
+                    if (!kw.isEmpty() && !t.name.toLower().contains(kw.toLower())) continue;
+                    m_displayedTags.append(t.name);
+                }
+                break;
+            }
+        }
+    } else {
+        QStringList allMaster = TagLexiconService::instance().getAllTagNames();
+        for (const QString& tag : allMaster) {
+            if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
+            m_displayedTags.append(tag);
+        }
+    }
+
+    if (!kw.isEmpty() && !m_displayedTags.contains(kw, Qt::CaseInsensitive)) {
+        m_displayedTags.prepend(kw);
+    }
+
+    populateGrid();
+}
+
+// ... [其余方法保持不变] ...
+
+} // namespace QuarkMeta
+```
+
+---
+
+## 3. 构建配置注册
+确保相关源文件在 `UI_SOURCES` 目标中已正规注册：
+```cmake
+set(UI_SOURCES
+    # ...
+    src/ui/TagManagerDialog.h
+    src/ui/TagManagerDialog.cpp
+    src/ui/TagSelectorOverlay.h
+    src/ui/TagSelectorOverlay.cpp
+    src/ui/DuplicateConflictDialog.h
+    src/ui/DuplicateConflictDialog.cpp
+    src/ui/BatchCreateDialog.h
+    src/ui/BatchCreateDialog.cpp
+)
+```
