@@ -23,6 +23,8 @@
 #include "FilterPanel.h"
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
+#include "models/FolderProxyModel.h"
+#include "models/FileProxyModel.h"
 
 #include "../core/ModelContract.h"
 
@@ -132,6 +134,8 @@ public:
     // --- 业务接口 ---
     QAbstractItemModel* model() const { return m_model; }
     QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
+    FolderProxyModel* getFolderProxyModel() const { return m_folderProxyModel; }
+    FileProxyModel* getFileProxyModel() const { return m_fileProxyModel; }
     QStringList getSelectedPaths() const;
     QList<int> getSelectedTrashIds() const;
 
@@ -229,6 +233,9 @@ private:
     QTreeView* m_treeView = nullptr;
     DiskItemModel* m_diskModel = nullptr;       // 负责纯物理磁盘导航模型
     ItemModelBase* m_model = nullptr;           // 当前多态激活指针合约
+
+    FolderProxyModel* m_folderProxyModel = nullptr; // 专责文件夹代理
+    FileProxyModel*   m_fileProxyModel = nullptr;   // 专责文件代理
 
     QTimer* m_visibleTimer = nullptr;
     QSortFilterProxyModel* m_proxyModel = nullptr;

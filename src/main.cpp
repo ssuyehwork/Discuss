@@ -22,6 +22,7 @@
 #include <shellapi.h>
 #endif
 #include "ui/UiHelper.h"
+#include "ui/ThemeManager.h"
 #include "ui/Logger.h"
 #include "ui/MainWindow.h"
 
@@ -101,10 +102,10 @@ int main(int argc, char *argv[]) {
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QApplication a(argc, argv);
 
-    // 2026-07-26：全局彻底消除所有按钮（QAbstractButton 子类）被点击后产生的点状虚线聚焦框
-    a.setStyleSheet("QAbstractButton { outline: none; }");
+    // 🚀【全局主题与样式中枢】：一键注入全局统一 QSS 样式表与面板/菜单暗黑规范
+    QuarkMeta::ThemeManager::instance().initialize(&a);
 
-    // 2026-06-xx 按照用户要求：全局统一设置蓝色透明框选样式
+    // 全局统一设置蓝色透明框选样式
     QPalette p = a.palette();
     p.setColor(QPalette::Highlight, QColor(52, 152, 219));      // #3498db (蓝色)
     p.setColor(QPalette::HighlightedText, Qt::white);

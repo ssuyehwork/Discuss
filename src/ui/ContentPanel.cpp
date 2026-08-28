@@ -791,6 +791,13 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
  
             if (keyEvent->key() == Qt::Key_Space) { 
                 QModelIndex idx = view->currentIndex(); 
+                if (!idx.isValid() && view->selectionModel()) {
+                    auto selected = view->selectionModel()->selectedIndexes();
+                    if (!selected.isEmpty()) {
+                        idx = selected.first();
+                    }
+                }
+
                 if (idx.isValid()) {
                     QString path = idx.data(PathRole).toString();
                     if (!path.isEmpty()) {

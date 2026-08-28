@@ -445,7 +445,15 @@ bool QuickLookWindow::eventFilter(QObject* watched, QEvent* event) {
         if (m_ignoreDeactivate) {
             return true;
         }
+
+        QWidget* activeWin = QApplication::activeWindow();
+        QWidget* focusW = QApplication::focusWidget();
+        if (activeWin == this || (focusW && this->isAncestorOf(focusW))) {
+            return true;
+        }
+
         closePreview();
+        return true;
     }
     return QWidget::eventFilter(watched, event);
 }

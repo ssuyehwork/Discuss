@@ -15,6 +15,7 @@
 #include <QDebug>
 
 #include "SvgIconRenderer.h"
+#include "ThemeManager.h"
 #include "../util/ColorPaletteEngine.h"
 
 namespace QuarkMeta {
@@ -61,7 +62,7 @@ public:
     }
 
     static inline void applyMenuStyle(QWidget* menu) {
-        SvgIconRenderer::applyMenuStyle(menu);
+        ThemeManager::instance().applyMenuStyle(menu);
     }
 
     static inline QColor getExtensionColor(const QString& ext) {

@@ -22,7 +22,7 @@ TrayController::TrayController(QMainWindow* mainWindow)
     m_trayIcon->setIcon(QIcon(":/app_icon.ico"));
     m_trayIcon->setToolTip("QuarkMeta");
 
-    m_trayMenu = new QMenu(nullptr);
+    m_trayMenu = new QMenu(mainWindow);
     UiHelper::applyMenuStyle(m_trayMenu);
 
     QAction* showAction = m_trayMenu->addAction("显示主界面");

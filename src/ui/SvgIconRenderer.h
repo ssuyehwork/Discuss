@@ -20,7 +20,6 @@ public:
     static QIcon getIcon(const QString& key, const QColor& color, int size = 18);
     static QPixmap getPixmap(const QString& key, const QSize& size, const QColor& color);
     static QString getSvgTempFilePath(const QString& key, const QColor& color);
-    static void applyMenuStyle(QWidget* menu);
 };
 
 } // namespace QuarkMeta

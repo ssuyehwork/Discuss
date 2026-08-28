@@ -31,7 +31,7 @@ class TagLexiconService : public QObject {
 public:
     static TagLexiconService& instance();
 
-    // 1. Fast auto-completion and querying
+    // 1. Fast auto-completion and querying (MSVC Rebuild Trigger 2026-08-28)
     QStringList querySuggestions(const QString& prefix = "", int limit = 20) const;
     QList<TagGroup> getAllTagGroups() const;
     QStringList getAllTagNames() const;

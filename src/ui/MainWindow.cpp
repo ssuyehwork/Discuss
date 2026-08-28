@@ -102,41 +102,6 @@ MainWindow::MainWindow(QWidget* parent)
 
     m_isPinned = AppConfig::instance().getValue("MainWindow/AlwaysOnTop", false).toBool();
 
-    QFile file(":/style.qss");
-    if (file.open(QFile::ReadOnly)) {
-        setStyleSheet(QLatin1String(file.readAll()));
-    } else {
-        QString qss = QString(R"(
-            QMainWindow { background-color: %1; }
-            #SidebarContainer, #FavoriteContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
-                background-color: %1; border: none; border-radius: 0px;
-            }
-            #ContainerHeader {
-                background-color: %3; border-bottom: 1px solid %2;
-            }
-            QScrollBar:vertical { border: none; background: transparent; width: 10px; }
-            QScrollBar::handle:vertical { background: %2; min-height: 20px; border-radius: 3px; }
-            QScrollBar::handle:vertical:hover { background: %4; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { width: 0px; height: 0px; }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
-            QScrollBar:horizontal { border: none; background: transparent; height: 10px; }
-            QScrollBar::handle:horizontal { background: %2; min-width: 20px; border-radius: 3px; }
-            QScrollBar::handle:horizontal:hover { background: %4; }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; height: 0px; }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }
-            QLineEdit, QPlainTextEdit, QTextEdit {
-                background: %1; border: 1px solid %2; border-radius: 6px; color: %5; padding-left: 8px;
-            }
-            QLineEdit:focus { border: 1px solid %6; }
-        )")
-        .arg(qssColor(BackgroundDeep))
-        .arg(qssColor(BorderColor))
-        .arg(qssColor(BackgroundHeader))
-        .arg(qssColor(BorderDark))
-        .arg(qssColor(TextMain))
-        .arg(qssColor(PrimaryBlue));
-        setStyleSheet(qss);
-    }
 
     initUi();
 

@@ -54,7 +54,7 @@ void QuickLookGraphicsView::setPixmap(const QPixmap& pixmap) {
         m_minimap->setPixmap(pixmap);
     }
     
-    setZoomOriginal();
+    fitImage();
     updateMinimap();
 }
 

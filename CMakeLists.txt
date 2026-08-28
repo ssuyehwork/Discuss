@@ -150,6 +150,10 @@ set(SOURCES
     src/ui/IScanResultView.h
     src/ui/FilterStateModel.h
     src/ui/FilterStateModel.cpp
+    src/ui/models/FolderProxyModel.h
+    src/ui/models/FolderProxyModel.cpp
+    src/ui/models/FileProxyModel.h
+    src/ui/models/FileProxyModel.cpp
     src/ui/models/FilterProxyModel.h
     src/ui/models/FilterProxyModel.cpp
     src/ui/ScanStatsEngine.h
@@ -264,6 +268,8 @@ set(SOURCES
     src/ui/models/ItemModelBase.h
     src/ui/models/DiskItemModel.h
     src/ui/models/DiskItemModel.cpp
+    src/ui/ThemeManager.h
+    src/ui/ThemeManager.cpp
     src/ui/UiHelper.h
     src/ui/IconCacheManager.h
     src/ui/IconCacheManager.cpp
@@ -367,4 +373,4 @@ target_include_directories(QuarkMeta PRIVATE
 if(MSVC)
     target_link_options(QuarkMeta PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
 endif()
-# Force Refresh CMake: 2026-06-xx 11:30 (Removed AmMetaJson & SyncQueue, switched to DB-only)
+# Force Rebuild TagLexiconService: 2026-08-28 19:40
