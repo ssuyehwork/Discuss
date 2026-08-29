@@ -18,7 +18,7 @@
 | **PSD 标签配色 (PSD Badge)** | 背景色 `#001D26` / 字体色 `#02B1DD` | Photoshop 文件 Badge 专属配色 |
 | **EPS 标签配色 (EPS Badge)** | 背景色 `#35483D` / 字体色 `#F88025` | EPS 矢量文件 Badge 专属配色 |
 | **AI 标签配色 (AI Badge)** | 背景色 `#F88025` / 字体色 `#35483D` | Illustrator 文件 Badge 专属配色 |
-| **其他扩展名 (Other Badges)** | 确定性 Hash 生成背景色 / 动态对比度字体色 | 未指定后缀名基于 Hash 保证唯一与稳定固定色 |
+| **其他扩展名 (Other Badges)** | `global.db` 持久化表 / 动态生成刷盘 | 非硬编码扩展名持久化固化于 `global.db` `extension_colors` 表 |
 
 ---
 

@@ -96,7 +96,7 @@
 
 ### 多媒体色彩提取与调色板引擎归一化顶层规范 (ColorPaletteEngine)
 1. **底层工具层绝对归一收敛红线**：多媒体图像格式权威判定（标准图/矢量图/RAW 等）、主导色彩提取、5 色调色板桶量化算法、标准色标（红/橙/黄/绿/青/蓝/紫/灰等）量化映射以及 CIEDE2000 国际标准色差算法（$\Delta E$）必须 100% 物理归一化收敛至底层 `ColorPaletteEngine`（位于 `src/util/`），绝对禁止在 UI 视图层、中介者或控制器内编写手写 RGB 差值算法或色彩比对逻辑。
-2. **后缀名 Badge 专属与确定性 Hash 唯一配色顶层规范**：卡片与视图层文件扩展名 Badge 标签的背景色与字体色映射计算完全交由 `ColorPaletteEngine` 统一调度。对于特定后缀名（如 `psd`、`eps`、`ai`）提供专属高辨识度配色；对于其他未指定扩展名，强制采用基于扩展名文本 `qHash` 归一化的确定性 Hash 算法生成唯一且固定的 Hue 色相角，并结合亮度算式自动计算高对比度前景字体色，杜绝视图重绘或软件重启时色彩随机震荡变色。
+2. **后缀名 Badge 专属与 global.db 数据库持久化配色顶层规范**：卡片与视图层文件扩展名 Badge 标签的背景色与字体色映射计算完全交由 `ColorPaletteEngine` 统一调度。对于特定后缀名（如 `psd`、`eps`、`ai`）提供专属高辨识度配色保护；对于其他未指定扩展名，配色方案统一物理落盘持久化存储于 `global.db` 数据库（`extension_colors` 表）。系统首次遇到新扩展名时生成高对比度配色并自动刷盘固化，后续由内存 LRU 缓存与 DB 级联直取，既保障配色 100% 物理固化与高灵活性配置，又杜绝界面重绘与写盘性能损耗。
 2. **纯计算与 0 UI 依赖隔离红线**：`ColorPaletteEngine` 归属于底层 Utility 计算层，严禁包含任何 `src/ui/` 目录头文件或持有 QWidget/QPainter 等 UI 绘图组件。同时支持基于文件路径（`extractPalette`）与内存 `QImage` 句柄（`extractPaletteFromImage`）的双重提取重载，保障后台多媒体提取管道（`MediaExtractorPipeline`）的高性能零卡顿处理。
 3. **架构分层倒挂物理彻底清除红线**：物理废除并彻底删除原 UI 层中分层倒挂的 `MediaColorExtractor` 与 `ColorAlgorithmEngine` 旧类；`UiHelper` 仅保留平滑转发内联接口，确保既有调用的 100% 向后兼容性。
 
