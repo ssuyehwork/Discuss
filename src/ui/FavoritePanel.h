@@ -52,11 +52,6 @@ public:
      */
     void loadFavorites();
 
-    /**
-     * @brief 保存收藏夹排序号至 global.db
-     */
-    void saveFavorites();
-
 signals:
     /**
      * @brief 当点击收藏的文件夹时发出，通知主窗口跳转
@@ -75,6 +70,11 @@ private slots:
 
 private:
     void initUi();
+
+    /**
+     * @brief 保存收藏夹拖拽排序号至 global.db
+     */
+    void saveFavorites();
 
     QVBoxLayout* m_mainLayout = nullptr;
 

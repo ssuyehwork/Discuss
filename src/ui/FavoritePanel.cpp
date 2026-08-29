@@ -281,7 +281,6 @@ void FavoritePanel::onPathsDroppedToFavorite(const QStringList& paths, const QMo
     for (const QString& path : paths) {
         addFavoriteItem(path);
     }
-    saveFavorites();
 }
 
 void FavoritePanel::loadFavorites() {
