@@ -296,10 +296,13 @@ void FavoritePanel::loadFavorites() {
         QColor itemColor = QColor(rec.colorHex);
         if (!itemColor.isValid()) itemColor = QColor("#FDB70A");
 
-        QIcon icon = UiHelper::getIcon(rec.iconKey.isEmpty() ? "folder" : rec.iconKey, itemColor, 18);
+        QString iconKey = rec.iconKey.isEmpty() ? "folder_filled" : rec.iconKey;
+        if (iconKey == "folder") iconKey = "folder_filled";
+
+        QIcon icon = UiHelper::getIcon(iconKey, itemColor, 18);
         QStandardItem* item = new QStandardItem(icon, rec.name.isEmpty() ? fi.fileName() : rec.name);
         item->setData(rec.path, Qt::UserRole + 1);
-        item->setData(rec.iconKey, Qt::UserRole + 2);
+        item->setData(iconKey, Qt::UserRole + 2);
         item->setData(rec.colorHex, Qt::UserRole + 3);
 
         m_favoriteModel->appendRow(item);
@@ -347,12 +350,12 @@ void FavoritePanel::addFavoriteItem(const QString& path) {
     QFileInfo fi(cleanPath);
     if (!fi.exists()) return;
 
-    FavoriteDao::addFavorite(cleanPath, "folder", "#FDB70A");
+    FavoriteDao::addFavorite(cleanPath, "folder_filled", "#FDB70A");
 
-    QIcon icon = UiHelper::getIcon("folder", QColor("#FDB70A"), 18);
+    QIcon icon = UiHelper::getIcon("folder_filled", QColor("#FDB70A"), 18);
     QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? cleanPath : fi.fileName());
     item->setData(cleanPath, Qt::UserRole + 1);
-    item->setData("folder", Qt::UserRole + 2);
+    item->setData("folder_filled", Qt::UserRole + 2);
     item->setData("#FDB70A", Qt::UserRole + 3);
 
     m_favoriteModel->appendRow(item);
