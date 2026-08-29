@@ -1,4 +1,5 @@
 #include "ColorPaletteEngine.h"
+#include "../meta/ExtensionColorDao.h"
 #include <QImageReader>
 #include <QFileInfo>
 #include <QSet>
@@ -69,17 +70,48 @@ QString ColorPaletteEngine::normalizeColorHex(const QString& colorStr) {
 }
 
 QColor ColorPaletteEngine::getExtensionColor(const QString& ext) {
+    return getExtensionBadgeColors(ext).first;
+}
+
+QPair<QColor, QColor> ColorPaletteEngine::getExtensionBadgeColors(const QString& ext) {
     QString e = ext.toLower().trimmed();
-    if (e == "psd" || e == "psb") return QColor("#31A8FF");
-    if (e == "ai" || e == "eps")  return QColor("#FF9A00");
-    if (e == "svg")               return QColor("#FFB13B");
-    if (e == "png")               return QColor("#2ECC71");
-    if (e == "jpg" || e == "jpeg") return QColor("#E67E22");
-    if (e == "gif")               return QColor("#9B59B6");
-    if (e == "webp")              return QColor("#1ABC9C");
-    if (e == "pdf")               return QColor("#E74C3C");
-    if (e == "txt" || e == "md")  return QColor("#95A5A6");
-    return QColor("#7F8C8D");
+
+    // 1. 独占硬编码保护项
+    if (e == "psd" || e == "psb") return { QColor("#001D26"), QColor("#02B1DD") };
+    if (e == "eps")               return { QColor("#35483D"), QColor("#F88025") };
+    if (e == "ai")                return { QColor("#F88025"), QColor("#35483D") };
+
+    // 2. 内存缓存第一级查找
+    static QMap<QString, QPair<QColor, QColor>> s_colorCache;
+    static bool s_tableInited = false;
+
+    if (!s_tableInited) {
+        ExtensionColorDao::initTable();
+        s_colorCache = ExtensionColorDao::loadAllColors();
+        s_tableInited = true;
+    }
+
+    if (s_colorCache.contains(e)) {
+        return s_colorCache.value(e);
+    }
+
+    // 3. 动态生成新配色并物理落盘写入 global.db
+    uint hashVal = static_cast<uint>(qHash(e));
+    int hue = static_cast<int>(hashVal % 360);
+    int saturation = 130 + static_cast<int>((hashVal >> 8) % 80);
+    int lightness = 80 + static_cast<int>((hashVal >> 16) % 60);
+
+    QColor bgColor = QColor::fromHsl(hue, saturation, lightness);
+    double luminance = (0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue()) / 255.0;
+    QColor textColor = (luminance < 0.55) ? QColor("#FFFFFF") : QColor("#1A1A1A");
+
+    QPair<QColor, QColor> colorPair = { bgColor, textColor };
+
+    // 刷盘固化并填充内存 Cache
+    ExtensionColorDao::saveExtensionColor(e, bgColor, textColor, false);
+    s_colorCache.insert(e, colorPair);
+
+    return colorPair;
 }
 
 QColor ColorPaletteEngine::extractDominantColor(const QString& filePath) {

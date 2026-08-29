@@ -29,6 +29,7 @@ public:
     // 3. 颜色量化与标准名称/Hex 映射
     static QColor quantizeToStandardColor(const QColor& color);
     static QColor getExtensionColor(const QString& ext);
+    static QPair<QColor, QColor> getExtensionBadgeColors(const QString& ext);
     static QColor parseColorName(const QString& colorName);
     static QString normalizeColorHex(const QString& colorStr);
 

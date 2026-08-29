@@ -95,7 +95,7 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
     // 1. 🚀【网格/自适应视图】：直接调用 CardLayoutEngine 归一化命中查询！
     if (view != m_panel->findChild<QTreeView*>()) {
         QRect itemRect = view->visualRect(index);
-        CardLayout l = CardLayoutEngine::calculate(itemRect, m_panel->zoomLevel());
+        CardLayout l = CardLayoutEngine::calculate(itemRect, m_panel->m_zoomLevel);
         int hitVal = l.hitStar(pos);
 
         if (hitVal != -1) {

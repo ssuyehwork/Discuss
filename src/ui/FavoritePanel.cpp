@@ -1,6 +1,7 @@
 #include "FavoritePanel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
+#include "../meta/FavoriteDao.h"
 #include <QPainter>
 #include "../core/AppConfig.h"
 #include <QLabel>
@@ -160,11 +161,58 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QModelIndex index = m_favoriteView->indexAt(pos);
     if (!index.isValid()) return;
 
+    QString path = index.data(Qt::UserRole + 1).toString();
+    QString curIconKey = index.data(Qt::UserRole + 2).toString();
+    QString curColorHex = index.data(Qt::UserRole + 3).toString();
+    if (curIconKey.isEmpty()) curIconKey = "folder";
+    if (curColorHex.isEmpty()) curColorHex = "#FDB70A";
+
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
 
+    QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder", QColor("#EEEEEE")), "切换图标");
+    static const QPair<QString, QString> iconOptions[] = {
+        { "folder", "标准文件夹" },
+        { "star", "星号" },
+        { "heart", "红心" },
+        { "bookmark", "书签" },
+        { "tag", "标签" }
+    };
+    for (const auto& opt : iconOptions) {
+        QAction* act = iconMenu->addAction(UiHelper::getIcon(opt.first, QColor(curColorHex)), opt.second);
+        connect(act, &QAction::triggered, this, [this, path, opt, curColorHex, index]() {
+            FavoriteDao::updateFavorite(path, opt.first, curColorHex);
+            QIcon newIcon = UiHelper::getIcon(opt.first, QColor(curColorHex), 18);
+            m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
+            m_favoriteModel->itemFromIndex(index)->setData(opt.first, Qt::UserRole + 2);
+        });
+    }
+
+    QMenu* colorMenu = menu.addMenu(UiHelper::getIcon("circle_filled", QColor(curColorHex)), "切换色标");
+    static const QPair<QString, QString> colorOptions[] = {
+        { "#FDB70A", "金色" },
+        { "#E24B4A", "红色" },
+        { "#EF9F27", "橙色" },
+        { "#639922", "绿色" },
+        { "#1D9E75", "青色" },
+        { "#378ADD", "蓝色" },
+        { "#7F77DD", "紫色" }
+    };
+    for (const auto& opt : colorOptions) {
+        QAction* act = colorMenu->addAction(UiHelper::getIcon("circle_filled", QColor(opt.first)), opt.second);
+        connect(act, &QAction::triggered, this, [this, path, curIconKey, opt, index]() {
+            FavoriteDao::updateFavorite(path, curIconKey, opt.first);
+            QIcon newIcon = UiHelper::getIcon(curIconKey, QColor(opt.first), 18);
+            m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
+            m_favoriteModel->itemFromIndex(index)->setData(opt.first, Qt::UserRole + 3);
+        });
+    }
+
+    menu.addSeparator();
+
     QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "取消收藏");
-    connect(removeAct, &QAction::triggered, this, [this, index]() {
+    connect(removeAct, &QAction::triggered, this, [this, path, index]() {
+        FavoriteDao::removeFavorite(path);
         m_favoriteModel->removeRow(index.row());
     });
 
@@ -183,62 +231,53 @@ void FavoritePanel::loadFavorites() {
     if (!m_favoriteModel) return;
     m_favoriteModel->clear();
 
-    QVariant val = AppConfig::instance().getValue("FavoritePanel/Favorites");
-    if (!val.isValid()) {
-        val = AppConfig::instance().getValue("NavPanel/Favorites"); // 向下兼容原配置
-    }
-    if (!val.isValid()) return;
+    FavoriteDao::initTable();
+    auto list = FavoriteDao::getAllFavorites();
 
-    QJsonDocument doc = QJsonDocument::fromJson(val.toByteArray());
-    if (!doc.isArray()) return;
+    for (const auto& rec : list) {
+        QFileInfo fi(rec.path);
+        if (!fi.exists()) continue;
 
-    QJsonArray arr = doc.array();
-    for (int i = 0; i < arr.size(); ++i) {
-        QJsonObject obj = arr.at(i).toObject();
-        QString path = obj.value("path").toString();
-        if (!path.isEmpty()) {
-            addFavoriteItem(path);
-        }
+        QColor itemColor = QColor(rec.colorHex);
+        if (!itemColor.isValid()) itemColor = QColor("#FDB70A");
+
+        QIcon icon = UiHelper::getIcon(rec.iconKey.isEmpty() ? "folder" : rec.iconKey, itemColor, 18);
+        QStandardItem* item = new QStandardItem(icon, rec.name.isEmpty() ? fi.fileName() : rec.name);
+        item->setData(rec.path, Qt::UserRole + 1);
+        item->setData(rec.iconKey, Qt::UserRole + 2);
+        item->setData(rec.colorHex, Qt::UserRole + 3);
+
+        m_favoriteModel->appendRow(item);
     }
 }
 
 void FavoritePanel::saveFavorites() {
     if (!m_favoriteModel) return;
 
-    QJsonArray arr;
+    QList<QPair<QString, int>> orders;
     for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
         QStandardItem* item = m_favoriteModel->item(i);
         QString path = item->data(Qt::UserRole + 1).toString();
-
-        QJsonObject obj;
-        obj.insert("path", path);
-        arr.append(obj);
+        orders.append({ path, i + 1 });
     }
-
-    QJsonDocument doc(arr);
-    AppConfig::instance().setValue("FavoritePanel/Favorites", doc.toJson(QJsonDocument::Compact));
+    FavoriteDao::updateSortOrders(orders);
 }
 
 bool FavoritePanel::containsPath(const QString& path) const {
-    if (!m_favoriteModel || path.isEmpty()) return false;
-    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
-    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
-        QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
-        if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
-            return true;
-        }
-    }
-    return false;
+    if (path.isEmpty()) return false;
+    return FavoriteDao::containsPath(path);
 }
 
 void FavoritePanel::removeFavoriteItem(const QString& path) {
-    if (!m_favoriteModel || path.isEmpty()) return;
+    if (path.isEmpty()) return;
+    FavoriteDao::removeFavorite(path);
+
+    if (!m_favoriteModel) return;
     QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
     for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
         QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
         if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
             m_favoriteModel->removeRow(i);
-            saveFavorites();
             return;
         }
     }
@@ -248,19 +287,18 @@ void FavoritePanel::addFavoriteItem(const QString& path) {
     QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
     if (cleanPath.isEmpty()) return;
 
-    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
-        QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
-        if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
-            return;
-        }
-    }
+    if (FavoriteDao::containsPath(cleanPath)) return;
 
     QFileInfo fi(cleanPath);
     if (!fi.exists()) return;
 
-    QIcon icon = ShellIconManager::getFileIcon(cleanPath, 18);
+    FavoriteDao::addFavorite(cleanPath, "folder", "#FDB70A");
+
+    QIcon icon = UiHelper::getIcon("folder", QColor("#FDB70A"), 18);
     QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? cleanPath : fi.fileName());
     item->setData(cleanPath, Qt::UserRole + 1);
+    item->setData("folder", Qt::UserRole + 2);
+    item->setData("#FDB70A", Qt::UserRole + 3);
 
     m_favoriteModel->appendRow(item);
 }
