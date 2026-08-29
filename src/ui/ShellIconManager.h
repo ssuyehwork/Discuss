@@ -26,10 +26,6 @@ public:
         return WindowsShellThumbnailProvider::getFileIconFast(filePath, isDir, suffix);
     }
 
-    static inline QPixmap getFilePixmapFast(const QString& filePath, bool isDir, const QString& suffix, int size = 128) {
-        return WindowsShellThumbnailProvider::getFilePixmapFast(filePath, isDir, suffix, size);
-    }
-
     static inline bool isIconCached(const QString& filePath, bool isDir, const QString& suffix) {
         return WindowsShellThumbnailProvider::isIconCached(filePath, isDir, suffix);
     }

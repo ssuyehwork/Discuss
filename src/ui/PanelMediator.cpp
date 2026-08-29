@@ -8,7 +8,6 @@
 #include "SearchController.h"
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
-#include "ShellIconManager.h"
 #include "../core/NavigationService.h"
 #include "../core/TrashService.h"
 #include "../core/CoreEngine.h"
@@ -164,13 +163,10 @@ void PanelMediator::setupConnections() {
 
                 QVariant decData = idx.data(Qt::DecorationRole);
                 QPixmap previewPixmap;
-                if (decData.canConvert<QPixmap>()) {
+                if (decData.canConvert<QIcon>()) {
+                    previewPixmap = decData.value<QIcon>().pixmap(128, 128);
+                } else if (decData.canConvert<QPixmap>()) {
                     previewPixmap = decData.value<QPixmap>();
-                } else {
-                    previewPixmap = ShellIconManager::getFilePixmapFast(path, fi.isDir(), fi.suffix(), 128);
-                    if (previewPixmap.isNull() && decData.canConvert<QIcon>()) {
-                        previewPixmap = decData.value<QIcon>().pixmap(128, 128);
-                    }
                 }
                 metaPanel->setImagePreview(previewPixmap);
             }
