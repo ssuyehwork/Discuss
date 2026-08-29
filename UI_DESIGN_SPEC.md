@@ -15,6 +15,11 @@
 | **主文字颜色 (Text Main)** | `#EEEEEE` | 核心标题、文件名文本 |
 | **暗色/次要文本 (Text Muted/Dim)** | `#888888` / `#AAAAAA` | 面包屑箭头、文件属性辅助文字 |
 | **错误/成功颜色 (Error / Success)** | `#E81123` / `#1ABC9C` | 物理删除操作、快捷收藏成功反馈 |
+| **PSD 标签配色 (PSD Badge)** | 背景色 `#001D26` / 字体色 `#02B1DD` | Photoshop 文件 Badge 专属配色 |
+| **EPS 标签配色 (EPS Badge)** | 背景色 `#35483D` / 字体色 `#F88025` | EPS 矢量文件 Badge 专属配色 |
+| **AI 标签配色 (AI Badge)** | 背景色 `#F88025` / 字体色 `#35483D` | Illustrator 文件 Badge 专属配色 |
+| **其他扩展名 (Other Badges)** | `global.db` 持久化表 / 动态生成刷盘 | 非硬编码扩展名持久化固化于 `global.db` `extension_colors` 表 |
+| **收藏夹默认主题色 (Favorite Color)** | `#FDB70A` | 收藏夹矢量图标与标题默认金色 |
 
 ---
 
