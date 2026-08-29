@@ -77,7 +77,6 @@ private:
     void initUi();
 
     QVBoxLayout* m_mainLayout = nullptr;
-    QWidget* m_focusLine = nullptr;
 
     DropTreeView* m_favoriteView = nullptr;
     QStandardItemModel* m_favoriteModel = nullptr;

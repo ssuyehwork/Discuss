@@ -93,17 +93,10 @@ void NavPanel::deferredInit() {
 }
 
 void NavPanel::setFocusHighlight(bool visible) {
-    if (m_focusLine) m_focusLine->setVisible(visible);
+    Q_UNUSED(visible);
 }
 
 void NavPanel::initUi() {
-    // 2026-05-07 按照用户要求：修改焦点线颜色为蓝色
-    m_focusLine = new QWidget(this);
-    m_focusLine->setFixedHeight(1);
-    m_focusLine->setStyleSheet("background-color: #007ACC;");
-    m_focusLine->hide(); // 初始隐藏
-    m_mainLayout->addWidget(m_focusLine);
-
     // 面板标题 (2026-xx-xx 按照 Plan-96：作为顶层固定标题)
     QWidget* header = new QWidget(this);
     header->setObjectName("ContainerHeader");

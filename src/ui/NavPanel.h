@@ -71,7 +71,6 @@ private:
     QStandardItemModel* m_model = nullptr;
 
     QVBoxLayout* m_mainLayout = nullptr;
-    QWidget* m_focusLine = nullptr;
 };
 
 } // namespace QuarkMeta

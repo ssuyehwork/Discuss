@@ -70,17 +70,10 @@ FavoritePanel::FavoritePanel(QWidget* parent)
 }
 
 void FavoritePanel::setFocusHighlight(bool visible) {
-    if (m_focusLine) m_focusLine->setVisible(visible);
+    Q_UNUSED(visible);
 }
 
 void FavoritePanel::initUi() {
-    // 顶部 1px 焦点线
-    m_focusLine = new QWidget(this);
-    m_focusLine->setFixedHeight(1);
-    m_focusLine->setStyleSheet("background-color: #007ACC;");
-    m_focusLine->hide();
-    m_mainLayout->addWidget(m_focusLine);
-
     // 固定顶栏 Header
     QWidget* header = new QWidget(this);
     header->setObjectName("ContainerHeader");
