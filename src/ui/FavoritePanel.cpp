@@ -1,12 +1,15 @@
 #include "FavoritePanel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
+#include "ColorPicker.h"
 #include "../meta/FavoriteDao.h"
 #include <QPainter>
 #include "../core/AppConfig.h"
 #include <QLabel>
 #include <QPushButton>
 #include <QMenu>
+#include <QWidgetAction>
+#include <QGridLayout>
 #include <QFileInfo>
 #include <QDir>
 #include <QHeaderView>
@@ -164,51 +167,105 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QString path = index.data(Qt::UserRole + 1).toString();
     QString curIconKey = index.data(Qt::UserRole + 2).toString();
     QString curColorHex = index.data(Qt::UserRole + 3).toString();
-    if (curIconKey.isEmpty()) curIconKey = "folder";
+    if (curIconKey.isEmpty()) curIconKey = "folder_filled";
     if (curColorHex.isEmpty()) curColorHex = "#FDB70A";
 
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
 
-    QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder", QColor("#EEEEEE")), "切换图标");
-    static const QPair<QString, QString> iconOptions[] = {
-        { "folder", "标准文件夹" },
-        { "star", "星号" },
-        { "heart", "红心" },
-        { "bookmark", "书签" },
-        { "tag", "标签" }
-    };
-    for (const auto& opt : iconOptions) {
-        QAction* act = iconMenu->addAction(UiHelper::getIcon(opt.first, QColor(curColorHex)), opt.second);
-        connect(act, &QAction::triggered, this, [this, path, opt, curColorHex, index]() {
-            FavoriteDao::updateFavorite(path, opt.first, curColorHex);
-            QIcon newIcon = UiHelper::getIcon(opt.first, QColor(curColorHex), 18);
-            m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
-            m_favoriteModel->itemFromIndex(index)->setData(opt.first, Qt::UserRole + 2);
-        });
-    }
+    QFileInfo fi(path);
+    bool isFolder = fi.isDir();
 
-    QMenu* colorMenu = menu.addMenu(UiHelper::getIcon("circle_filled", QColor(curColorHex)), "切换色标");
-    static const QPair<QString, QString> colorOptions[] = {
-        { "#FDB70A", "金色" },
-        { "#E24B4A", "红色" },
-        { "#EF9F27", "橙色" },
-        { "#639922", "绿色" },
-        { "#1D9E75", "青色" },
-        { "#378ADD", "蓝色" },
-        { "#7F77DD", "紫色" }
-    };
-    for (const auto& opt : colorOptions) {
-        QAction* act = colorMenu->addAction(UiHelper::getIcon("circle_filled", QColor(opt.first)), opt.second);
-        connect(act, &QAction::triggered, this, [this, path, curIconKey, opt, index]() {
-            FavoriteDao::updateFavorite(path, curIconKey, opt.first);
-            QIcon newIcon = UiHelper::getIcon(curIconKey, QColor(opt.first), 18);
-            m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
-            m_favoriteModel->itemFromIndex(index)->setData(opt.first, Qt::UserRole + 3);
-        });
-    }
+    if (isFolder) {
+        // ColorStripPicker Action
+        QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
+        ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
+        colorPickerAction->setDefaultWidget(colorPickerWidget);
+        menu.addAction(colorPickerAction);
 
-    menu.addSeparator();
+        connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [this, path, curIconKey, index, &menu](const QString& hexColor) {
+            QString finalColor = hexColor.isEmpty() ? "#FDB70A" : hexColor.toUpper();
+            FavoriteDao::updateFavorite(path, curIconKey, finalColor);
+            QIcon newIcon = UiHelper::getIcon(curIconKey, QColor(finalColor), 18);
+            m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
+            m_favoriteModel->itemFromIndex(index)->setData(finalColor, Qt::UserRole + 3);
+            menu.close();
+        });
+
+        // Icon Grid Picker Submenu
+        QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor(curColorHex)), "切换图标");
+        UiHelper::applyMenuStyle(iconMenu);
+
+        QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
+        QWidget* pickerWidget = new QWidget(iconMenu);
+        QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
+        pickerLayout->setContentsMargins(6, 6, 6, 6);
+        pickerLayout->setSpacing(6);
+
+        static const QList<QPair<QString, QString>> builtInIcons = {
+            {"默认文件夹", "folder_filled"},
+            {"层级分类", "category"},
+            {"照片媒体", "image_filled"},
+            {"时钟历史", "clock_filled"},
+            {"星标收藏", "star_filled"},
+            {"爱心常用", "heart_filled"},
+            {"加密安全", "lock_filled"},
+            {"图书文档", "book"},
+            {"配置管理", "settings_filled"},
+            {"网络球体", "globe_filled"}
+        };
+
+        QColor catColor = QColor(curColorHex);
+        int row = 0;
+        int col = 0;
+        for (const auto& pair : builtInIcons) {
+            QString label = pair.first;
+            QString iconKey = pair.second;
+
+            QPushButton* btn = new QPushButton(pickerWidget);
+            btn->setFixedSize(28, 28);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setStyleSheet(
+                "QPushButton { "
+                "  background-color: transparent; "
+                "  border: 1px solid transparent; "
+                "  border-radius: 4px; "
+                "}"
+                "QPushButton:hover { "
+                "  background-color: #3E3E42; "
+                "  border: 1px solid #555555; "
+                "}"
+                "QPushButton:pressed { "
+                "  background-color: #4E4E52; "
+                "}"
+            );
+            btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
+            btn->setIconSize(QSize(18, 18));
+            btn->setToolTip(label);
+
+            pickerLayout->addWidget(btn, row, col);
+
+            connect(btn, &QPushButton::clicked, this, [this, path, iconKey, curColorHex, index, iconMenu]() {
+                FavoriteDao::updateFavorite(path, iconKey, curColorHex);
+                QIcon newIcon = UiHelper::getIcon(iconKey, QColor(curColorHex), 18);
+                m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
+                m_favoriteModel->itemFromIndex(index)->setData(iconKey, Qt::UserRole + 2);
+                iconMenu->close();
+            });
+
+            col++;
+            if (col >= 5) {
+                col = 0;
+                row++;
+            }
+        }
+
+        pickerWidget->setLayout(pickerLayout);
+        pickerAction->setDefaultWidget(pickerWidget);
+        iconMenu->addAction(pickerAction);
+
+        menu.addSeparator();
+    }
 
     QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "取消收藏");
     connect(removeAct, &QAction::triggered, this, [this, path, index]() {
