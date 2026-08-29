@@ -141,11 +141,11 @@ void FavoritePanel::initUi() {
     connect(m_favoriteView, &QWidget::customContextMenuRequested, this, &FavoritePanel::onFavoriteContextMenu);
     connect(m_favoriteView, &DropTreeView::pathsDropped, this, &FavoritePanel::onPathsDroppedToFavorite);
 
-    // 模型数据变动监听
+    // 模型数据变动监听 (使用 QueuedConnection 避开 model 拖拽中间状态)
     auto updateFavAndSave = [this](){ saveFavorites(); };
-    connect(m_favoriteModel, &QStandardItemModel::rowsMoved, this, updateFavAndSave);
-    connect(m_favoriteModel, &QStandardItemModel::rowsInserted, this, updateFavAndSave);
-    connect(m_favoriteModel, &QStandardItemModel::rowsRemoved, this, updateFavAndSave);
+    connect(m_favoriteModel, &QStandardItemModel::rowsMoved, this, updateFavAndSave, Qt::QueuedConnection);
+    connect(m_favoriteModel, &QStandardItemModel::rowsInserted, this, updateFavAndSave, Qt::QueuedConnection);
+    connect(m_favoriteModel, &QStandardItemModel::rowsRemoved, this, updateFavAndSave, Qt::QueuedConnection);
 }
 
 void FavoritePanel::onFavoriteClicked(const QModelIndex& index) {
@@ -315,8 +315,11 @@ void FavoritePanel::saveFavorites() {
     QList<QPair<QString, int>> orders;
     for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
         QStandardItem* item = m_favoriteModel->item(i);
+        if (!item) continue;
         QString path = item->data(Qt::UserRole + 1).toString();
-        orders.append({ path, i + 1 });
+        if (!path.isEmpty()) {
+            orders.append({ path, i + 1 });
+        }
     }
     FavoriteDao::updateSortOrders(orders);
 }
