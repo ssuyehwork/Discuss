@@ -1,4 +1,5 @@
 #include "PanelMediator.h"
+#include "MainWindow.h"
 #include "NavPanel.h"
 #include "FavoritePanel.h"
 #include "ContentPanel.h"
@@ -113,6 +114,11 @@ void PanelMediator::setupConnections() {
                 }
                 favoritePanel->saveFavorites();
             });
+        }
+
+        MainWindow* mainWindow = qobject_cast<MainWindow*>(parent());
+        if (mainWindow) {
+            connect(contentPanel, &ContentPanel::statusBarStatsUpdated, mainWindow, &MainWindow::onStatusBarStatsUpdated);
         }
     }
 
