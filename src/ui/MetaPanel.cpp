@@ -208,6 +208,7 @@ void MetaPanel::initUi() {
     starLayout->setContentsMargins(0, 2, 0, 2);
     starLayout->setSpacing(2);
 
+    // 清除评级按钮 ⊘：完全保持原样（22x22px，图标 16px）
     QPushButton* btnClearStar = new QPushButton(ratingRow);
     btnClearStar->setFixedSize(22, 22);
     btnClearStar->setCursor(Qt::PointingHandCursor);
@@ -219,12 +220,13 @@ void MetaPanel::initUi() {
     connect(btnClearStar, &QPushButton::clicked, this, [this]() { setRating(0, true); });
     starLayout->addWidget(btnClearStar);
 
+    // 🚀 五角星按钮：仅按您的要求减小 2 像素（外框 20x20px，图标 16px）
     for (int i = 1; i <= 5; ++i) {
         QPushButton* btnStar = new QPushButton(ratingRow);
-        btnStar->setFixedSize(22, 22);
+        btnStar->setFixedSize(20, 20); // 👈 减小 2 像素
         btnStar->setCursor(Qt::PointingHandCursor);
-        btnStar->setIcon(UiHelper::getIcon("star", QColor("#555555"), 18));
-        btnStar->setIconSize(QSize(18, 18));
+        btnStar->setIcon(UiHelper::getIcon("star", QColor("#555555"), 16)); // 👈 减小 2 像素
+        btnStar->setIconSize(QSize(16, 16)); // 👈 减小 2 像素
         btnStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 3px; }");
         connect(btnStar, &QPushButton::clicked, this, [this, i]() {
             int newRating = (m_currentRating == i) ? 0 : i;
@@ -271,7 +273,6 @@ void MetaPanel::initUi() {
         ).arg(pair.second));
 
         QString hex = pair.second;
-        // 核心修复：点击时传递精确的十六进制色值 hex，确保缩略图能够识别并直接绘制
         connect(btnColor, &QPushButton::clicked, this, [this, hex]() {
             if (m_currentColorHex.compare(hex, Qt::CaseInsensitive) == 0) {
                 setColor(QString(""), true);
@@ -742,12 +743,13 @@ void MetaPanel::setRating(int rating, bool fromUser) {
     m_currentRating = rating;
     for (int i = 0; i < m_starBtns.size(); ++i) {
         bool active = (i < rating);
+        // 🚀 五角星图标尺寸严格设为 16px
         m_starBtns[i]->setIcon(UiHelper::getIcon(
             active ? "star_filled" : "star",
             active ? QColor("#FF551C") : QColor("#555555"),
-            18
+            16
         ));
-        m_starBtns[i]->setIconSize(QSize(18, 18));
+        m_starBtns[i]->setIconSize(QSize(16, 16));
     }
 
     if (fromUser && !m_selectedPaths.isEmpty() && !m_isReadOnlyMode) {
