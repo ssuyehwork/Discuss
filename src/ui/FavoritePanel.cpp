@@ -243,7 +243,8 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             );
             btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
             btn->setIconSize(QSize(18, 18));
-            btn->installEventFilter(new HoverEventFilter(label, btn));
+            btn->setProperty("tooltipText", label);
+            btn->installEventFilter(new HoverEventFilter(btn));
 
             pickerLayout->addWidget(btn, row, col);
 
