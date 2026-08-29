@@ -150,3 +150,123 @@ QMap<QString, QPair<QColor, QColor>> ExtensionColorDao::loadAllColors() {
 }
 
 } // namespace QuarkMeta
+```
+
+---
+
+### 3. `src/util/ColorPaletteEngine.cpp`
+Integrate `ExtensionColorDao` with memory LRU caching.
+
+```
+<<<<<<< SEARCH
+QPair<QColor, QColor> ColorPaletteEngine::getExtensionBadgeColors(const QString& ext) {
+    QString e = ext.toLower().trimmed();
+    
+    // 1. 特性定制扩展名配色
+    if (e == "psd" || e == "psb") {
+        return { QColor("#001D26"), QColor("#02B1DD") };
+    }
+    if (e == "eps") {
+        return { QColor("#35483D"), QColor("#F88025") };
+    }
+    if (e == "ai") {
+        return { QColor("#F88025"), QColor("#35483D") };
+    }
+    if (e == "svg") {
+        return { QColor("#FFB13B"), QColor("#1A1A1A") };
+    }
+    if (e == "png") {
+        return { QColor("#2ECC71"), QColor("#FFFFFF") };
+    }
+    if (e == "jpg" || e == "jpeg") {
+        return { QColor("#E67E22"), QColor("#FFFFFF") };
+    }
+    if (e == "pdf") {
+        return { QColor("#E74C3C"), QColor("#FFFFFF") };
+    }
+
+    // 2. 其他未指定扩展名：基于 qHash 确定性 HSL 生成唯一背景色
+    uint hashVal = qHash(e);
+    int hue = static_cast<int>(hashVal % 360);
+    int saturation = 130 + static_cast<int>((hashVal >> 8) % 80); // 130~210
+    int lightness = 80 + static_cast<int>((hashVal >> 16) % 60);  // 80~140
+
+    QColor bgColor = QColor::fromHsl(hue, saturation, lightness);
+
+    // 3. 计算亮度自动平衡文字颜色 (YIQ Luminance)
+    double luminance = (0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue()) / 255.0;
+    QColor textColor = (luminance < 0.55) ? QColor("#FFFFFF") : QColor("#1A1A1A");
+
+    return { bgColor, textColor };
+}
+=======
+QPair<QColor, QColor> ColorPaletteEngine::getExtensionBadgeColors(const QString& ext) {
+    QString e = ext.toLower().trimmed();
+    
+    // 1. 独占硬编码保护项
+    if (e == "psd" || e == "psb") return { QColor("#001D26"), QColor("#02B1DD") };
+    if (e == "eps")               return { QColor("#35483D"), QColor("#F88025") };
+    if (e == "ai")                return { QColor("#F88025"), QColor("#35483D") };
+
+    // 2. 内存缓存第一级查找
+    static QMap<QString, QPair<QColor, QColor>> s_colorCache;
+    static bool s_tableInited = false;
+
+    if (!s_tableInited) {
+        ExtensionColorDao::initTable();
+        s_colorCache = ExtensionColorDao::loadAllColors();
+        s_tableInited = true;
+    }
+
+    if (s_colorCache.contains(e)) {
+        return s_colorCache.value(e);
+    }
+
+    // 3. 动态生成新配色并物理落盘写入 global.db
+    uint hashVal = qHash(e);
+    int hue = static_cast<int>(hashVal % 360);
+    int saturation = 130 + static_cast<int>((hashVal >> 8) % 80);
+    int lightness = 80 + static_cast<int>((hashVal >> 16) % 60);
+
+    QColor bgColor = QColor::fromHsl(hue, saturation, lightness);
+    double luminance = (0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue()) / 255.0;
+    QColor textColor = (luminance < 0.55) ? QColor("#FFFFFF") : QColor("#1A1A1A");
+
+    QPair<QColor, QColor> colorPair = { bgColor, textColor };
+    
+    // 刷盘固化并填充内存 Cache
+    ExtensionColorDao::saveExtensionColor(e, bgColor, textColor, false);
+    s_colorCache.insert(e, colorPair);
+
+    return colorPair;
+}
+>>>>>>> REPLACE
+```
+
+---
+
+### 4. `CMakeLists.txt`
+Register `ExtensionColorDao.h` and `ExtensionColorDao.cpp` into build sources.
+
+```
+<<<<<<< SEARCH
+    src/meta/DatabaseManager.h
+    src/meta/DatabaseManager.cpp
+=======
+    src/meta/DatabaseManager.h
+    src/meta/DatabaseManager.cpp
+    src/meta/ExtensionColorDao.h
+    src/meta/ExtensionColorDao.cpp
+>>>>>>> REPLACE
+```
+
+---
+
+## Build & Verification Steps
+1. Verify implementation plan file existence in `QuarkMeta Architecture/Implementation Plan/ColorPaletteEngine-2.md`.
+2. Compile project with CMake:
+   ```bash
+   cmake -B build -S .
+   cmake --build build
+   ```
+3. Test SQLite table creation and database query for `extension_colors` in `global.db`.
