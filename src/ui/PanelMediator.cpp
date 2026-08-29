@@ -134,6 +134,33 @@ void PanelMediator::setupConnections() {
 
     // 2. 内容面板选中项改变 -> 元数据面板 0 毫秒极速同步
     if (contentPanel && metaPanel) {
+        // 🚀【核心补通通道】：监听卡片/列表上的就地星级修改，实时同步右侧 MetaPanel！
+        connect(contentPanel->model(), &QAbstractItemModel::dataChanged, metaPanel, 
+                [contentPanel, metaPanel](const QModelIndex& topLeft, const QModelIndex&, const QVector<int>& roles) {
+            if (!roles.isEmpty() && !roles.contains(RatingRole) && !roles.contains(ColorRole)) {
+                return;
+            }
+
+            // 检查当前选中的项目是否与被修改的项目相吻合（精确通过 PathRole 进行文件物理绝对路径比对，100% 免疫排序与过滤）
+            QModelIndexList selected = contentPanel->getSelectedIndexes();
+            if (selected.isEmpty()) return;
+
+            QModelIndex currentSel = selected.first();
+            QString selPath = currentSel.data(PathRole).toString();
+            QString changedPath = topLeft.data(PathRole).toString();
+
+            if (!selPath.isEmpty() && selPath == changedPath) {
+                if (roles.isEmpty() || roles.contains(RatingRole)) {
+                    int newRating = currentSel.data(RatingRole).toInt();
+                    metaPanel->setRating(newRating, false); // 👈 0 毫秒瞬间同步右侧星星！
+                }
+                if (roles.isEmpty() || roles.contains(ColorRole)) {
+                    QString newColor = currentSel.data(ColorRole).toString();
+                    metaPanel->setColor(newColor, false);   // 👈 0 毫秒瞬间同步右侧色标！
+                }
+            }
+        });
+
         connect(contentPanel, &ContentPanel::selectionChanged, metaPanel, [contentPanel, metaPanel](const QStringList& paths) {
             metaPanel->setSelectedPaths(paths);
             if (paths.isEmpty()) {

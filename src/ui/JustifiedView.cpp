@@ -2,6 +2,7 @@
 #define NOMINMAX
 #endif
 #include "JustifiedView.h"
+#include "CardLayoutEngine.h"
 #include "../core/ModelContract.h"
 #include <QPainter>
 #include <QScrollBar>
@@ -306,24 +307,14 @@ void JustifiedView::mouseDoubleClickEvent(QMouseEvent* event) {
         return;
     }
 
-    // 2026-06-16 工业级纠偏：与 doLayout 及 ThumbnailDelegate::calculateMetrics 保持 100% 同步
-    const int textHeight   = 36;
-    const int ratingHeight = 20;
-    const int gap          = 4;
-    const int cardPadding  = 6;
-    const int extraHeight  = cardPadding + textHeight + ratingHeight + gap; 
-
+    // 🚀【归一化应用】：直接调用 CardLayoutEngine 查询双击命中！
     QRect itemRect = visualRect(idx);
+    CardLayout layout = CardLayoutEngine::calculate(itemRect, m_targetRowHeight);
 
-    // 文字区域 = item 底部 textHeight 像素
-    QRect textRect(itemRect.left(), itemRect.bottom() - textHeight, itemRect.width(), textHeight);
-    // 缩略图区域 = item 顶部到文字区域之前
-    QRect thumbRect(itemRect.left(), itemRect.top(), itemRect.width(), itemRect.height() - extraHeight);
-
-    if (textRect.contains(event->pos())) {
-        edit(idx);                  // 双击文字区域 → 触发行内重命名
-    } else if (thumbRect.contains(event->pos())) {
-        emit doubleClicked(idx);    // 双击缩略图区域 → 触发打开文件
+    if (layout.isTextHit(event->pos())) {
+        edit(idx); // 双击文字 -> 重命名
+    } else if (layout.isCoverHit(event->pos())) {
+        emit doubleClicked(idx); // 双击 Cover -> 打开
     }
 }
 
@@ -432,7 +423,6 @@ void JustifiedView::doLayout() {
     const int extraHeight = cardPadding + textHeight + ratingHeight + gap; // cardPadding 也是上下内边距总和
 
     if (m_layoutMode == GridMode) {
-        // GridMode 网格等宽等高排布
         int itemWidth = m_targetRowHeight + cardPadding;
         int itemHeight = m_targetRowHeight + extraHeight;
 
@@ -447,9 +437,18 @@ void JustifiedView::doLayout() {
         int i = 0;
         while (i < count) {
             int rowStart = i;
-            
+            bool isCurrentDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
 
-            int numInRow = std::min(maxNumInRow, count - rowStart);
+            // 🚀【核心铁律】：检查本行内是否出现“文件夹与文件混杂”，若出现则强制换行！
+            int numInRow = 0;
+            while (i < count && numInRow < maxNumInRow) {
+                bool isDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
+                if (isDir != isCurrentDir) {
+                    break; // 文件夹结束，文件从下一行全新开始！
+                }
+                numInRow++;
+                i++;
+            }
 
             int currentX = margin;
             for (int j = 0; j < numInRow; ++j) {
@@ -458,7 +457,6 @@ void JustifiedView::doLayout() {
                 currentX += itemWidth + standardSpacing;
             }
             currentY += itemHeight + spacing;
-            i += numInRow; // 推进到下一行
         }
     } else {
         // JustifiedMode 自适应宽高合理对齐排版

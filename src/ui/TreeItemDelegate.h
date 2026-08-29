@@ -11,6 +11,7 @@
 #include <QFileInfo>
 #include "ContentPanel.h"
 #include "ThumbnailDelegate.h"
+#include "RatingBarLayout.h"
 #include "../meta/MetadataManager.h"
 #include "../core/ModelContract.h"
 #include "UiHelper.h"
@@ -170,19 +171,11 @@ public:
                 QString colorName = idx0.data(ColorRole).toString();
 
                 if (rating > 0 || isSelected || !colorName.isEmpty()) {
-                    int banW = 12;
-                    int starSize = 18;
-                    int banGap = 2;
-                    int starSpacing = -4;
-                    int totalW = banW + banGap + 5 * starSize + 4 * starSpacing;
-                    int startX = option.rect.left() + (option.rect.width() - totalW) / 2;
+                    // 🚀【统一调用 RatingBarLayout】：彻底消灭绘制时的 18 / -4 / 12 硬编码！
+                    RatingBarMetrics rm = RatingBarLayout::calculate(option.rect, RatingBarMode::TreeRow);
 
-                    QRect banRect(startX, option.rect.top() + (option.rect.height() - banW) / 2, banW, banW);
-                    int starsStartX = startX + banW + banGap; 
-
-                    // 2. 一行代码委托绘制 5 星与彩色胶囊背景（含感知对比度自动计算）
-                    CardPainterHelper::drawRatingStars(painter, banRect, option.rect, starSize, starSpacing, 
-                                                      option.rect.top(), option.rect.height(), starsStartX,
+                    CardPainterHelper::drawRatingStars(painter, rm.banRect, option.rect, rm.starSize, rm.starSpacing, 
+                                                      option.rect.top(), option.rect.height(), rm.starsStartX,
                                                       rating, colorName, isSelected);
                 }
             }
