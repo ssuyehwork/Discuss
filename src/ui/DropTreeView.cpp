@@ -24,7 +24,7 @@ DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
 }
 
 void DropTreeView::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData()->hasUrls()) {
+    if (event->source() != this && event->mimeData()->hasUrls()) {
         event->acceptProposedAction();
     } else {
         QTreeView::dragEnterEvent(event);
@@ -32,7 +32,7 @@ void DropTreeView::dragEnterEvent(QDragEnterEvent* event) {
 }
 
 void DropTreeView::dragMoveEvent(QDragMoveEvent* event) {
-    if (event->mimeData()->hasUrls()) {
+    if (event->source() != this && event->mimeData()->hasUrls()) {
         // 物理同步：显式调用基类逻辑以激活放置指示器 (Drop Indicator)
         QTreeView::dragMoveEvent(event);
         event->acceptProposedAction();
@@ -42,7 +42,7 @@ void DropTreeView::dragMoveEvent(QDragMoveEvent* event) {
 }
 
 void DropTreeView::dropEvent(QDropEvent* event) {
-    if (event->mimeData()->hasUrls()) {
+    if (event->source() != this && event->mimeData()->hasUrls()) {
         QStringList paths;
         for (const QUrl& u : event->mimeData()->urls()) {
             if (u.isLocalFile()) {
