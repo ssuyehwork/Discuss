@@ -2,7 +2,6 @@
 #include "DatabaseManager.h"
 #include <sqlite3.h>
 #include <QDateTime>
-#include <mutex>
 
 namespace QuarkMeta {
 

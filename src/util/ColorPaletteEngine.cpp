@@ -95,30 +95,13 @@ QPair<QColor, QColor> ColorPaletteEngine::getExtensionBadgeColors(const QString&
         return s_colorCache.value(e);
     }
 
-    // 3. 黄金角 137.508° + Delta E (CIEDE2000 >= 25.0) 色差碰撞校验生成唯一背景色
+    // 3. 动态生成新配色并物理落盘写入 global.db
     uint hashVal = static_cast<uint>(qHash(e));
-    double baseHue = std::fmod(s_colorCache.size() * 137.508 + (hashVal % 360), 360.0);
-    int saturation = 140 + static_cast<int>((hashVal >> 8) % 70);
-    int lightness = 85 + static_cast<int>((hashVal >> 16) % 50);
+    int hue = static_cast<int>(hashVal % 360);
+    int saturation = 130 + static_cast<int>((hashVal >> 8) % 80);
+    int lightness = 80 + static_cast<int>((hashVal >> 16) % 60);
 
-    QColor bgColor = QColor::fromHsl(static_cast<int>(baseHue), saturation, lightness);
-
-    // 碰撞检测：确保新生成颜色与已有背景色的 Delta E 至少为 25.0
-    bool collision = true;
-    int maxAttempts = 24;
-    while (collision && maxAttempts-- > 0) {
-        collision = false;
-        for (auto it = s_colorCache.begin(); it != s_colorCache.end(); ++it) {
-            double deltaE = calculateDeltaE(bgColor, it.value().first);
-            if (deltaE < 25.0) {
-                collision = true;
-                baseHue = std::fmod(baseHue + 15.0, 360.0);
-                bgColor = QColor::fromHsl(static_cast<int>(baseHue), saturation, lightness);
-                break;
-            }
-        }
-    }
-
+    QColor bgColor = QColor::fromHsl(hue, saturation, lightness);
     double luminance = (0.299 * bgColor.red() + 0.587 * bgColor.green() + 0.114 * bgColor.blue()) / 255.0;
     QColor textColor = (luminance < 0.55) ? QColor("#FFFFFF") : QColor("#1A1A1A");
 

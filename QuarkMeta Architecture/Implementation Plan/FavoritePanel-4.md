@@ -1,16 +1,22 @@
-# Implementation Plan - FavoritePanel-3
+# Implementation Plan - FavoritePanel-4
 
-This implementation plan resolves the missing declaration errors (`saveFavorites`), fixes the blank file icon issue via `IconLoadNotifier` signal subscription, and enforces solid folder icons (`folder_filled`), folder/file dual-track rendering, and pure icon context menus without text labels.
+This implementation plan refines `FavoritePanel` right-click context menus. It replaces plain `QAction` lists with `QWidgetAction` combined with a `QGridLayout` (5 columns × 2 rows) for a 10-item vector SVG icon picker, embeds `ColorStripPicker` for color selection, and completely eliminates empty black right-hand whitespace margins.
 
 ## 1. Overview
-- **Fix Declaration Errors**: Add `void saveFavorites();` private helper method to `FavoritePanel.h` to resolve compiler errors regarding `saveFavorites` not being a member of `FavoritePanel`.
-- **Async Icon Refresh via `IconLoadNotifier`**: Subscribe to `IconLoadNotifier::instance().iconLoaded` in `FavoritePanel` constructor to trigger `m_favoriteView->viewport()->update()`. As soon as background threads finish extracting system icons for files (`.svg`, `.psd`, etc.), the view immediately updates and replaces placeholder icons with actual system thumbnails/icons.
-- **Solid Folder Default**: Folder favorites default to `folder_filled` SVG key and `#FDB70A` color.
-- **Dual-Track Item Rendering**:
-  - **Folders (`QFileInfo::isDir() == true`)**: Rendered using `UiHelper::getIcon(iconKey, color, 18)`.
-  - **Files (`QFileInfo::isDir() == false`)**: Rendered strictly using native system icons/thumbnails via `ShellIconManager::getFileIcon(path)`.
-- **Pure Icon Context Menu (No Text Labels)**: Right-click "切换图标" and "切换色标" menus display **icons only with empty text strings `""`**.
-- **Context Menu File Safeguard**: File items in favorites show only "取消收藏"; icon/color customization submenus are hidden for files.
+- **10-Item Vector Icon Grid (`builtInIcons`)**:
+  - `folder_filled` (Solid Folder)
+  - `category` (Category)
+  - `image_filled` (Photo/Media)
+  - `clock_filled` (Clock/History)
+  - `star_filled` (Star/Favorite)
+  - `heart_filled` (Heart/Common)
+  - `lock_filled` (Lock/Secure)
+  - `book` (Book/Doc)
+  - `settings_filled` (Settings)
+  - `globe_filled` (Globe/Network)
+- **`QWidgetAction` + `QGridLayout` Grid Layout**: Icon picker sub-menu uses a 5-column grid of 28x28px compact buttons (`QPushButton`), completely eliminating right-side empty space.
+- **Embedded `ColorStripPicker`**: Color selection submenu directly embeds `ColorStripPicker` widget displaying 9 color circles (no color + 8 standard colors).
+- **File Item Safeguard**: Context menu for file items displays only "取消收藏", hiding icon and color selection submenus.
 
 ## 2. Modified Files List
 - `src/ui/FavoritePanel.h`
@@ -45,6 +51,41 @@ private:
 ### `src/ui/FavoritePanel.cpp`
 ```diff
 <<<<<<< SEARCH
+#include "FavoritePanel.h"
+#include "UiHelper.h"
+#include "ShellIconManager.h"
+#include "../meta/FavoriteDao.h"
+#include <QPainter>
+#include "../core/AppConfig.h"
+#include <QLabel>
+#include <QPushButton>
+#include <QMenu>
+#include <QFileInfo>
+#include <QDir>
+#include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonDocument>
+=======
+#include "FavoritePanel.h"
+#include "UiHelper.h"
+#include "ShellIconManager.h"
+#include "ColorPicker.h"
+#include "../meta/FavoriteDao.h"
+#include <QPainter>
+#include <QLabel>
+#include <QPushButton>
+#include <QMenu>
+#include <QWidgetAction>
+#include <QGridLayout>
+#include <QFileInfo>
+#include <QDir>
+#include <QHeaderView>
+>>>>>>> REPLACE
+```
+
+```diff
+<<<<<<< SEARCH
 FavoritePanel::FavoritePanel(QWidget* parent)
     : QFrame(parent) {
     setObjectName("ListContainer");
@@ -74,7 +115,7 @@ FavoritePanel::FavoritePanel(QWidget* parent)
     initUi();
     loadFavorites();
 
-    // Subscribe to async system icon load notifications to update viewport when icons are extracted
+    // Subscribe to async system icon load notifications to refresh viewport when icons finish extracting
     connect(&WindowsShellThumbnailProvider::instance(), &IconLoadNotifier::iconLoaded, this, [this]() {
         if (m_favoriteView && m_favoriteView->viewport()) {
             m_favoriteView->viewport()->update();
@@ -158,52 +199,100 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
 
-    // Only folders support changing SVG icons and colors
+    // Folders only: enable ColorStripPicker and QWidgetAction 10-icon grid
     if (fi.isDir()) {
         QString curIconKey = index.data(Qt::UserRole + 2).toString();
         QString curColorHex = index.data(Qt::UserRole + 3).toString();
         if (curIconKey.isEmpty()) curIconKey = "folder_filled";
         if (curColorHex.isEmpty()) curColorHex = "#FDB70A";
 
+        // 1. ColorStripPicker sub-menu
+        QMenu* colorMenu = menu.addMenu(UiHelper::getIcon("circle_filled", QColor(curColorHex)), "切换色标");
+        UiHelper::applyMenuStyle(colorMenu);
+
+        QWidgetAction* colorAction = new QWidgetAction(colorMenu);
+        ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, colorMenu);
+        colorAction->setDefaultWidget(colorPickerWidget);
+        colorMenu->addAction(colorAction);
+
+        connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [this, path, curIconKey, index, colorMenu](const QString& hexColor) {
+            QString finalColor = hexColor.isEmpty() ? "#FDB70A" : hexColor;
+            FavoriteDao::updateFavorite(path, curIconKey, finalColor);
+            QIcon newIcon = UiHelper::getIcon(curIconKey, QColor(finalColor), 18);
+            m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
+            m_favoriteModel->itemFromIndex(index)->setData(finalColor, Qt::UserRole + 3);
+            colorMenu->close();
+        });
+
+        // 2. QWidgetAction 10-icon 5x2 grid sub-menu
         QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "切换图标");
-        static const QString iconKeys[] = {
-            "folder_filled",
-            "star_filled",
-            "heart_filled",
-            "bookmark_filled",
-            "tag_filled"
+        UiHelper::applyMenuStyle(iconMenu);
+
+        QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
+        QWidget* pickerWidget = new QWidget(iconMenu);
+        QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
+        pickerLayout->setContentsMargins(6, 6, 6, 6);
+        pickerLayout->setSpacing(6);
+
+        static const QList<QPair<QString, QString>> builtInIcons = {
+            {"默认文件夹", "folder_filled"},
+            {"层级分类", "category"},
+            {"照片媒体", "image_filled"},
+            {"时钟历史", "clock_filled"},
+            {"星标收藏", "star_filled"},
+            {"爱心常用", "heart_filled"},
+            {"加密安全", "lock_filled"},
+            {"图书文档", "book"},
+            {"配置管理", "settings_filled"},
+            {"网络球体", "globe_filled"}
         };
-        for (const QString& key : iconKeys) {
-            // Pure icon option - empty text label ""
-            QAction* act = iconMenu->addAction(UiHelper::getIcon(key, QColor(curColorHex)), "");
-            connect(act, &QAction::triggered, this, [this, path, key, curColorHex, index]() {
-                FavoriteDao::updateFavorite(path, key, curColorHex);
-                QIcon newIcon = UiHelper::getIcon(key, QColor(curColorHex), 18);
+
+        QColor folderColor = QColor(curColorHex);
+        if (!folderColor.isValid()) folderColor = QColor("#FDB70A");
+
+        int row = 0, col = 0;
+        for (const auto& item : builtInIcons) {
+            QString label = item.first;
+            QString iconKey = item.second;
+
+            QPushButton* btnIcon = new QPushButton(pickerWidget);
+            btnIcon->setFixedSize(28, 28);
+            btnIcon->setCursor(Qt::PointingHandCursor);
+            btnIcon->setStyleSheet(
+                "QPushButton { "
+                "  background-color: transparent; "
+                "  border: 1px solid transparent; "
+                "  border-radius: 4px; "
+                "}"
+                "QPushButton:hover { "
+                "  background-color: #3E3E42; "
+                "  border: 1px solid #555555; "
+                "}"
+            );
+            btnIcon->setIcon(UiHelper::getIcon(iconKey, folderColor, 18));
+            btnIcon->setIconSize(QSize(18, 18));
+            btnIcon->setToolTip(label);
+
+            pickerLayout->addWidget(btnIcon, row, col);
+
+            connect(btnIcon, &QPushButton::clicked, this, [this, path, iconKey, curColorHex, index, iconMenu]() {
+                FavoriteDao::updateFavorite(path, iconKey, curColorHex);
+                QIcon newIcon = UiHelper::getIcon(iconKey, QColor(curColorHex), 18);
                 m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
-                m_favoriteModel->itemFromIndex(index)->setData(key, Qt::UserRole + 2);
+                m_favoriteModel->itemFromIndex(index)->setData(iconKey, Qt::UserRole + 2);
+                iconMenu->close();
             });
+
+            col++;
+            if (col >= 5) {
+                col = 0;
+                row++;
+            }
         }
 
-        QMenu* colorMenu = menu.addMenu(UiHelper::getIcon("circle_filled", QColor(curColorHex)), "切换色标");
-        static const QString colorHexes[] = {
-            "#FDB70A",
-            "#E24B4A",
-            "#EF9F27",
-            "#639922",
-            "#1D9E75",
-            "#378ADD",
-            "#7F77DD"
-        };
-        for (const QString& hex : colorHexes) {
-            // Pure icon option - empty text label ""
-            QAction* act = colorMenu->addAction(UiHelper::getIcon("circle_filled", QColor(hex)), "");
-            connect(act, &QAction::triggered, this, [this, path, curIconKey, hex, index]() {
-                FavoriteDao::updateFavorite(path, curIconKey, hex);
-                QIcon newIcon = UiHelper::getIcon(curIconKey, QColor(hex), 18);
-                m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
-                m_favoriteModel->itemFromIndex(index)->setData(hex, Qt::UserRole + 3);
-            });
-        }
+        pickerWidget->setLayout(pickerLayout);
+        pickerAction->setDefaultWidget(pickerWidget);
+        iconMenu->addAction(pickerAction);
 
         menu.addSeparator();
     }
@@ -331,14 +420,12 @@ void FavoritePanel::addFavoriteItem(const QString& path) {
 ```
 
 ## 4. Build & Verification Steps
-1. Clean and build the project using CMake:
+1. Build with CMake:
    ```bash
    cmake -B build -G Ninja
    cmake --build build
    ```
 2. Run application and verify:
-   - Ensure `saveFavorites()` compilation error is eliminated.
-   - Add files (such as `.svg` or `.psd`) to FavoritePanel: when the background thread completes icon extraction, the viewport automatically refreshes and displays actual file system icons.
-   - Verify folder items display `folder_filled` solid SVG icons by default.
-   - Verify right-clicking folder items shows pure-icon menus without text labels.
-   - Verify right-clicking file items shows only "取消收藏".
+   - Right-click favorite folder: check that "切换图标" displays a compact 5x2 grid of 10 vector SVG icons with zero right-hand whitespace.
+   - Check that "切换色标" displays `ColorStripPicker` with 9 color circles.
+   - Right-click favorite file: check that icon/color submenus are completely hidden.

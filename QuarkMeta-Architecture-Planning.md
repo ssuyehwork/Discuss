@@ -18,9 +18,11 @@
 4. **外壳图标异步提取与 IconLoadNotifier 监听重绘规范**：
    - 针对文件项的系统原生图标提取，由于系统底层（`WindowsShellThumbnailProvider`）采用异步多线程加载机制，`FavoritePanel` 必须强制在构造函数中订阅 `IconLoadNotifier::instance().iconLoaded` 信号。
    - 当后台子线程完成系统格式图标（如 `.svg`、`.psd` 等）的读取与缓存后，自动触发收藏夹视图重绘（`m_favoriteView->viewport()->update()`），瞬间抹平初始占位符与真实图标的延迟，消除空白图标痛点。
-5. **文件夹右键上下文菜单精简规范（纯图标无文字）**：
-   - 收藏夹文件夹项的右键“切换图标”与“切换色标”菜单，**菜单项中必须仅显示图标，严禁显示任何纯文本文字**，保持视觉极简与利落。
-   - 收藏夹文件项的右键菜单**严禁显示**“切换图标”与“切换色标”子菜单，仅保留“取消收藏”操作，实现严格的类型安全防护。
+5. **文件夹右键丰富网格图标 (`QWidgetAction` + `QGridLayout`) 与 `ColorStripPicker` 调色板规范**：
+   - 收藏夹文件夹项右键“切换图标”菜单，必须内置 10 维全场景高保真矢量 SVG 图标库（包含 `folder_filled`、`category`、`image_filled`、`clock_filled`、`star_filled`、`heart_filled`、`lock_filled`、`book`、`settings_filled`、`globe_filled`）。
+   - 必须通过 `QWidgetAction` 搭配 `QGridLayout`（5 列 × 2 行）网格布局展示，每个图标封装为 28x28px 的微型紧凑按钮，**彻底消灭菜单右侧任何大面积黑色空白**。
+   - 收藏夹右键“切换色标”菜单直接嵌入 `ColorStripPicker` 快捷选择控件，单行展示 9 色精致圆点（含无颜色及红/橙/黄/绿/青/蓝/紫/灰），点击即完成换色并自动关闭菜单。
+   - 收藏夹文件项右键菜单**严禁显示**“切换图标”与“切换色标”子菜单，仅保留“取消收藏”操作。
 
 ### 全局操作反馈 Toast (UndoToastOverlay) 停留时长规范
 1. **统一停留时长红线**：全局所有基于 `UndoToastOverlay` 弹出的轻量级操作反馈与状态通知提示，默认停留时间统一固定为 7000ms（7 秒），确保用户具备充足的操作与撤销交互响应窗口。
@@ -103,7 +105,10 @@
 
 ### 多媒体色彩提取与调色板引擎归一化顶层规范 (ColorPaletteEngine)
 1. **底层工具层绝对归一收敛红线**：多媒体图像格式权威判定（标准图/矢量图/RAW 等）、主导色彩提取、5 色调色板桶量化算法、标准色标（红/橙/黄/绿/青/蓝/紫/灰等）量化映射以及 CIEDE2000 国际标准色差算法（$\Delta E$）必须 100% 物理归一化收敛至底层 `ColorPaletteEngine`（位于 `src/util/`），绝对禁止在 UI 视图层、中介者或控制器内编写手写 RGB 差值算法或色彩比对逻辑。
-2. **后缀名 Badge 专属与 global.db 数据库持久化配色顶层规范**：卡片与视图层文件扩展名 Badge 标签的背景色与字体色映射计算完全交由 `ColorPaletteEngine` 统一调度。对于特定后缀名（如 `psd`、`eps`、`ai`）提供专属高辨识度配色保护；对于其他未指定扩展名，配色方案统一物理落盘持久化存储于 `global.db` 数据库（`extension_colors` 表）。系统首次遇到新扩展名时生成高对比度配色并自动刷盘固化，后续由内存 LRU 缓存与 DB 级联直取，既保障配色 100% 物理固化与高灵活性配置，又杜绝界面重绘与写盘性能损耗。
+2. **后缀名 Badge 专属与 global.db 数据库持久化及黄金角/Delta E 全局唯一防撞色规范**：
+   - 卡片与视图层文件扩展名 Badge 标签的背景色与字体色映射计算完全交由 `ColorPaletteEngine` 统一调度。对于特定后缀名（如 `psd`、`eps`、`ai`）提供专属高辨识度配色保护。
+   - 对于其他未指定扩展名，新配色必须基于**黄金角 ($137.508^\circ$) 离散色相偏移算法**生成，并在写入数据库前调用 `calculateDeltaE` 进行 CIEDE2000 国际标准色差动态校验（必须满足 $\Delta E \ge 25.0$），确保新扩展名与已存在的已知背景色**肉眼可清晰区分且绝对不重复碰撞**。
+   - 生成的唯一配色方案统一物理刷盘持久化存储于 `global.db` 数据库（`extension_colors` 表），后续由内存 Cache 与 DB 直取，保障配色物理固化与零卡顿。
 2. **纯计算与 0 UI 依赖隔离红线**：`ColorPaletteEngine` 归属于底层 Utility 计算层，严禁包含任何 `src/ui/` 目录头文件或持有 QWidget/QPainter 等 UI 绘图组件。同时支持基于文件路径（`extractPalette`）与内存 `QImage` 句柄（`extractPaletteFromImage`）的双重提取重载，保障后台多媒体提取管道（`MediaExtractorPipeline`）的高性能零卡顿处理。
 3. **架构分层倒挂物理彻底清除红线**：物理废除并彻底删除原 UI 层中分层倒挂的 `MediaColorExtractor` 与 `ColorAlgorithmEngine` 旧类；`UiHelper` 仅保留平滑转发内联接口，确保既有调用的 100% 向后兼容性。
 

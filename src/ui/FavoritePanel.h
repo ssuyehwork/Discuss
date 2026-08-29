@@ -33,11 +33,6 @@ public:
     void setFocusHighlight(bool visible);
 
     /**
-     * @brief 兼容性存根：SQLite 变动时即时自动持久化
-     */
-    void saveFavorites();
-
-    /**
      * @brief 检查路径是否已在收藏夹中
      */
     bool containsPath(const QString& path) const;
