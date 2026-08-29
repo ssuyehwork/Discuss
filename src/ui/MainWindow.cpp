@@ -317,17 +317,17 @@ void MainWindow::setupSplitters() {
     QWidget* bodyWrapper = new QWidget(centralC);
     bodyWrapper->setStyleSheet("background: transparent;");
     m_bodyLayout = new QVBoxLayout(bodyWrapper);
-    m_bodyLayout->setContentsMargins(kEdgeMargin, 0, kEdgeMargin, kEdgeMargin); 
+    m_bodyLayout->setContentsMargins(0, 0, 0, 0); 
     m_bodyLayout->setSpacing(0);
 
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
     m_mainSplitter->setHandleWidth(1); 
     m_mainSplitter->setChildrenCollapsible(false);
     m_mainSplitter->setStyleSheet(QString(
-        "QSplitter { background: transparent; border: none; }"
-        "QSplitter::handle { background-color: %1; width: 1px; }"
+        "QSplitter { background: transparent; border: none; spacing: 0px; }"
+        "QSplitter::handle { background-color: %1; width: 1px; margin: 0px; padding: 0px; }"
         "QSplitter::handle:hover { background-color: %2; }"
-    ).arg(qssColor(BorderColor)).arg(qssColor(PrimaryBlue)));
+    ).arg(qssColor(BackgroundDeep)).arg(qssColor(PrimaryBlue)));
 
     m_navPanel = new NavPanel(this);
     m_navPanel->setObjectName("SidebarContainer");

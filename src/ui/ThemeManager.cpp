@@ -26,7 +26,7 @@ QString ThemeManager::getGlobalStyleSheet() const {
         QMainWindow, QDialog { background-color: #1E1E1E; color: #EEEEEE; }
         QWidget#CentralWidget { background-color: #1E1E1E; }
         #SidebarContainer, #FavoriteContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
-            background-color: #1E1E1E; border: none; border-radius: 0px;
+            background-color: #1E1E1E; border: none; border-radius: 0px; margin: 0px; padding: 0px;
         }
         #ContainerHeader { background-color: #252526; border-bottom: 1px solid #333333; }
 
