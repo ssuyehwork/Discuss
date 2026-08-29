@@ -86,10 +86,13 @@ void CardPainterHelper::drawStatusIndicators(QPainter* painter, const QRect& car
 
 void CardPainterHelper::drawExtensionBadge(QPainter* painter, const QRect& cardRect, 
                                            const QString& ext, bool hasThumb) {
-    QColor badgeColor = UiHelper::getExtensionColor(ext);
+    auto colors = ColorPaletteEngine::getExtensionBadgeColors(ext);
+    QColor badgeColor = colors.first;
+    QColor textColor = colors.second;
 
     if (!hasThumb) {
         badgeColor.setAlpha(160);
+        textColor.setAlpha(200);
     }
 
     QRect extRect(cardRect.left() + 8, cardRect.top() + 8, 36, 18);
@@ -98,7 +101,7 @@ void CardPainterHelper::drawExtensionBadge(QPainter* painter, const QRect& cardR
     painter->setPen(Qt::NoPen);
     painter->setBrush(badgeColor);
     painter->drawRoundedRect(extRect, 2, 2);
-    painter->setPen(hasThumb ? QColor("#FFFFFF") : QColor(255, 255, 255, 180));
+    painter->setPen(textColor);
     QFont extFont = painter->font(); extFont.setPointSize(8); extFont.setBold(true);
     painter->setFont(extFont);
     painter->drawText(extRect, Qt::AlignCenter, ext);
