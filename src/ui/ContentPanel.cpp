@@ -161,8 +161,8 @@ ContentPanel::ContentPanel(QWidget* parent)
     // 2026-06-05 按照要求：从配置中加载上次保存的缩放比例 
     m_zoomLevel = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt(); 
     m_isRecursive = false; 
-    // 2026-07-xx 按照用户要求：文件夹默认设为隐藏 (false)
-    m_showFolders = AppConfig::instance().getValue("ContentPanel/ShowFolders", false).toBool();
+    // 文件夹默认显示 (true)
+    m_showFolders = AppConfig::instance().getValue("ContentPanel/ShowFolders", true).toBool();
     m_showFiles = AppConfig::instance().getValue("ContentPanel/ShowFiles", true).toBool();
     m_showHidden = AppConfig::instance().getValue("ContentPanel/ShowHidden", false).toBool();
     
