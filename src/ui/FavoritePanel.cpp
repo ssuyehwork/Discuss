@@ -2,8 +2,6 @@
 #include "UiHelper.h"
 #include "ShellIconManager.h"
 #include "ColorPicker.h"
-#include "HoverEventFilter.h"
-#include "ToolTipOverlay.h"
 #include "../meta/FavoriteDao.h"
 #include <QPainter>
 #include "../core/AppConfig.h"
@@ -243,8 +241,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             );
             btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
             btn->setIconSize(QSize(18, 18));
-            btn->setProperty("tooltipText", label);
-            btn->installEventFilter(new HoverEventFilter(btn));
+            btn->setToolTip(label);
 
             pickerLayout->addWidget(btn, row, col);
 
