@@ -7,6 +7,7 @@
 #include "SearchController.h" 
 #include "SearchHistoryPanel.h" 
 #include <QDateTime>
+#include <QSet>
 #include <algorithm>
 #include "../meta/DiskNavigatorService.h"
 #include "Logger.h"
@@ -593,31 +594,29 @@ void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
 
 
 void MainWindow::onStatusBarStatsUpdated(int fileCount, int folderCount, int totalCount) {
-    if (!m_statusLeft || !m_contentPanel || !m_contentPanel->getProxyModel()) return;
+    if (!m_statusLeft || !m_contentPanel) return;
 
-    int visibleCount = m_contentPanel->getProxyModel()->rowCount();
-    int fullCount = m_contentPanel->model() ? m_contentPanel->model()->rowCount() : visibleCount;
-    int hiddenCount = fullCount - visibleCount;
-    int selectedCount = m_contentPanel->getSelectedIndexes().size();
-
-    QString statusText;
-    if (hiddenCount > 0) {
-        statusText = QString("%1个项目，%2个已隐藏，选中了%3个")
-                     .arg(visibleCount).arg(hiddenCount).arg(selectedCount);
-    } else {
-        statusText = QString("%1个项目，选中了%2个")
-                     .arg(visibleCount).arg(selectedCount);
+    if (totalCount == 0 && m_contentPanel->getProxyModel()) {
+        totalCount = m_contentPanel->getProxyModel()->rowCount();
     }
 
-    m_statusLeft->setText(statusText);
+    auto selectedIndexes = m_contentPanel->getSelectedIndexes();
+    QSet<int> uniqueRows;
+    for (const QModelIndex& index : selectedIndexes) {
+        uniqueRows.insert(index.row());
+    }
+    int selectedCount = uniqueRows.size();
+
+    m_statusLeft->setText(QString("%1 个项目, 已选中 %2 个").arg(QString::number(totalCount)).arg(QString::number(selectedCount)));
 
     Q_UNUSED(fileCount);
     Q_UNUSED(folderCount);
-    Q_UNUSED(totalCount);
 }
 
 void MainWindow::updateStatusBar() {
-    onStatusBarStatsUpdated(0, 0, 0);
+    if (!m_statusLeft || !m_contentPanel || !m_contentPanel->getProxyModel()) return;
+    int totalCount = m_contentPanel->getProxyModel()->rowCount();
+    onStatusBarStatsUpdated(0, 0, totalCount);
 }
 
 void MainWindow::onPinToggled(bool checked) {
