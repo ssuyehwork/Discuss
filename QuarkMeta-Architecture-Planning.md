@@ -15,7 +15,10 @@
 3. **文件夹/文件双轨渲染与实心文件夹图标规范**：
    - **文件夹项 (`QFileInfo::isDir() == true`)**：必须统一使用 `UiHelper::getIcon(iconKey, color, 18)` 渲染视网膜屏高保真矢量 SVG 图标，默认使用实心文件夹图标（`folder_filled`）及金色（`#FDB70A`）。支持右键菜单自定义图标与颜色。
    - **文件项 (`QFileInfo::isDir() == false`)**：**严格禁止**使用矢量 SVG 图标与自定义颜色，必须且只能通过 `ShellIconManager::getFileIcon(path)` 渲染系统原生文件图标与缩略图。
-4. **文件夹右键上下文菜单精简规范（纯图标无文字）**：
+4. **外壳图标异步提取与 IconLoadNotifier 监听重绘规范**：
+   - 针对文件项的系统原生图标提取，由于系统底层（`WindowsShellThumbnailProvider`）采用异步多线程加载机制，`FavoritePanel` 必须强制在构造函数中订阅 `IconLoadNotifier::instance().iconLoaded` 信号。
+   - 当后台子线程完成系统格式图标（如 `.svg`、`.psd` 等）的读取与缓存后，自动触发收藏夹视图重绘（`m_favoriteView->viewport()->update()`），瞬间抹平初始占位符与真实图标的延迟，消除空白图标痛点。
+5. **文件夹右键上下文菜单精简规范（纯图标无文字）**：
    - 收藏夹文件夹项的右键“切换图标”与“切换色标”菜单，**菜单项中必须仅显示图标，严禁显示任何纯文本文字**，保持视觉极简与利落。
    - 收藏夹文件项的右键菜单**严禁显示**“切换图标”与“切换色标”子菜单，仅保留“取消收藏”操作，实现严格的类型安全防护。
 

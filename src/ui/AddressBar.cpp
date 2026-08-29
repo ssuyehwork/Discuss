@@ -105,7 +105,6 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
                 ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e81123"));
             } else {
                 favoritePanel->addFavoriteItem(fullPath);
-                favoritePanel->saveFavorites();
                 ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, Style::SuccessGreen);
             }
         }

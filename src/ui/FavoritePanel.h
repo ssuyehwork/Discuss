@@ -48,12 +48,7 @@ public:
     void addFavoriteItem(const QString& path);
 
     /**
-     * @brief 持久化保存收藏夹到 AppConfig
-     */
-    void saveFavorites();
-
-    /**
-     * @brief 从 AppConfig 加载收藏夹
+     * @brief 从 global.db 加载收藏夹
      */
     void loadFavorites();
 

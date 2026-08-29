@@ -112,7 +112,6 @@ void PanelMediator::setupConnections() {
                 for (const QString& p : paths) {
                     favoritePanel->addFavoriteItem(p);
                 }
-                favoritePanel->saveFavorites();
             });
         }
 
@@ -284,7 +283,6 @@ void PanelMediator::setupConnections() {
     connect(&QuickLookWindow::instance(), &QuickLookWindow::favoriteRequested, this, [favoritePanel](const QString& path) {
         if (!path.isEmpty() && favoritePanel) {
             favoritePanel->addFavoriteItem(path);
-            favoritePanel->saveFavorites();
             ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
         }
     });
