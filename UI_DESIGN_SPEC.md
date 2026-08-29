@@ -19,6 +19,7 @@
 | **EPS 标签配色 (EPS Badge)** | 背景色 `#35483D` / 字体色 `#F88025` | EPS 矢量文件 Badge 专属配色 |
 | **AI 标签配色 (AI Badge)** | 背景色 `#F88025` / 字体色 `#35483D` | Illustrator 文件 Badge 专属配色 |
 | **其他扩展名 (Other Badges)** | `global.db` 持久化表 / 动态生成刷盘 | 非硬编码扩展名持久化固化于 `global.db` `extension_colors` 表 |
+| **收藏夹默认主题色 (Favorite Color)** | `#FDB70A` | 收藏夹矢量图标与标题默认金色 |
 
 ---
 
