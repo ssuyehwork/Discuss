@@ -17,7 +17,8 @@ MetaRatingColorWidget::MetaRatingColorWidget(QWidget* parent) : QWidget(parent) 
 
     for (int i = 1; i <= 5; ++i) {
         QPushButton* star = new QPushButton(this);
-        star->setFixedSize(22, 22);
+        star->setFixedSize(20, 20);
+        star->setIconSize(QSize(14, 14));
         star->setCursor(Qt::PointingHandCursor);
         m_starBtns.append(star);
         m_ratingLayout->addWidget(star);
@@ -67,7 +68,7 @@ void MetaRatingColorWidget::setRating(int rating) {
     m_currentRating = rating;
     for (int i = 0; i < m_starBtns.size(); ++i) {
         QColor col = (i < rating) ? Style::ActiveOrange : QColor("#444444");
-        m_starBtns[i]->setIcon(UiHelper::getIcon("star_filled", col, 18));
+        m_starBtns[i]->setIcon(UiHelper::getIcon("star_filled", col, 14));
     }
 }
 

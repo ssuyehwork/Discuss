@@ -402,6 +402,11 @@ void FilterPanel::rebuildDateCheckboxes(bool isCreateDate, bool descending) {
             m_filterModel->setState(st);
         });
     }
+
+    if (m_scrollArea && m_scrollArea->widget()) {
+        m_scrollArea->widget()->updateGeometry();
+    }
+    update();
 }
 
 void FilterPanel::rebuildGroups() {
@@ -648,14 +653,15 @@ void FilterPanel::rebuildGroups() {
 
         QPushButton* btnSort = new QPushButton(g);
         btnSort->setFixedSize(16, 16);
-        btnSort->setIcon(UiHelper::getIcon(m_createDateDesc ? "arrow_down" : "arrow_up", QColor("#B0B0B0")));
+        btnSort->setIconSize(QSize(12, 12));
+        btnSort->setIcon(UiHelper::getIcon(m_createDateDesc ? "scroll-010.svg" : "scroll-007.svg", QColor("#B0B0B0")));
         btnSort->setFlat(true);
         btnSort->setCursor(Qt::PointingHandCursor);
         btnSort->setStyleSheet("QPushButton { background: transparent; border: none; } QPushButton:hover { background: #3E3E42; border-radius: 2px; }");
         hdrLayout->addWidget(btnSort);
         connect(btnSort, &QPushButton::clicked, this, [this, btnSort]() {
             m_createDateDesc = !m_createDateDesc;
-            btnSort->setIcon(UiHelper::getIcon(m_createDateDesc ? "arrow_down" : "arrow_up", QColor("#B0B0B0")));
+            btnSort->setIcon(UiHelper::getIcon(m_createDateDesc ? "scroll-010.svg" : "scroll-007.svg", QColor("#B0B0B0")));
             rebuildDateCheckboxes(true, m_createDateDesc);
         });
 
@@ -711,14 +717,15 @@ void FilterPanel::rebuildGroups() {
 
         QPushButton* btnSort = new QPushButton(g);
         btnSort->setFixedSize(16, 16);
-        btnSort->setIcon(UiHelper::getIcon(m_modifyDateDesc ? "arrow_down" : "arrow_up", QColor("#B0B0B0")));
+        btnSort->setIconSize(QSize(12, 12));
+        btnSort->setIcon(UiHelper::getIcon(m_modifyDateDesc ? "scroll-010.svg" : "scroll-007.svg", QColor("#B0B0B0")));
         btnSort->setFlat(true);
         btnSort->setCursor(Qt::PointingHandCursor);
         btnSort->setStyleSheet("QPushButton { background: transparent; border: none; } QPushButton:hover { background: #3E3E42; border-radius: 2px; }");
         hdrLayout->addWidget(btnSort);
         connect(btnSort, &QPushButton::clicked, this, [this, btnSort]() {
             m_modifyDateDesc = !m_modifyDateDesc;
-            btnSort->setIcon(UiHelper::getIcon(m_modifyDateDesc ? "arrow_down" : "arrow_up", QColor("#B0B0B0")));
+            btnSort->setIcon(UiHelper::getIcon(m_modifyDateDesc ? "scroll-010.svg" : "scroll-007.svg", QColor("#B0B0B0")));
             rebuildDateCheckboxes(false, m_modifyDateDesc);
         });
 
