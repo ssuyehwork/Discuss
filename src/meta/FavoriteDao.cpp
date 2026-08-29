@@ -2,7 +2,6 @@
 #include "DatabaseManager.h"
 #include <sqlite3.h>
 #include <QDir>
-#include <mutex>
 #include <QFileInfo>
 #include <QDateTime>
 
