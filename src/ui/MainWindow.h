@@ -48,6 +48,9 @@ public:
 
     PanelLayoutManager* layoutManager() const { return m_panelLayoutManager; }
 
+public slots:
+    void onStatusBarStatsUpdated(int fileCount, int folderCount, int totalCount);
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void changeEvent(QEvent* event) override;
@@ -61,7 +64,6 @@ protected:
      */
 private slots:
     void onPinToggled(bool checked);
-    void onStatusBarStatsUpdated(int fileCount, int folderCount, int totalCount);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
