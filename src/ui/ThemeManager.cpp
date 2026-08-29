@@ -46,7 +46,7 @@ QString ThemeManager::getGlobalStyleSheet() const {
             font-size: 12px;
         }
         QMenu::item:selected {
-            background-color: #378ADD;
+            background-color: #3E3E42;
             color: #FFFFFF;
         }
         QMenu::separator {
@@ -95,7 +95,7 @@ void ThemeManager::applyMenuStyle(QWidget* menu) const {
         "   font-size: 12px;"
         "}"
         "QMenu::item:selected {"
-        "   background-color: #378ADD;"
+        "   background-color: #3E3E42;"
         "   color: #FFFFFF;"
         "}"
         "QMenu::separator {"
