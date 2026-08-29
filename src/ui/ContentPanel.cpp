@@ -799,7 +799,7 @@ void ContentPanel::initListView() {
     header->setSectionResizeMode(6, QHeaderView::Fixed);
 
     header->resizeSection(1, 40);   // 状态
-    header->resizeSection(2, 90);   // 评分
+    header->resizeSection(2, 100);   // 评分
     header->resizeSection(3, 100);  // 尺寸
     header->resizeSection(4, 60);   // 类型
     header->resizeSection(5, 80);   // 大小
