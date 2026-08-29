@@ -47,6 +47,11 @@ QMap<QString, QIcon>& WindowsShellThumbnailProvider::fileIconCache() {
     return cache;
 }
 
+QMap<QString, QPixmap>& WindowsShellThumbnailProvider::filePixmapCache() {
+    static QMap<QString, QPixmap> cache;
+    return cache;
+}
+
 QMutex& WindowsShellThumbnailProvider::loadingMutex() {
     static QMutex mutex;
     return mutex;
@@ -100,6 +105,29 @@ bool WindowsShellThumbnailProvider::isIconCached(const QString& filePath, bool i
 
     QMutexLocker locker(&fileIconMutex());
     return fileIconCache().contains(key);
+}
+
+QPixmap WindowsShellThumbnailProvider::getFilePixmapFast(const QString& filePath, bool isDir, const QString& suffix, int size) {
+    bool isRoot = isDir && (filePath.endsWith(":\\") || filePath.endsWith(":/") || filePath.length() <= 3);
+    QString key = (isDir ? (isRoot ? filePath : "folder") : suffix.toLower()) + QString("_%1").arg(size);
+    if (key.length() > 128) key = QString("unknown_%1").arg(size);
+
+    {
+        QMutexLocker locker(&fileIconMutex());
+        if (filePixmapCache().contains(key)) {
+            return filePixmapCache()[key];
+        }
+    }
+
+    QIcon icon = getFileIconFast(filePath, isDir, suffix);
+    if (icon.isNull()) return QPixmap();
+
+    QPixmap pix = icon.pixmap(size, size);
+    if (!pix.isNull()) {
+        QMutexLocker locker(&fileIconMutex());
+        filePixmapCache()[key] = pix;
+    }
+    return pix;
 }
 
 QIcon WindowsShellThumbnailProvider::getFileIconFast(const QString& filePath, bool isDir, const QString& suffix) {

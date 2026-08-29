@@ -54,7 +54,7 @@ void QuickLookGraphicsView::setPixmap(const QPixmap& pixmap) {
         m_minimap->setPixmap(pixmap);
     }
     
-    fitImage();
+    setZoomOriginal(); // 2026-11-xx：将"原始大小模式（100% 比例）"作为默认（重构时曾被误改为 fitImage()，现已改回）
     updateMinimap();
 }
 

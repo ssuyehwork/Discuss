@@ -14,6 +14,7 @@ namespace QuarkMeta {
 
 std::mutex DiskMediaExtractor::s_qtGuiMutex;
 std::mutex DiskMediaExtractor::s_jsonSaveMutex;
+std::mutex DiskMediaExtractor::s_thumbFileMutex;
 QMutex DiskMediaExtractor::s_pendingFailureMutex;
 QHash<QString, QSet<QString>> DiskMediaExtractor::s_pendingFailures;
 
@@ -108,6 +109,7 @@ QString DiskMediaExtractor::getDiskThumbCachePath(const QString& filePath) {
 bool DiskMediaExtractor::saveDiskThumbnail(const QString& filePath, const QImage& img512) {
     if (img512.isNull()) return false;
     QString diskCachePath = getDiskThumbCachePath(filePath);
+    std::lock_guard<std::mutex> lock(s_thumbFileMutex);
     return img512.save(diskCachePath, "PNG");
 }
 
@@ -135,6 +137,7 @@ QImage DiskMediaExtractor::getCapsuleThumbnailReadOnly(const QString& filePath) 
     QString diskCachePath = getDiskThumbCachePath(filePath);
     if (QFile::exists(diskCachePath)) {
         QImage img;
+        std::lock_guard<std::mutex> lock(s_thumbFileMutex);
         if (img.load(diskCachePath)) return img;
     }
     return QImage();

@@ -30,6 +30,7 @@ public:
 
     static QIcon getFileIcon(const QString& filePath, int size = 18);
     static QIcon getFileIconFast(const QString& filePath, bool isDir, const QString& suffix);
+    static QPixmap getFilePixmapFast(const QString& filePath, bool isDir, const QString& suffix, int size = 128);
     static bool isIconCached(const QString& filePath, bool isDir, const QString& suffix);
     static QImage getShellThumbnail(const QString& path, int size);
 
@@ -45,6 +46,7 @@ private:
 
     static QMutex& fileIconMutex();
     static QMap<QString, QIcon>& fileIconCache();
+    static QMap<QString, QPixmap>& filePixmapCache();
     static QMutex& loadingMutex();
     static QSet<QString>& loadingKeys();
 };

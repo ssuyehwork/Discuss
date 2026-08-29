@@ -9,6 +9,7 @@
 #include <QSlider>
 #include <QHBoxLayout>
 #include <QContextMenuEvent>
+#include <QThreadPool>
 #include <atomic>
 #include "QuickLookGraphicsView.h"
 
@@ -59,6 +60,7 @@ private:
     QString m_currentPath;
     bool m_ignoreDeactivate = false;
 
+    QThreadPool m_previewThreadPool; // 专属线程池，只服务预览加载，不与批量提取共享
     std::atomic<uint64_t> m_previewGeneration{1};
 };
 

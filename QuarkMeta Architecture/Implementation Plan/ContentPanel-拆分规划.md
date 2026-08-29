@@ -1,80 +1,74 @@
-**是的，`ContentPanel.cpp` 目前处于极其严重的“职责过载”状态！**
-
-它是全工程在重构完 `MainWindow` 之后，**仅存的最后一个“视图层上帝类（View God-Class）”**。
-
-一个标准的前端 View 控件代码量应在 **200 ~ 300 行以内**，而目前的 `ContentPanel.cpp` 膨胀到了 **近 1,400 行**，塞入了 45 个头文件，同时兼职了 7 种截然不同的工种！
+为了保证重构过程**绝对安全、零编译报错、零功能回退**，并严格遵守 Clean Architecture 规范，我们对 `ContentPanel.cpp` 的瘦身遵循**“外科手术式渐进剥离法”**。
 
 ---
 
-### 一、 事实：当前 `ContentPanel.cpp` 承担的 7 大杂乱职责
-
-审查 `ContentPanel.cpp` 的实际代码行，其内部塞满了以下跨领域的违规逻辑：
-
-1. **职责 1：视图容器排版与视口管理**（本职工作，约 150 行）
-   - 管理 Grid / Justified / List 视图栈切换、缩放滑杆尺寸换算。
-2. **职责 2：巨型右键上下文菜单构建与派发**（严重越权，占 **近 400 行**）
-   - `onCustomContextMenuRequested` 包含了 28 种业务 Action 的构造、置灰控制与庞大的 `switch-case` 派发。
-3. **职责 3：底层物理像素 Hitbox 碰撞数学计算**（严重越权，占 **120 行**）
-   - 在 `eventFilter` 内部，亲自去算卡片和树形列表第 2 列每一颗星、每一个禁选 ⊘ 按钮的像素物理坐标（`col2Rect.left() + (col2Rect.width() - totalW)/2`）。
-4. **职责 4：键盘快捷键硬拦截与映射**（严重越权，占 **150 行**）
-   - 在 `eventFilter` 内部拦截了 `Alt+D`、`Alt+1~9`、`Ctrl+0~5`、`F2`、`Space`、`Delete`、`Ctrl+Shift+R` 等 10 多个按键。
-5. **职责 5：全量 11 维扫描统计与哈希聚合计算**（严重越权，占 **100 行**）
-   - `recalculateAndEmitStats` 在 View 内部写了对全部文件的 11 维循环统计、日期字符串格式化与判重统计。
-6. **职责 6：剪贴板文件校验与截图 PNG 生成**（严重越权，占 **120 行**）
-   - `canPaste` 和 `performPaste` 内部包含了父子文件夹嵌套防爆、原地剪切置灰判定、生成 `贴图_yyyyMMdd.png` 物理写盘。
-7. **职责 7：物理文件/文件夹模板创建**（严重越权，占 **50 行**）
-   - `createNewItem` 内部直接调用 `QDir().mkdir` 和 `QFile().open(WriteOnly)` 进行物理写盘。
+### 🏛️ 核心原则与安全红线（铁律）
+1. **【Public 接口 100% 冻结】**：`ContentPanel.h` 中暴露给 `MainWindow`、`PanelMediator` 和 `AppShortcutController` 的所有方法、信号、槽函数签名**保持绝对不变**，确保外部调用方零感透明。
+2. **【严禁 `friend class` 友元侵入】**：剥离出的 Handler 必须通过强类型上下文（Context）或标准信号槽与 `ContentPanel` 交互，杜绝任何私有指针穿透。
+3. **【零底层 I/O 留存】**：所有创建文件、物理复制、加密保护等代码全部下沉至领域层服务（`DiskIoService` / `ProtectionService`）。
 
 ---
 
-### 二、 推断：职责过载带来的 3 大系统性危害（因果链路）
-
-- **[推断 1 - 任何小改动都会引发“牵一发而动全身”的代码事故]**
-  - **原因**：右键菜单、键盘快捷键、统计计算、文件创建和视图排版全揉在一个 `.cpp` 里面。
-  - **影响**：比如想给右键菜单加一个选项，或者想调整一个快捷键，都必须在 `ContentPanel.cpp` 动刀。
-  - **结果**：极易误触和破坏旁边的流式排版、双容器渲染或选区同步逻辑，导致“改一个菜单 Bug，把视图排版改崩”的恶性循环。
-
-- **[推断 2 - 热区碰撞计算与 Delegate 职责倒挂]**
-  - **原因**：`ContentPanel` 越权去算 Delegate 内部绘制的星级坐标。
-  - **影响**：一旦 `TreeItemDelegate` 或 `ThumbnailDelegate` 微调了 2 像素的图标边距，`ContentPanel` 里的数学算式没有同步修改。
-  - **结果**：导致用户鼠标明明点在星星上，系统却判定没有点中，交互体验失灵。
-  - **标准解法**：星级点击判定**必须由 Delegate 自身的 `editorEvent` 原生接管**，View 控件 0 算式。
-
-- **[推断 3 - 领域服务无法脱离 View 独立复用]**
-  - **原因**：`createNewItem`（新建模板文件）、`recalculateAndEmitStats`（数据多维统计）被死死锁在 `ContentPanel` 私有方法里。
-  - **影响**：其他组件（如主菜单、命令行、其他 Dialog）完全无法复用这套统计与模板创建能力。
-  - **结果**：造成全工程到处重复造轮子。
-
----
-
-### 三、 终极瘦身重构蓝图（从 1400 行锐减至 < 250 行纯粹 View）
-
-将 `ContentPanel.cpp` 的 6 大非视图职责彻底剥离，四向分流：
+### 📦 拆解规划：从 1200 行拆为 4 个职责单一的模块
 
 ```
-                         【ContentPanel 彻底瘦身架构】
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 1. ContentPanel.cpp (纯粹视图容器，代码量 < 250 行)                         │
-│    • 只负责：双隐式容器组装 (FolderView + FileView)                          │
-│    • 只负责：ViewStack 切换 (Grid / Justified / List)                        │
-│    • 只负责：滚动条监听与缩放级别响应                                         │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ (职责剥离分流)
-         ┌─────────────────────────────┼─────────────────────────────┐
-         ▼                             ▼                             ▼
-【 ContentContextMenu 】      【 动作与快捷键控制器 】       【 统计与文件创建服务 】
-• 剥离 400 行右键菜单构建     • 剥离 canPaste 与粘贴        • 统计下沉至 ScanStatsEngine
-• 独立为 ContextMenuHandler   • 剥离 performCopy / Paste    • 新建下沉至 FileCreationService
-• 28 个 Action 独立分发       • 星级点击下沉至 Delegate     • 100% 具备无界面独立复用能力
+                             ┌───────────────────────────────────────┐
+                             │       ContentPanel (纯装配容器)        │
+                             │       代码量从 1200+ 行 ➔ < 250 行     │
+                             │ (仅负责: 视图切换、模型绑定、布局管理)  │
+                             └───────────────────┬───────────────────┘
+                                                 │
+         ┌───────────────────┬───────────────────┴───────────────────┬───────────────────┐
+         ▼                   ▼                                       ▼                   ▼
+┌──────────────────┐┌──────────────────┐                   ┌──────────────────┐┌──────────────────┐
+│ ContextMenu      ││ KeyEventHandler  │                   │ FileOpCoordinator││ StatsCoordinator │
+│ (右键菜单处理器) ││ (热键与交互拦截) │                   │ (文件I/O与剪贴板)││ (后台统计与查重) │
+├──────────────────┤├──────────────────┤                   ├──────────────────┤├──────────────────┤
+│• 回收站专有菜单  ││• Ctrl+0~5 星级   │                   │• canPaste 判定   ││• 后台三阶哈希查重│
+│• 物理盘符专有菜单││• Alt+1~9 改色    │                   │• 截图直粘保存    ││• 宽高比/格式统计 │
+│• 常规文件/文件夹 ││• Space 预览拦截  │                   │• 新建文件/文件夹 ││• 防抖异步通知    │
+│• 排序二级子菜单  ││• 代理 Hitbox 点击│                   │• 对接 DiskIoService││• 对接 FilterPanel│
+└──────────────────┘└──────────────────┘                   └──────────────────┘└──────────────────┘
 ```
 
 ---
 
-### 探讨结论：
+### 📋 4 大模块具体剥离方案
 
-1. **`ContentPanel` 必须且完全应该进行大瘦身**；
-2. 剥离后，`ContentPanel.cpp` 将成为一个极其优雅、纯粹、只有两百多行的标准 Qt 视图容器；
-3. 所有的右键菜单、文件操作、统计计算全部进入各自独立的领域类，全系统的模块化程度将达到 100% 满分。
+#### 1. 剥离【右键菜单构建器】➔ `src/presentation/view/ContentContextMenu.h / .cpp`
+* **剥离内容**：`onCustomContextMenuRequested` 内部极其冗长的 300 行 `QMenu` 拼装逻辑；
+* **交互方式**：
+  `ContentContextMenu::showMenu(const MenuContext& ctx, ContentPanel* parent);`
+  内部触发动作直接调用对应领域 Service（如 `TrashService`、`ClipboardService`、`PermanentDeleteService`）。
 
-请问您对将 `ContentPanel.cpp` 的右键菜单、动作分发与统计计算彻底剥离、让其瘦身为纯粹 View 容器的探讨方向是否认可？
+#### 2. 剥离【热键与事件拦截器】➔ `src/presentation/view/ContentKeyHandler.h / .cpp`
+* **剥离内容**：`eventFilter` 中长达 250 行的按键判断（Ctrl+0~5 评分、Alt+1~9 标色、Space 预览白名单、Delete 删除）以及委托 Hitbox 点击计算；
+* **交互方式**：作为独立的 `QObject` 事件过滤器直接 `installEventFilter` 到视图的 viewport 上。
+
+#### 3. 剥离【剪贴板与新建文件逻辑】➔ 收敛至 `ClipboardService` 与 `DiskIoService`
+* **剥离内容**：`canPaste`（70行）、`performPaste`（60行）、`createNewItem`（30行）；
+* **交互方式**：`ContentPanel` 中的对应方法仅保留 2~3 行，直接转调 `ClipboardService::instance().canPaste(...)` 和 `DiskIoService::instance().executeAsync(...)`。
+
+#### 4. 剥离【全量统计与查重逻辑】➔ `src/core/StatisticsService.cpp`
+* **剥离内容**：`recalculateAndEmitStats`（80行）中的全量循环、尺寸比率计算和三阶哈希判重；
+* **交互方式**：异步交由后台线程池处理，结果通过 `CentralEventHub` 或回调交付给 `FilterPanel`。
+
+---
+
+### 🚀 瘦身后 `ContentPanel.cpp` 的纯净面貌
+重构完成后的 `ContentPanel.cpp` 仅保留：
+1. `initUi()` / `initGridView()` / `initListView()`：纯 UI 控件创建；
+2. `loadDirectory()` / `setViewMode()` / `setZoomLevel()`：纯视图模式与布局切换；
+3. **总代码量彻底压缩在 250 行以内，结构一目了然，维护成本直降 80%**。
+
+---
+
+### 📌 实施路线图（小步快跑，单步可测）
+* **第 1 步**：先抽取 `ContentContextMenu`（剥离最庞大的 350 行菜单逻辑）；
+* **第 2 步**：抽取 `ContentKeyHandler`（剥离 250 行事件与快捷键逻辑）；
+* **第 3 步**：精简 `ContentPanel.cpp` 主体并做接口对接与编译验证。
+
+请问是否**同意按照该拆解规划，授权启动第 1 步（提取 `ContentContextMenu`）**？
+
+// ===================|===================
+

@@ -28,6 +28,8 @@
 
 namespace QuarkMeta {
 
+class ContentKeyHandler;
+
 /**
  * @brief 内容面板（面板四）：核心业务展示区
  * 支持网格视图（QListView）与列表视图（QTreeView）切换
@@ -62,6 +64,29 @@ public:
 
     SortType currentSortType() const { return m_sortType; }
     Qt::SortOrder currentSortOrder() const { return m_sortOrder; }
+    void setSortType(SortType type) { m_sortType = type; }
+    void setSortOrder(Qt::SortOrder order) { m_sortOrder = order; }
+    void setContextMenuActive(bool active) { m_isContextMenuActive = active; }
+
+    QString currentPath() const { return m_currentPath; }
+    bool isRecursive() const { return m_isRecursive; }
+    int zoomLevel() const { return m_zoomLevel; }
+    DiskItemModel* diskModel() const { return m_diskModel; }
+    QPushButton* btnLayers() const { return m_btnLayers; }
+    QPushButton* btnToggleFolders() const { return m_btnToggleFolders; }
+    QPushButton* btnToggleFiles() const { return m_btnToggleFiles; }
+    QPushButton* btnToggleHidden() const { return m_btnToggleHidden; }
+    QStackedWidget* viewStack() const { return m_viewStack; }
+    QAbstractItemView* gridView() const { return m_gridView; }
+    QTreeView* treeView() const { return m_treeView; }
+    ContentKeyHandler* keyHandler() const { return m_keyHandler; }
+
+    /**
+     * @brief 内部业务辅助逻辑
+     */
+    void performCopy(bool cutMode);
+    void performPaste();
+    void performBatchRename();
 
 
     enum ViewMode {
@@ -210,13 +235,6 @@ private:
     void initListView();
     void updateLayersButtonState();
 
-    /**
-     * @brief 内部业务辅助逻辑
-     */
-    void performCopy(bool cutMode);
-    void performPaste();
-    void performBatchRename();
-
     QVBoxLayout* m_mainLayout = nullptr;
     QStackedWidget* m_viewStack = nullptr;
     QPushButton* m_btnLayers = nullptr;
@@ -232,6 +250,7 @@ private:
 
     QTimer* m_visibleTimer = nullptr;
     QSortFilterProxyModel* m_proxyModel = nullptr;
+    ContentKeyHandler* m_keyHandler = nullptr;
 
 public:
     void refreshVisibleThumbnails();

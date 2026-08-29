@@ -31,8 +31,10 @@
 
 ### 内容面板（ContentPanel）模块化拆分与高并发选中性能防卡死顶层规范
 1. **上帝类拆分解耦红线**：内容面板（ContentPanel）必须遵循单一职责原则，主面板仅保留视图栈管理与子控制器调度职责，右键菜单构建、物理文件系统操作（复制/剪切/粘贴/删除/重命名）与统计运算物理解耦拆分为独立控制器。
-2. **高并发选中索引计算防卡死与多视图兼容规范**：在处理选中项获取时（如 `getSelectedIndexes()`），在列表视图（QTreeView）下获取 `selectedRows(0)`；在网格视图下仅提取 `column == 0` 的首列单元格索引，杜绝在成千上万条记录场景下因遍历多列导致主 UI 线程卡顿。
-3. **视图编辑触发器纯化红线**：视图层编辑触发器（`EditTriggers`）必须限制为仅响应 `EditKeyPressed`（如 F2 按键），绝对禁止将 `DoubleClicked` 注册为编辑触发器。
+2. **右键上下文菜单独立控制器解耦规范 (ContentContextMenu)**：内容面板的巨型右键菜单构建、事件路由及菜单动作派发逻辑彻底从 `ContentPanel` 剥离，完全收拢至独立的 `ContentContextMenu` 控制组件，`ContentPanel` 仅保留 3 行纯调度调用，实现视图容器与上下文菜单业务逻辑的彻底解耦。
+3. **按键响应与 Hitbox 点击拦截独立控制器解耦规范 (ContentKeyHandler)**：内容面板的滚轮缩放、快捷键（Ctrl+0~5 评分、Alt+D 置顶、Alt+1~9 色标、F2/Delete/空格预览/Ctrl+C/X/V）以及委托 Hitbox 点击拦截等重度事件过滤逻辑彻底剥离并收拢至 `ContentKeyHandler`，`ContentPanel::eventFilter` 仅保留统一的事件入口路由转发。
+4. **高并发选中索引计算防卡死与多视图兼容规范**：在处理选中项获取时（如 `getSelectedIndexes()`），在列表视图（QTreeView）下获取 `selectedRows(0)`；在网格视图下仅提取 `column == 0` 的首列单元格索引，杜绝在成千上万条记录场景下因遍历多列导致主 UI 线程卡顿。
+4. **视图编辑触发器纯化红线**：视图层编辑触发器（`EditTriggers`）必须限制为仅响应 `EditKeyPressed`（如 F2 按键），绝对禁止将 `DoubleClicked` 注册为编辑触发器。
 
 ### 高并发选区响应防抖与信号广播熔断保护顶层规范
 1. **防抖时间窗口红线**：选区变更通知必须引入防抖定时器机制，防止在多选、框选或全选过程中连续高频触发选区变更事件。

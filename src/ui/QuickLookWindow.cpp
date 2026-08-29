@@ -60,6 +60,7 @@ QuickLookWindow& QuickLookWindow::instance() {
 
 QuickLookWindow::QuickLookWindow() : QWidget(nullptr) {
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::Tool);
+    m_previewThreadPool.setMaxThreadCount(2);
     
     setupUi();
     installEventFilter(this);
@@ -203,11 +204,9 @@ void QuickLookWindow::renderImage(const QString& path) {
     // 优先读取原始像素的本地格式 (由于 Qt 可能未安装/未部署 WebP 图像解码器插件，WebP 格式应交由系统 Shell 提供高分辨率缩略图预览)
     static const QSet<QString> QT_NATIVE_FORMATS = {"png", "jpg", "jpeg", "bmp", "gif"};
 
-    uint64_t taskGen = m_previewGeneration.fetch_add(1, std::memory_order_relaxed) + 1;
-
     QPointer<QuickLookWindow> weakThis(this);
-    (void)QtConcurrent::run([weakThis, path, ext, taskGen]() {
-        if (!weakThis || weakThis->m_previewGeneration.load(std::memory_order_relaxed) != taskGen) return;
+    (void)QtConcurrent::run(&m_previewThreadPool, [weakThis, path, ext]() {
+        if (!weakThis) return;
         
         QImage img;
         if (ext == "svg") {
@@ -232,9 +231,9 @@ void QuickLookWindow::renderImage(const QString& path) {
             }
         }
 
-        if (!weakThis || weakThis->m_previewGeneration.load(std::memory_order_relaxed) != taskGen) return;
-        QMetaObject::invokeMethod(weakThis.data(), [weakThis, img, path, taskGen]() {
-            if (!weakThis || weakThis->m_previewGeneration.load(std::memory_order_relaxed) != taskGen || weakThis->m_currentPath != path) return;
+        if (!weakThis) return;
+        QMetaObject::invokeMethod(weakThis.data(), [weakThis, img, path]() {
+            if (!weakThis || weakThis->m_currentPath != path) return;
             if (!img.isNull()) {
                 qint64 totalPixels = static_cast<qint64>(img.width()) * img.height();
                 bool isHuge = totalPixels > 50000000LL; // 超过 5000 万像素安全降采样
