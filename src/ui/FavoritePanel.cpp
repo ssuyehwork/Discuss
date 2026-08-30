@@ -137,6 +137,12 @@ void FavoritePanel::initUi() {
     m_mainLayout->addWidget(m_favoriteView, 1);
 
     // 信号绑定
+    connect(&IconLoadNotifier::instance(), &IconLoadNotifier::iconLoaded, this, [this](const QString& path) {
+        Q_UNUSED(path);
+        if (m_favoriteView && m_favoriteView->viewport()) {
+            m_favoriteView->viewport()->update();
+        }
+    });
     connect(m_favoriteView, &QTreeView::clicked, this, &FavoritePanel::onFavoriteClicked);
     connect(m_favoriteView, &QWidget::customContextMenuRequested, this, &FavoritePanel::onFavoriteContextMenu);
     connect(m_favoriteView, &DropTreeView::pathsDropped, this, &FavoritePanel::onPathsDroppedToFavorite);
@@ -339,7 +345,12 @@ void FavoritePanel::loadFavorites() {
         QString iconKey = rec.iconKey.isEmpty() ? "folder_filled" : rec.iconKey;
         if (iconKey == "folder") iconKey = "folder_filled";
 
-        QIcon icon = UiHelper::getIcon(iconKey, itemColor, 18);
+        QIcon icon;
+        if (fi.isDir()) {
+            icon = UiHelper::getIcon(iconKey, itemColor, 18);
+        } else {
+            icon = ShellIconManager::getFileIcon(rec.path);
+        }
         QStandardItem* item = new QStandardItem(icon, rec.name.isEmpty() ? fi.fileName() : rec.name);
         item->setData(rec.path, Qt::UserRole + 1);
         item->setData(iconKey, Qt::UserRole + 2);
@@ -395,7 +406,12 @@ void FavoritePanel::addFavoriteItem(const QString& path) {
 
     FavoriteDao::addFavorite(cleanPath, "folder_filled", "#FDB70A");
 
-    QIcon icon = UiHelper::getIcon("folder_filled", QColor("#FDB70A"), 18);
+    QIcon icon;
+    if (fi.isDir()) {
+        icon = UiHelper::getIcon("folder_filled", QColor("#FDB70A"), 18);
+    } else {
+        icon = ShellIconManager::getFileIcon(cleanPath);
+    }
     QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? cleanPath : fi.fileName());
     item->setData(cleanPath, Qt::UserRole + 1);
     item->setData("folder_filled", Qt::UserRole + 2);
