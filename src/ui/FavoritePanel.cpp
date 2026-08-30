@@ -138,6 +138,18 @@ void FavoritePanel::initUi() {
 
     // 信号绑定
     connect(&IconLoadNotifier::instance(), &IconLoadNotifier::iconLoaded, this, [this]() {
+        if (!m_favoriteModel) return;
+        for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+            QStandardItem* item = m_favoriteModel->item(i);
+            if (!item) continue;
+            QString path = item->data(Qt::UserRole + 1).toString();
+            if (path.isEmpty()) continue;
+            QFileInfo fi(path);
+            if (!fi.isDir()) {
+                QIcon realIcon = ShellIconManager::getFileIcon(path);
+                item->setIcon(realIcon);
+            }
+        }
         if (m_favoriteView && m_favoriteView->viewport()) {
             m_favoriteView->viewport()->update();
         }
