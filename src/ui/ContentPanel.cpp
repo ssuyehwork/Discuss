@@ -30,6 +30,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QHeaderView>
+#include <QScrollBar>
 #include <QtConcurrent>
 #include <QFileInfo>
 #include <QDir>
@@ -43,7 +44,7 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("EditorContainer");
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(230);
-    setStyleSheet("color: #EEEEEE;");
+    setStyleSheet("#EditorContainer { background-color: #1E1E1E; border: none; color: #EEEEEE; }");
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -231,6 +232,13 @@ void ContentPanel::initListView() {
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
     connect(m_treeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked);
     connect(m_treeView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
+
+    // 🚀【列表模式滚动提图支持】：监听纵向滚动条滑动，驱动可见区域缩略图异步刷新
+    if (m_treeView->verticalScrollBar()) {
+        connect(m_treeView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+            if (m_visibleTimer) m_visibleTimer->start();
+        });
+    }
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
@@ -483,6 +491,9 @@ void ContentPanel::setViewMode(ViewMode mode) {
     updateGridSize();
     emit viewModeChanged(mode);
     emit zoomLevelChanged(m_zoomLevel);
+
+    // 🚀【视图模式切换驱动】：切换视图模式后立刻启动定时器刷新可视区域缩略图
+    if (m_visibleTimer) m_visibleTimer->start();
 }
 
 void ContentPanel::setZoomLevel(int level) {

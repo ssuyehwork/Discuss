@@ -399,11 +399,12 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
 
     QStringList pathsToLoad;
     for (int r : rows) {
-        if (pathsToLoad.size() >= 2) break;
-
         if (r < 0 || r >= static_cast<int>(m_allRecords.size())) continue;
         const auto& rec = m_allRecords[r];
-        if (rec.isDir || !UiHelper::isGraphicsFile(rec.suffix)) continue;
+
+        QString ext = rec.suffix.toLower();
+        bool isGraphic = UiHelper::isGraphicsFile(ext) || ext == "svg" || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf";
+        if (rec.isDir || !isGraphic) continue;
 
         QString path = rec.path;
         if (m_iconCache.contains(path) || m_requestedPaths.contains(path)) continue;
@@ -539,8 +540,9 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         return ratio > 0.0 ? ratio : 1.0;
     } else if (role == HasThumbnailRole) {
         static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
-        if (iconOnlyExts.contains(record.suffix.toLower())) return false;
-        if (UiHelper::isGraphicsFile(record.suffix)) return true;
+        QString ext = record.suffix.toLower();
+        if (iconOnlyExts.contains(ext)) return false;
+        if (UiHelper::isGraphicsFile(ext) || ext == "svg" || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf") return true;
         if (record.width > 0 && record.height > 0) return true;
         return m_aspectRatios.contains(QDir::toNativeSeparators(path)) && m_aspectRatios.value(QDir::toNativeSeparators(path)) > 0.0;
     } else if (role == Qt::DecorationRole && index.column() == 0) {
@@ -549,7 +551,7 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         if (cached) return *cached;
 
         QString ext = record.suffix.toLower();
-        bool isGraphic = UiHelper::isGraphicsFile(ext) || ext == "svg";
+        bool isGraphic = UiHelper::isGraphicsFile(ext) || ext == "svg" || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf";
         
         if (isGraphic) return QIcon();
         QIcon icon = ShellIconManager::getFileIconFast(path, record.isDir, ext);
