@@ -327,6 +327,10 @@ void BatchRenameDialog::updatePreview() {
     auto newNames = BatchRenameService::instance().computePreview(m_originalPaths, rules);
     int total = static_cast<int>(newNames.size());
 
+    if (!newNames.empty()) {
+        m_firstNewName = QString::fromStdWString(newNames[0]);
+    }
+
     // 仅更新第 1 列的新名称文本，耗时 < 0.1ms，打字极度丝滑！
     for (int i = 0; i < total; ++i) {
         QTableWidgetItem* itemNew = m_table->item(i, 1);

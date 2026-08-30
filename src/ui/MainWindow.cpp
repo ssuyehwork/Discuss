@@ -362,6 +362,8 @@ void MainWindow::setupSplitters() {
     );
     m_panelLayoutManager->initLayout();
 
+    connect(m_contentPanel, &ContentPanel::statusBarStatsUpdated, this, &MainWindow::onStatusBarStatsUpdated);
+
     m_bodyLayout->addWidget(m_mainSplitter);
 
     m_statusBarWidget = new QWidget(centralC);

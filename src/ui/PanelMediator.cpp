@@ -1,5 +1,4 @@
 #include "PanelMediator.h"
-#include "MainWindow.h"
 #include "NavPanel.h"
 #include "FavoritePanel.h"
 #include "ContentPanel.h"
@@ -112,12 +111,8 @@ void PanelMediator::setupConnections() {
                 for (const QString& p : paths) {
                     favoritePanel->addFavoriteItem(p);
                 }
+                favoritePanel->saveFavorites();
             });
-        }
-
-        MainWindow* mainWindow = qobject_cast<MainWindow*>(parent());
-        if (mainWindow) {
-            connect(contentPanel, &ContentPanel::statusBarStatsUpdated, mainWindow, &MainWindow::onStatusBarStatsUpdated);
         }
     }
 
@@ -133,14 +128,13 @@ void PanelMediator::setupConnections() {
 
     // 2. 内容面板选中项改变 -> 元数据面板 0 毫秒极速同步
     if (contentPanel && metaPanel) {
-        // 🚀【核心补通通道】：监听卡片/列表上的就地星级修改，实时同步右侧 MetaPanel！
+        // 监听卡片/列表上的就地修改，0 毫秒同步右侧 MetaPanel
         connect(contentPanel->model(), &QAbstractItemModel::dataChanged, metaPanel, 
                 [contentPanel, metaPanel](const QModelIndex& topLeft, const QModelIndex&, const QVector<int>& roles) {
             if (!roles.isEmpty() && !roles.contains(RatingRole) && !roles.contains(ColorRole)) {
                 return;
             }
 
-            // 检查当前选中的项目是否与被修改的项目相吻合（精确通过 PathRole 进行文件物理绝对路径比对，100% 免疫排序与过滤）
             QModelIndexList selected = contentPanel->getSelectedIndexes();
             if (selected.isEmpty()) return;
 
@@ -148,14 +142,14 @@ void PanelMediator::setupConnections() {
             QString selPath = currentSel.data(PathRole).toString();
             QString changedPath = topLeft.data(PathRole).toString();
 
-            if (!selPath.isEmpty() && selPath == changedPath) {
+            if (!selPath.isEmpty() && QString::compare(selPath, changedPath, Qt::CaseInsensitive) == 0) {
                 if (roles.isEmpty() || roles.contains(RatingRole)) {
                     int newRating = currentSel.data(RatingRole).toInt();
-                    metaPanel->setRating(newRating, false); // 👈 0 毫秒瞬间同步右侧星星！
+                    metaPanel->setRating(newRating, false);
                 }
                 if (roles.isEmpty() || roles.contains(ColorRole)) {
                     QString newColor = currentSel.data(ColorRole).toString();
-                    metaPanel->setColor(newColor, false);   // 👈 0 毫秒瞬间同步右侧色标！
+                    metaPanel->setColor(newColor, false);
                 }
             }
         });
@@ -205,7 +199,7 @@ void PanelMediator::setupConnections() {
         });
     }
 
-    // 3. 内容面板与 QuickLook 预览窗口联动
+    // 3. 内容面板与 QuickLook 预览窗口联动 (🚀 闭环补齐主视图同步)
     if (contentPanel) {
         connect(contentPanel, &ContentPanel::requestQuickLook, this, [this](const QString& path) {
             m_currentQuickLookPath = path;
@@ -233,7 +227,8 @@ void PanelMediator::setupConnections() {
         }
     });
 
-    connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this, metaPanel](int rating) {
+    // 🚀【QuickLook 改星级 ➔ 同步更新内容面板卡片】
+    connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this, metaPanel, contentPanel](int rating) {
         if (m_currentQuickLookPath.isEmpty()) return;
 
         AppCommand cmd;
@@ -243,9 +238,11 @@ void PanelMediator::setupConnections() {
         CoreEngine::instance().executeCommand(cmd);
 
         if (metaPanel) metaPanel->setRating(rating, false);
+        if (contentPanel) contentPanel->updateItemMetadata(m_currentQuickLookPath);
     });
 
-    connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this, metaPanel](const QString& color) {
+    // 🚀【QuickLook 改颜色 ➔ 同步更新内容面板卡片】
+    connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this, metaPanel, contentPanel](const QString& color) {
         if (m_currentQuickLookPath.isEmpty()) return;
 
         AppCommand cmd;
@@ -255,12 +252,13 @@ void PanelMediator::setupConnections() {
         CoreEngine::instance().executeCommand(cmd);
 
         if (metaPanel) metaPanel->setColor(color, false);
+        if (contentPanel) contentPanel->updateItemMetadata(m_currentQuickLookPath);
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::deleteRequested, this, [this, contentPanel](const QString& path) {
         if (path.isEmpty()) return;
 
-        if (TrashService::instance().moveToTrash({path})) {
+        if (TrashService::instance().moveToTrash({path}, contentPanel)) {
             if (contentPanel) {
                 QString next = contentPanel->getAdjacentFilePath(path, 1);
                 if (!next.isEmpty()) {
@@ -283,6 +281,7 @@ void PanelMediator::setupConnections() {
     connect(&QuickLookWindow::instance(), &QuickLookWindow::favoriteRequested, this, [favoritePanel](const QString& path) {
         if (!path.isEmpty() && favoritePanel) {
             favoritePanel->addFavoriteItem(path);
+            favoritePanel->saveFavorites();
             ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
         }
     });
