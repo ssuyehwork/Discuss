@@ -6,10 +6,10 @@ CardLayout CardLayoutEngine::calculate(const QRect& totalRect, int /*zoomLevel*/
     CardLayout l;
     l.totalRect = totalRect;
 
-    const int padding = 3;
-    const int textHeight = 36;
-    const int ratingH = 24;
-    const int gap = 4;
+    const int padding = kCardPadding;
+    const int textHeight = kTextHeight;
+    const int ratingH = kRatingHeight;
+    const int gap = kGap;
 
     // 1. Cover 区域
     int coverBottom = totalRect.bottom() - (textHeight + ratingH + gap + padding);

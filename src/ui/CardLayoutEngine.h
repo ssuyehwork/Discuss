@@ -36,6 +36,14 @@ struct CardLayout {
 
 class CardLayoutEngine {
 public:
+    static constexpr int kCardPadding = 3;
+    static constexpr int kTextHeight = 36;
+    static constexpr int kRatingHeight = 24;
+    static constexpr int kGap = 4;
+
+    static constexpr int totalPaddingHorizontal() { return kCardPadding * 2; }
+    static constexpr int extraHeight() { return kCardPadding * 2 + kTextHeight + kRatingHeight + kGap; }
+
     static CardLayout calculate(const QRect& totalRect, int zoomLevel = 96);
 };
 

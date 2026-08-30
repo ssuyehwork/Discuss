@@ -36,29 +36,32 @@ public:
         bool selected = option.state & QStyle::State_Selected;
         bool hover = option.state & QStyle::State_MouseOver;
 
-        if (selected || hover) {
-            painter->save();
-            // 2026-06-xx 按照用户最新要求：消除“坑坑洼洼”感，改用全行贯穿式直角高亮，填满整个区域
-            QColor bg = selected ? QColor("#378ADD") : QColor("#2a2d2e");
-            if (selected) bg.setAlphaF(0.15f); 
-
-            // 物理修复：直接使用 option.rect，不进行 adjust 缩进，不使用圆角，确保色块无缝对接
-            painter->setBrush(bg);
-            painter->setPen(Qt::NoPen);
-            painter->drawRect(option.rect);
-            painter->restore();
+        // 🚀【行底色彻底统一与防穿透自绘】：直接根据选中/悬停/行号奇偶绘制底色，贯穿整个单元格矩形
+        painter->save();
+        QColor bg;
+        if (selected) {
+            bg = QColor("#378ADD");
+            bg.setAlphaF(0.15f);
+        } else if (hover) {
+            bg = QColor("#2A2D2E");
+        } else {
+            // 根据行号奇偶直接精准赋值交替底色，完全绝缘 Qt 内部原生 Palette 露白
+            bg = (index.row() % 2 == 1) ? QColor("#252526") : QColor("#1E1E1E");
         }
+        painter->setBrush(bg);
+        painter->setPen(Qt::NoPen);
+        painter->drawRect(option.rect);
+        painter->restore();
 
         QStyleOptionViewItem opt = option;
         if (index.column() >= 1) {
             opt.displayAlignment = Qt::AlignCenter;
         }
+
         opt.state &= ~QStyle::State_Selected;
         opt.state &= ~QStyle::State_MouseOver;
-        if (selected || hover) {
-            opt.features &= ~QStyleOptionViewItem::Alternate;
-            opt.backgroundBrush = QBrush();
-        }
+        opt.features &= ~QStyleOptionViewItem::Alternate;
+        opt.backgroundBrush = QBrush();
         
         if (selected) {
             opt.palette.setColor(QPalette::Text, Qt::white);

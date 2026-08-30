@@ -415,12 +415,9 @@ void JustifiedView::doLayout() {
 
     int currentY = margin; 
 
-    // 物理常数统一定义
-    const int textHeight = 36;
-    const int ratingHeight = 20;
-    const int gap = 4;
-    const int cardPadding = 6; // 左右内边距总和 (3px + 3px)
-    const int extraHeight = cardPadding + textHeight + ratingHeight + gap; // cardPadding 也是上下内边距总和
+    // 物理常数由 CardLayoutEngine 单一真理源导出
+    const int cardPadding = CardLayoutEngine::totalPaddingHorizontal();
+    const int extraHeight = CardLayoutEngine::extraHeight();
 
     if (m_layoutMode == GridMode) {
         int itemWidth = m_targetRowHeight + cardPadding;
@@ -493,9 +490,7 @@ void JustifiedView::doLayout() {
                 rowAspectRatioSum += ar;
                 
                 int numInRow = (int)aspectRatios.size();
-                // 2026-06-xx 物理修正：考虑 ThumbnailDelegate 的内边距 (左右各 3px = 6px)
-                // 预估宽度 = (宽高比总和 * 目标高度) + (内边距补偿 6px * 数量) + (项间距 * 间距数量)
-                double estimatedWidth = (rowAspectRatioSum * m_targetRowHeight) + (6 * numInRow) + (spacing * (numInRow - 1));
+                double estimatedWidth = (rowAspectRatioSum * m_targetRowHeight) + (cardPadding * numInRow) + (spacing * (numInRow - 1));
                 if (estimatedWidth > containerWidth) {
                     // 如果单项就超过了容器宽度，则强制独占一行
                     if (numInRow > 1) {
@@ -518,7 +513,7 @@ void JustifiedView::doLayout() {
             // 2026-07-xx 物理对齐修正：若因类型差异导致的强制换行，该行不执行两端对齐，防止图标拉伸变形
             bool rowIsJustified = !isLastRow && !forceBreak; 
 
-            int availableImageWidth = containerWidth - (spacing * (numInRow - 1)) - (6 * numInRow);
+            int availableImageWidth = containerWidth - (spacing * (numInRow - 1)) - (cardPadding * numInRow);
 
             if (rowIsJustified) {
                 actualHeight = qRound(availableImageWidth / rowAspectRatioSum);

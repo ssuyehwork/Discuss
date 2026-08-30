@@ -1,30 +1,17 @@
 #include "ToolTipOverlay.h"
 
-#ifdef Q_OS_WIN
-#include <qt_windows.h>
-#endif
 #include <QTimer>
 
 namespace QuarkMeta {
 
 ToolTipOverlay::ToolTipOverlay() : QWidget(nullptr) {
-    // [CRITICAL] 彻底弃用 Qt::ToolTip，防止 OS 动画残留
-    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | 
-                  Qt::WindowTransparentForInput | Qt::NoDropShadowWindowHint | Qt::WindowDoesNotAcceptFocus);
+    setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | 
+                  Qt::WindowTransparentForInput | Qt::NoDropShadowWindowHint | 
+                  Qt::WindowDoesNotAcceptFocus | Qt::WindowStaysOnTopHint);
     setObjectName("ToolTipOverlay");
 
     setAttribute(Qt::WA_TranslucentBackground);
     setAttribute(Qt::WA_ShowWithoutActivating);
-
-    // 2026-06-xx 物理修复：通过原生 API 实现置顶，避免标志位导致的重建问题
-#ifdef Q_OS_WIN
-    QTimer::singleShot(0, this, [this]() {
-        HWND hwnd = reinterpret_cast<HWND>(winId());
-        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
-    });
-#else
-    setWindowFlag(Qt::WindowStaysOnTopHint, true);
-#endif
     
     m_doc.setUndoRedoEnabled(false);
     // [ULTIMATE FIX] 强制锁定调色板颜色
@@ -163,15 +150,7 @@ void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int 
     show();
     update();
 
-    // 2026-xx-xx 特殊修复：由于 QuickLookWindow 自身是通过 SetWindowPos(..., HWND_TOPMOST, ...) 显示的置顶无边框窗口，
-    // 为了防止 ToolTipOverlay 被同样是 TOPMOST 的预览窗口意外遮挡，在调用 show() 后，必须强制性通过原生 WinAPI
-    // 重新确立 ToolTipOverlay 的最高优先级置顶秩序，确保提示信息绝对不被遮蔽。
-#ifdef Q_OS_WIN
-    HWND hwnd = reinterpret_cast<HWND>(winId());
-    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
-#else
     raise();
-#endif
     
     m_fadeAnim->setStartValue(0.0);
     m_fadeAnim->setEndValue(1.0);

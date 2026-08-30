@@ -21,6 +21,17 @@ DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     setHeader(new ContentHeaderView(Qt::Horizontal, this));
     setAcceptDrops(true);
     setDropIndicatorShown(true);
+
+    // 🚀【强力锁定 QPalette】：强制设定暗色 Base 与 AlternateBase，防止原生 Windows 调色板在交替行露白
+    QPalette pal = palette();
+    pal.setColor(QPalette::Base, QColor("#1E1E1E"));
+    pal.setColor(QPalette::AlternateBase, QColor("#252526"));
+    pal.setColor(QPalette::Text, QColor("#EEEEEE"));
+    pal.setColor(QPalette::WindowText, QColor("#EEEEEE"));
+    setPalette(pal);
+    if (viewport()) {
+        viewport()->setPalette(pal);
+    }
 }
 
 void DropTreeView::dragEnterEvent(QDragEnterEvent* event) {

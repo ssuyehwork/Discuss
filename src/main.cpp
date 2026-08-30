@@ -105,8 +105,17 @@ int main(int argc, char *argv[]) {
     // 🚀【全局主题与样式中枢】：一键注入全局统一 QSS 样式表与面板/菜单暗黑规范
     QuarkMeta::ThemeManager::instance().initialize(&a);
 
-    // 全局统一设置蓝色透明框选样式
-    QPalette p = a.palette();
+    // 全局统一设置深色 QPalette，防止原生 Windows 调色板在斑马纹/Base/AlternateBase 露底纯白
+    QPalette p;
+    p.setColor(QPalette::Window, QColor("#1E1E1E"));
+    p.setColor(QPalette::WindowText, QColor("#EEEEEE"));
+    p.setColor(QPalette::Base, QColor("#1E1E1E"));
+    p.setColor(QPalette::AlternateBase, QColor("#252526"));
+    p.setColor(QPalette::ToolTipBase, QColor("#252526"));
+    p.setColor(QPalette::ToolTipText, QColor("#EEEEEE"));
+    p.setColor(QPalette::Text, QColor("#EEEEEE"));
+    p.setColor(QPalette::Button, QColor("#252526"));
+    p.setColor(QPalette::ButtonText, QColor("#EEEEEE"));
     p.setColor(QPalette::Highlight, QColor(52, 152, 219));      // #3498db (蓝色)
     p.setColor(QPalette::HighlightedText, Qt::white);
     a.setPalette(p);

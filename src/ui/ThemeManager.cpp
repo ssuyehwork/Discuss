@@ -70,6 +70,30 @@ QString ThemeManager::getGlobalStyleSheet() const {
             background: #252526; border: 1px solid #333333; border-radius: 4px; color: #EEEEEE; padding-left: 6px;
         }
         QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus { border: 1px solid #378ADD; }
+
+        /* 5. 统一 QTreeView 列表视图暗色斑马纹与高亮 */
+        QTreeView {
+            background-color: #1E1E1E;
+            alternate-background-color: #252526;
+            qproperty-alternateBase: #252526;
+            color: #EEEEEE;
+            border: none;
+            outline: 0;
+        }
+        QTreeView::item {
+            height: 28px;
+            border: none;
+        }
+        QTreeView::item:alternate {
+            background-color: #252526;
+        }
+        QTreeView::item:hover {
+            background-color: #2A2D2E;
+        }
+        QTreeView::item:selected {
+            background-color: rgba(55, 138, 221, 0.3);
+            color: #FFFFFF;
+        }
     )");
 }
 

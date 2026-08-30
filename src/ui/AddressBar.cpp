@@ -1,7 +1,6 @@
 #include "AddressBar.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
-#include "FavoritePanel.h"
 #include "StyleLibrary.h"
 #include "../core/NavigationHistoryService.h"
 #include <QHBoxLayout>
@@ -20,7 +19,6 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // 2026-06-xx 按照用户图片：引入一体化容器 AddressContainer，包含路径与刷新按钮
     m_addressContainer = new QWidget(this);
     m_addressContainer->setObjectName("AddressContainer");
     m_addressContainer->setFixedHeight(32);
@@ -33,7 +31,7 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     containerLayout->setSpacing(0);
 
     m_pathStack = new QStackedWidget(m_addressContainer);
-    m_pathStack->setFixedHeight(30); // 扣除上下边框
+    m_pathStack->setFixedHeight(30);
     m_pathStack->setStyleSheet("QStackedWidget { background: transparent; border: none; }");
 
     m_breadcrumbBar = new BreadcrumbBar(m_pathStack);
@@ -49,7 +47,6 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     m_btnRefresh = new QPushButton(m_addressContainer);
     m_btnRefresh->setFixedSize(30, 30);
     m_btnRefresh->setIcon(UiHelper::getIcon("sync", QColor("#CCCCCC"), 16));
-    // 2026-07-xx 按照宪法规范：禁绝原生 ToolTip，对接 ToolTipOverlay
     m_btnRefresh->setProperty("tooltipText", "刷新 (F5)");
     m_btnRefresh->setCursor(Qt::ArrowCursor);
     m_btnRefresh->setStyleSheet(
@@ -68,7 +65,6 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     connect(m_pathEdit, &QLineEdit::editingFinished, this, &AddressBar::onPathEditFinished);
     connect(m_pathEdit, &QLineEdit::returnPressed, this, [this]() {
         QString input = m_pathEdit->text();
-        // 2026-06-xx 交互纠偏：跳转前先解除选中并失焦，防止干扰后续双击
         m_pathEdit->deselect();
         m_pathEdit->clearFocus();
 
@@ -84,29 +80,15 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     connect(m_breadcrumbBar, &BreadcrumbBar::favoriteToggleRequested, this, [this](const QString& fullPath, const QPoint& globalPos) {
         if (fullPath.isEmpty() || fullPath == "computer://") return;
 
-        FavoritePanel* favoritePanel = nullptr;
-        for (QWidget* topWidget : QApplication::topLevelWidgets()) {
-            if (topWidget) {
-                favoritePanel = topWidget->findChild<FavoritePanel*>();
-                if (favoritePanel) break;
-            }
-        }
-
         QMenu menu(this);
         UiHelper::applyMenuStyle(&menu);
 
-        bool isFav = favoritePanel ? favoritePanel->containsPath(fullPath) : false;
-        QAction* actFav = menu.addAction(isFav ? "取消收藏" : "添加至收藏夹");
+        QAction* actNav = menu.addAction("定位至此文件夹");
 
         QAction* selected = menu.exec(globalPos);
-        if (selected == actFav && favoritePanel) {
-            if (isFav) {
-                favoritePanel->removeFavoriteItem(fullPath);
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e81123"));
-            } else {
-                favoritePanel->addFavoriteItem(fullPath);
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, Style::SuccessGreen);
-            }
+        if (selected == actNav) {
+            emit pathChanged(fullPath);
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "已定位至当前路径", 1500, Style::SuccessGreen);
         }
     });
 
@@ -135,9 +117,6 @@ void AddressBar::onBreadcrumbBlankClicked() {
     m_pathEdit->setText(displayPath);
     m_pathStack->setCurrentWidget(m_pathEdit);
     m_pathEdit->setFocus();
-    
-    // 2026-06-xx 交互优化：使用 singleShot 延迟全选，防止双击事件的第一击触发全选后，
-    // 第二击被全选状态下的系统默认逻辑（取消全选）拦截，确保 eventFilter 能稳定捕获 DblClick。
     QTimer::singleShot(50, m_pathEdit, &QLineEdit::selectAll);
 }
 
@@ -155,7 +134,6 @@ bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
     if (obj == m_btnRefresh) {
         if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) {
             m_btnRefresh->setIcon(UiHelper::getIcon("sync", Qt::white, 16));
-            // 2026-07-xx 按照 Plan-65：悬停触发，timeout = 0
             QString text = m_btnRefresh->property("tooltipText").toString();
             if (!text.isEmpty()) {
                 ToolTipOverlay::instance()->showText(QCursor::pos(), text, 0);
@@ -166,7 +144,6 @@ bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
         }
     }
 
-    // 2026-06-xx 物理联动：由于 QSS 不支持 :focus-within，此处手动驱动容器焦点边框
     if (obj == m_pathEdit) {
         if (event->type() == QEvent::FocusIn) {
             m_addressContainer->setProperty("focused", true);
@@ -182,11 +159,9 @@ bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
     if ((obj == m_pathStack || obj == m_breadcrumbBar || obj == m_pathEdit) && 
         event->type() == QEvent::MouseButtonDblClick) {
         
-        // 2026-06-xx 物理拦截：双击时立即弹出历史面板，并防止文本编辑器吞掉事件
         QStringList history = NavigationHistoryService::instance().getHistory();
         if (!history.isEmpty()) {
             m_historyPanel->setHistory(history);
-            // 锚定到整个 Stack 以获得正确的对齐
             m_historyPanel->showBelow(m_pathStack);
             return true;
         }

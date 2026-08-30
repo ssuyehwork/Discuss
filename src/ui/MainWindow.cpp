@@ -82,9 +82,8 @@ using namespace QuarkMeta::Style;
 
 namespace QuarkMeta {
 
-// 【物理护栏-禁止修改/禁止改为0】全局边缘留白基准值
-constexpr int kEdgeMargin = 5;
-constexpr int kStatusBarMargin = 12;
+constexpr int kLayoutEdgeMargin = 5;
+constexpr int kStatusBarHorizontalMargin = 12;
 
 MainWindow::~MainWindow() {
 }
@@ -281,7 +280,7 @@ void MainWindow::setupSplitters() {
     m_titleBarWidget->setStyleSheet(QString("QWidget#TitleBar { border: none; border-bottom: 1px solid %1; background: transparent; }").arg(qssColor(BorderColor)));
     m_titleBarWidget->setFixedHeight(34);
     m_titleBarLayout = new QHBoxLayout(m_titleBarWidget);
-    m_titleBarLayout->setContentsMargins(5, 0, kEdgeMargin, 0); 
+    m_titleBarLayout->setContentsMargins(5, 0, kLayoutEdgeMargin, 0); 
     m_titleBarLayout->setSpacing(8);
 
     m_logoLabel = new QLabel(m_titleBarWidget);
@@ -302,7 +301,7 @@ void MainWindow::setupSplitters() {
     m_navBarWidget->setFixedHeight(42); 
     
     m_navBarLayout = new QHBoxLayout(m_navBarWidget);
-    m_navBarLayout->setContentsMargins(kEdgeMargin, kEdgeMargin, kEdgeMargin, kEdgeMargin); 
+    m_navBarLayout->setContentsMargins(kLayoutEdgeMargin, kLayoutEdgeMargin, kLayoutEdgeMargin, kLayoutEdgeMargin); 
     m_navBarLayout->setSpacing(5);
     m_navBarLayout->setAlignment(Qt::AlignVCenter);
 
@@ -370,7 +369,7 @@ void MainWindow::setupSplitters() {
     m_statusBarWidget->setObjectName("StatusBar");
     m_statusBarWidget->setFixedHeight(28);
     QHBoxLayout* statusL = new QHBoxLayout(m_statusBarWidget);
-    statusL->setContentsMargins(kStatusBarMargin, 0, kStatusBarMargin, 0);
+    statusL->setContentsMargins(kStatusBarHorizontalMargin, 0, kStatusBarHorizontalMargin, 0);
     statusL->setSpacing(0);
 
     m_statusLeft = new QLabel("就绪中...", m_statusBarWidget);
@@ -648,9 +647,6 @@ void MainWindow::changeEvent(QEvent* event) {
             m_btnMax->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
         }
 
-        if (m_bodyLayout) {
-            m_bodyLayout->setContentsMargins(kEdgeMargin, 0, kEdgeMargin, kEdgeMargin);
-        }
     }
     QMainWindow::changeEvent(event);
 }
