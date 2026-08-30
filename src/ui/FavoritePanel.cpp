@@ -379,7 +379,16 @@ void FavoritePanel::loadFavorites() {
                     icon = QIcon(thumb);
                 } else {
                     icon = ShellIconManager::getFileIcon(rec.path);
-                    ThumbnailPipelineService::instance().loadBatchAsync({rec.path}, 64);
+                    ThumbnailPipelineService::instance().loadBatchAsync({rec.path}, 64, [this](const QString& path, const QPixmap& pix) {
+                        if (!m_favoriteModel || pix.isNull()) return;
+                        for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+                            QStandardItem* item = m_favoriteModel->item(i);
+                            if (item && item->data(Qt::UserRole + 1).toString() == path) {
+                                item->setIcon(QIcon(pix));
+                                break;
+                            }
+                        }
+                    });
                 }
             } else {
                 icon = ShellIconManager::getFileIcon(rec.path);
@@ -451,7 +460,16 @@ void FavoritePanel::addFavoriteItem(const QString& path) {
                 icon = QIcon(thumb);
             } else {
                 icon = ShellIconManager::getFileIcon(cleanPath);
-                ThumbnailPipelineService::instance().loadBatchAsync({cleanPath}, 64);
+                ThumbnailPipelineService::instance().loadBatchAsync({cleanPath}, 64, [this](const QString& path, const QPixmap& pix) {
+                    if (!m_favoriteModel || pix.isNull()) return;
+                    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+                        QStandardItem* item = m_favoriteModel->item(i);
+                        if (item && item->data(Qt::UserRole + 1).toString() == path) {
+                            item->setIcon(QIcon(pix));
+                            break;
+                        }
+                    }
+                });
             }
         } else {
             icon = ShellIconManager::getFileIcon(cleanPath);
