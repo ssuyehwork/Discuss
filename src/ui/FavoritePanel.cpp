@@ -1,6 +1,7 @@
 #include "FavoritePanel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
+#include "../util/ThumbnailPipelineService.h"
 #include "ColorPicker.h"
 #include "../meta/FavoriteDao.h"
 #include <QPainter>
@@ -146,7 +147,18 @@ void FavoritePanel::initUi() {
             if (path.isEmpty()) continue;
             QFileInfo fi(path);
             if (!fi.isDir()) {
-                QIcon realIcon = ShellIconManager::getFileIcon(path);
+                QString ext = fi.suffix().toLower();
+                QIcon realIcon;
+                if (UiHelper::isGraphicsFile(ext)) {
+                    QPixmap thumb = ThumbnailPipelineService::instance().getFromMemoryCache(path, 64);
+                    if (!thumb.isNull()) {
+                        realIcon = QIcon(thumb);
+                    } else {
+                        realIcon = ShellIconManager::getFileIcon(path);
+                    }
+                } else {
+                    realIcon = ShellIconManager::getFileIcon(path);
+                }
                 item->setIcon(realIcon);
             }
         }
@@ -360,7 +372,18 @@ void FavoritePanel::loadFavorites() {
         if (fi.isDir()) {
             icon = UiHelper::getIcon(iconKey, itemColor, 18);
         } else {
-            icon = ShellIconManager::getFileIcon(rec.path);
+            QString ext = fi.suffix().toLower();
+            if (UiHelper::isGraphicsFile(ext)) {
+                QPixmap thumb = ThumbnailPipelineService::instance().getFromMemoryCache(rec.path, 64);
+                if (!thumb.isNull()) {
+                    icon = QIcon(thumb);
+                } else {
+                    icon = ShellIconManager::getFileIcon(rec.path);
+                    ThumbnailPipelineService::instance().loadBatchAsync({rec.path}, 64);
+                }
+            } else {
+                icon = ShellIconManager::getFileIcon(rec.path);
+            }
         }
         QStandardItem* item = new QStandardItem(icon, rec.name.isEmpty() ? fi.fileName() : rec.name);
         item->setData(rec.path, Qt::UserRole + 1);
@@ -421,7 +444,18 @@ void FavoritePanel::addFavoriteItem(const QString& path) {
     if (fi.isDir()) {
         icon = UiHelper::getIcon("folder_filled", QColor("#FDB70A"), 18);
     } else {
-        icon = ShellIconManager::getFileIcon(cleanPath);
+        QString ext = fi.suffix().toLower();
+        if (UiHelper::isGraphicsFile(ext)) {
+            QPixmap thumb = ThumbnailPipelineService::instance().getFromMemoryCache(cleanPath, 64);
+            if (!thumb.isNull()) {
+                icon = QIcon(thumb);
+            } else {
+                icon = ShellIconManager::getFileIcon(cleanPath);
+                ThumbnailPipelineService::instance().loadBatchAsync({cleanPath}, 64);
+            }
+        } else {
+            icon = ShellIconManager::getFileIcon(cleanPath);
+        }
     }
     QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? cleanPath : fi.fileName());
     item->setData(cleanPath, Qt::UserRole + 1);

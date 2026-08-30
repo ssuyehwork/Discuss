@@ -12,9 +12,10 @@
 ### 收藏夹（FavoritePanel）global.db 数据库持久化与 SVG 图标/颜色动态切换顶层规范
 1. **global.db 数据库持久化红线**：收藏夹数据完全废除 JSON 文件存储，统一收拢持久化存储于 `global.db` 数据库（`favorites` 表）。支持物理路径、显示名称、SVG 图标键名 (`icon_key`)、颜色 HEX (`color_hex`) 与排序号 (`sort_order`) 的 $O(1)$ 极速读写。
 2. **物理路径绝对唯一性与归一化红线**：每一个收藏条目在入库前必须强制执行 `QDir::cleanPath` 路径归一化，由 SQL `path TEXT UNIQUE` 数据库约束拦截重复项，严禁允许重复收藏相同的物理路径。
-3. **文件夹/文件双轨渲染与实心文件夹图标规范**：
+3. **文件夹/文件双轨渲染与图形文件真实缩略图管线接入规范**：
    - **文件夹项 (`QFileInfo::isDir() == true`)**：必须统一使用 `UiHelper::getIcon(iconKey, color, 18)` 渲染视网膜屏高保真矢量 SVG 图标，默认使用实心文件夹图标（`folder_filled`）及金色（`#FDB70A`）。支持右键菜单自定义图标与颜色。
-   - **文件项 (`QFileInfo::isDir() == false`)**：**严格禁止**使用矢量 SVG 图标与自定义颜色，必须且只能通过 `ShellIconManager::getFileIcon(path)` 渲染系统原生文件图标与缩略图。
+   - **非图形文件项 (`!isDir() && !isGraphicsFile(ext)`)**：**严格禁止**使用矢量 SVG 图标与自定义颜色，必须且只能通过 `ShellIconManager::getFileIcon(path)` 渲染系统原生文件关联程序图标。
+   - **图形文件项 (`!isDir() && isGraphicsFile(ext)`)**：必须接入 `ThumbnailPipelineService` 缩略图流水线，优先从内存 LRU 缓存获取 64px 精致微型缩略图 `QPixmap` 渲染，未命中时以后台异步并发提图并先以原生程序图标平滑占位，在解码完成后自动刷新替换，直观呈现图片真实内容。
 4. **外壳图标异步提取与 IconLoadNotifier 监听重绘规范**：
    - 针对文件项的系统原生图标提取，由于系统底层（`WindowsShellThumbnailProvider`）采用异步多线程加载机制，`FavoritePanel` 必须强制在构造函数中订阅 `IconLoadNotifier::instance().iconLoaded` 信号。
    - 当后台子线程完成系统格式图标（如 `.svg`、`.psd` 等）的读取与缓存后，自动触发收藏夹视图重绘（`m_favoriteView->viewport()->update()`），瞬间抹平初始占位符与真实图标的延迟，消除空白图标痛点。
