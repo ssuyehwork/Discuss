@@ -4,6 +4,8 @@
 #include "../util/DiskMediaExtractor.h"
 #include "ColorPicker.h"
 #include "../meta/FavoriteDao.h"
+#include "../meta/MetadataManager.h"
+#include "../meta/DriveMetaDao.h"
 #include <QPainter>
 #include <QPainterPath>
 #include "../core/AppConfig.h"
@@ -46,7 +48,7 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
     QRect iconRect(opt.rect.left() + leftMargin, opt.rect.top() + (opt.rect.height() - iconSize) / 2, iconSize, iconSize);
     QRect textRect(iconRect.right() + spacing, opt.rect.top(), opt.rect.width() - leftMargin - iconSize - spacing, opt.rect.height());
 
-    // 🚀【微卡片圆角绘制】：为缩略图增加精致 3px 圆角
+    // 微卡片圆角绘制
     QVariant decoData = index.data(Qt::DecorationRole);
     bool isFolder = index.data(Qt::UserRole + 4).toBool();
     bool hasCustomThumb = index.data(Qt::UserRole + 5).toBool();
@@ -201,22 +203,19 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
 
     QFileInfo fi(path);
     bool isFolder = fi.isDir();
+    bool isItemRemoved = false;
+
+    // 缓存图标按钮指针，以便在换色时动态刷新子菜单图标色彩
+    QList<QPair<QPushButton*, QString>> iconButtons;
 
     if (isFolder) {
+        // 1. 颜色条组件
         QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
         ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
         colorPickerAction->setDefaultWidget(colorPickerWidget);
         menu.addAction(colorPickerAction);
 
-        connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [this, path, curIconKey, index, &menu](const QString& hexColor) {
-            QString finalColor = hexColor.isEmpty() ? "#FDB70A" : hexColor.toUpper();
-            FavoriteDao::updateFavorite(path, curIconKey, finalColor);
-            QIcon newIcon = UiHelper::getIcon(curIconKey, QColor(finalColor), 18);
-            m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
-            m_favoriteModel->itemFromIndex(index)->setData(finalColor, Qt::UserRole + 3);
-            menu.close();
-        });
-
+        // 2. 图标九宫格子菜单
         QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor(curColorHex)), "切换图标");
         UiHelper::applyMenuStyle(iconMenu);
 
@@ -258,12 +257,23 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             btn->setIconSize(QSize(18, 18));
             pickerLayout->addWidget(btn, row, col);
 
-            connect(btn, &QPushButton::clicked, this, [this, path, iconKey, curColorHex, index, iconMenu]() {
-                FavoriteDao::updateFavorite(path, iconKey, curColorHex);
-                QIcon newIcon = UiHelper::getIcon(iconKey, QColor(curColorHex), 18);
-                m_favoriteModel->itemFromIndex(index)->setIcon(newIcon);
-                m_favoriteModel->itemFromIndex(index)->setData(iconKey, Qt::UserRole + 2);
-                iconMenu->close();
+            iconButtons.append({btn, iconKey});
+
+            // 🚀【持续点击 0ms 就地预览，绝对不调用 close()】
+            connect(btn, &QPushButton::clicked, this, [this, index, iconKey]() {
+                QStandardItem* item = m_favoriteModel->itemFromIndex(index);
+                if (!item) return;
+
+                QString colorHex = item->data(Qt::UserRole + 3).toString();
+                if (colorHex.isEmpty()) colorHex = "#FDB70A";
+
+                QIcon newIcon = UiHelper::getIcon(iconKey, QColor(colorHex), 18);
+                item->setIcon(newIcon);
+                item->setData(iconKey, Qt::UserRole + 2);
+
+                if (m_favoriteView && m_favoriteView->viewport()) {
+                    m_favoriteView->viewport()->update();
+                }
             });
 
             col++;
@@ -273,16 +283,55 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
         pickerWidget->setLayout(pickerLayout);
         pickerAction->setDefaultWidget(pickerWidget);
         iconMenu->addAction(pickerAction);
+
+        // 🚀【持续改色 0ms 就地预览，绝对不调用 close()】
+        connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [this, index, iconMenu, iconButtons](const QString& hexColor) {
+            QStandardItem* item = m_favoriteModel->itemFromIndex(index);
+            if (!item) return;
+
+            QString finalColor = hexColor.isEmpty() ? "#FDB70A" : hexColor.toUpper();
+            QString iconKey = item->data(Qt::UserRole + 2).toString();
+            if (iconKey.isEmpty()) iconKey = "folder_filled";
+
+            // 1. 实时就地刷新左侧收藏项
+            QIcon newIcon = UiHelper::getIcon(iconKey, QColor(finalColor), 18);
+            item->setIcon(newIcon);
+            item->setData(finalColor, Qt::UserRole + 3);
+
+            // 2. 联动刷新子菜单自身的头部图标与内部 50 个小图标颜色
+            iconMenu->setIcon(UiHelper::getIcon("folder_filled", QColor(finalColor)));
+            for (const auto& btnPair : iconButtons) {
+                btnPair.first->setIcon(UiHelper::getIcon(btnPair.second, QColor(finalColor), 18));
+            }
+
+            if (m_favoriteView && m_favoriteView->viewport()) {
+                m_favoriteView->viewport()->update();
+            }
+        });
+
         menu.addSeparator();
     }
 
     QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "取消收藏");
-    connect(removeAct, &QAction::triggered, this, [this, path, index]() {
+    connect(removeAct, &QAction::triggered, this, [this, path, index, &isItemRemoved]() {
+        isItemRemoved = true;
         FavoriteDao::removeFavorite(path);
         m_favoriteModel->removeRow(index.row());
     });
 
+    // 阻塞展示菜单（期间用户可随意连点试选 100 次）
     menu.exec(m_favoriteView->viewport()->mapToGlobal(pos));
+
+    // 🚀【失焦退出机制】：菜单自然关闭后，仅在此处执行【唯一 1 次】物理数据库持久化！
+    if (isFolder && !isItemRemoved && index.isValid()) {
+        QStandardItem* item = m_favoriteModel->itemFromIndex(index);
+        if (item) {
+            QString finalPath = item->data(Qt::UserRole + 1).toString();
+            QString finalIconKey = item->data(Qt::UserRole + 2).toString();
+            QString finalColorHex = item->data(Qt::UserRole + 3).toString();
+            FavoriteDao::updateFavorite(finalPath, finalIconKey, finalColorHex);
+        }
+    }
 }
 
 void FavoritePanel::onPathsDroppedToFavorite(const QStringList& paths, const QModelIndex& target) {
@@ -303,7 +352,7 @@ void FavoritePanel::updateItemThumbnail(const QString& path, const QPixmap& pix)
 
         if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
             item->setIcon(QIcon(pix));
-            item->setData(true, Qt::UserRole + 5); // 标记已拥有真实缩略图
+            item->setData(true, Qt::UserRole + 5);
             if (m_favoriteView && m_favoriteView->viewport()) {
                 m_favoriteView->viewport()->update();
             }
@@ -339,10 +388,8 @@ void FavoritePanel::loadFavorites() {
         if (isDir) {
             icon = UiHelper::getIcon(iconKey, itemColor, 18);
         } else {
-            // 初始先显示标准系统图标
             icon = ShellIconManager::getFileIcon(nativePath);
             QString ext = fi.suffix().toLower();
-            // 🚀【全能格式检测】：支持 PSD, AI, EPS, PDF, SVG 及所有图像
             if (UiHelper::isGraphicsFile(ext) || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf" || ext == "svg") {
                 pathsToExtract << nativePath;
             }
@@ -360,7 +407,6 @@ void FavoritePanel::loadFavorites() {
 
     m_isLoading = false;
 
-    // 🚀【调用全能深度提图引擎 DiskMediaExtractor】：彻底解决 PSD / EPS / AI 提图问题
     if (!pathsToExtract.isEmpty()) {
         QPointer<FavoritePanel> weakThis(this);
         for (const QString& path : pathsToExtract) {
@@ -425,21 +471,45 @@ void FavoritePanel::addFavoriteItem(const QString& path) {
     QFileInfo fi(cleanPath);
     if (!fi.exists()) return;
 
-    FavoriteDao::addFavorite(cleanPath, "folder_filled", "#FDB70A");
-
     bool isDir = fi.isDir();
-    QIcon icon = isDir ? UiHelper::getIcon("folder_filled", QColor("#FDB70A"), 18) : ShellIconManager::getFileIcon(cleanPath);
+    QString finalColorHex = "#FDB70A";
+
+    if (isDir) {
+        bool isDriveRoot = fi.isRoot() || cleanPath.endsWith(":\\") || cleanPath.endsWith(":/") || (cleanPath.length() == 2 && cleanPath.endsWith(':'));
+        if (isDriveRoot) {
+            std::wstring normWPath = MetadataManager::normalizePath(cleanPath.toStdWString());
+            auto driveRec = DriveMetaDao::getDriveMeta(normWPath);
+            QString driveColor = QString::fromStdWString(driveRec.color);
+            if (!driveColor.isEmpty()) {
+                finalColorHex = UiHelper::normalizeColorHex(driveColor);
+            }
+        } else {
+            RuntimeMeta meta = MetadataManager::instance().getMeta(cleanPath.toStdWString());
+            QString folderColor = QString::fromStdWString(meta.manualColor);
+            if (!folderColor.isEmpty()) {
+                finalColorHex = UiHelper::normalizeColorHex(folderColor);
+            }
+        }
+    }
+
+    FavoriteDao::addFavorite(cleanPath, "folder_filled", finalColorHex);
+
+    QIcon icon;
+    if (isDir) {
+        icon = UiHelper::getIcon("folder_filled", QColor(finalColorHex), 18);
+    } else {
+        icon = ShellIconManager::getFileIcon(cleanPath);
+    }
 
     QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? cleanPath : fi.fileName());
     item->setData(cleanPath, Qt::UserRole + 1);
     item->setData("folder_filled", Qt::UserRole + 2);
-    item->setData("#FDB70A", Qt::UserRole + 3);
+    item->setData(finalColorHex, Qt::UserRole + 3);
     item->setData(isDir, Qt::UserRole + 4);
     item->setData(false, Qt::UserRole + 5);
 
     m_favoriteModel->appendRow(item);
 
-    // 🚀【异步深度提图】：支持全格式
     if (!isDir) {
         QString ext = fi.suffix().toLower();
         if (UiHelper::isGraphicsFile(ext) || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf" || ext == "svg") {
