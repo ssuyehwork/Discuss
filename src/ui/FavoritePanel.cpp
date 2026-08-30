@@ -137,8 +137,7 @@ void FavoritePanel::initUi() {
     m_mainLayout->addWidget(m_favoriteView, 1);
 
     // 信号绑定
-    connect(&IconLoadNotifier::instance(), &IconLoadNotifier::iconLoaded, this, [this](const QString& path) {
-        Q_UNUSED(path);
+    connect(&IconLoadNotifier::instance(), &IconLoadNotifier::iconLoaded, this, [this]() {
         if (m_favoriteView && m_favoriteView->viewport()) {
             m_favoriteView->viewport()->update();
         }
