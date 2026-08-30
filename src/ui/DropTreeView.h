@@ -36,9 +36,7 @@ protected:
         painter->setFont(font());
 
         if (logicalIndex == 0) {
-            int side = m_zoomLevel - 6;
-            if (side <= 0) side = 16;
-            int textStartX = rect.left() + 6 + side + 10;
+            int textStartX = rect.left() + 40; // 🚀 表头第 0 列名称固定从 40px 起始，与 TreeItemDelegate 40px 文本起点绝对物理居中垂直对齐
 
             QRect textRect = rect;
             textRect.setLeft(textStartX);

@@ -1,6 +1,7 @@
 #include "DiskItemModel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
+#include "ThumbnailPipelineService.h"
 #include "ModelContract.h"
 #include <QDateTime>
 #include <QFileInfo>
@@ -403,7 +404,7 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
         const auto& rec = m_allRecords[r];
 
         QString ext = rec.suffix.toLower();
-        bool isGraphic = UiHelper::isGraphicsFile(ext) || ext == "svg" || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf";
+        bool isGraphic = UiHelper::isGraphicsFile(ext);
         if (rec.isDir || !isGraphic) continue;
 
         QString path = rec.path;
@@ -416,56 +417,25 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
     if (pathsToLoad.isEmpty()) return;
 
     QPointer<DiskItemModel> weakThis(this);
+    ThumbnailPipelineService::instance().loadBatchAsync(pathsToLoad, 230, [weakThis, thisGen](const QString& path, const QPixmap& pixmap) {
+        if (!weakThis || weakThis->currentGeneration() != thisGen) return;
 
-    std::shared_ptr<CancellationToken> token;
-    {
-        QMutexLocker locker(&m_genTokenMutex);
-        auto it = m_genTokens.find(thisGen);
-        if (it != m_genTokens.end()) {
-            token = it.value();
-        } else {
-            token = std::make_shared<CancellationToken>();
-            m_genTokens[thisGen] = token;
-        }
-    }
+        weakThis->m_requestedPaths.remove(path);
+        if (!pixmap.isNull()) {
+            QIcon icon(pixmap);
+            weakThis->m_iconCache.insert(path, new QIcon(icon));
+            double ar = (double)pixmap.width() / pixmap.height();
+            weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = ar;
 
-    for (const QString& path : pathsToLoad) {
-        QFileInfo fi(path);
-        QString ext = fi.suffix().toLower();
-        int priority = (ext == "ai" || ext == "eps" || ext == "pdf") ? -10 : 0;
-
-        thumbnailPool()->start([weakThis, path, thisGen, token]() {
-            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown() || (token && token->isCanceled())) return;
-
-            QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, 512, token);
-
-            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown() || (token && token->isCanceled())) return;
-
-            double ar = 1.0;
-            bool hasThumb = false;
-            if (!img.isNull()) {
-                ar = (double)img.width() / img.height();
-                hasThumb = true;
+            auto it = weakThis->m_pathToIndex.find(path);
+            if (it != weakThis->m_pathToIndex.end()) {
+                int rIdx = it->second;
+                emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), 
+                                          {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+                emit weakThis->thumbnailLoaded(rIdx);
             }
-
-            QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, img, ar, hasThumb, thisGen]() {
-                if (weakThis && weakThis->currentGeneration() == thisGen) {
-                    QIcon icon = img.isNull() ? ShellIconManager::getFileIcon(path, 128) : QIcon(QPixmap::fromImage(img));
-                    weakThis->m_iconCache.insert(path, new QIcon(icon));
-                    weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = hasThumb ? ar : -1.0;
-                    weakThis->m_requestedPaths.remove(path);
-
-                    auto it = weakThis->m_pathToIndex.find(path);
-                    if (it != weakThis->m_pathToIndex.end()) {
-                        int rIdx = it->second;
-                        emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), 
-                                                  {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
-                        emit weakThis->thumbnailLoaded(rIdx);
-                    }
-                }
-            }, Qt::QueuedConnection);
-        }, priority);
-    }
+        }
+    });
 }
 
 Qt::ItemFlags DiskItemModel::flags(const QModelIndex& index) const {
@@ -542,7 +512,7 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
         QString ext = record.suffix.toLower();
         if (iconOnlyExts.contains(ext)) return false;
-        if (UiHelper::isGraphicsFile(ext) || ext == "svg" || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf") return true;
+        if (UiHelper::isGraphicsFile(ext)) return true;
         if (record.width > 0 && record.height > 0) return true;
         return m_aspectRatios.contains(QDir::toNativeSeparators(path)) && m_aspectRatios.value(QDir::toNativeSeparators(path)) > 0.0;
     } else if (role == Qt::DecorationRole && index.column() == 0) {
@@ -551,7 +521,7 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         if (cached) return *cached;
 
         QString ext = record.suffix.toLower();
-        bool isGraphic = UiHelper::isGraphicsFile(ext) || ext == "svg" || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf";
+        bool isGraphic = UiHelper::isGraphicsFile(ext);
         
         if (isGraphic) return QIcon();
         QIcon icon = ShellIconManager::getFileIconFast(path, record.isDir, ext);

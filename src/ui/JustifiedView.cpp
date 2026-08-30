@@ -15,6 +15,7 @@
 namespace QuarkMeta {
 
 JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
+    setFrameShape(QFrame::NoFrame);
     m_layoutTimer = new QTimer(this);
     m_layoutTimer->setSingleShot(true);
     m_layoutTimer->setInterval(50); // 50ms 黄金布局节流窗口

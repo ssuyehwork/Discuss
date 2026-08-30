@@ -28,7 +28,13 @@ class TreeItemDelegate : public QStyledItemDelegate {
 public:
     explicit TreeItemDelegate(QObject* parent = nullptr, bool showStatus = true, bool drawMiniCards = false)
         : QStyledItemDelegate(parent), m_showStatus(showStatus), m_drawMiniCards(drawMiniCards) {}
-    
+
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        QSize sz = QStyledItemDelegate::sizeHint(option, index);
+        sz.setHeight(32); // 🚀 显式锁定列表行高为 32px (绝对突破默认 20px 限制)
+        return sz;
+    }
+
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         if (!index.isValid()) return;
 
@@ -81,14 +87,14 @@ public:
 
             QRect squareRect(option.rect.left() + 6, option.rect.top() + padding, side, side);
 
-            // 1. 绘制微型卡片背景
+            // 1. 绘制微型卡片背景（严格保持 Version-1 / Version-2 的纯透明背景底板）
             painter->setPen(Qt::NoPen);
             painter->setBrush(Qt::transparent);
             QPainterPath cardPath;
             cardPath.addRoundedRect(squareRect, 4, 4);
             painter->drawPath(cardPath);
 
-            // 2. 图像/图标平滑居中绘制
+            // 2. 图像/图标平滑居中绘制（严格保持 Version-1 / Version-2 的物理等比居中渲染模式）
             QVariant decoData = index.data(Qt::DecorationRole);
             bool hasThumb = index.data(HasThumbnailRole).toBool();
 
@@ -116,22 +122,20 @@ public:
                 } else {
                     QIcon icon = qvariant_cast<QIcon>(decoData);
                     if (!icon.isNull()) {
-                        int iconSize = qRound(side * 0.65);
+                        int iconSize = qRound(side * 0.75);
                         QRect iconRect(squareRect.center().x() - iconSize / 2,
                                        squareRect.center().y() - iconSize / 2,
                                        iconSize, iconSize);
-                        // 🚨 物理修复 ②：传入 Qt::AlignCenter，强制占位符图标在微卡片内部绝对居中！
                         icon.paint(painter, iconRect, Qt::AlignCenter);
                     }
                 }
             } else {
                 QIcon icon = qvariant_cast<QIcon>(decoData);
                 if (!icon.isNull()) {
-                    int iconSize = qRound(side * 0.65);
+                    int iconSize = qRound(side * 0.75);
                     QRect iconRect(squareRect.center().x() - iconSize / 2,
                                    squareRect.center().y() - iconSize / 2,
                                    iconSize, iconSize);
-                    // 🚨 物理修复 ②：传入 Qt::AlignCenter，强制占位符图标在微卡片内部绝对居中！
                     icon.paint(painter, iconRect, Qt::AlignCenter);
                 }
             }
@@ -148,7 +152,7 @@ public:
                 painter->restore();
             }
 
-            // 4. 文本排版向右偏移
+            // 4. 文本排版向右偏移（在 32px 行高下，固定起始起点 40px = 6px left + 26px 卡片 + 8px 间距，保持绝对对齐与稳定）
             QString name = index.data(Qt::DisplayRole).toString();
             QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
 
@@ -156,7 +160,7 @@ public:
             painter->setFont(option.font);
 
             QRect textRect = option.rect;
-            textRect.setLeft(squareRect.right() + 10);
+            textRect.setLeft(option.rect.left() + 40);
 
             QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideMiddle, textRect.width() - 10);
             painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);

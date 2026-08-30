@@ -165,6 +165,7 @@ void ContentPanel::initUi() {
     m_mainLayout->addWidget(titleBar);
 
     m_viewStack = new QStackedWidget(this);
+    m_viewStack->setFrameShape(QFrame::NoFrame);
     initGridView();
     initListView();
     m_viewStack->addWidget(m_gridView);
@@ -180,6 +181,7 @@ void ContentPanel::initUi() {
 
 void ContentPanel::initGridView() {
     m_gridView = new DropJustifiedView(this);
+    m_gridView->setFrameShape(QFrame::NoFrame);
     m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_gridView->setEditTriggers(QAbstractItemView::EditKeyPressed);
@@ -199,6 +201,7 @@ void ContentPanel::initGridView() {
         m_gridView->setItemDelegate(delegate);
     }
 
+    m_gridView->installEventFilter(this);
     m_gridView->viewport()->installEventFilter(this);
     connect(m_gridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
     connect(m_gridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
@@ -208,6 +211,7 @@ void ContentPanel::initGridView() {
 
 void ContentPanel::initListView() {
     m_treeView = new DropTreeView(this);
+    m_treeView->setFrameShape(QFrame::NoFrame);
     m_treeView->setAlternatingRowColors(true);
     m_treeView->setSortingEnabled(true);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -215,6 +219,7 @@ void ContentPanel::initListView() {
     m_treeView->setRootIsDecorated(false);
     m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true));
     m_treeView->setModel(m_proxyModel);
+    m_treeView->installEventFilter(this);
     m_treeView->viewport()->installEventFilter(this);
 
     auto* header = m_treeView->header();
@@ -615,19 +620,12 @@ void ContentPanel::refreshVisibleThumbnails() {
     if (btmIdx.isValid()) bottom = qMin(m_proxyModel->rowCount() - 1, btmIdx.row() + 4);
 
     QList<int> visibleRows;
-    QStringList visiblePaths;
     for (int r = top; r <= bottom; ++r) {
         QModelIndex proxyIdx = m_proxyModel->index(r, 0);
         QModelIndex srcIdx = m_proxyModel->mapToSource(proxyIdx);
         if (srcIdx.isValid()) visibleRows.append(srcIdx.row());
-        QString p = proxyIdx.data(PathRole).toString();
-        if (!p.isEmpty()) visiblePaths << p;
     }
 
-    QPointer<ContentPanel> weakThis(this);
-    ThumbnailPipelineService::instance().loadBatchAsync(visiblePaths, m_zoomLevel, [weakThis](const QString& path, const QPixmap&) {
-        if (weakThis) weakThis->updateItemMetadata(path);
-    });
     m_model->loadThumbnailsForRows(visibleRows);
 }
 

@@ -224,7 +224,16 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         if (selectedPaths.size() > 1) {
             m_panel->performBatchRename();
         } else {
-            view->edit(view->currentIndex());
+            QModelIndex idx = view->currentIndex();
+            if (!idx.isValid() && view->selectionModel()) {
+                auto selected = view->selectionModel()->selectedIndexes();
+                if (!selected.isEmpty()) idx = selected.first();
+            }
+            if (idx.isValid()) {
+                QModelIndex nameIdx = idx.sibling(idx.row(), 0);
+                view->setCurrentIndex(nameIdx);
+                view->edit(nameIdx);
+            }
         }
         return true;
     }
@@ -268,7 +277,9 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
 
         if (idx.isValid()) {
-            QString path = idx.data(PathRole).toString();
+            // 🚀 确保即使焦点处于列表视图第 1~6 列，也能正确从第 0 列 sibling 获取完整 PathRole 属性
+            QModelIndex nameIdx = idx.sibling(idx.row(), 0);
+            QString path = nameIdx.data(PathRole).toString();
             if (!path.isEmpty()) {
                 QFileInfo info(path);
                 if (!info.isDir()) {
