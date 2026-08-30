@@ -133,7 +133,19 @@ public:
                 }
             }
 
-            // 3. 文本排版向右偏移
+            // 3. 空文件夹绘制青蓝色虚线框 (#41F2F2 Qt::DashLine)
+            bool isFolder = (index.data(TypeRole).toString() == "folder");
+            bool isEmpty = index.data(IsEmptyRole).toBool();
+            if (isFolder && isEmpty) {
+                painter->save();
+                painter->setRenderHint(QPainter::Antialiasing);
+                painter->setPen(QPen(QColor("#41F2F2"), 1, Qt::DashLine));
+                painter->setBrush(Qt::NoBrush);
+                painter->drawRoundedRect(squareRect, 4, 4);
+                painter->restore();
+            }
+
+            // 4. 文本排版向右偏移
             QString name = index.data(Qt::DisplayRole).toString();
             QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
 
