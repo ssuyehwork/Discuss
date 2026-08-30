@@ -27,40 +27,15 @@ public:
     explicit FavoritePanel(QWidget* parent = nullptr);
     ~FavoritePanel() override = default;
 
-    /**
-     * @brief 物理还原：设置 1px 高亮线的显隐状态
-     */
     void setFocusHighlight(bool visible);
-
-    /**
-     * @brief 检查路径是否已在收藏夹中
-     */
     bool containsPath(const QString& path) const;
-
-    /**
-     * @brief 从收藏夹中移除指定路径项目
-     */
     void removeFavoriteItem(const QString& path);
-
-    /**
-     * @brief 向收藏夹追加项目并防重
-     */
     void addFavoriteItem(const QString& path);
-
-    /**
-     * @brief 从 global.db 加载收藏夹
-     */
     void loadFavorites();
+    void saveFavorites();
 
 signals:
-    /**
-     * @brief 当点击收藏的文件夹时发出，通知主窗口跳转
-     */
     void directorySelected(const QString& path);
-
-    /**
-     * @brief 当点击收藏的文件时发出，通知主窗口跳转到父目录并高亮文件
-     */
     void requestLocateFile(const QString& path);
 
 private slots:
@@ -70,16 +45,12 @@ private slots:
 
 private:
     void initUi();
-
-    /**
-     * @brief 保存收藏夹拖拽排序号至 global.db
-     */
-    void saveFavorites();
+    void updateItemThumbnail(const QString& path, const QPixmap& pix);
 
     QVBoxLayout* m_mainLayout = nullptr;
-
     DropTreeView* m_favoriteView = nullptr;
     QStandardItemModel* m_favoriteModel = nullptr;
+    bool m_isLoading = false;
 };
 
 } // namespace QuarkMeta

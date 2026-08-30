@@ -1,9 +1,11 @@
 #include "FavoritePanel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
+#include "../util/DiskMediaExtractor.h"
 #include "ColorPicker.h"
 #include "../meta/FavoriteDao.h"
 #include <QPainter>
+#include <QPainterPath>
 #include "../core/AppConfig.h"
 #include <QLabel>
 #include <QPushButton>
@@ -13,9 +15,9 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QHeaderView>
-#include <QJsonArray>
-#include <QJsonObject>
-#include <QJsonDocument>
+#include <QCoreApplication>
+#include <QtConcurrent>
+#include <QPointer>
 
 namespace QuarkMeta {
 
@@ -23,10 +25,11 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
     QStyleOptionViewItem opt = option;
     initStyleOption(&opt, index);
 
-    // Draw selection/hover background and text
     painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setRenderHint(QPainter::SmoothPixmapTransform);
     
-    // Custom background fill if selected or hovered
+    // 背景高亮
     if (opt.state & QStyle::State_Selected) {
         painter->fillRect(opt.rect, QColor("#37373D"));
     } else if (opt.state & QStyle::State_MouseOver) {
@@ -35,25 +38,51 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
         painter->fillRect(opt.rect, Qt::transparent);
     }
 
-    // Calculate layout geometries for icon and text
+    // 几何布局
     int leftMargin = 10;
     int iconSize = 18;
-    int spacing = 6;
+    int spacing = 8;
 
     QRect iconRect(opt.rect.left() + leftMargin, opt.rect.top() + (opt.rect.height() - iconSize) / 2, iconSize, iconSize);
     QRect textRect(iconRect.right() + spacing, opt.rect.top(), opt.rect.width() - leftMargin - iconSize - spacing, opt.rect.height());
 
-    // Paint Icon in QIcon::Normal mode (prevents Qt selected state darkening mask)
-    QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
-    if (!icon.isNull()) {
-        icon.paint(painter, iconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+    // 🚀【微卡片圆角绘制】：为缩略图增加精致 3px 圆角
+    QVariant decoData = index.data(Qt::DecorationRole);
+    bool isFolder = index.data(Qt::UserRole + 4).toBool();
+    bool hasCustomThumb = index.data(Qt::UserRole + 5).toBool();
+
+    if (!isFolder && hasCustomThumb && decoData.canConvert<QIcon>()) {
+        QIcon icon = decoData.value<QIcon>();
+        QPixmap pix = icon.pixmap(QSize(64, 64));
+
+        if (!pix.isNull()) {
+            QPainterPath clipPath;
+            clipPath.addRoundedRect(iconRect, 3, 3);
+            painter->save();
+            painter->setClipPath(clipPath);
+
+            QPixmap scaled = pix.scaled(iconRect.size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+            int x = iconRect.center().x() - scaled.width() / 2;
+            int y = iconRect.center().y() - scaled.height() / 2;
+            painter->drawPixmap(x, y, scaled);
+            painter->restore();
+        } else {
+            icon.paint(painter, iconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        }
+    } else {
+        QIcon icon = decoData.value<QIcon>();
+        if (!icon.isNull()) {
+            icon.paint(painter, iconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        }
     }
 
-    // Paint Text
+    // 绘制文本
     QString text = index.data(Qt::DisplayRole).toString();
     painter->setPen((opt.state & QStyle::State_Selected) ? QColor("#FFFFFF") : QColor("#EEEEEE"));
     painter->setFont(opt.font);
-    painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, text);
+    
+    QString elidedText = opt.fontMetrics.elidedText(text, Qt::ElideRight, textRect.width() - 6);
+    painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
 
     painter->restore();
 }
@@ -78,7 +107,6 @@ void FavoritePanel::setFocusHighlight(bool visible) {
 }
 
 void FavoritePanel::initUi() {
-    // 固定顶栏 Header
     QWidget* header = new QWidget(this);
     header->setObjectName("ContainerHeader");
     header->setFixedHeight(32);
@@ -102,7 +130,6 @@ void FavoritePanel::initUi() {
     headerLayout->addStretch();
     m_mainLayout->addWidget(header);
 
-    // 收藏夹树视图
     m_favoriteView = new DropTreeView(this);
     m_favoriteView->setHeaderHidden(true);
     if (m_favoriteView->header()) {
@@ -125,7 +152,6 @@ void FavoritePanel::initUi() {
     m_favoriteView->setModel(m_favoriteModel);
     m_favoriteView->setItemDelegate(new FavoriteItemDelegate(this));
 
-    // 树视图 QSS 样式
     QString treeStyle = QString(
         "QTreeView { background-color: transparent; border: none; font-size: 12px; outline: none; padding-left: 10px; }"
         "QTreeView::item { height: 28px; padding-left: 0px; color: #EEEEEE; }"
@@ -136,13 +162,13 @@ void FavoritePanel::initUi() {
 
     m_mainLayout->addWidget(m_favoriteView, 1);
 
-    // 信号绑定
     connect(m_favoriteView, &QTreeView::clicked, this, &FavoritePanel::onFavoriteClicked);
     connect(m_favoriteView, &QWidget::customContextMenuRequested, this, &FavoritePanel::onFavoriteContextMenu);
     connect(m_favoriteView, &DropTreeView::pathsDropped, this, &FavoritePanel::onPathsDroppedToFavorite);
 
-    // 模型数据变动监听 (使用 QueuedConnection 避开 model 拖拽中间状态)
-    auto updateFavAndSave = [this](){ saveFavorites(); };
+    auto updateFavAndSave = [this](){
+        if (!m_isLoading) saveFavorites();
+    };
     connect(m_favoriteModel, &QStandardItemModel::rowsMoved, this, updateFavAndSave, Qt::QueuedConnection);
     connect(m_favoriteModel, &QStandardItemModel::rowsInserted, this, updateFavAndSave, Qt::QueuedConnection);
     connect(m_favoriteModel, &QStandardItemModel::rowsRemoved, this, updateFavAndSave, Qt::QueuedConnection);
@@ -177,7 +203,6 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     bool isFolder = fi.isDir();
 
     if (isFolder) {
-        // ColorStripPicker Action
         QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
         ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
         colorPickerAction->setDefaultWidget(colorPickerWidget);
@@ -192,7 +217,6 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             menu.close();
         });
 
-        // Icon Grid Picker Submenu
         QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor(curColorHex)), "切换图标");
         UiHelper::applyMenuStyle(iconMenu);
 
@@ -203,85 +227,35 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
         pickerLayout->setSpacing(6);
 
         static const QList<QPair<QString, QString>> builtInIcons = {
-            {"默认文件夹", "folder_filled"},
-            {"层级分类", "category"},
-            {"照片媒体", "image_filled"},
-            {"时钟历史", "clock_filled"},
-            {"星标收藏", "star_filled"},
-            {"爱心常用", "heart_filled"},
-            {"加密安全", "lock_filled"},
-            {"图书文档", "book"},
-            {"配置管理", "settings_filled"},
-            {"网络球体", "globe_filled"},
-            {"主页主路径", "home_filled"},
-            {"标签标记", "tag_filled"},
-            {"书签指示", "bookmark_filled"},
-            {"代码源码", "code"},
-            {"终端命令行", "terminal"},
-            {"音频音乐", "music_filled"},
-            {"视频影视", "video_filled"},
-            {"摄影相机", "camera_filled"},
-            {"密钥钥匙", "key"},
-            {"盾牌防护", "shield_filled"},
-            {"数据库源", "database"},
-            {"物理硬盘", "hard_drive"},
-            {"云端同步", "cloud_filled"},
-            {"处理器芯片", "cpu"},
-            {"闪电极速", "zap_filled"},
-            {"魔法火花", "sparkles_filled"},
-            {"旗帜标记", "flag_filled"},
-            {"礼物珍藏", "gift_filled"},
-            {"奖星勋章", "award_filled"},
-            {"回收废弃", "trash_filled"},
-            {"个人专属", "user_filled"},
-            {"团队共享", "users_filled"},
-            {"邮件通信", "mail_filled"},
-            {"消息通知", "message_filled"},
-            {"电话联系", "phone_filled"},
-            {"地理定位", "map_pin_filled"},
-            {"罗盘指南", "compass_filled"},
-            {"日光白天", "sun_filled"},
-            {"夜间月亮", "moon_filled"},
-            {"日历日程", "calendar_filled"},
-            {"今日任务", "today_filled"},
-            {"搜索检索", "search_filled"},
-            {"九宫网格", "grid_filled"},
-            {"布局排版", "layout_filled"},
-            {"数据表格", "table_filled"},
-            {"提醒铃铛", "bell_filled"},
-            {"收件收纳", "inbox_filled"},
-            {"副本复制", "copy_filled"},
-            {"磁盘保存", "save_filled"},
-            {"魔棒工具", "wand_filled"}
+            {"默认文件夹", "folder_filled"}, {"层级分类", "category"}, {"照片媒体", "image_filled"},
+            {"时钟历史", "clock_filled"}, {"星标收藏", "star_filled"}, {"爱心常用", "heart_filled"},
+            {"加密安全", "lock_filled"}, {"图书文档", "book"}, {"配置管理", "settings_filled"},
+            {"网络球体", "globe_filled"}, {"主页主路径", "home_filled"}, {"标签标记", "tag_filled"},
+            {"书签指示", "bookmark_filled"}, {"代码源码", "code"}, {"终端命令行", "terminal"},
+            {"音频音乐", "music_filled"}, {"视频影视", "video_filled"}, {"摄影相机", "camera_filled"},
+            {"密钥钥匙", "key"}, {"盾牌防护", "shield_filled"}, {"数据库源", "database"},
+            {"物理硬盘", "hard_drive"}, {"云端同步", "cloud_filled"}, {"处理器芯片", "cpu"},
+            {"闪电极速", "zap_filled"}, {"魔法火花", "sparkles_filled"}, {"旗帜标记", "flag_filled"},
+            {"礼物珍藏", "gift_filled"}, {"奖星勋章", "award_filled"}, {"回收废弃", "trash_filled"},
+            {"个人专属", "user_filled"}, {"团队共享", "users_filled"}, {"邮件通信", "mail_filled"},
+            {"消息通知", "message_filled"}, {"电话联系", "phone_filled"}, {"地理定位", "map_pin_filled"},
+            {"罗盘指南", "compass_filled"}, {"日光白天", "sun_filled"}, {"夜间月亮", "moon_filled"},
+            {"日历日程", "calendar_filled"}, {"今日任务", "today_filled"}, {"搜索检索", "search_filled"},
+            {"九宫网格", "grid_filled"}, {"布局排版", "layout_filled"}, {"数据表格", "table_filled"},
+            {"提醒铃铛", "bell_filled"}, {"收件收纳", "inbox_filled"}, {"副本复制", "copy_filled"},
+            {"磁盘保存", "save_filled"}, {"魔棒工具", "wand_filled"}
         };
 
         QColor catColor = QColor(curColorHex);
-        int row = 0;
-        int col = 0;
+        int row = 0, col = 0;
         for (const auto& pair : builtInIcons) {
-            QString label = pair.first;
             QString iconKey = pair.second;
-
             QPushButton* btn = new QPushButton(pickerWidget);
             btn->setFixedSize(28, 28);
             btn->setCursor(Qt::PointingHandCursor);
-            btn->setStyleSheet(
-                "QPushButton { "
-                "  background-color: transparent; "
-                "  border: 1px solid transparent; "
-                "  border-radius: 4px; "
-                "}"
-                "QPushButton:hover { "
-                "  background-color: #3E3E42; "
-                "  border: 1px solid #555555; "
-                "}"
-                "QPushButton:pressed { "
-                "  background-color: #4E4E52; "
-                "}"
-            );
+            btn->setStyleSheet("QPushButton { background-color: transparent; border: 1px solid transparent; border-radius: 4px; } QPushButton:hover { background-color: #3E3E42; border: 1px solid #555555; }");
             btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
             btn->setIconSize(QSize(18, 18));
-
             pickerLayout->addWidget(btn, row, col);
 
             connect(btn, &QPushButton::clicked, this, [this, path, iconKey, curColorHex, index, iconMenu]() {
@@ -293,16 +267,12 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             });
 
             col++;
-            if (col >= 5) {
-                col = 0;
-                row++;
-            }
+            if (col >= 5) { col = 0; row++; }
         }
 
         pickerWidget->setLayout(pickerLayout);
         pickerAction->setDefaultWidget(pickerWidget);
         iconMenu->addAction(pickerAction);
-
         menu.addSeparator();
     }
 
@@ -322,15 +292,39 @@ void FavoritePanel::onPathsDroppedToFavorite(const QStringList& paths, const QMo
     }
 }
 
+void FavoritePanel::updateItemThumbnail(const QString& path, const QPixmap& pix) {
+    if (!m_favoriteModel || pix.isNull()) return;
+
+    QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(path));
+    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+        QStandardItem* item = m_favoriteModel->item(i);
+        if (!item) continue;
+        QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(item->data(Qt::UserRole + 1).toString()));
+
+        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
+            item->setIcon(QIcon(pix));
+            item->setData(true, Qt::UserRole + 5); // 标记已拥有真实缩略图
+            if (m_favoriteView && m_favoriteView->viewport()) {
+                m_favoriteView->viewport()->update();
+            }
+            break;
+        }
+    }
+}
+
 void FavoritePanel::loadFavorites() {
     if (!m_favoriteModel) return;
+    m_isLoading = true;
     m_favoriteModel->clear();
 
     FavoriteDao::initTable();
     auto list = FavoriteDao::getAllFavorites();
 
+    QStringList pathsToExtract;
+
     for (const auto& rec : list) {
-        QFileInfo fi(rec.path);
+        QString nativePath = QDir::toNativeSeparators(QDir::cleanPath(rec.path));
+        QFileInfo fi(nativePath);
         if (!fi.exists()) continue;
 
         QColor itemColor = QColor(rec.colorHex);
@@ -339,18 +333,55 @@ void FavoritePanel::loadFavorites() {
         QString iconKey = rec.iconKey.isEmpty() ? "folder_filled" : rec.iconKey;
         if (iconKey == "folder") iconKey = "folder_filled";
 
-        QIcon icon = UiHelper::getIcon(iconKey, itemColor, 18);
+        bool isDir = fi.isDir();
+        QIcon icon;
+
+        if (isDir) {
+            icon = UiHelper::getIcon(iconKey, itemColor, 18);
+        } else {
+            // 初始先显示标准系统图标
+            icon = ShellIconManager::getFileIcon(nativePath);
+            QString ext = fi.suffix().toLower();
+            // 🚀【全能格式检测】：支持 PSD, AI, EPS, PDF, SVG 及所有图像
+            if (UiHelper::isGraphicsFile(ext) || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf" || ext == "svg") {
+                pathsToExtract << nativePath;
+            }
+        }
+
         QStandardItem* item = new QStandardItem(icon, rec.name.isEmpty() ? fi.fileName() : rec.name);
-        item->setData(rec.path, Qt::UserRole + 1);
+        item->setData(nativePath, Qt::UserRole + 1);
         item->setData(iconKey, Qt::UserRole + 2);
         item->setData(rec.colorHex, Qt::UserRole + 3);
+        item->setData(isDir, Qt::UserRole + 4);
+        item->setData(false, Qt::UserRole + 5);
 
         m_favoriteModel->appendRow(item);
+    }
+
+    m_isLoading = false;
+
+    // 🚀【调用全能深度提图引擎 DiskMediaExtractor】：彻底解决 PSD / EPS / AI 提图问题
+    if (!pathsToExtract.isEmpty()) {
+        QPointer<FavoritePanel> weakThis(this);
+        for (const QString& path : pathsToExtract) {
+            (void)QtConcurrent::run([weakThis, path]() {
+                if (!weakThis) return;
+                QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, 128);
+                if (!img.isNull()) {
+                    QPixmap pix = QPixmap::fromImage(img);
+                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, path, pix]() {
+                        if (weakThis) {
+                            weakThis->updateItemThumbnail(path, pix);
+                        }
+                    }, Qt::QueuedConnection);
+                }
+            });
+        }
     }
 }
 
 void FavoritePanel::saveFavorites() {
-    if (!m_favoriteModel) return;
+    if (!m_favoriteModel || m_isLoading) return;
 
     QList<QPair<QString, int>> orders;
     for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
@@ -366,15 +397,16 @@ void FavoritePanel::saveFavorites() {
 
 bool FavoritePanel::containsPath(const QString& path) const {
     if (path.isEmpty()) return false;
-    return FavoriteDao::containsPath(path);
+    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
+    return FavoriteDao::containsPath(cleanPath);
 }
 
 void FavoritePanel::removeFavoriteItem(const QString& path) {
     if (path.isEmpty()) return;
-    FavoriteDao::removeFavorite(path);
+    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
+    FavoriteDao::removeFavorite(cleanPath);
     
     if (!m_favoriteModel) return;
-    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
     for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
         QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
         if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
@@ -395,13 +427,35 @@ void FavoritePanel::addFavoriteItem(const QString& path) {
 
     FavoriteDao::addFavorite(cleanPath, "folder_filled", "#FDB70A");
 
-    QIcon icon = UiHelper::getIcon("folder_filled", QColor("#FDB70A"), 18);
+    bool isDir = fi.isDir();
+    QIcon icon = isDir ? UiHelper::getIcon("folder_filled", QColor("#FDB70A"), 18) : ShellIconManager::getFileIcon(cleanPath);
+
     QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? cleanPath : fi.fileName());
     item->setData(cleanPath, Qt::UserRole + 1);
     item->setData("folder_filled", Qt::UserRole + 2);
     item->setData("#FDB70A", Qt::UserRole + 3);
+    item->setData(isDir, Qt::UserRole + 4);
+    item->setData(false, Qt::UserRole + 5);
 
     m_favoriteModel->appendRow(item);
+
+    // 🚀【异步深度提图】：支持全格式
+    if (!isDir) {
+        QString ext = fi.suffix().toLower();
+        if (UiHelper::isGraphicsFile(ext) || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf" || ext == "svg") {
+            QPointer<FavoritePanel> weakThis(this);
+            (void)QtConcurrent::run([weakThis, cleanPath]() {
+                if (!weakThis) return;
+                QImage img = DiskMediaExtractor::getCapsuleThumbnail(cleanPath, 128);
+                if (!img.isNull()) {
+                    QPixmap pix = QPixmap::fromImage(img);
+                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, cleanPath, pix]() {
+                        if (weakThis) weakThis->updateItemThumbnail(cleanPath, pix);
+                    }, Qt::QueuedConnection);
+                }
+            });
+        }
+    }
 }
 
 } // namespace QuarkMeta
