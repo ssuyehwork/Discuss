@@ -8,6 +8,7 @@
 #include "../core/BatchRenameService.h"
 #include "../meta/MetadataManager.h"
 #include <QHeaderView>
+#include <QPainterPath>
 #include "FramelessFileDialog.h"
 #include "FramelessDialog.h"
 #include "ToolTipOverlay.h"

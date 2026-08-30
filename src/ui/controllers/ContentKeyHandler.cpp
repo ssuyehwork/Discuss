@@ -92,10 +92,10 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
     QModelIndex index = view->indexAt(pos);
     if (!index.isValid()) return false;
 
-    // 1. 🚀【网格/自适应视图】：直接调用 CardLayoutEngine 归一化命中查询！
-    if (view != m_panel->findChild<QTreeView*>()) {
+    // 1. 网格/自适应视图：归一化 Hitbox 查询
+    if (view != m_panel->treeView()) {
         QRect itemRect = view->visualRect(index);
-        CardLayout l = CardLayoutEngine::calculate(itemRect, m_panel->m_zoomLevel);
+        CardLayout l = CardLayoutEngine::calculate(itemRect, m_panel->zoomLevel());
         int hitVal = l.hitStar(pos);
 
         if (hitVal != -1) {
@@ -117,34 +117,30 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
         }
     }
 
-    // 2. 列表视图（TreeView）第 2 列星级的 Hitbox 点击计算
+    // 2. 列表视图（TreeView）第 2 列星级 Hitbox 点击计算
     QTreeView* treeView = qobject_cast<QTreeView*>(view);
     if (treeView) {
         QModelIndex indexCol2 = index.model()->index(index.row(), 2, index.parent());
         QRect col2Rect = treeView->visualRect(indexCol2);
 
-        // 🚀【统一调用 RatingBarLayout】：彻底消灭手写的 18 / -4 / 12！
         RatingBarMetrics rm = RatingBarLayout::calculate(col2Rect, RatingBarMode::TreeRow);
 
-        bool isBanHit = rm.banRect.contains(pos);
         int hitStar = -1;
-
-        for (int i = 0; i < 5; ++i) {
-            if (rm.starRect(i).contains(pos)) {
-                hitStar = i + 1;
-                break;
+        if (rm.banRect.contains(pos)) hitStar = 0;
+        else {
+            for (int i = 0; i < 5; ++i) {
+                if (rm.starRect(i).contains(pos)) { hitStar = i + 1; break; }
             }
         }
 
-        if (isBanHit || hitStar != -1) {
+        if (hitStar != -1) {
             bool isRowSelected = treeView->selectionModel() && treeView->selectionModel()->isRowSelected(index.row(), index.parent());
             if (!isRowSelected) return false;
 
-            int newValue = isBanHit ? 0 : hitStar;
             auto selectedRows = treeView->selectionModel()->selectedRows();
             for (const auto& selRow : selectedRows) {
                 QModelIndex targetIdx = treeView->model()->index(selRow.row(), 0, selRow.parent());
-                m_panel->getProxyModel()->setData(targetIdx, newValue, RatingRole);
+                m_panel->getProxyModel()->setData(targetIdx, hitStar, RatingRole);
             }
 
             QAbstractItemView::EditTriggers currentTriggers = treeView->editTriggers();
@@ -222,7 +218,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
     }
 
-    // 5. 基础文件操作键 (F2: 选中 1 项进入行内重命名，选中多项自动进入批量重命名弹窗)
+    // 5. 基础文件操作键
     if (keyEvent->key() == Qt::Key_F2) {
         QStringList selectedPaths = m_panel->getSelectedPaths();
         if (selectedPaths.size() > 1) {
@@ -263,7 +259,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
     }
 
-    // 7. 空格键: QuickLook 预览 (受支持类型白名单过滤)
+    // 7. 空格键: QuickLook 预览
     if (keyEvent->key() == Qt::Key_Space) {
         QModelIndex idx = view->currentIndex();
         if (!idx.isValid() && view->selectionModel()) {

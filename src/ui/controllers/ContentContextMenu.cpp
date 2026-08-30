@@ -17,7 +17,6 @@
 #include "../../core/ClipboardService.h"
 #include "../../core/OperationSnapshotEngine.h"
 #include "../../core/CoreEngine.h"
-#include "../../core/AppConfig.h"
 #include "../../meta/MetadataManager.h"
 #include "../../crypto/EncryptionManager.h"
 
@@ -44,6 +43,15 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
     QModelIndex currentIndex = view->indexAt(pos);
     bool onItem = currentIndex.isValid();
+
+    // 🚀【修复右键选区漂移】：若右键点击了尚未高亮选中的项目，自动校准选区与焦点到该项目上！
+    if (onItem && view->selectionModel()) {
+        if (!view->selectionModel()->isSelected(currentIndex)) {
+            view->selectionModel()->select(currentIndex, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            view->setCurrentIndex(currentIndex);
+        }
+    }
+
     QString path = onItem ? currentIndex.data(PathRole).toString() : "";
     QFileInfo itemInfo(path);
 
@@ -102,12 +110,9 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     }
 
     // =========================================================================
-    // 场景 2：选中具体项目（右键点击某个项目）
+    // 场景 2：选中具体项目
     // =========================================================================
     if (onItem) {
-        // -------------------------------------------------------------
-        // 分支 2.A：选中的是【物理驱动器/盘符】
-        // -------------------------------------------------------------
         if (isDriveRoot) {
             menu.addAction("打开")->setData(ContentPanel::ActionOpen);
             menu.addAction("在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
@@ -144,11 +149,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             menu.addSeparator();
             menu.addAction("刷新")->setData(ContentPanel::ActionRefresh);
-        }
-        // -------------------------------------------------------------
-        // 分支 2.B：选中的是【常规文件 / 普通文件夹】
-        // -------------------------------------------------------------
-        else {
+        } else {
             menu.addAction(isFolder ? "打开文件夹" : "打开")->setData(ContentPanel::ActionOpen);
             if (!isFolder) {
                 menu.addAction("用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
@@ -205,7 +206,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         }
     }
     // =========================================================================
-    // 场景 3：点击空白处（未选中任何项目）
+    // 场景 3：点击空白处
     // =========================================================================
     else {
         if (isComputerRoot) {
@@ -238,7 +239,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
     menu.addSeparator();
 
-    // 注入“排序”二级子菜单
+    // 排序二级子菜单
     QMenu* sortMenu = menu.addMenu("排序");
     UiHelper::applyMenuStyle(sortMenu);
 
@@ -250,9 +251,6 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         typeGroup->addAction(act);
         connect(act, &QAction::triggered, [this, type]() {
             m_panel->setSortType(type);
-            AppConfig::instance().setValue("ContentPanel/RightClickSortType", static_cast<int>(type));
-            m_panel->getProxyModel()->invalidate();
-            m_panel->getProxyModel()->sort(0, m_panel->currentSortOrder());
         });
     };
 
@@ -274,9 +272,6 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         orderGroup->addAction(act);
         connect(act, &QAction::triggered, [this, order]() {
             m_panel->setSortOrder(order);
-            AppConfig::instance().setValue("ContentPanel/RightClickSortOrder", static_cast<int>(order));
-            m_panel->getProxyModel()->invalidate();
-            m_panel->getProxyModel()->sort(0, order);
         });
     };
 

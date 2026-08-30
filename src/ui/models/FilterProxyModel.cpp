@@ -1,7 +1,6 @@
 #include "FilterProxyModel.h"
 #include "../ContentPanel.h"
 #include "../UiHelper.h"
-#include "../../util/DiskMediaExtractor.h"
 #include <QDateTime>
 #include <cmath>
 
@@ -139,7 +138,7 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         }
     }
 
-    // 6. 附加属性过滤 (链接、备注、标签、尺寸)
+    // 6. 附加属性过滤 (链接、备注、标签、尺寸、判重)
     if (currentFilter.linkPresence != FilterState::All) {
         bool hasLink = !record.url.isEmpty();
         if (currentFilter.linkPresence == FilterState::Yes && !hasLink) return false;
@@ -221,16 +220,16 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     const auto& leftRec = records[leftRow];
     const auto& rightRec = records[rightRow];
 
-    // 绝对权重 1：文件夹排在文件前面
+    // 🚀【绝对权重 1：文件夹永远在最上方】：无视升序降序反转，文件夹永远第一顺位
     if (leftRec.isDir != rightRec.isDir) {
         return (sortOrder() == Qt::AscendingOrder) ? leftRec.isDir : !leftRec.isDir;
     }
 
-    // 绝对权重 2：置顶/加密优先
+    // 🚀【绝对权重 2：置顶/加密优先】：无视升序降序反转，置顶项永远置顶
     bool leftPinned = leftRec.pinned || leftRec.encrypted;
     bool rightPinned = rightRec.pinned || rightRec.encrypted;
     if (leftPinned != rightPinned) {
-        return leftPinned;
+        return (sortOrder() == Qt::AscendingOrder) ? leftPinned : !rightPinned;
     }
 
     auto compareNames = [](const ItemRecord& l, const ItemRecord& r) {
@@ -272,9 +271,9 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
             if (leftAdded != rightAdded) return leftAdded < rightAdded;
             return compareNames(leftRec, rightRec);
         }
+        default:
+            return compareNames(leftRec, rightRec);
     }
-
-    return QSortFilterProxyModel::lessThan(source_left, source_right);
 }
 
 } // namespace QuarkMeta
