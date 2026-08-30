@@ -177,10 +177,19 @@ ContentPanel::ContentPanel(QWidget* parent)
     });
     m_currentFilter.showHidden = m_showHidden;
  
-    // 从配置中恢复排序类型与方向 (对应用户原话："名称、创建日期、修改日期、扩展名、大小、尺寸、评分" 与 "升序、降序")
-    m_sortType = static_cast<SortType>(AppConfig::instance().getValue("ContentPanel/RightClickSortType", SortByName).toInt());
-    m_sortOrder = static_cast<Qt::SortOrder>(AppConfig::instance().getValue("ContentPanel/RightClickSortOrder", Qt::AscendingOrder).toInt());
-    m_proxyModel->sort(0, m_sortOrder);
+    m_sortController = new ContentSortController(this);
+    connect(m_sortController, &ContentSortController::sortCriteriaChanged, this, [this](SortType type, Qt::SortOrder order) {
+        if (auto* proxy = qobject_cast<FilterProxyModel*>(m_proxyModel)) {
+            proxy->setSortType(static_cast<int>(type));
+            proxy->setSortOrder(order);
+            proxy->sort(0, order);
+        }
+    });
+    if (auto* proxy = qobject_cast<FilterProxyModel*>(m_proxyModel)) {
+        proxy->setSortType(static_cast<int>(m_sortController->sortType()));
+        proxy->setSortOrder(m_sortController->sortOrder());
+    }
+    m_sortController->applySortToModel(m_proxyModel);
 
         m_keyHandler = new ContentKeyHandler(this);
     initUi(); 
@@ -1215,8 +1224,8 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
         } 
         MetaCacheDecorator::decorate(driveRecords);
         m_model->setRecords(driveRecords);
-        // 2026-05-29 物理对齐：在加载“此电脑”后显式触发一次排序，使用持久化的 m_sortOrder
-        m_proxyModel->sort(0, m_sortOrder);
+        // 2026-05-29 物理对齐：在加载“此电脑”后显式触发一次排序，使用持久化的 sortOrder
+        m_sortController->applySortToModel(m_proxyModel);
         m_isLoading = false;
         recalculateAndEmitStats();
         return; 
@@ -1244,7 +1253,7 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [panelPtr, path, allItems, reqId]() { 
             if (panelPtr && panelPtr->m_loadRequestId == reqId) { 
                 panelPtr->m_model->setRecords(allItems);
-                panelPtr->m_proxyModel->sort(0, panelPtr->m_sortOrder);
+                panelPtr->m_sortController->applySortToModel(panelPtr->m_proxyModel);
                 panelPtr->m_isLoading = false;
                 panelPtr->recalculateAndEmitStats();
                 // 2026-06-xx 物理同步：数据加载完成后强制重新应用筛选，防止显示已过滤掉的占位符记录
@@ -1381,7 +1390,7 @@ void ContentPanel::loadPaths(const QStringList& paths, int reqId) {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, records, reqId]() {
             if (weakThis && weakThis->m_loadRequestId == reqId) {
                 weakThis->m_model->setRecords(records);
-                weakThis->m_proxyModel->sort(0, weakThis->m_sortOrder);
+                weakThis->m_sortController->applySortToModel(weakThis->m_proxyModel);
                 weakThis->m_isLoading = false;
                 weakThis->recalculateAndEmitStats();
                 weakThis->applyFilters(); 

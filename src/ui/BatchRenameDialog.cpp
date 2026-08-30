@@ -277,13 +277,28 @@ void BatchRenameDialog::initTableItems() {
         QString oldPath = QString::fromStdWString(m_originalPaths[static_cast<size_t>(i)]);
         QFileInfo info(oldPath);
 
-        // 恢复老版本高速机制：直接加载现成的缩略图缓存小图（微秒级），没有才退避为文件图标
+        // 🚀 1:1 标准正方形中心裁切 (Center Crop) + 3px 微圆角，消除上下/左右黑边与留白
         QIcon fileIcon;
         QString thumbPath = DiskMediaExtractor::getDiskThumbCachePath(oldPath);
         if (QFile::exists(thumbPath)) {
             QPixmap pix(thumbPath);
-            if (!pix.isNull()) {
-                fileIcon = QIcon(pix);
+            if (!pix.isNull() && pix.width() > 0 && pix.height() > 0) {
+                int minSide = qMin(pix.width(), pix.height());
+                QRect cropRect((pix.width() - minSide) / 2, (pix.height() - minSide) / 2, minSide, minSide);
+                QPixmap cropped = pix.copy(cropRect);
+
+                QPixmap target(48, 48);
+                target.fill(Qt::transparent);
+                QPainter painter(&target);
+                painter.setRenderHint(QPainter::Antialiasing, true);
+                painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+                QPainterPath clipPath;
+                clipPath.addRoundedRect(QRectF(0, 0, 48, 48), 6.0, 6.0);
+                painter.setClipPath(clipPath);
+                painter.drawPixmap(QRect(0, 0, 48, 48), cropped);
+                painter.end();
+
+                fileIcon = QIcon(target);
             }
         }
         if (fileIcon.isNull()) {

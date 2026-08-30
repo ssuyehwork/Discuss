@@ -220,15 +220,16 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             if (!paths.isEmpty()) QApplication::clipboard()->setText(paths.join("\r\n"));
             return true;
         }
-        if (keyEvent->key() == Qt::Key_R) {
-            m_panel->performBatchRename();
-            return true;
-        }
     }
 
-    // 5. 基础文件操作键
+    // 5. 基础文件操作键 (F2: 选中 1 项进入行内重命名，选中多项自动进入批量重命名弹窗)
     if (keyEvent->key() == Qt::Key_F2) {
-        view->edit(view->currentIndex());
+        QStringList selectedPaths = m_panel->getSelectedPaths();
+        if (selectedPaths.size() > 1) {
+            m_panel->performBatchRename();
+        } else {
+            view->edit(view->currentIndex());
+        }
         return true;
     }
     if (keyEvent->key() == Qt::Key_Delete) {

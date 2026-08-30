@@ -1,5 +1,6 @@
 #include "ContentContextMenu.h"
 #include "../ContentPanel.h"
+#include "ContentSortController.h"
 #include "../UiHelper.h"
 #include "../ToolTipOverlay.h"
 #include "../ColorPicker.h"
@@ -187,17 +188,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction("复制名称")->setData(ContentPanel::ActionCopyName);
             menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
 
-            int selectedCount = 0;
-            for (const auto& selIdx : view->selectionModel()->selectedIndexes()) {
-                if (selIdx.column() == 0 && !selIdx.data(PathRole).toString().isEmpty()) selectedCount++;
-            }
-
-            if (selectedCount <= 1) {
-                menu.addAction("重命名")->setData(ContentPanel::ActionRename);
-            }
-            if (isFolder || selectedCount > 1) {
-                menu.addAction("批量重命名 (Ctrl+Shift+R)")->setData(ContentPanel::ActionBatchRename);
-            }
+            menu.addAction("重命名")->setData(ContentPanel::ActionRename);
 
             menu.addSeparator();
             menu.addAction("刷新")->setData(ContentPanel::ActionRefresh);
@@ -399,11 +390,15 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             break;
         }
         case ContentPanel::ActionBatchRename:
-            m_panel->performBatchRename();
+        case ContentPanel::ActionRename: {
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            if (selectedPaths.size() > 1) {
+                m_panel->performBatchRename();
+            } else {
+                view->edit(currentIndex);
+            }
             break;
-        case ContentPanel::ActionRename:
-            view->edit(currentIndex);
-            break;
+        }
         case ContentPanel::ActionCopy:
             ClipboardService::instance().copyItems(m_panel->getSelectedPaths());
             break;

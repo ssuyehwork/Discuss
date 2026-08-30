@@ -23,6 +23,7 @@
 #include "FilterPanel.h"
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
+#include "controllers/ContentSortController.h"
 
 #include "../core/ModelContract.h"
 
@@ -51,21 +52,21 @@ public:
     DataSourceType dataSourceType() const;
     bool isContextMenuActive() const { return m_isContextMenuActive; }
 
-    enum SortType {
-        SortByName,
-        SortByCreateDate,
-        SortByModifyDate,
-        SortByExtension,
-        SortBySize,
-        SortByDimension,
-        SortByRating,
-        SortByAddedDate
-    };
+    using SortType = QuarkMeta::SortType;
+    static constexpr SortType SortByName = SortType::SortByName;
+    static constexpr SortType SortByCreateDate = SortType::SortByCreateDate;
+    static constexpr SortType SortByModifyDate = SortType::SortByModifyDate;
+    static constexpr SortType SortByExtension = SortType::SortByExtension;
+    static constexpr SortType SortBySize = SortType::SortBySize;
+    static constexpr SortType SortByDimension = SortType::SortByDimension;
+    static constexpr SortType SortByRating = SortType::SortByRating;
+    static constexpr SortType SortByAddedDate = SortType::SortByAddedDate;
 
-    SortType currentSortType() const { return m_sortType; }
-    Qt::SortOrder currentSortOrder() const { return m_sortOrder; }
-    void setSortType(SortType type) { m_sortType = type; }
-    void setSortOrder(Qt::SortOrder order) { m_sortOrder = order; }
+    ContentSortController* sortController() const { return m_sortController; }
+    SortType currentSortType() const { return m_sortController ? m_sortController->sortType() : SortType::SortByName; }
+    Qt::SortOrder currentSortOrder() const { return m_sortController ? m_sortController->sortOrder() : Qt::AscendingOrder; }
+    void setSortType(SortType type) { if (m_sortController) m_sortController->setSortType(type); }
+    void setSortOrder(Qt::SortOrder order) { if (m_sortController) m_sortController->setSortOrder(order); }
     void setContextMenuActive(bool active) { m_isContextMenuActive = active; }
 
     QString currentPath() const { return m_currentPath; }
@@ -268,8 +269,7 @@ public:
     bool m_showFiles = true;
     bool m_showHidden = false;
     ViewMode m_currentViewMode = GridView;
-    SortType m_sortType = SortByName;
-    Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
+    ContentSortController* m_sortController = nullptr;
     std::atomic<bool> m_isLoading{false}; // 2026-06-16 物理状态锁：防止加载数据时的布局抖动覆盖用户配置
     bool m_isContextMenuActive = false;
     std::atomic<int> m_loadRequestId{0}; // 2026-07-xx 物理请求 ID：防止异步回调导致的视图内容乱跳

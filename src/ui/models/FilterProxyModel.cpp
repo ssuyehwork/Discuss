@@ -233,42 +233,40 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
         return leftPinned;
     }
 
-    auto* contentPanel = qobject_cast<ContentPanel*>(parent());
-    ContentPanel::SortType sType = contentPanel ? contentPanel->currentSortType() : ContentPanel::SortByName;
-
     auto compareNames = [](const ItemRecord& l, const ItemRecord& r) {
         return l.filename.localeAwareCompare(r.filename) < 0;
     };
 
-    switch (sType) {
-        case ContentPanel::SortByName: return compareNames(leftRec, rightRec);
-        case ContentPanel::SortByCreateDate:
+    // 0: SortByName, 1: SortByCreateDate, 2: SortByModifyDate, 3: SortByExtension, 4: SortBySize, 5: SortByDimension, 6: SortByRating, 7: SortByAddedDate
+    switch (m_sortType) {
+        case 0: return compareNames(leftRec, rightRec);
+        case 1:
             if (leftRec.ctime != rightRec.ctime) return leftRec.ctime < rightRec.ctime;
             return compareNames(leftRec, rightRec);
-        case ContentPanel::SortByModifyDate:
+        case 2:
             if (leftRec.mtime != rightRec.mtime) return leftRec.mtime < rightRec.mtime;
             return compareNames(leftRec, rightRec);
-        case ContentPanel::SortByExtension: {
+        case 3: {
             int comp = leftRec.suffix.localeAwareCompare(rightRec.suffix);
             if (comp != 0) return comp < 0;
             return compareNames(leftRec, rightRec);
         }
-        case ContentPanel::SortBySize: {
+        case 4: {
             long long lSize = leftRec.isDir ? -1 : leftRec.size;
             long long rSize = rightRec.isDir ? -1 : rightRec.size;
             if (lSize != rSize) return lSize < rSize;
             return compareNames(leftRec, rightRec);
         }
-        case ContentPanel::SortByDimension: {
+        case 5: {
             long long lDim = static_cast<long long>(leftRec.width) * leftRec.height;
             long long rDim = static_cast<long long>(rightRec.width) * rightRec.height;
             if (lDim != rDim) return lDim < rDim;
             return compareNames(leftRec, rightRec);
         }
-        case ContentPanel::SortByRating:
+        case 6:
             if (leftRec.rating != rightRec.rating) return leftRec.rating < rightRec.rating;
             return compareNames(leftRec, rightRec);
-        case ContentPanel::SortByAddedDate: {
+        case 7: {
             long long leftAdded = leftRec.added_at == 0 ? leftRec.ctime : leftRec.added_at;
             long long rightAdded = rightRec.added_at == 0 ? rightRec.ctime : rightRec.added_at;
             if (leftAdded != rightAdded) return leftAdded < rightAdded;

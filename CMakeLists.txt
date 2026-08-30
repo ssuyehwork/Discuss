@@ -239,6 +239,8 @@ set(SOURCES
     src/ui/controllers/ContentContextMenu.cpp
     src/ui/controllers/ContentKeyHandler.h
     src/ui/controllers/ContentKeyHandler.cpp
+    src/ui/controllers/ContentSortController.h
+    src/ui/controllers/ContentSortController.cpp
     src/core/ActionCommand.h
     src/core/UndoManager.h
     src/core/BasicCommands.h
