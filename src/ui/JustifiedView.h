@@ -18,6 +18,10 @@ public:
     void setLayoutMode(LayoutMode mode);
     LayoutMode layoutMode() const;
 
+    // 🚀【物理契约】：彻底切断 QAbstractItemView 对父容器的尺寸顶推
+    QSize minimumSizeHint() const override { return QSize(50, 50); }
+    QSize sizeHint() const override { return QSize(230, 200); }
+
     QRect visualRect(const QModelIndex& index) const override;
     void scrollTo(const QModelIndex& index, ScrollHint hint = EnsureVisible) override;
     QModelIndex indexAt(const QPoint& point) const override;
@@ -59,7 +63,7 @@ private:
     int m_totalHeight = 0;
     int m_targetRowHeight = 128;
     int m_aspectRatioRole = Qt::UserRole + 2;
-    int m_anchorRow = -1; // 2026-06-16 物理锚点：锁定 Shift 多选起始行
+    int m_anchorRow = -1;
     
     QPoint m_dragStartPos;
     bool m_isDraggingSelection = false;

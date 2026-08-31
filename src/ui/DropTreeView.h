@@ -37,7 +37,6 @@ protected:
         painter->setFont(font());
 
         if (logicalIndex == 0) {
-            // 🚀 唯一调用 RowLayoutEngine，表头起点与数据行 100% 垂直共线
             int textStartX = rect.left() + RowLayoutEngine::calculateHeaderTextStartX(m_zoomLevel);
             QRect textRect = rect;
             textRect.setLeft(textStartX);
@@ -57,14 +56,10 @@ class DropTreeView : public QTreeView {
 public:
     explicit DropTreeView(QWidget* parent = nullptr);
 
-    /**
-     * @brief 物理辅助：暴露内部 rowHeight 接口以支持外部布局高度计算
-     */
-    int rowHeight(const QModelIndex& index) const { return QTreeView::rowHeight(index); }
+    // 🚀【关键修复】：声明极小 minimumSizeHint，防止在 QStackedWidget 后台顶死外层布局
+    QSize minimumSizeHint() const override { return QSize(50, 50); }
 
-    /**
-     * @brief 设置空状态时的占位文本提示
-     */
+    int rowHeight(const QModelIndex& index) const { return QTreeView::rowHeight(index); }
     void setEmptyHint(const QString& hint) { m_emptyHint = hint; }
 
 signals:
@@ -81,7 +76,6 @@ protected:
     void paintEvent(QPaintEvent* event) override;
 
 private:
-    // 2026-06-xx 物理辅助：拖拽悬停自动展开
     QTimer* m_autoExpandTimer = nullptr;
     QModelIndex m_hoverIndex;
     QString m_emptyHint;

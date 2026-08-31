@@ -172,8 +172,9 @@ void ContentPanel::initUi() {
     m_viewStack->addWidget(m_treeView);
     m_viewStack->setCurrentWidget(m_gridView);
 
+    // 🚀【彻底消灭不对称内边距】：所有边距归零，分栏间隙唯一由 Splitter 5px 决定
     QVBoxLayout* wrapper = new QVBoxLayout();
-    wrapper->setContentsMargins(4, 4, 0, 4);
+    wrapper->setContentsMargins(0, 0, 0, 0);
     wrapper->setSpacing(0);
     wrapper->addWidget(m_viewStack);
     m_mainLayout->addLayout(wrapper);
@@ -214,6 +215,7 @@ void ContentPanel::initListView() {
     m_treeView->setFrameShape(QFrame::NoFrame);
     m_treeView->setAlternatingRowColors(true);
     m_treeView->setSortingEnabled(true);
+    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_treeView->setRootIsDecorated(false);
@@ -224,21 +226,21 @@ void ContentPanel::initListView() {
 
     auto* header = m_treeView->header();
     header->setFixedHeight(32);
+    header->setMinimumSectionSize(0);
     header->setSectionResizeMode(0, QHeaderView::Stretch);
     for (int i = 1; i <= 6; ++i) header->setSectionResizeMode(i, QHeaderView::Fixed);
-    header->resizeSection(1, 40);  // 状态
-    header->resizeSection(2, 100); // 评分
-    header->resizeSection(3, 100); // 尺寸
-    header->resizeSection(4, 60);  // 类型
-    header->resizeSection(5, 80);  // 大小
-    header->resizeSection(6, 130); // 修改日期
+    header->resizeSection(1, 40);
+    header->resizeSection(2, 100);
+    header->resizeSection(3, 100);
+    header->resizeSection(4, 60);
+    header->resizeSection(5, 80);
+    header->resizeSection(6, 130);
 
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
     connect(m_treeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked);
     connect(m_treeView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
 
-    // 🚀【列表模式滚动提图支持】：监听纵向滚动条滑动，驱动可见区域缩略图异步刷新
     if (m_treeView->verticalScrollBar()) {
         connect(m_treeView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
             if (m_visibleTimer) m_visibleTimer->start();
@@ -503,7 +505,6 @@ void ContentPanel::setViewMode(ViewMode mode) {
     emit viewModeChanged(mode);
     emit zoomLevelChanged(m_zoomLevel);
 
-    // 🚀【视图模式切换驱动】：切换视图模式后立刻启动定时器刷新可视区域缩略图
     if (m_visibleTimer) m_visibleTimer->start();
 }
 
@@ -522,7 +523,6 @@ void ContentPanel::updateGridSize() {
             jv->setTargetRowHeight(m_zoomLevel);
         }
     } else if (m_viewStack->currentWidget() == m_treeView) {
-        // 🚀 同步更新表头与列表项，触发即时重排
         if (auto* dropTree = qobject_cast<DropTreeView*>(m_treeView)) {
             if (auto* hdr = qobject_cast<ContentHeaderView*>(dropTree->header())) {
                 hdr->setZoomLevel(m_zoomLevel);

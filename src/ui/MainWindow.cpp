@@ -77,7 +77,6 @@ using namespace QuarkMeta::Style;
 #include <QSlider>
 #include <QSignalBlocker>
 
-
 #include <QtConcurrent>
 
 namespace QuarkMeta {
@@ -100,7 +99,6 @@ MainWindow::MainWindow(QWidget* parent)
     m_hoverFilter = new HoverEventFilter(this);
 
     m_isPinned = AppConfig::instance().getValue("MainWindow/AlwaysOnTop", false).toBool();
-
 
     initUi();
 
@@ -153,7 +151,6 @@ void MainWindow::initUi() {
         m_mainSplitter->setSizes(sizes);
     }
 
-    // 由 PanelMediator 接管各面板间的信号联动 setup
     m_panelMediator = new PanelMediator(
         m_navPanel,
         m_favoritePanel,
@@ -177,9 +174,7 @@ void MainWindow::initUi() {
             m_btnPinTop->setChecked(!m_btnPinTop->isChecked());
         }
     });
-
 }
-
 
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
@@ -205,7 +200,6 @@ void MainWindow::showEvent(QShowEvent* event) {
         });
     }
 }
-
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {
     setAttribute(Qt::WA_Hover);
@@ -261,8 +255,9 @@ void MainWindow::initToolbar() {
         m_btnUp->setEnabled(canUp);
     });
 
+    // 🚀【唯一弹性件】：地址栏承担顶栏全部伸缩自适应
     m_addressBar = new AddressBar(this);
-    m_addressBar->setMinimumWidth(300);
+    m_addressBar->setMinimumWidth(80);
 
     m_searchController = new SearchController(this);
 }
@@ -319,12 +314,13 @@ void MainWindow::setupSplitters() {
     m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin); 
     m_bodyLayout->setSpacing(0);
 
+    // 🚀【物理 5 像素 Handle】：绝对 5px 占位，清除任何破坏性 spacing
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
     m_mainSplitter->setHandleWidth(5); 
     m_mainSplitter->setChildrenCollapsible(false);
     m_mainSplitter->setStyleSheet(QString(
-        "QSplitter { background: transparent; border: none; spacing: 0px; }"
-        "QSplitter::handle:horizontal { background-color: #141414; width: 5px; margin: 0px; padding: 0px; }"
+        "QSplitter { background: transparent; border: none; }"
+        "QSplitter::handle:horizontal { background-color: #141414; width: 5px; }"
         "QSplitter::handle:horizontal:hover { background-color: %1; }"
     ).arg(qssColor(PrimaryBlue)));
 
@@ -456,7 +452,7 @@ void MainWindow::setupCustomTitleBarButtons() {
             "QMenu::item:checked { color: #ff551c; }"
             "QMenu::item:checked:selected { color: #ff551c; }"
             "QMenu::indicator:checked { image: url(%1); width: 14px; height: 14px; left: 4px; }"
-        ).arg(checkPath));
+        ).arg(checkPath)); 
  
         connect(actAdaptive, &QAction::triggered, this, [this]() { 
             m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode); 
@@ -592,7 +588,6 @@ void MainWindow::unifiedNavigateTo(const QString& url, bool record) {
     NavigationService::instance().navigateTo(url, record);
 }
 
-
 void MainWindow::onStatusBarStatsUpdated(int fileCount, int folderCount, int totalCount) {
     if (!m_statusLeft || !m_contentPanel || !m_contentPanel->getProxyModel()) return;
 
@@ -699,7 +694,6 @@ void MainWindow::initDriveBar() {
 
     m_driveBarLayout->addWidget(m_btnTagManager);
     m_driveBarLayout->addStretch();
-
 }
 
 void MainWindow::onDriveBarContextMenu(const QPoint& pos) {

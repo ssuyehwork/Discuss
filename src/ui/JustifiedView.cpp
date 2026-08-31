@@ -18,13 +18,14 @@ JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     setFrameShape(QFrame::NoFrame);
     m_layoutTimer = new QTimer(this);
     m_layoutTimer->setSingleShot(true);
-    m_layoutTimer->setInterval(50); // 50ms 黄金布局节流窗口
+    m_layoutTimer->setInterval(50);
     connect(m_layoutTimer, &QTimer::timeout, this, &JustifiedView::onLayoutTimerTimeout);
 
+    // 🚀【物理铁律】：横向滚动彻底关闭，横向尺寸由外层 Splitter 绝对支配
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     horizontalScrollBar()->setRange(0, 0);
     verticalScrollBar()->setSingleStep(20);
     
-    // 2026-06-xx 物理加固：彻底消除背景穿透。
     setAutoFillBackground(true);
     viewport()->setAutoFillBackground(true);
     viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
@@ -33,7 +34,6 @@ JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     pal.setColor(QPalette::Window, QColor("#1E1E1E"));
     viewport()->setPalette(pal);
     setPalette(pal);
-
 }
 
 void JustifiedView::setLayoutMode(LayoutMode mode) {
@@ -119,7 +119,6 @@ QModelIndex JustifiedView::indexAt(const QPoint& point) const {
     if (m_geometries.empty()) return QModelIndex();
     int y = point.y() + verticalScrollBar()->value();
 
-    // 二分查找匹配行/区域，大幅提升成千上万条目下的查找性能
     auto it = std::lower_bound(m_geometries.begin(), m_geometries.end(), y,
         [](const ItemGeometry& geo, int targetY) {
             return geo.rect.bottom() < targetY;
@@ -135,11 +134,9 @@ QModelIndex JustifiedView::indexAt(const QPoint& point) const {
 }
 
 void JustifiedView::dataChanged(const QModelIndex& topLeft, const QModelIndex& bottomRight, const QList<int>& roles) {
-    // 只有宽高比角色发生变化时才启动 50ms 重新布局，纯选中状态变更绝不启动 50ms 定时器！
     if (roles.contains(m_aspectRatioRole)) {
         scheduleLayout();
     } else {
-        // 选中状态/星级/颜色变更：0 毫秒立刻重绘视口，绝不推迟！
         viewport()->update();
     }
     QAbstractItemView::dataChanged(topLeft, bottomRight, roles);
@@ -151,7 +148,6 @@ void JustifiedView::rowsInserted(const QModelIndex& parent, int start, int end) 
 }
 
 void JustifiedView::rowsAboutToBeRemoved(const QModelIndex& parent, int start, int end) {
-    // 直接转发给基类即可，实际重排由 setModel 中连接的 rowsRemoved 信号处理
     QAbstractItemView::rowsAboutToBeRemoved(parent, start, end);
 }
 
@@ -240,8 +236,6 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
         }
     }
 
-    // 2026-06-xx 物理拨乱反正：仅在按下 Shift 时执行自定义“视觉顺序”选择逻辑
-    // 其余所有情况（普通单击、Ctrl、空白处）均退避并转发给基类处理，防止破坏 Model/View 原生多选状态
     if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ShiftModifier)) {
         QModelIndex clicked = indexAt(event->pos());
         if (clicked.isValid() && m_anchorRow >= 0) {
@@ -267,7 +261,6 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
         }
     }
 
-    // 更新锚点：在每次有效点击（非 Shift 点击）时同步锚点，以便后续 Shift 多选定位
     QAbstractItemView::mousePressEvent(event);
     QModelIndex current = currentIndex();
     if (current.isValid()) {
@@ -275,7 +268,6 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
     } else {
         m_anchorRow = -1;
     }
-    // 🚨 0 毫秒物理响应：鼠标按下瞬间，强行立即刷新卡片蓝色高亮边框！
     viewport()->update();
 }
 
@@ -308,20 +300,18 @@ void JustifiedView::mouseDoubleClickEvent(QMouseEvent* event) {
         return;
     }
 
-    // 🚀【归一化应用】：直接调用 CardLayoutEngine 查询双击命中！
     QRect itemRect = visualRect(idx);
     CardLayout layout = CardLayoutEngine::calculate(itemRect, m_targetRowHeight);
 
     if (layout.isTextHit(event->pos())) {
-        edit(idx); // 双击文字 -> 重命名
+        edit(idx);
     } else if (layout.isCoverHit(event->pos())) {
-        emit doubleClicked(idx); // 双击 Cover -> 打开
+        emit doubleClicked(idx);
     }
 }
 
 void JustifiedView::paintEvent(QPaintEvent*) {
     QPainter painter(viewport());
-    // 2026-06-xx 物理修复：在开启 TranslucentBackground 时手动填充坚实背景，防止透明穿透
     painter.fillRect(viewport()->rect(), QColor("#1E1E1E"));
 
     if (m_geometries.empty()) {
@@ -338,7 +328,6 @@ void JustifiedView::paintEvent(QPaintEvent*) {
     int vHeight = viewport()->height();
     painter.translate(0, -scrollY);
     
-    // 使用 std::lower_bound 快速裁剪进入视口的条目范围
     auto startIt = std::lower_bound(m_geometries.begin(), m_geometries.end(), scrollY,
         [](const ItemGeometry& geo, int targetY) {
             return geo.rect.bottom() < targetY;
@@ -358,19 +347,16 @@ void JustifiedView::paintEvent(QPaintEvent*) {
         if (currentIndex() == idx)
             option.state |= QStyle::State_HasFocus;
 
-        // 2026-05-20 物理适配：使用接口推荐的 itemDelegateForIndex
         itemDelegateForIndex(idx)->paint(&painter, option, idx);
     }
     painter.restore();
 
-    // 2026-06-xx 按照 1.7 需求：绘制蓝色透明框选矩形
     if (m_isDraggingSelection && !m_selectionRect.isEmpty()) {
         painter.save();
         painter.setRenderHint(QPainter::Antialiasing, false);
-        // 2026-06-xx 物理对齐：使用标准高亮蓝 (#378ADD) 并增加透明度以达到预期效果
         QColor highlightColor = QColor("#378ADD");
         QColor brushColor = highlightColor;
-        brushColor.setAlpha(80); // 适度提升透明度可见度 (Alpha 0-255)
+        brushColor.setAlpha(80);
         painter.setBrush(brushColor);
         painter.setPen(QPen(highlightColor, 1, Qt::SolidLine));
         painter.drawRect(m_selectionRect);
@@ -379,7 +365,8 @@ void JustifiedView::paintEvent(QPaintEvent*) {
 }
 
 void JustifiedView::resizeEvent(QResizeEvent* event) {
-    scheduleLayout();
+    // 🚀【核心机制】：拖拽边缘时 0 毫秒即时重排，瞬间响应列数升降
+    doLayout();
     QAbstractItemView::resizeEvent(event);
 }
 
@@ -410,13 +397,11 @@ void JustifiedView::doLayout() {
     m_geometries.resize(count);
     const int margin = 10;
     const int spacing = 5;
-    // 可用宽度：视口宽度 - 左边距 - 右边距
     int containerWidth = viewport()->width() - (margin * 2); 
     if (containerWidth <= 0) return;
 
     int currentY = margin; 
 
-    // 物理常数由 CardLayoutEngine 单一真理源导出
     const int cardPadding = CardLayoutEngine::totalPaddingHorizontal();
     const int extraHeight = CardLayoutEngine::extraHeight();
 
@@ -437,18 +422,22 @@ void JustifiedView::doLayout() {
             int rowStart = i;
             bool isCurrentDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
 
-            // 🚀【核心铁律】：检查本行内是否出现“文件夹与文件混杂”，若出现则强制换行！
             int numInRow = 0;
             while (i < count && numInRow < maxNumInRow) {
                 bool isDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
                 if (isDir != isCurrentDir) {
-                    break; // 文件夹结束，文件从下一行全新开始！
+                    break;
                 }
                 numInRow++;
                 i++;
             }
 
+            // 🚀【单列居中契约】：在 230px 极限宽度下自动将单列卡片物理居中
             int currentX = margin;
+            if (maxNumInRow == 1) {
+                currentX = margin + std::max(0, (containerWidth - itemWidth) / 2);
+            }
+
             for (int j = 0; j < numInRow; ++j) {
                 int itemIdx = rowStart + j;
                 m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, itemHeight), itemIdx };
@@ -457,11 +446,9 @@ void JustifiedView::doLayout() {
             currentY += itemHeight + spacing;
         }
     } else {
-        // JustifiedMode 自适应宽高合理对齐排版
         int i = 0;
         while (i < count) {
             int rowStart = i;
-
 
             double rowAspectRatioSum = 0;
             std::vector<double> aspectRatios;
@@ -472,7 +459,6 @@ void JustifiedView::doLayout() {
                 double ar = model()->data(idx, m_aspectRatioRole).toDouble();
                 if (ar <= 0) ar = 1.0;
                 
-                // 2026-07-xx 物理分离逻辑：如果当前项是文件，但行首是文件夹（或反之），强制换行
                 QString type = model()->data(idx, TypeRole).toString();
                 bool isCurrentDir = (type == "folder");
 
@@ -493,7 +479,6 @@ void JustifiedView::doLayout() {
                 int numInRow = (int)aspectRatios.size();
                 double estimatedWidth = (rowAspectRatioSum * m_targetRowHeight) + (cardPadding * numInRow) + (spacing * (numInRow - 1));
                 if (estimatedWidth > containerWidth) {
-                    // 如果单项就超过了容器宽度，则强制独占一行
                     if (numInRow > 1) {
                         aspectRatios.pop_back();
                         rowAspectRatioSum -= ar;
@@ -511,14 +496,12 @@ void JustifiedView::doLayout() {
 
             int actualHeight = m_targetRowHeight;
             bool isLastRow = (i == count);
-            // 2026-07-xx 物理对齐修正：若因类型差异导致的强制换行，该行不执行两端对齐，防止图标拉伸变形
             bool rowIsJustified = !isLastRow && !forceBreak; 
 
             int availableImageWidth = containerWidth - (spacing * (numInRow - 1)) - (cardPadding * numInRow);
 
             if (rowIsJustified) {
                 actualHeight = qRound(availableImageWidth / rowAspectRatioSum);
-                // 工业级纠偏：允许高度在一定范围内浮动以填满行宽，无论是否超出 targetRowHeight 范围均开启对齐
                 actualHeight = std::max(actualHeight, (int)(m_targetRowHeight * 0.75));
                 actualHeight = std::min(actualHeight, (int)(m_targetRowHeight * 1.5));
                 rowIsJustified = true; 
@@ -531,7 +514,6 @@ void JustifiedView::doLayout() {
                 int itemWidth;
 
                 if (j == numInRow - 1 && rowIsJustified) {
-                    // 最后一个 item 精确填满剩余宽度，消除舍入误差导致的空隙
                     itemWidth = (containerWidth + margin) - currentX;
                 } else {
                     itemWidth = qRound(aspectRatios[j] * actualHeight) + cardPadding;
@@ -540,7 +522,7 @@ void JustifiedView::doLayout() {
                 m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, actualHeight + extraHeight), itemIdx };
                 currentX += itemWidth + spacing; 
             }
-            currentY += actualHeight + extraHeight + spacing; // 统一行高推进
+            currentY += actualHeight + extraHeight + spacing;
         }
     }
 

@@ -23,9 +23,6 @@ namespace QuarkMeta {
 
 class ContentKeyHandler;
 
-/**
- * @brief 内容面板（面板四）：核心业务展示区
- */
 class ContentPanel : public QFrame {
     Q_OBJECT
 
@@ -61,6 +58,9 @@ public:
 
     explicit ContentPanel(QWidget* parent = nullptr);
     ~ContentPanel() override = default;
+
+    // 🚀【物理封顶】：向外宣称 minimumSizeHint 严格为 230，彻底阻断 QStackedWidget 内部子视图尺寸渗透
+    QSize minimumSizeHint() const override { return QSize(230, 100); }
 
     void deferredInit() {}
 
