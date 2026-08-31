@@ -262,7 +262,7 @@ void MainWindow::initToolbar() {
     });
 
     m_addressBar = new AddressBar(this);
-    m_addressBar->setMinimumWidth(120);
+    m_addressBar->setMinimumWidth(80);
 
     m_searchController = new SearchController(this);
 }
