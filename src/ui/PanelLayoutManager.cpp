@@ -147,9 +147,9 @@ void PanelLayoutManager::updateDynamicMinimumSize() {
 
     if (visibleCount <= 0) visibleCount = 1;
 
-    // 🚀【单一真理源】：5 栏全开时严格为 1180px (230*5 + 5*4 + 10)
+    // 🚀【彻底干掉 465 像素】：按可见栏区数量精准计算（单面板时为 240px，五面板时为 1180px）
     int calculatedMinW = (visibleCount * kBasePanelWidth) + ((visibleCount - 1) * kSplitterHandleWidth) + 10;
-    int finalMinW = qMax(465, calculatedMinW);
+    int finalMinW = calculatedMinW;
 
     m_mainWindow->setMinimumWidth(finalMinW);
 }

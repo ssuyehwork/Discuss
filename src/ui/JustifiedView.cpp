@@ -21,7 +21,6 @@ JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     m_layoutTimer->setInterval(50);
     connect(m_layoutTimer, &QTimer::timeout, this, &JustifiedView::onLayoutTimerTimeout);
 
-    // 🚀【物理铁律】：横向滚动彻底关闭，横向尺寸由外层 Splitter 绝对支配
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     horizontalScrollBar()->setRange(0, 0);
     verticalScrollBar()->setSingleStep(20);
@@ -365,7 +364,6 @@ void JustifiedView::paintEvent(QPaintEvent*) {
 }
 
 void JustifiedView::resizeEvent(QResizeEvent* event) {
-    // 🚀【核心机制】：拖拽边缘时 0 毫秒即时重排，瞬间响应列数升降
     doLayout();
     QAbstractItemView::resizeEvent(event);
 }
@@ -389,17 +387,15 @@ void JustifiedView::doLayout() {
         return;
     }
 
-    if (viewport()->width() < 50) {
-        QTimer::singleShot(100, this, [this]() { doLayout(); });
-        return;
-    }
-
-    m_geometries.resize(count);
-    const int margin = 10;
+    // 🚀【精确数学对齐】：边距微调为 6px，可用宽度精准扣减 16px 滚动条
+    const int margin = 6;
     const int spacing = 5;
-    int containerWidth = viewport()->width() - (margin * 2); 
+    
+    int scrollBarW = (verticalScrollBar() && verticalScrollBar()->isVisible()) ? verticalScrollBar()->width() : 0;
+    int containerWidth = width() - scrollBarW - (margin * 2);
     if (containerWidth <= 0) return;
 
+    m_geometries.resize(count);
     int currentY = margin; 
 
     const int cardPadding = CardLayoutEngine::totalPaddingHorizontal();
@@ -432,7 +428,6 @@ void JustifiedView::doLayout() {
                 i++;
             }
 
-            // 🚀【单列居中契约】：在 230px 极限宽度下自动将单列卡片物理居中
             int currentX = margin;
             if (maxNumInRow == 1) {
                 currentX = margin + std::max(0, (containerWidth - itemWidth) / 2);

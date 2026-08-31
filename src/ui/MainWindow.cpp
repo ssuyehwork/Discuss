@@ -93,7 +93,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     ToolTipOverlay::instance();
 
-    setMinimumSize(465, 400); 
+    setMinimumSize(240, 400); 
     setWindowTitle("QuarkMeta");
 
     m_hoverFilter = new HoverEventFilter(this);
@@ -137,7 +137,7 @@ void MainWindow::initUi() {
     if (!savedGeom.isEmpty()) {
         restoreGeometry(savedGeom);
     } else {
-        resize(1400, 850);
+        resize(1180, 800);
     }
 
     QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
@@ -147,7 +147,7 @@ void MainWindow::initUi() {
         });
     } else {
         QList<int> sizes;
-        sizes << 230 << 230 << 550 << 230 << 230;
+        sizes << 230 << 230 << 230 << 230 << 230;
         m_mainSplitter->setSizes(sizes);
     }
 
@@ -255,7 +255,6 @@ void MainWindow::initToolbar() {
         m_btnUp->setEnabled(canUp);
     });
 
-    // 🚀【唯一弹性件】：地址栏承担顶栏全部伸缩自适应
     m_addressBar = new AddressBar(this);
     m_addressBar->setMinimumWidth(80);
 
@@ -314,14 +313,28 @@ void MainWindow::setupSplitters() {
     m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin); 
     m_bodyLayout->setSpacing(0);
 
-    // 🚀【物理 5 像素 Handle】：绝对 5px 占位，清除任何破坏性 spacing
+    // 🚀【物理 5 像素深黑槽 + 8px 暗黑细滚动条】：彻底消除继承阻断，杜绝系统白底滚动条
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
     m_mainSplitter->setHandleWidth(5); 
     m_mainSplitter->setChildrenCollapsible(false);
     m_mainSplitter->setStyleSheet(QString(
-        "QSplitter { background: transparent; border: none; }"
+        "QSplitter { background-color: #141414; border: none; }"
         "QSplitter::handle:horizontal { background-color: #141414; width: 5px; }"
         "QSplitter::handle:horizontal:hover { background-color: %1; }"
+        "#SidebarContainer, #FavoriteContainer, #EditorContainer, #MetadataContainer, #FilterContainer {"
+        "  background-color: #1E1E1E;"
+        "  border: 1px solid #2A2A2A;"
+        "}"
+        "QScrollBar:vertical { border: none; background: transparent; width: 8px; margin: 0px; }"
+        "QScrollBar::handle:vertical { background: #3E3E42; min-height: 20px; border-radius: 4px; }"
+        "QScrollBar::handle:vertical:hover { background: #505054; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { width: 0px; height: 0px; }"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }"
+        "QScrollBar:horizontal { border: none; background: transparent; height: 8px; margin: 0px; }"
+        "QScrollBar::handle:horizontal { background: #3E3E42; min-width: 20px; border-radius: 4px; }"
+        "QScrollBar::handle:horizontal:hover { background: #505054; }"
+        "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; height: 0px; }"
+        "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }"
     ).arg(qssColor(PrimaryBlue)));
 
     m_navPanel = new NavPanel(this);

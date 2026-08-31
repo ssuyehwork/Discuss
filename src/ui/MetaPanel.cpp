@@ -106,7 +106,6 @@ void MetaPanel::initUi() {
     
     m_container = new QWidget(m_scrollArea);
     m_containerLayout = new QVBoxLayout(m_container);
-    m_containerLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
     m_containerLayout->setContentsMargins(8, 8, 8, 8);
     m_containerLayout->setSpacing(8);
 
@@ -196,7 +195,7 @@ void MetaPanel::initUi() {
 
     m_containerLayout->addWidget(createCollapsibleSection("关联网址", m_linkEdit, true));
 
-    // 5. 星级评级 + 颜色色标条 (严格采用 Hex 物理色值)
+    // 5. 星级评级 + 颜色色标条
     m_ratingColorBox = new QWidget(m_container);
     QVBoxLayout* ratingColorLayout = new QVBoxLayout(m_ratingColorBox);
     ratingColorLayout->setContentsMargins(0, 2, 0, 2);
@@ -208,7 +207,6 @@ void MetaPanel::initUi() {
     starLayout->setContentsMargins(0, 2, 0, 2);
     starLayout->setSpacing(2);
 
-    // 清除评级按钮 ⊘：完全保持原样（22x22px，图标 16px）
     QPushButton* btnClearStar = new QPushButton(ratingRow);
     btnClearStar->setFixedSize(22, 22);
     btnClearStar->setCursor(Qt::PointingHandCursor);
@@ -220,13 +218,12 @@ void MetaPanel::initUi() {
     connect(btnClearStar, &QPushButton::clicked, this, [this]() { setRating(0, true); });
     starLayout->addWidget(btnClearStar);
 
-    // 🚀 五角星按钮：仅按您的要求减小 2 像素（外框 20x20px，图标 16px）
     for (int i = 1; i <= 5; ++i) {
         QPushButton* btnStar = new QPushButton(ratingRow);
-        btnStar->setFixedSize(20, 20); // 👈 减小 2 像素
+        btnStar->setFixedSize(20, 20);
         btnStar->setCursor(Qt::PointingHandCursor);
-        btnStar->setIcon(UiHelper::getIcon("star", QColor("#555555"), 16)); // 👈 减小 2 像素
-        btnStar->setIconSize(QSize(16, 16)); // 👈 减小 2 像素
+        btnStar->setIcon(UiHelper::getIcon("star", QColor("#555555"), 16));
+        btnStar->setIconSize(QSize(16, 16));
         btnStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 3px; }");
         connect(btnStar, &QPushButton::clicked, this, [this, i]() {
             int newRating = (m_currentRating == i) ? 0 : i;
@@ -594,37 +591,8 @@ void MetaPanel::onTagDeleted(const QString& text) {
 
 void MetaPanel::resizeEvent(QResizeEvent* event) {
     QFrame::resizeEvent(event);
-    QTimer::singleShot(0, this, [this]() {
-        if (!m_scrollArea || !m_container) return;
-        int viewportW = m_scrollArea->viewport()->width();
-        if (viewportW < 100) return;
-
-        if (m_container->width() != viewportW) {
-            m_container->setFixedWidth(viewportW);
-        }
-        
-        int maxW = viewportW - 16;
-        if (maxW > 50) {
-            auto syncWidthAndHeight = [maxW](ElasticEdit* edit) {
-                if (edit && edit->width() != maxW) {
-                    edit->setFixedWidth(maxW);
-                    edit->adjustHeight();
-                }
-            };
-
-            syncWidthAndHeight(m_nameEdit);
-            syncWidthAndHeight(m_noteEdit);
-            if (m_btnAddTagBig) m_btnAddTagBig->setFixedWidth(maxW);
-            
-            if (m_topPreviewBox) m_topPreviewBox->setFixedWidth(maxW);
-            if (m_ratingColorBox) m_ratingColorBox->setFixedWidth(maxW);
-            if (m_tagBox) m_tagBox->setFixedWidth(maxW);
-            if (m_tagContainer) m_tagContainer->setFixedWidth(maxW);
-            
-            adjustFlowHeights();
-            m_container->adjustSize();
-        }
-    });
+    // 🚀【彻底拔除滞后锁】：由 QScrollArea 原生自适应，0 延迟无阻碍平滑响应
+    adjustFlowHeights();
 }
 
 void MetaPanel::adjustFlowHeights() {
@@ -664,8 +632,7 @@ void MetaPanel::adjustFlowHeights() {
 
 void MetaPanel::showEvent(QShowEvent* event) {
     QFrame::showEvent(event);
-    QResizeEvent e(size(), size());
-    MetaPanel::resizeEvent(&e);
+    adjustFlowHeights();
 }
 
 void MetaPanel::updateInfo(const QString& n, const QString& t, const QString& s, 
@@ -743,7 +710,6 @@ void MetaPanel::setRating(int rating, bool fromUser) {
     m_currentRating = rating;
     for (int i = 0; i < m_starBtns.size(); ++i) {
         bool active = (i < rating);
-        // 🚀 五角星图标尺寸严格设为 16px
         m_starBtns[i]->setIcon(UiHelper::getIcon(
             active ? "star_filled" : "star",
             active ? QColor("#FF551C") : QColor("#555555"),
@@ -851,7 +817,6 @@ bool MetaPanel::eventFilter(QObject* watched, QEvent* event) {
 
     if (m_isInternalUpdating || m_isReadOnlyMode) return QFrame::eventFilter(watched, event);
 
-    // 拦截文件名编辑的回车键，防止插入换行符并触发提交
     if (watched == m_nameEdit && event->type() == QEvent::KeyPress) {
         QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
         if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {

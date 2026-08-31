@@ -67,7 +67,6 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     connect(m_sortController, &ContentSortController::sortCriteriaChanged, this, [this](SortType, Qt::SortOrder) {
         m_sortController->applySortToModel(m_proxyModel);
     });
-
     m_sortController->applySortToModel(m_proxyModel);
 
     m_zoomLevel = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
@@ -98,7 +97,7 @@ void ContentPanel::initUi() {
     QWidget* titleBar = new QWidget(this);
     titleBar->setObjectName("ContainerHeader");
     titleBar->setFixedHeight(32);
-    titleBar->setStyleSheet("QWidget#ContainerHeader { background-color: #252526; border-bottom: 1px solid #333; }");
+    titleBar->setStyleSheet("QWidget#ContainerHeader { background-color: #252526; border-bottom: 1px solid #333333; }");
     QHBoxLayout* titleL = new QHBoxLayout(titleBar);
     titleL->setContentsMargins(15, 0, 5, 0);
     titleL->setSpacing(5);
@@ -164,6 +163,7 @@ void ContentPanel::initUi() {
 
     m_mainLayout->addWidget(titleBar);
 
+    // 🚀【纯净挂载】：所有边距彻底归零，分栏间隙完全由 Splitter 5px 掌控
     m_viewStack = new QStackedWidget(this);
     m_viewStack->setFrameShape(QFrame::NoFrame);
     initGridView();
@@ -172,12 +172,7 @@ void ContentPanel::initUi() {
     m_viewStack->addWidget(m_treeView);
     m_viewStack->setCurrentWidget(m_gridView);
 
-    // 🚀【彻底消灭不对称内边距】：所有边距归零，分栏间隙唯一由 Splitter 5px 决定
-    QVBoxLayout* wrapper = new QVBoxLayout();
-    wrapper->setContentsMargins(0, 0, 0, 0);
-    wrapper->setSpacing(0);
-    wrapper->addWidget(m_viewStack);
-    m_mainLayout->addLayout(wrapper);
+    m_mainLayout->addWidget(m_viewStack, 1);
 }
 
 void ContentPanel::initGridView() {
