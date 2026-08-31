@@ -230,8 +230,8 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             // Fallback: 复制绝对路径
             QStringList paths;
             auto indexes = view->selectionModel()->selectedIndexes();
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0) paths << QDir::toNativeSeparators(idx.data(PathRole).toString());
+            for (const auto& selIdx : indexes) {
+                if (selIdx.column() == 0) paths << QDir::toNativeSeparators(selIdx.data(PathRole).toString());
             }
             if (!paths.isEmpty()) QApplication::clipboard()->setText(paths.join("\r\n"));
             return true;
