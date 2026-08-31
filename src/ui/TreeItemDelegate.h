@@ -48,14 +48,19 @@ public:
         // 🚀【行底色彻底统一与防穿透自绘】：直接根据选中/悬停/行号奇偶绘制底色，贯穿整个单元格矩形
         painter->save();
         QColor bg;
+        bool useAlternate = false;
+        if (const QAbstractItemView* view = qobject_cast<const QAbstractItemView*>(option.widget)) {
+            useAlternate = view->alternatingRowColors();
+        }
+
         if (selected) {
             bg = QColor("#378ADD");
             bg.setAlphaF(0.15f);
         } else if (hover) {
             bg = QColor("#2A2D2E");
         } else {
-            // 根据行号奇偶直接精准赋值交替底色，完全绝缘 Qt 内部原生 Palette 露白
-            bg = (index.row() % 2 == 1) ? QColor("#252526") : QColor("#1E1E1E");
+            // 根据控件是否开启斑马纹与行号奇偶精准赋值底色
+            bg = (useAlternate && index.row() % 2 == 1) ? QColor("#252526") : QColor("#1E1E1E");
         }
         painter->setBrush(bg);
         painter->setPen(Qt::NoPen);

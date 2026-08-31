@@ -42,15 +42,9 @@ void PanelLayoutManager::initLayout() {
     m_mainSplitter->setStretchFactor(3, 0);
     m_mainSplitter->setStretchFactor(4, 0);
 
-    loadPanelVisibility();
-
     QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
     if (!state.isEmpty()) {
-        QTimer::singleShot(0, this, [this, state]() {
-            if (m_mainSplitter) {
-                m_mainSplitter->restoreState(state);
-            }
-        });
+        m_mainSplitter->restoreState(state);
     } else {
         QList<int> sizes;
         sizes << kBasePanelWidth << kBasePanelWidth << kContentBaseWidth << kBasePanelWidth << kBasePanelWidth;
@@ -62,8 +56,6 @@ void PanelLayoutManager::initLayout() {
 
 void PanelLayoutManager::resetSplitterLayout() {
     if (!m_mainSplitter) return;
-
-    m_isTagManagerMode = false;
 
     if (m_navPanel) m_navPanel->show();
     if (m_favoritePanel) m_favoritePanel->show();
@@ -102,11 +94,11 @@ void PanelLayoutManager::setPanelVisible(const QString& panelId, bool visible) {
 }
 
 bool PanelLayoutManager::isPanelVisible(const QString& panelId) const {
-    if (panelId == "nav" && m_navPanel) return m_navPanel->isVisible();
-    if (panelId == "favorite" && m_favoritePanel) return m_favoritePanel->isVisible();
-    if (panelId == "content" && m_contentPanel) return m_contentPanel->isVisible();
-    if (panelId == "meta" && m_metaPanel) return m_metaPanel->isVisible();
-    if (panelId == "filter" && m_filterPanel) return m_filterPanel->isVisible();
+    if (panelId == "nav" && m_navPanel) return !m_navPanel->isHidden();
+    if (panelId == "favorite" && m_favoritePanel) return !m_favoritePanel->isHidden();
+    if (panelId == "content" && m_contentPanel) return !m_contentPanel->isHidden();
+    if (panelId == "meta" && m_metaPanel) return !m_metaPanel->isHidden();
+    if (panelId == "filter" && m_filterPanel) return !m_filterPanel->isHidden();
     return false;
 }
 
@@ -117,7 +109,7 @@ void PanelLayoutManager::populatePanelMenu(QMenu* menu) {
         if (!panel) return;
         QAction* action = menu->addAction(text);
         action->setCheckable(true);
-        action->setChecked(panel->isVisible());
+        action->setChecked(!panel->isHidden());
         action->setEnabled(canHide);
 
         connect(action, &QAction::toggled, this, [this, panelId](bool visible) {
@@ -161,32 +153,10 @@ void PanelLayoutManager::updateDynamicMinimumSize() {
     m_mainWindow->setMinimumWidth(finalMinW);
 }
 
-void PanelLayoutManager::loadPanelVisibility() {
-    QVariant val = AppConfig::instance().getValue("MainWindow/PanelVisibility");
-    if (val.isValid()) {
-        QStringList hiddenPanels = val.toStringList();
-        if (m_navPanel)      m_navPanel->setHidden(hiddenPanels.contains("nav"));
-        if (m_favoritePanel) m_favoritePanel->setHidden(hiddenPanels.contains("favorite"));
-        if (m_metaPanel)     m_metaPanel->setHidden(hiddenPanels.contains("meta"));
-        if (m_filterPanel)   m_filterPanel->setHidden(hiddenPanels.contains("filter"));
-    }
-    updateDynamicMinimumSize();
-}
-
 void PanelLayoutManager::saveLayoutState() {
-    if (m_isTagManagerMode) return;
-
     if (m_mainSplitter) {
         AppConfig::instance().setValue("MainWindow/SplitterState", m_mainSplitter->saveState());
     }
-
-    QStringList hiddenPanels;
-    if (m_navPanel && !m_navPanel->isVisible())           hiddenPanels << "nav";
-    if (m_favoritePanel && !m_favoritePanel->isVisible()) hiddenPanels << "favorite";
-    if (m_metaPanel && !m_metaPanel->isVisible())         hiddenPanels << "meta";
-    if (m_filterPanel && !m_filterPanel->isVisible())     hiddenPanels << "filter";
-
-    AppConfig::instance().setValue("MainWindow/PanelVisibility", hiddenPanels);
     AppConfig::instance().sync();
 }
 

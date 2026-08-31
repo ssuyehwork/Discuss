@@ -91,10 +91,9 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
 
 FavoritePanel::FavoritePanel(QWidget* parent)
     : QFrame(parent) {
-    setObjectName("ListContainer");
+    setObjectName("FavoriteContainer");
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(230);
-    setStyleSheet("FavoritePanel { background-color: #1E1E1E; color: #EEEEEE; }");
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);

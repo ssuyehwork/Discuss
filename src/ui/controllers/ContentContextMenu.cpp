@@ -15,10 +15,14 @@
 #include "../../core/DiskTrashService.h"
 #include "../../core/PermanentDeleteService.h"
 #include "../../core/ClipboardService.h"
+#include "../../core/NavigationHistoryService.h"
 #include "../../core/OperationSnapshotEngine.h"
+#include "../../util/DiskIoService.h"
+#include "../FramelessFileDialog.h"
 #include "../../core/CoreEngine.h"
 #include "../../meta/MetadataManager.h"
 #include "../../crypto/EncryptionManager.h"
+#include "../../core/LastOperationManager.h"
 
 #include <QMenu>
 #include <QWidgetAction>
@@ -52,7 +56,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         }
     }
 
-    QString path = onItem ? currentIndex.data(PathRole).toString() : "";
+    QModelIndex col0Index = onItem ? currentIndex.sibling(currentIndex.row(), 0) : QModelIndex();
+    QString path = onItem ? col0Index.data(PathRole).toString() : "";
     QFileInfo itemInfo(path);
 
     QString currentPath = m_panel->currentPath();
@@ -147,6 +152,32 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction("复制名称")->setData(ContentPanel::ActionCopyName);
             menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
 
+            // 标签复制与粘贴
+            QString nativePath = QDir::toNativeSeparators(path);
+            QStringList itemTags;
+            if (!nativePath.isEmpty()) {
+                itemTags = MetadataManager::instance().getMeta(nativePath.toStdWString()).tags;
+            }
+            if (itemTags.isEmpty() && col0Index.isValid()) {
+                itemTags = col0Index.data(TagsRole).toStringList();
+            }
+            QStringList cleanTags;
+            for (const QString& t : itemTags) {
+                QString trimmed = t.trimmed();
+                if (!trimmed.isEmpty()) cleanTags << trimmed;
+            }
+            QAction* actCopyTags = menu.addAction("复制标签");
+            actCopyTags->setData(ContentPanel::ActionCopyTags);
+            actCopyTags->setEnabled(!cleanTags.isEmpty());
+
+            QAction* actPasteTags = menu.addAction("粘贴标签");
+            actPasteTags->setData(ContentPanel::ActionPasteTags);
+            actPasteTags->setEnabled(ClipboardService::instance().hasCopiedTags());
+
+            QAction* actRepeat = menu.addAction(LastOperationManager::instance().displayText());
+            actRepeat->setData(ContentPanel::ActionRepeatLastOp);
+            actRepeat->setEnabled(LastOperationManager::instance().hasOperation());
+
             menu.addSeparator();
             menu.addAction("刷新")->setData(ContentPanel::ActionRefresh);
         } else {
@@ -182,12 +213,91 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction("复制")->setData(ContentPanel::ActionCopy);
             menu.addAction("剪切")->setData(ContentPanel::ActionCut);
 
+            // 恢复“移动到”二级菜单 (获取当前驱动卷的最近15个访问文件夹 + 浏览选择)
+            if (!isComputerRoot && !currentPath.isEmpty()) {
+                std::wstring volSerial = MetadataManager::getVolumeSerialNumber(path.toStdWString());
+                QStringList recentFolders = NavigationHistoryService::getRecentVisitedFolders(volSerial);
+                recentFolders.removeAll(currentPath);
+
+                QMenu* moveMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor("#3498db"), 18), "移动到");
+                UiHelper::applyMenuStyle(moveMenu);
+
+                auto performMoveTo = [this](const QString& targetDir) {
+                    QStringList selectedPaths = m_panel->getSelectedPaths();
+                    if (selectedPaths.isEmpty()) return;
+
+                    DiskIoContext ioCtx;
+                    ioCtx.sources = selectedPaths;
+                    ioCtx.destination = targetDir;
+                    ioCtx.isMove = true;
+
+                    QPointer<ContentPanel> weakPanel(m_panel);
+                    DiskIoService::instance().executeAsync(ioCtx, [weakPanel](bool success) {
+                        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, success]() {
+                            if (weakPanel) {
+                                if (success) {
+                                    weakPanel->refreshAll();
+                                    ToolTipOverlay::instance()->showText(QCursor::pos(), "文件移动成功", 1500, QColor("#2ecc71"));
+                                } else {
+                                    ToolTipOverlay::instance()->showText(QCursor::pos(), "移动失败：物理写入未能完成", 2000, QColor("#e81123"));
+                                }
+                            }
+                        });
+                    });
+                };
+
+                for (const QString& recentDir : recentFolders) {
+                    QAction* actMove = moveMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), recentDir);
+                    connect(actMove, &QAction::triggered, this, [performMoveTo, recentDir]() {
+                        performMoveTo(recentDir);
+                    });
+                }
+
+                if (!recentFolders.isEmpty()) {
+                    moveMenu->addSeparator();
+                }
+
+                QAction* actBrowseMove = moveMenu->addAction("浏览选择文件夹...");
+                connect(actBrowseMove, &QAction::triggered, this, [this, performMoveTo]() {
+                    QString selectedDir = FramelessFileDialog::getExistingDirectory(m_panel, "选择移动的目标文件夹", m_panel->currentPath());
+                    if (!selectedDir.isEmpty()) {
+                        performMoveTo(selectedDir);
+                    }
+                });
+            }
+
             QAction* actItemPaste = menu.addAction("粘贴");
             actItemPaste->setData(ContentPanel::ActionPaste);
             actItemPaste->setEnabled(m_panel->canPaste(isFolder ? path : currentPath));
 
             menu.addAction("复制名称")->setData(ContentPanel::ActionCopyName);
             menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
+
+            // 标签复制与粘贴
+            QString nativePath = QDir::toNativeSeparators(path);
+            QStringList itemTags;
+            if (!nativePath.isEmpty()) {
+                itemTags = MetadataManager::instance().getMeta(nativePath.toStdWString()).tags;
+            }
+            if (itemTags.isEmpty() && col0Index.isValid()) {
+                itemTags = col0Index.data(TagsRole).toStringList();
+            }
+            QStringList cleanTags;
+            for (const QString& t : itemTags) {
+                QString trimmed = t.trimmed();
+                if (!trimmed.isEmpty()) cleanTags << trimmed;
+            }
+            QAction* actCopyTags = menu.addAction("复制标签");
+            actCopyTags->setData(ContentPanel::ActionCopyTags);
+            actCopyTags->setEnabled(!cleanTags.isEmpty());
+
+            QAction* actPasteTags = menu.addAction("粘贴标签");
+            actPasteTags->setData(ContentPanel::ActionPasteTags);
+            actPasteTags->setEnabled(ClipboardService::instance().hasCopiedTags());
+
+            QAction* actRepeat = menu.addAction(LastOperationManager::instance().displayText());
+            actRepeat->setData(ContentPanel::ActionRepeatLastOp);
+            actRepeat->setEnabled(LastOperationManager::instance().hasOperation());
 
             menu.addAction("重命名")->setData(ContentPanel::ActionRename);
 
@@ -312,6 +422,31 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             }
             break;
         }
+        case ContentPanel::ActionRepeatLastOp: {
+            if (!LastOperationManager::instance().hasOperation()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未记录任何可重复的操作", 1500, QColor("#e81123"));
+                break;
+            }
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            LastOperationType type = LastOperationManager::instance().type();
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    if (type == LastOperationType::SetRating) {
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().rating(), RatingRole);
+                    } else if (type == LastOperationType::SetColor) {
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().color(), ColorRole);
+                    } else if (type == LastOperationType::PasteTags) {
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+                    }
+                    count++;
+                }
+            }
+            if (count > 0) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已对 %1 个项目重复执行上一次操作").arg(count), 1500, QColor("#2ecc71"));
+            }
+            break;
+        }
         case ContentPanel::ActionShowInExplorer: {
             QString targetPath = onItem ? path : currentPath;
             if (!targetPath.isEmpty() && !targetPath.contains("://")) {
@@ -403,6 +538,47 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         case ContentPanel::ActionPaste:
             ClipboardService::instance().executePaste(isFolder ? path : currentPath, m_panel);
             break;
+        case ContentPanel::ActionCopyTags: {
+            QString nativePath = QDir::toNativeSeparators(path);
+            QStringList tags;
+            if (!nativePath.isEmpty()) {
+                tags = MetadataManager::instance().getMeta(nativePath.toStdWString()).tags;
+            }
+            if (tags.isEmpty() && col0Index.isValid()) {
+                tags = col0Index.data(TagsRole).toStringList();
+            }
+            QStringList cleanTags;
+            for (const QString& t : tags) {
+                QString trimmed = t.trimmed();
+                if (!trimmed.isEmpty()) cleanTags << trimmed;
+            }
+            if (!cleanTags.isEmpty()) {
+                ClipboardService::instance().setCopiedTags(cleanTags);
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制 %1 个标签").arg(cleanTags.size()), 1500, QColor("#2ecc71"));
+            } else {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "当前项目未绑定任何标签", 1500, QColor("#e81123"));
+            }
+            break;
+        }
+        case ContentPanel::ActionPasteTags: {
+            QStringList copiedTags = ClipboardService::instance().copiedTags();
+            if (copiedTags.isEmpty()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "剪贴板无有效标签", 1500, QColor("#e81123"));
+                break;
+            }
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    m_panel->getProxyModel()->setData(idx, copiedTags, TagsRole);
+                    count++;
+                }
+            }
+            if (count > 0) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将标签粘贴至 %1 个项目").arg(count), 1500, QColor("#2ecc71"));
+            }
+            break;
+        }
         case ContentPanel::ActionBatchCreate: {
             BatchCreateDialog dlg(currentPath, m_panel);
             if (dlg.exec() == QDialog::Accepted) {

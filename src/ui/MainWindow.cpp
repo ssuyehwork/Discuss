@@ -324,8 +324,8 @@ void MainWindow::setupSplitters() {
     m_mainSplitter->setChildrenCollapsible(false);
     m_mainSplitter->setStyleSheet(QString(
         "QSplitter { background: transparent; border: none; spacing: 0px; }"
-        "QSplitter::handle { background-color: #141414; width: 5px; margin: 0px; padding: 0px; }"
-        "QSplitter::handle:hover { background-color: %1; }"
+        "QSplitter::handle:horizontal { background-color: #141414; width: 5px; margin: 0px; padding: 0px; }"
+        "QSplitter::handle:horizontal:hover { background-color: %1; }"
     ).arg(qssColor(PrimaryBlue)));
 
     m_navPanel = new NavPanel(this);
@@ -479,7 +479,7 @@ void MainWindow::setupCustomTitleBarButtons() {
         "QSlider { background: transparent; margin-right: 5px; }" 
         "QSlider::groove:horizontal { height: 3px; background: #3F3F3F; border-radius: 2px; }" 
         "QSlider::sub-page:horizontal { background: #378ADD; border-radius: 2px; }" 
-        "QSlider::handle:horizontal { width: 10px; height: 10px; background: #8E8E93; border-radius: 5px; margin: -4px 0; }" 
+        "QSlider::handle:horizontal { width: 10px; height: 10px; background: #8E8E93; border-radius: 5px; margin: 5px 0; }" 
         "QSlider::handle:horizontal:hover { background: #CCCCCC; }" 
     ); 
      

@@ -37,15 +37,12 @@ public:
     void showPanelContextMenu(const QPoint& globalPos);
     void updateDynamicMinimumSize();
     void saveLayoutState();
-    void setTagManagerMode(bool isMode) { m_isTagManagerMode = isMode; }
 
 signals:
     void layoutResetCompleted();
     void panelVisibilityChanged(const QString& panelId, bool visible);
 
 private:
-    void loadPanelVisibility();
-
     QPointer<QMainWindow> m_mainWindow;
     QPointer<QSplitter> m_mainSplitter;
 
@@ -55,7 +52,6 @@ private:
     QPointer<MetaPanel> m_metaPanel;
     QPointer<FilterPanel> m_filterPanel;
 
-    bool m_isTagManagerMode = false;
     static constexpr int kBasePanelWidth = 230;
     static constexpr int kContentBaseWidth = 550;
     static constexpr int kSplitterHandleWidth = 5;

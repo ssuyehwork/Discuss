@@ -131,7 +131,7 @@ void PanelMediator::setupConnections() {
         // 监听卡片/列表上的就地修改，0 毫秒同步右侧 MetaPanel
         connect(contentPanel->model(), &QAbstractItemModel::dataChanged, metaPanel, 
                 [contentPanel, metaPanel](const QModelIndex& topLeft, const QModelIndex&, const QVector<int>& roles) {
-            if (!roles.isEmpty() && !roles.contains(RatingRole) && !roles.contains(ColorRole)) {
+            if (!roles.isEmpty() && !roles.contains(RatingRole) && !roles.contains(ColorRole) && !roles.contains(TagsRole) && !roles.contains(NoteRole) && !roles.contains(UrlRole)) {
                 return;
             }
 
@@ -150,6 +150,15 @@ void PanelMediator::setupConnections() {
                 if (roles.isEmpty() || roles.contains(ColorRole)) {
                     QString newColor = currentSel.data(ColorRole).toString();
                     metaPanel->setColor(newColor, false);
+                }
+                if (roles.isEmpty() || roles.contains(TagsRole)) {
+                    metaPanel->setTags(currentSel.data(TagsRole).toStringList());
+                }
+                if (roles.isEmpty() || roles.contains(NoteRole)) {
+                    metaPanel->setNote(currentSel.data(NoteRole).toString());
+                }
+                if (roles.isEmpty() || roles.contains(UrlRole)) {
+                    metaPanel->setURL(currentSel.data(UrlRole).toString());
                 }
             }
         });

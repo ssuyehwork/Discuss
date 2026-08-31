@@ -7,7 +7,11 @@
 #include "../../core/TrashService.h"
 #include "../../core/PermanentDeleteService.h"
 #include "../../core/ClipboardService.h"
+#include "../../core/AppConfig.h"
 #include "../../core/ModelContract.h"
+#include "../../util/DiskIoService.h"
+#include "../../core/LastOperationManager.h"
+#include <QPointer>
 
 #include <QWheelEvent>
 #include <QMouseEvent>
@@ -205,20 +209,124 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
 
-    // 4. Ctrl + Shift + C: 复制路径列表
+    // 4. Ctrl + Shift + C / V / R
     if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier)) {
         if (keyEvent->key() == Qt::Key_C) {
+            // 优先检查选中项目是否有标签，有标签则复制标签；若无标签，则保留原有的复制路径逻辑
+            QModelIndex idx = view->currentIndex();
+            if (!idx.isValid() && view->selectionModel()) {
+                auto selected = view->selectionModel()->selectedIndexes();
+                if (!selected.isEmpty()) idx = selected.first();
+            }
+            if (idx.isValid()) {
+                QModelIndex nameIdx = idx.sibling(idx.row(), 0);
+                QString path = nameIdx.data(PathRole).toString();
+                QString nativePath = QDir::toNativeSeparators(path);
+                QStringList tags = MetadataManager::instance().getMeta(nativePath.toStdWString()).tags;
+                if (tags.isEmpty()) {
+                    tags = nameIdx.data(TagsRole).toStringList();
+                }
+                tags.removeAll("");
+                if (!tags.isEmpty()) {
+                    ClipboardService::instance().setCopiedTags(tags);
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制 %1 个标签").arg(tags.size()), 1500, QColor("#2ecc71"));
+                    return true;
+                }
+            }
+
+            // Fallback: 复制绝对路径
             QStringList paths;
             auto indexes = view->selectionModel()->selectedIndexes();
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0) paths << QDir::toNativeSeparators(idx.data(PathRole).toString());
+            for (const auto& selIdx : indexes) {
+                if (selIdx.column() == 0) paths << QDir::toNativeSeparators(selIdx.data(PathRole).toString());
             }
             if (!paths.isEmpty()) QApplication::clipboard()->setText(paths.join("\r\n"));
             return true;
         }
+        if (keyEvent->key() == Qt::Key_V) {
+            QStringList copiedTags = ClipboardService::instance().copiedTags();
+            if (copiedTags.isEmpty()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "剪贴板无有效标签", 1500, QColor("#e81123"));
+                return true;
+            }
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            for (const auto& targetIdx : indexes) {
+                if (targetIdx.column() == 0) {
+                    m_panel->getProxyModel()->setData(targetIdx, copiedTags, TagsRole);
+                    count++;
+                }
+            }
+            if (count > 0) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将标签粘贴至 %1 个项目").arg(count), 1500, QColor("#2ecc71"));
+            }
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_R) {
+            QString lastDragDest = AppConfig::instance().getValue("RecentVisited/LastDragDropDestination").toString();
+            if (lastDragDest.isEmpty() || !QDir(lastDragDest).exists()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未发生过拖拽移入操作或目标文件夹不存在", 1500, QColor("#e81123"));
+                return true;
+            }
+
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            if (selectedPaths.isEmpty()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "未选择任何项目", 1200, QColor("#e81123"));
+                return true;
+            }
+
+            DiskIoContext ioCtx;
+            ioCtx.sources = selectedPaths;
+            ioCtx.destination = lastDragDest;
+            ioCtx.isMove = true;
+
+            QPointer<ContentPanel> weakPanel(m_panel);
+            DiskIoService::instance().executeAsync(ioCtx, [weakPanel, lastDragDest](bool success) {
+                QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, lastDragDest, success]() {
+                    if (weakPanel) {
+                        if (success) {
+                            weakPanel->refreshAll();
+                            QString folderName = QFileInfo(lastDragDest).fileName();
+                            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已移入到: %1").arg(folderName), 1500, QColor("#2ecc71"));
+                        } else {
+                            ToolTipOverlay::instance()->showText(QCursor::pos(), "移动失败：物理写入未能完成", 2000, QColor("#e81123"));
+                        }
+                    }
+                });
+            });
+            return true;
+        }
     }
 
-    // 5. 基础文件操作键
+    // 5. F4: 重复上一次操作 (星级 / 标记颜色 / 粘贴标签)
+    if (keyEvent->key() == Qt::Key_F4) {
+        if (!LastOperationManager::instance().hasOperation()) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未记录任何可重复的操作", 1500, QColor("#e81123"));
+            return true;
+        }
+
+        auto indexes = view->selectionModel()->selectedIndexes();
+        int count = 0;
+        LastOperationType type = LastOperationManager::instance().type();
+        for (const auto& targetIdx : indexes) {
+            if (targetIdx.column() == 0) {
+                if (type == LastOperationType::SetRating) {
+                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().rating(), RatingRole);
+                } else if (type == LastOperationType::SetColor) {
+                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().color(), ColorRole);
+                } else if (type == LastOperationType::PasteTags) {
+                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().tags(), TagsRole);
+                }
+                count++;
+            }
+        }
+        if (count > 0) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已对 %1 个项目重复执行上一次操作").arg(count), 1500, QColor("#2ecc71"));
+        }
+        return true;
+    }
+
+    // 6. 基础文件操作键
     if (keyEvent->key() == Qt::Key_F2) {
         QStringList selectedPaths = m_panel->getSelectedPaths();
         if (selectedPaths.size() > 1) {

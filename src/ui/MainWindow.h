@@ -137,7 +137,6 @@ private:
 
     // 状态管理
     bool m_isPinned = false;
-    bool m_isTagManagerMode = false;
     QString m_currentDataSource; // "category" or "nav"
     bool m_panelsInitialized = false; // 2026-04-12 状态锁：确保面板仅初始化一次
 

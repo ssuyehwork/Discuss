@@ -20,6 +20,7 @@
 #include "../core/TrashService.h"
 #include "../core/PermanentDeleteService.h"
 #include "../core/ClipboardService.h"
+#include "../core/NavigationHistoryService.h"
 #include "../meta/MetaCacheDecorator.h"
 #include "../meta/DiskTrashRepo.h"
 #include "../meta/DuplicateDetectorService.h"
@@ -44,7 +45,6 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("EditorContainer");
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(230);
-    setStyleSheet("#EditorContainer { background-color: #1E1E1E; border: none; color: #EEEEEE; }");
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -443,6 +443,12 @@ void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& t
         if (srcIdx.isValid() && QFileInfo(srcIdx.data(PathRole).toString()).isDir()) {
             destDir = srcIdx.data(PathRole).toString();
         }
+    }
+
+    if (!destDir.isEmpty() && destDir != "computer://") {
+        NavigationHistoryService::recordRecentVisitedFolder(QDir::toNativeSeparators(destDir).toStdWString());
+        AppConfig::instance().setValue("RecentVisited/LastDragDropDestination", destDir);
+        AppConfig::instance().sync();
     }
 
     DiskIoContext ioCtx;

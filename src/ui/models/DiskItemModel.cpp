@@ -14,6 +14,7 @@
 #include "FileOperationHelper.h"
 #include "MetadataManager.h"
 #include "DriveMetaDao.h"
+#include "../../core/LastOperationManager.h"
 
 namespace QuarkMeta {
 
@@ -307,6 +308,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
                 record.rating = newRating;
                 driveRec.rating = newRating;
                 driveUpdated = true;
+                LastOperationManager::instance().recordSetRating(newRating);
             }
         } else if (role == ColorRole) {
             QString newColor = value.toString();
@@ -314,6 +316,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
                 record.manualColor = newColor;
                 driveRec.color = newColor.toStdWString();
                 driveUpdated = true;
+                LastOperationManager::instance().recordSetColor(newColor);
             }
         } else if (role == IsLockedRole || role == PinnedRole) {
             bool pinned = value.toBool();
@@ -342,6 +345,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             record.rating = newRating;
             MetadataManager::instance().setRating(wpath, newRating, true);
             metaUpdated = true;
+            LastOperationManager::instance().recordSetRating(newRating);
         }
     } else if (role == ColorRole) {
         QString newColor = value.toString();
@@ -349,6 +353,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             record.manualColor = newColor;
             MetadataManager::instance().setColor(wpath, newColor.toStdWString(), true);
             metaUpdated = true;
+            LastOperationManager::instance().recordSetColor(newColor);
         }
     } else if (role == IsLockedRole || role == PinnedRole) {
         bool pinned = value.toBool();
@@ -357,6 +362,12 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             MetadataManager::instance().setPinned(wpath, pinned, true);
             metaUpdated = true;
         }
+    } else if (role == TagsRole) {
+        QStringList newTags = value.toStringList();
+        record.tags = newTags;
+        MetadataManager::instance().setTags(wpath, newTags, true);
+        metaUpdated = true;
+        LastOperationManager::instance().recordPasteTags(newTags);
     }
 
     if (metaUpdated) {
@@ -497,6 +508,14 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == EncryptedRole) {
         return record.encrypted;
     } else if (role == TagsRole) {
+        // 如果 record.tags 为空，尝试从 MetadataManager 读取最新数据
+        if (record.tags.isEmpty()) {
+            std::wstring wpath = path.toStdWString();
+            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
+            if (!meta.tags.isEmpty()) {
+                return meta.tags;
+            }
+        }
         return record.tags;
     } else if (role == NoteRole) {
         return record.note;
