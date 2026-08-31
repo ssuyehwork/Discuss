@@ -324,7 +324,7 @@ void MainWindow::setupSplitters() {
     m_mainSplitter->setChildrenCollapsible(false);
     m_mainSplitter->setStyleSheet(QString(
         "QSplitter { background: transparent; border: none; spacing: 0px; }"
-        "QSplitter::handle { background-color: #141414; width: 5px; margin: 0px; padding: 0px; }"
+        "QSplitter::handle { background-color: #1E1E1E; width: 5px; margin: 0px; padding: 0px; }"
         "QSplitter::handle:hover { background-color: %1; }"
     ).arg(qssColor(PrimaryBlue)));
 
