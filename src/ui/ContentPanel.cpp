@@ -20,6 +20,7 @@
 #include "../core/TrashService.h"
 #include "../core/PermanentDeleteService.h"
 #include "../core/ClipboardService.h"
+#include "../core/NavigationHistoryService.h"
 #include "../meta/MetaCacheDecorator.h"
 #include "../meta/DiskTrashRepo.h"
 #include "../meta/DuplicateDetectorService.h"
@@ -443,6 +444,10 @@ void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& t
         if (srcIdx.isValid() && QFileInfo(srcIdx.data(PathRole).toString()).isDir()) {
             destDir = srcIdx.data(PathRole).toString();
         }
+    }
+
+    if (!destDir.isEmpty() && destDir != "computer://") {
+        NavigationHistoryService::recordRecentVisitedFolder(QDir::toNativeSeparators(destDir).toStdWString());
     }
 
     DiskIoContext ioCtx;
