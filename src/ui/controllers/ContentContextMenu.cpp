@@ -15,7 +15,10 @@
 #include "../../core/DiskTrashService.h"
 #include "../../core/PermanentDeleteService.h"
 #include "../../core/ClipboardService.h"
+#include "../../core/NavigationHistoryService.h"
 #include "../../core/OperationSnapshotEngine.h"
+#include "../../util/DiskIoService.h"
+#include "../FramelessFileDialog.h"
 #include "../../core/CoreEngine.h"
 #include "../../meta/MetadataManager.h"
 #include "../../crypto/EncryptionManager.h"
@@ -181,6 +184,59 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             menu.addAction("复制")->setData(ContentPanel::ActionCopy);
             menu.addAction("剪切")->setData(ContentPanel::ActionCut);
+
+            // 恢复“移动到”二级菜单 (获取当前驱动卷的最近15个访问文件夹 + 浏览选择)
+            if (!isComputerRoot && !currentPath.isEmpty()) {
+                std::wstring volSerial = MetadataManager::getVolumeSerialNumber(path.toStdWString());
+                QStringList recentFolders = NavigationHistoryService::getRecentVisitedFolders(volSerial);
+                recentFolders.removeAll(currentPath);
+
+                QMenu* moveMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor("#3498db"), 18), "移动到");
+                UiHelper::applyMenuStyle(moveMenu);
+
+                auto performMoveTo = [this](const QString& targetDir) {
+                    QStringList selectedPaths = m_panel->getSelectedPaths();
+                    if (selectedPaths.isEmpty()) return;
+
+                    DiskIoContext ioCtx;
+                    ioCtx.sources = selectedPaths;
+                    ioCtx.destination = targetDir;
+                    ioCtx.isMove = true;
+
+                    QPointer<ContentPanel> weakPanel(m_panel);
+                    DiskIoService::instance().executeAsync(ioCtx, [weakPanel](bool success) {
+                        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, success]() {
+                            if (weakPanel) {
+                                if (success) {
+                                    weakPanel->refreshAll();
+                                    ToolTipOverlay::instance()->showText(QCursor::pos(), "文件移动成功", 1500, QColor("#2ecc71"));
+                                } else {
+                                    ToolTipOverlay::instance()->showText(QCursor::pos(), "移动失败：物理写入未能完成", 2000, QColor("#e81123"));
+                                }
+                            }
+                        });
+                    });
+                };
+
+                for (const QString& recentDir : recentFolders) {
+                    QAction* actMove = moveMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), recentDir);
+                    connect(actMove, &QAction::triggered, this, [performMoveTo, recentDir]() {
+                        performMoveTo(recentDir);
+                    });
+                }
+
+                if (!recentFolders.isEmpty()) {
+                    moveMenu->addSeparator();
+                }
+
+                QAction* actBrowseMove = moveMenu->addAction("浏览选择文件夹...");
+                connect(actBrowseMove, &QAction::triggered, this, [this, performMoveTo]() {
+                    QString selectedDir = FramelessFileDialog::getExistingDirectory(m_panel, "选择移动的目标文件夹", m_panel->currentPath());
+                    if (!selectedDir.isEmpty()) {
+                        performMoveTo(selectedDir);
+                    }
+                });
+            }
 
             QAction* actItemPaste = menu.addAction("粘贴");
             actItemPaste->setData(ContentPanel::ActionPaste);
