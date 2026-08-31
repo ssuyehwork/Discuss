@@ -150,6 +150,16 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction("复制名称")->setData(ContentPanel::ActionCopyName);
             menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
 
+            // 标签复制与粘贴
+            QStringList itemTags = currentIndex.data(TagsRole).toStringList();
+            QAction* actCopyTags = menu.addAction("复制标签");
+            actCopyTags->setData(ContentPanel::ActionCopyTags);
+            actCopyTags->setEnabled(!itemTags.isEmpty());
+
+            QAction* actPasteTags = menu.addAction("粘贴标签");
+            actPasteTags->setData(ContentPanel::ActionPasteTags);
+            actPasteTags->setEnabled(ClipboardService::instance().hasCopiedTags());
+
             menu.addSeparator();
             menu.addAction("刷新")->setData(ContentPanel::ActionRefresh);
         } else {
@@ -244,6 +254,16 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             menu.addAction("复制名称")->setData(ContentPanel::ActionCopyName);
             menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
+
+            // 标签复制与粘贴
+            QStringList itemTags = currentIndex.data(TagsRole).toStringList();
+            QAction* actCopyTags = menu.addAction("复制标签");
+            actCopyTags->setData(ContentPanel::ActionCopyTags);
+            actCopyTags->setEnabled(!itemTags.isEmpty());
+
+            QAction* actPasteTags = menu.addAction("粘贴标签");
+            actPasteTags->setData(ContentPanel::ActionPasteTags);
+            actPasteTags->setEnabled(ClipboardService::instance().hasCopiedTags());
 
             menu.addAction("重命名")->setData(ContentPanel::ActionRename);
 
@@ -459,6 +479,35 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         case ContentPanel::ActionPaste:
             ClipboardService::instance().executePaste(isFolder ? path : currentPath, m_panel);
             break;
+        case ContentPanel::ActionCopyTags: {
+            QStringList tags = currentIndex.data(TagsRole).toStringList();
+            if (!tags.isEmpty()) {
+                ClipboardService::instance().setCopiedTags(tags);
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制 %1 个标签").arg(tags.size()), 1500, QColor("#2ecc71"));
+            } else {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "当前项目未绑定任何标签", 1500, QColor("#e81123"));
+            }
+            break;
+        }
+        case ContentPanel::ActionPasteTags: {
+            QStringList copiedTags = ClipboardService::instance().copiedTags();
+            if (copiedTags.isEmpty()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "剪贴板无有效标签", 1500, QColor("#e81123"));
+                break;
+            }
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    m_panel->getProxyModel()->setData(idx, copiedTags, TagsRole);
+                    count++;
+                }
+            }
+            if (count > 0) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将标签粘贴至 %1 个项目").arg(count), 1500, QColor("#2ecc71"));
+            }
+            break;
+        }
         case ContentPanel::ActionBatchCreate: {
             BatchCreateDialog dlg(currentPath, m_panel);
             if (dlg.exec() == QDialog::Accepted) {

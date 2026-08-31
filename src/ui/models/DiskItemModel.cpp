@@ -357,6 +357,11 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             MetadataManager::instance().setPinned(wpath, pinned, true);
             metaUpdated = true;
         }
+    } else if (role == TagsRole) {
+        QStringList newTags = value.toStringList();
+        record.tags = newTags;
+        MetadataManager::instance().setTags(wpath, newTags, true);
+        metaUpdated = true;
     }
 
     if (metaUpdated) {

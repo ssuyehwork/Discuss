@@ -208,15 +208,51 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
 
-    // 4. Ctrl + Shift + C / R
+    // 4. Ctrl + Shift + C / V / R
     if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier)) {
         if (keyEvent->key() == Qt::Key_C) {
+            // 优先检查选中项目是否有标签，有标签则复制标签；若无标签，则保留原有的复制路径逻辑
+            QModelIndex idx = view->currentIndex();
+            if (!idx.isValid() && view->selectionModel()) {
+                auto selected = view->selectionModel()->selectedIndexes();
+                if (!selected.isEmpty()) idx = selected.first();
+            }
+            if (idx.isValid()) {
+                QModelIndex nameIdx = idx.sibling(idx.row(), 0);
+                QStringList tags = nameIdx.data(TagsRole).toStringList();
+                if (!tags.isEmpty()) {
+                    ClipboardService::instance().setCopiedTags(tags);
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制 %1 个标签").arg(tags.size()), 1500, QColor("#2ecc71"));
+                    return true;
+                }
+            }
+
+            // Fallback: 复制绝对路径
             QStringList paths;
             auto indexes = view->selectionModel()->selectedIndexes();
             for (const auto& idx : indexes) {
                 if (idx.column() == 0) paths << QDir::toNativeSeparators(idx.data(PathRole).toString());
             }
             if (!paths.isEmpty()) QApplication::clipboard()->setText(paths.join("\r\n"));
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_V) {
+            QStringList copiedTags = ClipboardService::instance().copiedTags();
+            if (copiedTags.isEmpty()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "剪贴板无有效标签", 1500, QColor("#e81123"));
+                return true;
+            }
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    m_panel->getProxyModel()->setData(idx, copiedTags, TagsRole);
+                    count++;
+                }
+            }
+            if (count > 0) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将标签粘贴至 %1 个项目").arg(count), 1500, QColor("#2ecc71"));
+            }
             return true;
         }
         if (keyEvent->key() == Qt::Key_R) {

@@ -23,6 +23,22 @@ ClipboardService& ClipboardService::instance() {
 
 ClipboardService::ClipboardService(QObject* parent) : QObject(parent) {}
 
+void ClipboardService::setCopiedTags(const QStringList& tags) {
+    m_copiedTags = tags;
+}
+
+QStringList ClipboardService::copiedTags() const {
+    return m_copiedTags;
+}
+
+bool ClipboardService::hasCopiedTags() const {
+    return !m_copiedTags.isEmpty();
+}
+
+void ClipboardService::clearCopiedTags() {
+    m_copiedTags.clear();
+}
+
 void ClipboardService::copyItems(const QStringList& paths) {
     if (paths.isEmpty()) return;
 
