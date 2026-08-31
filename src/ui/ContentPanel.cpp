@@ -512,9 +512,18 @@ void ContentPanel::setZoomLevel(int level) {
 
 void ContentPanel::updateGridSize() {
     if (m_viewStack->currentWidget() == m_gridView) {
-        if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) jv->setTargetRowHeight(m_zoomLevel);
+        if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+            jv->setTargetRowHeight(m_zoomLevel);
+        }
     } else if (m_viewStack->currentWidget() == m_treeView) {
+        // 🚀 同步更新表头与列表项，触发即时重排
+        if (auto* dropTree = qobject_cast<DropTreeView*>(m_treeView)) {
+            if (auto* hdr = qobject_cast<ContentHeaderView*>(dropTree->header())) {
+                hdr->setZoomLevel(m_zoomLevel);
+            }
+        }
         m_treeView->setIconSize(QSize(qMax(16, m_zoomLevel - 8), qMax(16, m_zoomLevel - 8)));
+        m_treeView->doItemsLayout();
     }
     AppConfig::instance().setValue("UI/GridZoomLevel", m_zoomLevel);
 }

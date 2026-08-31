@@ -314,6 +314,13 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
 }
 
 QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    // 1. 优先尝试 Ghostscript 矢量渲染（画质最好）
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token);
+    if (!gsImg.isNull()) {
+        return gsImg;
+    }
+
+    // 2. Ghostscript 不可用/渲染失败时，退回内嵌预览：先试 DOS 二进制头 (C5D0D3C6) 里嵌的 TIFF 预览
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         return QImage();
@@ -324,7 +331,6 @@ QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize
         return QImage();
     }
 
-    // 1. 优先尝试 DOS 二进制头 (C5D0D3C6)
     if (quint8(header[0]) == 0xC5 && quint8(header[1]) == 0xD0 &&
         quint8(header[2]) == 0xD3 && quint8(header[3]) == 0xC6) {
         
@@ -342,7 +348,7 @@ QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize
         }
     }
 
-    // 2. 普通 ASCII EPS (文本格式) 的 %%BeginPreview: 预览块解析
+    // 3. 最后兜底：%%BeginPreview / %%EndPreview 内嵌 EPSI 灰网预览
     file.seek(0);
     QTextStream in(&file);
     bool inPreview = false;
@@ -378,12 +384,6 @@ QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize
         if (img.loadFromData(binaryData)) {
             return img;
         }
-    }
-
-    // Ghostscript 终极矢量引擎
-    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token);
-    if (!gsImg.isNull()) {
-        return gsImg;
     }
 
     return QImage();

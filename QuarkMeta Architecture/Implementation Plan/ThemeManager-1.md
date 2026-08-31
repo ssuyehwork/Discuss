@@ -1,86 +1,74 @@
-# Implementation Plan - Tray Menu Dark Theme Fix (ThemeManager-1.md)
+# QuarkMeta 架构重构方案：ThemeManager 与 MainWindow 边距完全复原
 
-## Overview
-本实施方案旨在彻底解决 Windows 平台下系统托盘右键菜单（`QSystemTrayIcon::setContextMenu`）显示为 Win32 浅色原生菜单的问题。
-根因分析：在 Windows 上，Qt 对于未设置显式 `setStyleSheet(...)` 的 `QMenu` 实例，会默认走 Win32 原生 `HMENU` 弹出机制（从而忽略 `qApp` 全局样式表）。
-解决方案：在 `ThemeManager::applyMenuStyle(QWidget* menu)` 中，为传入的 `menu` 控件显式调用 `setStyleSheet(...)` 注入专用的暗黑 QSS，强制 Qt 触发自绘 QMenu 控件逻辑，从而完美呈现深色背景（`#252526`）、6px 圆角与 1px 细边框。
+## 一、 Overview
+彻底撤销给 `bodyWrapper` 误加的外边距与各面板容器上多余的卡片边框/圆角，彻底恢复 0 边距平整无缝隙的面板风格。保持主分割器把手 `5px` 标准物理宽度（`background-color: #141414`）。
 
----
+## 二、 Modified Files List
+- `src/ui/MainWindow.cpp`
+- `src/ui/ThemeManager.cpp`
 
-## Modified Files List
-1. `src/ui/ThemeManager.cpp`
-2. `src/ui/TrayController.cpp`
+## 三、 Detailed Line-by-Line Changes
 
----
-
-## Detailed Line-by-Line Changes
-
-### 1. `src/ui/ThemeManager.cpp`
-
-```
+### 1. `src/ui/MainWindow.cpp`
+```git
 <<<<<<< SEARCH
-void ThemeManager::applyMenuStyle(QWidget* menu) const {
-    if (!menu) return;
-    menu->setAttribute(Qt::WA_TranslucentBackground, true);
-    menu->setWindowFlags(menu->windowFlags() | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
-}
-=======
-void ThemeManager::applyMenuStyle(QWidget* menu) const {
-    if (!menu) return;
-    menu->setAttribute(Qt::WA_TranslucentBackground, true);
-    menu->setWindowFlags(menu->windowFlags() | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
+    m_bodyLayout->setContentsMargins(5, 5, 5, 5); 
+    m_bodyLayout->setSpacing(5);
 
-    // 🚀【核心修复】：显式设置 setStyleSheet，强制 Qt 绕过 Win32 原生 HMENU 渲染机制，走 Qt 自绘 QMenu
-    menu->setStyleSheet(
-        "QMenu {"
-        "   background-color: #252526;"
-        "   color: #EEEEEE;"
-        "   border: 1px solid #333333;"
-        "   border-radius: 6px;"
-        "   padding: 4px;"
-        "}"
-        "QMenu::item {"
-        "   background-color: transparent;"
-        "   color: #EEEEEE;"
-        "   padding: 6px 24px 6px 12px;"
-        "   border-radius: 4px;"
-        "   font-size: 12px;"
-        "}"
-        "QMenu::item:selected {"
-        "   background-color: #378ADD;"
-        "   color: #FFFFFF;"
-        "}"
-        "QMenu::separator {"
-        "   height: 1px;"
-        "   background-color: #333333;"
-        "   margin: 4px 6px;"
-        "}"
-    );
-}
+    m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
+    m_mainSplitter->setHandleWidth(5); 
+    m_mainSplitter->setChildrenCollapsible(false);
+    m_mainSplitter->setStyleSheet(QString(
+        "QSplitter { background: transparent; border: none; }"
+        "QSplitter::handle { background: transparent; width: 5px; }"
+        "QSplitter::handle:hover { background-color: %1; }"
+    ).arg(qssColor(PrimaryBlue)));
+=======
+    m_bodyLayout->setContentsMargins(0, 0, 0, 0); 
+    m_bodyLayout->setSpacing(0);
+
+    m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
+    m_mainSplitter->setHandleWidth(5); 
+    m_mainSplitter->setChildrenCollapsible(false);
+    m_mainSplitter->setStyleSheet(QString(
+        "QSplitter { background: transparent; border: none; spacing: 0px; }"
+        "QSplitter::handle { background-color: #141414; width: 5px; margin: 0px; padding: 0px; }"
+        "QSplitter::handle:hover { background-color: %1; }"
+    ).arg(qssColor(PrimaryBlue)));
 >>>>>>> REPLACE
 ```
 
----
-
-### 2. `src/ui/TrayController.cpp`
-
-```
+### 2. `src/ui/ThemeManager.cpp`
+```git
 <<<<<<< SEARCH
-    m_trayMenu = new QMenu(nullptr);
+        #SidebarContainer, #FavoriteContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
+            background-color: #1E1E1E;
+            border: 1px solid #333333;
+            border-radius: 4px;
+        }
+        #ContainerHeader {
+            background-color: #252526;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            border-bottom: 1px solid #333333;
+        }
 =======
-    m_trayMenu = new QMenu(mainWindow);
+        #SidebarContainer, #FavoriteContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
+            background-color: #1E1E1E;
+            border: none;
+            border-radius: 0px;
+            margin: 0px;
+            padding: 0px;
+        }
+        #ContainerHeader {
+            background-color: #252526;
+            border-radius: 0px;
+            border-bottom: 1px solid #333333;
+        }
 >>>>>>> REPLACE
 ```
 
----
-
-## Build & Verification Steps
-
-1. **构建工程**：
-   在 MSVC 编译环境下运行：
-   ```bash
-   cmake --build build --config Release
-   ```
-2. **功能验证**：
-   - 启动应用，在 Windows 任务栏系统托盘区域右键点击 QuarkMeta 图标。
-   - 确认托盘菜单不再显示为浅色 Win32 灰框，而是完美呈现深灰背景（`#252526`）、白色文字与蓝色选中高亮的暗黑自绘 QMenu。
+## 四、 Build & Verification Steps
+1. 确认 `src/ui/MainWindow.cpp` body 边距为 0。
+2. 确认 `src/ui/ThemeManager.cpp` 面板容器 `border: none; border-radius: 0px;`。
+3. 确认 `m_mainSplitter` handle 宽度 5px，背景色 `#141414`。

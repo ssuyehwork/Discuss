@@ -270,6 +270,8 @@ set(SOURCES
     src/ui/dialogs/FramelessMessageBox.cpp
     src/ui/CardLayoutEngine.h
     src/ui/CardLayoutEngine.cpp
+    src/ui/RowLayoutEngine.h
+    src/ui/RowLayoutEngine.cpp
     src/ui/RatingBarLayout.h
     src/ui/RatingBarLayout.cpp
     src/ui/ToolTipOverlay.cpp

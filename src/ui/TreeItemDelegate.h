@@ -12,6 +12,7 @@
 #include "ContentPanel.h"
 #include "ThumbnailDelegate.h"
 #include "RatingBarLayout.h"
+#include "RowLayoutEngine.h"
 #include "../meta/MetadataManager.h"
 #include "../core/ModelContract.h"
 #include "UiHelper.h"
@@ -31,7 +32,9 @@ public:
 
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         QSize sz = QStyledItemDelegate::sizeHint(option, index);
-        sz.setHeight(32); // 🚀 显式锁定列表行高为 32px (绝对突破默认 20px 限制)
+        const QAbstractItemView* view = qobject_cast<const QAbstractItemView*>(option.widget);
+        int zoom = view ? view->iconSize().height() + 8 : 30;
+        sz.setHeight(RowLayoutEngine::calculateRowHeight(zoom));
         return sz;
     }
 
@@ -81,11 +84,9 @@ public:
             painter->setRenderHint(QPainter::Antialiasing);
             painter->setRenderHint(QPainter::SmoothPixmapTransform);
 
-            int padding = 3;
-            int side = option.rect.height() - (padding * 2);
-            if (side <= 0) side = 16;
-
-            QRect squareRect(option.rect.left() + 6, option.rect.top() + padding, side, side);
+            RowLayout layout = RowLayoutEngine::calculate(option.rect, option.rect.height());
+            QRect squareRect = layout.cardRect;
+            QRect textRect   = layout.textRect;
 
             // 1. 绘制微型卡片背景（严格保持 Version-1 / Version-2 的纯透明背景底板）
             painter->setPen(Qt::NoPen);
@@ -122,7 +123,7 @@ public:
                 } else {
                     QIcon icon = qvariant_cast<QIcon>(decoData);
                     if (!icon.isNull()) {
-                        int iconSize = qRound(side * 0.75);
+                        int iconSize = qRound(squareRect.width() * 0.75);
                         QRect iconRect(squareRect.center().x() - iconSize / 2,
                                        squareRect.center().y() - iconSize / 2,
                                        iconSize, iconSize);
@@ -132,7 +133,7 @@ public:
             } else {
                 QIcon icon = qvariant_cast<QIcon>(decoData);
                 if (!icon.isNull()) {
-                    int iconSize = qRound(side * 0.75);
+                    int iconSize = qRound(squareRect.width() * 0.75);
                     QRect iconRect(squareRect.center().x() - iconSize / 2,
                                    squareRect.center().y() - iconSize / 2,
                                    iconSize, iconSize);
@@ -152,15 +153,12 @@ public:
                 painter->restore();
             }
 
-            // 4. 文本排版向右偏移（在 32px 行高下，固定起始起点 40px = 6px left + 26px 卡片 + 8px 间距，保持绝对对齐与稳定）
+            // 4. 文本排版向右偏移：使用统一文本矩形
             QString name = index.data(Qt::DisplayRole).toString();
             QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
 
             painter->setPen(textColor);
             painter->setFont(option.font);
-
-            QRect textRect = option.rect;
-            textRect.setLeft(option.rect.left() + 40);
 
             QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideMiddle, textRect.width() - 10);
             painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
@@ -239,31 +237,14 @@ public:
     }
 
     void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
-        QRect targetRect = option.rect;
-
-        // 2026-07-26 极致重构：如果渲染了微卡片，则对编辑器 left 边界执行完全的物理避让（对应用户原话：“绝不覆盖、叠占卡片”）
         if (index.column() == 0 && m_drawMiniCards) {
-            int padding = 3;
-            int side = option.rect.height() - (padding * 2);
-            if (side <= 0) side = 16;
-            QRect squareRect(option.rect.left() + 6, option.rect.top() + padding, side, side);
-            targetRect.setLeft(squareRect.right() + 10);
+            RowLayout layout = RowLayoutEngine::calculate(option.rect, option.rect.height());
+            editor->setGeometry(layout.editorRect);
         } else {
-            targetRect.adjust(6, 0, -6, 0);
+            QRect r = option.rect;
+            r.adjust(6, 2, -6, -2);
+            editor->setGeometry(r);
         }
-
-        // 2026-07-26 极致重构：行内编辑框物理最大高度不超过 28 像素限幅约束，居中收缩留白（对应用户原话：“行内编辑的编辑框高度不可大于28像素”）
-        const int maxH = 28;
-        if (targetRect.height() > maxH) {
-            int diff = targetRect.height() - maxH;
-            int topAdj = diff / 2;
-            int botAdj = diff - topAdj;
-            targetRect.adjust(0, topAdj, 0, -botAdj);
-        } else {
-            targetRect.adjust(0, 2, 0, -2);
-        }
-
-        editor->setGeometry(targetRect);
     }
 
     bool eventFilter(QObject* obj, QEvent* event) override {
