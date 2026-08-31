@@ -3,6 +3,7 @@
 #include "MetadataDefs.h"
 #include <unordered_map>
 #include <shared_mutex>
+#include <mutex>
 #include <array>
 #include <string>
 #include <vector>

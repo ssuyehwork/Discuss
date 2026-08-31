@@ -45,7 +45,6 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("EditorContainer");
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(230);
-    setStyleSheet("#EditorContainer { background-color: #1E1E1E; border: none; color: #EEEEEE; }");
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -215,6 +214,7 @@ void ContentPanel::initListView() {
     m_treeView->setFrameShape(QFrame::NoFrame);
     m_treeView->setAlternatingRowColors(true);
     m_treeView->setSortingEnabled(true);
+    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_treeView->setRootIsDecorated(false);
@@ -225,6 +225,7 @@ void ContentPanel::initListView() {
 
     auto* header = m_treeView->header();
     header->setFixedHeight(32);
+    header->setMinimumSectionSize(20);
     header->setSectionResizeMode(0, QHeaderView::Stretch);
     for (int i = 1; i <= 6; ++i) header->setSectionResizeMode(i, QHeaderView::Fixed);
     header->resizeSection(1, 40);  // 状态

@@ -29,13 +29,9 @@ namespace QuarkMeta {
  */
 NavPanel::NavPanel(QWidget* parent)
     : QFrame(parent) {
-    setObjectName("ListContainer");
+    setObjectName("SidebarContainer");
     setAttribute(Qt::WA_StyledBackground, true);
-    // 设置面板宽度（遵循文档：导航面板 230px）
     setMinimumWidth(230);
-
-    // 核心修正：设置明确的背景色与前景色，防止 QSS 异步加载时露出系统默认浅色背景
-    setStyleSheet("NavPanel { background-color: #1E1E1E; color: #EEEEEE; }");
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
