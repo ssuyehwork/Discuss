@@ -219,7 +219,13 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             }
             if (idx.isValid()) {
                 QModelIndex nameIdx = idx.sibling(idx.row(), 0);
-                QStringList tags = nameIdx.data(TagsRole).toStringList();
+                QString path = nameIdx.data(PathRole).toString();
+                QString nativePath = QDir::toNativeSeparators(path);
+                QStringList tags = MetadataManager::instance().getMeta(nativePath.toStdWString()).tags;
+                if (tags.isEmpty()) {
+                    tags = nameIdx.data(TagsRole).toStringList();
+                }
+                tags.removeAll("");
                 if (!tags.isEmpty()) {
                     ClipboardService::instance().setCopiedTags(tags);
                     ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制 %1 个标签").arg(tags.size()), 1500, QColor("#2ecc71"));
@@ -244,9 +250,9 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             }
             auto indexes = view->selectionModel()->selectedIndexes();
             int count = 0;
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0) {
-                    m_panel->getProxyModel()->setData(idx, copiedTags, TagsRole);
+            for (const auto& targetIdx : indexes) {
+                if (targetIdx.column() == 0) {
+                    m_panel->getProxyModel()->setData(targetIdx, copiedTags, TagsRole);
                     count++;
                 }
             }

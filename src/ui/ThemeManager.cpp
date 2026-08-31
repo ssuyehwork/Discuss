@@ -57,6 +57,10 @@ QString ThemeManager::getGlobalStyleSheet() const {
             background-color: #3E3E42;
             color: #FFFFFF;
         }
+        QMenu::item:disabled {
+            color: #666666;
+            background-color: transparent;
+        }
         QMenu::separator {
             height: 1px;
             background-color: #333333;
@@ -129,6 +133,10 @@ void ThemeManager::applyMenuStyle(QWidget* menu) const {
         "QMenu::item:selected {"
         "   background-color: #3E3E42;"
         "   color: #FFFFFF;"
+        "}"
+        "QMenu::item:disabled {"
+        "   color: #666666;"
+        "   background-color: transparent;"
         "}"
         "QMenu::separator {"
         "   height: 1px;"

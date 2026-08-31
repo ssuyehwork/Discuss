@@ -55,7 +55,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         }
     }
 
-    QString path = onItem ? currentIndex.data(PathRole).toString() : "";
+    QModelIndex col0Index = onItem ? currentIndex.sibling(currentIndex.row(), 0) : QModelIndex();
+    QString path = onItem ? col0Index.data(PathRole).toString() : "";
     QFileInfo itemInfo(path);
 
     QString currentPath = m_panel->currentPath();
@@ -151,10 +152,22 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
 
             // 标签复制与粘贴
-            QStringList itemTags = currentIndex.data(TagsRole).toStringList();
+            QString nativePath = QDir::toNativeSeparators(path);
+            QStringList itemTags;
+            if (!nativePath.isEmpty()) {
+                itemTags = MetadataManager::instance().getMeta(nativePath.toStdWString()).tags;
+            }
+            if (itemTags.isEmpty() && col0Index.isValid()) {
+                itemTags = col0Index.data(TagsRole).toStringList();
+            }
+            QStringList cleanTags;
+            for (const QString& t : itemTags) {
+                QString trimmed = t.trimmed();
+                if (!trimmed.isEmpty()) cleanTags << trimmed;
+            }
             QAction* actCopyTags = menu.addAction("复制标签");
             actCopyTags->setData(ContentPanel::ActionCopyTags);
-            actCopyTags->setEnabled(!itemTags.isEmpty());
+            actCopyTags->setEnabled(!cleanTags.isEmpty());
 
             QAction* actPasteTags = menu.addAction("粘贴标签");
             actPasteTags->setData(ContentPanel::ActionPasteTags);
@@ -256,10 +269,22 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
 
             // 标签复制与粘贴
-            QStringList itemTags = currentIndex.data(TagsRole).toStringList();
+            QString nativePath = QDir::toNativeSeparators(path);
+            QStringList itemTags;
+            if (!nativePath.isEmpty()) {
+                itemTags = MetadataManager::instance().getMeta(nativePath.toStdWString()).tags;
+            }
+            if (itemTags.isEmpty() && col0Index.isValid()) {
+                itemTags = col0Index.data(TagsRole).toStringList();
+            }
+            QStringList cleanTags;
+            for (const QString& t : itemTags) {
+                QString trimmed = t.trimmed();
+                if (!trimmed.isEmpty()) cleanTags << trimmed;
+            }
             QAction* actCopyTags = menu.addAction("复制标签");
             actCopyTags->setData(ContentPanel::ActionCopyTags);
-            actCopyTags->setEnabled(!itemTags.isEmpty());
+            actCopyTags->setEnabled(!cleanTags.isEmpty());
 
             QAction* actPasteTags = menu.addAction("粘贴标签");
             actPasteTags->setData(ContentPanel::ActionPasteTags);
@@ -480,10 +505,22 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             ClipboardService::instance().executePaste(isFolder ? path : currentPath, m_panel);
             break;
         case ContentPanel::ActionCopyTags: {
-            QStringList tags = currentIndex.data(TagsRole).toStringList();
-            if (!tags.isEmpty()) {
-                ClipboardService::instance().setCopiedTags(tags);
-                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制 %1 个标签").arg(tags.size()), 1500, QColor("#2ecc71"));
+            QString nativePath = QDir::toNativeSeparators(path);
+            QStringList tags;
+            if (!nativePath.isEmpty()) {
+                tags = MetadataManager::instance().getMeta(nativePath.toStdWString()).tags;
+            }
+            if (tags.isEmpty() && col0Index.isValid()) {
+                tags = col0Index.data(TagsRole).toStringList();
+            }
+            QStringList cleanTags;
+            for (const QString& t : tags) {
+                QString trimmed = t.trimmed();
+                if (!trimmed.isEmpty()) cleanTags << trimmed;
+            }
+            if (!cleanTags.isEmpty()) {
+                ClipboardService::instance().setCopiedTags(cleanTags);
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制 %1 个标签").arg(cleanTags.size()), 1500, QColor("#2ecc71"));
             } else {
                 ToolTipOverlay::instance()->showText(QCursor::pos(), "当前项目未绑定任何标签", 1500, QColor("#e81123"));
             }
