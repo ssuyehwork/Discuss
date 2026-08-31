@@ -7,7 +7,10 @@
 #include "../../core/TrashService.h"
 #include "../../core/PermanentDeleteService.h"
 #include "../../core/ClipboardService.h"
+#include "../../core/AppConfig.h"
 #include "../../core/ModelContract.h"
+#include "../../util/DiskIoService.h"
+#include <QPointer>
 
 #include <QWheelEvent>
 #include <QMouseEvent>
@@ -205,7 +208,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
 
-    // 4. Ctrl + Shift + C: 复制路径列表
+    // 4. Ctrl + Shift + C / R
     if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier)) {
         if (keyEvent->key() == Qt::Key_C) {
             QStringList paths;
@@ -214,6 +217,40 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
                 if (idx.column() == 0) paths << QDir::toNativeSeparators(idx.data(PathRole).toString());
             }
             if (!paths.isEmpty()) QApplication::clipboard()->setText(paths.join("\r\n"));
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_R) {
+            QString lastDragDest = AppConfig::instance().getValue("RecentVisited/LastDragDropDestination").toString();
+            if (lastDragDest.isEmpty() || !QDir(lastDragDest).exists()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未发生过拖拽移入操作或目标文件夹不存在", 1500, QColor("#e81123"));
+                return true;
+            }
+
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            if (selectedPaths.isEmpty()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "未选择任何项目", 1200, QColor("#e81123"));
+                return true;
+            }
+
+            DiskIoContext ioCtx;
+            ioCtx.sources = selectedPaths;
+            ioCtx.destination = lastDragDest;
+            ioCtx.isMove = true;
+
+            QPointer<ContentPanel> weakPanel(m_panel);
+            DiskIoService::instance().executeAsync(ioCtx, [weakPanel, lastDragDest](bool success) {
+                QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, lastDragDest, success]() {
+                    if (weakPanel) {
+                        if (success) {
+                            weakPanel->refreshAll();
+                            QString folderName = QFileInfo(lastDragDest).fileName();
+                            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已移入到: %1").arg(folderName), 1500, QColor("#2ecc71"));
+                        } else {
+                            ToolTipOverlay::instance()->showText(QCursor::pos(), "移动失败：物理写入未能完成", 2000, QColor("#e81123"));
+                        }
+                    }
+                });
+            });
             return true;
         }
     }

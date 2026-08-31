@@ -448,6 +448,8 @@ void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& t
 
     if (!destDir.isEmpty() && destDir != "computer://") {
         NavigationHistoryService::recordRecentVisitedFolder(QDir::toNativeSeparators(destDir).toStdWString());
+        AppConfig::instance().setValue("RecentVisited/LastDragDropDestination", destDir);
+        AppConfig::instance().sync();
     }
 
     DiskIoContext ioCtx;
