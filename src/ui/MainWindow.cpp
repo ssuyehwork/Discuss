@@ -316,7 +316,7 @@ void MainWindow::setupSplitters() {
     QWidget* bodyWrapper = new QWidget(centralC);
     bodyWrapper->setStyleSheet("background: transparent;");
     m_bodyLayout = new QVBoxLayout(bodyWrapper);
-    m_bodyLayout->setContentsMargins(0, 0, 0, 0); 
+    m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin);
     m_bodyLayout->setSpacing(0);
 
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
@@ -647,6 +647,9 @@ void MainWindow::changeEvent(QEvent* event) {
             m_btnMax->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
         }
 
+        if (m_bodyLayout) {
+            m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin);
+        }
     }
     QMainWindow::changeEvent(event);
 }
