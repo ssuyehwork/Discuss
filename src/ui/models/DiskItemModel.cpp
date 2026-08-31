@@ -14,6 +14,7 @@
 #include "FileOperationHelper.h"
 #include "MetadataManager.h"
 #include "DriveMetaDao.h"
+#include "../../core/LastOperationManager.h"
 
 namespace QuarkMeta {
 
@@ -307,6 +308,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
                 record.rating = newRating;
                 driveRec.rating = newRating;
                 driveUpdated = true;
+                LastOperationManager::instance().recordSetRating(newRating);
             }
         } else if (role == ColorRole) {
             QString newColor = value.toString();
@@ -314,6 +316,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
                 record.manualColor = newColor;
                 driveRec.color = newColor.toStdWString();
                 driveUpdated = true;
+                LastOperationManager::instance().recordSetColor(newColor);
             }
         } else if (role == IsLockedRole || role == PinnedRole) {
             bool pinned = value.toBool();
@@ -342,6 +345,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             record.rating = newRating;
             MetadataManager::instance().setRating(wpath, newRating, true);
             metaUpdated = true;
+            LastOperationManager::instance().recordSetRating(newRating);
         }
     } else if (role == ColorRole) {
         QString newColor = value.toString();
@@ -349,6 +353,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             record.manualColor = newColor;
             MetadataManager::instance().setColor(wpath, newColor.toStdWString(), true);
             metaUpdated = true;
+            LastOperationManager::instance().recordSetColor(newColor);
         }
     } else if (role == IsLockedRole || role == PinnedRole) {
         bool pinned = value.toBool();
@@ -362,6 +367,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
         record.tags = newTags;
         MetadataManager::instance().setTags(wpath, newTags, true);
         metaUpdated = true;
+        LastOperationManager::instance().recordPasteTags(newTags);
     }
 
     if (metaUpdated) {

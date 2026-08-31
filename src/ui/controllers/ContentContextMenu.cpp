@@ -22,6 +22,7 @@
 #include "../../core/CoreEngine.h"
 #include "../../meta/MetadataManager.h"
 #include "../../crypto/EncryptionManager.h"
+#include "../../core/LastOperationManager.h"
 
 #include <QMenu>
 #include <QWidgetAction>
@@ -173,6 +174,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             actPasteTags->setData(ContentPanel::ActionPasteTags);
             actPasteTags->setEnabled(ClipboardService::instance().hasCopiedTags());
 
+            QAction* actRepeat = menu.addAction(LastOperationManager::instance().displayText());
+            actRepeat->setData(ContentPanel::ActionRepeatLastOp);
+            actRepeat->setEnabled(LastOperationManager::instance().hasOperation());
+
             menu.addSeparator();
             menu.addAction("刷新")->setData(ContentPanel::ActionRefresh);
         } else {
@@ -289,6 +294,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             QAction* actPasteTags = menu.addAction("粘贴标签");
             actPasteTags->setData(ContentPanel::ActionPasteTags);
             actPasteTags->setEnabled(ClipboardService::instance().hasCopiedTags());
+
+            QAction* actRepeat = menu.addAction(LastOperationManager::instance().displayText());
+            actRepeat->setData(ContentPanel::ActionRepeatLastOp);
+            actRepeat->setEnabled(LastOperationManager::instance().hasOperation());
 
             menu.addAction("重命名")->setData(ContentPanel::ActionRename);
 
@@ -410,6 +419,31 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                         QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
                     }
                 }
+            }
+            break;
+        }
+        case ContentPanel::ActionRepeatLastOp: {
+            if (!LastOperationManager::instance().hasOperation()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未记录任何可重复的操作", 1500, QColor("#e81123"));
+                break;
+            }
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            LastOperationType type = LastOperationManager::instance().type();
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    if (type == LastOperationType::SetRating) {
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().rating(), RatingRole);
+                    } else if (type == LastOperationType::SetColor) {
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().color(), ColorRole);
+                    } else if (type == LastOperationType::PasteTags) {
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+                    }
+                    count++;
+                }
+            }
+            if (count > 0) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已对 %1 个项目重复执行上一次操作").arg(count), 1500, QColor("#2ecc71"));
             }
             break;
         }

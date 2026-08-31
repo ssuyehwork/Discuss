@@ -10,6 +10,7 @@
 #include "../../core/AppConfig.h"
 #include "../../core/ModelContract.h"
 #include "../../util/DiskIoService.h"
+#include "../../core/LastOperationManager.h"
 #include <QPointer>
 
 #include <QWheelEvent>
@@ -297,7 +298,35 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
     }
 
-    // 5. 基础文件操作键
+    // 5. F4: 重复上一次操作 (星级 / 标记颜色 / 粘贴标签)
+    if (keyEvent->key() == Qt::Key_F4) {
+        if (!LastOperationManager::instance().hasOperation()) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未记录任何可重复的操作", 1500, QColor("#e81123"));
+            return true;
+        }
+
+        auto indexes = view->selectionModel()->selectedIndexes();
+        int count = 0;
+        LastOperationType type = LastOperationManager::instance().type();
+        for (const auto& targetIdx : indexes) {
+            if (targetIdx.column() == 0) {
+                if (type == LastOperationType::SetRating) {
+                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().rating(), RatingRole);
+                } else if (type == LastOperationType::SetColor) {
+                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().color(), ColorRole);
+                } else if (type == LastOperationType::PasteTags) {
+                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().tags(), TagsRole);
+                }
+                count++;
+            }
+        }
+        if (count > 0) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已对 %1 个项目重复执行上一次操作").arg(count), 1500, QColor("#2ecc71"));
+        }
+        return true;
+    }
+
+    // 6. 基础文件操作键
     if (keyEvent->key() == Qt::Key_F2) {
         QStringList selectedPaths = m_panel->getSelectedPaths();
         if (selectedPaths.size() > 1) {
