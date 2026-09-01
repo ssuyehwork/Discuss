@@ -21,6 +21,8 @@ public:
     explicit NavPanel(QWidget* parent = nullptr);
     ~NavPanel() override = default;
 
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
     // 🚀【物理契约】：刚性锁定 230px 下限，杜绝被 QSplitter 挤压偷扣像素
     QSize minimumSizeHint() const override { return QSize(230, 100); }
 

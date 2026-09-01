@@ -5,6 +5,7 @@
 #include "TreeItemDelegate.h"
 #include "DropTreeView.h"
 #include "ContentPanel.h"
+#include "ToolTipOverlay.h"
 #include "../core/AppConfig.h"
 #include <QHeaderView>
 #include <QScrollBar>
@@ -114,7 +115,8 @@ void NavPanel::initUi() {
     QPushButton* btnTrash = new QPushButton(header);
     btnTrash->setFixedSize(24, 24);
     btnTrash->setIcon(UiHelper::getIcon("trash", QColor("#e81123"), 16));
-    btnTrash->setToolTip("打开回收站");
+    btnTrash->setProperty("tooltipText", "打开回收站");
+    btnTrash->installEventFilter(this);
     btnTrash->setObjectName("NavTrashBtn");
     connect(btnTrash, &QPushButton::clicked, this, &NavPanel::requestOpenTrash);
     headerLayout->addWidget(btnTrash);
@@ -195,6 +197,19 @@ void NavPanel::onItemExpanded(const QModelIndex& index) {
 
 void NavPanel::updateTreeHeight() {
     // 2026-xx-xx 按照 Plan-107：废弃手动高度计算，解锁 Splitter 自由拉伸
+}
+
+bool NavPanel::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::ToolTip) {
+        QString text = watched->property("tooltipText").toString();
+        if (!text.isEmpty()) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), text, 0);
+            return true;
+        }
+    } else if (event->type() == QEvent::Leave) {
+        ToolTipOverlay::hideTip();
+    }
+    return QFrame::eventFilter(watched, event);
 }
 
 /**
