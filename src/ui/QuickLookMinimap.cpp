@@ -8,7 +8,7 @@ namespace QuarkMeta {
 QuickLookMinimap::QuickLookMinimap(QWidget* parent) : QWidget(parent) {
     setFixedSize(140, 90); // 极简小地图尺寸
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet("background: transparent;");
+    setObjectName("QuickLookMinimap");
     hide(); // 默认隐藏
 }
 

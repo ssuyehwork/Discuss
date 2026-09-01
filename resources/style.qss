@@ -215,6 +215,404 @@ QLabel#StatusBarLeft[indexing='true'] {
     font-weight: bold;
 }
 
+/* 批次二重构样式：对话框与弹窗类外联 QSS 选择器 */
+QWidget#DialogContainer {
+    background-color: #1E1E1E;
+    border: 1px solid #333333;
+    border-radius: 6px;
+}
+QWidget#DialogContentArea {
+    background: transparent;
+    border: none;
+}
+QLabel#FramelessTitleLabel {
+    color: #AAAAAA;
+    font-size: 12px;
+    font-weight: bold;
+    border: none;
+}
+QPushButton#FramelessTitleBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 0;
+}
+QPushButton#FramelessTitleBtn:hover {
+    background-color: #3E3E42;
+}
+QPushButton#FramelessTitleBtn:pressed {
+    background-color: #555555;
+}
+QPushButton#FramelessPinBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+}
+QPushButton#FramelessPinBtn:hover {
+    background-color: #3E3E42;
+}
+QPushButton#FramelessPinBtn:checked {
+    background-color: rgba(255, 85, 28, 0.2);
+}
+QPushButton#FramelessCloseBtn {
+    background-color: #E81123;
+    border: none;
+    border-radius: 4px;
+}
+QPushButton#FramelessCloseBtn:hover {
+    background-color: #E81123;
+}
+QPushButton#FramelessCloseBtn:pressed {
+    background-color: #A50000;
+}
+
+QLineEdit#TagManagerSearchEdit {
+    background: transparent;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 0 8px;
+    color: #EEEEEE;
+    font-size: 12px;
+}
+QLineEdit#TagManagerSearchEdit:focus {
+    border-color: #3498DB;
+}
+QPushButton#TagManagerToggleBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 0;
+}
+QPushButton#TagManagerToggleBtn:hover {
+    background-color: #3E3E42;
+}
+QPushButton#TagManagerBtnAddGroup {
+    background: #2A2D2E;
+    color: #AAAAAA;
+    border: 1px solid #3A3D3E;
+    border-radius: 4px;
+    font-size: 11px;
+}
+QPushButton#TagManagerBtnAddGroup:hover {
+    background: #3E3E42;
+    color: #FFFFFF;
+    border-color: #1C97EA;
+}
+QPushButton#TagManagerBtnAddNewTag {
+    background: #1C97EA;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-weight: bold;
+    font-size: 11px;
+}
+QPushButton#TagManagerBtnAddNewTag:hover {
+    background: #1886D2;
+}
+QPushButton#TagManagerSideBtn {
+    background: transparent;
+    color: #CCCCCC;
+    border: none;
+    text-align: left;
+    padding-left: 10px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+QPushButton#TagManagerSideBtn:hover {
+    background-color: #2D2D30;
+    color: #FFFFFF;
+}
+QPushButton#TagManagerSideBtn:checked {
+    background-color: #3E3E42;
+    color: #3498DB;
+    font-weight: bold;
+}
+QPushButton#TagManagerTagBtn {
+    background: transparent;
+    border: 1px solid #333333;
+    color: #BBBBBB;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 11px;
+    text-align: left;
+}
+QPushButton#TagManagerTagBtn:hover {
+    border-color: #1C97EA;
+    color: #1C97EA;
+    background-color: #2D2D30;
+}
+
+QPushButton#ColorPickerPresetBtn {
+    border: 1px solid #444444;
+    border-radius: 4px;
+}
+QPushButton#ColorPickerPresetBtn:hover {
+    border: 1px solid #AAAAAA;
+}
+QSlider#ColorPickerToleranceSlider::groove:horizontal {
+    height: 3px;
+    background: #444444;
+    border-radius: 2px;
+}
+QSlider#ColorPickerToleranceSlider::handle:horizontal {
+    width: 12px;
+    height: 12px;
+    background: #EEEEEE;
+    border-radius: 6px;
+    margin: -5px 0;
+}
+QSlider#ColorPickerToleranceSlider::sub-page:horizontal {
+    background: #378ADD;
+    border-radius: 2px;
+}
+
+QWidget#FileDialogTopRow, QWidget#FileDialogBottomRow {
+    background-color: #252526;
+    border-bottom: 1px solid #333333;
+}
+QWidget#FileDialogBottomRow {
+    border-top: 1px solid #333333;
+}
+QLineEdit#FileDialogPathEdit, QLineEdit#FileDialogFileEdit {
+    background: #1E1E1E;
+    color: #EEEEEE;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+QLineEdit#FileDialogPathEdit:focus {
+    border-color: #3498DB;
+}
+QListWidget#FileDialogSidebar {
+    background-color: #252526;
+    border: none;
+    border-right: 1px solid #333333;
+    color: #BBBBBB;
+    outline: none;
+    padding: 5px;
+}
+QListWidget#FileDialogSidebar::item {
+    height: 32px;
+    padding-left: 10px;
+    border-radius: 4px;
+}
+QListWidget#FileDialogSidebar::item:hover {
+    background-color: #2A2D2E;
+}
+QListWidget#FileDialogSidebar::item:selected {
+    background-color: #37373D;
+    color: #FFFFFF;
+}
+QListView#FileDialogListView {
+    background-color: #1E1E1E;
+    border: none;
+    color: #EEEEEE;
+    outline: none;
+}
+QListView#FileDialogListView::item {
+    height: 28px;
+    padding-left: 5px;
+}
+QListView#FileDialogListView::item:hover {
+    background-color: #2A2D2E;
+}
+QListView#FileDialogListView::item:selected {
+    background-color: #094771;
+}
+QComboBox#FileDialogFilterCombo {
+    background: #1E1E1E;
+    color: #EEEEEE;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding-left: 5px;
+}
+QPushButton#FileDialogCancelBtn {
+    background-color: transparent;
+    color: #999999;
+    border: 1px solid #444444;
+    border-radius: 4px;
+}
+QPushButton#FileDialogCancelBtn:hover {
+    background-color: #333333;
+}
+QPushButton#FileDialogOkBtn {
+    background-color: #3498DB;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+}
+QPushButton#FileDialogOkBtn:hover {
+    background-color: #2980B9;
+}
+
+QLabel#ProgressStatusLabel {
+    color: #EEEEEE;
+    font-size: 13px;
+}
+QProgressBar#ProgressDialogBar {
+    background: #2D2D2D;
+    border: none;
+    border-radius: 4px;
+}
+QProgressBar#ProgressDialogBar::chunk {
+    background: #378ADD;
+    border-radius: 4px;
+}
+
+QLabel#ConflictImgLabel {
+    background-color: #2D2D30;
+    border-radius: 6px;
+}
+QLabel#ConflictBadge {
+    background-color: rgba(0, 0, 0, 0.6);
+    color: #FFFFFF;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+}
+
+QPlainTextEdit#QLPlainTextEdit {
+    background: transparent;
+    border: none;
+    color: #D4D4D4;
+    font-family: 'Consolas', 'Monaco', 'PingFang SC', 'Microsoft YaHei';
+    font-size: 13px;
+}
+QPlainTextEdit#QLPlainTextEdit QScrollBar:vertical {
+    width: 10px;
+    background: transparent;
+}
+QPlainTextEdit#QLPlainTextEdit QScrollBar::handle:vertical {
+    background: #333333;
+    border-radius: 3px;
+}
+QPlainTextEdit#QLPlainTextEdit QScrollBar::add-line:vertical, QPlainTextEdit#QLPlainTextEdit QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+}
+QPlainTextEdit#QLPlainTextEdit QScrollBar::add-page:vertical, QPlainTextEdit#QLPlainTextEdit QScrollBar::sub-page:vertical {
+    background: none;
+}
+QPlainTextEdit#QLPlainTextEdit QScrollBar:horizontal {
+    height: 10px;
+    background: transparent;
+}
+QPlainTextEdit#QLPlainTextEdit QScrollBar::handle:horizontal {
+    background: #333333;
+    border-radius: 3px;
+}
+QPlainTextEdit#QLPlainTextEdit QScrollBar::add-line:horizontal, QPlainTextEdit#QLPlainTextEdit QScrollBar::sub-line:horizontal {
+    border: none;
+    background: none;
+}
+QPlainTextEdit#QLPlainTextEdit QScrollBar::add-page:horizontal, QPlainTextEdit#QLPlainTextEdit QScrollBar::sub-page:horizontal {
+    background: none;
+}
+
+/* 批次三重构样式：悬浮浮层与历史面板外联 QSS 选择器 */
+QFrame#TagSelectorOverlay {
+    background-color: #1E1E1E;
+    border: 1px solid #333333;
+    border-radius: 6px;
+}
+QPushButton#TagSelectorBtn {
+    background-color: transparent;
+    color: #BBBBBB;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 0 8px;
+    font-size: 11px;
+    text-align: left;
+}
+QPushButton#TagSelectorBtn:hover {
+    border-color: #1ABC9C;
+    color: #FFFFFF;
+}
+
+QFrame#AddressHistoryPanel, QFrame#SearchHistoryPanel {
+    background-color: #252526;
+    border: 1px solid #444444;
+    border-radius: 8px;
+}
+QWidget#HistoryRow {
+    background: transparent;
+    border-radius: 4px;
+}
+QWidget#HistoryRow:hover {
+    background: #2A2A2A;
+}
+
+QWidget#QuickLookMinimap {
+    background: transparent;
+}
+QGraphicsView#QLGraphicsView QScrollBar:horizontal, QGraphicsView#QLGraphicsView QScrollBar:vertical {
+    background: transparent;
+}
+QGraphicsView#QLGraphicsView QScrollBar::handle:horizontal, QGraphicsView#QLGraphicsView QScrollBar::handle:vertical {
+    background: #333333;
+    border-radius: 3px;
+}
+QGraphicsView#QLGraphicsView QScrollBar::add-line, QGraphicsView#QLGraphicsView QScrollBar::sub-line {
+    border: none;
+    background: none;
+}
+QGraphicsView#QLGraphicsView QScrollBar::add-page, QGraphicsView#QLGraphicsView QScrollBar::sub-page {
+    background: none;
+}
+
+/* 批次四重构样式：自定义控件、Delegate 与规则编辑外联 QSS 选择器 */
+QComboBox#RuleCombo {
+    background: #1E1E1E;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 2px 5px;
+    color: #EEEEEE;
+}
+QComboBox#RuleCombo::drop-down {
+    border: none;
+    width: 24px;
+}
+QComboBox#RuleCombo QAbstractItemView {
+    background-color: #2D2D2D;
+    border: 1px solid #444444;
+    selection-background-color: #3E3E42;
+    color: #EEEEEE;
+    outline: 0;
+}
+QLineEdit#RuleTextEdit, QSpinBox#RuleStartSpin {
+    background: #1E1E1E;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 2px 5px;
+    color: #EEEEEE;
+}
+QPushButton#RuleDeleteBtn {
+    background: transparent;
+    border: 1px solid #434343;
+    border-radius: 2px;
+    color: #888888;
+    font-weight: bold;
+    font-size: 14px;
+}
+QPushButton#RuleDeleteBtn:hover {
+    background: #3E3E42;
+    color: #EEEEEE;
+    border-color: #666666;
+}
+
+QLineEdit#TreeItemEditor, QLineEdit#ThumbnailEditor {
+    background-color: #2D2D2D;
+    color: #FFFFFF;
+    selection-background-color: #3498DB;
+    border: 1px solid #3498DB;
+    border-radius: 4px;
+    padding: 0px 4px;
+    margin: 0px;
+    font-size: 8pt;
+}
+
 /* 批次三：对话框、浮层与小组件选择器外联 */
 QLabel#UndoToastMsgLabel {
     color: #EEEEEE;

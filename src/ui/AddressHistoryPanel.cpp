@@ -12,13 +12,6 @@ AddressHistoryPanel::AddressHistoryPanel(QWidget* parent)
 {
     setAttribute(Qt::WA_TranslucentBackground, false);
     setObjectName("AddressHistoryPanel");
-    setStyleSheet(
-        "#AddressHistoryPanel {"
-        "  background-color: #252526;"
-        "  border: 1px solid #444444;"
-        "  border-radius: 8px;"
-        "}"
-    );
 
     m_layout = new QVBoxLayout(this);
     m_layout->setContentsMargins(6, 6, 6, 6);
@@ -67,10 +60,7 @@ void AddressHistoryPanel::rebuild() {
         QPushButton* btnClearAll = new QPushButton("全部清除", titleRow);
         btnClearAll->setFixedHeight(20);
         btnClearAll->setFlat(true);
-        btnClearAll->setStyleSheet(
-            "QPushButton { color: #666666; font-size: 11px; border: none; background: transparent; }"
-            "QPushButton:hover { color: #378ADD; }"
-        );
+        btnClearAll->setObjectName("HistoryBtnClearAll");
         connect(btnClearAll, &QPushButton::clicked, this, []() {
             NavigationHistoryService::instance().clearAll();
         });
@@ -87,11 +77,7 @@ void AddressHistoryPanel::rebuild() {
 
         for (const QString& path : m_history) {
             QWidget* row = new QWidget(this);
-            row->setObjectName("historyRow");
-            row->setStyleSheet(
-                "QWidget#historyRow { background: transparent; border-radius: 4px; }"
-                "QWidget#historyRow:hover { background: #2A2A2A; }"
-            );
+            row->setObjectName("HistoryRow");
             row->setCursor(Qt::PointingHandCursor);
             row->setFixedHeight(30);
 
@@ -111,10 +97,7 @@ void AddressHistoryPanel::rebuild() {
             btnRemove->setFlat(true);
             btnRemove->setIcon(UiHelper::getIcon("close", QColor("#555555"), 12));
             btnRemove->setIconSize(QSize(12, 12));
-            btnRemove->setStyleSheet(
-                "QPushButton { background: transparent; border: none; border-radius: 3px; }"
-                "QPushButton:hover { background: #3E3E42; }"
-            );
+            btnRemove->setObjectName("HistoryBtnRemove");
             connect(btnRemove, &QPushButton::clicked, this, [path]() {
                 NavigationHistoryService::instance().removePath(path);
             });
@@ -145,7 +128,7 @@ void AddressHistoryPanel::showBelow(QWidget* anchor) {
 bool AddressHistoryPanel::eventFilter(QObject* obj, QEvent* event) {
     if (event->type() == QEvent::MouseButtonPress) {
         QWidget* w = qobject_cast<QWidget*>(obj);
-        if (w && w->objectName() == "historyRow") {
+        if (w && w->objectName() == "HistoryRow") {
             QString path = w->property("path").toString();
             if (!path.isEmpty()) {
                 emit historyItemClicked(path);

@@ -127,6 +127,7 @@ void FavoritePanel::initUi() {
     m_mainLayout->addWidget(header);
 
     m_favoriteView = new DropTreeView(this);
+    m_favoriteView->setObjectName("FavoriteTreeView");
     m_favoriteView->setHeaderHidden(true);
     if (m_favoriteView->header()) {
         m_favoriteView->header()->setStretchLastSection(true);
@@ -148,13 +149,6 @@ void FavoritePanel::initUi() {
     m_favoriteView->setModel(m_favoriteModel);
     m_favoriteView->setItemDelegate(new FavoriteItemDelegate(this));
 
-    QString treeStyle = QString(
-        "QTreeView { background-color: transparent; border: none; font-size: 12px; outline: none; padding-left: 10px; }"
-        "QTreeView::item { height: 28px; padding-left: 0px; color: #EEEEEE; }"
-        "QTreeView::item:hover { background-color: #2A2D2E; }"
-        "QTreeView::item:selected { background-color: #37373D; color: #FFFFFF; }"
-    );
-    m_favoriteView->setStyleSheet(treeStyle);
 
     m_mainLayout->addWidget(m_favoriteView, 1);
 

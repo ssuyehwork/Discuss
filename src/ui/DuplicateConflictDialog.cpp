@@ -8,6 +8,7 @@
 namespace QuarkMeta {
 
 static QWidget* createCard(const DuplicateItemInfo& item, const QString& badgeText, bool isExisting) {
+    Q_UNUSED(isExisting);
     QWidget* card = new QWidget();
     card->setFixedSize(320, 320);
     card->setObjectName("ConflictCard");
@@ -19,7 +20,7 @@ static QWidget* createCard(const DuplicateItemInfo& item, const QString& badgeTe
     // 图片卡片容器
     QLabel* imgLabel = new QLabel(card);
     imgLabel->setFixedSize(290, 200);
-    imgLabel->setStyleSheet(isExisting ? "background-color: #2D2D30; border-radius: 6px;" : "background-color: #2D2D30; border-radius: 6px;");
+    imgLabel->setObjectName("ConflictImgLabel");
     imgLabel->setAlignment(Qt::AlignCenter);
 
     if (!item.thumbnail.isNull()) {
@@ -28,7 +29,7 @@ static QWidget* createCard(const DuplicateItemInfo& item, const QString& badgeTe
 
     // 徽章 ("已存在" / "新的文件")
     QLabel* badge = new QLabel(badgeText, imgLabel);
-    badge->setStyleSheet("background-color: rgba(0, 0, 0, 0.6); color: #FFFFFF; border-radius: 4px; padding: 2px 8px; font-size: 11px;");
+    badge->setObjectName("ConflictBadge");
     badge->move(10, 10);
 
     layout->addWidget(imgLabel);
@@ -53,7 +54,7 @@ static QWidget* createCard(const DuplicateItemInfo& item, const QString& badgeTe
     if (!item.tagHint.isEmpty()) {
         QLabel* tagBadge = new QLabel(item.tagHint, card);
         tagBadge->setAlignment(Qt::AlignCenter);
-        tagBadge->setStyleSheet("background-color: #333336; color: #CCCCCC; border-radius: 4px; padding: 2px 6px; font-size: 10px;");
+        tagBadge->setObjectName("ConflictTagBadge");
         layout->addWidget(tagBadge, 0, Qt::AlignHCenter);
     }
 
@@ -91,11 +92,7 @@ DuplicateConflictDialog::DuplicateConflictDialog(const DuplicateConflictGroup& c
 
     // 3. 对应用户截图中的全部应用(N) 复选框（对应用户原话：“另外在这界面上新增一个“全部应用”选项”）
     m_chkApplyToAll = new QCheckBox(totalCount > 1 ? QString("全部应用(%1)").arg(totalCount) : "全部应用", this);
-    m_chkApplyToAll->setStyleSheet(
-        "QCheckBox { color: #FFFFFF; font-size: 12px; }"
-        "QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid #666; border-radius: 3px; background: transparent; }"
-        "QCheckBox::indicator:checked { background: #378ADD; border-color: #378ADD; }"
-    );
+    m_chkApplyToAll->setObjectName("ConflictApplyAllCheckBox");
     bottomLayout->addWidget(m_chkApplyToAll);
 
     bottomLayout->addStretch();
@@ -103,10 +100,7 @@ DuplicateConflictDialog::DuplicateConflictDialog(const DuplicateConflictGroup& c
     m_btnSubmit = new QPushButton("导入文件", this);
     m_btnSubmit->setFixedSize(100, 32);
     m_btnSubmit->setCursor(Qt::PointingHandCursor);
-    m_btnSubmit->setStyleSheet(
-        "QPushButton { background-color: #378ADD; color: #FFFFFF; border: none; border-radius: 4px; font-weight: bold; }"
-        "QPushButton:hover { background-color: #2B73B9; }"
-    );
+    m_btnSubmit->setObjectName("ConflictSubmitBtn");
     bottomLayout->addWidget(m_btnSubmit);
 
     mainL->addLayout(bottomLayout);

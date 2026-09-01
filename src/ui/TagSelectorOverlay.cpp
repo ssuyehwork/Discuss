@@ -18,13 +18,6 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
 {
     setObjectName("TagSelectorOverlay");
     setFrameShape(QFrame::StyledPanel);
-    setStyleSheet(
-        "QFrame#TagSelectorOverlay {"
-        "  background-color: #1E1E1E;"
-        "  border: 1px solid #333333;"
-        "  border-radius: 6px;"
-        "}"
-    );
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setAttribute(Qt::WA_DeleteOnClose, false);
@@ -72,10 +65,7 @@ void TagSelectorOverlay::initUi() {
     m_searchEdit->setPlaceholderText("搜索或新建标签...");
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setFixedHeight(26);
-    m_searchEdit->setStyleSheet(
-        "QLineEdit { background: #151515; border: 1px solid #333; border-radius: 4px; padding: 0 8px; color: #EEE; font-size: 11px; }"
-        "QLineEdit:focus { border-color: #1C97EA; }"
-    );
+    m_searchEdit->setObjectName("TagSelectorSearchEdit");
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this]() {
         filterTags();
     });
@@ -88,10 +78,7 @@ void TagSelectorOverlay::initUi() {
     m_btnToggleSidebar->setIcon(UiHelper::getIcon("sidebar", QColor("#AAAAAA"), 16));
     m_btnToggleSidebar->setIconSize(QSize(16, 16));
     m_btnToggleSidebar->setCursor(Qt::PointingHandCursor);
-    m_btnToggleSidebar->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-radius: 4px; padding: 0; }"
-        "QPushButton:hover { background-color: #3E3E42; }"
-    );
+    m_btnToggleSidebar->setObjectName("TagSelectorToggleBtn");
     connect(m_btnToggleSidebar, &QPushButton::toggled, this, [this](bool checked) {
         m_groupList->setVisible(checked);
     });
@@ -105,12 +92,7 @@ void TagSelectorOverlay::initUi() {
     m_groupList = new QListWidget(this);
     m_groupList->setFixedWidth(110);
     m_groupList->setFocusPolicy(Qt::StrongFocus);
-    m_groupList->setStyleSheet(
-        "QListWidget { background-color: #252526; border: 1px solid #333; border-radius: 4px; outline: none; padding: 2px; }"
-        "QListWidget::item { height: 26px; color: #BBB; border-radius: 3px; padding-left: 6px; font-size: 11px; }"
-        "QListWidget::item:hover { background-color: #2D2D30; color: #FFF; }"
-        "QListWidget::item:selected { background-color: #3E3E42; color: #1C97EA; font-weight: bold; }"
-    );
+    m_groupList->setObjectName("TagSelectorGroupList");
     connect(m_groupList, &QListWidget::currentRowChanged, this, [this]() {
         filterTags();
     });
@@ -277,7 +259,7 @@ void TagSelectorOverlay::updateSelectionHighlight() {
         } else {
             style += " QPushButton:hover { border-color: #1ABC9C; color: #FFF; }";
         }
-        btn->setStyleSheet(style);
+        btn->setObjectName("TagSelectorBtn");
     }
 }
 

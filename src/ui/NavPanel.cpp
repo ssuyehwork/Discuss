@@ -123,6 +123,7 @@ void NavPanel::initUi() {
 
     // --- 磁盘树 ---
     m_treeView = new DropTreeView(this);
+    m_treeView->setObjectName("NavTreeView");
     m_treeView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_treeView->setHeaderHidden(true);
     if (m_treeView->header()) {
@@ -145,18 +146,6 @@ void NavPanel::initUi() {
 
     m_mainLayout->addWidget(m_treeView, 1);
 
-    // 样式美化
-    QString arrowRight = UiHelper::getSvgTempFilePath("chevron_right", QColor("#3498db"));
-    QString arrowDown  = UiHelper::getSvgTempFilePath("arrow_down",  QColor("#3498db"));
-    QString treeStyle = QString(
-        "QTreeView { background-color: transparent; border: none; font-size: 12px; outline: none; padding-left: 15px; }"
-        "QTreeView::item { height: 28px; padding-left: 0px; color: #EEEEEE; }"
-        "QTreeView::branch { width: 20px; }"
-        "QTreeView::branch:has-children:closed { image: url(\"%1\"); }"
-        "QTreeView::branch:has-children:open   { image: url(\"%2\"); }"
-    ).arg(arrowRight, arrowDown);
-
-    m_treeView->setStyleSheet(treeStyle);
 
     // 信号连接
     connect(m_treeView, &QTreeView::expanded, this, &NavPanel::onItemExpanded);

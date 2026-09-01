@@ -26,20 +26,14 @@ FramelessColorPicker::FramelessColorPicker(const QString& title, QWidget* parent
     auto* btnCancel = new QPushButton("取消");
     btnCancel->setFixedSize(80, 32);
     btnCancel->setCursor(Qt::PointingHandCursor);
-    btnCancel->setStyleSheet(
-        "QPushButton { background-color: transparent; color: #888; border: 1px solid #444; border-radius: 4px; } "
-        "QPushButton:hover { color: #EEE; background-color: #333; }"
-    );
+    btnCancel->setObjectName("FramelessBtnCancel");
     connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
     btnLayout->addWidget(btnCancel);
 
     auto* btnOk = new QPushButton("确定");
     btnOk->setFixedSize(80, 32);
     btnOk->setCursor(Qt::PointingHandCursor);
-    btnOk->setStyleSheet(
-        "QPushButton { background-color: #3498db; color: white; border: none; border-radius: 4px; font-weight: bold; } "
-        "QPushButton:hover { background-color: #2980b9; }"
-    );
+    btnOk->setObjectName("FramelessBtnOk");
     connect(btnOk, &QPushButton::clicked, this, [this]() {
         m_selectedColor = m_picker->currentColor();
         accept();

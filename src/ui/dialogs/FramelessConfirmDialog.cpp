@@ -45,10 +45,7 @@ FramelessConfirmDialog::FramelessConfirmDialog(const QString& title, const QStri
         auto* btnCancel = new QPushButton("取消");
         btnCancel->setFixedSize(85, 30);
         btnCancel->setCursor(Qt::PointingHandCursor);
-        btnCancel->setStyleSheet(
-            "QPushButton { background-color: transparent; color: #999; border: 1px solid #444; border-radius: 4px; } "
-            "QPushButton:hover { color: #EEE; background-color: #333; }"
-        );
+        btnCancel->setObjectName("FramelessBtnCancel");
         connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
         btnLayout->addWidget(btnCancel);
     }
@@ -56,10 +53,7 @@ FramelessConfirmDialog::FramelessConfirmDialog(const QString& title, const QStri
     auto* btnOk = new QPushButton("确定");
     btnOk->setFixedSize(85, 30);
     btnOk->setCursor(Qt::PointingHandCursor);
-    btnOk->setStyleSheet(
-        "QPushButton { background-color: #3498db; color: white; border: none; border-radius: 4px; font-weight: bold; } "
-        "QPushButton:hover { background-color: #2980b9; }"
-    );
+    btnOk->setObjectName("FramelessBtnOk");
     connect(btnOk, &QPushButton::clicked, this, &QDialog::accept);
     btnLayout->addWidget(btnOk);
 

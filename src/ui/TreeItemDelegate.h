@@ -222,19 +222,7 @@ public:
     QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         Q_UNUSED(option);
         FileNameLineEdit* editor = new FileNameLineEdit(parent);
-        // 2026-07-26 极致重构：应用精致的暗黑带蓝边框样式（背景 `#2D2D2D`，外框 `#3498db`，圆角 `4px`），消除默认白色粗糙样式
-        editor->setStyleSheet(
-            "QLineEdit {"
-            "  background-color: #2D2D2D;"
-            "  color: white;"
-            "  selection-background-color: #3498db;"
-            "  border: 1px solid #3498db;"
-            "  border-radius: 4px;"
-            "  padding: 0px 4px;"
-            "  margin: 0px;"
-            "  font-size: 8pt;"
-            "}"
-        );
+        editor->setObjectName("TreeItemEditor");
         bool isFolder = (index.data(TypeRole).toString() == "folder");
         editor->setIsFolder(isFolder);
         editor->installEventFilter(const_cast<TreeItemDelegate*>(this));

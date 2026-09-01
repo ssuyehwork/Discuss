@@ -30,13 +30,6 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     m_container = new QWidget(this);
     m_container->setObjectName("DialogContainer");
     m_container->setAttribute(Qt::WA_StyledBackground);
-    m_container->setStyleSheet(
-        "#DialogContainer {"
-        "  background-color: #1E1E1E;"
-        "  border: 1px solid #333333;"
-        "  border-radius: 6px;"
-        "}"
-    );
     m_outerLayout->addWidget(m_container);
 
     m_mainLayout = new QVBoxLayout(m_container);
@@ -52,11 +45,12 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     m_titleLayout->setSpacing(4);
 
     m_titleLabel = new QLabel(title);
-    m_titleLabel->setStyleSheet("color: #AAAAAA; font-size: 12px; font-weight: bold; border: none;");
+    m_titleLabel->setObjectName("FramelessTitleLabel");
     m_titleLayout->addWidget(m_titleLabel);
     m_titleLayout->addStretch();
 
     auto createTitleBtn = [this](const QString& iconName, const QString& tooltip, const QString& hoverColor) {
+        Q_UNUSED(hoverColor);
         QPushButton* btn = new QPushButton();
         btn->setFixedSize(20, 20);
         btn->setIcon(UiHelper::getIcon(iconName, QColor("#CCCCCC"), 16));
@@ -64,22 +58,14 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
         btn->setAutoDefault(false);
         btn->setProperty("tooltipText", tooltip);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(QString(
-            "QPushButton { background-color: transparent; border: none; border-radius: 4px; padding: 0; } "
-            "QPushButton:hover { background-color: %1; } "
-            "QPushButton:pressed { background-color: #555555; }"
-        ).arg(hoverColor));
+        btn->setObjectName("FramelessTitleBtn");
         btn->installEventFilter(this);
         return btn;
     };
 
     m_pinBtn = createTitleBtn("pin_tilted", "置顶", "#3E3E42");
     m_pinBtn->setCheckable(true);
-    m_pinBtn->setStyleSheet(
-        "QPushButton { background-color: transparent; border: none; border-radius: 4px; } "
-        "QPushButton:hover { background-color: #3E3E42; } "
-        "QPushButton:checked { background-color: rgba(255, 85, 28, 0.2); }"
-    );
+    m_pinBtn->setObjectName("FramelessPinBtn");
     connect(m_pinBtn, &QPushButton::toggled, this, [this](bool checked) {
         m_pinBtn->setIcon(UiHelper::getIcon(checked ? "pin_vertical" : "pin_tilted", 
                                             checked ? QColor("#FF551C") : QColor("#CCCCCC"), 18));
@@ -114,11 +100,7 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     m_closeBtn->setAutoDefault(false);
     m_closeBtn->setProperty("tooltipText", "关闭");
     m_closeBtn->setCursor(Qt::PointingHandCursor);
-    m_closeBtn->setStyleSheet(
-        "QPushButton { background-color: #E81123; border: none; border-radius: 4px; } "
-        "QPushButton:hover { background-color: #E81123; } "
-        "QPushButton:pressed { background-color: #A50000; }"
-    );
+    m_closeBtn->setObjectName("FramelessCloseBtn");
     m_closeBtn->installEventFilter(this);
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::reject);
 
@@ -139,7 +121,6 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
 
     m_contentArea = new QWidget();
     m_contentArea->setObjectName("DialogContentArea");
-    m_contentArea->setStyleSheet("QWidget#DialogContentArea { background: transparent; border: none; }");
     m_mainLayout->addWidget(m_contentArea, 1);
 }
 
