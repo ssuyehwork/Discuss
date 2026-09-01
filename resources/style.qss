@@ -2,6 +2,28 @@
 QMainWindow, QDialog { background-color: #1E1E1E; color: #EEEEEE; }
 QWidget#CentralWidget { background-color: #1E1E1E; }
 
+/* 全局按钮基础暗色规则 */
+QPushButton {
+    background-color: #252526;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    color: #EEEEEE;
+    padding: 4px 10px;
+    font-size: 12px;
+}
+QPushButton:hover {
+    background-color: #3E3E42;
+    border-color: #444444;
+}
+QPushButton:pressed {
+    background-color: #4E4E52;
+}
+QPushButton:disabled {
+    background-color: #2A2A2B;
+    border-color: #2D2D2E;
+    color: #666666;
+}
+
 /* 标题栏与导航栏切割线 */
 #TitleBar {
     background-color: #1E1E1E;
@@ -893,6 +915,25 @@ QLabel#ConflictTagBadge {
     border-radius: 3px;
     font-size: 10px;
     font-weight: bold;
+}
+QRadioButton {
+    color: #EEEEEE;
+    font-size: 12px;
+    spacing: 5px;
+}
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #555555;
+    border-radius: 7px;
+    background-color: #1E1E1E;
+}
+QRadioButton::indicator:hover {
+    border-color: #378ADD;
+}
+QRadioButton::indicator:checked {
+    border-color: #378ADD;
+    background-color: #378ADD;
 }
 QRadioButton#ConflictRadio {
     color: #FFFFFF;
