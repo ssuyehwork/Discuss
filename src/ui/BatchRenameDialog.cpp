@@ -87,10 +87,7 @@ void BatchRenameDialog::initContent() {
     m_btnDeletePreset = new QPushButton("×", presetGroup);
     m_btnDeletePreset->setFixedSize(20, 20);
     m_btnDeletePreset->setCursor(Qt::PointingHandCursor);
-    m_btnDeletePreset->setStyleSheet(
-        "QPushButton { background: #3E3E42; color: white; border: none; border-radius: 4px; font-size: 14px; font-weight: bold; }"
-        "QPushButton:hover { background: #4E4E52; }"
-    );
+    m_btnDeletePreset->setObjectName("BatchRenameDeletePresetBtn");
     presetL->addWidget(m_btnDeletePreset);
 
     // 导入/导出按钮
@@ -159,26 +156,7 @@ void BatchRenameDialog::initContent() {
     m_btnExecute = new QPushButton("重命名", leftPanel);
     m_btnExecute->setFixedSize(120, 36);
     m_btnExecute->setCursor(Qt::PointingHandCursor);
-    m_btnExecute->setStyleSheet(
-        "QPushButton {"
-        "  background-color: #378ADD;"
-        "  color: #FFFFFF;"
-        "  border: none;"
-        "  border-radius: 6px;"
-        "  font-size: 13px;"
-        "  font-weight: bold;"
-        "}"
-        "QPushButton:hover {"
-        "  background-color: #4A9BE8;"
-        "}"
-        "QPushButton:pressed {"
-        "  background-color: #2674C2;"
-        "}"
-        "QPushButton:disabled {"
-        "  background-color: #333333;"
-        "  color: #777777;"
-        "}"
-    );
+    m_btnExecute->setObjectName("BatchRenameExecuteBtn");
     execBtnLayout->addStretch();
     execBtnLayout->addWidget(m_btnExecute);
     execBtnLayout->addStretch();
@@ -217,25 +195,7 @@ void BatchRenameDialog::initContent() {
 }
 
 void BatchRenameDialog::applyTheme() {
-    static const QString arrowPath = UiHelper::getSvgTempFilePath("dropdown_triangle", QColor("#AAAAAA"));
-
-    setStyleSheet(QString(
-        "QDialog { background-color: #1E1E1E; color: #BBB; }"
-        "QGroupBox { border: 1px solid #333; border-radius: 4px; margin-top: 10px; font-weight: bold; font-size: 11px; color: #888; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 8px; padding: 0 3px; }"
-        "QLineEdit { background: #252526; border: 1px solid #444; border-radius: 4px; padding: 2px 5px; color: #EEE; }"
-        "QRadioButton { color: #BBB; spacing: 5px; }"
-        "QPushButton { background: #333; color: #EEE; border-radius: 4px; }"
-        "QComboBox { background: #252526; border: 1px solid #444; border-radius: 4px; padding: 1px 4px; color: #EEE; }"
-        "QComboBox::drop-down { border: none; width: 24px; }"
-        "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
-        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; selection-color: white; color: #EEE; outline: 0; }"
-        "QComboBox QAbstractItemView::item { height: 22px; padding: 2px; }" 
-        "QTableWidget { background-color: #1E1E1E; alternate-background-color: #252526; color: #EEEEEE; border: 1px solid #333333; gridline-color: transparent; selection-background-color: rgba(52, 152, 219, 0.2); outline: none; }"
-        "QTableWidget::item { outline: none; border: none; }"
-        "QTableWidget::item:focus { outline: none; border: none; }"
-        "QHeaderView::section { background-color: #2D2D2D; color: #888888; border: none; height: 30px; font-weight: bold; font-size: 11px; }"
-    ).arg(arrowPath));
+    // Style handled in style.qss
 }
 
 void BatchRenameDialog::onAddRow(RuleRow* targetRow) {

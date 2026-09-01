@@ -26,10 +26,7 @@ void TaskProgressToolBar::initUi() {
     m_progressBar->setFixedHeight(6);
     m_progressBar->setRange(0, 100);
     m_progressBar->setTextVisible(false);
-    m_progressBar->setStyleSheet(
-        "QProgressBar { background-color: #3E3E42; border: none; border-radius: 3px; }"
-        "QProgressBar::chunk { background-color: #378ADD; border-radius: 3px; }"
-    );
+    m_progressBar->setObjectName("TaskProgressBar");
 
     m_lblDetail = new QLabel("", this);
     m_lblDetail->setObjectName("TaskProgressDetailLabel");

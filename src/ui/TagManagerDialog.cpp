@@ -46,10 +46,7 @@ void TagManagerDialog::initContent() {
     m_searchEdit->setPlaceholderText("搜索或新建标签词条...");
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setFixedHeight(28);
-    m_searchEdit->setStyleSheet(
-        "QLineEdit { background: transparent; border: 1px solid #444; border-radius: 4px; padding: 0 8px; color: #EEE; font-size: 12px; }"
-        "QLineEdit:focus { border-color: #3498DB; }"
-    );
+    m_searchEdit->setObjectName("TagManagerSearchEdit");
     connect(m_searchEdit, &QLineEdit::textChanged, this, &TagManagerDialog::onSearchTextChanged);
     connect(m_searchEdit, &QLineEdit::returnPressed, [this]() {
         QString kw = m_searchEdit->text().trimmed();
@@ -70,10 +67,7 @@ void TagManagerDialog::initContent() {
     m_btnToggleSidebar->setIconSize(QSize(16, 16));
     m_btnToggleSidebar->setCursor(Qt::PointingHandCursor);
     m_btnToggleSidebar->setProperty("tooltipText", "展开/收起侧边栏");
-    m_btnToggleSidebar->setStyleSheet(
-        "QPushButton { background-color: transparent; border: none; border-radius: 4px; padding: 0; }"
-        "QPushButton:hover { background-color: #3E3E42; }"
-    );
+    m_btnToggleSidebar->setObjectName("TagManagerToggleBtn");
     connect(m_btnToggleSidebar, &QPushButton::toggled, this, &TagManagerDialog::onSidebarToggled);
 
     if (m_titleLayout && m_pinBtn) {
@@ -114,10 +108,7 @@ void TagManagerDialog::initContent() {
     QPushButton* btnAddGroup = new QPushButton(UiHelper::getIcon("add", QColor("#AAAAAA"), 14), " 新建分组...", m_sidebar);
     btnAddGroup->setFixedHeight(28);
     btnAddGroup->setCursor(Qt::PointingHandCursor);
-    btnAddGroup->setStyleSheet(
-        "QPushButton { background: #2A2D2E; color: #AAA; border: 1px solid #3A3D3E; border-radius: 4px; font-size: 11px; }"
-        "QPushButton:hover { background: #3E3E42; color: #FFF; border-color: #1C97EA; }"
-    );
+    btnAddGroup->setObjectName("TagManagerBtnAddGroup");
     connect(btnAddGroup, &QPushButton::clicked, this, &TagManagerDialog::onAddNewGroup);
     m_sidebarLayout->addWidget(btnAddGroup);
 
@@ -144,10 +135,7 @@ void TagManagerDialog::initContent() {
     addL->setContentsMargins(0, 0, 0, 0);
     m_btnAddNewTag = new QPushButton(m_addNewTagWidget);
     m_btnAddNewTag->setCursor(Qt::PointingHandCursor);
-    m_btnAddNewTag->setStyleSheet(
-        "QPushButton { background: #1C97EA; color: #FFF; border: none; border-radius: 4px; padding: 4px 12px; font-weight: bold; font-size: 11px; }"
-        "QPushButton:hover { background: #1886D2; }"
-    );
+    m_btnAddNewTag->setObjectName("TagManagerBtnAddNewTag");
     connect(m_btnAddNewTag, &QPushButton::clicked, [this]() {
         QString kw = m_searchEdit->text().trimmed();
         if (!kw.isEmpty()) {
@@ -189,11 +177,7 @@ void TagManagerDialog::refreshSidebar() {
         btn->setCheckable(true);
         btn->setFixedSize(160, 28);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(
-            "QPushButton { background: transparent; color: #CCC; border: none; text-align: left; padding-left: 10px; border-radius: 4px; font-size: 11px; }"
-            "QPushButton:hover { background-color: #2D2D30; color: #FFF; }"
-            "QPushButton:checked { background-color: #3E3E42; color: #3498DB; font-weight: bold; }"
-        );
+        btn->setObjectName("TagManagerSideBtn");
         m_groupButtonsLayout->addWidget(btn);
         m_sidebarGroup->addButton(btn, id);
         return btn;
@@ -401,10 +385,7 @@ void TagManagerDialog::refreshTags() {
         btn->setIconSize(QSize(12, 12));
         btn->setCursor(Qt::PointingHandCursor);
         btn->setContextMenuPolicy(Qt::CustomContextMenu);
-        btn->setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #333; color: #BBB; border-radius: 4px; padding: 3px 10px; font-size: 11px; text-align: left; }"
-            "QPushButton:hover { border-color: #1C97EA; color: #1C97EA; background-color: #2D2D30; }"
-        );
+        btn->setObjectName("TagManagerTagBtn");
         connect(btn, &QWidget::customContextMenuRequested, this, [this, tag](const QPoint& pos) {
             QPushButton* b = qobject_cast<QPushButton*>(sender());
             if (b) showTagContextMenu(tag, b->mapToGlobal(pos));
@@ -421,15 +402,7 @@ void TagManagerDialog::resizeEvent(QResizeEvent* event) {
 }
 
 void TagManagerDialog::applyTheme() {
-    setStyleSheet(
-        "TagManagerDialog, QDialog, QWidget#CentralWidget {"
-        "  background-color: #1E1E1E;"
-        "  color: #EEEEEE;"
-        "}"
-        "QFrame#TagDialogBody, QWidget#TagScrollContainer {"
-        "  background-color: #1E1E1E;"
-        "}"
-    );
+    // Style handled in style.qss
 }
 
 } // namespace QuarkMeta

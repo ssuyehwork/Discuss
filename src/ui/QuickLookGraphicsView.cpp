@@ -22,18 +22,6 @@ QuickLookGraphicsView::QuickLookGraphicsView(QWidget* parent) : QGraphicsView(pa
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setObjectName("QLGraphicsView");
     
-    horizontalScrollBar()->setStyleSheet(R"(
-        QScrollBar:horizontal { height: 10px; background: transparent; }
-        QScrollBar::handle:horizontal { background: #333333; border-radius: 3px; }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { border: none; background: none; }
-        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }
-    )");
-    verticalScrollBar()->setStyleSheet(R"(
-        QScrollBar:vertical { width: 10px; background: transparent; }
-        QScrollBar::handle:vertical { background: #333333; border-radius: 3px; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { border: none; background: none; }
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
-    )");
 
     m_minimap = new QuickLookMinimap(this);
     

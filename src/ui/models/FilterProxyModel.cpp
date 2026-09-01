@@ -35,15 +35,10 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         return false;
     }
 
-    // 1. 文件夹与文件显隐控制
+    // 1. 文件夹与文件显隐控制 (showFolders/showFiles 为顶栏切换按钮的绝对关断最高优先级)
     if (!isTrashView) {
         if (record.isDir) {
-            bool isEmptyFolder = record.isEmpty;
-            bool isFolderExplicitlySelected = currentFilter.types.contains("folder") ||
-                                              (isEmptyFolder && currentFilter.types.contains("空文件夹"));
-            if (!currentFilter.showFolders && !isFolderExplicitlySelected) {
-                return false;
-            }
+            if (!currentFilter.showFolders) return false;
         } else {
             if (!currentFilter.showFiles) return false;
         }

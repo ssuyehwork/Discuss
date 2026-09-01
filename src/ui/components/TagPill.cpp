@@ -23,20 +23,7 @@ TagPill::TagPill(const QString& text, QWidget* parent) : QWidget(parent), m_text
     m_closeBtn->setCursor(Qt::PointingHandCursor); 
     m_closeBtn->setIcon(UiHelper::getIcon("close", QColor("#FFFFFF"), 14)); 
     m_closeBtn->setIconSize(QSize(12, 12)); 
-    m_closeBtn->setStyleSheet( 
-        "QPushButton {" 
-        "  border: none;" 
-        "  background: rgba(255, 255, 255, 0.1);" 
-        "  border-radius: 8px;" 
-        "  padding: 0px;" 
-        "}" 
-        "QPushButton:hover {" 
-        "  background-color: #E81123;" 
-        "}" 
-        "QPushButton:pressed {" 
-        "  background-color: #A50000;" 
-        "}" 
-    );
+    m_closeBtn->setObjectName("TagPillCloseBtn");
 
     layout->addWidget(m_label);
     layout->addWidget(m_closeBtn);

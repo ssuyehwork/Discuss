@@ -111,27 +111,40 @@ bool FramelessWindowHelper::eventFilter(QObject* obj, QEvent* event) {
         QPoint globalPos = mouseEvent->globalPosition().toPoint();
         QPoint localPos = m_window->mapFromGlobal(globalPos);
 
-        // 如果正在拉伸中
+        // 如果正在拉伸中，锁定几何形状计算，防止依赖动态 mapFromGlobal 导致原点跳变闪烁
         if (m_isResizing) {
             const QPoint delta = globalPos - m_resizeStartGlobalPos;
             QRect r = m_resizeStartGeometry;
 
-            if (m_resizeDir == Left || m_resizeDir == TopLeft || m_resizeDir == BottomLeft)
-                r.setLeft(r.left() + delta.x());
-            if (m_resizeDir == Right || m_resizeDir == TopRight || m_resizeDir == BottomRight)
-                r.setRight(r.right() + delta.x());
-            if (m_resizeDir == Top || m_resizeDir == TopLeft || m_resizeDir == TopRight)
-                r.setTop(r.top() + delta.y());
-            if (m_resizeDir == Bottom || m_resizeDir == BottomLeft || m_resizeDir == BottomRight)
-                r.setBottom(r.bottom() + delta.y());
+            int minW = m_window->minimumWidth();
+            int minH = m_window->minimumHeight();
 
-            r.setWidth(qMax(r.width(), m_window->minimumWidth()));
-            r.setHeight(qMax(r.height(), m_window->minimumHeight()));
+            if (m_resizeDir == Left || m_resizeDir == TopLeft || m_resizeDir == BottomLeft) {
+                int newLeft = r.left() + delta.x();
+                if (r.right() - newLeft + 1 < minW) newLeft = r.right() - minW + 1;
+                r.setLeft(newLeft);
+            }
+            if (m_resizeDir == Right || m_resizeDir == TopRight || m_resizeDir == BottomRight) {
+                int newRight = r.right() + delta.x();
+                if (newRight - r.left() + 1 < minW) newRight = r.left() + minW - 1;
+                r.setRight(newRight);
+            }
+            if (m_resizeDir == Top || m_resizeDir == TopLeft || m_resizeDir == TopRight) {
+                int newTop = r.top() + delta.y();
+                if (r.bottom() - newTop + 1 < minH) newTop = r.bottom() - minH + 1;
+                r.setTop(newTop);
+            }
+            if (m_resizeDir == Bottom || m_resizeDir == BottomLeft || m_resizeDir == BottomRight) {
+                int newBottom = r.bottom() + delta.y();
+                if (newBottom - r.top() + 1 < minH) newBottom = r.top() + minH - 1;
+                r.setBottom(newBottom);
+            }
+
             m_window->setGeometry(r);
             return true;
         }
 
-        // 仅在非最大化时计算边缘
+        // 仅在非拉伸非拖拽非最大化时动态更新光标形状
         if (!m_isDragging && !m_window->isMaximized()) {
             ResizeDirection dir = calculateResizeDirection(localPos);
             updateCursorShape(dir);

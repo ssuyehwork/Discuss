@@ -136,7 +136,7 @@ QSize ThumbnailDelegate::sizeHint(const QStyleOptionViewItem& option, const QMod
 
 QWidget* ThumbnailDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem&, const QModelIndex& index) const { 
     FileNameLineEdit* editor = new FileNameLineEdit(parent); 
-    editor->setStyleSheet("QLineEdit { background-color: #2D2D2D; color: #FFFFFF; selection-background-color: #3498db; border: 1px solid #3498db; border-radius: 4px; padding: 0px 4px; font-size: 8pt; }"); 
+    editor->setObjectName("ThumbnailEditor");
     editor->setIsFolder(index.data(m_typeRole).toString() == "folder"); 
     editor->installEventFilter(const_cast<ThumbnailDelegate*>(this)); 
     return editor; 

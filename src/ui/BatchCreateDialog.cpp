@@ -218,16 +218,7 @@ void BatchCreateDialog::onInsertRowAfter(CreateRuleRow* targetRow) {
 }
 
 void BatchCreateDialog::applyTheme() {
-    static const QString arrowPath = UiHelper::getSvgTempFilePath("dropdown_triangle", QColor("#AAAAAA"));
-    setStyleSheet(QString(
-        "QDialog { background-color: #1E1E1E; color: #BBB; }"
-        "QLineEdit { background: #252526; border: 1px solid #444; border-radius: 4px; padding: 2px 5px; color: #EEE; }"
-        "QSpinBox { background: #252526; border: 1px solid #444; border-radius: 4px; color: #EEE; }"
-        "QComboBox { background: #252526; border: 1px solid #444; border-radius: 4px; padding: 1px 4px; color: #EEE; }"
-        "QComboBox::drop-down { border: none; width: 24px; }"
-        "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
-        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; selection-color: white; color: #EEE; outline: 0; }"
-    ).arg(arrowPath));
+    // Style handled in style.qss
 }
 
 QString BatchCreateDialog::renderOne(int index, const std::vector<RenameRule>& rules) const {

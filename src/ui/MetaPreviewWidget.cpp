@@ -10,7 +10,7 @@ MetaPreviewWidget::MetaPreviewWidget(QWidget* parent) : QWidget(parent) {
     m_lblImagePreview = new QLabel(this);
     m_lblImagePreview->setAlignment(Qt::AlignCenter);
     m_lblImagePreview->setFixedHeight(160);
-    m_lblImagePreview->setStyleSheet("background: transparent; border: none;");
+    m_lblImagePreview->setObjectName("MetaImagePreview");
 
     QWidget* paletteWidget = new QWidget(this);
     m_paletteFlowLayout = new FlowLayout(paletteWidget, 0, 4, 4);

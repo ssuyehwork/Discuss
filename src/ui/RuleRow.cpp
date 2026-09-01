@@ -26,13 +26,7 @@ void RuleRow::initUi() {
     m_typeCombo->setFixedWidth(100);
     m_typeCombo->setFixedHeight(25); // 2026-04-11 按照用户要求：物理锁定最高高度为25像素
     
-    m_typeCombo->setStyleSheet(QString(
-        "QComboBox { background: #2B2B2B; border: 1px solid #444; border-radius: 4px; padding: 2px 4px; color: #EEE; }"
-        "QComboBox::drop-down { border: none; width: 24px; }"
-        "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
-        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; selection-color: white; color: #EEE; outline: 0; }"
-        "QComboBox QAbstractItemView::item { height: 22px; padding: 2px; }" 
-    ).arg(arrowPath));
+    m_typeCombo->setObjectName("RuleCombo");
 
     m_paramStack = new QStackedWidget(this);
     m_paramStack->setFixedHeight(25);
@@ -62,12 +56,7 @@ void RuleRow::initUi() {
     m_paddingCombo->setCurrentIndex(2); // Default 3
     m_paddingCombo->setFixedHeight(25);
     m_paddingCombo->setFixedWidth(90);
-    m_paddingCombo->setStyleSheet(QString(
-        "QComboBox { background: #1E1E1E; border: 1px solid #444; border-radius: 4px; padding-left: 4px; color: #EEE; }"
-        "QComboBox::drop-down { border: none; width: 24px; }"
-        "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
-        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; color: #EEE; outline: 0; }"
-    ).arg(arrowPath));
+    m_paddingCombo->setObjectName("RuleCombo");
     
     seqL->addWidget(m_startSpin);
     seqL->addWidget(m_paddingCombo);
@@ -83,21 +72,13 @@ void RuleRow::initUi() {
     m_dateFormatCombo->addItems({"yyyyMMdd", "yyyy-MM-dd", "yyyy_MM_dd", "yyyy", "MM", "dd"});
     m_dateFormatCombo->setEditable(true);
     m_dateFormatCombo->setFixedHeight(25);
-    m_dateFormatCombo->setStyleSheet(QString(
-        "QComboBox { background: #1E1E1E; border: 1px solid #444; border-radius: 4px; padding-left: 4px; color: #EEE; }"
-        "QComboBox::drop-down { border: none; width: 24px; }"
-        "QComboBox::down-arrow { image: url(%1); width: 12px; height: 12px; }"
-        "QComboBox QAbstractItemView { background-color: #2D2D2D; border: 1px solid #444; selection-background-color: #3E3E42; color: #EEE; outline: 0; }"
-    ).arg(arrowPath));
+    m_dateFormatCombo->setObjectName("RuleCombo");
     m_paramStack->addWidget(m_dateFormatCombo);
 
     auto createBtn = [this](const QString& text) {
         QPushButton* btn = new QPushButton(text, this);
         btn->setFixedSize(22, 22); // 回归紧凑尺寸
-        btn->setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #434343; border-radius: 2px; color: #888; font-weight: bold; font-size: 14px; }"
-            "QPushButton:hover { background: #3E3E42; color: #EEE; border-color: #666; }"
-        );
+        btn->setObjectName("RuleDeleteBtn");
         return btn;
     };
 

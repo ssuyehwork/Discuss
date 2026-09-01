@@ -47,7 +47,8 @@ MetaRatingColorWidget::MetaRatingColorWidget(QWidget* parent) : QWidget(parent) 
         btn->setFixedSize(18, 18);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setProperty("colorHex", colHex.toUpper());
-        btn->setStyleSheet(QString("background: %1; border-radius: 9px; border: none;").arg(colHex));
+        btn->setObjectName("MetaRatingColorBtn");
+        btn->setStyleSheet(QString("QPushButton#MetaRatingColorBtn { background: %1; border-radius: 9px; border: none; }").arg(colHex));
         m_colorBtns.append(btn);
         m_colorLayout->addWidget(btn);
 

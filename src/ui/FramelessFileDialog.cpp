@@ -26,15 +26,12 @@ FramelessFileDialog::FramelessFileDialog(const QString& title, const QString& di
     // 1. 地址栏
     auto* topRow = new QWidget();
     topRow->setFixedHeight(40);
-    topRow->setStyleSheet("background-color: #252526; border-bottom: 1px solid #333;");
+    topRow->setObjectName("FileDialogTopRow");
     auto* topLayout = new QHBoxLayout(topRow);
     topLayout->setContentsMargins(10, 0, 10, 0);
     
     m_pathEdit = new QLineEdit();
-    m_pathEdit->setStyleSheet(
-        "QLineEdit { background: #1E1E1E; color: #EEE; border: 1px solid #444; border-radius: 4px; padding: 2px 8px; }"
-        "QLineEdit:focus { border-color: #3498db; }"
-    );
+    m_pathEdit->setObjectName("FileDialogPathEdit");
     connect(m_pathEdit, &QLineEdit::returnPressed, this, &FramelessFileDialog::onPathEntered);
     topLayout->addWidget(m_pathEdit);
     
@@ -48,24 +45,14 @@ FramelessFileDialog::FramelessFileDialog(const QString& title, const QString& di
 
     m_sidebar = new QListWidget();
     m_sidebar->setFixedWidth(180);
-    m_sidebar->setStyleSheet(
-        "QListWidget { background-color: #252526; border: none; border-right: 1px solid #333; color: #BBB; outline: none; padding: 5px; }"
-        "QListWidget::item { height: 32px; padding-left: 10px; border-radius: 4px; }"
-        "QListWidget::item:hover { background-color: #2A2D2E; }"
-        "QListWidget::item:selected { background-color: #37373D; color: white; }"
-    );
+    m_sidebar->setObjectName("FileDialogSidebar");
     setupSidebar();
     connect(m_sidebar, &QListWidget::itemClicked, this, &FramelessFileDialog::onSidebarClicked);
     middleLayout->addWidget(m_sidebar);
 
     m_listView = new QListView();
     m_listView->setViewMode(QListView::ListMode);
-    m_listView->setStyleSheet(
-        "QListView { background-color: #1E1E1E; border: none; color: #EEE; outline: none; }"
-        "QListView::item { height: 28px; padding-left: 5px; }"
-        "QListView::item:hover { background-color: #2A2D2E; }"
-        "QListView::item:selected { background-color: #094771; }"
-    );
+    m_listView->setObjectName("FileDialogListView");
     
     m_model = new QFileSystemModel(this);
     m_model->setReadOnly(true);
@@ -83,19 +70,19 @@ FramelessFileDialog::FramelessFileDialog(const QString& title, const QString& di
     // 3. 底部操作栏
     auto* bottomRow = new QWidget();
     bottomRow->setFixedHeight(80);
-    bottomRow->setStyleSheet("background-color: #252526; border-top: 1px solid #333;");
+    bottomRow->setObjectName("FileDialogBottomRow");
     auto* bottomLayout = new QVBoxLayout(bottomRow);
     bottomLayout->setContentsMargins(15, 10, 15, 10);
     
     auto* fileRow = new QHBoxLayout();
     fileRow->addWidget(new QLabel("文件名:"));
     m_fileEdit = new QLineEdit();
-    m_fileEdit->setStyleSheet("QLineEdit { background: #1E1E1E; color: #EEE; border: 1px solid #444; border-radius: 4px; padding: 2px 8px; }");
+    m_fileEdit->setObjectName("FileDialogFileEdit");
     fileRow->addWidget(m_fileEdit, 1);
     
     m_filterCombo = new QComboBox();
     m_filterCombo->setFixedWidth(200);
-    m_filterCombo->setStyleSheet("QComboBox { background: #1E1E1E; color: #EEE; border: 1px solid #444; border-radius: 4px; padding-left: 5px; }");
+    m_filterCombo->setObjectName("FileDialogFilterCombo");
     
     QStringList filters;
     if (!filter.isEmpty()) {
@@ -128,13 +115,13 @@ FramelessFileDialog::FramelessFileDialog(const QString& title, const QString& di
     btnRow->addStretch();
     auto* cancelBtn = new QPushButton("取消");
     cancelBtn->setFixedSize(85, 28);
-    cancelBtn->setStyleSheet("QPushButton { background-color: transparent; color: #999; border: 1px solid #444; border-radius: 4px; } QPushButton:hover { background-color: #333; }");
+    cancelBtn->setObjectName("FileDialogCancelBtn");
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     btnRow->addWidget(cancelBtn);
 
     m_okBtn = new QPushButton(m_mode == Directory ? "选择文件夹" : "打开");
     m_okBtn->setFixedSize(100, 28);
-    m_okBtn->setStyleSheet("QPushButton { background-color: #3498db; color: white; border: none; border-radius: 4px; font-weight: bold; } QPushButton:hover { background-color: #2980b9; }");
+    m_okBtn->setObjectName("FileDialogOkBtn");
     connect(m_okBtn, &QPushButton::clicked, this, &FramelessFileDialog::onAccept);
     btnRow->addWidget(m_okBtn);
     bottomLayout->addLayout(btnRow);

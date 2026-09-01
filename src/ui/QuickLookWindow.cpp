@@ -74,20 +74,6 @@ void QuickLookWindow::setupUi() {
 
     m_container = new QWidget();
     m_container->setObjectName("QLContainer");
-    m_container->setStyleSheet(R"(
-        #QLContainer {
-            background-color: #1E1E1E;
-        }
-        QLabel { color: #CCC; font-size: 12px; }
-        #QLTitle { color: #FF8C00; font-weight: bold; font-size: 14px; }
-        QPlainTextEdit {
-            background: transparent;
-            border: none;
-            color: #D4D4D4;
-            font-family: 'Consolas', 'Monaco', 'PingFang SC', 'Microsoft YaHei';
-            font-size: 13px;
-        }
-    )");
 
     auto* layout = new QVBoxLayout(m_container);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -106,20 +92,8 @@ void QuickLookWindow::setupUi() {
     // 文本渲染控件
     m_textEdit = new QPlainTextEdit();
     m_textEdit->setReadOnly(true);
+    m_textEdit->setObjectName("QLPlainTextEdit");
     m_textEdit->hide();
-    // 重构 QPlainTextEdit 的垂直与水平滚动条，使其完全满足全局考古标准
-    m_textEdit->verticalScrollBar()->setStyleSheet(R"(
-        QScrollBar:vertical { width: 10px; background: transparent; }
-        QScrollBar::handle:vertical { background: #333333; border-radius: 3px; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { border: none; background: none; }
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
-    )");
-    m_textEdit->horizontalScrollBar()->setStyleSheet(R"(
-        QScrollBar:horizontal { height: 10px; background: transparent; }
-        QScrollBar::handle:horizontal { background: #333333; border-radius: 3px; }
-        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { border: none; background: none; }
-        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }
-    )");
     m_textEdit->installEventFilter(this);
     m_textEdit->viewport()->installEventFilter(this);
     layout->addWidget(m_textEdit);

@@ -185,9 +185,9 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
         QPushButton* btn = new QPushButton(this);
         btn->setFixedSize(22, 22);
         btn->setCursor(Qt::PointingHandCursor);
+        btn->setObjectName("ColorPickerPresetBtn");
         btn->setStyleSheet(QString(
-            "QPushButton { background: %1; border: 1px solid #444; border-radius: 4px; }"
-            "QPushButton:hover { border: 1px solid #AAA; }"
+            "QPushButton#ColorPickerPresetBtn { background: %1; }"
         ).arg(hex));
         connect(btn, &QPushButton::clicked, this, [this, hex]() {
             setCurrentColor(QColor(hex));
@@ -213,6 +213,7 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
 
     m_previewBlock = new QWidget(bottomContainer);
     m_previewBlock->setFixedSize(16, 16);
+    m_previewBlock->setObjectName("ColorPickerPreviewBlock");
     m_previewBlock->setStyleSheet("background: red; border-radius: 4px;");
     bottomLayout->addWidget(m_previewBlock);
 
@@ -259,19 +260,7 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
     m_toleranceSlider->setRange(0, 100);
     m_toleranceSlider->setValue(30); // 默认容差 30
     m_toleranceSlider->setCursor(Qt::PointingHandCursor);
-    m_toleranceSlider->setStyleSheet(
-        "QSlider::groove:horizontal {"
-        "  height: 3px; background: #444; border-radius: 2px;"
-        "}"
-        "QSlider::handle:horizontal {"
-        "  width: 12px; height: 12px;"
-        "  background: #EEEEEE; border-radius: 6px;"
-        "  margin: -5px 0;"
-        "}"
-        "QSlider::sub-page:horizontal {"
-        "  background: #378ADD; border-radius: 2px;"
-        "}"
-    );
+    m_toleranceSlider->setObjectName("ColorPickerToleranceSlider");
     toleranceLayout->addWidget(m_toleranceSlider, 1);
     mainLayout->addWidget(toleranceRow);
 

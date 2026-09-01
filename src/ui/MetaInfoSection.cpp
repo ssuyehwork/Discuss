@@ -31,19 +31,19 @@ MetaInfoSection::MetaInfoSection(QWidget* parent) : QWidget(parent) {
 
     m_pathEdit = new QLineEdit(pathBox);
     m_pathEdit->setReadOnly(true);
-    m_pathEdit->setStyleSheet("QLineEdit { background: #252526; border: 1px solid #3C3C3C; border-radius: 4px; color: #CCCCCC; padding: 2px 6px; font-size: 11px; }");
+    m_pathEdit->setObjectName("MetaInfoPathEdit");
 
     m_btnCopyPath = new QPushButton(pathBox);
     m_btnCopyPath->setFixedSize(24, 24);
     m_btnCopyPath->setIcon(UiHelper::getIcon("copy", QColor("#EEEEEE"), 14));
     m_btnCopyPath->setCursor(Qt::PointingHandCursor);
-    m_btnCopyPath->setStyleSheet("QPushButton { background: #2A2A2A; border: 1px solid #3C3C3C; border-radius: 4px; } QPushButton:hover { background: #333333; }");
+    m_btnCopyPath->setObjectName("BtnCopyPath");
 
     m_btnOpenLocation = new QPushButton(pathBox);
     m_btnOpenLocation->setFixedSize(24, 24);
     m_btnOpenLocation->setIcon(UiHelper::getIcon("folder", QColor("#EEEEEE"), 14));
     m_btnOpenLocation->setCursor(Qt::PointingHandCursor);
-    m_btnOpenLocation->setStyleSheet("QPushButton { background: #2A2A2A; border: 1px solid #3C3C3C; border-radius: 4px; } QPushButton:hover { background: #333333; }");
+    m_btnOpenLocation->setObjectName("BtnOpenLocation");
 
     pathLayout->addWidget(m_pathEdit, 1);
     pathLayout->addWidget(m_btnCopyPath);
