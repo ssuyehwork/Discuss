@@ -195,12 +195,12 @@ QLineEdit#SearchEdit {
     border: 1px solid #333333;
     border-radius: 6px;
     color: #EEEEEE;
-    padding-left: 28px;
+    padding-left: 4px;
     padding-right: 24px;
     font-size: 12px;
 }
 QLineEdit#SearchEdit:focus {
-    border-color: #FDB70A;
+    border-color: #378ADD;
 }
 
 QLabel#StatusBarLeft {
@@ -1051,6 +1051,49 @@ QListWidget#FileDialogListView::item:hover {
 QListWidget#FileDialogListView::item:selected {
     background-color: rgba(55, 138, 221, 0.3);
     color: #FFFFFF;
+}
+
+/* 统一 QTableWidget & QTableView & QHeaderView 表格组件暗色样式 */
+QTableWidget, QTableView {
+    background-color: #1E1E1E;
+    alternate-background-color: #252526;
+    color: #EEEEEE;
+    gridline-color: #333333;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    outline: 0;
+}
+QTableWidget::item, QTableView::item {
+    padding: 4px;
+    border: none;
+}
+QTableWidget::item:hover, QTableView::item:hover {
+    background-color: #2A2D2E;
+}
+QTableWidget::item:selected, QTableView::item:selected {
+    background-color: rgba(55, 138, 221, 0.3);
+    color: #FFFFFF;
+}
+
+QHeaderView {
+    background-color: #252526;
+    border: none;
+}
+QHeaderView::section {
+    background-color: #252526;
+    color: #888888;
+    padding: 6px 10px;
+    border: none;
+    border-right: 1px solid #333333;
+    border-bottom: 1px solid #333333;
+    font-size: 12px;
+    font-weight: bold;
+}
+QHeaderView::section:horizontal {
+    border-top: none;
+}
+QHeaderView::section:last {
+    border-right: none;
 }
 QLineEdit#FileDialogFileEdit, QComboBox#FileDialogFilterCombo {
     background: #1E1E1E;
