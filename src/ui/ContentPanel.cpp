@@ -5,14 +5,15 @@
 #include "controllers/ContentContextMenu.h"
 #include "controllers/ContentKeyHandler.h"
 #include "controllers/ContentSortController.h"
+#include "controllers/ContentDataLoader.h"
+#include "controllers/ContentFileOpsHandler.h"
+#include "workers/ContentStatsWorker.h"
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
 #include "ThumbnailDelegate.h"
 #include "TreeItemDelegate.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
-#include "DiskScanService.h"
-#include "BatchRenameDialog.h"
 
 #include "../core/AppConfig.h"
 #include "../core/CoreEngine.h"
@@ -20,22 +21,15 @@
 #include "../core/TrashService.h"
 #include "../core/PermanentDeleteService.h"
 #include "../core/ClipboardService.h"
-#include "../core/NavigationHistoryService.h"
-#include "../meta/MetaCacheDecorator.h"
-#include "../meta/DiskTrashRepo.h"
-#include "../meta/DuplicateDetectorService.h"
 #include "../meta/MediaExtractorPipeline.h"
 #include "../util/ThumbnailPipelineService.h"
-#include "../util/DiskIoService.h"
 
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QHeaderView>
 #include <QScrollBar>
-#include <QtConcurrent>
 #include <QFileInfo>
 #include <QDir>
-#include <QFile>
 #include <QApplication>
 
 namespace QuarkMeta {
@@ -69,6 +63,18 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     });
     m_sortController->applySortToModel(m_proxyModel);
 
+    m_dataLoader = new ContentDataLoader(this);
+    m_fileOpsHandler = new ContentFileOpsHandler(this);
+    m_statsWorker = new ContentStatsWorker(this);
+
+    connect(m_statsWorker, &ContentStatsWorker::statsReady, this, [this](const ScanStats& stats) {
+        auto* proxy = qobject_cast<FilterProxyModel*>(m_proxyModel);
+        if (proxy) {
+            proxy->setCachedDuplicatePaths(stats.duplicatePaths);
+        }
+        emit directoryStatsReady(stats);
+    });
+
     m_zoomLevel = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
     m_showFolders = AppConfig::instance().getValue("ContentPanel/ShowFolders", true).toBool();
     m_showFiles = AppConfig::instance().getValue("ContentPanel/ShowFiles", true).toBool();
@@ -97,7 +103,7 @@ void ContentPanel::initUi() {
     QWidget* titleBar = new QWidget(this);
     titleBar->setObjectName("ContainerHeader");
     titleBar->setFixedHeight(32);
-    // ContainerHeader in style.qss
+
     QHBoxLayout* titleL = new QHBoxLayout(titleBar);
     titleL->setContentsMargins(15, 0, 5, 0);
     titleL->setSpacing(5);
@@ -156,14 +162,16 @@ void ContentPanel::initUi() {
     m_btnLayers->installEventFilter(this);
     m_btnLayers->setObjectName("ViewModeToolBtn");
     connect(m_btnLayers, &QPushButton::clicked, this, [this]() {
-        if (m_currentPath.isEmpty() || m_currentPath == "computer://") { m_btnLayers->setChecked(false); return; }
+        if (m_currentPath.isEmpty() || m_currentPath == "computer://") {
+            m_btnLayers->setChecked(false);
+            return;
+        }
         loadDirectory(m_currentPath, m_btnLayers->isChecked());
     });
     titleL->addWidget(m_btnLayers, 0, Qt::AlignVCenter);
 
     m_mainLayout->addWidget(titleBar);
 
-    // 🚀【纯净挂载】：所有边距彻底归零，分栏间隙完全由 Splitter 5px 掌控
     m_viewStack = new QStackedWidget(this);
     m_viewStack->setFrameShape(QFrame::NoFrame);
     initGridView();
@@ -248,6 +256,25 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
     return QFrame::eventFilter(obj, event);
 }
 
+void ContentPanel::ensureSourceModelIsDiskModel() {
+    if (m_model != m_diskModel) {
+        m_model = m_diskModel;
+        m_proxyModel->setSourceModel(m_model);
+    }
+}
+
+void ContentPanel::applySort() {
+    if (m_sortController) {
+        m_sortController->applySortToModel(m_proxyModel);
+    }
+}
+
+void ContentPanel::startVisibleTimer() {
+    if (m_visibleTimer) {
+        m_visibleTimer->start();
+    }
+}
+
 void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(sender());
     if (!view) view = (m_viewStack && m_viewStack->currentWidget() == m_gridView) ? m_gridView : m_treeView;
@@ -257,154 +284,19 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 }
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
-    restoreActiveView();
-    MediaExtractorPipeline::instance().cancelAll();
-    if (m_diskModel) m_diskModel->incrementGeneration();
-    if (m_model != m_diskModel) {
-        m_model = m_diskModel;
-        m_proxyModel->setSourceModel(m_model);
-    }
-    ThumbnailPipelineService::instance().cancelAll();
-
-    m_isLoading = true;
-    int reqId = ++m_loadRequestId;
-    m_currentCategoryType = "";
-    emit dataSourceChanged("nav");
-
-    m_isRecursive = recursive;
-    if (m_btnLayers) m_btnLayers->setChecked(recursive);
-
-    if (path.isEmpty() || path == "computer://") {
-        m_currentPath = "computer://";
-        updateLayersButtonState();
-        std::vector<ItemRecord> driveRecords;
-        for (const QFileInfo& drive : QDir::drives()) driveRecords.push_back(ItemRecord::create(drive.absolutePath()));
-        MetaCacheDecorator::decorate(driveRecords);
-        m_model->setRecords(driveRecords);
-        m_sortController->applySortToModel(m_proxyModel);
-        m_isLoading = false;
-        recalculateAndEmitStats();
-        return;
-    }
-
-    m_currentPath = path;
-    updateLayersButtonState();
-
-    QPointer<ContentPanel> panelPtr(this);
-    (void)QtConcurrent::run([panelPtr, path, recursive, reqId]() {
-        if (!panelPtr) return;
-        std::vector<ItemRecord> allItems = DiskScanService::scanDirectory(path, recursive, [panelPtr]() { return static_cast<bool>(panelPtr); });
-        if (!panelPtr) return;
-        MetaCacheDecorator::decorate(allItems);
-
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [panelPtr, allItems, reqId]() {
-            if (panelPtr && panelPtr->m_loadRequestId == reqId) {
-                panelPtr->m_model->setRecords(allItems);
-                panelPtr->m_sortController->applySortToModel(panelPtr->m_proxyModel);
-                panelPtr->m_isLoading = false;
-                panelPtr->recalculateAndEmitStats();
-                panelPtr->applyFilters();
-                panelPtr->restoreSelections();
-                panelPtr->m_visibleTimer->start();
-            }
-        }, Qt::QueuedConnection);
-    });
+    if (m_dataLoader) m_dataLoader->loadDirectory(path, recursive);
 }
 
 void ContentPanel::loadCategory(const QString& categoryType) {
-    m_currentCategoryType = categoryType;
-    if (categoryType == "trash") {
-        m_currentPath = "trash://";
-        loadPaths({});
-    }
-}
-
-static std::vector<ItemRecord> loadTrashItemsDirect() {
-    std::vector<ItemRecord> records;
-    auto rawDiskTrash = DiskTrashRepo::getAllTrashItems();
-    for (const auto& raw : rawDiskTrash) {
-        ItemRecord rec;
-        rec.isDiskTrash = true;
-        rec.diskTrashId = raw.id;
-        rec.fileId = QString::fromStdWString(raw.fileId);
-        rec.path = QString::fromStdWString(raw.trashPath);
-        rec.originalPath = QString::fromStdWString(raw.originalPath);
-        rec.filename = QString::fromStdWString(raw.fileName);
-        rec.suffix = QFileInfo(rec.filename).suffix();
-        rec.isDir = raw.isFolder;
-        rec.size = raw.fileSize;
-        rec.ctime = raw.createdAt > 0 ? raw.createdAt : raw.deletedAt;
-        rec.mtime = raw.deletedAt;
-        records.push_back(rec);
-    }
-    MetaCacheDecorator::decorate(records);
-    return records;
+    if (m_dataLoader) m_dataLoader->loadCategory(categoryType);
 }
 
 void ContentPanel::loadPaths(const QStringList& paths, int reqId) {
-    restoreActiveView();
-    if (m_model != m_diskModel) {
-        m_model = m_diskModel;
-        m_proxyModel->setSourceModel(m_model);
-    }
-
-    if (paths.isEmpty() && m_currentCategoryType != "trash") {
-        m_model->clear();
-        m_isLoading = false;
-        recalculateAndEmitStats();
-        return;
-    }
-    m_isLoading = true;
-    if (reqId == 0) reqId = ++m_loadRequestId;
-    if (m_currentCategoryType.isEmpty()) m_currentCategoryType = "path_list";
-    updateLayersButtonState();
-
-    QPointer<ContentPanel> weakThis(this);
-    (void)QtConcurrent::run([weakThis, paths, reqId]() {
-        if (!weakThis) return;
-        std::vector<ItemRecord> records;
-        
-        if (weakThis->getCurrentCategoryType() == "trash") {
-            records = loadTrashItemsDirect();
-        } else {
-            for (const QString& p : paths) records.push_back(ItemRecord::create(p));
-            MetaCacheDecorator::decorate(records);
-        }
-        if (!weakThis) return;
-
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, records, reqId]() {
-            if (weakThis && weakThis->m_loadRequestId == reqId) {
-                weakThis->m_model->setRecords(records);
-                weakThis->m_sortController->applySortToModel(weakThis->m_proxyModel);
-                weakThis->m_isLoading = false;
-                weakThis->recalculateAndEmitStats();
-                weakThis->applyFilters();
-                weakThis->restoreSelections();
-            }
-        });
-    });
+    if (m_dataLoader) m_dataLoader->loadPaths(paths, reqId);
 }
 
 void ContentPanel::appendPaths(const QStringList& paths, int reqId) {
-    if (paths.isEmpty() || (reqId != 0 && m_loadRequestId != reqId)) return;
-    QPointer<ContentPanel> weakThis(this);
-    (void)QtConcurrent::run([weakThis, paths, reqId]() {
-        if (!weakThis) return;
-        std::vector<ItemRecord> newRecs;
-        for (const QString& p : paths) newRecs.push_back(ItemRecord::create(p));
-        MetaCacheDecorator::decorate(newRecs);
-        if (!weakThis) return;
-
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, newRecs, reqId]() {
-            if (weakThis && (reqId == 0 || weakThis->m_loadRequestId == reqId)) {
-                std::vector<ItemRecord> all = weakThis->m_model->allRecords();
-                all.insert(all.end(), newRecs.begin(), newRecs.end());
-                weakThis->m_model->setRecords(all);
-                weakThis->recalculateAndEmitStats();
-                weakThis->applyFilters();
-            }
-        });
-    });
+    if (m_dataLoader) m_dataLoader->appendPaths(paths, reqId);
 }
 
 bool ContentPanel::canPaste(const QString& targetOverride) const {
@@ -421,44 +313,19 @@ void ContentPanel::performPaste() {
 }
 
 bool ContentPanel::resolvePasteDestination() {
-    if (m_currentCategoryType == "trash") {
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "当前视图为回收站，不支持粘贴或拖拽导入新项目", 2000, QColor("#e81123"));
-        return false;
-    }
-    if (m_currentPath.isEmpty() || m_currentPath == "computer://") {
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "粘贴失败：当前未处于任何有效目录中", 2000, QColor("#e81123"));
-        return false;
-    }
-    return true;
+    return m_fileOpsHandler ? m_fileOpsHandler->resolvePasteDestination() : false;
+}
+
+void ContentPanel::createNewItem(const QString& type) {
+    if (m_fileOpsHandler) m_fileOpsHandler->createNewItem(type);
+}
+
+void ContentPanel::performBatchRename() {
+    if (m_fileOpsHandler) m_fileOpsHandler->performBatchRename();
 }
 
 void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex) {
-    if (paths.isEmpty() || m_currentPath.isEmpty() || m_currentPath == "computer://") return;
-    QString destDir = m_currentPath;
-    if (targetIndex.isValid()) {
-        QModelIndex srcIdx = m_proxyModel->mapToSource(targetIndex);
-        if (srcIdx.isValid() && QFileInfo(srcIdx.data(PathRole).toString()).isDir()) {
-            destDir = srcIdx.data(PathRole).toString();
-        }
-    }
-
-    if (!destDir.isEmpty() && destDir != "computer://") {
-        NavigationHistoryService::recordRecentVisitedFolder(QDir::toNativeSeparators(destDir).toStdWString());
-        AppConfig::instance().setValue("RecentVisited/LastDragDropDestination", destDir);
-        AppConfig::instance().sync();
-    }
-
-    DiskIoContext ioCtx;
-    ioCtx.sources = paths;
-    ioCtx.destination = destDir;
-    ioCtx.isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
-
-    QPointer<ContentPanel> weakThis(this);
-    DiskIoService::instance().executeAsync(ioCtx, [weakThis](bool success) {
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, success]() {
-            if (weakThis && success) weakThis->loadDirectory(weakThis->m_currentPath, weakThis->m_isRecursive);
-        });
-    });
+    if (m_fileOpsHandler) m_fileOpsHandler->onPathsDropped(paths, targetIndex);
 }
 
 void ContentPanel::onDoubleClicked(const QModelIndex& index) {
@@ -531,6 +398,9 @@ void ContentPanel::updateGridSize() {
 
 void ContentPanel::applyFilters(const FilterState& state) {
     m_currentFilter = state;
+    m_currentFilter.showFolders = m_showFolders;
+    m_currentFilter.showFiles = m_showFiles;
+    m_currentFilter.showHidden = m_showHidden;
     applyFilters();
 }
 
@@ -584,39 +454,10 @@ void ContentPanel::updateStatusBarStats() {
 }
 
 void ContentPanel::recalculateAndEmitStats() {
-    const std::vector<ItemRecord>& records = m_model->allRecords();
-    if (records.empty()) return;
-
-    QPointer<ContentPanel> weakThis(this);
-    (void)QtConcurrent::run([weakThis, records]() {
-        ScanStats stats;
-        stats.duplicatePaths = DuplicateDetectorService::findDuplicatePaths(records);
-        stats.duplicateCount = static_cast<int>(stats.duplicatePaths.size());
-
-        for (const auto& record : records) {
-            if (!weakThis) return;
-            if (record.isHidden && !weakThis->m_currentFilter.showHidden) continue;
-            stats.ratingCounts[record.rating]++;
-            stats.colorCounts[UiHelper::normalizeColorHex(record.manualColor)]++;
-            if (record.isDir) {
-                stats.typeCounts["folder"]++;
-                if (record.isEmpty) stats.emptyFolderCount++;
-            } else {
-                stats.typeCounts["file"]++;
-                stats.typeCounts[record.suffix.toUpper()]++;
-                if (!record.url.isEmpty()) stats.hasLinkCount++; else stats.noLinkCount++;
-                if (!record.note.isEmpty()) stats.hasNoteCount++; else stats.noNoteCount++;
-                if (!record.tags.isEmpty()) stats.hasTagCount++; else stats.noTagCount++;
-            }
-        }
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, stats]() {
-            if (weakThis) {
-                auto* proxy = qobject_cast<FilterProxyModel*>(weakThis->m_proxyModel);
-                if (proxy) proxy->setCachedDuplicatePaths(stats.duplicatePaths);
-                emit weakThis->directoryStatsReady(stats);
-            }
-        });
-    });
+    if (!m_model || m_model->allRecords().empty()) return;
+    if (m_statsWorker) {
+        m_statsWorker->processAsync(m_model->allRecords(), m_currentFilter.showHidden);
+    }
 }
 
 void ContentPanel::refreshVisibleThumbnails() {
@@ -637,36 +478,6 @@ void ContentPanel::refreshVisibleThumbnails() {
     }
 
     m_model->loadThumbnailsForRows(visibleRows);
-}
-
-void ContentPanel::createNewItem(const QString& type) {
-    if (m_currentPath.isEmpty() || m_currentPath == "computer://") return;
-    QString baseName = (type == "folder") ? "新建文件夹" : "未命名";
-    QString ext = (type == "md") ? ".md" : ((type == "txt") ? ".txt" : "");
-    QString finalName = baseName + ext;
-    QString fullPath = m_currentPath + "/" + finalName;
-    int counter = 1;
-    while (QFileInfo::exists(fullPath)) {
-        finalName = baseName + QString(" (%1)").arg(counter++) + ext;
-        fullPath = m_currentPath + "/" + finalName;
-    }
-    if (type == "folder") QDir(m_currentPath).mkdir(finalName);
-    else { QFile f(fullPath); if (f.open(QIODevice::WriteOnly)) f.close(); }
-    setPendingSelectName(finalName, true);
-    loadDirectory(m_currentPath, m_isRecursive);
-}
-
-void ContentPanel::performBatchRename() {
-    std::vector<std::wstring> originalPaths;
-    for (const auto& idx : getSelectedIndexes()) {
-        if (idx.column() == 0) {
-            QString p = idx.data(PathRole).toString();
-            if (!p.isEmpty()) originalPaths.push_back(QDir::toNativeSeparators(p).toStdWString());
-        }
-    }
-    if (originalPaths.empty()) return;
-    BatchRenameDialog dlg(originalPaths, this);
-    if (dlg.exec() == QDialog::Accepted) refreshAll();
 }
 
 void ContentPanel::selectAndScrollToPath(const QString& path) { selectAndScrollToItem(path); }

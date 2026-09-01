@@ -22,6 +22,9 @@
 namespace QuarkMeta {
 
 class ContentKeyHandler;
+class ContentDataLoader;
+class ContentFileOpsHandler;
+class ContentStatsWorker;
 
 /**
  * @brief 内容面板（面板四）：核心业务展示区（纯视图与交互路由层）
@@ -76,7 +79,20 @@ public:
     bool isContextMenuActive() const { return m_isContextMenuActive; }
     QString getCurrentCategoryType() const { return m_currentCategoryType; }
     int currentLoadRequestId() const { return m_loadRequestId.load(); }
+    int loadRequestId() const { return m_loadRequestId.load(); }
+    int incrementLoadRequestId() { return ++m_loadRequestId; }
     const FilterState& currentFilter() const { return m_currentFilter; }
+
+    // 状态与辅助设置（供 Handler / Loader 转调）
+    void setCurrentPath(const QString& path) { m_currentPath = path; }
+    void setIsRecursive(bool recursive) { m_isRecursive = recursive; }
+    void setLoading(bool loading) { m_isLoading = loading; }
+    void ensureSourceModelIsDiskModel();
+    void applySort();
+    void startVisibleTimer();
+    void updateLayersButtonState();
+    void restoreActiveView();
+    void restoreSelections();
 
     // 排序与控制访问器
     ContentSortController* sortController() const { return m_sortController; }
@@ -98,11 +114,15 @@ public:
     QAbstractItemView* gridView() const { return m_gridView; }
     QTreeView* treeView() const { return m_treeView; }
     ContentKeyHandler* keyHandler() const { return m_keyHandler; }
+    ContentDataLoader* dataLoader() const { return m_dataLoader; }
+    ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
+    ContentStatsWorker* statsWorker() const { return m_statsWorker; }
 
     // 业务操作转发
     void performCopy(bool cutMode);
     void performPaste();
     void performBatchRename();
+    bool resolvePasteDestination();
     void setViewMode(ViewMode mode);
     void selectAndScrollToPath(const QString& path);
     void selectAndScrollToItem(const QString& path);
@@ -111,7 +131,7 @@ public:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
     // 模型数据访问
-    QAbstractItemModel* model() const { return m_model; }
+    ItemModelBase* model() const { return m_model; }
     QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
     QStringList getSelectedPaths() const;
     QList<int> getSelectedTrashIds() const;
@@ -148,6 +168,7 @@ public slots:
     void appendPaths(const QStringList& paths, int reqId = 0);
     void loadCategory(const QString& categoryType);
     void refreshVisibleThumbnails();
+    void recalculateAndEmitStats();
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
@@ -156,13 +177,8 @@ private:
     void initUi();
     void initGridView();
     void initListView();
-    void updateLayersButtonState();
     void updateGridSize();
     void updateStatusBarStats();
-    void recalculateAndEmitStats();
-    bool resolvePasteDestination();
-    void restoreActiveView();
-    void restoreSelections();
     void emitSelectionChangedSignal();
 
     // 🚀【状态 100% 私有化安全封装】
@@ -199,6 +215,9 @@ private:
     QTimer* m_selectionTimer = nullptr;
     ContentSortController* m_sortController = nullptr;
     ContentKeyHandler* m_keyHandler = nullptr;
+    ContentDataLoader* m_dataLoader = nullptr;
+    ContentFileOpsHandler* m_fileOpsHandler = nullptr;
+    ContentStatsWorker* m_statsWorker = nullptr;
 };
 
 } // namespace QuarkMeta
