@@ -241,6 +241,12 @@ set(SOURCES
     src/ui/controllers/ContentKeyHandler.cpp
     src/ui/controllers/ContentSortController.h
     src/ui/controllers/ContentSortController.cpp
+    src/ui/controllers/ContentDataLoader.h
+    src/ui/controllers/ContentDataLoader.cpp
+    src/ui/controllers/ContentFileOpsHandler.h
+    src/ui/controllers/ContentFileOpsHandler.cpp
+    src/ui/workers/ContentStatsWorker.h
+    src/ui/workers/ContentStatsWorker.cpp
     src/core/ActionCommand.h
     src/core/UndoManager.h
     src/core/BasicCommands.h
