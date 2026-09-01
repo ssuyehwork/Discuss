@@ -601,6 +601,16 @@ void ContentPanel::recalculateAndEmitStats() {
             if (record.isHidden && !weakThis->m_currentFilter.showHidden) continue;
             stats.ratingCounts[record.rating]++;
             stats.colorCounts[UiHelper::normalizeColorHex(record.manualColor)]++;
+
+            if (record.ctime > 0) {
+                QString cDateStr = QDateTime::fromMSecsSinceEpoch(record.ctime).date().toString("dd-MM-yyyy");
+                if (!cDateStr.isEmpty()) stats.createDateCounts[cDateStr]++;
+            }
+            if (record.mtime > 0) {
+                QString mDateStr = QDateTime::fromMSecsSinceEpoch(record.mtime).date().toString("dd-MM-yyyy");
+                if (!mDateStr.isEmpty()) stats.modifyDateCounts[mDateStr]++;
+            }
+
             if (record.isDir) {
                 stats.typeCounts["folder"]++;
                 if (record.isEmpty) stats.emptyFolderCount++;
