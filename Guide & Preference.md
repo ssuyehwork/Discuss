@@ -101,20 +101,12 @@
 
 ---
 
-## 4. 业务领域与数据契约规范
+## 4. 检索与线程安全规范
 
-### 4.1 内容面板数据源契约
-- **核心定义**: 使用强类型枚举 `DataSourceType` 规范 `ContentPanel` 的数据源来源（如 `DiskNav` / `PathList` 等）。
-- **铁律**: 严禁在代码中手写散落的弱类型字符串判定，数据源判定统一通过 `ContentPanel::dataSourceType()` 枚举接口。
-
-### 4.2 范围感知搜索规范
+### 4.1 范围感知搜索规范
 - **Scope-Aware 搜索**: 搜索请求统一通过 `CoreController::performSearch` 转发，实时绑定顶部蓝色提示线 (Focus Line) 位置；分类模式下限定于当前分类及子类，导航模式下限定于当前物理磁盘路径及子目录。
 
----
-
-## 5. 线程安全与底层 API 调用边界
-
-### 5.1 媒体提取管道线程安全边界
+### 4.2 媒体提取管道线程安全边界
 - 后台提取管道中，任何触碰 `QSvgRenderer` / `QPainter` / `QPixmap` / `QIcon` 等 Qt Gui 模块 API 的代码段，必须用 `DiskMediaExtractor::s_qtGuiMutex` 显式串行化保护。
 - Qt Gui 模块 API 不保证线程安全，并发访问会导致内部缓存越界写入引发进程崩溃 (`0xC0000005`)。
 - 文件 I/O、哈希计算、数据库读写等与 Qt Gui 无关的部分维持并行。
