@@ -11,10 +11,10 @@
 #include <QSlider>
 #include <QMap>
 #include <QStringList>
+#include <QFrame>
 #include "ScanStats.h"
 #include "FilterStateModel.h"
 #include "ScanStatsEngine.h"
-#include "MetaPanel.h"
 #include "components/StyledCheckBox.h"
 #include "components/ClickableRow.h"
 
@@ -28,6 +28,9 @@ class FilterPanel : public QFrame {
 public:
     explicit FilterPanel(QWidget* parent = nullptr);
     ~FilterPanel() override = default;
+
+    // 🚀【物理契约】：刚性锁定 230px 下限，杜绝被 QSplitter 挤压偷扣像素
+    QSize minimumSizeHint() const override { return QSize(230, 100); }
 
     void populateStats(const QuarkMeta::ScanStats& stats);
     void populate(const QuarkMeta::ScanStats& stats) { populateStats(stats); }

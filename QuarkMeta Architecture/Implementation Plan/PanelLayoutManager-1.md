@@ -1,46 +1,82 @@
-# QuarkMeta 架构重构方案：PanelLayoutManager 分栏间距复原
+# Implementation Plan: PanelLayoutManager-1
 
-## 一、 Overview
-彻底复原 Version-1/2 标准设计的 5 像素分栏间距（`kSplitterHandleWidth = 5`），纠正硬编码为 1 像素导致布局紧凑混乱的问题。
+## 1. Overview
+将全应用五大面板（`NavPanel`, `FavoritePanel`, `ContentPanel`, `MetaPanel`, `FilterPanel`）的物理基准宽度与最小宽度限制从 230px 统一修改为 228px，确保各栏区在默认状态下呈现精确的 228 像素宽度。
 
-## 二、 Modified Files List
+## 2. Modified Files List
+- `src/ui/NavPanel.cpp`
+- `src/ui/FavoritePanel.cpp`
+- `src/ui/ContentPanel.cpp`
+- `src/ui/ContentPanel.h`
+- `src/ui/MetaPanel.cpp`
+- `src/ui/FilterPanel.cpp`
 - `src/ui/MainWindow.cpp`
 - `src/ui/PanelLayoutManager.h`
 
-## 三、 Detailed Line-by-Line Changes
+## 3. Detailed Line-by-Line Changes
 
-### 1. `src/ui/MainWindow.cpp`
-```git
+### `src/ui/NavPanel.cpp`
 <<<<<<< SEARCH
-    m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
-    m_mainSplitter->setHandleWidth(1); 
-    m_mainSplitter->setChildrenCollapsible(false);
-    m_mainSplitter->setStyleSheet(QString(
-        "QSplitter { background: transparent; border: none; spacing: 0px; }"
-        "QSplitter::handle { background-color: %1; width: 1px; margin: 0px; padding: 0px; }"
-        "QSplitter::handle:hover { background-color: %2; }"
-    ).arg(qssColor(BackgroundDeep)).arg(qssColor(PrimaryBlue)));
+    setMinimumWidth(230);
 =======
-    m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
-    m_mainSplitter->setHandleWidth(5); 
-    m_mainSplitter->setChildrenCollapsible(false);
-    m_mainSplitter->setStyleSheet(QString(
-        "QSplitter { background: transparent; border: none; }"
-        "QSplitter::handle { background-color: transparent; width: 5px; }"
-        "QSplitter::handle:hover { background-color: %1; }"
-    ).arg(qssColor(PrimaryBlue)));
+    setMinimumWidth(228);
 >>>>>>> REPLACE
-```
 
-### 2. `src/ui/PanelLayoutManager.h`
-```git
+### `src/ui/FavoritePanel.cpp`
 <<<<<<< SEARCH
-    static constexpr int kSplitterHandleWidth = 1;
+    setMinimumWidth(230);
 =======
-    static constexpr int kSplitterHandleWidth = 5;
+    setMinimumWidth(228);
 >>>>>>> REPLACE
-```
 
-## 四、 Build & Verification Steps
-1. 确认 `src/ui/MainWindow.cpp` 与 `src/ui/PanelLayoutManager.h` 已复原 5px 间距。
-2. 确认主窗口分割条宽为 5px，悬停高亮展示 PrimaryBlue 提示框。
+### `src/ui/ContentPanel.cpp`
+<<<<<<< SEARCH
+    setMinimumWidth(230);
+=======
+    setMinimumWidth(228);
+>>>>>>> REPLACE
+
+### `src/ui/ContentPanel.h`
+<<<<<<< SEARCH
+    // 🚀【物理沙盒契约】：硬性向外报告 230px 下限，切断内部组件尺寸反向渗透
+    QSize minimumSizeHint() const override { return QSize(230, 100); }
+=======
+    // 🚀【物理沙盒契约】：硬性向外报告 228px 下限，切断内部组件尺寸反向渗透
+    QSize minimumSizeHint() const override { return QSize(228, 100); }
+>>>>>>> REPLACE
+
+### `src/ui/MetaPanel.cpp`
+<<<<<<< SEARCH
+    setMinimumWidth(230);
+=======
+    setMinimumWidth(228);
+>>>>>>> REPLACE
+
+### `src/ui/FilterPanel.cpp`
+<<<<<<< SEARCH
+    setMinimumWidth(230);
+=======
+    setMinimumWidth(228);
+>>>>>>> REPLACE
+
+### `src/ui/MainWindow.cpp`
+<<<<<<< SEARCH
+        sizes << 230 << 230 << 230 << 230 << 230;
+=======
+        sizes << 228 << 228 << 228 << 228 << 228;
+>>>>>>> REPLACE
+
+### `src/ui/PanelLayoutManager.h`
+<<<<<<< SEARCH
+    // 🚀【紧凑物理基准】：内容面板基准设为 230，总和严格等于 1180px
+    static constexpr int kBasePanelWidth = 230;
+    static constexpr int kContentBaseWidth = 230;
+=======
+    // 🚀【物理基准】：面板基准设为 228px
+    static constexpr int kBasePanelWidth = 228;
+    static constexpr int kContentBaseWidth = 228;
+>>>>>>> REPLACE
+
+## 4. Build & Verification Steps
+1. 核对所有 8 个修改文件，确认 minimumWidth 与 basePanelWidth 均已精确更新为 228。
+2. 确认 API 契约与公开接口无任何破坏。

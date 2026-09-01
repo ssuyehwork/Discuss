@@ -62,8 +62,8 @@ public:
     explicit ContentPanel(QWidget* parent = nullptr);
     ~ContentPanel() override = default;
 
-    // 🚀【物理沙盒契约】：硬性向外报告 230px 下限，切断内部组件尺寸反向渗透
-    QSize minimumSizeHint() const override { return QSize(230, 100); }
+    // 🚀【物理沙盒契约】：硬性向外报告 228px 下限，切断内部组件尺寸反向渗透
+    QSize minimumSizeHint() const override { return QSize(228, 100); }
     void deferredInit() {}
 
     // 只读状态查询接口

@@ -3,6 +3,7 @@
 #include "ToolTipOverlay.h"
 #include "StyleLibrary.h"
 #include "../core/NavigationHistoryService.h"
+#include "../meta/FavoriteDao.h"
 #include <QHBoxLayout>
 #include <QDir>
 #include <QPushButton>
@@ -11,6 +12,7 @@
 #include <QMenu>
 #include <QAction>
 #include <QApplication>
+#include <QClipboard>
 
 namespace QuarkMeta {
 
@@ -77,18 +79,38 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
         }
     });
     connect(m_breadcrumbBar, &BreadcrumbBar::pathClicked, this, &AddressBar::onBreadcrumbClicked);
+
+    // 🚀【真实业务还原】：右键菜单恢复为标准的“添加至收藏夹 / 从收藏夹移除”与“复制完整路径”
     connect(m_breadcrumbBar, &BreadcrumbBar::favoriteToggleRequested, this, [this](const QString& fullPath, const QPoint& globalPos) {
         if (fullPath.isEmpty() || fullPath == "computer://") return;
+
+        QString nativePath = QDir::toNativeSeparators(QDir::cleanPath(fullPath));
+        bool isFav = FavoriteDao::containsPath(nativePath);
 
         QMenu menu(this);
         UiHelper::applyMenuStyle(&menu);
 
-        QAction* actNav = menu.addAction("定位至此文件夹");
+        QAction* actFavToggle = nullptr;
+        if (isFav) {
+            actFavToggle = menu.addAction(UiHelper::getIcon("close", QColor("#e74c3c")), "从收藏夹移除");
+        } else {
+            actFavToggle = menu.addAction(UiHelper::getIcon("star_filled", QColor("#FDB70A")), "添加至收藏夹");
+        }
+
+        QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE")), "复制完整路径");
 
         QAction* selected = menu.exec(globalPos);
-        if (selected == actNav) {
-            emit pathChanged(fullPath);
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "已定位至当前路径", 1500, Style::SuccessGreen);
+        if (selected == actFavToggle) {
+            if (isFav) {
+                FavoriteDao::removeFavorite(nativePath);
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
+            } else {
+                FavoriteDao::addFavorite(nativePath, "folder_filled", "#FDB70A");
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已添加至收藏夹", 1500, Style::SuccessGreen);
+            }
+        } else if (selected == actCopyPath) {
+            QApplication::clipboard()->setText(nativePath);
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径至剪贴板", 1500, Style::SuccessGreen);
         }
     });
 

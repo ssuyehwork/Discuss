@@ -147,7 +147,7 @@ void MainWindow::initUi() {
         });
     } else {
         QList<int> sizes;
-        sizes << 230 << 230 << 230 << 230 << 230;
+        sizes << 228 << 228 << 228 << 228 << 228;
         m_mainSplitter->setSizes(sizes);
     }
 
@@ -313,17 +313,18 @@ void MainWindow::setupSplitters() {
     m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin); 
     m_bodyLayout->setSpacing(0);
 
-    // 🚀【物理 5 像素深黑槽 + 8px 暗黑细滚动条】：彻底消除继承阻断，杜绝系统白底滚动条
+    // 5px 实体物理缝隙 (2px margin + 1px handle + 2px margin) + Dual-mode 深色样式
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
-    m_mainSplitter->setHandleWidth(5); 
+    m_mainSplitter->setHandleWidth(1); 
     m_mainSplitter->setChildrenCollapsible(false);
     m_mainSplitter->setStyleSheet(QString(
-        "QSplitter { background-color: #141414; border: none; }"
-        "QSplitter::handle:horizontal { background-color: #141414; width: 5px; }"
+        "QSplitter { background: transparent; border: none; }"
+        "QSplitter::handle:horizontal { background-color: #1E1E1E; width: 1px; }"
         "QSplitter::handle:horizontal:hover { background-color: %1; }"
         "#SidebarContainer, #FavoriteContainer, #EditorContainer, #MetadataContainer, #FilterContainer {"
         "  background-color: #1E1E1E;"
-        "  border: 1px solid #2A2A2A;"
+        "  border: 1px solid #333333;"
+        "  margin: 0px 2px;"
         "}"
         "QScrollBar:vertical { border: none; background: transparent; width: 8px; margin: 0px; }"
         "QScrollBar::handle:vertical { background: #3E3E42; min-height: 20px; border-radius: 4px; }"

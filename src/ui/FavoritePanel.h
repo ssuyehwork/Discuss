@@ -27,6 +27,9 @@ public:
     explicit FavoritePanel(QWidget* parent = nullptr);
     ~FavoritePanel() override = default;
 
+    // 🚀【物理契约】：刚性锁定 230px 下限，杜绝被 QSplitter 挤压偷扣像素
+    QSize minimumSizeHint() const override { return QSize(230, 100); }
+
     void setFocusHighlight(bool visible);
     bool containsPath(const QString& path) const;
     void removeFavoriteItem(const QString& path);

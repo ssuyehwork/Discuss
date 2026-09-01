@@ -101,7 +101,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
 
     setObjectName("FilterContainer");
     setAttribute(Qt::WA_StyledBackground, true);
-    setMinimumWidth(230);
+    setMinimumWidth(228);
     setStyleSheet("color: #EEEEEE;");
 
     m_mainLayout = new QVBoxLayout(this);
@@ -144,7 +144,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     m_btnPin = new QPushButton(topBar);
     m_btnPin->setFixedSize(24, 24);
     m_btnPin->setIcon(UiHelper::getIcon("pin_tilted", QColor("#B0B0B0")));
-    m_btnPin->setIconSize(QSize(18, 18));
+    m_btnPin->setIconSize(QSize(16, 16));
     m_btnPin->setFlat(true);
     m_btnPin->setCursor(Qt::PointingHandCursor);
     m_btnPin->setProperty("tooltipText", "锁定当前筛选条件");
@@ -166,6 +166,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
 
     m_btnToggleGroups = new QPushButton(topBar);
     m_btnToggleGroups->setFixedSize(24, 24);
+    m_btnToggleGroups->setIconSize(QSize(16, 16));
     m_btnToggleGroups->setFlat(true);
     m_btnToggleGroups->setCursor(Qt::PointingHandCursor);
     m_btnToggleGroups->installEventFilter(this);
@@ -1046,6 +1047,7 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
         "QPushButton {"
         "  background: transparent;"
         "  border: none;"
+        "  outline: none;"
         "  color: #AAAAAA;"
         "  font-size: 11px;"
         "  font-weight: 600;"
@@ -1056,7 +1058,8 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
         "  padding-bottom: 0px;"
         "  margin: 0px;"
         "}"
-        "QPushButton:hover { color: #EEEEEE; }"
+        "QPushButton:hover { color: #EEEEEE; background: transparent; }"
+        "QPushButton:checked { background: transparent; color: #EEEEEE; border: none; }"
         "QPushButton:pressed { background: transparent; }");
     hdrRowLayout->addWidget(hdr);
 

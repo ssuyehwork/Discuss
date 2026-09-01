@@ -31,7 +31,7 @@ NavPanel::NavPanel(QWidget* parent)
     : QFrame(parent) {
     setObjectName("SidebarContainer");
     setAttribute(Qt::WA_StyledBackground, true);
-    setMinimumWidth(230);
+    setMinimumWidth(228);
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);

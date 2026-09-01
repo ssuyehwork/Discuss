@@ -76,11 +76,11 @@ void BreadcrumbBar::addLevel(const QString& name, const QString& fullPath) {
     btn->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     btn->setFixedHeight(24);
     
-    // 面包屑按钮样式：扁平化，仅悬停可见背景
+    // 面包屑按钮样式：扁平化，无外框与背景底，仅悬停可见暗色背景
     btn->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-radius: 6px; "
-        "              color: #EEEEEE; font-size: 12px; padding: 0 6px; }"
-        "QPushButton:hover { background: #3E3E42; }"
+        "QPushButton { background: transparent; border: none; outline: none; border-radius: 4px; "
+        "              color: #CCCCCC; font-size: 12px; padding: 0 4px; }"
+        "QPushButton:hover { background: #3E3E42; color: #FFFFFF; }"
         "QPushButton:pressed { background: #4E4E52; }"
     );
 

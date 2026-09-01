@@ -52,9 +52,9 @@ private:
     QPointer<MetaPanel> m_metaPanel;
     QPointer<FilterPanel> m_filterPanel;
 
-    // 🚀【紧凑物理基准】：内容面板基准设为 230，总和严格等于 1180px
-    static constexpr int kBasePanelWidth = 230;
-    static constexpr int kContentBaseWidth = 230;
+    // 🚀【物理基准】：面板基准设为 228px
+    static constexpr int kBasePanelWidth = 228;
+    static constexpr int kContentBaseWidth = 228;
     static constexpr int kSplitterHandleWidth = 5;
 };
 

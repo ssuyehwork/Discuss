@@ -29,6 +29,9 @@ public:
     explicit MetaPanel(QWidget* parent = nullptr);
     ~MetaPanel() override = default;
 
+    // 🚀【物理契约】：刚性锁定 230px 下限，杜绝被 QSplitter 挤压偷扣像素
+    QSize minimumSizeHint() const override { return QSize(230, 100); }
+
     void updateInfo(const QString& name, const QString& type, const QString& size,
                     const QString& ctime, const QString& mtime, const QString& atime,
                     const QString& path, bool encrypted, int width = 0, int height = 0);
@@ -47,7 +50,6 @@ public:
     void setPinned(bool pinned) { Q_UNUSED(pinned); }
 
 signals:
-    // 解耦且携带路径的纯净领域信号
     void ratingChanged(const QStringList& paths, int rating);
     void colorChanged(const QStringList& paths, const QString& hexColor);
     void tagAddRequested(const QStringList& paths, const QString& tag);
@@ -75,31 +77,24 @@ private:
     QWidget* m_container = nullptr;
     QVBoxLayout* m_containerLayout = nullptr;
 
-    // 1. 顶部预览与色板区
     QWidget* m_topPreviewBox = nullptr;
     QLabel* m_lblImagePreview = nullptr;
     QWidget* m_paletteContainer = nullptr;
     FlowLayout* m_paletteFlowLayout = nullptr;
 
-    // 2. 文件名编辑区
     ElasticEdit* m_nameEdit = nullptr;
-
-    // 3. 备注说明区
     ElasticEdit* m_noteEdit = nullptr;
 
-    // 4. 关联网址区
     QWidget* m_linkBox = nullptr;
     QLineEdit* m_linkEdit = nullptr;
     QAction* m_actOpenLink = nullptr;
 
-    // 5. 星级评级 + 颜色色标条
     QWidget* m_ratingColorBox = nullptr;
     QList<QPushButton*> m_starBtns;
     QList<QPushButton*> m_colorBtns;
     int m_currentRating = 0;
     QString m_currentColorHex;
 
-    // 6. 标签管理区
     QWidget* m_tagBox = nullptr;
     QWidget* m_tagContainer = nullptr;
     FlowLayout* m_tagFlowLayout = nullptr;
@@ -107,7 +102,6 @@ private:
     QPushButton* m_btnAddTagSmall = nullptr;
     QPointer<TagSelectorOverlay> m_tagSelectorOverlay;
 
-    // 7. 基础物理属性区
     QWidget* m_infoSectionWidget = nullptr;
     QLabel* lblType = nullptr;
     QLabel* lblSize = nullptr;
@@ -117,13 +111,12 @@ private:
     QLabel* lblAtime = nullptr;
     QLabel* lblEncrypted = nullptr;
 
-    // 8. 物理路径区
     QLineEdit* m_pathEdit = nullptr;
     QPushButton* m_btnCopyPath = nullptr;
     QPushButton* m_btnOpenLocation = nullptr;
 
     QStringList m_selectedPaths;
-    QStringList m_editingPathsSnapshot; // 防失焦时序竞态的路径快照
+    QStringList m_editingPathsSnapshot;
     QSet<QString> m_currentTagsSet;
     QTimer* m_adjustTimer = nullptr;
     bool m_isInternalUpdating = false;
