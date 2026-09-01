@@ -88,7 +88,7 @@ QSet<QString> DuplicateDetectorService::findDuplicatePaths(const std::vector<Ite
 
             QHash<QString, std::vector<const ItemRecord*>> fullShaBuckets;
             for (const auto* r : fastList) {
-                QString fullSha = r->sha256.isEmpty() ? computeFullSha256(r->path) : r->sha256.toLower();
+                QString fullSha = !r->sha256.isEmpty() ? r->sha256.toLower() : computeFullSha256(r->path);
                 if (!fullSha.isEmpty()) {
                     fullShaBuckets[fullSha].push_back(r);
                 }

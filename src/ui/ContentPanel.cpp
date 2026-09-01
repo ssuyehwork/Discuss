@@ -590,15 +590,16 @@ void ContentPanel::recalculateAndEmitStats() {
     const std::vector<ItemRecord>& records = m_model->allRecords();
     if (records.empty()) return;
 
+    bool showHidden = m_currentFilter.showHidden;
     QPointer<ContentPanel> weakThis(this);
-    (void)QtConcurrent::run([weakThis, records]() {
+    (void)QtConcurrent::run([weakThis, records, showHidden]() {
         ScanStats stats;
         stats.duplicatePaths = DuplicateDetectorService::findDuplicatePaths(records);
         stats.duplicateCount = static_cast<int>(stats.duplicatePaths.size());
 
         for (const auto& record : records) {
             if (!weakThis) return;
-            if (record.isHidden && !weakThis->m_currentFilter.showHidden) continue;
+            if (record.isHidden && !showHidden) continue;
             stats.ratingCounts[record.rating]++;
             stats.colorCounts[UiHelper::normalizeColorHex(record.manualColor)]++;
 

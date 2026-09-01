@@ -14,6 +14,7 @@ void FilterProxyModel::updateFilter() {
 }
 
 void FilterProxyModel::setCachedDuplicatePaths(const QSet<QString>& paths) {
+    if (m_cachedDuplicatePaths == paths) return;
     m_cachedDuplicatePaths = paths;
     updateFilter();
 }
