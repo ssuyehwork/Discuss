@@ -1,6 +1,7 @@
 #include "TrashService.h"
 #include "../core/DiskTrashService.h"
 #include "../core/OperationSnapshotEngine.h"
+#include "../core/PermanentDeleteService.h"
 #include "../meta/TrashRepository.h"
 #include "../meta/MetadataManager.h"
 #include "../ui/ToolTipOverlay.h"
@@ -98,14 +99,8 @@ bool TrashService::restoreToDirectory(const QStringList& trashPaths, const QStri
 }
 
 bool TrashService::emptyTrash(QWidget* parentWidget) {
-    Q_UNUSED(parentWidget);
-    bool ok = DiskTrashService::emptyDiskTrash();
-    if (ok) {
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "回收站已清空", 1500, QColor("#2ecc71"));
-        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
-        emit trashOperationCompleted();
-    }
-    return ok;
+    // 🚀【统一安全管线】：彻底摒弃静默删除，全权委托给 PermanentDeleteService 走高安全物理销毁流程
+    return PermanentDeleteService::instance().executeEmptyTrash(parentWidget);
 }
 
 } // namespace QuarkMeta

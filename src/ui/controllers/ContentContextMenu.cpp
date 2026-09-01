@@ -48,7 +48,6 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     QModelIndex currentIndex = view->indexAt(pos);
     bool onItem = currentIndex.isValid();
 
-    // 🚀【修复右键选区漂移】：若右键点击了尚未高亮选中的项目，自动校准选区与焦点到该项目上！
     if (onItem && view->selectionModel()) {
         if (!view->selectionModel()->isSelected(currentIndex)) {
             view->selectionModel()->select(currentIndex, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
@@ -106,7 +105,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 TrashService::instance().restoreAll(m_panel);
                 break;
             case ContentPanel::ActionEmptyTrash:
-                TrashService::instance().emptyTrash(m_panel);
+                // 🚀【统一安全管线】：直接调用具有弹窗确认、进度条和扇区覆写的全量清空管线
+                PermanentDeleteService::instance().executeEmptyTrash(m_panel);
                 break;
             default:
                 break;
@@ -152,7 +152,6 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction("复制名称")->setData(ContentPanel::ActionCopyName);
             menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
 
-            // 标签复制与粘贴
             QString nativePath = QDir::toNativeSeparators(path);
             QStringList itemTags;
             if (!nativePath.isEmpty()) {
@@ -213,7 +212,6 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction("复制")->setData(ContentPanel::ActionCopy);
             menu.addAction("剪切")->setData(ContentPanel::ActionCut);
 
-            // 恢复“移动到”二级菜单 (获取当前驱动卷的最近15个访问文件夹 + 浏览选择)
             if (!isComputerRoot && !currentPath.isEmpty()) {
                 std::wstring volSerial = MetadataManager::getVolumeSerialNumber(path.toStdWString());
                 QStringList recentFolders = NavigationHistoryService::getRecentVisitedFolders(volSerial);
@@ -273,7 +271,6 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction("复制名称")->setData(ContentPanel::ActionCopyName);
             menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
 
-            // 标签复制与粘贴
             QString nativePath = QDir::toNativeSeparators(path);
             QStringList itemTags;
             if (!nativePath.isEmpty()) {
