@@ -531,6 +531,9 @@ void ContentPanel::updateGridSize() {
 
 void ContentPanel::applyFilters(const FilterState& state) {
     m_currentFilter = state;
+    m_currentFilter.showFolders = m_showFolders;
+    m_currentFilter.showFiles = m_showFiles;
+    m_currentFilter.showHidden = m_showHidden;
     applyFilters();
 }
 
