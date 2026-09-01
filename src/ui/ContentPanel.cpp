@@ -44,7 +44,7 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     setContextMenuPolicy(Qt::CustomContextMenu);
     setObjectName("EditorContainer");
     setAttribute(Qt::WA_StyledBackground, true);
-    setMinimumWidth(228);
+    setMinimumWidth(230);
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);

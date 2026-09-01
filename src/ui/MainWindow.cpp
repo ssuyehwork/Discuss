@@ -148,7 +148,7 @@ void MainWindow::initUi() {
         });
     } else {
         QList<int> sizes;
-        sizes << 228 << 228 << 228 << 228 << 228;
+        sizes << 230 << 230 << 230 << 230 << 230;
         m_mainSplitter->setSizes(sizes);
     }
 
@@ -311,7 +311,7 @@ void MainWindow::setupSplitters() {
 
     // 5px 实体物理缝隙 (2px margin + 1px handle + 2px margin) + Dual-mode 深色样式
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
-    m_mainSplitter->setHandleWidth(1); 
+    m_mainSplitter->setHandleWidth(5); 
     m_mainSplitter->setChildrenCollapsible(false);
     // QSplitter style in style.qss
 

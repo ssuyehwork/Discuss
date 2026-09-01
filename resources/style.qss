@@ -9,7 +9,7 @@ QWidget#CentralWidget { background-color: #1E1E1E; }
 }
 #NavBar {
     background-color: #1E1E1E;
-    border-bottom: 1px solid #333333;
+    border-bottom: none;
 }
 
 /* 卡片 5px 实体物理切缝 + Dual-mode 深色风格 */
@@ -19,19 +19,19 @@ QSplitter {
 }
 QSplitter::handle:horizontal {
     background-color: #1E1E1E;
-    width: 1px;
+    width: 5px;
 }
 QSplitter::handle:horizontal:hover {
     background-color: #378ADD;
 }
 
-/* 核心容器样式 - 强化 1 像素物理切割感及 5px 缝隙 */
+/* 核心容器样式 - 彻底消除 margin，由 QSplitter 5px 句柄原生提供栏间 5px 物理间距，确保面板精确呈现 230px 物理满额宽度 */
 #SidebarContainer, #FavoriteContainer, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
     background-color: #1E1E1E;
     border: 1px solid #333333;
     border-radius: 0px;
     color: #EEEEEE;
-    margin: 0px 2px;
+    margin: 0px;
     padding: 0px;
 }
 
@@ -916,20 +916,31 @@ QWidget#FilterGroupHdrRow {
 }
 QPushButton#FilterGroupHdrBtn {
     background: transparent;
-    color: #EEEEEE;
-    font-size: 12px;
-    font-weight: bold;
+    color: #AAAAAA;
+    font-size: 11px;
+    font-weight: 600;
     border: none;
+    outline: none;
     text-align: left;
-    padding-left: 4px;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    margin: 0px;
 }
 QPushButton#FilterGroupHdrBtn:hover {
-    color: #FFFFFF;
+    color: #EEEEEE;
+    background: transparent;
 }
 QPushButton#FilterGroupHdrBtn:checked {
     background: transparent;
     color: #EEEEEE;
     border: none;
+    outline: none;
+}
+QPushButton#FilterGroupHdrBtn:pressed {
+    background: transparent;
+    color: #EEEEEE;
 }
 QPushButton#FilterGroupHdrBtn:focus {
     outline: none;

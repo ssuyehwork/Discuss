@@ -101,7 +101,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
 
     setObjectName("FilterContainer");
     setAttribute(Qt::WA_StyledBackground, true);
-    setMinimumWidth(228);
+    setMinimumWidth(230);
     // FilterPanel style in style.qss
 
     m_mainLayout = new QVBoxLayout(this);
@@ -1022,20 +1022,16 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
     wl->setSpacing(0);
 
     QWidget* hdrRow = new QWidget(wrapper);
-    hdrRow->setObjectName("GroupHdrRow");
+    hdrRow->setObjectName("FilterGroupHdrRow");
     hdrRow->setFixedHeight(24);
     hdrRow->setAttribute(Qt::WA_StyledBackground, true);
-    hdrRow->setStyleSheet(
-        "QWidget#GroupHdrRow {"
-        "  background: #252526;"
-        "  border-top: 1px solid #333333;"
-        "}");
 
     QHBoxLayout* hdrRowLayout = new QHBoxLayout(hdrRow);
     hdrRowLayout->setContentsMargins(0, 0, 0, 0);
     hdrRowLayout->setSpacing(0);
 
     QPushButton* hdr = new QPushButton(title, hdrRow);
+    hdr->setObjectName("FilterGroupHdrBtn");
     hdr->setCheckable(true);
 
     bool isCollapsed = AppConfig::instance().getValue(QString("FilterPanel/Collapsed_%1").arg(title), false).toBool();
@@ -1043,24 +1039,6 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
 
     hdr->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     hdr->setFixedHeight(24);
-    hdr->setStyleSheet(
-        "QPushButton {"
-        "  background: transparent;"
-        "  border: none;"
-        "  outline: none;"
-        "  color: #AAAAAA;"
-        "  font-size: 11px;"
-        "  font-weight: 600;"
-        "  text-align: left;"
-        "  padding-left: 5px;"
-        "  padding-right: 5px;"
-        "  padding-top: 0px;"
-        "  padding-bottom: 0px;"
-        "  margin: 0px;"
-        "}"
-        "QPushButton:hover { color: #EEEEEE; background: transparent; }"
-        "QPushButton:checked { background: transparent; color: #EEEEEE; border: none; }"
-        "QPushButton:pressed { background: transparent; }");
     hdrRowLayout->addWidget(hdr);
 
     if (outHdrLayout) *outHdrLayout = hdrRowLayout;

@@ -125,9 +125,9 @@ bool FramelessWindowHelper::eventFilter(QObject* obj, QEvent* event) {
             if (m_resizeDir == Bottom || m_resizeDir == BottomLeft || m_resizeDir == BottomRight)
                 r.setBottom(r.bottom() + delta.y());
 
-            if (r.width() >= m_window->minimumWidth() && r.height() >= m_window->minimumHeight()) {
-                m_window->setGeometry(r);
-            }
+            r.setWidth(qMax(r.width(), m_window->minimumWidth()));
+            r.setHeight(qMax(r.height(), m_window->minimumHeight()));
+            m_window->setGeometry(r);
             return true;
         }
 

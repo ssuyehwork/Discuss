@@ -27,7 +27,7 @@ namespace QuarkMeta {
 MetaPanel::MetaPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("MetadataContainer");
     setAttribute(Qt::WA_StyledBackground, true);
-    setMinimumWidth(228);
+    setMinimumWidth(230);
     // Style handled in style.qss
 
     m_mainLayout = new QVBoxLayout(this);
