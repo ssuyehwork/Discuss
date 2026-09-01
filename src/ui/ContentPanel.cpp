@@ -620,6 +620,24 @@ void ContentPanel::recalculateAndEmitStats() {
                 if (!record.url.isEmpty()) stats.hasLinkCount++; else stats.noLinkCount++;
                 if (!record.note.isEmpty()) stats.hasNoteCount++; else stats.noNoteCount++;
                 if (!record.tags.isEmpty()) stats.hasTagCount++; else stats.noTagCount++;
+
+                if (record.width > 0 && record.height > 0) {
+                    double r = static_cast<double>(record.width) / record.height;
+                    if (record.width > record.height) stats.ratioHorizontalCount++;
+                    if (record.height > record.width) stats.ratioVerticalCount++;
+                    if (std::abs(r - 1.0) <= 0.05) stats.ratioSquareCount++;
+                    if (std::abs(r - 1.77) <= 0.05) stats.ratio169Count++;
+                }
+
+                static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
+                QString ext = record.suffix.toLower();
+                if (record.thumbStatus == 1) {
+                    stats.noThumbnailCount++;
+                } else if (UiHelper::isGraphicsFile(ext) || (record.width > 0 && record.height > 0)) {
+                    if (!iconOnlyExts.contains(ext)) {
+                        stats.hasThumbnailCount++;
+                    }
+                }
             }
         }
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, stats]() {
