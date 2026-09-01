@@ -80,6 +80,7 @@ public:
     QString getCurrentCategoryType() const { return m_currentCategoryType; }
     int currentLoadRequestId() const { return m_loadRequestId.load(); }
     int loadRequestId() const { return m_loadRequestId.load(); }
+    int incrementLoadRequestId() { return ++m_loadRequestId; }
     const FilterState& currentFilter() const { return m_currentFilter; }
 
     // 状态与辅助设置（供 Handler / Loader 转调）

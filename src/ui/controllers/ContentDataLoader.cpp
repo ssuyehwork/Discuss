@@ -1,6 +1,6 @@
 #include "ContentDataLoader.h"
 #include "../ContentPanel.h"
-#include "../DiskScanService.h"
+#include "../../core/DiskScanService.h"
 #include "../../meta/DiskTrashRepo.h"
 #include "../../meta/MetaCacheDecorator.h"
 #include "../../meta/MediaExtractorPipeline.h"
@@ -50,7 +50,8 @@ void ContentDataLoader::loadDirectory(const QString& path, bool recursive) {
     ThumbnailPipelineService::instance().cancelAll();
 
     m_panel->setLoading(true);
-    int reqId = ++m_loadRequestId;
+    int reqId = m_panel->incrementLoadRequestId();
+    m_loadRequestId = reqId;
     m_panel->setCurrentCategoryType("");
     emit m_panel->dataSourceChanged("nav");
 
@@ -125,7 +126,8 @@ void ContentDataLoader::loadPaths(const QStringList& paths, int reqId) {
 
     m_panel->setLoading(true);
     if (reqId == 0) {
-        reqId = ++m_loadRequestId;
+        reqId = m_panel->incrementLoadRequestId();
+        m_loadRequestId = reqId;
     }
     if (m_panel->getCurrentCategoryType().isEmpty()) {
         m_panel->setCurrentCategoryType("path_list");
@@ -163,7 +165,7 @@ void ContentDataLoader::loadPaths(const QStringList& paths, int reqId) {
 }
 
 void ContentDataLoader::appendPaths(const QStringList& paths, int reqId) {
-    if (!m_panel || paths.isEmpty() || (reqId != 0 && m_loadRequestId != reqId)) return;
+    if (!m_panel || paths.isEmpty() || (reqId != 0 && m_panel->loadRequestId() != reqId)) return;
     QPointer<ContentPanel> weakPanel(m_panel);
     (void)QtConcurrent::run([weakPanel, paths, reqId]() {
         if (!weakPanel) return;
