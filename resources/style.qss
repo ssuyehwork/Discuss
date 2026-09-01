@@ -195,12 +195,12 @@ QLineEdit#SearchEdit {
     border: 1px solid #333333;
     border-radius: 6px;
     color: #EEEEEE;
-    padding-left: 28px;
+    padding-left: 4px;
     padding-right: 24px;
     font-size: 12px;
 }
 QLineEdit#SearchEdit:focus {
-    border-color: #FDB70A;
+    border-color: #378ADD;
 }
 
 QLabel#StatusBarLeft {
