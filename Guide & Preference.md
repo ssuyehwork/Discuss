@@ -103,24 +103,18 @@
 
 ## 4. 业务领域与数据契约规范
 
-### 4.1 内容面板数据源判定与强类型契约
-- **核心定义**: 统一使用强类型枚举 `DataSourceType` 规范 `ContentPanel` 的数据源来源（`DiskNav` / `UserCategory` / `SystemCategory` / `PathList`）。
-- **铁律**: 严禁在代码中手写散落的弱类型字符串判定（如 `if (m_currentCategoryType == "all")`），判定统一通过 `ContentPanel::dataSourceType()` 接口。
-- **辅助接口**: `ContentPanel` 必须公开 `isMirrorSource()` 与 `isManagedContext()` 辅助判定方法。
+### 4.1 内容面板数据源契约
+- **核心定义**: 使用强类型枚举 `DataSourceType` 规范 `ContentPanel` 的数据源来源（如 `DiskNav` / `PathList` 等）。
+- **铁律**: 严禁在代码中手写散落的弱类型字符串判定，数据源判定统一通过 `ContentPanel::dataSourceType()` 枚举接口。
 
-### 4.2 双轨元数据落盘路由
-- 在托管库上下文 (`isManagedContext() == true`) 内，元数据 100% 写入统一 SQLite 本地数据库；
-- 在库外普通磁盘模式 (`isManagedContext() == false`) 下，元数据自动调用 `AmMetaJson` 精准写入同级 `.QuarkMeta.json` 离散缓存中，不污染用户原始物理盘。
-
-### 4.3 隔离式多维关联索引与范围感知搜索
-- **关联索引**: `MetadataManager` 通过 `m_fileNameToFids`（仅文件）、`m_folderNameToFids`（仅文件夹）及 `m_extensionToFids`（仅小写后缀）三个隔离的倒排索引管理关联，注册时须校验去重。
-- ** Scope-Aware 搜索**: 搜索请求通过 `CoreController::performSearch` 转发，实时绑定顶部蓝色提示线 (Focus Line) 位置，分类模式下限定于当前分类及子类，导航模式下限定于当前路径及子目录。
+### 4.2 范围感知搜索规范
+- **Scope-Aware 搜索**: 搜索请求统一通过 `CoreController::performSearch` 转发，实时绑定顶部蓝色提示线 (Focus Line) 位置；分类模式下限定于当前分类及子类，导航模式下限定于当前物理磁盘路径及子目录。
 
 ---
 
 ## 5. 线程安全与底层 API 调用边界
 
 ### 5.1 媒体提取管道线程安全边界
-- `MediaExtractorPipeline` 与 `CapsuleMediaExtractor` 后台提取管道中，任何触碰 `QSvgRenderer` / `QPainter` / `QPixmap` / `QIcon` 等 Qt Gui 模块 API 的代码段，必须用 `CapsuleMediaExtractor::s_qtGuiMutex` 显式串行化保护。
+- 后台提取管道中，任何触碰 `QSvgRenderer` / `QPainter` / `QPixmap` / `QIcon` 等 Qt Gui 模块 API 的代码段，必须用 `DiskMediaExtractor::s_qtGuiMutex` 显式串行化保护。
 - Qt Gui 模块 API 不保证线程安全，并发访问会导致内部缓存越界写入引发进程崩溃 (`0xC0000005`)。
 - 文件 I/O、哈希计算、数据库读写等与 Qt Gui 无关的部分维持并行。
