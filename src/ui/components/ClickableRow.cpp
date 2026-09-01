@@ -1,3 +1,4 @@
+#include <QStyle>
 #include "components/ClickableRow.h"
 #include "components/StyledCheckBox.h"
 #include <QMouseEvent>
@@ -21,12 +22,16 @@ void ClickableRow::mousePressEvent(QMouseEvent* e) {
 }
 
 void ClickableRow::enterEvent(QEnterEvent* e) {
-    setStyleSheet("QWidget { background: #2A2A2A; border-radius: 4px; }");
+    setObjectName("ClickableRowActive");
+    style()->unpolish(this);
+    style()->polish(this);
     QWidget::enterEvent(e);
 }
 
 void ClickableRow::leaveEvent(QEvent* e) {
-    setStyleSheet("");
+    setObjectName("ClickableRowNormal");
+    style()->unpolish(this);
+    style()->polish(this);
     QWidget::leaveEvent(e);
 }
 

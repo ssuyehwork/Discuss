@@ -9,11 +9,11 @@ MetaTagSection::MetaTagSection(QWidget* parent) : QWidget(parent) {
     m_btnAddTagBig = new QPushButton(" 添加标签", this);
     m_btnAddTagBig->setIcon(UiHelper::getIcon("add", QColor("#EEEEEE"), 14));
     m_btnAddTagBig->setCursor(Qt::PointingHandCursor);
-    m_btnAddTagBig->setStyleSheet("QPushButton { background: #2A2A2A; border: 1px solid #3C3C3C; border-radius: 4px; color: #EEEEEE; padding: 4px 8px; font-size: 11px; } QPushButton:hover { background: #333333; }");
+    m_btnAddTagBig->setObjectName("BtnAddTagBig");
 
     m_btnAddTagSmall = new QPushButton("[+]", this);
     m_btnAddTagSmall->setCursor(Qt::PointingHandCursor);
-    m_btnAddTagSmall->setStyleSheet("QPushButton { background: transparent; border: none; color: #888888; font-size: 11px; } QPushButton:hover { color: #FFFFFF; }");
+    m_btnAddTagSmall->setObjectName("BtnAddTagSmall");
 
     m_tagFlowLayout->addWidget(m_btnAddTagBig);
 

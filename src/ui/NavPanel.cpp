@@ -97,12 +97,7 @@ void NavPanel::initUi() {
     QWidget* header = new QWidget(this);
     header->setObjectName("ContainerHeader");
     header->setFixedHeight(32);
-    header->setStyleSheet(
-        "QWidget#ContainerHeader {"
-        "  background-color: #252526;"
-        "  border-bottom: 1px solid #333;"
-        "}"
-    );
+// ContainerHeader in style.qss
     QHBoxLayout* headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(15, 0, 5, 0);
     headerLayout->setSpacing(5);
@@ -112,7 +107,7 @@ void NavPanel::initUi() {
     headerLayout->addWidget(iconLabel);
 
     QLabel* titleLabel = new QLabel("目录导航", header);
-    titleLabel->setStyleSheet("color: #2ecc71; font-size: 13px; font-weight: bold; background: transparent; border: none;");
+    titleLabel->setObjectName("NavPanelTitleLabel");
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
 
@@ -120,11 +115,7 @@ void NavPanel::initUi() {
     btnTrash->setFixedSize(24, 24);
     btnTrash->setIcon(UiHelper::getIcon("trash", QColor("#e81123"), 16));
     btnTrash->setToolTip("打开回收站");
-    btnTrash->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-        "QPushButton:hover { background: #3E3E42; }"
-        "QPushButton:pressed { background: #4E4E52; }"
-    );
+    btnTrash->setObjectName("NavTrashBtn");
     connect(btnTrash, &QPushButton::clicked, this, &NavPanel::requestOpenTrash);
     headerLayout->addWidget(btnTrash);
 

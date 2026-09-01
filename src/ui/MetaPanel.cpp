@@ -28,7 +28,7 @@ MetaPanel::MetaPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("MetadataContainer");
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(228);
-    setStyleSheet("color: #EEEEEE;");
+    // Style handled in style.qss
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -52,10 +52,7 @@ QWidget* MetaPanel::createCollapsibleSection(const QString& title, QWidget* cont
     QPushButton* btnHeader = new QPushButton(sectionWidget);
     btnHeader->setFixedHeight(22);
     btnHeader->setCursor(Qt::PointingHandCursor);
-    btnHeader->setStyleSheet(
-        "QPushButton { border: none; background: transparent; color: #888888; font-size: 11px; font-weight: bold; text-align: left; padding: 0; }"
-        "QPushButton:hover { color: #FFFFFF; }"
-    );
+    btnHeader->setObjectName("CollapsibleHeaderBtn");
 
     auto updateHeaderText = [btnHeader, title](bool expanded) {
         btnHeader->setIcon(UiHelper::getIcon(expanded ? "chevron_down" : "chevron_right", QColor("#888888"), 12));
@@ -83,7 +80,7 @@ void MetaPanel::initUi() {
     QWidget* header = new QWidget(this);
     header->setObjectName("ContainerHeader");
     header->setFixedHeight(32);
-    header->setStyleSheet("QWidget#ContainerHeader { background-color: #252526; border-bottom: 1px solid #333333; }");
+    // ContainerHeader style in style.qss
     QHBoxLayout* headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(12, 0, 8, 0);
     headerLayout->setSpacing(6);
@@ -93,7 +90,7 @@ void MetaPanel::initUi() {
     headerLayout->addWidget(iconLabel);
     
     QLabel* titleLabel = new QLabel("元数据属性", header);
-    titleLabel->setStyleSheet("font-size: 12px; font-weight: bold; color: #4a90e2; background: transparent; border: none;");
+    titleLabel->setObjectName("MetaPanelTitleLabel");
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
     m_mainLayout->addWidget(header);
@@ -102,7 +99,7 @@ void MetaPanel::initUi() {
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet("QScrollArea { border: none; background: transparent; }");
+    m_scrollArea->setObjectName("MetaScrollArea");
     
     m_container = new QWidget(m_scrollArea);
     m_containerLayout = new QVBoxLayout(m_container);
@@ -112,7 +109,7 @@ void MetaPanel::initUi() {
     // 1. 顶部预览与色板区
     m_topPreviewBox = new QWidget(m_container);
     m_topPreviewBox->setObjectName("TopPreviewBox");
-    m_topPreviewBox->setStyleSheet("QWidget#TopPreviewBox { background: transparent; border: none; }");
+    // TopPreviewBox style in style.qss
     QVBoxLayout* previewLayout = new QVBoxLayout(m_topPreviewBox);
     previewLayout->setContentsMargins(0, 0, 0, 0);
     previewLayout->setSpacing(6);
@@ -120,7 +117,7 @@ void MetaPanel::initUi() {
     m_lblImagePreview = new QLabel(m_topPreviewBox);
     m_lblImagePreview->setAlignment(Qt::AlignCenter);
     m_lblImagePreview->setObjectName("MetaImagePreview");
-    m_lblImagePreview->setStyleSheet("background: transparent; border: none;");
+    // MetaImagePreview style in style.qss
     m_lblImagePreview->hide();
     previewLayout->addWidget(m_lblImagePreview, 0, Qt::AlignHCenter);
 
@@ -134,23 +131,14 @@ void MetaPanel::initUi() {
     // 2. 文件名编辑区
     m_nameEdit = new ElasticEdit(m_container);
     m_nameEdit->setPlaceholderText("文件名...");
-    m_nameEdit->setStyleSheet(
-        "QTextEdit { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px 8px; "
-        "font-size: 13px; font-weight: bold; color: #FFFFFF; }"
-        "QTextEdit:focus { border-color: #378ADD; }"
-        "QTextEdit:disabled { background: #1E1E1E; color: #777777; border-color: #2A2A2A; }"
-    );
+    m_nameEdit->setObjectName("MetaNameEdit");
     m_nameEdit->installEventFilter(this);
     m_containerLayout->addWidget(m_nameEdit);
 
     // 3. 备注说明区
     m_noteEdit = new ElasticEdit(m_container);
     m_noteEdit->setPlaceholderText("添加备注说明...");
-    m_noteEdit->setStyleSheet(
-        "QTextEdit { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px 8px; font-size: 12px; color: #AAAAAA; }"
-        "QTextEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
-        "QTextEdit:disabled { background: #1E1E1E; color: #555555; }"
-    );
+    m_noteEdit->setObjectName("MetaNoteEdit");
     m_noteEdit->installEventFilter(this);
     m_containerLayout->addWidget(createCollapsibleSection("备注说明", m_noteEdit, true));
 
@@ -158,11 +146,7 @@ void MetaPanel::initUi() {
     m_linkEdit = new QLineEdit(m_container);
     m_linkEdit->setPlaceholderText("添加关联网址...");
     m_linkEdit->setFixedHeight(28);
-    m_linkEdit->setStyleSheet(
-        "QLineEdit { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding-left: 8px; font-size: 12px; color: #378ADD; }"
-        "QLineEdit:focus { border-color: #378ADD; }"
-        "QLineEdit:disabled { background: #1E1E1E; color: #555555; }"
-    );
+    m_linkEdit->setObjectName("MetaLinkEdit");
     m_linkEdit->installEventFilter(this);
 
     m_actOpenLink = m_linkEdit->addAction(UiHelper::getIcon("link", QColor("#378ADD"), 14), QLineEdit::TrailingPosition);
@@ -170,10 +154,7 @@ void MetaPanel::initUi() {
 
     for (QToolButton* btn : m_linkEdit->findChildren<QToolButton*>()) {
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(
-            "QToolButton { border: none; border-left: 1px solid #3c3c3c; background: transparent; padding-left: 4px; padding-right: 4px; }"
-            "QToolButton:hover { background: #3E3E42; }"
-        );
+        btn->setObjectName("MetaLinkToolBtn");
     }
 
     connect(m_actOpenLink, &QAction::triggered, this, [this]() {
@@ -202,7 +183,7 @@ void MetaPanel::initUi() {
     ratingColorLayout->setSpacing(6);
 
     QWidget* ratingRow = new QWidget(m_ratingColorBox);
-    ratingRow->setStyleSheet("QWidget { background: transparent; border: none; }");
+    ratingRow->setObjectName("MetaRatingRow");
     QHBoxLayout* starLayout = new QHBoxLayout(ratingRow);
     starLayout->setContentsMargins(0, 2, 0, 2);
     starLayout->setSpacing(2);
@@ -214,7 +195,7 @@ void MetaPanel::initUi() {
     btnClearStar->setIconSize(QSize(16, 16));
     btnClearStar->setProperty("tooltipText", "清除评级");
     btnClearStar->installEventFilter(this);
-    btnClearStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 4px; }");
+    btnClearStar->setObjectName("MetaBtnClearStar");
     connect(btnClearStar, &QPushButton::clicked, this, [this]() { setRating(0, true); });
     starLayout->addWidget(btnClearStar);
 
@@ -224,7 +205,7 @@ void MetaPanel::initUi() {
         btnStar->setCursor(Qt::PointingHandCursor);
         btnStar->setIcon(UiHelper::getIcon("star", QColor("#555555"), 16));
         btnStar->setIconSize(QSize(16, 16));
-        btnStar->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 3px; }");
+        btnStar->setObjectName("MetaBtnStar");
         connect(btnStar, &QPushButton::clicked, this, [this, i]() {
             int newRating = (m_currentRating == i) ? 0 : i;
             setRating(newRating, true);
@@ -236,7 +217,7 @@ void MetaPanel::initUi() {
     ratingColorLayout->addWidget(ratingRow);
 
     QWidget* colorRow = new QWidget(m_ratingColorBox);
-    colorRow->setStyleSheet("QWidget { background: transparent; border: none; }");
+    colorRow->setObjectName("MetaColorRow");
     QHBoxLayout* colorLayout = new QHBoxLayout(colorRow);
     colorLayout->setContentsMargins(0, 2, 0, 2);
     colorLayout->setSpacing(6);
@@ -248,7 +229,7 @@ void MetaPanel::initUi() {
     btnNoColor->setIconSize(QSize(16, 16));
     btnNoColor->setProperty("tooltipText", "无色标");
     btnNoColor->installEventFilter(this);
-    btnNoColor->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #333333; border-radius: 4px; }");
+    btnNoColor->setObjectName("MetaBtnNoColor");
     connect(btnNoColor, &QPushButton::clicked, this, [this]() { setColor(QString(""), true); });
     colorLayout->addWidget(btnNoColor);
 
@@ -293,11 +274,7 @@ void MetaPanel::initUi() {
     m_btnAddTagBig = new QPushButton(UiHelper::getIcon("add", QColor("#AAAAAA"), 14), " 添加标签", m_tagBox);
     m_btnAddTagBig->setFixedHeight(28);
     m_btnAddTagBig->setCursor(Qt::PointingHandCursor);
-    m_btnAddTagBig->setStyleSheet(
-        "QPushButton { background-color: #252526; border: 1px solid #3c3c3c; border-radius: 4px; padding: 0 10px; color: #AAAAAA; font-size: 12px; text-align: center; }"
-        "QPushButton:hover { background-color: #2a2d2e; border-color: #378ADD; color: #FFFFFF; }"
-        "QPushButton:disabled { background: #1E1E1E; color: #555555; }"
-    );
+    m_btnAddTagBig->setObjectName("BtnAddTagBig");
     connect(m_btnAddTagBig, &QPushButton::clicked, this, [this]() { openTagSelectorOverlay(m_btnAddTagBig); });
     tagL->addWidget(m_btnAddTagBig);
 
@@ -311,10 +288,7 @@ void MetaPanel::initUi() {
     m_btnAddTagSmall->setIconSize(QSize(12, 12));
     m_btnAddTagSmall->setProperty("tooltipText", "添加标签");
     m_btnAddTagSmall->installEventFilter(this);
-    m_btnAddTagSmall->setStyleSheet(
-        "QPushButton { background-color: #2D2D30; border: 1px solid #555555; border-radius: 4px; padding: 0; }"
-        "QPushButton:hover { background-color: #378ADD; border-color: #378ADD; }"
-    );
+    m_btnAddTagSmall->setObjectName("BtnAddTagSmall");
     connect(m_btnAddTagSmall, &QPushButton::clicked, this, [this]() { openTagSelectorOverlay(m_btnAddTagSmall); });
     m_btnAddTagSmall->hide();
 
@@ -345,7 +319,7 @@ void MetaPanel::initUi() {
 
     m_pathEdit = new QLineEdit(pathBox);
     m_pathEdit->setReadOnly(true);
-    m_pathEdit->setStyleSheet("QLineEdit { background: #1E1E1E; border: 1px solid #2A2A2A; border-radius: 4px; padding: 4px 6px; font-size: 11px; color: #CCCCCC; }");
+    m_pathEdit->setObjectName("MetaPathEdit");
     pathL->addWidget(m_pathEdit);
 
     QHBoxLayout* pathBtnL = new QHBoxLayout();
@@ -355,7 +329,7 @@ void MetaPanel::initUi() {
     m_btnCopyPath = new QPushButton("复制路径", pathBox);
     m_btnCopyPath->setFixedHeight(24);
     m_btnCopyPath->setCursor(Qt::PointingHandCursor);
-    m_btnCopyPath->setStyleSheet("QPushButton { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; color: #CCCCCC; font-size: 11px; } QPushButton:hover { background: #333333; color: #FFFFFF; }");
+    m_btnCopyPath->setObjectName("BtnCopyPath");
     connect(m_btnCopyPath, &QPushButton::clicked, this, [this]() {
         QString p = m_pathEdit->text().trimmed();
         if (!p.isEmpty() && !p.startsWith("已选中")) {
@@ -368,7 +342,7 @@ void MetaPanel::initUi() {
     m_btnOpenLocation = new QPushButton("打开位置", pathBox);
     m_btnOpenLocation->setFixedHeight(24);
     m_btnOpenLocation->setCursor(Qt::PointingHandCursor);
-    m_btnOpenLocation->setStyleSheet("QPushButton { background: #252526; border: 1px solid #3c3c3c; border-radius: 4px; color: #CCCCCC; font-size: 11px; } QPushButton:hover { background: #378ADD; border-color: #378ADD; color: #FFFFFF; }");
+    m_btnOpenLocation->setObjectName("BtnOpenLocation");
     connect(m_btnOpenLocation, &QPushButton::clicked, this, [this]() {
         QString p = m_pathEdit->text().trimmed();
         if (!p.isEmpty() && !p.startsWith("已选中")) {
@@ -566,13 +540,13 @@ void MetaPanel::addInfoRow(QVBoxLayout* layout, const QString& label, QLabel*& v
     
     QLabel* kl = new QLabel(label, row);
     kl->setFixedWidth(65);
-    kl->setStyleSheet("font-size: 11px; color: #888888;");
+    kl->setObjectName("MetaInfoKeyLabel");
     rl->addWidget(kl, 0, Qt::AlignTop);
 
     valueLabel = new QLabel("-", row);
     valueLabel->setWordWrap(true);
     valueLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    valueLabel->setStyleSheet("font-size: 11px; color: #CCCCCC; line-height: 1.4;");
+    valueLabel->setObjectName("MetaInfoValueLabel");
     valueLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     rl->addWidget(valueLabel, 1);
     
@@ -784,7 +758,7 @@ void MetaPanel::setPalettes(const QVector<QPair<QColor, float>>& palette) {
 
     for (const auto& entry : palette) {
         ColorPill* pill = new ColorPill(entry.first, entry.second, m_paletteContainer);
-        pill->setStyleSheet("background: transparent; border: none;");
+        pill->setObjectName("MetaColorPill");
         connect(pill, &ColorPill::colorSelected, this, [this](const QColor& c){ emit searchByColor(c); });
         connect(pill, &ColorPill::requestSetAsPrimary, this, &MetaPanel::setAsPrimaryColor);
         pill->show();

@@ -41,7 +41,7 @@ void RuleRow::initUi() {
     m_textEdit = new QLineEdit(this);
     m_textEdit->setPlaceholderText("输入固定文本...");
     m_textEdit->setFixedHeight(25);
-    m_textEdit->setStyleSheet("QLineEdit { background: #1E1E1E; border: 1px solid #444; border-radius: 4px; padding: 2px 5px; color: #EEE; }");
+    m_textEdit->setObjectName("RuleTextEdit");
     m_paramStack->addWidget(m_textEdit);
 
     // 2. Sequence Param
@@ -55,7 +55,7 @@ void RuleRow::initUi() {
     m_startSpin->setValue(1);
     m_startSpin->setFixedHeight(25);
     m_startSpin->setFixedWidth(70);
-    m_startSpin->setStyleSheet("QSpinBox { background: #1E1E1E; border: 1px solid #444; border-radius: 4px; color: #EEE; }");
+    m_startSpin->setObjectName("RuleStartSpin");
     
     m_paddingCombo = new QComboBox(seqW);
     for(int i=1; i<=6; ++i) m_paddingCombo->addItem(QString("%1 位数").arg(i), i);

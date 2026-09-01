@@ -20,7 +20,7 @@ QuickLookGraphicsView::QuickLookGraphicsView(QWidget* parent) : QGraphicsView(pa
     setDragMode(QGraphicsView::ScrollHandDrag);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    setStyleSheet("background: transparent; border: none;");
+    setObjectName("QLGraphicsView");
     
     horizontalScrollBar()->setStyleSheet(R"(
         QScrollBar:horizontal { height: 10px; background: transparent; }

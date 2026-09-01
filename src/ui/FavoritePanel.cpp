@@ -111,12 +111,7 @@ void FavoritePanel::initUi() {
     QWidget* header = new QWidget(this);
     header->setObjectName("ContainerHeader");
     header->setFixedHeight(32);
-    header->setStyleSheet(
-        "QWidget#ContainerHeader {"
-        "  background-color: #252526;"
-        "  border-bottom: 1px solid #333333;"
-        "}"
-    );
+// ContainerHeader in style.qss
     QHBoxLayout* headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(15, 0, 5, 0);
     headerLayout->setSpacing(5);
@@ -126,7 +121,7 @@ void FavoritePanel::initUi() {
     headerLayout->addWidget(iconLabel);
 
     QLabel* titleLabel = new QLabel("收藏夹", header);
-    titleLabel->setStyleSheet("color: #FDB70A; font-size: 13px; font-weight: bold; background: transparent; border: none;");
+    titleLabel->setObjectName("FavoritePanelTitleLabel");
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
     m_mainLayout->addWidget(header);
@@ -251,7 +246,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             QPushButton* btn = new QPushButton(pickerWidget);
             btn->setFixedSize(28, 28);
             btn->setCursor(Qt::PointingHandCursor);
-            btn->setStyleSheet("QPushButton { background-color: transparent; border: 1px solid transparent; border-radius: 4px; } QPushButton:hover { background-color: #3E3E42; border: 1px solid #555555; }");
+            btn->setObjectName("FavPickerIconBtn");
             btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
             btn->setIconSize(QSize(18, 18));
             pickerLayout->addWidget(btn, row, col);

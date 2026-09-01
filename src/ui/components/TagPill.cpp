@@ -15,7 +15,7 @@ TagPill::TagPill(const QString& text, QWidget* parent) : QWidget(parent), m_text
     layout->setSpacing(4);
 
     m_label = new QLabel(text, this);
-    m_label->setStyleSheet("color: #EEEEEE; font-size: 12px; border: none; background: transparent;");
+    m_label->setObjectName("TagPillLabel");
     
     // 显眼突出“×”号：增大图标、提升常规状态对比度与悬停反馈 
     m_closeBtn = new QPushButton(this); 

@@ -30,32 +30,28 @@ UndoToastOverlay::UndoToastOverlay(QWidget* parent) : QWidget(parent) {
 
     // 2. 消息文案
     m_msgLabel = new QLabel(this);
-    m_msgLabel->setStyleSheet("color: #EEEEEE; font-size: 12px; font-family: 'Segoe UI', 'Microsoft YaHei';");
+    m_msgLabel->setObjectName("UndoToastMsgLabel");
     layout->addWidget(m_msgLabel);
 
     // 3. 撤销按钮
     m_btnUndo = new QPushButton("撤销", this);
+    m_btnUndo->setObjectName("UndoToastBtnUndo");
     m_btnUndo->setCursor(Qt::PointingHandCursor);
-    m_btnUndo->setStyleSheet(
-        "QPushButton { color: #FFFFFF; font-weight: bold; font-size: 12px; border: none; background: transparent; text-decoration: underline; }"
-        "QPushButton:hover { color: #FF551C; }"
-    );
+    m_btnUndo->setObjectName("UndoToastBtnUndo");
     layout->addWidget(m_btnUndo);
 
     // 4. 垂直分割线
     m_separator = new QWidget(this);
     m_separator->setFixedSize(1, 14);
-    m_separator->setStyleSheet("background-color: #4E4E52;");
+    m_separator->setObjectName("UndoToastSeparator");
     layout->addWidget(m_separator);
 
     // 5. 关闭按钮
     m_btnClose = new QPushButton("×", this);
+    m_btnClose->setObjectName("UndoToastBtnClose");
     m_btnClose->setFixedSize(16, 16);
     m_btnClose->setCursor(Qt::PointingHandCursor);
-    m_btnClose->setStyleSheet(
-        "QPushButton { color: #888888; font-size: 14px; font-weight: bold; border: none; background: transparent; }"
-        "QPushButton:hover { color: #FFFFFF; }"
-    );
+    m_btnClose->setObjectName("UndoToastBtnClose");
     layout->addWidget(m_btnClose);
 
     // 定时器与动画

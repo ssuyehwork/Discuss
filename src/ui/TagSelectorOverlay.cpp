@@ -118,16 +118,16 @@ void TagSelectorOverlay::initUi() {
 
     m_tagGridWidget = new QWidget(this);
     m_tagGridWidget->setAttribute(Qt::WA_StyledBackground, true);
-    m_tagGridWidget->setStyleSheet("background-color: #1E1E1E;");
+    m_tagGridWidget->setObjectName("TagSelectorGridWidget");
     m_tagGridWidget->setFocusPolicy(Qt::StrongFocus);
     m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 10, 6, 6);
     m_tagGridWidget->setLayout(m_gridFlowLayout);
 
     m_scrollArea = new QScrollArea(this);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet("QScrollArea { border: 1px solid #333; background-color: #1E1E1E; border-radius: 4px; }");
+    m_scrollArea->setObjectName("TagSelectorScrollArea");
     if (m_scrollArea->viewport()) {
-        m_scrollArea->viewport()->setStyleSheet("background-color: #1E1E1E; border: none;");
+// viewport style in style.qss
     }
     m_scrollArea->setWidget(m_tagGridWidget);
     bodyL->addWidget(m_scrollArea, 1);

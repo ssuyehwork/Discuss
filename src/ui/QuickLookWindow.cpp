@@ -127,13 +127,13 @@ void QuickLookWindow::setupUi() {
     // 空文本提示标签
     m_lblEmptyPrompt = new QLabel(m_container);
     m_lblEmptyPrompt->setAlignment(Qt::AlignCenter);
-    m_lblEmptyPrompt->setStyleSheet("color: #888888; font-size: 16px; font-weight: bold; background: transparent;");
+    m_lblEmptyPrompt->setObjectName("QLEmptyPromptLabel");
     m_lblEmptyPrompt->hide();
     layout->addWidget(m_lblEmptyPrompt);
 
     // 状态与信息标签
     m_infoLabel = new QLabel(m_container);
-    m_infoLabel->setStyleSheet("color: #777;");
+    m_infoLabel->setObjectName("QLInfoLabel");
     m_infoLabel->hide();
 
     rootLayout->addWidget(m_container);
@@ -147,7 +147,7 @@ void QuickLookWindow::preview(const QString& filePath) {
     m_currentPath = filePath;
     QFileInfo fi(filePath);
     m_titleLabel->setText(fi.fileName());
-    m_infoLabel->setStyleSheet("color: #777;");
+    m_infoLabel->setObjectName("QLInfoLabel");
     
     QString ext = fi.suffix().toLower();
     
@@ -167,7 +167,7 @@ void QuickLookWindow::preview(const QString& filePath) {
         m_graphicsView->show();
         
         m_infoLabel->setText("该文件类型暂不支持预览");
-        m_infoLabel->setStyleSheet("color: #FF8C00; font-weight: bold; font-size: 14px;");
+        m_infoLabel->setObjectName("QLInfoLabelWarn");
     } else {
         renderText(filePath);
     }
@@ -291,7 +291,7 @@ void QuickLookWindow::renderText(const QString& path) {
         m_graphicsView->setPixmap(pix);
         
         m_infoLabel->setText("二进制文件，无法直接预览文本");
-        m_infoLabel->setStyleSheet("color: #FF8C00; font-weight: bold; font-size: 14px;");
+        m_infoLabel->setObjectName("QLInfoLabelWarn");
         return;
     }
 

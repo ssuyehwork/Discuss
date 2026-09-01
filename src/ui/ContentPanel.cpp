@@ -97,7 +97,7 @@ void ContentPanel::initUi() {
     QWidget* titleBar = new QWidget(this);
     titleBar->setObjectName("ContainerHeader");
     titleBar->setFixedHeight(32);
-    titleBar->setStyleSheet("QWidget#ContainerHeader { background-color: #252526; border-bottom: 1px solid #333333; }");
+    // ContainerHeader in style.qss
     QHBoxLayout* titleL = new QHBoxLayout(titleBar);
     titleL->setContentsMargins(15, 0, 5, 0);
     titleL->setSpacing(5);
@@ -107,7 +107,7 @@ void ContentPanel::initUi() {
     titleL->addWidget(iconLabel);
 
     QLabel* titleLabel = new QLabel("内容", titleBar);
-    titleLabel->setStyleSheet("font-size: 13px; font-weight: bold; color: #41F2F2; background: transparent; border: none;");
+    titleLabel->setObjectName("ContentPanelTitleLabel");
     titleL->addWidget(titleLabel);
     titleL->addStretch();
 
@@ -119,7 +119,7 @@ void ContentPanel::initUi() {
         btn->setIcon(UiHelper::getIcon(icon, checked ? actCol : QColor("#888888"), 16));
         btn->setProperty("tooltipText", tip);
         btn->installEventFilter(this);
-        btn->setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 4px; } QPushButton:hover, QPushButton:checked { background: #3E3E42; }");
+        btn->setObjectName("ViewModeToolBtn");
         connect(btn, &QPushButton::clicked, this, slot);
         titleL->addWidget(btn, 0, Qt::AlignVCenter);
     };
@@ -154,7 +154,7 @@ void ContentPanel::initUi() {
     m_btnLayers->setIcon(UiHelper::getIcon("layers", QColor("#2ecc71"), 18));
     m_btnLayers->setProperty("tooltipText", "显示子文件夹中的项目");
     m_btnLayers->installEventFilter(this);
-    m_btnLayers->setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 4px; } QPushButton:hover, QPushButton:checked { background: #3E3E42; }");
+    m_btnLayers->setObjectName("ViewModeToolBtn");
     connect(m_btnLayers, &QPushButton::clicked, this, [this]() {
         if (m_currentPath.isEmpty() || m_currentPath == "computer://") { m_btnLayers->setChecked(false); return; }
         loadDirectory(m_currentPath, m_btnLayers->isChecked());

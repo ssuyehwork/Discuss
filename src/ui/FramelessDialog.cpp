@@ -46,7 +46,7 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     auto* titleBar = new QWidget();
     titleBar->setObjectName("TitleBar");
     titleBar->setFixedHeight(34);
-    titleBar->setStyleSheet("background-color: transparent; border: none;");
+    titleBar->setObjectName("FramelessTitleBar");
     m_titleLayout = new QHBoxLayout(titleBar);
     m_titleLayout->setContentsMargins(12, 0, 5, 0);
     m_titleLayout->setSpacing(4);
@@ -134,7 +134,7 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     line->setFixedHeight(1);
     line->setFrameShape(QFrame::HLine);
     line->setFrameShadow(QFrame::Plain);
-    line->setStyleSheet("background-color: #333333; border: none;");
+    line->setObjectName("FramelessLine");
     m_mainLayout->addWidget(line);
 
     m_contentArea = new QWidget();

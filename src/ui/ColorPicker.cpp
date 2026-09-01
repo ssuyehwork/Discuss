@@ -143,7 +143,7 @@ void HueSlider::mouseMoveEvent(QMouseEvent* event) {
 ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint) {
     setAttribute(Qt::WA_DeleteOnClose);
     setFixedSize(220, 320); // 2026-05-17 按照用户要求：高度由 280 扩大到 320，容纳准确度滑条行
-    setStyleSheet("ColorPicker { background: #181818; border: 1px solid #333333; border-radius: 6px; }");
+// ColorPicker style in style.qss
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(10, 10, 10, 10);
@@ -207,7 +207,7 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
     bottomLayout->setSpacing(8);
     
     QWidget* bottomContainer = new QWidget(this);
-    bottomContainer->setStyleSheet("QWidget { background: #252526; border: 1px solid #378ADD; border-radius: 4px; }");
+    bottomContainer->setObjectName("ColorPickerBottomBox");
     bottomContainer->setLayout(bottomLayout);
     mainLayout->addWidget(bottomContainer);
 
@@ -217,7 +217,7 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
     bottomLayout->addWidget(m_previewBlock);
 
     m_hexEdit = new QLineEdit(bottomContainer);
-    m_hexEdit->setStyleSheet("QLineEdit { background: transparent; border: none; color: #EEEEEE; font-family: monospace; font-size: 12px; }");
+    m_hexEdit->setObjectName("ColorPickerHexEdit");
     m_hexEdit->setText("#FF0000");
     connect(m_hexEdit, &QLineEdit::returnPressed, this, [this]() {
         QColor c(m_hexEdit->text());
@@ -235,7 +235,7 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
     btnConfirm->setFlat(true);
     btnConfirm->setCursor(Qt::PointingHandCursor);
     btnConfirm->setIcon(UiHelper::getIcon("color_wheel", QColor("#EEEEEE"), 16));
-    btnConfirm->setStyleSheet("QPushButton { border: none; background: transparent; } QPushButton:hover { background: #3E3E42; border-radius: 2px; }");
+    btnConfirm->setObjectName("ColorPickerBtnConfirm");
     connect(btnConfirm, &QPushButton::clicked, this, [this]() {
         // 2026-05-17 按照用户要求：携带容差值发射
         emit colorSelected(m_color, m_toleranceSlider ? m_toleranceSlider->value() : 30);
@@ -245,13 +245,13 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
 
     // 4. 2026-05-17 按照用户要求：准确度控制行（容差滑条）
     QWidget* toleranceRow = new QWidget(this);
-    toleranceRow->setStyleSheet("QWidget { background: transparent; }");
+    toleranceRow->setObjectName("ColorPickerToleranceRow");
     QHBoxLayout* toleranceLayout = new QHBoxLayout(toleranceRow);
     toleranceLayout->setContentsMargins(0, 0, 0, 0);
     toleranceLayout->setSpacing(8);
 
     QLabel* toleranceLabel = new QLabel("\u51c6\u786e\u5ea6:", toleranceRow); // "准确度:"
-    toleranceLabel->setStyleSheet("QLabel { color: #AAAAAA; font-size: 11px; background: transparent; border: none; }");
+    toleranceLabel->setObjectName("ColorPickerToleranceLabel");
     toleranceLabel->setFixedWidth(40);
     toleranceLayout->addWidget(toleranceLabel);
 

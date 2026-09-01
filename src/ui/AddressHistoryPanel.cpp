@@ -52,17 +52,17 @@ void AddressHistoryPanel::rebuild() {
 
     if (m_history.isEmpty()) {
         QLabel* empty = new QLabel("暂无历史路径", this);
-        empty->setStyleSheet("color: #666666; font-size: 12px; padding: 4px 8px;");
+        empty->setObjectName("HistoryEmptyLabel");
         m_layout->addWidget(empty);
     } else {
         QWidget* titleRow = new QWidget(this);
-        titleRow->setStyleSheet("QWidget { background: transparent; }");
+        titleRow->setObjectName("HistoryTitleRow");
         QHBoxLayout* titleLayout = new QHBoxLayout(titleRow);
         titleLayout->setContentsMargins(4, 0, 4, 0);
         titleLayout->setSpacing(0);
 
         QLabel* titleLabel = new QLabel("最近访问路径", titleRow);
-        titleLabel->setStyleSheet("color: #888888; font-size: 11px;");
+        titleLabel->setObjectName("HistoryTitleLabel");
 
         QPushButton* btnClearAll = new QPushButton("全部清除", titleRow);
         btnClearAll->setFixedHeight(20);
@@ -82,7 +82,7 @@ void AddressHistoryPanel::rebuild() {
 
         QFrame* sep = new QFrame(this);
         sep->setFrameShape(QFrame::HLine);
-        sep->setStyleSheet("background: #333333; border: none; max-height: 1px;");
+        sep->setObjectName("HistorySep");
         m_layout->addWidget(sep);
 
         for (const QString& path : m_history) {
@@ -104,7 +104,7 @@ void AddressHistoryPanel::rebuild() {
             icon->setFixedSize(14, 14);
 
             QLabel* pathLabel = new QLabel(path, row);
-            pathLabel->setStyleSheet("color: #CCCCCC; font-size: 12px; background: transparent;");
+            pathLabel->setObjectName("HistoryItemLabel");
 
             QPushButton* btnRemove = new QPushButton(row);
             btnRemove->setFixedSize(16, 16);

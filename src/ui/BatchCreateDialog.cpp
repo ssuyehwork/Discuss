@@ -94,7 +94,7 @@ void BatchCreateDialog::initContent() {
     QHBoxLayout* typeGroupL = new QHBoxLayout();
     typeGroupL->setSpacing(4); // 组内标签与控件间距设为 4px（紧密靠拢）
     QLabel* typeLabel = new QLabel("类型:", this);
-    typeLabel->setStyleSheet("color: #BBB; font-weight: bold;");
+    typeLabel->setObjectName("BatchCreateTitleLabel");
     m_typeCombo = new QComboBox(this);
     m_typeCombo->addItem("文件夹", 0);
     m_typeCombo->addItem("文件", 1);
@@ -107,7 +107,7 @@ void BatchCreateDialog::initContent() {
     QHBoxLayout* suffixGroupL = new QHBoxLayout();
     suffixGroupL->setSpacing(4); // 组内间距 4px
     QLabel* suffixLabel = new QLabel("后缀名:", this);
-    suffixLabel->setStyleSheet("color: #BBB; font-weight: bold;");
+    suffixLabel->setObjectName("BatchCreateTitleLabel");
     
     m_suffixEdit = new QLineEdit(this);
     m_suffixEdit->setPlaceholderText("md");
@@ -123,7 +123,7 @@ void BatchCreateDialog::initContent() {
     QHBoxLayout* countGroupL = new QHBoxLayout();
     countGroupL->setSpacing(4); // 组内间距 4px
     QLabel* countLabel = new QLabel("数量:", this);
-    countLabel->setStyleSheet("color: #BBB; font-weight: bold;");
+    countLabel->setObjectName("BatchCreateTitleLabel");
     m_countSpin = new QSpinBox(this);
     m_countSpin->setRange(1, 10000);
     m_countSpin->setValue(5);
@@ -144,13 +144,13 @@ void BatchCreateDialog::initContent() {
 
     // 规则容器区
     QLabel* ruleLabel = new QLabel("命名规则构造器 (按照添加规则管道生成):", this);
-    ruleLabel->setStyleSheet("color: #888; font-size: 11px;");
+    ruleLabel->setObjectName("BatchCreateRuleLabel");
     layout->addWidget(ruleLabel);
 
     QScrollArea* scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet("background: transparent; border: none;");
+    scroll->setObjectName("BatchCreateScroll");
     
     m_rulesContainer = new QWidget(scroll);
     m_rulesContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
@@ -168,13 +168,13 @@ void BatchCreateDialog::initContent() {
     QPushButton* btnCancel = new QPushButton("取消", this);
     btnCancel->setCursor(Qt::PointingHandCursor);
     btnCancel->setFixedSize(90, 28);
-    btnCancel->setStyleSheet("QPushButton { background: transparent; color: #BBB; border: 1px solid #444; border-radius: 4px; } QPushButton:hover { background: #3E3E42; }");
+    btnCancel->setObjectName("BatchCreateCancelBtn");
     bottomL->addWidget(btnCancel);
 
     m_btnOk = new QPushButton("开始创建", this);
     m_btnOk->setCursor(Qt::PointingHandCursor);
     m_btnOk->setFixedSize(100, 28);
-    m_btnOk->setStyleSheet("QPushButton { background: #007ACC; color: white; border: none; border-radius: 4px; font-weight: bold; } QPushButton:hover { background: #1C97EA; } QPushButton:disabled { background: #333333; color: #666666; }");
+    m_btnOk->setObjectName("BatchCreateOkBtn");
     bottomL->addWidget(m_btnOk);
     layout->addLayout(bottomL);
 

@@ -102,7 +102,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("FilterContainer");
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(228);
-    setStyleSheet("color: #EEEEEE;");
+    // FilterPanel style in style.qss
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -194,7 +194,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     );
 
     m_container = new QWidget(m_scrollArea);
-    m_container->setStyleSheet("QWidget { background: transparent; }");
+    m_container->setObjectName("FilterContainerWidget");
     m_containerLayout = new QVBoxLayout(m_container);
     m_containerLayout->setContentsMargins(0, 0, 0, 10); 
     m_containerLayout->setSpacing(0);
@@ -658,7 +658,7 @@ void FilterPanel::rebuildGroups() {
         btnSort->setIcon(UiHelper::getIcon(m_createDateDesc ? "scroll-010.svg" : "scroll-007.svg", QColor("#B0B0B0")));
         btnSort->setFlat(true);
         btnSort->setCursor(Qt::PointingHandCursor);
-        btnSort->setStyleSheet("QPushButton { background: transparent; border: none; } QPushButton:hover { background: #3E3E42; border-radius: 2px; }");
+        btnSort->setObjectName("FilterBtnSort");
         hdrLayout->addWidget(btnSort);
         connect(btnSort, &QPushButton::clicked, this, [this, btnSort]() {
             m_createDateDesc = !m_createDateDesc;
@@ -722,7 +722,7 @@ void FilterPanel::rebuildGroups() {
         btnSort->setIcon(UiHelper::getIcon(m_modifyDateDesc ? "scroll-010.svg" : "scroll-007.svg", QColor("#B0B0B0")));
         btnSort->setFlat(true);
         btnSort->setCursor(Qt::PointingHandCursor);
-        btnSort->setStyleSheet("QPushButton { background: transparent; border: none; } QPushButton:hover { background: #3E3E42; border-radius: 2px; }");
+        btnSort->setObjectName("FilterBtnSort");
         hdrLayout->addWidget(btnSort);
         connect(btnSort, &QPushButton::clicked, this, [this, btnSort]() {
             m_modifyDateDesc = !m_modifyDateDesc;
@@ -881,7 +881,7 @@ void FilterPanel::rebuildGroups() {
         ).arg(arrowPath));
 
         hs->addWidget(minEdit);
-        QLabel* sep = new QLabel("-", g); sep->setStyleSheet("color: #AAA;"); hs->addWidget(sep);
+        QLabel* sep = new QLabel("-", g); sep->setObjectName("FilterSepLabel"); hs->addWidget(sep);
         hs->addWidget(maxEdit);
         hs->addWidget(unitCombo);
         gl->addLayout(hs);
@@ -1016,7 +1016,7 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
                                   QHBoxLayout** outHdrLayout) {
     QWidget* wrapper = new QWidget(m_container);
     wrapper->setAttribute(Qt::WA_StyledBackground, true);
-    wrapper->setStyleSheet("background: transparent;");
+    wrapper->setObjectName("FilterGroupWrapper");
     QVBoxLayout* wl = new QVBoxLayout(wrapper);
     wl->setContentsMargins(0, 0, 0, 0);
     wl->setSpacing(0);
@@ -1067,7 +1067,7 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
 
     QWidget* content = new QWidget(wrapper);
     content->setAttribute(Qt::WA_StyledBackground, true);
-    content->setStyleSheet("background: transparent;");
+    content->setObjectName("FilterGroupContent");
     outContentLayout = new QVBoxLayout(content);
     outContentLayout->setContentsMargins(0, 0, 0, 0);
     outContentLayout->setSpacing(0);
@@ -1108,11 +1108,11 @@ QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, 
     }
 
     QLabel* lbl = new QLabel(label, row);
-    lbl->setStyleSheet("font-size: 12px; color: #CCCCCC; background: transparent;");
+    lbl->setObjectName("FilterItemLabel");
     rl->addWidget(lbl, 1);
 
     QLabel* cnt = new QLabel(QString::number(count), row);
-    cnt->setStyleSheet("font-size: 11px; color: #555555; background: transparent;");
+    cnt->setObjectName("FilterItemCountLabel");
     cnt->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     rl->addWidget(cnt);
 

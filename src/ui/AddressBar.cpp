@@ -24,17 +24,14 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     m_addressContainer = new QWidget(this);
     m_addressContainer->setObjectName("AddressContainer");
     m_addressContainer->setFixedHeight(32);
-    m_addressContainer->setStyleSheet(
-        "QWidget#AddressContainer { background: #1E1E1E; border: 1px solid #333333; border-radius: 6px; }"
-        "QWidget#AddressContainer[focused='true'] { border: 1px solid #3498db; }"
-    );
+    // AddressContainer style in style.qss
     QHBoxLayout* containerLayout = new QHBoxLayout(m_addressContainer);
     containerLayout->setContentsMargins(0, 0, 0, 0);
     containerLayout->setSpacing(0);
 
     m_pathStack = new QStackedWidget(m_addressContainer);
     m_pathStack->setFixedHeight(30);
-    m_pathStack->setStyleSheet("QStackedWidget { background: transparent; border: none; }");
+    m_pathStack->setObjectName("AddressPathStack");
 
     m_breadcrumbBar = new BreadcrumbBar(m_pathStack);
     m_pathStack->addWidget(m_breadcrumbBar);
@@ -43,7 +40,7 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     m_pathEdit->setPlaceholderText("输入路径...");
     m_pathEdit->setFixedHeight(30); 
     m_pathEdit->setClearButtonEnabled(true);
-    m_pathEdit->setStyleSheet("QLineEdit { background: transparent; border: none; color: #EEEEEE; padding-left: 8px; }");
+    m_pathEdit->setObjectName("AddressPathEdit");
     m_pathStack->addWidget(m_pathEdit);
 
     m_btnRefresh = new QPushButton(m_addressContainer);
@@ -51,9 +48,7 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     m_btnRefresh->setIcon(UiHelper::getIcon("sync", QColor("#CCCCCC"), 16));
     m_btnRefresh->setProperty("tooltipText", "刷新 (F5)");
     m_btnRefresh->setCursor(Qt::ArrowCursor);
-    m_btnRefresh->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-left: 1px solid #333333; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }"
-    );
+    m_btnRefresh->setObjectName("BtnRefreshAddress");
     m_btnRefresh->setAttribute(Qt::WA_Hover);
     m_btnRefresh->installEventFilter(this);
 

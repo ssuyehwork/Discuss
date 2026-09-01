@@ -13,14 +13,14 @@ TaskProgressToolBar::TaskProgressToolBar(QWidget* parent)
 
 void TaskProgressToolBar::initUi() {
     setFixedHeight(36);
-    setStyleSheet("QWidget { background-color: #252526; border-top: 1px solid #333333; }");
+// TaskProgressToolBar style in style.qss
 
     QHBoxLayout* layout = new QHBoxLayout(this);
     layout->setContentsMargins(15, 0, 15, 0);
     layout->setSpacing(10);
 
     m_lblTitle = new QLabel("正在处理任务...", this);
-    m_lblTitle->setStyleSheet("color: #EEEEEE; font-size: 11px; font-weight: bold; background: transparent;");
+    m_lblTitle->setObjectName("TaskProgressTitleLabel");
 
     m_progressBar = new QProgressBar(this);
     m_progressBar->setFixedHeight(6);
@@ -32,10 +32,10 @@ void TaskProgressToolBar::initUi() {
     );
 
     m_lblDetail = new QLabel("", this);
-    m_lblDetail->setStyleSheet("color: #888888; font-size: 11px; background: transparent;");
+    m_lblDetail->setObjectName("TaskProgressDetailLabel");
 
     m_lblCount = new QLabel("", this);
-    m_lblCount->setStyleSheet("color: #378ADD; font-size: 11px; font-weight: bold; background: transparent;");
+    m_lblCount->setObjectName("TaskProgressCountLabel");
 
     layout->addWidget(m_lblTitle);
     layout->addWidget(m_progressBar, 1);

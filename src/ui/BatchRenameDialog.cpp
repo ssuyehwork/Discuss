@@ -132,7 +132,7 @@ void BatchRenameDialog::initContent() {
 
     // 3. 新文件名 (规则构造器)
     QGroupBox* rulesGroup = new QGroupBox("新文件名", leftPanel);
-    rulesGroup->setStyleSheet("QGroupBox { padding-top: 15px; margin-top: 5px; } QGroupBox::title { top: -2px; left: 8px; }");
+    rulesGroup->setObjectName("BatchRenameRulesGroup");
     
     QVBoxLayout* rulesGroupL = new QVBoxLayout(rulesGroup);
     rulesGroupL->setContentsMargins(4, 2, 4, 4);
@@ -142,7 +142,7 @@ void BatchRenameDialog::initContent() {
     scroll->setWidgetResizable(true);
     scroll->setAlignment(Qt::AlignTop);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet("background: transparent; border: none; padding: 0px; margin: 0px;");
+    scroll->setObjectName("BatchRenameScroll");
     
     m_rulesContainer = new QWidget(scroll);
     m_rulesContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);

@@ -20,7 +20,7 @@ FramelessInputDialog::FramelessInputDialog(const QString& title, const QString& 
     layout->setSpacing(7);
 
     auto* lbl = new QLabel(label);
-    lbl->setStyleSheet("color: #EEEEEE; font-size: 13px;");
+    lbl->setObjectName("FramelessInputLabel");
     layout->addWidget(lbl);
 
     m_edit = new QLineEdit(initial);

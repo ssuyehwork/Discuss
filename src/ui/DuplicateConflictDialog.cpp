@@ -10,7 +10,7 @@ namespace QuarkMeta {
 static QWidget* createCard(const DuplicateItemInfo& item, const QString& badgeText, bool isExisting) {
     QWidget* card = new QWidget();
     card->setFixedSize(320, 320);
-    card->setStyleSheet("background-color: #232325; border-radius: 8px;");
+    card->setObjectName("ConflictCard");
 
     QVBoxLayout* layout = new QVBoxLayout(card);
     layout->setContentsMargins(15, 15, 15, 15);
@@ -36,7 +36,7 @@ static QWidget* createCard(const DuplicateItemInfo& item, const QString& badgeTe
     // 文件名
     QLabel* nameLabel = new QLabel(item.filename, card);
     nameLabel->setAlignment(Qt::AlignCenter);
-    nameLabel->setStyleSheet("color: #FFFFFF; font-weight: bold; font-size: 12px;");
+    nameLabel->setObjectName("ConflictNameLabel");
     layout->addWidget(nameLabel);
 
     // 分辨率 / 大小
@@ -46,7 +46,7 @@ static QWidget* createCard(const DuplicateItemInfo& item, const QString& badgeTe
                         .arg(item.size / 1024);
     QLabel* infoLabel = new QLabel(infoText, card);
     infoLabel->setAlignment(Qt::AlignCenter);
-    infoLabel->setStyleSheet("color: #AAAAAA; font-size: 11px;");
+    infoLabel->setObjectName("ConflictInfoLabel");
     layout->addWidget(infoLabel);
 
     // 标签徽章
@@ -83,8 +83,8 @@ DuplicateConflictDialog::DuplicateConflictDialog(const DuplicateConflictGroup& c
     m_radKeepBoth = new QRadioButton("保留两者", this);
     m_radUseExisting->setChecked(true);
 
-    m_radUseExisting->setStyleSheet("QRadioButton { color: #FFFFFF; font-size: 12px; }");
-    m_radKeepBoth->setStyleSheet("QRadioButton { color: #FFFFFF; font-size: 12px; }");
+    m_radUseExisting->setObjectName("ConflictRadio");
+    m_radKeepBoth->setObjectName("ConflictRadio");
 
     bottomLayout->addWidget(m_radUseExisting);
     bottomLayout->addWidget(m_radKeepBoth);

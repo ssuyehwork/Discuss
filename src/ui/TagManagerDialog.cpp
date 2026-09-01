@@ -37,7 +37,7 @@ void TagManagerDialog::initContent() {
     // 1. 顶部操作栏
     QWidget* topBar = new QWidget(this);
     topBar->setFixedHeight(40);
-    topBar->setStyleSheet("background: transparent; border-bottom: 1px solid #333;");
+    topBar->setObjectName("TagManagerTopBar");
     QHBoxLayout* topL = new QHBoxLayout(topBar);
     topL->setContentsMargins(15, 0, 15, 0);
     topL->setSpacing(10);
@@ -90,13 +90,13 @@ void TagManagerDialog::initContent() {
     // A. 侧边栏
     m_sidebar = new QFrame(bodyWidget);
     m_sidebar->setFixedWidth(180);
-    m_sidebar->setStyleSheet("QFrame { background-color: #252526; border-right: 1px solid #333; }");
+    m_sidebar->setObjectName("TagManagerSidebar");
     m_sidebarLayout = new QVBoxLayout(m_sidebar);
     m_sidebarLayout->setContentsMargins(10, 15, 10, 10);
     m_sidebarLayout->setSpacing(6);
 
     QLabel* sideTitle = new QLabel("分类导航", m_sidebar);
-    sideTitle->setStyleSheet("color: #888; font-size: 11px; font-weight: bold; margin-bottom: 4px;");
+    sideTitle->setObjectName("TagManagerSideTitle");
     m_sidebarLayout->addWidget(sideTitle);
 
     m_groupButtonsLayout = new QVBoxLayout();
@@ -126,14 +126,14 @@ void TagManagerDialog::initContent() {
     // B. 右侧内容区
     m_scrollArea = new QScrollArea(bodyWidget);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet("QScrollArea { border: none; background-color: #1E1E1E; }");
+    m_scrollArea->setObjectName("TagManagerScrollArea");
     if (m_scrollArea->viewport()) {
-        m_scrollArea->viewport()->setStyleSheet("background-color: #1E1E1E; border: none;");
+// viewport style in style.qss
     }
 
     m_contentWidget = new QWidget();
     m_contentWidget->setAttribute(Qt::WA_StyledBackground, true);
-    m_contentWidget->setStyleSheet("background-color: #1E1E1E;");
+    m_contentWidget->setObjectName("TagManagerContentWidget");
     m_contentLayout = new QVBoxLayout(m_contentWidget);
     m_contentLayout->setContentsMargins(15, 15, 15, 15);
     m_contentLayout->setSpacing(15);

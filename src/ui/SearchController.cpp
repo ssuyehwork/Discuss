@@ -13,7 +13,7 @@ namespace QuarkMeta {
 SearchController::SearchController(QWidget* parent)
     : QObject(parent) {
     m_searchContainer = new QWidget(parent);
-    m_searchContainer->setStyleSheet("background: transparent;");
+    m_searchContainer->setObjectName("SearchContainer");
     QHBoxLayout* searchLayout = new QHBoxLayout(m_searchContainer);
     searchLayout->setContentsMargins(0, 0, 0, 0);
 
@@ -22,12 +22,7 @@ SearchController::SearchController(QWidget* parent)
     m_searchEdit->setFixedSize(230, 32);
     m_searchEdit->addAction(UiHelper::getIcon("search", TextMuted), QLineEdit::LeadingPosition);
     m_searchEdit->setClearButtonEnabled(true);
-    m_searchEdit->setStyleSheet(QString(
-        "QLineEdit { background: %1; border: 1px solid %2;"
-        "  border-radius: 6px;"
-        "  color: %3; padding-left: 5px; padding-right: 5px; }"
-        "QLineEdit:focus { border: 1px solid %4; }"
-    ).arg(qssColor(BackgroundDeep)).arg(qssColor(BorderColor)).arg(qssColor(TextMain)).arg(qssColor(PrimaryBlue)));
+    m_searchEdit->setObjectName("SearchEdit");
 
     searchLayout->addWidget(m_searchEdit);
 

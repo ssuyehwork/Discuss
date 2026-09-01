@@ -14,7 +14,7 @@ BreadcrumbBar::BreadcrumbBar(QWidget* parent) : QWidget(parent) {
     
     setCursor(Qt::PointingHandCursor);
     // 基础样式：作为地址栏背景
-    setStyleSheet("QWidget { background: transparent; border: none; }");
+    // BreadcrumbBar style in style.qss
 }
 
 void BreadcrumbBar::setPath(const QString& path) {
@@ -47,7 +47,7 @@ void BreadcrumbBar::setPath(const QString& path) {
         // 添加箭头/分隔符 (统一采用矢量 SVG 箭头图标)
         QLabel* sep = new QLabel(this);
         sep->setPixmap(UiHelper::getIcon("chevron_right", QColor("#AAAAAA"), 12).pixmap(12, 12));
-        sep->setStyleSheet("background: transparent; border: none; padding: 0 1px;");
+        sep->setObjectName("BreadcrumbSep");
         m_layout->addWidget(sep);
 
         if (!currentBuildPath.endsWith(QDir::separator())) {
@@ -77,12 +77,7 @@ void BreadcrumbBar::addLevel(const QString& name, const QString& fullPath) {
     btn->setFixedHeight(24);
     
     // 面包屑按钮样式：扁平化，无外框与背景底，仅悬停可见暗色背景
-    btn->setStyleSheet(
-        "QPushButton { background: transparent; border: none; outline: none; border-radius: 4px; "
-        "              color: #CCCCCC; font-size: 12px; padding: 0 4px; }"
-        "QPushButton:hover { background: #3E3E42; color: #FFFFFF; }"
-        "QPushButton:pressed { background: #4E4E52; }"
-    );
+    btn->setObjectName("BreadcrumbNodeBtn");
 
     btn->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(btn, &QPushButton::clicked, [this, fullPath]() {

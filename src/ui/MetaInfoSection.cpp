@@ -72,11 +72,11 @@ void MetaInfoSection::addInfoRow(QVBoxLayout* layout, const QString& label, QLab
     hl->setSpacing(8);
 
     QLabel* lbl = new QLabel(label, row);
-    lbl->setStyleSheet("color: #888888; font-size: 11px;");
+    lbl->setObjectName("MetaInfoKeyLabel");
     lbl->setFixedWidth(60);
 
     valueLabel = new QLabel("-", row);
-    valueLabel->setStyleSheet("color: #CCCCCC; font-size: 11px;");
+    valueLabel->setObjectName("MetaInfoValueLabel");
 
     hl->addWidget(lbl);
     hl->addWidget(valueLabel, 1);

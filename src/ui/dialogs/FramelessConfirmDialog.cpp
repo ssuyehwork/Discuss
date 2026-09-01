@@ -30,7 +30,7 @@ FramelessConfirmDialog::FramelessConfirmDialog(const QString& title, const QStri
     }
 
     auto* lbl = new QLabel(message);
-    lbl->setStyleSheet("color: #DDDDDD; font-size: 14px;");
+    lbl->setObjectName("FramelessConfirmLabel");
     lbl->setWordWrap(true);
     lbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     msgLayout->addWidget(lbl, 1);

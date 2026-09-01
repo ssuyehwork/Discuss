@@ -22,7 +22,7 @@ ToolTipOverlay::ToolTipOverlay() : QWidget(nullptr) {
     setPalette(pal);
 
     m_doc.setDefaultStyleSheet("body, div, p, span, b, i { color: #EEEEEE !important; font-family: 'Microsoft YaHei', 'Segoe UI'; }"); 
-    setStyleSheet("QWidget { color: #EEEEEE !important; background: transparent; }");
+// ToolTipOverlay style in style.qss
 
     QFont f = font();
     f.setPointSize(9);
