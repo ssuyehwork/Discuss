@@ -96,6 +96,12 @@ void NavPanel::deferredInit() {
     m_model->appendRow(m_recentRootItem);
 
     updateRecentVisitedList();
+
+    // 5. 新增：回收站 (固定主节点，在“最近访问”正下方)
+    QIcon trashIcon = UiHelper::getIcon("trash", QColor("#e81123"), 18);
+    QStandardItem* trashItem = new QStandardItem(trashIcon, "回收站");
+    trashItem->setData("trash_root", Qt::UserRole + 1);
+    m_model->appendRow(trashItem);
 }
 
 void NavPanel::setFocusHighlight(bool visible) {
@@ -120,15 +126,6 @@ void NavPanel::initUi() {
     titleLabel->setObjectName("NavPanelTitleLabel");
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
-
-    QPushButton* btnTrash = new QPushButton(header);
-    btnTrash->setFixedSize(24, 24);
-    btnTrash->setIcon(UiHelper::getIcon("trash", QColor("#e81123"), 16));
-    btnTrash->setProperty("tooltipText", "打开回收站");
-    btnTrash->installEventFilter(this);
-    btnTrash->setObjectName("NavTrashBtn");
-    connect(btnTrash, &QPushButton::clicked, this, &NavPanel::requestOpenTrash);
-    headerLayout->addWidget(btnTrash);
 
     m_mainLayout->addWidget(header);
 
@@ -216,9 +213,10 @@ void NavPanel::setRootPath(const QString& path) {
 }
 
 void NavPanel::selectPath(const QString& path) {
+    QString targetData = (path == "trash://" || path == "trash") ? "trash_root" : path;
     for (int i = 0; i < m_model->rowCount(); ++i) {
         QStandardItem* item = m_model->item(i);
-        if (item->data(Qt::UserRole + 1).toString() == path) {
+        if (item->data(Qt::UserRole + 1).toString() == targetData) {
             m_treeView->setCurrentIndex(item->index());
             m_treeView->setFocus();
             break;
@@ -231,7 +229,9 @@ void NavPanel::selectPath(const QString& path) {
  */
 void NavPanel::onTreeClicked(const QModelIndex& index) {
     QString path = index.data(Qt::UserRole + 1).toString();
-    if (!path.isEmpty() && path != "computer://" && path != "recent_root") {
+    if (path == "trash_root") {
+        emit requestOpenTrash();
+    } else if (!path.isEmpty() && path != "computer://" && path != "recent_root") {
         emit directorySelected(path);
     } else if (path == "computer://") {
         emit directorySelected("computer://");
