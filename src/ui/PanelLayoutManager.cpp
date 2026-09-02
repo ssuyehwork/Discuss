@@ -54,6 +54,9 @@ void PanelLayoutManager::initLayout() {
             sizes << kBasePanelWidth << kBasePanelWidth << kContentBaseWidth << kBasePanelWidth << kBasePanelWidth;
             splitterPtr->setSizes(sizes);
         }
+        // 【归一化修复】restoreState() 会把配置文件里存档的旧 handle 宽度一并带回来，
+        // 覆盖掉刚才在 setupSplitters() 里设置好的 5px，此处强制重新纠正
+        splitterPtr->setHandleWidth(kSplitterHandleWidth);
     });
 
     updateDynamicMinimumSize();

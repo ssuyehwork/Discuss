@@ -165,6 +165,7 @@ void MainWindow::initUi() {
 
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
+    qDebug() << "[诊断] 窗口显示后，handleWidth =" << (m_mainSplitter ? m_mainSplitter->handleWidth() : -1);
     if (!m_panelsInitialized) {
         m_panelsInitialized = true;
         QTimer::singleShot(0, [this]() {
@@ -298,6 +299,7 @@ void MainWindow::setupSplitters() {
     // 5px 实体物理缝隙 (2px margin + 1px handle + 2px margin) + Dual-mode 深色样式
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
     m_mainSplitter->setHandleWidth(5); 
+    qDebug() << "[诊断] setHandleWidth(5)刚设置完，此刻实际读到的handleWidth =" << m_mainSplitter->handleWidth();
     m_mainSplitter->setChildrenCollapsible(false);
     // QSplitter style in style.qss
 

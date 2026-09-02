@@ -1393,7 +1393,7 @@ QLabel#FilterSepLabel {
 QWidget#FilterGroupHdrRow {
     background-color: #252526;
     border: 1px solid #333333;
-    border-radius: 4px;
+    border-radius: 0px;
 }
 QPushButton#FilterGroupHdrBtn {
     background-color: transparent;
