@@ -113,7 +113,7 @@ void ContentPanel::initUi() {
     titleL->setSpacing(5);
 
     QLabel* iconLabel = new QLabel(titleBar);
-    iconLabel->setPixmap(UiHelper::getIcon("eye", QColor("#41F2F2"), 18).pixmap(18, 18));
+    iconLabel->setPixmap(UiHelper::getIcon("image_picture", QColor("#41F2F2"), 18).pixmap(18, 18));
     titleL->addWidget(iconLabel);
 
     QLabel* titleLabel = new QLabel("内容", titleBar);
@@ -395,7 +395,9 @@ void ContentPanel::updateGridSize() {
 }
 
 void ContentPanel::applyFilters(const FilterState& state) {
+    QString currentKw = m_currentFilter.keyword; // 1. 暂存当前搜索框中的活跃关键词
     m_currentFilter = state;
+    m_currentFilter.keyword = currentKw;          // 2. 锁定并恢复关键词，严禁被空状态冲刷
     m_currentFilter.showFolders = m_showFolders;
     m_currentFilter.showFiles = m_showFiles;
     m_currentFilter.showHidden = m_showHidden;
