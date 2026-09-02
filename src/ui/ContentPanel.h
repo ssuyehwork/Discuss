@@ -113,7 +113,7 @@ public:
     QPushButton* btnToggleHidden() const { return m_btnToggleHidden; }
     QStackedWidget* viewStack() const { return m_viewStack; }
     QAbstractItemView* gridView() const { return m_gridView; }
-    QTreeView* treeView() const { return reinterpret_cast<QTreeView*>(m_treeView); }
+    QTreeView* treeView() const;
     DropTreeView* dropTreeView() const { return m_treeView; }
     ContentKeyHandler* keyHandler() const { return m_keyHandler; }
     ContentDataLoader* dataLoader() const { return m_dataLoader; }

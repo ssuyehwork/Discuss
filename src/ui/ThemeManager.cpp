@@ -20,7 +20,6 @@ QString ThemeManager::getGlobalStyleSheet() const {
     QFile file(":/style.qss");
     if (file.open(QFile::ReadOnly)) {
         QString content = QLatin1String(file.readAll());
-        qDebug() << "QSS加载长度:" << content.length();
         return content;
     }
 

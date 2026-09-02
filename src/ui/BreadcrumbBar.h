@@ -42,13 +42,23 @@ signals:
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
+    struct PathNode {
+        QString name;
+        QString fullPath;
+
+        PathNode(const QString& n, const QString& p) : name(n), fullPath(p) {}
+    };
+
     void clearButtons();
     void addLevel(const QString& name, const QString& fullPath);
+    void rebuildBreadcrumbs();
 
     QHBoxLayout* m_layout = nullptr;
     QString m_currentPath;
+    QList<PathNode> m_nodes;
 };
 
 } // namespace QuarkMeta

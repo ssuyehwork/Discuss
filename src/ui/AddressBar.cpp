@@ -109,7 +109,10 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
         }
     });
 
+    m_addressContainer->setAttribute(Qt::WA_Hover);
+    m_addressContainer->installEventFilter(this);
     m_pathStack->installEventFilter(this);
+    m_breadcrumbBar->setAttribute(Qt::WA_Hover);
     m_breadcrumbBar->installEventFilter(this);
     m_pathEdit->installEventFilter(this);
 
@@ -148,6 +151,18 @@ void AddressBar::onBreadcrumbClicked(const QString& path) {
 }
 
 bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
+    // 规则三：悬停气泡提示（ToolTipOverlay 显完整路径）
+    if (obj == m_breadcrumbBar || obj == m_addressContainer) {
+        if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) {
+            if (!m_currentPath.isEmpty()) {
+                QString fullPath = (m_currentPath == "computer://") ? tr("此电脑") : QDir::toNativeSeparators(m_currentPath);
+                ToolTipOverlay::instance()->showText(QCursor::pos(), fullPath, 0);
+            }
+        } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::Leave) {
+            ToolTipOverlay::hideTip();
+        }
+    }
+
     if (obj == m_btnRefresh) {
         if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) {
             m_btnRefresh->setIcon(UiHelper::getIcon("sync", Qt::white, 16));

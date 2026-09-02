@@ -299,14 +299,9 @@ void JustifiedView::mouseDoubleClickEvent(QMouseEvent* event) {
         return;
     }
 
-    QRect itemRect = visualRect(idx);
-    CardLayout layout = CardLayoutEngine::calculate(itemRect, m_targetRowHeight);
-
-    if (layout.isTextHit(event->pos())) {
-        edit(idx);
-    } else if (layout.isCoverHit(event->pos())) {
-        emit doubleClicked(idx);
-    }
+    // 核心架构意图：双击 = 打开 / 预览（绝无编辑副作用）
+    // 无论是命中卡片封面、文字区域还是整卡，统一发射 doubleClicked 驱动打开/预览
+    emit doubleClicked(idx);
 }
 
 void JustifiedView::paintEvent(QPaintEvent*) {

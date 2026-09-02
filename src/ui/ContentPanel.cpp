@@ -34,6 +34,10 @@
 
 namespace QuarkMeta {
 
+QTreeView* ContentPanel::treeView() const {
+    return static_cast<QTreeView*>(m_treeView);
+}
+
 ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     setContextMenuPolicy(Qt::CustomContextMenu);
     setObjectName("EditorContainer");
@@ -188,7 +192,7 @@ void ContentPanel::initGridView() {
     m_gridView->setFrameShape(QFrame::NoFrame);
     m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_gridView->setEditTriggers(QAbstractItemView::EditKeyPressed);
+    m_gridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_gridView->setModel(m_proxyModel);
 
     auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
@@ -221,6 +225,7 @@ void ContentPanel::initListView() {
     m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setRootIsDecorated(false);
     m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true));
     m_treeView->setModel(m_proxyModel);

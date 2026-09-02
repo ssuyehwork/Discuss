@@ -94,7 +94,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     ToolTipOverlay::instance();
 
-    setMinimumSize(240, 400); 
+    setMinimumSize(475, 400); 
     setWindowTitle("QuarkMeta");
 
     m_hoverFilter = new HoverEventFilter(this);
@@ -165,7 +165,6 @@ void MainWindow::initUi() {
 
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
-    qDebug() << "[诊断] 窗口显示后，handleWidth =" << (m_mainSplitter ? m_mainSplitter->handleWidth() : -1);
     if (!m_panelsInitialized) {
         m_panelsInitialized = true;
         QTimer::singleShot(0, [this]() {
@@ -274,21 +273,27 @@ void MainWindow::setupSplitters() {
 
     m_navBarWidget = new QWidget(centralC);
     m_navBarWidget->setObjectName("NavBar");
-    // NavBar style in style.qss
     m_navBarWidget->setFixedHeight(42); 
-    
-    m_navBarLayout = new QHBoxLayout(m_navBarWidget);
-    m_navBarLayout->setContentsMargins(kLayoutEdgeMargin, kLayoutEdgeMargin, kLayoutEdgeMargin, kLayoutEdgeMargin); 
-    m_navBarLayout->setSpacing(5);
-    m_navBarLayout->setAlignment(Qt::AlignVCenter);
 
-    m_navBarLayout->addWidget(m_btnBack);
-    m_navBarLayout->addWidget(m_btnForward);
-    m_navBarLayout->addWidget(m_btnUp);
-    m_navBarLayout->addWidget(m_addressBar, 1);
+    m_navBarMainLayout = new QVBoxLayout(m_navBarWidget);
+    m_navBarMainLayout->setContentsMargins(kLayoutEdgeMargin, 2, kLayoutEdgeMargin, 2);
+    m_navBarMainLayout->setSpacing(2);
+
+    m_navRow1Widget = new QWidget(m_navBarWidget);
+    m_navRow1Layout = new QHBoxLayout(m_navRow1Widget);
+    m_navRow1Layout->setContentsMargins(0, 0, 0, 0);
+    m_navRow1Layout->setSpacing(5);
+    m_navRow1Layout->setAlignment(Qt::AlignVCenter);
+
+    m_navRow1Layout->addWidget(m_btnBack);
+    m_navRow1Layout->addWidget(m_btnForward);
+    m_navRow1Layout->addWidget(m_btnUp);
+    m_navRow1Layout->addWidget(m_addressBar, 1);
     if (m_searchController && m_searchController->toolbarWidget()) {
-        m_navBarLayout->addWidget(m_searchController->toolbarWidget());
+        m_navRow1Layout->addWidget(m_searchController->toolbarWidget());
     }
+
+    m_navBarMainLayout->addWidget(m_navRow1Widget);
 
     QWidget* bodyWrapper = new QWidget(centralC);
     bodyWrapper->setObjectName("BodyWrapper");
@@ -299,7 +304,6 @@ void MainWindow::setupSplitters() {
     // 5px 实体物理缝隙 (2px margin + 1px handle + 2px margin) + Dual-mode 深色样式
     m_mainSplitter = new QSplitter(Qt::Horizontal, bodyWrapper);
     m_mainSplitter->setHandleWidth(5); 
-    qDebug() << "[诊断] setHandleWidth(5)刚设置完，此刻实际读到的handleWidth =" << m_mainSplitter->handleWidth();
     m_mainSplitter->setChildrenCollapsible(false);
     // QSplitter style in style.qss
 
@@ -657,8 +661,41 @@ void MainWindow::onDriveBarContextMenu(const QPoint& pos) {
     Q_UNUSED(pos);
 }
 
+void MainWindow::updateNavBarResponsiveLayout() {
+    if (!m_navBarWidget || !m_searchController || !m_searchController->toolbarWidget()) return;
+
+    QWidget* searchW = m_searchController->toolbarWidget();
+    QLineEdit* searchEdit = m_searchController->searchEdit();
+
+    // 规则一：响应式折行
+    // 窄屏判别阈值：当 m_navBarWidget 宽度不足以容纳 [前进/后退/上级]+[最小地址栏]+[搜索框] 时（约 650px）
+    bool needTwoRow = (m_navBarWidget->width() < 650);
+
+    if (needTwoRow && !m_navBarIsTwoRowMode) {
+        m_navBarIsTwoRowMode = true;
+        m_navRow1Layout->removeWidget(searchW);
+        m_navBarMainLayout->addWidget(searchW);
+        if (searchEdit) {
+            searchEdit->setFixedWidth(QWIDGETSIZE_MAX);
+            searchEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        }
+        searchW->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        m_navBarWidget->setFixedHeight(78);
+    } else if (!needTwoRow && m_navBarIsTwoRowMode) {
+        m_navBarIsTwoRowMode = false;
+        m_navBarMainLayout->removeWidget(searchW);
+        m_navRow1Layout->addWidget(searchW);
+        if (searchEdit) {
+            searchEdit->setFixedSize(230, 32);
+        }
+        searchW->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        m_navBarWidget->setFixedHeight(42);
+    }
+}
+
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
+    updateNavBarResponsiveLayout();
 }
 
 } // namespace QuarkMeta
