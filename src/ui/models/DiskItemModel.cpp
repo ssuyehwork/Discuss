@@ -52,7 +52,7 @@ int DiskItemModel::rowCount(const QModelIndex& parent) const {
 }
 
 int DiskItemModel::columnCount(const QModelIndex&) const {
-    return 7;
+    return static_cast<int>(FileListColumn::Count);
 }
 
 QVariant DiskItemModel::headerData(int section, Qt::Orientation orientation, int role) const {

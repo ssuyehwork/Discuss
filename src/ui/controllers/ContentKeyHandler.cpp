@@ -219,7 +219,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
                 if (!selected.isEmpty()) idx = selected.first();
             }
             if (idx.isValid()) {
-                QModelIndex nameIdx = idx.sibling(idx.row(), 0);
+                QModelIndex nameIdx = idx.sibling(idx.row(), static_cast<int>(FileListColumn::Name));
                 QString path = nameIdx.data(PathRole).toString();
                 QString nativePath = QDir::toNativeSeparators(path);
                 QStringList tags = MetadataManager::instance().getMeta(nativePath.toStdWString()).tags;
@@ -338,7 +338,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
                 if (!selected.isEmpty()) idx = selected.first();
             }
             if (idx.isValid()) {
-                QModelIndex nameIdx = idx.sibling(idx.row(), 0);
+                QModelIndex nameIdx = idx.sibling(idx.row(), static_cast<int>(FileListColumn::Name));
                 view->setCurrentIndex(nameIdx);
                 view->edit(nameIdx);
             }
@@ -385,8 +385,8 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
 
         if (idx.isValid()) {
-            // 🚀 确保即使焦点处于列表视图第 1~6 列，也能正确从第 0 列 sibling 获取完整 PathRole 属性
-            QModelIndex nameIdx = idx.sibling(idx.row(), 0);
+            // 🚀 确保即使焦点处于列表视图非 Name 列，也能正确从 FileListColumn::Name sibling 获取完整 PathRole 属性
+            QModelIndex nameIdx = idx.sibling(idx.row(), static_cast<int>(FileListColumn::Name));
             QString path = nameIdx.data(PathRole).toString();
             if (!path.isEmpty()) {
                 QFileInfo info(path);

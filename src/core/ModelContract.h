@@ -37,4 +37,19 @@ enum CommonRole {
     DiskTrashIdRole     = Qt::UserRole + 209  // 磁盘回收站表 ID
 };
 
+/**
+ * @brief 列表视图标准列契约 (FileListColumn)
+ * 彻底消灭数字字面量，提供强类型枚举语义。
+ */
+enum class FileListColumn : int {
+    Name = 0,        // 名称 (微卡片 + 文本)
+    Status = 1,      // 状态 (固定 40px，默认常态隐藏)
+    Rating = 2,      // 评分 (固定 100px)
+    Dimension = 3,   // 尺寸 (固定 100px)
+    Type = 4,        // 类型 (固定 60px)
+    Size = 5,        // 大小 (固定 80px)
+    ModifiedDate = 6,// 修改日期 (固定 130px)
+    Count = 7
+};
+
 } // namespace QuarkMeta

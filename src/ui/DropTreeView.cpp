@@ -17,6 +17,17 @@
 
 namespace QuarkMeta {
 
+// 声明式规则表：单一真理来源 (Single Source of Truth)
+static const std::vector<ColumnPolicy> kFileListColumnPolicies = {
+    { FileListColumn::Name,         0,   QHeaderView::Stretch, 0,   false }, // 始终显示并拉伸
+    { FileListColumn::Status,       40,  QHeaderView::Fixed,   0,   true  }, // 恒定隐藏
+    { FileListColumn::Rating,       100, QHeaderView::Fixed,   350, false }, // >=350px
+    { FileListColumn::Dimension,    100, QHeaderView::Fixed,   480, false }, // >=480px
+    { FileListColumn::Type,         60,  QHeaderView::Fixed,   600, false }, // >=600px
+    { FileListColumn::Size,         80,  QHeaderView::Fixed,   600, false }, // >=600px
+    { FileListColumn::ModifiedDate, 130, QHeaderView::Fixed,   720, false }, // >=720px
+};
+
 DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     setHeader(new ContentHeaderView(Qt::Horizontal, this));
     setDragEnabled(true);
@@ -112,6 +123,29 @@ void DropTreeView::startDrag(Qt::DropActions supportedActions) {
     drag->setHotSpot(QPoint(0, 0));
     
     drag->exec(supportedActions | Qt::CopyAction, Qt::MoveAction);
+}
+
+void DropTreeView::applyColumnPolicies() {
+    QHeaderView* hdr = header();
+    if (!hdr) return;
+
+    int currentWidth = viewport() ? viewport()->width() : width();
+
+    for (const auto& policy : kFileListColumnPolicies) {
+        int colIdx = static_cast<int>(policy.column);
+        bool shouldHide = policy.alwaysHidden || (policy.minContainerWidth > 0 && currentWidth < policy.minContainerWidth);
+        
+        setColumnHidden(colIdx, shouldHide);
+        hdr->setSectionResizeMode(colIdx, policy.resizeMode);
+        if (policy.fixedWidth > 0) {
+            hdr->resizeSection(colIdx, policy.fixedWidth);
+        }
+    }
+}
+
+void DropTreeView::resizeEvent(QResizeEvent* event) {
+    QTreeView::resizeEvent(event);
+    applyColumnPolicies();
 }
 
 void DropTreeView::keyboardSearch(const QString& search) {

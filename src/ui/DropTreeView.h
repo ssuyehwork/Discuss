@@ -8,9 +8,23 @@
 #include <QDropEvent>
 #include <QMimeData>
 #include <QTimer>
+#include <vector>
 #include "RowLayoutEngine.h"
+#include "../core/ModelContract.h"
 
 namespace QuarkMeta {
+
+/**
+ * @brief 列表视图列策略配置 (ColumnPolicy)
+ * 声明式静态定义各列的尺寸、拉伸模式与响应式激活阈值。
+ */
+struct ColumnPolicy {
+    FileListColumn column;
+    int fixedWidth;                     // 固定宽度（Stretch 列为 0）
+    QHeaderView::ResizeMode resizeMode; // Stretch 或 Fixed
+    int minContainerWidth;              // 容器达到多少宽度时才激活展示 (0 表示始终保留)
+    bool alwaysHidden;                  // 是否常态隐藏 (如 Status 列)
+};
 
 class ContentHeaderView : public QHeaderView {
     Q_OBJECT
@@ -62,6 +76,8 @@ public:
     int rowHeight(const QModelIndex& index) const { return QTreeView::rowHeight(index); }
     void setEmptyHint(const QString& hint) { m_emptyHint = hint; }
 
+    void applyColumnPolicies();
+
 signals:
     void notesDropped(const QList<int>& noteIds, const QModelIndex& targetIndex);
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
@@ -74,6 +90,7 @@ protected:
 
     void keyboardSearch(const QString& search) override;
     void paintEvent(QPaintEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     QTimer* m_autoExpandTimer = nullptr;

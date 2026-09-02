@@ -21,6 +21,7 @@
 
 namespace QuarkMeta {
 
+class DropTreeView;
 class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
@@ -112,7 +113,8 @@ public:
     QPushButton* btnToggleHidden() const { return m_btnToggleHidden; }
     QStackedWidget* viewStack() const { return m_viewStack; }
     QAbstractItemView* gridView() const { return m_gridView; }
-    QTreeView* treeView() const { return m_treeView; }
+    QTreeView* treeView() const { return reinterpret_cast<QTreeView*>(m_treeView); }
+    DropTreeView* dropTreeView() const { return m_treeView; }
     ContentKeyHandler* keyHandler() const { return m_keyHandler; }
     ContentDataLoader* dataLoader() const { return m_dataLoader; }
     ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
@@ -206,7 +208,7 @@ private:
 
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;
-    QTreeView* m_treeView = nullptr;
+    DropTreeView* m_treeView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;
     QSortFilterProxyModel* m_proxyModel = nullptr;

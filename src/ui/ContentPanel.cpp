@@ -230,14 +230,7 @@ void ContentPanel::initListView() {
     auto* header = m_treeView->header();
     header->setFixedHeight(32);
     header->setMinimumSectionSize(0);
-    header->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int i = 1; i <= 6; ++i) header->setSectionResizeMode(i, QHeaderView::Fixed);
-    header->resizeSection(1, 40);
-    header->resizeSection(2, 100);
-    header->resizeSection(3, 100);
-    header->resizeSection(4, 60);
-    header->resizeSection(5, 80);
-    header->resizeSection(6, 130);
+    m_treeView->applyColumnPolicies();
 
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
