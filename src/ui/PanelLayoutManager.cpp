@@ -42,14 +42,19 @@ void PanelLayoutManager::initLayout() {
     m_mainSplitter->setStretchFactor(3, 0);
     m_mainSplitter->setStretchFactor(4, 0);
 
+    // 【归一化修复】splitter状态恢复必须延迟到下一轮事件循环，确保此时子控件已完成首次布局、窗口geometry已经是最终值
     QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
-    if (!state.isEmpty()) {
-        m_mainSplitter->restoreState(state);
-    } else {
-        QList<int> sizes;
-        sizes << kBasePanelWidth << kBasePanelWidth << kContentBaseWidth << kBasePanelWidth << kBasePanelWidth;
-        m_mainSplitter->setSizes(sizes);
-    }
+    QPointer<QSplitter> splitterPtr = m_mainSplitter;
+    QTimer::singleShot(0, [splitterPtr, state]() {
+        if (!splitterPtr) return;
+        if (!state.isEmpty()) {
+            splitterPtr->restoreState(state);
+        } else {
+            QList<int> sizes;
+            sizes << kBasePanelWidth << kBasePanelWidth << kContentBaseWidth << kBasePanelWidth << kBasePanelWidth;
+            splitterPtr->setSizes(sizes);
+        }
+    });
 
     updateDynamicMinimumSize();
 }

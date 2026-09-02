@@ -1,5 +1,6 @@
 #include "ThemeManager.h"
 #include <QFile>
+#include <QDebug>
 
 namespace QuarkMeta {
 
@@ -18,7 +19,9 @@ void ThemeManager::initialize(QApplication* app) {
 QString ThemeManager::getGlobalStyleSheet() const {
     QFile file(":/style.qss");
     if (file.open(QFile::ReadOnly)) {
-        return QLatin1String(file.readAll());
+        QString content = QLatin1String(file.readAll());
+        qDebug() << "QSS加载长度:" << content.length();
+        return content;
     }
 
     return QString();

@@ -953,6 +953,23 @@ QPushButton#BatchCreateOkBtn:disabled {
     color: #666666;
 }
 
+QPushButton#BatchRenameSecBtn {
+    background-color: transparent;
+    color: #CCCCCC;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    font-size: 11px;
+}
+QPushButton#BatchRenameSecBtn:hover {
+    background-color: #3E3E42;
+    color: #FFFFFF;
+    border-color: #555555;
+}
+QPushButton#BatchRenameSecBtn:disabled {
+    background-color: #1E1E1E;
+    color: #555555;
+    border-color: #2D2D2D;
+}
 QPushButton#BatchRenameDeletePresetBtn {
     background: transparent;
     border: 1px solid #3c3c3c;
@@ -1053,6 +1070,29 @@ QListWidget#FileDialogListView::item:selected {
     color: #FFFFFF;
 }
 
+/* 全局通用 QPushButton 暗色兜底规整 (防止未带 objectName 的按钮回退 Windows 原生灰白) */
+QPushButton {
+    background-color: transparent;
+    color: #EEEEEE;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 12px;
+}
+QPushButton:hover {
+    background-color: #3E3E42;
+    color: #FFFFFF;
+    border-color: #555555;
+}
+QPushButton:pressed {
+    background-color: #4E4E52;
+}
+QPushButton:disabled {
+    background-color: #1E1E1E;
+    color: #555555;
+    border-color: #2D2D2D;
+}
+
 /* 统一 QTableWidget & QTableView & QHeaderView 表格组件暗色样式 */
 QTableWidget, QTableView {
     background-color: #1E1E1E;
@@ -1068,11 +1108,11 @@ QTableWidget::item, QTableView::item {
     border: none;
 }
 QTableWidget::item:hover, QTableView::item:hover {
-    background-color: #2A2D2E;
+    background-color: transparent;
 }
 QTableWidget::item:selected, QTableView::item:selected {
-    background-color: rgba(55, 138, 221, 0.3);
-    color: #FFFFFF;
+    background-color: transparent;
+    color: #EEEEEE;
 }
 
 QHeaderView {
@@ -1356,7 +1396,7 @@ QWidget#FilterGroupHdrRow {
     border-radius: 4px;
 }
 QPushButton#FilterGroupHdrBtn {
-    background: transparent;
+    background-color: transparent;
     color: #AAAAAA;
     font-size: 11px;
     font-weight: 600;
@@ -1371,19 +1411,24 @@ QPushButton#FilterGroupHdrBtn {
 }
 QPushButton#FilterGroupHdrBtn:hover {
     color: #EEEEEE;
-    background: transparent;
+    background-color: transparent;
 }
 QPushButton#FilterGroupHdrBtn:checked {
-    background: transparent;
+    background-color: transparent;
     color: #EEEEEE;
     border: none;
     outline: none;
 }
+QPushButton#FilterGroupHdrBtn:checked:hover {
+    background-color: transparent;
+    color: #FFFFFF;
+}
 QPushButton#FilterGroupHdrBtn:pressed {
-    background: transparent;
+    background-color: transparent;
     color: #EEEEEE;
 }
 QPushButton#FilterGroupHdrBtn:focus {
+    background-color: transparent;
     outline: none;
 }
 QLabel#FilterItemLabel {
@@ -1680,6 +1725,89 @@ QLineEdit, QPlainTextEdit, QTextEdit {
 }
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
     border: 1px solid #378ADD;
+}
+
+/* 全局 QComboBox 下拉框暗色规整 */
+QComboBox {
+    background-color: #252526;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 2px 8px;
+    color: #EEEEEE;
+    font-size: 12px;
+}
+QComboBox:hover {
+    border-color: #444444;
+}
+QComboBox:focus {
+    border-color: #378ADD;
+}
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 20px;
+    border-left: none;
+}
+QComboBox QAbstractItemView {
+    background-color: #252526;
+    border: 1px solid #333333;
+    selection-background-color: #378ADD;
+    selection-color: #FFFFFF;
+    color: #EEEEEE;
+    outline: 0;
+    padding: 2px;
+}
+
+/* 全局 QGroupBox 分组框暗色规整 */
+QGroupBox {
+    color: #EEEEEE;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    margin-top: 8px;
+    padding-top: 12px;
+    font-size: 12px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 10px;
+    padding: 0 4px;
+    color: #888888;
+    background-color: #1E1E1E;
+}
+
+/* 全局 QRadioButton 单选框暗色规整 */
+QRadioButton {
+    color: #EEEEEE;
+    font-size: 12px;
+    spacing: 6px;
+}
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 8px;
+    border: 1px solid #555555;
+    background: transparent;
+}
+QRadioButton::indicator:hover {
+    border-color: #888888;
+}
+QRadioButton::indicator:checked {
+    border: 1px solid #CCCCCC;
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0 #FFFFFF, stop:0.45 #FFFFFF, stop:0.5 transparent, stop:1 transparent);
+}
+
+/* 全局 QSpinBox 数字框暗色规整 */
+QSpinBox {
+    background-color: #252526;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 2px 6px;
+    color: #EEEEEE;
+    font-size: 12px;
+}
+QSpinBox:focus {
+    border-color: #378ADD;
 }
 
 /* 统一 QTreeView 列表视图暗色斑马纹与高亮 */

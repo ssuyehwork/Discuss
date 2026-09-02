@@ -102,9 +102,6 @@ int main(int argc, char *argv[]) {
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QApplication a(argc, argv);
 
-    // 🚀【全局主题与样式中枢】：一键注入全局统一 QSS 样式表与面板/菜单暗黑规范
-    QuarkMeta::ThemeManager::instance().initialize(&a);
-
     // 全局统一设置深色 QPalette，防止原生 Windows 调色板在斑马纹/Base/AlternateBase 露底纯白
     QPalette p;
     p.setColor(QPalette::Window, QColor("#1E1E1E"));
@@ -145,6 +142,7 @@ int main(int argc, char *argv[]) {
     // 重构 5：多段启动。MainWindow 放置于栈上局部作用域，利用 RAII 自动且安全析构，规避 Double Free
     // -------------------------------------------------------------
     QuarkMeta::MainWindow w;
+    w.setStyleSheet(QuarkMeta::ThemeManager::instance().getGlobalStyleSheet());
     
     // 启动异步系统扫描与监控监听
     QuarkMeta::CoreController::instance().startSystem();

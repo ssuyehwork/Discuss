@@ -93,6 +93,8 @@ void BatchRenameDialog::initContent() {
     // 导入/导出按钮
     m_btnImportPreset = new QPushButton("导入...", presetGroup);
     m_btnExportPreset = new QPushButton("导出...", presetGroup);
+    m_btnImportPreset->setObjectName("BatchRenameSecBtn");
+    m_btnExportPreset->setObjectName("BatchRenameSecBtn");
     m_btnImportPreset->setFixedHeight(25);
     m_btnExportPreset->setFixedHeight(25);
     m_btnImportPreset->setFixedWidth(80);
@@ -119,6 +121,7 @@ void BatchRenameDialog::initContent() {
     m_targetPathEdit->setFixedHeight(25);
     m_targetPathEdit->setEnabled(false);
     m_btnBrowse = new QPushButton("浏览...", targetGroup);
+    m_btnBrowse->setObjectName("BatchRenameSecBtn");
     m_btnBrowse->setFixedSize(80, 25);
     m_btnBrowse->setEnabled(false);
     pathL->addWidget(m_targetPathEdit);
@@ -177,6 +180,7 @@ void BatchRenameDialog::initContent() {
     m_table->setAlternatingRowColors(true); // 开启斑马纹
     m_table->setShowGrid(false);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_table->setSelectionMode(QAbstractItemView::NoSelection);
     m_table->setIconSize(QSize(20, 20)); // 最左侧微型缩略图/图标尺寸
     m_table->setFocusPolicy(Qt::NoFocus); // 彻底消除选中单元格四周的虚线焦点框
 

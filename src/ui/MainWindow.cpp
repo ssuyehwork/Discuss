@@ -123,17 +123,7 @@ MainWindow::MainWindow(QWidget* parent)
 void MainWindow::initUi() {
     Q_ASSERT(m_hoverFilter && "事件过滤器必须在 initUi() 之前创建");
 
-    initToolbar();
-    setupSplitters();
-
-    setupCustomTitleBarButtons();
-
-    m_mainSplitter->setStretchFactor(0, 0);
-    m_mainSplitter->setStretchFactor(1, 0);
-    m_mainSplitter->setStretchFactor(2, 1);
-    m_mainSplitter->setStretchFactor(3, 0);
-    m_mainSplitter->setStretchFactor(4, 0);
-
+    // 【归一化修复】窗口自身尺寸必须先于分栏状态确定，否则splitter会基于错误的临时宽度做比例分配
     QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
     if (!savedGeom.isEmpty()) {
         restoreGeometry(savedGeom);
@@ -141,16 +131,12 @@ void MainWindow::initUi() {
         resize(1180, 800);
     }
 
-    QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
-    if (!state.isEmpty()) {
-        QTimer::singleShot(0, this, [this, state]() {
-            m_mainSplitter->restoreState(state);
-        });
-    } else {
-        QList<int> sizes;
-        sizes << 230 << 230 << 230 << 230 << 230;
-        m_mainSplitter->setSizes(sizes);
-    }
+    initToolbar();
+    setupSplitters();
+
+    setupCustomTitleBarButtons();
+
+    // 【归一化修复】splitter拉伸系数与尺寸恢复的唯一权威实现在 PanelLayoutManager::initLayout()，此处不再重复
 
     m_panelMediator = new PanelMediator(
         m_navPanel,
