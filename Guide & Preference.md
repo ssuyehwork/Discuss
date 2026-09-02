@@ -78,6 +78,11 @@
 - 菜单背景 `#252526`，边框 `#333333`，圆角 `6px`。
 - 项悬停/选中背景色统一为 **`#3E3E42`**。
 
+### 2.4 分栏布局初始化与尺寸计算规范 (PanelLayoutManager)
+- **`initLayout()` 单一调用收敛**: `PanelLayoutManager::initLayout()` 中，`updateDynamicMinimumSize()` **必须且只能**在 `QTimer::singleShot(0, ...)` 延迟回调函数内部调用唯一一次。
+- **严禁同步二次调用**: 严禁在 `initLayout()` 函数末尾同步调用 `updateDynamicMinimumSize()`。由于 `setMinimumWidth()` 会在被调用且当前窗口宽度小于新设最小值时立即撑大窗口，两次调用时机不同计算值不一致会导致应用每次启动时主窗口被莫名撑大。
+- **独立场景不连带**: `resetSplitterLayout()`、`setPanelVisible()`、`toggleImmersiveMode()` 等各自独立场景中调用一次 `updateDynamicMinimumSize()` 为正常行为，保持独立性。
+
 ---
 
 ## 3. UI 交互体验与渲染防抖规范

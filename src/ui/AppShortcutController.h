@@ -20,13 +20,23 @@ public:
     explicit AppShortcutController(QWidget* targetWindow,
                                   SearchController* searchController,
                                   QObject* parent = nullptr);
-    ~AppShortcutController() override = default;
+    ~AppShortcutController() override;
+
+    static bool isEditingFocus();
 
 signals:
     /**
      * @brief Alt+Q 局内快捷键触发置顶状态翻转
      */
     void togglePinRequested();
+
+    /**
+     * @brief Tab 局内快捷键（非编辑状态）触发沉浸单栏模式切换
+     */
+    void toggleImmersiveRequested();
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void initShortcuts();

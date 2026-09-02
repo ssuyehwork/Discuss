@@ -82,6 +82,7 @@ void NavigationService::navigateTo(const QString& rawUrl, bool recordHistory) {
     m_currentUrl = normalized;
 
     if (!isVirtualProtocol()) {
+        NavigationHistoryService::instance().appendPath(normalized);
         NavigationHistoryService::recordRecentVisitedFolder(QDir::toNativeSeparators(m_currentUrl).toStdWString());
     }
 

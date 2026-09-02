@@ -33,10 +33,16 @@ public:
     void resetSplitterLayout();
     void setPanelVisible(const QString& panelId, bool visible);
     bool isPanelVisible(const QString& panelId) const;
+    bool isImmersiveMode() const;
+    void toggleImmersiveMode();
     void populatePanelMenu(QMenu* menu);
     void showPanelContextMenu(const QPoint& globalPos);
     void updateDynamicMinimumSize();
     void saveLayoutState();
+
+private:
+    void savePreImmersiveState();
+    void restorePreImmersiveState();
 
 signals:
     void layoutResetCompleted();

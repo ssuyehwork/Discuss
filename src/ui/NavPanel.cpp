@@ -7,6 +7,7 @@
 #include "ContentPanel.h"
 #include "ToolTipOverlay.h"
 #include "../core/AppConfig.h"
+#include "../core/NavigationHistoryService.h"
 #include <QHeaderView>
 #include <QScrollBar>
 #include <QLabel>
@@ -87,6 +88,14 @@ void NavPanel::deferredInit() {
             }
         }
     });
+
+    // 4. 新增：最近访问 (固定主节点，在所有磁盘正下方)
+    QIcon recentIcon = UiHelper::getIcon("clock_history", QColor("#3498db"), 18);
+    m_recentRootItem = new QStandardItem(recentIcon, "最近访问");
+    m_recentRootItem->setData("recent_root", Qt::UserRole + 1);
+    m_model->appendRow(m_recentRootItem);
+
+    updateRecentVisitedList();
 }
 
 void NavPanel::setFocusHighlight(bool visible) {
@@ -152,6 +161,50 @@ void NavPanel::initUi() {
     // 信号连接
     connect(m_treeView, &QTreeView::expanded, this, &NavPanel::onItemExpanded);
     connect(m_treeView, &QTreeView::clicked, this, &NavPanel::onTreeClicked);
+    connect(&NavigationHistoryService::instance(), &NavigationHistoryService::historyChanged, this, &NavPanel::updateRecentVisitedList);
+}
+
+void NavPanel::updateRecentVisitedList() {
+    if (!m_recentRootItem) return;
+
+    m_recentRootItem->removeRows(0, m_recentRootItem->rowCount());
+
+    QStringList history = NavigationHistoryService::instance().getHistory();
+    QSet<QString> seenPaths;
+    int count = 0;
+
+    for (const QString& path : history) {
+        if (count >= 14) break;
+        if (path.isEmpty() || path == "computer://" || path.startsWith("分类: ")) continue;
+
+        QString normalizedKey = QDir::cleanPath(path).toLower();
+        if (seenPaths.contains(normalizedKey)) continue;
+        seenPaths.insert(normalizedKey);
+
+        QFileInfo info(path);
+        if (!info.exists() || !info.isDir()) continue;
+
+        QString displayName = info.fileName();
+        if (displayName.isEmpty()) {
+            displayName = QDir::toNativeSeparators(path);
+        }
+
+        QIcon icon = ShellIconManager::getFileIcon(path, 18);
+        if (icon.isNull()) {
+            icon = UiHelper::getIcon("folder_filled", QColor("#3498db"), 18);
+        }
+
+        QStandardItem* child = new QStandardItem(icon, displayName);
+        child->setData(path, Qt::UserRole + 1);
+        child->setData(QDir::toNativeSeparators(path), Qt::UserRole + 2);
+
+        m_recentRootItem->appendRow(child);
+        count++;
+    }
+
+    if (m_treeView && m_recentRootItem->index().isValid()) {
+        m_treeView->expand(m_recentRootItem->index());
+    }
 }
 
 /**
@@ -178,7 +231,7 @@ void NavPanel::selectPath(const QString& path) {
  */
 void NavPanel::onTreeClicked(const QModelIndex& index) {
     QString path = index.data(Qt::UserRole + 1).toString();
-    if (!path.isEmpty() && path != "computer://") {
+    if (!path.isEmpty() && path != "computer://" && path != "recent_root") {
         emit directorySelected(path);
     } else if (path == "computer://") {
         emit directorySelected("computer://");

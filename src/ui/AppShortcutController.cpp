@@ -2,7 +2,14 @@
 #include "SearchController.h"
 #include "../core/NavigationService.h"
 #include "../core/UndoManager.h"
+#include <QApplication>
 #include <QLineEdit>
+#include <QTextEdit>
+#include <QPlainTextEdit>
+#include <QAbstractSpinBox>
+#include <QComboBox>
+#include <QAbstractItemView>
+#include <QKeyEvent>
 
 namespace QuarkMeta {
 
@@ -12,7 +19,72 @@ AppShortcutController::AppShortcutController(QWidget* targetWindow,
     : QObject(parent),
       m_window(targetWindow),
       m_searchController(searchController) {
+    if (qApp) {
+        qApp->installEventFilter(this);
+    }
     initShortcuts();
+}
+
+AppShortcutController::~AppShortcutController() {
+    if (qApp) {
+        qApp->removeEventFilter(this);
+    }
+}
+
+bool AppShortcutController::isEditingFocus() {
+    QWidget* focusW = QApplication::focusWidget();
+    if (!focusW) return false;
+
+    // 1. 标准单行/多行/数值输入框
+    if (qobject_cast<QLineEdit*>(focusW) ||
+        qobject_cast<QTextEdit*>(focusW) ||
+        qobject_cast<QPlainTextEdit*>(focusW) ||
+        qobject_cast<QAbstractSpinBox*>(focusW)) {
+        return true;
+    }
+
+    // 2. 可编辑下拉框
+    if (auto cb = qobject_cast<QComboBox*>(focusW)) {
+        if (cb->isEditable()) return true;
+    }
+
+    // 3. 元对象继承检查 (涵盖继承 QLineEdit/QTextEdit 等的自定义控件)
+    if (focusW->inherits("QLineEdit") ||
+        focusW->inherits("QTextEdit") ||
+        focusW->inherits("QPlainTextEdit") ||
+        focusW->inherits("QAbstractSpinBox")) {
+        return true;
+    }
+
+    // 4. ItemView 行内编辑器检查: 焦点控件属于 QAbstractItemView 内部的子控件（且既不是 view 本身也不是 viewport）
+    QWidget* p = focusW->parentWidget();
+    while (p) {
+        if (auto view = qobject_cast<QAbstractItemView*>(p)) {
+            if (focusW != view && focusW != view->viewport()) {
+                return true;
+            }
+        }
+        p = p->parentWidget();
+    }
+
+    return false;
+}
+
+bool AppShortcutController::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::KeyPress && m_window) {
+        QKeyEvent* keyEv = static_cast<QKeyEvent*>(event);
+        if (keyEv->key() == Qt::Key_Tab && keyEv->modifiers() == Qt::NoModifier) {
+            QWidget* watchedW = qobject_cast<QWidget*>(watched);
+            if (watchedW && (watchedW == m_window || m_window->isAncestorOf(watchedW))) {
+                if (!isEditingFocus()) {
+                    emit toggleImmersiveRequested();
+                    event->accept();
+                    return true;
+                }
+            }
+        }
+    }
+    return QObject::eventFilter(watched, event);
 }
 
 void AppShortcutController::initShortcuts() {

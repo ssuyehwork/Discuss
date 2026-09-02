@@ -40,6 +40,7 @@ private slots:
     void onItemExpanded(const QModelIndex& index);
     void onTreeClicked(const QModelIndex& index);
     void updateTreeHeight();
+    void updateRecentVisitedList();
 
 private:
     void initUi();
@@ -48,6 +49,7 @@ private:
     QTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
     QVBoxLayout* m_mainLayout = nullptr;
+    QStandardItem* m_recentRootItem = nullptr;
 };
 
 } // namespace QuarkMeta

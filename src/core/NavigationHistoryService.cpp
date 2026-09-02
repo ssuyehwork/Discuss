@@ -1,6 +1,7 @@
 #include "NavigationHistoryService.h"
 #include "AppConfig.h"
 #include "../meta/MetadataManager.h"
+#include <QDir>
 
 namespace QuarkMeta {
 
@@ -15,11 +16,27 @@ QStringList NavigationHistoryService::getHistory() const {
     return AppConfig::instance().getValue("AddressBar/History").toStringList();
 }
 
-void NavigationHistoryService::appendPath(const QString& path) {
-    if (path.isEmpty() || path == "computer://" || path.startsWith("分类: ")) return;
+void NavigationHistoryService::appendPath(const QString& rawPath) {
+    if (rawPath.isEmpty() || rawPath == "computer://" || rawPath.startsWith("分类: ")) return;
+    
+    // 【归一化修复】将正反斜杠统一为 QDir::cleanPath 的标准格式
+    QString cleanP = QDir::cleanPath(rawPath);
+    if (cleanP.endsWith('/') || cleanP.endsWith('\\')) {
+        if (cleanP.length() > 3) { // 保留盘符如 "C:/"
+            cleanP.chop(1);
+        }
+    }
+
     QStringList history = getHistory();
-    history.removeAll(path);
-    history.prepend(path);
+    
+    // 大小写不敏感去重
+    for (int i = history.size() - 1; i >= 0; --i) {
+        if (QDir::cleanPath(history[i]).compare(cleanP, Qt::CaseInsensitive) == 0) {
+            history.removeAt(i);
+        }
+    }
+    
+    history.prepend(cleanP);
     while (history.size() > m_maxLimit) {
         history.removeLast();
     }

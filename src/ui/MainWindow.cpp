@@ -161,6 +161,11 @@ void MainWindow::initUi() {
             m_btnPinTop->setChecked(!m_btnPinTop->isChecked());
         }
     });
+    connect(m_shortcutController, &AppShortcutController::toggleImmersiveRequested, this, [this]() {
+        if (m_panelLayoutManager) {
+            m_panelLayoutManager->toggleImmersiveMode();
+        }
+    });
 }
 
 void MainWindow::showEvent(QShowEvent* event) {

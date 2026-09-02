@@ -1819,6 +1819,15 @@ QTreeView {
     border: none;
     outline: 0;
 }
+QTreeView::branch {
+    background: transparent;
+}
+QTreeView::branch:has-children:closed {
+    image: url(:/Icon/arrow_right.svg);
+}
+QTreeView::branch:has-children:open {
+    image: url(:/Icon/arrow_down.svg);
+}
 QTreeView::item {
     height: 28px;
     border: none;
