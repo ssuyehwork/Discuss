@@ -266,7 +266,7 @@ void MainWindow::setupSplitters() {
 
     m_logoLabel = new QLabel(m_titleBarWidget);
     m_logoLabel->setFixedSize(18, 18);
-    m_logoLabel->setPixmap(UiHelper::getIcon("QuarkMeta", BrandOrange).pixmap(16, 16));
+    m_logoLabel->setPixmap(UiHelper::getIcon("quarkMeta", BrandOrange).pixmap(16, 16));
     m_logoLabel->setAlignment(Qt::AlignCenter);
     m_logoLabel->setObjectName("TitleLogoLabel");
     m_titleBarLayout->addWidget(m_logoLabel);
