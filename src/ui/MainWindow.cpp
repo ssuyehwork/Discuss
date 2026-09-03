@@ -38,6 +38,7 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include <windowsx.h>
 #endif
 
 #include "SearchHistoryPanel.h"
@@ -701,6 +702,44 @@ void MainWindow::updateNavBarResponsiveLayout() {
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
     updateNavBarResponsiveLayout();
+}
+
+bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr* result) {
+    Q_UNUSED(eventType);
+#ifdef Q_OS_WIN
+    MSG* msg = static_cast<MSG*>(message);
+
+    if (msg->message == WM_NCCALCSIZE) {
+        // 告诉Windows：客户区 = 整个窗口矩形（不留标题栏/边框空间，因为我们自己画标题栏）
+        *result = 0;
+        return true;
+    }
+
+    if (msg->message == WM_GETMINMAXINFO) {
+        // 修正最大化时的尺寸，让它精确匹配"工作区"（即排除任务栏后的可用屏幕区域）
+        MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(msg->lParam);
+        HMONITOR monitor = MonitorFromWindow(msg->hwnd, MONITOR_DEFAULTTONEAREST);
+        if (monitor) {
+            MONITORINFO monitorInfo = {};
+            monitorInfo.cbSize = sizeof(MONITORINFO);
+            GetMonitorInfo(monitor, &monitorInfo);
+
+            RECT workArea = monitorInfo.rcWork;
+            RECT monitorArea = monitorInfo.rcMonitor;
+
+            mmi->ptMaxPosition.x = workArea.left - monitorArea.left;
+            mmi->ptMaxPosition.y = workArea.top - monitorArea.top;
+            mmi->ptMaxSize.x = workArea.right - workArea.left;
+            mmi->ptMaxSize.y = workArea.bottom - workArea.top;
+        }
+        *result = 0;
+        return true;
+    }
+#else
+    Q_UNUSED(message);
+    Q_UNUSED(result);
+#endif
+    return false;
 }
 
 } // namespace QuarkMeta
