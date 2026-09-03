@@ -27,7 +27,10 @@ void FramelessWindowHelper::apply(QWidget* window, QWidget* titleBar) {
 FramelessWindowHelper::FramelessWindowHelper(QWidget* window, QWidget* titleBar)
     : QObject(window), m_window(window), m_titleBar(titleBar) {
     
-    m_window->setWindowFlags(m_window->windowFlags() | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
+    Qt::WindowFlags requiredFlags = m_window->windowFlags() | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint;
+    if (m_window->windowFlags() != requiredFlags) {
+        m_window->setWindowFlags(requiredFlags);
+    }
     
     // 安装至全局应用事件总线，穿透所有子控件的物理遮蔽
     QCoreApplication::instance()->installEventFilter(this);

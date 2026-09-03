@@ -58,6 +58,7 @@ protected:
     // 2026-04-11 按照用户要求：showEvent 是执行 ToolTipOverlay GPU 真实预热的唯一合法时机
     void showEvent(QShowEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void moveEvent(QMoveEvent* event) override;
     bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
 
     /**
@@ -145,6 +146,7 @@ private:
     bool m_isPinned = false;
     QString m_currentDataSource; // "category" or "nav"
     bool m_panelsInitialized = false; // 2026-04-12 状态锁：确保面板仅初始化一次
+    QRect m_lastNormalGeometry;
 
     // 底部状态栏
     QLabel* m_statusLeft = nullptr;

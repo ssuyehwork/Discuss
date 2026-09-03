@@ -91,6 +91,8 @@ MainWindow::~MainWindow() {
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent), m_currentDataSource("nav") {
+    setWindowFlags(windowFlags() | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
+
     m_panelsInitialized = false;
 
     ToolTipOverlay::instance();
@@ -124,12 +126,34 @@ MainWindow::MainWindow(QWidget* parent)
 void MainWindow::initUi() {
     Q_ASSERT(m_hoverFilter && "事件过滤器必须在 initUi() 之前创建");
 
-    // 【归一化修复】窗口自身尺寸必须先于分栏状态确定，否则splitter会基于错误的临时宽度做比例分配
-    QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
-    if (!savedGeom.isEmpty()) {
-        restoreGeometry(savedGeom);
+    // 【归一化修复】：无论上次是否最大化，先给窗口赋予最大化前的常规尺寸（让 Windows 底层登记真实 rcNormalPosition）
+    QRect savedNormal = AppConfig::instance().getValue("MainWindow/NormalGeometry").toRect();
+    if (savedNormal.isValid() && savedNormal.width() >= 475 && savedNormal.height() >= 400) {
+        setGeometry(savedNormal);
+        m_lastNormalGeometry = savedNormal;
+        Logger::log(QString("[MainWindow] initUi applied savedNormal geometry: (%1,%2,%3x%4)")
+            .arg(savedNormal.x()).arg(savedNormal.y()).arg(savedNormal.width()).arg(savedNormal.height()));
     } else {
-        resize(1180, 800);
+        QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
+        if (!savedGeom.isEmpty()) {
+            restoreGeometry(savedGeom);
+            m_lastNormalGeometry = geometry();
+            Logger::log("[MainWindow] initUi restored legacy geometry");
+        } else {
+            resize(1180, 800);
+            m_lastNormalGeometry = geometry();
+            Logger::log("[MainWindow] initUi resized to default 1180x800");
+        }
+    }
+
+    bool wasMax = AppConfig::instance().getValue("MainWindow/WasMaximized", false).toBool();
+    if (wasMax) {
+        QTimer::singleShot(0, this, [this]() {
+            showMaximized();
+            Logger::log(QString("[MainWindow] singleShot(0) showMaximized restored state, current geometry=(%1,%2,%3x%4), normalGeometry=(%5,%6,%7x%8)")
+                .arg(geometry().x()).arg(geometry().y()).arg(geometry().width()).arg(geometry().height())
+                .arg(normalGeometry().x()).arg(normalGeometry().y()).arg(normalGeometry().width()).arg(normalGeometry().height()));
+        });
     }
 
     initToolbar();
@@ -171,6 +195,10 @@ void MainWindow::initUi() {
 
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
+    Logger::log(QString("[MainWindow] showEvent geometry=(%1,%2,%3x%4), normalGeometry=(%5,%6,%7x%8)")
+        .arg(geometry().x()).arg(geometry().y()).arg(geometry().width()).arg(geometry().height())
+        .arg(normalGeometry().x()).arg(normalGeometry().y()).arg(normalGeometry().width()).arg(normalGeometry().height()));
+
     if (!m_panelsInitialized) {
         m_panelsInitialized = true;
         QTimer::singleShot(0, [this]() {
@@ -630,6 +658,22 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     AppConfig::instance().setValue("MainWindow/LastPath", NavigationService::instance().currentUrl());
     AppConfig::instance().setValue("MainWindow/Geometry", saveGeometry());
 
+    // 1. 明确记录是否最大化
+    bool maxState = isMaximized();
+    AppConfig::instance().setValue("MainWindow/WasMaximized", maxState);
+
+    // 2. 核心：优先使用自行维护的 m_lastNormalGeometry，若无效则回退至 normalGeometry() 或 geometry()
+    QRect normalRect = m_lastNormalGeometry;
+    if (!normalRect.isValid() || normalRect.width() < 475 || normalRect.height() < 400) {
+        normalRect = maxState ? normalGeometry() : geometry();
+    }
+    if (normalRect.isValid() && normalRect.width() >= 475 && normalRect.height() >= 400) {
+        AppConfig::instance().setValue("MainWindow/NormalGeometry", normalRect);
+    }
+
+    Logger::log(QString("[MainWindow] closeEvent saved maxState=%1, normalRect=(%2,%3,%4x%5)")
+        .arg(maxState).arg(normalRect.x()).arg(normalRect.y()).arg(normalRect.width()).arg(normalRect.height()));
+
     if (m_panelLayoutManager) {
         m_panelLayoutManager->saveLayoutState();
     }
@@ -701,7 +745,17 @@ void MainWindow::updateNavBarResponsiveLayout() {
 
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
+    if (!isMaximized() && !isMinimized()) {
+        m_lastNormalGeometry = geometry();
+    }
     updateNavBarResponsiveLayout();
+}
+
+void MainWindow::moveEvent(QMoveEvent* event) {
+    QMainWindow::moveEvent(event);
+    if (!isMaximized() && !isMinimized()) {
+        m_lastNormalGeometry = geometry();
+    }
 }
 
 bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr* result) {
