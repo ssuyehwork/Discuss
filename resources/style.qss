@@ -1835,10 +1835,3 @@ QTreeView::item {
 QTreeView::item:alternate {
     background-color: #252526;
 }
-QTreeView::item:hover {
-    background-color: #2A2D2E;
-}
-QTreeView::item:selected {
-    background-color: rgba(55, 138, 221, 0.3);
-    color: #FFFFFF;
-}

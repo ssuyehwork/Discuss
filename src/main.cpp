@@ -138,12 +138,8 @@ int main(int argc, char *argv[]) {
     // -------------------------------------------------------------
     QuarkMeta::CoreController::initializeCoreComponents();
 
-    // -------------------------------------------------------------
-    // 重构 5：多段启动。一键为整个 QApplication 注入全局暗黑主题 QSS 样式
-    // -------------------------------------------------------------
-    QuarkMeta::ThemeManager::instance().initialize(&a);
-
     QuarkMeta::MainWindow w;
+    w.setStyleSheet(QuarkMeta::ThemeManager::instance().getGlobalStyleSheet());
     
     // 启动异步系统扫描与监控监听
     QuarkMeta::CoreController::instance().startSystem();

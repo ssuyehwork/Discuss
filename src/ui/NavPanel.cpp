@@ -96,6 +96,15 @@ void NavPanel::deferredInit() {
     m_model->appendRow(m_recentRootItem);
 
     updateRecentVisitedList();
+    if (m_treeView && m_recentRootItem->index().isValid()) {
+        m_treeView->expand(m_recentRootItem->index());
+    }
+
+    // 5. 新增：回收站 (固定主节点，在“最近访问”正下方)
+    QIcon trashIcon = UiHelper::getIcon("trash", QColor("#e81123"), 18);
+    QStandardItem* trashItem = new QStandardItem(trashIcon, "回收站");
+    trashItem->setData("trash_root", Qt::UserRole + 1);
+    m_model->appendRow(trashItem);
 }
 
 void NavPanel::setFocusHighlight(bool visible) {
@@ -121,15 +130,6 @@ void NavPanel::initUi() {
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
 
-    QPushButton* btnTrash = new QPushButton(header);
-    btnTrash->setFixedSize(24, 24);
-    btnTrash->setIcon(UiHelper::getIcon("trash", QColor("#e81123"), 16));
-    btnTrash->setProperty("tooltipText", "打开回收站");
-    btnTrash->installEventFilter(this);
-    btnTrash->setObjectName("NavTrashBtn");
-    connect(btnTrash, &QPushButton::clicked, this, &NavPanel::requestOpenTrash);
-    headerLayout->addWidget(btnTrash);
-
     m_mainLayout->addWidget(header);
 
     // --- 磁盘树 ---
@@ -143,6 +143,7 @@ void NavPanel::initUi() {
     }
     m_treeView->setAnimated(true);
     m_treeView->setIndentation(20);
+    m_treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setExpandsOnDoubleClick(true);
     m_treeView->setDragEnabled(true);
@@ -156,6 +157,19 @@ void NavPanel::initUi() {
     m_treeView->setModel(m_model);
 
     m_mainLayout->addWidget(m_treeView, 1);
+
+    // 使用 SvgIcons.h 统一图标体系动态生成展开/折叠箭头，而非依赖全局QSS里绑定的独立svg文件路径
+    // 注意：这里只处理箭头图标本身，绝不对 branch:selected / item:selected 做任何自定义，
+    // 选中态高亮完全交给Qt原生渲染（整行连续绘制），一旦自定义branch:selected会导致选中行被
+    // 拆成branch与item两块分别绘制，产生视觉断层补丁
+    QString arrowRight = UiHelper::getSvgTempFilePath("chevron_right", QColor("#378ADD"));
+    QString arrowDown = UiHelper::getSvgTempFilePath("chevron_down", QColor("#378ADD"));
+    QString treeStyle = QString(
+        "QTreeView::branch { width: 20px; }"
+        "QTreeView::branch:has-children:closed { image: url(\"%1\"); }"
+        "QTreeView::branch:has-children:open { image: url(\"%2\"); }"
+    ).arg(arrowRight, arrowDown);
+    m_treeView->setStyleSheet(treeStyle);
 
 
     // 信号连接
@@ -175,7 +189,7 @@ void NavPanel::updateRecentVisitedList() {
 
     for (const QString& path : history) {
         if (count >= 14) break;
-        if (path.isEmpty() || path == "computer://" || path.startsWith("分类: ")) continue;
+        if (path.isEmpty() || path == "computer://" || path.startsWith("trash") || path.startsWith("分类: ")) continue;
 
         QString normalizedKey = QDir::cleanPath(path).toLower();
         if (seenPaths.contains(normalizedKey)) continue;
@@ -201,10 +215,6 @@ void NavPanel::updateRecentVisitedList() {
         m_recentRootItem->appendRow(child);
         count++;
     }
-
-    if (m_treeView && m_recentRootItem->index().isValid()) {
-        m_treeView->expand(m_recentRootItem->index());
-    }
 }
 
 /**
@@ -216,9 +226,10 @@ void NavPanel::setRootPath(const QString& path) {
 }
 
 void NavPanel::selectPath(const QString& path) {
+    QString targetData = (path == "trash://" || path == "trash") ? "trash_root" : path;
     for (int i = 0; i < m_model->rowCount(); ++i) {
         QStandardItem* item = m_model->item(i);
-        if (item->data(Qt::UserRole + 1).toString() == path) {
+        if (item->data(Qt::UserRole + 1).toString() == targetData) {
             m_treeView->setCurrentIndex(item->index());
             m_treeView->setFocus();
             break;
@@ -231,7 +242,9 @@ void NavPanel::selectPath(const QString& path) {
  */
 void NavPanel::onTreeClicked(const QModelIndex& index) {
     QString path = index.data(Qt::UserRole + 1).toString();
-    if (!path.isEmpty() && path != "computer://" && path != "recent_root") {
+    if (path == "trash_root") {
+        emit requestOpenTrash();
+    } else if (!path.isEmpty() && path != "computer://" && path != "recent_root") {
         emit directorySelected(path);
     } else if (path == "computer://") {
         emit directorySelected("computer://");
