@@ -34,6 +34,7 @@ class SearchHistoryPanel;
 class AppShortcutController;
 class PanelMediator;
 class PanelLayoutManager;
+class FramelessWindowHelper;
 
 /**
  * @brief 主窗口类
@@ -58,12 +59,8 @@ protected:
     // 2026-04-11 按照用户要求：showEvent 是执行 ToolTipOverlay GPU 真实预热的唯一合法时机
     void showEvent(QShowEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
-    void moveEvent(QMoveEvent* event) override;
     bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
 
-    /**
-     * @brief 2026-05-24 按照用户要求：拦截 Windows 原生事件监听硬件变化
-     */
 private slots:
     void onPinToggled(bool checked);
 
@@ -146,7 +143,6 @@ private:
     bool m_isPinned = false;
     QString m_currentDataSource; // "category" or "nav"
     bool m_panelsInitialized = false; // 2026-04-12 状态锁：确保面板仅初始化一次
-    QRect m_lastNormalGeometry;
 
     // 底部状态栏
     QLabel* m_statusLeft = nullptr;
@@ -163,6 +159,7 @@ private:
     AppShortcutController* m_shortcutController = nullptr;
     PanelMediator* m_panelMediator = nullptr;
     PanelLayoutManager*       m_panelLayoutManager = nullptr;
+    FramelessWindowHelper*    m_framelessHelper = nullptr;
 
 };
 

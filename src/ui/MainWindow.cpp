@@ -36,11 +36,6 @@
 #include "TaskProgressToolBar.h"
 #include "../core/VolumeOnlineManager.h"
 
-#ifdef Q_OS_WIN
-#include <windows.h>
-#include <windowsx.h>
-#endif
-
 #include "SearchHistoryPanel.h"
 #include "SvgIcons.h"
 
@@ -60,6 +55,10 @@
 #include <QWidgetAction>
 #include <QGridLayout>
 #include <QTimer>
+#include <QToolButton>
+#include <QPushButton>
+#include <QLineEdit>
+#include <QSlider>
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "SvgIconRenderer.h"
@@ -75,7 +74,6 @@ using namespace QuarkMeta::Style;
 #include "FramelessDialog.h"
 #include "FramelessFileDialog.h"
 #include "../core/NavigationService.h"
-#include <QSlider>
 #include <QStyle>
 #include <QSignalBlocker>
 
@@ -106,7 +104,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     initUi();
 
-    FramelessWindowHelper::apply(this, m_titleBarWidget);
+    m_framelessHelper = FramelessWindowHelper::apply(this, m_titleBarWidget);
     if (m_isPinned) {
         FramelessWindowHelper::setAlwaysOnTop(this, true);
     }
@@ -126,34 +124,11 @@ MainWindow::MainWindow(QWidget* parent)
 void MainWindow::initUi() {
     Q_ASSERT(m_hoverFilter && "事件过滤器必须在 initUi() 之前创建");
 
-    // 【归一化修复】：无论上次是否最大化，先给窗口赋予最大化前的常规尺寸（让 Windows 底层登记真实 rcNormalPosition）
-    QRect savedNormal = AppConfig::instance().getValue("MainWindow/NormalGeometry").toRect();
-    if (savedNormal.isValid() && savedNormal.width() >= 475 && savedNormal.height() >= 400) {
-        setGeometry(savedNormal);
-        m_lastNormalGeometry = savedNormal;
-        Logger::log(QString("[MainWindow] initUi applied savedNormal geometry: (%1,%2,%3x%4)")
-            .arg(savedNormal.x()).arg(savedNormal.y()).arg(savedNormal.width()).arg(savedNormal.height()));
+    QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
+    if (!savedGeom.isEmpty()) {
+        restoreGeometry(savedGeom);
     } else {
-        QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
-        if (!savedGeom.isEmpty()) {
-            restoreGeometry(savedGeom);
-            m_lastNormalGeometry = geometry();
-            Logger::log("[MainWindow] initUi restored legacy geometry");
-        } else {
-            resize(1180, 800);
-            m_lastNormalGeometry = geometry();
-            Logger::log("[MainWindow] initUi resized to default 1180x800");
-        }
-    }
-
-    bool wasMax = AppConfig::instance().getValue("MainWindow/WasMaximized", false).toBool();
-    if (wasMax) {
-        QTimer::singleShot(0, this, [this]() {
-            showMaximized();
-            Logger::log(QString("[MainWindow] singleShot(0) showMaximized restored state, current geometry=(%1,%2,%3x%4), normalGeometry=(%5,%6,%7x%8)")
-                .arg(geometry().x()).arg(geometry().y()).arg(geometry().width()).arg(geometry().height())
-                .arg(normalGeometry().x()).arg(normalGeometry().y()).arg(normalGeometry().width()).arg(normalGeometry().height()));
-        });
+        resize(1180, 800);
     }
 
     initToolbar();
@@ -658,22 +633,6 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     AppConfig::instance().setValue("MainWindow/LastPath", NavigationService::instance().currentUrl());
     AppConfig::instance().setValue("MainWindow/Geometry", saveGeometry());
 
-    // 1. 明确记录是否最大化
-    bool maxState = isMaximized();
-    AppConfig::instance().setValue("MainWindow/WasMaximized", maxState);
-
-    // 2. 核心：优先使用自行维护的 m_lastNormalGeometry，若无效则回退至 normalGeometry() 或 geometry()
-    QRect normalRect = m_lastNormalGeometry;
-    if (!normalRect.isValid() || normalRect.width() < 475 || normalRect.height() < 400) {
-        normalRect = maxState ? normalGeometry() : geometry();
-    }
-    if (normalRect.isValid() && normalRect.width() >= 475 && normalRect.height() >= 400) {
-        AppConfig::instance().setValue("MainWindow/NormalGeometry", normalRect);
-    }
-
-    Logger::log(QString("[MainWindow] closeEvent saved maxState=%1, normalRect=(%2,%3,%4x%5)")
-        .arg(maxState).arg(normalRect.x()).arg(normalRect.y()).arg(normalRect.width()).arg(normalRect.height()));
-
     if (m_panelLayoutManager) {
         m_panelLayoutManager->saveLayoutState();
     }
@@ -745,55 +704,14 @@ void MainWindow::updateNavBarResponsiveLayout() {
 
 void MainWindow::resizeEvent(QResizeEvent* event) {
     QMainWindow::resizeEvent(event);
-    if (!isMaximized() && !isMinimized()) {
-        m_lastNormalGeometry = geometry();
-    }
     updateNavBarResponsiveLayout();
 }
 
-void MainWindow::moveEvent(QMoveEvent* event) {
-    QMainWindow::moveEvent(event);
-    if (!isMaximized() && !isMinimized()) {
-        m_lastNormalGeometry = geometry();
-    }
-}
-
 bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr* result) {
-    Q_UNUSED(eventType);
-#ifdef Q_OS_WIN
-    MSG* msg = static_cast<MSG*>(message);
-
-    if (msg->message == WM_NCCALCSIZE) {
-        // 告诉Windows：客户区 = 整个窗口矩形（不留标题栏/边框空间，因为我们自己画标题栏）
-        *result = 0;
+    if (m_framelessHelper && m_framelessHelper->handleNativeEvent(message, result)) {
         return true;
     }
-
-    if (msg->message == WM_GETMINMAXINFO) {
-        // 修正最大化时的尺寸，让它精确匹配"工作区"（即排除任务栏后的可用屏幕区域）
-        MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(msg->lParam);
-        HMONITOR monitor = MonitorFromWindow(msg->hwnd, MONITOR_DEFAULTTONEAREST);
-        if (monitor) {
-            MONITORINFO monitorInfo = {};
-            monitorInfo.cbSize = sizeof(MONITORINFO);
-            GetMonitorInfo(monitor, &monitorInfo);
-
-            RECT workArea = monitorInfo.rcWork;
-            RECT monitorArea = monitorInfo.rcMonitor;
-
-            mmi->ptMaxPosition.x = workArea.left - monitorArea.left;
-            mmi->ptMaxPosition.y = workArea.top - monitorArea.top;
-            mmi->ptMaxSize.x = workArea.right - workArea.left;
-            mmi->ptMaxSize.y = workArea.bottom - workArea.top;
-        }
-        *result = 0;
-        return true;
-    }
-#else
-    Q_UNUSED(message);
-    Q_UNUSED(result);
-#endif
-    return false;
+    return QMainWindow::nativeEvent(eventType, message, result);
 }
 
 } // namespace QuarkMeta
