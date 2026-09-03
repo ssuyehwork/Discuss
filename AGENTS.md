@@ -87,3 +87,72 @@ Your Pull Request or generated patch **will be rejected immediately** if it cont
 2. Direct calls to platform-specific Win32 APIs outside of `util/` or `FramelessWindowHelper`.
 3. Newly created `*Manager` or `*Helper` classes that duplicate functions of Qt standard libraries or existing services.
 4. "Quick-fix" patches that break existing geometry or layout preservation logic (e.g., in `MainWindow.cpp` or `PanelLayoutManager.cpp`).
+
+// ===================|===================
+
+---
+
+## 5. Mandatory Patch Accounting & Circuit Breaker (补丁计数与熔断机制)
+
+To prevent endless layered hotfixes, **EVERY** bug fix, behavioral tweak, or edge-case patch made by AI Agents MUST be explicitly logged at the very top of the modified file.
+
+### 5.1 File Header Patch Block Standard
+Whenever you modify an existing file to fix a bug or adjust behavior, you **MUST** update or create the `[AI-PATCH-LEDGER]` comment block at the top of the file:
+
+```cpp
+/**
+ * [AI-PATCH-LEDGER]
+ * Patch-Count: 3
+ * Max-Allowed-Patches: 5
+ * -------------------------------------------------------------
+ * Rev | Date (UTC)   | Agent / Author | Reason / Root Cause Fixed
+ * -------------------------------------------------------------
+ * #1  | 2026-05-10   | Jules          | Fix window geometry restoration under multi-monitor setup.
+ * #2  | 2026-05-18   | Jules          | Prevent taskbar overlap on maximized state (nativeEvent WM_NCCALCSIZE).
+ * #3  | 2026-06-01   | Jules          | Fix flicker when restoring from system tray.
+ * -------------------------------------------------------------
+ */
+ 
+// ===================|===================
+ 
+## 6. The Normalization Law (归一化铁律：排查不断层)
+
+Before touching any code related to Paths, Window States, Selection, or Navigation, you MUST adhere to `SYSTEM_CONTRACTS.md`.
+
+1. **Check SSOT (Single Source of Truth)**:
+   - Identify the UNIQUE authority for the state you are modifying.
+   - If a bug occurs because State A (e.g. in AddressBar) mismatches State B (e.g. in ContentPanel), **DO NOT sync them with a local hack**. Fix the binding to the central authority (`NavigationService`).
+
+2. **No Data Adulteration (数据形态一致性)**:
+   - Every file path passed through the system MUST be pre-normalized. If you receive an unnormalized path, trace it back to the system boundary (input point) and fix it at the root with `PathHelper::normalize()`. Never sanitize strings deep inside business logic.
+
+3. **No Timing Patches (严禁时序补丁)**:
+   - PRs containing arbitrary `QTimer::singleShot(50/100/200, ...)` to bypass race conditions or initialization order bugs will be **IMMEDIATELY REJECTED**. Refactor the signal chain or follow the lifecycle contract.
+   
+   // ===================|===================
+   
+   ---
+
+## 7. Naming Conventions & Lexicon Contract (命名与目录归一化铁律)
+
+Semantic ambiguity in file names causes Agent amnesia and duplicate code. You MUST strictly adhere to the project's naming lexicon and directory structure.
+
+### 7.1 Mandatory Suffixes & Locations
+- **Dialogs**: MUST reside in `src/ui/dialogs/` and end with `*Dialog.h/.cpp` (MUST inherit `FramelessDialog`).
+- **Data Access**: MUST end with `*Repo` (e.g., `TrashRepo`, NOT `TrashRepository` or `TrashDao`).
+- **Pure Helpers**: MUST reside in `src/util/` and end with `*Helper.h/.cpp` (MUST only contain stateless/static methods).
+- **Core Algorithms**: Long-running or heavy stateless computation units end with `*Engine`.
+- **Business Orchestrators**: Singleton stateful business providers end with `*Service`.
+
+### 7.2 Domain Lexicon (No Synonyms Allowed!)
+DO NOT invent synonymous names. Use ONLY the established project domain words:
+- Use `Trash` (FORBIDDEN: `RecycleBin`, `Garbage`, `Discard`)
+- Use `Duplicate` (FORBIDDEN: `Clone`, `SameFile`, `Identical`)
+- Use `Thumbnail` (FORBIDDEN: `PreviewIcon`, `Snapshot`, `MiniImage`)
+- Use `Extension` (FORBIDDEN: `Suffix`, `ExtName`, `Postfix`)
+
+### 7.3 Rejection Warning
+Any PR that introduces files with ambiguous names (e.g., `MyUtils.cpp`, `CommonManager.h`, `DataHandler.cpp`) or mismatches the directory topology will be **AUTOMATICALLY REJECTED**.
+
+// ===================|===================
+
