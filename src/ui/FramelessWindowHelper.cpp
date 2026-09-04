@@ -213,7 +213,12 @@ bool FramelessWindowHelper::eventFilter(QObject* obj, QEvent* event) {
             return true;
         } else if (!m_window->isMaximized()) {
             QPoint windowLocalPos = m_window->mapFromGlobal(me->globalPosition().toPoint());
-            updateCursorShape(getResizeDirection(windowLocalPos));
+            int dir = getResizeDirection(windowLocalPos);
+            if (dir != 0) {
+                updateCursorShape(dir);
+            } else if (m_window->cursor().shape() != Qt::ArrowCursor) {
+                m_window->unsetCursor();
+            }
         }
     } else if (type == QEvent::MouseButtonRelease) {
         if (m_isResizing) {

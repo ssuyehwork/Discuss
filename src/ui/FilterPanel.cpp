@@ -128,6 +128,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     topL->addWidget(m_titleLabel);
 
     m_btnClearAll = new QPushButton(topBar);
+    m_btnClearAll->setObjectName("FilterHeaderBtn");
     m_btnClearAll->setFixedSize(24, 24);
     m_btnClearAll->setIcon(UiHelper::getIcon("reset_filter", QColor("#B0B0B0")));
     m_btnClearAll->setIconSize(QSize(16, 16));
@@ -135,13 +136,10 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     m_btnClearAll->setCursor(Qt::PointingHandCursor);
     m_btnClearAll->setProperty("tooltipText", "重置所有筛选条件");
     m_btnClearAll->installEventFilter(this);
-    m_btnClearAll->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-        "QPushButton:hover { background: #3E3E42; }"
-        "QPushButton:pressed { background: #4E4E52; }");
     connect(m_btnClearAll, &QPushButton::clicked, this, [this]() { clearAllFilters(true); });
 
     m_btnPin = new QPushButton(topBar);
+    m_btnPin->setObjectName("FilterHeaderBtn");
     m_btnPin->setFixedSize(24, 24);
     m_btnPin->setIcon(UiHelper::getIcon("pin_tilted", QColor("#B0B0B0")));
     m_btnPin->setIconSize(QSize(16, 16));
@@ -149,10 +147,6 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     m_btnPin->setCursor(Qt::PointingHandCursor);
     m_btnPin->setProperty("tooltipText", "锁定当前筛选条件");
     m_btnPin->installEventFilter(this);
-    m_btnPin->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-        "QPushButton:hover { background: #3E3E42; }"
-        "QPushButton:pressed { background: #4E4E52; }");
     connect(m_btnPin, &QPushButton::clicked, this, [this]() {
         m_isFilterPinned = !m_isFilterPinned;
         if (m_isFilterPinned) {
@@ -165,15 +159,12 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     });
 
     m_btnToggleGroups = new QPushButton(topBar);
+    m_btnToggleGroups->setObjectName("FilterHeaderBtn");
     m_btnToggleGroups->setFixedSize(24, 24);
     m_btnToggleGroups->setIconSize(QSize(16, 16));
     m_btnToggleGroups->setFlat(true);
     m_btnToggleGroups->setCursor(Qt::PointingHandCursor);
     m_btnToggleGroups->installEventFilter(this);
-    m_btnToggleGroups->setStyleSheet(
-        "QPushButton { background: transparent; border: none; border-radius: 4px; }"
-        "QPushButton:hover { background: #3E3E42; }"
-        "QPushButton:pressed { background: #4E4E52; }");
     connect(m_btnToggleGroups, &QPushButton::clicked, this, &FilterPanel::onToggleAllGroupsClicked);
 
     topL->addStretch();
@@ -468,7 +459,7 @@ void FilterPanel::rebuildGroups() {
     }
 
     // ── 2. 评级 ──────────────────────────────────────────────
-    if (!m_ratingCounts.isEmpty()) {
+    {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("评级", gl);
         for (int r : {0, 1, 2, 3, 4, 5}) {
@@ -502,49 +493,37 @@ void FilterPanel::rebuildGroups() {
             {"灰色",   "#5F5E5A", QColor("#5F5E5A")}
         };
 
-        bool hasAnyColor = false;
+        QVBoxLayout* gl = nullptr;
+        QHBoxLayout* hdrLayout = nullptr;
+        QWidget* g = buildGroup("颜色标记", gl, &hdrLayout);
+
         for (const auto& item : colorsList) {
             int cnt = m_colorCounts.value(item.hex, m_colorCounts.value(item.name, 0));
             bool isChecked = (currentSt.colors.contains(item.name) || currentSt.colors.contains(item.hex));
-            if (cnt > 0 || isChecked) {
-                hasAnyColor = true;
-                break;
+
+            if (cnt == 0 && !isChecked) {
+                continue;
             }
-        }
 
-        if (hasAnyColor) {
-            QVBoxLayout* gl = nullptr;
-            QHBoxLayout* hdrLayout = nullptr;
-            QWidget* g = buildGroup("颜色标记", gl, &hdrLayout);
-
-            for (const auto& item : colorsList) {
-                int cnt = m_colorCounts.value(item.hex, m_colorCounts.value(item.name, 0));
-                bool isChecked = (currentSt.colors.contains(item.name) || currentSt.colors.contains(item.hex));
-
-                if (cnt == 0 && !isChecked) {
-                    continue;
+            QCheckBox* cb = addFilterRow(gl, item.name, cnt, item.color);
+            cb->setChecked(isChecked);
+            connect(cb, &QCheckBox::checkStateChanged, this, [this, name = item.name, hex = item.hex](Qt::CheckState state) {
+                FilterState st = m_filterModel->state();
+                if (state == Qt::Checked) {
+                    if (!st.colors.contains(name)) st.colors.append(name);
+                } else {
+                    st.colors.removeAll(name);
+                    st.colors.removeAll(hex);
                 }
-
-                QCheckBox* cb = addFilterRow(gl, item.name, cnt, item.color);
-                cb->setChecked(isChecked);
-                connect(cb, &QCheckBox::checkStateChanged, this, [this, name = item.name, hex = item.hex](Qt::CheckState state) {
-                    FilterState st = m_filterModel->state();
-                    if (state == Qt::Checked) {
-                        if (!st.colors.contains(name)) st.colors.append(name);
-                    } else {
-                        st.colors.removeAll(name);
-                        st.colors.removeAll(hex);
-                    }
-                    m_filterModel->setState(st);
-                });
-            }
-
-            m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+                m_filterModel->setState(st);
+            });
         }
+
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
     // ── 4. 文件类型 ──────────────────────────────────────────
-    if (!m_typeCounts.isEmpty() || !currentSt.typeFilterText.isEmpty() || m_emptyFolderCount > 0) {
+    {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("文件类型", gl);
 
@@ -559,17 +538,6 @@ void FilterPanel::rebuildGroups() {
         m_editType->setText(currentSt.typeFilterText);
         m_editType->setObjectName("FilterSearchEdit");
         m_editType->setFixedHeight(22);
-        m_editType->setStyleSheet(
-            "QLineEdit#FilterSearchEdit {"
-            "  background: #2D2D2D;"
-            "  color: #CCCCCC;"
-            "  border: 1px solid #444444;"
-            "  border-radius: 4px;"
-            "  padding: 0px 6px;"
-            "  font-size: 11px;"
-            "}"
-            "QLineEdit#FilterSearchEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
-        );
         m_editType->installEventFilter(this);
         connect(m_editType, &QLineEdit::returnPressed, this, [this]() {
             FilterState st = m_filterModel->state();
@@ -643,7 +611,7 @@ void FilterPanel::rebuildGroups() {
     }
 
     // ── 5. 创建日期 ──────────────────────────
-    if (!m_createDateCounts.isEmpty() || !currentSt.createDateFilterText.isEmpty()) {
+    {
         QVBoxLayout* gl = nullptr;
         QHBoxLayout* hdrLayout = nullptr;
         QWidget* g = buildGroup("创建日期", gl, &hdrLayout);
@@ -674,17 +642,6 @@ void FilterPanel::rebuildGroups() {
         m_editCreateDate->setText(currentSt.createDateFilterText);
         m_editCreateDate->setObjectName("FilterSearchEdit");
         m_editCreateDate->setFixedHeight(22);
-        m_editCreateDate->setStyleSheet(
-            "QLineEdit#FilterSearchEdit {"
-            "  background: #2D2D2D;"
-            "  color: #CCCCCC;"
-            "  border: 1px solid #444444;"
-            "  border-radius: 4px;"
-            "  padding: 0px 6px;"
-            "  font-size: 11px;"
-            "}"
-            "QLineEdit#FilterSearchEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
-        );
         m_editCreateDate->installEventFilter(this);
         connect(m_editCreateDate, &QLineEdit::returnPressed, this, [this]() {
             FilterState st = m_filterModel->state();
@@ -707,7 +664,7 @@ void FilterPanel::rebuildGroups() {
     }
 
     // ── 6. 修改日期 ──────────────────────────
-    if (!m_modifyDateCounts.isEmpty() || !currentSt.modifyDateFilterText.isEmpty()) {
+    {
         QVBoxLayout* gl = nullptr;
         QHBoxLayout* hdrLayout = nullptr;
         QWidget* g = buildGroup("修改日期", gl, &hdrLayout);
@@ -738,17 +695,6 @@ void FilterPanel::rebuildGroups() {
         m_editModifyDate->setText(currentSt.modifyDateFilterText);
         m_editModifyDate->setObjectName("FilterSearchEdit");
         m_editModifyDate->setFixedHeight(22);
-        m_editModifyDate->setStyleSheet(
-            "QLineEdit#FilterSearchEdit {"
-            "  background: #2D2D2D;"
-            "  color: #CCCCCC;"
-            "  border: 1px solid #444444;"
-            "  border-radius: 4px;"
-            "  padding: 0px 6px;"
-            "  font-size: 11px;"
-            "}"
-            "QLineEdit#FilterSearchEdit:focus { border-color: #378ADD; color: #FFFFFF; }"
-        );
         m_editModifyDate->installEventFilter(this);
         connect(m_editModifyDate, &QLineEdit::returnPressed, this, [this]() {
             FilterState st = m_filterModel->state();
@@ -857,23 +803,16 @@ void FilterPanel::rebuildGroups() {
         unitCombo->addItems({"KB", "MB", "GB"});
         unitCombo->setCurrentIndex(1);
 
-        auto sizeEditStyle = "QLineEdit { background: #2D2D2D; color: #EEE; border: 1px solid #444; border-radius: 4px; padding: 2px 4px; font-size: 11px; }";
-        minEdit->setStyleSheet(sizeEditStyle);
-        maxEdit->setStyleSheet(sizeEditStyle);
+        minEdit->setObjectName("FilterSizeEdit");
+        maxEdit->setObjectName("FilterSizeEdit");
+        unitCombo->setObjectName("FilterUnitCombo");
         minEdit->setPlaceholderText("最小");
         maxEdit->setPlaceholderText("最大");
         minEdit->setFixedHeight(24);
         maxEdit->setFixedHeight(24);
 
-        QString arrowPath = UiHelper::getSvgTempFilePath("menu_triangle", QColor("#AAAAAA"));
         unitCombo->setFixedHeight(24);
         unitCombo->setFixedWidth(52); 
-        unitCombo->setStyleSheet(QString(
-            "QComboBox { background: #2D2D2D; color: #EEEEEE; border: 1px solid #444444; border-radius: 4px; font-size: 11px; padding-left: 6px; }"
-            "QComboBox::drop-down { border: none; width: 18px; }"
-            "QComboBox::down-arrow { image: url(%1); width: 10px; height: 10px; }"
-            "QComboBox QAbstractItemView { background-color: #252526; color: #EEEEEE; selection-background-color: #3E3E42; border: 1px solid #444444; outline: none; }"
-        ).arg(arrowPath));
 
         hs->addWidget(minEdit);
         QLabel* sep = new QLabel("-", g); sep->setObjectName("FilterSepLabel"); hs->addWidget(sep);
