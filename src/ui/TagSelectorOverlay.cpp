@@ -28,11 +28,16 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
     m_searchEdit->installEventFilter(this);
     m_tagGridWidget->installEventFilter(this);
 
-    // 🚨 无论在任何时候任何情况下，一旦失去焦点或外部发生点击，立即关闭浮层
     qApp->installEventFilter(this);
     connect(qApp, &QApplication::focusChanged, this, [this](QWidget* old, QWidget* now) {
         Q_UNUSED(old);
-        if (!m_isClosing && isVisible() && now && now != this && !this->isAncestorOf(now)) {
+        if (m_isClosing || !isVisible()) return;
+
+        if (now && (now == this || this->isAncestorOf(now))) {
+            return;
+        }
+
+        if (now && !this->isAncestorOf(now)) {
             closeOverlay();
         }
     });
@@ -219,14 +224,13 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
     QString cleanTag = tag.trimmed();
     if (cleanTag.isEmpty()) return;
 
-    // 写入 global.db 词库
-    TagLexiconService::instance().addTag(cleanTag);
-
     if (m_selectedTags.contains(cleanTag)) {
         m_selectedTags.removeAll(cleanTag);
     } else {
+        TagLexiconService::instance().addTag(cleanTag);
         m_selectedTags.append(cleanTag);
     }
+
     updateSelectionHighlight();
     emit selectionChanged(m_selectedTags);
 }
@@ -240,26 +244,44 @@ void TagSelectorOverlay::updateSelectionHighlight() {
         bool isFocused = (i == m_currentTagIndex);
 
         btn->setText(tag);
+
+        // ✅ 选中显示对勾(check)，未选中显示时钟(clock)
         if (isSelected) {
             btn->setIcon(UiHelper::getIcon("check", QColor("#FFFFFF"), 12));
         } else {
-            btn->setIcon(UiHelper::getIcon("tag_pill", QColor("#888888"), 12));
+            btn->setIcon(UiHelper::getIcon("clock", QColor("#888888"), 12));
         }
         btn->setIconSize(QSize(12, 12));
 
         QString style;
         if (isSelected) {
-            style = "QPushButton { background-color: #1C97EA; color: #FFF; border: 1px solid #1C97EA; border-radius: 4px; padding: 0 8px; font-size: 11px; text-align: left; }";
+            style = "QPushButton {"
+                    "  background-color: rgba(28, 151, 234, 0.35);"
+                    "  color: #FFFFFF;"
+                    "  border: 1px solid #1C97EA;"
+                    "  border-radius: 4px;"
+                    "  padding: 0 8px;"
+                    "  font-size: 11px;"
+                    "  text-align: left;"
+                    "}";
         } else {
-            style = "QPushButton { background-color: transparent; color: #BBB; border: 1px solid #333; border-radius: 4px; padding: 0 8px; font-size: 11px; text-align: left; }";
+            style = "QPushButton {"
+                    "  background-color: transparent;"
+                    "  color: #BBBBBB;"
+                    "  border: 1px solid #333333;"
+                    "  border-radius: 4px;"
+                    "  padding: 0 8px;"
+                    "  font-size: 11px;"
+                    "  text-align: left;"
+                    "}";
         }
 
         if (isFocused) {
-            style += " QPushButton { border: 1px solid #1C97EA; color: #FFF; background-color: #2D2D30; }";
-        } else {
-            style += " QPushButton:hover { border-color: #1ABC9C; color: #FFF; }";
+            style += " QPushButton { border: 1px solid #1C97EA; color: #FFFFFF; }";
+        } else if (!isSelected) {
+            style += " QPushButton:hover { border-color: #1ABC9C; color: #FFFFFF; }";
         }
-        btn->setObjectName("TagSelectorBtn");
+        btn->setStyleSheet(style);
     }
 }
 
