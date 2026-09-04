@@ -51,6 +51,7 @@ QSplitter::handle:horizontal:hover {
 #SidebarContainer, #FavoriteContainer, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
     background-color: #1E1E1E;
     border: 1px solid #333333;
+    border-top: none;
     border-radius: 0px;
     color: #EEEEEE;
     margin: 0px;
@@ -63,6 +64,10 @@ QSplitter::handle:horizontal:hover {
     border-bottom: 1px solid #333333;
     border-top-left-radius: 0px;
     border-top-right-radius: 0px;
+}
+
+#FilterContainer QWidget#ContainerHeader {
+    border-bottom: none;
 }
 
 /* 批次二：顶层窗口与导航栏外联选择器 */

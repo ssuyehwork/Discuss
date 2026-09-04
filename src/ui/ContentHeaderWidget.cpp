@@ -8,7 +8,7 @@ ContentHeaderWidget::ContentHeaderWidget(QWidget* parent)
     : QWidget(parent) {
     setObjectName("ContentHeaderWidget");
     setAttribute(Qt::WA_StyledBackground, true);
-    setFixedHeight(28);
+    setFixedHeight(32);
     initUi();
 }
 
