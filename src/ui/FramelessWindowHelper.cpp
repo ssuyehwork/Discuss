@@ -10,6 +10,7 @@
 #include <QAbstractButton>
 #include <QComboBox>
 #include <QSpinBox>
+#include <QMouseEvent>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -30,9 +31,20 @@ FramelessWindowHelper::FramelessWindowHelper(QWidget* window, QWidget* titleBar)
     if (m_window->windowFlags() != requiredFlags) {
         m_window->setWindowFlags(requiredFlags);
     }
+
+    if (m_window) {
+        m_window->setMouseTracking(true);
+        if (QCoreApplication::instance()) {
+            QCoreApplication::instance()->installEventFilter(this);
+        }
+    }
 }
 
-FramelessWindowHelper::~FramelessWindowHelper() = default;
+FramelessWindowHelper::~FramelessWindowHelper() {
+    if (QCoreApplication::instance()) {
+        QCoreApplication::instance()->removeEventFilter(this);
+    }
+}
 
 bool FramelessWindowHelper::isInteractiveWidget(QWidget* child, QWidget* titleBar, QWidget* window) {
     QWidget* wWidget = child;
@@ -101,42 +113,7 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
     if (msg->message == WM_NCHITTEST) {
         POINT screenPt = { GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam) };
 
-        if (!m_window->isMaximized() && !m_window->isFullScreen()) {
-            LONG dpi = 96;
-            HMODULE user32 = GetModuleHandleW(L"user32.dll");
-            if (user32) {
-                using GetDpiForWindowFunc = UINT(WINAPI*)(HWND);
-                auto pGetDpiForWindow = reinterpret_cast<GetDpiForWindowFunc>(GetProcAddress(user32, "GetDpiForWindow"));
-                if (pGetDpiForWindow) {
-                    dpi = static_cast<LONG>(pGetDpiForWindow(msg->hwnd));
-                }
-            }
-            const int margin = MulDiv(kBaseResizeMargin, dpi, 96);
-
-            RECT wr;
-            if (GetWindowRect(msg->hwnd, &wr)) {
-                int x = screenPt.x - wr.left;
-                int y = screenPt.y - wr.top;
-                int w = wr.right - wr.left;
-                int h = wr.bottom - wr.top;
-
-                bool left   = x >= 0 && x < margin;
-                bool right  = x >= w - margin && x < w;
-                bool top    = y >= 0 && y < margin;
-                bool bottom = y >= h - margin && y < h;
-
-                if (top && left)     { *result = HTTOPLEFT;     return true; }
-                if (top && right)    { *result = HTTOPRIGHT;    return true; }
-                if (bottom && left)  { *result = HTBOTTOMLEFT;  return true; }
-                if (bottom && right) { *result = HTBOTTOMRIGHT; return true; }
-                if (left)            { *result = HTLEFT;        return true; }
-                if (right)           { *result = HTRIGHT;       return true; }
-                if (top)             { *result = HTTOP;         return true; }
-                if (bottom)          { *result = HTBOTTOM;      return true; }
-            }
-        }
-
-        if (m_titleBar) {
+        if (m_titleBar && !m_window->isMaximized() && !m_window->isFullScreen()) {
             QPoint localPt = m_window->mapFromGlobal(QPoint(screenPt.x, screenPt.y));
             QWidget* childAtPt = m_window->childAt(localPt);
             bool inTitleBar = m_titleBar->rect().contains(m_titleBar->mapFromGlobal(QPoint(screenPt.x, screenPt.y)));
@@ -145,59 +122,6 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
 
             if (inTitleBar && !isInteractive) {
                 *result = HTCAPTION;
-                return true;
-            }
-        }
-    }
-
-    if (msg->message == WM_SETCURSOR) {
-        WORD hitTest = LOWORD(msg->lParam);
-        HCURSOR hCursor = nullptr;
-
-        switch (hitTest) {
-        case HTLEFT:
-        case HTRIGHT:
-            hCursor = ::LoadCursor(NULL, IDC_SIZEWE);
-            break;
-        case HTTOP:
-        case HTBOTTOM:
-            hCursor = ::LoadCursor(NULL, IDC_SIZENS);
-            break;
-        case HTTOPLEFT:
-        case HTBOTTOMRIGHT:
-            hCursor = ::LoadCursor(NULL, IDC_SIZENWSE);
-            break;
-        case HTTOPRIGHT:
-        case HTBOTTOMLEFT:
-            hCursor = ::LoadCursor(NULL, IDC_SIZENESW);
-            break;
-        }
-
-        if (hCursor) {
-            ::SetCursor(hCursor);
-            *result = TRUE;
-            return true;
-        }
-    }
-
-    if (msg->message == WM_NCLBUTTONDOWN) {
-        WPARAM hitTest = msg->wParam;
-        if (hitTest >= HTLEFT && hitTest <= HTBOTTOMRIGHT) {
-            int dir = 0;
-            switch (hitTest) {
-            case HTLEFT:        dir = 1; break; // WMSZ_LEFT
-            case HTRIGHT:       dir = 2; break; // WMSZ_RIGHT
-            case HTTOP:         dir = 3; break; // WMSZ_TOP
-            case HTTOPLEFT:     dir = 4; break; // WMSZ_TOPLEFT
-            case HTTOPRIGHT:    dir = 5; break; // WMSZ_TOPRIGHT
-            case HTBOTTOM:      dir = 6; break; // WMSZ_BOTTOM
-            case HTBOTTOMLEFT:  dir = 7; break; // WMSZ_BOTTOMLEFT
-            case HTBOTTOMRIGHT: dir = 8; break; // WMSZ_BOTTOMRIGHT
-            }
-            if (dir > 0) {
-                ::ReleaseCapture();
-                ::SendMessageW(msg->hwnd, WM_SYSCOMMAND, 0xF000 | dir, msg->lParam);
-                *result = 0;
                 return true;
             }
         }
@@ -241,6 +165,86 @@ void FramelessWindowHelper::setAlwaysOnTop(QWidget* window, bool onTop) {
 bool FramelessWindowHelper::isAlwaysOnTop(QWidget* window) {
     if (!window) return false;
     return (window->windowFlags() & Qt::WindowStaysOnTopHint) != 0;
+}
+
+bool FramelessWindowHelper::eventFilter(QObject* obj, QEvent* event) {
+    if (!m_window || !m_window->isVisible()) return false;
+
+    QWidget* widget = qobject_cast<QWidget*>(obj);
+    if (!widget || (widget != m_window && !m_window->isAncestorOf(widget))) {
+        return false;
+    }
+
+    QEvent::Type type = event->type();
+
+    if (type == QEvent::MouseButtonPress) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (me->button() == Qt::LeftButton && !m_window->isMaximized()) {
+            QPoint windowLocalPos = m_window->mapFromGlobal(me->globalPosition().toPoint());
+            m_resizeDir = getResizeDirection(windowLocalPos);
+            if (m_resizeDir != 0) {
+                m_isResizing = true;
+                m_resizeStartGlobalPos = me->globalPosition().toPoint();
+                m_resizeStartGeometry = m_window->geometry();
+                return true;
+            }
+        }
+    } else if (type == QEvent::MouseMove) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (m_isResizing) {
+            QPoint delta = me->globalPosition().toPoint() - m_resizeStartGlobalPos;
+            QRect newGeom = m_resizeStartGeometry;
+            if (m_resizeDir & 1) newGeom.setLeft(m_resizeStartGeometry.left() + delta.x());
+            if (m_resizeDir & 2) newGeom.setRight(m_resizeStartGeometry.right() + delta.x());
+            if (m_resizeDir & 4) newGeom.setTop(m_resizeStartGeometry.top() + delta.y());
+            if (m_resizeDir & 8) newGeom.setBottom(m_resizeStartGeometry.bottom() + delta.y());
+
+            int minW = m_window->minimumWidth();
+            int minH = m_window->minimumHeight();
+            if (newGeom.width() < minW) {
+                if (m_resizeDir & 1) newGeom.setLeft(newGeom.right() - minW + 1);
+                else newGeom.setRight(newGeom.left() + minW - 1);
+            }
+            if (newGeom.height() < minH) {
+                if (m_resizeDir & 4) newGeom.setTop(newGeom.bottom() - minH + 1);
+                else newGeom.setBottom(newGeom.top() + minH - 1);
+            }
+            m_window->setGeometry(newGeom);
+            return true;
+        } else if (!m_window->isMaximized()) {
+            QPoint windowLocalPos = m_window->mapFromGlobal(me->globalPosition().toPoint());
+            updateCursorShape(getResizeDirection(windowLocalPos));
+        }
+    } else if (type == QEvent::MouseButtonRelease) {
+        if (m_isResizing) {
+            m_isResizing = false;
+            m_resizeDir = 0;
+            m_window->setCursor(Qt::ArrowCursor);
+            return true;
+        }
+    }
+
+    return QObject::eventFilter(obj, event);
+}
+
+int FramelessWindowHelper::getResizeDirection(const QPoint& pos) const {
+    if (!m_window) return 0;
+    const int margin = kBaseResizeMargin;
+    int dir = 0;
+    if (pos.x() <= margin) dir |= 1;
+    if (pos.x() >= m_window->width() - margin) dir |= 2;
+    if (pos.y() <= margin) dir |= 4;
+    if (pos.y() >= m_window->height() - margin) dir |= 8;
+    return dir;
+}
+
+void FramelessWindowHelper::updateCursorShape(int dir) {
+    if (!m_window) return;
+    if (dir == (1 | 4) || dir == (2 | 8)) m_window->setCursor(Qt::SizeFDiagCursor);
+    else if (dir == (2 | 4) || dir == (1 | 8)) m_window->setCursor(Qt::SizeBDiagCursor);
+    else if (dir == 1 || dir == 2) m_window->setCursor(Qt::SizeHorCursor);
+    else if (dir == 4 || dir == 8) m_window->setCursor(Qt::SizeVerCursor);
+    else m_window->setCursor(Qt::ArrowCursor);
 }
 
 } // namespace QuarkMeta

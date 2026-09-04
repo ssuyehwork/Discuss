@@ -370,20 +370,16 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     QWidget* topWidget = this->topLevelWidget();
     m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), topWidget);
 
-    QPoint globalPos = targetAnchor->mapToGlobal(QPoint(0, targetAnchor->height() + 4));
-    QPoint parentPos = topWidget ? topWidget->mapFromGlobal(globalPos) : globalPos;
-
-    QScreen* screen = QApplication::screenAt(globalPos);
-    if (!screen) screen = QApplication::primaryScreen();
-    if (screen) {
+    if (topWidget) {
+        int overlayW = m_tagSelectorOverlay->width();
         int overlayH = m_tagSelectorOverlay->height();
-        int screenBottom = screen->availableGeometry().bottom();
-        if (globalPos.y() + overlayH > screenBottom) {
-            parentPos.setY(parentPos.y() - overlayH - targetAnchor->height() - 8);
-        }
+        int centerX = (topWidget->width() - overlayW) / 2;
+        int centerY = (topWidget->height() - overlayH) / 2;
+        m_tagSelectorOverlay->move(centerX, centerY);
+    } else {
+        m_tagSelectorOverlay->move(targetAnchor->mapToGlobal(QPoint(0, targetAnchor->height() + 4)));
     }
 
-    m_tagSelectorOverlay->move(parentPos);
     m_tagSelectorOverlay->show();
 
     connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& newSelectedTags) {
