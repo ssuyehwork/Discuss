@@ -8,6 +8,7 @@ namespace QuarkMeta {
 DriveBarWidget::DriveBarWidget(QWidget* parent)
     : QWidget(parent) {
     setObjectName("DriveBar");
+    setAttribute(Qt::WA_StyledBackground, true);
     setFixedHeight(42);
     initUi();
 }

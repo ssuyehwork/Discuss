@@ -158,19 +158,13 @@ void NavPanel::initUi() {
 
     m_mainLayout->addWidget(m_treeView, 1);
 
-    // 使用 SvgIcons.h 统一图标体系动态生成展开/折叠箭头，而非依赖全局QSS里绑定的独立svg文件路径
-    // 注意：这里只处理箭头图标本身，绝不对 branch:selected / item:selected 做任何自定义，
-    // 选中态高亮完全交给Qt原生渲染（整行连续绘制），一旦自定义branch:selected会导致选中行被
-    // 拆成branch与item两块分别绘制，产生视觉断层补丁
     QString arrowRight = UiHelper::getSvgTempFilePath("chevron_right", QColor("#378ADD"));
     QString arrowDown = UiHelper::getSvgTempFilePath("chevron_down", QColor("#378ADD"));
     QString treeStyle = QString(
-        "QTreeView::branch { width: 20px; }"
-        "QTreeView::branch:has-children:closed { image: url(\"%1\"); }"
-        "QTreeView::branch:has-children:open { image: url(\"%2\"); }"
+        "QTreeView#NavTreeView::branch:has-children:closed { image: url(\"%1\"); }"
+        "QTreeView#NavTreeView::branch:has-children:open { image: url(\"%2\"); }"
     ).arg(arrowRight, arrowDown);
     m_treeView->setStyleSheet(treeStyle);
-
 
     // 信号连接
     connect(m_treeView, &QTreeView::expanded, this, &NavPanel::onItemExpanded);

@@ -15,6 +15,7 @@ constexpr int kLayoutEdgeMargin = 5;
 NavBarWidget::NavBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
     : QWidget(parent) {
     setObjectName("NavBar");
+    setAttribute(Qt::WA_StyledBackground, true);
     setFixedHeight(42);
     initUi(hoverFilter);
 }

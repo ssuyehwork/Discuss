@@ -111,12 +111,6 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     QWidget* topBar = new QWidget(this);
     topBar->setObjectName("ContainerHeader");
     topBar->setFixedHeight(32);
-    topBar->setStyleSheet(
-        "QWidget#ContainerHeader {"
-        "  background-color: #252526;"
-        "  border-bottom: none;"
-        "}"
-    );
     QHBoxLayout* topL = new QHBoxLayout(topBar);
     topL->setContentsMargins(15, 0, 5, 0);
     topL->setSpacing(5);
@@ -125,6 +119,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     topL->addWidget(m_iconLabel);
 
     m_titleLabel = new QLabel("筛选", topBar);
+    m_titleLabel->setObjectName("FilterTitleLabel");
     topL->addWidget(m_titleLabel);
 
     m_btnClearAll = new QPushButton(topBar);
@@ -176,13 +171,10 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     updateHeaderStatus();
 
     m_scrollArea = new QScrollArea(this);
+    m_scrollArea->setObjectName("FilterScrollArea");
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setStyleSheet(
-        "QScrollArea { border: none; background: transparent; }"
-        "QScrollBar:vertical { border-left: 1px solid #333333; }"
-    );
 
     m_container = new QWidget(m_scrollArea);
     m_container->setObjectName("FilterContainerWidget");
@@ -1012,8 +1004,9 @@ QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, 
 
     if (dotColor.isValid() && dotColor != Qt::transparent) {
         QLabel* dot = new QLabel(row);
+        dot->setObjectName("FilterItemDot");
         dot->setFixedSize(10, 10);
-        dot->setStyleSheet(QString("background: %1; border-radius: 5px;").arg(dotColor.name()));
+        dot->setStyleSheet(QString("background: %1;").arg(dotColor.name()));
         rl->addWidget(dot);
     }
 
@@ -1061,7 +1054,7 @@ void FilterPanel::updateHeaderStatus() {
     
     QColor brandYellow = QColor("#f1c40f");
     m_iconLabel->setPixmap(UiHelper::getIcon("filter_funnel_outline", brandYellow, 18).pixmap(18, 18));
-    m_titleLabel->setStyleSheet(QString("font-size: 13px; font-weight: bold; color: %1; background: transparent; border: none;").arg(brandYellow.name()));
+    m_titleLabel->setStyleSheet(QString("color: %1;").arg(brandYellow.name()));
     m_titleLabel->style()->unpolish(m_titleLabel);
     m_titleLabel->style()->polish(m_titleLabel);
     m_titleLabel->update();
