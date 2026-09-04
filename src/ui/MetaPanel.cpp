@@ -370,17 +370,20 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     QWidget* topWidget = this->topLevelWidget();
     m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), topWidget);
 
-    if (topWidget) {
-        int overlayW = m_tagSelectorOverlay->width();
-        int overlayH = m_tagSelectorOverlay->height();
+    QPoint globalPos = targetAnchor ? targetAnchor->mapToGlobal(QPoint(0, targetAnchor->height() + 4)) : this->mapToGlobal(QPoint(0, 0));
+    QPoint parentPos = topWidget ? topWidget->mapFromGlobal(globalPos) : globalPos;
 
-        int leftBoundary = this->x();
-        int centerX = qMax(0, (leftBoundary - overlayW) / 2);
-        int centerY = (topWidget->height() - overlayH) / 2;
-        m_tagSelectorOverlay->move(centerX, centerY);
-    } else {
-        m_tagSelectorOverlay->move(targetAnchor->mapToGlobal(QPoint(0, targetAnchor->height() + 4)));
+    QScreen* screen = QApplication::screenAt(globalPos);
+    if (!screen) screen = QApplication::primaryScreen();
+    if (screen && targetAnchor) {
+        int overlayH = m_tagSelectorOverlay->height();
+        int screenBottom = screen->availableGeometry().bottom();
+        if (globalPos.y() + overlayH > screenBottom) {
+            parentPos.setY(parentPos.y() - overlayH - targetAnchor->height() - 8);
+        }
     }
+
+    m_tagSelectorOverlay->move(parentPos);
 
     m_tagSelectorOverlay->show();
 
@@ -552,6 +555,7 @@ void MetaPanel::addInfoRow(QVBoxLayout* layout, const QString& label, QLabel*& v
 }
 
 void MetaPanel::onTagDeleted(const QString& text) {
+    if (text.trimmed().isEmpty()) return;
     if (m_selectedPaths.isEmpty() || m_isReadOnlyMode) return;
 
     emit tagRemoveRequested(m_selectedPaths, text);
@@ -664,7 +668,9 @@ void MetaPanel::setTags(const QStringList& tags) {
         for (const QString& tag : tags) {
             TagPill* pill = new TagPill(tag, m_tagContainer);
             pill->setProperty("tagText", tag);
-            connect(pill, &TagPill::deleteRequested, this, &MetaPanel::onTagDeleted);
+            connect(pill, &TagPill::deleteRequested, this, [this, tag]() {
+                onTagDeleted(tag);
+            });
             pill->show();
             m_tagFlowLayout->addWidget(pill);
         }

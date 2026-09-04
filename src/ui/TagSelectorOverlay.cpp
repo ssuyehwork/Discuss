@@ -9,6 +9,7 @@
 #include <QApplication>
 #include <QScreen>
 #include <QScrollBar>
+#include <QStyle>
 
 namespace QuarkMeta {
 
@@ -247,19 +248,11 @@ void TagSelectorOverlay::updateSelectionHighlight() {
         }
         btn->setIconSize(QSize(12, 12));
 
-        QString style;
-        if (isSelected) {
-            style = "QPushButton { background-color: #1C97EA; color: #FFF; border: 1px solid #1C97EA; border-radius: 4px; padding: 0 8px; font-size: 11px; text-align: left; }";
-        } else {
-            style = "QPushButton { background-color: transparent; color: #BBB; border: 1px solid #333; border-radius: 4px; padding: 0 8px; font-size: 11px; text-align: left; }";
-        }
-
-        if (isFocused) {
-            style += " QPushButton { border: 1px solid #1C97EA; color: #FFF; background-color: #2D2D30; }";
-        } else {
-            style += " QPushButton:hover { border-color: #1ABC9C; color: #FFF; }";
-        }
         btn->setObjectName("TagSelectorBtn");
+        btn->setProperty("selected", isSelected);
+        btn->setProperty("focused", isFocused);
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
     }
 }
 
@@ -346,14 +339,7 @@ void TagSelectorOverlay::mouseMoveEvent(QMouseEvent* event) {
     if (event->buttons() & Qt::LeftButton) {
         QPoint delta = event->globalPosition().toPoint() - m_dragStartPos;
         if (m_isDragging) {
-            QPoint newPos = m_dragStartGeometry.topLeft() + delta;
-            if (QWidget* p = parentWidget()) {
-                int maxX = qMax(0, p->width() - width());
-                int maxY = qMax(0, p->height() - height());
-                newPos.setX(qBound(0, newPos.x(), maxX));
-                newPos.setY(qBound(0, newPos.y(), maxY));
-            }
-            move(newPos);
+            move(m_dragStartGeometry.topLeft() + delta);
         } else if (m_resizeDir != 0) {
             QRect newGeom = m_dragStartGeometry;
             if (m_resizeDir & 1) newGeom.setLeft(m_dragStartGeometry.left() + delta.x());
