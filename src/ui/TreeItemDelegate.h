@@ -28,7 +28,7 @@ namespace QuarkMeta {
 class TreeItemDelegate : public QStyledItemDelegate {
 public:
     explicit TreeItemDelegate(QObject* parent = nullptr, bool showStatus = true, bool drawMiniCards = false)
-        : QStyledItemDelegate(parent), m_showStatus(showStatus), m_drawMiniCards(drawMiniCards) {}
+        : QStyledItemDelegate(parent), m_drawMiniCards(drawMiniCards) { Q_UNUSED(showStatus); }
 
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         QSize sz = QStyledItemDelegate::sizeHint(option, index);
@@ -285,7 +285,6 @@ public:
     }
 
 private:
-    bool m_showStatus;
     bool m_drawMiniCards;
 };
 

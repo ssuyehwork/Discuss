@@ -70,9 +70,7 @@ bool ContentKeyHandler::handleTooltipHover(QObject* obj, QEvent* event) {
     if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) {
         QString text = obj->property("tooltipText").toString();
         if (!text.isEmpty()) {
-            int timeout = (obj == m_panel->btnLayers() || 
-                           obj == m_panel->btnToggleFolders() || 
-                           obj == m_panel->btnToggleFiles()) ? 0 : 700;
+            int timeout = (obj && obj->objectName() == "ViewModeToolBtn") ? 0 : 700;
             ToolTipOverlay::instance()->showText(QCursor::pos(), text, timeout);
         }
     } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::Leave) {
@@ -97,7 +95,7 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
     if (!index.isValid()) return false;
 
     // 1. 网格/自适应视图：归一化 Hitbox 查询
-    if (view != m_panel->treeView()) {
+    if (!m_panel->isTreeView(view)) {
         QRect itemRect = view->visualRect(index);
         CardLayout l = CardLayoutEngine::calculate(itemRect, m_panel->zoomLevel());
         int hitVal = l.hitStar(pos);

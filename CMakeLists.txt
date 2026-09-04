@@ -179,6 +179,14 @@ set(SOURCES
     src/ui/PanelMediator.cpp
     src/ui/MainWindow.cpp
     src/ui/MainWindow.h
+    src/ui/DriveBarWidget.h
+    src/ui/DriveBarWidget.cpp
+    src/ui/NavBarWidget.h
+    src/ui/NavBarWidget.cpp
+    src/ui/TitleBarWidget.h
+    src/ui/TitleBarWidget.cpp
+    src/ui/ContentHeaderWidget.h
+    src/ui/ContentHeaderWidget.cpp
     src/ui/SearchController.h
     src/ui/SearchController.cpp
     src/ui/TrayController.cpp

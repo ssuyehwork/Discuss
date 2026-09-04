@@ -436,7 +436,6 @@ void FilterPanel::rebuildGroups() {
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("标签", gl);
-        m_groupTag = g;
 
         QButtonGroup* tagGroup = new QButtonGroup(g);
         tagGroup->setExclusive(false);
@@ -472,7 +471,6 @@ void FilterPanel::rebuildGroups() {
     if (!m_ratingCounts.isEmpty()) {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("评级", gl);
-        m_groupRating = g;
         for (int r : {0, 1, 2, 3, 4, 5}) {
             if (!m_ratingCounts.contains(r) || m_ratingCounts[r] <= 0) continue;
             QCheckBox* cb = addFilterRow(gl, ratingDisplayName(r), m_ratingCounts[r]);
@@ -518,7 +516,6 @@ void FilterPanel::rebuildGroups() {
             QVBoxLayout* gl = nullptr;
             QHBoxLayout* hdrLayout = nullptr;
             QWidget* g = buildGroup("颜色标记", gl, &hdrLayout);
-            m_groupColor = g;
 
             for (const auto& item : colorsList) {
                 int cnt = m_colorCounts.value(item.hex, m_colorCounts.value(item.name, 0));
@@ -777,7 +774,6 @@ void FilterPanel::rebuildGroups() {
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("链接", gl);
-        m_groupLink = g;
 
         QButtonGroup* linkGroup = new QButtonGroup(g);
         linkGroup->setExclusive(false);
@@ -813,7 +809,6 @@ void FilterPanel::rebuildGroups() {
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("备注", gl);
-        m_groupNote = g;
 
         QButtonGroup* noteGroup = new QButtonGroup(g);
         noteGroup->setExclusive(false);
@@ -920,7 +915,6 @@ void FilterPanel::rebuildGroups() {
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("图像比例", gl);
-        m_groupRatio = g;
 
         QButtonGroup* ratioGroup = new QButtonGroup(g);
         ratioGroup->setExclusive(false);
@@ -951,7 +945,6 @@ void FilterPanel::rebuildGroups() {
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("重复状态", gl);
-        m_groupDuplicate = g;
 
         QButtonGroup* dupGroup = new QButtonGroup(g);
         dupGroup->setExclusive(false);

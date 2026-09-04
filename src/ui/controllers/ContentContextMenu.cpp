@@ -709,8 +709,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 DeepThumbnailExtractor::instance().extractBatchAsync(
                     targetPaths,
                     [weakThis](const QString& itemPath, bool success) {
-                        if (weakThis && success && weakThis->diskModel()) {
-                            weakThis->diskModel()->reloadThumbnailForPath(itemPath);
+                        if (weakThis && success) {
+                            weakThis->reloadThumbnailForPath(itemPath);
                         }
                     },
                     [weakThis](int successCount, int totalCount) {

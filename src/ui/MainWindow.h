@@ -25,6 +25,9 @@ class HoverEventFilter;
 class AddressBar;
 class TaskProgressToolBar;
 class SearchController; 
+class TitleBarWidget;
+class DriveBarWidget;
+class NavBarWidget;
 class NavPanel;
 class FavoritePanel;
 class ContentPanel;
@@ -56,54 +59,26 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
     void changeEvent(QEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
-    // 2026-04-11 按照用户要求：showEvent 是执行 ToolTipOverlay GPU 真实预热的唯一合法时机
     void showEvent(QShowEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;
-
-private slots:
-    void onPinToggled(bool checked);
-
-protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
 
-    QWidget* m_titleBarWidget = nullptr;
-    QHBoxLayout* m_titleBarLayout = nullptr;
-    QLabel* m_logoLabel = nullptr;
-    QLabel* m_appNameLabel = nullptr;
-    QWidget* m_navBarWidget = nullptr;
-    QVBoxLayout* m_navBarMainLayout = nullptr;
-    QWidget* m_navRow1Widget = nullptr;
-    QHBoxLayout* m_navRow1Layout = nullptr;
-    bool m_navBarIsTwoRowMode = false;
-    QVBoxLayout* m_bodyLayout = nullptr; // 2026-05-08 按照用户要求：提升为成员变量以支持动态边距切换
-
-    void updateNavBarResponsiveLayout();
+    TitleBarWidget* m_titleBarWidget = nullptr;
+    NavBarWidget* m_navBarWidget = nullptr;
+    DriveBarWidget* m_driveBarWidget = nullptr;
+    QVBoxLayout* m_bodyLayout = nullptr;
 
     void initUi();
     void updateStatusBar();
-    void initDriveBar();
 
-    /**
-     * @brief 统一导航调度向前兼容转调接口
-     */
-    void unifiedNavigateTo(const QString& url, bool record = true);
-
-    void initToolbar();
-    void setupSplitters();
-    void setupCustomTitleBarButtons();
-    void resetSplitterLayout();
-
-    // 复合地址栏
+    // 导航与搜索组件句柄
     AddressBar* m_addressBar = nullptr;
+    SearchController* m_searchController = nullptr;
 
-    // 六个面板
-    // 2026-04-11 按照用户要求：记录当前预览的文件路径，用于驱动方向键切图
-    QString m_currentQuickLookPath;
-    
-    // UI Panels
+    // 5 大核心面板与 Splitter
     NavPanel* m_navPanel = nullptr;
     FavoritePanel* m_favoritePanel = nullptr;
     ContentPanel* m_contentPanel = nullptr;
@@ -112,36 +87,8 @@ private:
 
     QSplitter* m_mainSplitter = nullptr;
 
-    // 工具栏组件
-    QToolBar* m_toolbar    = nullptr;
-    QPushButton* m_btnBack    = nullptr;
-    QPushButton* m_btnForward = nullptr;
-    QPushButton* m_btnUp      = nullptr;
-
-    SearchController* m_searchController = nullptr;
-    
-    // 排列方式视图按钮及中性缩放滑杆 (Modification_Plan-47)
-    QPushButton* m_btnViewMenu = nullptr;
-    QSlider* m_sizeSlider = nullptr;
-
-    // 标题栏按钮组 (用于 frameless 时的模拟，此处作为标准按钮展示)
-    QPushButton* m_btnToggleDriveBar = nullptr;
-    QPushButton* m_btnLayout = nullptr;
-    QPushButton* m_btnCreate = nullptr;
-    QPushButton* m_btnPinTop = nullptr;
-    QPushButton* m_btnMin = nullptr;
-    QPushButton* m_btnMax = nullptr;
-    QPushButton* m_btnClose = nullptr;
-
-    // 盘符管理栏组件
-    QWidget* m_driveBarWidget = nullptr;
-    QHBoxLayout* m_driveBarLayout = nullptr;
-    QPushButton* m_btnTagManager = nullptr;
-    void onDriveBarContextMenu(const QPoint& pos);
-
     // 状态管理
     bool m_isPinned = false;
-    QString m_currentDataSource; // "category" or "nav"
     bool m_panelsInitialized = false; // 2026-04-12 状态锁：确保面板仅初始化一次
 
     // 底部状态栏
@@ -149,11 +96,9 @@ private:
     QWidget* m_statusBarWidget = nullptr;
     TaskProgressToolBar* m_taskProgressToolBar = nullptr;
 
-
     // 系统托盘控制器
     TrayController* m_trayController = nullptr;
     HoverEventFilter*     m_hoverFilter     = nullptr;
-    QTimer* m_sidebarRefreshTimer = nullptr;
 
     // 模块化控制器与中介者
     AppShortcutController* m_shortcutController = nullptr;

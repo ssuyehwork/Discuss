@@ -214,6 +214,23 @@ void PanelMediator::setupConnections() {
             m_currentQuickLookPath = path;
             QuickLookWindow::instance().previewFile(path);
         });
+
+        connect(contentPanel, &ContentPanel::fileActivated, this, [this](const QString& path) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::RecordAccess;
+            cmd.targetPaths << path;
+            CoreEngine::instance().executeCommand(cmd);
+
+            QString ext = QFileInfo(path).suffix().toLower();
+            static const QSet<QString> whiteList = {
+                "jpg", "jpeg", "png", "bmp", "webp", "gif", "ico", "cur", "ani", "psd", "ai", "eps", "pdf", "svg",
+                "txt", "md", "markdown", "log", "cpp", "h", "hpp", "c", "py", "js", "css", "html", "json", "xml", "ini", "conf", "yaml", "yml"
+            };
+            if (whiteList.contains(ext)) {
+                m_currentQuickLookPath = path;
+                QuickLookWindow::instance().previewFile(path);
+            }
+        });
     }
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::prevRequested, this, [this, contentPanel]() {

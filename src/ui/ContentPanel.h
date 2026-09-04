@@ -2,11 +2,8 @@
 
 #include <QFrame>
 #include <QStackedWidget>
-#include <QPushButton>
 #include <QVBoxLayout>
 #include <QTreeView>
-#include <QListView>
-#include <QTimer>
 #include <QSet>
 #include <QModelIndexList>
 #include <atomic>
@@ -17,7 +14,6 @@
 #include "models/FilterProxyModel.h"
 #include "controllers/ContentSortController.h"
 #include "../core/ModelContract.h"
-#include "../core/ItemRecord.h"
 
 namespace QuarkMeta {
 
@@ -28,7 +24,7 @@ class ContentFileOpsHandler;
 class ContentStatsWorker;
 
 /**
- * @brief 内容面板（面板四）：核心业务展示区（纯视图与交互路由层）
+ * @brief 内容面板（面板四）：核心业务展示工作台（纯视图承载与高级意图分发）
  */
 class ContentPanel : public QFrame {
     Q_OBJECT
@@ -66,11 +62,10 @@ public:
     explicit ContentPanel(QWidget* parent = nullptr);
     ~ContentPanel() override = default;
 
-    // 🚀【物理沙盒契约】：硬性向外报告 230px 下限，切断内部组件尺寸反向渗透
     QSize minimumSizeHint() const override { return QSize(230, 100); }
     void deferredInit() {}
 
-    // 只读状态查询接口
+    // 1. 状态与配置查询
     QString currentPath() const { return m_currentPath; }
     bool isRecursive() const { return m_isRecursive; }
     int zoomLevel() const { return m_zoomLevel; }
@@ -84,9 +79,9 @@ public:
     int incrementLoadRequestId() { return ++m_loadRequestId; }
     const FilterState& currentFilter() const { return m_currentFilter; }
 
-    // 状态与辅助设置（供 Handler / Loader 转调）
+    // 2. 状态与配置高阶方法
     void setCurrentPath(const QString& path) { m_currentPath = path; }
-    void setIsRecursive(bool recursive) { m_isRecursive = recursive; }
+    void setIsRecursive(bool recursive);
     void setLoading(bool loading) { m_isLoading = loading; }
     void ensureSourceModelIsDiskModel();
     void applySort();
@@ -94,8 +89,11 @@ public:
     void updateLayersButtonState();
     void restoreActiveView();
     void restoreSelections();
+    void incrementModelGeneration();
+    void reloadThumbnailForPath(const QString& path);
+    bool isTreeView(QObject* view) const;
 
-    // 排序与控制访问器
+    // 3. 排序策略控制器
     ContentSortController* sortController() const { return m_sortController; }
     SortType currentSortType() const { return m_sortController ? m_sortController->sortType() : SortType::SortByName; }
     Qt::SortOrder currentSortOrder() const { return m_sortController ? m_sortController->sortOrder() : Qt::AscendingOrder; }
@@ -105,22 +103,18 @@ public:
     void setContextMenuActive(bool active) { m_isContextMenuActive = active; }
     void setCurrentCategoryType(const QString& type) { m_currentCategoryType = type; }
 
-    // 内部只读组件引用（保持向后兼容性）
-    DiskItemModel* diskModel() const { return m_diskModel; }
-    QPushButton* btnLayers() const { return m_btnLayers; }
-    QPushButton* btnToggleFolders() const { return m_btnToggleFolders; }
-    QPushButton* btnToggleFiles() const { return m_btnToggleFiles; }
-    QPushButton* btnToggleHidden() const { return m_btnToggleHidden; }
+    // 4. 视图与控制器引用
     QStackedWidget* viewStack() const { return m_viewStack; }
     QAbstractItemView* gridView() const { return m_gridView; }
     QTreeView* treeView() const;
     DropTreeView* dropTreeView() const { return m_treeView; }
+    DiskItemModel* diskModel() const { return m_diskModel; }
     ContentKeyHandler* keyHandler() const { return m_keyHandler; }
     ContentDataLoader* dataLoader() const { return m_dataLoader; }
     ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
     ContentStatsWorker* statsWorker() const { return m_statsWorker; }
 
-    // 业务操作转发
+    // 5. 业务操作分发
     void performCopy(bool cutMode);
     void performPaste();
     void performBatchRename();
@@ -132,7 +126,7 @@ public:
 
     bool eventFilter(QObject* obj, QEvent* event) override;
 
-    // 模型数据访问
+    // 6. 模型与选中数据访问
     ItemModelBase* model() const { return m_model; }
     QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
     QStringList getSelectedPaths() const;
@@ -143,12 +137,14 @@ signals:
     void zoomLevelChanged(int level);
     void viewModeChanged(ViewMode mode);
     void requestQuickLook(const QString& path);
+    void fileActivated(const QString& path);
     void selectionChanged(const QStringList& paths);
     void directorySelected(const QString& path);
     void requestAddFavorite(const QStringList& paths);
     void dataSourceChanged(const QString& source);
     void directoryStatsReady(const QuarkMeta::ScanStats& stats);
     void statusBarStatsUpdated(int fileCount, int folderCount, int totalCount);
+    void statusBarMessageReady(const QString& message);
 
 public slots:
     void setZoomLevel(int level);
@@ -183,7 +179,7 @@ private:
     void updateStatusBarStats();
     void emitSelectionChangedSignal();
 
-    // 🚀【状态 100% 私有化安全封装】
+    // 单一事实来源配置与状态 (FilterState)
     FilterState m_currentFilter;
     int m_zoomLevel = 96;
     QString m_currentPath;
@@ -191,20 +187,14 @@ private:
     bool m_isPendingEdit = false;
     QString m_currentCategoryType;
     bool m_isRecursive = false;
-    bool m_showFolders = true;
-    bool m_showFiles = true;
-    bool m_showHidden = false;
     ViewMode m_currentViewMode = GridView;
     std::atomic<bool> m_isLoading{false};
     bool m_isContextMenuActive = false;
     std::atomic<int> m_loadRequestId{0};
 
-    // UI 组件私有指针
+    // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
-    QPushButton* m_btnLayers = nullptr;
-    QPushButton* m_btnToggleHidden = nullptr;
-    QPushButton* m_btnToggleFolders = nullptr;
-    QPushButton* m_btnToggleFiles = nullptr;
+    class ContentHeaderWidget* m_headerWidget = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;
@@ -214,7 +204,6 @@ private:
     QSortFilterProxyModel* m_proxyModel = nullptr;
     
     QTimer* m_visibleTimer = nullptr;
-    QTimer* m_selectionTimer = nullptr;
     ContentSortController* m_sortController = nullptr;
     ContentKeyHandler* m_keyHandler = nullptr;
     ContentDataLoader* m_dataLoader = nullptr;

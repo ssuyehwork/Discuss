@@ -2,6 +2,7 @@
 #define NOMINMAX
 #endif
 #include "ContentPanel.h"
+#include "ContentHeaderWidget.h"
 #include "controllers/ContentContextMenu.h"
 #include "controllers/ContentKeyHandler.h"
 #include "controllers/ContentSortController.h"
@@ -80,13 +81,9 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     });
 
     m_zoomLevel = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
-    m_showFolders = AppConfig::instance().getValue("ContentPanel/ShowFolders", true).toBool();
-    m_showFiles = AppConfig::instance().getValue("ContentPanel/ShowFiles", true).toBool();
-    m_showHidden = AppConfig::instance().getValue("ContentPanel/ShowHidden", false).toBool();
-
-    m_currentFilter.showFolders = m_showFolders;
-    m_currentFilter.showFiles = m_showFiles;
-    m_currentFilter.showHidden = m_showHidden;
+    m_currentFilter.showFolders = AppConfig::instance().getValue("ContentPanel/ShowFolders", true).toBool();
+    m_currentFilter.showFiles = AppConfig::instance().getValue("ContentPanel/ShowFiles", true).toBool();
+    m_currentFilter.showHidden = AppConfig::instance().getValue("ContentPanel/ShowHidden", false).toBool();
 
     connect(&TrashService::instance(), &TrashService::trashOperationCompleted, this, &ContentPanel::refreshAll);
     connect(&PermanentDeleteService::instance(), &PermanentDeleteService::permanentDeleteCompleted, this, &ContentPanel::refreshAll);
@@ -104,77 +101,28 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
 }
 
 void ContentPanel::initUi() {
-    QWidget* titleBar = new QWidget(this);
-    titleBar->setObjectName("ContainerHeader");
-    titleBar->setFixedHeight(32);
+    // ── 顶部 Header 区域 ──
+    m_headerWidget = new ContentHeaderWidget(this);
+    m_headerWidget->setFilterState(m_currentFilter);
 
-    QHBoxLayout* titleL = new QHBoxLayout(titleBar);
-    titleL->setContentsMargins(15, 0, 5, 0);
-    titleL->setSpacing(5);
-
-    QLabel* iconLabel = new QLabel(titleBar);
-    iconLabel->setPixmap(UiHelper::getIcon("image_picture", QColor("#41F2F2"), 18).pixmap(18, 18));
-    titleL->addWidget(iconLabel);
-
-    QLabel* titleLabel = new QLabel("内容", titleBar);
-    titleLabel->setObjectName("ContentPanelTitleLabel");
-    titleL->addWidget(titleLabel);
-    titleL->addStretch();
-
-    auto setupToggleBtn = [this, titleBar, titleL](QPushButton*& btn, const QString& icon, const QColor& actCol, bool checked, const QString& tip, auto slot) {
-        btn = new QPushButton(titleBar);
-        btn->setCheckable(true);
-        btn->setFixedSize(24, 24);
-        btn->setChecked(checked);
-        btn->setIcon(UiHelper::getIcon(icon, checked ? actCol : QColor("#888888"), 16));
-        btn->setProperty("tooltipText", tip);
-        btn->installEventFilter(this);
-        btn->setObjectName("ViewModeToolBtn");
-        connect(btn, &QPushButton::clicked, this, slot);
-        titleL->addWidget(btn, 0, Qt::AlignVCenter);
-    };
-
-    setupToggleBtn(m_btnToggleHidden, "eye", QColor("#3498db"), m_showHidden, "显示/隐藏隐藏项目", [this]() {
-        m_showHidden = m_btnToggleHidden->isChecked();
-        m_btnToggleHidden->setIcon(UiHelper::getIcon("eye", m_showHidden ? QColor("#3498db") : QColor("#888888"), 16));
-        AppConfig::instance().setValue("ContentPanel/ShowHidden", m_showHidden);
-        m_currentFilter.showHidden = m_showHidden;
+    connect(m_headerWidget, &ContentHeaderWidget::filterStateChanged, this, [this](const FilterState& state) {
+        m_currentFilter = state;
+        AppConfig::instance().setValue("ContentPanel/ShowHidden", state.showHidden);
+        AppConfig::instance().setValue("ContentPanel/ShowFolders", state.showFolders);
+        AppConfig::instance().setValue("ContentPanel/ShowFiles", state.showFiles);
         applyFilters();
     });
 
-    setupToggleBtn(m_btnToggleFolders, "folder_filled", QColor("#FDB70A"), m_showFolders, "显示/隐藏文件夹", [this]() {
-        m_showFolders = m_btnToggleFolders->isChecked();
-        m_btnToggleFolders->setIcon(UiHelper::getIcon("folder_filled", m_showFolders ? QColor("#FDB70A") : QColor("#B0B0B0"), 16));
-        AppConfig::instance().setValue("ContentPanel/ShowFolders", m_showFolders);
-        m_currentFilter.showFolders = m_showFolders;
-        applyFilters();
-    });
-
-    setupToggleBtn(m_btnToggleFiles, "file", QColor("#2ecc71"), m_showFiles, "显示/隐藏文件", [this]() {
-        m_showFiles = m_btnToggleFiles->isChecked();
-        m_btnToggleFiles->setIcon(UiHelper::getIcon("file", m_showFiles ? QColor("#2ecc71") : QColor("#B0B0B0"), 16));
-        AppConfig::instance().setValue("ContentPanel/ShowFiles", m_showFiles);
-        m_currentFilter.showFiles = m_showFiles;
-        applyFilters();
-    });
-
-    m_btnLayers = new QPushButton(titleBar);
-    m_btnLayers->setCheckable(true);
-    m_btnLayers->setFixedSize(24, 24);
-    m_btnLayers->setIcon(UiHelper::getIcon("layers", QColor("#2ecc71"), 18));
-    m_btnLayers->setProperty("tooltipText", "显示子文件夹中的项目");
-    m_btnLayers->installEventFilter(this);
-    m_btnLayers->setObjectName("ViewModeToolBtn");
-    connect(m_btnLayers, &QPushButton::clicked, this, [this]() {
+    connect(m_headerWidget, &ContentHeaderWidget::recursiveToggled, this, [this](bool recursive) {
         if (m_currentPath.isEmpty() || m_currentPath == "computer://") {
-            m_btnLayers->setChecked(false);
+            if (m_headerWidget) m_headerWidget->setRecursive(false);
             return;
         }
-        loadDirectory(m_currentPath, m_btnLayers->isChecked());
+        m_isRecursive = recursive;
+        loadDirectory(m_currentPath, recursive);
     });
-    titleL->addWidget(m_btnLayers, 0, Qt::AlignVCenter);
 
-    m_mainLayout->addWidget(titleBar);
+    m_mainLayout->addWidget(m_headerWidget);
 
     m_viewStack = new QStackedWidget(this);
     m_viewStack->setFrameShape(QFrame::NoFrame);
@@ -267,6 +215,25 @@ void ContentPanel::applySort() {
     }
 }
 
+void ContentPanel::setIsRecursive(bool recursive) {
+    m_isRecursive = recursive;
+    if (m_headerWidget) {
+        m_headerWidget->setRecursive(recursive);
+    }
+}
+
+void ContentPanel::incrementModelGeneration() {
+    if (m_diskModel) m_diskModel->incrementGeneration();
+}
+
+void ContentPanel::reloadThumbnailForPath(const QString& path) {
+    if (m_diskModel) m_diskModel->reloadThumbnailForPath(path);
+}
+
+bool ContentPanel::isTreeView(QObject* view) const {
+    return (view == m_treeView);
+}
+
 void ContentPanel::startVisibleTimer() {
     if (m_visibleTimer) {
         m_visibleTimer->start();
@@ -333,17 +300,7 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
     if (QFileInfo(path).isDir()) {
         emit directorySelected(path);
     } else {
-        AppCommand cmd;
-        cmd.type = AppCommandType::RecordAccess;
-        cmd.targetPaths << path;
-        CoreEngine::instance().executeCommand(cmd);
-
-        QString ext = QFileInfo(path).suffix().toLower();
-        static const QSet<QString> whiteList = {
-            "jpg", "jpeg", "png", "bmp", "webp", "gif", "ico", "cur", "ani", "psd", "ai", "eps", "pdf", "svg",
-            "txt", "md", "markdown", "log", "cpp", "h", "hpp", "c", "py", "js", "css", "html", "json", "xml", "ini", "conf", "yaml", "yml"
-        };
-        if (whiteList.contains(ext)) emit requestQuickLook(path);
+        emit fileActivated(path);
     }
 }
 
@@ -396,11 +353,14 @@ void ContentPanel::updateGridSize() {
 
 void ContentPanel::applyFilters(const FilterState& state) {
     QString currentKw = m_currentFilter.keyword; // 1. 暂存当前搜索框中的活跃关键词
+    bool sf = m_currentFilter.showFolders;
+    bool sfi = m_currentFilter.showFiles;
+    bool sh = m_currentFilter.showHidden;
     m_currentFilter = state;
     m_currentFilter.keyword = currentKw;          // 2. 锁定并恢复关键词，严禁被空状态冲刷
-    m_currentFilter.showFolders = m_showFolders;
-    m_currentFilter.showFiles = m_showFiles;
-    m_currentFilter.showHidden = m_showHidden;
+    m_currentFilter.showFolders = sf;
+    m_currentFilter.showFiles = sfi;
+    m_currentFilter.showHidden = sh;
     applyFilters();
 }
 
@@ -428,13 +388,7 @@ void ContentPanel::migrateModelCache(const QString& oldPath, const QString& newP
 void ContentPanel::clearFolderCache(const QString& folderPath) { if (m_model) m_model->clearCacheForFolder(folderPath); }
 
 void ContentPanel::onSelectionChanged() {
-    if (!m_selectionTimer) {
-        m_selectionTimer = new QTimer(this);
-        m_selectionTimer->setSingleShot(true);
-        m_selectionTimer->setInterval(30);
-        connect(m_selectionTimer, &QTimer::timeout, this, &ContentPanel::emitSelectionChangedSignal);
-    }
-    m_selectionTimer->start();
+    emitSelectionChangedSignal();
 }
 
 void ContentPanel::emitSelectionChangedSignal() {
@@ -450,7 +404,17 @@ void ContentPanel::emitSelectionChangedSignal() {
 }
 
 void ContentPanel::updateStatusBarStats() {
-    if (m_proxyModel) emit statusBarStatsUpdated(0, 0, m_proxyModel->rowCount());
+    if (!m_proxyModel) return;
+    int visibleCount = m_proxyModel->rowCount();
+    int fullCount = m_model ? m_model->rowCount() : visibleCount;
+    int hiddenCount = fullCount - visibleCount;
+    int selectedCount = getSelectedIndexes().size();
+
+    QString statusText = (hiddenCount > 0)
+        ? QString("%1个项目，%2个已隐藏，选中了%3个").arg(visibleCount).arg(hiddenCount).arg(selectedCount)
+        : QString("%1个项目，选中了%2个").arg(visibleCount).arg(selectedCount);
+
+    emit statusBarMessageReady(statusText);
 }
 
 void ContentPanel::recalculateAndEmitStats() {
@@ -462,13 +426,14 @@ void ContentPanel::recalculateAndEmitStats() {
 
 void ContentPanel::refreshVisibleThumbnails() {
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
-    if (!view || !m_model || CoreController::isShuttingDown()) return;
+    if (!view || !m_model || !m_proxyModel || CoreController::isShuttingDown() || !view->viewport()) return;
 
-    int top = 0, bottom = m_proxyModel->rowCount() - 1;
-    QModelIndex topIdx = view->indexAt(QPoint(10, 10));
-    QModelIndex btmIdx = view->indexAt(QPoint(view->viewport()->width() - 10, view->viewport()->height() - 10));
-    if (topIdx.isValid()) top = qMax(0, topIdx.row() - 4);
-    if (btmIdx.isValid()) bottom = qMin(m_proxyModel->rowCount() - 1, btmIdx.row() + 4);
+    QRect vpRect = view->viewport()->rect();
+    QModelIndex topIdx = view->indexAt(vpRect.topLeft());
+    QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
+
+    int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
+    int bottom = btmIdx.isValid() ? qMin(m_proxyModel->rowCount() - 1, btmIdx.row() + 4) : m_proxyModel->rowCount() - 1;
 
     QList<int> visibleRows;
     for (int r = top; r <= bottom; ++r) {
@@ -574,10 +539,9 @@ void ContentPanel::setPendingSelectName(const QString& name, bool edit) {
 }
 
 void ContentPanel::updateLayersButtonState() {
-    if (!m_btnLayers) return;
+    if (!m_headerWidget) return;
     bool isComp = m_currentPath.isEmpty() || m_currentPath == "computer://";
-    m_btnLayers->setEnabled(!isComp);
-    m_btnLayers->setProperty("tooltipText", isComp ? "“此电脑”不支持递归显示" : "显示子文件夹中的项目");
+    m_headerWidget->setLayersEnabled(!isComp, isComp ? "“此电脑”不支持递归显示" : "显示子文件夹中的项目");
 }
 
 ContentPanel::DataSourceType ContentPanel::dataSourceType() const {

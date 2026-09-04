@@ -43,9 +43,7 @@ void ContentDataLoader::loadDirectory(const QString& path, bool recursive) {
     if (!m_panel) return;
     m_panel->restoreActiveView();
     MediaExtractorPipeline::instance().cancelAll();
-    if (m_panel->diskModel()) {
-        m_panel->diskModel()->incrementGeneration();
-    }
+    m_panel->incrementModelGeneration();
     m_panel->ensureSourceModelIsDiskModel();
     ThumbnailPipelineService::instance().cancelAll();
 

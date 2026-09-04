@@ -98,14 +98,6 @@ private:
 
     QList<QPushButton*> m_groupHeaders;
 
-    QWidget* m_groupRating = nullptr;
-    QWidget* m_groupColor = nullptr;
-    QWidget* m_groupLink = nullptr;
-    QWidget* m_groupNote = nullptr;
-    QWidget* m_groupTag = nullptr;
-    QWidget* m_groupRatio = nullptr;
-    QWidget* m_groupDuplicate = nullptr;
-
     QLineEdit*    m_editType        = nullptr;
     QLineEdit*    m_editCreateDate  = nullptr;
     QLineEdit*    m_editModifyDate  = nullptr;
