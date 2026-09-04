@@ -373,7 +373,9 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     if (topWidget) {
         int overlayW = m_tagSelectorOverlay->width();
         int overlayH = m_tagSelectorOverlay->height();
-        int centerX = (topWidget->width() - overlayW) / 2;
+
+        int leftBoundary = this->x();
+        int centerX = qMax(0, (leftBoundary - overlayW) / 2);
         int centerY = (topWidget->height() - overlayH) / 2;
         m_tagSelectorOverlay->move(centerX, centerY);
     } else {
