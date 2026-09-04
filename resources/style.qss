@@ -721,24 +721,27 @@ QPushButton#TagSelectorToggleBtn:hover, QPushButton#TagManagerToggleBtn:hover {
     background-color: #3E3E42;
 }
 QListWidget#TagSelectorGroupList {
-    background-color: transparent;
-    border: none;
+    background-color: #252526;
+    border: 1px solid #333333;
+    border-radius: 4px;
     outline: none;
+    padding: 2px;
     color: #CCCCCC;
-    font-size: 12px;
+    font-size: 11px;
 }
 QListWidget#TagSelectorGroupList::item {
     height: 26px;
+    color: #BBBBBB;
+    border-radius: 3px;
     padding-left: 6px;
-    border-radius: 4px;
 }
 QListWidget#TagSelectorGroupList::item:hover {
-    background-color: #3E3E42;
+    background-color: #2D2D30;
     color: #FFFFFF;
 }
 QListWidget#TagSelectorGroupList::item:selected {
-    background-color: #378ADD;
-    color: #FFFFFF;
+    background-color: #3E3E42;
+    color: #1C97EA;
     font-weight: bold;
 }
 QWidget#TagSelectorGridWidget, QWidget#TagManagerContentWidget {

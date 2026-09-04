@@ -348,10 +348,13 @@ void TagSelectorOverlay::mouseMoveEvent(QMouseEvent* event) {
         if (m_isDragging) {
             QPoint newPos = m_dragStartGeometry.topLeft() + delta;
             if (QWidget* p = parentWidget()) {
-                int maxX = qMax(0, p->width() - width());
-                int maxY = qMax(0, p->height() - height());
-                newPos.setX(qBound(0, newPos.x(), maxX));
-                newPos.setY(qBound(0, newPos.y(), maxY));
+                QRect pGeom = p->frameGeometry();
+                int minX = pGeom.left();
+                int maxX = qMax(minX, pGeom.right() - width());
+                int minY = pGeom.top();
+                int maxY = qMax(minY, pGeom.bottom() - height());
+                newPos.setX(qBound(minX, newPos.x(), maxX));
+                newPos.setY(qBound(minY, newPos.y(), maxY));
             }
             move(newPos);
         } else if (m_resizeDir != 0) {
