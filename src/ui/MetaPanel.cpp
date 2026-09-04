@@ -371,16 +371,21 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), topWidget);
 
     if (topWidget) {
-        m_tagSelectorOverlay->adjustSize();
+        // 1. 忠实尊重窗口自己的真实尺寸，绝对不改动大小！
         const int overlayW = m_tagSelectorOverlay->width();
         const int overlayH = m_tagSelectorOverlay->height();
 
+        // 2. 全部换算为主窗口所在屏幕的【全局绝对坐标】
         QRect topGeom = topWidget->frameGeometry(); 
         QPoint metaPanelGlobal = this->mapToGlobal(QPoint(0, 0)); 
 
+        // 3. 目标 X：紧贴 MetaPanel 屏幕左侧，留 8px 间距
         int targetX = metaPanelGlobal.x() - overlayW - 8;
+
+        // 4. 目标 Y：在主窗口物理高度上严格【绝对垂直居中】
         int targetY = topGeom.top() + (topGeom.height() - overlayH) / 2;
 
+        // 5. 【边界死锁】：严格限制在主窗口物理四壁之内，绝不溢出主界面
         int minX = topGeom.left();
         int maxX = qMax(minX, topGeom.right() - overlayW);
         int minY = topGeom.top();
@@ -389,6 +394,7 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
         targetX = qBound(minX, targetX, maxX);
         targetY = qBound(minY, targetY, maxY);
 
+        // 6. 移动到算好的绝对坐标
         m_tagSelectorOverlay->move(targetX, targetY);
     } else if (targetAnchor) {
         m_tagSelectorOverlay->move(targetAnchor->mapToGlobal(QPoint(0, targetAnchor->height() + 4)));
@@ -564,7 +570,6 @@ void MetaPanel::addInfoRow(QVBoxLayout* layout, const QString& label, QLabel*& v
 }
 
 void MetaPanel::onTagDeleted(const QString& text) {
-    if (text.trimmed().isEmpty()) return;
     if (m_selectedPaths.isEmpty() || m_isReadOnlyMode) return;
 
     emit tagRemoveRequested(m_selectedPaths, text);
@@ -677,9 +682,7 @@ void MetaPanel::setTags(const QStringList& tags) {
         for (const QString& tag : tags) {
             TagPill* pill = new TagPill(tag, m_tagContainer);
             pill->setProperty("tagText", tag);
-            connect(pill, &TagPill::deleteRequested, this, [this, tag]() {
-                onTagDeleted(tag);
-            });
+            connect(pill, &TagPill::deleteRequested, this, &MetaPanel::onTagDeleted);
             pill->show();
             m_tagFlowLayout->addWidget(pill);
         }
