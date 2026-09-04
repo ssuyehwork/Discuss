@@ -156,6 +156,7 @@ void TitleBarWidget::setupViewMenu() {
         if (!m_contentPanel) return;
 
         QMenu menu(this);
+        menu.setObjectName("TitleBarViewModeMenu");
         UiHelper::applyMenuStyle(&menu);
 
         QAction* actAdaptive = menu.addAction("自适应(A)");
@@ -173,9 +174,7 @@ void TitleBarWidget::setupViewMenu() {
 
         QString checkPath = SvgIconRenderer::getSvgTempFilePath("check", QColor("#ff551c"));
         menu.setStyleSheet(menu.styleSheet() + QString(
-            "QMenu::item:checked { color: #ff551c; }"
-            "QMenu::item:checked:selected { color: #ff551c; }"
-            "QMenu::indicator:checked { image: url(%1); width: 14px; height: 14px; left: 4px; }"
+            "QMenu#TitleBarViewModeMenu::indicator:checked { image: url(%1); }"
         ).arg(checkPath));
 
         connect(actAdaptive, &QAction::triggered, this, [this]() {

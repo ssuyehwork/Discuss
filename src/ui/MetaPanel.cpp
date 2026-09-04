@@ -240,15 +240,13 @@ void MetaPanel::initUi() {
 
     for (const auto& pair : s_colorMap) {
         QPushButton* btnColor = new QPushButton(colorRow);
+        btnColor->setObjectName("MetaPanelColorBtn");
         btnColor->setFixedSize(16, 16);
         btnColor->setCursor(Qt::PointingHandCursor);
         btnColor->setProperty("tooltipText", pair.first);
         btnColor->setProperty("hexColor", pair.second);
         btnColor->installEventFilter(this);
-        btnColor->setStyleSheet(QString(
-            "QPushButton { background-color: %1; border: 1px solid transparent; border-radius: 8px; }"
-            "QPushButton:hover { border-color: #FFFFFF; }"
-        ).arg(pair.second));
+        btnColor->setStyleSheet(QString("background-color: %1;").arg(pair.second));
 
         QString hex = pair.second;
         connect(btnColor, &QPushButton::clicked, this, [this, hex]() {
@@ -720,10 +718,10 @@ void MetaPanel::setColor(const QString& hexColor, bool fromUser) {
         QString hex = btn->property("hexColor").toString();
         bool active = (!hexColor.isEmpty() && hex.compare(hexColor, Qt::CaseInsensitive) == 0);
 
-        btn->setStyleSheet(QString(
-            "QPushButton { background-color: %1; border: %2; border-radius: 8px; }"
-            "QPushButton:hover { border-color: #FFFFFF; }"
-        ).arg(hex).arg(active ? "2px solid #FFFFFF" : "1px solid transparent"));
+        btn->setProperty("active", active);
+        btn->setStyleSheet(QString("background-color: %1;").arg(hex));
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
     }
 
     if (fromUser && !m_selectedPaths.isEmpty() && !m_isReadOnlyMode) {

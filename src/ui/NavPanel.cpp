@@ -165,9 +165,8 @@ void NavPanel::initUi() {
     QString arrowRight = UiHelper::getSvgTempFilePath("chevron_right", QColor("#378ADD"));
     QString arrowDown = UiHelper::getSvgTempFilePath("chevron_down", QColor("#378ADD"));
     QString treeStyle = QString(
-        "QTreeView::branch { width: 20px; }"
-        "QTreeView::branch:has-children:closed { image: url(\"%1\"); }"
-        "QTreeView::branch:has-children:open { image: url(\"%2\"); }"
+        "QTreeView#NavTreeView::branch:has-children:closed { image: url(\"%1\"); }"
+        "QTreeView#NavTreeView::branch:has-children:open { image: url(\"%2\"); }"
     ).arg(arrowRight, arrowDown);
     m_treeView->setStyleSheet(treeStyle);
 

@@ -214,7 +214,7 @@ ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::Fram
     m_previewBlock = new QWidget(bottomContainer);
     m_previewBlock->setFixedSize(16, 16);
     m_previewBlock->setObjectName("ColorPickerPreviewBlock");
-    m_previewBlock->setStyleSheet("background: red; border-radius: 4px;");
+    updatePreview();
     bottomLayout->addWidget(m_previewBlock);
 
     m_hexEdit = new QLineEdit(bottomContainer);
@@ -300,7 +300,7 @@ void ColorPicker::updateColorFromHsv() {
 }
 
 void ColorPicker::updatePreview() {
-    m_previewBlock->setStyleSheet(QString("background: %1; border-radius: 4px;").arg(m_color.name()));
+    m_previewBlock->setStyleSheet(QString("background: %1;").arg(m_color.name()));
     m_hexEdit->setText(m_color.name().toUpper());
 }
 

@@ -17,6 +17,28 @@ QSplitter {
     background: transparent;
     border: none;
 }
+/* MetaPanel 色彩选择圆点按钮基础样式 */
+QPushButton#MetaPanelColorBtn {
+    border-radius: 8px;
+    border: 1px solid transparent;
+}
+QPushButton#MetaPanelColorBtn:hover {
+    border-color: #FFFFFF;
+}
+QPushButton#MetaPanelColorBtn[active="true"] {
+    border: 2px solid #FFFFFF;
+}
+
+/* 元数据评级色彩选择小圆点基础静态样式 */
+QPushButton#MetaRatingColorBtn {
+    border-radius: 9px;
+    border: none;
+}
+
+/* 导航树形视图分支宽度静态定义 */
+QTreeView#NavTreeView::branch {
+    width: 20px;
+}
 QSplitter::handle:horizontal {
     background-color: #1E1E1E;
     width: 5px;
@@ -531,6 +553,36 @@ QPushButton#TagSelectorBtn:hover {
     color: #FFFFFF;
 }
 
+/* TagSelectorOverlay 标签按钮 1:1 无损迁移 */
+QPushButton#TagOverlayBtn {
+    background-color: transparent;
+    color: #BBBBBB;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 0 8px;
+    font-size: 11px;
+    text-align: left;
+}
+
+/* 未选中状态悬停 */
+QPushButton#TagOverlayBtn[selected="false"]:hover {
+    border-color: #1ABC9C;
+    color: #FFFFFF;
+}
+
+/* 已选中状态 */
+QPushButton#TagOverlayBtn[selected="true"] {
+    background-color: rgba(28, 151, 234, 0.35);
+    color: #FFFFFF;
+    border: 1px solid #1C97EA;
+}
+
+/* 键盘聚焦状态（优先于普通悬停） */
+QPushButton#TagOverlayBtn[focused="true"] {
+    border: 1px solid #1C97EA;
+    color: #FFFFFF;
+}
+
 QFrame#AddressHistoryPanel, QFrame#SearchHistoryPanel {
     background-color: #252526;
     border: 1px solid #444444;
@@ -849,6 +901,10 @@ QPushButton#TagManagerBtnAddNewTag:hover {
 QWidget#ColorPickerBottomBox {
     background: #252526;
     border: 1px solid #378ADD;
+    border-radius: 4px;
+}
+/* ColorPicker 色彩预览块静态形状 */
+QWidget#ColorPickerPreviewBlock {
     border-radius: 4px;
 }
 QLineEdit#ColorPickerHexEdit {
@@ -1459,6 +1515,35 @@ QLabel#FilterItemCountLabel {
     background: transparent;
 }
 
+/* FilterPanel 顶部 Header 栏无损迁移 */
+QWidget#ContainerHeader {
+    background-color: #252526;
+    border-bottom: none;
+}
+
+/* FilterPanel 滚动区域无损迁移 */
+QScrollArea#FilterScrollArea {
+    border: none;
+    background: transparent;
+}
+
+QScrollArea#FilterScrollArea QScrollBar:vertical {
+    border-left: 1px solid #333333;
+}
+
+/* FilterPanel 分类圆点基础静态样式 */
+QLabel#FilterItemDot {
+    border-radius: 5px;
+}
+
+/* FilterPanel 标题标签基础静态样式 */
+QLabel#FilterTitleLabel {
+    font-size: 13px;
+    font-weight: bold;
+    background: transparent;
+    border: none;
+}
+
 /* 元数据面板专属组件选择器外联 */
 QLabel#MetaPanelTitleLabel {
     font-size: 12px;
@@ -1649,6 +1734,16 @@ QMenu {
     border: 1px solid #333333;
     border-radius: 6px;
     padding: 4px;
+}
+/* TitleBarWidget 视图模式下拉菜单选中项静态属性 */
+QMenu#TitleBarViewModeMenu::item:checked,
+QMenu#TitleBarViewModeMenu::item:checked:selected {
+    color: #ff551c;
+}
+QMenu#TitleBarViewModeMenu::indicator:checked {
+    width: 14px;
+    height: 14px;
+    left: 4px;
 }
 QMenu::item {
     background-color: transparent;

@@ -204,6 +204,7 @@ void TagSelectorOverlay::populateGrid() {
         QString tag = m_displayedTags[i];
 
         QPushButton* btn = new QPushButton(m_tagGridWidget);
+        btn->setObjectName("TagOverlayBtn");
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(22);
@@ -253,35 +254,10 @@ void TagSelectorOverlay::updateSelectionHighlight() {
         }
         btn->setIconSize(QSize(12, 12));
 
-        QString style;
-        if (isSelected) {
-            style = "QPushButton {"
-                    "  background-color: rgba(28, 151, 234, 0.35);"
-                    "  color: #FFFFFF;"
-                    "  border: 1px solid #1C97EA;"
-                    "  border-radius: 4px;"
-                    "  padding: 0 8px;"
-                    "  font-size: 11px;"
-                    "  text-align: left;"
-                    "}";
-        } else {
-            style = "QPushButton {"
-                    "  background-color: transparent;"
-                    "  color: #BBBBBB;"
-                    "  border: 1px solid #333333;"
-                    "  border-radius: 4px;"
-                    "  padding: 0 8px;"
-                    "  font-size: 11px;"
-                    "  text-align: left;"
-                    "}";
-        }
-
-        if (isFocused) {
-            style += " QPushButton { border: 1px solid #1C97EA; color: #FFFFFF; }";
-        } else if (!isSelected) {
-            style += " QPushButton:hover { border-color: #1ABC9C; color: #FFFFFF; }";
-        }
-        btn->setStyleSheet(style);
+        btn->setProperty("selected", isSelected);
+        btn->setProperty("focused", isFocused);
+        btn->style()->unpolish(btn);
+        btn->style()->polish(btn);
     }
 }
 
