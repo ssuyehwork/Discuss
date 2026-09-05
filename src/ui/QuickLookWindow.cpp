@@ -277,7 +277,8 @@ void QuickLookWindow::renderText(const QString& path) {
     if (encodingName == "UTF-8") {
         text = QString::fromUtf8(fileData);
     } else if (encodingName == "UTF-16LE") {
-        text = QString::fromWCharArray(reinterpret_cast<const wchar_t*>(fileData.constData()), fileData.size() / 2);
+        auto decoder = QStringDecoder(QStringDecoder::Utf16LE);
+        text = decoder(fileData);
     } else if (encodingName == "UTF-16BE") {
         auto decoder = QStringDecoder(QStringDecoder::Utf16BE);
         text = decoder(fileData);

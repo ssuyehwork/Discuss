@@ -233,6 +233,8 @@ void PanelMediator::setupConnections() {
             if (UiHelper::canPreviewFile(path)) {
                 m_currentQuickLookPath = path;
                 QuickLookWindow::instance().previewFile(path);
+            } else {
+                QDesktopServices::openUrl(QUrl::fromLocalFile(path));
             }
         });
     }
