@@ -53,6 +53,17 @@ public:
         return ColorPaletteEngine::isStandardImage(ext);
     }
 
+    static inline bool isTextFile(const QString& ext) {
+        static const QSet<QString> textExts = {
+            "txt", "md", "markdown", "log", "rtf", "tex",
+            "bat", "cmd", "ps1", "sh", "bash", "zsh", "fish", "vbs",
+            "json", "xml", "yaml", "yml", "ini", "conf", "config", "toml", "cmake", "qrc", "rc", "properties", "env",
+            "cpp", "cxx", "cc", "c", "h", "hpp", "hxx", "py", "js", "mjs", "ts", "jsx", "tsx", "html", "htm", "css", "scss", "sass", "less", "vue",
+            "php", "rb", "rs", "go", "java", "cs", "sql", "swift", "kt", "kts", "lua", "pl", "r", "dart", "asm", "s"
+        };
+        return textExts.contains(ext.toLower().trimmed());
+    }
+
     static inline QIcon getIcon(const QString& key, const QColor& color, int size = 18) {
         return SvgIconRenderer::getIcon(key, color, size);
     }

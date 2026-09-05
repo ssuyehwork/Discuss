@@ -4,6 +4,7 @@
 #include "../RatingBarLayout.h"
 #include "../ToolTipOverlay.h"
 #include "../ShellIconManager.h"
+#include "../UiHelper.h"
 #include "../../core/TrashService.h"
 #include "../../core/PermanentDeleteService.h"
 #include "../../core/ClipboardService.h"
@@ -390,11 +391,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
                 QFileInfo info(path);
                 if (!info.isDir()) {
                     QString ext = info.suffix().toLower();
-                    static const QSet<QString> whiteList = {
-                        "jpg", "jpeg", "png", "bmp", "webp", "gif", "ico", "cur", "ani", "psd", "ai", "eps", "pdf", "svg",
-                        "txt", "md", "markdown", "log", "cpp", "h", "hpp", "c", "py", "js", "css", "html", "json", "xml", "ini", "conf", "yaml", "yml"
-                    };
-                    if (whiteList.contains(ext)) {
+                    if (UiHelper::isGraphicsFile(ext) || UiHelper::isTextFile(ext) || ext == "pdf") {
                         emit m_panel->requestQuickLook(path);
                     }
                 }
