@@ -451,6 +451,11 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     QAction* actFlip = menu.addAction("水平翻转");
     QAction* actOrig = menu.addAction("原始");
     QAction* actFit = menu.addAction("自适应");
+    actOrig->setCheckable(true);
+    actFit->setCheckable(true);
+    bool isFit = m_graphicsView->isFitMode();
+    actFit->setChecked(isFit);
+    actOrig->setChecked(!isFit);
     menu.addSeparator();
 
     QAction* actOpenDefault = menu.addAction("用系统默认程序打开");

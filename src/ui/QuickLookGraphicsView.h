@@ -18,6 +18,7 @@ public:
     void rotateClockwise();
     void flipHorizontal();
     void clear();
+    bool isFitMode() const { return m_isFitMode; }
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
