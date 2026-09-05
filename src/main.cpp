@@ -138,8 +138,9 @@ int main(int argc, char *argv[]) {
     // -------------------------------------------------------------
     QuarkMeta::CoreController::initializeCoreComponents();
 
+    QuarkMeta::ThemeManager::instance().initialize(&a);
+
     QuarkMeta::MainWindow w;
-    w.setStyleSheet(QuarkMeta::ThemeManager::instance().getGlobalStyleSheet());
     
     // 启动异步系统扫描与监控监听
     QuarkMeta::CoreController::instance().startSystem();
