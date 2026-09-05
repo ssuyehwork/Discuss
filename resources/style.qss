@@ -565,6 +565,11 @@ QWidget#QLContainer {
     border: 1px solid #333333;
     border-radius: 8px;
 }
+QLabel#QLTitle {
+    color: #FF8C00;
+    font-weight: bold;
+    font-size: 14px;
+}
 QLabel#QLEmptyPromptLabel {
     color: #888888;
     font-size: 16px;
