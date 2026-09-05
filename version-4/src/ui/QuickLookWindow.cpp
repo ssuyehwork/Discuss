@@ -19,7 +19,6 @@
 #include <QContextMenuEvent>
 #include "../util/ShellHelper.h"
 #include "FavoritePanel.h"
-#include "../meta/FavoriteDao.h"
 #include <QFileInfo>
 #include <QScreen>
 #include <QApplication>
@@ -464,8 +463,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
 
     QAction* actCopyName = menu.addAction("复制文件名");
     QAction* actCopyPath = menu.addAction("复制路径");
-    bool isFav = FavoriteDao::containsPath(m_currentPath);
-    QAction* actFavorite = menu.addAction(isFav ? "取消收藏" : "添加至收藏夹");
+    QAction* actFavorite = menu.addAction("添加至收藏夹 / 切换收藏");
 
     // 根据是否显示图片启用/禁用 旋转、水平翻转、原始、自适应
     bool isImage = m_graphicsView->isVisible();
