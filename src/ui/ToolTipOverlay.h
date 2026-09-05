@@ -78,6 +78,7 @@ private:
 
     QColor m_currentBorderColor = QColor("#B0B0B0");
     QColor m_currentBackgroundColor = QColor("#2B2B2B");
+    QPoint m_lastPos;
 };
 
 } // namespace QuarkMeta

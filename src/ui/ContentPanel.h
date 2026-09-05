@@ -205,6 +205,7 @@ private:
     QSortFilterProxyModel* m_proxyModel = nullptr;
     
     QTimer* m_visibleTimer = nullptr;
+    QTimer* m_statsDebounceTimer = nullptr;
     ContentSortController* m_sortController = nullptr;
     ContentKeyHandler* m_keyHandler = nullptr;
     ContentDataLoader* m_dataLoader = nullptr;

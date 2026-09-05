@@ -62,6 +62,21 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_visibleTimer->setInterval(60);
     connect(m_visibleTimer, &QTimer::timeout, this, &ContentPanel::refreshVisibleThumbnails);
 
+    // 统计重算防抖定时器 (50ms)：兼顾实时响应与批量修改时的去噪
+    m_statsDebounceTimer = new QTimer(this);
+    m_statsDebounceTimer->setSingleShot(true);
+    m_statsDebounceTimer->setInterval(50);
+    connect(m_statsDebounceTimer, &QTimer::timeout, this, &ContentPanel::recalculateAndEmitStats);
+
+    // 核心架构闭环：监听底层模型元数据变更（卡片点击、列表点击、快捷键赋予、F4重复等），自动防抖驱动统计重算与筛选器同步
+    connect(m_diskModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex&, const QModelIndex&, const QList<int>& roles) {
+        if (roles.isEmpty() || roles.contains(RatingRole) || roles.contains(ColorRole) || roles.contains(TagsRole)) {
+            if (m_statsDebounceTimer) {
+                m_statsDebounceTimer->start();
+            }
+        }
+    });
+
     m_sortController = new ContentSortController(this);
     connect(m_sortController, &ContentSortController::sortCriteriaChanged, this, [this](SortType, Qt::SortOrder) {
         m_sortController->applySortToModel(m_proxyModel);

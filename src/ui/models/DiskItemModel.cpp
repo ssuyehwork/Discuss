@@ -300,7 +300,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             m_pathToIndex.erase(oldPath);
             m_pathToIndex[newPath] = index.row();
             
-            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1));
+            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {Qt::EditRole, Qt::DisplayRole});
             return true;
         }
         return false;
@@ -344,7 +344,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
 
         if (driveUpdated) {
             DriveMetaDao::saveDriveMeta(driveRec);
-            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1));
+            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
             return true;
         }
         return false;
@@ -386,7 +386,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
     }
 
     if (metaUpdated) {
-        emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1));
+        emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
         return true;
     }
     return false;

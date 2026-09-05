@@ -349,12 +349,20 @@ void PanelMediator::setupConnections() {
 
         if (favoritePanel) {
             connect(addressBar, &AddressBar::requestAddFavorite, favoritePanel, [favoritePanel](const QString& path) {
-                favoritePanel->addFavoriteItem(path);
-                favoritePanel->saveFavorites();
+                if (favoritePanel->containsPath(path)) {
+                    favoritePanel->removeFavoriteItem(path);
+                    favoritePanel->saveFavorites();
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
+                } else {
+                    favoritePanel->addFavoriteItem(path);
+                    favoritePanel->saveFavorites();
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+                }
             });
             connect(addressBar, &AddressBar::requestRemoveFavorite, favoritePanel, [favoritePanel](const QString& path) {
                 favoritePanel->removeFavoriteItem(path);
                 favoritePanel->saveFavorites();
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
             });
         }
     }
