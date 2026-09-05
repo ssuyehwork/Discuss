@@ -465,7 +465,8 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     QAction* actCopyName = menu.addAction("复制文件名");
     QAction* actCopyPath = menu.addAction("复制路径");
     bool isFav = FavoriteDao::containsPath(m_currentPath);
-    QAction* actFavorite = menu.addAction(isFav ? "取消收藏" : "添加至收藏夹");
+    QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#e74c3c")) : UiHelper::getIcon("star_filled", QColor("#FDB70A"));
+    QAction* actFavorite = menu.addAction(favIcon, isFav ? "取消收藏" : "添加至收藏夹");
 
     // 根据是否显示图片启用/禁用 旋转、水平翻转、原始、自适应
     bool isImage = m_graphicsView->isVisible();
