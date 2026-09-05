@@ -83,7 +83,8 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
         QMenu menu(this);
         UiHelper::applyMenuStyle(&menu);
 
-        QAction* actFavToggle = menu.addAction(UiHelper::getIcon("star_filled", QColor("#FDB70A")), "收藏 / 取消收藏");
+        bool isFav = FavoriteDao::containsPath(nativePath);
+        QAction* actFavToggle = menu.addAction(UiHelper::getIcon("star_filled", QColor("#FDB70A")), isFav ? "取消收藏" : "添加至收藏夹");
         QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE")), "复制完整路径");
 
         QAction* selected = menu.exec(globalPos);
