@@ -60,12 +60,6 @@ MainWindow::MainWindow(QWidget* parent)
 
     m_trayController = new TrayController(this);
     m_trayController->show();
-
-    QTimer::singleShot(200, []() {
-        QString lastPath = AppConfig::instance().getValue("MainWindow/LastPath", "computer://").toString();
-        bool isValid = lastPath.contains("://") || QDir(lastPath).exists();
-        NavigationService::instance().navigateTo(isValid ? lastPath : "computer://");
-    });
 }
 
 void MainWindow::initUi() {
@@ -189,10 +183,14 @@ void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
     if (!m_panelsInitialized) {
         m_panelsInitialized = true;
-        QTimer::singleShot(0, [this]() {
-            if (m_navPanel) m_navPanel->deferredInit();
-            if (m_contentPanel) m_contentPanel->deferredInit();
-        });
+        // 1. 确保左侧导航树完成桌面、此电脑、磁盘的基础节点构建
+        if (m_navPanel) m_navPanel->deferredInit();
+
+        // 2. 严密确定性因果链：navPanel 刚构建完毕，立即精准拉起上次打开的路径，
+        //    左侧树 100% 准确命中高亮，内容区立即开始加载，0 毫秒盲猜延时
+        QString lastPath = AppConfig::instance().getValue("MainWindow/LastPath", "computer://").toString();
+        bool isValid = lastPath.contains("://") || QDir(lastPath).exists();
+        NavigationService::instance().navigateTo(isValid ? lastPath : "computer://");
     }
 }
 

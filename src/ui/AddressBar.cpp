@@ -24,7 +24,7 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     m_addressContainer = new QWidget(this);
     m_addressContainer->setObjectName("AddressContainer");
     m_addressContainer->setFixedHeight(32);
-    // AddressContainer style in style.qss
+
     QHBoxLayout* containerLayout = new QHBoxLayout(m_addressContainer);
     containerLayout->setContentsMargins(0, 0, 0, 0);
     containerLayout->setSpacing(0);
@@ -75,7 +75,6 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     });
     connect(m_breadcrumbBar, &BreadcrumbBar::pathClicked, this, &AddressBar::onBreadcrumbClicked);
 
-    // 🚀【真实业务还原】：右键菜单恢复为标准的“添加至收藏夹 / 从收藏夹移除”与“复制完整路径”
     connect(m_breadcrumbBar, &BreadcrumbBar::favoriteToggleRequested, this, [this](const QString& fullPath, const QPoint& globalPos) {
         if (fullPath.isEmpty() || fullPath == "computer://") return;
 
@@ -84,7 +83,6 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
         QMenu menu(this);
         UiHelper::applyMenuStyle(&menu);
 
-        // 先不强求检查，让 PanelMediator 统一处理 toggle 并弹出 Tip
         QAction* actFavToggle = menu.addAction(UiHelper::getIcon("star_filled", QColor("#FDB70A")), "收藏 / 取消收藏");
         QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE")), "复制完整路径");
 
@@ -137,15 +135,18 @@ void AddressBar::onBreadcrumbClicked(const QString& path) {
 }
 
 bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
-    // 规则三：悬停气泡提示（ToolTipOverlay 显完整路径）
+    // 规则三：悬停气泡提示（仅在路径超长被截断/省略时，才使用 ToolTipOverlay 显示完整物理路径）
     if (obj == m_breadcrumbBar) {
         if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) {
-            if (!m_currentPath.isEmpty()) {
+            // 核心把关门禁：路径完整可见时绝对不弹，彻底杜绝无谓弹窗与 DWM 频繁合成假死
+            if (m_breadcrumbBar && m_breadcrumbBar->isPathElided() && !m_currentPath.isEmpty()) {
                 QString fullPath = (m_currentPath == "computer://") ? tr("此电脑") : QDir::toNativeSeparators(m_currentPath);
                 ToolTipOverlay::instance()->showText(QCursor::pos(), fullPath, 0);
             }
         } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::Leave) {
-            ToolTipOverlay::hideTip();
+            if (m_breadcrumbBar && m_breadcrumbBar->isPathElided()) {
+                ToolTipOverlay::hideTip();
+            }
         }
     }
 

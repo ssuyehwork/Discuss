@@ -9,7 +9,7 @@ namespace QuarkMeta {
 
 /**
  * @brief 面包屑导航栏部件
- * 将路径拆分为层级按钮，支持点击跳转
+ * 将路径拆分为层级按钮，支持点击跳转；自感知超长截断状态
  */
 class BreadcrumbBar : public QWidget {
     Q_OBJECT
@@ -22,6 +22,11 @@ public:
      * @brief 设置当前显示路径并刷新按钮
      */
     void setPath(const QString& path);
+
+    /**
+     * @brief 当前路径是否因超长而被截断省略（显示了 "..."）
+     */
+    bool isPathElided() const { return m_isElided; }
 
 signals:
     /**
@@ -59,6 +64,7 @@ private:
     QHBoxLayout* m_layout = nullptr;
     QString m_currentPath;
     QList<PathNode> m_nodes;
+    bool m_isElided = false; // 标记当前排版是否处于超长截断状态
 };
 
 } // namespace QuarkMeta

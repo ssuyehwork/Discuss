@@ -13,8 +13,6 @@ BreadcrumbBar::BreadcrumbBar(QWidget* parent) : QWidget(parent) {
     m_layout->setSpacing(2);
     
     setCursor(Qt::PointingHandCursor);
-    // 基础样式：作为地址栏背景
-    // BreadcrumbBar style in style.qss
 }
 
 void BreadcrumbBar::setPath(const QString& path) {
@@ -52,14 +50,16 @@ void BreadcrumbBar::setPath(const QString& path) {
 
 void BreadcrumbBar::rebuildBreadcrumbs() {
     clearButtons();
-    if (m_nodes.isEmpty()) return;
+    if (m_nodes.isEmpty()) {
+        m_isElided = false;
+        return;
+    }
 
-    // 规则二：超长路径截断（头部保留 + “...” 省略）
     QFontMetrics fm(font());
     int availableWidth = width() - 32; // 留出左右边距与容差
     if (availableWidth <= 0) availableWidth = 300;
 
-    // 计算包含所有节点时的预估宽度
+    // 计算包含所有节点时的预估总宽度
     int totalWidth = 0;
     for (int i = 0; i < m_nodes.size(); ++i) {
         totalWidth += fm.horizontalAdvance(m_nodes[i].name) + 24; // 按钮 padding
@@ -67,7 +67,8 @@ void BreadcrumbBar::rebuildBreadcrumbs() {
     }
 
     if (totalWidth <= availableWidth || m_nodes.size() <= 2) {
-        // 未超长或节点数量极少时显示全部
+        // 未超长或节点极少：完整呈现全部路径，打上“未截断”标记
+        m_isElided = false;
         for (int i = 0; i < m_nodes.size(); ++i) {
             if (i > 0) {
                 QLabel* sep = new QLabel(this);
@@ -78,7 +79,9 @@ void BreadcrumbBar::rebuildBreadcrumbs() {
             addLevel(m_nodes[i].name, m_nodes[i].fullPath);
         }
     } else {
-        // 超长：保留头部 1~2 个节点，中间超出部分截断，显示 ... 按钮
+        // 超长：中间超出部分截断并显示 ... 按钮，打上“已截断”标记
+        m_isElided = true;
+
         int headCount = 1;
         if (m_nodes.size() > 3) headCount = 2; // 较长路径保留前两级（例如 C:\ > Users）
 
@@ -89,7 +92,6 @@ void BreadcrumbBar::rebuildBreadcrumbs() {
         }
         usedWidth += fm.horizontalAdvance("...") + 24 + 14;
 
-        // 从尾部尝试保留尽可能多的节点，若装不下则至少保留最后 1 个
         while (visibleTailIndex > headCount) {
             int nodeW = fm.horizontalAdvance(m_nodes[visibleTailIndex].name) + 24 + 14;
             if (usedWidth + nodeW > availableWidth && visibleTailIndex < m_nodes.size() - 1) {
@@ -98,9 +100,9 @@ void BreadcrumbBar::rebuildBreadcrumbs() {
             usedWidth += nodeW;
             visibleTailIndex--;
         }
-        visibleTailIndex++; // 指向第一个渲染的尾部节点
+        visibleTailIndex++;
 
-        // 渲染头部节点
+        // 渲染头部保留节点
         for (int i = 0; i < headCount; ++i) {
             if (i > 0) {
                 QLabel* sep = new QLabel(this);
@@ -155,8 +157,6 @@ void BreadcrumbBar::addLevel(const QString& name, const QString& fullPath) {
     QPushButton* btn = new QPushButton(name, this);
     btn->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     btn->setFixedHeight(24);
-    
-    // 面包屑按钮样式：扁平化，无外框与背景底，仅悬停可见暗色背景
     btn->setObjectName("BreadcrumbNodeBtn");
 
     btn->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -172,7 +172,6 @@ void BreadcrumbBar::addLevel(const QString& name, const QString& fullPath) {
 
 void BreadcrumbBar::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
-        // 改进：点击按钮以外的任何地方（包括分隔符和空白区）都触发编辑模式
         QWidget* child = childAt(event->pos());
         if (!qobject_cast<QPushButton*>(child)) {
             emit blankAreaClicked();
