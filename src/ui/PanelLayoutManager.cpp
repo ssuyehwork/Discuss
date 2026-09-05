@@ -9,7 +9,6 @@
 #include "../core/AppConfig.h"
 #include <QAction>
 #include <QCursor>
-#include <QTimer>
 #include <QList>
 #include <QStringList>
 
@@ -54,24 +53,19 @@ void PanelLayoutManager::initLayout() {
         emit panelVisibilityChanged("filter", false);
     }
 
-    // 【归一化修复】splitter状态恢复必须延迟到下一轮事件循环，确保此时子控件已完成首次布局、窗口geometry已经是最终值
+    // 同步恢复分栏尺寸，杜绝异步 singleShot(0) 造成的二次排版抽搐
     QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
-    QPointer<QSplitter> splitterPtr = m_mainSplitter;
-    QPointer<PanelLayoutManager> selfPtr(this);
-    QTimer::singleShot(0, [splitterPtr, state, selfPtr, isImmersive]() {
-        if (!splitterPtr) return;
-        if (!state.isEmpty() && !isImmersive) {
-            splitterPtr->restoreState(state);
-        } else if (!isImmersive) {
-            QList<int> sizes;
-            sizes << kBasePanelWidth << kBasePanelWidth << kContentBaseWidth << kBasePanelWidth << kBasePanelWidth;
-            splitterPtr->setSizes(sizes);
-        }
-        splitterPtr->setHandleWidth(kSplitterHandleWidth);
-        if (selfPtr) {
-            selfPtr->updateDynamicMinimumSize();
-        }
-    });
+    if (!state.isEmpty() && !isImmersive) {
+        m_mainSplitter->restoreState(state);
+    } else if (!isImmersive) {
+        QList<int> sizes;
+        sizes << kBasePanelWidth << kBasePanelWidth << kContentBaseWidth << kBasePanelWidth << kBasePanelWidth;
+        m_mainSplitter->setSizes(sizes);
+    }
+    m_mainSplitter->setHandleWidth(kSplitterHandleWidth);
+
+    // 🚀 初始化完成当场强制焊死最小宽度保护，防止 5 栏被挤压崩溃
+    updateDynamicMinimumSize();
 }
 
 void PanelLayoutManager::resetSplitterLayout() {
@@ -241,7 +235,7 @@ void PanelLayoutManager::updateDynamicMinimumSize() {
 
     if (visibleCount <= 0) visibleCount = 1;
 
-    // 🚀【刚性物理生命线】：根据可见栏区数量严谨计算最小宽度，杜绝 5 栏被挤压崩溃
+    // 🚀【绝对不可动摇的刚性物理生命线】：5栏全开时强制锁定 1180px，坚决杜绝再次被挤成肉饼！
     int calculatedMinW = (visibleCount * kBasePanelWidth) + ((visibleCount - 1) * kSplitterHandleWidth) + 10;
     int finalMinW = std::max(kWindowAbsoluteMinWidth, calculatedMinW);
 

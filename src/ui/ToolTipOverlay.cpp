@@ -33,8 +33,38 @@ ToolTipOverlay::ToolTipOverlay() : QWidget(nullptr) {
     m_showDelayTimer.setSingleShot(true);
     connect(&m_showDelayTimer, &QTimer::timeout, this, &ToolTipOverlay::triggerPendingShow);
 
-    // 初始静默隐藏，等待 MainWindow 的 showEvent 触发真正有效的 GPU 预热
     hide();
+}
+
+void ToolTipOverlay::silentWarmup() {
+    if (m_warmedUp) return;
+    m_warmedUp = true;
+
+    // 1. 强制向操作系统申请底层真正的 Win32 窗口句柄 (HWND)
+    (void)this->winId();
+
+    // 2. 绝对不可见双重保护：移至屏幕外万象之外 + 全透明
+    setWindowOpacity(0.0);
+    move(-9999, -9999);
+    resize(40, 24);
+
+    // 3. 预先激活 QTextDocument 字体解析引擎与字形缓存
+    m_doc.setHtml(
+        "<html><body style='margin:0; padding:0; color:#EEEEEE; font-family:\"Microsoft YaHei\",\"Segoe UI\",sans-serif;'>"
+        "<div style='color:#EEEEEE;'>Warmup</div></body></html>"
+    );
+    m_doc.setTextWidth(-1);
+    (void)m_doc.idealWidth();
+    (void)m_doc.size();
+
+    // 4. 驱动 DWM 在显存中分配透明混合图层并完成首次 GPU 渲染指令预编译
+    show();
+    render(this);
+    hide();
+
+    // 5. 静默复位，随时就绪
+    setWindowOpacity(1.0);
+    m_doc.clear();
 }
 
 void ToolTipOverlay::hideOverlay() {
@@ -44,7 +74,6 @@ void ToolTipOverlay::hideOverlay() {
 }
 
 void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int timeout, const QColor& borderColor, bool exactPosition, const QColor& backgroundColor) {
-    // [THREAD SAFE] 强制确保在主线程执行
     if (thread() != QThread::currentThread()) {
         QMetaObject::invokeMethod(this, [this, globalPos, text, timeout, borderColor, exactPosition, backgroundColor]() { 
             showText(globalPos, text, timeout, borderColor, exactPosition, backgroundColor); 
@@ -81,7 +110,6 @@ void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int 
     }
 
     m_lastPos = globalPos;
-    // 保存等待显示的参数
     m_pendingPos = globalPos;
     m_pendingText = text;
     m_pendingTimeout = timeout;
@@ -89,7 +117,6 @@ void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int 
     m_pendingBackgroundColor = backgroundColor;
     m_pendingExactPosition = exactPosition;
 
-    // 启动 150ms 延迟防抖定时器，频繁划过时只响应最后停顿的控件
     m_showDelayTimer.start(150);
 }
 
@@ -190,7 +217,7 @@ void ToolTipOverlay::paintEvent(QPaintEvent*) {
     
     p.setPen(QPen(m_currentBorderColor, 1));
     p.setBrush(m_currentBackgroundColor);
-    // 2026-03-xx 按照用户硬性要求：ToolTip 圆角必须锁定为 2px
+    // ToolTip 圆角锁定为 2px
     p.drawRoundedRect(rectF, 2, 2);
     
     if (!m_text.isEmpty()) {

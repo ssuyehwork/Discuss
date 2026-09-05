@@ -41,7 +41,7 @@ public:
     }
 
     /**
-     * @brief 显示提示文字（2026-03-xx 重构升级版）
+     * @brief 显示提示文字
      */
     void showText(const QPoint& globalPos, const QString& text, int timeout = 700, const QColor& borderColor = QColor("#B0B0B0"), bool exactPosition = false, const QColor& backgroundColor = QColor("#2B2B2B"));
 
@@ -55,6 +55,11 @@ public:
     }
 
     void hideOverlay();
+
+    /**
+     * @brief 真·静默预热接口：提前向系统申请 HWND 并激活 DWM 显存分层与排版引擎，杜绝首次悬停顿挫
+     */
+    void silentWarmup();
 
 protected:
     explicit ToolTipOverlay();
@@ -79,6 +84,8 @@ private:
     QColor m_currentBorderColor = QColor("#B0B0B0");
     QColor m_currentBackgroundColor = QColor("#2B2B2B");
     QPoint m_lastPos;
+
+    bool m_warmedUp = false; // 防重入预热标记
 };
 
 } // namespace QuarkMeta
