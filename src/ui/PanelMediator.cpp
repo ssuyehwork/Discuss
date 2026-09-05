@@ -17,6 +17,7 @@
 #include "../util/ShellHelper.h"
 #include "UiHelper.h"
 #include <QFileInfo>
+#include <QFile>
 #include <QCursor>
 
 namespace QuarkMeta {
@@ -229,8 +230,7 @@ void PanelMediator::setupConnections() {
             cmd.targetPaths << path;
             CoreEngine::instance().executeCommand(cmd);
 
-            QString ext = QFileInfo(path).suffix().toLower();
-            if (UiHelper::isGraphicsFile(ext) || UiHelper::isTextFile(ext) || ext == "pdf") {
+            if (UiHelper::canPreviewFile(path)) {
                 m_currentQuickLookPath = path;
                 QuickLookWindow::instance().previewFile(path);
             }

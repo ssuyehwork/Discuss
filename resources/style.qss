@@ -1775,3 +1775,43 @@ QTreeView::item {
 QTreeView::item:alternate {
     background-color: #252526;
 }
+
+/* TextExtensionDialog 文本扩展名设置弹窗 */
+#TextExtBuiltInTitle, #TextExtCustomTitle {
+    font-weight: bold;
+    color: #CCCCCC;
+    font-size: 13px;
+}
+
+#TextExtScrollArea {
+    background-color: #1a1a1a;
+    border: 1px solid #333333;
+    border-radius: 6px;
+}
+
+#TextExtScrollContent, #TextExtBuiltInContainer {
+    background-color: transparent;
+}
+
+#TextExtBuiltInCapsules {
+    color: #888888;
+    font-size: 12px;
+}
+
+#TextExtensionListWidget {
+    background-color: #1e1e1e;
+    border: 1px solid #333333;
+    border-radius: 6px;
+    color: #e0e0e0;
+    padding: 4px;
+}
+
+#TextExtensionListWidget::item {
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+#TextExtensionListWidget::item:selected {
+    background-color: #005fb8;
+    color: #ffffff;
+}

@@ -23,6 +23,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QFileInfo>
+#include <QFile>
 #include <QDir>
 #include <QSet>
 #include <QTimer>
@@ -387,14 +388,8 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             // 🚀 确保即使焦点处于列表视图非 Name 列，也能正确从 FileListColumn::Name sibling 获取完整 PathRole 属性
             QModelIndex nameIdx = idx.sibling(idx.row(), static_cast<int>(FileListColumn::Name));
             QString path = nameIdx.data(PathRole).toString();
-            if (!path.isEmpty()) {
-                QFileInfo info(path);
-                if (!info.isDir()) {
-                    QString ext = info.suffix().toLower();
-                    if (UiHelper::isGraphicsFile(ext) || UiHelper::isTextFile(ext) || ext == "pdf") {
-                        emit m_panel->requestQuickLook(path);
-                    }
-                }
+            if (!path.isEmpty() && UiHelper::canPreviewFile(path)) {
+                emit m_panel->requestQuickLook(path);
             }
         }
         return true;

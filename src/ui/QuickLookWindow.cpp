@@ -20,6 +20,7 @@
 #include "../util/ShellHelper.h"
 #include "FavoritePanel.h"
 #include "../meta/FavoriteDao.h"
+#include "dialogs/TextExtensionDialog.h"
 #include <QFileInfo>
 #include <QScreen>
 #include <QApplication>
@@ -472,6 +473,9 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     bool isFav = FavoriteDao::containsPath(m_currentPath);
     QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#e74c3c")) : UiHelper::getIcon("star_filled", QColor("#FDB70A"));
     QAction* actFavorite = menu.addAction(favIcon, isFav ? "取消收藏" : "添加至收藏夹");
+    menu.addSeparator();
+
+    QAction* actTextExtSettings = menu.addAction("文本扩展名设置...");
 
     // 根据是否显示图片启用/禁用 旋转、水平翻转、原始、自适应
     bool isImage = m_graphicsView->isVisible();
@@ -522,6 +526,9 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
         QApplication::clipboard()->setText(QDir::toNativeSeparators(m_currentPath));
     } else if (selected == actFavorite) {
         emit favoriteRequested(m_currentPath);
+    } else if (selected == actTextExtSettings) {
+        TextExtensionDialog dlg(this);
+        dlg.exec();
     }
 }
 
