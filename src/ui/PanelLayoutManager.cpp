@@ -54,7 +54,6 @@ void PanelLayoutManager::initLayout() {
         emit panelVisibilityChanged("filter", false);
     }
 
-    // 【归一化修复】splitter状态恢复必须延迟到下一轮事件循环，确保此时子控件已完成首次布局、窗口geometry已经是最终值
     QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
     QPointer<QSplitter> splitterPtr = m_mainSplitter;
     QPointer<PanelLayoutManager> selfPtr(this);
@@ -67,8 +66,6 @@ void PanelLayoutManager::initLayout() {
             sizes << kBasePanelWidth << kBasePanelWidth << kContentBaseWidth << kBasePanelWidth << kBasePanelWidth;
             splitterPtr->setSizes(sizes);
         }
-        // 【归一化修复】restoreState() 会把配置文件里存档的旧 handle 宽度一并带回来，
-        // 覆盖掉刚才在 setupSplitters() 里设置好的 5px，此处强制重新纠正
         splitterPtr->setHandleWidth(kSplitterHandleWidth);
         if (selfPtr) {
             selfPtr->updateDynamicMinimumSize();
@@ -232,22 +229,8 @@ void PanelLayoutManager::showPanelContextMenu(const QPoint& globalPos) {
 }
 
 void PanelLayoutManager::updateDynamicMinimumSize() {
-    if (!m_mainWindow) return;
-
-    int visibleCount = 0;
-    if (m_navPanel && !m_navPanel->isHidden()) visibleCount++;
-    if (m_favoritePanel && !m_favoritePanel->isHidden()) visibleCount++;
-    if (m_contentPanel && !m_contentPanel->isHidden()) visibleCount++;
-    if (m_metaPanel && !m_metaPanel->isHidden()) visibleCount++;
-    if (m_filterPanel && !m_filterPanel->isHidden()) visibleCount++;
-
-    if (visibleCount <= 0) visibleCount = 1;
-
-    // 🚀【顶栏物理安全锁】：动态计算值与 475px 绝对下限取最大值
-    int calculatedMinW = (visibleCount * kBasePanelWidth) + ((visibleCount - 1) * kSplitterHandleWidth) + 10;
-    int finalMinW = std::max(kWindowAbsoluteMinWidth, calculatedMinW);
-
-    m_mainWindow->setMinimumWidth(finalMinW);
+    // 彻底废除将面板宽度累加并强制篡改顶级主窗口 setMinimumWidth 的霸道逻辑。
+    // 主窗口尺寸保持其自身的物理下限契约（475px），各面板分配全权交由 QSplitter 弹性负责。
 }
 
 void PanelLayoutManager::saveLayoutState() {

@@ -28,6 +28,9 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
     m_searchEdit->installEventFilter(this);
     m_tagGridWidget->installEventFilter(this);
 
+    // 接入全项目统一的纯 Qt 物理手柄缩放助手，彻底拔除重复造轮子
+    FramelessWindowHelper::apply(this);
+
     qApp->installEventFilter(this);
     connect(qApp, &QApplication::focusChanged, this, [this](QWidget* old, QWidget* now) {
         Q_UNUSED(old);
@@ -113,14 +116,12 @@ void TagSelectorOverlay::initUi() {
     m_scrollArea = new QScrollArea(this);
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setObjectName("TagSelectorScrollArea");
-    if (m_scrollArea->viewport()) {
-// viewport style in style.qss
-    }
     m_scrollArea->setWidget(m_tagGridWidget);
     bodyL->addWidget(m_scrollArea, 1);
 
     mainL->addLayout(bodyL, 1);
 
+    setMinimumSize(250, 150);
     QSize savedSize = AppConfig::instance().getValue("TagSelectorOverlay/Size", QSize(400, 240)).toSize();
     resize(savedSize.expandedTo(QSize(250, 150)));
 }
@@ -246,7 +247,6 @@ void TagSelectorOverlay::updateSelectionHighlight() {
 
         btn->setText(tag);
 
-        // ✅ 选中显示对勾(check)，未选中显示时钟(clock)
         if (isSelected) {
             btn->setIcon(UiHelper::getIcon("check", QColor("#FFFFFF"), 12));
         } else {
@@ -286,104 +286,6 @@ void TagSelectorOverlay::handleGroupNavigation(int key) {
     }
 }
 
-int TagSelectorOverlay::getResizeDirection(const QPoint& pos) {
-    int dir = 0;
-    if (pos.x() < m_margin) dir |= 1;
-    else if (pos.x() > width() - m_margin) dir |= 2;
-    
-    if (pos.y() < m_margin) dir |= 4;
-    else if (pos.y() > height() - m_margin) dir |= 8;
-    return dir;
-}
-
-bool TagSelectorOverlay::isInteractiveChild(QWidget* child) const {
-    if (!child) return false;
-    if (child == m_searchEdit || (m_searchEdit && m_searchEdit->isAncestorOf(child))) return true;
-    if (child == m_btnToggleSidebar) return true;
-    if (child == m_groupList || (m_groupList && m_groupList->isAncestorOf(child))) return true;
-    if (qobject_cast<QPushButton*>(child)) return true;
-    if (qobject_cast<QScrollBar*>(child)) return true;
-    return false;
-}
-
-void TagSelectorOverlay::updateCursorShape(const QPoint& pos) {
-    int dir = getResizeDirection(pos);
-    if (dir == 0) {
-        QWidget* child = childAt(pos);
-        if (isInteractiveChild(child)) {
-            setCursor(Qt::ArrowCursor);
-        } else {
-            setCursor(Qt::SizeAllCursor);
-        }
-    } else {
-        if (dir == (1 | 4) || dir == (2 | 8)) setCursor(Qt::SizeFDiagCursor);
-        else if (dir == (2 | 4) || dir == (1 | 8)) setCursor(Qt::SizeBDiagCursor);
-        else if (dir == 1 || dir == 2) setCursor(Qt::SizeHorCursor);
-        else if (dir == 4 || dir == 8) setCursor(Qt::SizeVerCursor);
-    }
-}
-
-void TagSelectorOverlay::mousePressEvent(QMouseEvent* event) {
-    if (event->button() == Qt::LeftButton) {
-        m_resizeDir = getResizeDirection(event->pos());
-        QWidget* child = childAt(event->pos());
-        m_isDragging = (m_resizeDir == 0 && !isInteractiveChild(child));
-        m_dragStartPos = event->globalPosition().toPoint();
-        m_dragStartGeometry = geometry();
-        if (m_resizeDir != 0 || m_isDragging) {
-            event->accept();
-        } else {
-            QFrame::mousePressEvent(event);
-        }
-    } else {
-        QFrame::mousePressEvent(event);
-    }
-}
-
-void TagSelectorOverlay::mouseMoveEvent(QMouseEvent* event) {
-    if (event->buttons() & Qt::LeftButton) {
-        QPoint delta = event->globalPosition().toPoint() - m_dragStartPos;
-        if (m_isDragging) {
-            QPoint newPos = m_dragStartGeometry.topLeft() + delta;
-            if (QWidget* p = parentWidget()) {
-                QRect pGeom = p->frameGeometry();
-                int minX = pGeom.left();
-                int maxX = qMax(minX, pGeom.right() - width());
-                int minY = pGeom.top();
-                int maxY = qMax(minY, pGeom.bottom() - height());
-                newPos.setX(qBound(minX, newPos.x(), maxX));
-                newPos.setY(qBound(minY, newPos.y(), maxY));
-            }
-            move(newPos);
-        } else if (m_resizeDir != 0) {
-            QRect newGeom = m_dragStartGeometry;
-            if (m_resizeDir & 1) newGeom.setLeft(m_dragStartGeometry.left() + delta.x());
-            else if (m_resizeDir & 2) newGeom.setRight(m_dragStartGeometry.right() + delta.x());
-
-            if (m_resizeDir & 4) newGeom.setTop(m_dragStartGeometry.top() + delta.y());
-            else if (m_resizeDir & 8) newGeom.setBottom(m_dragStartGeometry.bottom() + delta.y());
-
-            if (newGeom.width() >= 250 && newGeom.height() >= 150) {
-                setGeometry(newGeom);
-            }
-        }
-        event->accept();
-    } else {
-        updateCursorShape(event->pos());
-        QFrame::mouseMoveEvent(event);
-    }
-}
-
-void TagSelectorOverlay::mouseReleaseEvent(QMouseEvent* event) {
-    if (m_resizeDir != 0) {
-        AppConfig::instance().setValue("TagSelectorOverlay/Size", size());
-    }
-    m_isDragging = false;
-    m_resizeDir = 0;
-    setCursor(Qt::ArrowCursor);
-    QFrame::mouseReleaseEvent(event);
-}
-
 void TagSelectorOverlay::resizeEvent(QResizeEvent* event) {
     QFrame::resizeEvent(event);
     if (isVisible()) {
@@ -401,12 +303,11 @@ void TagSelectorOverlay::changeEvent(QEvent* event) {
 }
 
 bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
-    // 1. 全局鼠标点击检测：若在浮层外部区域点击，立刻关闭
     if (event->type() == QEvent::MouseButtonPress) {
         QMouseEvent* me = static_cast<QMouseEvent*>(event);
         if (isVisible() && !geometry().contains(me->globalPosition().toPoint())) {
             closeOverlay();
-            return false; // 不拦截，允许底层控件正常响应点击
+            return false;
         }
     }
 

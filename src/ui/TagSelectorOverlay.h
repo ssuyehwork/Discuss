@@ -10,6 +10,7 @@
 #include <QStringList>
 #include "components/FlowLayout.h"
 #include "../core/TagLexiconService.h"
+#include "FramelessWindowHelper.h"
 
 namespace QuarkMeta {
 
@@ -26,9 +27,6 @@ signals:
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void changeEvent(QEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseMoveEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
 private:
@@ -43,14 +41,9 @@ private:
 
     void closeOverlay();
 
-    void updateCursorShape(const QPoint& pos);
-    int getResizeDirection(const QPoint& pos);
-    bool isInteractiveChild(QWidget* child) const;
-
     QStringList m_selectedTags;
     QStringList m_displayedTags;
     QMap<QString, int> m_allTagCounts;
-    // 🚀【类型对齐】：对齐标准 TagGroup
     QList<TagGroup> m_lexiconGroups;
 
     QLineEdit* m_searchEdit = nullptr;
@@ -62,12 +55,6 @@ private:
     QList<QPushButton*> m_tagButtons;
     int m_currentTagIndex = -1;
 
-    QPoint m_dragStartPos;
-    QRect m_dragStartGeometry;
-    bool m_isDragging = false;
-    int m_resizeDir = 0;
-    const int m_margin = 6;
-    bool m_wasActivated = false;
     bool m_isClosing = false;
 };
 
