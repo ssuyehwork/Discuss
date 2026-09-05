@@ -1,158 +1,74 @@
-# AGENTS.md
+# 通用架构重构指导原则（面向：本地磁盘直连型资产管理桌面应用）
 
-> **CRITICAL DIRECTIVE FOR ALL AI AGENTS (Jules, Cursor, Copilot, etc.)**  
-> **READ THIS BEFORE PROPOSING OR MODIFYING ANY CODE IN THIS REPOSITORY.**  
-> You are operating within an established, production-grade C++/Qt desktop codebase.  
-> **Blindly adding patches, duplicating existing utilities, inventing custom infrastructure, or violating layered architecture WILL RESULT IN IMMEDIATE REJECTION.**
+## 0. 本文档的定位与项目 UI 规范引导
 
----
+这是一份**原则层面**的通用指导，适用于"本地磁盘直连、多栏布局、给文件打元数据、元数据落地在文件系统侧车文件里"这一类桌面应用的架构判断，不点名任何具体类名或文件名，因此可以在项目结构调整、文件重命名之后依然适用。
 
-## 1. Zero-Duplication Policy (Anti-Wheel-Reinventing)
+**如果涉及到 UI 界面样式、主题管理、控件外观等重构或新增修改，Agent 与开发者必须优先读取并严格遵守项目根目录下的 `Guide & Preference.md` 规范。任何样式修改必须在 `resources/style.qss` 与 `ThemeManager` 框架下按规范实施，禁止在 C++ 控件代码中采用内联 `setStyleSheet(...)` 方式硬编码样式。**
 
-Before creating ANY utility function, helper class, or custom low-level logic, you **MUST** verify if it already exists in the table below. **Always reuse existing modules.**
-
-### 🚫 Banned Inventions & Required Existing Modules
-
-| Category | 🚫 FORBIDDEN TO CREATE / DUPLICATE | ✅ MANDATORY REUSE MODULE |
-| :--- | :--- | :--- |
-| **Path & Navigation** | Manual string manipulation for paths (`lastIndexOf('/')`, string concatenation). Custom history stacks. | `core/NavigationService.h`<br>`core/NavigationHistoryService.h`<br>`std::filesystem` |
-| **Frameless & Windows OS** | Hand-crafted `nativeEvent` (`WM_NCCALCSIZE`, `WM_GETMINMAXINFO`, custom monitor calculation). | `ui/FramelessWindowHelper.h`<br>`ui/FramelessDialog.h` |
-| **Icons & Vector Graphics** | Loading raw raster PNGs directly or hand-written color replacements for icons. | `ui/SvgIconRenderer.h`<br>`ui/ShellIconManager.h`<br>`ui/UiHelper.h` |
-| **Configuration & Storage** | Instantiating independent `QSettings`, hand-crafted JSON configs, manual registry read/write. | `core/AppConfig.h` |
-| **OS / Shell Integration** | Calling raw Win32 COM, `IShellItem`, `SHGetFileInfo`, `ShellExecute` directly inside UI panels. | `util/ShellHelper.h` |
-| **Hashing & Duplication** | Custom MD5/SHA256 loops, hand-rolled file fingerprinters. | `meta/DuplicateDetectorService.h`<br>`QCryptographicHash` |
-| **Media Extraction** | Parsing metadata headers directly in business services. | `util/DiskMediaExtractor.h` |
-| **Asynchronous Tasks** | Spawning raw `std::thread`, unmanaged `QThread`, custom worker dispatch loops. | `QtConcurrent`<br>`QThreadPool`<br>`core/UndoManager.h` |
-| **UI Tooltips & Badges** | Creating custom hovering popup loops or ad-hoc Tooltip widgets. | `ui/ToolTipOverlay.h`<br>`ui/HoverEventFilter.h` |
+**如果这份文档里的某条原则，跟另一份写明了具体类名/文件名的项目专属规则文档冲突，以那份具体的为准**——具体的、经过实际代码验证过的例外，永远优先于这里的通用原则，因为通用原则天然无法预见每一个具体场景。
 
 ---
 
-## 2. Strict Architectural Boundaries
+## 1. 这类应用的真实运行特性（先认清对象，再谈架构）
 
-The codebase follows a strict multi-layer separation. You must strictly adhere to these layer boundaries:
+在对这类应用做任何架构判断之前，先确认以下几件事是不是成立，不成立就不要机械套用后面的原则：
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ UI Layer: ui/* (Panels, Widgets, Dialogs, Overlays)         │
-│  - CAN ONLY: Handle rendering, user inputs, signals/slots   │
-│  - STRICTLY FORBIDDEN: Raw Win32 API, direct disk I/O, COM  │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ invokes
-┌──────────────────────────────▼──────────────────────────────┐
-│ Core & Orchestration Layer: core/*, meta/*                  │
-│  - CAN ONLY: Manage app state, business flow, DB, services  │
-│  - STRICTLY FORBIDDEN: #include <QWidget>, GUI dependencies │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ invokes
-┌──────────────────────────────▼──────────────────────────────┐
-│ Platform & Utility Layer: util/*                            │
-│  - Single source of truth for OS-level and hardware logic   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Absolute Rules:
-1. **Never pollute UI with Native APIs**: If you need Windows-specific logic, it **MUST** reside in `util/ShellHelper` or `ui/FramelessWindowHelper`, never directly inside a `*Panel.cpp` or `*Dialog.cpp`.
-2. **Never cross-wire UI panels directly**: Panels (`NavPanel`, `ContentPanel`, `MetaPanel`) must communicate strictly via `core/CentralEventHub.h`, `PanelMediator.h`, or Qt Signals/Slots. Do not pass raw pointers of one panel into another.
-3. **No Hidden Local State**: Do not invent local static caches or private state variables to bypass the centralized state managers (`CoreController`, `NavigationService`).
+- **数据落地方式**：这类应用通常不是把每个文件的元数据（星级、颜色、标签、备注、链接）集中存进一个中心数据库，而是**按文件夹为单位，落地成一个隐藏的侧车配置文件**，中心数据库只存跨文件夹的全局性数据（标签词典、回收站记录、盘符级元数据）。判断"某个数据该存哪"时，先确认它是"归属于某个具体文件/文件夹"还是"归属于全局"，两者的存储层完全不同，不能混用同一套读写路径。
+- **磁盘直连 vs 托管库的历史包袱**：这类应用有可能是从一个更早的、同时支持"托管库模式"和"磁盘直连模式"的双轨应用里拆分出来的。拆分之后，代码里可能残留只服务于已废弃模式的类、注释、"红线警告"。**看到任何限制性的架构声明（红线、禁止、必须），第一反应不是照做或照防，而是先确认它防的对象现在是否还存在于这个仓库里。**
+- **缩略图/预览是分层的**：原始文件 → 内存缓存 → 磁盘缓存 → 实时解码兜底，这几层各自独立，可能出现"同一件事在不同层各实现一次"的重复。判断要不要合并，先确认这几层各自服务的场景是否真的相同（比如"网格卡片要的缩略图尺寸"和"详情预览要的缩略图尺寸"未必一样，合并前要先确认场景是否真的等价）。
 
 ---
 
-## 3. Mandatory Workflow for Agents (The 3-Step Protocol)
+## 2. 架构分层：用判断标准代替教条模板
 
-When given a task or bug report, follow these three steps sequentially. **Do not skip Step 1.**
+不要求把每个类塞进一张固定的"五层架构图"里去凑数。改用以下判断标准去决定一段代码该待在哪：
 
-### Step 1: Capability Inspection (Read Before Write)
-* Search the repository for relevant keywords using `grep` or file search before writing any code.
-* Identify which services or helpers are already handling related tasks.
-* Ask yourself: *"Can this be solved by calling an existing method in `NavigationService`, `AppConfig`, or `UiHelper`?"*
+- **这段代码有没有直接操作操作系统窗口/输入设备/文件系统底层 API？** 有 → 它属于最贴近硬件/操作系统的一层，不该包含业务判断逻辑。
+- **这段代码有没有直接做 QWidget 布局、绘制、捕获用户输入？** 有且仅有这些 → 它是纯视图层，内部状态应该私有，只通过信号或有限的访问接口对外暴露。
+- **这段代码是不是在"发生了什么事、该转发给谁"这件事上打转，本身不做业务判断也不碰底层 IO？** 是 → 它是路由/协调层。
+- **这段代码是不是某个业务状态（当前路径、选中项、撤销栈、后台任务队列）的唯一权威来源，负责校验和广播变化？** 是 → 它是业务领域层，这类状态不允许在别的地方再存一份副本。
+- **这段代码是不是在做真正的磁盘/数据库读写，或者调用外部进程？** 是 → 它属于基础设施层，这类操作必须跟主线程隔开，不能让界面等它。
 
-### Step 2: Minimalist Surgical Modification
-* Prefer small, localized changes that leverage existing extension points.
-* Do not introduce new third-party dependencies without explicit instruction.
-* Do not rewrite architectural layouts just to fix a visual glitch. Use existing helpers (e.g., `PanelLayoutManager`).
-
-### Step 3: Self-Audit Checklist Before Submitting
-Before finalizing your plan or code submission, you must verify:
-- [ ] Did I introduce any new utility class that overlaps with `util/*` or `core/*`? (If yes, delete it and reuse).
-- [ ] Did I add raw `#include <windows.h>` into a UI component? (If yes, move it to `util/ShellHelper`).
-- [ ] Did I bypass `AppConfig` and write hardcoded configurations? (If yes, refactor to use `AppConfig`).
-- [ ] Is this patch addressing the root cause or just slapping an ad-hoc fix on top of another patch?
+一个类如果同时满足好几条，就是需要拆分的信号；但**拆分方案不能靠套用一张预设的分层图去决定要拆成什么样**，要根据这个类实际承担的、互相无关的职责去决定拆几块、每块叫什么。
 
 ---
 
-## 4. Rejection Criteria
+## 3. 封装方式：不预设"唯一正确解法"
 
-Your Pull Request or generated patch **will be rejected immediately** if it contains:
-1. Copy-pasted helper functions across different files.
-2. Direct calls to platform-specific Win32 APIs outside of `util/` or `FramelessWindowHelper`.
-3. Newly created `*Manager` or `*Helper` classes that duplicate functions of Qt standard libraries or existing services.
-4. "Quick-fix" patches that break existing geometry or layout preservation logic (e.g., in `MainWindow.cpp` or `PanelLayoutManager.cpp`).
+模块之间怎么互相访问对方的内部状态，存在不止一种合法做法，包括但不限于：**通过构造函数注入并声明为友元**，或者**通过对外暴露一组只读访问方法**。这两种（以及其他等价的做法）都是可以接受的解耦手段，**不要武断地把其中一种判定为"违规"而只允许另一种**——判断标准应该是"访问范围是不是被限制在合理的最小集合内、有没有被滥用成到处互相掏对方内部状态"，而不是"用了哪种具体机制"。
 
-// ===================|===================
+同理，"要不要允许新拆出来的辅助类直接持有主类指针"这件事，也应该按实际访问范围和使用场景判断，而不是一刀切禁止或允许。
 
 ---
 
-## 5. Mandatory Patch Accounting & Circuit Breaker (补丁计数与熔断机制)
+## 4. 批量操作与事件广播：新代码守规矩，旧代码看情况
 
-To prevent endless layered hotfixes, **EVERY** bug fix, behavioral tweak, or edge-case patch made by AI Agents MUST be explicitly logged at the very top of the modified file.
+新写的批量操作代码（对一批文件设置星级、颜色、标签等），应该做完全部数据变更后只广播一次聚合结果，不要在循环体内逐条广播——这能避免界面在处理大批量操作时被迫做几十上百次重复刷新。
 
-### 5.1 File Header Patch Block Standard
-Whenever you modify an existing file to fix a bug or adjust behavior, you **MUST** update or create the `[AI-PATCH-LEDGER]` comment block at the top of the file:
+但**这条原则不追溯已经存在、且是循环内逐条广播的旧代码**，尤其是当这些旧代码对应的事件结构体本身就是"单路径单字段"设计时——把这类旧代码改成聚合广播，需要先重新设计事件的数据结构，这是一次独立的、影响面更大的工作，不应该被"批量操作要聚合广播"这条通用原则顺带触发。
 
-```cpp
-/**
- * [AI-PATCH-LEDGER]
- * Patch-Count: 3
- * Max-Allowed-Patches: 5
- * -------------------------------------------------------------
- * Rev | Date (UTC)   | Agent / Author | Reason / Root Cause Fixed
- * -------------------------------------------------------------
- * #1  | 2026-05-10   | Jules          | Fix window geometry restoration under multi-monitor setup.
- * #2  | 2026-05-18   | Jules          | Prevent taskbar overlap on maximized state (nativeEvent WM_NCCALCSIZE).
- * #3  | 2026-06-01   | Jules          | Fix flicker when restoring from system tray.
- * -------------------------------------------------------------
- */
- 
-// ===================|===================
- 
-## 6. The Normalization Law (归一化铁律：排查不断层)
+---
 
-Before touching any code related to Paths, Window States, Selection, or Navigation, you MUST adhere to `SYSTEM_CONTRACTS.md`.
+## 5. 全局事件拦截：新增要克制，存量不倒查
 
-1. **Check SSOT (Single Source of Truth)**:
-   - Identify the UNIQUE authority for the state you are modifying.
-   - If a bug occurs because State A (e.g. in AddressBar) mismatches State B (e.g. in ContentPanel), **DO NOT sync them with a local hack**. Fix the binding to the central authority (`NavigationService`).
+不要在新代码里随意安装不加范围限制的全局事件过滤器——一个全局过滤器如果什么都想拦，会污染全应用所有弹窗、菜单、快捷键的正常事件流转。
 
-2. **No Data Adulteration (数据形态一致性)**:
-   - Every file path passed through the system MUST be pre-normalized. If you receive an unnormalized path, trace it back to the system boundary (input point) and fix it at the root with `PathHelper::normalize()`. Never sanitize strings deep inside business logic.
+但如果代码库里已经存在服务于明确、单一目的（比如统一处理悬浮提示、统一处理无边框窗口缩放热区）的全局过滤器，这些是合理的既有设计，**不因为这条原则被要求倒查或移除**。
 
-3. **No Timing Patches (严禁时序补丁)**:
-   - PRs containing arbitrary `QTimer::singleShot(50/100/200, ...)` to bypass race conditions or initialization order bugs will be **IMMEDIATELY REJECTED**. Refactor the signal chain or follow the lifecycle contract.
-   
-   // ===================|===================
-   
-   ---
+---
 
-## 7. Naming Conventions & Lexicon Contract (命名与目录归一化铁律)
+## 6. 平台级 Hack：永远先查根因
 
-Semantic ambiguity in file names causes Agent amnesia and duplicate code. You MUST strictly adhere to the project's naming lexicon and directory structure.
+遇到"焦点抢不到"、"窗口弹不出来"、"菜单显示位置不对"这类表面症状时，永远先去查：事件是在哪一层被谁截走的、窗口的显示/激活状态机走到了哪一步、跟别的控件有没有抢占关系。**不允许在没有查清楚上述任何一条之前，就用底层平台 API 强行抢焦点、强行改窗口属性去压制症状**——这类手段能让症状暂时消失，但下一次类似场景下大概率会以另一种形式复发，而且会破坏控件本身正常的事件处理机制。
 
-### 7.1 Mandatory Suffixes & Locations
-- **Dialogs**: MUST reside in `src/ui/dialogs/` and end with `*Dialog.h/.cpp` (MUST inherit `FramelessDialog`).
-- **Data Access**: MUST end with `*Repo` (e.g., `TrashRepo`, NOT `TrashRepository` or `TrashDao`).
-- **Pure Helpers**: MUST reside in `src/util/` and end with `*Helper.h/.cpp` (MUST only contain stateless/static methods).
-- **Core Algorithms**: Long-running or heavy stateless computation units end with `*Engine`.
-- **Business Orchestrators**: Singleton stateful business providers end with `*Service`.
+---
 
-### 7.2 Domain Lexicon (No Synonyms Allowed!)
-DO NOT invent synonymous names. Use ONLY the established project domain words:
-- Use `Trash` (FORBIDDEN: `RecycleBin`, `Garbage`, `Discard`)
-- Use `Duplicate` (FORBIDDEN: `Clone`, `SameFile`, `Identical`)
-- Use `Thumbnail` (FORBIDDEN: `PreviewIcon`, `Snapshot`, `MiniImage`)
-- Use `Extension` (FORBIDDEN: `Suffix`, `ExtName`, `Postfix`)
+## 7. 动手与汇报的纪律（跟代码本身的架构无关，但同等重要）
 
-### 7.3 Rejection Warning
-Any PR that introduces files with ambiguous names (e.g., `MyUtils.cpp`, `CommonManager.h`, `DataHandler.cpp`) or mismatches the directory topology will be **AUTOMATICALLY REJECTED**.
-
-// ===================|===================
-
+- **给出重构或修复方案之前，先确认清楚问题的真实范围**，不能只看被要求修改的那一小段代码，要清楚它在整条调用链、整个类的生命周期里处于什么位置。
+- **任何不确定的地方，直接说不确定，并列出需要查看哪些具体代码才能确认**，不允许凭"这类代码通常长什么样"的经验去补全没见过的实现细节，也不允许要求"只给接口不给内部实现"——判断一个函数是否安全可改，离不开看它的真实实现。
+- **动手改代码之前，先输出方案，等待明确批准，不允许在给出方案的同时就已经动手执行**。
+- **看到代码里的红线注释、架构警告，先确认它保护的对象现在是否还真实存在于这个仓库里**，不要默认它依然有效就照着执行或照着回避。
+- **不允许为了让汇报显得好听、显得任务已完成，而给出比实际情况更乐观的结论，或者编造没有真实核实过的执行历史、评估报告**。排查结果、执行结果跟预期或假设不一致时，必须原样报告不一致的地方。
+- **对外公开的接口签名，一律视为已冻结**，除非有明确指示要改接口；需要扩展功能时，优先用重载、默认参数或新增结构体，不破坏既有调用方。
