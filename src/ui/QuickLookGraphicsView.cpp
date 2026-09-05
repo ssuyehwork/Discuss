@@ -1,6 +1,7 @@
 #include "QuickLookGraphicsView.h"
 #include "QuickLookMinimap.h"
 #include "QuickLookWindow.h"
+#include "../core/AppConfig.h"
 #include <QWheelEvent>
 #include <QMouseEvent>
 #include <QScrollBar>
@@ -42,7 +43,12 @@ void QuickLookGraphicsView::setPixmap(const QPixmap& pixmap) {
         m_minimap->setPixmap(pixmap);
     }
     
-    setZoomOriginal(); // 2026-11-xx：将"原始大小模式（100% 比例）"作为默认（重构时曾被误改为 fitImage()，现已改回）
+    bool defaultFit = AppConfig::instance().getValue("QuickLook/ImageFitMode", false).toBool();
+    if (defaultFit) {
+        fitImage();
+    } else {
+        setZoomOriginal();
+    }
     updateMinimap();
 }
 
@@ -65,6 +71,8 @@ void QuickLookGraphicsView::fitImage() {
     
     m_currentScale = transform().m11();
     m_isFitMode = true;
+    AppConfig::instance().setValue("QuickLook/ImageFitMode", true);
+    AppConfig::instance().sync();
     updateCursor();
 }
 
@@ -75,6 +83,8 @@ void QuickLookGraphicsView::setZoomOriginal() {
     m_scene->setSceneRect(m_pixmapItem->boundingRect());
     m_currentScale = 1.0;
     m_isFitMode = false;
+    AppConfig::instance().setValue("QuickLook/ImageFitMode", false);
+    AppConfig::instance().sync();
     updateCursor();
 }
 
