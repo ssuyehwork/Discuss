@@ -20,6 +20,7 @@ constexpr int kLayoutEdgeMargin = 5;
 TitleBarWidget::TitleBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
     : QWidget(parent) {
     setObjectName("TitleBar");
+    setAttribute(Qt::WA_StyledBackground, true);
     setFixedHeight(34);
     m_isPinned = AppConfig::instance().getValue("MainWindow/AlwaysOnTop", false).toBool();
     initUi(hoverFilter);

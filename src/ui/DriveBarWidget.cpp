@@ -8,6 +8,7 @@ namespace QuarkMeta {
 DriveBarWidget::DriveBarWidget(QWidget* parent)
     : QWidget(parent) {
     setObjectName("DriveBar");
+    setAttribute(Qt::WA_StyledBackground, true);
     setFixedHeight(42);
     initUi();
 }
@@ -18,7 +19,7 @@ void DriveBarWidget::initUi() {
     m_driveBarLayout->setSpacing(8);
 
     m_btnTagManager = new QPushButton(UiHelper::getIcon("tag", QColor("#1abc9c"), 18), " 标签管理", this);
-    m_btnTagManager->setFixedHeight(28);
+    m_btnTagManager->setFixedHeight(32);
     m_btnTagManager->setCursor(Qt::PointingHandCursor);
     m_btnTagManager->setObjectName("BtnTagManager");
 

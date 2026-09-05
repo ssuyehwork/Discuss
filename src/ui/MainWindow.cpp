@@ -147,7 +147,7 @@ void MainWindow::initUi() {
     // 4. 底部状态栏
     m_statusBarWidget = new QWidget(centralC);
     m_statusBarWidget->setObjectName("StatusBar");
-    m_statusBarWidget->setFixedHeight(28);
+    m_statusBarWidget->setFixedHeight(32);
     QHBoxLayout* statusL = new QHBoxLayout(m_statusBarWidget);
     statusL->setContentsMargins(kStatusBarHorizontalMargin, 0, kStatusBarHorizontalMargin, 0);
     statusL->setSpacing(0);

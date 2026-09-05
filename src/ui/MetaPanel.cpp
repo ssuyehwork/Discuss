@@ -145,7 +145,7 @@ void MetaPanel::initUi() {
     // 4. 关联网址区
     m_linkEdit = new QLineEdit(m_container);
     m_linkEdit->setPlaceholderText("添加关联网址...");
-    m_linkEdit->setFixedHeight(28);
+    m_linkEdit->setFixedHeight(32);
     m_linkEdit->setObjectName("MetaLinkEdit");
     m_linkEdit->installEventFilter(this);
 
@@ -270,7 +270,7 @@ void MetaPanel::initUi() {
     tagL->setSpacing(6);
 
     m_btnAddTagBig = new QPushButton(UiHelper::getIcon("add", QColor("#AAAAAA"), 14), " 添加标签", m_tagBox);
-    m_btnAddTagBig->setFixedHeight(28);
+    m_btnAddTagBig->setFixedHeight(32);
     m_btnAddTagBig->setCursor(Qt::PointingHandCursor);
     m_btnAddTagBig->setObjectName("BtnAddTagBig");
     connect(m_btnAddTagBig, &QPushButton::clicked, this, [this]() { openTagSelectorOverlay(m_btnAddTagBig); });

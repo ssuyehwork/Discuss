@@ -45,7 +45,7 @@ void TagManagerDialog::initContent() {
     m_searchEdit = new QLineEdit(topBar);
     m_searchEdit->setPlaceholderText("搜索或新建标签词条...");
     m_searchEdit->setClearButtonEnabled(true);
-    m_searchEdit->setFixedHeight(28);
+    m_searchEdit->setFixedHeight(32);
     m_searchEdit->setObjectName("TagManagerSearchEdit");
     connect(m_searchEdit, &QLineEdit::textChanged, this, &TagManagerDialog::onSearchTextChanged);
     connect(m_searchEdit, &QLineEdit::returnPressed, [this]() {
@@ -106,7 +106,7 @@ void TagManagerDialog::initContent() {
 
     // 底部“新建分组”按钮
     QPushButton* btnAddGroup = new QPushButton(UiHelper::getIcon("add", QColor("#AAAAAA"), 14), " 新建分组...", m_sidebar);
-    btnAddGroup->setFixedHeight(28);
+    btnAddGroup->setFixedHeight(32);
     btnAddGroup->setCursor(Qt::PointingHandCursor);
     btnAddGroup->setObjectName("TagManagerBtnAddGroup");
     connect(btnAddGroup, &QPushButton::clicked, this, &TagManagerDialog::onAddNewGroup);
