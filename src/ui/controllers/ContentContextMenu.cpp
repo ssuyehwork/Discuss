@@ -21,6 +21,7 @@
 #include "../FramelessFileDialog.h"
 #include "../../core/CoreEngine.h"
 #include "../../meta/MetadataManager.h"
+#include "../../meta/FavoriteDao.h"
 #include "../../crypto/EncryptionManager.h"
 #include "../../core/LastOperationManager.h"
 
@@ -139,8 +140,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
             menu.addAction(isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
 
-            FavoritePanel* favoritePanelDrive = m_panel->window() ? m_panel->window()->findChild<FavoritePanel*>() : nullptr;
-            bool isFavDrive = favoritePanelDrive ? favoritePanelDrive->containsPath(path) : false;
+            bool isFavDrive = FavoriteDao::containsPath(path);
             menu.addAction(isFavDrive ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
 
             menu.addSeparator();
@@ -203,8 +203,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
             menu.addAction(isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
 
-            FavoritePanel* favoritePanelItem = m_panel->window() ? m_panel->window()->findChild<FavoritePanel*>() : nullptr;
-            bool isFavItem = favoritePanelItem ? favoritePanelItem->containsPath(path) : false;
+            bool isFavItem = FavoriteDao::containsPath(path);
             menu.addAction(isFavItem ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
 
             menu.addSeparator();
@@ -611,43 +610,38 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             }
 
             if (!selectedPaths.isEmpty()) {
-                FavoritePanel* favoritePanel = m_panel->window() ? m_panel->window()->findChild<FavoritePanel*>() : nullptr;
-                if (favoritePanel) {
-                    bool allFav = true;
-                    for (const QString& p : selectedPaths) {
-                        if (!favoritePanel->containsPath(p)) {
-                            allFav = false;
-                            break;
-                        }
+                bool allFav = true;
+                for (const QString& p : selectedPaths) {
+                    if (!FavoriteDao::containsPath(p)) {
+                        allFav = false;
+                        break;
                     }
+                }
 
-                    if (allFav) {
-                        for (const QString& p : selectedPaths) {
-                            favoritePanel->removeFavoriteItem(p);
-                        }
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e81123"));
-                    } else {
-                        OperationSnapshotEngine::instance().executeWithSnapshot(
-                            m_panel,
-                            SnapshotOperationType::ToggleFavorite,
-                            selectedPaths,
-                            "已成功添加至收藏夹",
-                            [this, selectedPaths]() {
-                                emit m_panel->requestAddFavorite(selectedPaths);
-                                return true;
-                            },
-                            [](const QVector<AssetItemSnapshot>& beforeState) {
-                                for (const auto& snap : beforeState) {
-                                    AppCommand cmd;
-                                    cmd.type = AppCommandType::SetPinned;
-                                    cmd.targetPaths << snap.path;
-                                    cmd.params["pinned"] = snap.isPinned;
-                                    CoreEngine::instance().executeCommand(cmd);
-                                }
-                                return true;
+                if (allFav) {
+                    emit m_panel->requestRemoveFavorite(selectedPaths);
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e81123"));
+                } else {
+                    OperationSnapshotEngine::instance().executeWithSnapshot(
+                        m_panel,
+                        SnapshotOperationType::ToggleFavorite,
+                        selectedPaths,
+                        "已成功添加至收藏夹",
+                        [this, selectedPaths]() {
+                            emit m_panel->requestAddFavorite(selectedPaths);
+                            return true;
+                        },
+                        [](const QVector<AssetItemSnapshot>& beforeState) {
+                            for (const auto& snap : beforeState) {
+                                AppCommand cmd;
+                                cmd.type = AppCommandType::SetPinned;
+                                cmd.targetPaths << snap.path;
+                                cmd.params["pinned"] = snap.isPinned;
+                                CoreEngine::instance().executeCommand(cmd);
                             }
-                        );
-                    }
+                            return true;
+                        }
+                    );
                 }
             }
             break;

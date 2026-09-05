@@ -40,6 +40,7 @@ public:
 signals:
     void directorySelected(const QString& path);
     void requestLocateFile(const QString& path);
+    void favoriteStateChanged(const QString& path, bool isFavorite);
 
 private slots:
     void onFavoriteClicked(const QModelIndex& index);

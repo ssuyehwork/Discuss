@@ -51,23 +51,33 @@ public:
     }
 
     static void hideTip() {
-        if (instance()) instance()->hide();
+        if (instance()) instance()->hideOverlay();
     }
+
+    void hideOverlay();
 
 protected:
     explicit ToolTipOverlay();
     void paintEvent(QPaintEvent* event) override;
 
 private slots:
-    void fadeOutAndHide();
+    void triggerPendingShow();
 
 private:
     QString m_text;
     QTextDocument m_doc;
     QTimer m_hideTimer;
+    QTimer m_showDelayTimer;
+
+    QPoint m_pendingPos;
+    QString m_pendingText;
+    int m_pendingTimeout = 700;
+    QColor m_pendingBorderColor;
+    QColor m_pendingBackgroundColor;
+    bool m_pendingExactPosition = false;
+
     QColor m_currentBorderColor = QColor("#B0B0B0");
     QColor m_currentBackgroundColor = QColor("#2B2B2B");
-    QPropertyAnimation* m_fadeAnim = nullptr;
 };
 
 } // namespace QuarkMeta

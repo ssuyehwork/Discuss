@@ -22,32 +22,25 @@ ToolTipOverlay::ToolTipOverlay() : QWidget(nullptr) {
     setPalette(pal);
 
     m_doc.setDefaultStyleSheet("body, div, p, span, b, i { color: #EEEEEE !important; font-family: 'Microsoft YaHei', 'Segoe UI'; }"); 
-// ToolTipOverlay style in style.qss
 
     QFont f = font();
     f.setPointSize(9);
     m_doc.setDefaultFont(f);
 
-    m_fadeAnim = new QPropertyAnimation(this, "windowOpacity", this);
-    m_fadeAnim->setDuration(150);
-
     m_hideTimer.setSingleShot(true);
-    connect(&m_hideTimer, &QTimer::timeout, this, &ToolTipOverlay::fadeOutAndHide);
+    connect(&m_hideTimer, &QTimer::timeout, this, &ToolTipOverlay::hideOverlay);
+
+    m_showDelayTimer.setSingleShot(true);
+    connect(&m_showDelayTimer, &QTimer::timeout, this, &ToolTipOverlay::triggerPendingShow);
 
     // 初始静默隐藏，等待 MainWindow 的 showEvent 触发真正有效的 GPU 预热
     hide();
 }
 
-void ToolTipOverlay::fadeOutAndHide() {
-    m_fadeAnim->stop();
-    m_fadeAnim->setStartValue(windowOpacity());
-    m_fadeAnim->setEndValue(0.0);
-    disconnect(m_fadeAnim, &QPropertyAnimation::finished, nullptr, nullptr);
-    connect(m_fadeAnim, &QPropertyAnimation::finished, this, [this]() {
-        QWidget::hide();
-        setWindowOpacity(1.0); // 隐藏后重置不透明度以兼容非动画弹出
-    });
-    m_fadeAnim->start();
+void ToolTipOverlay::hideOverlay() {
+    m_showDelayTimer.stop();
+    m_hideTimer.stop();
+    hide();
 }
 
 void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int timeout, const QColor& borderColor, bool exactPosition, const QColor& backgroundColor) {
@@ -59,9 +52,47 @@ void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int 
         return;
     }
 
-    m_currentBorderColor = borderColor;
-    m_currentBackgroundColor = backgroundColor;
+    if (text.isEmpty() && !exactPosition) {
+        hideOverlay();
+        return;
+    }
 
+    // 若已经处于显示状态，且文本/边框无变化，仅更新位置，不需要重新延迟防抖
+    if (isVisible() && m_pendingText == text && m_currentBorderColor == borderColor && !exactPosition) {
+        m_showDelayTimer.stop();
+        QPoint pos = globalPos + QPoint(15, 15);
+        QScreen* screen = QGuiApplication::screenAt(globalPos);
+        if (!screen) screen = QGuiApplication::primaryScreen();
+        if (screen) {
+            QRect screenGeom = screen->geometry();
+            if (pos.x() + width() > screenGeom.right()) {
+                pos.setX(globalPos.x() - width() - 15);
+            }
+            if (pos.y() + height() > screenGeom.bottom()) {
+                pos.setY(globalPos.y() - height() - 15);
+            }
+        }
+        move(pos);
+        return;
+    }
+
+    // 保存等待显示的参数
+    m_pendingPos = globalPos;
+    m_pendingText = text;
+    m_pendingTimeout = timeout;
+    m_pendingBorderColor = borderColor;
+    m_pendingBackgroundColor = backgroundColor;
+    m_pendingExactPosition = exactPosition;
+
+    // 启动 150ms 延迟防抖定时器，频繁划过时只响应最后停顿的控件
+    m_showDelayTimer.start(150);
+}
+
+void ToolTipOverlay::triggerPendingShow() {
+    m_currentBorderColor = m_pendingBorderColor;
+    m_currentBackgroundColor = m_pendingBackgroundColor;
+
+    int timeout = m_pendingTimeout;
     if (timeout > 0) {
         timeout = qBound(500, timeout, 60000); 
     }
@@ -69,25 +100,17 @@ void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int 
     int w = 40;
     int h = 24;
 
-    if (text.isEmpty()) {
-        // 2026-xx-xx 按照用户最新指令：当 text 为空时，表明我们处于纯色块（颜色气泡）模式。
-        // 我们不解析文档或文本，而是设置成固定 60x24px 大小的纯色色块指示器！
+    if (m_pendingText.isEmpty()) {
         m_text = "";
         m_doc.clear();
         w = 60;
         h = 24;
     } else {
-        // 2026-05-20 性能优化：内容脏检查，防止鼠标在按钮内部微动导致的重复渲染卡顿
-        if (isVisible() && m_text == text && m_currentBorderColor == borderColor && !exactPosition) {
-            move(globalPos + QPoint(15, 15));
-            return;
-        }
-
         QString htmlBody;
-        if (text.contains("<") && text.contains(">")) {
-            htmlBody = text;
+        if (m_pendingText.contains("<") && m_pendingText.contains(">")) {
+            htmlBody = m_pendingText;
         } else {
-            htmlBody = text.toHtmlEscaped().replace("\n", "<br>");
+            htmlBody = m_pendingText.toHtmlEscaped().replace("\n", "<br>");
         }
 
         m_text = QString(
@@ -124,42 +147,32 @@ void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int 
     resize(w, h);
     
     QPoint pos;
-    if (exactPosition) {
-        pos = globalPos;
+    if (m_pendingExactPosition) {
+        pos = m_pendingPos;
     } else {
-        pos = globalPos + QPoint(15, 15);
-        QScreen* screen = QGuiApplication::screenAt(globalPos);
+        pos = m_pendingPos + QPoint(15, 15);
+        QScreen* screen = QGuiApplication::screenAt(m_pendingPos);
         if (!screen) screen = QGuiApplication::primaryScreen();
         if (screen) {
             QRect screenGeom = screen->geometry();
             if (pos.x() + width() > screenGeom.right()) {
-                pos.setX(globalPos.x() - width() - 15);
+                pos.setX(m_pendingPos.x() - width() - 15);
             }
             if (pos.y() + height() > screenGeom.bottom()) {
-                pos.setY(globalPos.y() - height() - 15);
+                pos.setY(m_pendingPos.y() - height() - 15);
             }
         }
     }
     
     move(pos);
-    
-    // 淡入显示
-    m_fadeAnim->stop();
-    disconnect(m_fadeAnim, &QPropertyAnimation::finished, nullptr, nullptr);
-    setWindowOpacity(0.0);
+    setWindowOpacity(1.0);
     show();
     update();
-
     raise();
-    
-    m_fadeAnim->setStartValue(0.0);
-    m_fadeAnim->setEndValue(1.0);
-    m_fadeAnim->start();
 
     if (timeout > 0) {
         m_hideTimer.start(timeout);
     } else {
-        // 2026-07-xx 按照 Plan-65：如果 timeout 为 0 或负数，停止计时器以支持持续显示
         m_hideTimer.stop();
     }
 }
