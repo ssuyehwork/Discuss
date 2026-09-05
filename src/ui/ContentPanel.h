@@ -141,6 +141,7 @@ signals:
     void selectionChanged(const QStringList& paths);
     void directorySelected(const QString& path);
     void requestAddFavorite(const QStringList& paths);
+    void requestRemoveFavorite(const QStringList& paths);
     void dataSourceChanged(const QString& source);
     void directoryStatsReady(const QuarkMeta::ScanStats& stats);
     void statusBarStatsUpdated(int fileCount, int folderCount, int totalCount);

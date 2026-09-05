@@ -80,40 +80,26 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
         if (fullPath.isEmpty() || fullPath == "computer://") return;
 
         QString nativePath = QDir::toNativeSeparators(QDir::cleanPath(fullPath));
-        bool isFav = FavoriteDao::containsPath(nativePath);
 
         QMenu menu(this);
         UiHelper::applyMenuStyle(&menu);
 
-        QAction* actFavToggle = nullptr;
-        if (isFav) {
-            actFavToggle = menu.addAction(UiHelper::getIcon("close", QColor("#e74c3c")), "从收藏夹移除");
-        } else {
-            actFavToggle = menu.addAction(UiHelper::getIcon("star_filled", QColor("#FDB70A")), "添加至收藏夹");
-        }
-
+        // 先不强求检查，让 PanelMediator 统一处理 toggle 并弹出 Tip
+        QAction* actFavToggle = menu.addAction(UiHelper::getIcon("star_filled", QColor("#FDB70A")), "收藏 / 取消收藏");
         QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE")), "复制完整路径");
 
         QAction* selected = menu.exec(globalPos);
         if (selected == actFavToggle) {
-            if (isFav) {
-                FavoriteDao::removeFavorite(nativePath);
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
-            } else {
-                FavoriteDao::addFavorite(nativePath, "folder_filled", "#FDB70A");
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已添加至收藏夹", 1500, Style::SuccessGreen);
-            }
+            emit requestAddFavorite(nativePath);
         } else if (selected == actCopyPath) {
             QApplication::clipboard()->setText(nativePath);
             ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径至剪贴板", 1500, Style::SuccessGreen);
         }
     });
 
-    m_addressContainer->setAttribute(Qt::WA_Hover);
-    m_addressContainer->installEventFilter(this);
-    m_pathStack->installEventFilter(this);
     m_breadcrumbBar->setAttribute(Qt::WA_Hover);
     m_breadcrumbBar->installEventFilter(this);
+    m_pathStack->installEventFilter(this);
     m_pathEdit->installEventFilter(this);
 
     m_historyPanel = new AddressHistoryPanel(this);
@@ -152,7 +138,7 @@ void AddressBar::onBreadcrumbClicked(const QString& path) {
 
 bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
     // 规则三：悬停气泡提示（ToolTipOverlay 显完整路径）
-    if (obj == m_breadcrumbBar || obj == m_addressContainer) {
+    if (obj == m_breadcrumbBar) {
         if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) {
             if (!m_currentPath.isEmpty()) {
                 QString fullPath = (m_currentPath == "computer://") ? tr("此电脑") : QDir::toNativeSeparators(m_currentPath);

@@ -300,10 +300,9 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     }
 
     QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "取消收藏");
-    connect(removeAct, &QAction::triggered, this, [this, path, index, &isItemRemoved]() {
+    connect(removeAct, &QAction::triggered, this, [this, path, &isItemRemoved]() {
         isItemRemoved = true;
-        FavoriteDao::removeFavorite(path);
-        m_favoriteModel->removeRow(index.row());
+        removeFavoriteItem(path);
     });
 
     // 阻塞展示菜单（期间用户可随意连点试选 100 次）
@@ -437,15 +436,21 @@ bool FavoritePanel::containsPath(const QString& path) const {
 void FavoritePanel::removeFavoriteItem(const QString& path) {
     if (path.isEmpty()) return;
     QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
+    bool wasFav = FavoriteDao::containsPath(cleanPath);
     FavoriteDao::removeFavorite(cleanPath);
     
-    if (!m_favoriteModel) return;
-    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
-        QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
-        if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
-            m_favoriteModel->removeRow(i);
-            return;
+    if (m_favoriteModel) {
+        for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+            QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
+            if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
+                m_favoriteModel->removeRow(i);
+                break;
+            }
         }
+    }
+
+    if (wasFav) {
+        emit favoriteStateChanged(cleanPath, false);
     }
 }
 
@@ -496,6 +501,7 @@ void FavoritePanel::addFavoriteItem(const QString& path) {
     item->setData(false, Qt::UserRole + 5);
 
     m_favoriteModel->appendRow(item);
+    emit favoriteStateChanged(cleanPath, true);
 
     if (!isDir) {
         QString ext = fi.suffix().toLower();
