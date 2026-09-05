@@ -56,7 +56,11 @@ void FilterPanel::syncUIFromFilterState() {
         QString text = labelWidget->text();
         bool shouldCheck = false;
         
-        if (text == "无评级") shouldCheck = currentSt.ratings.contains(0);
+        QVariant ratingProp = row->property("ratingValue");
+        if (ratingProp.isValid()) {
+            shouldCheck = currentSt.ratings.contains(ratingProp.toInt());
+        }
+        else if (text == "无评级") shouldCheck = currentSt.ratings.contains(0);
         else if (text.contains("★")) shouldCheck = currentSt.ratings.contains(text.count("★"));
         
         else if (text == "无色标") shouldCheck = (currentSt.colors.contains("无色标") || currentSt.colors.contains(""));
@@ -312,7 +316,11 @@ void FilterPanel::populate(
                  QString name = nameLabel->text();
                  
                  int count = 0;
-                 if (name == "无评级") count = m_ratingCounts.value(0, 0);
+                 QVariant ratingProp = row->property("ratingValue");
+                 if (ratingProp.isValid()) {
+                     count = m_ratingCounts.value(ratingProp.toInt(), 0);
+                 }
+                 else if (name == "无评级") count = m_ratingCounts.value(0, 0);
                  else if (name.contains("★")) count = m_ratingCounts.value(name.count("★"), 0);
                  else if (name == "空文件夹") count = m_emptyFolderCount;
                  else if (name == "文件夹") count = m_typeCounts.value("folder", 0);
@@ -460,6 +468,29 @@ void FilterPanel::rebuildGroups() {
             cb->blockSignals(true);
             cb->setChecked(currentSt.ratings.contains(r));
             cb->blockSignals(false);
+
+            ClickableRow* row = qobject_cast<ClickableRow*>(cb->parentWidget());
+            if (row) {
+                row->setProperty("ratingValue", r);
+                if (r > 0) {
+                    QLabel* lbl = row->findChild<QLabel*>("FilterItemLabel");
+                    if (lbl) {
+                        int starSize = 12;
+                        int spacing = 2;
+                        int totalW = r * starSize + (r - 1) * spacing;
+                        QPixmap pix(totalW, starSize);
+                        pix.fill(Qt::transparent);
+                        QPainter painter(&pix);
+                        QPixmap starPix = UiHelper::getIcon("star_filled", QColor("#CCCCCC"), starSize).pixmap(starSize, starSize);
+                        for (int i = 0; i < r; ++i) {
+                            painter.drawPixmap(i * (starSize + spacing), 0, starPix);
+                        }
+                        painter.end();
+                        lbl->setPixmap(pix);
+                    }
+                }
+            }
+
             connect(cb, &QCheckBox::toggled, this, [this, r](bool on) {
                 FilterState st = m_filterModel->state();
                 if (on) { if (!st.ratings.contains(r)) st.ratings.append(r); }
@@ -947,6 +978,9 @@ QWidget* FilterPanel::buildGroup(const QString& title, QVBoxLayout*& outContentL
 
     QWidget* hdrRow = new QWidget(wrapper);
     hdrRow->setObjectName("FilterGroupHdrRow");
+    if (m_groupHeaders.isEmpty()) {
+        hdrRow->setProperty("isFirst", true);
+    }
     hdrRow->setFixedHeight(24);
     hdrRow->setAttribute(Qt::WA_StyledBackground, true);
 
