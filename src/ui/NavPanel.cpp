@@ -8,6 +8,7 @@
 #include "ToolTipOverlay.h"
 #include "../core/AppConfig.h"
 #include "../core/NavigationHistoryService.h"
+#include "../core/TrashService.h"
 #include "../meta/FavoriteDao.h"
 #include <QHeaderView>
 #include <QScrollBar>
@@ -252,7 +253,26 @@ void NavPanel::onTreeContextMenu(const QPoint& pos) {
     if (!index.isValid()) return;
 
     QString path = index.data(Qt::UserRole + 1).toString();
-    if (path.isEmpty() || path == "computer://" || path == "trash_root" || path == "recent_root") {
+
+    if (path == "trash_root") {
+        QMenu menu(this);
+        UiHelper::applyMenuStyle(&menu);
+
+        QAction* actRestore = menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原全部");
+        QAction* actEmpty = menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "清空回收站");
+
+        connect(actRestore, &QAction::triggered, this, [this]() {
+            TrashService::instance().restoreAll(this);
+        });
+        connect(actEmpty, &QAction::triggered, this, [this]() {
+            TrashService::instance().emptyTrash(this);
+        });
+
+        menu.exec(m_treeView->viewport()->mapToGlobal(pos));
+        return;
+    }
+
+    if (path.isEmpty() || path == "computer://" || path == "recent_root") {
         return;
     }
 
