@@ -155,7 +155,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             QMenu* moreMenuDrive = menu.addMenu("更多");
             UiHelper::applyMenuStyle(moreMenuDrive);
 
-            bool canExtractDrive = UiHelper::canPreviewFile(path);
+            QString driveExt = QFileInfo(path).suffix().toLower();
+            bool canExtractDrive = UiHelper::isTextFile(driveExt);
             if (canExtractDrive) {
                 QAction* actExtract = moreMenuDrive->addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "支持提取内容");
                 connect(actExtract, &QAction::triggered, this, [path]() {
@@ -293,7 +294,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             QMenu* moreMenu = menu.addMenu("更多");
             UiHelper::applyMenuStyle(moreMenu);
 
-            bool canExtract = !isFolder && UiHelper::canPreviewFile(path);
+            QString fileExt = QFileInfo(path).suffix().toLower();
+            bool canExtract = !isFolder && UiHelper::isTextFile(fileExt);
             if (canExtract) {
                 QAction* actExtract = moreMenu->addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "支持提取内容");
                 connect(actExtract, &QAction::triggered, this, [path]() {
