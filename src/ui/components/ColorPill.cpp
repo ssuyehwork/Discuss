@@ -57,12 +57,12 @@ void ColorPill::mousePressEvent(QMouseEvent* event) {
         QMenu menu(this);
         UiHelper::applyMenuStyle(&menu);
         QColor color = m_color;
-        menu.addAction("搜索相似颜色的项目", [this, color]() { emit colorSelected(color); });
+        menu.addAction(UiHelper::getIcon("search", QColor("#EEEEEE"), 18), "搜索相似颜色的项目", [this, color]() { emit colorSelected(color); });
         menu.addSeparator();
         QString hex = color.name().toUpper();
-        menu.addAction(QString("复制 %1").arg(hex), [hex]() { QApplication::clipboard()->setText(hex); });
+        menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), QString("复制 %1").arg(hex), [hex]() { QApplication::clipboard()->setText(hex); });
         menu.addSeparator();
-        menu.addAction("设置为自定义主色", [this, color]() { emit requestSetAsPrimary(color); });
+        menu.addAction(UiHelper::getIcon("star_filled", QColor("#EEEEEE"), 18), "设置为自定义主色", [this, color]() { emit requestSetAsPrimary(color); });
         menu.exec(event->globalPosition().toPoint());
     }
     QWidget::mousePressEvent(event);

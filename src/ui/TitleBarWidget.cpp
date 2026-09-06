@@ -160,9 +160,9 @@ void TitleBarWidget::setupViewMenu() {
         menu.setObjectName("TitleBarViewModeMenu");
         UiHelper::applyMenuStyle(&menu);
 
-        QAction* actAdaptive = menu.addAction("自适应(A)");
-        QAction* actGrid = menu.addAction("网格(G)");
-        QAction* actList = menu.addAction("列表(L)");
+        QAction* actAdaptive = menu.addAction(UiHelper::getIcon("grid", QColor("#EEEEEE"), 18), "自适应(A)");
+        QAction* actGrid = menu.addAction(UiHelper::getIcon("grid", QColor("#EEEEEE"), 18), "网格(G)");
+        QAction* actList = menu.addAction(UiHelper::getIcon("list_ul", QColor("#EEEEEE"), 18), "列表(L)");
 
         actAdaptive->setCheckable(true);
         actGrid->setCheckable(true);

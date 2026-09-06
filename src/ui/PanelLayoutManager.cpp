@@ -212,7 +212,7 @@ void PanelLayoutManager::populatePanelMenu(QMenu* menu) {
     addToggleAction("显示筛选栏", "filter", m_filterPanel);
 
     menu->addSeparator();
-    QAction* resetAct = menu->addAction("重置分栏");
+    QAction* resetAct = menu->addAction(UiHelper::getIcon("sync", QColor("#EEEEEE"), 18), "重置分栏");
     connect(resetAct, &QAction::triggered, this, &PanelLayoutManager::resetSplitterLayout);
 }
 
