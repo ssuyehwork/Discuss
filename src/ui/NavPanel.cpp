@@ -8,6 +8,8 @@
 #include "ToolTipOverlay.h"
 #include "../core/AppConfig.h"
 #include "../core/NavigationHistoryService.h"
+#include "../core/TrashService.h"
+#include "../meta/FavoriteDao.h"
 #include <QHeaderView>
 #include <QScrollBar>
 #include <QLabel>
@@ -21,6 +23,7 @@
 #include <QPushButton>
 #include <QPointer>
 #include <QMenu>
+#include <QClipboard>
 #include <QtConcurrent>
 #include <QApplication>
 
@@ -160,6 +163,9 @@ void NavPanel::initUi() {
     ).arg(arrowRight, arrowDown);
     m_treeView->setStyleSheet(treeStyle);
 
+    m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_treeView, &QTreeView::customContextMenuRequested, this, &NavPanel::onTreeContextMenu);
+
     connect(m_treeView, &QTreeView::expanded, this, &NavPanel::onItemExpanded);
     connect(m_treeView, &QTreeView::clicked, this, &NavPanel::onTreeClicked);
     connect(&NavigationHistoryService::instance(), &NavigationHistoryService::historyChanged, this, &NavPanel::updateRecentVisitedList);
@@ -239,6 +245,63 @@ void NavPanel::selectPath(const QString& path) {
             m_treeView->setFocus();
             break;
         }
+    }
+}
+
+void NavPanel::onTreeContextMenu(const QPoint& pos) {
+    QModelIndex index = m_treeView->indexAt(pos);
+    if (!index.isValid()) return;
+
+    QString path = index.data(Qt::UserRole + 1).toString();
+
+    if (path == "trash_root") {
+        QMenu menu(this);
+        UiHelper::applyMenuStyle(&menu);
+
+        QAction* actRestore = menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原全部");
+        QAction* actEmpty = menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "清空回收站");
+
+        connect(actRestore, &QAction::triggered, this, [this]() {
+            TrashService::instance().restoreAll(this);
+        });
+        connect(actEmpty, &QAction::triggered, this, [this]() {
+            TrashService::instance().emptyTrash(this);
+        });
+
+        menu.exec(m_treeView->viewport()->mapToGlobal(pos));
+        return;
+    }
+
+    if (path.isEmpty() || path == "computer://" || path == "recent_root") {
+        return;
+    }
+
+    QFileInfo info(path);
+    if (!info.exists() || !info.isDir()) {
+        return;
+    }
+
+    QMenu menu(this);
+    UiHelper::applyMenuStyle(&menu);
+
+    bool isFav = FavoriteDao::containsPath(path);
+    QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#e74c3c"), 18) : UiHelper::getIcon("star_filled", QColor("#FDB70A"), 18);
+    QAction* actFavorite = menu.addAction(favIcon, isFav ? "从收藏夹移除" : "添加至收藏夹");
+
+    QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "复制完整路径");
+
+    QAction* selected = menu.exec(m_treeView->viewport()->mapToGlobal(pos));
+    if (!selected) return;
+
+    if (selected == actFavorite) {
+        if (isFav) {
+            emit requestRemoveFavorite(path);
+        } else {
+            emit requestAddFavorite(path);
+        }
+    } else if (selected == actCopyPath) {
+        QApplication::clipboard()->setText(QDir::toNativeSeparators(path));
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径到剪贴板", 1200, QColor("#2ecc71"));
     }
 }
 

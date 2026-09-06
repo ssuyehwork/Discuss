@@ -89,6 +89,19 @@ void PanelMediator::setupConnections() {
         connect(navPanel, &NavPanel::requestOpenTrash, &NavigationService::instance(), []() {
             NavigationService::instance().navigateTo("trash://");
         });
+
+        if (favoritePanel) {
+            connect(navPanel, &NavPanel::requestAddFavorite, favoritePanel, [favoritePanel](const QString& path) {
+                favoritePanel->addFavoriteItem(path);
+                favoritePanel->saveFavorites();
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+            });
+            connect(navPanel, &NavPanel::requestRemoveFavorite, favoritePanel, [favoritePanel](const QString& path) {
+                favoritePanel->removeFavoriteItem(path);
+                favoritePanel->saveFavorites();
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
+            });
+        }
     }
 
     if (favoritePanel) {
