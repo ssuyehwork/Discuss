@@ -17,7 +17,7 @@ ContentHeaderWidget::ContentHeaderWidget(QWidget* parent)
 
 void ContentHeaderWidget::initUi() {
     m_layout = new QHBoxLayout(this);
-    m_layout->setContentsMargins(8, 0, 8, 0);
+    m_layout->setContentsMargins(15, 0, 8, 0);
     m_layout->setSpacing(6);
 
     m_iconLabel = new QLabel(this);

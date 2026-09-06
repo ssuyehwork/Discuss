@@ -89,6 +89,19 @@ void PanelMediator::setupConnections() {
         connect(navPanel, &NavPanel::requestOpenTrash, &NavigationService::instance(), []() {
             NavigationService::instance().navigateTo("trash://");
         });
+
+        if (favoritePanel) {
+            connect(navPanel, &NavPanel::requestAddFavorite, favoritePanel, [favoritePanel](const QString& path) {
+                favoritePanel->addFavoriteItem(path);
+                favoritePanel->saveFavorites();
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+            });
+            connect(navPanel, &NavPanel::requestRemoveFavorite, favoritePanel, [favoritePanel](const QString& path) {
+                favoritePanel->removeFavoriteItem(path);
+                favoritePanel->saveFavorites();
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
+            });
+        }
     }
 
     if (favoritePanel) {
@@ -218,7 +231,7 @@ void PanelMediator::setupConnections() {
         });
     }
 
-    // 3. 内容面板与 QuickLook 预览窗口联动 (🚀 闭环补齐主视图同步)
+    // 3. 内容面板与 QuickLook 预览窗口联动 (🚀 闭环补齐内容同步)
     if (contentPanel) {
         connect(contentPanel, &ContentPanel::requestQuickLook, this, [this](const QString& path) {
             m_currentQuickLookPath = path;

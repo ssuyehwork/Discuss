@@ -20,7 +20,7 @@ public:
     explicit BatchRenameDialog(const std::vector<std::wstring>& originalPaths, QWidget* parent = nullptr); 
     ~BatchRenameDialog() override = default; 
  
-    // 🚀【核心接口】：返回重命名后第 1 个新文件名，供主视图精准锁定高亮 
+    // 🚀【核心接口】：返回重命名后第 1 个新文件名，供内容精准锁定高亮
     QString getFirstNewName() const { return m_firstNewName; } 
  
 private slots: 
