@@ -1573,6 +1573,9 @@ QMenu#TitleBarViewModeMenu::indicator:checked {
     height: 14px;
     left: 4px;
 }
+QMenu::icon {
+    margin-right: 10px;
+}
 QMenu::item {
     background-color: transparent;
     color: #EEEEEE;

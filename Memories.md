@@ -33,6 +33,7 @@
 # 5.1 全局 QMenu 菜单规范 (ThemeManager)
 - **菜单背景**: `#252526` (边界 `#333333`，圆角 6px)。
 - **选中/高亮背景色 (Item Hover/Selected)**: 物理色值统一为 **`#3E3E42`**（对标 `Dual-mode version` 原始深灰风格，全软件托盘菜单与右键上下文菜单统一遵循该标准）。
+- **图标与文本间距 (Icon-Text Spacing)**: 图标与文本之间的物理间距统一并精确锁定为 **`10px`**（通过 `QMenu::icon { margin-right: 10px; }` 控制，全软件所有右键菜单与上下文菜单强制统一遵循该标准）。
 
 ## 4. 特殊按钮规范 (Special Buttons)
 - **关闭按钮 (Close Button)**:
@@ -58,19 +59,6 @@
 
 // ===================|===================
 
-# 7. 元数据管理与搜索规范
-## 7.1 隔离式多维关联索引
-- **机制**：`MetadataManager` 通过 `m_fileNameToFids`（仅文件）、`m_folderNameToFids`（仅文件夹）及 `m_extensionToFids`（仅后缀，小写，不含点）三个隔离的倒排索引管理名称关联。
-- **一致性**：在项目激活（`ensureActivated`）、重命名（`renameItem`）及删除（`removeMetadataSync`）时，必须同步维护上述三个索引映射。
-- **去重**：注册索引时须执行 `std::find` 检查，防止同一 FID 在同一键下重复注。
-
-## 7.2 “范围感知 (Scope-Aware)” 搜索
-- **核心逻辑**：搜索行为必须实时对标 UI 顶部的 **蓝色提示线 (Focus Line)** 位置。
-- **数据流**：搜索请求必须通过 `CoreController::performSearch` 转发，并携带当前的数据源范围参数（"category" 或 "nav"）。
-- **过滤准则**：
-    - **侧边栏模式**：限定在当前分类及其子类范围内（利用 `CategoryRepo::getItemsRecursive`）。
-    - **目录导航模式**：限定在当前物理磁盘路径及其子目录范围内（通过路径前缀匹配）。
-
 # 8. UI 异步加载与防闪烁规范
 - **原则**: 在内容面板（`ContentPanel`）进行异步数据扫描（如物理目录扫描、数据库分类查询）前，**禁止**先行调用 `m_model->clear()`。
 - **目的**: 避免在数据就绪前的空窗期内出现“白屏/黑屏”视觉抖动，保留旧数据直至新数据通过 `setRecords` 实现毫秒级原子替换。
@@ -91,21 +79,3 @@
 - **拦截机制**: 必须采用“黑名单拦截+白名单准入”的双重防御机制。严禁预览文件夹、安装包 (.msi, .exe), 系统库 (.dll, .sys) 及各类压缩包。
 - **性能红线**: `renderImage` 在加载原图前必须检查文件物理大小。若超过 50MB，必须自动降级调用高清缩略图引擎以确保 UI 响应性能。
 - **画质保障**: `SmoothPixmapTransform` 必须全程开启，杜绝在高清屏下出现插值锯齿。
-
-# 12. 内容面板数据源判定与强类型契约规范 (Plan-123)
-- **核心定义**: 必须使用强类型枚举 `DataSourceType` 统一规范内容面板 (`ContentPanel`) 的显示数据源来源：
-  - `DiskNav`: 物理磁盘直接 I/O 直接扫描的导航模式 (m_currentCategoryType 为空)；
-  - `UserCategory`: 数据库驱动的用户自定义逻辑分类模型 (m_currentCategoryType == "user_category")；
-  - `SystemCategory`: 系统内置逻辑桶（全部、未分类、无标签、最近访问、垃圾箱）；
-  - `PathList`: 临时加载的静态路径集合（标签或搜索物理结果）；
-- **铁律 1 (杜绝拼写 Bug)**: 严禁在全应用任何 cpp 文件中随手写散落的弱类型字符串判定（如 `if (m_currentCategoryType == "all")`），判定数据源必须统一通过 `ContentPanel::dataSourceType()` 枚举接口，充分运用编译器在编译阶段进行类型强制安全检查。
-- **铁律 2 (统一辅助判定)**: `ContentPanel` 必须公开 `isMirrorSource()` (返回是否为逻辑/镜像源数据) 与 `isManagedContext()` (返回当前是否处于已激活的托管库内可读写 SQLite DB 的可信生命周期内)。
-- **铁律 3 (双轨标记落盘路由)**: 当打标或星级操作触发时，统一由数据源契约一键判断：
-  - 在托管库上下文 (`isManagedContext() == true`) 内，元数据 100% 写入统一 SQLite 本地数据库；
-  - 在库外普通磁盘模式 (`isManagedContext() == false`) 下，元数据自动调用 `AmMetaJson` 精准写入同级 `.QuarkMeta.json` 离散缓存中，确保不污染用户原始物理盘。
-
-# 13. 关于媒体提取管道的线程安全边界
-## 13.1 Qt Gui API 禁止无保护地在 worker 线程并发调用
-- `MediaExtractorPipeline` 与 `CapsuleMediaExtractor` 所在的后台提取管道，任何会触碰 `QSvgRenderer`/`QPainter`/`QPixmap`/`QIcon` 等 Qt Gui 模块 API 的代码段，必须用 `CapsuleMediaExtractor::s_qtGuiMutex` 显式串行化保护，不允许多个 worker 线程并发执行这类代码。
-- 这类 API 不保证线程安全，并发访问会导致 `Qt6Gui.dll` 内部缓存越界写入，进程直接崩溃 (`0xC0000005`)。此约束不因新增图形格式支持、性能优化理由被绕过，新增任何调用这类 API 的代码前必须先复用此锁。
-- 文件 I/O、哈希计算、数据库读写等与 Qt Gui 无关的部分不受此约束，维持并行。
