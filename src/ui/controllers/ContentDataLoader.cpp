@@ -78,7 +78,9 @@ void ContentDataLoader::loadDirectory(const QString& path, bool recursive) {
     QPointer<ContentPanel> panelPtr(m_panel);
     (void)QtConcurrent::run([panelPtr, path, recursive, reqId]() {
         if (!panelPtr) return;
-        std::vector<ItemRecord> allItems = DiskScanService::scanDirectory(path, recursive, [panelPtr]() { return static_cast<bool>(panelPtr); });
+        std::vector<ItemRecord> allItems = DiskScanService::scanDirectory(path, recursive, [panelPtr, reqId]() {
+            return panelPtr && panelPtr->loadRequestId() == reqId;
+        });
         if (!panelPtr) return;
 
         MetaCacheDecorator::decorate(allItems);
