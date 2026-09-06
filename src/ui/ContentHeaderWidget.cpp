@@ -1,6 +1,9 @@
 #include "ContentHeaderWidget.h"
 #include "UiHelper.h"
+#include "ToolTipOverlay.h"
 #include "../core/AppConfig.h"
+#include <QEvent>
+#include <QCursor>
 
 namespace QuarkMeta {
 
@@ -36,6 +39,7 @@ void ContentHeaderWidget::initUi() {
         btn->setIcon(UiHelper::getIcon(iconKey, defaultChecked ? activeColor : QColor("#888888"), 16));
         btn->setProperty("tooltipText", tooltip);
         btn->setObjectName("ViewModeToolBtn");
+        btn->installEventFilter(this);
         m_layout->addWidget(btn, 0, Qt::AlignVCenter);
     };
 
@@ -66,6 +70,7 @@ void ContentHeaderWidget::initUi() {
     m_btnLayers->setIcon(UiHelper::getIcon("layers", QColor("#2ecc71"), 18));
     m_btnLayers->setProperty("tooltipText", "显示子文件夹中的项目");
     m_btnLayers->setObjectName("ViewModeToolBtn");
+    m_btnLayers->installEventFilter(this);
 
     connect(m_btnLayers, &QPushButton::clicked, this, [this]() {
         emit recursiveToggled(m_btnLayers->isChecked());
@@ -101,6 +106,19 @@ void ContentHeaderWidget::setLayersEnabled(bool enabled, const QString& tooltip)
         m_btnLayers->setEnabled(enabled);
         m_btnLayers->setProperty("tooltipText", tooltip);
     }
+}
+
+bool ContentHeaderWidget::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::ToolTip) {
+        QString text = watched->property("tooltipText").toString();
+        if (!text.isEmpty()) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), text, 0);
+            return true;
+        }
+    } else if (event->type() == QEvent::Leave || event->type() == QEvent::MouseButtonPress) {
+        ToolTipOverlay::hideTip();
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 } // namespace QuarkMeta
