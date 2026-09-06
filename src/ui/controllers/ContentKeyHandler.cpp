@@ -4,6 +4,7 @@
 #include "../RatingBarLayout.h"
 #include "../ToolTipOverlay.h"
 #include "../ShellIconManager.h"
+#include "../UiHelper.h"
 #include "../../core/TrashService.h"
 #include "../../core/PermanentDeleteService.h"
 #include "../../core/ClipboardService.h"
@@ -22,6 +23,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QFileInfo>
+#include <QFile>
 #include <QDir>
 #include <QSet>
 #include <QTimer>
@@ -386,18 +388,8 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             // 🚀 确保即使焦点处于列表视图非 Name 列，也能正确从 FileListColumn::Name sibling 获取完整 PathRole 属性
             QModelIndex nameIdx = idx.sibling(idx.row(), static_cast<int>(FileListColumn::Name));
             QString path = nameIdx.data(PathRole).toString();
-            if (!path.isEmpty()) {
-                QFileInfo info(path);
-                if (!info.isDir()) {
-                    QString ext = info.suffix().toLower();
-                    static const QSet<QString> whiteList = {
-                        "jpg", "jpeg", "png", "bmp", "webp", "gif", "ico", "cur", "ani", "psd", "ai", "eps", "pdf", "svg",
-                        "txt", "md", "markdown", "log", "cpp", "h", "hpp", "c", "py", "js", "css", "html", "json", "xml", "ini", "conf", "yaml", "yml"
-                    };
-                    if (whiteList.contains(ext)) {
-                        emit m_panel->requestQuickLook(path);
-                    }
-                }
+            if (!path.isEmpty() && UiHelper::canPreviewFile(path)) {
+                emit m_panel->requestQuickLook(path);
             }
         }
         return true;

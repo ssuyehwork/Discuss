@@ -15,7 +15,10 @@
 #include "../core/VolumeOnlineManager.h"
 #include "../core/ModelContract.h"
 #include "../util/ShellHelper.h"
+#include "UiHelper.h"
 #include <QFileInfo>
+#include <QFile>
+#include <QDesktopServices>
 #include <QCursor>
 
 namespace QuarkMeta {
@@ -228,14 +231,11 @@ void PanelMediator::setupConnections() {
             cmd.targetPaths << path;
             CoreEngine::instance().executeCommand(cmd);
 
-            QString ext = QFileInfo(path).suffix().toLower();
-            static const QSet<QString> whiteList = {
-                "jpg", "jpeg", "png", "bmp", "webp", "gif", "ico", "cur", "ani", "psd", "ai", "eps", "pdf", "svg",
-                "txt", "md", "markdown", "log", "cpp", "h", "hpp", "c", "py", "js", "css", "html", "json", "xml", "ini", "conf", "yaml", "yml"
-            };
-            if (whiteList.contains(ext)) {
+            if (UiHelper::canPreviewFile(path)) {
                 m_currentQuickLookPath = path;
                 QuickLookWindow::instance().previewFile(path);
+            } else {
+                QDesktopServices::openUrl(QUrl::fromLocalFile(path));
             }
         });
     }

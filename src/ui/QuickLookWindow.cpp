@@ -20,6 +20,7 @@
 #include "../util/ShellHelper.h"
 #include "FavoritePanel.h"
 #include "../meta/FavoriteDao.h"
+#include "dialogs/TextExtensionDialog.h"
 #include <QFileInfo>
 #include <QScreen>
 #include <QApplication>
@@ -276,7 +277,8 @@ void QuickLookWindow::renderText(const QString& path) {
     if (encodingName == "UTF-8") {
         text = QString::fromUtf8(fileData);
     } else if (encodingName == "UTF-16LE") {
-        text = QString::fromWCharArray(reinterpret_cast<const wchar_t*>(fileData.constData()), fileData.size() / 2);
+        auto decoder = QStringDecoder(QStringDecoder::Utf16LE);
+        text = decoder(fileData);
     } else if (encodingName == "UTF-16BE") {
         auto decoder = QStringDecoder(QStringDecoder::Utf16BE);
         text = decoder(fileData);
@@ -451,6 +453,11 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     QAction* actFlip = menu.addAction("水平翻转");
     QAction* actOrig = menu.addAction("原始");
     QAction* actFit = menu.addAction("自适应");
+    actOrig->setCheckable(true);
+    actFit->setCheckable(true);
+    bool isFit = m_graphicsView->isFitMode();
+    actFit->setChecked(isFit);
+    actOrig->setChecked(!isFit);
     menu.addSeparator();
 
     QAction* actOpenDefault = menu.addAction("用系统默认程序打开");
@@ -467,6 +474,9 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     bool isFav = FavoriteDao::containsPath(m_currentPath);
     QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#e74c3c")) : UiHelper::getIcon("star_filled", QColor("#FDB70A"));
     QAction* actFavorite = menu.addAction(favIcon, isFav ? "取消收藏" : "添加至收藏夹");
+    menu.addSeparator();
+
+    QAction* actTextExtSettings = menu.addAction("文本扩展名设置...");
 
     // 根据是否显示图片启用/禁用 旋转、水平翻转、原始、自适应
     bool isImage = m_graphicsView->isVisible();
@@ -517,6 +527,9 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
         QApplication::clipboard()->setText(QDir::toNativeSeparators(m_currentPath));
     } else if (selected == actFavorite) {
         emit favoriteRequested(m_currentPath);
+    } else if (selected == actTextExtSettings) {
+        TextExtensionDialog dlg(this);
+        dlg.exec();
     }
 }
 

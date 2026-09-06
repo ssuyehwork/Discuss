@@ -276,6 +276,8 @@ set(SOURCES
     src/ui/components/ClickableRow.cpp
     src/ui/dialogs/FramelessInputDialog.h
     src/ui/dialogs/FramelessInputDialog.cpp
+    src/ui/dialogs/TextExtensionDialog.h
+    src/ui/dialogs/TextExtensionDialog.cpp
     src/ui/dialogs/FramelessColorPicker.h
     src/ui/dialogs/FramelessColorPicker.cpp
     src/ui/dialogs/FramelessConfirmDialog.h
