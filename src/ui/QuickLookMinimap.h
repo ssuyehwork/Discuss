@@ -16,7 +16,7 @@ public:
     void clear();
 
 signals:
-    // 当用户在小地图上点击/拖拽时，向主视图发送跳转比例请求 (0.0 ~ 1.0)
+    // 当用户在小地图上点击/拖拽时，向内容发送跳转比例请求 (0.0 ~ 1.0)
     void centerRequested(double xRatio, double yRatio);
 
 protected:

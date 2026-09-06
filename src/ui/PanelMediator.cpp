@@ -218,7 +218,7 @@ void PanelMediator::setupConnections() {
         });
     }
 
-    // 3. 内容面板与 QuickLook 预览窗口联动 (🚀 闭环补齐主视图同步)
+    // 3. 内容面板与 QuickLook 预览窗口联动 (🚀 闭环补齐内容同步)
     if (contentPanel) {
         connect(contentPanel, &ContentPanel::requestQuickLook, this, [this](const QString& path) {
             m_currentQuickLookPath = path;

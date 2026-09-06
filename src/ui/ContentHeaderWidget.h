@@ -24,6 +24,9 @@ public:
     void setRecursive(bool recursive);
     void setLayersEnabled(bool enabled, const QString& tooltip);
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 signals:
     void filterStateChanged(const FilterState& state);
     void recursiveToggled(bool recursive);
