@@ -17,6 +17,8 @@
 #include <QStringList>
 #include <QFileInfo>
 #include <QFile>
+#include <QStringDecoder>
+#include <algorithm>
 
 #include "SvgIconRenderer.h"
 #include "ThemeManager.h"
@@ -88,6 +90,77 @@ public:
         }
         AppConfig::instance().setValue("QuickLook/CustomTextExtensions", cleaned);
         AppConfig::instance().sync();
+    }
+
+    static inline bool extractTextContent(const QString& path, QString& outText, qint64 maxBytes = 5 * 1024 * 1024) {
+        QFileInfo fi(path);
+        if (fi.isDir() || !fi.exists() || fi.size() > maxBytes) {
+            return false;
+        }
+
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) {
+            return false;
+        }
+
+        QByteArray fileData = file.read(maxBytes);
+        file.close();
+
+        if (fileData.isEmpty()) {
+            outText.clear();
+            return true;
+        }
+
+        // 检查二进制特征
+        int checkLen = std::min<int>(fileData.size(), 1024);
+        int continuousNull = 0;
+        for (int i = 0; i < checkLen; ++i) {
+            if (fileData[i] == '\0') {
+                continuousNull++;
+                if (continuousNull > 2) return false;
+            } else {
+                continuousNull = 0;
+            }
+        }
+
+        // 编码判断
+        if (fileData.startsWith("\xEF\xBB\xBF")) {
+            outText = QString::fromUtf8(fileData.mid(3));
+            return true;
+        }
+        if (fileData.startsWith("\xFF\xFE")) {
+            auto decoder = QStringDecoder(QStringDecoder::Utf16LE);
+            outText = decoder(fileData.mid(2));
+            return true;
+        }
+        if (fileData.startsWith("\xFE\xFF")) {
+            auto decoder = QStringDecoder(QStringDecoder::Utf16BE);
+            outText = decoder(fileData.mid(2));
+            return true;
+        }
+
+        int utf8Count = 0;
+        for (int i = 0; i < fileData.size() - 2; ++i) {
+            unsigned char c = static_cast<unsigned char>(fileData[i]);
+            if (c >= 0xC0 && c <= 0xDF) {
+                if (static_cast<unsigned char>(fileData[i+1]) >= 0x80 && static_cast<unsigned char>(fileData[i+1]) <= 0xBF) {
+                    utf8Count++; i++;
+                }
+            } else if (c >= 0xE0 && c <= 0xEF) {
+                if (static_cast<unsigned char>(fileData[i+1]) >= 0x80 && static_cast<unsigned char>(fileData[i+1]) <= 0xBF &&
+                    static_cast<unsigned char>(fileData[i+2]) >= 0x80 && static_cast<unsigned char>(fileData[i+2]) <= 0xBF) {
+                    utf8Count += 2; i += 2;
+                }
+            }
+        }
+
+        if (utf8Count > 0) {
+            outText = QString::fromUtf8(fileData);
+        } else {
+            outText = QString::fromLocal8Bit(fileData);
+        }
+
+        return true;
     }
 
     static inline bool canPreviewFile(const QString& path) {
