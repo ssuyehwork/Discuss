@@ -2,6 +2,7 @@
 #include "../ContentPanel.h"
 #include "ContentSortController.h"
 #include "../UiHelper.h"
+#include "../StyleLibrary.h"
 #include "../ToolTipOverlay.h"
 #include "../ColorPicker.h"
 #include "../FavoritePanel.h"
@@ -120,8 +121,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     // =========================================================================
     if (onItem) {
         if (isDriveRoot) {
-            menu.addAction("打开")->setData(ContentPanel::ActionOpen);
-            menu.addAction("在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
+            menu.addAction(UiHelper::getIcon("open", QColor("#EEEEEE"), 18), "打开")->setData(ContentPanel::ActionOpen);
+            menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
 
             QString currentColorStr = currentIndex.data(ColorRole).toString();
             QWidgetAction* pickerAction = new QWidgetAction(&menu);
@@ -138,21 +139,21 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             });
 
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
-            menu.addAction(isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
+            menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", isPinned ? Style::ActiveOrange : QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
 
             bool isFavDrive = FavoriteDao::containsPath(path);
-            menu.addAction(isFavDrive ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
+            menu.addAction(UiHelper::getIcon(isFavDrive ? "close" : "star_filled", isFavDrive ? QColor("#e74c3c") : QColor("#FDB70A"), 18), isFavDrive ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
 
             menu.addSeparator();
 
-            QAction* actItemPaste = menu.addAction("粘贴");
+            QAction* actItemPaste = menu.addAction(UiHelper::getIcon("paste", QColor("#EEEEEE"), 18), "粘贴");
             actItemPaste->setData(ContentPanel::ActionPaste);
             actItemPaste->setEnabled(m_panel->canPaste(path));
 
-            menu.addAction("复制名称")->setData(ContentPanel::ActionCopyName);
-            menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
+            menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "复制名称")->setData(ContentPanel::ActionCopyName);
+            menu.addAction(UiHelper::getIcon("link", QColor("#EEEEEE"), 18), "复制路径")->setData(ContentPanel::ActionCopyPath);
 
-            QMenu* moreMenuDrive = menu.addMenu("更多");
+            QMenu* moreMenuDrive = menu.addMenu(UiHelper::getIcon("more_horizontal", QColor("#EEEEEE"), 18), "更多");
             UiHelper::applyMenuStyle(moreMenuDrive);
 
             QString driveExt = QFileInfo(path).suffix().toLower();
@@ -169,7 +170,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     }
                 });
             } else {
-                QAction* actDisabled = moreMenuDrive->addAction("不支持提取内容");
+                QAction* actDisabled = moreMenuDrive->addAction(UiHelper::getIcon("prohibit", QColor("#888888"), 18), "不支持提取内容");
                 actDisabled->setEnabled(false);
             }
 
@@ -186,26 +187,26 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 QString trimmed = t.trimmed();
                 if (!trimmed.isEmpty()) cleanTags << trimmed;
             }
-            QAction* actCopyTags = menu.addAction("复制标签");
+            QAction* actCopyTags = menu.addAction(UiHelper::getIcon("tag", QColor("#EEEEEE"), 18), "复制标签");
             actCopyTags->setData(ContentPanel::ActionCopyTags);
             actCopyTags->setEnabled(!cleanTags.isEmpty());
 
-            QAction* actPasteTags = menu.addAction("粘贴标签");
+            QAction* actPasteTags = menu.addAction(UiHelper::getIcon("paste_tag", QColor("#EEEEEE"), 18), "粘贴标签");
             actPasteTags->setData(ContentPanel::ActionPasteTags);
             actPasteTags->setEnabled(ClipboardService::instance().hasCopiedTags());
 
-            QAction* actRepeat = menu.addAction(LastOperationManager::instance().displayText());
+            QAction* actRepeat = menu.addAction(UiHelper::getIcon("repeat", QColor("#EEEEEE"), 18), LastOperationManager::instance().displayText());
             actRepeat->setData(ContentPanel::ActionRepeatLastOp);
             actRepeat->setEnabled(LastOperationManager::instance().hasOperation());
 
             menu.addSeparator();
-            menu.addAction("刷新")->setData(ContentPanel::ActionRefresh);
+            menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
         } else {
-            menu.addAction(isFolder ? "打开文件夹" : "打开")->setData(ContentPanel::ActionOpen);
+            menu.addAction(UiHelper::getIcon(isFolder ? "folder" : "open", QColor("#EEEEEE"), 18), isFolder ? "打开文件夹" : "打开")->setData(ContentPanel::ActionOpen);
             if (!isFolder) {
-                menu.addAction("用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
+                menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
             }
-            menu.addAction("在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
+            menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
 
             QString currentColorStr = currentIndex.data(ColorRole).toString();
             QWidgetAction* pickerAction = new QWidgetAction(&menu);
@@ -222,15 +223,15 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             });
 
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
-            menu.addAction(isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
+            menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", isPinned ? Style::ActiveOrange : QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
 
             bool isFavItem = FavoriteDao::containsPath(path);
-            menu.addAction(isFavItem ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
+            menu.addAction(UiHelper::getIcon(isFavItem ? "close" : "star_filled", isFavItem ? QColor("#e74c3c") : QColor("#FDB70A"), 18), isFavItem ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
 
             menu.addSeparator();
 
-            menu.addAction("复制")->setData(ContentPanel::ActionCopy);
-            menu.addAction("剪切")->setData(ContentPanel::ActionCut);
+            menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "复制")->setData(ContentPanel::ActionCopy);
+            menu.addAction(UiHelper::getIcon("cut", QColor("#EEEEEE"), 18), "剪切")->setData(ContentPanel::ActionCut);
 
             if (!isComputerRoot && !currentPath.isEmpty()) {
                 std::wstring volSerial = MetadataManager::getVolumeSerialNumber(path.toStdWString());
@@ -275,7 +276,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     moveMenu->addSeparator();
                 }
 
-                QAction* actBrowseMove = moveMenu->addAction("浏览选择文件夹...");
+                QAction* actBrowseMove = moveMenu->addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 16), "浏览选择文件夹...");
                 connect(actBrowseMove, &QAction::triggered, this, [this, performMoveTo]() {
                     QString selectedDir = FramelessFileDialog::getExistingDirectory(m_panel, "选择移动的目标文件夹", m_panel->currentPath());
                     if (!selectedDir.isEmpty()) {
@@ -284,14 +285,14 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 });
             }
 
-            QAction* actItemPaste = menu.addAction("粘贴");
+            QAction* actItemPaste = menu.addAction(UiHelper::getIcon("paste", QColor("#EEEEEE"), 18), "粘贴");
             actItemPaste->setData(ContentPanel::ActionPaste);
             actItemPaste->setEnabled(m_panel->canPaste(isFolder ? path : currentPath));
 
-            menu.addAction("复制名称")->setData(ContentPanel::ActionCopyName);
-            menu.addAction("复制路径")->setData(ContentPanel::ActionCopyPath);
+            menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "复制名称")->setData(ContentPanel::ActionCopyName);
+            menu.addAction(UiHelper::getIcon("link", QColor("#EEEEEE"), 18), "复制路径")->setData(ContentPanel::ActionCopyPath);
 
-            QMenu* moreMenu = menu.addMenu("更多");
+            QMenu* moreMenu = menu.addMenu(UiHelper::getIcon("more_horizontal", QColor("#EEEEEE"), 18), "更多");
             UiHelper::applyMenuStyle(moreMenu);
 
             QString fileExt = QFileInfo(path).suffix().toLower();
@@ -308,7 +309,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     }
                 });
             } else {
-                QAction* actDisabled = moreMenu->addAction("不支持提取内容");
+                QAction* actDisabled = moreMenu->addAction(UiHelper::getIcon("prohibit", QColor("#888888"), 18), "不支持提取内容");
                 actDisabled->setEnabled(false);
             }
 
@@ -325,31 +326,31 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 QString trimmed = t.trimmed();
                 if (!trimmed.isEmpty()) cleanTags << trimmed;
             }
-            QAction* actCopyTags = menu.addAction("复制标签");
+            QAction* actCopyTags = menu.addAction(UiHelper::getIcon("tag", QColor("#EEEEEE"), 18), "复制标签");
             actCopyTags->setData(ContentPanel::ActionCopyTags);
             actCopyTags->setEnabled(!cleanTags.isEmpty());
 
-            QAction* actPasteTags = menu.addAction("粘贴标签");
+            QAction* actPasteTags = menu.addAction(UiHelper::getIcon("paste_tag", QColor("#EEEEEE"), 18), "粘贴标签");
             actPasteTags->setData(ContentPanel::ActionPasteTags);
             actPasteTags->setEnabled(ClipboardService::instance().hasCopiedTags());
 
-            QAction* actRepeat = menu.addAction(LastOperationManager::instance().displayText());
+            QAction* actRepeat = menu.addAction(UiHelper::getIcon("repeat", QColor("#EEEEEE"), 18), LastOperationManager::instance().displayText());
             actRepeat->setData(ContentPanel::ActionRepeatLastOp);
             actRepeat->setEnabled(LastOperationManager::instance().hasOperation());
 
-            menu.addAction("重命名")->setData(ContentPanel::ActionRename);
+            menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE"), 18), "重命名")->setData(ContentPanel::ActionRename);
 
             menu.addSeparator();
-            menu.addAction("刷新")->setData(ContentPanel::ActionRefresh);
+            menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
 
             if (!isFolder) {
                 menu.addAction(UiHelper::getIcon("sync", QColor("#3498db"), 18), "重新提取缩略图")->setData(ContentPanel::ActionReextractThumbnail);
 
-                QMenu* cryptoMenu = menu.addMenu("外壳保护");
+                QMenu* cryptoMenu = menu.addMenu(UiHelper::getIcon("shield", QColor("#EEEEEE"), 18), "外壳保护");
                 UiHelper::applyMenuStyle(cryptoMenu);
-                cryptoMenu->addAction("执行外壳保护")->setData(ContentPanel::ActionEncrypt);
-                cryptoMenu->addAction("解除保护")->setData(ContentPanel::ActionDecrypt);
-                cryptoMenu->addAction("修改保护密码")->setData(ContentPanel::ActionChangePwd);
+                cryptoMenu->addAction(UiHelper::getIcon("lock", QColor("#EEEEEE"), 18), "执行外壳保护")->setData(ContentPanel::ActionEncrypt);
+                cryptoMenu->addAction(UiHelper::getIcon("unlock", QColor("#EEEEEE"), 18), "解除保护")->setData(ContentPanel::ActionDecrypt);
+                cryptoMenu->addAction(UiHelper::getIcon("key", QColor("#EEEEEE"), 18), "修改保护密码")->setData(ContentPanel::ActionChangePwd);
             }
         }
     }
@@ -358,10 +359,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     // =========================================================================
     else {
         if (isComputerRoot) {
-            menu.addAction("在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
-            menu.addAction("刷新")->setData(ContentPanel::ActionRefresh);
+            menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
+            menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
         } else {
-            QMenu* newMenu = menu.addMenu("新建...");
+            QMenu* newMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "新建...");
             UiHelper::applyMenuStyle(newMenu);
             newMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹")->setData(ContentPanel::ActionNewFolder);
             newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown")->setData(ContentPanel::ActionNewMd);
@@ -371,24 +372,24 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE")), "批量创建项目...")->setData(ContentPanel::ActionBatchCreate);
 
             menu.addSeparator();
-            QAction* actPaste = menu.addAction("粘贴");
+            QAction* actPaste = menu.addAction(UiHelper::getIcon("paste", QColor("#EEEEEE"), 18), "粘贴");
             actPaste->setData(ContentPanel::ActionPaste);
             actPaste->setEnabled(m_panel->canPaste(currentPath));
 
             menu.addSeparator();
             bool isPhysicalPath = !currentPath.isEmpty() && !currentPath.contains("://") && QDir(currentPath).exists();
-            QAction* actShowInExp = menu.addAction("在“资源管理器”中显示");
+            QAction* actShowInExp = menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示");
             actShowInExp->setData(ContentPanel::ActionShowInExplorer);
             actShowInExp->setEnabled(isPhysicalPath);
 
-            menu.addAction("刷新")->setData(ContentPanel::ActionRefresh);
+            menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
         }
     }
 
     menu.addSeparator();
 
     // 排序二级子菜单
-    QMenu* sortMenu = menu.addMenu("排序");
+    QMenu* sortMenu = menu.addMenu(UiHelper::getIcon("sort", QColor("#EEEEEE"), 18), "排序");
     UiHelper::applyMenuStyle(sortMenu);
 
     QActionGroup* typeGroup = new QActionGroup(this);
@@ -429,10 +430,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     // 删除子菜单
     if (onItem && !isDriveRoot) {
         menu.addSeparator();
-        QMenu* delMenu = menu.addMenu("删除");
+        QMenu* delMenu = menu.addMenu(UiHelper::getIcon("trash", QColor("#e81123"), 18), "删除");
         UiHelper::applyMenuStyle(delMenu);
-        delMenu->addAction("移入回收站")->setData(ContentPanel::ActionDelete);
-        delMenu->addAction("永久删除")->setData(ContentPanel::ActionSecureDelete);
+        delMenu->addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "移入回收站")->setData(ContentPanel::ActionDelete);
+        delMenu->addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "永久删除")->setData(ContentPanel::ActionSecureDelete);
     }
 
     m_panel->setContextMenuActive(true);
