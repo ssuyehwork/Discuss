@@ -78,13 +78,13 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     // =========================================================================
     if (isTrashView) {
         if (onItem) {
-            menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原")->setData(ContentPanel::ActionRestore);
+            menu.addAction(UiHelper::getIcon("sync", QColor("#EEEEEE"), 18), "还原")->setData(ContentPanel::ActionRestore);
             menu.addAction(UiHelper::getIcon("cut", QColor("#EEEEEE"), 18), "剪切")->setData(ContentPanel::ActionCut);
-            menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "永久删除")->setData(ContentPanel::ActionSecureDelete);
+            menu.addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "永久删除")->setData(ContentPanel::ActionSecureDelete);
             menu.addSeparator();
         }
-        menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原全部")->setData(ContentPanel::ActionRestoreAll);
-        menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "清空回收站")->setData(ContentPanel::ActionEmptyTrash);
+        menu.addAction(UiHelper::getIcon("sync", QColor("#EEEEEE"), 18), "还原全部")->setData(ContentPanel::ActionRestoreAll);
+        menu.addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "清空回收站")->setData(ContentPanel::ActionEmptyTrash);
 
         m_panel->setContextMenuActive(true);
         QAction* selectedAction = menu.exec(view->viewport()->mapToGlobal(pos));
@@ -139,10 +139,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             });
 
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
-            menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", isPinned ? Style::ActiveOrange : QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
+            menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
 
             bool isFavDrive = FavoriteDao::containsPath(path);
-            menu.addAction(UiHelper::getIcon(isFavDrive ? "close" : "star_filled", isFavDrive ? QColor("#e74c3c") : QColor("#FDB70A"), 18), isFavDrive ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
+            menu.addAction(UiHelper::getIcon(isFavDrive ? "close" : "star_filled", QColor("#EEEEEE"), 18), isFavDrive ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
 
             menu.addSeparator();
 
@@ -223,10 +223,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             });
 
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
-            menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", isPinned ? Style::ActiveOrange : QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
+            menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
 
             bool isFavItem = FavoriteDao::containsPath(path);
-            menu.addAction(UiHelper::getIcon(isFavItem ? "close" : "star_filled", isFavItem ? QColor("#e74c3c") : QColor("#FDB70A"), 18), isFavItem ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
+            menu.addAction(UiHelper::getIcon(isFavItem ? "close" : "star_filled", QColor("#EEEEEE"), 18), isFavItem ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
 
             menu.addSeparator();
 
@@ -238,7 +238,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 QStringList recentFolders = NavigationHistoryService::getRecentVisitedFolders(volSerial);
                 recentFolders.removeAll(currentPath);
 
-                QMenu* moveMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor("#3498db"), 18), "移动到");
+                QMenu* moveMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18), "移动到");
                 UiHelper::applyMenuStyle(moveMenu);
 
                 auto performMoveTo = [this](const QString& targetDir) {
@@ -344,7 +344,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
 
             if (!isFolder) {
-                menu.addAction(UiHelper::getIcon("sync", QColor("#3498db"), 18), "重新提取缩略图")->setData(ContentPanel::ActionReextractThumbnail);
+                menu.addAction(UiHelper::getIcon("sync", QColor("#EEEEEE"), 18), "重新提取缩略图")->setData(ContentPanel::ActionReextractThumbnail);
 
                 QMenu* cryptoMenu = menu.addMenu(UiHelper::getIcon("shield", QColor("#EEEEEE"), 18), "外壳保护");
                 UiHelper::applyMenuStyle(cryptoMenu);
@@ -430,10 +430,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     // 删除子菜单
     if (onItem && !isDriveRoot) {
         menu.addSeparator();
-        QMenu* delMenu = menu.addMenu(UiHelper::getIcon("trash", QColor("#e81123"), 18), "删除");
+        QMenu* delMenu = menu.addMenu(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "删除");
         UiHelper::applyMenuStyle(delMenu);
         delMenu->addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "移入回收站")->setData(ContentPanel::ActionDelete);
-        delMenu->addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "永久删除")->setData(ContentPanel::ActionSecureDelete);
+        delMenu->addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "永久删除")->setData(ContentPanel::ActionSecureDelete);
     }
 
     m_panel->setContextMenuActive(true);

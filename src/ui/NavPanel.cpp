@@ -258,8 +258,8 @@ void NavPanel::onTreeContextMenu(const QPoint& pos) {
         QMenu menu(this);
         UiHelper::applyMenuStyle(&menu);
 
-        QAction* actRestore = menu.addAction(UiHelper::getIcon("sync", QColor("#2ecc71"), 18), "还原全部");
-        QAction* actEmpty = menu.addAction(UiHelper::getIcon("trash", QColor("#e81123"), 18), "清空回收站");
+        QAction* actRestore = menu.addAction(UiHelper::getIcon("sync", QColor("#EEEEEE"), 18), "还原全部");
+        QAction* actEmpty = menu.addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "清空回收站");
 
         connect(actRestore, &QAction::triggered, this, [this]() {
             TrashService::instance().restoreAll(this);
@@ -285,7 +285,7 @@ void NavPanel::onTreeContextMenu(const QPoint& pos) {
     UiHelper::applyMenuStyle(&menu);
 
     bool isFav = FavoriteDao::containsPath(path);
-    QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#e74c3c"), 18) : UiHelper::getIcon("star_filled", QColor("#FDB70A"), 18);
+    QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#EEEEEE"), 18) : UiHelper::getIcon("star_filled", QColor("#EEEEEE"), 18);
     QAction* actFavorite = menu.addAction(favIcon, isFav ? "从收藏夹移除" : "添加至收藏夹");
 
     QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "复制完整路径");
