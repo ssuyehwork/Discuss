@@ -132,7 +132,10 @@ public:
         if (cleanExt.startsWith('.')) cleanExt = cleanExt.mid(1);
         if (cleanExt.isEmpty()) return false;
 
-        static const QSet<QString> builtIn = QSet<QString>(getBuiltInTextExtensions().begin(), getBuiltInTextExtensions().end());
+        static const QSet<QString> builtIn = []() {
+            const auto list = getBuiltInTextExtensions();
+            return QSet<QString>(list.begin(), list.end());
+        }();
         if (builtIn.contains(cleanExt)) return true;
 
         QStringList custom = getCustomTextExtensions();

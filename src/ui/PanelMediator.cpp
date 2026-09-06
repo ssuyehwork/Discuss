@@ -18,6 +18,7 @@
 #include "UiHelper.h"
 #include <QFileInfo>
 #include <QFile>
+#include <QDesktopServices>
 #include <QCursor>
 
 namespace QuarkMeta {
