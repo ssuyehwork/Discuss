@@ -25,9 +25,9 @@ TrayController::TrayController(QMainWindow* mainWindow)
     m_trayMenu = new QMenu(mainWindow);
     UiHelper::applyMenuStyle(m_trayMenu);
 
-    QAction* showAction = m_trayMenu->addAction(UiHelper::getIcon("monitor", QColor("#EEEEEE"), 18), "显示主界面");
+    QAction* showAction = m_trayMenu->addAction(UiHelper::getIcon("window", QColor("#EEEEEE"), 18), "显示主界面");
     m_trayMenu->addSeparator();
-    QAction* quitAction = m_trayMenu->addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 18), "退出 QuarkMeta");
+    QAction* quitAction = m_trayMenu->addAction(UiHelper::getIcon("power", QColor("#EEEEEE"), 18), "退出 QuarkMeta");
 
     connect(showAction, &QAction::triggered, this, &TrayController::onShowMainWindow);
     connect(quitAction, &QAction::triggered, this, &TrayController::onQuitApp);

@@ -220,10 +220,8 @@ void MainWindow::changeEvent(QEvent* event) {
         if (isMinimized() && m_searchController && m_searchController->historyPanel()) {
             m_searchController->historyPanel()->hide();
         }
-        if (m_titleBarWidget && m_titleBarWidget->btnMax()) {
-            QString iconKey = isMaximized() ? "restore_line" : "maximize";
-            // 修正笔误：恢复为正确的 UiHelper::getIcon
-            m_titleBarWidget->btnMax()->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
+        if (m_titleBarWidget) {
+            m_titleBarWidget->updateMaxButtonIcon();
         }
         if (m_bodyLayout) {
             m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin);

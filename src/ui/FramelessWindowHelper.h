@@ -21,6 +21,7 @@ class FramelessWindowHelper : public QObject {
 public:
     static FramelessWindowHelper* apply(QWidget* window, QWidget* titleBar = nullptr);
     static void setAlwaysOnTop(QWidget* window, bool onTop);
+    static void restoreFromMaximized(QWidget* window);
     static bool isAlwaysOnTop(QWidget* window);
 
     bool handleNativeEvent(void* message, qintptr* result);

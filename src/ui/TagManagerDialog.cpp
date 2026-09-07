@@ -60,6 +60,8 @@ void TagManagerDialog::initContent() {
 
     // 侧边栏开关
     m_btnToggleSidebar = new QPushButton(this);
+    m_btnToggleSidebar->setAutoDefault(false);
+    m_btnToggleSidebar->setDefault(false);
     m_btnToggleSidebar->setFixedSize(20, 20);
     m_btnToggleSidebar->setCheckable(true);
     m_btnToggleSidebar->setChecked(true);
@@ -78,8 +80,8 @@ void TagManagerDialog::initContent() {
     // 2. 主体区
     QWidget* bodyWidget = new QWidget(this);
     QHBoxLayout* bodyL = new QHBoxLayout(bodyWidget);
-    bodyL->setContentsMargins(0, 0, 0, 0);
-    bodyL->setSpacing(0);
+    bodyL->setContentsMargins(10, 10, 10, 10);
+    bodyL->setSpacing(10);
 
     // A. 侧边栏
     m_sidebar = new QFrame(bodyWidget);
@@ -106,6 +108,8 @@ void TagManagerDialog::initContent() {
 
     // 底部“新建分组”按钮
     QPushButton* btnAddGroup = new QPushButton(UiHelper::getIcon("add", QColor("#AAAAAA"), 14), " 新建分组...", m_sidebar);
+    btnAddGroup->setAutoDefault(false);
+    btnAddGroup->setDefault(false);
     btnAddGroup->setFixedHeight(32);
     btnAddGroup->setCursor(Qt::PointingHandCursor);
     btnAddGroup->setObjectName("TagManagerBtnAddGroup");
@@ -134,6 +138,8 @@ void TagManagerDialog::initContent() {
     QHBoxLayout* addL = new QHBoxLayout(m_addNewTagWidget);
     addL->setContentsMargins(0, 0, 0, 0);
     m_btnAddNewTag = new QPushButton(m_addNewTagWidget);
+    m_btnAddNewTag->setAutoDefault(false);
+    m_btnAddNewTag->setDefault(false);
     m_btnAddNewTag->setCursor(Qt::PointingHandCursor);
     m_btnAddNewTag->setObjectName("TagManagerBtnAddNewTag");
     connect(m_btnAddNewTag, &QPushButton::clicked, [this]() {
@@ -171,6 +177,8 @@ void TagManagerDialog::refreshSidebar() {
 
     auto createSideBtn = [this](int id, const QString& icon, const QString& name) {
         QPushButton* btn = new QPushButton(m_sidebar);
+        btn->setAutoDefault(false);
+        btn->setDefault(false);
         btn->setText(" " + name);
         btn->setIcon(UiHelper::getIcon(icon, QColor("#AAAAAA"), 13));
         btn->setIconSize(QSize(13, 13));
@@ -381,6 +389,8 @@ void TagManagerDialog::refreshTags() {
 
     for (const QString& tag : finalTags) {
         QPushButton* btn = new QPushButton(tag, flowContainer);
+        btn->setAutoDefault(false);
+        btn->setDefault(false);
         btn->setIcon(UiHelper::getIcon("tag_pill", QColor("#888888"), 12));
         btn->setIconSize(QSize(12, 12));
         btn->setCursor(Qt::PointingHandCursor);
@@ -399,6 +409,21 @@ void TagManagerDialog::refreshTags() {
 void TagManagerDialog::resizeEvent(QResizeEvent* event) {
     FramelessDialog::resizeEvent(event);
     refreshTags();
+}
+
+void TagManagerDialog::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        if (m_searchEdit && m_searchEdit->hasFocus()) {
+            QString kw = m_searchEdit->text().trimmed();
+            if (!kw.isEmpty()) {
+                createTag(kw);
+                m_searchEdit->clear();
+            }
+        }
+        event->accept();
+        return;
+    }
+    FramelessDialog::keyPressEvent(event);
 }
 
 void TagManagerDialog::applyTheme() {

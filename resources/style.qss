@@ -695,7 +695,8 @@ QWidget#TagManagerTopBar {
 }
 QFrame#TagManagerSidebar {
     background-color: #252526;
-    border-right: 1px solid #333;
+    border: 1px solid #333333;
+    border-radius: 4px;
 }
 QLabel#TagManagerSideTitle {
     color: #888;
@@ -717,7 +718,8 @@ QPushButton#TagManagerBtnAddGroup:hover {
     color: #FFF;
 }
 QScrollArea#TagManagerScrollArea {
-    border: none;
+    border: 1px solid #333333;
+    border-radius: 4px;
     background-color: #1E1E1E;
 }
 QPushButton#TagManagerBtnAddNewTag {

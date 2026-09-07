@@ -14,6 +14,7 @@
 #include <QScrollBar>
 #include <QAbstractItemView>
 #include <QMouseEvent>
+#include <QTimer>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -143,7 +144,7 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
     if (msg->message == WM_NCLBUTTONDBLCLK) {
         if (msg->wParam == HTCAPTION) {
             if (m_window->isMaximized()) {
-                m_window->showNormal();
+                restoreFromMaximized(m_window);
             } else {
                 m_window->showMaximized();
             }
@@ -171,6 +172,42 @@ void FramelessWindowHelper::setAlwaysOnTop(QWidget* window, bool onTop) {
     else flags &= ~Qt::WindowStaysOnTopHint;
     window->setWindowFlags(flags);
     window->show();
+#endif
+}
+
+void FramelessWindowHelper::restoreFromMaximized(QWidget* window) {
+    if (!window) return;
+
+#ifdef Q_OS_WIN
+    QRect savedNormal = window->normalGeometry();
+    if (!savedNormal.isValid() || savedNormal.isEmpty()) {
+        window->showNormal();
+        return;
+    }
+
+    HWND hwnd = reinterpret_cast<HWND>(window->winId());
+    WINDOWPLACEMENT wp = {};
+    wp.length = sizeof(WINDOWPLACEMENT);
+    if (!GetWindowPlacement(hwnd, &wp)) {
+        window->showNormal();
+        return;
+    }
+
+    qreal dpr = window->devicePixelRatioF();
+    int left   = qRound(savedNormal.left() * dpr);
+    int top    = qRound(savedNormal.top() * dpr);
+    int right  = qRound((savedNormal.right() + 1) * dpr);
+    int bottom = qRound((savedNormal.bottom() + 1) * dpr);
+
+    wp.showCmd = SW_SHOWNORMAL;
+    wp.rcNormalPosition.left   = left;
+    wp.rcNormalPosition.top    = top;
+    wp.rcNormalPosition.right  = right;
+    wp.rcNormalPosition.bottom = bottom;
+
+    SetWindowPlacement(hwnd, &wp);
+#else
+    window->showNormal();
 #endif
 }
 

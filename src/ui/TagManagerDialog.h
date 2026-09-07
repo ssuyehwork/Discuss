@@ -22,6 +22,7 @@ public:
 protected:
     explicit TagManagerDialog(const QString& currentPath, bool isMirrorSource, QWidget* parent = nullptr);
     void resizeEvent(QResizeEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 private slots:
     void onSearchTextChanged(const QString& text);

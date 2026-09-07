@@ -445,14 +445,14 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     UiHelper::applyMenuStyle(&menu);
 
     // 14 项选项
-    QAction* actPrev = menu.addAction(UiHelper::getIcon("chevron_right", QColor("#EEEEEE"), 18), "上一个");
-    QAction* actNext = menu.addAction(UiHelper::getIcon("chevron_right", QColor("#EEEEEE"), 18), "下一个");
+    QAction* actPrev = menu.addAction(UiHelper::getIcon("scroll-007", QColor("#FFFFFF"), 18), "上一个");
+    QAction* actNext = menu.addAction(UiHelper::getIcon("scroll-006", QColor("#FFFFFF"), 18), "下一个");
     menu.addSeparator();
 
-    QAction* actRotate = menu.addAction(UiHelper::getIcon("sync", QColor("#EEEEEE"), 18), "旋转");
-    QAction* actFlip = menu.addAction(UiHelper::getIcon("layers", QColor("#EEEEEE"), 18), "水平翻转");
-    QAction* actOrig = menu.addAction(UiHelper::getIcon("image_picture", QColor("#EEEEEE"), 18), "原始");
-    QAction* actFit = menu.addAction(UiHelper::getIcon("grid", QColor("#EEEEEE"), 18), "自适应");
+    QAction* actRotate = menu.addAction(UiHelper::getIcon("sync", QColor("#FFFFFF"), 18), "旋转");
+    QAction* actFlip = menu.addAction(UiHelper::getIcon("split_v", QColor("#FFFFFF"), 18), "水平翻转");
+    QAction* actOrig = menu.addAction(UiHelper::getIcon("image_picture", QColor("#FFFFFF"), 18), "原始");
+    QAction* actFit = menu.addAction(UiHelper::getIcon("resize2", QColor("#FFFFFF"), 18), "自适应");
     actOrig->setCheckable(true);
     actFit->setCheckable(true);
     bool isFit = m_graphicsView->isFitMode();

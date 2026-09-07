@@ -28,9 +28,6 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
     m_searchEdit->installEventFilter(this);
     m_tagGridWidget->installEventFilter(this);
 
-    // 接入全项目统一的纯 Qt 物理手柄缩放助手，彻底拔除重复造轮子
-    FramelessWindowHelper::apply(this);
-
     qApp->installEventFilter(this);
     connect(qApp, &QApplication::focusChanged, this, [this](QWidget* old, QWidget* now) {
         Q_UNUSED(old);
@@ -218,7 +215,7 @@ void TagSelectorOverlay::populateGrid() {
         });
     }
 
-    m_currentTagIndex = m_displayedTags.isEmpty() ? -1 : 0;
+    m_currentTagIndex = -1;
     updateSelectionHighlight();
 }
 
@@ -264,14 +261,18 @@ void TagSelectorOverlay::updateSelectionHighlight() {
 void TagSelectorOverlay::handleGridNavigation(int key) {
     if (m_displayedTags.isEmpty()) return;
     int rowCount = m_displayedTags.size();
-    if (key == Qt::Key_Left) {
-        m_currentTagIndex = (m_currentTagIndex - 1 + rowCount) % rowCount;
-    } else if (key == Qt::Key_Right) {
-        m_currentTagIndex = (m_currentTagIndex + 1) % rowCount;
-    } else if (key == Qt::Key_Up) {
-        m_currentTagIndex = qMax(0, m_currentTagIndex - 4);
-    } else if (key == Qt::Key_Down) {
-        m_currentTagIndex = qMin(rowCount - 1, m_currentTagIndex + 4);
+    if (m_currentTagIndex < 0) {
+        m_currentTagIndex = 0;
+    } else {
+        if (key == Qt::Key_Left) {
+            m_currentTagIndex = (m_currentTagIndex - 1 + rowCount) % rowCount;
+        } else if (key == Qt::Key_Right) {
+            m_currentTagIndex = (m_currentTagIndex + 1) % rowCount;
+        } else if (key == Qt::Key_Up) {
+            m_currentTagIndex = qMax(0, m_currentTagIndex - 4);
+        } else if (key == Qt::Key_Down) {
+            m_currentTagIndex = qMin(rowCount - 1, m_currentTagIndex + 4);
+        }
     }
     updateSelectionHighlight();
 }
@@ -291,6 +292,45 @@ void TagSelectorOverlay::resizeEvent(QResizeEvent* event) {
     if (isVisible()) {
         AppConfig::instance().setValue("TagSelectorOverlay/Size", size());
     }
+}
+
+void TagSelectorOverlay::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        m_isDragging = true;
+        m_dragPos = event->globalPosition().toPoint() - frameGeometry().topLeft();
+        event->accept();
+        return;
+    }
+    QFrame::mousePressEvent(event);
+}
+
+void TagSelectorOverlay::mouseMoveEvent(QMouseEvent* event) {
+    if (m_isDragging && (event->buttons() & Qt::LeftButton)) {
+        QPoint newPos = event->globalPosition().toPoint() - m_dragPos;
+        QWidget* parentWin = parentWidget() ? parentWidget()->window() : nullptr;
+        if (parentWin) {
+            QRect parentGeom = parentWin->frameGeometry();
+            int minX = parentGeom.left();
+            int maxX = qMax(minX, parentGeom.right() - width());
+            int minY = parentGeom.top();
+            int maxY = qMax(minY, parentGeom.bottom() - height());
+            newPos.setX(qBound(minX, newPos.x(), maxX));
+            newPos.setY(qBound(minY, newPos.y(), maxY));
+        }
+        move(newPos);
+        event->accept();
+        return;
+    }
+    QFrame::mouseMoveEvent(event);
+}
+
+void TagSelectorOverlay::mouseReleaseEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        m_isDragging = false;
+        event->accept();
+        return;
+    }
+    QFrame::mouseReleaseEvent(event);
 }
 
 void TagSelectorOverlay::changeEvent(QEvent* event) {

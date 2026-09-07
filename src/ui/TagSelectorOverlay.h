@@ -28,6 +28,9 @@ protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void changeEvent(QEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
     void initUi();
@@ -56,6 +59,8 @@ private:
     int m_currentTagIndex = -1;
 
     bool m_isClosing = false;
+    bool m_isDragging = false;
+    QPoint m_dragPos;
 };
 
 } // namespace QuarkMeta
