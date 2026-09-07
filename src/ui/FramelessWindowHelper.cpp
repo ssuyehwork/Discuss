@@ -35,8 +35,9 @@ FramelessWindowHelper::FramelessWindowHelper(QWidget* window, QWidget* titleBar)
 #ifdef Q_OS_WIN
     HWND hwnd = reinterpret_cast<HWND>(m_window->winId());
     DWORD style = GetWindowLong(hwnd, GWL_STYLE);
-    // 关键修正：必须具备 WS_CAPTION、WS_THICKFRAME、系统菜单和最大最小化盒子，Windows 才会为其维护合法的恢复尺寸 (WINDOWPLACEMENT)
-    SetWindowLong(hwnd, GWL_STYLE, style | WS_THICKFRAME | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SYSMENU);
+    // 关键修正：必须具备 WS_THICKFRAME、WS_MAXIMIZEBOX、WS_MINIMIZEBOX 以支持 DWM 动画与 WINDOWPLACEMENT，
+    // 同时移除 WS_CAPTION，防止 Qt QPA 框架误判原生标题栏尺寸而产生 30px/8px 的客户区内缩位移错位。
+    SetWindowLong(hwnd, GWL_STYLE, (style | WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX) & ~WS_CAPTION);
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
 #endif
@@ -68,10 +69,10 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
 
     HWND hwnd = msg->hwnd;
 
-    // 1. 无边框客户区撑满，消除 WS_CAPTION 带来的原生标题栏
+    // 1. 无边框客户区撑满，消除系统拉伸边框
     if (msg->message == WM_NCCALCSIZE) {
         if (msg->wParam == TRUE) {
-            // 关键修正：必须使用原生 ::IsZoomed(hwnd)，坚决不能用 Qt 滞后的 m_window->isMaximized()！
+            // 使用原生 ::IsZoomed(hwnd)，坚决不能用 Qt 滞后的 m_window->isMaximized()！
             if (::IsZoomed(hwnd)) {
                 NCCALCSIZE_PARAMS* pnc = reinterpret_cast<NCCALCSIZE_PARAMS*>(msg->lParam);
                 HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -123,7 +124,6 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
         int width = m_window->width();
         int height = m_window->height();
 
-        // 关键修正：必须使用原生 IsZoomed 判断
         bool isMax = ::IsZoomed(hwnd) || m_window->isFullScreen();
 
         if (!isMax) {
@@ -162,7 +162,6 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
     // 3. 原生双击标题栏最大化 / 还原
     if (msg->message == WM_NCLBUTTONDBLCLK) {
         if (msg->wParam == HTCAPTION) {
-            // 关键修正：通过 WM_SYSCOMMAND 派发，走 Windows 原生状态机！
             ::SendMessage(hwnd, WM_SYSCOMMAND, ::IsZoomed(hwnd) ? SC_RESTORE : SC_MAXIMIZE, 0);
             *result = 0;
             return true;
