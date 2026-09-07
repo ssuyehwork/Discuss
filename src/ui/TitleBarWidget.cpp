@@ -9,6 +9,10 @@
 #include <QApplication>
 #include <QSignalBlocker>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 namespace QuarkMeta {
 
 constexpr int kLayoutEdgeMargin = 5;
@@ -125,12 +129,25 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     connect(m_btnMin, &QPushButton::clicked, this, [this]() {
         if (window()) window()->showMinimized();
     });
+
     connect(m_btnMax, &QPushButton::clicked, this, [this]() {
-        if (window()) {
-            if (window()->isMaximized()) window()->showNormal();
-            else window()->showMaximized();
+        QWidget* topWin = window();
+        if (!topWin) return;
+
+#ifdef Q_OS_WIN
+        HWND hwnd = reinterpret_cast<HWND>(topWin->winId());
+        // 强制使用 Windows 原生系统命令，确保 WINDOWPLACEMENT 状态机完美衔接
+        if (::IsZoomed(hwnd)) {
+            ::SendMessage(hwnd, WM_SYSCOMMAND, SC_RESTORE, 0);
+        } else {
+            ::SendMessage(hwnd, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
         }
+#else
+        if (topWin->isMaximized()) topWin->showNormal();
+        else topWin->showMaximized();
+#endif
     });
+
     connect(m_btnClose, &QPushButton::clicked, this, [this]() {
         if (window()) window()->close();
     });

@@ -31,6 +31,15 @@ FramelessWindowHelper::FramelessWindowHelper(QWidget* window, QWidget* titleBar)
     if (m_window->windowFlags() != requiredFlags) {
         m_window->setWindowFlags(requiredFlags);
     }
+
+#ifdef Q_OS_WIN
+    HWND hwnd = reinterpret_cast<HWND>(m_window->winId());
+    DWORD style = GetWindowLong(hwnd, GWL_STYLE);
+    // 关键修正：必须具备 WS_CAPTION、WS_THICKFRAME、系统菜单和最大最小化盒子，Windows 才会为其维护合法的恢复尺寸 (WINDOWPLACEMENT)
+    SetWindowLong(hwnd, GWL_STYLE, style | WS_THICKFRAME | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SYSMENU);
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+#endif
 }
 
 bool FramelessWindowHelper::isInteractiveWidget(QWidget* child, QWidget* titleBar, QWidget* window) {
@@ -57,37 +66,43 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
     MSG* msg = static_cast<MSG*>(message);
     if (!msg) return false;
 
-    // 1. 最大化多显示器边缘工作区补偿
+    HWND hwnd = msg->hwnd;
+
+    // 1. 无边框客户区撑满，消除 WS_CAPTION 带来的原生标题栏
     if (msg->message == WM_NCCALCSIZE) {
-        if (msg->wParam == TRUE && m_window->isMaximized()) {
-            NCCALCSIZE_PARAMS* pnc = reinterpret_cast<NCCALCSIZE_PARAMS*>(msg->lParam);
-            HMONITOR monitor = MonitorFromWindow(msg->hwnd, MONITOR_DEFAULTTONEAREST);
-            if (monitor) {
-                MONITORINFO monitorInfo = {};
-                monitorInfo.cbSize = sizeof(MONITORINFO);
-                if (GetMonitorInfo(monitor, &monitorInfo)) {
-                    pnc->rgrc[0] = monitorInfo.rcWork;
+        if (msg->wParam == TRUE) {
+            // 关键修正：必须使用原生 ::IsZoomed(hwnd)，坚决不能用 Qt 滞后的 m_window->isMaximized()！
+            if (::IsZoomed(hwnd)) {
+                NCCALCSIZE_PARAMS* pnc = reinterpret_cast<NCCALCSIZE_PARAMS*>(msg->lParam);
+                HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                if (monitor) {
+                    MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
+                    if (GetMonitorInfo(monitor, &monitorInfo)) {
+                        // 最大化时，内容区等于屏幕工作区，吃掉不可见拉伸边框
+                        pnc->rgrc[0] = monitorInfo.rcWork;
+                    }
                 }
             }
+            // 返回 0 表示客户区占据整个窗口范围，彻底消除原生标题栏与边框
+            *result = 0;
+            return true;
         }
-        *result = 0;
-        return true;
+        return false;
     }
 
     if (msg->message == WM_GETMINMAXINFO) {
         MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(msg->lParam);
         if (mmi) {
-            HMONITOR monitor = MonitorFromWindow(msg->hwnd, MONITOR_DEFAULTTONEAREST);
+            HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
             if (monitor) {
-                MONITORINFO monitorInfo = {};
-                monitorInfo.cbSize = sizeof(MONITORINFO);
+                MONITORINFO monitorInfo = { sizeof(MONITORINFO) };
                 if (GetMonitorInfo(monitor, &monitorInfo)) {
-                    RECT workArea = monitorInfo.rcWork;
-                    RECT monitorArea = monitorInfo.rcMonitor;
-                    mmi->ptMaxPosition.x = workArea.left - monitorArea.left;
-                    mmi->ptMaxPosition.y = workArea.top - monitorArea.top;
-                    mmi->ptMaxSize.x = workArea.right - workArea.left;
-                    mmi->ptMaxSize.y = workArea.bottom - workArea.top;
+                    RECT rcWork = monitorInfo.rcWork;
+                    RECT rcMonitor = monitorInfo.rcMonitor;
+                    mmi->ptMaxPosition.x = rcWork.left - rcMonitor.left;
+                    mmi->ptMaxPosition.y = rcWork.top - rcMonitor.top;
+                    mmi->ptMaxSize.x = rcWork.right - rcWork.left;
+                    mmi->ptMaxSize.y = rcWork.bottom - rcWork.top;
                 }
             }
             if (m_window) {
@@ -100,7 +115,7 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
         return true;
     }
 
-    // 2. 原生 WM_NCHITTEST 精确命中检测，全由 DWM 接管 Native 缩放与拖拽
+    // 2. 原生 WM_NCHITTEST 精确命中检测
     if (msg->message == WM_NCHITTEST) {
         POINT screenPt = { GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam) };
         QPoint localPos = m_window->mapFromGlobal(QPoint(screenPt.x, screenPt.y));
@@ -108,10 +123,10 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
         int width = m_window->width();
         int height = m_window->height();
 
-        bool isMaximizedOrFullScreen = m_window->isMaximized() || m_window->isFullScreen();
+        // 关键修正：必须使用原生 IsZoomed 判断
+        bool isMax = ::IsZoomed(hwnd) || m_window->isFullScreen();
 
-        // 未最大化时，优先响应四周 8px 边缘的 Native 缩放热区
-        if (!isMaximizedOrFullScreen) {
+        if (!isMax) {
             const int m = kBaseResizeMargin;
             bool left = localPos.x() >= 0 && localPos.x() < m;
             bool right = localPos.x() >= width - m && localPos.x() < width;
@@ -147,11 +162,8 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
     // 3. 原生双击标题栏最大化 / 还原
     if (msg->message == WM_NCLBUTTONDBLCLK) {
         if (msg->wParam == HTCAPTION) {
-            if (m_window->isMaximized()) {
-                m_window->showNormal();
-            } else {
-                m_window->showMaximized();
-            }
+            // 关键修正：通过 WM_SYSCOMMAND 派发，走 Windows 原生状态机！
+            ::SendMessage(hwnd, WM_SYSCOMMAND, ::IsZoomed(hwnd) ? SC_RESTORE : SC_MAXIMIZE, 0);
             *result = 0;
             return true;
         }

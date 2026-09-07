@@ -33,6 +33,10 @@
 #include <QTimer>
 #include <QCloseEvent>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 namespace QuarkMeta {
 
 constexpr int kLayoutEdgeMargin = 5;
@@ -60,6 +64,14 @@ MainWindow::MainWindow(QWidget* parent)
     QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
     if (!savedGeom.isEmpty()) {
         restoreGeometry(savedGeom);
+        if (m_titleBarWidget) {
+#ifdef Q_OS_WIN
+            bool isMax = ::IsZoomed(reinterpret_cast<HWND>(winId()));
+            m_titleBarWidget->setWindowMaximized(isMax);
+#else
+            m_titleBarWidget->setWindowMaximized(isMaximized());
+#endif
+        }
     } else {
         resize(1180, 800);
     }
@@ -219,6 +231,14 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
 
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
+    if (m_titleBarWidget) {
+#ifdef Q_OS_WIN
+        bool isMax = ::IsZoomed(reinterpret_cast<HWND>(winId()));
+        m_titleBarWidget->setWindowMaximized(isMax);
+#else
+        m_titleBarWidget->setWindowMaximized(isMaximized());
+#endif
+    }
     if (!m_panelsInitialized) {
         m_panelsInitialized = true;
         if (m_navPanel) m_navPanel->deferredInit();
@@ -256,7 +276,12 @@ void MainWindow::changeEvent(QEvent* event) {
             m_searchController->historyPanel()->hide();
         }
         if (m_titleBarWidget) {
+#ifdef Q_OS_WIN
+            bool isMax = ::IsZoomed(reinterpret_cast<HWND>(winId()));
+            m_titleBarWidget->setWindowMaximized(isMax);
+#else
             m_titleBarWidget->setWindowMaximized(isMaximized());
+#endif
         }
         if (m_bodyLayout) {
             m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin);
