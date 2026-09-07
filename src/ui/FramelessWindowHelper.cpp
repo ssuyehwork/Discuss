@@ -116,68 +116,23 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
         return true;
     }
 
-    // 2. 原生标题栏拖动与最大化“还原+移动”处理
-    if (msg->message == WM_NCLBUTTONDOWN && msg->wParam == HTCAPTION) {
-        if (m_window->isMaximized()) {
-            POINT screenPt = { GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam) };
-            QPoint globalPos(screenPt.x, screenPt.y);
-            
-            // 计算当前光标在最大化宽度上的比例
-            QRect maxGeom = m_window->geometry();
-            double factorX = static_cast<double>(globalPos.x() - maxGeom.left()) / maxGeom.width();
-            
-            // 执行还原
-            m_window->showNormal();
-            
-            // 精确计算还原后尺寸下的鼠标 TopLeft 偏移
-            QRect normalGeom = m_window->geometry();
-            int newX = globalPos.x() - static_cast<int>(normalGeom.width() * factorX);
-            int newY = globalPos.y() - 15; // 居中挂载在 34px 标题栏中上部
-            
-            m_window->move(newX, newY);
-            m_isDraggingMaximized = true;
-            
-            // 触发系统原生拖拽
-            ReleaseCapture();
-            SendMessageW(msg->hwnd, WM_NCLBUTTONDOWN, HTCAPTION, msg->lParam);
-            *result = 0;
-            return true;
-        }
-    }
-
+    // 2. 原生标题栏拖动识别：坚决杜绝抢占顶部 8px 缩放热区
     if (msg->message == WM_NCHITTEST) {
         POINT screenPt = { GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam) };
         QPoint localPos = m_window->mapFromGlobal(QPoint(screenPt.x, screenPt.y));
 
-        // 1. 在还原/正常尺寸下，优先处理四周 8px 原生非客户区缩放热区
-        if (!m_window->isMaximized() && !m_window->isFullScreen()) {
-            int x = localPos.x();
-            int y = localPos.y();
-            int w = m_window->width();
-            int h = m_window->height();
-            const int margin = kBaseResizeMargin; // 8px
-
-            bool left   = (x <= margin);
-            bool right  = (x >= w - margin);
-            bool top    = (y <= margin);
-            bool bottom = (y >= h - margin);
-
-            if (top && left)     { *result = HTTOPLEFT;     return true; }
-            if (top && right)    { *result = HTTOPRIGHT;    return true; }
-            if (bottom && left)  { *result = HTBOTTOMLEFT;  return true; }
-            if (bottom && right) { *result = HTBOTTOMRIGHT; return true; }
-            if (left)            { *result = HTLEFT;        return true; }
-            if (right)           { *result = HTRIGHT;       return true; }
-            if (top)             { *result = HTTOP;         return true; }
-            if (bottom)          { *result = HTBOTTOM;      return true; }
+        if (!m_window->isMaximized() && !m_window->isFullScreen() && localPos.y() <= kBaseResizeMargin) {
+            return false; // 顶部 8px 放行给 Qt
         }
 
-        // 2. 允许全窗口任意非交互空白区域（标题栏及各面板底板空白处）响应拖拽与还原
-        if (m_window && !m_window->isFullScreen()) {
-            QWidget* childAtPt = m_window->childAt(localPos);
-            if (!isInteractiveWidget(childAtPt, m_titleBar, m_window)) {
-                *result = HTCAPTION;
-                return true;
+        if (m_titleBar && !m_window->isFullScreen()) {
+            QRect titleRect = QRect(m_titleBar->mapTo(m_window, QPoint(0, 0)), m_titleBar->size());
+            if (titleRect.contains(localPos)) {
+                QWidget* childAtPt = m_window->childAt(localPos);
+                if (!isInteractiveWidget(childAtPt, m_titleBar, m_window)) {
+                    *result = HTCAPTION;
+                    return true;
+                }
             }
         }
 
@@ -221,18 +176,101 @@ void FramelessWindowHelper::setAlwaysOnTop(QWidget* window, bool onTop) {
 
 bool FramelessWindowHelper::isAlwaysOnTop(QWidget* window) {
     if (!window) return false;
-
-#ifdef Q_OS_WIN
-    HWND hwnd = reinterpret_cast<HWND>(window->winId());
-    LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-    return (exStyle & WS_EX_TOPMOST) != 0;
-#else
     return (window->windowFlags() & Qt::WindowStaysOnTopHint) != 0;
-#endif
 }
 
 bool FramelessWindowHelper::eventFilter(QObject* obj, QEvent* event) {
+    if (!m_window || !m_window->isVisible()) return false;
+
+    QWidget* widget = qobject_cast<QWidget*>(obj);
+    if (!widget || (widget != m_window && !m_window->isAncestorOf(widget))) {
+        return false;
+    }
+
+    QEvent::Type type = event->type();
+
+    // 1. 鼠标按下：四周 8px 边缘按压时开启鼠标锁定 (grabMouse)
+    if (type == QEvent::MouseButtonPress) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (me->button() == Qt::LeftButton && !m_window->isMaximized() && !m_window->isFullScreen()) {
+            QPoint windowLocalPos = m_window->mapFromGlobal(me->globalPosition().toPoint());
+            m_resizeDir = getResizeDirection(windowLocalPos);
+            if (m_resizeDir != 0) {
+                m_isResizing = true;
+                m_resizeStartGlobalPos = me->globalPosition().toPoint();
+                m_resizeStartGeometry = m_window->geometry();
+                m_window->grabMouse(); // 强制锁定鼠标
+                return true;
+            }
+        }
+    } 
+    // 2. 鼠标移动：拉伸处理与双向箭头光标自适应
+    else if (type == QEvent::MouseMove) {
+        auto* me = static_cast<QMouseEvent*>(event);
+        if (m_isResizing) {
+            QPoint delta = me->globalPosition().toPoint() - m_resizeStartGlobalPos;
+            QRect newGeom = m_resizeStartGeometry;
+
+            if (m_resizeDir & 1) newGeom.setLeft(m_resizeStartGeometry.left() + delta.x());
+            if (m_resizeDir & 2) newGeom.setRight(m_resizeStartGeometry.right() + delta.x());
+            if (m_resizeDir & 4) newGeom.setTop(m_resizeStartGeometry.top() + delta.y());
+            if (m_resizeDir & 8) newGeom.setBottom(m_resizeStartGeometry.bottom() + delta.y());
+
+            int minW = m_window->minimumWidth();
+            int minH = m_window->minimumHeight();
+            if (newGeom.width() < minW) {
+                if (m_resizeDir & 1) newGeom.setLeft(newGeom.right() - minW + 1);
+                else newGeom.setRight(newGeom.left() + minW - 1);
+            }
+            if (newGeom.height() < minH) {
+                if (m_resizeDir & 4) newGeom.setTop(newGeom.bottom() - minH + 1);
+                else newGeom.setBottom(newGeom.top() + minH - 1);
+            }
+
+            m_window->setGeometry(newGeom);
+            return true;
+        } else if (!m_window->isMaximized() && !m_window->isFullScreen()) {
+            QPoint windowLocalPos = m_window->mapFromGlobal(me->globalPosition().toPoint());
+            int dir = getResizeDirection(windowLocalPos);
+            if (dir != 0) {
+                updateCursorShape(dir);
+            } else if (m_window->cursor().shape() != Qt::ArrowCursor) {
+                m_window->unsetCursor();
+            }
+        }
+    } 
+    // 3. 鼠标释放：安全释放鼠标锁定
+    else if (type == QEvent::MouseButtonRelease) {
+        if (m_isResizing) {
+            m_isResizing = false;
+            m_resizeDir = 0;
+            m_window->releaseMouse(); // 安全释放
+            m_window->unsetCursor();
+            return true;
+        }
+    }
+
     return QObject::eventFilter(obj, event);
+}
+
+int FramelessWindowHelper::getResizeDirection(const QPoint& pos) const {
+    if (!m_window) return 0;
+    const int margin = kBaseResizeMargin;
+    int dir = 0;
+    if (pos.x() <= margin) dir |= 1;
+    if (pos.x() >= m_window->width() - margin) dir |= 2;
+    if (pos.y() <= margin) dir |= 4;
+    if (pos.y() >= m_window->height() - margin) dir |= 8;
+    return dir;
+}
+
+void FramelessWindowHelper::updateCursorShape(int dir) {
+    if (!m_window) return;
+    if (dir == (1 | 4) || dir == (2 | 8)) m_window->setCursor(Qt::SizeFDiagCursor);
+    else if (dir == (2 | 4) || dir == (1 | 8)) m_window->setCursor(Qt::SizeBDiagCursor);
+    else if (dir == 1 || dir == 2) m_window->setCursor(Qt::SizeHorCursor);
+    else if (dir == 4 || dir == 8) m_window->setCursor(Qt::SizeVerCursor);
+    else m_window->setCursor(Qt::ArrowCursor);
 }
 
 } // namespace QuarkMeta

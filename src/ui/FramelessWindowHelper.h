@@ -33,11 +33,16 @@ private:
     explicit FramelessWindowHelper(QWidget* window, QWidget* titleBar = nullptr);
     ~FramelessWindowHelper() override;
 
+    int getResizeDirection(const QPoint& pos) const;
+    void updateCursorShape(int dir);
+
     QPointer<QWidget> m_window;
     QPointer<QWidget> m_titleBar;
 
-    bool m_isDraggingMaximized = false;
-    QPoint m_dragNormalOffset;
+    bool m_isResizing = false;
+    int m_resizeDir = 0;
+    QPoint m_resizeStartGlobalPos;
+    QRect m_resizeStartGeometry;
 
     static constexpr int kBaseResizeMargin = 8;
 };
