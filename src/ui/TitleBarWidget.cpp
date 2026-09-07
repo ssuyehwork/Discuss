@@ -3,7 +3,6 @@
 #include "HoverEventFilter.h"
 #include "SvgIconRenderer.h"
 #include "StyleLibrary.h"
-#include "FramelessWindowHelper.h"
 
 #include <QMenu>
 #include <QAction>
@@ -43,6 +42,10 @@ void TitleBarWidget::setWindowMaximized(bool maximized) {
     if (!m_btnMax) return;
     QString iconKey = maximized ? "restore_line" : "maximize";
     m_btnMax->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
+}
+
+void TitleBarWidget::setViewModeOption(ViewModeOption mode) {
+    m_currentViewMode = mode;
 }
 
 void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
@@ -157,9 +160,9 @@ void TitleBarWidget::setupViewMenu() {
         actGrid->setCheckable(true);
         actList->setCheckable(true);
 
-        actAdaptive->setChecked(m_currentViewMode == ContentPanel::JustifiedViewMode);
-        actGrid->setChecked(m_currentViewMode == ContentPanel::GridView);
-        actList->setChecked(m_currentViewMode == ContentPanel::ListView);
+        actAdaptive->setChecked(m_currentViewMode == JustifiedViewMode);
+        actGrid->setChecked(m_currentViewMode == GridViewMode);
+        actList->setChecked(m_currentViewMode == ListViewMode);
 
         QString checkPath = SvgIconRenderer::getSvgTempFilePath("check", QColor("#ff551c"));
         menu.setStyleSheet(menu.styleSheet() + QString(
@@ -167,16 +170,16 @@ void TitleBarWidget::setupViewMenu() {
         ).arg(checkPath));
 
         connect(actAdaptive, &QAction::triggered, this, [this]() {
-            m_currentViewMode = ContentPanel::JustifiedViewMode;
-            emit viewModeRequested(ContentPanel::JustifiedViewMode);
+            m_currentViewMode = JustifiedViewMode;
+            emit viewModeRequested(JustifiedViewMode);
         });
         connect(actGrid, &QAction::triggered, this, [this]() {
-            m_currentViewMode = ContentPanel::GridView;
-            emit viewModeRequested(ContentPanel::GridView);
+            m_currentViewMode = GridViewMode;
+            emit viewModeRequested(GridViewMode);
         });
         connect(actList, &QAction::triggered, this, [this]() {
-            m_currentViewMode = ContentPanel::ListView;
-            emit viewModeRequested(ContentPanel::ListView);
+            m_currentViewMode = ListViewMode;
+            emit viewModeRequested(ListViewMode);
         });
 
         menu.exec(m_btnViewMenu->mapToGlobal(QPoint(0, m_btnViewMenu->height())));

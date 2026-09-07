@@ -5,7 +5,6 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSlider>
-#include "ContentPanel.h"
 
 namespace QuarkMeta {
 
@@ -14,12 +13,19 @@ class HoverEventFilter;
 /**
  * @brief 独立标题栏组件
  * 封装 LOGO、应用名称、缩放滑杆、排列视图菜单、新建菜单、盘符折叠按钮、布局重置、窗口控制按钮(置顶/最小化/最大化/关闭)
- * 纯 View 部件：不依赖 ContentPanel/PanelLayoutManager 指针，不直接读写 AppConfig。
+ * 纯 View 部件：完全不依赖 ContentPanel/PanelLayoutManager 的指针或头文件。
  */
 class TitleBarWidget : public QWidget {
     Q_OBJECT
 
 public:
+    enum ViewModeOption {
+        JustifiedViewMode,
+        GridViewMode,
+        ListViewMode
+    };
+    Q_ENUM(ViewModeOption)
+
     explicit TitleBarWidget(QWidget* parent = nullptr, HoverEventFilter* hoverFilter = nullptr);
     ~TitleBarWidget() override = default;
 
@@ -37,12 +43,13 @@ public:
     void setPinned(bool pinned);
     void setZoomLevel(int value);
     void setWindowMaximized(bool maximized);
+    void setViewModeOption(ViewModeOption mode);
 
 signals:
     void driveBarToggleRequested(bool visible);
     void pinToggled(bool pinned);
     void zoomLevelChanged(int value);
-    void viewModeRequested(ContentPanel::ViewMode mode);
+    void viewModeRequested(TitleBarWidget::ViewModeOption mode);
     void createItemRequested(const QString& type);
     void layoutMenuRequested(const QPoint& globalPos);
 
@@ -66,7 +73,7 @@ private:
     QPushButton* m_btnMax = nullptr;
     QPushButton* m_btnClose = nullptr;
 
-    ContentPanel::ViewMode m_currentViewMode = ContentPanel::GridView;
+    ViewModeOption m_currentViewMode = GridViewMode;
 };
 
 } // namespace QuarkMeta

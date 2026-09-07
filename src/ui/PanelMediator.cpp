@@ -61,9 +61,15 @@ void PanelMediator::setupConnections() {
             });
         }
         if (contentPanel) {
-            connect(titleBar, &TitleBarWidget::viewModeRequested, contentPanel, [contentPanel](ContentPanel::ViewMode mode) {
-                contentPanel->setViewMode(mode);
+            connect(titleBar, &TitleBarWidget::viewModeRequested, contentPanel, [contentPanel](TitleBarWidget::ViewModeOption option) {
+                ContentPanel::ViewMode targetMode = ContentPanel::GridView;
+                if (option == TitleBarWidget::JustifiedViewMode) targetMode = ContentPanel::JustifiedViewMode;
+                else if (option == TitleBarWidget::GridViewMode) targetMode = ContentPanel::GridView;
+                else if (option == TitleBarWidget::ListViewMode) targetMode = ContentPanel::ListView;
+
+                contentPanel->setViewMode(targetMode);
             });
+
             connect(titleBar, &TitleBarWidget::createItemRequested, contentPanel, [contentPanel](const QString& type) {
                 contentPanel->createNewItem(type);
             });

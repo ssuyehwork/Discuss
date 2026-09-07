@@ -53,7 +53,17 @@ MainWindow::MainWindow(QWidget* parent)
 
     initUi();
 
+    // 挂载无边框助手（必须在几何属性 restoreGeometry 恢复前完成挂载）
     m_framelessHelper = FramelessWindowHelper::apply(this, m_titleBarWidget);
+
+    // 恢复窗口位置与几何尺寸
+    QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
+    if (!savedGeom.isEmpty()) {
+        restoreGeometry(savedGeom);
+    } else {
+        resize(1180, 800);
+    }
+
     if (m_isPinned) {
         FramelessWindowHelper::setAlwaysOnTop(this, true);
     }
@@ -63,13 +73,6 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 void MainWindow::initUi() {
-    QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
-    if (!savedGeom.isEmpty()) {
-        restoreGeometry(savedGeom);
-    } else {
-        resize(1180, 800);
-    }
-
     QWidget* centralC = new QWidget(this);
     centralC->setObjectName("CentralWidget");
     QVBoxLayout* mainL = new QVBoxLayout(centralC);
@@ -115,7 +118,7 @@ void MainWindow::setupTopBars(QWidget* parentWidget) {
         AppConfig::instance().setValue("MainWindow/AlwaysOnTop", pinned);
     });
 
-    // 顶层子部件间的纯 UI 布局显显隐联动
+    // 顶层子部件间的纯 UI 布局显隐联动
     connect(m_titleBarWidget, &TitleBarWidget::driveBarToggleRequested, this, [this](bool visible) {
         if (m_driveBarWidget) m_driveBarWidget->setVisible(visible);
     });
