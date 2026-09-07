@@ -47,17 +47,6 @@ void TitleBarWidget::bindLayoutManager(PanelLayoutManager* layoutManager) {
     m_layoutManager = layoutManager;
 }
 
-void TitleBarWidget::updateMaxButtonIcon() {
-    if (!m_btnMax) return;
-    bool maximized = window() ? window()->isMaximized() : false;
-    m_btnMax->setIcon(UiHelper::getIcon(maximized ? "restore_line" : "maximize", QColor("#EEEEEE")));
-}
-
-void TitleBarWidget::showEvent(QShowEvent* event) {
-    QWidget::showEvent(event);
-    updateMaxButtonIcon();
-}
-
 void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_layout = new QHBoxLayout(this);
     m_layout->setContentsMargins(5, 0, kLayoutEdgeMargin, 0);
@@ -144,9 +133,8 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     });
     connect(m_btnMax, &QPushButton::clicked, this, [this]() {
         if (window()) {
-            if (window()->isMaximized()) FramelessWindowHelper::restoreFromMaximized(window());
+            if (window()->isMaximized()) window()->showNormal();
             else window()->showMaximized();
-            updateMaxButtonIcon();
         }
     });
     connect(m_btnClose, &QPushButton::clicked, this, [this]() {

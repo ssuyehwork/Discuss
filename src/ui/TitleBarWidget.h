@@ -36,11 +36,6 @@ public:
     QPushButton* btnViewMenu() const { return m_btnViewMenu; }
     QSlider* sizeSlider() const { return m_sizeSlider; }
 
-    void updateMaxButtonIcon();
-
-protected:
-    void showEvent(QShowEvent* event) override;
-
 signals:
     void driveBarToggleRequested(bool visible);
     void pinToggled(bool pinned);
