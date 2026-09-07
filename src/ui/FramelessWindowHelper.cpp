@@ -221,7 +221,14 @@ void FramelessWindowHelper::setAlwaysOnTop(QWidget* window, bool onTop) {
 
 bool FramelessWindowHelper::isAlwaysOnTop(QWidget* window) {
     if (!window) return false;
+
+#ifdef Q_OS_WIN
+    HWND hwnd = reinterpret_cast<HWND>(window->winId());
+    LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    return (exStyle & WS_EX_TOPMOST) != 0;
+#else
     return (window->windowFlags() & Qt::WindowStaysOnTopHint) != 0;
+#endif
 }
 
 bool FramelessWindowHelper::eventFilter(QObject* obj, QEvent* event) {
