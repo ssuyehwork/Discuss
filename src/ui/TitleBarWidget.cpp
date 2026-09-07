@@ -1,11 +1,8 @@
 #include "TitleBarWidget.h"
 #include "UiHelper.h"
-#include "ContentPanel.h"
-#include "PanelLayoutManager.h"
 #include "HoverEventFilter.h"
 #include "SvgIconRenderer.h"
 #include "StyleLibrary.h"
-#include "../core/AppConfig.h"
 #include "FramelessWindowHelper.h"
 
 #include <QMenu>
@@ -22,29 +19,30 @@ TitleBarWidget::TitleBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
     setObjectName("TitleBar");
     setAttribute(Qt::WA_StyledBackground, true);
     setFixedHeight(34);
-    m_isPinned = AppConfig::instance().getValue("MainWindow/AlwaysOnTop", false).toBool();
     initUi(hoverFilter);
 }
 
-void TitleBarWidget::bindContentPanel(ContentPanel* contentPanel) {
-    m_contentPanel = contentPanel;
-    if (!m_contentPanel) return;
-
-    connect(m_sizeSlider, &QSlider::valueChanged, this, [this](int value) {
-        if (m_contentPanel) m_contentPanel->setZoomLevel(value);
-    });
-
-    connect(m_contentPanel, &ContentPanel::zoomLevelChanged, this, [this](int level) {
-        QSignalBlocker blocker(m_sizeSlider);
-        m_sizeSlider->setValue(level);
-    });
-
-    int initZoom = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
-    m_sizeSlider->setValue(qBound(30, initZoom, 230));
+bool TitleBarWidget::isPinned() const {
+    return m_btnPinTop ? m_btnPinTop->isChecked() : false;
 }
 
-void TitleBarWidget::bindLayoutManager(PanelLayoutManager* layoutManager) {
-    m_layoutManager = layoutManager;
+void TitleBarWidget::setPinned(bool pinned) {
+    if (!m_btnPinTop) return;
+    QSignalBlocker blocker(m_btnPinTop);
+    m_btnPinTop->setChecked(pinned);
+    m_btnPinTop->setIcon(UiHelper::getIcon(pinned ? "pin_vertical" : "pin_tilted", pinned ? Style::ActiveOrange : Style::TextMain));
+}
+
+void TitleBarWidget::setZoomLevel(int value) {
+    if (!m_sizeSlider) return;
+    QSignalBlocker blocker(m_sizeSlider);
+    m_sizeSlider->setValue(qBound(m_sizeSlider->minimum(), value, m_sizeSlider->maximum()));
+}
+
+void TitleBarWidget::setWindowMaximized(bool maximized) {
+    if (!m_btnMax) return;
+    QString iconKey = maximized ? "restore_line" : "maximize";
+    m_btnMax->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
 }
 
 void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
@@ -87,6 +85,10 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_sizeSlider->setCursor(Qt::PointingHandCursor);
     m_sizeSlider->setObjectName("SizeSlider");
 
+    connect(m_sizeSlider, &QSlider::valueChanged, this, [this](int value) {
+        emit zoomLevelChanged(value);
+    });
+
     m_btnToggleDriveBar = createTitleBtn("chevrons_down", "展开/收起盘符管理栏");
     m_btnToggleDriveBar->setCheckable(true);
     m_btnToggleDriveBar->setChecked(true);
@@ -97,29 +99,18 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
 
     m_btnLayout = createTitleBtn("layout", "布局管理与重置");
     connect(m_btnLayout, &QPushButton::clicked, this, [this]() {
-        if (m_layoutManager) {
-            m_layoutManager->showPanelContextMenu(m_btnLayout->mapToGlobal(QPoint(0, m_btnLayout->height())));
-        }
+        emit layoutMenuRequested(m_btnLayout->mapToGlobal(QPoint(0, m_btnLayout->height())));
     });
 
     m_btnCreate = createTitleBtn("add", "新建...");
     setupCreateMenu();
 
-    m_btnPinTop = createTitleBtn(m_isPinned ? "pin_vertical" : "pin_tilted", "置顶窗口");
+    m_btnPinTop = createTitleBtn("pin_tilted", "置顶窗口");
     m_btnPinTop->setCheckable(true);
-    m_btnPinTop->setChecked(m_isPinned);
-    if (m_isPinned) {
-        m_btnPinTop->setIcon(UiHelper::getIcon("pin_vertical", Style::ActiveOrange));
-    }
+    m_btnPinTop->setChecked(false);
 
     connect(m_btnPinTop, &QPushButton::toggled, this, [this](bool checked) {
-        m_isPinned = checked;
-        QWidget* topWin = window();
-        if (topWin) {
-            FramelessWindowHelper::setAlwaysOnTop(topWin, checked);
-        }
         m_btnPinTop->setIcon(UiHelper::getIcon(checked ? "pin_vertical" : "pin_tilted", checked ? Style::ActiveOrange : Style::TextMain));
-        AppConfig::instance().setValue("MainWindow/AlwaysOnTop", checked);
         emit pinToggled(checked);
     });
 
@@ -154,8 +145,6 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
 
 void TitleBarWidget::setupViewMenu() {
     connect(m_btnViewMenu, &QPushButton::clicked, this, [this]() {
-        if (!m_contentPanel) return;
-
         QMenu menu(this);
         menu.setObjectName("TitleBarViewModeMenu");
         UiHelper::applyMenuStyle(&menu);
@@ -168,10 +157,9 @@ void TitleBarWidget::setupViewMenu() {
         actGrid->setCheckable(true);
         actList->setCheckable(true);
 
-        ContentPanel::ViewMode mode = m_contentPanel->currentViewMode();
-        actAdaptive->setChecked(mode == ContentPanel::JustifiedViewMode);
-        actGrid->setChecked(mode == ContentPanel::GridView);
-        actList->setChecked(mode == ContentPanel::ListView);
+        actAdaptive->setChecked(m_currentViewMode == ContentPanel::JustifiedViewMode);
+        actGrid->setChecked(m_currentViewMode == ContentPanel::GridView);
+        actList->setChecked(m_currentViewMode == ContentPanel::ListView);
 
         QString checkPath = SvgIconRenderer::getSvgTempFilePath("check", QColor("#ff551c"));
         menu.setStyleSheet(menu.styleSheet() + QString(
@@ -179,13 +167,16 @@ void TitleBarWidget::setupViewMenu() {
         ).arg(checkPath));
 
         connect(actAdaptive, &QAction::triggered, this, [this]() {
-            if (m_contentPanel) m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode);
+            m_currentViewMode = ContentPanel::JustifiedViewMode;
+            emit viewModeRequested(ContentPanel::JustifiedViewMode);
         });
         connect(actGrid, &QAction::triggered, this, [this]() {
-            if (m_contentPanel) m_contentPanel->setViewMode(ContentPanel::GridView);
+            m_currentViewMode = ContentPanel::GridView;
+            emit viewModeRequested(ContentPanel::GridView);
         });
         connect(actList, &QAction::triggered, this, [this]() {
-            if (m_contentPanel) m_contentPanel->setViewMode(ContentPanel::ListView);
+            m_currentViewMode = ContentPanel::ListView;
+            emit viewModeRequested(ContentPanel::ListView);
         });
 
         menu.exec(m_btnViewMenu->mapToGlobal(QPoint(0, m_btnViewMenu->height())));
@@ -205,7 +196,7 @@ void TitleBarWidget::setupCreateMenu() {
     });
 
     auto handleCreate = [this](const QString& type) {
-        if (m_contentPanel) m_contentPanel->createNewItem(type);
+        emit createItemRequested(type);
     };
     connect(actNewFolder, &QAction::triggered, this, [handleCreate](){ handleCreate("folder"); });
     connect(actNewMd,     &QAction::triggered, this, [handleCreate](){ handleCreate("md"); });

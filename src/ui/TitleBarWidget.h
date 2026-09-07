@@ -5,16 +5,16 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSlider>
+#include "ContentPanel.h"
 
 namespace QuarkMeta {
 
-class ContentPanel;
-class PanelLayoutManager;
 class HoverEventFilter;
 
 /**
  * @brief 独立标题栏组件
  * 封装 LOGO、应用名称、缩放滑杆、排列视图菜单、新建菜单、盘符折叠按钮、布局重置、窗口控制按钮(置顶/最小化/最大化/关闭)
+ * 纯 View 部件：不依赖 ContentPanel/PanelLayoutManager 指针，不直接读写 AppConfig。
  */
 class TitleBarWidget : public QWidget {
     Q_OBJECT
@@ -22,9 +22,6 @@ class TitleBarWidget : public QWidget {
 public:
     explicit TitleBarWidget(QWidget* parent = nullptr, HoverEventFilter* hoverFilter = nullptr);
     ~TitleBarWidget() override = default;
-
-    void bindContentPanel(ContentPanel* contentPanel);
-    void bindLayoutManager(PanelLayoutManager* layoutManager);
 
     QPushButton* btnPinTop() const { return m_btnPinTop; }
     QPushButton* btnMin() const { return m_btnMin; }
@@ -36,9 +33,18 @@ public:
     QPushButton* btnViewMenu() const { return m_btnViewMenu; }
     QSlider* sizeSlider() const { return m_sizeSlider; }
 
+    bool isPinned() const;
+    void setPinned(bool pinned);
+    void setZoomLevel(int value);
+    void setWindowMaximized(bool maximized);
+
 signals:
     void driveBarToggleRequested(bool visible);
     void pinToggled(bool pinned);
+    void zoomLevelChanged(int value);
+    void viewModeRequested(ContentPanel::ViewMode mode);
+    void createItemRequested(const QString& type);
+    void layoutMenuRequested(const QPoint& globalPos);
 
 private:
     void initUi(HoverEventFilter* hoverFilter);
@@ -60,9 +66,7 @@ private:
     QPushButton* m_btnMax = nullptr;
     QPushButton* m_btnClose = nullptr;
 
-    ContentPanel* m_contentPanel = nullptr;
-    PanelLayoutManager* m_layoutManager = nullptr;
-    bool m_isPinned = false;
+    ContentPanel::ViewMode m_currentViewMode = ContentPanel::GridView;
 };
 
 } // namespace QuarkMeta
