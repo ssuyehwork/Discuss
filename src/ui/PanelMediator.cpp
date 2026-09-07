@@ -6,6 +6,9 @@
 #include "FilterPanel.h"
 #include "AddressBar.h"
 #include "SearchController.h"
+#include "TitleBarWidget.h"
+#include "PanelLayoutManager.h"
+#include "AppShortcutController.h"
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
 #include "../core/NavigationService.h"
@@ -14,6 +17,7 @@
 #include "../core/CentralEventHub.h"
 #include "../core/VolumeOnlineManager.h"
 #include "../core/ModelContract.h"
+#include "../core/AppConfig.h"
 #include "../util/ShellHelper.h"
 #include "UiHelper.h"
 #include <QFileInfo>
@@ -23,22 +27,18 @@
 
 namespace QuarkMeta {
 
-PanelMediator::PanelMediator(NavPanel* navPanel,
-                             FavoritePanel* favoritePanel,
-                             ContentPanel* contentPanel,
-                             MetaPanel* metaPanel,
-                             FilterPanel* filterPanel,
-                             AddressBar* addressBar,
-                             SearchController* searchController,
-                             QObject* parent)
+PanelMediator::PanelMediator(const PanelMediatorComponents& components, QObject* parent)
     : QObject(parent),
-      m_navPanel(navPanel),
-      m_favoritePanel(favoritePanel),
-      m_contentPanel(contentPanel),
-      m_metaPanel(metaPanel),
-      m_filterPanel(filterPanel),
-      m_addressBar(addressBar),
-      m_searchController(searchController) {
+      m_navPanel(components.navPanel),
+      m_favoritePanel(components.favoritePanel),
+      m_contentPanel(components.contentPanel),
+      m_metaPanel(components.metaPanel),
+      m_filterPanel(components.filterPanel),
+      m_addressBar(components.addressBar),
+      m_searchController(components.searchController),
+      m_titleBar(components.titleBar),
+      m_layoutManager(components.layoutManager),
+      m_shortcutController(components.shortcutController) {
 }
 
 void PanelMediator::setupConnections() {
@@ -49,6 +49,65 @@ void PanelMediator::setupConnections() {
     FilterPanel* filterPanel = m_filterPanel;
     AddressBar* addressBar = m_addressBar;
     SearchController* searchController = m_searchController;
+    TitleBarWidget* titleBar = m_titleBar;
+    PanelLayoutManager* layoutManager = m_layoutManager;
+    AppShortcutController* shortcutController = m_shortcutController;
+
+    // 0. TitleBar 与各组件的高阶编排及 UI 状态恢复/持久化
+    if (titleBar) {
+        if (layoutManager) {
+            connect(titleBar, &TitleBarWidget::layoutMenuRequested, layoutManager, [layoutManager](const QPoint& pos) {
+                layoutManager->showPanelContextMenu(pos);
+            });
+        }
+        if (contentPanel) {
+            connect(titleBar, &TitleBarWidget::viewModeRequested, contentPanel, [contentPanel](TitleBarWidget::ViewModeOption option) {
+                ContentPanel::ViewMode targetMode = ContentPanel::GridView;
+                if (option == TitleBarWidget::JustifiedViewMode) targetMode = ContentPanel::JustifiedViewMode;
+                else if (option == TitleBarWidget::GridViewMode) targetMode = ContentPanel::GridView;
+                else if (option == TitleBarWidget::ListViewMode) targetMode = ContentPanel::ListView;
+
+                contentPanel->setViewMode(targetMode);
+            });
+
+            connect(titleBar, &TitleBarWidget::createItemRequested, contentPanel, [contentPanel](const QString& type) {
+                contentPanel->createNewItem(type);
+            });
+
+            // 缩放级别初始化与双向同步 + 持久化
+            int initZoom = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
+            int boundZoom = qBound(30, initZoom, 230);
+            titleBar->setZoomLevel(boundZoom);
+            contentPanel->setZoomLevel(boundZoom);
+
+            connect(titleBar, &TitleBarWidget::zoomLevelChanged, this, [contentPanel](int value) {
+                if (contentPanel) contentPanel->setZoomLevel(value);
+                AppConfig::instance().setValue("UI/GridZoomLevel", value);
+            });
+
+            connect(contentPanel, &ContentPanel::zoomLevelChanged, this, [titleBar](int level) {
+                if (titleBar) titleBar->setZoomLevel(level);
+                AppConfig::instance().setValue("UI/GridZoomLevel", level);
+            });
+        }
+    }
+
+    // 快捷键沉浸模式切换下沉
+    if (shortcutController && layoutManager) {
+        connect(shortcutController, &AppShortcutController::toggleImmersiveRequested, layoutManager, [layoutManager]() {
+            layoutManager->toggleImmersiveMode();
+        });
+    }
+
+    // 搜索控制器与 ContentPanel 绑定及状态更新
+    if (searchController) {
+        if (contentPanel) {
+            searchController->bindContentPanel(contentPanel);
+        }
+        connect(searchController, &SearchController::searchExecuted, this, [this]() {
+            emit statusMessageRequested("搜索已完成");
+        });
+    }
 
     // 1. 路径变更与导航驱动
     connect(&NavigationService::instance(), &NavigationService::currentUrlChanged, this,
@@ -273,7 +332,7 @@ void PanelMediator::setupConnections() {
         }
     });
 
-    // 🚀【QuickLook 改星级 ➔ 同步更新内容面板卡片】
+    // QuickLook 改星级 -> 同步更新内容面板卡片
     connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this, metaPanel, contentPanel](int rating) {
         if (m_currentQuickLookPath.isEmpty()) return;
 
@@ -287,7 +346,7 @@ void PanelMediator::setupConnections() {
         if (contentPanel) contentPanel->updateItemMetadata(m_currentQuickLookPath);
     });
 
-    // 🚀【QuickLook 改颜色 ➔ 同步更新内容面板卡片】
+    // QuickLook 改颜色 -> 同步更新内容面板卡片
     connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this, metaPanel, contentPanel](const QString& color) {
         if (m_currentQuickLookPath.isEmpty()) return;
 

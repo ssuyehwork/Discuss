@@ -43,7 +43,7 @@ MainWindow::~MainWindow() = default;
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
-    setMinimumSize(475, 400);
+    setMinimumHeight(400); // 宽度由 PanelLayoutManager::updateDynamicMinimumSize() 动态管理
     setWindowTitle("QuarkMeta");
 
     m_hoverFilter = new HoverEventFilter(this);
@@ -53,7 +53,17 @@ MainWindow::MainWindow(QWidget* parent)
 
     initUi();
 
+    // 挂载无边框助手（必须在几何属性 restoreGeometry 恢复前完成挂载）
     m_framelessHelper = FramelessWindowHelper::apply(this, m_titleBarWidget);
+
+    // 恢复窗口位置与几何尺寸
+    QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
+    if (!savedGeom.isEmpty()) {
+        restoreGeometry(savedGeom);
+    } else {
+        resize(1180, 800);
+    }
+
     if (m_isPinned) {
         FramelessWindowHelper::setAlwaysOnTop(this, true);
     }
@@ -63,33 +73,59 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 void MainWindow::initUi() {
-    QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
-    if (!savedGeom.isEmpty()) {
-        restoreGeometry(savedGeom);
-    } else {
-        resize(1180, 800);
-    }
-
     QWidget* centralC = new QWidget(this);
     centralC->setObjectName("CentralWidget");
     QVBoxLayout* mainL = new QVBoxLayout(centralC);
     mainL->setContentsMargins(0, 0, 0, 0);
     mainL->setSpacing(0);
 
-    // 1. 顶层子组件实例化 (TitleBar / NavBar / DriveBar)
-    m_titleBarWidget = new TitleBarWidget(centralC, m_hoverFilter);
-    m_navBarWidget   = new NavBarWidget(centralC, m_hoverFilter);
-    m_driveBarWidget = new DriveBarWidget(centralC);
+    // 1. 顶层栏组件组装
+    setupTopBars(centralC);
+
+    // 2. 5 大 Panel 核心主体组装
+    QWidget* bodyWrapper = setupCentralPanels(centralC);
+
+    // 3. 底部状态栏组装
+    setupStatusBar(centralC);
+
+    // 4. 控制器与中介者组装（组件依赖图绑定）
+    setupControllersAndMediators();
+
+    // 5. 组装至顶层主布局
+    mainL->addWidget(m_titleBarWidget);
+    mainL->addWidget(m_driveBarWidget);
+    mainL->addWidget(m_navBarWidget);
+    mainL->addWidget(bodyWrapper, 1);
+    mainL->addWidget(m_statusBarWidget);
+    mainL->addWidget(m_taskProgressToolBar);
+
+    setCentralWidget(centralC);
+}
+
+void MainWindow::setupTopBars(QWidget* parentWidget) {
+    m_titleBarWidget = new TitleBarWidget(parentWidget, m_hoverFilter);
+    m_navBarWidget   = new NavBarWidget(parentWidget, m_hoverFilter);
+    m_driveBarWidget = new DriveBarWidget(parentWidget);
 
     m_addressBar       = m_navBarWidget->addressBar();
     m_searchController = m_navBarWidget->searchController();
 
+    // 置顶状态初始化与配置持久化（依赖顶层窗口本体资源）
+    m_titleBarWidget->setPinned(m_isPinned);
+    connect(m_titleBarWidget, &TitleBarWidget::pinToggled, this, [this](bool pinned) {
+        m_isPinned = pinned;
+        FramelessWindowHelper::setAlwaysOnTop(this, pinned);
+        AppConfig::instance().setValue("MainWindow/AlwaysOnTop", pinned);
+    });
+
+    // 顶层子部件间的纯 UI 布局显隐联动
     connect(m_titleBarWidget, &TitleBarWidget::driveBarToggleRequested, this, [this](bool visible) {
         if (m_driveBarWidget) m_driveBarWidget->setVisible(visible);
     });
+}
 
-    // 2. 主 Splitter 与 5 大 Panel 骨架挂载
-    QWidget* bodyWrapper = new QWidget(centralC);
+QWidget* MainWindow::setupCentralPanels(QWidget* parentWidget) {
+    QWidget* bodyWrapper = new QWidget(parentWidget);
     bodyWrapper->setObjectName("BodyWrapper");
     m_bodyLayout = new QVBoxLayout(bodyWrapper);
     m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin);
@@ -113,33 +149,45 @@ void MainWindow::initUi() {
 
     m_bodyLayout->addWidget(m_mainSplitter);
 
-    m_titleBarWidget->bindContentPanel(m_contentPanel);
+    return bodyWrapper;
+}
 
-    // 3. 控制器停机坪挂载（当场同步初始化布局尺寸）
+void MainWindow::setupControllersAndMediators() {
     m_panelLayoutManager = new PanelLayoutManager(this, m_mainSplitter, m_navPanel, m_favoritePanel, m_contentPanel, m_metaPanel, m_filterPanel, this);
     m_panelLayoutManager->initLayout();
-    m_titleBarWidget->bindLayoutManager(m_panelLayoutManager);
-
-    m_panelMediator = new PanelMediator(m_navPanel, m_favoritePanel, m_contentPanel, m_metaPanel, m_filterPanel, m_addressBar, m_searchController, this);
-    m_panelMediator->setupConnections();
-
-    if (m_searchController) {
-        m_searchController->bindContentPanel(m_contentPanel);
-        connect(m_searchController, &SearchController::searchExecuted, this, &MainWindow::updateStatusBar);
-    }
 
     m_shortcutController = new AppShortcutController(this, m_searchController, this);
     connect(m_shortcutController, &AppShortcutController::togglePinRequested, this, [this]() {
-        if (m_titleBarWidget && m_titleBarWidget->btnPinTop()) {
-            m_titleBarWidget->btnPinTop()->setChecked(!m_titleBarWidget->btnPinTop()->isChecked());
+        if (m_titleBarWidget) {
+            bool nextState = !m_titleBarWidget->isPinned();
+            m_titleBarWidget->setPinned(nextState);
+            FramelessWindowHelper::setAlwaysOnTop(this, nextState);
+            AppConfig::instance().setValue("MainWindow/AlwaysOnTop", nextState);
         }
     });
-    connect(m_shortcutController, &AppShortcutController::toggleImmersiveRequested, this, [this]() {
-        if (m_panelLayoutManager) m_panelLayoutManager->toggleImmersiveMode();
-    });
 
-    // 4. 底部状态栏
-    m_statusBarWidget = new QWidget(centralC);
+    PanelMediatorComponents components;
+    components.navPanel = m_navPanel;
+    components.favoritePanel = m_favoritePanel;
+    components.contentPanel = m_contentPanel;
+    components.metaPanel = m_metaPanel;
+    components.filterPanel = m_filterPanel;
+    components.addressBar = m_addressBar;
+    components.searchController = m_searchController;
+    components.titleBar = m_titleBarWidget;
+    components.layoutManager = m_panelLayoutManager;
+    components.shortcutController = m_shortcutController;
+
+    m_panelMediator = new PanelMediator(components, this);
+    m_panelMediator->setupConnections();
+
+    connect(m_panelMediator, &PanelMediator::statusMessageRequested, this, [this](const QString& msg) {
+        if (m_statusLeft) m_statusLeft->setText(msg);
+    });
+}
+
+void MainWindow::setupStatusBar(QWidget* parentWidget) {
+    m_statusBarWidget = new QWidget(parentWidget);
     m_statusBarWidget->setObjectName("StatusBar");
     m_statusBarWidget->setFixedHeight(32);
     QHBoxLayout* statusL = new QHBoxLayout(m_statusBarWidget);
@@ -165,33 +213,20 @@ void MainWindow::initUi() {
     connect(&CoreController::instance(), &CoreController::isIndexingChanged, this, updateStatus);
     updateStatus();
 
-    m_taskProgressToolBar = new TaskProgressToolBar(centralC);
+    m_taskProgressToolBar = new TaskProgressToolBar(parentWidget);
     m_taskProgressToolBar->hide();
-
-    // 5. 将顶级部件拼装至主布局
-    mainL->addWidget(m_titleBarWidget);
-    mainL->addWidget(m_driveBarWidget);
-    mainL->addWidget(m_navBarWidget);
-    mainL->addWidget(bodyWrapper, 1);
-    mainL->addWidget(m_statusBarWidget);
-    mainL->addWidget(m_taskProgressToolBar);
-
-    setCentralWidget(centralC);
 }
 
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
     if (!m_panelsInitialized) {
         m_panelsInitialized = true;
-        // 1. 确保左侧导航树完成桌面、此电脑、磁盘的基础节点构建
         if (m_navPanel) m_navPanel->deferredInit();
 
-        // 2. 严密确定性因果链：navPanel 刚构建完毕，立即精准拉起上次打开的路径
         QString lastPath = AppConfig::instance().getValue("MainWindow/LastPath", "computer://").toString();
         bool isValid = lastPath.contains("://") || QDir(lastPath).exists();
         NavigationService::instance().navigateTo(isValid ? lastPath : "computer://");
 
-        // 3. 空闲期静默预热全局 ToolTip
         QTimer::singleShot(500, []() {
             ToolTipOverlay::instance()->silentWarmup();
         });
@@ -220,10 +255,8 @@ void MainWindow::changeEvent(QEvent* event) {
         if (isMinimized() && m_searchController && m_searchController->historyPanel()) {
             m_searchController->historyPanel()->hide();
         }
-        if (m_titleBarWidget && m_titleBarWidget->btnMax()) {
-            QString iconKey = isMaximized() ? "restore_line" : "maximize";
-            // 修正笔误：恢复为正确的 UiHelper::getIcon
-            m_titleBarWidget->btnMax()->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
+        if (m_titleBarWidget) {
+            m_titleBarWidget->setWindowMaximized(isMaximized());
         }
         if (m_bodyLayout) {
             m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin);

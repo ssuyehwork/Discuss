@@ -41,7 +41,7 @@ class FramelessWindowHelper;
 
 /**
  * @brief 主窗口类
- * 负责六栏布局的组装、QSplitter 管理及自定义标题栏按钮
+ * 负责窗口生命周期、物理属性、顶层组件组装（Composition Root）与布局管理
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -65,14 +65,20 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
+    void initUi();
+    
+    // 拆分的私有阶段初始化函数
+    void setupTopBars(QWidget* parentWidget);
+    QWidget* setupCentralPanels(QWidget* parentWidget);
+    void setupControllersAndMediators();
+    void setupStatusBar(QWidget* parentWidget);
+
+    void updateStatusBar();
 
     TitleBarWidget* m_titleBarWidget = nullptr;
     NavBarWidget* m_navBarWidget = nullptr;
     DriveBarWidget* m_driveBarWidget = nullptr;
     QVBoxLayout* m_bodyLayout = nullptr;
-
-    void initUi();
-    void updateStatusBar();
 
     // 导航与搜索组件句柄
     AddressBar* m_addressBar = nullptr;
@@ -89,7 +95,7 @@ private:
 
     // 状态管理
     bool m_isPinned = false;
-    bool m_panelsInitialized = false; // 2026-04-12 状态锁：确保面板仅初始化一次
+    bool m_panelsInitialized = false;
 
     // 底部状态栏
     QLabel* m_statusLeft = nullptr;
@@ -105,7 +111,6 @@ private:
     PanelMediator* m_panelMediator = nullptr;
     PanelLayoutManager*       m_panelLayoutManager = nullptr;
     FramelessWindowHelper*    m_framelessHelper = nullptr;
-
 };
 
 } // namespace QuarkMeta
