@@ -1,3 +1,6 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "TitleBarWidget.h"
 #include "UiHelper.h"
 #include "HoverEventFilter.h"
@@ -8,6 +11,10 @@
 #include <QAction>
 #include <QApplication>
 #include <QSignalBlocker>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace QuarkMeta {
 
@@ -42,6 +49,7 @@ void TitleBarWidget::setWindowMaximized(bool maximized) {
     if (!m_btnMax) return;
     QString iconKey = maximized ? "restore_line" : "maximize";
     m_btnMax->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
+    m_btnMax->setProperty("tooltipText", maximized ? "还原" : "最大化");
 }
 
 void TitleBarWidget::setViewModeOption(ViewModeOption mode) {
@@ -123,14 +131,33 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_btnClose->setObjectName("TitleCloseBtn");
 
     connect(m_btnMin, &QPushButton::clicked, this, [this]() {
-        if (window()) window()->showMinimized();
-    });
-    connect(m_btnMax, &QPushButton::clicked, this, [this]() {
-        if (window()) {
-            if (window()->isMaximized()) window()->showNormal();
-            else window()->showMaximized();
+        QWidget* topWin = window();
+        if (topWin) {
+#ifdef Q_OS_WIN
+            ::SendMessage(reinterpret_cast<HWND>(topWin->winId()), WM_SYSCOMMAND, SC_MINIMIZE, 0);
+#else
+            topWin->showMinimized();
+#endif
         }
     });
+
+    // 关键修正 3：使用 Win32 消息派发还原与最大化，彻底解决还原失败
+    connect(m_btnMax, &QPushButton::clicked, this, [this]() {
+        QWidget* topWin = window();
+        if (!topWin) return;
+#ifdef Q_OS_WIN
+        HWND hwnd = reinterpret_cast<HWND>(topWin->winId());
+        if (::IsZoomed(hwnd)) {
+            ::SendMessage(hwnd, WM_SYSCOMMAND, SC_RESTORE, 0);
+        } else {
+            ::SendMessage(hwnd, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+        }
+#else
+        if (topWin->isMaximized()) topWin->showNormal();
+        else topWin->showMaximized();
+#endif
+    });
+
     connect(m_btnClose, &QPushButton::clicked, this, [this]() {
         if (window()) window()->close();
     });

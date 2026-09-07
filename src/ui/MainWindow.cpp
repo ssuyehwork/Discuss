@@ -33,6 +33,10 @@
 #include <QTimer>
 #include <QCloseEvent>
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
 namespace QuarkMeta {
 
 constexpr int kLayoutEdgeMargin = 5;
@@ -63,6 +67,13 @@ MainWindow::MainWindow(QWidget* parent)
     } else {
         resize(1180, 800);
     }
+
+    // 关键修正 4：几何尺寸恢复后，主动检测 Win32 最大化状态并对齐标题栏按钮
+#ifdef Q_OS_WIN
+    if (m_titleBarWidget) {
+        m_titleBarWidget->setWindowMaximized(::IsZoomed(reinterpret_cast<HWND>(winId())));
+    }
+#endif
 
     if (m_isPinned) {
         FramelessWindowHelper::setAlwaysOnTop(this, true);
@@ -124,6 +135,7 @@ void MainWindow::setupTopBars(QWidget* parentWidget) {
     });
 }
 
+QWidget* setupCentralPanels(QWidget* parentWidget);
 QWidget* MainWindow::setupCentralPanels(QWidget* parentWidget) {
     QWidget* bodyWrapper = new QWidget(parentWidget);
     bodyWrapper->setObjectName("BodyWrapper");
@@ -219,6 +231,14 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
 
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
+
+    // 关键修正 5：在实际展示事件中再次核实同步最大化图标
+#ifdef Q_OS_WIN
+    if (m_titleBarWidget) {
+        m_titleBarWidget->setWindowMaximized(::IsZoomed(reinterpret_cast<HWND>(winId())));
+    }
+#endif
+
     if (!m_panelsInitialized) {
         m_panelsInitialized = true;
         if (m_navPanel) m_navPanel->deferredInit();
@@ -256,7 +276,11 @@ void MainWindow::changeEvent(QEvent* event) {
             m_searchController->historyPanel()->hide();
         }
         if (m_titleBarWidget) {
+#ifdef Q_OS_WIN
+            m_titleBarWidget->setWindowMaximized(::IsZoomed(reinterpret_cast<HWND>(winId())));
+#else
             m_titleBarWidget->setWindowMaximized(isMaximized());
+#endif
         }
         if (m_bodyLayout) {
             m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin);
