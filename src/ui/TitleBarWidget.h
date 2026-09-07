@@ -13,7 +13,7 @@ class HoverEventFilter;
 /**
  * @brief 独立标题栏组件
  * 封装 LOGO、应用名称、缩放滑杆、排列视图菜单、新建菜单、盘符折叠按钮、布局重置、窗口控制按钮(置顶/最小化/最大化/关闭)
- * 纯 View 部件：完全不依赖 ContentPanel/PanelLayoutManager 的指针或头文件。
+ * 纯 View 部件：完全不依赖 ContentPanel/PanelLayoutManager 的指针或头文件，且不泄漏内部控件指针。
  */
 class TitleBarWidget : public QWidget {
     Q_OBJECT
@@ -28,16 +28,6 @@ public:
 
     explicit TitleBarWidget(QWidget* parent = nullptr, HoverEventFilter* hoverFilter = nullptr);
     ~TitleBarWidget() override = default;
-
-    QPushButton* btnPinTop() const { return m_btnPinTop; }
-    QPushButton* btnMin() const { return m_btnMin; }
-    QPushButton* btnMax() const { return m_btnMax; }
-    QPushButton* btnClose() const { return m_btnClose; }
-    QPushButton* btnToggleDriveBar() const { return m_btnToggleDriveBar; }
-    QPushButton* btnLayout() const { return m_btnLayout; }
-    QPushButton* btnCreate() const { return m_btnCreate; }
-    QPushButton* btnViewMenu() const { return m_btnViewMenu; }
-    QSlider* sizeSlider() const { return m_sizeSlider; }
 
     bool isPinned() const;
     void setPinned(bool pinned);
