@@ -12,6 +12,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QSignalBlocker>
+#include <QTimer>
 
 namespace QuarkMeta {
 
@@ -150,6 +151,14 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_layout->addWidget(m_btnMin, 0, Qt::AlignVCenter);
     m_layout->addWidget(m_btnMax, 0, Qt::AlignVCenter);
     m_layout->addWidget(m_btnClose, 0, Qt::AlignVCenter);
+
+    // 主动同步宿主窗口当前的最大化状态，防止初始化时序漏更
+    QTimer::singleShot(0, this, [this]() {
+        if (window() && m_btnMax) {
+            QString iconKey = window()->isMaximized() ? "restore_line" : "maximize";
+            m_btnMax->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
+        }
+    });
 }
 
 void TitleBarWidget::setupViewMenu() {

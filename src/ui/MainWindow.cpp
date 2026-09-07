@@ -63,13 +63,6 @@ MainWindow::MainWindow(QWidget* parent)
 }
 
 void MainWindow::initUi() {
-    QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
-    if (!savedGeom.isEmpty()) {
-        restoreGeometry(savedGeom);
-    } else {
-        resize(1180, 800);
-    }
-
     QWidget* centralC = new QWidget(this);
     centralC->setObjectName("CentralWidget");
     QVBoxLayout* mainL = new QVBoxLayout(centralC);
@@ -78,6 +71,13 @@ void MainWindow::initUi() {
 
     // 1. 顶层子组件实例化 (TitleBar / NavBar / DriveBar)
     m_titleBarWidget = new TitleBarWidget(centralC, m_hoverFilter);
+
+    QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
+    if (!savedGeom.isEmpty()) {
+        restoreGeometry(savedGeom);
+    } else {
+        resize(1180, 800);
+    }
     m_navBarWidget   = new NavBarWidget(centralC, m_hoverFilter);
     m_driveBarWidget = new DriveBarWidget(centralC);
 
