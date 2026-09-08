@@ -244,10 +244,10 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
         QPushButton* btn = new QPushButton(m_statusBarWidget);
         btn->setFocusPolicy(Qt::NoFocus);
         btn->setAttribute(Qt::WA_Hover);
-        btn->setFixedSize(24, 24);
+        btn->setFixedSize(28, 20);
         btn->setCheckable(true);
-        btn->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE")));
-        btn->setIconSize(QSize(18, 18));
+        btn->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE"), 26));
+        btn->setIconSize(QSize(26, 17));
         btn->setObjectName("StatusBarControlBtn");
         btn->setProperty("tooltipText", tip);
         btn->setToolTip(tip);

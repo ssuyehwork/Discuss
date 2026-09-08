@@ -30,7 +30,17 @@ QPixmap SvgIconRenderer::renderIcon(const QString& key, const QSize& size, const
     QPainter painter(&pixmap);
     painter.setRenderHint(QPainter::Antialiasing);
     QSvgRenderer renderer(svgData.toUtf8());
-    renderer.render(&painter);
+
+    QSize defaultSz = renderer.defaultSize();
+    QRectF targetRect(0, 0, size.width(), size.height());
+    if (defaultSz.isValid() && !defaultSz.isEmpty()) {
+        QSizeF scaled = defaultSz.scaled(size, Qt::KeepAspectRatio);
+        qreal x = (size.width() - scaled.width()) / 2.0;
+        qreal y = (size.height() - scaled.height()) / 2.0;
+        targetRect = QRectF(x, y, scaled.width(), scaled.height());
+    }
+
+    renderer.render(&painter, targetRect);
     return pixmap;
 }
 
