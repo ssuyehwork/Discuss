@@ -46,8 +46,9 @@
   - **悬停状态 (Hover)**: `ErrorRed` (#e81123)。
   - **按下状态 (Pressed)**: `#A50000`。
   - **圆角**: `4px`。
-- **置顶按钮 (Pin Button)**:
+- **置顶按钮与窗口置顶逻辑 (Pin Button & Window Pinning)**:
   - **激活颜色**: 选中状态下图标颜色必须切换为唯一合法色值 **`#ff551c`** (对应常量 `ActiveOrange`)。杜绝任何形式的色值脑补。
+  - **底层绝对法则**: 窗口置顶逻辑**只许可使用 Win32 原生 API `SetWindowPos(HWND_TOPMOST / HWND_NOTOPMOST)`**！**严禁使用其他任何方式**（严禁使用 `setWindowFlags`，严禁使用 `Qt::WindowStaysOnTopHint` 等），确保置顶时零闪烁、不改变窗口句柄与尺寸，绝对对齐 Windows 平台最高堆叠层级标准！
 - **同步按钮 (Sync Button)**:
   - **状态联动**: 存在待同步元数据时，图标强制显示为 `ErrorRed`；同步完成后恢复为 `TextMain`。
 
