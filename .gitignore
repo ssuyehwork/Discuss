@@ -123,6 +123,7 @@ Cache-*/
 *.BridgeSort
 *.BridgeLabelsAndRatings
 *.QuarkMeta.json
+*.ai
 
 # 忽略 CMake 生成内容
 CMakeFiles/
