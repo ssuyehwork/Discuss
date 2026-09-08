@@ -1,7 +1,12 @@
 #include "DriveBarWidget.h"
 #include "UiHelper.h"
 #include "TagManagerDialog.h"
+#include "ToolTipOverlay.h"
 #include "../core/NavigationService.h"
+#include "../core/AppConfig.h"
+
+#include <QMenu>
+#include <QEvent>
 
 namespace QuarkMeta {
 
@@ -13,22 +18,96 @@ DriveBarWidget::DriveBarWidget(QWidget* parent)
     initUi();
 }
 
+QPushButton* DriveBarWidget::createIconButton(const QString& iconKey, const QColor& color, const QString& tooltipText) {
+    QPushButton* btn = new QPushButton(UiHelper::getIcon(iconKey, color, 18), "", this);
+    btn->setFixedSize(32, 32);
+    btn->setCursor(Qt::PointingHandCursor);
+    btn->setObjectName("DriveBarIconButton");
+    btn->setProperty("tooltipText", tooltipText);
+    btn->setAttribute(Qt::WA_Hover);
+
+    // 绑定 ToolTipOverlay 悬浮提示，纯图标零文字暴露
+    btn->installEventFilter(this);
+    return btn;
+}
+
+bool DriveBarWidget::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::ToolTip) {
+        QWidget* w = qobject_cast<QWidget*>(watched);
+        if (w) {
+            QString tooltipText = w->property("tooltipText").toString();
+            if (!tooltipText.isEmpty()) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), tooltipText, 0);
+                return true;
+            }
+        }
+    } else if (event->type() == QEvent::Leave) {
+        ToolTipOverlay::instance()->hideOverlay();
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void DriveBarWidget::initUi() {
     m_driveBarLayout = new QHBoxLayout(this);
     m_driveBarLayout->setContentsMargins(15, 5, 15, 5);
     m_driveBarLayout->setSpacing(8);
 
-    m_btnTagManager = new QPushButton(UiHelper::getIcon("tag", QColor("#1abc9c"), 18), " 标签管理", this);
-    m_btnTagManager->setFixedHeight(32);
-    m_btnTagManager->setCursor(Qt::PointingHandCursor);
-    m_btnTagManager->setObjectName("BtnTagManager");
+    // 1. 最左侧（第一个按钮）：固定放置 extension 图标的扩展与组件管理器按钮
+    m_btnExtensionManager = createIconButton("extension", QColor("#EEEEEE"), "扩展与组件管理");
+    setupExtensionMenu();
+    m_driveBarLayout->addWidget(m_btnExtensionManager);
 
+    // 2. 创建各独立功能图标（纯 Icon，通过 ToolTipOverlay 提示）
+    m_btnTagManager = createIconButton("tag", QColor("#1abc9c"), "标签管理");
     connect(m_btnTagManager, &QPushButton::clicked, this, [this]() {
         TagManagerDialog::showDialog(this, NavigationService::instance().currentUrl(), false);
     });
 
+    // 默认加至布局并依配置显隐
     m_driveBarLayout->addWidget(m_btnTagManager);
     m_driveBarLayout->addStretch();
+
+    refreshPinnedButtons();
+}
+
+void DriveBarWidget::refreshPinnedButtons() {
+    QStringList pinnedList = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag"}).toStringList();
+
+    if (m_btnTagManager) {
+        m_btnTagManager->setVisible(pinnedList.contains("tag"));
+    }
+}
+
+void DriveBarWidget::setupExtensionMenu() {
+    QMenu* extMenu = new QMenu(m_btnExtensionManager);
+    extMenu->setObjectName("DriveBarExtensionMenu");
+    UiHelper::applyMenuStyle(extMenu);
+
+    connect(m_btnExtensionManager, &QPushButton::clicked, this, [this, extMenu]() {
+        extMenu->clear();
+
+        QStringList pinnedList = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag"}).toStringList();
+
+        // 支持持续选择：重写 action 交互避免触发后自动销毁关闭菜单
+        QAction* actTag = extMenu->addAction(UiHelper::getIcon("tag", QColor("#1abc9c"), 18), "标签管理");
+        actTag->setCheckable(true);
+        actTag->setChecked(pinnedList.contains("tag"));
+
+        connect(actTag, &QAction::triggered, this, [this, actTag](bool checked) {
+            QStringList currentPinned = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag"}).toStringList();
+            if (checked && !currentPinned.contains("tag")) {
+                currentPinned.append("tag");
+            } else if (!checked) {
+                currentPinned.removeAll("tag");
+            }
+            AppConfig::instance().setValue("DriveBar/PinnedExtensions", currentPinned);
+            AppConfig::instance().sync();
+
+            refreshPinnedButtons();
+        });
+
+        extMenu->popup(m_btnExtensionManager->mapToGlobal(QPoint(0, m_btnExtensionManager->height())));
+    });
 }
 
 } // namespace QuarkMeta

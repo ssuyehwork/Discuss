@@ -101,7 +101,7 @@ void NavPanel::deferredInit() {
     }
 
     // 5. 回收站 (固定主节点)
-    QIcon trashIcon = UiHelper::getIcon("trash", QColor("#e81123"), 18);
+    QIcon trashIcon = UiHelper::getIcon("delete_forever", QColor("#e81123"), 18);
     QStandardItem* trashItem = new QStandardItem(trashIcon, "回收站");
     trashItem->setData("trash_root", Qt::UserRole + 1);
     m_model->appendRow(trashItem);

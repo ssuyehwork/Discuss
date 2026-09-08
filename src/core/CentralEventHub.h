@@ -16,6 +16,7 @@ enum class AppEventType {
     PathNavigated,          // 目录导航变更
     SelectionChanged,       // UI选中项变更
     MetadataUpdated,        // 元数据变动(星级/颜色/标签/备注/置顶等)
+    FavoritesUpdated,       // 收藏夹状态变更
     ItemsDeleted,           // 文件物理擦除/删除
     ItemsRenamed,           // 文件批量或单项重命名
     FilterStateChanged      // 条件筛选状态变更

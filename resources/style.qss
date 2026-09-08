@@ -93,6 +93,11 @@ QPushButton#TitleControlBtn {
     border: none;
     border-radius: 4px;
     padding: 0;
+    outline: none;
+}
+QPushButton#TitleControlBtn:focus {
+    outline: none;
+    border: none;
 }
 QPushButton#TitleControlBtn:hover {
     background: #3E3E42;
@@ -964,7 +969,7 @@ QListWidget#FileDialogListView::item:selected {
     color: #FFFFFF;
 }
 
-/* 全局通用 QPushButton 暗色兜底规整 (防止未带 objectName 的按钮回退 Windows 原生灰白) */
+/* 全局通用 QPushButton 暗色兜底规整 (防止未带 objectName 的按钮回退 Windows 原生灰白，彻底去除 focus 虚线框) */
 QPushButton {
     background-color: transparent;
     color: #EEEEEE;
@@ -972,6 +977,10 @@ QPushButton {
     border-radius: 4px;
     padding: 3px 10px;
     font-size: 12px;
+    outline: none;
+}
+QPushButton:focus {
+    outline: none;
 }
 QPushButton:hover {
     background-color: #3E3E42;

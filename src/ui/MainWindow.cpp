@@ -232,10 +232,15 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
 void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
 
-    // 关键修正 5：在实际展示事件中再次核实同步最大化图标
+    // 关键修正 5：在实际展示事件中再次核实同步最大化图标（结合 0ms 单次定时器处理 DWM 异步延迟）
 #ifdef Q_OS_WIN
     if (m_titleBarWidget) {
         m_titleBarWidget->setWindowMaximized(::IsZoomed(reinterpret_cast<HWND>(winId())));
+        QTimer::singleShot(0, this, [this]() {
+            if (m_titleBarWidget) {
+                m_titleBarWidget->setWindowMaximized(::IsZoomed(reinterpret_cast<HWND>(winId())));
+            }
+        });
     }
 #endif
 

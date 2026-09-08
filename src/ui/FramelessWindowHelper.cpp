@@ -70,6 +70,13 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
     // 关键修正 2：必须以 Win32 原生权威状态为唯一准绳，严禁使用状态滞后的 m_window->isMaximized()
     const bool isMax = ::IsZoomed(hwnd);
 
+    // 0. 尺寸与位置变动原生分发：第一时间校准标题栏最大化/还原图标
+    if (msg->message == WM_SIZE || msg->message == WM_WINDOWPOSCHANGED) {
+        if (m_titleBar) {
+            QMetaObject::invokeMethod(m_titleBar, "setWindowMaximized", Q_ARG(bool, isMax));
+        }
+    }
+
     // 1. 客户区计算：彻底修复图二的左偏脱轨Bug
     if (msg->message == WM_NCCALCSIZE) {
         if (msg->wParam == TRUE) {

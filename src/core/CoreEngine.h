@@ -25,6 +25,9 @@ enum class AppCommandType {
     SetNote,           // 设置备注
     SetURL,            // 设置链接
     SetPinned,         // 置顶/取消置顶
+    ToggleFavorite,    // 添加/取消收藏
+    MoveToTrash,       // 移入回收站
+    RestoreFromTrash,  // 从回收站还原
     RenameItems,       // 重命名文件/文件夹
     DeletePermanently, // 物理删除文件
     RecordAccess       // 记录访问历史
@@ -85,6 +88,7 @@ private:
     void handleSetNote(const QStringList& paths, const QString& note);
     void handleSetURL(const QStringList& paths, const QString& url);
     void handleRecordAccess(const QStringList& paths);
+    void handleToggleFavorite(const QStringList& paths);
 };
 
 } // namespace QuarkMeta

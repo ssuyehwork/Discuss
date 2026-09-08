@@ -181,13 +181,6 @@ void PanelLayoutManager::toggleImmersiveMode() {
     }
 
     saveLayoutState();
-
-    ToolTipOverlay::instance()->showText(
-        QCursor::pos(),
-        isImmersiveMode() ? "已进入沉浸全屏模式" : "已恢复分栏布局",
-        1200,
-        QColor("#378ADD")
-    );
 }
 
 void PanelLayoutManager::populatePanelMenu(QMenu* menu) {

@@ -1,5 +1,6 @@
 #include "CoreEngine.h"
 #include "../meta/MetadataManager.h"
+#include "../meta/FavoriteDao.h"
 #include "TagLexiconService.h"
 
 namespace QuarkMeta {
@@ -139,6 +140,10 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         handleRecordAccess(cmd.targetPaths);
         break;
     }
+    case AppCommandType::ToggleFavorite: {
+        handleToggleFavorite(cmd.targetPaths);
+        break;
+    }
     default:
         return false;
     }
@@ -224,6 +229,32 @@ void CoreEngine::handleRecordAccess(const QStringList& paths) {
     for (const QString& path : paths) {
         MetadataManager::instance().recordAccess(path.toStdWString());
     }
+}
+
+void CoreEngine::handleToggleFavorite(const QStringList& paths) {
+    if (paths.isEmpty()) return;
+
+    bool allFav = true;
+    for (const QString& p : paths) {
+        if (!FavoriteDao::containsPath(p)) {
+            allFav = false;
+            break;
+        }
+    }
+
+    for (const QString& p : paths) {
+        if (allFav) {
+            FavoriteDao::removeFavorite(p);
+        } else {
+            FavoriteDao::addFavorite(p);
+        }
+    }
+
+    AppEvent ev;
+    ev.type = AppEventType::FavoritesUpdated;
+    ev.paths = paths;
+    ev.payload["isFavorite"] = !allFav;
+    CentralEventHub::instance().publishEvent(ev);
 }
 
 } // namespace QuarkMeta
