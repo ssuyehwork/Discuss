@@ -74,6 +74,8 @@ private:
     void setupStatusBar(QWidget* parentWidget);
 
     void updateStatusBar();
+    void applyPresetLayout(const QString& leftPanel);
+    void updateStatusBarButtonHighlights();
 
     TitleBarWidget* m_titleBarWidget = nullptr;
     NavBarWidget* m_navBarWidget = nullptr;
@@ -101,6 +103,14 @@ private:
     QLabel* m_statusLeft = nullptr;
     QWidget* m_statusBarWidget = nullptr;
     TaskProgressToolBar* m_taskProgressToolBar = nullptr;
+
+    QPushButton* m_btnToggleFilter = nullptr;
+    QPushButton* m_btnToggleMeta = nullptr;
+    QPushButton* m_btnContentPanel = nullptr;
+    QPushButton* m_btnToggleFavorite = nullptr;
+    QPushButton* m_btnToggleNav = nullptr;
+    QPushButton* m_btnPresetLayout = nullptr;
+    QPushButton* m_btnResetLayout = nullptr;
 
     // 系统托盘控制器
     TrayController* m_trayController = nullptr;
