@@ -148,6 +148,8 @@ int main(int argc, char *argv[]) {
     // 利用主线程第一个 Tick 调度，平滑显示窗口，消解首帧信号洪暴导致的渲染卡顿
     QTimer::singleShot(0, [&w]() {
         w.show();
+        w.raise();
+        w.activateWindow();
     });
 
     // -------------------------------------------------------------

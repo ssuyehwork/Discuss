@@ -131,8 +131,6 @@ set(SOURCES
     src/ui/BatchRenameDialog.cpp
     src/ui/BatchRenameDialog.h
     src/ui/BatchProgressDialog.h
-    src/ui/DuplicateConflictDialog.h
-    src/ui/DuplicateConflictDialog.cpp
     src/ui/FileCollisionDialog.h
     src/ui/FileCollisionDialog.cpp
     src/ui/PresetManager.cpp

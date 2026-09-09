@@ -2,6 +2,7 @@
 #define NOMINMAX
 #endif
 #include "FramelessWindowHelper.h"
+#include <QDebug>
 #include <QPushButton>
 #include <QLineEdit>
 #include <QToolButton>
@@ -35,8 +36,13 @@ FramelessWindowHelper::FramelessWindowHelper(QWidget* window, QWidget* titleBar)
 #ifdef Q_OS_WIN
     HWND hwnd = reinterpret_cast<HWND>(m_window->winId());
     DWORD style = GetWindowLong(hwnd, GWL_STYLE);
-    // 关键修正 1：补齐完整系统窗口属性，Windows 才会记录合法的 WINDOWPLACEMENT(Normal 还原尺寸)
-    SetWindowLong(hwnd, GWL_STYLE, style | WS_THICKFRAME | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SYSMENU);
+    // 只有真正带标题栏（传入了 titleBar）的窗口，才需要完整的系统窗口属性
+    // 像 TagSelectorOverlay 这种 Qt::Tool 悬浮面板，不该被强行赋予标题栏/最大化/系统菜单语义
+    if (m_titleBar) {
+        SetWindowLong(hwnd, GWL_STYLE, style | WS_THICKFRAME | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SYSMENU);
+    } else {
+        SetWindowLong(hwnd, GWL_STYLE, style | WS_THICKFRAME);
+    }
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
 #endif
@@ -142,14 +148,14 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
             bool top = localPos.y() >= 0 && localPos.y() < m;
             bool bottom = localPos.y() >= height - m && localPos.y() < height;
 
-            if (top && left)     { *result = HTTOPLEFT;     return true; }
-            if (top && right)    { *result = HTTOPRIGHT;    return true; }
-            if (bottom && left)  { *result = HTBOTTOMLEFT;  return true; }
-            if (bottom && right) { *result = HTBOTTOMRIGHT; return true; }
-            if (left)            { *result = HTLEFT;        return true; }
-            if (right)           { *result = HTRIGHT;       return true; }
-            if (top)             { *result = HTTOP;         return true; }
-            if (bottom)          { *result = HTBOTTOM;      return true; }
+            if (top && left)     { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTTOPLEFT";     *result = HTTOPLEFT;     return true; }
+            if (top && right)    { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTTOPRIGHT";    *result = HTTOPRIGHT;    return true; }
+            if (bottom && left)  { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTBOTTOMLEFT";  *result = HTBOTTOMLEFT;  return true; }
+            if (bottom && right) { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTBOTTOMRIGHT"; *result = HTBOTTOMRIGHT; return true; }
+            if (left)            { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTLEFT";        *result = HTLEFT;        return true; }
+            if (right)           { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTRIGHT";       *result = HTRIGHT;       return true; }
+            if (top)             { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTTOP";         *result = HTTOP;         return true; }
+            if (bottom)          { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTBOTTOM";      *result = HTBOTTOM;      return true; }
         }
 
         // 标题栏原生拖拽与双击识别（排除交互控件）
@@ -158,12 +164,14 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
             if (titleRect.contains(localPos)) {
                 QWidget* childAtPt = m_window->childAt(localPos);
                 if (!isInteractiveWidget(childAtPt, m_titleBar, m_window)) {
+                    qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTCAPTION";
                     *result = HTCAPTION;
                     return true;
                 }
             }
         }
 
+        qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTCLIENT";
         *result = HTCLIENT;
         return true;
     }
@@ -188,6 +196,7 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
             default:
                 break;
         }
+        qDebug() << "[SETCURSOR]" << (m_window ? m_window->objectName() : "null") << hwnd << "hitTest=" << hitTest << "cursorId=" << (cursorId ? "resize" : "null(交给Qt)");
         if (cursorId) {
             SetCursor(LoadCursor(nullptr, cursorId));
             *result = TRUE;

@@ -55,6 +55,21 @@
 
 ---
 
+## 🪟 第五章：对话框与弹窗顶层 HWND 激活与事件循环治理规范 (Dialog & HWND Architecture)
+
+为彻底杜绝弹窗销毁后主窗口失去响应、非客户区 `WM_NCHITTEST` 命中检测失效、标题栏无法拖拽及光标滞留在手型状态等底层 HWND 激活失步问题，全系统必须无条件遵守以下**对话框与弹窗顶层架构治理规范**：
+
+1. **【父级溯源铁律】全软件对话框 Parent 绑定契约 (Root HWND Binding Contract)**：
+   全软件所有 `QDialog`、`FramelessDialog` 或 Overlay 浮窗在创建/弹出时，其 `parent` 必须且只能绑定为**顶层 `MainWindow`（或 `window()`）**，绝对禁止将 `DriveBarWidget`、`ContentPanel` 等局部 ToolBar 或 Child Widget 作为 Parent 传入。确保 Win32 消息循环在对话框销毁退栈时，能够 100% 精准恢复主窗口 HWND 的激活 (`SetActiveWindow`) 与输入使能 (`EnableWindow`) 状态。
+
+2. **【模态嵌套禁令】去 `exec()` 阻塞与平原化事件循环 (Flattened Event Loop Contract)**：
+   严禁在 `exec()` 运行期间再次嵌套调用二级 `exec()`（如在对话框内部再次弹出 `exec()` 阻断弹窗）。复杂管理面板（如 `TagManagerDialog`）应当向非模态 / Inline 内联编辑交互演进；对话框内部的二次输入/确认交互必须使用嵌入式 Inline 控件或异步响应，确保 C++ 调用栈与 Qt 事件循环始终保持平原化，消除堆栈交织死锁风险。
+
+3. **【HWND 激活与 Win32 拖拽安全隔离契约】**：
+   统一无边框对话框的生命周期与拖拽机制，严格禁止在模态阻塞事件循环中通过 `SendMessage(WM_NCLBUTTONDOWN)` 强抢线程控制权。对话框在 `reject()` / `accept()` 退出时，必须显式做好 HWND 状态清理与光标形态复位（复位为 `Qt::ArrowCursor`），保障主窗口非客户区拉伸与拖拽机制的完美平滑。
+
+---
+
 ## 📁 第六章：文件冲突处理交互与对话框规范 (File Collision Resolution Architecture)
 
 在批量文件粘贴或移动场景下，系统必须遵循标准且高辨识度的文件冲突处理规范：
