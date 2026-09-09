@@ -60,7 +60,7 @@ void DriveBarWidget::initUi() {
     // 2. 创建各独立功能图标（纯 Icon，通过 ToolTipOverlay 提示）
     m_btnTagManager = createIconButton("tag", QColor("#1abc9c"), "标签管理");
     connect(m_btnTagManager, &QPushButton::clicked, this, [this]() {
-        TagManagerDialog::showDialog(this, NavigationService::instance().currentUrl(), false);
+        TagManagerDialog::showDialog(window(), NavigationService::instance().currentUrl(), false);
     });
 
     // 默认加至布局并依配置显隐

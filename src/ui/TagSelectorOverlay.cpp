@@ -9,6 +9,9 @@
 #include <QApplication>
 #include <QScreen>
 #include <QScrollBar>
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
 
 namespace QuarkMeta {
 
@@ -54,9 +57,41 @@ TagSelectorOverlay::~TagSelectorOverlay() {
 void TagSelectorOverlay::closeOverlay() {
     if (m_isClosing) return;
     m_isClosing = true;
+
+    // 1. 立即拔除全局事件过滤器，绝不等析构
+    if (qApp) {
+        qApp->removeEventFilter(this);
+    }
+
+    // 2. 强制解除全局所有子控件的鼠标抓取（解决 QPushButton 隐式抓取悬空）
+    if (QWidget::mouseGrabber()) {
+        QWidget::mouseGrabber()->releaseMouse();
+    }
+
     emit overlayClosed();
     close();
+
+    // 3. 解决 Qt::Tool (WS_EX_TOOLWINDOW) 关闭时不向 Owner 归还激活的 Win32 缺陷：显式唤醒主窗口
+    QWidget* topWin = parentWidget() ? parentWidget()->window() : nullptr;
+    if (topWin) {
+        topWin->activateWindow();
+    }
+
     deleteLater();
+}
+
+void TagSelectorOverlay::hideEvent(QHideEvent* event) {
+    QFrame::hideEvent(event);
+    if (qApp) {
+        qApp->removeEventFilter(this);
+    }
+    if (QWidget::mouseGrabber()) {
+        QWidget::mouseGrabber()->releaseMouse();
+    }
+    QWidget* topWin = parentWidget() ? parentWidget()->window() : nullptr;
+    if (topWin) {
+        topWin->activateWindow();
+    }
 }
 
 void TagSelectorOverlay::initUi() {
@@ -346,6 +381,13 @@ void TagSelectorOverlay::changeEvent(QEvent* event) {
     QFrame::changeEvent(event);
 }
 
+bool TagSelectorOverlay::nativeEvent(const QByteArray& eventType, void* message, qintptr* result) {
+    if (m_framelessHelper && m_framelessHelper->handleNativeEvent(message, result)) {
+        return true;
+    }
+    return QFrame::nativeEvent(eventType, message, result);
+}
+
 bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
     if (event->type() == QEvent::MouseButtonPress) {
         QMouseEvent* me = static_cast<QMouseEvent*>(event);
@@ -408,11 +450,5 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
     return QFrame::eventFilter(obj, event);
 }
 
-bool TagSelectorOverlay::nativeEvent(const QByteArray& eventType, void* message, qintptr* result) {
-    if (m_framelessHelper && m_framelessHelper->handleNativeEvent(message, result)) {
-        return true;
-    }
-    return QFrame::nativeEvent(eventType, message, result);
-}
 
 } // namespace QuarkMeta
