@@ -51,6 +51,21 @@ void PanelLayoutManager::initLayout() {
         emit panelVisibilityChanged("favorite", false);
         emit panelVisibilityChanged("meta", false);
         emit panelVisibilityChanged("filter", false);
+    } else {
+        bool navVis = AppConfig::instance().getValue("MainWindow/NavVisible", true).toBool();
+        bool favVis = AppConfig::instance().getValue("MainWindow/FavoriteVisible", true).toBool();
+        bool metaVis = AppConfig::instance().getValue("MainWindow/MetaVisible", true).toBool();
+        bool filterVis = AppConfig::instance().getValue("MainWindow/FilterVisible", true).toBool();
+
+        if (m_navPanel) m_navPanel->setVisible(navVis);
+        if (m_favoritePanel) m_favoritePanel->setVisible(favVis);
+        if (m_metaPanel) m_metaPanel->setVisible(metaVis);
+        if (m_filterPanel) m_filterPanel->setVisible(filterVis);
+
+        emit panelVisibilityChanged("nav", navVis);
+        emit panelVisibilityChanged("favorite", favVis);
+        emit panelVisibilityChanged("meta", metaVis);
+        emit panelVisibilityChanged("filter", filterVis);
     }
 
     // 同步恢复分栏尺寸，杜绝异步 singleShot(0) 造成的二次排版抽搐

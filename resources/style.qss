@@ -1088,6 +1088,19 @@ QComboBox#RuleCombo {
 }
 QComboBox#RuleCombo::drop-down {
     border: none;
+    width: 20px;
+}
+QComboBox#RuleCombo QAbstractItemView {
+    background-color: #2D2D2D;
+    border: 1px solid #444;
+    selection-background-color: #3E3E42;
+    selection-color: white;
+    color: #EEE;
+    outline: 0;
+}
+QComboBox#RuleCombo QAbstractItemView::item {
+    height: 22px;
+    padding: 2px;
 }
 QLineEdit#RuleTextEdit, QSpinBox#RuleStartSpin {
     background: #1E1E1E;
@@ -1098,11 +1111,18 @@ QLineEdit#RuleTextEdit, QSpinBox#RuleStartSpin {
 }
 QPushButton#RuleDeleteBtn {
     background: transparent;
-    border: none;
-    border-radius: 3px;
+    border: 1px solid #434343;
+    border-radius: 2px;
+    color: #888;
+    font-weight: bold;
+    font-size: 14px;
+    padding: 0px;
+    text-align: center;
 }
 QPushButton#RuleDeleteBtn:hover {
     background-color: #3E3E42;
+    color: #EEE;
+    border-color: #666;
 }
 
 QWidget#ClickableRowActive {

@@ -51,7 +51,7 @@ MainWindow::~MainWindow() = default;
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
-    setMinimumHeight(400); // 宽度由 PanelLayoutManager::updateDynamicMinimumSize() 动态管理
+    setMinimumHeight(700); // 宽度由 PanelLayoutManager::updateDynamicMinimumSize() 动态管理
     setWindowTitle("QuarkMeta");
 
     m_hoverFilter = new HoverEventFilter(this);
