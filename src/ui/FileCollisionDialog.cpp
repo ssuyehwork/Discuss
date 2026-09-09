@@ -99,7 +99,7 @@ void FileCollisionDialog::setupUi(const QString& firstFileName, const QString& t
         return btn;
     };
 
-    btmLayout->addWidget(createCapsuleBtn("自动解析", CollisionResolveAction::AutoResolve));
+    btmLayout->addWidget(createCapsuleBtn("同存", CollisionResolveAction::AutoResolve));
     btmLayout->addWidget(createCapsuleBtn("替换", CollisionResolveAction::Replace));
     btmLayout->addWidget(createCapsuleBtn("跳过", CollisionResolveAction::Skip));
     btmLayout->addWidget(createCapsuleBtn("取消", CollisionResolveAction::Cancel));

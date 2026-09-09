@@ -5,6 +5,8 @@
 #include <QApplication>
 #include <QShortcut>
 #include <QKeySequence>
+#include <QCheckBox>
+#include <QLineEdit>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <dwmapi.h>

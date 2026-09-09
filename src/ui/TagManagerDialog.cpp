@@ -13,7 +13,7 @@ namespace QuarkMeta {
 void TagManagerDialog::showDialog(QWidget* parent, const QString& currentPath, bool isMirrorSource) {
     TagManagerDialog* dlg = new TagManagerDialog(currentPath, isMirrorSource, parent);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->exec();
+    dlg->show();
 }
 
 TagManagerDialog::TagManagerDialog(const QString& currentPath, bool isMirrorSource, QWidget* parent)
@@ -43,7 +43,7 @@ void TagManagerDialog::initContent() {
     topL->setSpacing(10);
 
     m_searchEdit = new QLineEdit(topBar);
-    m_searchEdit->setPlaceholderText("搜索或新建标签词条...");
+    m_searchEdit->setPlaceholderText("搜索...");
     m_searchEdit->setFixedHeight(32);
     m_searchEdit->setObjectName("TagManagerSearchEdit");
     UiHelper::setupLineEditContextMenu(m_searchEdit);

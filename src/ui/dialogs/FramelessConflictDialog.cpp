@@ -36,7 +36,7 @@ FramelessConflictDialog::FramelessConflictDialog(const QString& title, const QSt
     btnLayout->setSpacing(10);
     btnLayout->addStretch();
 
-    auto* btnAutoRename = new QPushButton("自动解析");
+    auto* btnAutoRename = new QPushButton("同存");
     btnAutoRename->setIcon(UiHelper::getIcon("sync", QColor("#EEEEEE"), 14));
     btnAutoRename->setFixedHeight(32);
     btnAutoRename->setCursor(Qt::PointingHandCursor);

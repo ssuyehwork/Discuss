@@ -22,6 +22,8 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
     setMouseTracking(true);
     setAttribute(Qt::WA_DeleteOnClose, false);
 
+    m_framelessHelper = FramelessWindowHelper::apply(this, nullptr);
+
     initUi();
     loadTagsAndGroups();
     
@@ -67,7 +69,7 @@ void TagSelectorOverlay::initUi() {
     topSearchLayout->setSpacing(6);
 
     m_searchEdit = new QLineEdit(this);
-    m_searchEdit->setPlaceholderText("搜索或新建标签...");
+    m_searchEdit->setPlaceholderText("搜索...");
     m_searchEdit->setFixedHeight(26);
     m_searchEdit->setObjectName("TagSelectorSearchEdit");
     UiHelper::setupLineEditContextMenu(m_searchEdit);
@@ -402,6 +404,13 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
         }
     }
     return QFrame::eventFilter(obj, event);
+}
+
+bool TagSelectorOverlay::nativeEvent(const QByteArray& eventType, void* message, qintptr* result) {
+    if (m_framelessHelper && m_framelessHelper->handleNativeEvent(message, result)) {
+        return true;
+    }
+    return QFrame::nativeEvent(eventType, message, result);
 }
 
 } // namespace QuarkMeta
