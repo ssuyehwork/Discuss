@@ -8,7 +8,7 @@
 #include <QMenu>
 #include <QAction>
 #ifdef Q_OS_WIN
-#include <windows.h>
+#include <qt_windows.h>
 #endif
 
 namespace QuarkMeta {
@@ -19,9 +19,9 @@ void TagManagerDialog::showDialog(QWidget* parent, const QString& currentPath, b
     TagManagerDialog dlg(currentPath, isMirrorSource, topParent);
     dlg.exec();
 
-#ifdef Q_OS_WIN
-    ::ReleaseCapture();
-#endif
+    if (QWidget::mouseGrabber()) {
+        QWidget::mouseGrabber()->releaseMouse();
+    }
 
     if (topParent) {
         topParent->activateWindow();
