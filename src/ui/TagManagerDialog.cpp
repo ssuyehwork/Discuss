@@ -13,7 +13,7 @@ namespace QuarkMeta {
 void TagManagerDialog::showDialog(QWidget* parent, const QString& currentPath, bool isMirrorSource) {
     TagManagerDialog* dlg = new TagManagerDialog(currentPath, isMirrorSource, parent);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->show();
+    dlg->exec();
 }
 
 TagManagerDialog::TagManagerDialog(const QString& currentPath, bool isMirrorSource, QWidget* parent)
@@ -168,7 +168,9 @@ void TagManagerDialog::initContent() {
 
 void TagManagerDialog::refreshSidebar() {
     while (QLayoutItem* item = m_groupButtonsLayout->takeAt(0)) {
-        delete item->widget();
+        if (item->widget()) {
+            item->widget()->deleteLater();
+        }
         delete item;
     }
     for (auto* btn : m_sidebarGroup->buttons()) {
@@ -336,7 +338,9 @@ void TagManagerDialog::refreshTags() {
     m_masterTags = TagLexiconService::instance().getAllTagNames();
 
     while (QLayoutItem* item = m_tagsScrollLayout->takeAt(0)) {
-        delete item->widget();
+        if (item->widget()) {
+            item->widget()->deleteLater();
+        }
         delete item;
     }
 
@@ -408,7 +412,6 @@ void TagManagerDialog::refreshTags() {
 
 void TagManagerDialog::resizeEvent(QResizeEvent* event) {
     FramelessDialog::resizeEvent(event);
-    refreshTags();
 }
 
 void TagManagerDialog::keyPressEvent(QKeyEvent* event) {
