@@ -23,6 +23,7 @@ void TagManagerDialog::showDialog(QWidget* parent, const QString& currentPath, b
         ::EnableWindow(reinterpret_cast<HWND>(topParent->winId()), TRUE);
 #endif
         topParent->activateWindow();
+        topParent->setFocus();
         QGuiApplication::restoreOverrideCursor();
         QCursor::setPos(QCursor::pos());
     }

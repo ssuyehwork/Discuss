@@ -54,11 +54,23 @@ TagSelectorOverlay::~TagSelectorOverlay() {
 void TagSelectorOverlay::closeOverlay() {
     if (m_isClosing) return;
     m_isClosing = true;
-    if (this->mouseGrabber() == this) {
-        this->releaseMouse();
+
+    if (qApp) {
+        qApp->removeEventFilter(this);
     }
+
+    if (QWidget::mouseGrabber()) {
+        QWidget::mouseGrabber()->releaseMouse();
+    }
+
     emit overlayClosed();
     close();
+
+    QWidget* topWin = parentWidget() ? parentWidget()->window() : nullptr;
+    if (topWin) {
+        topWin->activateWindow();
+    }
+
     QGuiApplication::restoreOverrideCursor();
     QCursor::setPos(QCursor::pos());
     deleteLater();
