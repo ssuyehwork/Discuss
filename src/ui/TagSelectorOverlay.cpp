@@ -22,6 +22,8 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
     setMouseTracking(true);
     setAttribute(Qt::WA_DeleteOnClose, false);
 
+    m_framelessHelper = FramelessWindowHelper::apply(this, nullptr);
+
     initUi();
     loadTagsAndGroups();
     
@@ -53,6 +55,10 @@ void TagSelectorOverlay::closeOverlay() {
     if (m_isClosing) return;
     m_isClosing = true;
 
+#ifdef Q_OS_WIN
+    ::ReleaseCapture();
+#endif
+
     // 1. 立即拔除全局事件过滤器，绝不等析构
     if (qApp) {
         qApp->removeEventFilter(this);
@@ -77,6 +83,9 @@ void TagSelectorOverlay::closeOverlay() {
 
 void TagSelectorOverlay::hideEvent(QHideEvent* event) {
     QFrame::hideEvent(event);
+#ifdef Q_OS_WIN
+    ::ReleaseCapture();
+#endif
     if (qApp) {
         qApp->removeEventFilter(this);
     }
@@ -374,6 +383,13 @@ void TagSelectorOverlay::changeEvent(QEvent* event) {
         }
     }
     QFrame::changeEvent(event);
+}
+
+bool TagSelectorOverlay::nativeEvent(const QByteArray& eventType, void* message, qintptr* result) {
+    if (m_framelessHelper && m_framelessHelper->handleNativeEvent(message, result)) {
+        return true;
+    }
+    return QFrame::nativeEvent(eventType, message, result);
 }
 
 bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
