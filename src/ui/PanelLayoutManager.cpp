@@ -13,7 +13,7 @@
 #include <QStringList>
 
 namespace QuarkMeta {
-
+ 
 PanelLayoutManager::PanelLayoutManager(QMainWindow* mainWindow,
                                        QSplitter* mainSplitter,
                                        NavPanel* navPanel,

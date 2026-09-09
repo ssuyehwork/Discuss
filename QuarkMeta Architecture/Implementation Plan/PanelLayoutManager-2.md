@@ -1,18 +1,13 @@
-# PanelLayoutManager Panel Visibility Persistence Implementation Plan
+PanelLayoutManager Panel Visibility Persistence Implementation Plan
+1. Overview
+When clicking panel layout buttons in the status bar (e.g. "Hide Filter", "Hide Meta", "Hide Nav", "Hide Favorite"), PanelLayoutManager::saveLayoutState() writes MainWindow/NavVisible, MainWindow/FavoriteVisible, MainWindow/MetaVisible, and MainWindow/FilterVisible keys to AppConfig. However, PanelLayoutManager::initLayout() failed to read these persisted flags on application startup when not in immersive mode, causing hidden panels to always reappear upon restarting the application.
 
-## 1. Overview
-When clicking panel layout buttons in the status bar (e.g. "Hide Filter", "Hide Meta", "Hide Nav", "Hide Favorite"), `PanelLayoutManager::saveLayoutState()` writes `MainWindow/NavVisible`, `MainWindow/FavoriteVisible`, `MainWindow/MetaVisible`, and `MainWindow/FilterVisible` keys to `AppConfig`. However, `PanelLayoutManager::initLayout()` failed to read these persisted flags on application startup when not in immersive mode, causing hidden panels to always reappear upon restarting the application.
+This plan restores panel visibility state reading in PanelLayoutManager::initLayout() to achieve 100% persistent panel layout state across restarts.
 
-This plan restores panel visibility state reading in `PanelLayoutManager::initLayout()` to achieve 100% persistent panel layout state across restarts.
-
-## 2. Modified Files List
-- `src/ui/PanelLayoutManager.cpp`
-
-## 3. Detailed Line-by-Line Changes
-
-### `src/ui/PanelLayoutManager.cpp`
-
-```diff
+2. Modified Files List
+src/ui/PanelLayoutManager.cpp
+3. Detailed Line-by-Line Changes
+src/ui/PanelLayoutManager.cpp
 <<<<<<< SEARCH
     bool isImmersive = AppConfig::instance().getValue("MainWindow/IsImmersiveMode", false).toBool();
     if (isImmersive) {
@@ -57,10 +52,8 @@ This plan restores panel visibility state reading in `PanelLayoutManager::initLa
 
     // 同步恢复分栏尺寸，杜绝异步 singleShot(0) 造成的二次排版抽搐
 >>>>>>> REPLACE
-```
-
-## 4. Build & Verification Steps
-1. Compile the application using CMake / MSVC build pipeline.
-2. Launch QuarkMeta, click a layout button in the status bar (e.g. "隐藏筛选器" / "隐藏目录导航").
-3. Close QuarkMeta and relaunch the application.
-4. Verify that the hidden panels remain hidden and that the corresponding status bar buttons retain their checked/highlighted state.
+4. Build & Verification Steps
+Compile the application using CMake / MSVC build pipeline.
+Launch QuarkMeta, click a layout button in the status bar (e.g. "隐藏筛选器" / "隐藏目录导航").
+Close QuarkMeta and relaunch the application.
+Verify that the hidden panels remain hidden and that the corresponding status bar buttons retain their checked/highlighted state.
