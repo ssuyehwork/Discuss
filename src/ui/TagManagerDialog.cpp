@@ -15,17 +15,15 @@ namespace QuarkMeta {
 
 void TagManagerDialog::showDialog(QWidget* parent, const QString& currentPath, bool isMirrorSource) {
     QWidget* topParent = parent ? parent->window() : nullptr;
+
+    // 栈分配保证退栈时完全析构
     TagManagerDialog dlg(currentPath, isMirrorSource, topParent);
     dlg.exec();
 
+    // 模态退出后，正规交还激活与焦点
     if (topParent) {
-#ifdef Q_OS_WIN
-        ::EnableWindow(reinterpret_cast<HWND>(topParent->winId()), TRUE);
-#endif
         topParent->activateWindow();
         topParent->setFocus();
-        QGuiApplication::restoreOverrideCursor();
-        QCursor::setPos(QCursor::pos());
     }
 }
 
