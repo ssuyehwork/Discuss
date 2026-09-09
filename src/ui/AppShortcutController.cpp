@@ -71,9 +71,21 @@ bool AppShortcutController::isEditingFocus() {
 }
 
 bool AppShortcutController::eventFilter(QObject* watched, QEvent* event) {
-    if (event->type() == QEvent::KeyPress && m_window) {
+    if (event->type() == QEvent::KeyPress) {
         QKeyEvent* keyEv = static_cast<QKeyEvent*>(event);
-        if (keyEv->key() == Qt::Key_Tab && keyEv->modifiers() == Qt::NoModifier) {
+
+        // 1. 全局 Ctrl + W 关闭激活窗口契约
+        if (keyEv->key() == Qt::Key_W && (keyEv->modifiers() & Qt::ControlModifier)) {
+            QWidget* activeWin = QApplication::activeWindow();
+            if (activeWin) {
+                activeWin->close();
+                event->accept();
+                return true;
+            }
+        }
+
+        // 2. Tab 键沉浸模式切换
+        if (keyEv->key() == Qt::Key_Tab && keyEv->modifiers() == Qt::NoModifier && m_window) {
             QWidget* watchedW = qobject_cast<QWidget*>(watched);
             if (watchedW && (watchedW == m_window || m_window->isAncestorOf(watchedW))) {
                 if (!isEditingFocus()) {
@@ -123,6 +135,15 @@ void AppShortcutController::initShortcuts() {
         if (m_searchController && m_searchController->searchEdit()) {
             m_searchController->searchEdit()->setFocus(Qt::ShortcutFocusReason);
             m_searchController->searchEdit()->selectAll();
+        }
+    });
+
+    // 6. Ctrl+W: 全局关闭/响应式退出主窗口
+    QShortcut* scClose = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), m_window);
+    scClose->setContext(Qt::WindowShortcut);
+    connect(scClose, &QShortcut::activated, this, [this]() {
+        if (m_window) {
+            m_window->close();
         }
     });
 }

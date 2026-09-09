@@ -20,6 +20,8 @@
 #include <QStringDecoder>
 #include <algorithm>
 
+class QLineEdit;
+
 #include "SvgIconRenderer.h"
 #include "ThemeManager.h"
 #include "../util/ColorPaletteEngine.h"
@@ -230,6 +232,8 @@ public:
     static inline void applyMenuStyle(QWidget* menu) {
         ThemeManager::instance().applyMenuStyle(menu);
     }
+
+    static void setupLineEditContextMenu(QLineEdit* edit);
 
     static inline QColor getExtensionColor(const QString& ext) {
         return ColorPaletteEngine::getExtensionColor(ext);

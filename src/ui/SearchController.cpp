@@ -21,8 +21,16 @@ SearchController::SearchController(QWidget* parent)
     m_searchEdit->setPlaceholderText("搜索...");
     m_searchEdit->setFixedSize(230, 32);
     m_searchEdit->addAction(UiHelper::getIcon("search", TextMuted), QLineEdit::LeadingPosition);
-    m_searchEdit->setClearButtonEnabled(true);
+
+    QAction* clearAction = m_searchEdit->addAction(UiHelper::getIcon("close", TextMuted), QLineEdit::TrailingPosition);
+    clearAction->setVisible(false);
+    connect(clearAction, &QAction::triggered, m_searchEdit, &QLineEdit::clear);
+    connect(m_searchEdit, &QLineEdit::textChanged, this, [clearAction](const QString& text) {
+        clearAction->setVisible(!text.isEmpty());
+    });
+
     m_searchEdit->setObjectName("SearchEdit");
+    UiHelper::setupLineEditContextMenu(m_searchEdit);
 
     searchLayout->addWidget(m_searchEdit);
 

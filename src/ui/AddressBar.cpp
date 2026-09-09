@@ -39,8 +39,8 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     m_pathEdit = new QLineEdit(m_pathStack);
     m_pathEdit->setPlaceholderText("输入路径...");
     m_pathEdit->setFixedHeight(30); 
-    m_pathEdit->setClearButtonEnabled(true);
     m_pathEdit->setObjectName("AddressPathEdit");
+    UiHelper::setupLineEditContextMenu(m_pathEdit);
     m_pathStack->addWidget(m_pathEdit);
 
     m_btnRefresh = new QPushButton(m_addressContainer);

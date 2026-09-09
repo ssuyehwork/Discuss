@@ -5,6 +5,7 @@
 #include "../ToolTipOverlay.h"
 #include "../ShellIconManager.h"
 #include "../UiHelper.h"
+#include "../FileCollisionDialog.h"
 #include "../../core/TrashService.h"
 #include "../../core/PermanentDeleteService.h"
 #include "../../core/ClipboardService.h"
@@ -275,10 +276,68 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
                 return true;
             }
 
+            // 检测目标文件夹中的同名冲突文件
+            QStringList conflictingSources;
+            for (const QString& src : selectedPaths) {
+                QString fileName = QFileInfo(src).fileName();
+                QString destPath = QDir(lastDragDest).filePath(fileName);
+                if (QFile::exists(destPath)) {
+                    conflictingSources.append(src);
+                }
+            }
+
             DiskIoContext ioCtx;
             ioCtx.sources = selectedPaths;
             ioCtx.destination = lastDragDest;
             ioCtx.isMove = true;
+
+            if (!conflictingSources.isEmpty()) {
+                QStringList activeSources = selectedPaths;
+                int remainingConflicts = conflictingSources.size();
+
+                for (int i = 0; i < conflictingSources.size(); ++i) {
+                    const QString& srcFile = conflictingSources.at(i);
+                    FileCollisionDialog dialog(srcFile, lastDragDest, remainingConflicts--, m_panel);
+
+                    if (dialog.exec() != QDialog::Accepted) {
+                        return true;
+                    }
+
+                    CollisionResolveAction action = dialog.selectedAction();
+                    bool applyToAll = dialog.applyToAll();
+
+                    if (action == CollisionResolveAction::Cancel) {
+                        return true;
+                    }
+
+                    if (applyToAll) {
+                        if (action == CollisionResolveAction::AutoResolve) {
+                            ioCtx.autoRenameAll = true;
+                        } else if (action == CollisionResolveAction::Replace) {
+                            ioCtx.overwriteAll = true;
+                        } else if (action == CollisionResolveAction::Skip) {
+                            for (int j = i; j < conflictingSources.size(); ++j) {
+                                activeSources.removeOne(conflictingSources.at(j));
+                            }
+                        }
+                        break;
+                    } else {
+                        if (action == CollisionResolveAction::AutoResolve) {
+                            ioCtx.autoRenameFiles.insert(srcFile);
+                        } else if (action == CollisionResolveAction::Replace) {
+                            ioCtx.overwriteFiles.insert(srcFile);
+                        } else if (action == CollisionResolveAction::Skip) {
+                            activeSources.removeOne(srcFile);
+                        }
+                    }
+                }
+
+                if (activeSources.isEmpty()) {
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "已跳过所有同名文件", 1500, QColor("#378ADD"));
+                    return true;
+                }
+                ioCtx.sources = activeSources;
+            }
 
             QPointer<ContentPanel> weakPanel(m_panel);
             DiskIoService::instance().executeAsync(ioCtx, [weakPanel, lastDragDest](bool success) {
@@ -301,27 +360,25 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
     // 5. F4: 重复上一次操作 (星级 / 标记颜色 / 粘贴标签)
     if (keyEvent->key() == Qt::Key_F4) {
         if (!LastOperationManager::instance().hasOperation()) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未记录任何可重复的操作", 1500, QColor("#e81123"));
             return true;
         }
 
         auto indexes = view->selectionModel()->selectedIndexes();
-        int count = 0;
         LastOperationType type = LastOperationManager::instance().type();
         for (const auto& targetIdx : indexes) {
             if (targetIdx.column() == 0) {
                 if (type == LastOperationType::SetRating) {
                     m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().rating(), RatingRole);
                 } else if (type == LastOperationType::SetColor) {
-                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().color(), ColorRole);
+                    QString colorVal = LastOperationManager::instance().color();
+                    m_panel->getProxyModel()->setData(targetIdx, colorVal, ColorRole);
+                    QString path = targetIdx.data(PathRole).toString();
+                    QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
+                    m_panel->getProxyModel()->setData(targetIdx, coloredIcon, Qt::DecorationRole);
                 } else if (type == LastOperationType::PasteTags) {
                     m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().tags(), TagsRole);
                 }
-                count++;
             }
-        }
-        if (count > 0) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已对 %1 个项目重复执行上一次操作").arg(count), 1500, QColor("#2ecc71"));
         }
         return true;
     }

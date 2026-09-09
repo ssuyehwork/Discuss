@@ -43,6 +43,11 @@ public:
     bool encryptFile(const std::wstring& srcPath, const std::wstring& destPath, const std::string& password);
 
     /**
+     * @brief 解密文件并保存至指定物理路径
+     */
+    bool decryptFile(const std::wstring& amencPath, const std::wstring& destPath, const std::string& password);
+
+    /**
      * @brief 解密文件并持有句柄 (RAII)
      */
     std::shared_ptr<DecryptedFileHandle> decryptToTemp(const std::wstring& amencPath, const std::string& password);

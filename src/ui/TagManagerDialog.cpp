@@ -44,9 +44,9 @@ void TagManagerDialog::initContent() {
 
     m_searchEdit = new QLineEdit(topBar);
     m_searchEdit->setPlaceholderText("搜索或新建标签词条...");
-    m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setFixedHeight(32);
     m_searchEdit->setObjectName("TagManagerSearchEdit");
+    UiHelper::setupLineEditContextMenu(m_searchEdit);
     connect(m_searchEdit, &QLineEdit::textChanged, this, &TagManagerDialog::onSearchTextChanged);
     connect(m_searchEdit, &QLineEdit::returnPressed, [this]() {
         QString kw = m_searchEdit->text().trimmed();
@@ -412,6 +412,11 @@ void TagManagerDialog::resizeEvent(QResizeEvent* event) {
 }
 
 void TagManagerDialog::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_W && (event->modifiers() & Qt::ControlModifier)) {
+        reject();
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         if (m_searchEdit && m_searchEdit->hasFocus()) {
             QString kw = m_searchEdit->text().trimmed();

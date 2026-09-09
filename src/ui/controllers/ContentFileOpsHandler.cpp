@@ -2,6 +2,7 @@
 #include "../ContentPanel.h"
 #include "../ToolTipOverlay.h"
 #include "../BatchRenameDialog.h"
+#include "../FileCollisionDialog.h"
 #include "../../core/AppConfig.h"
 #include "../../core/ClipboardService.h"
 #include "../../core/NavigationHistoryService.h"
@@ -99,10 +100,70 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
         AppConfig::instance().sync();
     }
 
+    bool isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
+
+    // 检测目标文件夹中的同名冲突文件
+    QStringList conflictingSources;
+    for (const QString& src : paths) {
+        QString fileName = QFileInfo(src).fileName();
+        QString destPath = QDir(destDir).filePath(fileName);
+        if (QFile::exists(destPath)) {
+            conflictingSources.append(src);
+        }
+    }
+
     DiskIoContext ioCtx;
     ioCtx.sources = paths;
     ioCtx.destination = destDir;
-    ioCtx.isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
+    ioCtx.isMove = isMove;
+
+    if (!conflictingSources.isEmpty()) {
+        QStringList activeSources = paths;
+        int remainingConflicts = conflictingSources.size();
+
+        for (int i = 0; i < conflictingSources.size(); ++i) {
+            const QString& srcFile = conflictingSources.at(i);
+            FileCollisionDialog dialog(srcFile, destDir, remainingConflicts--, m_panel);
+
+            if (dialog.exec() != QDialog::Accepted) {
+                return; // 用户取消
+            }
+
+            CollisionResolveAction action = dialog.selectedAction();
+            bool applyToAll = dialog.applyToAll();
+
+            if (action == CollisionResolveAction::Cancel) {
+                return;
+            }
+
+            if (applyToAll) {
+                if (action == CollisionResolveAction::AutoResolve) {
+                    ioCtx.autoRenameAll = true;
+                } else if (action == CollisionResolveAction::Replace) {
+                    ioCtx.overwriteAll = true;
+                } else if (action == CollisionResolveAction::Skip) {
+                    for (int j = i; j < conflictingSources.size(); ++j) {
+                        activeSources.removeOne(conflictingSources.at(j));
+                    }
+                }
+                break;
+            } else {
+                if (action == CollisionResolveAction::AutoResolve) {
+                    ioCtx.autoRenameFiles.insert(srcFile);
+                } else if (action == CollisionResolveAction::Replace) {
+                    ioCtx.overwriteFiles.insert(srcFile);
+                } else if (action == CollisionResolveAction::Skip) {
+                    activeSources.removeOne(srcFile);
+                }
+            }
+        }
+
+        if (activeSources.isEmpty()) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "已跳过所有同名文件", 1500, QColor("#378ADD"));
+            return;
+        }
+        ioCtx.sources = activeSources;
+    }
 
     QPointer<ContentPanel> weakPanel(m_panel);
     DiskIoService::instance().executeAsync(ioCtx, [weakPanel](bool success) {

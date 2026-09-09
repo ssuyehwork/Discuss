@@ -25,41 +25,60 @@ bool ShellHelper::moveToTrash(const QStringList& paths) {
     return DiskTrashService::moveToDiskTrash(paths);
 }
 
-bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString& destDir, bool isMove) {
+bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString& destDir, bool isMove,
+                                   bool overwriteAll, bool autoRenameAll,
+                                   const QSet<QString>& overwriteFiles, const QSet<QString>& autoRenameFiles) {
 #ifdef Q_OS_WIN
     if (sourcePaths.isEmpty() || destDir.isEmpty()) return false;
     
-    std::wstring from;
+    bool overallOk = true;
     for (const QString& p : sourcePaths) {
-        from += QDir::toNativeSeparators(p).toStdWString() + L'\0';
-    }
-    from += L'\0';
+        QFileInfo info(p);
+        QString destPath = QDir(destDir).filePath(info.fileName());
 
-    std::wstring to = QDir::toNativeSeparators(destDir).toStdWString() + L'\0' + L'\0';
+        bool shouldAutoRename = autoRenameAll || autoRenameFiles.contains(p);
+        bool shouldOverwrite = overwriteAll || overwriteFiles.contains(p);
 
-    SHFILEOPSTRUCTW fileOp = { 0 };
-    fileOp.wFunc = isMove ? FO_MOVE : FO_COPY;
-    fileOp.pFrom = from.c_str();
-    fileOp.pTo = to.c_str();
-    // 🚨 核心改动：移除 FOF_NOCONFIRMATION，遇到同名冲突由系统弹出确认或允许用户选择保留两者，绝不静默覆写！
-    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR;
-    bool ok = (SHFileOperationW(&fileOp) == 0 && !fileOp.fAnyOperationsAborted);
+        if (QFile::exists(destPath)) {
+            if (shouldAutoRename) {
+                QString baseName = info.completeBaseName();
+                QString suffix = info.suffix();
+                int counter = 1;
+                while (QFile::exists(destPath)) {
+                    QString newFileName = suffix.isEmpty() 
+                        ? QString("%1 (%2)").arg(baseName).arg(counter++)
+                        : QString("%1 (%2).%3").arg(baseName).arg(counter++).arg(suffix);
+                    destPath = QDir(destDir).filePath(newFileName);
+                }
+            } else if (shouldOverwrite) {
+                QFile::remove(destPath);
+            }
+        }
 
-    if (ok) {
-        for (const QString& p : sourcePaths) {
-            QFileInfo info(p);
-            QString newPath = QDir(destDir).filePath(info.fileName());
+        std::wstring from = QDir::toNativeSeparators(p).toStdWString() + L'\0' + L'\0';
+        std::wstring to = QDir::toNativeSeparators(destPath).toStdWString() + L'\0' + L'\0';
 
-            // 🚨 无论 Copy 还是 Move，自动触发整包元数据与缩略图原子漫游！
-            QuarkMetaJson::roamItemMetadata(p, newPath, isMove);
-            DiskMediaExtractor::roamThumbnailCache(p, newPath, isMove);
+        SHFILEOPSTRUCTW fileOp = { 0 };
+        fileOp.wFunc = isMove ? FO_MOVE : FO_COPY;
+        fileOp.pFrom = from.c_str();
+        fileOp.pTo = to.c_str();
+        fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR | FOF_NOCONFIRMATION | FOF_SILENT | FOF_MULTIDESTFILES;
+        
+        bool ok = (SHFileOperationW(&fileOp) == 0 && !fileOp.fAnyOperationsAborted);
+        if (ok) {
+            QuarkMetaJson::roamItemMetadata(p, destPath, isMove);
+            DiskMediaExtractor::roamThumbnailCache(p, destPath, isMove);
+        } else {
+            overallOk = false;
         }
     }
-    return ok;
+    return overallOk;
 #else
     Q_UNUSED(sourcePaths);
     Q_UNUSED(destDir);
     Q_UNUSED(isMove);
+    Q_UNUSED(overwrite);
+    Q_UNUSED(autoRename);
     return false;
 #endif
 }

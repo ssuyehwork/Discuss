@@ -225,6 +225,14 @@ QLineEdit#SearchEdit {
 QLineEdit#SearchEdit:focus {
     border-color: #378ADD;
 }
+QLineEdit#SearchEdit QToolButton {
+    border: none;
+    background: transparent;
+}
+QLineEdit#SearchEdit QToolButton:hover {
+    background-color: #3E3E42;
+    border-radius: 3px;
+}
 
 QLabel#StatusBarLeft {
     font-size: 11px;

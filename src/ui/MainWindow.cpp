@@ -247,15 +247,34 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
         btn->setFixedSize(28, 20);
         btn->setCheckable(true);
         btn->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE"), 26));
-        btn->setIconSize(QSize(26, 17));
+        btn->setIconSize(QSize(27, 24));
         btn->setObjectName("StatusBarControlBtn");
         btn->setProperty("tooltipText", tip);
-        btn->setToolTip(tip);
         if (m_hoverFilter) {
             btn->installEventFilter(m_hoverFilter);
         }
         return btn;
     };
+
+    auto createSquareStatusBtn = [this](const QString& iconKey, const QString& tip) -> QPushButton* {
+        QPushButton* btn = new QPushButton(m_statusBarWidget);
+        btn->setFocusPolicy(Qt::NoFocus);
+        btn->setAttribute(Qt::WA_Hover);
+        btn->setFixedSize(22, 22);
+        btn->setCheckable(true);
+        btn->setIcon(UiHelper::getIcon(iconKey, QColor("#EEEEEE"), 18));
+        btn->setIconSize(QSize(18, 18));
+        btn->setObjectName("StatusBarControlBtn");
+        btn->setProperty("tooltipText", tip);
+        if (m_hoverFilter) {
+            btn->installEventFilter(m_hoverFilter);
+        }
+        return btn;
+    };
+
+    m_btnToggleJustified = createSquareStatusBtn("resize2", "自适应(A)");
+    m_btnToggleGrid      = createSquareStatusBtn("gridgapm", "网格(G)");
+    m_btnToggleList      = createSquareStatusBtn("list_ul", "列表(L)");
 
     m_btnToggleFilter   = createStatusBtn("隐藏筛选器", "切换筛选器面板 (显示/隐藏)");
     m_btnToggleMeta     = createStatusBtn("隐藏元数据面板", "切换元数据面板 (显示/隐藏)");
@@ -272,11 +291,11 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
 
         QString currentLeft = AppConfig::instance().getValue("MainWindow/PresetLeftPanel", "favorite").toString();
 
-        QAction* actFav = menu.addAction(UiHelper::getIcon("bookmark", QColor("#EEEEEE")), "显示 收藏栏 + 内容面板 + 筛选器");
+        QAction* actFav = menu.addAction(UiHelper::getIcon("显示收藏栏+内容面板+筛选器", QColor("#EEEEEE")), "显示 收藏栏 + 内容面板 + 筛选器");
         actFav->setCheckable(true);
         actFav->setChecked(currentLeft == "favorite");
 
-        QAction* actNav = menu.addAction(UiHelper::getIcon("sidebar", QColor("#EEEEEE")), "显示 目录导航 + 内容面板 + 筛选器");
+        QAction* actNav = menu.addAction(UiHelper::getIcon("显示收藏栏+内容面板+筛选器", QColor("#EEEEEE")), "显示 目录导航 + 内容面板 + 筛选器");
         actNav->setCheckable(true);
         actNav->setChecked(currentLeft == "nav");
 
@@ -299,37 +318,53 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     });
 
     connect(m_btnToggleFilter, &QPushButton::clicked, this, [this]() {
-        if (m_panelLayoutManager) {
-            bool current = m_panelLayoutManager->isPanelVisible("filter");
-            m_panelLayoutManager->setPanelVisible("filter", !current);
-        }
+        if (!m_panelLayoutManager) return;
+        m_panelLayoutManager->setPanelVisible("nav", true);
+        m_panelLayoutManager->setPanelVisible("favorite", true);
+        m_panelLayoutManager->setPanelVisible("content", true);
+        m_panelLayoutManager->setPanelVisible("meta", true);
+        m_panelLayoutManager->setPanelVisible("filter", false);
+        updateStatusBarButtonHighlights();
     });
 
     connect(m_btnToggleMeta, &QPushButton::clicked, this, [this]() {
-        if (m_panelLayoutManager) {
-            bool current = m_panelLayoutManager->isPanelVisible("meta");
-            m_panelLayoutManager->setPanelVisible("meta", !current);
-        }
+        if (!m_panelLayoutManager) return;
+        m_panelLayoutManager->setPanelVisible("nav", true);
+        m_panelLayoutManager->setPanelVisible("favorite", true);
+        m_panelLayoutManager->setPanelVisible("content", true);
+        m_panelLayoutManager->setPanelVisible("meta", false);
+        m_panelLayoutManager->setPanelVisible("filter", true);
+        updateStatusBarButtonHighlights();
     });
 
     connect(m_btnContentPanel, &QPushButton::clicked, this, [this]() {
-        if (m_panelLayoutManager) {
-            m_panelLayoutManager->toggleImmersiveMode();
-        }
+        if (!m_panelLayoutManager) return;
+        m_panelLayoutManager->setPanelVisible("nav", false);
+        m_panelLayoutManager->setPanelVisible("favorite", false);
+        m_panelLayoutManager->setPanelVisible("content", true);
+        m_panelLayoutManager->setPanelVisible("meta", false);
+        m_panelLayoutManager->setPanelVisible("filter", false);
+        updateStatusBarButtonHighlights();
     });
 
     connect(m_btnToggleFavorite, &QPushButton::clicked, this, [this]() {
-        if (m_panelLayoutManager) {
-            bool current = m_panelLayoutManager->isPanelVisible("favorite");
-            m_panelLayoutManager->setPanelVisible("favorite", !current);
-        }
+        if (!m_panelLayoutManager) return;
+        m_panelLayoutManager->setPanelVisible("nav", true);
+        m_panelLayoutManager->setPanelVisible("favorite", false);
+        m_panelLayoutManager->setPanelVisible("content", true);
+        m_panelLayoutManager->setPanelVisible("meta", true);
+        m_panelLayoutManager->setPanelVisible("filter", true);
+        updateStatusBarButtonHighlights();
     });
 
     connect(m_btnToggleNav, &QPushButton::clicked, this, [this]() {
-        if (m_panelLayoutManager) {
-            bool current = m_panelLayoutManager->isPanelVisible("nav");
-            m_panelLayoutManager->setPanelVisible("nav", !current);
-        }
+        if (!m_panelLayoutManager) return;
+        m_panelLayoutManager->setPanelVisible("nav", false);
+        m_panelLayoutManager->setPanelVisible("favorite", true);
+        m_panelLayoutManager->setPanelVisible("content", true);
+        m_panelLayoutManager->setPanelVisible("meta", true);
+        m_panelLayoutManager->setPanelVisible("filter", true);
+        updateStatusBarButtonHighlights();
     });
 
     connect(m_btnPresetLayout, &QPushButton::clicked, this, [this]() {
@@ -337,20 +372,62 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
         applyPresetLayout(presetLeft);
     });
 
-    connect(m_btnResetLayout, &QPushButton::clicked, this, [this]() {
-        if (m_panelLayoutManager) {
-            m_panelLayoutManager->resetSplitterLayout();
+    connect(m_btnToggleJustified, &QPushButton::clicked, this, [this]() {
+        if (m_contentPanel) {
+            m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode);
+            updateStatusBarButtonHighlights();
         }
     });
 
+    connect(m_btnToggleGrid, &QPushButton::clicked, this, [this]() {
+        if (m_contentPanel) {
+            m_contentPanel->setViewMode(ContentPanel::GridView);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    connect(m_btnToggleList, &QPushButton::clicked, this, [this]() {
+        if (m_contentPanel) {
+            m_contentPanel->setViewMode(ContentPanel::ListView);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    if (m_contentPanel) {
+        connect(m_contentPanel, &ContentPanel::viewModeChanged, this, [this](ContentPanel::ViewMode) {
+            updateStatusBarButtonHighlights();
+        });
+    }
+
+    connect(m_btnResetLayout, &QPushButton::clicked, this, [this]() {
+        if (!m_panelLayoutManager) return;
+        m_panelLayoutManager->setPanelVisible("nav", true);
+        m_panelLayoutManager->setPanelVisible("favorite", true);
+        m_panelLayoutManager->setPanelVisible("content", true);
+        m_panelLayoutManager->setPanelVisible("meta", true);
+        m_panelLayoutManager->setPanelVisible("filter", true);
+        m_panelLayoutManager->resetSplitterLayout();
+        updateStatusBarButtonHighlights();
+    });
+
+    QFrame* sepLine = new QFrame(m_statusBarWidget);
+    sepLine->setFrameShape(QFrame::VLine);
+    sepLine->setFixedWidth(1);
+    sepLine->setFixedHeight(14);
+    sepLine->setStyleSheet("background-color: #444444; border: none;");
+
     statusL->setSpacing(4);
-    statusL->addWidget(m_btnToggleFilter);
-    statusL->addWidget(m_btnToggleMeta);
-    statusL->addWidget(m_btnContentPanel);
-    statusL->addWidget(m_btnToggleFavorite);
-    statusL->addWidget(m_btnToggleNav);
-    statusL->addWidget(m_btnPresetLayout);
+    statusL->addWidget(m_btnToggleJustified);
+    statusL->addWidget(m_btnToggleGrid);
+    statusL->addWidget(m_btnToggleList);
+    statusL->addWidget(sepLine);
     statusL->addWidget(m_btnResetLayout);
+    statusL->addWidget(m_btnPresetLayout);
+    statusL->addWidget(m_btnToggleNav);
+    statusL->addWidget(m_btnToggleFavorite);
+    statusL->addWidget(m_btnContentPanel);
+    statusL->addWidget(m_btnToggleMeta);
+    statusL->addWidget(m_btnToggleFilter);
 }
 
 void MainWindow::applyPresetLayout(const QString& leftPanel) {
@@ -384,24 +461,39 @@ void MainWindow::updateStatusBarButtonHighlights() {
     QSignalBlocker b5(m_btnToggleNav);
     QSignalBlocker b6(m_btnPresetLayout);
     QSignalBlocker b7(m_btnResetLayout);
+    QSignalBlocker b8(m_btnToggleJustified);
+    QSignalBlocker b9(m_btnToggleGrid);
+    QSignalBlocker b10(m_btnToggleList);
 
-    if (m_btnToggleFilter) m_btnToggleFilter->setChecked(filterVis);
-    if (m_btnToggleMeta) m_btnToggleMeta->setChecked(metaVis);
-    if (m_btnToggleFavorite) m_btnToggleFavorite->setChecked(favVis);
-    if (m_btnToggleNav) m_btnToggleNav->setChecked(navVis);
+    if (m_contentPanel) {
+        ContentPanel::ViewMode mode = m_contentPanel->currentViewMode();
+        if (m_btnToggleJustified) m_btnToggleJustified->setChecked(mode == ContentPanel::JustifiedViewMode);
+        if (m_btnToggleGrid)      m_btnToggleGrid->setChecked(mode == ContentPanel::GridView);
+        if (m_btnToggleList)      m_btnToggleList->setChecked(mode == ContentPanel::ListView);
+    }
 
-    if (isImm) {
+    if (m_btnToggleFilter)   m_btnToggleFilter->setChecked(false);
+    if (m_btnToggleMeta)     m_btnToggleMeta->setChecked(false);
+    if (m_btnContentPanel)   m_btnContentPanel->setChecked(false);
+    if (m_btnToggleFavorite) m_btnToggleFavorite->setChecked(false);
+    if (m_btnToggleNav)      m_btnToggleNav->setChecked(false);
+    if (m_btnPresetLayout)   m_btnPresetLayout->setChecked(false);
+    if (m_btnResetLayout)    m_btnResetLayout->setChecked(false);
+
+    if (isImm || (!navVis && !favVis && !metaVis && !filterVis)) {
         if (m_btnContentPanel) m_btnContentPanel->setChecked(true);
-        if (m_btnResetLayout) m_btnResetLayout->setChecked(false);
-        if (m_btnPresetLayout) m_btnPresetLayout->setChecked(false);
-    } else {
-        if (m_btnContentPanel) m_btnContentPanel->setChecked(false);
-
-        bool allDefault = navVis && favVis && metaVis && filterVis;
-        if (m_btnResetLayout) m_btnResetLayout->setChecked(allDefault);
-
-        bool isPreset3 = (favVis || navVis) && !metaVis && filterVis && !(favVis && navVis);
-        if (m_btnPresetLayout) m_btnPresetLayout->setChecked(isPreset3);
+    } else if (navVis && favVis && metaVis && filterVis) {
+        if (m_btnResetLayout) m_btnResetLayout->setChecked(true);
+    } else if (navVis && favVis && metaVis && !filterVis) {
+        if (m_btnToggleFilter) m_btnToggleFilter->setChecked(true);
+    } else if (navVis && favVis && !metaVis && filterVis) {
+        if (m_btnToggleMeta) m_btnToggleMeta->setChecked(true);
+    } else if (navVis && !favVis && metaVis && filterVis) {
+        if (m_btnToggleFavorite) m_btnToggleFavorite->setChecked(true);
+    } else if (!navVis && favVis && metaVis && filterVis) {
+        if (m_btnToggleNav) m_btnToggleNav->setChecked(true);
+    } else if (((favVis && !navVis) || (navVis && !favVis)) && !metaVis && filterVis) {
+        if (m_btnPresetLayout) m_btnPresetLayout->setChecked(true);
     }
 }
 
@@ -435,6 +527,11 @@ void MainWindow::showEvent(QShowEvent* event) {
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_W && (event->modifiers() & Qt::ControlModifier)) {
+        close();
+        event->accept();
+        return;
+    }
     setAttribute(Qt::WA_Hover);
     QMainWindow::keyPressEvent(event);
 }

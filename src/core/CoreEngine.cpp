@@ -1,4 +1,5 @@
 #include "CoreEngine.h"
+#include "LastOperationManager.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/FavoriteDao.h"
 #include "TagLexiconService.h"
@@ -152,6 +153,7 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
 }
 
 void CoreEngine::handleSetRating(const QStringList& paths, int rating) {
+    LastOperationManager::instance().recordSetRating(rating);
     for (const QString& path : paths) {
         MetadataManager::instance().setRating(path.toStdWString(), rating);
         
@@ -165,6 +167,7 @@ void CoreEngine::handleSetRating(const QStringList& paths, int rating) {
 }
 
 void CoreEngine::handleSetColor(const QStringList& paths, const QString& color) {
+    LastOperationManager::instance().recordSetColor(color);
     for (const QString& path : paths) {
         MetadataManager::instance().setColor(path.toStdWString(), color.toStdWString());
         
@@ -178,6 +181,7 @@ void CoreEngine::handleSetColor(const QStringList& paths, const QString& color) 
 }
 
 void CoreEngine::handleSetTags(const QStringList& paths, const QStringList& tags) {
+    LastOperationManager::instance().recordPasteTags(tags);
     // 🚨 铁律第一步：确保这一批标签全部已在 global.db 主词典中登记
     for (const QString& t : tags) {
         QString cleanTag = t.trimmed();

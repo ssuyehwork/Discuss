@@ -68,9 +68,9 @@ void TagSelectorOverlay::initUi() {
 
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setPlaceholderText("搜索或新建标签...");
-    m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->setFixedHeight(26);
     m_searchEdit->setObjectName("TagSelectorSearchEdit");
+    UiHelper::setupLineEditContextMenu(m_searchEdit);
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this]() {
         filterTags();
     });

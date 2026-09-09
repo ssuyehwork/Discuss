@@ -3,6 +3,8 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QApplication>
+#include <QShortcut>
+#include <QKeySequence>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <dwmapi.h>
@@ -122,6 +124,10 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     m_contentArea = new QWidget();
     m_contentArea->setObjectName("DialogContentArea");
     m_mainLayout->addWidget(m_contentArea, 1);
+
+    QShortcut* scClose = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), this);
+    scClose->setContext(Qt::WindowShortcut);
+    connect(scClose, &QShortcut::activated, this, &QDialog::reject);
 }
 
 void FramelessDialog::setVisibleButtons(int flags) {
@@ -138,23 +144,12 @@ void FramelessDialog::showEvent(QShowEvent* event) {
 void FramelessDialog::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         QWidget* child = childAt(event->pos());
-        if (child) {
-            bool inTitleBar = false;
-            QWidget* p = child;
-            while (p && p != m_container) {
-                if (p->objectName() == "TitleBar") {
-                    inTitleBar = true;
-                    break;
-                }
-                p = p->parentWidget();
-            }
-            
-            if (inTitleBar && !qobject_cast<QPushButton*>(child)) {
-                m_isDragging = true;
-                m_dragPos = event->globalPosition().toPoint() - frameGeometry().topLeft();
-                event->accept();
-                return;
-            }
+        // 允许在标题栏、空白区域、背景、QLabel 等非可点击控件区域拖拽移动窗口
+        if (!child || qobject_cast<QLabel*>(child) || child == m_container || child == m_contentArea || child->objectName() == "TitleBar") {
+            m_isDragging = true;
+            m_dragPos = event->globalPosition().toPoint() - frameGeometry().topLeft();
+            event->accept();
+            return;
         }
     }
     QDialog::mousePressEvent(event);
@@ -175,13 +170,12 @@ void FramelessDialog::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void FramelessDialog::keyPressEvent(QKeyEvent* event) {
+    if ((event->key() == Qt::Key_W && (event->modifiers() & Qt::ControlModifier))) {
+        reject();
+        event->accept();
+        return;
+    }
     if (event->key() == Qt::Key_Escape) {
-        QLineEdit* edit = findChild<QLineEdit*>();
-        if (edit && edit->isVisible() && !edit->text().isEmpty()) {
-            edit->clear();
-            event->accept();
-            return;
-        }
         reject();
     } else {
         QDialog::keyPressEvent(event);

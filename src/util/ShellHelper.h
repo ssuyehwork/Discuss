@@ -1,6 +1,7 @@
 #pragma once
 #include <QString>
 #include <QStringList>
+#include <QSet>
 
 namespace QuarkMeta {
 
@@ -18,7 +19,9 @@ public:
     /**
      * @brief 执行复制或移动
      */
-    static bool copyOrMoveItems(const QStringList& sourcePaths, const QString& destDir, bool isMove);
+    static bool copyOrMoveItems(const QStringList& sourcePaths, const QString& destDir, bool isMove,
+                                bool overwriteAll = false, bool autoRenameAll = false,
+                                const QSet<QString>& overwriteFiles = {}, const QSet<QString>& autoRenameFiles = {});
 
     /**
      * @brief 显示文件属性对话框

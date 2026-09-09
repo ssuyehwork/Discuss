@@ -50,9 +50,9 @@ std::vector<BYTE> EncryptionManager::generateRandom(size_t size) {
  * @brief 修复：实现基于 64KB 分块的加密逻辑，支持大文件且内存友好
  */
 bool EncryptionManager::encryptFile(const std::wstring& srcPath, const std::wstring& destPath, const std::string& password) {
-    std::ifstream is(QString::fromStdWString(srcPath).toStdString(), std::ios::binary);
+    std::ifstream is(srcPath, std::ios::binary);
     if (!is) return false;
-    std::ofstream os(QString::fromStdWString(destPath).toStdString(), std::ios::binary);
+    std::ofstream os(destPath, std::ios::binary);
     if (!is || !os) return false;
 
     std::vector<BYTE> salt = generateRandom(16);
@@ -87,6 +87,65 @@ bool EncryptionManager::encryptFile(const std::wstring& srcPath, const std::wstr
     BCryptDestroyKey(hKey);
     is.close();
     os.close();
+    return true;
+}
+
+/**
+ * @brief 实现分块解密还原至指定物理路径
+ */
+bool EncryptionManager::decryptFile(const std::wstring& amencPath, const std::wstring& destPath, const std::string& password) {
+    std::ifstream is(amencPath, std::ios::binary);
+    if (!is) return false;
+
+    // 读取 Salt 和 IV
+    std::vector<BYTE> salt(16);
+    std::vector<BYTE> iv(16);
+    is.read((char*)salt.data(), 16);
+    if (is.gcount() < 16) return false;
+    is.read((char*)iv.data(), 16);
+    if (is.gcount() < 16) return false;
+
+    std::vector<BYTE> key;
+    if (!deriveKey(password, salt, key)) return false;
+
+    std::ofstream os(destPath, std::ios::binary);
+    if (!os) return false;
+
+    BCRYPT_KEY_HANDLE hKey = NULL;
+    if (BCryptGenerateSymmetricKey(m_aesAlg, &hKey, NULL, 0, key.data(), (ULONG)key.size(), 0) != 0) {
+        return false;
+    }
+
+    const size_t CHUNK_SIZE = 64 * 1024;
+    std::vector<BYTE> buffer(CHUNK_SIZE + 16);
+    std::vector<BYTE> plainBuffer(CHUNK_SIZE + 16);
+    bool decryptSuccess = true;
+
+    while (is.read((char*)buffer.data(), CHUNK_SIZE) || is.gcount() > 0) {
+        DWORD readBytes = (DWORD)is.gcount();
+        DWORD plainLen = 0;
+        bool isLast = is.eof();
+
+        NTSTATUS status = BCryptDecrypt(hKey, buffer.data(), readBytes, NULL, iv.data(), (ULONG)iv.size(),
+                                        plainBuffer.data(), (ULONG)plainBuffer.size(), &plainLen,
+                                        isLast ? BCRYPT_BLOCK_PADDING : 0);
+        if (status != 0) {
+            decryptSuccess = false;
+            break;
+        }
+
+        os.write((char*)plainBuffer.data(), plainLen);
+    }
+
+    BCryptDestroyKey(hKey);
+    is.close();
+    os.close();
+
+    if (!decryptSuccess) {
+        std::filesystem::remove(destPath);
+        return false;
+    }
+
     return true;
 }
 
