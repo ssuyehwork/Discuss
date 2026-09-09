@@ -141,15 +141,35 @@ void FramelessDialog::showEvent(QShowEvent* event) {
     QDialog::showEvent(event);
 }
 
+namespace {
+bool isInteractiveWidget(QWidget* widget) {
+    while (widget) {
+        if (qobject_cast<QAbstractButton*>(widget) ||
+            qobject_cast<QLineEdit*>(widget) ||
+            qobject_cast<QCheckBox*>(widget)) {
+            return true;
+        }
+        widget = widget->parentWidget();
+    }
+    return false;
+}
+} // namespace
+
 void FramelessDialog::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         QWidget* child = childAt(event->pos());
-        // 允许在标题栏、空白区域、背景、QLabel 等非可点击控件区域拖拽移动窗口
-        if (!child || qobject_cast<QLabel*>(child) || child == m_container || child == m_contentArea || child->objectName() == "TitleBar") {
+        if (!child || !isInteractiveWidget(child)) {
+#ifdef Q_OS_WIN
+            ReleaseCapture();
+            ::SendMessageW(reinterpret_cast<HWND>(winId()), WM_NCLBUTTONDOWN, HTCAPTION, 0);
+            event->accept();
+            return;
+#else
             m_isDragging = true;
             m_dragPos = event->globalPosition().toPoint() - frameGeometry().topLeft();
             event->accept();
             return;
+#endif
         }
     }
     QDialog::mousePressEvent(event);

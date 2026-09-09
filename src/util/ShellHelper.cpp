@@ -77,8 +77,10 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
     Q_UNUSED(sourcePaths);
     Q_UNUSED(destDir);
     Q_UNUSED(isMove);
-    Q_UNUSED(overwrite);
-    Q_UNUSED(autoRename);
+    Q_UNUSED(overwriteAll);
+    Q_UNUSED(autoRenameAll);
+    Q_UNUSED(overwriteFiles);
+    Q_UNUSED(autoRenameFiles);
     return false;
 #endif
 }
