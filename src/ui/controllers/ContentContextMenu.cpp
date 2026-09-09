@@ -1,6 +1,7 @@
 #include "ContentContextMenu.h"
 #include "../ContentPanel.h"
 #include "ContentSortController.h"
+#include "ContentKeyHandler.h"
 #include "../UiHelper.h"
 #include "../StyleLibrary.h"
 #include "../ToolTipOverlay.h"
@@ -246,6 +247,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     QStringList selectedPaths = m_panel->getSelectedPaths();
                     if (selectedPaths.isEmpty()) return;
 
+                    LastOperationManager::instance().recordMoveToFolder(targetDir);
+
                     DiskIoContext ioCtx;
                     ioCtx.sources = selectedPaths;
                     ioCtx.destination = targetDir;
@@ -467,9 +470,13 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未记录任何可重复的操作", 1500, QColor("#e81123"));
                 break;
             }
+            LastOperationType type = LastOperationManager::instance().type();
+            if (type == LastOperationType::MoveToFolder) {
+                ContentKeyHandler::executeMoveToFolder(m_panel, LastOperationManager::instance().destination());
+                break;
+            }
             auto indexes = view->selectionModel()->selectedIndexes();
             int count = 0;
-            LastOperationType type = LastOperationManager::instance().type();
             for (const auto& idx : indexes) {
                 if (idx.column() == 0) {
                     if (type == LastOperationType::SetRating) {

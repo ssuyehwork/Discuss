@@ -22,6 +22,11 @@ public:
      */
     bool handleEvent(QObject* obj, QEvent* event);
 
+    /**
+     * @brief 执行快捷移入/重复移入到目标文件夹
+     */
+    static bool executeMoveToFolder(ContentPanel* panel, const QString& targetDir);
+
 private:
     bool handleWheel(QObject* obj, QEvent* event);
     bool handleMousePress(QObject* obj, QEvent* event);

@@ -6,6 +6,7 @@
 #include "../../core/AppConfig.h"
 #include "../../core/ClipboardService.h"
 #include "../../core/NavigationHistoryService.h"
+#include "../../core/LastOperationManager.h"
 #include "../../util/DiskIoService.h"
 
 #include <QDir>
@@ -94,13 +95,16 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
         }
     }
 
+    bool isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
+
     if (!destDir.isEmpty() && destDir != "computer://") {
         NavigationHistoryService::recordRecentVisitedFolder(QDir::toNativeSeparators(destDir).toStdWString());
         AppConfig::instance().setValue("RecentVisited/LastDragDropDestination", destDir);
         AppConfig::instance().sync();
+        if (isMove) {
+            LastOperationManager::instance().recordMoveToFolder(destDir);
+        }
     }
-
-    bool isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
 
     // 检测目标文件夹中的同名冲突文件
     QStringList conflictingSources;

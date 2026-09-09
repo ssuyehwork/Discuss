@@ -35,6 +35,99 @@ ContentKeyHandler::ContentKeyHandler(ContentPanel* panel, QObject* parent)
     : QObject(parent), m_panel(panel) {
 }
 
+bool ContentKeyHandler::executeMoveToFolder(ContentPanel* panel, const QString& targetDir) {
+    if (!panel) return false;
+    if (targetDir.isEmpty() || !QDir(targetDir).exists()) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "目标文件夹不存在或尚未发生过移入操作", 1500, QColor("#e81123"));
+        return false;
+    }
+
+    QStringList selectedPaths = panel->getSelectedPaths();
+    if (selectedPaths.isEmpty()) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "未选择任何项目", 1200, QColor("#e81123"));
+        return false;
+    }
+
+    // 检测目标文件夹中的同名冲突文件
+    QStringList conflictingSources;
+    for (const QString& src : selectedPaths) {
+        QString fileName = QFileInfo(src).fileName();
+        QString destPath = QDir(targetDir).filePath(fileName);
+        if (QFile::exists(destPath)) {
+            conflictingSources.append(src);
+        }
+    }
+
+    DiskIoContext ioCtx;
+    ioCtx.sources = selectedPaths;
+    ioCtx.destination = targetDir;
+    ioCtx.isMove = true;
+
+    if (!conflictingSources.isEmpty()) {
+        QStringList activeSources = selectedPaths;
+        int remainingConflicts = conflictingSources.size();
+
+        for (int i = 0; i < conflictingSources.size(); ++i) {
+            const QString& srcFile = conflictingSources.at(i);
+            FileCollisionDialog dialog(srcFile, targetDir, remainingConflicts--, panel);
+
+            if (dialog.exec() != QDialog::Accepted) {
+                return true;
+            }
+
+            CollisionResolveAction action = dialog.selectedAction();
+            bool applyToAll = dialog.applyToAll();
+
+            if (action == CollisionResolveAction::Cancel) {
+                return true;
+            }
+
+            if (applyToAll) {
+                if (action == CollisionResolveAction::AutoResolve) {
+                    ioCtx.autoRenameAll = true;
+                } else if (action == CollisionResolveAction::Replace) {
+                    ioCtx.overwriteAll = true;
+                } else if (action == CollisionResolveAction::Skip) {
+                    for (int j = i; j < conflictingSources.size(); ++j) {
+                        activeSources.removeOne(conflictingSources.at(j));
+                    }
+                }
+                break;
+            } else {
+                if (action == CollisionResolveAction::AutoResolve) {
+                    ioCtx.autoRenameFiles.insert(srcFile);
+                } else if (action == CollisionResolveAction::Replace) {
+                    ioCtx.overwriteFiles.insert(srcFile);
+                } else if (action == CollisionResolveAction::Skip) {
+                    activeSources.removeOne(srcFile);
+                }
+            }
+        }
+
+        if (activeSources.isEmpty()) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "已跳过所有同名文件", 1500, QColor("#378ADD"));
+            return true;
+        }
+        ioCtx.sources = activeSources;
+    }
+
+    QPointer<ContentPanel> weakPanel(panel);
+    DiskIoService::instance().executeAsync(ioCtx, [weakPanel, targetDir](bool success) {
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, targetDir, success]() {
+            if (weakPanel) {
+                if (success) {
+                    weakPanel->refreshAll();
+                    QString folderName = QFileInfo(targetDir).fileName();
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已移入到: %1").arg(folderName), 1500, QColor("#2ecc71"));
+                } else {
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "移动失败：物理写入未能完成", 2000, QColor("#e81123"));
+                }
+            }
+        });
+    });
+    return true;
+}
+
 bool ContentKeyHandler::handleEvent(QObject* obj, QEvent* event) {
     if (!m_panel) return false;
 
@@ -263,108 +356,21 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             }
             return true;
         }
-        if (keyEvent->key() == Qt::Key_R) {
-            QString lastDragDest = AppConfig::instance().getValue("RecentVisited/LastDragDropDestination").toString();
-            if (lastDragDest.isEmpty() || !QDir(lastDragDest).exists()) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未发生过拖拽移入操作或目标文件夹不存在", 1500, QColor("#e81123"));
-                return true;
-            }
-
-            QStringList selectedPaths = m_panel->getSelectedPaths();
-            if (selectedPaths.isEmpty()) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "未选择任何项目", 1200, QColor("#e81123"));
-                return true;
-            }
-
-            // 检测目标文件夹中的同名冲突文件
-            QStringList conflictingSources;
-            for (const QString& src : selectedPaths) {
-                QString fileName = QFileInfo(src).fileName();
-                QString destPath = QDir(lastDragDest).filePath(fileName);
-                if (QFile::exists(destPath)) {
-                    conflictingSources.append(src);
-                }
-            }
-
-            DiskIoContext ioCtx;
-            ioCtx.sources = selectedPaths;
-            ioCtx.destination = lastDragDest;
-            ioCtx.isMove = true;
-
-            if (!conflictingSources.isEmpty()) {
-                QStringList activeSources = selectedPaths;
-                int remainingConflicts = conflictingSources.size();
-
-                for (int i = 0; i < conflictingSources.size(); ++i) {
-                    const QString& srcFile = conflictingSources.at(i);
-                    FileCollisionDialog dialog(srcFile, lastDragDest, remainingConflicts--, m_panel);
-
-                    if (dialog.exec() != QDialog::Accepted) {
-                        return true;
-                    }
-
-                    CollisionResolveAction action = dialog.selectedAction();
-                    bool applyToAll = dialog.applyToAll();
-
-                    if (action == CollisionResolveAction::Cancel) {
-                        return true;
-                    }
-
-                    if (applyToAll) {
-                        if (action == CollisionResolveAction::AutoResolve) {
-                            ioCtx.autoRenameAll = true;
-                        } else if (action == CollisionResolveAction::Replace) {
-                            ioCtx.overwriteAll = true;
-                        } else if (action == CollisionResolveAction::Skip) {
-                            for (int j = i; j < conflictingSources.size(); ++j) {
-                                activeSources.removeOne(conflictingSources.at(j));
-                            }
-                        }
-                        break;
-                    } else {
-                        if (action == CollisionResolveAction::AutoResolve) {
-                            ioCtx.autoRenameFiles.insert(srcFile);
-                        } else if (action == CollisionResolveAction::Replace) {
-                            ioCtx.overwriteFiles.insert(srcFile);
-                        } else if (action == CollisionResolveAction::Skip) {
-                            activeSources.removeOne(srcFile);
-                        }
-                    }
-                }
-
-                if (activeSources.isEmpty()) {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "已跳过所有同名文件", 1500, QColor("#378ADD"));
-                    return true;
-                }
-                ioCtx.sources = activeSources;
-            }
-
-            QPointer<ContentPanel> weakPanel(m_panel);
-            DiskIoService::instance().executeAsync(ioCtx, [weakPanel, lastDragDest](bool success) {
-                QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, lastDragDest, success]() {
-                    if (weakPanel) {
-                        if (success) {
-                            weakPanel->refreshAll();
-                            QString folderName = QFileInfo(lastDragDest).fileName();
-                            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已移入到: %1").arg(folderName), 1500, QColor("#2ecc71"));
-                        } else {
-                            ToolTipOverlay::instance()->showText(QCursor::pos(), "移动失败：物理写入未能完成", 2000, QColor("#e81123"));
-                        }
-                    }
-                });
-            });
-            return true;
-        }
     }
 
-    // 5. F4: 重复上一次操作 (星级 / 标记颜色 / 粘贴标签)
+    // 5. F4: 重复上一次操作 (星级 / 标记颜色 / 粘贴标签 / 快捷移入)
     if (keyEvent->key() == Qt::Key_F4) {
         if (!LastOperationManager::instance().hasOperation()) {
             return true;
         }
 
-        auto indexes = view->selectionModel()->selectedIndexes();
         LastOperationType type = LastOperationManager::instance().type();
+        if (type == LastOperationType::MoveToFolder) {
+            executeMoveToFolder(m_panel, LastOperationManager::instance().destination());
+            return true;
+        }
+
+        auto indexes = view->selectionModel()->selectedIndexes();
         for (const auto& targetIdx : indexes) {
             if (targetIdx.column() == 0) {
                 if (type == LastOperationType::SetRating) {

@@ -12,6 +12,7 @@
 
 namespace QuarkMeta {
 
+
 TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent)
     : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), 
       m_selectedTags(initialSelected) 
@@ -46,6 +47,7 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
 }
 
 TagSelectorOverlay::~TagSelectorOverlay() {
+    UiHelper::cleanupWidgetCursorState(this);
     if (qApp) {
         qApp->removeEventFilter(this);
     }
@@ -54,9 +56,20 @@ TagSelectorOverlay::~TagSelectorOverlay() {
 void TagSelectorOverlay::closeOverlay() {
     if (m_isClosing) return;
     m_isClosing = true;
+    UiHelper::cleanupWidgetCursorState(this);
     emit overlayClosed();
     close();
     deleteLater();
+}
+
+void TagSelectorOverlay::hideEvent(QHideEvent* event) {
+    UiHelper::cleanupWidgetCursorState(this);
+    QFrame::hideEvent(event);
+}
+
+void TagSelectorOverlay::closeEvent(QCloseEvent* event) {
+    UiHelper::cleanupWidgetCursorState(this);
+    QFrame::closeEvent(event);
 }
 
 void TagSelectorOverlay::initUi() {

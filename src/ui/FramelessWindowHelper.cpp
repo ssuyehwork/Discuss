@@ -148,14 +148,14 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
             bool top = localPos.y() >= 0 && localPos.y() < m;
             bool bottom = localPos.y() >= height - m && localPos.y() < height;
 
-            if (top && left)     { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTTOPLEFT";     *result = HTTOPLEFT;     return true; }
-            if (top && right)    { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTTOPRIGHT";    *result = HTTOPRIGHT;    return true; }
-            if (bottom && left)  { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTBOTTOMLEFT";  *result = HTBOTTOMLEFT;  return true; }
-            if (bottom && right) { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTBOTTOMRIGHT"; *result = HTBOTTOMRIGHT; return true; }
-            if (left)            { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTLEFT";        *result = HTLEFT;        return true; }
-            if (right)           { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTRIGHT";       *result = HTRIGHT;       return true; }
-            if (top)             { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTTOP";         *result = HTTOP;         return true; }
-            if (bottom)          { qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTBOTTOM";      *result = HTBOTTOM;      return true; }
+            if (top && left)     { *result = HTTOPLEFT;     return true; }
+            if (top && right)    { *result = HTTOPRIGHT;    return true; }
+            if (bottom && left)  { *result = HTBOTTOMLEFT;  return true; }
+            if (bottom && right) { *result = HTBOTTOMRIGHT; return true; }
+            if (left)            { *result = HTLEFT;        return true; }
+            if (right)           { *result = HTRIGHT;       return true; }
+            if (top)             { *result = HTTOP;         return true; }
+            if (bottom)          { *result = HTBOTTOM;      return true; }
         }
 
         // 标题栏原生拖拽与双击识别（排除交互控件）
@@ -164,14 +164,12 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
             if (titleRect.contains(localPos)) {
                 QWidget* childAtPt = m_window->childAt(localPos);
                 if (!isInteractiveWidget(childAtPt, m_titleBar, m_window)) {
-                    qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTCAPTION";
                     *result = HTCAPTION;
                     return true;
                 }
             }
         }
 
-        qDebug() << "[NCHITTEST]" << (m_window ? m_window->objectName() : "null") << hwnd << "titleBar=" << (m_titleBar != nullptr) << "result=HTCLIENT";
         *result = HTCLIENT;
         return true;
     }
@@ -196,7 +194,6 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
             default:
                 break;
         }
-        qDebug() << "[SETCURSOR]" << (m_window ? m_window->objectName() : "null") << hwnd << "hitTest=" << hitTest << "cursorId=" << (cursorId ? "resize" : "null(交给Qt)");
         if (cursorId) {
             SetCursor(LoadCursor(nullptr, cursorId));
             *result = TRUE;

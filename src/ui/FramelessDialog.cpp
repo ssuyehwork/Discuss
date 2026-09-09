@@ -15,6 +15,7 @@
 
 namespace QuarkMeta {
 
+
 FramelessDialog::FramelessDialog(const QString& title, QWidget* parent) 
     : QDialog(parent, Qt::FramelessWindowHint | Qt::Window) 
 {
@@ -139,8 +140,22 @@ void FramelessDialog::setVisibleButtons(int flags) {
     if (m_closeBtn) m_closeBtn->setVisible(flags & Close);
 }
 
+FramelessDialog::~FramelessDialog() {
+    UiHelper::cleanupWidgetCursorState(this);
+}
+
 void FramelessDialog::showEvent(QShowEvent* event) {
     QDialog::showEvent(event);
+}
+
+void FramelessDialog::hideEvent(QHideEvent* event) {
+    UiHelper::cleanupWidgetCursorState(this);
+    QDialog::hideEvent(event);
+}
+
+void FramelessDialog::closeEvent(QCloseEvent* event) {
+    UiHelper::cleanupWidgetCursorState(this);
+    QDialog::closeEvent(event);
 }
 
 namespace {

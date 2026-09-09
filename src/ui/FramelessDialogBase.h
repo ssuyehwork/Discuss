@@ -8,6 +8,8 @@
 #include <QPoint>
 #include <QColor>
 #include <QShowEvent>
+#include <QHideEvent>
+#include <QCloseEvent>
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QEvent>
@@ -19,13 +21,15 @@ class FramelessDialog : public QDialog {
 public:
     enum DialogButton { Pin = 1, Min = 2, Max = 4, Close = 8, All = 15 };
     explicit FramelessDialog(const QString& title, QWidget* parent = nullptr);
-    virtual ~FramelessDialog() = default;
+    ~FramelessDialog() override;
 
     QWidget* getContentArea() const { return m_contentArea; }
     void setVisibleButtons(int flags);
 
 protected:
     void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;

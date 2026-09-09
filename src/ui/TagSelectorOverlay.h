@@ -27,6 +27,8 @@ signals:
 protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
     void changeEvent(QEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
