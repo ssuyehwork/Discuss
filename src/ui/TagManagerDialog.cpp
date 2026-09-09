@@ -7,14 +7,25 @@
 #include <QApplication>
 #include <QMenu>
 #include <QAction>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace QuarkMeta {
 
 void TagManagerDialog::showDialog(QWidget* parent, const QString& currentPath, bool isMirrorSource) {
     QWidget* topParent = parent ? parent->window() : nullptr;
-    TagManagerDialog* dlg = new TagManagerDialog(currentPath, isMirrorSource, topParent);
-    dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->exec();
+    TagManagerDialog dlg(currentPath, isMirrorSource, topParent);
+    dlg.exec();
+
+    if (topParent) {
+#ifdef Q_OS_WIN
+        ::EnableWindow(reinterpret_cast<HWND>(topParent->winId()), TRUE);
+#endif
+        topParent->activateWindow();
+        QGuiApplication::restoreOverrideCursor();
+        QCursor::setPos(QCursor::pos());
+    }
 }
 
 TagManagerDialog::TagManagerDialog(const QString& currentPath, bool isMirrorSource, QWidget* parent)
