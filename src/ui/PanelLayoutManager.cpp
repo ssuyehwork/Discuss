@@ -9,6 +9,7 @@
 #include "../core/AppConfig.h"
 #include <QAction>
 #include <QCursor>
+#include <QDebug>
 #include <QList>
 #include <QStringList>
 
@@ -42,6 +43,23 @@ void PanelLayoutManager::initLayout() {
     m_mainSplitter->setStretchFactor(4, 0);
 
     bool isImmersive = AppConfig::instance().getValue("MainWindow/IsImmersiveMode", false).toBool();
+
+    // 【顺序修正】：先恢复分栏尺寸比例，再按配置做面板显隐——
+    // 避免"先显隐搅乱比例、restoreState 再纠正"这个中间态被画出来（黑块/单列内容区闪烁的根因）
+    QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
+    qDebug() << "[LAYOUT] step1 restoreState before visibility, isImmersive=" << isImmersive
+             << "hasSavedState=" << !state.isEmpty()
+             << "sizesBefore=" << m_mainSplitter->sizes();
+    if (!state.isEmpty() && !isImmersive) {
+        m_mainSplitter->restoreState(state);
+    } else if (!isImmersive) {
+        QList<int> sizes;
+        sizes << kBasePanelWidth << kBasePanelWidth << kContentBaseWidth << kBasePanelWidth << kBasePanelWidth;
+        m_mainSplitter->setSizes(sizes);
+    }
+    m_mainSplitter->setHandleWidth(kSplitterHandleWidth);
+    qDebug() << "[LAYOUT] step1 done, sizesAfter=" << m_mainSplitter->sizes();
+
     if (isImmersive) {
         if (m_navPanel) m_navPanel->setVisible(false);
         if (m_favoritePanel) m_favoritePanel->setVisible(false);
@@ -57,27 +75,21 @@ void PanelLayoutManager::initLayout() {
         bool metaVis = AppConfig::instance().getValue("MainWindow/MetaVisible", true).toBool();
         bool filterVis = AppConfig::instance().getValue("MainWindow/FilterVisible", true).toBool();
 
+        qDebug() << "[LAYOUT] step2 applying visibility nav=" << navVis << "fav=" << favVis
+                 << "meta=" << metaVis << "filter=" << filterVis;
+
         if (m_navPanel) m_navPanel->setVisible(navVis);
         if (m_favoritePanel) m_favoritePanel->setVisible(favVis);
         if (m_metaPanel) m_metaPanel->setVisible(metaVis);
         if (m_filterPanel) m_filterPanel->setVisible(filterVis);
+
+        qDebug() << "[LAYOUT] step2 done, sizesAfterVisibility=" << m_mainSplitter->sizes();
 
         emit panelVisibilityChanged("nav", navVis);
         emit panelVisibilityChanged("favorite", favVis);
         emit panelVisibilityChanged("meta", metaVis);
         emit panelVisibilityChanged("filter", filterVis);
     }
-
-    // 同步恢复分栏尺寸，杜绝异步 singleShot(0) 造成的二次排版抽搐
-    QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
-    if (!state.isEmpty() && !isImmersive) {
-        m_mainSplitter->restoreState(state);
-    } else if (!isImmersive) {
-        QList<int> sizes;
-        sizes << kBasePanelWidth << kBasePanelWidth << kContentBaseWidth << kBasePanelWidth << kBasePanelWidth;
-        m_mainSplitter->setSizes(sizes);
-    }
-    m_mainSplitter->setHandleWidth(kSplitterHandleWidth);
 
     // 🚀 初始化完成当场强制焊死最小宽度保护，防止 5 栏被挤压崩溃
     updateDynamicMinimumSize();
