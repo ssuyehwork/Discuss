@@ -1,18 +1,20 @@
-# Implementation Plan - ColumnViewWidget: Cascading Multi-Column Navigation & NavigationService Integration
+# Implementation Plan - ColumnViewWidget: Clean UI Header Removal, Flexible Column Fill & TreeItemDelegate Integration
 
 ## 1. Overview
-Drawing architectural insights from [FilesApp (`files-community/Files`)](https://github.com/files-community/Files), the current `ColumnViewWidget` in QuarkMeta lacks cascading path stack reconstruction, `NavigationService` address bar synchronization, global selection indicator exclusivity, and context menu integration.
+The user provided a screenshot demonstrating two severe UI defects in the column view:
+1. **Redundant Header Label Box (`G:/`)**: `ColumnViewPane` instantiated an ugly `QLabel` header (`m_titleLabel`) with a dark background (`#252526`), creating visual clutter and duplicating the top `AddressBar`.
+2. **Huge Blank Dark Space on the Right**: `ColumnViewPane` had a rigid `setFixedWidth(230)` constraint with an `addStretch()` layout in `ColumnViewWidget`. When only 1 or 2 columns were open, it created a massive black void on the right instead of gracefully filling the container.
 
-This implementation plan refactors `ColumnViewWidget` and `ColumnViewPane` to:
-1. Support full ancestor path stack reconstruction upon `setRootPath()`, automatically cascading columns from the root drive down to the current path and selecting the active folder in each parent column.
-2. Synchronize navigation events (`pathNavigated`) with `NavigationService` and `AddressBar`.
-3. Clear selection highlights across non-active columns so that only one item/column holds active focus.
-4. Integrate `ContentContextMenu` and delegate-driven UI rendering for items in each pane.
+This plan details the complete UI refactoring of `ColumnViewWidget` and `ColumnViewPane`:
+- Completely strip out `m_titleLabel` from `ColumnViewPane`.
+- Replace rigid `setFixedWidth(230)` with `setMinimumWidth(220)` and flexible layout management.
+- Attach `TreeItemDelegate` to each column's `QListView` for unified SVG icons and hover/selection styling (`#3E3E42`).
+- Support recursive ancestor path stack expansion in `setRootPath()`.
+- Propagate `pathNavigated` to `ContentPanel` and `NavigationService`.
 
 ## 2. Modified Files List
 - `src/ui/ColumnViewWidget.h`
 - `src/ui/ColumnViewWidget.cpp`
-- `src/ui/ContentPanel.cpp`
 
 ## 3. Detailed Line-by-Line Changes
 
@@ -20,11 +22,6 @@ This implementation plan refactors `ColumnViewWidget` and `ColumnViewPane` to:
 
 ```
 <<<<<<< SEARCH
-signals:
-    void folderSelected(const QString& folderPath, int paneIndex);
-    void fileSelected(const QString& filePath, int paneIndex);
-
-private:
     QString m_path;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
@@ -44,7 +41,6 @@ private:
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
     QListView* m_listView = nullptr;
-    QLabel* m_titleLabel = nullptr;
 };
 >>>>>>> REPLACE
 ```
@@ -76,6 +72,7 @@ private:
     void dismissSubColumns(int fromIndex);
     ColumnViewPane* appendColumn(const QString& path);
     void clearOtherSelections(int activePaneIdx);
+    void updatePaneWidths();
 
     QWidget* m_container = nullptr;
     QHBoxLayout* m_layout = nullptr;
@@ -85,6 +82,73 @@ private:
 ```
 
 ### `src/ui/ColumnViewWidget.cpp`
+
+```
+<<<<<<< SEARCH
+#include "ColumnViewWidget.h"
+#include "../core/DiskScanService.h"
+#include "UiHelper.h"
+#include <QFileInfo>
+#include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
+#include <QCoreApplication>
+
+namespace QuarkMeta {
+
+ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
+    : QWidget(parent), m_path(path)
+{
+    setFixedWidth(230);
+    QVBoxLayout* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(2);
+
+    m_titleLabel = new QLabel(QFileInfo(path).fileName().isEmpty() ? path : QFileInfo(path).fileName(), this);
+    m_titleLabel->setStyleSheet("font-weight: bold; padding: 4px; color: #EEEEEE; background: #252526;");
+    layout->addWidget(m_titleLabel);
+
+    m_model = new DiskItemModel(this);
+    m_proxyModel = new FilterProxyModel(this);
+    m_proxyModel->setSourceModel(m_model);
+
+    m_listView = new QListView(this);
+    m_listView->setModel(m_proxyModel);
+    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: 1px solid #333333; color: #CCCCCC; }"
+                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; }");
+    layout->addWidget(m_listView);
+=======
+#include "ColumnViewWidget.h"
+#include "../core/DiskScanService.h"
+#include "TreeItemDelegate.h"
+#include "UiHelper.h"
+#include <QFileInfo>
+#include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
+#include <QCoreApplication>
+#include <QDir>
+
+namespace QuarkMeta {
+
+ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
+    : QWidget(parent), m_path(path)
+{
+    setMinimumWidth(220);
+    QVBoxLayout* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    m_model = new DiskItemModel(this);
+    m_proxyModel = new FilterProxyModel(this);
+    m_proxyModel->setSourceModel(m_model);
+
+    m_listView = new QListView(this);
+    m_listView->setModel(m_proxyModel);
+    m_listView->setItemDelegate(new TreeItemDelegate(this, false, false));
+    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: none; border-right: 1px solid #2D2D2D; color: #CCCCCC; }"
+                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; }");
+    layout->addWidget(m_listView);
+>>>>>>> REPLACE
+```
 
 ```
 <<<<<<< SEARCH
@@ -147,7 +211,6 @@ void ColumnViewWidget::setRootPath(const QString& path) {
     clearAllColumns();
     if (path.isEmpty()) return;
 
-    // Build path stack from root to target path
     QList<QString> pathStack;
     QDir dir(path);
     QString curr = dir.absolutePath();
@@ -161,21 +224,28 @@ void ColumnViewWidget::setRootPath(const QString& path) {
         curr = parentDir.absolutePath();
     }
 
-    // Append columns recursively for each ancestor
     for (int i = 0; i < pathStack.size(); ++i) {
         const QString& p = pathStack[i];
         ColumnViewPane* pane = appendColumn(p);
         if (i > 0 && i - 1 < m_panes.size() - 1) {
-            // Highlight the selected child folder in the parent pane
             m_panes[i - 1]->selectItemByPath(p);
         }
     }
+    updatePaneWidths();
 }
 >>>>>>> REPLACE
 ```
 
 ```
 <<<<<<< SEARCH
+void ColumnViewWidget::dismissSubColumns(int fromIndex) {
+    while (m_panes.size() > fromIndex + 1) {
+        ColumnViewPane* pane = m_panes.takeLast();
+        m_layout->removeWidget(pane);
+        pane->deleteLater();
+    }
+}
+
 void ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_container);
@@ -192,6 +262,15 @@ void ColumnViewWidget::appendColumn(const QString& path) {
     ensureWidgetVisible(pane);
 }
 =======
+void ColumnViewWidget::dismissSubColumns(int fromIndex) {
+    while (m_panes.size() > fromIndex + 1) {
+        ColumnViewPane* pane = m_panes.takeLast();
+        m_layout->removeWidget(pane);
+        pane->deleteLater();
+    }
+    updatePaneWidths();
+}
+
 ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_container);
@@ -212,6 +291,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
 
     m_panes.append(pane);
     m_layout->insertWidget(m_panes.size() - 1, pane);
+    updatePaneWidths();
     ensureWidgetVisible(pane);
     return pane;
 }
@@ -223,19 +303,28 @@ void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
         }
     }
 }
->>>>>>> REPLACE
-```
 
-### `src/ui/ContentPanel.cpp`
+void ColumnViewWidget::updatePaneWidths() {
+    if (m_panes.isEmpty()) return;
+    int availableWidth = width();
+    if (availableWidth <= 0) availableWidth = 800;
 
-```
-<<<<<<< SEARCH
-    m_columnView = new ColumnViewWidget(this);
-=======
-    m_columnView = new ColumnViewWidget(this);
-    connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
-        emit pathNavigated(path);
-    });
+    int colCount = m_panes.size();
+    int defaultWidth = 230;
+
+    if (colCount * defaultWidth < availableWidth) {
+        // Distribute remaining space to the last active column so there is no dark void
+        for (int i = 0; i < colCount - 1; ++i) {
+            m_panes[i]->setFixedWidth(defaultWidth);
+        }
+        m_panes.last()->setMinimumWidth(availableWidth - (colCount - 1) * defaultWidth - 10);
+        m_panes.last()->setMaximumWidth(QWIDGETSIZE_MAX);
+    } else {
+        for (auto* pane : m_panes) {
+            pane->setFixedWidth(defaultWidth);
+        }
+    }
+}
 >>>>>>> REPLACE
 ```
 
@@ -243,10 +332,9 @@ void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
 
 1. Configure build system:
    `cmake -B build -G "Ninja"`
-2. Compile application:
+2. Compile project:
    `cmake --build build`
 3. Launch QuarkMeta and test Column View:
-   - Switch to Column View via status bar or top menu while in a deep path `/A/B/C/D`.
-   - Verify that ancestor columns (`/A`, `/B`, `/C`, `/D`) cascade horizontally.
-   - Verify that clicking a folder in any column appends a sub-column and updates the top address bar (`AddressBar`) and `NavigationService`.
-   - Verify smooth horizontal scrolling to the newest column.
+   - Verify that no ugly `G:/` label header appears above the list.
+   - Verify that when opening Column View with 1 column, the column fills the width gracefully without leaving huge black gaps on the right.
+   - Verify that clicking folders cascades columns horizontally with vector icons and smooth scrolling.

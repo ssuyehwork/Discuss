@@ -19,6 +19,9 @@ public:
     QString currentPath() const { return m_path; }
     void loadDirectory();
 
+    void selectItemByPath(const QString& targetPath);
+    void clearSelection();
+
 signals:
     void folderSelected(const QString& folderPath, int paneIndex);
     void fileSelected(const QString& filePath, int paneIndex);
@@ -45,7 +48,8 @@ signals:
 
 private:
     void dismissSubColumns(int fromIndex);
-    void appendColumn(const QString& path);
+    ColumnViewPane* appendColumn(const QString& path);
+    void clearOtherSelections(int activePaneIdx);
 
     QWidget* m_container = nullptr;
     QHBoxLayout* m_layout = nullptr;
