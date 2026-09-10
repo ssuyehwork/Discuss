@@ -26,8 +26,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
 
     m_listView = new QListView(this);
     m_listView->setModel(m_proxyModel);
-    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: 1px solid #333333; color: #CCCCCC; }"
-                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; }");
+    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: 1px solid #333333; color: #CCCCCC; outline: none; }"
+                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; outline: none; }");
     layout->addWidget(m_listView);
 
     connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
