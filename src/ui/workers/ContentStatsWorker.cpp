@@ -34,15 +34,16 @@ ScanStats ContentStatsWorker::calculateStats(const std::vector<ItemRecord>& reco
             if (!mDateStr.isEmpty()) stats.modifyDateCounts[mDateStr]++;
         }
 
+        if (!record.url.isEmpty()) stats.hasLinkCount++; else stats.noLinkCount++;
+        if (!record.note.isEmpty()) stats.hasNoteCount++; else stats.noNoteCount++;
+        if (!record.tags.isEmpty()) stats.hasTagCount++; else stats.noTagCount++;
+
         if (record.isDir) {
             stats.typeCounts["folder"]++;
             if (record.isEmpty) stats.emptyFolderCount++;
         } else {
             stats.typeCounts["file"]++;
             stats.typeCounts[record.suffix.toUpper()]++;
-            if (!record.url.isEmpty()) stats.hasLinkCount++; else stats.noLinkCount++;
-            if (!record.note.isEmpty()) stats.hasNoteCount++; else stats.noNoteCount++;
-            if (!record.tags.isEmpty()) stats.hasTagCount++; else stats.noTagCount++;
 
             if (record.width > 0 && record.height > 0) {
                 double r = static_cast<double>(record.width) / record.height;

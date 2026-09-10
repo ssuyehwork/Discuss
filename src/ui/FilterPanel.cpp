@@ -1,6 +1,7 @@
 #include "FilterPanel.h"
 #include "../core/AppConfig.h"
 #include <QSet>
+#include <QDate>
 #include "ToolTipOverlay.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
@@ -389,6 +390,11 @@ void FilterPanel::rebuildDateCheckboxes(bool isCreateDate, bool descending) {
 
     QStringList dates = counts.keys();
     std::sort(dates.begin(), dates.end(), [descending](const QString& a, const QString& b) {
+        QDate dateA = QDate::fromString(a, "dd-MM-yyyy");
+        QDate dateB = QDate::fromString(b, "dd-MM-yyyy");
+        if (dateA.isValid() && dateB.isValid()) {
+            return descending ? (dateA > dateB) : (dateA < dateB);
+        }
         return descending ? (a > b) : (a < b);
     });
 

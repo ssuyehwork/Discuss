@@ -73,6 +73,9 @@
 3. **【HWND 激活与 Win32 拖拽安全隔离契约】**：
    统一无边框对话框的生命周期与拖拽机制，严格禁止在模态阻塞事件循环中通过 `SendMessage(WM_NCLBUTTONDOWN)` 强抢线程控制权。对话框在 `reject()` / `accept()` 退出时，必须显式做好 HWND 状态清理与光标形态复位（复位为 `Qt::ArrowCursor`），保障主窗口非客户区拉伸与拖拽机制的完美平滑。
 
+4. **【顶级宿主入口自愈契约 (Host Self-Healing Input Defense Contract)】**：
+   主窗口（`MainWindow`）作为全系统的顶级宿主，绝对禁止盲目信任任何子窗口、弹窗（`QDialog` / `FramelessDialog`）、浮层（Overlay）或上下文菜单能够 100% 干净无残留地退出。主窗口必须在 `changeEvent` 中监视 `QEvent::ActivationChange` 事件：每当主窗口重新重夺激活权 (`isActiveWindow() == true`) 的第 0 毫秒，必须强制执行入口自愈清场动作——彻底释放孤儿鼠标抓取 (`QWidget::mouseGrabber()->releaseMouse()`)、解开 Win32 系统的全局鼠标捕获锁 (`::ReleaseCapture()`) 并清空残留显式光标 (`unsetCursor()`)，确保无边框原生 `WM_SETCURSOR` 与正常事件流转瞬间复位。
+
 ---
 
 ## 📁 第六章：文件冲突处理交互与对话框规范 (File Collision Resolution Architecture)
