@@ -49,7 +49,7 @@ void ColumnViewPane::loadDirectory() {
     QPointer<ColumnViewPane> weakSelf(this);
     (void)QtConcurrent::run([weakSelf, path]() {
         if (!weakSelf) return;
-        std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, nullptr);
+        std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
                 weakSelf->m_model->setRecords(items);
