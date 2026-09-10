@@ -1,20 +1,19 @@
-# Implementation Plan - ColumnViewWidget: Clean UI Header Removal, Flexible Column Fill & TreeItemDelegate Integration
+# Implementation Plan - ColumnViewWidget: Cascading Multi-Column Navigation, Ancestor Stack Reconstruction & Arrow Indicator
 
 ## 1. Overview
-The user provided a screenshot demonstrating two severe UI defects in the column view:
-1. **Redundant Header Label Box (`G:/`)**: `ColumnViewPane` instantiated an ugly `QLabel` header (`m_titleLabel`) with a dark background (`#252526`), creating visual clutter and duplicating the top `AddressBar`.
-2. **Huge Blank Dark Space on the Right**: `ColumnViewPane` had a rigid `setFixedWidth(230)` constraint with an `addStretch()` layout in `ColumnViewWidget`. When only 1 or 2 columns were open, it created a massive black void on the right instead of gracefully filling the container.
+Based on the reference screenshot provided by the user, the ideal Column View experience requires:
+1. **Ancestor Path Stack Reconstruction**: When navigating to a deep path (e.g. `C:\Users\xiaoinfx\Desktop\ProjectManagement\CustomerA\Project1\Contract`), `ColumnViewWidget::setRootPath()` must reconstruct the full chain of parent columns (`ProjectManagement` ➔ `CustomerA` ➔ `Project1` ➔ `Contract` ➔ `File List`), cascading horizontally.
+2. **Parent Item Selection & Right Arrow (`>`) Indicator**: In each parent column, the selected folder must be visually highlighted with a right-arrow `>` indicator at the trailing edge, explicitly signaling that its contents are expanded in the next column.
+3. **No Redundant Header Labels**: Remove the top ugly `QLabel` header (`m_titleLabel`) from `ColumnViewPane` entirely so that columns seamlessly blend into the content pane.
+4. **Adaptive Width & Smooth Auto-Scrolling**: Expand columns horizontally without black empty gaps on the right, automatically scrolling to ensure the active/newest column is visible.
 
-This plan details the complete UI refactoring of `ColumnViewWidget` and `ColumnViewPane`:
-- Completely strip out `m_titleLabel` from `ColumnViewPane`.
-- Replace rigid `setFixedWidth(230)` with `setMinimumWidth(220)` and flexible layout management.
-- Attach `TreeItemDelegate` to each column's `QListView` for unified SVG icons and hover/selection styling (`#3E3E42`).
-- Support recursive ancestor path stack expansion in `setRootPath()`.
-- Propagate `pathNavigated` to `ContentPanel` and `NavigationService`.
+This plan details the code changes in `ColumnViewWidget.h`, `ColumnViewWidget.cpp`, and `TreeItemDelegate.h`.
 
 ## 2. Modified Files List
 - `src/ui/ColumnViewWidget.h`
 - `src/ui/ColumnViewWidget.cpp`
+- `src/ui/TreeItemDelegate.h`
+- `src/ui/ContentPanel.cpp`
 
 ## 3. Detailed Line-by-Line Changes
 
@@ -211,6 +210,7 @@ void ColumnViewWidget::setRootPath(const QString& path) {
     clearAllColumns();
     if (path.isEmpty()) return;
 
+    // 1. Deconstruct full ancestor path stack
     QList<QString> pathStack;
     QDir dir(path);
     QString curr = dir.absolutePath();
@@ -224,6 +224,7 @@ void ColumnViewWidget::setRootPath(const QString& path) {
         curr = parentDir.absolutePath();
     }
 
+    // 2. Cascade columns recursively and highlight child items in parent columns
     for (int i = 0; i < pathStack.size(); ++i) {
         const QString& p = pathStack[i];
         ColumnViewPane* pane = appendColumn(p);
@@ -313,7 +314,6 @@ void ColumnViewWidget::updatePaneWidths() {
     int defaultWidth = 230;
 
     if (colCount * defaultWidth < availableWidth) {
-        // Distribute remaining space to the last active column so there is no dark void
         for (int i = 0; i < colCount - 1; ++i) {
             m_panes[i]->setFixedWidth(defaultWidth);
         }
@@ -328,6 +328,36 @@ void ColumnViewWidget::updatePaneWidths() {
 >>>>>>> REPLACE
 ```
 
+### `src/ui/TreeItemDelegate.h`
+
+```
+<<<<<<< SEARCH
+        // 5. 画文案
+        QRect textRect = rect;
+        textRect.setLeft(iconRect.right() + 6);
+        painter->setPen(isSelected ? QColor("#FFFFFF") : QColor("#CCCCCC"));
+        QString text = painter->fontMetrics().elidedText(index.data(Qt::DisplayRole).toString(), Qt::ElideRight, textRect.width());
+        painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
+=======
+        // 5. 画文案
+        QRect textRect = rect;
+        textRect.setLeft(iconRect.right() + 6);
+        if (isDir) {
+            textRect.setRight(rect.right() - 18);
+        }
+        painter->setPen(isSelected ? QColor("#FFFFFF") : QColor("#CCCCCC"));
+        QString text = painter->fontMetrics().elidedText(index.data(Qt::DisplayRole).toString(), Qt::ElideRight, textRect.width());
+        painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
+
+        // 6. 如果是文件夹，在最右侧画 trailing 箭头指示器 (>)
+        if (isDir) {
+            QRect arrowRect(rect.right() - 16, rect.top(), 12, rect.height());
+            painter->setPen(isSelected ? QColor("#FFFFFF") : QColor("#888888"));
+            painter->drawText(arrowRect, Qt::AlignCenter, ">");
+        }
+>>>>>>> REPLACE
+```
+
 ## 4. Build & Verification Steps
 
 1. Configure build system:
@@ -335,6 +365,7 @@ void ColumnViewWidget::updatePaneWidths() {
 2. Compile project:
    `cmake --build build`
 3. Launch QuarkMeta and test Column View:
-   - Verify that no ugly `G:/` label header appears above the list.
-   - Verify that when opening Column View with 1 column, the column fills the width gracefully without leaving huge black gaps on the right.
-   - Verify that clicking folders cascades columns horizontally with vector icons and smooth scrolling.
+   - Navigate to a deep directory like `C:\Users\xiaoinfx\Desktop\ProjectManagement\CustomerA\Project1\Contract`.
+   - Verify that ancestor columns (`ProjectManagement` ➔ `CustomerA` ➔ `Project1` ➔ `Contract` ➔ `Files`) cascade horizontally like the reference screenshot.
+   - Verify that every parent folder displays a trailing `>` arrow indicator at the right edge of its item row.
+   - Verify that selected items in parent columns remain highlighted in `#3E3E42`.
