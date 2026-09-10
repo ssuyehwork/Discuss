@@ -415,11 +415,6 @@ void TagManagerDialog::resizeEvent(QResizeEvent* event) {
 }
 
 void TagManagerDialog::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_W && (event->modifiers() & Qt::ControlModifier)) {
-        reject();
-        event->accept();
-        return;
-    }
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         if (m_searchEdit && m_searchEdit->hasFocus()) {
             QString kw = m_searchEdit->text().trimmed();

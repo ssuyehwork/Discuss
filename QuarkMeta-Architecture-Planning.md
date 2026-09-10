@@ -35,6 +35,9 @@
 7. **三栏视界物理绝对下限契约 (Three-Column View Physical Absolute Minimum Width Contract)**：
    主窗口（`MainWindow`）的全局绝对物理最小宽度限制锁定为 **`710px`**（标准三栏物理宽度计算：$3 \times 230\text{px} + 10\text{px} + 10\text{px} = 710\text{px}$）。无论主界面处于单栏、双栏还是侧边栏隐藏的沉浸模式，窗口物理宽度均不得低于 710px，为列视图（Column View / 米勒列下钻）提供至少流畅平铺 3 列视图的舒展显示空间，并保障顶栏地址栏、搜索栏及操作按钮绝不发生重叠挤压。
 
+8. **米勒列下钻视图契约 (Miller Columns View Architecture Contract)**：
+   列视图（`ColumnViewWidget`）作为 `ContentPanel` 内容面板的第 4 种平行布局模式（与网格 Grid、列表 List、卡片/自适应 Justified 平级并列）。在架构实现上，采用横向 `QScrollArea` + 动态多列 `ColumnViewPane` 状态机。每一列维持固定 230px 标准宽度与独立的轻量 `DiskItemModel` 数据源，通过 `DiskScanService` 进行无阻塞异步扫描。点击某列中的文件夹时，自动裁切销毁该列右侧所有深层子列，并在右侧平滑新建一列下钻呈现；点击文件时则右侧展开属性与缩略图预览列，实现极致流畅的瀑布式横向多级导航体验。
+
 ---
 
 ## 🛑 第二章：上下文菜单控制协调层 (ContextMenu Architecture)

@@ -62,7 +62,7 @@ private:
     static constexpr int kBasePanelWidth = 230;
     static constexpr int kContentBaseWidth = 230;
     static constexpr int kSplitterHandleWidth = 5;
-    static constexpr int kWindowAbsoluteMinWidth = 475; // 顶栏与导航栏防重叠物理绝对下限
+    static constexpr int kWindowAbsoluteMinWidth = 710; // 顶栏与三栏视界物理绝对下限 (3 * 230px + 10px + 10px = 710px)
 };
 
 } // namespace QuarkMeta
