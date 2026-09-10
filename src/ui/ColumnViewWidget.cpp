@@ -1,24 +1,22 @@
 #include "ColumnViewWidget.h"
 #include "../core/DiskScanService.h"
+#include "TreeItemDelegate.h"
 #include "UiHelper.h"
 #include <QFileInfo>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 #include <QCoreApplication>
+#include <QDir>
 
 namespace QuarkMeta {
 
 ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
     : QWidget(parent), m_path(path) 
 {
-    setFixedWidth(230);
+    setMinimumWidth(220);
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(2);
-
-    m_titleLabel = new QLabel(QFileInfo(path).fileName().isEmpty() ? path : QFileInfo(path).fileName(), this);
-    m_titleLabel->setStyleSheet("font-weight: bold; padding: 4px; color: #EEEEEE; background: #252526;");
-    layout->addWidget(m_titleLabel);
+    layout->setSpacing(0);
 
     m_model = new DiskItemModel(this);
     m_proxyModel = new FilterProxyModel(this);
@@ -26,7 +24,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
 
     m_listView = new QListView(this);
     m_listView->setModel(m_proxyModel);
-    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: 1px solid #333333; color: #CCCCCC; outline: none; }"
+    m_listView->setItemDelegate(new TreeItemDelegate(this, false, false));
+    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: none; border-right: 1px solid #2D2D2D; color: #CCCCCC; outline: none; }"
                               "QListView::item:selected { background: #3E3E42; color: #FFFFFF; outline: none; }");
     layout->addWidget(m_listView);
 
@@ -84,9 +83,8 @@ ColumnViewWidget::ColumnViewWidget(QWidget* parent)
 
     m_container = new QWidget(this);
     m_layout = new QHBoxLayout(m_container);
-    m_layout->setContentsMargins(4, 4, 4, 4);
-    m_layout->setSpacing(4);
-    m_layout->addStretch();
+    m_layout->setContentsMargins(0, 0, 0, 0);
+    m_layout->setSpacing(0);
 
     setWidget(m_container);
 }
@@ -95,7 +93,6 @@ void ColumnViewWidget::setRootPath(const QString& path) {
     clearAllColumns();
     if (path.isEmpty()) return;
 
-    // Build path stack from root to target path
     QList<QString> pathStack;
     QDir dir(path);
     QString curr = dir.absolutePath();
@@ -109,15 +106,14 @@ void ColumnViewWidget::setRootPath(const QString& path) {
         curr = parentDir.absolutePath();
     }
 
-    // Append columns recursively for each ancestor
     for (int i = 0; i < pathStack.size(); ++i) {
         const QString& p = pathStack[i];
         ColumnViewPane* pane = appendColumn(p);
         if (i > 0 && i - 1 < m_panes.size() - 1) {
-            // Highlight the selected child folder in the parent pane
             m_panes[i - 1]->selectItemByPath(p);
         }
     }
+    updatePaneWidths();
 }
 
 void ColumnViewWidget::clearAllColumns() {
@@ -130,6 +126,7 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
         m_layout->removeWidget(pane);
         pane->deleteLater();
     }
+    updatePaneWidths();
 }
 
 ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
@@ -151,7 +148,8 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     m_panes.append(pane);
-    m_layout->insertWidget(m_panes.size() - 1, pane);
+    m_layout->addWidget(pane);
+    updatePaneWidths();
     ensureWidgetVisible(pane);
     return pane;
 }
@@ -160,6 +158,27 @@ void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
     for (int i = 0; i < m_panes.size(); ++i) {
         if (i != activePaneIdx) {
             m_panes[i]->clearSelection();
+        }
+    }
+}
+
+void ColumnViewWidget::updatePaneWidths() {
+    if (m_panes.isEmpty()) return;
+    int availableWidth = width();
+    if (availableWidth <= 0) availableWidth = 800;
+
+    int colCount = m_panes.size();
+    int defaultWidth = 230;
+
+    if (colCount * defaultWidth < availableWidth) {
+        for (int i = 0; i < colCount - 1; ++i) {
+            m_panes[i]->setFixedWidth(defaultWidth);
+        }
+        m_panes.last()->setMinimumWidth(availableWidth - (colCount - 1) * defaultWidth);
+        m_panes.last()->setMaximumWidth(QWIDGETSIZE_MAX);
+    } else {
+        for (auto* pane : m_panes) {
+            pane->setFixedWidth(defaultWidth);
         }
     }
 }
