@@ -31,8 +31,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
     layout->addWidget(m_listView);
 
     connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
-        QString itemPath = index.data(Qt::UserRole + 1).toString();
-        bool isDir = index.data(Qt::UserRole + 2).toBool();
+        QString itemPath = index.data(PathRole).toString();
+        bool isDir = (index.data(TypeRole).toString() == "folder");
         int paneIdx = property("paneIndex").toInt();
         if (isDir) {
             emit folderSelected(itemPath, paneIdx);
@@ -45,12 +45,14 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
 }
 
 void ColumnViewPane::selectItemByPath(const QString& targetPath) {
+    m_pendingSelectPath = targetPath;
     if (!m_proxyModel) return;
     for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
         QModelIndex idx = m_proxyModel->index(r, 0);
-        if (idx.data(Qt::UserRole + 1).toString() == targetPath) {
+        if (idx.data(PathRole).toString() == targetPath) {
             m_listView->setCurrentIndex(idx);
             m_listView->scrollTo(idx);
+            m_pendingSelectPath.clear();
             break;
         }
     }
@@ -71,6 +73,9 @@ void ColumnViewPane::loadDirectory() {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
                 weakSelf->m_model->setRecords(items);
+                if (!weakSelf->m_pendingSelectPath.isEmpty()) {
+                    weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
+                }
             }
         });
     });

@@ -28,6 +28,7 @@ signals:
 
 private:
     QString m_path;
+    QString m_pendingSelectPath;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
     QListView* m_listView = nullptr;
