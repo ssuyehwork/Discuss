@@ -69,8 +69,6 @@ public:
         painter->setPen(Qt::NoPen);
         painter->drawRect(option.rect);
         painter->restore();
-
-        QStyleOptionViewItem opt = option;
         if (index.column() >= 1) {
             opt.displayAlignment = Qt::AlignCenter;
         }
