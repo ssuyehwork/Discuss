@@ -146,7 +146,11 @@ void ContentPanel::initUi() {
     initListView();
     m_columnView = new ColumnViewWidget(this);
     connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
-        emit pathNavigated(path);
+        if (QFileInfo(path).isDir()) {
+            emit directorySelected(path);
+        } else {
+            emit fileActivated(path);
+        }
     });
     m_viewStack->addWidget(m_gridView);
     m_viewStack->addWidget(m_treeView);
