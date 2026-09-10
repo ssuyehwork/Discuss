@@ -31,7 +31,6 @@ private:
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
     QListView* m_listView = nullptr;
-    QLabel* m_titleLabel = nullptr;
 };
 
 class ColumnViewWidget : public QScrollArea {
@@ -46,10 +45,14 @@ public:
 signals:
     void pathNavigated(const QString& path);
 
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+
 private:
     void dismissSubColumns(int fromIndex);
     ColumnViewPane* appendColumn(const QString& path);
     void clearOtherSelections(int activePaneIdx);
+    void updatePaneWidths();
 
     QWidget* m_container = nullptr;
     QHBoxLayout* m_layout = nullptr;
