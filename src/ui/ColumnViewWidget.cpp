@@ -1,4 +1,5 @@
 #include "ColumnViewWidget.h"
+#include "ContentPanel.h"
 #include "../core/DiskScanService.h"
 #include "TreeItemDelegate.h"
 #include "UiHelper.h"
@@ -11,8 +12,8 @@
 
 namespace QuarkMeta {
 
-ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
-    : QWidget(parent), m_path(path) 
+ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent)
+    : QWidget(parent), m_path(path), m_contentPanel(contentPanel)
 {
     setMinimumWidth(220);
     QVBoxLayout* layout = new QVBoxLayout(this);
@@ -25,11 +26,23 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
 
     m_listView = new QListView(this);
     m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_listView->setModel(m_proxyModel);
-    m_listView->setItemDelegate(new TreeItemDelegate(this, false, false));
+
+    auto* delegate = new TreeItemDelegate(this, false, false);
+    m_listView->setItemDelegate(delegate);
     m_listView->setStyleSheet("QListView { background: #1E1E1E; border: none; border-right: 1px solid #2D2D2D; color: #CCCCCC; }"
                               "QListView::item:selected { background: #3E3E42; color: #FFFFFF; }");
     layout->addWidget(m_listView);
+
+    if (m_contentPanel) {
+        m_listView->installEventFilter(m_contentPanel);
+        m_listView->viewport()->installEventFilter(m_contentPanel);
+        connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
+    }
+
+    connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ColumnViewPane::selectionChanged);
 
     connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
         QString itemPath = index.data(PathRole).toString();
@@ -50,6 +63,13 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
     });
 
     loadDirectory();
+}
+
+void ColumnViewPane::setFilterState(const FilterState& state) {
+    if (m_proxyModel) {
+        m_proxyModel->currentFilter = state;
+        m_proxyModel->updateFilter();
+    }
 }
 
 void ColumnViewPane::selectItemByPath(const QString& targetPath) {
@@ -89,8 +109,8 @@ void ColumnViewPane::loadDirectory() {
     });
 }
 
-ColumnViewWidget::ColumnViewWidget(QWidget* parent)
-    : QScrollArea(parent) 
+ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
+    : QScrollArea(parent), m_contentPanel(contentPanel)
 {
     setWidgetResizable(true);
     setStyleSheet("QScrollArea { background: #181818; border: none; }");
@@ -102,6 +122,39 @@ ColumnViewWidget::ColumnViewWidget(QWidget* parent)
     m_layout->setAlignment(Qt::AlignLeft);
 
     setWidget(m_container);
+}
+
+ColumnViewPane* ColumnViewWidget::activePane() const {
+    if (m_activePaneIndex >= 0 && m_activePaneIndex < m_panes.size()) {
+        return m_panes[m_activePaneIndex];
+    }
+    return m_panes.isEmpty() ? nullptr : m_panes.last();
+}
+
+QStringList ColumnViewWidget::getSelectedPaths() const {
+    ColumnViewPane* pane = activePane();
+    if (!pane || !pane->listView() || !pane->listView()->selectionModel()) return {};
+    QStringList paths;
+    for (const auto& idx : pane->listView()->selectionModel()->selectedIndexes()) {
+        if (idx.column() == 0) {
+            QString p = idx.data(PathRole).toString();
+            if (!p.isEmpty()) paths << p;
+        }
+    }
+    return paths;
+}
+
+QModelIndexList ColumnViewWidget::getSelectedIndexes() const {
+    ColumnViewPane* pane = activePane();
+    if (!pane || !pane->listView() || !pane->listView()->selectionModel()) return {};
+    return pane->listView()->selectionModel()->selectedIndexes();
+}
+
+void ColumnViewWidget::applyFilterState(const FilterState& state) {
+    m_currentFilter = state;
+    for (auto* pane : m_panes) {
+        pane->setFilterState(state);
+    }
 }
 
 void ColumnViewWidget::setRootPath(const QString& path) {
@@ -148,10 +201,17 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
 
 ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
-    ColumnViewPane* pane = new ColumnViewPane(path, m_container);
+    ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
     pane->setProperty("paneIndex", newIdx);
+    pane->setFilterState(m_currentFilter);
+
+    connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
+        m_activePaneIndex = pane->property("paneIndex").toInt();
+        emit selectionChanged();
+    });
 
     connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
+        m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
         clearOtherSelections(paneIdx);
         appendColumn(folderPath);
@@ -159,6 +219,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
+        m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
         clearOtherSelections(paneIdx);
         emit pathNavigated(filePath);
