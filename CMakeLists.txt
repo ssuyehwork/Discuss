@@ -298,6 +298,8 @@ set(SOURCES
     src/ui/models/DiskItemModel.cpp
     src/ui/ThemeManager.h
     src/ui/ThemeManager.cpp
+    src/ui/QuarkApplication.h
+    src/ui/QuarkApplication.cpp
     src/ui/UiHelper.h
     src/ui/UiHelper.cpp
     src/ui/IconCacheManager.h
