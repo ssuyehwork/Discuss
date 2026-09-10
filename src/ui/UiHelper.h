@@ -234,7 +234,6 @@ public:
     }
 
     static void setupLineEditContextMenu(QLineEdit* edit);
-    static void cleanupWidgetCursorState(QWidget* widget);
 
     static inline QColor getExtensionColor(const QString& ext) {
         return ColorPaletteEngine::getExtensionColor(ext);

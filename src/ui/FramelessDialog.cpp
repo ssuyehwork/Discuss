@@ -140,21 +140,17 @@ void FramelessDialog::setVisibleButtons(int flags) {
     if (m_closeBtn) m_closeBtn->setVisible(flags & Close);
 }
 
-FramelessDialog::~FramelessDialog() {
-    UiHelper::cleanupWidgetCursorState(this);
-}
+FramelessDialog::~FramelessDialog() = default;
 
 void FramelessDialog::showEvent(QShowEvent* event) {
     QDialog::showEvent(event);
 }
 
 void FramelessDialog::hideEvent(QHideEvent* event) {
-    UiHelper::cleanupWidgetCursorState(this);
     QDialog::hideEvent(event);
 }
 
 void FramelessDialog::closeEvent(QCloseEvent* event) {
-    UiHelper::cleanupWidgetCursorState(this);
     QDialog::closeEvent(event);
 }
 

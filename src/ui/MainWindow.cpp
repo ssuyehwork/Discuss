@@ -133,9 +133,14 @@ void MainWindow::setupTopBars(QWidget* parentWidget) {
         AppConfig::instance().setValue("MainWindow/AlwaysOnTop", pinned);
     });
 
-    // 顶层子部件间的纯 UI 布局显隐联动
+    // 顶层子部件间的纯 UI 布局显隐联动与持久化恢复
+    bool driveBarVis = AppConfig::instance().getValue("MainWindow/DriveBarVisible", true).toBool();
+    m_titleBarWidget->setDriveBarVisible(driveBarVis);
+    if (m_driveBarWidget) m_driveBarWidget->setVisible(driveBarVis);
+
     connect(m_titleBarWidget, &TitleBarWidget::driveBarToggleRequested, this, [this](bool visible) {
         if (m_driveBarWidget) m_driveBarWidget->setVisible(visible);
+        AppConfig::instance().setValue("MainWindow/DriveBarVisible", visible);
     });
 }
 
@@ -565,9 +570,6 @@ void MainWindow::changeEvent(QEvent* event) {
         }
     } else if (event->type() == QEvent::ActivationChange) {
         if (isActiveWindow()) {
-            while (QGuiApplication::overrideCursor()) {
-                QGuiApplication::restoreOverrideCursor();
-            }
             if (QWidget::mouseGrabber()) {
                 QWidget::mouseGrabber()->releaseMouse();
             }
@@ -577,7 +579,6 @@ void MainWindow::changeEvent(QEvent* event) {
             }
 #endif
             unsetCursor();
-            QCursor::setPos(QCursor::pos());
         }
     }
     QMainWindow::changeEvent(event);
@@ -586,6 +587,9 @@ void MainWindow::changeEvent(QEvent* event) {
 void MainWindow::closeEvent(QCloseEvent* event) {
     AppConfig::instance().setValue("MainWindow/LastPath", NavigationService::instance().currentUrl());
     AppConfig::instance().setValue("MainWindow/Geometry", saveGeometry());
+    if (m_driveBarWidget) {
+        AppConfig::instance().setValue("MainWindow/DriveBarVisible", m_driveBarWidget->isVisible());
+    }
     if (m_panelLayoutManager) {
         m_panelLayoutManager->saveLayoutState();
     }
