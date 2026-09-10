@@ -563,6 +563,18 @@ void MainWindow::changeEvent(QEvent* event) {
         if (m_bodyLayout) {
             m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin);
         }
+    } else if (event->type() == QEvent::ActivationChange) {
+        if (isActiveWindow()) {
+            if (QWidget::mouseGrabber()) {
+                QWidget::mouseGrabber()->releaseMouse();
+            }
+#ifdef Q_OS_WIN
+            if (testAttribute(Qt::WA_WState_Created)) {
+                ::ReleaseCapture();
+            }
+#endif
+            unsetCursor();
+        }
     }
     QMainWindow::changeEvent(event);
 }
