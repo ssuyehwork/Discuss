@@ -32,8 +32,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     auto* delegate = new TreeItemDelegate(this, false, false);
     m_listView->setItemDelegate(delegate);
-    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: none; border-right: 1px solid #2D2D2D; color: #CCCCCC; }"
-                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; }");
+    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: none; border-right: 1px solid #2D2D2D; color: #CCCCCC; outline: none; }"
+                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; outline: none; }");
     layout->addWidget(m_listView);
 
     if (m_contentPanel) {
@@ -103,6 +103,14 @@ void ColumnViewPane::loadDirectory() {
                 weakSelf->m_model->setRecords(items);
                 if (!weakSelf->m_pendingSelectPath.isEmpty()) {
                     weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
+                }
+                // 触发图标与缩略图提取管线
+                int count = weakSelf->m_model->rowCount();
+                if (count > 0) {
+                    QList<int> visibleRows;
+                    visibleRows.reserve(count);
+                    for (int r = 0; r < count; ++r) visibleRows.append(r);
+                    weakSelf->m_model->loadThumbnailsForRows(visibleRows);
                 }
             }
         });
