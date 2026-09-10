@@ -56,6 +56,13 @@ void TitleBarWidget::setViewModeOption(ViewModeOption mode) {
     m_currentViewMode = mode;
 }
 
+void TitleBarWidget::setDriveBarVisible(bool visible) {
+    if (!m_btnToggleDriveBar) return;
+    QSignalBlocker blocker(m_btnToggleDriveBar);
+    m_btnToggleDriveBar->setChecked(visible);
+    m_btnToggleDriveBar->setIcon(UiHelper::getIcon(visible ? "chevrons_down" : "chevrons_up", QColor("#EEEEEE")));
+}
+
 void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_layout = new QHBoxLayout(this);
     m_layout->setContentsMargins(5, 0, kLayoutEdgeMargin, 0);
