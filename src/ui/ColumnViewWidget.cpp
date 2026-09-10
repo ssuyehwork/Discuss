@@ -1,6 +1,6 @@
 #include "ColumnViewWidget.h"
 #include "../core/DiskScanService.h"
-#include "TreeItemDelegate.h"
+#include "ColumnItemDelegate.h"
 #include "UiHelper.h"
 #include <QFileInfo>
 #include <QVBoxLayout>
@@ -24,7 +24,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
 
     m_listView = new QListView(this);
     m_listView->setModel(m_proxyModel);
-    m_listView->setItemDelegate(new TreeItemDelegate(this, false, false));
+    m_listView->setItemDelegate(new ColumnItemDelegate(this));
     m_listView->setStyleSheet("QListView { background: #1E1E1E; border: none; border-right: 1px solid #2D2D2D; color: #CCCCCC; outline: none; }"
                               "QListView::item:selected { background: #3E3E42; color: #FFFFFF; outline: none; }");
     layout->addWidget(m_listView);
@@ -93,27 +93,7 @@ void ColumnViewWidget::setRootPath(const QString& path) {
     clearAllColumns();
     if (path.isEmpty()) return;
 
-    QList<QString> pathStack;
-    QDir dir(path);
-    QString curr = dir.absolutePath();
-
-    while (!curr.isEmpty()) {
-        pathStack.prepend(curr);
-        QDir parentDir(curr);
-        if (!parentDir.cdUp() || parentDir.absolutePath() == curr) {
-            break;
-        }
-        curr = parentDir.absolutePath();
-    }
-
-    for (int i = 0; i < pathStack.size(); ++i) {
-        const QString& p = pathStack[i];
-        ColumnViewPane* pane = appendColumn(p);
-        if (i > 0 && i - 1 < m_panes.size() - 1) {
-            m_panes[i - 1]->selectItemByPath(p);
-        }
-    }
-    updatePaneWidths();
+    appendColumn(path);
 }
 
 void ColumnViewWidget::clearAllColumns() {
