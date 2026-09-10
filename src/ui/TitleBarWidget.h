@@ -34,6 +34,7 @@ public:
     void setZoomLevel(int value);
     void setWindowMaximized(bool maximized);
     void setViewModeOption(ViewModeOption mode);
+    void setDriveBarVisible(bool visible);
 
 signals:
     void driveBarToggleRequested(bool visible);
