@@ -127,10 +127,6 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     m_contentArea = new QWidget();
     m_contentArea->setObjectName("DialogContentArea");
     m_mainLayout->addWidget(m_contentArea, 1);
-
-    QShortcut* scClose = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), this);
-    scClose->setContext(Qt::WindowShortcut);
-    connect(scClose, &QShortcut::activated, this, &QDialog::reject);
 }
 
 void FramelessDialog::setVisibleButtons(int flags) {
