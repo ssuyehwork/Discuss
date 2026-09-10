@@ -58,6 +58,7 @@ public:
 
 signals:
     void pathNavigated(const QString& path);
+    void folderNavigated(const QString& path);
     void selectionChanged();
 
 protected:

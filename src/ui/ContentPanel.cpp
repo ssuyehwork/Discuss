@@ -149,7 +149,6 @@ void ContentPanel::initUi() {
     connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
         if (QFileInfo(path).isDir()) {
             m_currentPath = path;
-            emit directorySelected(path);
             emit selectionChanged({path});
             updateStatusBarStats();
         } else {

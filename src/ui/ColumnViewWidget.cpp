@@ -224,6 +224,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
         clearOtherSelections(paneIdx);
         appendColumn(folderPath);
         emit pathNavigated(folderPath);
+        emit folderNavigated(folderPath);
     });
 
     connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
