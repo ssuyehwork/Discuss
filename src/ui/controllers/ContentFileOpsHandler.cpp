@@ -106,9 +106,23 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
         }
     }
 
-    // 检测目标文件夹中的同名冲突文件
-    QStringList conflictingSources;
+    // 0. 原地/同目录拖放保护：剔除源目录与目标目录一模一样的项目
+    QStringList externalPaths;
     for (const QString& src : paths) {
+        QFileInfo srcInfo(src);
+        if (QDir::cleanPath(srcInfo.absolutePath()) != QDir::cleanPath(QDir(destDir).absolutePath())) {
+            externalPaths.append(src);
+        }
+    }
+
+    if (externalPaths.isEmpty()) {
+        // 全为同目录内自拖放，直接静默恢复/忽略，绝不误触同名冲突弹窗
+        return;
+    }
+
+    // 1. 仅对来自外部目录的项目检测目标文件夹中的同名冲突文件
+    QStringList conflictingSources;
+    for (const QString& src : externalPaths) {
         QString fileName = QFileInfo(src).fileName();
         QString destPath = QDir(destDir).filePath(fileName);
         if (QFile::exists(destPath)) {
@@ -117,12 +131,12 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
     }
 
     DiskIoContext ioCtx;
-    ioCtx.sources = paths;
+    ioCtx.sources = externalPaths;
     ioCtx.destination = destDir;
     ioCtx.isMove = isMove;
 
     if (!conflictingSources.isEmpty()) {
-        QStringList activeSources = paths;
+        QStringList activeSources = externalPaths;
         int remainingConflicts = conflictingSources.size();
 
         for (int i = 0; i < conflictingSources.size(); ++i) {
