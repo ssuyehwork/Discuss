@@ -26,8 +26,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
 
     m_listView = new QListView(this);
     m_listView->setModel(m_proxyModel);
-    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: 1px solid #333333; color: #CCCCCC; }"
-                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; }");
+    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: 1px solid #333333; color: #CCCCCC; outline: none; }"
+                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; outline: none; }");
     layout->addWidget(m_listView);
 
     connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
@@ -42,6 +42,24 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
     });
 
     loadDirectory();
+}
+
+void ColumnViewPane::selectItemByPath(const QString& targetPath) {
+    if (!m_proxyModel) return;
+    for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
+        QModelIndex idx = m_proxyModel->index(r, 0);
+        if (idx.data(Qt::UserRole + 1).toString() == targetPath) {
+            m_listView->setCurrentIndex(idx);
+            m_listView->scrollTo(idx);
+            break;
+        }
+    }
+}
+
+void ColumnViewPane::clearSelection() {
+    if (m_listView) {
+        m_listView->clearSelection();
+    }
 }
 
 void ColumnViewPane::loadDirectory() {
@@ -75,7 +93,31 @@ ColumnViewWidget::ColumnViewWidget(QWidget* parent)
 
 void ColumnViewWidget::setRootPath(const QString& path) {
     clearAllColumns();
-    appendColumn(path);
+    if (path.isEmpty()) return;
+
+    // Build path stack from root to target path
+    QList<QString> pathStack;
+    QDir dir(path);
+    QString curr = dir.absolutePath();
+
+    while (!curr.isEmpty()) {
+        pathStack.prepend(curr);
+        QDir parentDir(curr);
+        if (!parentDir.cdUp() || parentDir.absolutePath() == curr) {
+            break;
+        }
+        curr = parentDir.absolutePath();
+    }
+
+    // Append columns recursively for each ancestor
+    for (int i = 0; i < pathStack.size(); ++i) {
+        const QString& p = pathStack[i];
+        ColumnViewPane* pane = appendColumn(p);
+        if (i > 0 && i - 1 < m_panes.size() - 1) {
+            // Highlight the selected child folder in the parent pane
+            m_panes[i - 1]->selectItemByPath(p);
+        }
+    }
 }
 
 void ColumnViewWidget::clearAllColumns() {
@@ -90,20 +132,36 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
     }
 }
 
-void ColumnViewWidget::appendColumn(const QString& path) {
+ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_container);
     pane->setProperty("paneIndex", newIdx);
 
     connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
         dismissSubColumns(paneIdx);
+        clearOtherSelections(paneIdx);
         appendColumn(folderPath);
         emit pathNavigated(folderPath);
+    });
+
+    connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
+        dismissSubColumns(paneIdx);
+        clearOtherSelections(paneIdx);
+        emit pathNavigated(filePath);
     });
 
     m_panes.append(pane);
     m_layout->insertWidget(m_panes.size() - 1, pane);
     ensureWidgetVisible(pane);
+    return pane;
+}
+
+void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (i != activePaneIdx) {
+            m_panes[i]->clearSelection();
+        }
+    }
 }
 
 } // namespace QuarkMeta
