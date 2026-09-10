@@ -2,6 +2,7 @@
 
 #include <QStyledItemDelegate>
 #include <QPainter>
+#include <QPixmap>
 #include "UiHelper.h"
 #include "../core/ModelContract.h"
 
@@ -27,12 +28,13 @@ public:
 
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing);
+        painter->setRenderHint(QPainter::SmoothPixmapTransform);
 
         // 1. 绘制背景
         QColor bg;
         if (selected) {
             bg = QColor("#378ADD");
-            bg.setAlphaF(0.2f);
+            bg.setAlphaF(0.25f);
         } else if (hover) {
             bg = QColor("#2A2D2E");
         } else {
@@ -42,26 +44,35 @@ public:
         painter->setPen(Qt::NoPen);
         painter->drawRect(option.rect);
 
-        // 2. 绘制图标
+        // 2. 绘制图标/缩略图
         QVariant deco = index.data(Qt::DecorationRole);
-        QRect iconRect(option.rect.left() + 8, option.rect.top() + (option.rect.height() - 18) / 2, 18, 18);
-        if (deco.canConvert<QIcon>()) {
+        QRect iconRect(option.rect.left() + 8, option.rect.top() + (option.rect.height() - 20) / 2, 20, 20);
+
+        if (deco.canConvert<QPixmap>()) {
+            QPixmap pm = deco.value<QPixmap>();
+            if (!pm.isNull()) {
+                QPixmap scaled = pm.scaled(iconRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                int x = iconRect.center().x() - scaled.width() / 2;
+                int y = iconRect.center().y() - scaled.height() / 2;
+                painter->drawPixmap(x, y, scaled);
+            }
+        } else if (deco.canConvert<QIcon>()) {
             QIcon icon = deco.value<QIcon>();
             if (!icon.isNull()) {
                 icon.paint(painter, iconRect, Qt::AlignCenter);
             }
         }
 
-        // 3. 绘制文字
+        // 3. 绘制文本
         QString name = index.data(Qt::DisplayRole).toString();
-        QRect textRect = option.rect.adjusted(32, 0, -28, 0);
+        QRect textRect = option.rect.adjusted(34, 0, -28, 0);
         QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
         painter->setPen(textColor);
         painter->setFont(option.font);
         QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideRight, textRect.width());
         painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
 
-        // 4. 如果是文件夹，最右侧绘制向右箭头 chevron_right
+        // 4. 如果是文件夹，最右侧绘制向右箭头
         bool isDir = index.data(Qt::UserRole + 2).toBool();
         if (isDir) {
             QRect arrowRect(option.rect.right() - 20, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);

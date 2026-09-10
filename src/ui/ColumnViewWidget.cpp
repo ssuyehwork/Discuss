@@ -23,10 +23,12 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
     m_proxyModel->setSourceModel(m_model);
 
     m_listView = new QListView(this);
+    m_listView->setFocusPolicy(Qt::NoFocus);
     m_listView->setModel(m_proxyModel);
     m_listView->setItemDelegate(new ColumnItemDelegate(this));
     m_listView->setStyleSheet("QListView { background: #1E1E1E; border: none; border-right: 1px solid #2D2D2D; color: #CCCCCC; outline: none; }"
-                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; outline: none; }");
+                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; outline: none; }"
+                              "QListView::item:focus { outline: none; border: none; }");
     layout->addWidget(m_listView);
 
     connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
@@ -70,8 +72,22 @@ void ColumnViewPane::loadDirectory() {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
                 weakSelf->m_model->setRecords(items);
+                // 异步扫描完成后加载前 50 行项目的缩略图并更新视图
+                int count = weakSelf->m_model->rowCount();
+                QList<int> rowsToLoad;
+                for (int i = 0; i < qMin(count, 50); ++i) {
+                    rowsToLoad.append(i);
+                }
+                weakSelf->m_model->loadThumbnailsForRows(rowsToLoad);
             }
         });
+    });
+
+    connect(m_model, &DiskItemModel::dataChanged, this, [this](const QModelIndex& topLeft, const QModelIndex& bottomRight) {
+        Q_UNUSED(topLeft); Q_UNUSED(bottomRight);
+        if (m_listView && m_listView->viewport()) {
+            m_listView->viewport()->update();
+        }
     });
 }
 
