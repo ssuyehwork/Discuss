@@ -565,6 +565,9 @@ void MainWindow::changeEvent(QEvent* event) {
         }
     } else if (event->type() == QEvent::ActivationChange) {
         if (isActiveWindow()) {
+            while (QGuiApplication::overrideCursor()) {
+                QGuiApplication::restoreOverrideCursor();
+            }
             if (QWidget::mouseGrabber()) {
                 QWidget::mouseGrabber()->releaseMouse();
             }
@@ -574,6 +577,7 @@ void MainWindow::changeEvent(QEvent* event) {
             }
 #endif
             unsetCursor();
+            QCursor::setPos(QCursor::pos());
         }
     }
     QMainWindow::changeEvent(event);
