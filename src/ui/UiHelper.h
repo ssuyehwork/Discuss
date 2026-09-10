@@ -235,6 +235,8 @@ public:
 
     static void setupLineEditContextMenu(QLineEdit* edit);
     static void showLineEditContextMenu(QLineEdit* edit, const QPoint& pos);
+    static QMenu* createMenu(QWidget* parent = nullptr);
+    static QAction* setupLineEditClearButton(QLineEdit* edit);
 
     static inline QColor getExtensionColor(const QString& ext) {
         return ColorPaletteEngine::getExtensionColor(ext);

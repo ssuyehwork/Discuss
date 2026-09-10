@@ -63,6 +63,23 @@ void UiHelper::showLineEditContextMenu(QLineEdit* edit, const QPoint& pos) {
     menu.exec(edit->mapToGlobal(pos));
 }
 
+QMenu* UiHelper::createMenu(QWidget* parent) {
+    QMenu* menu = new QMenu(parent);
+    applyMenuStyle(menu);
+    return menu;
+}
+
+QAction* UiHelper::setupLineEditClearButton(QLineEdit* edit) {
+    if (!edit) return nullptr;
+    QAction* clearAction = edit->addAction(getIcon("close", QColor("#888888")), QLineEdit::TrailingPosition);
+    clearAction->setVisible(!edit->text().isEmpty());
+    QObject::connect(clearAction, &QAction::triggered, edit, &QLineEdit::clear);
+    QObject::connect(edit, &QLineEdit::textChanged, edit, [clearAction](const QString& text) {
+        clearAction->setVisible(!text.isEmpty());
+    });
+    return clearAction;
+}
+
 void UiHelper::setupLineEditContextMenu(QLineEdit* edit) {
     if (!edit) return;
     edit->setContextMenuPolicy(Qt::CustomContextMenu);
