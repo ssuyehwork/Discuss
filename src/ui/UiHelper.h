@@ -234,6 +234,7 @@ public:
     }
 
     static void setupLineEditContextMenu(QLineEdit* edit);
+    static void showLineEditContextMenu(QLineEdit* edit, const QPoint& pos);
 
     static inline QColor getExtensionColor(const QString& ext) {
         return ColorPaletteEngine::getExtensionColor(ext);
