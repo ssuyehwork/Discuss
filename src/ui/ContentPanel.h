@@ -48,7 +48,8 @@ public:
     enum ViewMode {
         ListView,
         GridView,
-        JustifiedViewMode
+        JustifiedViewMode,
+        ViewModeColumn
     };
 
     enum ContextAction {
@@ -200,6 +201,7 @@ private:
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;
     DropTreeView* m_treeView = nullptr;
+    class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;
     QSortFilterProxyModel* m_proxyModel = nullptr;
