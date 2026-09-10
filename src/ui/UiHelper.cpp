@@ -14,30 +14,6 @@
 
 namespace QuarkMeta {
 
-void UiHelper::cleanupWidgetCursorState(QWidget* widget) {
-    if (QWidget* grabber = QWidget::mouseGrabber()) {
-        if (grabber == widget || (widget && widget->isAncestorOf(grabber))) {
-            grabber->releaseMouse();
-        }
-    }
-#ifdef Q_OS_WIN
-    if (widget && widget->testAttribute(Qt::WA_WState_Created)) {
-        HWND hwnd = reinterpret_cast<HWND>(widget->winId());
-        if (GetCapture() == hwnd) {
-            ::ReleaseCapture();
-        }
-    }
-#endif
-    if (widget) {
-        widget->unsetCursor();
-        if (QWidget* parent = widget->parentWidget()) {
-            parent->unsetCursor();
-            if (QWidget* topWin = parent->window()) {
-                topWin->unsetCursor();
-            }
-        }
-    }
-}
 
 void UiHelper::setupLineEditContextMenu(QLineEdit* edit) {
     if (!edit) return;

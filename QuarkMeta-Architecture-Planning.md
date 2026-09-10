@@ -73,6 +73,12 @@
 3. **【HWND 激活与 Win32 拖拽安全隔离契约】**：
    统一无边框对话框的生命周期与拖拽机制，严格禁止在模态阻塞事件循环中通过 `SendMessage(WM_NCLBUTTONDOWN)` 强抢线程控制权。对话框在 `reject()` / `accept()` 退出时，必须显式做好 HWND 状态清理与光标形态复位（复位为 `Qt::ArrowCursor`），保障主窗口非客户区拉伸与拖拽机制的完美平滑。
 
+4. **【框架级顶层入口自愈契约 (QuarkApplication Self-Healing Framework Contract)】**：
+   全系统统一使用自定义 `QuarkApplication` 继承并替代 `QApplication`。通过重写虚函数 `notify(QObject* receiver, QEvent* event)`，在框架事件派发的最源头实时监听全局所有 `QWindow` 及 `QDialog` 窗口的 `QEvent::Close` 与 `QEvent::Hide` 事件。每当任何弹窗或窗口关闭/隐藏的第 0 毫秒，由框架层自动且强制执行全局清场动作：彻底弹栈全局 `QGuiApplication::overrideCursor()`、释放孤儿鼠标抓取 (`releaseMouse()`)、解开 Win32 原生捕获锁 (`::ReleaseCapture()`) 并通过 `QCursor::setPos(QCursor::pos())` 驱动 Windows DWM 立即重新进行 WM_SETCURSOR Hit-Test 判定。全软件所有界面 100% 无感实现框架级自愈。
+
+5. **【架构绝对归一化与零补丁契约 (Unified Clean Architecture & Zero-Patch Contract)】**：
+   全软件在面对跨模块横切关注点（如输入焦点收回、鼠标抓取释放、光标形态复位、主题与样式派发）时，**必须且只能通过最顶层的框架门禁（如 `QuarkApplication`）或中介协调层（Mediator）做统一高内聚治理**。绝对禁止在下层具体的子对话框、局部面板或叶子 Widget 控件内部手写“擦屁股”式的碎片化补丁代码，彻底抹除打地鼠式的补丁遗留，从架构源头上降低全生命周期的维护与重构成本。
+
 ---
 
 ## 📁 第六章：文件冲突处理交互与对话框规范 (File Collision Resolution Architecture)

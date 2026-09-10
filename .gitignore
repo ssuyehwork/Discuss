@@ -74,6 +74,8 @@
 !specs/**
 !Buk_20260720_144208/
 !Buk_20260720_144208/**
+!FramelessWindowHelper-架构方案/
+!FramelessWindowHelper-架构方案/**
 
 # 忽略构建目录
 build/

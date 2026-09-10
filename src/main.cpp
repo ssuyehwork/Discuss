@@ -2,7 +2,7 @@
 #define NOMINMAX
 #endif
 //2813583 main 禁止删除此行
-#include <QApplication>
+#include "ui/QuarkApplication.h"
 #include "FramelessDialog.h"
 #include <QDebug>
 #include <QFile>
@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
 
     // 设置高 DPI 支持：Qt 6 默认行为，此处显式设置 PassThrough 以防旧设备缩放模糊
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
-    QApplication a(argc, argv);
+    QuarkMeta::QuarkApplication a(argc, argv);
 
     // 全局统一设置深色 QPalette，防止原生 Windows 调色板在斑马纹/Base/AlternateBase 露底纯白
     QPalette p;

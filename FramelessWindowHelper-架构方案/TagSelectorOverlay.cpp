@@ -12,10 +12,9 @@
 
 namespace QuarkMeta {
 
-
 TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent)
-    : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), 
-      m_selectedTags(initialSelected) 
+    : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint),
+      m_selectedTags(initialSelected)
 {
     setObjectName("TagSelectorOverlay");
     setFrameShape(QFrame::StyledPanel);
@@ -23,11 +22,11 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
     setMouseTracking(true);
     setAttribute(Qt::WA_DeleteOnClose, false);
 
-    m_framelessHelper = FramelessWindowHelper::apply(this, nullptr);
+    m_framelessHelper = FramelessWindowHelper::apply(this, WindowRole::Tool);
 
     initUi();
     loadTagsAndGroups();
-    
+
     m_searchEdit->installEventFilter(this);
     m_tagGridWidget->installEventFilter(this);
 
@@ -58,14 +57,6 @@ void TagSelectorOverlay::closeOverlay() {
     emit overlayClosed();
     close();
     deleteLater();
-}
-
-void TagSelectorOverlay::hideEvent(QHideEvent* event) {
-    QFrame::hideEvent(event);
-}
-
-void TagSelectorOverlay::closeEvent(QCloseEvent* event) {
-    QFrame::closeEvent(event);
 }
 
 void TagSelectorOverlay::initUi() {
@@ -136,7 +127,7 @@ void TagSelectorOverlay::initUi() {
 
 void TagSelectorOverlay::loadTagsAndGroups() {
     m_lexiconGroups = TagLexiconService::instance().getAllTagGroups();
-    
+
     m_groupList->clear();
 
     auto addGroupItem = [this](const QString& name, const QString& iconKey) {
@@ -366,7 +357,7 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
 
     if (event->type() == QEvent::KeyPress) {
         QKeyEvent* ke = static_cast<QKeyEvent*>(event);
-        
+
         if (ke->key() == Qt::Key_Escape) {
             closeOverlay();
             ke->accept();
