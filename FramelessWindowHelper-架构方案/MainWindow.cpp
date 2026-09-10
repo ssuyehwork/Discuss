@@ -51,7 +51,7 @@ MainWindow::~MainWindow() = default;
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
-    setMinimumHeight(700); // 宽度由 PanelLayoutManager::updateDynamicMinimumSize() 动态管理
+    setMinimumHeight(400); // 宽度由 PanelLayoutManager::updateDynamicMinimumSize() 动态管理
     setWindowTitle("QuarkMeta");
 
     m_hoverFilter = new HoverEventFilter(this);
@@ -62,7 +62,7 @@ MainWindow::MainWindow(QWidget* parent)
     initUi();
 
     // 挂载无边框助手（必须在几何属性 restoreGeometry 恢复前完成挂载）
-    m_framelessHelper = FramelessWindowHelper::apply(this, m_titleBarWidget);
+    m_framelessHelper = FramelessWindowHelper::apply(this, WindowRole::Primary, m_titleBarWidget);
 
     // 恢复窗口位置与几何尺寸
     QByteArray savedGeom = AppConfig::instance().getValue("MainWindow/Geometry").toByteArray();
@@ -133,14 +133,9 @@ void MainWindow::setupTopBars(QWidget* parentWidget) {
         AppConfig::instance().setValue("MainWindow/AlwaysOnTop", pinned);
     });
 
-    // 顶层子部件间的纯 UI 布局显隐联动与持久化恢复
-    bool driveBarVis = AppConfig::instance().getValue("MainWindow/DriveBarVisible", true).toBool();
-    m_titleBarWidget->setDriveBarVisible(driveBarVis);
-    if (m_driveBarWidget) m_driveBarWidget->setVisible(driveBarVis);
-
+    // 顶层子部件间的纯 UI 布局显隐联动
     connect(m_titleBarWidget, &TitleBarWidget::driveBarToggleRequested, this, [this](bool visible) {
         if (m_driveBarWidget) m_driveBarWidget->setVisible(visible);
-        AppConfig::instance().setValue("MainWindow/DriveBarVisible", visible);
     });
 }
 
@@ -568,18 +563,6 @@ void MainWindow::changeEvent(QEvent* event) {
         if (m_bodyLayout) {
             m_bodyLayout->setContentsMargins(kLayoutEdgeMargin, 0, kLayoutEdgeMargin, kLayoutEdgeMargin);
         }
-    } else if (event->type() == QEvent::ActivationChange) {
-        if (isActiveWindow()) {
-            if (QWidget::mouseGrabber()) {
-                QWidget::mouseGrabber()->releaseMouse();
-            }
-#ifdef Q_OS_WIN
-            if (testAttribute(Qt::WA_WState_Created)) {
-                ::ReleaseCapture();
-            }
-#endif
-            unsetCursor();
-        }
     }
     QMainWindow::changeEvent(event);
 }
@@ -587,9 +570,6 @@ void MainWindow::changeEvent(QEvent* event) {
 void MainWindow::closeEvent(QCloseEvent* event) {
     AppConfig::instance().setValue("MainWindow/LastPath", NavigationService::instance().currentUrl());
     AppConfig::instance().setValue("MainWindow/Geometry", saveGeometry());
-    if (m_driveBarWidget) {
-        AppConfig::instance().setValue("MainWindow/DriveBarVisible", m_driveBarWidget->isVisible());
-    }
     if (m_panelLayoutManager) {
         m_panelLayoutManager->saveLayoutState();
     }
