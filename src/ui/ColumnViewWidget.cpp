@@ -167,23 +167,11 @@ void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
 
 void ColumnViewWidget::updatePaneWidths() {
     if (m_panes.isEmpty()) return;
-    int availableWidth = width();
-    if (availableWidth <= 0) availableWidth = 800;
-
-    int colCount = m_panes.size();
-    int defaultWidth = 230;
-
-    if (colCount * defaultWidth < availableWidth) {
-        // 列数少时，最后一列铺满剩余宽度，消灭右侧巨幅黑色空白死区
-        for (int i = 0; i < colCount - 1; ++i) {
-            m_panes[i]->setFixedWidth(defaultWidth);
-        }
-        m_panes.last()->setMinimumWidth(availableWidth - (colCount - 1) * defaultWidth - 4);
-        m_panes.last()->setMaximumWidth(QWIDGETSIZE_MAX);
-    } else {
-        for (auto* pane : m_panes) {
-            pane->setFixedWidth(defaultWidth);
-        }
+    int defaultWidth = 240;
+    for (auto* pane : m_panes) {
+        pane->setFixedWidth(defaultWidth);
+        pane->setMinimumWidth(defaultWidth);
+        pane->setMaximumWidth(defaultWidth);
     }
 }
 

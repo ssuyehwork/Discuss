@@ -545,7 +545,16 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 }
 
 void ContentPanel::restoreActiveView() {
-    m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
+    if (m_currentViewMode == ListView) {
+        m_viewStack->setCurrentWidget(m_treeView);
+    } else if (m_currentViewMode == ViewModeColumn) {
+        if (m_columnView) {
+            m_columnView->setRootPath(m_currentPath);
+        }
+        m_viewStack->setCurrentWidget(m_columnView);
+    } else {
+        m_viewStack->setCurrentWidget(m_gridView);
+    }
 }
 
 void ContentPanel::restoreSelections() {
