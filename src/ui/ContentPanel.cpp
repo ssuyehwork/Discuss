@@ -149,6 +149,7 @@ void ContentPanel::initUi() {
     connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
         if (QFileInfo(path).isDir()) {
             m_currentPath = path;
+            emit directorySelected(path);
             emit selectionChanged({path});
             updateStatusBarStats();
         } else {
@@ -277,6 +278,12 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 }
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
+    if (m_currentViewMode == ViewModeColumn && m_columnView) {
+        m_currentPath = path;
+        m_columnView->setRootPath(path);
+        updateStatusBarStats();
+        return;
+    }
     if (m_dataLoader) m_dataLoader->loadDirectory(path, recursive);
 }
 

@@ -42,8 +42,11 @@ public:
         if (!index.isValid()) return;
 
 
-        bool selected = option.state & QStyle::State_Selected;
-        bool hover = option.state & QStyle::State_MouseOver;
+        QStyleOptionViewItem opt = option;
+        opt.state &= ~QStyle::State_HasFocus;
+
+        bool selected = opt.state & QStyle::State_Selected;
+        bool hover = opt.state & QStyle::State_MouseOver;
 
         // 🚀【行底色彻底统一与防穿透自绘】：直接根据选中/悬停/行号奇偶绘制底色，贯穿整个单元格矩形
         painter->save();
