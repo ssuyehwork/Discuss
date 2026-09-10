@@ -145,6 +145,9 @@ void ContentPanel::initUi() {
     initGridView();
     initListView();
     m_columnView = new ColumnViewWidget(this);
+    connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
+        emit pathNavigated(path);
+    });
     m_viewStack->addWidget(m_gridView);
     m_viewStack->addWidget(m_treeView);
     m_viewStack->addWidget(m_columnView);
