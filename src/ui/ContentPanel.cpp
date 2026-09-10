@@ -11,6 +11,7 @@
 #include "workers/ContentStatsWorker.h"
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
+#include "ColumnViewWidget.h"
 #include "ThumbnailDelegate.h"
 #include "TreeItemDelegate.h"
 #include "UiHelper.h"
@@ -143,8 +144,10 @@ void ContentPanel::initUi() {
     m_viewStack->setFrameShape(QFrame::NoFrame);
     initGridView();
     initListView();
+    m_columnView = new ColumnViewWidget(this);
     m_viewStack->addWidget(m_gridView);
     m_viewStack->addWidget(m_treeView);
+    m_viewStack->addWidget(m_columnView);
     m_viewStack->setCurrentWidget(m_gridView);
 
     m_mainLayout->addWidget(m_viewStack, 1);
@@ -326,6 +329,11 @@ void ContentPanel::setViewMode(ViewMode mode) {
 
     if (mode == ListView) {
         m_viewStack->setCurrentWidget(m_treeView);
+    } else if (mode == ViewModeColumn) {
+        if (m_columnView) {
+            m_columnView->setRootPath(m_currentPath);
+        }
+        m_viewStack->setCurrentWidget(m_columnView);
     } else {
         auto* jv = qobject_cast<JustifiedView*>(m_gridView);
         if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);

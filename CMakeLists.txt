@@ -150,6 +150,8 @@ set(SOURCES
     src/ui/DropListView.cpp
     src/ui/DropListView.h
     src/ui/DropTreeView.cpp
+    src/ui/ColumnViewWidget.h
+    src/ui/ColumnViewWidget.cpp
     src/ui/DropTreeView.h
     src/ui/IScanResultView.h
     src/ui/FilterStateModel.h
