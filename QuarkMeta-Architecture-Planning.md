@@ -107,3 +107,23 @@
 1. **本文档仅且只能记录高级设计理念、顶层架构规划与全局规范**；
 2. **严禁将任何具体的代码修改点、Search/Replace Git Merge Diff 替换块、具体代码行号或编译调试命令写入本文档**；
 3. **所有具体的代码重构与修改实施方案，必须物理隔离在 `QuarkMeta Architecture/Implementation Plan/` 目录下**（采用英文小写或类名映射命名，如 `FileCollisionDialog.md`）。
+
+---
+
+## 🗂️ 第八章：分列视图交互与编辑触发控制规范 (Column View Architecture & Edit Trigger Contract)
+
+为确保分列视图（Miller Columns 架构）具备极致流畅、符合桌面系统习惯且与其他视图高一致的交互体验，全系统必须遵守以下**分列视图交互与编辑控制规范**：
+
+1. **编辑触发器彻底封禁契约 (No Edit Triggers Contract)**：
+   分列视图 (`ColumnViewWidget` / `ColumnViewPane`) 内部所有子级视图控件 (`QListView`) 必须强制配置 `setEditTriggers(QAbstractItemView::NoEditTriggers)`，彻底阻断 Qt 默认双击或连击唤起行内重命名文本框（`QLineEdit`）的行为，杜绝误触重命名编辑框。
+
+2. **Miller Columns 级联交互与导航契约**：
+   - **单击文件夹**：高亮选中当前项目，并即时在右侧级联卡片区域加载并呈现下一级目录列；
+   - **双击文件夹**：级联展开右侧子列视图，并同步更新全局当前活动路径，绝不进入行内编辑框；
+   - **双击文件**：触发文件激活/打开操作，关闭后级子列并触发关联应用。
+
+3. **ContentPanel 统一控制器体系融合契约 (Unified Controller Integration Contract)**：
+   分列视图 (`ColumnViewWidget`) 必须 100% 深度融合进 `ContentPanel` 的全局控制与状态感知体系，严禁孤立化：
+   - **右键菜单与快捷键**：分列视图内所有子视图控件必须注册 `ContentPanel` 的事件过滤器（挂载 `ContentKeyHandler`），并连接 `customContextMenuRequested` 至 `ContentContextMenu`，全面支持右键菜单、快捷键（`F2` 重命名、`Delete` 删除、`Ctrl+C/V` 复制粘贴、`Space` QuickLook 预览）；
+   - **全局选择集与状态同步**：`ContentPanel::getSelectedPaths()` 必须包含分列视图活动列的选择输出，确保属性面板（`MetaPanel`）、状态栏统计与全局导航栏无缝感知当前选择集；
+   - **筛选与元数据感知**：分列视图所有子列必须继承 `ContentPanel` 的 `FilterState`（搜索过滤、隐藏文件显示、类型筛选），并完整配置渲染代理的色彩标记、评级与异步缩略图管线。

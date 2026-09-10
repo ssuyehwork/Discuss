@@ -144,10 +144,13 @@ void ContentPanel::initUi() {
     m_viewStack->setFrameShape(QFrame::NoFrame);
     initGridView();
     initListView();
-    m_columnView = new ColumnViewWidget(this);
+    m_columnView = new ColumnViewWidget(this, this);
+    connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
         if (QFileInfo(path).isDir()) {
-            emit directorySelected(path);
+            m_currentPath = path;
+            emit selectionChanged({path});
+            updateStatusBarStats();
         } else {
             emit fileActivated(path);
         }
@@ -400,6 +403,9 @@ void ContentPanel::applyFilters() {
         proxy->currentFilter = m_currentFilter;
         proxy->updateFilter();
     }
+    if (m_columnView) {
+        m_columnView->applyFilterState(m_currentFilter);
+    }
     updateStatusBarStats();
 }
 
@@ -510,6 +516,9 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
 }
 
 QStringList ContentPanel::getSelectedPaths() const {
+    if (m_viewStack && m_viewStack->currentWidget() == m_columnView && m_columnView) {
+        return m_columnView->getSelectedPaths();
+    }
     QStringList paths;
     for (const auto& idx : getSelectedIndexes()) {
         if (idx.column() == 0) {
@@ -533,6 +542,9 @@ QList<int> ContentPanel::getSelectedTrashIds() const {
 
 QModelIndexList ContentPanel::getSelectedIndexes() const {
     if (!m_viewStack) return {};
+    if (m_viewStack->currentWidget() == m_columnView && m_columnView) {
+        return m_columnView->getSelectedIndexes();
+    }
     bool isGrid = (m_viewStack->currentWidget() == m_gridView);
     QItemSelectionModel* sel = isGrid ? m_gridView->selectionModel() : m_treeView->selectionModel();
     if (!sel) return {};
@@ -545,7 +557,16 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 }
 
 void ContentPanel::restoreActiveView() {
-    m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
+    if (m_currentViewMode == ListView) {
+        m_viewStack->setCurrentWidget(m_treeView);
+    } else if (m_currentViewMode == ViewModeColumn) {
+        if (m_columnView) {
+            m_columnView->setRootPath(m_currentPath);
+        }
+        m_viewStack->setCurrentWidget(m_columnView);
+    } else {
+        m_viewStack->setCurrentWidget(m_gridView);
+    }
 }
 
 void ContentPanel::restoreSelections() {
