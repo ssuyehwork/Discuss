@@ -107,3 +107,17 @@
 1. **本文档仅且只能记录高级设计理念、顶层架构规划与全局规范**；
 2. **严禁将任何具体的代码修改点、Search/Replace Git Merge Diff 替换块、具体代码行号或编译调试命令写入本文档**；
 3. **所有具体的代码重构与修改实施方案，必须物理隔离在 `QuarkMeta Architecture/Implementation Plan/` 目录下**（采用英文小写或类名映射命名，如 `FileCollisionDialog.md`）。
+
+---
+
+## 🗂️ 第八章：分列视图交互与编辑触发控制规范 (Column View Architecture & Edit Trigger Contract)
+
+为确保分列视图（Miller Columns 架构）具备极致流畅、符合桌面系统习惯且与其他视图高一致的交互体验，全系统必须遵守以下**分列视图交互与编辑控制规范**：
+
+1. **编辑触发器彻底封禁契约 (No Edit Triggers Contract)**：
+   分列视图 (`ColumnViewWidget` / `ColumnViewPane`) 内部所有子级视图控件 (`QListView`) 必须强制配置 `setEditTriggers(QAbstractItemView::NoEditTriggers)`，彻底阻断 Qt 默认双击或连击唤起行内重命名文本框（`QLineEdit`）的行为，杜绝误触重命名编辑框。
+
+2. **Miller Columns 级联交互与导航契约**：
+   - **单击文件夹**：高亮选中当前项目，并即时在右侧级联卡片区域加载并呈现下一级目录列；
+   - **双击文件夹**：级联展开右侧子列视图，并同步更新全局当前活动路径，绝不进入行内编辑框；
+   - **双击文件**：触发文件激活/打开操作，关闭后级子列并触发关联应用。

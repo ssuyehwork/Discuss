@@ -24,19 +24,27 @@ ColumnViewPane::ColumnViewPane(const QString& path, QWidget* parent)
     m_proxyModel->setSourceModel(m_model);
 
     m_listView = new QListView(this);
+    m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_listView->setModel(m_proxyModel);
     m_listView->setItemDelegate(new TreeItemDelegate(this, false, false));
     m_listView->setStyleSheet("QListView { background: #1E1E1E; border: none; border-right: 1px solid #2D2D2D; color: #CCCCCC; }"
                               "QListView::item:selected { background: #3E3E42; color: #FFFFFF; }");
     layout->addWidget(m_listView);
 
-    connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
+    connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
         QString itemPath = index.data(PathRole).toString();
         bool isDir = (index.data(TypeRole).toString() == "folder");
         int paneIdx = property("paneIndex").toInt();
         if (isDir) {
             emit folderSelected(itemPath, paneIdx);
-        } else {
+        }
+    });
+
+    connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
+        QString itemPath = index.data(PathRole).toString();
+        bool isDir = (index.data(TypeRole).toString() == "folder");
+        int paneIdx = property("paneIndex").toInt();
+        if (!isDir) {
             emit fileSelected(itemPath, paneIdx);
         }
     });
