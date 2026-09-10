@@ -111,7 +111,7 @@ void ColumnViewWidget::setRootPath(const QString& path) {
     // 2. 逐层展开列，并在父列中高亮选中对应的子项
     for (int i = 0; i < pathStack.size(); ++i) {
         const QString& p = pathStack[i];
-        ColumnViewPane* pane = appendColumn(p);
+        appendColumn(p);
         if (i > 0 && i - 1 < m_panes.size() - 1) {
             m_panes[i - 1]->selectItemByPath(p);
         }

@@ -159,7 +159,6 @@ public:
             }
 
             // 3. 空文件夹绘制青蓝色虚线框 (#41F2F2 Qt::DashLine)
-            bool isFolder = (index.data(TypeRole).toString() == "folder");
             bool isEmpty = index.data(IsEmptyRole).toBool();
             if (isFolder && isEmpty) {
                 painter->save();
