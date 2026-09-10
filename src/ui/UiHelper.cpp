@@ -14,44 +14,6 @@
 
 namespace QuarkMeta {
 
-void UiHelper::cleanupWidgetCursorState(QWidget* widget) {
-    // 1. 彻底出栈所有可能的 QApplication 全局 overrideCursor
-    while (QGuiApplication::overrideCursor()) {
-        QGuiApplication::restoreOverrideCursor();
-    }
-
-    // 2. 释放 Qt 级别的孤儿 mouseGrabber
-    if (QWidget* grabber = QWidget::mouseGrabber()) {
-        if (grabber == widget || (widget && widget->isAncestorOf(grabber))) {
-            grabber->releaseMouse();
-        }
-    }
-
-    // 3. 解开 Win32 原生捕获锁
-#ifdef Q_OS_WIN
-    if (widget && widget->testAttribute(Qt::WA_WState_Created)) {
-        HWND hwnd = reinterpret_cast<HWND>(widget->winId());
-        if (GetCapture() == hwnd) {
-            ::ReleaseCapture();
-        }
-    }
-#endif
-
-    // 4. 清空 Widget 及其父窗口身上的显式光标
-    if (widget) {
-        widget->unsetCursor();
-        if (QWidget* parent = widget->parentWidget()) {
-            parent->unsetCursor();
-            if (QWidget* topWin = parent->window()) {
-                topWin->unsetCursor();
-            }
-        }
-    }
-
-    // 5. 🚀【核心突破】：强行移动 0 像素鼠标位置，逼迫 Windows DWM 与 Qt 立即对当前静止鼠标重新触发 WM_SETCURSOR Hit-Test！
-    QPoint currentPos = QCursor::pos();
-    QCursor::setPos(currentPos);
-}
 
 void UiHelper::setupLineEditContextMenu(QLineEdit* edit) {
     if (!edit) return;
