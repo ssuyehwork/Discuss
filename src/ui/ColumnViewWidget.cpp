@@ -91,6 +91,7 @@ ColumnViewWidget::ColumnViewWidget(QWidget* parent)
     m_layout = new QHBoxLayout(m_container);
     m_layout->setContentsMargins(0, 0, 0, 0);
     m_layout->setSpacing(0);
+    m_layout->setAlignment(Qt::AlignLeft);
 
     setWidget(m_container);
 }
