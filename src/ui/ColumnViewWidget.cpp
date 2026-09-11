@@ -115,7 +115,8 @@ void ColumnViewPane::setSharedRecords(const std::vector<ItemRecord>& records) {
     if (!m_model) return;
     std::vector<ItemRecord> items = records;
     for (auto& rec : items) {
-        RuntimeMeta meta = MetadataManager::instance().getMeta(rec.path.toStdWString());
+        QString nativePath = QDir::toNativeSeparators(QDir::cleanPath(rec.path));
+        RuntimeMeta meta = MetadataManager::instance().getMeta(nativePath.toStdWString());
         ItemRecord::fromMetadata(rec, meta);
     }
     m_model->setRecords(items);
