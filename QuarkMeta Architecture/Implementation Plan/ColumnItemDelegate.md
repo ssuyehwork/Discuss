@@ -1,108 +1,142 @@
-# ColumnItemDelegate Implementation Plan (ColumnItemDelegate.md)
+# ColumnItemDelegate In-Place Renaming Unification Implementation Plan
 
-## 1. Overview
-This implementation plan specifies switching the item delegate used in Column View (`ColumnViewWidget` / `ColumnViewPane`) from `TreeItemDelegate` to a dedicated `ColumnItemDelegate`. 
-By isolating Column View rendering from `TreeItemDelegate`'s `RowLayoutEngine` square card logic, we eliminate layout collision issues (such as offset SVG icons, overlapping text, and arrow alignment issues in Miller Columns).
+This implementation plan details the precise changes required to harmonize the in-place renaming editor experience in `ColumnItemDelegate` with QuarkMeta's application-wide standards (`QuarkMeta-Architecture-Planning.md`).
 
-## 2. Modified Files List
-- `src/ui/ColumnItemDelegate.h` (Enhanced single-row delegate implementation)
-- `src/ui/ColumnViewWidget.cpp` (Switch `m_listView->setItemDelegate(...)` to use `ColumnItemDelegate`)
+## Overview
+Currently, `ColumnItemDelegate` relies on Qt's default `QStyledItemDelegate::createEditor` (which creates a standard `QLineEdit`). This causes three major issues:
+1. **Lack of Extension Protection**: When renaming a file in Column View, the entire filename including extension is selected, leading to accidental deletion of file extensions.
+2. **Native Right-Click Menu Violation**: Default `QLineEdit` presents Windows/Qt default context menus instead of QuarkMeta's dark-themed exclusive context menu.
+3. **Inconsistent Navigation Keys**: Up/Down and Left/Right key behaviors during in-place editing do not match the smart cursor positioning and navigation guards present in Grid/Tree views.
 
-## 3. Detailed Line-by-Line Changes
+This plan integrates `FileNameLineEdit` into `ColumnItemDelegate` and handles precise geometry and model data synchronization.
 
-### 3.1 Update `src/ui/ColumnItemDelegate.h`
+---
 
-```cpp
+## Modified Files List
+- `src/ui/ColumnItemDelegate.h`
+
+---
+
+## Detailed Line-by-Line Changes
+
+### File: `src/ui/ColumnItemDelegate.h`
+
+```git
 <<<<<<< SEARCH
-        // 2. 绘制图标
-        QVariant deco = index.data(Qt::DecorationRole);
-        QRect iconRect(option.rect.left() + 8, option.rect.top() + (option.rect.height() - 18) / 2, 18, 18);
-        if (deco.canConvert<QIcon>()) {
-            QIcon icon = deco.value<QIcon>();
-            if (!icon.isNull()) {
-                icon.paint(painter, iconRect, Qt::AlignCenter);
-            }
-        }
+#pragma once
 
-        // 3. 绘制文字
-        QString name = index.data(Qt::DisplayRole).toString();
-        QRect textRect = option.rect.adjusted(32, 0, -28, 0);
-        QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
-        painter->setPen(textColor);
-        painter->setFont(option.font);
-        QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideRight, textRect.width());
-        painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
+#include <QStyledItemDelegate>
+#include <QPainter>
+#include "UiHelper.h"
+#include "../core/ModelContract.h"
 
-        // 4. 如果是文件夹，最右侧绘制向右箭头 chevron_right
-        bool isDir = index.data(Qt::UserRole + 2).toBool();
-        if (isDir) {
-            QRect arrowRect(option.rect.right() - 20, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);
-            QColor arrowColor = selected ? QColor("#FFFFFF") : QColor("#888888");
-            UiHelper::getIcon("chevron_right", arrowColor, 14).paint(painter, arrowRect, Qt::AlignCenter);
-        }
+namespace QuarkMeta {
+
+class ColumnItemDelegate : public QStyledItemDelegate {
+public:
+    explicit ColumnItemDelegate(QObject* parent = nullptr)
+        : QStyledItemDelegate(parent) {}
 =======
-        // 2. 绘制图标或缩略图 (精确定位 18x18px)
-        QRect iconRect(option.rect.left() + 8, option.rect.top() + (option.rect.height() - 18) / 2, 18, 18);
-        QVariant deco = index.data(Qt::DecorationRole);
-        if (deco.canConvert<QIcon>()) {
-            QIcon icon = deco.value<QIcon>();
-            if (!icon.isNull()) {
-                icon.paint(painter, iconRect, Qt::AlignCenter);
-            }
-        } else if (deco.canConvert<QPixmap>()) {
-            QPixmap pix = deco.value<QPixmap>();
-            if (!pix.isNull()) {
-                painter->drawPixmap(iconRect, pix.scaled(iconRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+#pragma once
+
+#include <QStyledItemDelegate>
+#include <QPainter>
+#include <QLineEdit>
+#include <QKeyEvent>
+#include "UiHelper.h"
+#include "ThumbnailDelegate.h"
+#include "../core/ModelContract.h"
+
+namespace QuarkMeta {
+
+class ColumnItemDelegate : public QStyledItemDelegate {
+public:
+    explicit ColumnItemDelegate(QObject* parent = nullptr)
+        : QStyledItemDelegate(parent) {}
+
+    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        Q_UNUSED(option);
+        FileNameLineEdit* editor = new FileNameLineEdit(parent);
+        editor->setObjectName("ColumnItemEditor");
+        bool isFolder = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool();
+        editor->setIsFolder(isFolder);
+        editor->installEventFilter(const_cast<ColumnItemDelegate*>(this));
+        return editor;
+    }
+
+    void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        Q_UNUSED(index);
+        QRect r = option.rect;
+        r.adjust(32, 1, -22, -1);
+        editor->setGeometry(r);
+    }
+
+    void setEditorData(QWidget* editor, const QModelIndex& index) const override {
+        QString value = index.model()->data(index, Qt::EditRole).toString();
+        FileNameLineEdit* lineEdit = qobject_cast<FileNameLineEdit*>(editor);
+        if (lineEdit) {
+            lineEdit->setText(value);
+        }
+    }
+
+    void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override {
+        QLineEdit* lineEdit = qobject_cast<QLineEdit*>(editor);
+        if (!lineEdit) return;
+        QString newName = lineEdit->text().trimmed();
+        if (!newName.isEmpty()) {
+            model->setData(index, newName, Qt::EditRole);
+        }
+    }
+
+    bool eventFilter(QObject* obj, QEvent* event) override {
+        if (event->type() == QEvent::KeyPress) {
+            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+            QLineEdit* editor = qobject_cast<QLineEdit*>(obj);
+            if (editor) {
+                int key = keyEvent->key();
+                if (key == Qt::Key_Up || key == Qt::Key_Down) {
+                    keyEvent->accept();
+                    return true;
+                }
+                if (key == Qt::Key_Left || key == Qt::Key_Right) {
+                    if (editor->hasSelectedText()) {
+                        if (key == Qt::Key_Left) {
+                            editor->setCursorPosition(0);
+                        } else {
+                            QString val = editor->text();
+                            int lastDot = val.lastIndexOf('.');
+                            if (lastDot > 0) {
+                                editor->setCursorPosition(lastDot);
+                            } else {
+                                editor->setCursorPosition(val.length());
+                            }
+                        }
+                        editor->deselect();
+                        keyEvent->accept();
+                        return true;
+                    }
+                    return false;
+                }
             }
         }
-
-        // 3. 绘制文件名
-        QString name = index.data(Qt::DisplayRole).toString();
-        QRect textRect = option.rect.adjusted(32, 0, -24, 0);
-        QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
-        painter->setPen(textColor);
-        painter->setFont(option.font);
-        QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideRight, textRect.width());
-        painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
-
-        // 4. 如果是文件夹，最右侧绘制向右箭头 chevron_right；若是空文件夹可辅助描边
-        bool isDir = index.data(TypeRole).toString() == "folder" || index.data(Qt::UserRole + 2).toBool();
-        bool isEmpty = index.data(IsEmptyRole).toBool();
-
-        if (isDir) {
-            QRect arrowRect(option.rect.right() - 18, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);
-            QColor arrowColor = selected ? QColor("#FFFFFF") : (isEmpty ? QColor("#41F2F2") : QColor("#888888"));
-            UiHelper::getIcon("chevron_right", arrowColor, 14).paint(painter, arrowRect, Qt::AlignCenter);
-        }
+        return QStyledItemDelegate::eventFilter(obj, event);
+    }
 >>>>>>> REPLACE
 ```
 
-### 3.2 Update `src/ui/ColumnViewWidget.cpp`
+---
 
-```cpp
-<<<<<<< SEARCH
-#include "TreeItemDelegate.h"
-=======
-#include "ColumnItemDelegate.h"
->>>>>>> REPLACE
-```
+## Build & Verification Steps
 
-```cpp
-<<<<<<< SEARCH
-    auto* delegate = new TreeItemDelegate(this, false, false);
-    m_listView->setItemDelegate(delegate);
-=======
-    auto* delegate = new ColumnItemDelegate(this);
-    m_listView->setItemDelegate(delegate);
->>>>>>> REPLACE
-```
-
-## 4. Build & Verification Steps
-1. Rebuild the application via CMake:
+1. **CMake Build Verification**:
    ```bash
-   cmake --build build --config Release
+   cmake --build build --config Debug
    ```
-2. Verify Column View rendering:
-   - Ensure file and folder icons align precisely at 18x18px on the left (8px margin).
-   - Ensure text is elided cleanly with `Qt::ElideRight`.
-   - Ensure SVG files and thumbnails display without overlap or misaligned offset.
+2. **Functional Verification**:
+   - Launch QuarkMeta application and switch to Column View mode (Miller Columns).
+   - Select a file in any active column and press `F2` (or click "Rename" from right-click context menu).
+   - Verify that:
+     - Only the base filename is selected (extension is protected and unselected).
+     - Up/Down direction keys do not cause view selection drift while editing.
+     - Pressing Left arrow moves cursor to beginning of filename; pressing Right arrow moves cursor directly before the extension dot.
+     - Right-clicking inside the active in-place edit box invokes QuarkMeta's exclusive dark context menu.
