@@ -36,6 +36,9 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setModel(m_proxyModel);
 
+    connect(m_proxyModel, &QAbstractItemModel::modelReset, this, &ColumnViewPane::tryPendingSelection);
+    connect(m_proxyModel, &QAbstractItemModel::layoutChanged, this, &ColumnViewPane::tryPendingSelection);
+
     auto* delegate = new ColumnItemDelegate(this);
     m_listView->setItemDelegate(delegate);
     layout->addWidget(m_listView);
@@ -78,14 +81,25 @@ void ColumnViewPane::setFilterState(const FilterState& state) {
 
 void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     m_pendingSelectPath = targetPath;
-    if (!m_proxyModel || !m_listView) return;
+    tryPendingSelection();
+}
+
+void ColumnViewPane::tryPendingSelection() {
+    if (m_pendingSelectPath.isEmpty() || !m_proxyModel || !m_listView) return;
+
+    QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(m_pendingSelectPath));
     for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
         QModelIndex idx = m_proxyModel->index(r, 0);
-        if (idx.data(PathRole).toString() == targetPath) {
+        QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+
+        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
             m_listView->setCurrentIndex(idx);
-            m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            if (m_listView->selectionModel()) {
+                m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            }
             m_listView->scrollTo(idx, QAbstractItemView::EnsureVisible);
             m_pendingSelectPath.clear();
+            emit selectionChanged();
             break;
         }
     }
