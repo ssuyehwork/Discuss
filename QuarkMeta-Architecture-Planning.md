@@ -122,14 +122,17 @@
    - **双击文件夹**：级联展开右侧子列视图，并同步更新全局当前活动路径，绝不进入行内编辑框；
    - **双击文件**：触发文件激活/打开操作，关闭后级子列并触发关联应用。
 
-3. **ContentPanel 统一控制器体系融合契约 (Unified Controller Integration Contract)**：
+3. **RowLayoutEngine 1:1 正方形卡片对齐契约 (RowLayoutEngine 1:1 Square Card Alignment Contract)**：
+   分列视图必须全面对标列表视图（List View）的渲染架构，在渲染代理（`TreeItemDelegate`）中统一接入 `RowLayoutEngine`。分列视图每一列最左侧均自动计算 1:1 比例的正方形隐式微型卡片区域 (`cardRect`)，文件夹/文件图标、图片缩略图以及空文件夹的 `#41F2F2` 青蓝色虚线框，必须**严格锚定在 1:1 `cardRect` 正方形卡片区域内居中与裁剪绘制**，确保全应用所有视图在底层几何基准上实现 100% 绝对一致。
+
+4. **ContentPanel 统一控制器体系融合契约 (Unified Controller Integration Contract)**：
    分列视图 (`ColumnViewWidget`) 必须 100% 深度融合进 `ContentPanel` 的全局控制与状态感知体系，严禁孤立化：
    - **右键菜单与快捷键**：分列视图内所有子视图控件必须注册 `ContentPanel` 的事件过滤器（挂载 `ContentKeyHandler`），并连接 `customContextMenuRequested` 至 `ContentContextMenu`，全面支持右键菜单、快捷键（`F2` 重命名、`Delete` 删除、`Ctrl+C/V` 复制粘贴、`Space` QuickLook 预览）；
    - **全局选择集与状态同步**：`ContentPanel::getSelectedPaths()` 必须包含分列视图活动列的选择输出，确保属性面板（`MetaPanel`）、状态栏统计与全局导航栏无缝感知当前选择集；
    - **拖拽至收藏夹与跨面板拖拽契约 (Drag & Drop to Favorite Contract)**：分列视图各列控件必须实现拖拽重写类 (`DropListView`) 并继承 `startDrag`，允许用户选择文件/文件夹后将其拖拽至左侧“收藏夹”面板（`FavoritePanel`）、导航栏（`NavPanel`）或外部文件夹，保持与网格/列表视图 100% 同等的拖拽能力；
    - **筛选与元数据感知**：分列视图所有子列必须继承 `ContentPanel` 的 `FilterState`（搜索过滤、隐藏文件显示、类型筛选），并完整配置渲染代理的色彩标记、评级与异步缩略图管线。
 
-4. **视觉精致度与全局导航同步契约 (Visual Polish & Global Sync Contract)**：
+5. **视觉精致度与全局导航同步契约 (Visual Polish & Global Sync Contract)**：
    - **无虚线框契约**：分列视图所有列表控件项在选中与聚焦状态下，必须彻底清除虚线焦点框 (`outline: none;`，并在代理绘制时擦除 `QStyle::State_HasFocus`)，保障沉浸平滑的视觉呈现；
    - **地址栏与导航树无损同步**：分列视图展开子目录或选中文件夹时，必须同步通知全局导航服务 (`NavigationService`) 发射 `currentUrlChanged` / `directorySelected` 广播，使地址栏 (AddressBar) 与导航树 (NavPanel) 实时反映当前选中列的完整最新路径；同时 `ContentPanel` 在分列视图模式下必须阻止无意义的全列重置渲染，保障级联列堆栈的平滑展开；
    - **图标与缩略图管线加载**：分列视图每一列完成目录数据载入后，必须即时调用 `loadThumbnailsForRows` 将记录提交至全局 `ThumbnailPipelineService`，加载显示精美矢量/文件缩略图。
