@@ -57,6 +57,7 @@ public:
     void clearAllColumns();
 
     ColumnViewPane* activePane() const;
+    bool containsPath(const QString& path) const;
     void refreshActiveColumn();
     void scrollToRightmostPane();
     QStringList getSelectedPaths() const;

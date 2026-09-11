@@ -148,7 +148,9 @@ void ContentPanel::initUi() {
     m_columnView = new ColumnViewWidget(this, this);
     connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
-        if (!QFileInfo(path).isDir()) {
+        if (QFileInfo(path).isDir()) {
+            emit directorySelected(path);
+        } else {
             emit fileActivated(path);
         }
     });
@@ -280,13 +282,9 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (m_currentViewMode == ViewModeColumn && m_columnView) {
-        bool pathInPanes = false;
-        ColumnViewPane* active = m_columnView->activePane();
-        if (active && active->currentPath() == path) {
-            pathInPanes = true;
-        }
         m_currentPath = path;
-        if (!pathInPanes) {
+        // 🚀【防大刷新机制】：若目标路径已存在于分栏视图的已有列栈中，仅同步 m_currentPath 与地址栏，绝对不触发整套列重置 (setRootPath)
+        if (!m_columnView->containsPath(path)) {
             m_columnView->setRootPath(path);
         }
         updateStatusBarStats();

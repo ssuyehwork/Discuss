@@ -182,6 +182,20 @@ ColumnViewPane* ColumnViewWidget::activePane() const {
     return m_panes.isEmpty() ? nullptr : m_panes.last();
 }
 
+bool ColumnViewWidget::containsPath(const QString& path) const {
+    if (path.isEmpty()) return false;
+    QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(path));
+    for (auto* pane : m_panes) {
+        if (pane) {
+            QString panePath = QDir::toNativeSeparators(QDir::cleanPath(pane->currentPath()));
+            if (QString::compare(panePath, cleanTarget, Qt::CaseInsensitive) == 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 QStringList ColumnViewWidget::getSelectedPaths() const {
     ColumnViewPane* pane = activePane();
     if (!pane || !pane->listView() || !pane->listView()->selectionModel()) return {};
@@ -278,6 +292,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
             m_panes[i]->clearSelection();
         }
         appendColumn(folderPath);
+        emit pathNavigated(folderPath);
     });
 
     connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
