@@ -152,3 +152,7 @@
    - 分栏视图（Miller Columns 架构）的专用渲染代理 `ColumnItemDelegate` 必须彻底告别依赖 Qt 默认 `QLineEdit` 的私自实现，全面归一化接入统一的 `FileNameLineEdit` 编辑器；
    - **智能扩展名保护与按键流转**：分栏视图触发行内重命名时，获取焦点的编辑器必须具备“文件只高亮选中主文件名/自动避开扩展名，文件夹全选”的智能选区逻辑，且必须完整配备统一的按键拦截处理（阻断上下方向键导致 View 焦点漂移，优化左右方向键定位至基名末端）；
    - **应用专属右键菜单与几何对齐**：行内编辑器必须严格遵守系统专属暗色右键菜单契约（带 100% 语义匹配单色矢量图标与 10px 间距），其渲染几何区域必须精确定位在左侧 32px 留白与右侧 22px 级联指示器箭头之间，确保全视图绝对一致的重命名体验与架构纯洁性。
+
+10. **分栏视图数据与元数据充血同步契约 (Column View Data & Metadata Sync Contract)**：
+   - 分栏视图（Miller Columns 架构）中每一列（`ColumnViewPane`）在异步完成磁盘扫描加载后，必须主动对接系统内存元数据总线（`MetadataManager::instance().getMeta(path)`），对扫描得到的 `ItemRecord` 记录集进行元数据“充血”填充（包含 rating、manualColor、tags、pinned、encrypted、note 等），确保渲染代理获得真实元数据；
+   - 主界面面板（`ContentPanel`）禁止为了迁就分栏视图而塞入假的“自愈重载”代码或侵入性单列特判分支，确保全系统视图模式切换逻辑高内聚与简洁性。
