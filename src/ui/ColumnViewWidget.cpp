@@ -56,18 +56,18 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
         QString itemPath = index.data(PathRole).toString();
         bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
-        int paneIdx = property("paneIndex").toInt();
         if (isDir) {
-            emit folderSelected(itemPath, paneIdx);
+            emit folderSelected(itemPath, this);
+        } else {
+            emit fileSelected(itemPath, this);
         }
     });
 
     connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
         QString itemPath = index.data(PathRole).toString();
         bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
-        int paneIdx = property("paneIndex").toInt();
         if (!isDir) {
-            emit fileSelected(itemPath, paneIdx);
+            emit fileSelected(itemPath, this);
         }
     });
 }
@@ -123,12 +123,14 @@ void ColumnViewPane::setSharedRecords(const std::vector<ItemRecord>& records) {
     if (!m_pendingSelectPath.isEmpty()) {
         selectItemByPath(m_pendingSelectPath);
     }
+    // 🚀【性能治理】：不再盲目将 0..count-1 全量送去排队，仅加载首屏前 30 项首屏缩略图
     int count = m_model->rowCount();
     if (count > 0) {
-        QList<int> visibleRows;
-        visibleRows.reserve(count);
-        for (int r = 0; r < count; ++r) visibleRows.append(r);
-        m_model->loadThumbnailsForRows(visibleRows);
+        int limit = qMin(count, 30);
+        QList<int> firstBatchRows;
+        firstBatchRows.reserve(limit);
+        for (int r = 0; r < limit; ++r) firstBatchRows.append(r);
+        m_model->loadThumbnailsForRows(firstBatchRows);
     }
     emit recordsLoaded(items);
 }
@@ -231,6 +233,32 @@ void ColumnViewWidget::applyFilterState(const FilterState& state) {
     }
 }
 
+int ColumnViewWidget::indexOfPane(ColumnViewPane* pane) const {
+    if (!pane) return -1;
+    return m_panes.indexOf(pane);
+}
+
+void ColumnViewWidget::navigateToPath(const QString& path) {
+    if (path.isEmpty()) return;
+    QString targetClean = QDir::toNativeSeparators(QDir::cleanPath(path));
+
+    // 1. 在已有分栏中匹配目标路径
+    for (int i = 0; i < m_panes.size(); ++i) {
+        ColumnViewPane* pane = m_panes[i];
+        if (!pane) continue;
+        QString paneClean = QDir::toNativeSeparators(QDir::cleanPath(pane->currentPath()));
+        if (QString::compare(paneClean, targetClean, Qt::CaseInsensitive) == 0) {
+            m_activePaneIndex = i;
+            dismissSubColumns(i);
+            clearOtherSelections(i);
+            return;
+        }
+    }
+
+    // 2. 若未匹配到，则重新构建分栏栈
+    setRootPath(path);
+}
+
 void ColumnViewWidget::setRootPath(const QString& path) {
     clearAllColumns();
     if (path.isEmpty()) return;
@@ -274,9 +302,7 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
 }
 
 ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
-    int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
-    pane->setProperty("paneIndex", newIdx);
     pane->setFilterState(m_currentFilter);
     pane->loadDirectory();
 
@@ -287,17 +313,20 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
-        m_activePaneIndex = pane->property("paneIndex").toInt();
+        int idx = indexOfPane(pane);
+        if (idx >= 0) m_activePaneIndex = idx;
         emit selectionChanged();
         if (pane->model()) {
             emit activeColumnRecordsChanged(pane->model()->allRecords());
         }
     });
 
-    connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
+    connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, ColumnViewPane* srcPane) {
+        int paneIdx = indexOfPane(srcPane);
+        if (paneIdx < 0) return;
         m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
-        // 保持父列高亮：仅清空 paneIdx 右侧深层列的选区，保留 paneIdx 及其左侧父列的高亮
+        // 保持父列高亮：仅清空 paneIdx 右侧深层列的选区
         for (int i = paneIdx + 1; i < m_panes.size(); ++i) {
             m_panes[i]->clearSelection();
         }
@@ -305,7 +334,9 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
         emit pathNavigated(folderPath);
     });
 
-    connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
+    connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, ColumnViewPane* srcPane) {
+        int paneIdx = indexOfPane(srcPane);
+        if (paneIdx < 0) return;
         m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
         clearOtherSelections(paneIdx);

@@ -286,8 +286,8 @@ void PanelMediator::setupConnections() {
                 // 3. 权威 SSOT 查询（必须使用规范化后的 nativePath）
                 RuntimeMeta meta = MetadataManager::instance().getMeta(nativePath.toStdWString());
 
-                // 4. 彻底干掉盲信 idx 的三元运算符：优先采用数据库权威值，只有当 DB 为空时才降级读 idx
-                int rating   = (meta.rating > 0) ? meta.rating : (idx.isValid() ? idx.data(RatingRole).toInt() : 0);
+                // 4. 彻底干掉盲信 idx 的三元运算符：直接信任 SSOT 权威值，只在未查询到有效属性时降级读 idx
+                int rating   = meta.rating;
                 QString color= !meta.manualColor.empty() ? QString::fromStdWString(meta.manualColor) : (idx.isValid() ? idx.data(ColorRole).toString() : "");
                 QStringList tags = !meta.tags.isEmpty() ? meta.tags : (idx.isValid() ? idx.data(TagsRole).toStringList() : QStringList());
                 QString note = !meta.note.empty() ? QString::fromStdWString(meta.note) : (idx.isValid() ? idx.data(NoteRole).toString() : "");

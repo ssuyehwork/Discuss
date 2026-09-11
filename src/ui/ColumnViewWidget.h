@@ -32,8 +32,8 @@ public:
     void setSharedRecords(const std::vector<ItemRecord>& records);
 
 signals:
-    void folderSelected(const QString& folderPath, int paneIndex);
-    void fileSelected(const QString& filePath, int paneIndex);
+    void folderSelected(const QString& folderPath, ColumnViewPane* pane);
+    void fileSelected(const QString& filePath, ColumnViewPane* pane);
     void selectionChanged();
     void recordsLoaded(const std::vector<ItemRecord>& records);
 
@@ -56,6 +56,7 @@ public:
     ~ColumnViewWidget() override = default;
 
     void setRootPath(const QString& path);
+    void navigateToPath(const QString& path);
     void clearAllColumns();
 
     ColumnViewPane* activePane() const;
@@ -76,6 +77,7 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private:
+    int indexOfPane(ColumnViewPane* pane) const;
     void dismissSubColumns(int fromIndex);
     ColumnViewPane* appendColumn(const QString& path);
     void clearOtherSelections(int activePaneIdx);

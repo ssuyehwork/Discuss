@@ -283,10 +283,7 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (m_currentViewMode == ViewModeColumn && m_columnView) {
         m_currentPath = path;
-        // 🚀【防大刷新机制】：若目标路径已存在于分栏视图的已有列栈中，仅同步 m_currentPath 与地址栏，绝对不触发整套列重置 (setRootPath)
-        if (!m_columnView->containsPath(path)) {
-            m_columnView->setRootPath(path);
-        }
+        m_columnView->navigateToPath(path);
         updateStatusBarStats();
         return;
     }
