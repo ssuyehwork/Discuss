@@ -148,16 +148,6 @@
    - 网格视图、列表视图和瀑布流视图统一共享全局主模型 `m_diskModel`，而分栏视图采用独立的级联多列模型。当用户在分栏视图模式下进行路径导航或深度点击后，全局路径 `m_currentPath` 会即时刷新；
    - 当用户从分栏视图切换至网格、列表或瀑布流视图时，`ContentPanel::setViewMode` 必须自动比对主模型 `m_diskModel` 的权威路径与 `m_currentPath`。若发现主模型路径滞后或处于空状态，系统必须触发自愈重载（`loadDirectory(m_currentPath)`），保障切换回其他视图时真实数据项 0 毫秒同步呈现，彻底消除“切回网格视图显示无项目”的虚假空状态缺陷。
 
-9. **分栏视图行内编辑统一编辑器与智能选区契约 (Column View In-Place Editing & Smart Selection Sync Contract)**：
-   - 分栏视图（Miller Columns 架构）的专用渲染代理 `ColumnItemDelegate` 必须彻底告别依赖 Qt 默认 `QLineEdit` 的私自实现，全面归一化接入统一的 `FileNameLineEdit` 编辑器；
-   - **智能扩展名保护与按键流转**：分栏视图触发行内重命名时，获取焦点的编辑器必须具备“文件只高亮选中主文件名/自动避开扩展名，文件夹全选”的智能选区逻辑，且必须完整配备统一的按键拦截处理（阻断上下方向键导致 View 焦点漂移，优化左右方向键定位至基名末端）；
-   - **应用专属右键菜单与几何对齐**：行内编辑器必须严格遵守系统专属暗色右键菜单契约（带 100% 语义匹配单色矢量图标与 10px 间距），其渲染几何区域必须精确定位在左侧 32px 留白与右侧 22px 级联指示器箭头之间，确保全视图绝对一致的重命名体验与架构纯洁性。
-
-10. **分栏视图与元数据面板双向感知与元数据更新契约 (Column View & MetaPanel Bidirectional Integration Contract)**：
-   - 分栏视图（Miller Columns 架构）必须与右侧元数据面板（`MetaPanel`）保持 100% 无缝的响应式双向感知，严禁出现元数据修改后分栏视图“不刷新/不响应”的脱钩现象；
-   - **反向刷新覆盖契约**：`ContentPanel::updateItemMetadata(path)` 在更新主模型数据之余，必须遍历并透传更新分栏视图所有活动列（`ColumnViewPane`）中的私有 Model，确保从 `MetaPanel` 进行评级打星、更改色标、修改标签或编辑备注后，分栏视图列表项的渲染图元与文字 0 毫秒即时同步；
-   - **统计重算与选区广播同步**：分栏视图各列私有 Model 的 `dataChanged` 必须全量接入 `ContentPanel` 的统计重算管线，且跨列点击/销毁列时必须保证选区广播 (`selectionChanged`) 的精确时序，保障 `MetaPanel` 能够随时捕获活动列的精确选择集。
-
-11. **ItemRecord 工厂自动绑定内存真理源（MetadataManager SSOT）装载契约**：
-   - 任何视图（网格、列表、瀑布流、分栏视图）在通过 `DiskScanService` 或构造工厂生成 `ItemRecord` 实体记录时，**必须且只能自动从内存真理源（`MetadataManager::instance().getMeta()`）全量装载当前文件的实时元数据**（包括星级、手动/自动色标、标签列表、置顶状态、加密标记、URL 与备注）；
-   - **禁止裸属性装载**：严禁仅扫描磁盘 Win32 基础属性（尺寸、时间）却将内存元数据置空的“裸记录”行为，从数据工厂源头上保障所有视图模式（尤其是分栏视图）获取到的数据 100% 来源于统一的内存缓存真理源。
+9. **PanelMediator 统一模型数据变更监听与元数据安全透传契约 (PanelMediator Multi-Model Signal Bridge Contract)**：
+   - 中介协调层（`PanelMediator.cpp`）在绑定 `ContentPanel` 与 `MetaPanel` 的数据变更信号时，**必须监听抽象门面 `ContentPanel` 统一下沉的 `itemDataChanged` 聚合广播**，禁止仅硬编码绑定主模型 `m_diskModel`，确保分栏视图各私有列 Model 的数据变动能 0 毫秒同步至右侧元数据面板；
+   - **元数据安全退栈补全**：`PanelMediator` 在响应选区改变 (`selectionChanged`) 并更新 `MetaPanel` 信息时，若发现选中索引来自多列架构或未完成元数据装饰的 Model，必须安全调用 `MetadataManager::instance().getMeta()` 充当真理源退栈补全，绝对禁止将空/零元数据刷入 `MetaPanel`。
