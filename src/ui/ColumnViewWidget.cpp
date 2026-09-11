@@ -2,7 +2,7 @@
 #include "ContentPanel.h"
 #include "../core/DiskScanService.h"
 #include "DropListView.h"
-#include "TreeItemDelegate.h"
+#include "ColumnItemDelegate.h"
 #include "UiHelper.h"
 #include <QFileInfo>
 #include <QVBoxLayout>
@@ -33,9 +33,10 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setAcceptDrops(true);
     m_listView->setDropIndicatorShown(true);
     m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setModel(m_proxyModel);
 
-    auto* delegate = new TreeItemDelegate(this, false, false);
+    auto* delegate = new ColumnItemDelegate(this);
     m_listView->setItemDelegate(delegate);
     layout->addWidget(m_listView);
 
@@ -77,12 +78,13 @@ void ColumnViewPane::setFilterState(const FilterState& state) {
 
 void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     m_pendingSelectPath = targetPath;
-    if (!m_proxyModel) return;
+    if (!m_proxyModel || !m_listView) return;
     for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
         QModelIndex idx = m_proxyModel->index(r, 0);
         if (idx.data(PathRole).toString() == targetPath) {
             m_listView->setCurrentIndex(idx);
-            m_listView->scrollTo(idx);
+            m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            m_listView->scrollTo(idx, QAbstractItemView::EnsureVisible);
             m_pendingSelectPath.clear();
             break;
         }
@@ -115,6 +117,7 @@ void ColumnViewPane::loadDirectory() {
                     for (int r = 0; r < count; ++r) visibleRows.append(r);
                     weakSelf->m_model->loadThumbnailsForRows(visibleRows);
                 }
+                emit weakSelf->recordsLoaded(items);
             }
         });
     });
@@ -216,9 +219,18 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     pane->setProperty("paneIndex", newIdx);
     pane->setFilterState(m_currentFilter);
 
+    connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
+        if (pane == activePane()) {
+            emit activeColumnRecordsChanged(records);
+        }
+    });
+
     connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
         m_activePaneIndex = pane->property("paneIndex").toInt();
         emit selectionChanged();
+        if (pane->model()) {
+            emit activeColumnRecordsChanged(pane->model()->allRecords());
+        }
     });
 
     connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {

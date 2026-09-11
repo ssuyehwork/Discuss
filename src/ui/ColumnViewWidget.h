@@ -27,11 +27,13 @@ public:
 
     QListView* listView() const { return m_listView; }
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
+    DiskItemModel* model() const { return m_model; }
 
 signals:
     void folderSelected(const QString& folderPath, int paneIndex);
     void fileSelected(const QString& filePath, int paneIndex);
     void selectionChanged();
+    void recordsLoaded(const std::vector<ItemRecord>& records);
 
 private:
     QString m_path;
@@ -60,6 +62,7 @@ public:
 signals:
     void pathNavigated(const QString& path);
     void selectionChanged();
+    void activeColumnRecordsChanged(const std::vector<ItemRecord>& records);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
