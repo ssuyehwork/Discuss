@@ -1,13 +1,16 @@
 # ColumnViewWidget-6.md Implementation Plan
 
 ## Overview
-本实施方案旨在彻底解决列视图 (Column View) 存在的三个核心架构与交互缺陷：
+本实施方案旨在彻底解决列视图 (Column View) 存在的四个核心架构与交互缺陷：
 1. **彻底消除 C++ 内联硬编码 `setStyleSheet`**：将 `ColumnViewPane` 和 `ColumnViewWidget` 中内联写死的样式迁移至 `resources/style.qss`，通过对象名 (`ColumnViewPaneListView` 与 `ColumnViewScrollArea`) 进行样式隔离与统一渲染。
 2. **解决文件夹选中高亮秒消失问题**：
    - 调整选区清理逻辑（保持父列高亮）：在展开第 $N$ 列子文件夹时，仅清理第 $N+1$ 列及右侧更深层列的选区，严格保留第 $N$ 列及其左侧所有父列的高亮选中状态。
 3. **彻底根治“点击文件夹导致第 1 列/根列全局无故刷新”的缺陷**：
    - **根因**：此前点击文件夹时发射了 `pathNavigated(folderPath)`，被 `ContentPanel` 捕捉后调用了 `NavigationService::instance().navigateTo(path)`，进而触发全局 `currentUrlChanged` 信号广播，导致 `ContentPanel` 重新执行 `loadDirectory(path)` -> `m_columnView->setRootPath(path)`，引发整套列视图自顶向下全部销毁与重建（并在 SSD 上放大了瞬时重绘闪烁现象）。
    - **修复策略**：在列视图内单击展开级联子列时，**不触发全局 URL 导航服务**；仅在 `ContentPanel` 捕捉到 `ColumnViewWidget` 的增量文件夹展开时做局域列追加 (`appendColumn`)，彻底切断对第 1 列及其他父列的重构冲刷！
+4. **彻底解决“向下滚动点击文件夹后滚动条弹回顶部”的无感刷新问题**：
+   - **根因**：当触发 `setRootPath` 或全量 `loadDirectory` 时，Model 的重绘重置（`beginResetModel / endResetModel`）直接抹掉了 `QListView` 的滚动偏移量，导致 `verticalScrollBar()->setValue(0)` 弹回最顶端。
+   - **修复策略**：通过切断上述第 3 点的全局全量重置，局域父列**完全不触发重新扫描与 Model 重置**，其滚动条物理位置 (`scrollbar->value()`) 100% 原封不动保持；即便在刷新当前列时，也会在 `setRecords` 前后自动保存并精准还原滚动条偏移量，实现彻底无感流畅交互！
 
 ---
 
@@ -53,7 +56,7 @@ QListView#ColumnViewPaneListView::item:selected {
 
 ---
 
-### 2. `src/ui/ColumnViewWidget.cpp` (剔除 setStyleSheet，保持父列高亮与局域展开)
+### 2. `src/ui/ColumnViewWidget.cpp` (剔除 setStyleSheet，保持父列高亮/滚动条位置与局域展开)
 
 ```diff
 <<<<<<< SEARCH
@@ -117,9 +120,68 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
         for (int i = paneIdx + 1; i < m_panes.size(); ++i) {
             m_panes[i]->clearSelection();
         }
-        // 2. 局域局域展开下一列，绝对不发射全局 pathNavigated 避免触发全局 URL 刷新
+        // 2. 局域展开下一列，绝对不发射全局 pathNavigated 避免触发全局 URL 刷新与滚动条置顶
         appendColumn(folderPath);
     });
+>>>>>>> REPLACE
+```
+
+```diff
+<<<<<<< SEARCH
+void ColumnViewPane::loadDirectory() {
+    QString path = m_path;
+    QPointer<ColumnViewPane> weakSelf(this);
+    (void)QtConcurrent::run([weakSelf, path]() {
+        if (!weakSelf) return;
+        std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
+            if (weakSelf && weakSelf->m_model) {
+                weakSelf->m_model->setRecords(items);
+                if (!weakSelf->m_pendingSelectPath.isEmpty()) {
+                    weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
+                }
+                // 触发图标与缩略图提取管线
+                int count = weakSelf->m_model->rowCount();
+                if (count > 0) {
+                    QList<int> visibleRows;
+                    visibleRows.reserve(count);
+                    for (int r = 0; r < count; ++r) visibleRows.append(r);
+                    weakSelf->m_model->loadThumbnailsForRows(visibleRows);
+                }
+            }
+        });
+    });
+}
+=======
+void ColumnViewPane::loadDirectory() {
+    QString path = m_path;
+    // 记录刷新前的滚动偏移量，确保刷新后无感精准还原
+    int savedScrollVal = m_listView && m_listView->verticalScrollBar() ? m_listView->verticalScrollBar()->value() : 0;
+    QPointer<ColumnViewPane> weakSelf(this);
+    (void)QtConcurrent::run([weakSelf, path, savedScrollVal]() {
+        if (!weakSelf) return;
+        std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items, savedScrollVal]() {
+            if (weakSelf && weakSelf->m_model) {
+                weakSelf->m_model->setRecords(items);
+                if (!weakSelf->m_pendingSelectPath.isEmpty()) {
+                    weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
+                } else if (weakSelf->m_listView && weakSelf->m_listView->verticalScrollBar()) {
+                    // 无感还原滚动位置，阻止自动弹回顶部
+                    weakSelf->m_listView->verticalScrollBar()->setValue(savedScrollVal);
+                }
+                // 触发图标与缩略图提取管线
+                int count = weakSelf->m_model->rowCount();
+                if (count > 0) {
+                    QList<int> visibleRows;
+                    visibleRows.reserve(count);
+                    for (int r = 0; r < count; ++r) visibleRows.append(r);
+                    weakSelf->m_model->loadThumbnailsForRows(visibleRows);
+                }
+            }
+        });
+    });
+}
 >>>>>>> REPLACE
 ```
 
@@ -164,7 +226,7 @@ cmake --build build --config Release
 
 ### 2. 验证方案
 1. **样式外联性验证**：检查 `ColumnViewWidget.cpp` 中不再包含任何内联 `setStyleSheet`；确认列视图依赖 `resources/style.qss` 中的选择器正确呈现暗色视觉。
-2. **高亮持续呈现与跨列隔离验证**：
-   - 打开列视图，连续点击进入多级子文件夹（如点击第 5 列中的文件夹 ①）；
-   - 验证最左侧第 1 列 ② 及中间各级父列**绝对不会发生任何闪烁、重绘或数据刷新**；
-   - 验证被点击的文件夹 ① 在父列中**持续保持蓝色高亮背景 (`#378ADD`)**，不会发生秒消失现象。
+2. **滚动位置无感保持验证**：
+   - 打开列视图，在一个列表项目较多的长列中向下滚动（如图 1 所示滚动到中间/下方位置）；
+   - 点击下方某个文件夹（如“空文件夹-测试”）；
+   - **验证结果**：该列滚动条物理位置**100% 保持不动（绝对不会弹回顶部）**，右侧平滑展开下一级子列，体验彻底达到无感流畅！
