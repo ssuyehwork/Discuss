@@ -57,9 +57,9 @@ public:
             }
         }
 
-        // 3. 绘制文件名
+        // 3. 绘制文字 (预留右侧 22px 保证 chevron_right 箭头画廊排他)
         QString name = index.data(Qt::DisplayRole).toString();
-        QRect textRect = option.rect.adjusted(32, 0, -24, 0);
+        QRect textRect = option.rect.adjusted(32, 0, -22, 0);
         QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
         painter->setPen(textColor);
         painter->setFont(option.font);
@@ -71,7 +71,7 @@ public:
         bool isEmpty = index.data(IsEmptyRole).toBool();
 
         if (isDir) {
-            QRect arrowRect(option.rect.right() - 18, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);
+            QRect arrowRect(option.rect.right() - 20, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);
             QColor arrowColor = selected ? QColor("#FFFFFF") : (isEmpty ? QColor("#41F2F2") : QColor("#888888"));
             UiHelper::getIcon("chevron_right", arrowColor, 14).paint(painter, arrowRect, Qt::AlignCenter);
         }

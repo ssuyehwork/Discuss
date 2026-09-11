@@ -33,6 +33,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setAcceptDrops(true);
     m_listView->setDropIndicatorShown(true);
     m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setModel(m_proxyModel);
 
     auto* delegate = new ColumnItemDelegate(this);
@@ -77,12 +78,13 @@ void ColumnViewPane::setFilterState(const FilterState& state) {
 
 void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     m_pendingSelectPath = targetPath;
-    if (!m_proxyModel) return;
+    if (!m_proxyModel || !m_listView) return;
     for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
         QModelIndex idx = m_proxyModel->index(r, 0);
         if (idx.data(PathRole).toString() == targetPath) {
             m_listView->setCurrentIndex(idx);
-            m_listView->scrollTo(idx);
+            m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            m_listView->scrollTo(idx, QAbstractItemView::EnsureVisible);
             m_pendingSelectPath.clear();
             break;
         }
