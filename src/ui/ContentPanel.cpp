@@ -364,15 +364,6 @@ void ContentPanel::setViewMode(ViewMode mode) {
         m_viewStack->setCurrentWidget(m_gridView);
     }
 
-    // 🚀【自愈数据同步机制】：若从分栏视图切回网格/列表/瀑布流视图，且主模型处于空装载状态，自动自愈驱动 loadDirectory
-    if (oldMode == ViewModeColumn && mode != ViewModeColumn) {
-        if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
-            if (!m_diskModel || m_diskModel->rowCount() == 0) {
-                loadDirectory(m_currentPath, m_isRecursive);
-            }
-        }
-    }
-
     AppConfig::instance().setValue("ContentPanel/ViewMode", static_cast<int>(mode));
     updateGridSize();
     emit viewModeChanged(mode);
