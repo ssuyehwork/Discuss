@@ -137,6 +137,7 @@ public:
 signals:
     void zoomLevelChanged(int level);
     void viewModeChanged(ViewMode mode);
+    void itemDataChanged(const QString& path);
     void requestQuickLook(const QString& path);
     void fileActivated(const QString& path);
     void selectionChanged(const QStringList& paths);
