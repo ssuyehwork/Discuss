@@ -59,6 +59,7 @@ public:
     ColumnViewPane* activePane() const;
     bool containsPath(const QString& path) const;
     void refreshActiveColumn();
+    void updateMetadataForPath(const QString& path);
     void scrollToRightmostPane();
     QStringList getSelectedPaths() const;
     QModelIndexList getSelectedIndexes() const;
