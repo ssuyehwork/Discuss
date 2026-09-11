@@ -58,6 +58,7 @@ public:
 
     ColumnViewPane* activePane() const;
     void refreshActiveColumn();
+    void scrollToRightmostPane();
     QStringList getSelectedPaths() const;
     QModelIndexList getSelectedIndexes() const;
     void applyFilterState(const FilterState& state);
@@ -79,6 +80,7 @@ private:
     ContentPanel* m_contentPanel = nullptr;
     FilterState m_currentFilter;
     int m_activePaneIndex = -1;
+    bool m_autoScrollToRight = false;
     QWidget* m_container = nullptr;
     QHBoxLayout* m_layout = nullptr;
     QList<ColumnViewPane*> m_panes;
