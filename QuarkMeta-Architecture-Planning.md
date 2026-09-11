@@ -122,8 +122,8 @@
    - **双击文件夹**：级联展开右侧子列视图，并同步更新全局当前活动路径，绝不进入行内编辑框；
    - **双击文件**：触发文件激活/打开操作，关闭后级子列并触发关联应用。
 
-3. **RowLayoutEngine 1:1 正方形卡片对齐契约 (RowLayoutEngine 1:1 Square Card Alignment Contract)**：
-   分列视图必须全面对标列表视图（List View）的渲染架构，在渲染代理（`TreeItemDelegate`）中统一接入 `RowLayoutEngine`。分列视图每一列最左侧均自动计算 1:1 比例的正方形隐式微型卡片区域 (`cardRect`)，文件夹/文件图标、图片缩略图以及空文件夹的 `#41F2F2` 青蓝色虚线框，必须**严格锚定在 1:1 `cardRect` 正方形卡片区域内居中与裁剪绘制**，确保全应用所有视图在底层几何基准上实现 100% 绝对一致。
+3. **分栏视图独立单行渲染代理契约 (Column View Dedicated Single-Row Delegate Contract)**：
+   分列视图（Miller Columns 架构）采用物理隔离的专用渲染代理 `ColumnItemDelegate`，彻底隔离带正方形卡片布局的 `TreeItemDelegate`。分列视图每一项（高度锁定为 32px）采用精准单行横向对齐逻辑：左侧 8px 留白、18x18px 图标/缩略图垂直居中绘制、中间自适应文件名文本区（带 `ElideRight` 自动省略号）、右侧 20px 为文件夹级联展开箭头（chevron_right）。空文件夹时最右侧可增加精致青蓝色 (`#41F2F2`) 虚线指示或标识，彻底避免卡片布局引起的图标文本位置偏离与样式碰撞。
 
 4. **ContentPanel 统一控制器体系融合契约 (Unified Controller Integration Contract)**：
    分列视图 (`ColumnViewWidget`) 必须 100% 深度融合进 `ContentPanel` 的全局控制与状态感知体系，严禁孤立化：
@@ -136,3 +136,6 @@
    - **无虚线框契约**：分列视图所有列表控件项在选中与聚焦状态下，必须彻底清除虚线焦点框 (`outline: none;`，并在代理绘制时擦除 `QStyle::State_HasFocus`)，保障沉浸平滑的视觉呈现；
    - **地址栏与导航树无损同步**：分列视图展开子目录或选中文件夹时，必须同步通知全局导航服务 (`NavigationService`) 发射 `currentUrlChanged` / `directorySelected` 广播，使地址栏 (AddressBar) 与导航树 (NavPanel) 实时反映当前选中列的完整最新路径；同时 `ContentPanel` 在分列视图模式下必须阻止无意义的全列重置渲染，保障级联列堆栈的平滑展开；
    - **图标与缩略图管线加载**：分列视图每一列完成目录数据载入后，必须即时调用 `loadThumbnailsForRows` 将记录提交至全局 `ThumbnailPipelineService`，加载显示精美矢量/文件缩略图。
+
+6. **分栏视图与筛选器数据统计实时接轨契约 (Column View FilterPanel Integration Contract)**：
+   分栏视图（Miller Columns 架构）中每一列均具备独立的目录加载能力。每当分栏视图级联展开新列、最后一列加载完成或用户点击/切换当前活动列（`activePane`）时，系统必须自动捕获当前活动列的文件记录集（`ItemRecord`），驱动统计引擎（`ContentStatsWorker`）重新计算属性、标签、类型与日期分组数据，并通过广播 `directoryStatsReady` 信号与右侧筛选器面板（`FilterPanel`）实时无缝接轨。严禁出现分栏视图内容已更新但筛选器停留在旧目录统计数据的脱节现象。

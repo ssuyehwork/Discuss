@@ -115,6 +115,7 @@ void ColumnViewPane::loadDirectory() {
                     for (int r = 0; r < count; ++r) visibleRows.append(r);
                     weakSelf->m_model->loadThumbnailsForRows(visibleRows);
                 }
+                emit weakSelf->recordsLoaded(items);
             }
         });
     });
@@ -216,9 +217,18 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     pane->setProperty("paneIndex", newIdx);
     pane->setFilterState(m_currentFilter);
 
+    connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
+        if (pane == activePane()) {
+            emit activeColumnRecordsChanged(records);
+        }
+    });
+
     connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
         m_activePaneIndex = pane->property("paneIndex").toInt();
         emit selectionChanged();
+        if (pane->model()) {
+            emit activeColumnRecordsChanged(pane->model()->allRecords());
+        }
     });
 
     connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
