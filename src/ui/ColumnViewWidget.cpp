@@ -1,6 +1,7 @@
 #include "ColumnViewWidget.h"
 #include "ContentPanel.h"
 #include "../core/DiskScanService.h"
+#include "../meta/MetadataManager.h"
 #include "DropListView.h"
 #include "ColumnItemDelegate.h"
 #include "UiHelper.h"
@@ -110,27 +111,36 @@ void ColumnViewPane::clearSelection() {
     }
 }
 
+void ColumnViewPane::setSharedRecords(const std::vector<ItemRecord>& records) {
+    if (!m_model) return;
+    std::vector<ItemRecord> items = records;
+    for (auto& rec : items) {
+        RuntimeMeta meta = MetadataManager::instance().getMeta(rec.path.toStdWString());
+        ItemRecord::fromMetadata(rec, meta);
+    }
+    m_model->setRecords(items);
+    if (!m_pendingSelectPath.isEmpty()) {
+        selectItemByPath(m_pendingSelectPath);
+    }
+    int count = m_model->rowCount();
+    if (count > 0) {
+        QList<int> visibleRows;
+        visibleRows.reserve(count);
+        for (int r = 0; r < count; ++r) visibleRows.append(r);
+        m_model->loadThumbnailsForRows(visibleRows);
+    }
+    emit recordsLoaded(items);
+}
+
 void ColumnViewPane::loadDirectory() {
     QString path = m_path;
     QPointer<ColumnViewPane> weakSelf(this);
     (void)QtConcurrent::run([weakSelf, path]() {
         if (!weakSelf) return;
         std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
-            if (weakSelf && weakSelf->m_model) {
-                weakSelf->m_model->setRecords(items);
-                if (!weakSelf->m_pendingSelectPath.isEmpty()) {
-                    weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
-                }
-                // 触发图标与缩略图提取管线
-                int count = weakSelf->m_model->rowCount();
-                if (count > 0) {
-                    QList<int> visibleRows;
-                    visibleRows.reserve(count);
-                    for (int r = 0; r < count; ++r) visibleRows.append(r);
-                    weakSelf->m_model->loadThumbnailsForRows(visibleRows);
-                }
-                emit weakSelf->recordsLoaded(items);
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items = std::move(items)]() mutable {
+            if (weakSelf) {
+                weakSelf->setSharedRecords(items);
             }
         });
     });

@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QTimer>
 #include "ContentPanel.h"
 
 namespace QuarkMeta {
@@ -68,6 +69,8 @@ private:
     QPointer<AppShortcutController> m_shortcutController;
 
     QString m_currentQuickLookPath;
+    QTimer* m_selectionDebounceTimer = nullptr;
+    QStringList m_pendingSelectionPaths;
 };
 
 } // namespace QuarkMeta

@@ -29,6 +29,8 @@ public:
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
     DiskItemModel* model() const { return m_model; }
 
+    void setSharedRecords(const std::vector<ItemRecord>& records);
+
 signals:
     void folderSelected(const QString& folderPath, int paneIndex);
     void fileSelected(const QString& filePath, int paneIndex);

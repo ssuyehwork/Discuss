@@ -19,6 +19,7 @@
 #include "../core/ModelContract.h"
 #include "../core/AppConfig.h"
 #include "../util/ShellHelper.h"
+#include "../meta/MetadataManager.h"
 #include "UiHelper.h"
 #include <QFileInfo>
 #include <QFile>
@@ -245,8 +246,18 @@ void PanelMediator::setupConnections() {
             }
         });
 
-        connect(contentPanel, &ContentPanel::selectionChanged, metaPanel, [contentPanel, metaPanel](const QStringList& paths) {
+        if (!m_selectionDebounceTimer) {
+            m_selectionDebounceTimer = new QTimer(this);
+            m_selectionDebounceTimer->setSingleShot(true);
+            m_selectionDebounceTimer->setInterval(30);
+        }
+
+        m_selectionDebounceTimer->disconnect();
+        connect(m_selectionDebounceTimer, &QTimer::timeout, this, [this, contentPanel, metaPanel]() {
+            if (!metaPanel || !contentPanel) return;
+            const QStringList& paths = m_pendingSelectionPaths;
             metaPanel->setSelectedPaths(paths);
+
             if (paths.isEmpty()) {
                 metaPanel->setImagePreview(QPixmap());
                 metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false, 0, 0);
@@ -263,22 +274,33 @@ void PanelMediator::setupConnections() {
                 QString path = paths.first();
                 QFileInfo fi(path);
 
+                // 第一阶段：0ms 物理属性与 SSOT 元数据同步呈现
                 QString name = idx.isValid() ? idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString() : fi.fileName();
                 QString type = idx.isValid() ? ((idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件") : (fi.isDir() ? "文件夹" : fi.suffix().toUpper() + " 文件");
                 QString sizeStr = idx.isValid() ? idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString() : "-";
                 QString mtimeStr = idx.isValid() ? idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString() : "-";
 
+                // SSOT 权威校验兜底
+                RuntimeMeta meta = MetadataManager::instance().getMeta(path.toStdWString());
+                int rating = idx.isValid() ? idx.data(RatingRole).toInt() : meta.rating;
+                QString color = idx.isValid() ? idx.data(ColorRole).toString() : QString::fromStdWString(meta.manualColor);
+                QStringList tags = idx.isValid() ? idx.data(TagsRole).toStringList() : meta.tags;
+                QString note = idx.isValid() ? idx.data(NoteRole).toString() : QString::fromStdWString(meta.note);
+                QString url = idx.isValid() ? idx.data(UrlRole).toString() : QString::fromStdWString(meta.url);
+
                 metaPanel->updateInfo(
                     name, type, sizeStr, "-", mtimeStr, "-",
-                    path, idx.data(EncryptedRole).toBool(), 0, 0
+                    path, idx.isValid() ? idx.data(EncryptedRole).toBool() : meta.encrypted,
+                    meta.width, meta.height
                 );
-                metaPanel->setRating(idx.data(RatingRole).toInt(), false);
-                metaPanel->setColor(idx.data(ColorRole).toString(), false);
-                metaPanel->setTags(idx.data(TagsRole).toStringList());
-                metaPanel->setNote(idx.data(NoteRole).toString());
-                metaPanel->setURL(idx.data(UrlRole).toString());
+                metaPanel->setRating(rating, false);
+                metaPanel->setColor(color, false);
+                metaPanel->setTags(tags);
+                metaPanel->setNote(note);
+                metaPanel->setURL(url);
 
-                QVariant decData = idx.data(Qt::DecorationRole);
+                // 第二阶段：异步缩略图/预览管线呈现
+                QVariant decData = idx.isValid() ? idx.data(Qt::DecorationRole) : QVariant();
                 QPixmap previewPixmap;
                 if (decData.canConvert<QIcon>()) {
                     previewPixmap = decData.value<QIcon>().pixmap(128, 128);
@@ -286,6 +308,13 @@ void PanelMediator::setupConnections() {
                     previewPixmap = decData.value<QPixmap>();
                 }
                 metaPanel->setImagePreview(previewPixmap);
+            }
+        });
+
+        connect(contentPanel, &ContentPanel::selectionChanged, this, [this](const QStringList& paths) {
+            m_pendingSelectionPaths = paths;
+            if (m_selectionDebounceTimer) {
+                m_selectionDebounceTimer->start();
             }
         });
     }
