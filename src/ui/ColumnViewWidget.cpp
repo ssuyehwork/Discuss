@@ -54,7 +54,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
         QString itemPath = index.data(PathRole).toString();
-        bool isDir = (index.data(TypeRole).toString() == "folder");
+        bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
         int paneIdx = property("paneIndex").toInt();
         if (isDir) {
             emit folderSelected(itemPath, paneIdx);
@@ -63,14 +63,12 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
         QString itemPath = index.data(PathRole).toString();
-        bool isDir = (index.data(TypeRole).toString() == "folder");
+        bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
         int paneIdx = property("paneIndex").toInt();
         if (!isDir) {
             emit fileSelected(itemPath, paneIdx);
         }
     });
-
-    loadDirectory();
 }
 
 void ColumnViewPane::setFilterState(const FilterState& state) {
@@ -269,6 +267,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
     pane->setProperty("paneIndex", newIdx);
     pane->setFilterState(m_currentFilter);
+    pane->loadDirectory();
 
     connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
         if (pane == activePane()) {
