@@ -1,6 +1,7 @@
 #include "ColumnViewWidget.h"
 #include "ContentPanel.h"
 #include "../core/DiskScanService.h"
+#include "../meta/MetadataManager.h"
 #include "DropListView.h"
 #include "ColumnItemDelegate.h"
 #include "UiHelper.h"
