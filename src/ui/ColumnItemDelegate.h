@@ -42,30 +42,37 @@ public:
         painter->setPen(Qt::NoPen);
         painter->drawRect(option.rect);
 
-        // 2. 绘制图标
-        QVariant deco = index.data(Qt::DecorationRole);
+        // 2. 绘制图标或缩略图 (精确定位 18x18px)
         QRect iconRect(option.rect.left() + 8, option.rect.top() + (option.rect.height() - 18) / 2, 18, 18);
+        QVariant deco = index.data(Qt::DecorationRole);
         if (deco.canConvert<QIcon>()) {
             QIcon icon = deco.value<QIcon>();
             if (!icon.isNull()) {
                 icon.paint(painter, iconRect, Qt::AlignCenter);
             }
+        } else if (deco.canConvert<QPixmap>()) {
+            QPixmap pix = deco.value<QPixmap>();
+            if (!pix.isNull()) {
+                painter->drawPixmap(iconRect, pix.scaled(iconRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            }
         }
 
-        // 3. 绘制文字
+        // 3. 绘制文件名
         QString name = index.data(Qt::DisplayRole).toString();
-        QRect textRect = option.rect.adjusted(32, 0, -28, 0);
+        QRect textRect = option.rect.adjusted(32, 0, -24, 0);
         QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
         painter->setPen(textColor);
         painter->setFont(option.font);
         QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideRight, textRect.width());
         painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
 
-        // 4. 如果是文件夹，最右侧绘制向右箭头 chevron_right
-        bool isDir = index.data(Qt::UserRole + 2).toBool();
+        // 4. 如果是文件夹，最右侧绘制向右箭头 chevron_right；若是空文件夹可辅助描边
+        bool isDir = index.data(TypeRole).toString() == "folder" || index.data(Qt::UserRole + 2).toBool();
+        bool isEmpty = index.data(IsEmptyRole).toBool();
+
         if (isDir) {
-            QRect arrowRect(option.rect.right() - 20, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);
-            QColor arrowColor = selected ? QColor("#FFFFFF") : QColor("#888888");
+            QRect arrowRect(option.rect.right() - 18, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);
+            QColor arrowColor = selected ? QColor("#FFFFFF") : (isEmpty ? QColor("#41F2F2") : QColor("#888888"));
             UiHelper::getIcon("chevron_right", arrowColor, 14).paint(painter, arrowRect, Qt::AlignCenter);
         }
 

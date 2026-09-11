@@ -2,7 +2,7 @@
 #include "ContentPanel.h"
 #include "../core/DiskScanService.h"
 #include "DropListView.h"
-#include "TreeItemDelegate.h"
+#include "ColumnItemDelegate.h"
 #include "UiHelper.h"
 #include <QFileInfo>
 #include <QVBoxLayout>
@@ -35,7 +35,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_listView->setModel(m_proxyModel);
 
-    auto* delegate = new TreeItemDelegate(this, false, false);
+    auto* delegate = new ColumnItemDelegate(this);
     m_listView->setItemDelegate(delegate);
     layout->addWidget(m_listView);
 
