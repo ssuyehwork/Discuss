@@ -280,7 +280,7 @@ void PanelMediator::setupConnections() {
                 // 2. 修复单列 QListView 导致的 sibling(5) / sibling(6) 越界取空问题
                 QString name = fi.fileName();
                 QString type = fi.isDir() ? "文件夹" : (fi.suffix().isEmpty() ? "文件" : fi.suffix().toUpper() + " 文件");
-                QString sizeStr = fi.isDir() ? "-" : UiHelper::formatFileSize(fi.size());
+                QString sizeStr = fi.isDir() ? "-" : ShellHelper::formatSize(fi.size());
                 QString mtimeStr = fi.lastModified().toString("yyyy-MM-dd hh:mm");
 
                 // 3. 权威 SSOT 查询（必须使用规范化后的 nativePath）
