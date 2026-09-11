@@ -35,6 +35,9 @@ signals:
     void selectionChanged();
     void recordsLoaded(const std::vector<ItemRecord>& records);
 
+private slots:
+    void tryPendingSelection();
+
 private:
     QString m_path;
     QString m_pendingSelectPath;
