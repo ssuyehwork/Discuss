@@ -85,74 +85,8 @@ public:
         // 2026-06-16 按照 8 列架构重构：第 1, 2, 3 列由代理独立绘制；第 0 列作为名称列，具有微型圆角卡片预览（最左侧看片）
         int col = index.column();
 
-        // 🚨【列视图支持】：如果是单列 QListView (col == 0 且 !m_drawMiniCards)，在右侧绘制 trailing 箭头指示器 (>)，并全面接入 RowLayoutEngine 1:1 卡片
         bool isFolder = (index.data(TypeRole).toString() == "folder");
         bool isEmpty = index.data(IsEmptyRole).toBool();
-
-        if (col == 0 && !m_drawMiniCards) {
-            painter->save();
-            painter->setRenderHint(QPainter::Antialiasing);
-            painter->setRenderHint(QPainter::SmoothPixmapTransform);
-
-            // 1. 接入 RowLayoutEngine 计算 1:1 比例正方形隐式微卡片与文本区域
-            RowLayout layout = RowLayoutEngine::calculate(option.rect, option.rect.height());
-            QRect squareRect = layout.cardRect;
-
-            // 2. 图像/图标平滑居中绘制在 1:1 cardRect 内
-            QVariant decoData = index.data(Qt::DecorationRole);
-            bool hasThumb = index.data(HasThumbnailRole).toBool();
-
-            if (hasThumb) {
-                QPixmap thumb;
-                if (decoData.canConvert<QPixmap>()) thumb = decoData.value<QPixmap>();
-                else if (decoData.canConvert<QIcon>()) thumb = decoData.value<QIcon>().pixmap(squareRect.size());
-
-                if (!thumb.isNull()) {
-                    painter->save();
-                    QPainterPath clipPath;
-                    clipPath.addRoundedRect(squareRect, 4, 4);
-                    painter->setClipPath(clipPath);
-
-                    QPixmap scaled = thumb.scaled(squareRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                    int x = squareRect.center().x() - scaled.width() / 2;
-                    int y = squareRect.center().y() - scaled.height() / 2;
-                    painter->drawPixmap(x, y, scaled);
-                    painter->restore();
-                } else {
-                    QIcon icon = qvariant_cast<QIcon>(decoData);
-                    if (!icon.isNull()) {
-                        int iconSize = qRound(squareRect.width() * 0.75);
-                        QRect iconRect(squareRect.center().x() - iconSize / 2, squareRect.center().y() - iconSize / 2, iconSize, iconSize);
-                        icon.paint(painter, iconRect, Qt::AlignCenter);
-                    }
-                }
-            } else {
-                QIcon icon = qvariant_cast<QIcon>(decoData);
-                if (!icon.isNull()) {
-                    int iconSize = qRound(squareRect.width() * 0.75);
-                    QRect iconRect(squareRect.center().x() - iconSize / 2, squareRect.center().y() - iconSize / 2, iconSize, iconSize);
-                    icon.paint(painter, iconRect, Qt::AlignCenter);
-                }
-            }
-
-            // 3. 空文件夹青蓝色虚线框 (#41F2F2 Qt::DashLine) 物理锚定在 squareRect 边缘
-            if (isFolder && isEmpty) {
-                painter->save();
-                painter->setPen(QPen(QColor("#41F2F2"), 1, Qt::DashLine));
-                painter->setBrush(Qt::NoBrush);
-                painter->drawRoundedRect(squareRect, 4, 4);
-                painter->restore();
-            }
-
-            // 4. 绘制右侧级联箭头 (>)
-            if (isFolder) {
-                QRect arrowRect(option.rect.right() - 16, option.rect.top(), 12, option.rect.height());
-                painter->setPen(selected ? QColor("#FFFFFF") : QColor("#888888"));
-                painter->drawText(arrowRect, Qt::AlignCenter, ">");
-            }
-
-            painter->restore();
-        }
 
         if (col == 0 && m_drawMiniCards) {
             // 自定义绘制名称列与最左侧圆角卡片
@@ -273,6 +207,28 @@ public:
             painter->restore();
         } else {
             QStyledItemDelegate::paint(painter, opt, index);
+
+            // 🚨【列视图支持】：单列 QListView (col == 0 且 !m_drawMiniCards)，在 QStyledItemDelegate 原生绘制完图文之后，修饰绘制右侧 > 级联指示器与空文件夹虚线框
+            if (col == 0 && !m_drawMiniCards && isFolder) {
+                painter->save();
+                painter->setRenderHint(QPainter::Antialiasing);
+
+                // 1. 空文件夹青蓝色虚线框 (#41F2F2 Qt::DashLine)，物理对齐图标左侧坐标
+                if (isEmpty) {
+                    int iconSize = 18;
+                    QRect iconBounds(option.rect.left() + 4, option.rect.top() + (option.rect.height() - iconSize) / 2, iconSize, iconSize);
+                    painter->setPen(QPen(QColor("#41F2F2"), 1, Qt::DashLine));
+                    painter->setBrush(Qt::NoBrush);
+                    painter->drawRoundedRect(iconBounds, 3, 3);
+                }
+
+                // 2. 右侧 trailing 级联指示器 (>)
+                QRect arrowRect(option.rect.right() - 16, option.rect.top(), 12, option.rect.height());
+                painter->setPen(selected ? QColor("#FFFFFF") : QColor("#888888"));
+                painter->drawText(arrowRect, Qt::AlignCenter, ">");
+
+                painter->restore();
+            }
         }
     }
 
