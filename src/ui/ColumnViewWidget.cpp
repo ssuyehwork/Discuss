@@ -119,12 +119,7 @@ void ColumnViewPane::loadDirectory() {
         std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
         for (auto& item : items) {
             RuntimeMeta meta = MetadataManager::instance().getMeta(item.path.toStdWString());
-            item.rating = meta.rating;
-            item.manualColor = QString::fromStdWString(meta.color);
-            item.tags = meta.tags;
-            item.pinned = meta.pinned;
-            item.encrypted = meta.encrypted;
-            item.note = meta.note;
+            ItemRecord::fromMetadata(item, meta);
         }
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
