@@ -148,12 +148,7 @@ void ContentPanel::initUi() {
     m_columnView = new ColumnViewWidget(this, this);
     connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
-        if (QFileInfo(path).isDir()) {
-            m_currentPath = path;
-            emit directorySelected(path);
-            emit selectionChanged({path});
-            updateStatusBarStats();
-        } else {
+        if (!QFileInfo(path).isDir()) {
             emit fileActivated(path);
         }
     });
@@ -280,8 +275,13 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (m_currentViewMode == ViewModeColumn && m_columnView) {
-        if (m_currentPath != path) {
-            m_currentPath = path;
+        bool pathInPanes = false;
+        ColumnViewPane* active = m_columnView->activePane();
+        if (active && active->currentPath() == path) {
+            pathInPanes = true;
+        }
+        m_currentPath = path;
+        if (!pathInPanes) {
             m_columnView->setRootPath(path);
         }
         updateStatusBarStats();

@@ -1390,6 +1390,26 @@ QLabel#FilterItemCountLabel {
     background: transparent;
 }
 
+/* 列视图 ColumnView 专属外联 QSS 选择器 */
+QScrollArea#ColumnViewScrollArea {
+    background: #181818;
+    border: none;
+}
+
+QListView#ColumnViewPaneListView {
+    background: #1E1E1E;
+    border: none;
+    border-right: 1px solid #2D2D2D;
+    color: #CCCCCC;
+    outline: none;
+}
+
+QListView#ColumnViewPaneListView::item:selected {
+    background: #378ADD;
+    color: #FFFFFF;
+    outline: none;
+}
+
 /* ContentHeaderWidget 栏分割线 */
 QWidget#ContentHeaderWidget {
     background-color: #252526;

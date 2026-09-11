@@ -122,8 +122,8 @@
    - **双击文件夹**：级联展开右侧子列视图，并同步更新全局当前活动路径，绝不进入行内编辑框；
    - **双击文件**：触发文件激活/打开操作，关闭后级子列并触发关联应用。
 
-3. **RowLayoutEngine 1:1 正方形卡片对齐契约 (RowLayoutEngine 1:1 Square Card Alignment Contract)**：
-   分列视图必须全面对标列表视图（List View）的渲染架构，在渲染代理（`TreeItemDelegate`）中统一接入 `RowLayoutEngine`。分列视图每一列最左侧均自动计算 1:1 比例的正方形隐式微型卡片区域 (`cardRect`)，文件夹/文件图标、图片缩略图以及空文件夹的 `#41F2F2` 青蓝色虚线框，必须**严格锚定在 1:1 `cardRect` 正方形卡片区域内居中与裁剪绘制**，确保全应用所有视图在底层几何基准上实现 100% 绝对一致。
+3. **分栏视图独立单行渲染代理契约 (Column View Dedicated Single-Row Delegate Contract)**：
+   分列视图（Miller Columns 架构）采用物理隔离的专用渲染代理 `ColumnItemDelegate`，彻底隔离带正方形卡片布局的 `TreeItemDelegate`。分列视图每一项（高度锁定为 32px）采用精准单行横向对齐逻辑：左侧 8px 留白、18x18px 图标/缩略图垂直居中绘制、中间自适应文件名文本区（带 `ElideRight` 自动省略号）、右侧 20px 为文件夹级联展开箭头（chevron_right）。空文件夹时最右侧可增加精致青蓝色 (`#41F2F2`) 虚线指示或标识，彻底避免卡片布局引起的图标文本位置偏离与样式碰撞。
 
 4. **ContentPanel 统一控制器体系融合契约 (Unified Controller Integration Contract)**：
    分列视图 (`ColumnViewWidget`) 必须 100% 深度融合进 `ContentPanel` 的全局控制与状态感知体系，严禁孤立化：

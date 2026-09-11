@@ -1,6 +1,7 @@
 #include "ColumnViewWidget.h"
 #include "ContentPanel.h"
 #include "../core/DiskScanService.h"
+#include "DropListView.h"
 #include "TreeItemDelegate.h"
 #include "UiHelper.h"
 #include <QFileInfo>
@@ -9,7 +10,6 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QResizeEvent>
-#include <QApplication>
 
 namespace QuarkMeta {
 
@@ -25,16 +25,18 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_proxyModel = new FilterProxyModel(this);
     m_proxyModel->setSourceModel(m_model);
 
-    m_listView = new QListView(this);
+    m_listView = new DropListView(this);
+    m_listView->setObjectName("ColumnViewPaneListView");
     m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_listView->setDragEnabled(true);
+    m_listView->setAcceptDrops(true);
+    m_listView->setDropIndicatorShown(true);
     m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_listView->setModel(m_proxyModel);
 
     auto* delegate = new TreeItemDelegate(this, false, false);
     m_listView->setItemDelegate(delegate);
-    m_listView->setStyleSheet("QListView { background: #1E1E1E; border: none; border-right: 1px solid #2D2D2D; color: #CCCCCC; outline: none; }"
-                              "QListView::item:selected { background: #3E3E42; color: #FFFFFF; outline: none; }");
     layout->addWidget(m_listView);
 
     if (m_contentPanel) {
@@ -121,8 +123,8 @@ void ColumnViewPane::loadDirectory() {
 ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
     : QScrollArea(parent), m_contentPanel(contentPanel) 
 {
+    setObjectName("ColumnViewScrollArea");
     setWidgetResizable(true);
-    setStyleSheet("QScrollArea { background: #181818; border: none; }");
 
     m_container = new QWidget(this);
     m_layout = new QHBoxLayout(m_container);
@@ -134,17 +136,9 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
 }
 
 ColumnViewPane* ColumnViewWidget::activePane() const {
-    // 不缓存"活跃列"下标——现场查询当前持有键盘焦点的那一列，天然避免多个信号处理器
-    // 互相覆写同一份共享状态导致的竞态（对齐 Files 项目里 FindAscendant<BladeItem> 的思路）
-    QWidget* focusWidget = QApplication::focusWidget();
-    for (auto* pane : m_panes) {
-        if (pane->listView() && focusWidget &&
-            (focusWidget == pane->listView() || pane->listView()->isAncestorOf(focusWidget))) {
-            return pane;
-        }
+    if (m_activePaneIndex >= 0 && m_activePaneIndex < m_panes.size()) {
+        return m_panes[m_activePaneIndex];
     }
-    // 没有任何一列持有焦点时（比如刚切换到列视图、还没点过任何东西），
-    // 退化为最右边一列——那始终是当前导航到的最深层级
     return m_panes.isEmpty() ? nullptr : m_panes.last();
 }
 
@@ -222,18 +216,23 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     pane->setProperty("paneIndex", newIdx);
     pane->setFilterState(m_currentFilter);
 
-    connect(pane, &ColumnViewPane::selectionChanged, this, [this]() {
+    connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
+        m_activePaneIndex = pane->property("paneIndex").toInt();
         emit selectionChanged();
     });
 
     connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
+        m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
-        clearOtherSelections(paneIdx);
+        // 保持父列高亮：仅清空 paneIdx 右侧深层列的选区，保留 paneIdx 及其左侧父列的高亮
+        for (int i = paneIdx + 1; i < m_panes.size(); ++i) {
+            m_panes[i]->clearSelection();
+        }
         appendColumn(folderPath);
-        emit pathNavigated(folderPath);
     });
 
     connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
+        m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
         clearOtherSelections(paneIdx);
         emit pathNavigated(filePath);
@@ -243,7 +242,6 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     m_layout->addWidget(pane);
     updatePaneWidths();
     ensureWidgetVisible(pane);
-    pane->listView()->setFocus(Qt::MouseFocusReason);
     return pane;
 }
 
