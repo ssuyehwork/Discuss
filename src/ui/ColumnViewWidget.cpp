@@ -9,6 +9,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QResizeEvent>
+#include <QApplication>
 
 namespace QuarkMeta {
 
@@ -133,9 +134,17 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
 }
 
 ColumnViewPane* ColumnViewWidget::activePane() const {
-    if (m_activePaneIndex >= 0 && m_activePaneIndex < m_panes.size()) {
-        return m_panes[m_activePaneIndex];
+    // 不缓存"活跃列"下标——现场查询当前持有键盘焦点的那一列，天然避免多个信号处理器
+    // 互相覆写同一份共享状态导致的竞态（对齐 Files 项目里 FindAscendant<BladeItem> 的思路）
+    QWidget* focusWidget = QApplication::focusWidget();
+    for (auto* pane : m_panes) {
+        if (pane->listView() && focusWidget &&
+            (focusWidget == pane->listView() || pane->listView()->isAncestorOf(focusWidget))) {
+            return pane;
+        }
     }
+    // 没有任何一列持有焦点时（比如刚切换到列视图、还没点过任何东西），
+    // 退化为最右边一列——那始终是当前导航到的最深层级
     return m_panes.isEmpty() ? nullptr : m_panes.last();
 }
 
@@ -213,13 +222,11 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     pane->setProperty("paneIndex", newIdx);
     pane->setFilterState(m_currentFilter);
 
-    connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
-        m_activePaneIndex = pane->property("paneIndex").toInt();
+    connect(pane, &ColumnViewPane::selectionChanged, this, [this]() {
         emit selectionChanged();
     });
 
     connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
-        m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
         clearOtherSelections(paneIdx);
         appendColumn(folderPath);
@@ -227,7 +234,6 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
-        m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
         clearOtherSelections(paneIdx);
         emit pathNavigated(filePath);
@@ -237,6 +243,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     m_layout->addWidget(pane);
     updatePaneWidths();
     ensureWidgetVisible(pane);
+    pane->listView()->setFocus(Qt::MouseFocusReason);
     return pane;
 }
 
@@ -261,6 +268,13 @@ void ColumnViewWidget::updatePaneWidths() {
 void ColumnViewWidget::resizeEvent(QResizeEvent* event) {
     QScrollArea::resizeEvent(event);
     updatePaneWidths();
+}
+
+void ColumnViewWidget::refreshActiveColumn() {
+    ColumnViewPane* pane = activePane();
+    if (pane) {
+        pane->loadDirectory();
+    }
 }
 
 } // namespace QuarkMeta

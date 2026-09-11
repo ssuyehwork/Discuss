@@ -52,6 +52,7 @@ public:
     void clearAllColumns();
 
     ColumnViewPane* activePane() const;
+    void refreshActiveColumn();
     QStringList getSelectedPaths() const;
     QModelIndexList getSelectedIndexes() const;
     void applyFilterState(const FilterState& state);
@@ -71,7 +72,6 @@ private:
 
     ContentPanel* m_contentPanel = nullptr;
     FilterState m_currentFilter;
-    int m_activePaneIndex = -1;
     QWidget* m_container = nullptr;
     QHBoxLayout* m_layout = nullptr;
     QList<ColumnViewPane*> m_panes;

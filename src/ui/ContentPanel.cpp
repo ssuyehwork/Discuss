@@ -33,6 +33,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QApplication>
+#include <QListView>
 
 namespace QuarkMeta {
 
@@ -424,6 +425,10 @@ void ContentPanel::search(const QString& query) {
 }
 
 void ContentPanel::refreshAll() {
+    if (m_currentViewMode == ViewModeColumn && m_columnView) {
+        m_columnView->refreshActiveColumn();
+        return;
+    }
     if (!m_currentPath.isEmpty() && m_currentPath != "computer://") loadDirectory(m_currentPath, m_isRecursive);
     else loadDirectory("computer://");
 }
@@ -497,7 +502,16 @@ void ContentPanel::refreshVisibleThumbnails() {
 
 void ContentPanel::selectAndScrollToPath(const QString& path) { selectAndScrollToItem(path); }
 void ContentPanel::selectAndScrollToItem(const QString& path) {
-    if (!m_proxyModel || path.isEmpty()) return;
+    if (path.isEmpty()) return;
+
+    if (m_currentViewMode == ViewModeColumn && m_columnView) {
+        if (ColumnViewPane* pane = m_columnView->activePane()) {
+            pane->selectItemByPath(path);
+        }
+        return;
+    }
+
+    if (!m_proxyModel) return;
     for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
         QModelIndex proxyIdx = m_proxyModel->index(i, 0);
         if (proxyIdx.data(PathRole).toString() == path) {
@@ -513,6 +527,20 @@ void ContentPanel::selectAndScrollToItem(const QString& path) {
 }
 
 QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta) {
+    if (m_currentViewMode == ViewModeColumn && m_columnView) {
+        ColumnViewPane* pane = m_columnView->activePane();
+        FilterProxyModel* proxy = pane ? pane->proxyModel() : nullptr;
+        if (!proxy || proxy->rowCount() == 0) return QString();
+        int curIdx = -1;
+        for (int i = 0; i < proxy->rowCount(); ++i) {
+            if (proxy->index(i, 0).data(PathRole).toString() == currentPath) { curIdx = i; break; }
+        }
+        if (curIdx == -1) return QString();
+        int target = curIdx + delta;
+        if (target < 0 || target >= proxy->rowCount()) return QString();
+        return proxy->index(target, 0).data(PathRole).toString();
+    }
+
     if (!m_proxyModel || m_proxyModel->rowCount() == 0) return QString();
     int curIdx = -1;
     for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
@@ -580,6 +608,30 @@ void ContentPanel::restoreActiveView() {
 
 void ContentPanel::restoreSelections() {
     if (m_pendingSelectNames.isEmpty()) return;
+
+    if (m_currentViewMode == ViewModeColumn && m_columnView) {
+        ColumnViewPane* pane = m_columnView->activePane();
+        if (pane && pane->listView() && pane->proxyModel()) {
+            QListView* view = pane->listView();
+            FilterProxyModel* proxy = pane->proxyModel();
+            QItemSelection sel;
+            QModelIndex lastIdx;
+            for (int i = 0; i < proxy->rowCount(); ++i) {
+                QModelIndex idx = proxy->index(i, 0);
+                if (m_pendingSelectNames.contains(QFileInfo(idx.data(PathRole).toString()).fileName())) {
+                    sel.select(idx, idx);
+                    lastIdx = idx;
+                }
+            }
+            if (view->selectionModel()) {
+                view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            }
+            if (lastIdx.isValid()) view->scrollTo(lastIdx);
+        }
+        m_pendingSelectNames.clear();
+        return;
+    }
+
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
     if (view && view->selectionModel()) {
         QItemSelection sel;
