@@ -22,7 +22,8 @@ public:
     enum ViewModeOption {
         JustifiedViewMode,
         GridViewMode,
-        ListViewMode
+        ListViewMode,
+        ColumnViewMode
     };
     Q_ENUM(ViewModeOption)
 
