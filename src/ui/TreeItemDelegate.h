@@ -10,7 +10,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include "ContentPanel.h"
-#include "ThumbnailDelegate.h"
+#include "RenameCapableDelegate.h"
 #include "RatingBarLayout.h"
 #include "RowLayoutEngine.h"
 #include "../meta/MetadataManager.h"
@@ -25,10 +25,10 @@ namespace QuarkMeta {
 /**
  * @brief 通用树形视图代理，提供圆角高亮效果
  */
-class TreeItemDelegate : public QStyledItemDelegate {
+class TreeItemDelegate : public RenameCapableDelegate {
 public:
     explicit TreeItemDelegate(QObject* parent = nullptr, bool showStatus = true, bool drawMiniCards = false)
-        : QStyledItemDelegate(parent), m_drawMiniCards(drawMiniCards) { Q_UNUSED(showStatus); }
+        : RenameCapableDelegate(parent), m_drawMiniCards(drawMiniCards) { Q_UNUSED(showStatus); }
 
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         QSize sz = QStyledItemDelegate::sizeHint(option, index);
@@ -207,28 +207,6 @@ public:
         }
     }
 
-    void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override {
-        QLineEdit* lineEdit = qobject_cast<QLineEdit*>(editor);
-        if (!lineEdit) return;
-
-        QString newName = lineEdit->text().trimmed();
-        if (newName.isEmpty()) return;
-
-        // 🚀【方案 A 核心】：仅调用标准的 setData，没有任何 parent 向上引用的非标代码！
-        model->setData(index, newName, Qt::EditRole);
-    }
-
-public:
-    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
-        Q_UNUSED(option);
-        FileNameLineEdit* editor = new FileNameLineEdit(parent);
-        editor->setObjectName("TreeItemEditor");
-        bool isFolder = (index.data(TypeRole).toString() == "folder");
-        editor->setIsFolder(isFolder);
-        editor->installEventFilter(const_cast<TreeItemDelegate*>(this));
-        return editor;
-    }
-
     void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         if (index.column() == 0 && m_drawMiniCards) {
             RowLayout layout = RowLayoutEngine::calculate(option.rect, option.rect.height());
@@ -237,50 +215,6 @@ public:
             QRect r = option.rect;
             r.adjust(6, 2, -6, -2);
             editor->setGeometry(r);
-        }
-    }
-
-    bool eventFilter(QObject* obj, QEvent* event) override {
-        if (event->type() == QEvent::KeyPress) {
-            QKeyEvent* keyEvent = reinterpret_cast<QKeyEvent*>(event); 
-            QLineEdit* editor = qobject_cast<QLineEdit*>(obj); 
-            if (editor) { 
-                int key = keyEvent->key();
-                if (key == Qt::Key_Up || key == Qt::Key_Down) {
-                    keyEvent->accept();
-                    return true; // 彻底吞噬，不让 View 漂移（对应用户原话：“用户按下向上/向下方向键时则不该向上游动选中上方/下方的项目”）
-                }
-                if (key == Qt::Key_Left || key == Qt::Key_Right) {
-                    if (editor->hasSelectedText()) {
-                        // 全选高亮状态（对应用户原话：“如果用户按下向左/向右方向键，应该将光标定位到名称最前面或最后面，而不是'.'的后面，除非处于非全选状态”）
-                        if (key == Qt::Key_Left) {
-                            editor->setCursorPosition(0);
-                        } else {
-                            // 2026-07-26 极致重构：按下向右键光标一键定位到文件名基名（不含扩展名部分）的末端（点号前面）（对应用户原话：“我指的是文件名，不是后缀名...基名”）
-                            QString val = editor->text();
-                            int lastDot = val.lastIndexOf('.');
-                            if (lastDot > 0) {
-                                editor->setCursorPosition(lastDot);
-                            } else {
-                                editor->setCursorPosition(val.length());
-                            }
-                        }
-                        editor->deselect(); // 清除全选高亮状态
-                        keyEvent->accept();
-                        return true; // 吞噬该事件，不让其触发默认定位
-                    }
-                    return false; // 非全选状态，走默认逐字位移
-                }
-            } 
-        } 
-        return QStyledItemDelegate::eventFilter(obj, event); 
-    }
-
-    void setEditorData(QWidget* editor, const QModelIndex& index) const override {
-        QString value = index.model()->data(index, Qt::EditRole).toString();
-        FileNameLineEdit* lineEdit = qobject_cast<FileNameLineEdit*>(editor);
-        if (lineEdit) {
-            lineEdit->setText(value);
         }
     }
 

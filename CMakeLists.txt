@@ -293,6 +293,10 @@ set(SOURCES
     src/ui/ToolTipOverlay.cpp
     src/ui/ToolTipOverlay.h
     src/ui/TreeItemDelegate.h
+    src/ui/FileNameLineEdit.h
+    src/ui/FileNameLineEdit.cpp
+    src/ui/RenameCapableDelegate.h
+    src/ui/RenameCapableDelegate.cpp
     src/ui/models/ItemModelBase.h
     src/ui/models/DiskItemModel.h
     src/ui/models/DiskItemModel.cpp

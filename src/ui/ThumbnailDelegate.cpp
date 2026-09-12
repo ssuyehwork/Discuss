@@ -14,7 +14,7 @@
 
 namespace QuarkMeta {
 
-ThumbnailDelegate::ThumbnailDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
+ThumbnailDelegate::ThumbnailDelegate(QObject* parent) : RenameCapableDelegate(parent) {}
 
 void ThumbnailDelegate::setHasThumbnailRole(int role) { m_hasThumbnailRole = role; }
 void ThumbnailDelegate::setRatingRole(int role) { m_ratingRole = role; }
@@ -134,58 +134,9 @@ QSize ThumbnailDelegate::sizeHint(const QStyleOptionViewItem& option, const QMod
     return QStyledItemDelegate::sizeHint(option, index);
 }
 
-QWidget* ThumbnailDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem&, const QModelIndex& index) const { 
-    FileNameLineEdit* editor = new FileNameLineEdit(parent); 
-    editor->setObjectName("ThumbnailEditor");
-    editor->setIsFolder(index.data(m_typeRole).toString() == "folder"); 
-    editor->installEventFilter(const_cast<ThumbnailDelegate*>(this)); 
-    return editor; 
-} 
-
 void ThumbnailDelegate::updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex&) const { 
     CardLayout l = CardLayoutEngine::calculate(option.rect, option.decorationSize.width());
     editor->setGeometry(l.textRect.adjusted(1, 4, -1, -4)); 
-} 
-
-void ThumbnailDelegate::setEditorData(QWidget* editor, const QModelIndex& index) const { 
-    QString value = index.model()->data(index, Qt::EditRole).toString(); 
-    FileNameLineEdit* lineEdit = qobject_cast<FileNameLineEdit*>(editor);  
-    if (lineEdit) lineEdit->setText(value); 
-} 
-
-void ThumbnailDelegate::setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const {
-    QLineEdit* lineEdit = qobject_cast<QLineEdit*>(editor);
-    if (!lineEdit) return;
-    QString newName = lineEdit->text().trimmed();
-    if (!newName.isEmpty()) model->setData(index, newName, Qt::EditRole);
-}
-
-bool ThumbnailDelegate::eventFilter(QObject* obj, QEvent* event) {
-    if (event->type() == QEvent::KeyPress) {
-        QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event); 
-        QLineEdit* editor = qobject_cast<QLineEdit*>(obj); 
-        if (editor) { 
-            if (keyEvent->key() == Qt::Key_Up || keyEvent->key() == Qt::Key_Down) {
-                keyEvent->accept();
-                return true; 
-            }
-            if (keyEvent->key() == Qt::Key_Left || keyEvent->key() == Qt::Key_Right) {
-                if (editor->hasSelectedText()) {
-                    if (keyEvent->key() == Qt::Key_Left) editor->setCursorPosition(0);
-                    else {
-                        QString val = editor->text();
-                        int lastDot = val.lastIndexOf('.');
-                        editor->setCursorPosition(lastDot > 0 ? lastDot : val.length());
-                    }
-                    editor->deselect();
-                    keyEvent->accept();
-                    return true;
-                }
-                return false;
-            }
-        } 
-    } 
-    return QStyledItemDelegate::eventFilter(obj, event); 
 } 
 
 bool ThumbnailDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view, 
