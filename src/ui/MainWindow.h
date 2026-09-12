@@ -112,6 +112,7 @@ private:
     QPushButton* m_btnPresetLayout = nullptr;
     QPushButton* m_btnResetLayout = nullptr;
     QPushButton* m_btnToggleSortOrder = nullptr;
+    QPushButton* m_btnToggleColumn = nullptr;
     QPushButton* m_btnToggleJustified = nullptr;
     QPushButton* m_btnToggleGrid = nullptr;
     QPushButton* m_btnToggleList = nullptr;
