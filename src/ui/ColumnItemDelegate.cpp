@@ -69,23 +69,15 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
         painter->restore();
     }
 
-    // 3. 右侧箭头 (如果是文件夹)
-    int rightReserved = 0;
+    // 3. 右侧箭头 (如果是文件夹，保留 20px 专属区域)
+    int rightReserved = isFolder ? 20 : 0;
     if (isFolder) {
-        rightReserved = 20;
         QRect arrowRect(rect.right() - 16, rect.top() + (rect.height() - 16) / 2, 16, 16);
         QIcon arrowIcon = UiHelper::getIcon("chevron_right", QColor("#888888"), 16);
         arrowIcon.paint(painter, arrowRect, Qt::AlignCenter);
     }
 
-    // 星级/颜色标记
-    int rating = index.data(RatingRole).toInt();
-    QString colorName = index.data(ColorRole).toString();
-    if (rating > 0 || !colorName.isEmpty()) {
-        rightReserved += (rating > 0 ? 50 : 16);
-    }
-
-    // 4. 文件/文件夹名称文本
+    // 4. 文件/文件夹名称文本 (纯净单行渲染，不做行内星级/颜色标识绘制)
     int textLeft = iconRect.right() + 8;
     int textWidth = rect.width() - (textLeft - rect.left()) - rightReserved;
     QRect textRect(textLeft, rect.top(), qMax(10, textWidth), rect.height());
@@ -97,14 +89,6 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
 
     QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideRight, textRect.width());
     painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
-
-    // 5. 绘制星级/颜色标识
-    if (rating > 0 || !colorName.isEmpty()) {
-        QRect ratingRect(textRect.right() + 4, rect.top(), rightReserved - (isFolder ? 20 : 0), rect.height());
-        CardPainterHelper::drawRatingStars(painter, ratingRect, ratingRect, 10, 2,
-                                          ratingRect.top(), ratingRect.height(), ratingRect.left(),
-                                          rating, colorName, selected);
-    }
 
     painter->restore();
 }
