@@ -1,6 +1,7 @@
 #include "DiskItemModel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
+#include "MetaCacheDecorator.h"
 #include "ThumbnailPipelineService.h"
 #include "ModelContract.h"
 #include <QDateTime>
@@ -76,6 +77,10 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     incrementGeneration();
     beginResetModel();
     m_allRecords = records;
+
+    // 🚀【核心根治】：使用 MetaCacheDecorator 批量装载该目录下所有文件的 JSON 关联扩展元数据！
+    MetaCacheDecorator::decorate(m_allRecords);
+
     m_pathToIndex.clear();
     m_requestedPaths.clear();
     int populatedMetaCount = 0;
@@ -83,16 +88,18 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
         auto& rec = m_allRecords[i];
         m_pathToIndex[rec.path] = i;
 
-        // 🚀【防抖与缓存同步】：在加载目录记录时，从 MetadataManager 预填充扩展元数据
+        // 🚀【内存与缓存双向同步】：把 MetaCacheDecorator 装饰到的高级元数据回写激活进 MetadataManager 内存缓存！
         std::wstring wpath = rec.path.toStdWString();
-        RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
-        bool hasExtMeta = false;
-        if (rec.rating == 0 && meta.rating > 0) { rec.rating = meta.rating; hasExtMeta = true; }
-        if (rec.manualColor.isEmpty() && !meta.manualColor.empty()) { rec.manualColor = QString::fromStdWString(meta.manualColor); hasExtMeta = true; }
-        if (rec.tags.isEmpty() && !meta.tags.isEmpty()) { rec.tags = meta.tags; hasExtMeta = true; }
-        if (rec.note.isEmpty() && !meta.note.empty()) { rec.note = QString::fromStdWString(meta.note); hasExtMeta = true; }
-        if (rec.url.isEmpty() && !meta.url.empty()) { rec.url = QString::fromStdWString(meta.url); hasExtMeta = true; }
-        if (hasExtMeta) populatedMetaCount++;
+        MetadataManager::instance().ensureActivated(wpath);
+        if (rec.rating > 0) MetadataManager::instance().setRating(wpath, rec.rating, false);
+        if (!rec.manualColor.isEmpty()) MetadataManager::instance().setColor(wpath, rec.manualColor.toStdWString(), false);
+        if (!rec.tags.isEmpty()) MetadataManager::instance().setTags(wpath, rec.tags, false);
+        if (!rec.note.isEmpty()) MetadataManager::instance().setNote(wpath, rec.note.toStdWString(), false);
+        if (!rec.url.isEmpty()) MetadataManager::instance().setURL(wpath, rec.url.toStdWString(), false);
+
+        if (rec.rating > 0 || !rec.manualColor.isEmpty() || !rec.tags.isEmpty() || !rec.note.isEmpty()) {
+            populatedMetaCount++;
+        }
     }
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     endResetModel();
