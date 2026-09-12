@@ -18,6 +18,7 @@
 #include "../../core/PermanentDeleteService.h"
 #include "../../core/ClipboardService.h"
 #include "../../core/NavigationHistoryService.h"
+#include "../../core/NavigationService.h"
 #include "../../core/OperationSnapshotEngine.h"
 #include "../../util/DiskIoService.h"
 #include "../FramelessFileDialog.h"
@@ -209,6 +210,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
             }
             menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
+
+            if (m_panel && m_panel->isRecursive()) {
+                menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18), "在 QuarkMeta 中显示")->setData(ContentPanel::ActionShowInQuarkMeta);
+            }
 
             QString currentColorStr = currentIndex.data(ColorRole).toString();
             QWidgetAction* pickerAction = new QWidgetAction(&menu);
@@ -462,6 +467,20 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                         QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
                     }
                 }
+            }
+            break;
+        }
+        case ContentPanel::ActionShowInQuarkMeta: {
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            if (!selectedPaths.isEmpty()) {
+                QString targetPath = selectedPaths.first();
+                QFileInfo fi(targetPath);
+                m_panel->setPendingSelectName(fi.fileName(), fi.isDir());
+                NavigationService::instance().navigateTo(fi.absolutePath());
+            } else if (!path.isEmpty()) {
+                QFileInfo fi(path);
+                m_panel->setPendingSelectName(fi.fileName(), fi.isDir());
+                NavigationService::instance().navigateTo(fi.absolutePath());
             }
             break;
         }

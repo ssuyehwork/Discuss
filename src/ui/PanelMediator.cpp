@@ -19,6 +19,7 @@
 #include "../core/ModelContract.h"
 #include "../core/AppConfig.h"
 #include "../util/ShellHelper.h"
+#include "../meta/MetadataManager.h"
 #include "UiHelper.h"
 #include <QFileInfo>
 #include <QFile>
@@ -267,25 +268,38 @@ void PanelMediator::setupConnections() {
                 QString type = idx.isValid() ? ((idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件") : (fi.isDir() ? "文件夹" : fi.suffix().toUpper() + " 文件");
                 QString sizeStr = idx.isValid() ? idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString() : "-";
                 QString mtimeStr = idx.isValid() ? idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString() : "-";
+                bool encrypted = idx.isValid() ? idx.data(EncryptedRole).toBool() : false;
 
                 metaPanel->updateInfo(
                     name, type, sizeStr, "-", mtimeStr, "-",
-                    path, idx.data(EncryptedRole).toBool(), 0, 0
+                    path, encrypted, 0, 0
                 );
-                metaPanel->setRating(idx.data(RatingRole).toInt(), false);
-                metaPanel->setColor(idx.data(ColorRole).toString(), false);
-                metaPanel->setTags(idx.data(TagsRole).toStringList());
-                metaPanel->setNote(idx.data(NoteRole).toString());
-                metaPanel->setURL(idx.data(UrlRole).toString());
 
-                QVariant decData = idx.data(Qt::DecorationRole);
-                QPixmap previewPixmap;
-                if (decData.canConvert<QIcon>()) {
-                    previewPixmap = decData.value<QIcon>().pixmap(128, 128);
-                } else if (decData.canConvert<QPixmap>()) {
-                    previewPixmap = decData.value<QPixmap>();
+                // 🚀【双保险装载】：idx 有效走 Model，idx 无效通过 MetadataManager 兜底，绝不丢弃高级元数据
+                if (idx.isValid()) {
+                    metaPanel->setRating(idx.data(RatingRole).toInt(), false);
+                    metaPanel->setColor(idx.data(ColorRole).toString(), false);
+                    metaPanel->setTags(idx.data(TagsRole).toStringList());
+                    metaPanel->setNote(idx.data(NoteRole).toString());
+                    metaPanel->setURL(idx.data(UrlRole).toString());
+
+                    QVariant decData = idx.data(Qt::DecorationRole);
+                    QPixmap previewPixmap;
+                    if (decData.canConvert<QIcon>()) {
+                        previewPixmap = decData.value<QIcon>().pixmap(128, 128);
+                    } else if (decData.canConvert<QPixmap>()) {
+                        previewPixmap = decData.value<QPixmap>();
+                    }
+                    metaPanel->setImagePreview(previewPixmap);
+                } else {
+                    auto meta = MetadataManager::instance().getMeta(path.toStdWString());
+                    metaPanel->setRating(meta.rating, false);
+                    metaPanel->setColor(QString::fromStdWString(meta.manualColor), false);
+                    metaPanel->setTags(meta.tags);
+                    metaPanel->setNote(QString::fromStdWString(meta.note));
+                    metaPanel->setURL(QString::fromStdWString(meta.url));
+                    metaPanel->setImagePreview(QPixmap());
                 }
-                metaPanel->setImagePreview(previewPixmap);
             }
         });
     }

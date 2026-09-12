@@ -67,13 +67,15 @@ void ContentHeaderWidget::initUi() {
     m_btnLayers = new QPushButton(this);
     m_btnLayers->setCheckable(true);
     m_btnLayers->setFixedSize(24, 24);
-    m_btnLayers->setIcon(UiHelper::getIcon("layers", QColor("#2ecc71"), 18));
+    m_btnLayers->setIcon(UiHelper::getIcon("layers", QColor("#888888"), 18));
     m_btnLayers->setProperty("tooltipText", "显示子文件夹中的项目");
     m_btnLayers->setObjectName("ViewModeToolBtn");
     m_btnLayers->installEventFilter(this);
 
     connect(m_btnLayers, &QPushButton::clicked, this, [this]() {
-        emit recursiveToggled(m_btnLayers->isChecked());
+        bool checked = m_btnLayers->isChecked();
+        m_btnLayers->setIcon(UiHelper::getIcon("layers", checked ? QColor("#2ecc71") : QColor("#888888"), 18));
+        emit recursiveToggled(checked);
     });
 
     m_layout->addWidget(m_btnLayers, 0, Qt::AlignVCenter);
@@ -98,6 +100,7 @@ void ContentHeaderWidget::setFilterState(const FilterState& state) {
 void ContentHeaderWidget::setRecursive(bool recursive) {
     if (m_btnLayers) {
         m_btnLayers->setChecked(recursive);
+        m_btnLayers->setIcon(UiHelper::getIcon("layers", recursive ? QColor("#2ecc71") : QColor("#888888"), 18));
     }
 }
 

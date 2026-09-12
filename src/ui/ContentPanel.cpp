@@ -518,15 +518,18 @@ QList<int> ContentPanel::getSelectedTrashIds() const {
 
 QModelIndexList ContentPanel::getSelectedIndexes() const {
     if (!m_viewStack) return {};
-    bool isGrid = (m_viewStack->currentWidget() == m_gridView);
-    QItemSelectionModel* sel = isGrid ? m_gridView->selectionModel() : m_treeView->selectionModel();
-    if (!sel) return {};
-    if (isGrid) {
-        QModelIndexList res;
-        for (const auto& idx : sel->selectedIndexes()) if (idx.column() == 0) res.append(idx);
-        return res;
+    auto* curView = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
+    if (!curView || !curView->selectionModel()) return {};
+
+    QModelIndexList res;
+    const auto& selected = curView->selectionModel()->selectedIndexes();
+    res.reserve(selected.size());
+    for (const auto& idx : selected) {
+        if (idx.column() == 0) {
+            res.append(idx);
+        }
     }
-    return sel->selectedRows(0);
+    return res;
 }
 
 void ContentPanel::restoreActiveView() {

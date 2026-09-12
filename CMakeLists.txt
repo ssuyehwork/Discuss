@@ -147,8 +147,8 @@ set(SOURCES
     src/ui/DriveButton.h
     src/ui/DropJustifiedView.cpp
     src/ui/DropJustifiedView.h
-    src/ui/DropListView.cpp
-    src/ui/DropListView.h
+    src/ui/ViewDragDropHelper.cpp
+    src/ui/ViewDragDropHelper.h
     src/ui/DropTreeView.cpp
     src/ui/DropTreeView.h
     src/ui/IScanResultView.h

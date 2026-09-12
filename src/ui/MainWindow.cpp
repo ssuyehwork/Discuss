@@ -277,6 +277,8 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
         return btn;
     };
 
+    m_btnToggleSortOrder = createSquareStatusBtn("arrow_down_long", "排序方向 (降序)");
+    m_btnToggleSortOrder->setCheckable(false);
     m_btnToggleJustified = createSquareStatusBtn("resize2", "自适应(A)");
     m_btnToggleGrid      = createSquareStatusBtn("gridgapm", "网格(G)");
     m_btnToggleList      = createSquareStatusBtn("list_ul", "列表(L)");
@@ -377,6 +379,15 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
         applyPresetLayout(presetLeft);
     });
 
+    connect(m_btnToggleSortOrder, &QPushButton::clicked, this, [this]() {
+        if (m_contentPanel) {
+            Qt::SortOrder current = m_contentPanel->currentSortOrder();
+            Qt::SortOrder next = (current == Qt::AscendingOrder) ? Qt::DescendingOrder : Qt::AscendingOrder;
+            m_contentPanel->setSortOrder(next);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
     connect(m_btnToggleJustified, &QPushButton::clicked, this, [this]() {
         if (m_contentPanel) {
             m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode);
@@ -415,6 +426,12 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
         updateStatusBarButtonHighlights();
     });
 
+    QFrame* sepLineSort = new QFrame(m_statusBarWidget);
+    sepLineSort->setFrameShape(QFrame::VLine);
+    sepLineSort->setFixedWidth(1);
+    sepLineSort->setFixedHeight(14);
+    sepLineSort->setStyleSheet("background-color: #444444; border: none;");
+
     QFrame* sepLine = new QFrame(m_statusBarWidget);
     sepLine->setFrameShape(QFrame::VLine);
     sepLine->setFixedWidth(1);
@@ -422,6 +439,8 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     sepLine->setStyleSheet("background-color: #444444; border: none;");
 
     statusL->setSpacing(4);
+    statusL->addWidget(m_btnToggleSortOrder);
+    statusL->addWidget(sepLineSort);
     statusL->addWidget(m_btnToggleJustified);
     statusL->addWidget(m_btnToggleGrid);
     statusL->addWidget(m_btnToggleList);
@@ -469,12 +488,20 @@ void MainWindow::updateStatusBarButtonHighlights() {
     QSignalBlocker b8(m_btnToggleJustified);
     QSignalBlocker b9(m_btnToggleGrid);
     QSignalBlocker b10(m_btnToggleList);
+    QSignalBlocker b11(m_btnToggleSortOrder);
 
     if (m_contentPanel) {
         ContentPanel::ViewMode mode = m_contentPanel->currentViewMode();
         if (m_btnToggleJustified) m_btnToggleJustified->setChecked(mode == ContentPanel::JustifiedViewMode);
         if (m_btnToggleGrid)      m_btnToggleGrid->setChecked(mode == ContentPanel::GridView);
         if (m_btnToggleList)      m_btnToggleList->setChecked(mode == ContentPanel::ListView);
+
+        Qt::SortOrder sortOrd = m_contentPanel->currentSortOrder();
+        if (m_btnToggleSortOrder) {
+            bool isAsc = (sortOrd == Qt::AscendingOrder);
+            m_btnToggleSortOrder->setIcon(UiHelper::getIcon(isAsc ? "arrow_up_long" : "arrow_down_long", QColor("#EEEEEE"), 18));
+            m_btnToggleSortOrder->setProperty("tooltipText", isAsc ? "升序 状态中" : "降序 状态中");
+        }
     }
 
     if (m_btnToggleFilter)   m_btnToggleFilter->setChecked(false);
