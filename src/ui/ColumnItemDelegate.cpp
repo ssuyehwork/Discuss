@@ -56,7 +56,7 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
     if (!icon.isNull()) {
         icon.paint(painter, iconRect, Qt::AlignCenter);
     } else {
-        QIcon fallbackIcon = UiHelper::getFileIcon(isFolder ? "folder" : "file", 18);
+        QIcon fallbackIcon = UiHelper::getIcon(isFolder ? "folder" : "file", QColor("#888888"), 18);
         fallbackIcon.paint(painter, iconRect, Qt::AlignCenter);
     }
 

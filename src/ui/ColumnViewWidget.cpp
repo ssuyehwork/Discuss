@@ -61,7 +61,19 @@ void ColumnViewPane::loadDirectory() {
 
     QtConcurrent::run([this, scanPath]() {
         bool showHidden = m_contentPanel ? m_contentPanel->currentFilter().showHidden : false;
-        auto items = DiskScanService::scanDirectory(scanPath, false, showHidden);
+        std::vector<ItemRecord> rawItems = DiskScanService::scanDirectory(scanPath, false, []() { return true; });
+
+        std::vector<ItemRecord> items;
+        if (!showHidden) {
+            items.reserve(rawItems.size());
+            for (const auto& item : rawItems) {
+                if (!item.isHidden) {
+                    items.push_back(item);
+                }
+            }
+        } else {
+            items = std::move(rawItems);
+        }
 
         QMetaObject::invokeMethod(this, [this, items]() {
             if (m_model) {
