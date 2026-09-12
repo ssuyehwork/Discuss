@@ -37,10 +37,19 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     layout->addWidget(m_listView);
 
-    // 选中变化直接连 ContentPanel
+    // 选中变化驱动焦点设置与跨列选中清除，而后触发 ContentPanel::onSelectionChanged
     if (m_contentPanel) {
-        connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged,
-                m_contentPanel, &ContentPanel::onSelectionChanged);
+        connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
+            if (m_listView && !m_listView->selectionModel()->selectedIndexes().isEmpty()) {
+                m_listView->setFocus();
+                if (m_contentPanel && m_contentPanel->columnView()) {
+                    m_contentPanel->columnView()->clearOtherSelections(this);
+                }
+            }
+            if (m_contentPanel) {
+                m_contentPanel->onSelectionChanged();
+            }
+        });
 
         m_listView->installEventFilter(m_contentPanel);
         m_listView->viewport()->installEventFilter(m_contentPanel);
@@ -94,6 +103,15 @@ void ColumnViewPane::selectItemByPath(const QString& itemPath) {
                 m_listView->selectionModel()->select(proxyIdx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             }
             break;
+        }
+    }
+}
+
+void ColumnViewWidget::clearOtherSelections(ColumnViewPane* currentPane) {
+    for (auto* pane : m_panes) {
+        if (pane != currentPane && pane && pane->listView() && pane->listView()->selectionModel()) {
+            QSignalBlocker blocker(pane->listView()->selectionModel());
+            pane->listView()->clearSelection();
         }
     }
 }

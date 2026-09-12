@@ -59,6 +59,7 @@ public:
     ColumnViewPane* activePane() const;
     void refreshActiveColumn();
     void updateMetadataForPath(const QString& path);
+    void clearOtherSelections(ColumnViewPane* currentPane);
 
     QList<ColumnViewPane*> panes() const { return m_panes; }
 
