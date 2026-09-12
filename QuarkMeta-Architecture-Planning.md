@@ -167,8 +167,10 @@
    - **第一阶段（0ms 物理属性同步呈现）**：中介者与 `MetaPanel` 在接收到选中项变更的 0 毫秒内，首先从数据记录（`ItemRecord` / `QFileInfo`）中同步提取并秒级呈现基础物理属性（文件名、类型、物理大小、创建/修改/访问时间、基本评级与色标），避免界面空转或卡顿；
    - **第二阶段（按需/异步深层元数据提取管线）**：涉及 EXIF 图像宽高分辨率、音视频编码参数、色彩调色板（Palettes）提取以及深层媒体属性解析时，必须提交至后台异步管线（如 `MediaExtractorPipeline` / `ThumbnailPipelineService`）进行非阻塞处理，解析完成后异步发射事件局部更新 `MetaPanel`，保障主 UI 线程绝不阻塞。
 
-3. **视图选择集与模型真理源（SSOT）一致性保障**：
+3. **视图选择集与模型真理源（SSOT）一致性保障与分栏视图数据桥接契约 (Column View Model Metadata Bridge Contract)**：
    - 无论视图形态如何演变（单主模型或分栏多级模型），元数据面板（`MetaPanel`）所展现的星级、颜色、标签、备注与关联网址，必须统一归一化指向系统唯一权威内存真理源（`MetadataManager`）；
+   - **分栏模型数据完整性保障**：分栏视图（Miller Columns 架构）所使用的轻量级级联模型（如 `DiskItemModel`）在完成磁盘文件初始扫描后，必须防抖或按需从全局真理源（`MetadataManager`）填充及更新绑定的标签、星级评级、色彩与备注扩展元数据，禁止将未绑定的空白扩展元数据直接透传给中介层与 `MetaPanel`；
+   - **中介层安全熔断与数据库补全**：`PanelMediator` 在响应选择变更时，必须对视图 `ModelIndex` 携带的扩展字段完整度进行校验。当检测到 `ModelIndex` 属于未绑定扩展字段的轻量模型时，中介层必须强制向全局真理源（`MetadataManager`）请求数据补全并驱动两段式加载管线，确保任何视图模式下 `MetaPanel` 关联元数据呈现的 100% 完整与绝对实时一致；
    - 任何在 `MetaPanel` 或视图卡片上发起的元数据更新，必须经由 `CoreEngine` / `MetadataManager` 持久化后，通过事件总线（`CentralEventHub`）广播回视图，确保全视图模式下元数据状态 100% 绝对实时一致。
 
 ---
