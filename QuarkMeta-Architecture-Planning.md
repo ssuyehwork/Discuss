@@ -170,3 +170,18 @@
 3. **视图选择集与模型真理源（SSOT）一致性保障**：
    - 无论视图形态如何演变（单主模型或分栏多级模型），元数据面板（`MetaPanel`）所展现的星级、颜色、标签、备注与关联网址，必须统一归一化指向系统唯一权威内存真理源（`MetadataManager`）；
    - 任何在 `MetaPanel` 或视图卡片上发起的元数据更新，必须经由 `CoreEngine` / `MetadataManager` 持久化后，通过事件总线（`CentralEventHub`）广播回视图，确保全视图模式下元数据状态 100% 绝对实时一致。
+
+---
+
+## 🎨 第十章：视图代理与重命名编辑框架构归一化规范 (Delegate & Rename Framework Normalization Contract)
+
+为彻底解决全软件各内容视图代理（Delegate）在行内重命名功能实现上的逻辑散落、重复造轮子及交互不一致等架构痛点，全软件必须遵循以下**视图代理与重命名编辑框架构归一化规范**：
+
+1. **重命名编辑器物理剥离与高内聚自治契约 (FileNameLineEdit Independence Contract)**：
+   - 专门用于行内重命名的文本编辑框 `FileNameLineEdit` 必须具备物理独立的头文件与源文件（`FileNameLineEdit.h` / `FileNameLineEdit.cpp`），彻底消除寄生于特定 Delegate 头文件的历史架构耦合；
+   - **控件级交互自治**：编辑框获得焦点时的智能选区（文件夹全选、普通文件避开扩展名高亮选中主文件名）以及键盘事件拦截（吞噬上下方向键以阻断 View 行漂移、智能处理左右方向键定位至基名末端）统一下沉并高内聚于 `FileNameLineEdit` 自身的 `focusInEvent` 与 `keyPressEvent` 虚函数内部。禁止通过代理手动安装全局事件过滤器（`installEventFilter`），保障事件分发效率与架构洁净度。
+
+2. **具备重命名能力的统一代理基类契约 (RenameCapableDelegate Base Contract)**：
+   - 全软件所有需要行内重命名能力的视图渲染代理（包括树状/列表视图代理 `TreeItemDelegate`、网格卡片视图代理 `ThumbnailDelegate` 及分栏视图代理 `ColumnItemDelegate` 等），必须统一继承抽象基类 `RenameCapableDelegate`；
+   - **编辑生命周期强制统一与编译器锁**：基类 `RenameCapableDelegate` 统一实现并用 `override final` 密封 `createEditor`、`setEditorData` 与 `setModelData` 虚函数。所有具体子类 Delegate 绝对禁止且无法重新覆盖这三个函数，确保全软件重命名编辑框的创建、数据填充与模型提交逻辑 100% 绝对一致；
+   - **几何边界隔离**：编辑框的布局呈现与定位边界（`updateEditorGeometry`）保留为子类虚函数，由各视图代理根据各自的卡片/行数物理布局引擎进行针对性精准绘制，实现架构统一与布局灵活度的完美结合。
