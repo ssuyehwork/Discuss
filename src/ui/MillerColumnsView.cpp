@@ -17,7 +17,7 @@
 namespace QuarkMeta {
 
 // =========================================================
-// 1. MillerColumnDelegate: 精致渲染右箭头 (>) 与文件/目录图标
+// 1. MillerColumnDelegate: 绘制展开右箭头与图标
 // =========================================================
 
 MillerColumnDelegate::MillerColumnDelegate(QObject* parent)
@@ -34,23 +34,20 @@ void MillerColumnDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
     bool isSelected = (option.state & QStyle::State_Selected);
     bool isHover = (option.state & QStyle::State_MouseOver);
 
-    // 1. 背景底色
     if (isSelected) {
-        painter->fillRect(option.rect, QColor("#094771")); // VS Code / Finder 风格深蓝高亮
+        painter->fillRect(option.rect, QColor("#094771")); // 经典深蓝高亮
     } else if (isHover) {
         painter->fillRect(option.rect, QColor("#2A2D2E"));
     }
 
-    // 2. 数据提取
     QString type = index.data(TypeRole).toString();
     QString path = index.data(PathRole).toString();
     bool isFolder = (type == "folder") || QFileInfo(path).isDir();
     QString name = index.data(Qt::DisplayRole).toString();
 
-    // 3. 绘制图标 (16x16)
+    // 绘制图标
     int iconSize = 16;
-    int leftMargin = 10;
-    QRect iconRect(option.rect.left() + leftMargin, option.rect.top() + (option.rect.height() - iconSize) / 2, iconSize, iconSize);
+    QRect iconRect(option.rect.left() + 10, option.rect.top() + (option.rect.height() - iconSize) / 2, iconSize, iconSize);
 
     QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
     if (icon.isNull()) {
@@ -58,7 +55,7 @@ void MillerColumnDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
     }
     icon.paint(painter, iconRect);
 
-    // 4. 绘制文件夹右侧级联展开箭头 (>)
+    // 绘制文件夹级联展开右箭头 (>)
     int rightMargin = 8;
     if (isFolder) {
         int arrowSize = 12;
@@ -68,7 +65,7 @@ void MillerColumnDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
         rightMargin += (arrowSize + 4);
     }
 
-    // 5. 绘制文件/目录名称
+    // 绘制名称
     QRect textRect = option.rect;
     textRect.setLeft(iconRect.right() + 8);
     textRect.setRight(option.rect.right() - rightMargin);
@@ -87,7 +84,7 @@ void MillerColumnDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
 
 
 // =========================================================
-// 2. MillerColumnPane: 独立纵列加载与选区响应
+// 2. MillerColumnPane: 独立纵列异步加载与信号发出
 // =========================================================
 
 MillerColumnPane::MillerColumnPane(const QString& path, QWidget* parent)
@@ -161,7 +158,7 @@ void MillerColumnPane::loadDataAsync() {
 
 
 // =========================================================
-// 3. MillerColumnsView: 级联滚动控制器与选区同步穿透
+// 3. MillerColumnsView: 选区全局穿透与联动
 // =========================================================
 
 MillerColumnsView::MillerColumnsView(QWidget* parent)
@@ -212,18 +209,17 @@ void MillerColumnsView::appendColumn(const QString& folderPath, int parentPaneIn
     m_containerLayout->insertWidget(m_containerLayout->count() - 1, pane);
 
     connect(pane, &MillerColumnPane::itemSelected, this, [this, currentPaneIndex, pane](const QModelIndex& proxyIdx, const QString& itemPath, bool isDir) {
-        // 核心归一化：将活跃列的 Index 赋给本容器，打通 ContentPanel::getSelectedIndexes()
+        // 🚀【绝对打通】：将当前点击项的索引设为活跃索引，驱动 getSelectedIndexes()
         m_currentActiveIndex = proxyIdx;
-        if (selectionModel()) {
-            selectionModel()->setCurrentIndex(proxyIdx, QItemSelectionModel::ClearAndSelect);
-        }
+
+        // 🚀【绝对打通】：无论点文件夹还是文件，必须发射 selectionChanged，驱动右侧 MetaPanel 全量刷新！
+        emit fileSelected(itemPath);
 
         if (isDir) {
             appendColumn(itemPath, currentPaneIndex);
             emit directoryNavigated(itemPath);
         } else {
             truncateColumnsAfter(currentPaneIndex);
-            emit fileSelected(itemPath);
         }
     });
 
@@ -251,6 +247,7 @@ void MillerColumnsView::scrollToRightmost() {
     });
 }
 
+// 🚀【核心穿透】：外层 ContentPanel::getSelectedIndexes 调这里时，必须返回真实索引！
 QModelIndexList MillerColumnsView::selectedIndexes() const {
     if (m_currentActiveIndex.isValid()) {
         return { m_currentActiveIndex };
@@ -258,7 +255,7 @@ QModelIndexList MillerColumnsView::selectedIndexes() const {
     return {};
 }
 
-// 虚拟契约实现
+// 契约虚函数实现
 QRect MillerColumnsView::visualRect(const QModelIndex&) const { return QRect(); }
 void MillerColumnsView::scrollTo(const QModelIndex&, ScrollHint) {}
 QModelIndex MillerColumnsView::indexAt(const QPoint&) const { return m_currentActiveIndex; }

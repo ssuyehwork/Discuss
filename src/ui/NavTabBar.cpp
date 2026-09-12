@@ -59,6 +59,8 @@ NavTabBar::NavTabBar(QWidget* parent) : QWidget(parent) {
 
     m_mainLayout->addLayout(m_tabsLayout);
     m_mainLayout->addWidget(m_btnAddTab, 0, Qt::AlignVCenter);
+    // 🚀【核心锁定】：在 + 号右侧刚性锁死弹簧，强迫所有 Tab 和 + 号全部靠左紧凑排列，严禁横幅拉伸！
+    m_mainLayout->addStretch(1);
 
     connect(&NavigationService::instance(), &NavigationService::tabsUpdated, this, &NavTabBar::rebuildTabs);
 
@@ -69,7 +71,7 @@ void NavTabBar::rebuildTabs() {
     const auto& tabs = NavigationService::instance().tabs();
     int activeIdx = NavigationService::instance().activeTabIndex();
 
-    // 🚀【智能增量对比】：若 Tab 数量未改变，则原地平滑更新现有控件，杜绝闪烁
+    // 增量更新已有项，杜绝每次跳转时的全量闪烁
     if (m_tabsLayout->count() == tabs.size()) {
         for (int i = 0; i < tabs.size(); ++i) {
             QLayoutItem* item = m_tabsLayout->itemAt(i);
@@ -95,7 +97,7 @@ void NavTabBar::rebuildTabs() {
         return;
     }
 
-    // 数量变动时执行重排
+    // 数量变动时重新装配
     QLayoutItem* item;
     while ((item = m_tabsLayout->takeAt(0)) != nullptr) {
         if (item->widget()) {
@@ -114,7 +116,8 @@ void NavTabBar::rebuildTabs() {
 QWidget* NavTabBar::createTabWidget(int index, const QString& title, const QString& url, bool isActive) {
     QWidget* tab = new QWidget(this);
     tab->setObjectName(isActive ? "NavTabActive" : "NavTabInactive");
-    tab->setFixedHeight(28);
+    // 🚀【核心锁定】：刚性固定标签页宽度为 140px，高 28px，标准现代浏览器比例
+    tab->setFixedSize(140, 28);
     tab->setCursor(Qt::PointingHandCursor);
 
     QHBoxLayout* layout = new QHBoxLayout(tab);
@@ -133,7 +136,7 @@ QWidget* NavTabBar::createTabWidget(int index, const QString& title, const QStri
 
     QLabel* titleLabel = new QLabel(title, tab);
     titleLabel->setObjectName("TabTitleLabel");
-    titleLabel->setMaximumWidth(130);
+    titleLabel->setMaximumWidth(85);
     titleLabel->setStyleSheet(isActive ? "color: #FFFFFF; font-weight: bold; font-size: 12px;" : "color: #AAAAAA; font-size: 12px;");
 
     QPushButton* closeBtn = new QPushButton(tab);
