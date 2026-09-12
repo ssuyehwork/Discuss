@@ -278,6 +278,12 @@ void PanelMediator::setupConnections() {
 
                 // 🚀【双保险装载】：idx 有效走 Model，idx 无效通过 MetadataManager 兜底，扩展属性补充融合，绝不丢弃高级元数据
                 auto meta = MetadataManager::instance().getMeta(path.toStdWString());
+                QVector<QPair<QColor, float>> qPalettes;
+                qPalettes.reserve(static_cast<int>(meta.palettes.size()));
+                for (const auto& entry : meta.palettes) {
+                    qPalettes.append(qMakePair(entry.color, entry.ratio));
+                }
+
                 if (idx.isValid()) {
                     int rating = idx.data(RatingRole).toInt();
                     QString color = idx.data(ColorRole).toString();
@@ -290,7 +296,7 @@ void PanelMediator::setupConnections() {
                     metaPanel->setTags(!tags.isEmpty() ? tags : meta.tags);
                     metaPanel->setNote(!note.isEmpty() ? note : QString::fromStdWString(meta.note));
                     metaPanel->setURL(!url.isEmpty() ? url : QString::fromStdWString(meta.url));
-                    metaPanel->setPalettes(meta.palettes);
+                    metaPanel->setPalettes(qPalettes);
 
                     QVariant decData = idx.data(Qt::DecorationRole);
                     QPixmap previewPixmap;
@@ -306,6 +312,7 @@ void PanelMediator::setupConnections() {
                     metaPanel->setTags(meta.tags);
                     metaPanel->setNote(QString::fromStdWString(meta.note));
                     metaPanel->setURL(QString::fromStdWString(meta.url));
+                    metaPanel->setPalettes(qPalettes);
                     metaPanel->setImagePreview(QPixmap());
                 }
             }
