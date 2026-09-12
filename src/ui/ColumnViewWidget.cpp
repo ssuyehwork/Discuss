@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QScrollBar>
 #include <QtConcurrent/QtConcurrent>
+#include <QDebug>
 
 namespace QuarkMeta {
 
@@ -40,6 +41,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     // 选中变化驱动焦点设置与跨列选中清除，而后触发 ContentPanel::onSelectionChanged
     if (m_contentPanel) {
         connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
+            qDebug() << "[ColumnViewPane] QListView selectionChanged triggered. Selected count:"
+                     << (m_listView ? m_listView->selectionModel()->selectedIndexes().size() : 0);
             if (m_listView && !m_listView->selectionModel()->selectedIndexes().isEmpty()) {
                 m_listView->setFocus();
                 if (m_contentPanel && m_contentPanel->columnView()) {

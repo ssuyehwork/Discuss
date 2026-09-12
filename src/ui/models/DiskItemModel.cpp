@@ -4,6 +4,7 @@
 #include "ThumbnailPipelineService.h"
 #include "ModelContract.h"
 #include <QDateTime>
+#include <QDebug>
 #include <QFileInfo>
 #include <QDir>
 #include <QThreadPool>
@@ -77,6 +78,7 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     m_allRecords = records;
     m_pathToIndex.clear();
     m_requestedPaths.clear();
+    int populatedMetaCount = 0;
     for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
         auto& rec = m_allRecords[i];
         m_pathToIndex[rec.path] = i;
@@ -84,14 +86,18 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
         // 🚀【防抖与缓存同步】：在加载目录记录时，从 MetadataManager 预填充扩展元数据
         std::wstring wpath = rec.path.toStdWString();
         RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
-        if (rec.rating == 0 && meta.rating > 0) rec.rating = meta.rating;
-        if (rec.manualColor.isEmpty() && !meta.manualColor.empty()) rec.manualColor = QString::fromStdWString(meta.manualColor);
-        if (rec.tags.isEmpty() && !meta.tags.isEmpty()) rec.tags = meta.tags;
-        if (rec.note.isEmpty() && !meta.note.empty()) rec.note = QString::fromStdWString(meta.note);
-        if (rec.url.isEmpty() && !meta.url.empty()) rec.url = QString::fromStdWString(meta.url);
+        bool hasExtMeta = false;
+        if (rec.rating == 0 && meta.rating > 0) { rec.rating = meta.rating; hasExtMeta = true; }
+        if (rec.manualColor.isEmpty() && !meta.manualColor.empty()) { rec.manualColor = QString::fromStdWString(meta.manualColor); hasExtMeta = true; }
+        if (rec.tags.isEmpty() && !meta.tags.isEmpty()) { rec.tags = meta.tags; hasExtMeta = true; }
+        if (rec.note.isEmpty() && !meta.note.empty()) { rec.note = QString::fromStdWString(meta.note); hasExtMeta = true; }
+        if (rec.url.isEmpty() && !meta.url.empty()) { rec.url = QString::fromStdWString(meta.url); hasExtMeta = true; }
+        if (hasExtMeta) populatedMetaCount++;
     }
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     endResetModel();
+
+    qDebug() << "[DiskItemModel::setRecords] Loaded records count:" << m_allRecords.size() << "Pre-populated extended metadata items:" << populatedMetaCount;
 
     preloadDimensionsAsync();
 }
