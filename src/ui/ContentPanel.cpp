@@ -11,7 +11,6 @@
 #include "workers/ContentStatsWorker.h"
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
-#include "MillerColumnsView.h"
 #include "ThumbnailDelegate.h"
 #include "TreeItemDelegate.h"
 #include "UiHelper.h"
@@ -69,7 +68,7 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_statsDebounceTimer->setInterval(50);
     connect(m_statsDebounceTimer, &QTimer::timeout, this, &ContentPanel::recalculateAndEmitStats);
 
-    // 核心架构闭环：监听底层模型元数据变更，自动防抖驱动统计重算与筛选器同步
+    // 核心架构闭环：监听底层模型元数据变更（卡片点击、列表点击、快捷键赋予、F4重复等），自动防抖驱动统计重算与筛选器同步
     connect(m_diskModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex&, const QModelIndex&, const QList<int>& roles) {
         if (roles.isEmpty() || roles.contains(RatingRole) || roles.contains(ColorRole) || roles.contains(TagsRole)) {
             if (m_statsDebounceTimer) {
@@ -144,21 +143,8 @@ void ContentPanel::initUi() {
     m_viewStack->setFrameShape(QFrame::NoFrame);
     initGridView();
     initListView();
-
-    m_columnView = new MillerColumnsView(this);
-    connect(m_columnView, &MillerColumnsView::fileActivated, this, [this](const QString& path) {
-        emit fileActivated(path);
-    });
-    connect(m_columnView, &MillerColumnsView::fileSelected, this, [this](const QString& path) {
-        emit selectionChanged(QStringList{path});
-    });
-    connect(m_columnView, &MillerColumnsView::directoryNavigated, this, [this](const QString& path) {
-        emit directorySelected(path);
-    });
-
     m_viewStack->addWidget(m_gridView);
     m_viewStack->addWidget(m_treeView);
-    m_viewStack->addWidget(m_columnView);
     m_viewStack->setCurrentWidget(m_gridView);
 
     m_mainLayout->addWidget(m_viewStack, 1);
@@ -278,13 +264,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 }
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
-    m_currentPath = path;
-
-    // 🚀【核心修复】：如果当前处于列视图模式，导航跳转时必须同步更新分栏根路径！
-    if (m_currentViewMode == ColumnView && m_columnView) {
-        m_columnView->setRootPath(path);
-    }
-
     if (m_dataLoader) m_dataLoader->loadDirectory(path, recursive);
 }
 
@@ -347,11 +326,6 @@ void ContentPanel::setViewMode(ViewMode mode) {
 
     if (mode == ListView) {
         m_viewStack->setCurrentWidget(m_treeView);
-    } else if (mode == ColumnView) {
-        if (m_columnView) {
-            m_columnView->setRootPath(m_currentPath);
-        }
-        m_viewStack->setCurrentWidget(m_columnView);
     } else {
         auto* jv = qobject_cast<JustifiedView*>(m_gridView);
         if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
@@ -393,12 +367,12 @@ void ContentPanel::updateGridSize() {
 }
 
 void ContentPanel::applyFilters(const FilterState& state) {
-    QString currentKw = m_currentFilter.keyword;
+    QString currentKw = m_currentFilter.keyword; // 1. 暂存当前搜索框中的活跃关键词
     bool sf = m_currentFilter.showFolders;
     bool sfi = m_currentFilter.showFiles;
     bool sh = m_currentFilter.showHidden;
     m_currentFilter = state;
-    m_currentFilter.keyword = currentKw;
+    m_currentFilter.keyword = currentKw;          // 2. 锁定并恢复关键词，严禁被空状态冲刷
     m_currentFilter.showFolders = sf;
     m_currentFilter.showFiles = sfi;
     m_currentFilter.showHidden = sh;
@@ -559,17 +533,7 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 }
 
 void ContentPanel::restoreActiveView() {
-    // 🚀【核心修复】：正视 ColumnView 身份，恢复视口时必须正确识别，绝不允许私自切回网格！
-    if (m_currentViewMode == ListView) {
-        m_viewStack->setCurrentWidget(m_treeView);
-    } else if (m_currentViewMode == ColumnView) {
-        if (m_columnView) {
-            m_columnView->setRootPath(m_currentPath);
-        }
-        m_viewStack->setCurrentWidget(m_columnView);
-    } else {
-        m_viewStack->setCurrentWidget(m_gridView);
-    }
+    m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
 }
 
 void ContentPanel::restoreSelections() {

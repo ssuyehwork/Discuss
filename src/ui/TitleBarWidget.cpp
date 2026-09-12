@@ -2,7 +2,6 @@
 #define NOMINMAX
 #endif
 #include "TitleBarWidget.h"
-#include "NavTabBar.h"
 #include "UiHelper.h"
 #include "HoverEventFilter.h"
 #include "SvgIconRenderer.h"
@@ -69,8 +68,16 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_layout->setContentsMargins(5, 0, kLayoutEdgeMargin, 0);
     m_layout->setSpacing(8);
 
-    m_tabBar = new NavTabBar(this);
-    m_layout->addWidget(m_tabBar, 0, Qt::AlignVCenter);
+    m_logoLabel = new QLabel(this);
+    m_logoLabel->setFixedSize(18, 18);
+    m_logoLabel->setPixmap(UiHelper::getIcon("quarkmeta", Style::BrandOrange).pixmap(16, 16));
+    m_logoLabel->setAlignment(Qt::AlignCenter);
+    m_logoLabel->setObjectName("TitleLogoLabel");
+    m_layout->addWidget(m_logoLabel);
+
+    m_appNameLabel = new QLabel("QuarkMeta", this);
+    m_appNameLabel->setObjectName("AppNameLabel");
+    m_layout->addWidget(m_appNameLabel);
     m_layout->addStretch();
 
     auto createTitleBtn = [this, hoverFilter](const QString& iconKey, const QString& tip) -> QPushButton* {

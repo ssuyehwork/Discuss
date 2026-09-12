@@ -279,7 +279,7 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
 
     m_btnToggleSortOrder = createSquareStatusBtn("arrow_down_long", "排序方向 (降序)");
     m_btnToggleSortOrder->setCheckable(false);
-    m_btnToggleColumn    = createSquareStatusBtn("column_view", "列视图(C)");
+    m_btnToggleColumn    = createSquareStatusBtn("column_view", "列视图 (TODO)");
     m_btnToggleJustified = createSquareStatusBtn("resize2", "自适应(A)");
     m_btnToggleGrid      = createSquareStatusBtn("gridgapm", "网格(G)");
     m_btnToggleList      = createSquareStatusBtn("list_ul", "列表(L)");
@@ -390,10 +390,7 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     });
 
     connect(m_btnToggleColumn, &QPushButton::clicked, this, [this]() {
-        if (m_contentPanel) {
-            m_contentPanel->setViewMode(ContentPanel::ColumnView);
-            updateStatusBarButtonHighlights();
-        }
+        // TODO: 暂时设为 TODO
     });
 
     connect(m_btnToggleJustified, &QPushButton::clicked, this, [this]() {
@@ -502,7 +499,7 @@ void MainWindow::updateStatusBarButtonHighlights() {
 
     if (m_contentPanel) {
         ContentPanel::ViewMode mode = m_contentPanel->currentViewMode();
-        if (m_btnToggleColumn)    m_btnToggleColumn->setChecked(mode == ContentPanel::ColumnView);
+        if (m_btnToggleColumn)    m_btnToggleColumn->setChecked(false); // 暂时设为 TODO
         if (m_btnToggleJustified) m_btnToggleJustified->setChecked(mode == ContentPanel::JustifiedViewMode);
         if (m_btnToggleGrid)      m_btnToggleGrid->setChecked(mode == ContentPanel::GridView);
         if (m_btnToggleList)      m_btnToggleList->setChecked(mode == ContentPanel::ListView);

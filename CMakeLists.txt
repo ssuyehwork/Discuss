@@ -221,10 +221,6 @@ set(SOURCES
     src/ui/components/FlowLayout.cpp
     src/ui/components/ColorPill.h
     src/ui/components/ColorPill.cpp
-    src/ui/NavTabBar.cpp
-    src/ui/NavTabBar.h
-    src/ui/MillerColumnsView.cpp
-    src/ui/MillerColumnsView.h
     src/ui/NavPanel.cpp
     src/ui/NavPanel.h
     src/ui/FavoritePanel.cpp
