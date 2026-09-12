@@ -276,13 +276,21 @@ void PanelMediator::setupConnections() {
                     path, encrypted, 0, 0
                 );
 
-                // 🚀【双保险装载】：idx 有效走 Model，idx 无效通过 MetadataManager 兜底，绝不丢弃高级元数据
+                // 🚀【双保险装载】：idx 有效走 Model，idx 无效通过 MetadataManager 兜底，扩展属性补充融合，绝不丢弃高级元数据
+                auto meta = MetadataManager::instance().getMeta(path.toStdWString());
                 if (idx.isValid()) {
-                    metaPanel->setRating(idx.data(RatingRole).toInt(), false);
-                    metaPanel->setColor(idx.data(ColorRole).toString(), false);
-                    metaPanel->setTags(idx.data(TagsRole).toStringList());
-                    metaPanel->setNote(idx.data(NoteRole).toString());
-                    metaPanel->setURL(idx.data(UrlRole).toString());
+                    int rating = idx.data(RatingRole).toInt();
+                    QString color = idx.data(ColorRole).toString();
+                    QStringList tags = idx.data(TagsRole).toStringList();
+                    QString note = idx.data(NoteRole).toString();
+                    QString url = idx.data(UrlRole).toString();
+
+                    metaPanel->setRating(rating > 0 ? rating : meta.rating, false);
+                    metaPanel->setColor(!color.isEmpty() ? color : QString::fromStdWString(meta.manualColor), false);
+                    metaPanel->setTags(!tags.isEmpty() ? tags : meta.tags);
+                    metaPanel->setNote(!note.isEmpty() ? note : QString::fromStdWString(meta.note));
+                    metaPanel->setURL(!url.isEmpty() ? url : QString::fromStdWString(meta.url));
+                    metaPanel->setPalettes(meta.palettes);
 
                     QVariant decData = idx.data(Qt::DecorationRole);
                     QPixmap previewPixmap;
@@ -293,7 +301,6 @@ void PanelMediator::setupConnections() {
                     }
                     metaPanel->setImagePreview(previewPixmap);
                 } else {
-                    auto meta = MetadataManager::instance().getMeta(path.toStdWString());
                     metaPanel->setRating(meta.rating, false);
                     metaPanel->setColor(QString::fromStdWString(meta.manualColor), false);
                     metaPanel->setTags(meta.tags);

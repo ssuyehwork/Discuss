@@ -515,8 +515,19 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == TypeRole) {
         return record.isDir ? "folder" : "file";
     } else if (role == RatingRole) {
+        if (record.rating == 0) {
+            std::wstring wpath = path.toStdWString();
+            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
+            if (meta.rating > 0) return meta.rating;
+        }
         return record.rating;
     } else if (role == ColorRole) {
+        if (record.manualColor.isEmpty()) {
+            std::wstring wpath = path.toStdWString();
+            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
+            QString colorStr = QString::fromStdWString(meta.manualColor);
+            if (!colorStr.isEmpty()) return colorStr;
+        }
         return record.manualColor;
     } else if (role == IsLockedRole || role == PinnedRole) {
         return record.pinned;
@@ -533,6 +544,12 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         }
         return record.tags;
     } else if (role == NoteRole) {
+        if (record.note.isEmpty()) {
+            std::wstring wpath = path.toStdWString();
+            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
+            QString noteStr = QString::fromStdWString(meta.note);
+            if (!noteStr.isEmpty()) return noteStr;
+        }
         return record.note;
     } else if (role == UrlRole) {
         return record.url;
