@@ -11,6 +11,7 @@
 #include "workers/ContentStatsWorker.h"
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
+#include "ColumnViewWidget.h"
 #include "ThumbnailDelegate.h"
 #include "TreeItemDelegate.h"
 #include "UiHelper.h"
@@ -143,8 +144,10 @@ void ContentPanel::initUi() {
     m_viewStack->setFrameShape(QFrame::NoFrame);
     initGridView();
     initListView();
+    m_columnView = new ColumnViewWidget(this, this);
     m_viewStack->addWidget(m_gridView);
     m_viewStack->addWidget(m_treeView);
+    m_viewStack->addWidget(m_columnView);
     m_viewStack->setCurrentWidget(m_gridView);
 
     m_mainLayout->addWidget(m_viewStack, 1);
@@ -264,6 +267,14 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 }
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
+    if (m_currentViewMode == ColumnView) {
+        if (m_currentPath != path) {
+            m_currentPath = path;
+            if (m_columnView) m_columnView->setRootPath(path);
+        }
+        updateStatusBarStats();
+        return;
+    }
     if (m_dataLoader) m_dataLoader->loadDirectory(path, recursive);
 }
 
@@ -326,6 +337,11 @@ void ContentPanel::setViewMode(ViewMode mode) {
 
     if (mode == ListView) {
         m_viewStack->setCurrentWidget(m_treeView);
+    } else if (mode == ColumnView) {
+        if (m_columnView) {
+            m_columnView->setRootPath(m_currentPath);
+            m_viewStack->setCurrentWidget(m_columnView);
+        }
     } else {
         auto* jv = qobject_cast<JustifiedView*>(m_gridView);
         if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
@@ -394,6 +410,10 @@ void ContentPanel::search(const QString& query) {
 }
 
 void ContentPanel::refreshAll() {
+    if (m_currentViewMode == ColumnView) {
+        if (m_columnView) m_columnView->refreshActiveColumn();
+        return;
+    }
     if (!m_currentPath.isEmpty() && m_currentPath != "computer://") loadDirectory(m_currentPath, m_isRecursive);
     else loadDirectory("computer://");
 }
@@ -402,6 +422,7 @@ void ContentPanel::updateItemMetadata(const QString& path) {
     if (m_model) m_model->updateRecordMetadata(path);
     if (m_gridView && m_gridView->viewport()) m_gridView->viewport()->update();
     if (m_treeView && m_treeView->viewport()) m_treeView->viewport()->update();
+    if (m_columnView) m_columnView->updateMetadataForPath(path);
     recalculateAndEmitStats();
 }
 void ContentPanel::migrateModelCache(const QString& oldPath, const QString& newPath) { if (m_model) m_model->migrateCache(oldPath, newPath); }
@@ -467,6 +488,12 @@ void ContentPanel::refreshVisibleThumbnails() {
 
 void ContentPanel::selectAndScrollToPath(const QString& path) { selectAndScrollToItem(path); }
 void ContentPanel::selectAndScrollToItem(const QString& path) {
+    if (m_currentViewMode == ColumnView) {
+        if (m_columnView && m_columnView->activePane()) {
+            m_columnView->activePane()->selectItemByPath(path);
+        }
+        return;
+    }
     if (!m_proxyModel || path.isEmpty()) return;
     for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
         QModelIndex proxyIdx = m_proxyModel->index(i, 0);
@@ -483,15 +510,21 @@ void ContentPanel::selectAndScrollToItem(const QString& path) {
 }
 
 QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta) {
-    if (!m_proxyModel || m_proxyModel->rowCount() == 0) return QString();
+    QSortFilterProxyModel* proxy = m_proxyModel;
+    if (m_currentViewMode == ColumnView) {
+        if (m_columnView && m_columnView->activePane()) {
+            proxy = m_columnView->activePane()->proxyModel();
+        }
+    }
+    if (!proxy || proxy->rowCount() == 0) return QString();
     int curIdx = -1;
-    for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
-        if (m_proxyModel->index(i, 0).data(PathRole).toString() == currentPath) { curIdx = i; break; }
+    for (int i = 0; i < proxy->rowCount(); ++i) {
+        if (proxy->index(i, 0).data(PathRole).toString() == currentPath) { curIdx = i; break; }
     }
     if (curIdx == -1) return QString();
     int target = curIdx + delta;
-    if (target < 0 || target >= m_proxyModel->rowCount()) return QString();
-    return m_proxyModel->index(target, 0).data(PathRole).toString();
+    if (target < 0 || target >= proxy->rowCount()) return QString();
+    return proxy->index(target, 0).data(PathRole).toString();
 }
 
 QStringList ContentPanel::getSelectedPaths() const {
@@ -518,7 +551,14 @@ QList<int> ContentPanel::getSelectedTrashIds() const {
 
 QModelIndexList ContentPanel::getSelectedIndexes() const {
     if (!m_viewStack) return {};
-    auto* curView = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
+    QAbstractItemView* curView = nullptr;
+    if (m_currentViewMode == ColumnView) {
+        if (m_columnView && m_columnView->activePane()) {
+            curView = m_columnView->activePane()->listView();
+        }
+    } else {
+        curView = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
+    }
     if (!curView || !curView->selectionModel()) return {};
 
     QModelIndexList res;
@@ -533,19 +573,36 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 }
 
 void ContentPanel::restoreActiveView() {
-    m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
+    if (m_currentViewMode == ColumnView) {
+        m_viewStack->setCurrentWidget(m_columnView);
+    } else {
+        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
+    }
 }
 
 void ContentPanel::restoreSelections() {
     if (m_pendingSelectNames.isEmpty()) return;
-    QAbstractItemView* view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
-    if (view && view->selectionModel()) {
+    QAbstractItemView* view = nullptr;
+    DiskItemModel* model = m_model;
+    QSortFilterProxyModel* proxy = m_proxyModel;
+
+    if (m_currentViewMode == ColumnView) {
+        if (m_columnView && m_columnView->activePane()) {
+            view = m_columnView->activePane()->listView();
+            model = m_columnView->activePane()->model();
+            proxy = m_columnView->activePane()->proxyModel();
+        }
+    } else {
+        view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
+    }
+
+    if (view && view->selectionModel() && model && proxy) {
         QItemSelection sel;
         QModelIndex lastIdx;
-        const auto& recs = m_model->allRecords();
+        const auto& recs = model->allRecords();
         for (size_t i = 0; i < recs.size(); ++i) {
             if (m_pendingSelectNames.contains(QFileInfo(recs[i].path).fileName())) {
-                QModelIndex pIdx = m_proxyModel->mapFromSource(m_model->index(static_cast<int>(i), 0));
+                QModelIndex pIdx = proxy->mapFromSource(model->index(static_cast<int>(i), 0));
                 if (pIdx.isValid()) { sel.select(pIdx, pIdx); lastIdx = pIdx; }
             }
         }

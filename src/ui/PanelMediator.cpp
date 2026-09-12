@@ -67,6 +67,7 @@ void PanelMediator::setupConnections() {
                 if (option == TitleBarWidget::JustifiedViewMode) targetMode = ContentPanel::JustifiedViewMode;
                 else if (option == TitleBarWidget::GridViewMode) targetMode = ContentPanel::GridView;
                 else if (option == TitleBarWidget::ListViewMode) targetMode = ContentPanel::ListView;
+                else if (option == TitleBarWidget::ColumnViewMode) targetMode = ContentPanel::ColumnView;
 
                 contentPanel->setViewMode(targetMode);
             });

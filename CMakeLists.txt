@@ -295,6 +295,10 @@ set(SOURCES
     src/ui/TreeItemDelegate.h
     src/ui/FileNameLineEdit.h
     src/ui/FileNameLineEdit.cpp
+    src/ui/ColumnItemDelegate.h
+    src/ui/ColumnItemDelegate.cpp
+    src/ui/ColumnViewWidget.h
+    src/ui/ColumnViewWidget.cpp
     src/ui/RenameCapableDelegate.h
     src/ui/RenameCapableDelegate.cpp
     src/ui/models/ItemModelBase.h
