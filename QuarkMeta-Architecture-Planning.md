@@ -152,3 +152,21 @@
    - 分栏视图（Miller Columns 架构）的专用渲染代理 `ColumnItemDelegate` 必须彻底告别依赖 Qt 默认 `QLineEdit` 的私自实现，全面归一化接入统一的 `FileNameLineEdit` 编辑器；
    - **智能扩展名保护与按键流转**：分栏视图触发行内重命名时，获取焦点的编辑器必须具备“文件只高亮选中主文件名/自动避开扩展名，文件夹全选”的智能选区逻辑，且必须完整配备统一的按键拦截处理（阻断上下方向键导致 View 焦点漂移，优化左右方向键定位至基名末端）；
    - **应用专属右键菜单与几何对齐**：行内编辑器必须严格遵守系统专属暗色右键菜单契约（带 100% 语义匹配单色矢量图标与 10px 间距），其渲染几何区域必须精确定位在左侧 32px 留白与右侧 22px 级联指示器箭头之间，确保全视图绝对一致的重命名体验与架构纯洁性。
+
+---
+
+## 🏛️ 第九章：选择模型变更与元数据面板中介路由及两段式加载架构规范 (Selection Model & MetaPanel Routing Architecture)
+
+全软件所有内容视图（包括网格视图 `GridView`、自适应视图 `JustifiedView`、列表视图 `ListView` 及分栏视图 `ColumnView`）在与右侧元数据属性面板（`MetaPanel`）联动时，必须无条件遵循以下**顶层中介路由与两段式（同步基础+异步深层）元数据渲染架构规范**：
+
+1. **统一中介者去重防抖路由契约 (Mediator Debounce Routing Contract)**：
+   - 所有视图内部的 `QItemSelectionModel` 在发生选择集变更时，禁止绕过控制层直接与 `MetaPanel` 进行跨模块耦合通信，必须统一通过中介协调者（`PanelMediator`）进行信号转发；
+   - `PanelMediator` 在接收到选择集变更（`selectionChanged`）信号时，必须引入去重与高频防抖机制（`QTimer` 20ms~50ms 缓冲），避免键盘方向键快速连续滑动或视图切换时高频无效触发 `MetaPanel` 界面全量刷新与重绘，保持极致流畅的交互体验。
+
+2. **基础属性与深层元数据两段式加载契约 (Two-Stage Metadata Loading Architecture)**：
+   - **第一阶段（0ms 物理属性同步呈现）**：中介者与 `MetaPanel` 在接收到选中项变更的 0 毫秒内，首先从数据记录（`ItemRecord` / `QFileInfo`）中同步提取并秒级呈现基础物理属性（文件名、类型、物理大小、创建/修改/访问时间、基本评级与色标），避免界面空转或卡顿；
+   - **第二阶段（按需/异步深层元数据提取管线）**：涉及 EXIF 图像宽高分辨率、音视频编码参数、色彩调色板（Palettes）提取以及深层媒体属性解析时，必须提交至后台异步管线（如 `MediaExtractorPipeline` / `ThumbnailPipelineService`）进行非阻塞处理，解析完成后异步发射事件局部更新 `MetaPanel`，保障主 UI 线程绝不阻塞。
+
+3. **视图选择集与模型真理源（SSOT）一致性保障**：
+   - 无论视图形态如何演变（单主模型或分栏多级模型），元数据面板（`MetaPanel`）所展现的星级、颜色、标签、备注与关联网址，必须统一归一化指向系统唯一权威内存真理源（`MetadataManager`）；
+   - 任何在 `MetaPanel` 或视图卡片上发起的元数据更新，必须经由 `CoreEngine` / `MetadataManager` 持久化后，通过事件总线（`CentralEventHub`）广播回视图，确保全视图模式下元数据状态 100% 绝对实时一致。

@@ -11,7 +11,6 @@
 #include "workers/ContentStatsWorker.h"
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
-#include "ColumnViewWidget.h"
 #include "ThumbnailDelegate.h"
 #include "TreeItemDelegate.h"
 #include "UiHelper.h"
@@ -33,7 +32,6 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QApplication>
-#include <QListView>
 
 namespace QuarkMeta {
 
@@ -145,23 +143,8 @@ void ContentPanel::initUi() {
     m_viewStack->setFrameShape(QFrame::NoFrame);
     initGridView();
     initListView();
-    m_columnView = new ColumnViewWidget(this, this);
-    connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
-        if (QFileInfo(path).isDir()) {
-            emit directorySelected(path);
-        } else {
-            emit fileActivated(path);
-        }
-    });
-    connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<ItemRecord>& records) {
-        if (m_statsWorker && m_currentViewMode == ViewModeColumn) {
-            m_statsWorker->processAsync(records, m_currentFilter.showHidden);
-        }
-    });
     m_viewStack->addWidget(m_gridView);
     m_viewStack->addWidget(m_treeView);
-    m_viewStack->addWidget(m_columnView);
     m_viewStack->setCurrentWidget(m_gridView);
 
     m_mainLayout->addWidget(m_viewStack, 1);
@@ -281,15 +264,6 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 }
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
-    if (m_currentViewMode == ViewModeColumn && m_columnView) {
-        m_currentPath = path;
-        // 🚀【防大刷新机制】：若目标路径已存在于分栏视图的已有列栈中，仅同步 m_currentPath 与地址栏，绝对不触发整套列重置 (setRootPath)
-        if (!m_columnView->containsPath(path)) {
-            m_columnView->setRootPath(path);
-        }
-        updateStatusBarStats();
-        return;
-    }
     if (m_dataLoader) m_dataLoader->loadDirectory(path, recursive);
 }
 
@@ -346,31 +320,16 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
 }
 
 void ContentPanel::setViewMode(ViewMode mode) {
-    ViewMode oldMode = m_currentViewMode;
     m_currentViewMode = mode;
     int minZoom = (mode == ListView) ? 30 : 93;
     m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
 
     if (mode == ListView) {
         m_viewStack->setCurrentWidget(m_treeView);
-    } else if (mode == ViewModeColumn) {
-        if (m_columnView) {
-            m_columnView->setRootPath(m_currentPath);
-        }
-        m_viewStack->setCurrentWidget(m_columnView);
     } else {
         auto* jv = qobject_cast<JustifiedView*>(m_gridView);
         if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
         m_viewStack->setCurrentWidget(m_gridView);
-    }
-
-    // 🚀【自愈数据同步机制】：若从分栏视图切回网格/列表/瀑布流视图，且主模型处于空装载状态，自动自愈驱动 loadDirectory
-    if (oldMode == ViewModeColumn && mode != ViewModeColumn) {
-        if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
-            if (!m_diskModel || m_diskModel->rowCount() == 0) {
-                loadDirectory(m_currentPath, m_isRecursive);
-            }
-        }
     }
 
     AppConfig::instance().setValue("ContentPanel/ViewMode", static_cast<int>(mode));
@@ -426,9 +385,6 @@ void ContentPanel::applyFilters() {
         proxy->currentFilter = m_currentFilter;
         proxy->updateFilter();
     }
-    if (m_columnView) {
-        m_columnView->applyFilterState(m_currentFilter);
-    }
     updateStatusBarStats();
 }
 
@@ -438,17 +394,12 @@ void ContentPanel::search(const QString& query) {
 }
 
 void ContentPanel::refreshAll() {
-    if (m_currentViewMode == ViewModeColumn && m_columnView) {
-        m_columnView->refreshActiveColumn();
-        return;
-    }
     if (!m_currentPath.isEmpty() && m_currentPath != "computer://") loadDirectory(m_currentPath, m_isRecursive);
     else loadDirectory("computer://");
 }
 
 void ContentPanel::updateItemMetadata(const QString& path) {
     if (m_model) m_model->updateRecordMetadata(path);
-    if (m_columnView) m_columnView->updateMetadataForPath(path);
     if (m_gridView && m_gridView->viewport()) m_gridView->viewport()->update();
     if (m_treeView && m_treeView->viewport()) m_treeView->viewport()->update();
     recalculateAndEmitStats();
@@ -516,16 +467,7 @@ void ContentPanel::refreshVisibleThumbnails() {
 
 void ContentPanel::selectAndScrollToPath(const QString& path) { selectAndScrollToItem(path); }
 void ContentPanel::selectAndScrollToItem(const QString& path) {
-    if (path.isEmpty()) return;
-
-    if (m_currentViewMode == ViewModeColumn && m_columnView) {
-        if (ColumnViewPane* pane = m_columnView->activePane()) {
-            pane->selectItemByPath(path);
-        }
-        return;
-    }
-
-    if (!m_proxyModel) return;
+    if (!m_proxyModel || path.isEmpty()) return;
     for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
         QModelIndex proxyIdx = m_proxyModel->index(i, 0);
         if (proxyIdx.data(PathRole).toString() == path) {
@@ -541,20 +483,6 @@ void ContentPanel::selectAndScrollToItem(const QString& path) {
 }
 
 QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta) {
-    if (m_currentViewMode == ViewModeColumn && m_columnView) {
-        ColumnViewPane* pane = m_columnView->activePane();
-        FilterProxyModel* proxy = pane ? pane->proxyModel() : nullptr;
-        if (!proxy || proxy->rowCount() == 0) return QString();
-        int curIdx = -1;
-        for (int i = 0; i < proxy->rowCount(); ++i) {
-            if (proxy->index(i, 0).data(PathRole).toString() == currentPath) { curIdx = i; break; }
-        }
-        if (curIdx == -1) return QString();
-        int target = curIdx + delta;
-        if (target < 0 || target >= proxy->rowCount()) return QString();
-        return proxy->index(target, 0).data(PathRole).toString();
-    }
-
     if (!m_proxyModel || m_proxyModel->rowCount() == 0) return QString();
     int curIdx = -1;
     for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
@@ -567,9 +495,6 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
 }
 
 QStringList ContentPanel::getSelectedPaths() const {
-    if (m_viewStack && m_viewStack->currentWidget() == m_columnView && m_columnView) {
-        return m_columnView->getSelectedPaths();
-    }
     QStringList paths;
     for (const auto& idx : getSelectedIndexes()) {
         if (idx.column() == 0) {
@@ -593,9 +518,6 @@ QList<int> ContentPanel::getSelectedTrashIds() const {
 
 QModelIndexList ContentPanel::getSelectedIndexes() const {
     if (!m_viewStack) return {};
-    if (m_viewStack->currentWidget() == m_columnView && m_columnView) {
-        return m_columnView->getSelectedIndexes();
-    }
     bool isGrid = (m_viewStack->currentWidget() == m_gridView);
     QItemSelectionModel* sel = isGrid ? m_gridView->selectionModel() : m_treeView->selectionModel();
     if (!sel) return {};
@@ -608,44 +530,11 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 }
 
 void ContentPanel::restoreActiveView() {
-    if (m_currentViewMode == ListView) {
-        m_viewStack->setCurrentWidget(m_treeView);
-    } else if (m_currentViewMode == ViewModeColumn) {
-        if (m_columnView) {
-            m_columnView->setRootPath(m_currentPath);
-        }
-        m_viewStack->setCurrentWidget(m_columnView);
-    } else {
-        m_viewStack->setCurrentWidget(m_gridView);
-    }
+    m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
 }
 
 void ContentPanel::restoreSelections() {
     if (m_pendingSelectNames.isEmpty()) return;
-
-    if (m_currentViewMode == ViewModeColumn && m_columnView) {
-        ColumnViewPane* pane = m_columnView->activePane();
-        if (pane && pane->listView() && pane->proxyModel()) {
-            QListView* view = pane->listView();
-            FilterProxyModel* proxy = pane->proxyModel();
-            QItemSelection sel;
-            QModelIndex lastIdx;
-            for (int i = 0; i < proxy->rowCount(); ++i) {
-                QModelIndex idx = proxy->index(i, 0);
-                if (m_pendingSelectNames.contains(QFileInfo(idx.data(PathRole).toString()).fileName())) {
-                    sel.select(idx, idx);
-                    lastIdx = idx;
-                }
-            }
-            if (view->selectionModel()) {
-                view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-            }
-            if (lastIdx.isValid()) view->scrollTo(lastIdx);
-        }
-        m_pendingSelectNames.clear();
-        return;
-    }
-
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
     if (view && view->selectionModel()) {
         QItemSelection sel;

@@ -42,11 +42,8 @@ public:
         if (!index.isValid()) return;
 
 
-        QStyleOptionViewItem opt = option;
-        opt.state &= ~QStyle::State_HasFocus;
-
-        bool selected = opt.state & QStyle::State_Selected;
-        bool hover = opt.state & QStyle::State_MouseOver;
+        bool selected = option.state & QStyle::State_Selected;
+        bool hover = option.state & QStyle::State_MouseOver;
 
         // 🚀【行底色彻底统一与防穿透自绘】：直接根据选中/悬停/行号奇偶绘制底色，贯穿整个单元格矩形
         painter->save();
@@ -69,6 +66,8 @@ public:
         painter->setPen(Qt::NoPen);
         painter->drawRect(option.rect);
         painter->restore();
+
+        QStyleOptionViewItem opt = option;
         if (index.column() >= 1) {
             opt.displayAlignment = Qt::AlignCenter;
         }
@@ -84,10 +83,6 @@ public:
 
         // 2026-06-16 按照 8 列架构重构：第 1, 2, 3 列由代理独立绘制；第 0 列作为名称列，具有微型圆角卡片预览（最左侧看片）
         int col = index.column();
-
-        bool isFolder = (index.data(TypeRole).toString() == "folder");
-        bool isEmpty = index.data(IsEmptyRole).toBool();
-
         if (col == 0 && m_drawMiniCards) {
             // 自定义绘制名称列与最左侧圆角卡片
             painter->save();
@@ -152,6 +147,8 @@ public:
             }
 
             // 3. 空文件夹绘制青蓝色虚线框 (#41F2F2 Qt::DashLine)
+            bool isFolder = (index.data(TypeRole).toString() == "folder");
+            bool isEmpty = index.data(IsEmptyRole).toBool();
             if (isFolder && isEmpty) {
                 painter->save();
                 painter->setRenderHint(QPainter::Antialiasing);
@@ -207,28 +204,6 @@ public:
             painter->restore();
         } else {
             QStyledItemDelegate::paint(painter, opt, index);
-
-            // 🚨【列视图支持】：单列 QListView (col == 0 且 !m_drawMiniCards)，在 QStyledItemDelegate 原生绘制完图文之后，修饰绘制右侧 > 级联指示器与空文件夹虚线框
-            if (col == 0 && !m_drawMiniCards && isFolder) {
-                painter->save();
-                painter->setRenderHint(QPainter::Antialiasing);
-
-                // 1. 空文件夹青蓝色虚线框 (#41F2F2 Qt::DashLine)，物理对齐图标左侧坐标
-                if (isEmpty) {
-                    int iconSize = 18;
-                    QRect iconBounds(option.rect.left() + 4, option.rect.top() + (option.rect.height() - iconSize) / 2, iconSize, iconSize);
-                    painter->setPen(QPen(QColor("#41F2F2"), 1, Qt::DashLine));
-                    painter->setBrush(Qt::NoBrush);
-                    painter->drawRoundedRect(iconBounds, 3, 3);
-                }
-
-                // 2. 右侧 trailing 级联指示器 (>)
-                QRect arrowRect(option.rect.right() - 16, option.rect.top(), 12, option.rect.height());
-                painter->setPen(selected ? QColor("#FFFFFF") : QColor("#888888"));
-                painter->drawText(arrowRect, Qt::AlignCenter, ">");
-
-                painter->restore();
-            }
         }
     }
 

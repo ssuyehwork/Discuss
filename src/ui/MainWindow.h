@@ -114,7 +114,6 @@ private:
     QPushButton* m_btnToggleJustified = nullptr;
     QPushButton* m_btnToggleGrid = nullptr;
     QPushButton* m_btnToggleList = nullptr;
-    QPushButton* m_btnToggleColumn = nullptr;
 
     // 系统托盘控制器
     TrayController* m_trayController = nullptr;

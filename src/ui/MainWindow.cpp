@@ -280,7 +280,6 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     m_btnToggleJustified = createSquareStatusBtn("resize2", "自适应(A)");
     m_btnToggleGrid      = createSquareStatusBtn("gridgapm", "网格(G)");
     m_btnToggleList      = createSquareStatusBtn("list_ul", "列表(L)");
-    m_btnToggleColumn    = createSquareStatusBtn("column_view", "列(C)");
 
     m_btnToggleFilter   = createStatusBtn("隐藏筛选器", "切换筛选器面板 (显示/隐藏)");
     m_btnToggleMeta     = createStatusBtn("隐藏元数据面板", "切换元数据面板 (显示/隐藏)");
@@ -399,13 +398,6 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
         }
     });
 
-    connect(m_btnToggleColumn, &QPushButton::clicked, this, [this]() {
-        if (m_contentPanel) {
-            m_contentPanel->setViewMode(ContentPanel::ViewModeColumn);
-            updateStatusBarButtonHighlights();
-        }
-    });
-
     if (m_contentPanel) {
         connect(m_contentPanel, &ContentPanel::viewModeChanged, this, [this](ContentPanel::ViewMode) {
             updateStatusBarButtonHighlights();
@@ -433,7 +425,6 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     statusL->addWidget(m_btnToggleJustified);
     statusL->addWidget(m_btnToggleGrid);
     statusL->addWidget(m_btnToggleList);
-    statusL->addWidget(m_btnToggleColumn);
     statusL->addWidget(sepLine);
     statusL->addWidget(m_btnResetLayout);
     statusL->addWidget(m_btnPresetLayout);
@@ -478,14 +469,12 @@ void MainWindow::updateStatusBarButtonHighlights() {
     QSignalBlocker b8(m_btnToggleJustified);
     QSignalBlocker b9(m_btnToggleGrid);
     QSignalBlocker b10(m_btnToggleList);
-    QSignalBlocker b11(m_btnToggleColumn);
 
     if (m_contentPanel) {
         ContentPanel::ViewMode mode = m_contentPanel->currentViewMode();
         if (m_btnToggleJustified) m_btnToggleJustified->setChecked(mode == ContentPanel::JustifiedViewMode);
         if (m_btnToggleGrid)      m_btnToggleGrid->setChecked(mode == ContentPanel::GridView);
         if (m_btnToggleList)      m_btnToggleList->setChecked(mode == ContentPanel::ListView);
-        if (m_btnToggleColumn)    m_btnToggleColumn->setChecked(mode == ContentPanel::ViewModeColumn);
     }
 
     if (m_btnToggleFilter)   m_btnToggleFilter->setChecked(false);
