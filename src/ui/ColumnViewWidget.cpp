@@ -59,7 +59,7 @@ void ColumnViewPane::loadDirectory() {
     if (m_path.isEmpty()) return;
     QString scanPath = m_path;
 
-    QtConcurrent::run([this, scanPath]() {
+    QThreadPool::globalInstance()->start([this, scanPath]() {
         bool showHidden = m_contentPanel ? m_contentPanel->currentFilter().showHidden : false;
         std::vector<ItemRecord> rawItems = DiskScanService::scanDirectory(scanPath, false, []() { return true; });
 
