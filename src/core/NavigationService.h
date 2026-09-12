@@ -6,11 +6,26 @@
 
 namespace QuarkMeta {
 
+struct NavTabSession {
+    QString id;
+    QString currentUrl;
+    QString title;
+    QList<QString> history;
+    int historyIndex = -1;
+};
+
 class NavigationService : public QObject {
     Q_OBJECT
 
 public:
     static NavigationService& instance();
+
+    // 多会话 Tab 管理接口
+    int createTab(const QString& url = QString());
+    void closeTab(int index);
+    void switchTab(int index);
+    const QList<NavTabSession>& tabs() const { return m_tabs; }
+    int activeTabIndex() const { return m_activeTabIndex; }
 
     // 核心导航调度接口
     void navigateTo(const QString& rawUrl, bool recordHistory = true);
@@ -20,12 +35,15 @@ public:
     void refresh();
 
     // 状态查询接口
-    QString currentUrl() const { return m_currentUrl; }
+    QString currentUrl() const;
     QString currentDisplayPath() const;
     bool isVirtualProtocol() const;
-    bool canGoBack() const { return m_currentIndex > 0; }
-    bool canGoForward() const { return m_currentIndex < m_history.size() - 1; }
+    bool canGoBack() const;
+    bool canGoForward() const;
     bool canGoUp() const;
+
+    static QString displayPathForUrl(const QString& url);
+    static QString titleForUrl(const QString& url);
 
 signals:
     /**
@@ -40,6 +58,11 @@ signals:
      */
     void navStateChanged(bool canBack, bool canForward, bool canUp);
 
+    /**
+     * @brief Tab 列表与激活状态更新信号
+     */
+    void tabsUpdated();
+
 private:
     explicit NavigationService(QObject* parent = nullptr);
     ~NavigationService() override = default;
@@ -49,9 +72,8 @@ private:
     QString normalizeUrl(const QString& rawUrl) const;
     void emitNavState();
 
-    QString m_currentUrl;
-    QList<QString> m_history;
-    int m_currentIndex = -1;
+    QList<NavTabSession> m_tabs;
+    int m_activeTabIndex = -1;
     static constexpr int kMaxHistoryDepth = 100;
 };
 

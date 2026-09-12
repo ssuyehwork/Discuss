@@ -9,10 +9,11 @@
 namespace QuarkMeta {
 
 class HoverEventFilter;
+class NavTabBar;
 
 /**
  * @brief 独立标题栏组件
- * 封装 LOGO、应用名称、缩放滑杆、排列视图菜单、新建菜单、盘符折叠按钮、布局重置、窗口控制按钮(置顶/最小化/最大化/关闭)
+ * 封装 LOGO/标签栏、缩放滑杆、排列视图菜单、新建菜单、盘符折叠按钮、布局重置、窗口控制按钮(置顶/最小化/最大化/关闭)
  * 纯 View 部件：完全不依赖 ContentPanel/PanelLayoutManager 的指针或头文件，且不泄漏内部控件指针。
  */
 class TitleBarWidget : public QWidget {
@@ -36,6 +37,8 @@ public:
     void setViewModeOption(ViewModeOption mode);
     void setDriveBarVisible(bool visible);
 
+    NavTabBar* tabBar() const { return m_tabBar; }
+
 signals:
     void driveBarToggleRequested(bool visible);
     void pinToggled(bool pinned);
@@ -50,8 +53,7 @@ private:
     void setupCreateMenu();
 
     QHBoxLayout* m_layout = nullptr;
-    QLabel* m_logoLabel = nullptr;
-    QLabel* m_appNameLabel = nullptr;
+    NavTabBar* m_tabBar = nullptr;
 
     QPushButton* m_btnViewMenu = nullptr;
     QSlider* m_sizeSlider = nullptr;
