@@ -145,6 +145,11 @@ void ContentPanel::initUi() {
     initGridView();
     initListView();
     m_columnView = new ColumnViewWidget(this, this);
+    connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<QuarkMeta::ItemRecord>& records) {
+        if (m_statsWorker && !records.empty()) {
+            m_statsWorker->processAsync(records, m_currentFilter.showHidden);
+        }
+    });
     m_viewStack->addWidget(m_gridView);
     m_viewStack->addWidget(m_treeView);
     m_viewStack->addWidget(m_columnView);
@@ -331,6 +336,7 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
 }
 
 void ContentPanel::setViewMode(ViewMode mode) {
+    ViewMode oldMode = m_currentViewMode;
     m_currentViewMode = mode;
     int minZoom = (mode == ListView) ? 30 : 93;
     m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
@@ -346,6 +352,15 @@ void ContentPanel::setViewMode(ViewMode mode) {
         auto* jv = qobject_cast<JustifiedView*>(m_gridView);
         if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
         m_viewStack->setCurrentWidget(m_gridView);
+    }
+
+    // 🚀【自愈数据同步机制】：若从分栏视图切回网格/列表/瀑布流视图，且主模型处于空装载状态，自动自愈驱动 loadDirectory
+    if (oldMode == ColumnView && mode != ColumnView) {
+        if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
+            if (!m_diskModel || m_diskModel->rowCount() == 0) {
+                loadDirectory(m_currentPath, m_isRecursive);
+            }
+        }
     }
 
     AppConfig::instance().setValue("ContentPanel/ViewMode", static_cast<int>(mode));
