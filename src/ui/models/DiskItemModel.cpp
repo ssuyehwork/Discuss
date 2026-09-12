@@ -78,7 +78,17 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     m_pathToIndex.clear();
     m_requestedPaths.clear();
     for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
-        m_pathToIndex[m_allRecords[i].path] = i;
+        auto& rec = m_allRecords[i];
+        m_pathToIndex[rec.path] = i;
+
+        // 🚀【防抖与缓存同步】：在加载目录记录时，从 MetadataManager 预填充扩展元数据
+        std::wstring wpath = rec.path.toStdWString();
+        RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
+        if (rec.rating == 0 && meta.rating > 0) rec.rating = meta.rating;
+        if (rec.manualColor.isEmpty() && !meta.manualColor.empty()) rec.manualColor = QString::fromStdWString(meta.manualColor);
+        if (rec.tags.isEmpty() && !meta.tags.isEmpty()) rec.tags = meta.tags;
+        if (rec.note.isEmpty() && !meta.note.empty()) rec.note = QString::fromStdWString(meta.note);
+        if (rec.url.isEmpty() && !meta.url.empty()) rec.url = QString::fromStdWString(meta.url);
     }
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     endResetModel();
