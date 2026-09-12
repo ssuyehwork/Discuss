@@ -583,26 +583,25 @@ void ContentPanel::restoreActiveView() {
 void ContentPanel::restoreSelections() {
     if (m_pendingSelectNames.isEmpty()) return;
     QAbstractItemView* view = nullptr;
-    DiskItemModel* model = m_model;
+    DiskItemModel* diskModel = m_diskModel;
     QSortFilterProxyModel* proxy = m_proxyModel;
 
     if (m_currentViewMode == ColumnView) {
         if (m_columnView && m_columnView->activePane()) {
             view = m_columnView->activePane()->listView();
-            model = m_columnView->activePane()->model();
+            diskModel = m_columnView->activePane()->model();
             proxy = m_columnView->activePane()->proxyModel();
         }
     } else {
         view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
     }
-
-    if (view && view->selectionModel() && model && proxy) {
+    if (view && view->selectionModel() && diskModel && proxy) {
         QItemSelection sel;
         QModelIndex lastIdx;
-        const auto& recs = model->allRecords();
+        const auto& recs = diskModel->allRecords();
         for (size_t i = 0; i < recs.size(); ++i) {
             if (m_pendingSelectNames.contains(QFileInfo(recs[i].path).fileName())) {
-                QModelIndex pIdx = proxy->mapFromSource(model->index(static_cast<int>(i), 0));
+                QModelIndex pIdx = proxy->mapFromSource(diskModel->index(static_cast<int>(i), 0));
                 if (pIdx.isValid()) { sel.select(pIdx, pIdx); lastIdx = pIdx; }
             }
         }
