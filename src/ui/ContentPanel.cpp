@@ -417,6 +417,9 @@ void ContentPanel::applyFilters() {
         proxy->currentFilter = m_currentFilter;
         proxy->updateFilter();
     }
+    if (m_columnView) {
+        m_columnView->applyFilterState(m_currentFilter);
+    }
     updateStatusBarStats();
 }
 

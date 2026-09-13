@@ -29,8 +29,10 @@ public:
     void loadDirectory();
     void selectItemByPath(const QString& itemPath);
     void clearSelection();
+    void setFilterState(const FilterState& state);
 
 signals:
+    void selectionChanged();
     void folderSelected(const QString& folderPath, ColumnViewPane* pane);
     void fileSelected(const QString& filePath, ColumnViewPane* pane);
     void recordsLoaded(const std::vector<QuarkMeta::ItemRecord>& records);
@@ -63,14 +65,21 @@ public:
     void dismissSubColumns(int fromIndex);
     
     ColumnViewPane* activePane() const;
+    bool containsPath(const QString& path) const;
     void refreshActiveColumn();
     void updateMetadataForPath(const QString& path);
     void clearOtherSelections(ColumnViewPane* currentPane);
     void clearAllColumns();
+    void scrollToRightmostPane();
+    QStringList getSelectedPaths() const;
+    QModelIndexList getSelectedIndexes() const;
+    void applyFilterState(const FilterState& state);
 
     QList<ColumnViewPane*> panes() const { return m_panes; }
 
 signals:
+    void pathNavigated(const QString& path);
+    void selectionChanged();
     void activeColumnRecordsChanged(const std::vector<QuarkMeta::ItemRecord>& records);
 
 private slots:
@@ -79,6 +88,7 @@ private slots:
 
 private:
     ContentPanel* m_contentPanel = nullptr;
+    FilterState m_currentFilter;
     QScrollArea* m_scrollArea = nullptr;
     QWidget* m_container = nullptr;
     QHBoxLayout* m_containerLayout = nullptr;

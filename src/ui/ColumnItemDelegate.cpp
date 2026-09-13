@@ -80,7 +80,7 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
         arrowIcon.paint(painter, arrowRect, Qt::AlignCenter);
     }
 
-    // 4. 文件/文件夹名称文本 (纯净单行渲染，不做行内星级/颜色标识绘制)
+    // 4. 文件/文件夹名称文本 (遵循 QuarkMeta-Architecture-Planning.md 第八章第三条：纯净单行渲染，不在分栏行内绘制星级/颜色标示)
     int textLeft = iconRect.right() + 8;
     int textWidth = rect.width() - (textLeft - rect.left()) - rightReserved;
     QRect textRect(textLeft, rect.top(), qMax(10, textWidth), rect.height());

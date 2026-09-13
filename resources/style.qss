@@ -1873,3 +1873,27 @@ QPushButton#StatusBarControlBtn:pressed, QPushButton#StatusBarControlBtn:checked
     background: #3E3E42;
     border: 1px solid #555555;
 }
+
+/* 列视图 ColumnView 专属 QSS */
+QScrollArea#ColumnViewScrollArea {
+    background: #181818;
+    border: none;
+}
+
+QWidget#ColumnViewPane {
+    background: #1E1E1E;
+    border-right: 1px solid #2D2D2D;
+}
+
+QListView#ColumnViewPaneListView {
+    background: transparent;
+    border: none;
+    color: #CCCCCC;
+    outline: none;
+}
+
+QListView#ColumnViewPaneListView::item:selected {
+    background: #378ADD;
+    color: #FFFFFF;
+    outline: none;
+}
