@@ -585,7 +585,7 @@ void PanelMediator::setupConnections() {
     }
 
     // 7. 全局事件总线 CentralEventHub 增量通知响应
-    connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [contentPanel](const QuarkMeta::AppEvent& event) {
+    connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [contentPanel, metaPanel](const QuarkMeta::AppEvent& event) {
         if (!contentPanel) return;
 
         if (event.type == QuarkMeta::AppEventType::MetadataUpdated) {
@@ -593,7 +593,7 @@ void PanelMediator::setupConnections() {
                 contentPanel->updateItemMetadata(event.targetPath);
                 if (metaPanel) {
                     QString targetClean = QDir::cleanPath(event.targetPath);
-                    for (const QString& p : metaPanel->selectedPaths()) {
+                    for (const QString& p : contentPanel->getSelectedPaths()) {
                         if (QString::compare(QDir::cleanPath(p), targetClean, Qt::CaseInsensitive) == 0) {
                             if (event.payload.contains("field") && event.payload["field"].toString() == "color") {
                                 QString newColor = event.payload.value("value").toString();

@@ -335,14 +335,26 @@ void FilterPanel::populate(
                  else if (m_createDateCounts.contains(name)) count = m_createDateCounts.value(name, 0);
                  else if (m_modifyDateCounts.contains(name)) count = m_modifyDateCounts.value(name, 0);
                  else if (name == "无色标") count = m_colorCounts.value("", m_colorCounts.value("无色标", 0));
+                 else if (name == "未重复") count = m_currentStats.uniqueCount;
+                 else if (name == "重复项") count = m_currentStats.duplicateCount;
+                 else if (name == "横图") count = m_currentStats.ratioHorizontalCount;
+                 else if (name == "竖图") count = m_currentStats.ratioVerticalCount;
+                 else if (name == "方形") count = m_currentStats.ratioSquareCount;
+                 else if (name == "16:9") count = m_currentStats.ratio169Count;
+                 else if (name == "有链接") count = m_currentStats.hasLinkCount;
+                 else if (name == "无链接") count = m_currentStats.noLinkCount;
+                 else if (name == "有备注") count = m_currentStats.hasNoteCount;
+                 else if (name == "无备注") count = m_currentStats.noNoteCount;
+                 else if (name == "已标签") count = m_currentStats.hasTagCount;
+                 else if (name == "未标签") count = m_currentStats.noTagCount;
+                 else if (name == "有缩略图") count = m_currentStats.hasThumbnailCount;
+                 else if (name == "无缩略图 (提取失败)" || name == "无缩略图 (失败/跳过)") count = m_currentStats.noThumbnailCount;
                  else {
                      QString hex = Style::getColorHexByName(name);
                      if (!hex.isEmpty()) {
                          count = m_colorCounts.value(hex, m_colorCounts.value(name, 0));
                      }
                  }
-                 else if (name == "未重复") count = m_currentStats.uniqueCount;
-                 else if (name == "重复项") count = m_currentStats.duplicateCount;
                  else if (name == "横图") count = m_currentStats.ratioHorizontalCount;
                  else if (name == "竖图") count = m_currentStats.ratioVerticalCount;
                  else if (name == "方形") count = m_currentStats.ratioSquareCount;
