@@ -48,13 +48,16 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
     // 2. 左侧图标 (文件 / 文件夹)
     bool isFolder = (index.data(TypeRole).toString() == "folder");
     bool isEmpty = index.data(IsEmptyRole).toBool();
-    QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
+    QVariant deco = index.data(Qt::DecorationRole);
 
     int iconSize = 18;
     QRect iconRect(rect.left(), rect.top() + (rect.height() - iconSize) / 2, iconSize, iconSize);
 
-    if (!icon.isNull()) {
-        icon.paint(painter, iconRect, Qt::AlignCenter);
+    if (deco.canConvert<QIcon>() && !deco.value<QIcon>().isNull()) {
+        deco.value<QIcon>().paint(painter, iconRect, Qt::AlignCenter);
+    } else if (deco.canConvert<QPixmap>() && !deco.value<QPixmap>().isNull()) {
+        QPixmap pix = deco.value<QPixmap>();
+        painter->drawPixmap(iconRect, pix.scaled(iconRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     } else {
         QIcon fallbackIcon = UiHelper::getIcon(isFolder ? "folder" : "file", QColor("#888888"), 18);
         fallbackIcon.paint(painter, iconRect, Qt::AlignCenter);

@@ -28,17 +28,21 @@ public:
 
     void loadDirectory();
     void selectItemByPath(const QString& itemPath);
+    void clearSelection();
 
 signals:
     void folderSelected(const QString& folderPath, ColumnViewPane* pane);
     void fileSelected(const QString& filePath, ColumnViewPane* pane);
+    void recordsLoaded(const std::vector<QuarkMeta::ItemRecord>& records);
 
 private slots:
     void onClicked(const QModelIndex& index);
     void onDoubleClicked(const QModelIndex& index);
+    void tryPendingSelection();
 
 private:
     QString m_path;
+    QString m_pendingSelectPath;
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
@@ -56,11 +60,13 @@ public:
     void setRootPath(const QString& path);
     void appendColumn(const QString& path);
     void dismissSubColumns(ColumnViewPane* targetPane);
+    void dismissSubColumns(int fromIndex);
     
     ColumnViewPane* activePane() const;
     void refreshActiveColumn();
     void updateMetadataForPath(const QString& path);
     void clearOtherSelections(ColumnViewPane* currentPane);
+    void clearAllColumns();
 
     QList<ColumnViewPane*> panes() const { return m_panes; }
 
