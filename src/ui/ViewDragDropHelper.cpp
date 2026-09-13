@@ -10,16 +10,16 @@
 
 namespace QuarkMeta {
 
-bool ViewDragDropHelper::handleDragEnter(QAbstractItemView* view, QDragEnterEvent* event) {
-    if (event->source() != view && event->mimeData()->hasUrls()) {
+bool ViewDragDropHelper::handleDragEnter(QAbstractItemView* /*view*/, QDragEnterEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
         event->acceptProposedAction();
         return true;
     }
     return false;
 }
 
-bool ViewDragDropHelper::handleDragMove(QAbstractItemView* view, QDragMoveEvent* event) {
-    if (event->source() != view && event->mimeData()->hasUrls()) {
+bool ViewDragDropHelper::handleDragMove(QAbstractItemView* /*view*/, QDragMoveEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
         event->acceptProposedAction();
         return true;
     }
@@ -30,7 +30,7 @@ bool ViewDragDropHelper::handleDrop(QAbstractItemView* view, QDropEvent* event, 
     outPaths.clear();
     outTargetIdx = QModelIndex();
 
-    if (event->source() != view && event->mimeData()->hasUrls()) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
         const QList<QUrl> urls = event->mimeData()->urls();
         for (const QUrl& url : urls) {
             QString localPath = url.toLocalFile();
