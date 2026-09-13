@@ -7,6 +7,7 @@
 #include <QList>
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
+#include "DropListView.h"
 
 namespace QuarkMeta {
 
@@ -21,27 +22,31 @@ public:
     explicit ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent = nullptr);
 
     QString path() const { return m_path; }
-    QListView* listView() const { return m_listView; }
+    DropListView* listView() const { return m_listView; }
     DiskItemModel* model() const { return m_model; }
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
 
     void loadDirectory();
     void selectItemByPath(const QString& itemPath);
+    void clearSelection();
 
 signals:
     void folderSelected(const QString& folderPath, ColumnViewPane* pane);
     void fileSelected(const QString& filePath, ColumnViewPane* pane);
+    void recordsLoaded(const std::vector<QuarkMeta::ItemRecord>& records);
 
 private slots:
     void onClicked(const QModelIndex& index);
     void onDoubleClicked(const QModelIndex& index);
+    void tryPendingSelection();
 
 private:
     QString m_path;
+    QString m_pendingSelectPath;
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
-    QListView* m_listView = nullptr;
+    DropListView* m_listView = nullptr;
 };
 
 /**
@@ -55,11 +60,13 @@ public:
     void setRootPath(const QString& path);
     void appendColumn(const QString& path);
     void dismissSubColumns(ColumnViewPane* targetPane);
+    void dismissSubColumns(int fromIndex);
     
     ColumnViewPane* activePane() const;
     void refreshActiveColumn();
     void updateMetadataForPath(const QString& path);
     void clearOtherSelections(ColumnViewPane* currentPane);
+    void clearAllColumns();
 
     QList<ColumnViewPane*> panes() const { return m_panes; }
 

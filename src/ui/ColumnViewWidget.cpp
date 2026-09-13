@@ -20,6 +20,9 @@ namespace QuarkMeta {
 ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent)
     : QWidget(parent), m_path(path), m_contentPanel(contentPanel) {
     
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet("QWidget { border-right: 1px solid #333333; background: transparent; } QListView { border: none; background: transparent; }");
+
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
@@ -39,14 +42,11 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     layout->addWidget(m_listView);
 
-    // 选中变化驱动焦点设置与跨列选中清除，而后触发 ContentPanel::onSelectionChanged
+    // 选中变化驱动焦点设置，而后触发 ContentPanel::onSelectionChanged
     if (m_contentPanel) {
         connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
             if (m_listView && !m_listView->selectionModel()->selectedIndexes().isEmpty()) {
                 m_listView->setFocus();
-                if (m_contentPanel && m_contentPanel->columnView()) {
-                    m_contentPanel->columnView()->clearOtherSelections(this);
-                }
             }
             if (m_contentPanel) {
                 m_contentPanel->onSelectionChanged();
@@ -91,23 +91,51 @@ void ColumnViewPane::loadDirectory() {
         QMetaObject::invokeMethod(this, [this, items]() {
             if (m_model) {
                 m_model->setRecords(items);
+                if (!m_pendingSelectPath.isEmpty()) {
+                    tryPendingSelection();
+                }
+                // 触发图标与缩略图提取管线
+                int count = m_model->rowCount();
+                if (count > 0) {
+                    QList<int> visibleRows;
+                    visibleRows.reserve(count);
+                    for (int r = 0; r < count; ++r) visibleRows.append(r);
+                    m_model->loadThumbnailsForRows(visibleRows);
+                }
+                emit recordsLoaded(items);
             }
         }, Qt::QueuedConnection);
     });
 }
 
 void ColumnViewPane::selectItemByPath(const QString& itemPath) {
-    if (!m_proxyModel || itemPath.isEmpty()) return;
-    for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
-        QModelIndex proxyIdx = m_proxyModel->index(i, 0);
-        if (proxyIdx.data(PathRole).toString() == itemPath) {
-            if (m_listView && m_listView->selectionModel()) {
-                m_listView->scrollTo(proxyIdx);
-                m_listView->setCurrentIndex(proxyIdx);
-                m_listView->selectionModel()->select(proxyIdx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    m_pendingSelectPath = itemPath;
+    tryPendingSelection();
+}
+
+void ColumnViewPane::tryPendingSelection() {
+    if (m_pendingSelectPath.isEmpty() || !m_proxyModel || !m_listView) return;
+
+    QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(m_pendingSelectPath));
+    for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
+        QModelIndex idx = m_proxyModel->index(r, 0);
+        QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+
+        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
+            m_listView->setCurrentIndex(idx);
+            if (m_listView->selectionModel()) {
+                m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             }
+            m_listView->scrollTo(idx, QAbstractItemView::EnsureVisible);
+            m_pendingSelectPath.clear();
             break;
         }
+    }
+}
+
+void ColumnViewPane::clearSelection() {
+    if (m_listView && m_listView->selectionModel()) {
+        m_listView->selectionModel()->clearSelection();
     }
 }
 
@@ -164,7 +192,7 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
     m_container = new QWidget(m_scrollArea);
     m_containerLayout = new QHBoxLayout(m_container);
     m_containerLayout->setContentsMargins(0, 0, 0, 0);
-    m_containerLayout->setSpacing(1);
+    m_containerLayout->setSpacing(0);
     m_containerLayout->addStretch(1);
 
     m_container->setLayout(m_containerLayout);
@@ -175,12 +203,35 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
 
 void ColumnViewWidget::setRootPath(const QString& path) {
     m_rootPath = path;
-    qDeleteAll(m_panes);
-    m_panes.clear();
+    clearAllColumns();
+    if (path.isEmpty() || path == "computer://") return;
 
-    if (!path.isEmpty() && path != "computer://") {
-        appendColumn(path);
+    // 1. 拆分完整的祖先路径栈
+    QList<QString> pathStack;
+    QDir dir(path);
+    QString curr = dir.absolutePath();
+
+    while (!curr.isEmpty()) {
+        pathStack.prepend(curr);
+        QDir parentDir(curr);
+        if (!parentDir.cdUp() || parentDir.absolutePath() == curr) {
+            break;
+        }
+        curr = parentDir.absolutePath();
     }
+
+    // 2. 逐层展开列，并在父列中高亮选中对应的子项
+    for (int i = 0; i < pathStack.size(); ++i) {
+        const QString& p = pathStack[i];
+        appendColumn(p);
+        if (i > 0 && i - 1 < m_panes.size() - 1) {
+            m_panes[i - 1]->selectItemByPath(p);
+        }
+    }
+}
+
+void ColumnViewWidget::clearAllColumns() {
+    dismissSubColumns(-1);
 }
 
 void ColumnViewWidget::appendColumn(const QString& path) {
@@ -208,11 +259,14 @@ void ColumnViewWidget::appendColumn(const QString& path) {
 void ColumnViewWidget::dismissSubColumns(ColumnViewPane* targetPane) {
     int idx = m_panes.indexOf(targetPane);
     if (idx < 0) return;
+    dismissSubColumns(idx);
+}
 
-    while (m_panes.size() > idx + 1) {
-        ColumnViewPane* lastPane = m_panes.takeLast();
-        m_containerLayout->removeWidget(lastPane);
-        delete lastPane;
+void ColumnViewWidget::dismissSubColumns(int fromIndex) {
+    while (m_panes.size() > fromIndex + 1) {
+        ColumnViewPane* pane = m_panes.takeLast();
+        m_containerLayout->removeWidget(pane);
+        delete pane;
     }
 }
 
@@ -246,7 +300,14 @@ void ColumnViewWidget::updateMetadataForPath(const QString& path) {
 }
 
 void ColumnViewWidget::onFolderSelected(const QString& folderPath, ColumnViewPane* pane) {
+    int idx = m_panes.indexOf(pane);
     dismissSubColumns(pane);
+    // 保持父列高亮：仅清空当前列右侧深层列的选择，绝对保留当前列及其左侧父列的高亮
+    if (idx >= 0) {
+        for (int i = idx + 1; i < m_panes.size(); ++i) {
+            m_panes[i]->clearSelection();
+        }
+    }
     appendColumn(folderPath);
     if (pane && pane->model()) {
         emit activeColumnRecordsChanged(pane->model()->allRecords());
