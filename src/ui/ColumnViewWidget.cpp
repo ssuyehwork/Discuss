@@ -183,6 +183,10 @@ ColumnViewPane* ColumnViewWidget::activePane() const {
     return m_panes.isEmpty() ? nullptr : m_panes.last();
 }
 
+ColumnViewPane* ColumnViewWidget::rightmostPane() const {
+    return m_panes.isEmpty() ? nullptr : m_panes.last();
+}
+
 bool ColumnViewWidget::containsPath(const QString& path) const {
     if (path.isEmpty()) return false;
     QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(path));
@@ -263,6 +267,9 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
         pane->deleteLater();
     }
     updatePaneWidths();
+    if (rightmostPane() && rightmostPane()->model()) {
+        emit activeColumnRecordsChanged(rightmostPane()->model()->allRecords());
+    }
 }
 
 ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
@@ -273,7 +280,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     pane->loadDirectory();
 
     connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
-        if (pane == activePane()) {
+        if (pane == rightmostPane()) {
             emit activeColumnRecordsChanged(records);
         }
     });
@@ -281,8 +288,8 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
         m_activePaneIndex = pane->property("paneIndex").toInt();
         emit selectionChanged();
-        if (pane->model()) {
-            emit activeColumnRecordsChanged(pane->model()->allRecords());
+        if (rightmostPane() && rightmostPane()->model()) {
+            emit activeColumnRecordsChanged(rightmostPane()->model()->allRecords());
         }
     });
 
@@ -312,10 +319,8 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
 }
 
 void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
-    for (int i = 0; i < m_panes.size(); ++i) {
-        if (i != activePaneIdx) {
-            m_panes[i]->clearSelection();
-        }
+    for (int i = activePaneIdx + 1; i < m_panes.size(); ++i) {
+        m_panes[i]->clearSelection();
     }
 }
 
