@@ -1,5 +1,6 @@
 #include "ColumnItemDelegate.h"
 #include "UiHelper.h"
+#include "StyleLibrary.h"
 #include "CardPainterHelper.h"
 #include "../core/ModelContract.h"
 
@@ -79,12 +80,7 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
 
     // 绘制 5px 宽度的左侧垂直色条
     if (!colorName.isEmpty()) {
-        static const QMap<QString, QString> s_colorHexMap = {
-            {"红色", "#E24B4A"}, {"橙色", "#EF9F27"}, {"黄色", "#FECF0E"},
-            {"绿色", "#639922"}, {"青色", "#1D9E75"}, {"蓝色", "#378ADD"},
-            {"紫色", "#7F77DD"}, {"灰色", "#5F5E5A"}
-        };
-        QString hexColor = s_colorHexMap.value(colorName, colorName);
+        QString hexColor = Style::getColorHexByName(colorName);
         if (hexColor.startsWith("#")) {
             painter->setBrush(QColor(hexColor));
             painter->setPen(Qt::NoPen);

@@ -37,12 +37,9 @@ MetaRatingColorWidget::MetaRatingColorWidget(QWidget* parent) : QWidget(parent) 
     m_colorLayout->setContentsMargins(0, 0, 0, 0);
     m_colorLayout->setSpacing(4);
 
-    static const QStringList colors = {
-        "#E24B4A", "#EF9F27", "#FECF0E", "#639922",
-        "#1D9E75", "#378ADD", "#7F77DD", "#5F5E5A"
-    };
-
-    for (const QString& colHex : colors) {
+    for (const auto& item : Style::getColorPalette()) {
+        if (item.hex.isEmpty()) continue; // Skip no color option
+        QString colHex = item.hex;
         QPushButton* btn = new QPushButton(this);
         btn->setFixedSize(18, 18);
         btn->setCursor(Qt::PointingHandCursor);

@@ -10,6 +10,8 @@
 #include "../core/NavigationHistoryService.h"
 #include "../core/TrashService.h"
 #include "../meta/FavoriteDao.h"
+#include "../meta/FavoriteService.h"
+#include "controllers/ContextMenuFactory.h"
 #include <QHeaderView>
 #include <QScrollBar>
 #include <QLabel>
@@ -284,25 +286,10 @@ void NavPanel::onTreeContextMenu(const QPoint& pos) {
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
 
-    bool isFav = FavoriteDao::containsPath(path);
-    QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#EEEEEE"), 18) : UiHelper::getIcon("star_filled", QColor("#EEEEEE"), 18);
-    QAction* actFavorite = menu.addAction(favIcon, isFav ? "从收藏夹移除" : "添加至收藏夹");
+    FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+    ContextMenuFactory::buildCopyPathAction(&menu, QStringList{path}, this);
 
-    QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "复制完整路径");
-
-    QAction* selected = menu.exec(m_treeView->viewport()->mapToGlobal(pos));
-    if (!selected) return;
-
-    if (selected == actFavorite) {
-        if (isFav) {
-            emit requestRemoveFavorite(path);
-        } else {
-            emit requestAddFavorite(path);
-        }
-    } else if (selected == actCopyPath) {
-        QApplication::clipboard()->setText(QDir::toNativeSeparators(path));
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径到剪贴板", 1200, QColor("#2ecc71"));
-    }
+    menu.exec(m_treeView->viewport()->mapToGlobal(pos));
 }
 
 void NavPanel::onTreeClicked(const QModelIndex& index) {

@@ -25,6 +25,7 @@ public:
     void selectItemByPath(const QString& targetPath);
     void clearSelection();
     void setFilterState(const FilterState& state);
+    void applySort(int sortType, Qt::SortOrder sortOrder);
 
     QListView* listView() const { return m_listView; }
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
@@ -62,6 +63,7 @@ public:
     bool containsPath(const QString& path) const;
     void refreshActiveColumn();
     void updateMetadataForPath(const QString& path);
+    void applySort(int sortType, Qt::SortOrder sortOrder);
     void scrollToRightmostPane();
     QStringList getSelectedPaths() const;
     QModelIndexList getSelectedIndexes() const;

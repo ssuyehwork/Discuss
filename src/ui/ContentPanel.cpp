@@ -151,6 +151,7 @@ void ContentPanel::initUi() {
         if (m_statsWorker && !records.empty()) {
             m_statsWorker->processAsync(records, m_currentFilter.showHidden);
         }
+        restoreSelections();
     });
     m_viewStack->addWidget(m_gridView);
     m_viewStack->addWidget(m_treeView);
@@ -237,6 +238,9 @@ void ContentPanel::ensureSourceModelIsDiskModel() {
 void ContentPanel::applySort() {
     if (m_sortController) {
         m_sortController->applySortToModel(m_proxyModel);
+        if (m_columnView) {
+            m_columnView->applySort(static_cast<int>(m_sortController->sortType()), m_sortController->sortOrder());
+        }
     }
 }
 
@@ -275,9 +279,11 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (m_currentViewMode == ColumnView) {
-        if (m_currentPath != path) {
-            m_currentPath = path;
-            if (m_columnView) m_columnView->setRootPath(path);
+        m_currentPath = path;
+        m_isRecursive = recursive;
+        if (m_columnView) {
+            m_columnView->setRootPath(path);
+            restoreSelections();
         }
         updateStatusBarStats();
         return;
@@ -509,8 +515,8 @@ void ContentPanel::refreshVisibleThumbnails() {
 void ContentPanel::selectAndScrollToPath(const QString& path) { selectAndScrollToItem(path); }
 void ContentPanel::selectAndScrollToItem(const QString& path) {
     if (m_currentViewMode == ColumnView) {
-        if (m_columnView && m_columnView->activePane()) {
-            m_columnView->activePane()->selectItemByPath(path);
+        if (m_columnView && m_columnView->rightmostPane()) {
+            m_columnView->rightmostPane()->selectItemByPath(path);
         }
         return;
     }
@@ -607,10 +613,10 @@ void ContentPanel::restoreSelections() {
     QSortFilterProxyModel* proxy = m_proxyModel;
 
     if (m_currentViewMode == ColumnView) {
-        if (m_columnView && m_columnView->activePane()) {
-            view = m_columnView->activePane()->listView();
-            diskModel = m_columnView->activePane()->model();
-            proxy = m_columnView->activePane()->proxyModel();
+        if (m_columnView && m_columnView->rightmostPane()) {
+            view = m_columnView->rightmostPane()->listView();
+            diskModel = m_columnView->rightmostPane()->model();
+            proxy = m_columnView->rightmostPane()->proxyModel();
         }
     } else {
         view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());

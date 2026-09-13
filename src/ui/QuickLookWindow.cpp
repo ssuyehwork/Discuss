@@ -20,6 +20,8 @@
 #include "../util/ShellHelper.h"
 #include "FavoritePanel.h"
 #include "../meta/FavoriteDao.h"
+#include "../meta/FavoriteService.h"
+#include "controllers/ContextMenuFactory.h"
 #include "dialogs/TextExtensionDialog.h"
 #include <QFileInfo>
 #include <QScreen>
@@ -461,7 +463,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     menu.addSeparator();
 
     QAction* actOpenDefault = menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开");
-    QAction* actShowExplorer = menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在”资源管理器”中显示");
+    ContextMenuFactory::buildShowInExplorerAction(&menu, m_currentPath, this);
     menu.addSeparator();
 
     QAction* actCopy = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "复制");
@@ -469,11 +471,9 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     QAction* actDel = menu.addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "删除");
     menu.addSeparator();
 
-    QAction* actCopyName = menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "复制文件名");
-    QAction* actCopyPath = menu.addAction(UiHelper::getIcon("link", QColor("#EEEEEE"), 18), "复制路径");
-    bool isFav = FavoriteDao::containsPath(m_currentPath);
-    QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#EEEEEE")) : UiHelper::getIcon("star_filled", QColor("#EEEEEE"));
-    QAction* actFavorite = menu.addAction(favIcon, isFav ? "取消收藏" : "添加至收藏夹");
+    ContextMenuFactory::buildCopyNameAction(&menu, QStringList{m_currentPath}, this);
+    ContextMenuFactory::buildCopyPathAction(&menu, QStringList{m_currentPath}, this);
+    FavoriteService::instance().buildFavoriteAction(&menu, m_currentPath, this);
     menu.addSeparator();
 
     QAction* actTextExtSettings = menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "文本扩展名设置...");
@@ -502,8 +502,6 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
         m_graphicsView->fitImage();
     } else if (selected == actOpenDefault) {
         QDesktopServices::openUrl(QUrl::fromLocalFile(m_currentPath));
-    } else if (selected == actShowExplorer) {
-        ShellHelper::openInExplorer(m_currentPath);
     } else if (selected == actCopy) {
         QList<QUrl> urls;
         urls << QUrl::fromLocalFile(m_currentPath);
@@ -521,12 +519,6 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
         QApplication::clipboard()->setMimeData(mime);
     } else if (selected == actDel) {
         emit deleteRequested(m_currentPath);
-    } else if (selected == actCopyName) {
-        QApplication::clipboard()->setText(QFileInfo(m_currentPath).fileName());
-    } else if (selected == actCopyPath) {
-        QApplication::clipboard()->setText(QDir::toNativeSeparators(m_currentPath));
-    } else if (selected == actFavorite) {
-        emit favoriteRequested(m_currentPath);
     } else if (selected == actTextExtSettings) {
         TextExtensionDialog dlg(this);
         dlg.exec();
