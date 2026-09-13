@@ -222,8 +222,12 @@ QModelIndexList ColumnViewWidget::getSelectedIndexes() const {
 
 void ColumnViewWidget::applyFilterState(const FilterState& state) {
     m_currentFilter = state;
-    for (auto* pane : m_panes) {
-        pane->setFilterState(state);
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (i == m_panes.size() - 1) {
+            m_panes[i]->setFilterState(m_currentFilter);
+        } else {
+            m_panes[i]->setFilterState(FilterState());
+        }
     }
 }
 
@@ -267,6 +271,13 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
         pane->deleteLater();
     }
     updatePaneWidths();
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (i == m_panes.size() - 1) {
+            m_panes[i]->setFilterState(m_currentFilter);
+        } else {
+            m_panes[i]->setFilterState(FilterState());
+        }
+    }
     if (rightmostPane() && rightmostPane()->model()) {
         emit activeColumnRecordsChanged(rightmostPane()->model()->allRecords());
     }
@@ -276,7 +287,6 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
     pane->setProperty("paneIndex", newIdx);
-    pane->setFilterState(m_currentFilter);
     pane->loadDirectory();
 
     connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
@@ -314,6 +324,13 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     m_panes.append(pane);
     m_layout->addWidget(pane);
     updatePaneWidths();
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (i == m_panes.size() - 1) {
+            m_panes[i]->setFilterState(m_currentFilter);
+        } else {
+            m_panes[i]->setFilterState(FilterState());
+        }
+    }
     scrollToRightmostPane();
     return pane;
 }
