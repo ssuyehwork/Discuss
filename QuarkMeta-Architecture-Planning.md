@@ -158,6 +158,10 @@
    - **祖先列高亮持续保持**：分栏视图在级联展开子列或点击父级列时，只能清除当前列右侧（深层列）的选区与列，必须 100% 保持当前列及其左侧所有父列的选择高亮状态，呈现平滑、连贯的上下文路径链；
    - **图标与缩略图管线加载**：分栏视图所有列在数据装载完成后，必须调用 `loadThumbnailsForRows` 驱动全局 `ThumbnailPipelineService`，且渲染代理 `ColumnItemDelegate` 必须统一读取并绘制 `Qt::DecorationRole` 图标/缩略图，确保与系统全视图风格绝对一致。
 
+11. **分栏视图列分割线与边框视觉契约 (Column View Column Separator & Pane Border Contract)**：
+   - 分栏视图（Miller Columns 架构）多列级联呈现时，每一列面板 (`ColumnViewPane`) 右侧必须具备物理明确的垂直分割边框线（右边框宽度 `1px`，暗色中性边框配色 `#2B2B2B` 或 `#333333`，统一声明 `border-right: 1px solid #2B2B2B;`）；
+   - 通过列间右边框的物理隔离与布局间距精细化化设定，确保多列级联并排时展现清晰、规整的层级视觉边界，消除列间视图粘连感与视觉漂移。
+
 ---
 
 ## 🏛️ 第九章：选择模型变更与元数据面板中介路由及两段式加载架构规范 (Selection Model & MetaPanel Routing Architecture)
