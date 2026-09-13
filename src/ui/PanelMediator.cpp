@@ -21,6 +21,7 @@
 #include "../util/ShellHelper.h"
 #include "../meta/MetadataManager.h"
 #include "UiHelper.h"
+#include <QDebug>
 #include <QFileInfo>
 #include <QFile>
 #include <QDesktopServices>
@@ -276,13 +277,33 @@ void PanelMediator::setupConnections() {
                     path, encrypted, 0, 0
                 );
 
-                // 🚀【双保险装载】：idx 有效走 Model，idx 无效通过 MetadataManager 兜底，绝不丢弃高级元数据
+                // 🚀【双保险装载】：idx 有效走 Model，idx 无效通过 MetadataManager 兜底，扩展属性补充融合，绝不丢弃高级元数据
+                auto meta = MetadataManager::instance().getMeta(path.toStdWString());
+                QVector<QPair<QColor, float>> qPalettes;
+                qPalettes.reserve(static_cast<int>(meta.palettes.size()));
+                for (const auto& entry : meta.palettes) {
+                    qPalettes.append(qMakePair(entry.color, entry.ratio));
+                }
+
                 if (idx.isValid()) {
-                    metaPanel->setRating(idx.data(RatingRole).toInt(), false);
-                    metaPanel->setColor(idx.data(ColorRole).toString(), false);
-                    metaPanel->setTags(idx.data(TagsRole).toStringList());
-                    metaPanel->setNote(idx.data(NoteRole).toString());
-                    metaPanel->setURL(idx.data(UrlRole).toString());
+                    int rating = idx.data(RatingRole).toInt();
+                    QString color = idx.data(ColorRole).toString();
+                    QStringList tags = idx.data(TagsRole).toStringList();
+                    QString note = idx.data(NoteRole).toString();
+                    QString url = idx.data(UrlRole).toString();
+
+                    int finalRating = rating > 0 ? rating : meta.rating;
+                    QString finalColor = !color.isEmpty() ? color : QString::fromStdWString(meta.manualColor);
+                    QStringList finalTags = !tags.isEmpty() ? tags : meta.tags;
+                    QString finalNote = !note.isEmpty() ? note : QString::fromStdWString(meta.note);
+                    QString finalUrl = !url.isEmpty() ? url : QString::fromStdWString(meta.url);
+
+                    metaPanel->setRating(finalRating, false);
+                    metaPanel->setColor(finalColor, false);
+                    metaPanel->setTags(finalTags);
+                    metaPanel->setNote(finalNote);
+                    metaPanel->setURL(finalUrl);
+                    metaPanel->setPalettes(qPalettes);
 
                     QVariant decData = idx.data(Qt::DecorationRole);
                     QPixmap previewPixmap;
@@ -293,12 +314,12 @@ void PanelMediator::setupConnections() {
                     }
                     metaPanel->setImagePreview(previewPixmap);
                 } else {
-                    auto meta = MetadataManager::instance().getMeta(path.toStdWString());
                     metaPanel->setRating(meta.rating, false);
                     metaPanel->setColor(QString::fromStdWString(meta.manualColor), false);
                     metaPanel->setTags(meta.tags);
                     metaPanel->setNote(QString::fromStdWString(meta.note));
                     metaPanel->setURL(QString::fromStdWString(meta.url));
+                    metaPanel->setPalettes(qPalettes);
                     metaPanel->setImagePreview(QPixmap());
                 }
             }

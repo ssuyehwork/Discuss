@@ -1,9 +1,11 @@
 #include "DiskItemModel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
+#include "MetaCacheDecorator.h"
 #include "ThumbnailPipelineService.h"
 #include "ModelContract.h"
 #include <QDateTime>
+#include <QDebug>
 #include <QFileInfo>
 #include <QDir>
 #include <QThreadPool>
@@ -75,10 +77,29 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     incrementGeneration();
     beginResetModel();
     m_allRecords = records;
+
+    // 🚀【核心根治】：使用 MetaCacheDecorator 批量装载该目录下所有文件的 JSON 关联扩展元数据！
+    MetaCacheDecorator::decorate(m_allRecords);
+
     m_pathToIndex.clear();
     m_requestedPaths.clear();
+    int populatedMetaCount = 0;
     for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
-        m_pathToIndex[m_allRecords[i].path] = i;
+        auto& rec = m_allRecords[i];
+        m_pathToIndex[rec.path] = i;
+
+        // 🚀【内存与缓存双向同步】：把 MetaCacheDecorator 装饰到的高级元数据回写激活进 MetadataManager 内存缓存！
+        std::wstring wpath = rec.path.toStdWString();
+        MetadataManager::instance().ensureActivated(wpath);
+        if (rec.rating > 0) MetadataManager::instance().setRating(wpath, rec.rating, false);
+        if (!rec.manualColor.isEmpty()) MetadataManager::instance().setColor(wpath, rec.manualColor.toStdWString(), false);
+        if (!rec.tags.isEmpty()) MetadataManager::instance().setTags(wpath, rec.tags, false);
+        if (!rec.note.isEmpty()) MetadataManager::instance().setNote(wpath, rec.note.toStdWString(), false);
+        if (!rec.url.isEmpty()) MetadataManager::instance().setURL(wpath, rec.url.toStdWString(), false);
+
+        if (rec.rating > 0 || !rec.manualColor.isEmpty() || !rec.tags.isEmpty() || !rec.note.isEmpty()) {
+            populatedMetaCount++;
+        }
     }
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     endResetModel();
@@ -515,8 +536,19 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == TypeRole) {
         return record.isDir ? "folder" : "file";
     } else if (role == RatingRole) {
+        if (record.rating == 0) {
+            std::wstring wpath = path.toStdWString();
+            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
+            if (meta.rating > 0) return meta.rating;
+        }
         return record.rating;
     } else if (role == ColorRole) {
+        if (record.manualColor.isEmpty()) {
+            std::wstring wpath = path.toStdWString();
+            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
+            QString colorStr = QString::fromStdWString(meta.manualColor);
+            if (!colorStr.isEmpty()) return colorStr;
+        }
         return record.manualColor;
     } else if (role == IsLockedRole || role == PinnedRole) {
         return record.pinned;
@@ -533,6 +565,12 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         }
         return record.tags;
     } else if (role == NoteRole) {
+        if (record.note.isEmpty()) {
+            std::wstring wpath = path.toStdWString();
+            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
+            QString noteStr = QString::fromStdWString(meta.note);
+            if (!noteStr.isEmpty()) return noteStr;
+        }
         return record.note;
     } else if (role == UrlRole) {
         return record.url;
