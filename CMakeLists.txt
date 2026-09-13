@@ -112,6 +112,8 @@ set(SOURCES
     src/meta/ExtensionColorDao.cpp
     src/meta/FavoriteDao.h
     src/meta/FavoriteDao.cpp
+    src/meta/FavoriteService.h
+    src/meta/FavoriteService.cpp
     src/meta/DatabaseMigrator.h
     src/meta/BatchRenameEngine.cpp
     src/meta/BatchRenameEngine.h
@@ -247,6 +249,8 @@ set(SOURCES
     src/ui/TagManagerController.h
     src/ui/controllers/ContentContextMenu.h
     src/ui/controllers/ContentContextMenu.cpp
+    src/ui/controllers/ContextMenuFactory.h
+    src/ui/controllers/ContextMenuFactory.cpp
     src/ui/controllers/ContentKeyHandler.h
     src/ui/controllers/ContentKeyHandler.cpp
     src/ui/controllers/ContentSortController.h

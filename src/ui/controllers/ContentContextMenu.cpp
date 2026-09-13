@@ -25,6 +25,8 @@
 #include "../../core/CoreEngine.h"
 #include "../../meta/MetadataManager.h"
 #include "../../meta/FavoriteDao.h"
+#include "../../meta/FavoriteService.h"
+#include "ContextMenuFactory.h"
 #include "../../crypto/EncryptionManager.h"
 #include "../../core/LastOperationManager.h"
 #include "../ShellIconManager.h"
@@ -125,7 +127,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     if (onItem) {
         if (isDriveRoot) {
             menu.addAction(UiHelper::getIcon("open", QColor("#EEEEEE"), 18), "打开")->setData(ContentPanel::ActionOpen);
-            menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
+            ContextMenuFactory::buildShowInExplorerAction(&menu, path, m_panel);
 
             QString currentColorStr = currentIndex.data(ColorRole).toString();
             QWidgetAction* pickerAction = new QWidgetAction(&menu);
@@ -135,17 +137,46 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             connect(pickerWidget, &ColorStripPicker::colorSelected, this, [this, view, &menu](const QString& hexColor) {
                 auto indexes = view->selectionModel()->selectedIndexes();
+                QStringList targetPaths;
                 for (const auto& idx : indexes) {
-                    if (idx.column() == 0) m_panel->getProxyModel()->setData(idx, hexColor, ColorRole);
+                    if (idx.column() == 0) {
+                        QString p = idx.data(PathRole).toString();
+                        if (!p.isEmpty()) targetPaths << p;
+                    }
+                }
+                if (!targetPaths.isEmpty()) {
+                    AppCommand cmd;
+                    cmd.type = AppCommandType::SetColor;
+                    cmd.targetPaths = targetPaths;
+                    cmd.params["color"] = hexColor;
+                    CoreEngine::instance().executeCommand(cmd);
+                    if (m_panel) {
+                        for (const QString& p : targetPaths) m_panel->updateItemMetadata(p);
+                    }
                 }
                 menu.close();
             });
 
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
-            menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
+            ContextMenuFactory::buildPinToggleAction(&menu, isPinned, [this, view](bool pin) {
+                auto indexes = view->selectionModel()->selectedIndexes();
+                QStringList targetPaths;
+                for (const auto& idx : indexes) {
+                    if (idx.column() == 0) {
+                        QString p = idx.data(PathRole).toString();
+                        if (!p.isEmpty()) targetPaths << p;
+                    }
+                }
+                if (!targetPaths.isEmpty()) {
+                    for (const QString& p : targetPaths) {
+                        MetadataManager::instance().setPinned(p.toStdWString(), pin);
+                        if (m_panel) m_panel->updateItemMetadata(p);
+                    }
+                    if (m_panel) m_panel->refreshAll();
+                }
+            }, m_panel);
 
-            bool isFavDrive = FavoriteDao::containsPath(path);
-            menu.addAction(UiHelper::getIcon(isFavDrive ? "close" : "star_filled", QColor("#EEEEEE"), 18), isFavDrive ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
+            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
 
             menu.addSeparator();
 
@@ -153,8 +184,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             actItemPaste->setData(ContentPanel::ActionPaste);
             actItemPaste->setEnabled(m_panel->canPaste(path));
 
-            menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "复制名称")->setData(ContentPanel::ActionCopyName);
-            menu.addAction(UiHelper::getIcon("link", QColor("#EEEEEE"), 18), "复制路径")->setData(ContentPanel::ActionCopyPath);
+            QStringList selPaths = m_panel->getSelectedPaths();
+            if (selPaths.isEmpty()) selPaths << path;
+            ContextMenuFactory::buildCopyNameAction(&menu, selPaths, m_panel);
+            ContextMenuFactory::buildCopyPathAction(&menu, selPaths, m_panel);
 
             QMenu* moreMenuDrive = menu.addMenu(UiHelper::getIcon("more_horizontal", QColor("#EEEEEE"), 18), "更多");
             UiHelper::applyMenuStyle(moreMenuDrive);
@@ -209,7 +242,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             if (!isFolder) {
                 menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
             }
-            menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
+            ContextMenuFactory::buildShowInExplorerAction(&menu, path, m_panel);
 
             if (m_panel && m_panel->isRecursive()) {
                 menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18), "在 QuarkMeta 中显示")->setData(ContentPanel::ActionShowInQuarkMeta);
@@ -223,17 +256,46 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             connect(pickerWidget, &ColorStripPicker::colorSelected, this, [this, view, &menu](const QString& hexColor) {
                 auto indexes = view->selectionModel()->selectedIndexes();
+                QStringList targetPaths;
                 for (const auto& idx : indexes) {
-                    if (idx.column() == 0) m_panel->getProxyModel()->setData(idx, hexColor, ColorRole);
+                    if (idx.column() == 0) {
+                        QString p = idx.data(PathRole).toString();
+                        if (!p.isEmpty()) targetPaths << p;
+                    }
+                }
+                if (!targetPaths.isEmpty()) {
+                    AppCommand cmd;
+                    cmd.type = AppCommandType::SetColor;
+                    cmd.targetPaths = targetPaths;
+                    cmd.params["color"] = hexColor;
+                    CoreEngine::instance().executeCommand(cmd);
+                    if (m_panel) {
+                        for (const QString& p : targetPaths) m_panel->updateItemMetadata(p);
+                    }
                 }
                 menu.close();
             });
 
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
-            menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
+            ContextMenuFactory::buildPinToggleAction(&menu, isPinned, [this, view](bool pin) {
+                auto indexes = view->selectionModel()->selectedIndexes();
+                QStringList targetPaths;
+                for (const auto& idx : indexes) {
+                    if (idx.column() == 0) {
+                        QString p = idx.data(PathRole).toString();
+                        if (!p.isEmpty()) targetPaths << p;
+                    }
+                }
+                if (!targetPaths.isEmpty()) {
+                    for (const QString& p : targetPaths) {
+                        MetadataManager::instance().setPinned(p.toStdWString(), pin);
+                        if (m_panel) m_panel->updateItemMetadata(p);
+                    }
+                    if (m_panel) m_panel->refreshAll();
+                }
+            }, m_panel);
 
-            bool isFavItem = FavoriteDao::containsPath(path);
-            menu.addAction(UiHelper::getIcon(isFavItem ? "close" : "star_filled", QColor("#EEEEEE"), 18), isFavItem ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
+            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
 
             menu.addSeparator();
 
@@ -298,8 +360,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             actItemPaste->setData(ContentPanel::ActionPaste);
             actItemPaste->setEnabled(m_panel->canPaste(isFolder ? path : currentPath));
 
-            menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "复制名称")->setData(ContentPanel::ActionCopyName);
-            menu.addAction(UiHelper::getIcon("link", QColor("#EEEEEE"), 18), "复制路径")->setData(ContentPanel::ActionCopyPath);
+            QStringList selPaths = m_panel->getSelectedPaths();
+            if (selPaths.isEmpty()) selPaths << path;
+            ContextMenuFactory::buildCopyNameAction(&menu, selPaths, m_panel);
+            ContextMenuFactory::buildCopyPathAction(&menu, selPaths, m_panel);
 
             QMenu* moreMenu = menu.addMenu(UiHelper::getIcon("more_horizontal", QColor("#EEEEEE"), 18), "更多");
             UiHelper::applyMenuStyle(moreMenu);
@@ -537,13 +601,20 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         case ContentPanel::ActionUnpin: {
             auto indexes = view->selectionModel()->selectedIndexes();
             bool pin = (action == ContentPanel::ActionPin);
-            for (const QModelIndex& idx : indexes) {
+            QStringList targetPaths;
+            for (const auto& idx : indexes) {
                 if (idx.column() == 0) {
-                    m_panel->getProxyModel()->setData(idx, pin, IsLockedRole);
+                    QString p = idx.data(PathRole).toString();
+                    if (!p.isEmpty()) targetPaths << p;
                 }
             }
-            m_panel->getProxyModel()->invalidate();
-            m_panel->getProxyModel()->sort(0, m_panel->getProxyModel()->sortOrder());
+            if (!targetPaths.isEmpty()) {
+                for (const QString& p : targetPaths) {
+                    MetadataManager::instance().setPinned(p.toStdWString(), pin);
+                    if (m_panel) m_panel->updateItemMetadata(p);
+                }
+                if (m_panel) m_panel->refreshAll();
+            }
             break;
         }
         case ContentPanel::ActionEncrypt: {
