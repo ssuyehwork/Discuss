@@ -336,6 +336,22 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     });
                 };
 
+                connect(moveMenu, &QMenu::hovered, this, [](QAction* action) {
+                    if (action) {
+                        QString path = action->data().toString();
+                        if (!path.isEmpty()) {
+                            ToolTipOverlay::instance()->showText(QCursor::pos(), path, 0);
+                        } else {
+                            ToolTipOverlay::hideTip();
+                        }
+                    } else {
+                        ToolTipOverlay::hideTip();
+                    }
+                });
+                connect(moveMenu, &QMenu::aboutToHide, this, []() {
+                    ToolTipOverlay::hideTip();
+                });
+
                 for (const QString& recentDir : recentFolders) {
                     QFileInfo dirInfo(recentDir);
                     QString displayName = dirInfo.fileName();
@@ -343,7 +359,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                         displayName = recentDir; // 盘符或根目录降级显示原路径
                     }
                     QAction* actMove = moveMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), displayName);
-                    actMove->setToolTip(recentDir);
+                    actMove->setData(recentDir);
                     connect(actMove, &QAction::triggered, this, [performMoveTo, recentDir]() {
                         performMoveTo(recentDir);
                     });
