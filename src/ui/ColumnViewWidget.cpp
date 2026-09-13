@@ -1,26 +1,24 @@
 #include "ColumnViewWidget.h"
-#include "ColumnItemDelegate.h"
-#include "DropListView.h"
 #include "ContentPanel.h"
 #include "../core/DiskScanService.h"
-#include "../core/ModelContract.h"
-
+#include "DropListView.h"
+#include "ColumnItemDelegate.h"
+#include "UiHelper.h"
+#include <QFileInfo>
 #include <QVBoxLayout>
-#include <QApplication>
-#include <QScrollBar>
 #include <QtConcurrent/QtConcurrent>
-#include <QDebug>
+#include <QCoreApplication>
+#include <QDir>
+#include <QResizeEvent>
+#include <QScrollBar>
 
 namespace QuarkMeta {
 
-// ---------------------------------------------------------------------------
-// ColumnViewPane Implementation
-// ---------------------------------------------------------------------------
-
 ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent)
-    : QWidget(parent), m_path(path), m_contentPanel(contentPanel) {
+    : QWidget(parent), m_path(path), m_contentPanel(contentPanel)
+{
     setObjectName("ColumnViewPane");
-    setAttribute(Qt::WA_StyledBackground, true);
+    setMinimumWidth(220);
 
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -32,88 +30,58 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     m_listView = new DropListView(this);
     m_listView->setObjectName("ColumnViewPaneListView");
-    m_listView->setFrameShape(QFrame::NoFrame);
-    m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_listView->setDragEnabled(true);
+    m_listView->setAcceptDrops(true);
+    m_listView->setDropIndicatorShown(true);
+    m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setModel(m_proxyModel);
-    m_listView->setItemDelegate(new ColumnItemDelegate(this));
 
+    connect(m_proxyModel, &QAbstractItemModel::modelReset, this, &ColumnViewPane::tryPendingSelection);
+    connect(m_proxyModel, &QAbstractItemModel::layoutChanged, this, &ColumnViewPane::tryPendingSelection);
+
+    auto* delegate = new ColumnItemDelegate(this);
+    m_listView->setItemDelegate(delegate);
     layout->addWidget(m_listView);
-
-    // 选中变化驱动焦点设置，而后触发 ContentPanel::onSelectionChanged 与 selectionChanged 广播
-    if (m_listView->selectionModel()) {
-        connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
-            if (m_listView && !m_listView->selectionModel()->selectedIndexes().isEmpty()) {
-                m_listView->setFocus();
-            }
-            emit selectionChanged();
-            if (m_contentPanel) {
-                m_contentPanel->onSelectionChanged();
-            }
-        });
-    }
 
     if (m_contentPanel) {
         m_listView->installEventFilter(m_contentPanel);
         m_listView->viewport()->installEventFilter(m_contentPanel);
-        connect(m_listView, &QListView::customContextMenuRequested,
-                m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
-        connect(m_listView, &DropListView::pathsDropped,
-                m_contentPanel, &ContentPanel::onPathsDropped);
+        connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
     }
 
-    connect(m_listView, &QListView::clicked, this, &ColumnViewPane::onClicked);
-    connect(m_listView, &QListView::doubleClicked, this, &ColumnViewPane::onDoubleClicked);
+    connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ColumnViewPane::selectionChanged);
 
-    setFixedWidth(240);
-    loadDirectory();
-}
-
-void ColumnViewPane::loadDirectory() {
-    if (m_path.isEmpty()) return;
-    QString scanPath = m_path;
-
-    QThreadPool::globalInstance()->start([this, scanPath]() {
-        bool showHidden = m_contentPanel ? m_contentPanel->currentFilter().showHidden : false;
-        std::vector<ItemRecord> rawItems = DiskScanService::scanDirectory(scanPath, false, []() { return true; });
-
-        std::vector<ItemRecord> items;
-        if (!showHidden) {
-            items.reserve(rawItems.size());
-            for (const auto& item : rawItems) {
-                if (!item.isHidden) {
-                    items.push_back(item);
-                }
-            }
-        } else {
-            items = std::move(rawItems);
+    connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
+        QString itemPath = index.data(PathRole).toString();
+        bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
+        int paneIdx = property("paneIndex").toInt();
+        if (isDir) {
+            emit folderSelected(itemPath, paneIdx);
         }
+    });
 
-        QMetaObject::invokeMethod(this, [this, items]() {
-            if (m_model) {
-                m_model->setRecords(items);
-                if (!m_pendingSelectPath.isEmpty()) {
-                    tryPendingSelection();
-                }
-                // 触发图标与缩略图提取管线
-                int count = m_model->rowCount();
-                if (count > 0) {
-                    QList<int> visibleRows;
-                    visibleRows.reserve(count);
-                    for (int r = 0; r < count; ++r) visibleRows.append(r);
-                    m_model->loadThumbnailsForRows(visibleRows);
-                }
-                emit recordsLoaded(items);
-            }
-        }, Qt::QueuedConnection);
+    connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
+        QString itemPath = index.data(PathRole).toString();
+        bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
+        int paneIdx = property("paneIndex").toInt();
+        if (!isDir) {
+            emit fileSelected(itemPath, paneIdx);
+        }
     });
 }
 
-void ColumnViewPane::selectItemByPath(const QString& itemPath) {
-    m_pendingSelectPath = itemPath;
+void ColumnViewPane::setFilterState(const FilterState& state) {
+    if (m_proxyModel) {
+        m_proxyModel->currentFilter = state;
+        m_proxyModel->updateFilter();
+    }
+}
+
+void ColumnViewPane::selectItemByPath(const QString& targetPath) {
+    m_pendingSelectPath = targetPath;
     tryPendingSelection();
 }
 
@@ -132,96 +100,86 @@ void ColumnViewPane::tryPendingSelection() {
             }
             m_listView->scrollTo(idx, QAbstractItemView::EnsureVisible);
             m_pendingSelectPath.clear();
+            emit selectionChanged();
             break;
         }
     }
 }
 
 void ColumnViewPane::clearSelection() {
-    if (m_listView && m_listView->selectionModel()) {
-        m_listView->selectionModel()->clearSelection();
+    if (m_listView) {
+        m_listView->clearSelection();
     }
 }
 
-void ColumnViewWidget::clearOtherSelections(ColumnViewPane* currentPane) {
-    for (auto* pane : m_panes) {
-        if (pane != currentPane && pane && pane->listView() && pane->listView()->selectionModel()) {
-            QSignalBlocker blocker(pane->listView()->selectionModel());
-            pane->listView()->clearSelection();
-        }
-    }
+void ColumnViewPane::loadDirectory() {
+    QString path = m_path;
+    QPointer<ColumnViewPane> weakSelf(this);
+    (void)QtConcurrent::run([weakSelf, path]() {
+        if (!weakSelf) return;
+        std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
+            if (weakSelf && weakSelf->m_model) {
+                weakSelf->m_model->setRecords(items);
+                if (!weakSelf->m_pendingSelectPath.isEmpty()) {
+                    weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
+                }
+                // 触发图标与缩略图提取管线
+                int count = weakSelf->m_model->rowCount();
+                if (count > 0) {
+                    QList<int> visibleRows;
+                    visibleRows.reserve(count);
+                    for (int r = 0; r < count; ++r) visibleRows.append(r);
+                    weakSelf->m_model->loadThumbnailsForRows(visibleRows);
+                }
+                emit weakSelf->recordsLoaded(items);
+            }
+        });
+    });
 }
-
-void ColumnViewPane::setFilterState(const FilterState& state) {
-    if (m_proxyModel) {
-        m_proxyModel->currentFilter = state;
-        m_proxyModel->updateFilter();
-    }
-}
-
-void ColumnViewPane::onClicked(const QModelIndex& index) {
-    if (!index.isValid()) return;
-    QString targetPath = index.data(PathRole).toString();
-    bool isFolder = (index.data(TypeRole).toString() == "folder");
-
-    if (isFolder) {
-        emit folderSelected(targetPath, this);
-    } else {
-        emit fileSelected(targetPath, this);
-    }
-}
-
-void ColumnViewPane::onDoubleClicked(const QModelIndex& index) {
-    if (!index.isValid() || !m_contentPanel) return;
-    QString targetPath = index.data(PathRole).toString();
-    bool isFolder = (index.data(TypeRole).toString() == "folder");
-
-    if (isFolder) {
-        emit m_contentPanel->directorySelected(targetPath);
-    } else {
-        emit m_contentPanel->fileActivated(targetPath);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// ColumnViewWidget Implementation
-// ---------------------------------------------------------------------------
 
 ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
-    : QWidget(parent), m_contentPanel(contentPanel) {
-    
-    QHBoxLayout* mainLayout = new QHBoxLayout(this);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
+    : QScrollArea(parent), m_contentPanel(contentPanel)
+{
+    setObjectName("ColumnViewScrollArea");
+    setWidgetResizable(true);
 
-    m_scrollArea = new QScrollArea(this);
-    m_scrollArea->setObjectName("ColumnViewScrollArea");
-    m_scrollArea->setFrameShape(QFrame::NoFrame);
-    m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_container = new QWidget(this);
+    m_layout = new QHBoxLayout(m_container);
+    m_layout->setContentsMargins(0, 0, 0, 0);
+    m_layout->setSpacing(0);
+    m_layout->setAlignment(Qt::AlignLeft);
 
-    m_container = new QWidget(m_scrollArea);
-    m_containerLayout = new QHBoxLayout(m_container);
-    m_containerLayout->setContentsMargins(0, 0, 0, 0);
-    m_containerLayout->setSpacing(0);
-    m_containerLayout->addStretch(1);
+    setWidget(m_container);
 
-    m_container->setLayout(m_containerLayout);
-    m_scrollArea->setWidget(m_container);
-
-    mainLayout->addWidget(m_scrollArea);
+    if (horizontalScrollBar()) {
+        connect(horizontalScrollBar(), &QScrollBar::rangeChanged, this, [this](int min, int max) {
+            Q_UNUSED(min);
+            if (m_autoScrollToRight) {
+                horizontalScrollBar()->setValue(max);
+                m_autoScrollToRight = false;
+            }
+        });
+    }
 }
 
 void ColumnViewWidget::scrollToRightmostPane() {
+    m_autoScrollToRight = true;
     QMetaObject::invokeMethod(this, [this]() {
-        if (m_scrollArea && m_scrollArea->horizontalScrollBar()) {
-            m_scrollArea->horizontalScrollBar()->setValue(m_scrollArea->horizontalScrollBar()->maximum());
+        if (horizontalScrollBar()) {
+            horizontalScrollBar()->setValue(horizontalScrollBar()->maximum());
         }
         if (!m_panes.isEmpty() && m_panes.last()) {
-            m_scrollArea->ensureWidgetVisible(m_panes.last(), 0, 0);
+            ensureWidgetVisible(m_panes.last(), 0, 0);
         }
     }, Qt::QueuedConnection);
+}
+
+ColumnViewPane* ColumnViewWidget::activePane() const {
+    if (m_activePaneIndex >= 0 && m_activePaneIndex < m_panes.size()) {
+        return m_panes[m_activePaneIndex];
+    }
+    return m_panes.isEmpty() ? nullptr : m_panes.last();
 }
 
 bool ColumnViewWidget::containsPath(const QString& path) const {
@@ -229,7 +187,7 @@ bool ColumnViewWidget::containsPath(const QString& path) const {
     QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(path));
     for (auto* pane : m_panes) {
         if (pane) {
-            QString panePath = QDir::toNativeSeparators(QDir::cleanPath(pane->path()));
+            QString panePath = QDir::toNativeSeparators(QDir::cleanPath(pane->currentPath()));
             if (QString::compare(panePath, cleanTarget, Qt::CaseInsensitive) == 0) {
                 return true;
             }
@@ -265,9 +223,8 @@ void ColumnViewWidget::applyFilterState(const FilterState& state) {
 }
 
 void ColumnViewWidget::setRootPath(const QString& path) {
-    m_rootPath = path;
     clearAllColumns();
-    if (path.isEmpty() || path == "computer://") return;
+    if (path.isEmpty()) return;
 
     // 1. 拆分完整的祖先路径栈
     QList<QString> pathStack;
@@ -291,63 +248,95 @@ void ColumnViewWidget::setRootPath(const QString& path) {
             m_panes[i - 1]->selectItemByPath(p);
         }
     }
+    updatePaneWidths();
 }
 
 void ColumnViewWidget::clearAllColumns() {
     dismissSubColumns(-1);
 }
 
-void ColumnViewWidget::appendColumn(const QString& path) {
-    ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
-    pane->setFilterState(m_currentFilter);
-
-    connect(pane, &ColumnViewPane::selectionChanged, this, [this]() {
-        emit selectionChanged();
-    });
-    
-    connect(pane, &ColumnViewPane::folderSelected, this, &ColumnViewWidget::onFolderSelected);
-    connect(pane, &ColumnViewPane::fileSelected, this, &ColumnViewWidget::onFileSelected);
-
-    if (pane->model()) {
-        emit activeColumnRecordsChanged(pane->model()->allRecords());
-    }
-
-    // 插入到 layout Stretch 之前
-    m_containerLayout->insertWidget(m_containerLayout->count() - 1, pane);
-    m_panes.append(pane);
-
-    scrollToRightmostPane();
-}
-
-void ColumnViewWidget::dismissSubColumns(ColumnViewPane* targetPane) {
-    int idx = m_panes.indexOf(targetPane);
-    if (idx < 0) return;
-    dismissSubColumns(idx);
-}
-
 void ColumnViewWidget::dismissSubColumns(int fromIndex) {
     while (m_panes.size() > fromIndex + 1) {
         ColumnViewPane* pane = m_panes.takeLast();
-        m_containerLayout->removeWidget(pane);
-        delete pane;
+        m_layout->removeWidget(pane);
+        pane->deleteLater();
+    }
+    updatePaneWidths();
+}
+
+ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
+    int newIdx = m_panes.size();
+    ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
+    pane->setProperty("paneIndex", newIdx);
+    pane->setFilterState(m_currentFilter);
+    pane->loadDirectory();
+
+    connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
+        if (pane == activePane()) {
+            emit activeColumnRecordsChanged(records);
+        }
+    });
+
+    connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
+        m_activePaneIndex = pane->property("paneIndex").toInt();
+        emit selectionChanged();
+        if (pane->model()) {
+            emit activeColumnRecordsChanged(pane->model()->allRecords());
+        }
+    });
+
+    connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
+        m_activePaneIndex = paneIdx;
+        dismissSubColumns(paneIdx);
+        // 保持父列高亮：仅清空 paneIdx 右侧深层列的选区，保留 paneIdx 及其左侧父列的高亮
+        for (int i = paneIdx + 1; i < m_panes.size(); ++i) {
+            m_panes[i]->clearSelection();
+        }
+        appendColumn(folderPath);
+        emit pathNavigated(folderPath);
+    });
+
+    connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
+        m_activePaneIndex = paneIdx;
+        dismissSubColumns(paneIdx);
+        clearOtherSelections(paneIdx);
+        emit pathNavigated(filePath);
+    });
+
+    m_panes.append(pane);
+    m_layout->addWidget(pane);
+    updatePaneWidths();
+    scrollToRightmostPane();
+    return pane;
+}
+
+void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (i != activePaneIdx) {
+            m_panes[i]->clearSelection();
+        }
     }
 }
 
-ColumnViewPane* ColumnViewWidget::activePane() const {
-    QWidget* focusWidget = QApplication::focusWidget();
+void ColumnViewWidget::updatePaneWidths() {
+    if (m_panes.isEmpty()) return;
+    int defaultWidth = 240;
     for (auto* pane : m_panes) {
-        if (pane->listView() && focusWidget &&
-            (focusWidget == pane->listView() || pane->listView()->isAncestorOf(focusWidget))) {
-            return pane;
-        }
+        pane->setFixedWidth(defaultWidth);
+        pane->setMinimumWidth(defaultWidth);
+        pane->setMaximumWidth(defaultWidth);
     }
-    return m_panes.isEmpty() ? nullptr : m_panes.last();
+}
+
+void ColumnViewWidget::resizeEvent(QResizeEvent* event) {
+    QScrollArea::resizeEvent(event);
+    updatePaneWidths();
 }
 
 void ColumnViewWidget::refreshActiveColumn() {
-    ColumnViewPane* active = activePane();
-    if (active) {
-        active->loadDirectory();
+    ColumnViewPane* pane = activePane();
+    if (pane) {
+        pane->loadDirectory();
     }
 }
 
@@ -359,28 +348,6 @@ void ColumnViewWidget::updateMetadataForPath(const QString& path) {
                 pane->listView()->viewport()->update();
             }
         }
-    }
-}
-
-void ColumnViewWidget::onFolderSelected(const QString& folderPath, ColumnViewPane* pane) {
-    int idx = m_panes.indexOf(pane);
-    dismissSubColumns(pane);
-    // 保持父列高亮：仅清空当前列右侧深层列的选择，绝对保留当前列及其左侧父列的高亮
-    if (idx >= 0) {
-        for (int i = idx + 1; i < m_panes.size(); ++i) {
-            m_panes[i]->clearSelection();
-        }
-    }
-    appendColumn(folderPath);
-    if (pane && pane->model()) {
-        emit activeColumnRecordsChanged(pane->model()->allRecords());
-    }
-}
-
-void ColumnViewWidget::onFileSelected(const QString& /*filePath*/, ColumnViewPane* pane) {
-    dismissSubColumns(pane);
-    if (pane && pane->model()) {
-        emit activeColumnRecordsChanged(pane->model()->allRecords());
     }
 }
 
