@@ -524,8 +524,6 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
         QApplication::clipboard()->setText(QFileInfo(m_currentPath).fileName());
     } else if (selected == actCopyPath) {
         QApplication::clipboard()->setText(QDir::toNativeSeparators(m_currentPath));
-    } else if (selected == actFavorite) {
-        emit favoriteRequested(m_currentPath);
     } else if (selected == actTextExtSettings) {
         TextExtensionDialog dlg(this);
         dlg.exec();

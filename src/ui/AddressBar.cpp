@@ -88,9 +88,7 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
         QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE")), "复制完整路径");
 
         QAction* selected = menu.exec(globalPos);
-        if (selected == actFavToggle) {
-            emit requestAddFavorite(nativePath);
-        } else if (selected == actCopyPath) {
+        if (selected == actCopyPath) {
             QApplication::clipboard()->setText(nativePath);
             ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径至剪贴板", 1500, Style::SuccessGreen);
         }
