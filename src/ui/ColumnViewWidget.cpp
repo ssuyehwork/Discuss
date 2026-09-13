@@ -133,7 +133,7 @@ void ColumnViewPane::loadDirectory() {
                     for (int r = 0; r < count; ++r) visibleRows.append(r);
                     weakSelf->m_model->loadThumbnailsForRows(visibleRows);
                 }
-                emit weakSelf->recordsLoaded(items);
+                emit weakSelf->recordsLoaded(weakSelf->m_model->allRecords());
             }
         });
     });
