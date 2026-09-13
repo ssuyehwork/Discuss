@@ -334,15 +334,13 @@ void FilterPanel::populate(
                  else if (m_typeCounts.contains(name)) count = m_typeCounts.value(name, 0);
                  else if (m_createDateCounts.contains(name)) count = m_createDateCounts.value(name, 0);
                  else if (m_modifyDateCounts.contains(name)) count = m_modifyDateCounts.value(name, 0);
-                 else if (name == "红色") count = m_colorCounts.value("#E24B4A", m_colorCounts.value("红色", 0));
-                 else if (name == "橙色") count = m_colorCounts.value("#EF9F27", m_colorCounts.value("橙色", 0));
-                 else if (name == "黄色") count = m_colorCounts.value("#FECF0E", m_colorCounts.value("黄色", 0));
-                 else if (name == "绿色") count = m_colorCounts.value("#639922", m_colorCounts.value("绿色", 0));
-                 else if (name == "青色") count = m_colorCounts.value("#1D9E75", m_colorCounts.value("青色", 0));
-                 else if (name == "蓝色") count = m_colorCounts.value("#378ADD", m_colorCounts.value("蓝色", 0));
-                 else if (name == "紫色") count = m_colorCounts.value("#7F77DD", m_colorCounts.value("紫色", 0));
-                 else if (name == "灰色") count = m_colorCounts.value("#5F5E5A", m_colorCounts.value("灰色", 0));
                  else if (name == "无色标") count = m_colorCounts.value("", m_colorCounts.value("无色标", 0));
+                 else {
+                     QString hex = Style::getColorHexByName(name);
+                     if (!hex.isEmpty()) {
+                         count = m_colorCounts.value(hex, m_colorCounts.value(name, 0));
+                     }
+                 }
                  else if (name == "未重复") count = m_currentStats.uniqueCount;
                  else if (name == "重复项") count = m_currentStats.duplicateCount;
                  else if (name == "横图") count = m_currentStats.ratioHorizontalCount;

@@ -224,8 +224,8 @@ void PanelMediator::setupConnections() {
             if (selected.isEmpty()) return;
 
             QModelIndex currentSel = selected.first();
-            QString selPath = currentSel.data(PathRole).toString();
-            QString changedPath = topLeft.data(PathRole).toString();
+            QString selPath = QDir::cleanPath(currentSel.data(PathRole).toString());
+            QString changedPath = QDir::cleanPath(topLeft.data(PathRole).toString());
 
             if (!selPath.isEmpty() && QString::compare(selPath, changedPath, Qt::CaseInsensitive) == 0) {
                 if (roles.isEmpty() || roles.contains(RatingRole)) {
@@ -591,6 +591,21 @@ void PanelMediator::setupConnections() {
         if (event.type == QuarkMeta::AppEventType::MetadataUpdated) {
             if (!event.targetPath.isEmpty()) {
                 contentPanel->updateItemMetadata(event.targetPath);
+                if (metaPanel) {
+                    QString targetClean = QDir::cleanPath(event.targetPath);
+                    for (const QString& p : metaPanel->selectedPaths()) {
+                        if (QString::compare(QDir::cleanPath(p), targetClean, Qt::CaseInsensitive) == 0) {
+                            if (event.payload.contains("field") && event.payload["field"].toString() == "color") {
+                                QString newColor = event.payload.value("value").toString();
+                                metaPanel->setColor(newColor, false);
+                            } else if (event.payload.contains("field") && event.payload["field"].toString() == "rating") {
+                                int newRating = event.payload.value("value").toInt();
+                                metaPanel->setRating(newRating, false);
+                            }
+                            break;
+                        }
+                    }
+                }
             } else if (!event.paths.isEmpty()) {
                 for (const QString& p : event.paths) {
                     contentPanel->updateItemMetadata(p);
