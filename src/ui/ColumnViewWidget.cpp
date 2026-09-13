@@ -90,11 +90,15 @@ void ColumnViewPane::tryPendingSelection() {
     if (m_pendingSelectPath.isEmpty() || !m_proxyModel || !m_listView) return;
 
     QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(m_pendingSelectPath));
+    QString targetName = QFileInfo(cleanTarget).fileName();
+
     for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
         QModelIndex idx = m_proxyModel->index(r, 0);
         QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+        QString itemName = QFileInfo(itemPath).fileName();
 
-        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
+        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0 ||
+            (!targetName.isEmpty() && QString::compare(itemName, targetName, Qt::CaseInsensitive) == 0)) {
             m_listView->setCurrentIndex(idx);
             if (m_listView->selectionModel()) {
                 m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
