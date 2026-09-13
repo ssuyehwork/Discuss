@@ -146,6 +146,7 @@ void ContentPanel::initUi() {
     initGridView();
     initListView();
     m_columnView = new ColumnViewWidget(this, this);
+    connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<QuarkMeta::ItemRecord>& records) {
         if (m_statsWorker && !records.empty()) {
             m_statsWorker->processAsync(records, m_currentFilter.showHidden);
