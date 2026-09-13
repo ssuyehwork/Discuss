@@ -65,11 +65,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     });
 
     connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
-        QString itemPath = index.data(PathRole).toString();
-        bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
-        int paneIdx = property("paneIndex").toInt();
-        if (!isDir) {
-            emit fileSelected(itemPath, paneIdx);
+        if (m_contentPanel && index.isValid()) {
+            m_contentPanel->onDoubleClicked(index);
         }
     });
 }
@@ -84,6 +81,13 @@ void ColumnViewPane::setFilterState(const FilterState& state) {
 void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     m_pendingSelectPath = targetPath;
     tryPendingSelection();
+}
+
+void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
+    if (m_proxyModel) {
+        m_proxyModel->setSortType(sortType);
+        m_proxyModel->sort(0, sortOrder);
+    }
 }
 
 void ColumnViewPane::tryPendingSelection() {
@@ -103,7 +107,7 @@ void ColumnViewPane::tryPendingSelection() {
             if (m_listView->selectionModel()) {
                 m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             }
-            m_listView->scrollTo(idx, QAbstractItemView::EnsureVisible);
+            m_listView->scrollTo(idx, QAbstractItemView::PositionAtCenter);
             m_pendingSelectPath.clear();
             emit selectionChanged();
             break;
@@ -230,8 +234,16 @@ void ColumnViewWidget::applyFilterState(const FilterState& state) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
         } else {
-            m_panes[i]->setFilterState(FilterState());
+            FilterState parentFilter;
+            parentFilter.showHidden = m_currentFilter.showHidden;
+            m_panes[i]->setFilterState(parentFilter);
         }
+    }
+}
+
+void ColumnViewWidget::applySort(int sortType, Qt::SortOrder sortOrder) {
+    for (auto* pane : m_panes) {
+        if (pane) pane->applySort(sortType, sortOrder);
     }
 }
 
@@ -279,7 +291,9 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
         } else {
-            m_panes[i]->setFilterState(FilterState());
+            FilterState parentFilter;
+            parentFilter.showHidden = m_currentFilter.showHidden;
+            m_panes[i]->setFilterState(parentFilter);
         }
     }
     if (rightmostPane() && rightmostPane()->model()) {
@@ -291,6 +305,9 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
     pane->setProperty("paneIndex", newIdx);
+    if (m_contentPanel) {
+        pane->applySort(m_contentPanel->currentSortType(), m_contentPanel->currentSortOrder());
+    }
     pane->loadDirectory();
 
     connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
@@ -332,7 +349,9 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
         } else {
-            m_panes[i]->setFilterState(FilterState());
+            FilterState parentFilter;
+            parentFilter.showHidden = m_currentFilter.showHidden;
+            m_panes[i]->setFilterState(parentFilter);
         }
     }
     scrollToRightmostPane();

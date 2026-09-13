@@ -238,6 +238,9 @@ void ContentPanel::ensureSourceModelIsDiskModel() {
 void ContentPanel::applySort() {
     if (m_sortController) {
         m_sortController->applySortToModel(m_proxyModel);
+        if (m_columnView) {
+            m_columnView->applySort(m_sortController->sortType(), m_sortController->sortOrder());
+        }
     }
 }
 
@@ -276,9 +279,11 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (m_currentViewMode == ColumnView) {
-        if (m_currentPath != path) {
-            m_currentPath = path;
-            if (m_columnView) m_columnView->setRootPath(path);
+        m_currentPath = path;
+        m_isRecursive = recursive;
+        if (m_columnView) {
+            m_columnView->setRootPath(path);
+            restoreSelections();
         }
         updateStatusBarStats();
         return;
