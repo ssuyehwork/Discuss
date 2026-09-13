@@ -239,7 +239,7 @@ void ContentPanel::applySort() {
     if (m_sortController) {
         m_sortController->applySortToModel(m_proxyModel);
         if (m_columnView) {
-            m_columnView->applySort(m_sortController->sortType(), m_sortController->sortOrder());
+            m_columnView->applySort(static_cast<int>(m_sortController->sortType()), m_sortController->sortOrder());
         }
     }
 }
