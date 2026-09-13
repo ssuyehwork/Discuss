@@ -19,9 +19,8 @@ namespace QuarkMeta {
 
 ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent)
     : QWidget(parent), m_path(path), m_contentPanel(contentPanel) {
-    
+    setObjectName("ColumnViewPane");
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet("QWidget { border-right: 1px solid #333333; background: transparent; } QListView { border: none; background: transparent; }");
 
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -32,9 +31,11 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_proxyModel->setSourceModel(m_model);
 
     m_listView = new DropListView(this);
+    m_listView->setObjectName("ColumnViewPaneListView");
     m_listView->setFrameShape(QFrame::NoFrame);
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_listView->setModel(m_proxyModel);
@@ -42,17 +43,20 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     layout->addWidget(m_listView);
 
-    // 选中变化驱动焦点设置，而后触发 ContentPanel::onSelectionChanged
-    if (m_contentPanel) {
+    // 选中变化驱动焦点设置，而后触发 ContentPanel::onSelectionChanged 与 selectionChanged 广播
+    if (m_listView->selectionModel()) {
         connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
             if (m_listView && !m_listView->selectionModel()->selectedIndexes().isEmpty()) {
                 m_listView->setFocus();
             }
+            emit selectionChanged();
             if (m_contentPanel) {
                 m_contentPanel->onSelectionChanged();
             }
         });
+    }
 
+    if (m_contentPanel) {
         m_listView->installEventFilter(m_contentPanel);
         m_listView->viewport()->installEventFilter(m_contentPanel);
         connect(m_listView, &QListView::customContextMenuRequested,
@@ -148,6 +152,13 @@ void ColumnViewWidget::clearOtherSelections(ColumnViewPane* currentPane) {
     }
 }
 
+void ColumnViewPane::setFilterState(const FilterState& state) {
+    if (m_proxyModel) {
+        m_proxyModel->currentFilter = state;
+        m_proxyModel->updateFilter();
+    }
+}
+
 void ColumnViewPane::onClicked(const QModelIndex& index) {
     if (!index.isValid()) return;
     QString targetPath = index.data(PathRole).toString();
@@ -184,6 +195,7 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
     mainLayout->setSpacing(0);
 
     m_scrollArea = new QScrollArea(this);
+    m_scrollArea->setObjectName("ColumnViewScrollArea");
     m_scrollArea->setFrameShape(QFrame::NoFrame);
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -199,6 +211,57 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
     m_scrollArea->setWidget(m_container);
 
     mainLayout->addWidget(m_scrollArea);
+}
+
+void ColumnViewWidget::scrollToRightmostPane() {
+    QMetaObject::invokeMethod(this, [this]() {
+        if (m_scrollArea && m_scrollArea->horizontalScrollBar()) {
+            m_scrollArea->horizontalScrollBar()->setValue(m_scrollArea->horizontalScrollBar()->maximum());
+        }
+        if (!m_panes.isEmpty() && m_panes.last()) {
+            m_scrollArea->ensureWidgetVisible(m_panes.last(), 0, 0);
+        }
+    }, Qt::QueuedConnection);
+}
+
+bool ColumnViewWidget::containsPath(const QString& path) const {
+    if (path.isEmpty()) return false;
+    QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(path));
+    for (auto* pane : m_panes) {
+        if (pane) {
+            QString panePath = QDir::toNativeSeparators(QDir::cleanPath(pane->path()));
+            if (QString::compare(panePath, cleanTarget, Qt::CaseInsensitive) == 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+QStringList ColumnViewWidget::getSelectedPaths() const {
+    ColumnViewPane* pane = activePane();
+    if (!pane || !pane->listView() || !pane->listView()->selectionModel()) return {};
+    QStringList paths;
+    for (const auto& idx : pane->listView()->selectionModel()->selectedIndexes()) {
+        if (idx.column() == 0) {
+            QString p = idx.data(PathRole).toString();
+            if (!p.isEmpty()) paths << p;
+        }
+    }
+    return paths;
+}
+
+QModelIndexList ColumnViewWidget::getSelectedIndexes() const {
+    ColumnViewPane* pane = activePane();
+    if (!pane || !pane->listView() || !pane->listView()->selectionModel()) return {};
+    return pane->listView()->selectionModel()->selectedIndexes();
+}
+
+void ColumnViewWidget::applyFilterState(const FilterState& state) {
+    m_currentFilter = state;
+    for (auto* pane : m_panes) {
+        pane->setFilterState(state);
+    }
 }
 
 void ColumnViewWidget::setRootPath(const QString& path) {
@@ -236,6 +299,11 @@ void ColumnViewWidget::clearAllColumns() {
 
 void ColumnViewWidget::appendColumn(const QString& path) {
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
+    pane->setFilterState(m_currentFilter);
+
+    connect(pane, &ColumnViewPane::selectionChanged, this, [this]() {
+        emit selectionChanged();
+    });
     
     connect(pane, &ColumnViewPane::folderSelected, this, &ColumnViewWidget::onFolderSelected);
     connect(pane, &ColumnViewPane::fileSelected, this, &ColumnViewWidget::onFileSelected);
@@ -248,12 +316,7 @@ void ColumnViewWidget::appendColumn(const QString& path) {
     m_containerLayout->insertWidget(m_containerLayout->count() - 1, pane);
     m_panes.append(pane);
 
-    // 自动向右滚动到底
-    QMetaObject::invokeMethod(this, [this]() {
-        if (m_scrollArea && m_scrollArea->horizontalScrollBar()) {
-            m_scrollArea->horizontalScrollBar()->setValue(m_scrollArea->horizontalScrollBar()->maximum());
-        }
-    }, Qt::QueuedConnection);
+    scrollToRightmostPane();
 }
 
 void ColumnViewWidget::dismissSubColumns(ColumnViewPane* targetPane) {
