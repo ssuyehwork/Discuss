@@ -14,7 +14,7 @@ ColumnItemDelegate::ColumnItemDelegate(QObject* parent)
 
 QSize ColumnItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
     QSize sz = RenameCapableDelegate::sizeHint(option, index);
-    sz.setHeight(32);
+    sz.setHeight(28);
     return sz;
 }
 

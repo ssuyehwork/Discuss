@@ -1892,6 +1892,11 @@ QListView#ColumnViewPaneListView {
     outline: none;
 }
 
+QListView#ColumnViewPaneListView::item {
+    height: 28px;
+    border: none;
+}
+
 QListView#ColumnViewPaneListView::item:selected {
     background: #378ADD;
     color: #FFFFFF;
