@@ -123,7 +123,7 @@
    - **双击文件**：触发文件激活/打开操作，关闭后级子列并触发关联应用。
 
 3. **分栏视图独立极简单行渲染代理契约 (Column View Dedicated Clean Single-Row Delegate Contract)**：
-   分列视图（Miller Columns 架构）物理空间受限，其专用渲染代理 `ColumnItemDelegate` 必须保持绝对极简的视觉呈现。每一项（高度锁定为 32px）采用纯净单行横向布局：左侧 8px 留白、18x18px 图标/缩略图垂直居中绘制、中间自适应文件名文本区（带 `ElideRight` 自动省略号）、右侧 20px 仅绘制文件夹级联展开箭头（`chevron_right`）。**严禁在分栏行内额外绘制星级评分、颜色标记圆点或重叠卡片**，彻底避免有限宽度空间内的文本裁剪挤压与视觉碰撞，选中的关联扩展元数据统一在右侧 `MetaPanel` 中全量呈现。
+   分列视图（Miller Columns 架构）物理空间受限，其专用渲染代理 `ColumnItemDelegate` 必须保持绝对极简的视觉呈现。每一项（高度与目录导航 QSS 统一对齐为 28px）采用纯净单行横向布局：左侧 8px 留白、20x20px 图标/缩略图垂直居中绘制（与目录导航图标视觉饱满度 100% 对齐，杜绝系统外壳图标 16px 降级）、中间自适应文件名文本区（带 `ElideRight` 自动省略号）、右侧 20px 仅绘制文件夹级联展开箭头（`chevron_right`）。**严禁在分栏行内额外绘制星级评分、颜色标记圆点或重叠卡片**，彻底避免有限宽度空间内的文本裁剪挤压与视觉碰撞，选中的关联扩展元数据统一在右侧 `MetaPanel` 中全量呈现。
 
 4. **ContentPanel 统一控制器体系融合契约 (Unified Controller Integration Contract)**：
    分列视图 (`ColumnViewWidget`) 必须 100% 深度融合进 `ContentPanel` 的全局控制与状态感知体系，严禁孤立化：
