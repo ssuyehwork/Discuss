@@ -337,7 +337,13 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 };
 
                 for (const QString& recentDir : recentFolders) {
-                    QAction* actMove = moveMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), recentDir);
+                    QFileInfo dirInfo(recentDir);
+                    QString displayName = dirInfo.fileName();
+                    if (displayName.isEmpty()) {
+                        displayName = recentDir; // 盘符或根目录降级显示原路径
+                    }
+                    QAction* actMove = moveMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), displayName);
+                    actMove->setToolTip(recentDir);
                     connect(actMove, &QAction::triggered, this, [performMoveTo, recentDir]() {
                         performMoveTo(recentDir);
                     });
