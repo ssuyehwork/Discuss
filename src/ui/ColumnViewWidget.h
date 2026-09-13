@@ -58,6 +58,7 @@ public:
     void clearAllColumns();
 
     ColumnViewPane* activePane() const;
+    ColumnViewPane* rightmostPane() const;
     bool containsPath(const QString& path) const;
     void refreshActiveColumn();
     void updateMetadataForPath(const QString& path);

@@ -22,7 +22,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     setMinimumWidth(220);
 
     QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(0, 0, 1, 0);
     layout->setSpacing(0);
 
     m_model = new DiskItemModel(this);
@@ -133,7 +133,7 @@ void ColumnViewPane::loadDirectory() {
                     for (int r = 0; r < count; ++r) visibleRows.append(r);
                     weakSelf->m_model->loadThumbnailsForRows(visibleRows);
                 }
-                emit weakSelf->recordsLoaded(items);
+                emit weakSelf->recordsLoaded(weakSelf->m_model->allRecords());
             }
         });
     });
@@ -183,6 +183,10 @@ ColumnViewPane* ColumnViewWidget::activePane() const {
     return m_panes.isEmpty() ? nullptr : m_panes.last();
 }
 
+ColumnViewPane* ColumnViewWidget::rightmostPane() const {
+    return m_panes.isEmpty() ? nullptr : m_panes.last();
+}
+
 bool ColumnViewWidget::containsPath(const QString& path) const {
     if (path.isEmpty()) return false;
     QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(path));
@@ -218,8 +222,12 @@ QModelIndexList ColumnViewWidget::getSelectedIndexes() const {
 
 void ColumnViewWidget::applyFilterState(const FilterState& state) {
     m_currentFilter = state;
-    for (auto* pane : m_panes) {
-        pane->setFilterState(state);
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (i == m_panes.size() - 1) {
+            m_panes[i]->setFilterState(m_currentFilter);
+        } else {
+            m_panes[i]->setFilterState(FilterState());
+        }
     }
 }
 
@@ -263,17 +271,26 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
         pane->deleteLater();
     }
     updatePaneWidths();
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (i == m_panes.size() - 1) {
+            m_panes[i]->setFilterState(m_currentFilter);
+        } else {
+            m_panes[i]->setFilterState(FilterState());
+        }
+    }
+    if (rightmostPane() && rightmostPane()->model()) {
+        emit activeColumnRecordsChanged(rightmostPane()->model()->allRecords());
+    }
 }
 
 ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
     pane->setProperty("paneIndex", newIdx);
-    pane->setFilterState(m_currentFilter);
     pane->loadDirectory();
 
     connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
-        if (pane == activePane()) {
+        if (pane == rightmostPane()) {
             emit activeColumnRecordsChanged(records);
         }
     });
@@ -281,8 +298,8 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
         m_activePaneIndex = pane->property("paneIndex").toInt();
         emit selectionChanged();
-        if (pane->model()) {
-            emit activeColumnRecordsChanged(pane->model()->allRecords());
+        if (rightmostPane() && rightmostPane()->model()) {
+            emit activeColumnRecordsChanged(rightmostPane()->model()->allRecords());
         }
     });
 
@@ -307,15 +324,20 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     m_panes.append(pane);
     m_layout->addWidget(pane);
     updatePaneWidths();
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (i == m_panes.size() - 1) {
+            m_panes[i]->setFilterState(m_currentFilter);
+        } else {
+            m_panes[i]->setFilterState(FilterState());
+        }
+    }
     scrollToRightmostPane();
     return pane;
 }
 
 void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
-    for (int i = 0; i < m_panes.size(); ++i) {
-        if (i != activePaneIdx) {
-            m_panes[i]->clearSelection();
-        }
+    for (int i = activePaneIdx + 1; i < m_panes.size(); ++i) {
+        m_panes[i]->clearSelection();
     }
 }
 
