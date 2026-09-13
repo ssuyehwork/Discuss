@@ -12,6 +12,7 @@
 #include <QScreen>
 #include <QToolTip>
 #include "UiHelper.h"
+#include "StyleLibrary.h"
 
 namespace QuarkMeta {
 
@@ -334,17 +335,9 @@ ColorStripPicker::ColorStripPicker(const QString& currentColorHex, QWidget* pare
     setMouseTracking(true);
     setCursor(Qt::PointingHandCursor);
 
-    m_items = {
-        {"", QColor("#888780"), "无颜色"},
-        {"#E24B4A", QColor("#E24B4A"), "红色"},
-        {"#EF9F27", QColor("#EF9F27"), "橙色"},
-        {"#FECF0E", QColor("#FECF0E"), "黄色"},
-        {"#639922", QColor("#639922"), "绿色"},
-        {"#1D9E75", QColor("#1D9E75"), "青色"},
-        {"#378ADD", QColor("#378ADD"), "蓝色"},
-        {"#7F77DD", QColor("#7F77DD"), "紫色"},
-        {"#5F5E5A", QColor("#5F5E5A"), "灰色"}
-    };
+    for (const auto& item : Style::getColorPalette()) {
+        m_items.append({item.hex, item.color, item.name});
+    }
 }
 
 void ColorStripPicker::paintEvent(QPaintEvent* event) {

@@ -22,19 +22,13 @@ using namespace QuarkMeta::Style;
 namespace QuarkMeta {
 
 QMap<QString, QColor> FilterPanel::s_colorMap() {
-    return {
-        { "",        QColor("#888780") },
-        { "#E24B4A", QColor("#E24B4A") },
-        { "#EF9F27", QColor("#EF9F27") },
-        { "#FECF0E", QColor("#FECF0E") },
-        { "#639922", QColor("#639922") },
-        { "#1D9E75", QColor("#1D9E75") },
-        { "#378ADD", QColor("#378ADD") },
-        { "#7F77DD", QColor("#7F77DD") },
-        { "#5F5E5A", QColor("#5F5E5A") },
-        { "#000000", QColor("#000000") },
-        { "#FFFFFF", QColor("#FFFFFF") }
-    };
+    QMap<QString, QColor> map;
+    for (const auto& item : Style::getColorPalette()) {
+        map.insert(item.hex, item.color);
+    }
+    map.insert("#000000", QColor("#000000"));
+    map.insert("#FFFFFF", QColor("#FFFFFF"));
+    return map;
 }
 
 static QString ratingDisplayName(int r) {
@@ -521,17 +515,7 @@ void FilterPanel::rebuildGroups() {
 
     // ── 3. 颜色标记 ────────────
     {
-        static const struct { QString name; QString hex; QColor color; } colorsList[] = {
-            {"无色标", "",        QColor("#808080")},
-            {"红色",   "#E24B4A", QColor("#E24B4A")},
-            {"橙色",   "#EF9F27", QColor("#EF9F27")},
-            {"黄色",   "#FECF0E", QColor("#FECF0E")},
-            {"绿色",   "#639922", QColor("#639922")},
-            {"青色",   "#1D9E75", QColor("#1D9E75")},
-            {"蓝色",   "#378ADD", QColor("#378ADD")},
-            {"紫色",   "#7F77DD", QColor("#7F77DD")},
-            {"灰色",   "#5F5E5A", QColor("#5F5E5A")}
-        };
+        const auto& colorsList = Style::getColorPalette();
 
         QVBoxLayout* gl = nullptr;
         QHBoxLayout* hdrLayout = nullptr;

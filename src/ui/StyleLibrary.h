@@ -45,6 +45,34 @@ const int StatusBarHeight   = 28;
 const QColor HoverBackground = QColor("#3E3E42");
 const QColor PressedBackground = QColor("#4E4E52");
 
+struct ColorTagItem {
+    QString hex;
+    QColor color;
+    QString name;
+};
+
+inline const QList<ColorTagItem>& getColorPalette() {
+    static const QList<ColorTagItem> s_palette = {
+        {"",        QColor("#888780"), "无色标"},
+        {"#E24B4A", QColor("#E24B4A"), "红色"},
+        {"#EF9F27", QColor("#EF9F27"), "橙色"},
+        {"#FECF0E", QColor("#FECF0E"), "黄色"},
+        {"#639922", QColor("#639922"), "绿色"},
+        {"#1D9E75", QColor("#1D9E75"), "青色"},
+        {"#378ADD", QColor("#378ADD"), "蓝色"},
+        {"#7F77DD", QColor("#7F77DD"), "紫色"},
+        {"#5F5E5A", QColor("#5F5E5A"), "灰色"}
+    };
+    return s_palette;
+}
+
+inline QString getColorHexByName(const QString& name) {
+    for (const auto& item : getColorPalette()) {
+        if (item.name == name) return item.hex;
+    }
+    return name; // Fallback if already hex
+}
+
 // QSS Helper
 inline QString qssColor(const QColor& color) { return color.name(); }
 
