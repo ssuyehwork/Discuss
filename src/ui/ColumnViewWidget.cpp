@@ -35,6 +35,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setFrameShape(QFrame::NoFrame);
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_listView->setModel(m_proxyModel);
