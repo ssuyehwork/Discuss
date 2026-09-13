@@ -83,9 +83,9 @@ void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     tryPendingSelection();
 }
 
-void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
+void ColumnViewPane::applySort(QuarkMeta::SortType sortType, Qt::SortOrder sortOrder) {
     if (m_proxyModel) {
-        m_proxyModel->setSortType(sortType);
+        m_proxyModel->setSortType(static_cast<int>(sortType));
         m_proxyModel->sort(0, sortOrder);
     }
 }
@@ -241,7 +241,7 @@ void ColumnViewWidget::applyFilterState(const FilterState& state) {
     }
 }
 
-void ColumnViewWidget::applySort(int sortType, Qt::SortOrder sortOrder) {
+void ColumnViewWidget::applySort(QuarkMeta::SortType sortType, Qt::SortOrder sortOrder) {
     for (auto* pane : m_panes) {
         if (pane) pane->applySort(sortType, sortOrder);
     }
