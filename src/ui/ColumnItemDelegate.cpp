@@ -77,7 +77,7 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
     int rating = index.data(RatingRole).toInt();
     QString colorName = index.data(ColorRole).toString();
 
-    // 绘制色标圆点 (在左侧 2px 处)
+    // 绘制 5px 宽度的左侧垂直色条
     if (!colorName.isEmpty()) {
         static const QMap<QString, QString> s_colorHexMap = {
             {"红色", "#E24B4A"}, {"橙色", "#EF9F27"}, {"黄色", "#FECF0E"},
@@ -88,7 +88,8 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
         if (hexColor.startsWith("#")) {
             painter->setBrush(QColor(hexColor));
             painter->setPen(Qt::NoPen);
-            painter->drawEllipse(option.rect.left() + 2, option.rect.top() + (option.rect.height() - 6) / 2, 6, 6);
+            QRect colorBarRect(option.rect.left(), option.rect.top(), 5, option.rect.height());
+            painter->drawRect(colorBarRect);
         }
     }
 
@@ -112,10 +113,11 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
         QRect starIconRect(starRight - numWidth - starSize, option.rect.top() + (option.rect.height() - starSize) / 2, starSize, starSize);
         QRect numRect(starRight - numWidth, option.rect.top() + (option.rect.height() - starSize) / 2, numWidth, starSize);
 
-        QIcon starIcon = UiHelper::getIcon("star_filled", QColor("#FFC107"), starSize);
+        QColor orangeColor = QColor("#FF551C");
+        QIcon starIcon = UiHelper::getIcon("star_filled", orangeColor, starSize);
         starIcon.paint(painter, starIconRect, Qt::AlignCenter);
 
-        painter->setPen(QColor("#FFC107"));
+        painter->setPen(orangeColor);
         painter->setFont(QFont("Segoe UI", 9, QFont::Bold));
         painter->drawText(numRect, Qt::AlignRight | Qt::AlignVCenter, QString::number(rating));
     }
