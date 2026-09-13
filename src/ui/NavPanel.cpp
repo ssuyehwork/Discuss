@@ -11,6 +11,7 @@
 #include "../core/TrashService.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
+#include "controllers/ContextMenuFactory.h"
 #include <QHeaderView>
 #include <QScrollBar>
 #include <QLabel>
@@ -286,16 +287,9 @@ void NavPanel::onTreeContextMenu(const QPoint& pos) {
     UiHelper::applyMenuStyle(&menu);
 
     FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+    ContextMenuFactory::buildCopyPathAction(&menu, QStringList{path}, this);
 
-    QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "复制完整路径");
-
-    QAction* selected = menu.exec(m_treeView->viewport()->mapToGlobal(pos));
-    if (!selected) return;
-
-    if (selected == actCopyPath) {
-        QApplication::clipboard()->setText(QDir::toNativeSeparators(path));
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径到剪贴板", 1200, QColor("#2ecc71"));
-    }
+    menu.exec(m_treeView->viewport()->mapToGlobal(pos));
 }
 
 void NavPanel::onTreeClicked(const QModelIndex& index) {

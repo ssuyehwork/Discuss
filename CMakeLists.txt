@@ -249,6 +249,8 @@ set(SOURCES
     src/ui/TagManagerController.h
     src/ui/controllers/ContentContextMenu.h
     src/ui/controllers/ContentContextMenu.cpp
+    src/ui/controllers/ContextMenuFactory.h
+    src/ui/controllers/ContextMenuFactory.cpp
     src/ui/controllers/ContentKeyHandler.h
     src/ui/controllers/ContentKeyHandler.cpp
     src/ui/controllers/ContentSortController.h
