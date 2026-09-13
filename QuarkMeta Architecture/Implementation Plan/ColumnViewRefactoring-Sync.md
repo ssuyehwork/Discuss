@@ -9,6 +9,7 @@ Restores three critical Column View integration capabilities that were absent in
 ---
 
 ## 2. Modified Files List
+- `CMakeLists.txt`
 - `src/ui/ColumnViewWidget.h`
 - `src/ui/ColumnViewWidget.cpp`
 - `src/ui/ContentPanel.cpp`
@@ -17,7 +18,18 @@ Restores three critical Column View integration capabilities that were absent in
 
 ## 3. Detailed Line-by-Line Changes
 
-### Change 1: `src/ui/ColumnViewWidget.h`
+### Change 0: `CMakeLists.txt`
+Register `DropListView.cpp` and `DropListView.h` to resolve LNK2019 unresolved external symbol error.
+
+```git
+<<<<<<< SEARCH
+    src/ui/DropTreeView.cpp
+    src/ui/DropTreeView.h
+=======
+    src/ui/DropTreeView.cpp
+    src/ui/DropTreeView.h
+    src/ui/DropListView.cpp
+    src/ui/DropListView.h
 Add `DropListView` header and `activeColumnRecordsChanged` signal declaration.
 
 ```git
