@@ -65,8 +65,11 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     });
 
     connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
-        if (m_contentPanel && index.isValid()) {
-            m_contentPanel->onDoubleClicked(index);
+        QString itemPath = index.data(PathRole).toString();
+        bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
+        int paneIdx = property("paneIndex").toInt();
+        if (!isDir) {
+            emit fileSelected(itemPath, paneIdx);
         }
     });
 }
@@ -83,31 +86,20 @@ void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     tryPendingSelection();
 }
 
-void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
-    if (m_proxyModel) {
-        m_proxyModel->setSortType(sortType);
-        m_proxyModel->sort(0, sortOrder);
-    }
-}
-
 void ColumnViewPane::tryPendingSelection() {
     if (m_pendingSelectPath.isEmpty() || !m_proxyModel || !m_listView) return;
 
     QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(m_pendingSelectPath));
-    QString targetName = QFileInfo(cleanTarget).fileName();
-
     for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
         QModelIndex idx = m_proxyModel->index(r, 0);
         QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
-        QString itemName = QFileInfo(itemPath).fileName();
 
-        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0 ||
-            (!targetName.isEmpty() && QString::compare(itemName, targetName, Qt::CaseInsensitive) == 0)) {
+        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
             m_listView->setCurrentIndex(idx);
             if (m_listView->selectionModel()) {
                 m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             }
-            m_listView->scrollTo(idx, QAbstractItemView::PositionAtCenter);
+            m_listView->scrollTo(idx, QAbstractItemView::EnsureVisible);
             m_pendingSelectPath.clear();
             emit selectionChanged();
             break;
@@ -234,16 +226,8 @@ void ColumnViewWidget::applyFilterState(const FilterState& state) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
         } else {
-            FilterState parentFilter;
-            parentFilter.showHidden = m_currentFilter.showHidden;
-            m_panes[i]->setFilterState(parentFilter);
+            m_panes[i]->setFilterState(FilterState());
         }
-    }
-}
-
-void ColumnViewWidget::applySort(int sortType, Qt::SortOrder sortOrder) {
-    for (auto* pane : m_panes) {
-        if (pane) pane->applySort(sortType, sortOrder);
     }
 }
 
@@ -291,9 +275,7 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
         } else {
-            FilterState parentFilter;
-            parentFilter.showHidden = m_currentFilter.showHidden;
-            m_panes[i]->setFilterState(parentFilter);
+            m_panes[i]->setFilterState(FilterState());
         }
     }
     if (rightmostPane() && rightmostPane()->model()) {
@@ -305,9 +287,6 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
     pane->setProperty("paneIndex", newIdx);
-    if (m_contentPanel) {
-        pane->applySort(static_cast<int>(m_contentPanel->currentSortType()), m_contentPanel->currentSortOrder());
-    }
     pane->loadDirectory();
 
     connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
@@ -349,9 +328,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
         } else {
-            FilterState parentFilter;
-            parentFilter.showHidden = m_currentFilter.showHidden;
-            m_panes[i]->setFilterState(parentFilter);
+            m_panes[i]->setFilterState(FilterState());
         }
     }
     scrollToRightmostPane();

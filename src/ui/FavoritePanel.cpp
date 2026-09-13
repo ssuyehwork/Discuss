@@ -279,6 +279,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             QString finalColor = hexColor.isEmpty() ? "#FDB70A" : hexColor.toUpper();
             QString iconKey = item->data(Qt::UserRole + 2).toString();
             if (iconKey.isEmpty()) iconKey = "folder_filled";
+            QString targetPath = item->data(Qt::UserRole + 1).toString();
 
             // 1. 实时就地刷新左侧收藏项
             QIcon newIcon = UiHelper::getIcon(iconKey, QColor(finalColor), 18);
@@ -289,6 +290,15 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             iconMenu->setIcon(UiHelper::getIcon("folder_filled", QColor(finalColor)));
             for (const auto& btnPair : iconButtons) {
                 btnPair.first->setIcon(UiHelper::getIcon(btnPair.second, QColor(finalColor), 18));
+            }
+
+            // 3. 全局 Command 发起设色，触发 MetadataManager 与 CentralEventHub
+            if (!targetPath.isEmpty()) {
+                AppCommand cmd;
+                cmd.type = AppCommandType::SetColor;
+                cmd.targetPaths = {targetPath};
+                cmd.params["color"] = finalColor;
+                CoreEngine::instance().executeCommand(cmd);
             }
 
             if (m_favoriteView && m_favoriteView->viewport()) {

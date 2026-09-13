@@ -134,11 +134,23 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction(pickerAction);
 
             connect(pickerWidget, &ColorStripPicker::colorSelected, this, [this, view, &menu](const QString& hexColor) {
-                auto* model = view->model();
-                if (!model) return;
                 auto indexes = view->selectionModel()->selectedIndexes();
+                QStringList targetPaths;
                 for (const auto& idx : indexes) {
-                    if (idx.column() == 0) model->setData(idx, hexColor, ColorRole);
+                    if (idx.column() == 0) {
+                        QString p = idx.data(PathRole).toString();
+                        if (!p.isEmpty()) targetPaths << p;
+                    }
+                }
+                if (!targetPaths.isEmpty()) {
+                    AppCommand cmd;
+                    cmd.type = AppCommandType::SetColor;
+                    cmd.targetPaths = targetPaths;
+                    cmd.params["color"] = hexColor;
+                    CoreEngine::instance().executeCommand(cmd);
+                    if (m_panel) {
+                        for (const QString& p : targetPaths) m_panel->updateItemMetadata(p);
+                    }
                 }
                 menu.close();
             });
@@ -224,11 +236,23 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction(pickerAction);
 
             connect(pickerWidget, &ColorStripPicker::colorSelected, this, [this, view, &menu](const QString& hexColor) {
-                auto* model = view->model();
-                if (!model) return;
                 auto indexes = view->selectionModel()->selectedIndexes();
+                QStringList targetPaths;
                 for (const auto& idx : indexes) {
-                    if (idx.column() == 0) model->setData(idx, hexColor, ColorRole);
+                    if (idx.column() == 0) {
+                        QString p = idx.data(PathRole).toString();
+                        if (!p.isEmpty()) targetPaths << p;
+                    }
+                }
+                if (!targetPaths.isEmpty()) {
+                    AppCommand cmd;
+                    cmd.type = AppCommandType::SetColor;
+                    cmd.targetPaths = targetPaths;
+                    cmd.params["color"] = hexColor;
+                    CoreEngine::instance().executeCommand(cmd);
+                    if (m_panel) {
+                        for (const QString& p : targetPaths) m_panel->updateItemMetadata(p);
+                    }
                 }
                 menu.close();
             });
@@ -498,21 +522,20 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 ContentKeyHandler::executeMoveToFolder(m_panel, LastOperationManager::instance().destination());
                 break;
             }
-            auto* model = view->model();
             auto indexes = view->selectionModel()->selectedIndexes();
             int count = 0;
             for (const auto& idx : indexes) {
-                if (idx.column() == 0 && model) {
+                if (idx.column() == 0) {
                     if (type == LastOperationType::SetRating) {
-                        model->setData(idx, LastOperationManager::instance().rating(), RatingRole);
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().rating(), RatingRole);
                     } else if (type == LastOperationType::SetColor) {
                         QString colorVal = LastOperationManager::instance().color();
-                        model->setData(idx, colorVal, ColorRole);
+                        m_panel->getProxyModel()->setData(idx, colorVal, ColorRole);
                         QString itemPath = idx.data(PathRole).toString();
                         QIcon coloredIcon = ShellIconManager::getFileIcon(itemPath, 128);
-                        model->setData(idx, coloredIcon, Qt::DecorationRole);
+                        m_panel->getProxyModel()->setData(idx, coloredIcon, Qt::DecorationRole);
                     } else if (type == LastOperationType::PasteTags) {
-                        model->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().tags(), TagsRole);
                     }
                     count++;
                 }
@@ -540,18 +563,21 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             break;
         case ContentPanel::ActionPin:
         case ContentPanel::ActionUnpin: {
-            auto* model = view->model();
-            auto* proxy = qobject_cast<QSortFilterProxyModel*>(model);
             auto indexes = view->selectionModel()->selectedIndexes();
             bool pin = (action == ContentPanel::ActionPin);
-            for (const QModelIndex& idx : indexes) {
-                if (idx.column() == 0 && model) {
-                    model->setData(idx, pin, IsLockedRole);
+            QStringList targetPaths;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    QString p = idx.data(PathRole).toString();
+                    if (!p.isEmpty()) targetPaths << p;
                 }
             }
-            if (proxy) {
-                proxy->invalidate();
-                proxy->sort(0, proxy->sortOrder());
+            if (!targetPaths.isEmpty()) {
+                for (const QString& p : targetPaths) {
+                    MetadataManager::instance().setPinned(p.toStdWString(), pin);
+                    if (m_panel) m_panel->updateItemMetadata(p);
+                }
+                if (m_panel) m_panel->refreshAll();
             }
             break;
         }
@@ -730,12 +756,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 ToolTipOverlay::instance()->showText(QCursor::pos(), "剪贴板无有效标签", 1500, QColor("#e81123"));
                 break;
             }
-            auto* model = view->model();
             auto indexes = view->selectionModel()->selectedIndexes();
             int count = 0;
             for (const auto& idx : indexes) {
-                if (idx.column() == 0 && model) {
-                    model->setData(idx, copiedTags, TagsRole);
+                if (idx.column() == 0) {
+                    m_panel->getProxyModel()->setData(idx, copiedTags, TagsRole);
                     count++;
                 }
             }
