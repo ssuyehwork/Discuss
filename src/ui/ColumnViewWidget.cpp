@@ -20,6 +20,9 @@ namespace QuarkMeta {
 ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent)
     : QWidget(parent), m_path(path), m_contentPanel(contentPanel) {
     
+    setAttribute(Qt::WA_StyledBackground, true);
+    setStyleSheet("QWidget { border-right: 1px solid #333333; background: transparent; } QListView { border: none; background: transparent; }");
+
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
@@ -189,7 +192,7 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
     m_container = new QWidget(m_scrollArea);
     m_containerLayout = new QHBoxLayout(m_container);
     m_containerLayout->setContentsMargins(0, 0, 0, 0);
-    m_containerLayout->setSpacing(1);
+    m_containerLayout->setSpacing(0);
     m_containerLayout->addStretch(1);
 
     m_container->setLayout(m_containerLayout);
