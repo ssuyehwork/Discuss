@@ -20,6 +20,7 @@
 #include "../util/ShellHelper.h"
 #include "FavoritePanel.h"
 #include "../meta/FavoriteDao.h"
+#include "../meta/FavoriteService.h"
 #include "dialogs/TextExtensionDialog.h"
 #include <QFileInfo>
 #include <QScreen>
@@ -471,9 +472,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
 
     QAction* actCopyName = menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "复制文件名");
     QAction* actCopyPath = menu.addAction(UiHelper::getIcon("link", QColor("#EEEEEE"), 18), "复制路径");
-    bool isFav = FavoriteDao::containsPath(m_currentPath);
-    QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#EEEEEE")) : UiHelper::getIcon("star_filled", QColor("#EEEEEE"));
-    QAction* actFavorite = menu.addAction(favIcon, isFav ? "取消收藏" : "添加至收藏夹");
+    FavoriteService::instance().buildFavoriteAction(&menu, m_currentPath, this);
     menu.addSeparator();
 
     QAction* actTextExtSettings = menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "文本扩展名设置...");

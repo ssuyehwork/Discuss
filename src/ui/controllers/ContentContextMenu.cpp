@@ -25,6 +25,7 @@
 #include "../../core/CoreEngine.h"
 #include "../../meta/MetadataManager.h"
 #include "../../meta/FavoriteDao.h"
+#include "../../meta/FavoriteService.h"
 #include "../../crypto/EncryptionManager.h"
 #include "../../core/LastOperationManager.h"
 #include "../ShellIconManager.h"
@@ -158,8 +159,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
             menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
 
-            bool isFavDrive = FavoriteDao::containsPath(path);
-            menu.addAction(UiHelper::getIcon(isFavDrive ? "close" : "star_filled", QColor("#EEEEEE"), 18), isFavDrive ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
+            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
 
             menu.addSeparator();
 
@@ -260,8 +260,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             bool isPinned = currentIndex.data(IsLockedRole).toBool();
             menu.addAction(UiHelper::getIcon(isPinned ? "pin_tilted" : "pin_vertical", QColor("#EEEEEE"), 18), isPinned ? "取消置顶" : "置顶")->setData(isPinned ? ContentPanel::ActionUnpin : ContentPanel::ActionPin);
 
-            bool isFavItem = FavoriteDao::containsPath(path);
-            menu.addAction(UiHelper::getIcon(isFavItem ? "close" : "star_filled", QColor("#EEEEEE"), 18), isFavItem ? "取消收藏" : "添加至收藏夹")->setData(ContentPanel::ActionAddToFavorites);
+            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
 
             menu.addSeparator();
 

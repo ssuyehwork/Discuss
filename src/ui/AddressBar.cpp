@@ -4,6 +4,7 @@
 #include "StyleLibrary.h"
 #include "../core/NavigationHistoryService.h"
 #include "../meta/FavoriteDao.h"
+#include "../meta/FavoriteService.h"
 #include <QHBoxLayout>
 #include <QDir>
 #include <QPushButton>
@@ -83,9 +84,7 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
         QMenu menu(this);
         UiHelper::applyMenuStyle(&menu);
 
-        bool isFav = FavoriteDao::containsPath(nativePath);
-        QIcon favIcon = isFav ? UiHelper::getIcon("close", QColor("#EEEEEE")) : UiHelper::getIcon("star_filled", QColor("#EEEEEE"));
-        QAction* actFavToggle = menu.addAction(favIcon, isFav ? "取消收藏" : "添加至收藏夹");
+        FavoriteService::instance().buildFavoriteAction(&menu, nativePath, this);
         QAction* actCopyPath = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE")), "复制完整路径");
 
         QAction* selected = menu.exec(globalPos);

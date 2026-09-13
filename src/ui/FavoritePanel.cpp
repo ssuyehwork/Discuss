@@ -4,6 +4,7 @@
 #include "../util/DiskMediaExtractor.h"
 #include "ColorPicker.h"
 #include "../meta/FavoriteDao.h"
+#include "../meta/FavoriteService.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/DriveMetaDao.h"
 #include <QPainter>
@@ -162,6 +163,12 @@ void FavoritePanel::initUi() {
     connect(m_favoriteModel, &QStandardItemModel::rowsMoved, this, updateFavAndSave, Qt::QueuedConnection);
     connect(m_favoriteModel, &QStandardItemModel::rowsInserted, this, updateFavAndSave, Qt::QueuedConnection);
     connect(m_favoriteModel, &QStandardItemModel::rowsRemoved, this, updateFavAndSave, Qt::QueuedConnection);
+
+    connect(&FavoriteService::instance(), &FavoriteService::favoriteChanged, this, [this](const QString& path, bool isFav) {
+        Q_UNUSED(path);
+        Q_UNUSED(isFav);
+        loadFavorites();
+    });
 }
 
 void FavoritePanel::onFavoriteClicked(const QModelIndex& index) {
@@ -438,97 +445,15 @@ void FavoritePanel::saveFavorites() {
 }
 
 bool FavoritePanel::containsPath(const QString& path) const {
-    if (path.isEmpty()) return false;
-    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
-    return FavoriteDao::containsPath(cleanPath);
+    return FavoriteService::instance().isFavorite(path);
 }
 
 void FavoritePanel::removeFavoriteItem(const QString& path) {
-    if (path.isEmpty()) return;
-    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
-    bool wasFav = FavoriteDao::containsPath(cleanPath);
-    FavoriteDao::removeFavorite(cleanPath);
-    
-    if (m_favoriteModel) {
-        for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
-            QString existingPath = QDir::toNativeSeparators(QDir::cleanPath(m_favoriteModel->item(i)->data(Qt::UserRole + 1).toString()));
-            if (QString::compare(existingPath, cleanPath, Qt::CaseInsensitive) == 0) {
-                m_favoriteModel->removeRow(i);
-                break;
-            }
-        }
-    }
-
-    if (wasFav) {
-        emit favoriteStateChanged(cleanPath, false);
-    }
+    FavoriteService::instance().removeFavorite(path);
 }
 
 void FavoritePanel::addFavoriteItem(const QString& path) {
-    QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
-    if (cleanPath.isEmpty()) return;
-
-    if (FavoriteDao::containsPath(cleanPath)) return;
-
-    QFileInfo fi(cleanPath);
-    if (!fi.exists()) return;
-
-    bool isDir = fi.isDir();
-    QString finalColorHex = "#FDB70A";
-
-    if (isDir) {
-        bool isDriveRoot = fi.isRoot() || cleanPath.endsWith(":\\") || cleanPath.endsWith(":/") || (cleanPath.length() == 2 && cleanPath.endsWith(':'));
-        if (isDriveRoot) {
-            std::wstring normWPath = MetadataManager::normalizePath(cleanPath.toStdWString());
-            auto driveRec = DriveMetaDao::getDriveMeta(normWPath);
-            QString driveColor = QString::fromStdWString(driveRec.color);
-            if (!driveColor.isEmpty()) {
-                finalColorHex = UiHelper::normalizeColorHex(driveColor);
-            }
-        } else {
-            RuntimeMeta meta = MetadataManager::instance().getMeta(cleanPath.toStdWString());
-            QString folderColor = QString::fromStdWString(meta.manualColor);
-            if (!folderColor.isEmpty()) {
-                finalColorHex = UiHelper::normalizeColorHex(folderColor);
-            }
-        }
-    }
-
-    FavoriteDao::addFavorite(cleanPath, "folder_filled", finalColorHex);
-
-    QIcon icon;
-    if (isDir) {
-        icon = UiHelper::getIcon("folder_filled", QColor(finalColorHex), 18);
-    } else {
-        icon = ShellIconManager::getFileIcon(cleanPath);
-    }
-
-    QStandardItem* item = new QStandardItem(icon, fi.fileName().isEmpty() ? cleanPath : fi.fileName());
-    item->setData(cleanPath, Qt::UserRole + 1);
-    item->setData("folder_filled", Qt::UserRole + 2);
-    item->setData(finalColorHex, Qt::UserRole + 3);
-    item->setData(isDir, Qt::UserRole + 4);
-    item->setData(false, Qt::UserRole + 5);
-
-    m_favoriteModel->appendRow(item);
-    emit favoriteStateChanged(cleanPath, true);
-
-    if (!isDir) {
-        QString ext = fi.suffix().toLower();
-        if (UiHelper::isGraphicsFile(ext) || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf" || ext == "svg") {
-            QPointer<FavoritePanel> weakThis(this);
-            (void)QtConcurrent::run([weakThis, cleanPath]() {
-                if (!weakThis) return;
-                QImage img = DiskMediaExtractor::getCapsuleThumbnail(cleanPath, 128);
-                if (!img.isNull()) {
-                    QPixmap pix = QPixmap::fromImage(img);
-                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, cleanPath, pix]() {
-                        if (weakThis) weakThis->updateItemThumbnail(cleanPath, pix);
-                    }, Qt::QueuedConnection);
-                }
-            });
-        }
-    }
+    FavoriteService::instance().addFavorite(path);
 }
 
 } // namespace QuarkMeta

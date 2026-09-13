@@ -2,6 +2,7 @@
 #include "LastOperationManager.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/FavoriteDao.h"
+#include "../meta/FavoriteService.h"
 #include "TagLexiconService.h"
 
 namespace QuarkMeta {
@@ -240,18 +241,14 @@ void CoreEngine::handleToggleFavorite(const QStringList& paths) {
 
     bool allFav = true;
     for (const QString& p : paths) {
-        if (!FavoriteDao::containsPath(p)) {
+        if (!FavoriteService::instance().isFavorite(p)) {
             allFav = false;
             break;
         }
     }
 
     for (const QString& p : paths) {
-        if (allFav) {
-            FavoriteDao::removeFavorite(p);
-        } else {
-            FavoriteDao::addFavorite(p);
-        }
+        FavoriteService::instance().toggleFavorite(p);
     }
 
     AppEvent ev;
