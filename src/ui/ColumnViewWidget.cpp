@@ -153,7 +153,8 @@ void ColumnViewWidget::clearOtherSelections(ColumnViewPane* currentPane) {
 
 void ColumnViewPane::setFilterState(const FilterState& state) {
     if (m_proxyModel) {
-        m_proxyModel->setFilterState(state);
+        m_proxyModel->currentFilter = state;
+        m_proxyModel->updateFilter();
     }
 }
 
