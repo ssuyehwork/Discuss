@@ -250,9 +250,7 @@ void PanelMediator::setupConnections() {
 
         connect(contentPanel, &ContentPanel::selectionChanged, metaPanel, [contentPanel, metaPanel](const QStringList& paths) {
             metaPanel->setSelectedPaths(paths);
-            qDebug() << "[PanelMediator] selectionChanged triggered. Selected paths count:" << paths.size() << "paths:" << paths;
             if (paths.isEmpty()) {
-                qDebug() << "[PanelMediator] Selection is empty. Clearing MetaPanel.";
                 metaPanel->setImagePreview(QPixmap());
                 metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false, 0, 0);
                 metaPanel->setRating(0, false);
@@ -266,7 +264,6 @@ void PanelMediator::setupConnections() {
                 QModelIndex idx = selectedIndices.isEmpty() ? QModelIndex() : selectedIndices.first();
 
                 QString path = paths.first();
-                qDebug() << "[PanelMediator] Single item selected path:" << path << "idx.isValid:" << idx.isValid();
                 QFileInfo fi(path);
 
                 QString name = idx.isValid() ? idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString() : fi.fileName();
@@ -300,13 +297,6 @@ void PanelMediator::setupConnections() {
                     QStringList finalTags = !tags.isEmpty() ? tags : meta.tags;
                     QString finalNote = !note.isEmpty() ? note : QString::fromStdWString(meta.note);
                     QString finalUrl = !url.isEmpty() ? url : QString::fromStdWString(meta.url);
-
-                    qDebug() << "[PanelMediator] Merged Meta -> Rating:" << finalRating
-                             << "Color:" << finalColor
-                             << "Tags:" << finalTags
-                             << "Note:" << finalNote
-                             << "URL:" << finalUrl
-                             << "Palettes count:" << qPalettes.size();
 
                     metaPanel->setRating(finalRating, false);
                     metaPanel->setColor(finalColor, false);

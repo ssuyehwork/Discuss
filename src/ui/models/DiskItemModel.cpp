@@ -104,8 +104,6 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     endResetModel();
 
-    qDebug() << "[DiskItemModel::setRecords] Loaded records count:" << m_allRecords.size() << "Pre-populated extended metadata items:" << populatedMetaCount;
-
     preloadDimensionsAsync();
 }
 
