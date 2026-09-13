@@ -7,11 +7,11 @@
 #include <QList>
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
+#include "DropListView.h"
 
 namespace QuarkMeta {
 
 class ContentPanel;
-class DropListView;
 
 /**
  * @brief 单个列视图面板 (ColumnViewPane)
