@@ -151,6 +151,8 @@ set(SOURCES
     src/ui/ViewDragDropHelper.h
     src/ui/DropTreeView.cpp
     src/ui/DropTreeView.h
+    src/ui/DropListView.cpp
+    src/ui/DropListView.h
     src/ui/IScanResultView.h
     src/ui/FilterStateModel.h
     src/ui/FilterStateModel.cpp

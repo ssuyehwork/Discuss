@@ -1,5 +1,6 @@
 #include "ColumnViewWidget.h"
 #include "ColumnItemDelegate.h"
+#include "DropListView.h"
 #include "ContentPanel.h"
 #include "../core/DiskScanService.h"
 #include "../core/ModelContract.h"
@@ -8,6 +9,7 @@
 #include <QApplication>
 #include <QScrollBar>
 #include <QtConcurrent/QtConcurrent>
+#include <QDebug>
 
 namespace QuarkMeta {
 
@@ -26,7 +28,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_proxyModel = new FilterProxyModel(this);
     m_proxyModel->setSourceModel(m_model);
 
-    m_listView = new QListView(this);
+    m_listView = new DropListView(this);
     m_listView->setFrameShape(QFrame::NoFrame);
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -55,6 +57,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         m_listView->viewport()->installEventFilter(m_contentPanel);
         connect(m_listView, &QListView::customContextMenuRequested,
                 m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
+        connect(m_listView, &DropListView::pathsDropped,
+                m_contentPanel, &ContentPanel::onPathsDropped);
     }
 
     connect(m_listView, &QListView::clicked, this, &ColumnViewPane::onClicked);
@@ -185,6 +189,10 @@ void ColumnViewWidget::appendColumn(const QString& path) {
     connect(pane, &ColumnViewPane::folderSelected, this, &ColumnViewWidget::onFolderSelected);
     connect(pane, &ColumnViewPane::fileSelected, this, &ColumnViewWidget::onFileSelected);
 
+    if (pane->model()) {
+        emit activeColumnRecordsChanged(pane->model()->allRecords());
+    }
+
     // 插入到 layout Stretch 之前
     m_containerLayout->insertWidget(m_containerLayout->count() - 1, pane);
     m_panes.append(pane);
@@ -240,10 +248,16 @@ void ColumnViewWidget::updateMetadataForPath(const QString& path) {
 void ColumnViewWidget::onFolderSelected(const QString& folderPath, ColumnViewPane* pane) {
     dismissSubColumns(pane);
     appendColumn(folderPath);
+    if (pane && pane->model()) {
+        emit activeColumnRecordsChanged(pane->model()->allRecords());
+    }
 }
 
 void ColumnViewWidget::onFileSelected(const QString& /*filePath*/, ColumnViewPane* pane) {
     dismissSubColumns(pane);
+    if (pane && pane->model()) {
+        emit activeColumnRecordsChanged(pane->model()->allRecords());
+    }
 }
 
 } // namespace QuarkMeta

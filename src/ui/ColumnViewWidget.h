@@ -63,6 +63,9 @@ public:
 
     QList<ColumnViewPane*> panes() const { return m_panes; }
 
+signals:
+    void activeColumnRecordsChanged(const std::vector<QuarkMeta::ItemRecord>& records);
+
 private slots:
     void onFolderSelected(const QString& folderPath, ColumnViewPane* pane);
     void onFileSelected(const QString& filePath, ColumnViewPane* pane);
