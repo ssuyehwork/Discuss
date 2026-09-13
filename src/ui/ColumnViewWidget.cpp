@@ -68,7 +68,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     connect(m_listView, &QListView::clicked, this, &ColumnViewPane::onClicked);
     connect(m_listView, &QListView::doubleClicked, this, &ColumnViewPane::onDoubleClicked);
 
-    setFixedWidth(240);
+    setFixedWidth(230);
     loadDirectory();
 }
 
