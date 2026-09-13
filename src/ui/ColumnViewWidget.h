@@ -11,6 +11,7 @@
 namespace QuarkMeta {
 
 class ContentPanel;
+class DropListView;
 
 /**
  * @brief 单个列视图面板 (ColumnViewPane)
@@ -21,7 +22,7 @@ public:
     explicit ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent = nullptr);
 
     QString path() const { return m_path; }
-    QListView* listView() const { return m_listView; }
+    DropListView* listView() const { return m_listView; }
     DiskItemModel* model() const { return m_model; }
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
 
@@ -41,7 +42,7 @@ private:
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
-    QListView* m_listView = nullptr;
+    DropListView* m_listView = nullptr;
 };
 
 /**
