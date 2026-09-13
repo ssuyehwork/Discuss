@@ -107,10 +107,17 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
     // 5. 绘制星级标示 (若 rating > 0)
     if (rating > 0) {
         int starRight = option.rect.right() - (isDir ? 22 : 6);
-        QRect starRect(starRight - 30, option.rect.top() + (option.rect.height() - 12) / 2, 30, 12);
+        int starSize = 12;
+        int numWidth = 12;
+        QRect starIconRect(starRight - numWidth - starSize, option.rect.top() + (option.rect.height() - starSize) / 2, starSize, starSize);
+        QRect numRect(starRight - numWidth, option.rect.top() + (option.rect.height() - starSize) / 2, numWidth, starSize);
+
+        QIcon starIcon = UiHelper::getIcon("star_filled", QColor("#FFC107"), starSize);
+        starIcon.paint(painter, starIconRect, Qt::AlignCenter);
+
         painter->setPen(QColor("#FFC107"));
         painter->setFont(QFont("Segoe UI", 9, QFont::Bold));
-        painter->drawText(starRect, Qt::AlignRight | Qt::AlignVCenter, QString("★%1").arg(rating));
+        painter->drawText(numRect, Qt::AlignRight | Qt::AlignVCenter, QString::number(rating));
     }
 
     // 6. 如果是文件夹，最右侧绘制向右箭头 chevron_right

@@ -18,6 +18,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     : QWidget(parent), m_path(path), m_contentPanel(contentPanel)
 {
     setObjectName("ColumnViewPane");
+    setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(220);
 
     QVBoxLayout* layout = new QVBoxLayout(this);
