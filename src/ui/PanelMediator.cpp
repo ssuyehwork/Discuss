@@ -134,7 +134,7 @@ void PanelMediator::setupConnections() {
 
         if (contentPanel) {
             if (url == "computer://") {
-                contentPanel->loadDirectory("");
+                contentPanel->loadDirectory("computer://");
             } else if (url == "trash://") {
                 contentPanel->loadCategory("trash");
             } else {
