@@ -2,6 +2,7 @@
 #include "ContentPanel.h"
 #include "../core/DiskScanService.h"
 #include "../core/NavigationService.h"
+#include "../meta/MetaCacheDecorator.h"
 #include "DropListView.h"
 #include "ColumnItemDelegate.h"
 #include "UiHelper.h"
@@ -128,6 +129,7 @@ void ColumnViewPane::loadDirectory() {
     (void)QtConcurrent::run([weakSelf, path]() {
         if (!weakSelf) return;
         std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
+        MetaCacheDecorator::decorate(items);
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
                 weakSelf->m_model->setRecords(items);
@@ -326,6 +328,12 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
         }
     });
 
+    connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>&) {
+        if (pane == activePane() && m_contentPanel) {
+            m_contentPanel->recalculateAndEmitStats();
+        }
+    });
+
     connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
         m_activePaneIndex = pane->property("paneIndex").toInt();
         emit selectionChanged();
@@ -343,6 +351,9 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
         }
         appendColumn(folderPath);
         emit pathNavigated(folderPath);
+        if (m_contentPanel) {
+            m_contentPanel->recalculateAndEmitStats();
+        }
     });
 
     connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {

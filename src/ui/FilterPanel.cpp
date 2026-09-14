@@ -474,10 +474,13 @@ void FilterPanel::rebuildGroups() {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("评级", gl);
         for (int r : {0, 1, 2, 3, 4, 5}) {
-            if (!m_ratingCounts.contains(r) || m_ratingCounts[r] <= 0) continue;
-            QCheckBox* cb = addFilterRow(gl, ratingDisplayName(r), m_ratingCounts[r]);
+            int cnt = m_ratingCounts.value(r, 0);
+            bool isChecked = currentSt.ratings.contains(r);
+            if (cnt <= 0 && !isChecked) continue;
+
+            QCheckBox* cb = addFilterRow(gl, ratingDisplayName(r), cnt);
             cb->blockSignals(true);
-            cb->setChecked(currentSt.ratings.contains(r));
+            cb->setChecked(isChecked);
             cb->blockSignals(false);
 
             ClickableRow* row = qobject_cast<ClickableRow*>(cb->parentWidget());

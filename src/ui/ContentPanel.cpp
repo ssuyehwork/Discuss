@@ -522,9 +522,17 @@ void ContentPanel::updateStatusBarStats() {
 }
 
 void ContentPanel::recalculateAndEmitStats() {
-    if (!m_model || m_model->allRecords().empty()) return;
+    std::vector<ItemRecord> records;
+    if (m_currentViewMode == ColumnView && m_columnView && m_columnView->activePane() && m_columnView->activePane()->model()) {
+        records = m_columnView->activePane()->model()->allRecords();
+    } else if (m_model) {
+        records = m_model->allRecords();
+    }
+
+    if (records.empty()) return;
+
     if (m_statsWorker) {
-        m_statsWorker->processAsync(m_model->allRecords(), m_currentFilter.showHidden);
+        m_statsWorker->processAsync(records, m_currentFilter.showHidden);
     }
 }
 
