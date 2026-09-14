@@ -1,91 +1,292 @@
-# 偏好记录 Memories.md
+# 核心记忆与顶层规范指导文档 (Memories.md)
 
-# 0. 全局视觉与品牌规范
+本文档为 QuarkMeta 项目**唯一权威的历史记忆、全局设计理念、UI 交互哲学与工程架构规范指南**。
+在进行任何项目结构调整、UI 改版、功能新增、重构或 Bug 修复时，Agent 与开发者**必须优先读取并无条件遵守本文档所约定的各项规范与红线**。
+
+> **注意**：原 `QuarkMeta-Architecture-Planning.md` 与 `Guide & Preference.md` 已全面废除并无损迁移合并至本文档。从现在起，系统全面以 `Memories.md` 为唯一真理源 (SSOT)。
+
+---
+
+## 0. 全局视觉、品牌规范与核心红线
+
 - **品牌橙色 (BrandOrange)**: 物理色值为 **`#cb7208`**。该颜色仅用于 FERREX 品牌 Logo、标题栏名称文字等品牌识别元素。
 - **置顶激活色 (ActiveOrange)**: 物理色值为 **`#ff551c`**。该颜色用于全应用置顶激活按钮、内容面板置顶角标及侧边栏置顶状态。
 - **强制解耦**: 品牌色与置顶激活色必须独立，严禁共同引用同一个常量或色值。
 - **滑杆交互反馈**: 筛选面板中的百分比滑杆（如“占比”）必须支持实时数值回显，通过 `ToolTipOverlay` 在悬停或滑动时动态展示百分比，并在释放或离开时自动隐藏。
 - **彻底杜绝 UI 焦点虚线框与虚线边框铁律**: 
-  1. 除了内容面板中“显示空文件夹”可采用虚线边框作为特定视觉标识外，全应用其他所有 UI 控件、按钮、图标与元素（包括所有标题栏控制按钮、工具栏按钮、标签按钮等）**绝对禁止出现任何形式的虚线框或虚线边框**！
+  1. 除了内容面板中“显示空文件夹”可采用虚线边框作为特定视觉标识外，全应用其他所有 UI 控件、按钮、图标与元素（包括所有标题栏控制按钮、工具栏按钮、标签按钮、“+ 添加标签”按钮等）**绝对禁止出现任何形式的虚线框或虚线边框**！
   2. **代码级双重强锁**: 所有新建或修改的 `QPushButton`、`QToolButton` 等控制按钮，在 C++ 代码中**必须强制调用 `setFocusPolicy(Qt::NoFocus)`** 剥夺焦点抢占能力，同时在 QSS 样式中**必须显式声明 `outline: none;`**，双保险彻底从根源上消除 Qt 样式引擎绘制默认 Focus Rect 虚线框的所有可能！
 - **图标格式限制**: 全应用所有 UI 元素与控件只允许使用 SVG 格式矢量图标，严禁使用任何文本或特殊符号（如 Unicode 符号、键盘字符等）替代/充当图标！
 
-# 标题栏按钮及布局标准规范
+---
 
-## 1. 标题栏容器 (TitleBar)
+## 1. UI 样式与主题管理规范
+
+### 1.1 核心职责分工 (QSS + ThemeManager)
+在本项目中，全局 UI 样式与主题控制遵循“**QSS 负责静态样式声明 + ThemeManager.cpp 负责代码层控制与统一加载**”的分工架构：
+
+- **`resources/style.qss` ( 静态样式真理源 )**：
+  负责集中定义应用中所有**全局统一的静态 UI 样式**，包括但不限于：
+  * 顶层窗口与基础容器背景色、文字颜色；
+  * 五大实体栏区卡片底板、边框与 5px 实体物理切缝 (`margin: 0px 2px`)；
+  * 全局统一 `QMenu` 菜单样式 (背景、项 hover/selected、分隔线)；
+  * 全局统一滚动条 (`QScrollBar`) 样式；
+  * 全局统一输入框 (`QLineEdit`, `QTextEdit`, `QPlainTextEdit`) 样式；
+  * 全局 `QTreeView` 列表视图暗色斑马纹背景与选中项高亮；
+  * 全局 `QCheckBox` 复选框样式。
+
+- **`src/ui/ThemeManager.cpp` ( 样式加载与底层控制入口 )**：
+  用于处理 QSS 格式无法独立完成或表达的代码层控制逻辑，包括但不限于：
+  * **全局样式加载**：提供 `initialize(app)` 与 `getGlobalStyleSheet()` 入口，将 `:/style.qss` 集中读取并注入到全局 `QApplication`；
+  * **原生窗口属性控制**：针对右键/托盘菜单等控件设置 `Qt::WA_TranslucentBackground`（背景半透明）、`Qt::FramelessWindowHint`（无边框）及 `Qt::NoDropShadowWindowHint`（消除原生阴影）等代码层窗口属性；
+  * **动态覆盖与集中入口**：提供统一的 C++ 方法入口（如 `applyMenuStyle`）以便对特定场景实施局部覆盖与集中管理。
+
+### 1.2 UI 样式开发规范与红线
+1. **禁止内联硬编码**：在后续开发与重构中，**严格禁止在控件 C++ 代码中随意调用 `setStyleSheet(...)` 采用内联方式硬编码样式**。
+2. **全局统一修改**：凡涉及通用控件外观、颜色、边距、圆角等静态样式调整，一律在 `resources/style.qss` 中进行集中修改或扩充选择器。
+3. **全局样式表注入对象规范（作用域红线）**：全局 QSS 样式表**必须且只能注入至 `QApplication` 实例**（通过 `ThemeManager::initialize(app)`），**绝对禁止仅挂载在 `MainWindow` 窗口实例上**。因为 Qt 样式表仅沿着父子部件树（Widget Tree）向下级联继承，若挂在 `MainWindow` 上，会导致所有 `parent = nullptr` 的独立顶层窗口（如 `QuickLookWindow`、各类无边框对话框）无法继承 QSS，退化为原生控件外观。
+4. **极少数例外**：仅在纯运行时根据用户输入/数据动态计算生成的数值色彩（如 `MetaRatingColorWidget` 依据动态 hex 色彩绘制）时，才允许在 C++ 中进行必要的高效动态处理。
+
+### 1.3 顶层 UI 设计哲学与菜单/输入框规范
+1. **全局统一视觉与零差异体验**：
+   应用中所有弹出的右键菜单（上下文菜单）、托盘菜单及系统控制菜单，必须在外观样式、几何边距、高亮颜色与交互动画上保持 100% 绝对一致，杜绝任何窗口或面板回退至原生或不一致样式。
+2. **100% 语义化矢量图标契约 (Zero Unadorned Text)**：
+   全软件所有右键菜单与上下文菜单项，**必须为每一个菜单项配置与功能语义精准匹配的矢量图标**，严禁出现任何纯文本裸露项。
+   - **语义精准契约**：图标必须严格对齐操作功能（如打开用文件夹/应用开启类图标、重命名用编辑类图标、复制用双页类图标、删除用垃圾桶类图标），严禁乱用或滥用无关图标；
+   - **格式唯一限制**：全软件图标统一且只能使用 SVG 矢量格式，严格禁止使用任何字符、Unicode 符号或文本标点充当/替代图标；
+   - **图标缺失补全**：若系统中缺失对应语义的图标，必须在矢量图标库中创建并注册相符的 SVG 图标定义。
+3. **像素级控制与统一间距布局**：
+   - 全局菜单中，图标与文本之间的物理间距统一并精确锁定为 **`10px`**；
+   - 悬停/选中状态颜色统一对标 **`#3E3E42`**；
+   - 具有状态属性的操作（如置顶/取消置顶、收藏/取消收藏）必须进行状态感知与动态图标形态联动；
+   - **无彩色单色统一**：全局所有右键菜单与上下文菜单项图标统一采用中性单色设计 (`#EEEEEE`)，严格禁止在右键菜单图标上使用任何彩色着色（如红、黄、蓝、绿等），确保界面视觉沉静高档。
+4. **输入框清除按钮响应式呈现与原生契约**：
+   - 每个可编辑的单行输入框必须且只能配置 Qt 原生的 `setClearButtonEnabled(true)`，杜绝脑补另创自定义清除按钮；
+   - 全系统中所有具备清除能力的单行文本输入框（如全局搜索栏、标签/日期/类型筛选输入框、路径编辑框），其清除按钮 (×) 必须严格遵循“有文本时动态显示、无文本时绝对隐匿”的响应式契约。严禁在输入框为空（包括呈现 Placeholder 占位文本）时显示清除按钮。
+5. **文本输入框应用专属上下文菜单契约 (App-Exclusive LineEdit Context Menu Contract)**：
+   全软件所有文本输入框（包括单行 `QLineEdit` 与多行 `QTextEdit`）严格禁止弹出操作系统默认的原生英文右键菜单。必须统一拦截并替换为 QuarkMeta 应用专属暗色右键菜单（完整提供 `撤销 Ctrl+Z`、`重做 Ctrl+Y`、`剪切 Ctrl+X`、`复制 Ctrl+C`、`粘贴 Ctrl+V`、`删除`、`全选 Ctrl+A`），且每一个菜单项必须配备 100% 语义匹配的中性单色 SVG 矢量图标、物理 `10px` 图文间距与 QuarkMeta 统一暗色视觉样式（`UiHelper::applyMenuStyle`）。
+6. **规则构造器紧凑按钮与控件样式契约 (Rule Builder Controls Style Contract)**：
+   批量创建与批量重命名界面中的规则构造器控件（`RuleRow` / `CreateRuleRow`），其加减号控制按钮（`QPushButton#RuleDeleteBtn`）、规则下拉框（`QComboBox#RuleCombo`）与文本/数字输入框必须保持严格统一的紧凑视觉规范：
+   - 加减号按钮（`-` / `+`）必须具备 1px 明确的灰边框 (`1px solid #434343`)、14px 加粗文字与像素级居中对齐，严禁出现文本溢出裁剪或无边框坍塌；
+   - 规则下拉框与输入框高度锁定为 25px，具备 1px 实线边框 (`#444`) 与 4px 圆角，下拉弹出列表统一使用 QuarkMeta 深色背景 (`#2D2D2D`) 与 `#3E3E42` 项选中高亮。
+7. **Tooltip 提示控件限制**:
+   全应用**严禁使用 QWidget 原生 `setToolTip(...)` 硬编码悬浮提示**，悬浮提示只可使用统一的 `ToolTipOverlay` 控件（结合 `m_hoverFilter` 事件过滤器）实现感知与展示，以确保主题视觉一致性与平滑交互体验。
+
+---
+
+## 2. 界面组件与布局物理规范
+
+### 2.1 标题栏容器 (TitleBar)
 - **高度 (Height)**: 物理高度固定为 `34px`。
-- **布局边距 (ContentsMargins)**: `(5, 0, 5, 0)`
-  - 左侧边距: `5px`
-  - 右侧对齐: `5px` (物理对齐右侧边缘，由 kEdgeMargin 定义)
+- **布局边距 (ContentsMargins)**: `(5, 0, 5, 0)`（左侧边距 `5px`，右侧物理对齐 `5px`）。
 - **全局间距 (Spacing)**: `5px` (应用名与按钮组之间的间距)。
 
-## 2. 按钮组容器 (TitleBarButtons Container)
+### 2.2 按钮组容器 (TitleBarButtons Container)
 - **布局间距 (Spacing)**: 按钮与按钮之间的物理间距固定为 `5px`。
 - **布局边距 (ContentsMargins)**: `(0, 0, 0, 0)`。
 
-## 3. 按钮物理参数 (Button Parameters)
+### 2.3 按钮物理参数 (Button Parameters)
 - **外框尺寸 (FixedSize)**: `24x24px`。
 - **图标尺寸 (IconSize)**: `18x18px`。
 - **圆角 (BorderRadius)**: `4px`。
 - **背景样式**:
-  - 默认状态: `transparent` (透明)。
-  - 悬停状态 (Hover): `#3E3E42` (关闭按钮除外)。
+  - 默认状态: `transparent` (透明)；
+  - 悬停状态 (Hover): `#3E3E42` (关闭按钮除外)；
   - 按下状态 (Pressed): `#4E4E52`。
 
-# 5.1 全局 QMenu 菜单规范 (ThemeManager)
-- **菜单背景**: `#252526` (边界 `#333333`，圆角 6px)。
-- **选中/高亮背景色 (Item Hover/Selected)**: 物理色值统一为 **`#3E3E42`**（对标 `Dual-mode version` 原始深灰风格，全软件托盘菜单与右键上下文菜单统一遵循该标准）。
-- **图标与文本间距 (Icon-Text Spacing)**: 图标与文本之间的物理间距统一并精确锁定为 **`10px`**（通过 `QMenu::icon { margin-right: 10px; }` 控制，全软件所有右键菜单与上下文菜单强制统一遵循该标准）。
-- **图标格式与禁用符号**: 全软件所有右键菜单与上下文菜单项必须统一配置与语义相符的图标，只许可使用 SVG 矢量图标，绝对不可使用任何符号、Unicode 字符或文本字符替代/充当图标！
-- **菜单图标无彩色单色限制**: 全软件所有右键菜单与上下文菜单项的图标统一采用中性单色 (`#EEEEEE`)，严格禁止在右键菜单图标上使用任何彩色（如红、黄、蓝、绿等着色），确保右键菜单全局界面沉静统一、高档极简！
-
-## 4. 特殊按钮规范 (Special Buttons)
+### 2.4 特殊按钮与交互规范
 - **关闭按钮 (Close Button)**:
-  - **全应用标准**: 所有界面（主窗口、面板、对话框、标签块）的关闭按钮必须保持视觉一致性。
-  - **背景颜色**: 默认状态为 `ErrorRed` (#e81123) (按照用户要求：持续显示红色高亮，不再仅悬停显示)。
-  - **悬停状态 (Hover)**: `ErrorRed` (#e81123)。
-  - **按下状态 (Pressed)**: `#A50000`。
+  - **全应用标准**: 所有界面（主窗口、面板、对话框、标签块）的关闭按钮必须保持视觉一致性；
+  - **背景颜色**: 默认状态固定为 `ErrorRed` (`#e81123`)，持续显示红色高亮；
+  - **悬停状态 (Hover)**: `ErrorRed` (`#e81123`)；
+  - **按下状态 (Pressed)**: `#A50000`；
   - **圆角**: `4px`。
 - **置顶按钮与窗口置顶逻辑 (Pin Button & Window Pinning)**:
-  - **激活颜色**: 选中状态下图标颜色必须切换为唯一合法色值 **`#ff551c`** (对应常量 `ActiveOrange`)。杜绝任何形式的色值脑补。
+  - **激活颜色**: 选中状态下图标颜色必须切换为唯一合法色值 **`#ff551c`** (`ActiveOrange`)；
   - **底层绝对法则**: 窗口置顶逻辑**只许可使用 Win32 原生 API `SetWindowPos(HWND_TOPMOST / HWND_NOTOPMOST)`**！**严禁使用其他任何方式**（严禁使用 `setWindowFlags`，严禁使用 `Qt::WindowStaysOnTopHint` 等），确保置顶时零闪烁、不改变窗口句柄与尺寸，绝对对齐 Windows 平台最高堆叠层级标准！
 - **同步按钮 (Sync Button)**:
   - **状态联动**: 存在待同步元数据时，图标强制显示为 `ErrorRed`；同步完成后恢复为 `TextMain`。
+- **标题栏按钮交互**: 所有标题栏按钮必须开启 `Qt::WA_Hover` 属性以触发悬停事件。必须安装 `m_hoverFilter` 事件过滤器以支持全局 ToolTip 悬浮提醒。新建按钮 (+) 采用手动 `popup` 菜单模式，严禁使用 `setMenu` 以免破坏图标的绝对居中对齐。
 
-## 5. 交互行为
-- 所有标题栏按钮必须开启 `Qt::WA_Hover` 属性以触发悬停事件。
-- 必须安装 `m_hoverFilter` 事件过滤器以支持全局 ToolTip 悬浮提醒。
-- 新建按钮 (+) 采用手动 `popup` 菜单模式，严禁使用 `setMenu` 以免破坏图标的绝对居中对齐。
+### 2.5 全局 QMenu 菜单规范 (ThemeManager)
+- **菜单背景**: `#252526` (边界 `#333333`，圆角 6px)；
+- **选中/高亮背景色 (Item Hover/Selected)**: 物理色值统一为 **`#3E3E42`**；
+- **图标与文本间距 (Icon-Text Spacing)**: 图标与文本之间的物理间距统一并精确锁定为 **`10px`**（通过 `QMenu::icon { margin-right: 10px; }` 控制）。
 
-// ===================|===================
+### 2.6 分栏布局初始化与尺寸计算规范 (PanelLayoutManager)
+- **`initLayout()` 单一调用收敛**: `PanelLayoutManager::initLayout()` 中，`updateDynamicMinimumSize()` **必须且只能**在 `QTimer::singleShot(0, ...)` 延迟回调函数内部调用唯一一次。
+- **严禁同步二次调用**: 严禁在 `initLayout()` 函数末尾同步调用 `updateDynamicMinimumSize()`。由于 `setMinimumWidth()` 会在被调用且当前窗口宽度小于新设最小值时立即撑大窗口，两次调用时机不同计算值不一致会导致应用每次启动时主窗口被莫名撑大。
+- **独立场景不连带**: `resetSplitterLayout()`、`setPanelVisible()`、`toggleImmersiveMode()` 等各自独立场景中调用一次 `updateDynamicMinimumSize()` 为正常行为，保持独立性。
 
-# 6. 关于“清除”按钮
-## 6.1 每个可编辑的输入框必须配置上“Qt 原生的 setClearButtonEnabled(true)”，而且只可采用“Qt 原生的 setClearButtonEnabled(true)”，杜绝脑补另创 
+---
 
-// ===================|===================
+## 3. UI 交互体验与渲染防抖规范
 
-# 8. UI 异步加载与防闪烁规范
+### 3.1 UI 异步加载与防闪烁规范
 - **原则**: 在内容面板（`ContentPanel`）进行异步数据扫描（如物理目录扫描、数据库分类查询）前，**禁止**先行调用 `m_model->clear()`。
 - **目的**: 避免在数据就绪前的空窗期内出现“白屏/黑屏”视觉抖动，保留旧数据直至新数据通过 `setRecords` 实现毫秒级原子替换。
 - **例外**: 当目标路径列表确定为空（如路径不存在或搜索重置）时，必须执行同步 `clear()` 以反馈真实状态。
 - **竞态保护**: 加载流程必须绑定 `m_loadRequestId`。在异步回调中，必须校验回调携带的 ID 是否与当前面板 ID 一致，否则丢弃结果以防止快速切换导致的数据串扰。
 
-# 9. 缩略图平滑加载规范 (Plan-108)
+### 3.2 缩略图平滑加载规范 (Plan-108)
 - **原则**: 针对图形文件（图像、SVG等），在异步加载缩略图期间，`data()` 接口必须返回空图标 (`QIcon()`)。
 - **目的**: 拦截 Delegate 的默认图标绘制逻辑，防止出现“系统图标 -> 缩略图”的二段式闪烁抖动。
 - **视觉反馈**: `ThumbnailDelegate` 必须通过检测空图标状态，在单元格区域绘制轻量的灰色圆角矩形 (`#3A3A3A`) 作为占位背景，确保从占位态到内容态的过渡平滑且不突兀。
 
-# 10. 快速预览 (QuickLook) 规范 (Plan-109)
-- **原则**: 快速预览必须具备属性感知能力。针对文件夹、可执行文件 (.exe, .dll) 及压缩包 (.zip, .7z 等) 严禁打开预览窗口。
-- **画质**: 预览标准图像 (jpg, png, webp 等) 时必须加载全分辨率原图，并启用 `SmoothPixmapTransform` 以消除锯齿。
+### 3.3 快速预览 (QuickLook) 规范 (Plan-109)
+- **拦截机制**: 必须采用“黑名单拦截+白名单准入”的双重防御机制。严禁预览文件夹、安装包 (.msi, .exe), 系统库 (.dll, .sys) 及各类压缩包 (.zip, .7z 等)。
+- **画质**: 预览标准图像 (jpg, png, webp 等) 时必须加载全分辨率原图，并全程开启 `SmoothPixmapTransform` 以消除锯齿。
+- **性能红线**: `renderImage` 在加载原图前必须检查文件物理大小。若超过 50MB，必须自动降级调用高清缩略图引擎以确保 UI 响应性能。
 - **样式**: 预览窗口内的滚动条样式必须严格遵循全局规范：宽度 10px、圆角 3px、背景透明、Handle 颜色对齐 `BorderColor` (#333333)。
 
-# 11. 快速预览 (QuickLook) 进阶规范 (Plan-109)
-- **拦截机制**: 必须采用“黑名单拦截+白名单准入”的双重防御机制。严禁预览文件夹、安装包 (.msi, .exe), 系统库 (.dll, .sys) 及各类压缩包。
-- **性能红线**: `renderImage` 在加载原图前必须检查文件物理大小。若超过 50MB，必须自动降级调用高清缩略图引擎以确保 UI 响应性能。
-- **画质保障**: `SmoothPixmapTransform` 必须全程开启，杜绝在高清屏下出现插值锯齿。
-
-# 12. 内容面板“双击空白处”交互与逻辑架构规范
-- **以“最后一列/当前视角”为锚点**: 在列视图（`ColumnView`）中，无论展开了多少列分栏，在任何列分栏的空白处或视图最右侧的背景留白区域（区域 ⑥）双击左键，始终以最后一列（最右侧列）当前展示的文件夹数据为锚点执行回退上一级。
-- **父列高亮持续保留（降低记忆成本）**: 退回上一级（即移除最右侧分栏列）后，上一级列中原先选中的文件夹节点必须**持续保持高亮选中状态**，方便用户无须重新查找即可再次点击进入。
+### 3.4 列视图（ColumnView）双击空白处交互与逻辑规范
+- **以“最后一列/当前视角”为锚点**: 在列视图（`ColumnView`）中，无论展开了多少列分栏，在任何列分栏的空白处或视图最右侧的背景留白区域双击左键，始终以最后一列（最右侧列）当前展示的文件夹数据为锚点执行回退上一级。
+- **父列高亮持续保留**: 退回上一级（即移除最右侧分栏列）后，上一级列中原先选中的文件夹节点必须**持续保持高亮选中状态**，方便用户无须重新查找即可再次点击进入。
 - **逐级精准回退与单列降级**: 每次双击空白处/背景留白处均以当前最后一列数据为基准向上一级逐级退回；当列视图仅剩一列（根列）时，继续双击空白处则自动降级触发全局 `NavigationService::instance().goUp()`。
+
+---
+
+## 4. 检索与线程安全规范
+
+### 4.1 范围感知搜索规范 (Scope-Aware Search)
+- 搜索请求统一通过 `CoreController::performSearch` 转发，实时绑定顶部蓝色提示线 (Focus Line) 位置；分类模式下限定于当前分类及子类，导航模式下限定于当前物理磁盘路径及子目录。
+
+### 4.2 媒体提取管道线程安全边界
+- 后台提取管道中，任何触碰 `QSvgRenderer` / `QPainter` / `QPixmap` / `QIcon` 等 Qt Gui 模块 API 的代码段，必须用 `DiskMediaExtractor::s_qtGuiMutex` 显式串行化保护。
+- Qt Gui 模块 API 不保证线程安全，并发访问会导致内部缓存越界写入引发进程崩溃 (`0xC0000005`)。
+- 文件 I/O、哈希计算、数据库读写等与 Qt Gui 无关的部分维持并行。
+
+---
+
+## 5. 上下文菜单控制协调层 (ContextMenu Architecture)
+
+根据 QuarkMeta 标准五层 Clean Architecture 规范，右键上下文菜单属于 **【3. 控制协调层 (Controller / Mediator Layer)】** 的核心职责：
+
+1. **控制层职责与组装解耦**：
+   上下文菜单的构建与分发统一由对应的 Controller（如 `ContentContextMenu`）承载。视图呈现层（View）仅负责捕获右键事件并透传坐标，禁止在视图类内部混杂菜单项硬编码与业务分发。
+2. **状态感知与响应式动作 (State-Aware Actions)**：
+   Controller 在构建菜单项时，必须通过领域层（Domain Service / Core Engine）或模型接口获取当前选中实体的权威状态（SSOT），根据置顶状态、收藏状态、锁状态动态生成精准的语义图标与动作文本。
+3. **交互与阻断机制 (Non-Blocking Preview & Modal Actions)**：
+   涉及连点、就地预览或连续选色的复杂子菜单（如色彩选择条、图标选择网格），必须采用即时数据更新与流畅退出机制，避免不必要的菜单强行关闭，保障流畅的交互节奏。
+
+---
+
+## 6. 全局快捷键契约与窗口关闭规范 (Keyboard Shortcuts & Window Dismissal Architecture)
+
+为确保系统交互习惯符合桌面应用最佳实践，全系统必须遵循以下**全局快捷键与窗口关闭设计规范**：
+
+1. **`Ctrl + W` 窗口/对话框通用关闭契约**：
+   - **统一关闭响应**：全系统中所有独立窗口（如 `QuickLookWindow`）、模态/非模态对话框（如 `TagManagerDialog`）、设置弹窗与自定义 Overlay 浮窗，必须统一将 `Ctrl + W` 绑定为窗口关闭/隐藏/取消（Close / Reject / Dismiss）的标准动作；
+   - **焦点感知优先**：`Ctrl + W` 快捷键捕获必须遵循当前获得焦点的最顶层激活窗口（Active Top-Level Window / Focus Widget）优先原则，按下时仅触发当前处于激活状态的窗口关闭，严禁跨层或误关背景主窗口；
+   - **零副作用退出**：按下 `Ctrl + W` 关闭窗口时，必须优雅释放该窗口持有的临时资源或事件监听器，确保状态同步更新，不留残余浮窗与僵尸对象。
+
+---
+
+## 7. 对话框与弹窗顶层 HWND 激活与事件循环治理规范 (Dialog & HWND Architecture)
+
+为彻底杜绝弹窗销毁后主窗口失去响应、非客户区 `WM_NCHITTEST` 命中检测失效、标题栏无法拖拽及光标滞留在手型状态等底层 HWND 激活失步问题，全系统必须无条件遵守以下**对话框与弹窗顶层架构治理规范**：
+
+1. **【父级溯源铁律】全软件对话框 Parent 绑定契约 (Root HWND Binding Contract)**：
+   全软件所有 `QDialog`、`FramelessDialog` 或 Overlay 浮窗在创建/弹出时，其 `parent` 必须且只能绑定为**顶层 `MainWindow`（或 `window()`）**，绝对禁止将 `DriveBarWidget`、`ContentPanel` 等局部 ToolBar 或 Child Widget 作为 Parent 传入。确保 Win32 消息循环在对话框销毁退栈时，能够 100% 精准恢复主窗口 HWND 的激活 (`SetActiveWindow`) 与输入使能 (`EnableWindow`) 状态。
+2. **【模态嵌套禁令】去 `exec()` 阻塞与平原化事件循环 (Flattened Event Loop Contract)**：
+   严禁在 `exec()` 运行期间再次嵌套调用二级 `exec()`（如在对话框内部再次弹出 `exec()` 阻断弹窗）。复杂管理面板（如 `TagManagerDialog`）应当向非模态 / Inline 内联编辑交互演进；对话框内部的二次输入/确认交互必须使用嵌入式 Inline 控件或异步响应，确保 C++ 调用栈与 Qt 事件循环始终保持平滑化，消除堆栈交织死锁风险。
+3. **【HWND 激活与 Win32 拖拽安全隔离契约】**：
+   统一无边框对话框的生命周期与拖拽机制，严格禁止在模态阻塞事件循环中通过 `SendMessage(WM_NCLBUTTONDOWN)` 强抢线程控制权。对话框在 `reject()` / `accept()` 退出时，必须显式做好 HWND 状态清理与光标形态复位（复位为 `Qt::ArrowCursor`），保障主窗口非客户区拉伸与拖拽机制的完美平滑。
+4. **【框架级顶层入口自愈契约 (QuarkApplication Self-Healing Framework Contract)】**：
+   全系统统一使用自定义 `QuarkApplication` 继承并替代 `QApplication`。通过重写虚函数 `notify(QObject* receiver, QEvent* event)`，在框架事件派发的最源头实时监听全局所有 `QWindow` 及 `QDialog` 窗口的 `QEvent::Close` 与 `QEvent::Hide` 事件。每当任何弹窗或窗口关闭/隐藏的第 0 毫秒，由框架层自动且强制执行全局清场动作：彻底弹栈全局 `QGuiApplication::overrideCursor()`、释放孤儿鼠标抓取 (`releaseMouse()`)、解开 Win32 原生捕获锁 (`::ReleaseCapture()`) 并通过 `QCursor::setPos(QCursor::pos())` 驱动 Windows DWM 布局重新进行 WM_SETCURSOR Hit-Test 判定。全软件所有界面 100% 无感实现框架级自愈。
+5. **【架构绝对归一化与零补丁契约 (Unified Clean Architecture & Zero-Patch Contract)】**：
+   全软件在面对跨模块横切关注点（如输入焦点收回、鼠标抓取释放、光标形态复位、主题与样式派发）时，**必须且只能通过最顶层的框架门禁（如 `QuarkApplication`）或中介协调层（Mediator）做统一高内聚治理**。绝对禁止在下层具体的子对话框、局部面板或叶子 Widget 控件内部手写“擦屁股”式的碎片化补丁代码，彻底抹除打地鼠式的补丁遗留，从架构源头上降低全生命周期的维护与重构成本。
+
+---
+
+## 8. 文件冲突处理交互与对话框规范 (File Collision Resolution Architecture)
+
+在批量文件粘贴或移动场景下，系统必须遵循标准且高辨识度的文件冲突处理规范：
+
+1. **Adobe Bridge 风格直观冲突处理选项契约**：
+   冲突选项包含“自动解析”、“替换”、“跳过”、“取消”四个标准椭圆胶囊按钮：
+   - **自动解析**：同时保留目标文件，新写入的文件按标准递增规则编号重命名自动保留（如 `文件 (1).ext`）；
+   - **替换**：直接覆盖目标文件夹中的同名文件；
+   - **跳过**：忽略当前同名文件，不进行复制/移动；
+   - **取消**：终止当前粘贴/移动操作。
+   - **全部文件复选框**：左侧提供 `是否应用于全部文件？`，勾选后将当前选项策略应用至同批次所有冲突文件。
+2. **全局统一冲突感知与 Apply to All 规则**：
+   - 冲突对话框必须顶部清晰呈现当前操作路径与冲突数量 Stack（如 `正在将 X 个项目从 [源目录] 复制到 [目标目录]` 以及 `目标包含 X 个同名文件`）；
+   - 提供 `为所有冲突执行此操作` (Apply to All) 动态复选框，勾选后对同批次后续所有同名冲突自动应用相同策略，杜绝连续弹窗打扰用户；
+   - 样式与窗口必须继承 `FramelessDialog` 无边框优雅视觉体系，禁止原生窗口风格倒退。
+
+---
+
+## 9. 分列视图交互与编辑触发控制规范 (Column View Architecture & Edit Trigger Contract)
+
+为确保分列视图（Miller Columns 架构）具备极致流畅、符合桌面系统习惯且与其他视图高一致的交互体验，全系统必须遵守以下**分列视图交互与编辑控制规范**：
+
+1. **编辑触发器彻底封禁契约 (No Edit Triggers Contract)**：
+   分列视图 (`ColumnViewWidget` / `ColumnViewPane`) 内部所有子级视图控件 (`QListView`) 必须强制配置 `setEditTriggers(QAbstractItemView::NoEditTriggers)`，彻底阻断 Qt 默认双击或连击唤起行内重命名文本框（`QLineEdit`）的行为，杜绝误触重命名编辑框。
+2. **Miller Columns 级联交互与导航契约**：
+   - **单击文件夹**：高亮选中当前项目，并即时在右侧级联卡片区域加载并呈现下一级目录列；
+   - **双击文件夹**：级联展开右侧子列视图，并同步更新全局当前活动路径，绝不进入行内编辑框；
+   - **双击文件**：触发文件激活/打开操作，关闭后级子列并触发关联应用。
+3. **分栏视图独立极简单行渲染代理契约 (Column View Dedicated Clean Single-Row Delegate Contract)**：
+   分列视图（Miller Columns 架构）物理空间受限，其专用渲染代理 `ColumnItemDelegate` 必须保持绝对极简的视觉呈现。每一项（高度与目录导航 QSS 统一对齐为 28px）采用纯净单行横向布局：左侧 8px 留白、20x20px 图标/缩略图垂直居中绘制（与目录导航图标视觉饱满度 100% 对齐，杜绝系统外壳图标 16px 降级）、中间自适应文件名文本区（带 `ElideRight` 自动省略号）、右侧 20px 仅绘制文件夹级联展开箭头（`chevron_right`）。**严禁在分栏行内额外绘制星级评分、颜色标记圆点或重叠卡片**，彻底避免有限宽度空间内的文本裁剪挤压与视觉碰撞，选中的关联扩展元数据统一在右侧 `MetaPanel` 中全量呈现。
+4. **ContentPanel 统一控制器体系融合契约 (Unified Controller Integration Contract)**：
+   分列视图 (`ColumnViewWidget`) 必须 100% 深度融合进 `ContentPanel` 的全局控制与状态感知体系，严禁孤立化：
+   - **右键菜单与快捷键**：分列视图内所有子视图控件必须注册 `ContentPanel` 的事件过滤器（挂载 `ContentKeyHandler`），并连接 `customContextMenuRequested` 至 `ContentContextMenu`，全面支持右键菜单、快捷键（`F2` 重命名、`Delete` 删除、`Ctrl+C/V` 复制粘贴、`Space` QuickLook 预览）；
+   - **全局选择集与状态同步**：`ContentPanel::getSelectedPaths()` 必须包含分列视图活动列的选择输出，确保属性面板（`MetaPanel`）、状态栏统计与全局导航栏无缝感知当前选择集；
+   - **拖拽至收藏夹与跨面板拖拽契约 (Drag & Drop to Favorite Contract)**：分列视图各列控件必须实现拖拽重写类 (`DropListView`) 并继承 `startDrag`，允许用户选择文件/文件夹后将其拖拽至左侧“收藏夹”面板（`FavoritePanel`）、导航栏（`NavPanel`）或外部文件夹，保持与网格/列表视图 100% 同等的拖拽能力；
+   - **筛选与元数据感知**：分列视图所有子列必须继承 `ContentPanel` 的 `FilterState`（搜索过滤、隐藏文件显示、类型筛选），并完整配置渲染代理的色彩标记、评级与异步缩略图管线。
+5. **视觉精致度与全局导航同步契约 (Visual Polish & Global Sync Contract)**：
+   - **无虚线框契约**：分列视图所有列表控件项在选中与聚焦状态下，必须彻底清除虚线焦点框 (`outline: none;`，并在代理绘制时擦除 `QStyle::State_HasFocus`)，保障沉浸平滑的视觉呈现；
+   - **地址栏与导航树无损同步**：分列视图展开子目录或选中文件夹时，必须同步通知全局导航服务 (`NavigationService`) 发射 `currentUrlChanged` / `directorySelected` 广播，使地址栏 (AddressBar) 与导航树 (NavPanel) 实时反映当前选中列的完整最新路径；同时 `ContentPanel` 在分列视图模式下必须阻止无意义的全列重置渲染，保障级联列堆栈的平滑展开；
+   - **图标与缩略图管线加载**：分列视图每一列完成目录数据载入后，必须即时调用 `loadThumbnailsForRows` 将记录提交至全局 `ThumbnailPipelineService`，加载显示精美矢量/文件缩略图。
+6. **分栏视图与筛选器数据统计实时接轨契约 (Column View FilterPanel Integration Contract)**：
+   分栏视图（Miller Columns 架构）中每一列均具备独立的目录加载能力。每当分栏视图级联展开新列、最后一列加载完成或用户点击/切换当前活动列（`activePane`）时，系统必须自动捕获当前活动列的文件记录集（`ItemRecord`），驱动统计引擎（`ContentStatsWorker`）重新计算属性、标签、类型与日期分组数据，并通过广播 `directoryStatsReady` 信号与右侧筛选器面板（`FilterPanel`）实时无缝接轨。严禁出现分栏视图内容已更新但筛选器停留在旧目录统计数据的脱节现象。
+7. **分栏视图级联导航选中同步与文本截断省略号契约 (Column View Selection Sync & Text Elision Contract)**：
+   - **选中高亮即时同步契约**：当从外部面板（如收藏夹 `FavoritePanel`、地址栏 `AddressBar` 或快捷跳转）发起路径定位时，分栏视图除展开并加载对应路径的祖先与目标列外，必须显式在对应列中定位并高亮选中目标数据项，保障活动列与外部导航源选中的物理一致性；
+   - **文本尾部省略与箭头排他区域契约**：分栏列表（`QListView`）项目名称过长时，必须统一采用 `Qt::ElideRight`（尾部 `...`）进行文本自动截断，右侧强制锁定 20px 独立画廊区域用于绘制文件夹级联指示箭头 (`chevron_right`)。禁用不必要的水平滚动条 (`ScrollBarAlwaysOff`)，杜绝横向滚动条盖住列表底部项右侧箭头的视觉缺陷。
+8. **分栏视图与主视图模式切换数据模型无缝同步契约 (Column View ViewMode Switch Model Sync Contract)**：
+   - 网格视图、列表视图和瀑布流视图统一共享全局主模型 `m_diskModel`，而分栏视图采用独立的级联多列模型。当用户在分栏视图模式下进行路径导航或深度点击后，全局路径 `m_currentPath` 会即时刷新；
+   - 当用户从分栏视图切换至网格、列表或瀑布流视图时，`ContentPanel::setViewMode` 必须自动比对主模型 `m_diskModel` 的权威路径与 `m_currentPath`。若发现主模型路径滞后或处于空状态，系统必须触发自愈重载（`loadDirectory(m_currentPath)`），保障切换回其他视图时真实数据项 0 毫秒同步呈现，彻底消除“切回网格视图显示无项目”的虚假空状态缺陷。
+9. **分栏视图行内编辑统一编辑器与智能选区契约 (Column View In-Place Editing & Smart Selection Sync Contract)**：
+   - 分栏视图（Miller Columns 架构）的专用渲染代理 `ColumnItemDelegate` 必须彻底告别依赖 Qt 默认 `QLineEdit` 的私自实现，全面归一化接入统一的 `FileNameLineEdit` 编辑器；
+   - **智能扩展名保护与按键流转**：分栏视图触发行内重命名时，获取焦点的编辑器必须具备“文件只高亮选中主文件名/自动避开扩展名，文件夹全选”的智能选区逻辑，且必须完整配备统一的按键拦截处理（阻断上下方向键导致 View 焦点漂移，优化左右方向键定位至基名末端）；
+   - **应用专属右键菜单与几何对齐**：行内编辑器必须严格遵守系统专属暗色右键菜单契约（带 100% 语义匹配单色矢量图标与 10px 间距），其渲染几何区域必须精确定位在左侧 32px 留白与右侧 22px 级联指示器箭头之间，确保全视图绝对一致的重命名体验与架构纯洁性。
+10. **分栏视图祖先路径级联展开、选区高亮保持与图标管线契约 (Column View Ancestor Path Cascade & Icon Pipeline Contract)**：
+   - **祖先路径级联展开**：当从收藏栏、地址栏或外部导航跳转至分栏视图时，`setRootPath` 必须向上拆分完整的祖先路径栈（Path Stack），从根目录开始逐级构建多列分栏，并在每一级父列中自动定位并高亮选中指向子目录的项；
+   - **祖先列高亮持续保持**：分栏视图在级联展开子列或点击父级列时，只能清除当前列右侧（深层列）的选区与列，必须 100% 保持当前列及其左侧所有父列的选择高亮状态，呈现平滑、连贯的上下文路径链；
+   - **图标与缩略图管线加载**：分栏视图所有列在数据装载完成后，必须调用 `loadThumbnailsForRows` 驱动全局 `ThumbnailPipelineService`，且渲染代理 `ColumnItemDelegate` 必须统一读取并绘制 `Qt::DecorationRole` 图标/缩略图，确保与系统全视图风格绝对一致。
+11. **分栏视图列分割线与边框视觉契约 (Column View Column Separator & Pane Border Contract)**：
+   - 分栏视图（Miller Columns 架构）多列级联呈现时，每一列面板 (`ColumnViewPane`) 右侧必须具备物理明确的垂直分割边框线（右边框宽度 `1px`，暗色中性边框配色 `#2B2B2B` 或 `#333333`，统一声明 `border-right: 1px solid #2B2B2B;`）；
+   - 通过列间右边框的物理隔离与布局间距精细化设定，确保多列级联并排时展现清晰、规整的层级视觉边界，消除列间视图粘连感与视觉漂移。
+
+---
+
+## 10. 选择模型变更与元数据面板中介路由及两段式加载架构规范 (Selection Model & MetaPanel Routing Architecture)
+
+全软件所有内容视图（包括网格视图 `GridView`、自适应视图 `JustifiedView`、列表视图 `ListView` 及分栏视图 `ColumnView`）在与右侧元数据属性面板（`MetaPanel`）联动时，必须无条件遵循以下**顶层中介路由与两段式（同步基础+异步深层）元数据渲染架构规范**：
+
+1. **统一中介者去重防抖路由契约 (Mediator Debounce Routing Contract)**：
+   - 所有视图内部的 `QItemSelectionModel` 在发生选择集变更时，禁止绕过控制层直接与 `MetaPanel` 进行跨模块耦合通信，必须统一通过中介协调者（`PanelMediator`）进行信号转发；
+   - `PanelMediator` 在接收到选择集变更（`selectionChanged`）信号时，必须引入去重与高频防抖机制（`QTimer` 20ms~50ms 缓冲），避免键盘方向键快速连续滑动或视图切换时高频无效触发 `MetaPanel` 界面全量刷新与重绘，保持极致流畅的交互体验。
+2. **基础属性与深层元数据两段式加载契约 (Two-Stage Metadata Loading Architecture)**：
+   - **第一阶段（0ms 物理属性同步呈现）**：中介者与 `MetaPanel` 在接收到选中项变更的 0 毫秒内，首先从数据记录（`ItemRecord` / `QFileInfo`）中同步提取并秒级呈现基础物理属性（文件名、类型、物理大小、创建/修改/访问时间、基本评级与色标），避免界面空转或卡顿；
+   - **第二阶段（按需/异步深层元数据提取管线）**：涉及 EXIF 图像宽高分辨率、音视频编码参数、色彩调色板（Palettes）提取以及深层媒体属性解析时，必须提交至后台异步管线（如 `MediaExtractorPipeline` / `ThumbnailPipelineService`）进行非阻塞处理，解析完成后异步发射事件局部更新 `MetaPanel`，保障主 UI 线程绝不阻塞。
+3. **视图选择集与模型真理源（SSOT）一致性保障与分栏视图数据桥接契约 (Column View Model Metadata Bridge Contract)**：
+   - 无论视图形态如何演变（单主模型或分栏多级模型），元数据面板（`MetaPanel`）所展现的星级、颜色、标签、备注与关联网址，必须统一归一化指向系统唯一权威内存真理源（`MetadataManager`）；
+   - **分栏模型数据完整性保障**：分栏视图（Miller Columns 架构）所使用的轻量级级联模型（如 `DiskItemModel`）在完成磁盘文件初始扫描后，必须防抖或按需从全局真理源（`MetadataManager`）填充及更新绑定的标签、星级评级、色彩与备注扩展元数据，禁止将未绑定的空白扩展元数据直接透传给中介层与 `MetaPanel`；
+   - **中介层安全熔断与数据库补全**：`PanelMediator` 在响应选择变更时，必须对视图 `ModelIndex` 携带的扩展字段完整度进行校验。当检测到 `ModelIndex` 属于未绑定扩展字段的轻量模型时，中介层必须强制向全局真理源（`MetadataManager`）请求数据补全并驱动两段式加载管线，确保任何视图模式下 `MetaPanel` 关联元数据呈现的 100% 完整与绝对实时一致；
+   - 任何在 `MetaPanel` 或视图卡片上发起的元数据更新，必须经由 `CoreEngine` / `MetadataManager` 持久化后，通过事件总线（`CentralEventHub`）广播回视图，确保全视图模式下元数据状态 100% 绝对实时一致。
+
+---
+
+## 11. 视图代理与重命名编辑框架构归一化规范 (Delegate & Rename Framework Normalization Contract)
+
+为彻底解决全软件各内容视图代理（Delegate）在行内重命名功能实现上的逻辑散落、重复造轮子及交互不一致等架构痛点，全软件必须遵循以下**视图代理与重命名编辑框架构归一化规范**：
+
+1. **重命名编辑器物理剥离与高内聚自治契约 (FileNameLineEdit Independence Contract)**：
+   - 专门用于行内重命名的文本编辑框 `FileNameLineEdit` 必须具备物理独立的头文件与源文件（`FileNameLineEdit.h` / `FileNameLineEdit.cpp`），彻底消除寄生于特定 Delegate 头文件的历史架构耦合；
+   - **控件级交互自治**：编辑框获得焦点时的智能选区（文件夹全选、普通文件避开扩展名高亮选中主文件名）以及键盘事件拦截（吞噬上下方向键以阻断 View 行漂移、智能处理左右方向键定位至基名末端）统一下沉并高内聚于 `FileNameLineEdit` 自身的 `focusInEvent` 与 `keyPressEvent` 虚函数内部。禁止通过代理手动安装全局事件过滤器（`installEventFilter`），保障事件分发效率与架构洁净度。
+2. **具备重命名能力的统一代理基类契约 (RenameCapableDelegate Base Contract)**：
+   - 全软件所有需要行内重命名能力的视图渲染代理（包括树状/列表视图代理 `TreeItemDelegate`、网格卡片视图代理 `ThumbnailDelegate` 及分栏视图代理 `ColumnItemDelegate` 等），必须统一继承抽象基类 `RenameCapableDelegate`；
+   - **编辑生命周期强制统一与编译器锁**：基类 `RenameCapableDelegate` 统一实现并用 `override final` 密封 `createEditor`、`setEditorData` 与 `setModelData` 虚函数。所有具体子类 Delegate 绝对禁止且无法重新覆盖这三个函数，确保全软件重命名编辑框的创建、数据填充与模型提交逻辑 100% 绝对一致；
+   - **几何边界隔离**：编辑框的布局呈现与定位边界（`updateEditorGeometry`）保留为子类虚函数，由各视图代理根据各自的卡片/行数物理布局引擎进行针对性精准绘制，实现架构统一与布局灵活度的完美结合。
