@@ -1,9 +1,7 @@
 #include "FilterProxyModel.h"
 #include "../ContentPanel.h"
 #include "../UiHelper.h"
-#include "../../core/ModelContract.h"
 #include <QDateTime>
-#include <QDir>
 #include <cmath>
 
 namespace QuarkMeta {
@@ -19,27 +17,6 @@ void FilterProxyModel::setCachedDuplicatePaths(const QSet<QString>& paths) {
     if (m_cachedDuplicatePaths == paths) return;
     m_cachedDuplicatePaths = paths;
     updateFilter();
-}
-
-void FilterProxyModel::setExpandedChildPath(const QString& path) {
-    QString cleanPath = path.isEmpty() ? "" : QDir::toNativeSeparators(QDir::cleanPath(path));
-    if (m_expandedChildPath != cleanPath) {
-        m_expandedChildPath = cleanPath;
-        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {IsExpandedParentRole});
-    }
-}
-
-QVariant FilterProxyModel::data(const QModelIndex& index, int role) const {
-    if (role == IsExpandedParentRole) {
-        if (m_expandedChildPath.isEmpty() || !index.isValid()) return false;
-        QString itemType = QSortFilterProxyModel::data(index, TypeRole).toString();
-        bool isFolder = (itemType == "folder") || QSortFilterProxyModel::data(index, Qt::UserRole + 2).toBool();
-        if (!isFolder) return false;
-
-        QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(QSortFilterProxyModel::data(index, PathRole).toString()));
-        return QString::compare(itemPath, m_expandedChildPath, Qt::CaseInsensitive) == 0;
-    }
-    return QSortFilterProxyModel::data(index, role);
 }
 
 bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {

@@ -26,11 +26,6 @@ public:
     void setSortType(int type) { m_sortType = type; invalidate(); }
     void setSortOrder(Qt::SortOrder order) { m_sortOrder = order; invalidate(); }
 
-    void setExpandedChildPath(const QString& path);
-    QString expandedChildPath() const { return m_expandedChildPath; }
-
-    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
-
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
     bool lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const override;
@@ -39,7 +34,6 @@ private:
     QSet<QString> m_cachedDuplicatePaths;
     int m_sortType = 0;
     Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
-    QString m_expandedChildPath;
 };
 
 } // namespace QuarkMeta
