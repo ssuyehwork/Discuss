@@ -33,7 +33,6 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     m_listView = new DropListView(this);
     m_listView->setObjectName("ColumnViewPaneListView");
-    m_listView->setFocusPolicy(Qt::NoFocus);
     m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_listView->setDragEnabled(true);

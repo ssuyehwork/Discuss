@@ -131,6 +131,7 @@ public:
     // 6. 模型与选中数据访问
     ItemModelBase* model() const { return m_model; }
     QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
+    QSortFilterProxyModel* getActiveProxyModel() const;
     QStringList getSelectedPaths() const;
     QList<int> getSelectedTrashIds() const;
     QModelIndexList getSelectedIndexes() const;

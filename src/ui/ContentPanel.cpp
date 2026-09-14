@@ -580,6 +580,15 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
     return proxy->index(target, 0).data(PathRole).toString();
 }
 
+QSortFilterProxyModel* ContentPanel::getActiveProxyModel() const {
+    if (m_currentViewMode == ColumnView && m_columnView && m_columnView->activePane()) {
+        if (m_columnView->activePane()->proxyModel()) {
+            return m_columnView->activePane()->proxyModel();
+        }
+    }
+    return m_proxyModel;
+}
+
 QStringList ContentPanel::getSelectedPaths() const {
     QStringList paths;
     for (const auto& idx : getSelectedIndexes()) {
