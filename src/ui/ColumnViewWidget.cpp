@@ -1,6 +1,7 @@
 #include "ColumnViewWidget.h"
 #include "ContentPanel.h"
 #include "../core/DiskScanService.h"
+#include "../core/NavigationService.h"
 #include "DropListView.h"
 #include "ColumnItemDelegate.h"
 #include "UiHelper.h"
@@ -161,6 +162,12 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
 
     setWidget(m_container);
 
+    if (m_contentPanel) {
+        installEventFilter(m_contentPanel);
+        viewport()->installEventFilter(m_contentPanel);
+        m_container->installEventFilter(m_contentPanel);
+    }
+
     if (horizontalScrollBar()) {
         connect(horizontalScrollBar(), &QScrollBar::rangeChanged, this, [this](int min, int max) {
             Q_UNUSED(min);
@@ -304,6 +311,9 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
 ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
+    if (m_contentPanel) {
+        pane->installEventFilter(m_contentPanel);
+    }
     pane->setProperty("paneIndex", newIdx);
     if (m_contentPanel) {
         pane->applySort(static_cast<int>(m_contentPanel->currentSortType()), m_contentPanel->currentSortOrder());
@@ -394,6 +404,20 @@ void ColumnViewWidget::updateMetadataForPath(const QString& path) {
                 pane->listView()->viewport()->update();
             }
         }
+    }
+}
+
+void ColumnViewWidget::goUpColumn() {
+    if (m_panes.size() > 1) {
+        dismissSubColumns(m_panes.size() - 2);
+        ColumnViewPane* newActive = rightmostPane();
+        if (newActive) {
+            m_activePaneIndex = m_panes.size() - 1;
+            emit pathNavigated(newActive->currentPath());
+            emit selectionChanged();
+        }
+    } else {
+        NavigationService::instance().goUp();
     }
 }
 

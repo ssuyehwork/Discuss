@@ -229,15 +229,33 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
     if (event && event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
-            QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
-            if (!view && obj) {
-                view = qobject_cast<QAbstractItemView*>(obj->parent());
-            }
-            if (view) {
-                QModelIndex idx = view->indexAt(mouseEvent->pos());
-                if (!idx.isValid()) {
-                    NavigationService::instance().goUp();
+            if (m_currentViewMode == ColumnView && m_columnView) {
+                QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
+                if (!view && obj) {
+                    view = qobject_cast<QAbstractItemView*>(obj->parent());
+                }
+                if (view) {
+                    QModelIndex idx = view->indexAt(mouseEvent->pos());
+                    if (!idx.isValid()) {
+                        m_columnView->goUpColumn();
+                        return true;
+                    }
+                } else {
+                    // 匹配区域 ⑥ 背景留白处 (ColumnViewWidget及其container/viewport)
+                    m_columnView->goUpColumn();
                     return true;
+                }
+            } else {
+                QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
+                if (!view && obj) {
+                    view = qobject_cast<QAbstractItemView*>(obj->parent());
+                }
+                if (view) {
+                    QModelIndex idx = view->indexAt(mouseEvent->pos());
+                    if (!idx.isValid()) {
+                        NavigationService::instance().goUp();
+                        return true;
+                    }
                 }
             }
         }

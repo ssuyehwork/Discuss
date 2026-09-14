@@ -68,6 +68,7 @@ public:
     QStringList getSelectedPaths() const;
     QModelIndexList getSelectedIndexes() const;
     void applyFilterState(const FilterState& state);
+    void goUpColumn();
 
 signals:
     void pathNavigated(const QString& path);
