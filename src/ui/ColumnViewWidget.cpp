@@ -260,9 +260,17 @@ void ColumnViewWidget::setRootPath(const QString& path) {
     clearAllColumns();
     if (path.isEmpty()) return;
 
+    QString targetFilePath;
+    QString dirPath = path;
+    QFileInfo info(path);
+    if (info.exists() && !info.isDir()) {
+        targetFilePath = path;
+        dirPath = info.absolutePath();
+    }
+
     // 1. 拆分完整的祖先路径栈
     QList<QString> pathStack;
-    QDir dir(path);
+    QDir dir(dirPath);
     QString curr = dir.absolutePath();
 
     while (!curr.isEmpty()) {
@@ -282,6 +290,11 @@ void ColumnViewWidget::setRootPath(const QString& path) {
             m_panes[i - 1]->selectItemByPath(p);
         }
     }
+
+    if (!targetFilePath.isEmpty() && !m_panes.isEmpty()) {
+        m_panes.last()->selectItemByPath(targetFilePath);
+    }
+
     updatePaneWidths();
 }
 

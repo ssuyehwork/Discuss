@@ -229,8 +229,7 @@ void TitleBarWidget::setupViewMenu() {
 }
 
 void TitleBarWidget::setupCreateMenu() {
-    QMenu* createMenu = new QMenu(m_btnCreate);
-    UiHelper::applyMenuStyle(createMenu);
+    QMenu* createMenu = UiHelper::createMenu(m_btnCreate);
 
     QAction* actNewFolder = createMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹");
     QAction* actNewMd     = createMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown");

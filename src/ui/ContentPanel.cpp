@@ -560,8 +560,20 @@ void ContentPanel::refreshVisibleThumbnails() {
 void ContentPanel::selectAndScrollToPath(const QString& path) { selectAndScrollToItem(path); }
 void ContentPanel::selectAndScrollToItem(const QString& path) {
     if (m_currentViewMode == ColumnView) {
-        if (m_columnView && m_columnView->rightmostPane()) {
-            m_columnView->rightmostPane()->selectItemByPath(path);
+        if (m_columnView) {
+            QFileInfo info(path);
+            if (info.exists() && !info.isDir()) {
+                QString dirPath = info.absolutePath();
+                if (!m_columnView->containsPath(dirPath)) {
+                    m_columnView->setRootPath(path);
+                } else if (m_columnView->rightmostPane()) {
+                    m_columnView->rightmostPane()->selectItemByPath(path);
+                }
+            } else {
+                if (!m_columnView->containsPath(path)) {
+                    m_columnView->setRootPath(path);
+                }
+            }
         }
         return;
     }

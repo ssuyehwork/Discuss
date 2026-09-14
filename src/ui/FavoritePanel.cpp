@@ -211,7 +211,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
         menu.addAction(colorPickerAction);
 
         // 2. 图标九宫格子菜单
-        QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor(curColorHex)), "切换图标");
+        QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "切换图标");
         UiHelper::applyMenuStyle(iconMenu);
 
         QWidgetAction* pickerAction = new QWidgetAction(iconMenu);

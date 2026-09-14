@@ -79,9 +79,8 @@ void DriveBarWidget::refreshPinnedButtons() {
 }
 
 void DriveBarWidget::setupExtensionMenu() {
-    QMenu* extMenu = new QMenu(m_btnExtensionManager);
+    QMenu* extMenu = UiHelper::createMenu(m_btnExtensionManager);
     extMenu->setObjectName("DriveBarExtensionMenu");
-    UiHelper::applyMenuStyle(extMenu);
 
     connect(m_btnExtensionManager, &QPushButton::clicked, this, [this, extMenu]() {
         extMenu->clear();
