@@ -42,9 +42,9 @@
 4. **【静态红线扫描】严禁平台 Hack 级补丁**：严禁 Win32 `SetForegroundWindow` 强抢焦点、工具类篡改 `Qt::Popup`、`friend class` 伪解耦及 `installEventFilter` 无校验全局挂载。
 5. **【黑盒隔离锁】黑盒信息隐藏**：仅对接口 (API/DTO) 负责，禁止跨模块窥探或依赖私有实现。
 
-### 2.2 `QuarkMeta-Architecture-Planning.md` 纯洁性保护铁律
-1. **职责绝对单一**：`QuarkMeta-Architecture-Planning.md` **仅且只能记录应用的高级设计理念、顶层架构规划与全局规范**。
-2. **严禁写入任何实施细节**：任何具体的代码修改点、Search/Replace Diff 替换块、具体代码行号、编译调试命令或局部修复方案，**绝对禁止写入 `QuarkMeta-Architecture-Planning.md`**！
+### 2.2 核心历史记忆与设计规范指南 (Memories.md 权威引导)
+1. **唯一历史记忆与设计规范真理源 (SSOT)**：根目录下的 **`Memories.md`** 为 QuarkMeta 全局设计理念、UI 交互哲学、控件样式规范与历史记忆的唯一真理源。在进行任何代码分析、架构设计与重构修改前，**AI 助手必须优先读取并无条件遵守 `Memories.md`** 中的所有规则。
+2. **废弃文档声明**：原 `QuarkMeta-Architecture-Planning.md` 与 `Guide & Preference.md` 已全面废除并完整无损迁移合并至 `Memories.md`。全软件不再使用或修改 `QuarkMeta-Architecture-Planning.md` 及 `Guide & Preference.md`。
 3. **实施方案物理隔离**：所有具体的代码修改与实施方案，必须且只能创建在 `QuarkMeta Architecture/Implementation Plan/` 目录下（采用英文命名），严禁将实施方案与设计理念混为一谈。
 
 ### 2.3 资产管理桌面应用真实运行特性与架构分层
@@ -93,7 +93,7 @@ SEARCH 块中的代码必须在现有仓库中真实存在，绝不允许凭空�
 ## 4. C++ 编码与 UI 通用红线防线 (Coding & UI Rules)
 
 ### 4.1 UI 样式与主题管理规范引导
-- **样式规范真理源**：若涉及到 UI 界面样式、主题管理、控件外观等重构或新增修改， Agent 与开发者**必须优先读取并严格遵守项目根目录下的 `Guide & Preference.md` 规范**。
+- **样式规范真理源**：若涉及到 UI 界面样式、主题管理、控件外观等重构或新增修改， Agent 与开发者**必须优先读取并严格遵守 `Memories.md` 中的 UI 标准与规范**。
 - **禁止 C++ 内联样式硬编码**：任何样式修改必须在 `resources/style.qss` 与 `ThemeManager` 框架下按规范实施，**严禁在 C++ 控件代码中采用内联 `setStyleSheet(...)` 方式硬编码样式**。
 
 ### 4.2 平台级 Hack 与事件过滤器红线
