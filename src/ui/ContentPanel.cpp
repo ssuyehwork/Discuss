@@ -226,7 +226,25 @@ void ContentPanel::initListView() {
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
-    // 专门用于捕获并交由 ContentKeyHandler 处理全局按键快捷键（Ctrl+C/V/F2/Delete等）
+    if (event && event->type() == QEvent::MouseButtonDblClick) {
+        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
+            QAbstractItemView* view = nullptr;
+            if (m_gridView && (obj == m_gridView || obj == m_gridView->viewport())) {
+                view = m_gridView;
+            } else if (m_treeView && (obj == m_treeView || obj == m_treeView->viewport())) {
+                view = m_treeView;
+            }
+            if (view) {
+                QModelIndex idx = view->indexAt(mouseEvent->pos());
+                if (!idx.isValid()) {
+                    NavigationService::instance().goUp();
+                    return true;
+                }
+            }
+        }
+    }
+
     if (m_keyHandler && m_keyHandler->handleEvent(obj, event)) return true;
     return QFrame::eventFilter(obj, event);
 }

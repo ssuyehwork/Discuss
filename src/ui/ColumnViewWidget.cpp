@@ -134,7 +134,14 @@ void ColumnViewPane::loadDirectory() {
     QPointer<ColumnViewPane> weakSelf(this);
     (void)QtConcurrent::run([weakSelf, path]() {
         if (!weakSelf) return;
-        std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
+        std::vector<ItemRecord> items;
+        if (path.isEmpty() || path == "computer://") {
+            for (const QFileInfo& drive : QDir::drives()) {
+                items.push_back(ItemRecord::create(drive.absolutePath()));
+            }
+        } else {
+            items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
+        }
         MetaCacheDecorator::decorate(items);
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
@@ -170,6 +177,9 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
 
     setWidget(m_container);
 
+    // 监听背景留白区域的双击事件，用于触发右侧空白区域双击回退
+    viewport()->installEventFilter(this);
+    m_container->installEventFilter(this);
     if (m_contentPanel) {
         installEventFilter(m_contentPanel);
         viewport()->installEventFilter(m_contentPanel);
@@ -267,6 +277,13 @@ void ColumnViewWidget::applySort(int sortType, Qt::SortOrder sortOrder) {
 void ColumnViewWidget::setRootPath(const QString& path) {
     clearAllColumns();
     if (path.isEmpty()) return;
+
+    if (path == "computer://") {
+        appendColumn("computer://");
+        m_activePaneIndex = 0;
+        updatePaneWidths();
+        return;
+    }
 
     QString targetFilePath;
     QString dirPath = path;
@@ -421,6 +438,17 @@ void ColumnViewWidget::resizeEvent(QResizeEvent* event) {
     updatePaneWidths();
 }
 
+bool ColumnViewWidget::eventFilter(QObject* obj, QEvent* event) {
+    if ((obj == viewport() || obj == m_container) && event && event->type() == QEvent::MouseButtonDblClick) {
+        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
+            goUpColumnFromIndex(m_panes.size() - 1);
+            return true;
+        }
+    }
+    return QScrollArea::eventFilter(obj, event);
+}
+
 void ColumnViewWidget::refreshActiveColumn() {
     ColumnViewPane* pane = activePane();
     if (pane) {
@@ -448,19 +476,31 @@ void ColumnViewWidget::updateMetadataForPath(const QString& path) {
 }
 
 void ColumnViewWidget::goUpColumn() {
-    if (m_panes.size() > 1) {
-        goUpColumnFromIndex(m_panes.size() - 2);
-    } else {
-        NavigationService::instance().goUp();
-    }
+    goUpColumnFromIndex(m_panes.size() - 1);
 }
 
 void ColumnViewWidget::goUpColumnFromIndex(int paneIndex) {
-    if (paneIndex >= 0 && paneIndex < m_panes.size()) {
-        if (paneIndex == 0 && m_panes.size() == 1) {
+    if (m_panes.isEmpty()) {
+        NavigationService::instance().goUp();
+        return;
+    }
+
+    if (paneIndex >= m_panes.size() - 1) {
+        // 双击发生在最右侧列或背景留白处：逐级关闭最右侧列
+        if (m_panes.size() > 1) {
+            dismissSubColumns(m_panes.size() - 2);
+            ColumnViewPane* newActive = rightmostPane();
+            if (newActive) {
+                m_activePaneIndex = m_panes.size() - 1;
+                emit pathNavigated(newActive->currentPath());
+                emit selectionChanged();
+            }
+        } else {
+            // 仅剩最后一列（如盘符根目录 G:/）时，降级退回“此电脑”(computer://)
             NavigationService::instance().goUp();
-            return;
         }
+    } else if (paneIndex >= 0) {
+        // 双击发生在中间父列的空白处：裁撤该列右侧的所有子列并保持当前父列高亮
         dismissSubColumns(paneIndex);
         ColumnViewPane* newActive = rightmostPane();
         if (newActive) {
@@ -468,8 +508,6 @@ void ColumnViewWidget::goUpColumnFromIndex(int paneIndex) {
             emit pathNavigated(newActive->currentPath());
             emit selectionChanged();
         }
-    } else {
-        NavigationService::instance().goUp();
     }
 }
 
