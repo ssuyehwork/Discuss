@@ -32,6 +32,10 @@ enum CommonRole {
     PalettesRole        = Qt::UserRole + 203, // 物理色板数据
     CountRole           = Qt::UserRole + 204, // 子项数量
 
+    // 列视图与拖放交互角色 (UserRole + 210..220)
+    IsParentExpandedRole = Qt::UserRole + 210, // 列视图父目录展开高亮
+    IsDropTargetRole     = Qt::UserRole + 211, // 拖拽目标悬停高亮
+
     // 磁盘回收站专用角色
     IsDiskTrashRole     = Qt::UserRole + 208, // 是否是磁盘回收站项目
     DiskTrashIdRole     = Qt::UserRole + 209  // 磁盘回收站表 ID

@@ -429,18 +429,18 @@ void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
 }
 
 void ColumnViewWidget::updateParentHighlights() {
-    for (int i = 0; i < m_panes.size() - 1; ++i) {
+    for (int i = 0; i < m_panes.size(); ++i) {
         ColumnViewPane* parentPane = m_panes[i];
-        ColumnViewPane* childPane = m_panes[i + 1];
-        if (!parentPane || !childPane || !parentPane->proxyModel()) continue;
+        if (!parentPane || !parentPane->proxyModel()) continue;
 
-        QString childPath = QDir::toNativeSeparators(QDir::cleanPath(childPane->currentPath()));
+        ColumnViewPane* childPane = (i + 1 < m_panes.size()) ? m_panes[i + 1] : nullptr;
+        QString childPath = childPane ? QDir::toNativeSeparators(QDir::cleanPath(childPane->currentPath())) : "";
         FilterProxyModel* model = parentPane->proxyModel();
 
         for (int r = 0; r < model->rowCount(); ++r) {
             QModelIndex idx = model->index(r, 0);
             QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
-            bool isExpandedParent = (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
+            bool isExpandedParent = !childPath.isEmpty() && (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
             model->setData(idx, isExpandedParent, IsParentExpandedRole);
         }
     }

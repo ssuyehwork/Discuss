@@ -1,4 +1,5 @@
 #include "ColumnItemDelegate.h"
+#include "../core/ModelContract.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "CardPainterHelper.h"

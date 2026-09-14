@@ -1,5 +1,6 @@
 #include "ContentContextMenu.h"
 #include "../ContentPanel.h"
+#include "../ColumnViewWidget.h"
 #include "ContentSortController.h"
 #include "ContentKeyHandler.h"
 #include "../UiHelper.h"
@@ -74,7 +75,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             parentWidget = parentWidget->parentWidget();
         }
         if (parentWidget) {
-            ColumnViewPane* pane = qobject_cast<ColumnViewPane*>(parentWidget);
+            QuarkMeta::ColumnViewPane* pane = qobject_cast<QuarkMeta::ColumnViewPane*>(parentWidget);
             if (pane && !pane->currentPath().isEmpty()) {
                 currentPath = pane->currentPath();
             }

@@ -1,4 +1,5 @@
 #include "DiskItemModel.h"
+#include "../../core/ModelContract.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
 #include "MetaCacheDecorator.h"
