@@ -27,6 +27,8 @@
 #include "../meta/MediaExtractorPipeline.h"
 #include "../util/ThumbnailPipelineService.h"
 
+#include "../core/NavigationService.h"
+
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QHeaderView>
@@ -34,6 +36,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QApplication>
+#include <QMouseEvent>
 
 namespace QuarkMeta {
 
@@ -146,6 +149,13 @@ void ContentPanel::initUi() {
     initGridView();
     initListView();
     m_columnView = new ColumnViewWidget(this, this);
+    m_columnView->installEventFilter(this);
+    if (m_columnView->viewport()) {
+        m_columnView->viewport()->installEventFilter(this);
+    }
+    if (m_columnView->widget()) {
+        m_columnView->widget()->installEventFilter(this);
+    }
     connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<QuarkMeta::ItemRecord>& records) {
         if (m_statsWorker && !records.empty()) {
@@ -223,6 +233,27 @@ void ContentPanel::initListView() {
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
+    if (event && event->type() == QEvent::MouseButtonDblClick) {
+        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
+            QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
+            if (!view && obj) {
+                view = qobject_cast<QAbstractItemView*>(obj->parent());
+            }
+
+            if (view && !qobject_cast<QHeaderView*>(obj)) {
+                QModelIndex idx = view->indexAt(mouseEvent->pos());
+                if (!idx.isValid()) {
+                    NavigationService::instance().goUp();
+                    return true;
+                }
+            } else if (m_columnView && (obj == m_columnView || obj == m_columnView->viewport() || obj == m_columnView->widget())) {
+                NavigationService::instance().goUp();
+                return true;
+            }
+        }
+    }
+
     if (m_keyHandler && m_keyHandler->handleEvent(obj, event)) return true;
     return QFrame::eventFilter(obj, event);
 }

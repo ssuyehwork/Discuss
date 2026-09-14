@@ -50,6 +50,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     if (m_contentPanel) {
         m_listView->installEventFilter(m_contentPanel);
         m_listView->viewport()->installEventFilter(m_contentPanel);
+        this->installEventFilter(m_contentPanel);
         connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
     }
 
