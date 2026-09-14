@@ -87,6 +87,15 @@ void ColumnViewPane::setFilterState(const FilterState& state) {
     }
 }
 
+void ColumnViewPane::setExpandedChildPath(const QString& childPath) {
+    if (m_proxyModel) {
+        m_proxyModel->setExpandedChildPath(childPath);
+    }
+    if (m_listView && m_listView->viewport()) {
+        m_listView->viewport()->update();
+    }
+}
+
 void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     m_pendingSelectPath = targetPath;
     tryPendingSelection();
@@ -337,6 +346,7 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
         pane->deleteLater();
     }
     updatePaneWidths();
+    updateExpandedParentStates();
     for (int i = 0; i < m_panes.size(); ++i) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
@@ -405,6 +415,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     m_panes.append(pane);
     m_layout->addWidget(pane);
     updatePaneWidths();
+    updateExpandedParentStates();
     for (int i = 0; i < m_panes.size(); ++i) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
@@ -421,6 +432,17 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
 void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
     for (int i = activePaneIdx + 1; i < m_panes.size(); ++i) {
         m_panes[i]->clearSelection();
+    }
+}
+
+void ColumnViewWidget::updateExpandedParentStates() {
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (!m_panes[i]) continue;
+        if (i < m_panes.size() - 1 && m_panes[i + 1]) {
+            m_panes[i]->setExpandedChildPath(m_panes[i + 1]->currentPath());
+        } else {
+            m_panes[i]->setExpandedChildPath("");
+        }
     }
 }
 
