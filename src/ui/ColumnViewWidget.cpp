@@ -60,6 +60,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         // 保留 installEventFilter 用于捕获按键快捷键 (m_keyHandler)
         m_listView->installEventFilter(m_contentPanel);
         connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
+        connect(m_listView, &DropListView::pathsDropped, m_contentPanel, &ContentPanel::onPathsDropped);
     }
 
     connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ColumnViewPane::selectionChanged);
@@ -324,6 +325,7 @@ void ColumnViewWidget::setRootPath(const QString& path) {
     m_activePaneIndex = m_panes.size() - 1;
 
     updatePaneWidths();
+    updateParentHighlights();
 }
 
 void ColumnViewWidget::clearAllColumns() {
@@ -337,6 +339,7 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
         pane->deleteLater();
     }
     updatePaneWidths();
+    updateParentHighlights();
     for (int i = 0; i < m_panes.size(); ++i) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
@@ -405,6 +408,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     m_panes.append(pane);
     m_layout->addWidget(pane);
     updatePaneWidths();
+    updateParentHighlights();
     for (int i = 0; i < m_panes.size(); ++i) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
@@ -421,6 +425,24 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
 void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
     for (int i = activePaneIdx + 1; i < m_panes.size(); ++i) {
         m_panes[i]->clearSelection();
+    }
+}
+
+void ColumnViewWidget::updateParentHighlights() {
+    for (int i = 0; i < m_panes.size() - 1; ++i) {
+        ColumnViewPane* parentPane = m_panes[i];
+        ColumnViewPane* childPane = m_panes[i + 1];
+        if (!parentPane || !childPane || !parentPane->proxyModel()) continue;
+
+        QString childPath = QDir::toNativeSeparators(QDir::cleanPath(childPane->currentPath()));
+        FilterProxyModel* model = parentPane->proxyModel();
+
+        for (int r = 0; r < model->rowCount(); ++r) {
+            QModelIndex idx = model->index(r, 0);
+            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+            bool isExpandedParent = (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
+            model->setData(idx, isExpandedParent, IsParentExpandedRole);
+        }
     }
 }
 

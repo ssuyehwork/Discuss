@@ -87,6 +87,7 @@ private:
     ColumnViewPane* appendColumn(const QString& path);
     void clearOtherSelections(int activePaneIdx);
     void updatePaneWidths();
+    void updateParentHighlights();
 
     ContentPanel* m_contentPanel = nullptr;
     FilterState m_currentFilter;

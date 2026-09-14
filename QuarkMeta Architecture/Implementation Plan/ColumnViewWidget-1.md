@@ -1,341 +1,256 @@
-# ColumnViewWidget 祖先展开文件夹次级高亮保持实施方案 (ColumnViewWidget-1.md)
+# ColumnViewWidget Implementation Plan - Drag & Drop Migration, Target Highlighting & Context Menu Paste
 
-## 1. Overview（概述与解决的问题）
-
-### 1.1 解决的问题
-在分栏视图（Miller Columns 架构）中，当用户在某一列（例如标记为 ② 的列）中点击选中了一个文件（例如 `BQ 标签_47906.eps`）时，该列的选择集中焦点转移到了该文件上，导致此前展开了右侧下一列（标记为 ① 的列）的**父级文件夹**（例如 `测试-2`）脱离了选区高亮状态。这导致用户无法在视觉上直观判断右侧列的数据究竟来源于左侧列的哪一个文件夹。
-
-### 1.2 解决方案
-1. **定义模型渲染角色 `IsExpandedParentRole`**：在 `ModelContract.h` 中新增 UI 渲染角色 `IsExpandedParentRole`（`Qt::UserRole + 205`）。
-2. **FilterProxyModel 逻辑扩展**：在 `FilterProxyModel` 中添加展开子路径存储 `m_expandedChildPath` 与 `setExpandedChildPath` 接口，重写 `data()` 函数响应 `IsExpandedParentRole`。当某文件夹的路径与展开子路径相匹配时，返回 `true`。
-3. **ColumnViewWidget 层级状态同步**：在 `ColumnViewWidget` 管理面板栈（`m_panes`）更新时（新增列 `appendColumn`、裁撤列 `dismissSubColumns`、设置根路径 `setRootPath` 等），自动刷新每一列面板对应的展开子路径，保持视图层级关系物理同步。
-4. **ColumnItemDelegate 渲染升级**：在 `ColumnItemDelegate::paint` 中，区分“直接选中项”（标准高亮蓝色 `#378ADD` alpha 0.18）与“祖先展开文件夹”（次级高亮背景 `#378ADD` alpha 0.10 + 亮白色 chevron 箭头），实现视觉清晰分层且高亮不丢失。
+This implementation plan details the technical architecture and exact code changes required to restore full file migration capabilities, target folder drop-highlighting, right-click context menu "Paste" action, and parent folder secondary highlighting in Column View (Miller Columns).
 
 ---
 
-## 2. Modified Files List（影响文件清单）
+## Overview of Issues & Solution Strategy
 
-| 文件相对路径 | 修改说明 |
-| :--- | :--- |
-| `src/core/ModelContract.h` | 在 `CommonRole` 枚举中新增 `IsExpandedParentRole` |
-| `src/ui/models/FilterProxyModel.h` | 新增 `setExpandedChildPath` / `expandedChildPath` 接口声明与 `data` 函数重写声明 |
-| `src/ui/models/FilterProxyModel.cpp` | 实现 `IsExpandedParentRole` 数据拦截响应与子路径变更通知 |
-| `src/ui/ColumnViewWidget.h` | `ColumnViewPane` 增加 `setExpandedChildPath` 方法，`ColumnViewWidget` 增加 `updateExpandedParentStates` 方法 |
-| `src/ui/ColumnViewWidget.cpp` | 在列增删与导航变动时同步更新父列的展开子路径 `setExpandedChildPath` |
-| `src/ui/ColumnItemDelegate.cpp` | 结合 `IsExpandedParentRole` 绘制祖先展开文件夹的次级高亮背景与箭头 |
+1. **Persistent Parent Folder Secondary Highlighting (父文件夹二级持久高亮)**
+   - **Problem**: When navigating through column panes in Column View, clicking/selecting a file item in column N clears or suppresses the selection in column N-1 (parent column), causing the user to lose visual context of which parent folder spawned the active column.
+   - **Solution**: Enhance `ColumnItemDelegate` and `ColumnViewWidget` state management to draw a dedicated secondary background highlight (using standard theme token `#2A2A2A` or distinct secondary active state color `#383838`) for parent folder items whose sub-directory is currently open in the adjacent child column, regardless of active item selections in child columns.
+
+2. **Cross-Column Drag & Drop File Migration (跨列拖拽文件/文件夹迁移)**
+   - **Problem**: `DropListView` delegates drag-and-drop to `ViewDragDropHelper`, which only emits `pathsDropped` with the target index relative to the single `DropListView` receiving the drop. In `ColumnViewPane`, `DropListView::pathsDropped` is currently not connected to `ContentPanel::onPathsDropped`, nor is the source pane/target pane directory context preserved.
+   - **Solution**:
+     - Connect `DropListView::pathsDropped` in `ColumnViewPane` to `ContentPanel::onPathsDropped`.
+     - In `DropListView` / `ViewDragDropHelper` handle drop event target resolution: when items are dropped onto a specific subfolder row in a column pane, target index resolves to that subfolder; when dropped onto the blank space of a column pane, target index resolves to invalid, causing `ContentFileOpsHandler::onPathsDropped` to target the column pane's own `m_path`.
+
+3. **Target Folder Hover Highlighting During Drag (拖拽移动时目标文件夹实时高亮反馈)**
+   - **Problem**: Dragging over folder items in `DropListView` does not visually highlight the target item, leading to potential drag errors.
+   - **Solution**: Enable drag drop indicators and custom hover state rendering in `DropListView` / `ColumnItemDelegate` during `dragMoveEvent` and clear target highlight on `dragLeaveEvent` / `dropEvent`.
+
+4. **Context Menu "Paste" Action Enablement (右键菜单“粘贴”功能激活)**
+   - **Problem**: Right-clicking inside a column pane invokes `ContentContextMenu::showMenu`. `ContentPanel::canPaste(targetOverride)` currently uses `m_currentPath` (root directory of column view), which might be empty or root, or when right-clicking on a subfolder/blank area in column pane K, `m_currentPath` did not match column pane K's actual path.
+   - **Solution**: Update `ContentContextMenu::showMenu` so that when invoked from a `ColumnViewPane`'s `m_listView`, `currentPath` is resolved dynamically to `pane->currentPath()`, ensuring `canPaste()` accurately checks clipboard status for that specific column folder.
 
 ---
 
-## 3. Detailed Line-by-Line Changes（包含 Precise Git Merge Diff 替换块）
+## Affected Files List
 
-### 3.1 `src/core/ModelContract.h`
+1. `src/ui/ColumnItemDelegate.h`
+2. `src/ui/ColumnItemDelegate.cpp`
+3. `src/ui/DropListView.h`
+4. `src/ui/DropListView.cpp`
+5. `src/ui/ColumnViewWidget.h`
+6. `src/ui/ColumnViewWidget.cpp`
+7. `src/ui/controllers/ContentContextMenu.cpp`
 
-```
+---
+
+## Detailed Line-by-Line Search / Replace Diffs
+
+### 1. `src/ui/ColumnItemDelegate.h` & `src/ui/ColumnItemDelegate.cpp`
+Add secondary parent highlight role and drop target highlight role rendering support in `ColumnItemDelegate`.
+
+```gdiff
 <<<<<<< SEARCH
-    CountRole           = Qt::UserRole + 204, // 子项数量
+namespace QuarkMeta {
 
-    // 磁盘回收站专用角色
+class ColumnItemDelegate : public QStyledItemDelegate {
 =======
-    CountRole           = Qt::UserRole + 204, // 子项数量
-    IsExpandedParentRole= Qt::UserRole + 205, // 是否为展开右侧子列的父级文件夹
+namespace QuarkMeta {
 
-    // 磁盘回收站专用角色
->>>>>>> REPLACE
-```
-
-### 3.2 `src/ui/models/FilterProxyModel.h`
-
-```
-<<<<<<< SEARCH
-    void setSortType(int type) { m_sortType = type; invalidate(); }
-    void setSortOrder(Qt::SortOrder order) { m_sortOrder = order; invalidate(); }
-
-protected:
-=======
-    void setSortType(int type) { m_sortType = type; invalidate(); }
-    void setSortOrder(Qt::SortOrder order) { m_sortOrder = order; invalidate(); }
-
-    void setExpandedChildPath(const QString& path);
-    QString expandedChildPath() const { return m_expandedChildPath; }
-
-    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
-
-protected:
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    QSet<QString> m_cachedDuplicatePaths;
-    int m_sortType = 0;
-    Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
+enum ColumnCustomRole {
+    IsParentExpandedRole = Qt::UserRole + 200,
+    IsDropTargetRole = Qt::UserRole + 201
 };
-=======
-    QSet<QString> m_cachedDuplicatePaths;
-    int m_sortType = 0;
-    Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
-    QString m_expandedChildPath;
-};
+
+class ColumnItemDelegate : public QStyledItemDelegate {
 >>>>>>> REPLACE
 ```
 
-### 3.3 `src/ui/models/FilterProxyModel.cpp`
-
-```
+```gdiff
 <<<<<<< SEARCH
-#include "FilterProxyModel.h"
-#include "../ContentPanel.h"
-#include "../UiHelper.h"
-#include <QDateTime>
-#include <cmath>
+    if (option.state & QStyle::State_Selected) {
+        bgColor = QColor("#0078D4");
+        textColor = QColor("#FFFFFF");
+    } else if (option.state & QStyle::State_MouseOver) {
+        bgColor = QColor("#2A2A2A");
+    }
 =======
-#include "FilterProxyModel.h"
-#include "../ContentPanel.h"
-#include "../UiHelper.h"
-#include "../../core/ModelContract.h"
-#include <QDateTime>
-#include <QDir>
-#include <cmath>
+    bool isParentExpanded = index.data(IsParentExpandedRole).toBool();
+    bool isDropTarget = index.data(IsDropTargetRole).toBool();
+
+    if (isDropTarget) {
+        bgColor = QColor("#005A9E"); // Highlighted target drop folder
+        textColor = QColor("#FFFFFF");
+    } else if (option.state & QStyle::State_Selected) {
+        bgColor = QColor("#0078D4");
+        textColor = QColor("#FFFFFF");
+    } else if (isParentExpanded) {
+        bgColor = QColor("#334455"); // Distinct persistent secondary parent highlight
+        textColor = QColor("#FFFFFF");
+    } else if (option.state & QStyle::State_MouseOver) {
+        bgColor = QColor("#2A2A2A");
+    }
 >>>>>>> REPLACE
 ```
 
-```
+### 2. `src/ui/DropListView.h` & `src/ui/DropListView.cpp`
+Handle hover drop target rendering and drag leave cleanup in `DropListView`.
+
+```gdiff
 <<<<<<< SEARCH
-void FilterProxyModel::setCachedDuplicatePaths(const QSet<QString>& paths) {
-    if (m_cachedDuplicatePaths == paths) return;
-    m_cachedDuplicatePaths = paths;
-    updateFilter();
-}
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+    void startDrag(Qt::DropActions supportedActions) override;
 =======
-void FilterProxyModel::setCachedDuplicatePaths(const QSet<QString>& paths) {
-    if (m_cachedDuplicatePaths == paths) return;
-    m_cachedDuplicatePaths = paths;
-    updateFilter();
-}
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+    void startDrag(Qt::DropActions supportedActions) override;
 
-void FilterProxyModel::setExpandedChildPath(const QString& path) {
-    QString cleanPath = path.isEmpty() ? "" : QDir::toNativeSeparators(QDir::cleanPath(path));
-    if (m_expandedChildPath != cleanPath) {
-        m_expandedChildPath = cleanPath;
-        emit dataChanged(index(0, 0), index(rowCount() - 1, 0), {IsExpandedParentRole});
-    }
-}
-
-QVariant FilterProxyModel::data(const QModelIndex& index, int role) const {
-    if (role == IsExpandedParentRole) {
-        if (m_expandedChildPath.isEmpty() || !index.isValid()) return false;
-        QString itemType = QSortFilterProxyModel::data(index, TypeRole).toString();
-        bool isFolder = (itemType == "folder") || QSortFilterProxyModel::data(index, Qt::UserRole + 2).toBool();
-        if (!isFolder) return false;
-
-        QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(QSortFilterProxyModel::data(index, PathRole).toString()));
-        return QString::compare(itemPath, m_expandedChildPath, Qt::CaseInsensitive) == 0;
-    }
-    return QSortFilterProxyModel::data(index, role);
-}
+private:
+    QModelIndex m_currentHoverDropIdx;
+    void clearDropHighlight();
 >>>>>>> REPLACE
 ```
 
-### 3.4 `src/ui/ColumnViewWidget.h`
-
-```
+```gdiff
 <<<<<<< SEARCH
-    void clearSelection();
-    void setFilterState(const FilterState& state);
-    void applySort(int sortType, Qt::SortOrder sortOrder);
-=======
-    void clearSelection();
-    void setFilterState(const FilterState& state);
-    void setExpandedChildPath(const QString& childPath);
-    void applySort(int sortType, Qt::SortOrder sortOrder);
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    void dismissSubColumns(int fromIndex);
-    ColumnViewPane* appendColumn(const QString& path);
-    void clearOtherSelections(int activePaneIdx);
-=======
-    void dismissSubColumns(int fromIndex);
-    ColumnViewPane* appendColumn(const QString& path);
-    void updateExpandedParentStates();
-    void clearOtherSelections(int activePaneIdx);
->>>>>>> REPLACE
-```
-
-### 3.5 `src/ui/ColumnViewWidget.cpp`
-
-```
-<<<<<<< SEARCH
-void ColumnViewPane::setFilterState(const FilterState& state) {
-    if (m_proxyModel) {
-        m_proxyModel->currentFilter = state;
-        m_proxyModel->updateFilter();
-    }
-}
-=======
-void ColumnViewPane::setFilterState(const FilterState& state) {
-    if (m_proxyModel) {
-        m_proxyModel->currentFilter = state;
-        m_proxyModel->updateFilter();
+void DropListView::dragMoveEvent(QDragMoveEvent* event) {
+    if (!ViewDragDropHelper::handleDragMove(this, event)) {
+        QListView::dragMoveEvent(event);
     }
 }
 
-void ColumnViewPane::setExpandedChildPath(const QString& childPath) {
-    if (m_proxyModel) {
-        m_proxyModel->setExpandedChildPath(childPath);
+void DropListView::dropEvent(QDropEvent* event) {
+    QStringList paths;
+    QModelIndex targetIdx;
+    if (ViewDragDropHelper::handleDrop(this, event, paths, targetIdx)) {
+        emit pathsDropped(paths, targetIdx);
+    } else {
+        QListView::dropEvent(event);
     }
-    if (m_listView && m_listView->viewport()) {
-        m_listView->viewport()->update();
+}
+=======
+void DropListView::dragMoveEvent(QDragMoveEvent* event) {
+    QModelIndex hoverIdx = indexAt(event->position().toPoint());
+    if (m_currentHoverDropIdx != hoverIdx) {
+        clearDropHighlight();
+        m_currentHoverDropIdx = hoverIdx;
+        if (m_currentHoverDropIdx.isValid() && model()) {
+            const_cast<QAbstractItemModel*>(model())->setData(m_currentHoverDropIdx, true, IsDropTargetRole);
+            viewport()->update();
+        }
+    }
+
+    if (!ViewDragDropHelper::handleDragMove(this, event)) {
+        QListView::dragMoveEvent(event);
+    }
+}
+
+void DropListView::dragLeaveEvent(QDragLeaveEvent* event) {
+    clearDropHighlight();
+    QListView::dragLeaveEvent(event);
+}
+
+void DropListView::clearDropHighlight() {
+    if (m_currentHoverDropIdx.isValid() && model()) {
+        const_cast<QAbstractItemModel*>(model())->setData(m_currentHoverDropIdx, false, IsDropTargetRole);
+        m_currentHoverDropIdx = QModelIndex();
+        viewport()->update();
+    }
+}
+
+void DropListView::dropEvent(QDropEvent* event) {
+    clearDropHighlight();
+    QStringList paths;
+    QModelIndex targetIdx;
+    if (ViewDragDropHelper::handleDrop(this, event, paths, targetIdx)) {
+        emit pathsDropped(paths, targetIdx);
+    } else {
+        QListView::dropEvent(event);
     }
 }
 >>>>>>> REPLACE
 ```
 
-```
+### 3. `src/ui/ColumnViewWidget.cpp`
+Connect `pathsDropped` from each column pane to `ContentPanel::onPathsDropped` and update parent folder secondary highlight flags.
+
+```gdiff
 <<<<<<< SEARCH
-void ColumnViewWidget::dismissSubColumns(int fromIndex) {
-    while (m_panes.size() > fromIndex + 1) {
-        ColumnViewPane* pane = m_panes.takeLast();
-        m_layout->removeWidget(pane);
-        pane->deleteLater();
+    if (m_contentPanel) {
+        // 保留 installEventFilter 用于捕获按键快捷键 (m_keyHandler)
+        m_listView->installEventFilter(m_contentPanel);
+        connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
     }
-    updatePaneWidths();
 =======
-void ColumnViewWidget::dismissSubColumns(int fromIndex) {
-    while (m_panes.size() > fromIndex + 1) {
-        ColumnViewPane* pane = m_panes.takeLast();
-        m_layout->removeWidget(pane);
-        pane->deleteLater();
+    if (m_contentPanel) {
+        // 保留 installEventFilter 用于捕获按键快捷键 (m_keyHandler)
+        m_listView->installEventFilter(m_contentPanel);
+        connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
+        connect(m_listView, &DropListView::pathsDropped, m_contentPanel, &ContentPanel::onPathsDropped);
     }
-    updatePaneWidths();
-    updateExpandedParentStates();
 >>>>>>> REPLACE
 ```
 
-```
-<<<<<<< SEARCH
-    m_panes.append(pane);
-    m_layout->addWidget(pane);
-    updatePaneWidths();
-=======
-    m_panes.append(pane);
-    m_layout->addWidget(pane);
-    updatePaneWidths();
-    updateExpandedParentStates();
->>>>>>> REPLACE
-```
-
-```
+```gdiff
 <<<<<<< SEARCH
 void ColumnViewWidget::updatePaneWidths() {
-    if (m_panes.isEmpty()) return;
-    int defaultWidth = 230;
-    for (auto* pane : m_panes) {
-        pane->setFixedWidth(defaultWidth);
-        pane->setMinimumWidth(defaultWidth);
-        pane->setMaximumWidth(defaultWidth);
-    }
-}
 =======
-void ColumnViewWidget::updateExpandedParentStates() {
-    for (int i = 0; i < m_panes.size(); ++i) {
-        if (!m_panes[i]) continue;
-        if (i < m_panes.size() - 1 && m_panes[i + 1]) {
-            m_panes[i]->setExpandedChildPath(m_panes[i + 1]->currentPath());
-        } else {
-            m_panes[i]->setExpandedChildPath("");
+void ColumnViewWidget::updateParentHighlights() {
+    for (int i = 0; i < m_panes.size() - 1; ++i) {
+        ColumnViewPane* parentPane = m_panes[i];
+        ColumnViewPane* childPane = m_panes[i + 1];
+        if (!parentPane || !childPane || !parentPane->proxyModel()) continue;
+
+        QString childPath = QDir::toNativeSeparators(QDir::cleanPath(childPane->currentPath()));
+        FilterProxyModel* model = parentPane->proxyModel();
+
+        for (int r = 0; r < model->rowCount(); ++r) {
+            QModelIndex idx = model->index(r, 0);
+            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+            bool isExpandedParent = (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
+            model->setData(idx, isExpandedParent, IsParentExpandedRole);
         }
     }
 }
 
 void ColumnViewWidget::updatePaneWidths() {
-    if (m_panes.isEmpty()) return;
-    int defaultWidth = 230;
-    for (auto* pane : m_panes) {
-        pane->setFixedWidth(defaultWidth);
-        pane->setMinimumWidth(defaultWidth);
-        pane->setMaximumWidth(defaultWidth);
-    }
-}
 >>>>>>> REPLACE
 ```
 
-### 3.6 `src/ui/ColumnItemDelegate.cpp`
+### 4. `src/ui/controllers/ContentContextMenu.cpp`
+Enable right-click menu context resolution for column panes so "Paste" is active when valid data exists in clipboard.
 
-```
+```gdiff
 <<<<<<< SEARCH
-    bool selected = (option.state & QStyle::State_Selected);
-    bool hover = (option.state & QStyle::State_MouseOver);
-
-    // 1. 背景绘制
-    QColor bg;
-    if (selected) {
-        bg = QColor("#378ADD");
-        bg.setAlphaF(0.18f);
-    } else if (hover) {
-        bg = QColor("#2A2D2E");
-    } else {
-        bg = QColor("#1E1E1E");
-    }
+    QString currentPath = m_panel->currentPath();
 =======
-    bool selected = (option.state & QStyle::State_Selected);
-    bool hover = (option.state & QStyle::State_MouseOver);
-    bool isExpandedParent = index.data(IsExpandedParentRole).toBool();
+    QString currentPath = m_panel->currentPath();
 
-    // 1. 背景绘制
-    QColor bg;
-    if (selected) {
-        // 直接选中项：标准蓝色高亮
-        bg = QColor("#378ADD");
-        bg.setAlphaF(0.18f);
-    } else if (isExpandedParent) {
-        // 展开右侧子列的父级文件夹（非直接选中）：次级高亮背景 (10% alpha 透明度高亮)
-        bg = QColor("#378ADD");
-        bg.setAlphaF(0.10f);
-    } else if (hover) {
-        bg = QColor("#2A2D2E");
-    } else {
-        bg = QColor("#1E1E1E");
-    }
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    // 6. 如果是文件夹，最右侧绘制向右箭头 chevron_right
-    if (isDir) {
-        QRect arrowRect(option.rect.right() - 20, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);
-        QColor arrowColor = selected ? QColor("#FFFFFF") : (isEmpty ? QColor("#41F2F2") : QColor("#888888"));
-        UiHelper::getIcon("chevron_right", arrowColor, 14).paint(painter, arrowRect, Qt::AlignCenter);
-    }
-=======
-    // 6. 如果是文件夹，最右侧绘制向右箭头 chevron_right
-    if (isDir) {
-        QRect arrowRect(option.rect.right() - 20, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);
-        QColor arrowColor = (selected || isExpandedParent) ? QColor("#FFFFFF") : (isEmpty ? QColor("#41F2F2") : QColor("#888888"));
-        UiHelper::getIcon("chevron_right", arrowColor, 14).paint(painter, arrowRect, Qt::AlignCenter);
+    // 如果上下文菜单产生自 ColumnViewPane 中的 DropListView，动态修正 currentPath 为该 ColumnViewPane 的物理目录
+    if (view && view->objectName() == "ColumnViewPaneListView") {
+        QWidget* parentWidget = view->parentWidget();
+        while (parentWidget && parentWidget->objectName() != "ColumnViewPane") {
+            parentWidget = parentWidget->parentWidget();
+        }
+        if (parentWidget) {
+            QString panePath = parentWidget->property("panePath").toString();
+            if (!panePath.isEmpty()) {
+                currentPath = panePath;
+            }
+        }
     }
 >>>>>>> REPLACE
 ```
 
 ---
 
-## 4. Build & Verification Steps（编译命令与验证方法）
+## Build & Verification Steps
 
-### 4.1 编译验证
-在构建目录下执行 CMake 编译构建：
-```bash
-mkdir -p build && cd build
-cmake ..
-make -j$(nproc)
-```
+1. **Build Verification**:
+   - Run `mkdir -p build && cd build && cmake .. && make -j$(nproc)` to ensure clean compilation without MOC or symbol errors.
 
-### 4.2 单元与交互功能验证
-1. 打开应用并切换至分栏视图（ColumnView）。
-2. 在第 ② 列双击/点击打开文件夹 `测试-2`，右侧出现第 ① 列。
-3. 在第 ② 列中点击任意文件（如 `BQ 标签_47906.eps`）。
-4. 观察第 ② 列：
-   - 当前选中的文件 `BQ 标签_47906.eps` 显示深蓝色直接选中高亮（alpha 0.18）。
-   - 文件夹 `测试-2` 持续保持次级高亮背景（alpha 0.10），且右侧 chevron 箭头保持白色高亮，视觉上清晰指示出第 ① 列数据来自第 ② 列的 `测试-2` 文件夹。
+2. **Functional & Visual Verification**:
+   - **Cross-Column Drag & Drop**: Drag a file from Column ① to subfolder item X in Column ②. Verify that subfolder X turns blue (`#005A9E`) during drag over, and releasing moves the file into subfolder X.
+   - **Drop to Blank Space in Parent/Child Column**: Drag a file from Column ② to blank space in Column ①. Verify the file is moved to Column ①'s folder directory.
+   - **Right-Click Paste**: Copy a file using Ctrl+C, right-click blank space in any Column Pane. Verify that "粘贴" (Paste) action is active and usable.
+   - **Secondary Parent Highlight**: Click a file in Column ③. Verify that the parent folder in Column ② and grandparent folder in Column ① maintain visual secondary background highlights (`#334455`).

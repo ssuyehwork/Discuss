@@ -67,6 +67,20 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     QFileInfo itemInfo(path);
 
     QString currentPath = m_panel->currentPath();
+
+    if (view && view->objectName() == "ColumnViewPaneListView") {
+        QWidget* parentWidget = view->parentWidget();
+        while (parentWidget && parentWidget->objectName() != "ColumnViewPane") {
+            parentWidget = parentWidget->parentWidget();
+        }
+        if (parentWidget) {
+            ColumnViewPane* pane = qobject_cast<ColumnViewPane*>(parentWidget);
+            if (pane && !pane->currentPath().isEmpty()) {
+                currentPath = pane->currentPath();
+            }
+        }
+    }
+
     QString currentCategoryType = m_panel->getCurrentCategoryType();
 
     bool isComputerRoot = (currentPath.isEmpty() || currentPath == "computer://");
