@@ -28,6 +28,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     layout->setSpacing(0);
 
     m_model = new DiskItemModel(this);
+    m_model->setCurrentPath(path);
     m_proxyModel = new FilterProxyModel(this);
     m_proxyModel->setSourceModel(m_model);
 

@@ -55,6 +55,7 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
 
     m_diskModel = new DiskItemModel(this);
     m_model = m_diskModel;
+    m_model->setCurrentPath(m_currentPath);
 
     m_proxyModel = new FilterProxyModel(this);
     m_proxyModel->setSourceModel(m_model);
@@ -252,6 +253,7 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
 void ContentPanel::ensureSourceModelIsDiskModel() {
     if (m_model != m_diskModel) {
         m_model = m_diskModel;
+        m_model->setCurrentPath(m_currentPath);
         m_proxyModel->setSourceModel(m_model);
     }
 }
