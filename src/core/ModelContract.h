@@ -31,6 +31,7 @@ enum CommonRole {
     HasThumbnailRole    = Qt::UserRole + 202, // 是否拥有物理缩略图
     PalettesRole        = Qt::UserRole + 203, // 物理色板数据
     CountRole           = Qt::UserRole + 204, // 子项数量
+    IsExpandedParentRole= Qt::UserRole + 205, // 是否为展开右侧子列的父级文件夹
 
     // 磁盘回收站专用角色
     IsDiskTrashRole     = Qt::UserRole + 208, // 是否是磁盘回收站项目
