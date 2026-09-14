@@ -26,8 +26,10 @@
 #include "../core/ClipboardService.h"
 #include "../meta/MediaExtractorPipeline.h"
 #include "../util/ThumbnailPipelineService.h"
+#include "../core/NavigationService.h"
 
 #include <QHBoxLayout>
+#include <QMouseEvent>
 #include <QLabel>
 #include <QHeaderView>
 #include <QScrollBar>
@@ -224,6 +226,23 @@ void ContentPanel::initListView() {
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
+    if (event && event->type() == QEvent::MouseButtonDblClick) {
+        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
+            QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
+            if (!view && obj) {
+                view = qobject_cast<QAbstractItemView*>(obj->parent());
+            }
+            if (view) {
+                QModelIndex idx = view->indexAt(mouseEvent->pos());
+                if (!idx.isValid()) {
+                    NavigationService::instance().goUp();
+                    return true;
+                }
+            }
+        }
+    }
+
     if (m_keyHandler && m_keyHandler->handleEvent(obj, event)) return true;
     return QFrame::eventFilter(obj, event);
 }
