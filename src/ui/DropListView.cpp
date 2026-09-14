@@ -1,5 +1,6 @@
 #include "DropListView.h"
 #include "ViewDragDropHelper.h"
+#include <QMouseEvent>
 
 namespace QuarkMeta {
 
@@ -32,6 +33,18 @@ void DropListView::dropEvent(QDropEvent* event) {
 
 void DropListView::startDrag(Qt::DropActions supportedActions) {
     ViewDragDropHelper::executeStartDrag(this, supportedActions);
+}
+
+void DropListView::mouseDoubleClickEvent(QMouseEvent* event) {
+    if (event && event->button() == Qt::LeftButton) {
+        QModelIndex idx = indexAt(event->pos());
+        if (!idx.isValid()) {
+            emit blankSpaceDoubleClicked();
+            event->accept();
+            return;
+        }
+    }
+    QListView::mouseDoubleClickEvent(event);
 }
 
 } // namespace QuarkMeta

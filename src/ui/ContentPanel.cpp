@@ -226,41 +226,7 @@ void ContentPanel::initListView() {
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
-    if (event && event->type() == QEvent::MouseButtonDblClick) {
-        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
-        if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
-            if (m_currentViewMode == ColumnView && m_columnView) {
-                QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
-                if (!view && obj) {
-                    view = qobject_cast<QAbstractItemView*>(obj->parent());
-                }
-                if (view) {
-                    QModelIndex idx = view->indexAt(mouseEvent->pos());
-                    if (!idx.isValid()) {
-                        m_columnView->goUpColumn();
-                        return true;
-                    }
-                } else {
-                    // 匹配区域 ⑥ 背景留白处 (ColumnViewWidget及其container/viewport)
-                    m_columnView->goUpColumn();
-                    return true;
-                }
-            } else {
-                QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
-                if (!view && obj) {
-                    view = qobject_cast<QAbstractItemView*>(obj->parent());
-                }
-                if (view) {
-                    QModelIndex idx = view->indexAt(mouseEvent->pos());
-                    if (!idx.isValid()) {
-                        NavigationService::instance().goUp();
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-
+    // 专门用于捕获并交由 ContentKeyHandler 处理全局按键快捷键（Ctrl+C/V/F2/Delete等）
     if (m_keyHandler && m_keyHandler->handleEvent(obj, event)) return true;
     return QFrame::eventFilter(obj, event);
 }
@@ -474,7 +440,7 @@ void ContentPanel::search(const QString& query) {
 
 void ContentPanel::refreshAll() {
     if (m_currentViewMode == ColumnView) {
-        if (m_columnView) m_columnView->refreshActiveColumn();
+        if (m_columnView) m_columnView->refreshAllColumns();
         return;
     }
     if (!m_currentPath.isEmpty() && m_currentPath != "computer://") loadDirectory(m_currentPath, m_isRecursive);
