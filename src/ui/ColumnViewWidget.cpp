@@ -303,6 +303,8 @@ void ColumnViewWidget::setRootPath(const QString& path) {
         m_panes.last()->selectItemByPath(targetFilePath);
     }
 
+    m_activePaneIndex = m_panes.size() - 1;
+
     updatePaneWidths();
 }
 
@@ -348,12 +350,9 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
         if (pane == rightmostPane()) {
             emit activeColumnRecordsChanged(records);
-        }
-    });
-
-    connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>&) {
-        if ((pane == rightmostPane() || pane == activePane()) && m_contentPanel) {
-            m_contentPanel->recalculateAndEmitStats();
+            if (m_contentPanel) {
+                m_contentPanel->recalculateAndEmitStats();
+            }
         }
     });
 
