@@ -1,4 +1,5 @@
 #include "DiskItemModel.h"
+#include "../../core/ModelContract.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
 #include "MetaCacheDecorator.h"
@@ -410,6 +411,23 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
         emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
         return true;
     }
+
+    if (role == IsParentExpandedRole) {
+        bool val = value.toBool();
+        if (record.isParentExpanded != val) {
+            record.isParentExpanded = val;
+            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
+            return true;
+        }
+    } else if (role == IsDropTargetRole) {
+        bool val = value.toBool();
+        if (record.isDropTarget != val) {
+            record.isDropTarget = val;
+            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -580,6 +598,10 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         if (record.width > 0 && record.height > 0) return (double)record.width / record.height;
         double ratio = m_aspectRatios.value(QDir::toNativeSeparators(path), 1.0);
         return ratio > 0.0 ? ratio : 1.0;
+    } else if (role == IsParentExpandedRole) {
+        return record.isParentExpanded;
+    } else if (role == IsDropTargetRole) {
+        return record.isDropTarget;
     } else if (role == HasThumbnailRole) {
         static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
         QString ext = record.suffix.toLower();

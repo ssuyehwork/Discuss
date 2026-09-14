@@ -1,4 +1,5 @@
 #include "ColumnItemDelegate.h"
+#include "../core/ModelContract.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "CardPainterHelper.h"
@@ -28,16 +29,18 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
 
     bool selected = (option.state & QStyle::State_Selected);
     bool hover = (option.state & QStyle::State_MouseOver);
-    bool isExpandedParent = index.data(IsExpandedParentRole).toBool();
+    bool isParentExpanded = index.data(IsParentExpandedRole).toBool();
+    bool isDropTarget = index.data(IsDropTargetRole).toBool();
 
     // 1. 背景绘制
     QColor bg;
-    if (selected) {
+    if (isDropTarget) {
+        bg = QColor("#005A9E");
+    } else if (selected) {
         bg = QColor("#378ADD");
         bg.setAlphaF(0.18f);
-    } else if (isExpandedParent) {
-        bg = QColor("#378ADD");
-        bg.setAlphaF(0.10f);
+    } else if (isParentExpanded) {
+        bg = QColor("#334455");
     } else if (hover) {
         bg = QColor("#2A2D2E");
     } else {
@@ -125,7 +128,7 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
     // 6. 如果是文件夹，最右侧绘制向右箭头 chevron_right
     if (isDir) {
         QRect arrowRect(option.rect.right() - 20, option.rect.top() + (option.rect.height() - 14) / 2, 14, 14);
-        QColor arrowColor = (selected || isExpandedParent) ? QColor("#FFFFFF") : (isEmpty ? QColor("#41F2F2") : QColor("#888888"));
+        QColor arrowColor = selected ? QColor("#FFFFFF") : (isEmpty ? QColor("#41F2F2") : QColor("#888888"));
         UiHelper::getIcon("chevron_right", arrowColor, 14).paint(painter, arrowRect, Qt::AlignCenter);
     }
 

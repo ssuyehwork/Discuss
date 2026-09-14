@@ -25,7 +25,6 @@ public:
     void selectItemByPath(const QString& targetPath);
     void clearSelection();
     void setFilterState(const FilterState& state);
-    void setExpandedChildPath(const QString& childPath);
     void applySort(int sortType, Qt::SortOrder sortOrder);
 
     DropListView* listView() const { return m_listView; }
@@ -86,9 +85,9 @@ protected:
 private:
     void dismissSubColumns(int fromIndex);
     ColumnViewPane* appendColumn(const QString& path);
-    void updateExpandedParentStates();
     void clearOtherSelections(int activePaneIdx);
     void updatePaneWidths();
+    void updateParentHighlights();
 
     ContentPanel* m_contentPanel = nullptr;
     FilterState m_currentFilter;

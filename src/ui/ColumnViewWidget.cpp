@@ -60,6 +60,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         // 保留 installEventFilter 用于捕获按键快捷键 (m_keyHandler)
         m_listView->installEventFilter(m_contentPanel);
         connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
+        connect(m_listView, &DropListView::pathsDropped, m_contentPanel, &ContentPanel::onPathsDropped);
     }
 
     connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ColumnViewPane::selectionChanged);
@@ -84,15 +85,6 @@ void ColumnViewPane::setFilterState(const FilterState& state) {
     if (m_proxyModel) {
         m_proxyModel->currentFilter = state;
         m_proxyModel->updateFilter();
-    }
-}
-
-void ColumnViewPane::setExpandedChildPath(const QString& childPath) {
-    if (m_proxyModel) {
-        m_proxyModel->setExpandedChildPath(childPath);
-    }
-    if (m_listView && m_listView->viewport()) {
-        m_listView->viewport()->update();
     }
 }
 
@@ -333,6 +325,7 @@ void ColumnViewWidget::setRootPath(const QString& path) {
     m_activePaneIndex = m_panes.size() - 1;
 
     updatePaneWidths();
+    updateParentHighlights();
 }
 
 void ColumnViewWidget::clearAllColumns() {
@@ -346,7 +339,7 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
         pane->deleteLater();
     }
     updatePaneWidths();
-    updateExpandedParentStates();
+    updateParentHighlights();
     for (int i = 0; i < m_panes.size(); ++i) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
@@ -415,7 +408,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     m_panes.append(pane);
     m_layout->addWidget(pane);
     updatePaneWidths();
-    updateExpandedParentStates();
+    updateParentHighlights();
     for (int i = 0; i < m_panes.size(); ++i) {
         if (i == m_panes.size() - 1) {
             m_panes[i]->setFilterState(m_currentFilter);
@@ -435,13 +428,20 @@ void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
     }
 }
 
-void ColumnViewWidget::updateExpandedParentStates() {
+void ColumnViewWidget::updateParentHighlights() {
     for (int i = 0; i < m_panes.size(); ++i) {
-        if (!m_panes[i]) continue;
-        if (i < m_panes.size() - 1 && m_panes[i + 1]) {
-            m_panes[i]->setExpandedChildPath(m_panes[i + 1]->currentPath());
-        } else {
-            m_panes[i]->setExpandedChildPath("");
+        ColumnViewPane* parentPane = m_panes[i];
+        if (!parentPane || !parentPane->proxyModel()) continue;
+
+        ColumnViewPane* childPane = (i + 1 < m_panes.size()) ? m_panes[i + 1] : nullptr;
+        QString childPath = childPane ? QDir::toNativeSeparators(QDir::cleanPath(childPane->currentPath())) : "";
+        FilterProxyModel* model = parentPane->proxyModel();
+
+        for (int r = 0; r < model->rowCount(); ++r) {
+            QModelIndex idx = model->index(r, 0);
+            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+            bool isExpandedParent = !childPath.isEmpty() && (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
+            model->setData(idx, isExpandedParent, IsParentExpandedRole);
         }
     }
 }
