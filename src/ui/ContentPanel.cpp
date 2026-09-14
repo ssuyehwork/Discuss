@@ -55,6 +55,7 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
 
     m_diskModel = new DiskItemModel(this);
     m_model = m_diskModel;
+    m_model->setCurrentPath(m_currentPath);
 
     m_proxyModel = new FilterProxyModel(this);
     m_proxyModel->setSourceModel(m_model);
@@ -229,33 +230,17 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
     if (event && event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
-            if (m_currentViewMode == ColumnView && m_columnView) {
-                QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
-                if (!view && obj) {
-                    view = qobject_cast<QAbstractItemView*>(obj->parent());
-                }
-                if (view) {
-                    QModelIndex idx = view->indexAt(mouseEvent->pos());
-                    if (!idx.isValid()) {
-                        m_columnView->goUpColumn();
-                        return true;
-                    }
-                } else {
-                    // 匹配区域 ⑥ 背景留白处 (ColumnViewWidget及其container/viewport)
-                    m_columnView->goUpColumn();
+            QAbstractItemView* view = nullptr;
+            if (m_gridView && (obj == m_gridView || obj == m_gridView->viewport())) {
+                view = m_gridView;
+            } else if (m_treeView && (obj == m_treeView || obj == m_treeView->viewport())) {
+                view = m_treeView;
+            }
+            if (view) {
+                QModelIndex idx = view->indexAt(mouseEvent->pos());
+                if (!idx.isValid()) {
+                    NavigationService::instance().goUp();
                     return true;
-                }
-            } else {
-                QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
-                if (!view && obj) {
-                    view = qobject_cast<QAbstractItemView*>(obj->parent());
-                }
-                if (view) {
-                    QModelIndex idx = view->indexAt(mouseEvent->pos());
-                    if (!idx.isValid()) {
-                        NavigationService::instance().goUp();
-                        return true;
-                    }
                 }
             }
         }
@@ -268,6 +253,7 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
 void ContentPanel::ensureSourceModelIsDiskModel() {
     if (m_model != m_diskModel) {
         m_model = m_diskModel;
+        m_model->setCurrentPath(m_currentPath);
         m_proxyModel->setSourceModel(m_model);
     }
 }
@@ -474,7 +460,7 @@ void ContentPanel::search(const QString& query) {
 
 void ContentPanel::refreshAll() {
     if (m_currentViewMode == ColumnView) {
-        if (m_columnView) m_columnView->refreshActiveColumn();
+        if (m_columnView) m_columnView->refreshAllColumns();
         return;
     }
     if (!m_currentPath.isEmpty() && m_currentPath != "computer://") loadDirectory(m_currentPath, m_isRecursive);
@@ -523,8 +509,12 @@ void ContentPanel::updateStatusBarStats() {
 
 void ContentPanel::recalculateAndEmitStats() {
     std::vector<ItemRecord> records;
-    if (m_currentViewMode == ColumnView && m_columnView && m_columnView->activePane() && m_columnView->activePane()->model()) {
-        records = m_columnView->activePane()->model()->allRecords();
+    if (m_currentViewMode == ColumnView && m_columnView) {
+        ColumnViewPane* pane = m_columnView->rightmostPane();
+        if (!pane) pane = m_columnView->activePane();
+        if (pane && pane->model()) {
+            records = pane->model()->allRecords();
+        }
     } else if (m_model) {
         records = m_model->allRecords();
     }
@@ -608,6 +598,15 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
     int target = curIdx + delta;
     if (target < 0 || target >= proxy->rowCount()) return QString();
     return proxy->index(target, 0).data(PathRole).toString();
+}
+
+QSortFilterProxyModel* ContentPanel::getActiveProxyModel() const {
+    if (m_currentViewMode == ColumnView && m_columnView && m_columnView->activePane()) {
+        if (m_columnView->activePane()->proxyModel()) {
+            return m_columnView->activePane()->proxyModel();
+        }
+    }
+    return m_proxyModel;
 }
 
 QStringList ContentPanel::getSelectedPaths() const {

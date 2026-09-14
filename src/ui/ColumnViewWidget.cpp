@@ -28,11 +28,13 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     layout->setSpacing(0);
 
     m_model = new DiskItemModel(this);
+    m_model->setCurrentPath(path);
     m_proxyModel = new FilterProxyModel(this);
     m_proxyModel->setSourceModel(m_model);
 
     m_listView = new DropListView(this);
     m_listView->setObjectName("ColumnViewPaneListView");
+    m_listView->setFocusPolicy(Qt::StrongFocus);
     m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_listView->setDragEnabled(true);
@@ -49,9 +51,14 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setItemDelegate(delegate);
     layout->addWidget(m_listView);
 
+    connect(m_listView, &DropListView::blankSpaceDoubleClicked, this, [this]() {
+        int paneIdx = property("paneIndex").toInt();
+        emit blankSpaceDoubleClicked(paneIdx);
+    });
+
     if (m_contentPanel) {
+        // 保留 installEventFilter 用于捕获按键快捷键 (m_keyHandler)
         m_listView->installEventFilter(m_contentPanel);
-        m_listView->viewport()->installEventFilter(m_contentPanel);
         connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
     }
 
@@ -128,7 +135,14 @@ void ColumnViewPane::loadDirectory() {
     QPointer<ColumnViewPane> weakSelf(this);
     (void)QtConcurrent::run([weakSelf, path]() {
         if (!weakSelf) return;
-        std::vector<ItemRecord> items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
+        std::vector<ItemRecord> items;
+        if (path.isEmpty() || path == "computer://") {
+            for (const QFileInfo& drive : QDir::drives()) {
+                items.push_back(ItemRecord::create(drive.absolutePath()));
+            }
+        } else {
+            items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
+        }
         MetaCacheDecorator::decorate(items);
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
@@ -164,6 +178,9 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
 
     setWidget(m_container);
 
+    // 监听背景留白区域的双击事件，用于触发右侧空白区域双击回退
+    viewport()->installEventFilter(this);
+    m_container->installEventFilter(this);
     if (m_contentPanel) {
         installEventFilter(m_contentPanel);
         viewport()->installEventFilter(m_contentPanel);
@@ -252,13 +269,22 @@ void ColumnViewWidget::applyFilterState(const FilterState& state) {
 
 void ColumnViewWidget::applySort(int sortType, Qt::SortOrder sortOrder) {
     for (auto* pane : m_panes) {
-        if (pane) pane->applySort(sortType, sortOrder);
+        if (pane) {
+            pane->applySort(sortType, sortOrder);
+        }
     }
 }
 
 void ColumnViewWidget::setRootPath(const QString& path) {
     clearAllColumns();
     if (path.isEmpty()) return;
+
+    if (path == "computer://") {
+        appendColumn("computer://");
+        m_activePaneIndex = 0;
+        updatePaneWidths();
+        return;
+    }
 
     QString targetFilePath;
     QString dirPath = path;
@@ -295,6 +321,8 @@ void ColumnViewWidget::setRootPath(const QString& path) {
         m_panes.last()->selectItemByPath(targetFilePath);
     }
 
+    m_activePaneIndex = m_panes.size() - 1;
+
     updatePaneWidths();
 }
 
@@ -326,10 +354,12 @@ void ColumnViewWidget::dismissSubColumns(int fromIndex) {
 ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
-    if (m_contentPanel) {
-        pane->installEventFilter(m_contentPanel);
-    }
     pane->setProperty("paneIndex", newIdx);
+    m_activePaneIndex = newIdx;
+
+    connect(pane, &ColumnViewPane::blankSpaceDoubleClicked, this, [this](int paneIdx) {
+        goUpColumnFromIndex(paneIdx);
+    });
     if (m_contentPanel) {
         pane->applySort(static_cast<int>(m_contentPanel->currentSortType()), m_contentPanel->currentSortOrder());
     }
@@ -338,12 +368,9 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>& records) {
         if (pane == rightmostPane()) {
             emit activeColumnRecordsChanged(records);
-        }
-    });
-
-    connect(pane, &ColumnViewPane::recordsLoaded, this, [this, pane](const std::vector<ItemRecord>&) {
-        if (pane == activePane() && m_contentPanel) {
-            m_contentPanel->recalculateAndEmitStats();
+            if (m_contentPanel) {
+                m_contentPanel->recalculateAndEmitStats();
+            }
         }
     });
 
@@ -356,7 +383,6 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
-        m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
         // 保持父列高亮：仅清空 paneIdx 右侧深层列的选区，保留 paneIdx 及其左侧父列的高亮
         for (int i = paneIdx + 1; i < m_panes.size(); ++i) {
@@ -413,10 +439,29 @@ void ColumnViewWidget::resizeEvent(QResizeEvent* event) {
     updatePaneWidths();
 }
 
+bool ColumnViewWidget::eventFilter(QObject* obj, QEvent* event) {
+    if ((obj == viewport() || obj == m_container) && event && event->type() == QEvent::MouseButtonDblClick) {
+        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
+            goUpColumnFromIndex(m_panes.size() - 1);
+            return true;
+        }
+    }
+    return QScrollArea::eventFilter(obj, event);
+}
+
 void ColumnViewWidget::refreshActiveColumn() {
     ColumnViewPane* pane = activePane();
     if (pane) {
         pane->loadDirectory();
+    }
+}
+
+void ColumnViewWidget::refreshAllColumns() {
+    for (auto* pane : m_panes) {
+        if (pane) {
+            pane->loadDirectory();
+        }
     }
 }
 
@@ -432,16 +477,38 @@ void ColumnViewWidget::updateMetadataForPath(const QString& path) {
 }
 
 void ColumnViewWidget::goUpColumn() {
-    if (m_panes.size() > 1) {
-        dismissSubColumns(m_panes.size() - 2);
+    goUpColumnFromIndex(m_panes.size() - 1);
+}
+
+void ColumnViewWidget::goUpColumnFromIndex(int paneIndex) {
+    if (m_panes.isEmpty()) {
+        NavigationService::instance().goUp();
+        return;
+    }
+
+    if (paneIndex >= m_panes.size() - 1) {
+        // 双击发生在最右侧列或背景留白处：逐级关闭最右侧列
+        if (m_panes.size() > 1) {
+            dismissSubColumns(m_panes.size() - 2);
+            ColumnViewPane* newActive = rightmostPane();
+            if (newActive) {
+                m_activePaneIndex = m_panes.size() - 1;
+                emit pathNavigated(newActive->currentPath());
+                emit selectionChanged();
+            }
+        } else {
+            // 仅剩最后一列（如盘符根目录 G:/）时，降级退回“此电脑”(computer://)
+            NavigationService::instance().goUp();
+        }
+    } else if (paneIndex >= 0) {
+        // 双击发生在中间父列的空白处：裁撤该列右侧的所有子列并保持当前父列高亮
+        dismissSubColumns(paneIndex);
         ColumnViewPane* newActive = rightmostPane();
         if (newActive) {
             m_activePaneIndex = m_panes.size() - 1;
             emit pathNavigated(newActive->currentPath());
             emit selectionChanged();
         }
-    } else {
-        NavigationService::instance().goUp();
     }
 }
 

@@ -23,6 +23,10 @@ protected:
 
 signals:
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+    void blankSpaceDoubleClicked();
+
+protected:
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
 };
 
 } // namespace QuarkMeta

@@ -203,7 +203,7 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
             auto selectedIndexes = view->selectionModel()->selectedIndexes();
             for (const auto& selIdx : selectedIndexes) {
                 if (selIdx.column() == 0) {
-                    m_panel->getProxyModel()->setData(selIdx, hitVal, RatingRole);
+                    m_panel->getActiveProxyModel()->setData(selIdx, hitVal, RatingRole);
                 }
             }
 
@@ -238,7 +238,7 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
             auto selectedRows = treeView->selectionModel()->selectedRows();
             for (const auto& selRow : selectedRows) {
                 QModelIndex targetIdx = treeView->model()->index(selRow.row(), 0, selRow.parent());
-                m_panel->getProxyModel()->setData(targetIdx, hitStar, RatingRole);
+                m_panel->getActiveProxyModel()->setData(targetIdx, hitStar, RatingRole);
             }
 
             QAbstractItemView::EditTriggers currentTriggers = treeView->editTriggers();
@@ -266,7 +266,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         int rating = keyEvent->key() - Qt::Key_0;
         auto indexes = view->selectionModel()->selectedIndexes();
         for (const auto& idx : indexes) {
-            if (idx.column() == 0) m_panel->getProxyModel()->setData(idx, rating, RatingRole);
+            if (idx.column() == 0) m_panel->getActiveProxyModel()->setData(idx, rating, RatingRole);
         }
         return true;
     }
@@ -277,7 +277,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         for (const QModelIndex& idx : indexes) {
             if (idx.column() == 0) {
                 bool current = idx.data(IsLockedRole).toBool();
-                m_panel->getProxyModel()->setData(idx, !current, IsLockedRole);
+                m_panel->getActiveProxyModel()->setData(idx, !current, IsLockedRole);
             }
         }
         return true;
@@ -294,10 +294,10 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         auto indexes = view->selectionModel()->selectedIndexes();
         for (const auto& idx : indexes) {
             if (idx.column() == 0) {
-                m_panel->getProxyModel()->setData(idx, colorValue, ColorRole);
+                m_panel->getActiveProxyModel()->setData(idx, colorValue, ColorRole);
                 QString path = idx.data(PathRole).toString();
                 QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
-                m_panel->getProxyModel()->setData(idx, coloredIcon, Qt::DecorationRole);
+                m_panel->getActiveProxyModel()->setData(idx, coloredIcon, Qt::DecorationRole);
             }
         }
         return true;
@@ -347,7 +347,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             int count = 0;
             for (const auto& targetIdx : indexes) {
                 if (targetIdx.column() == 0) {
-                    m_panel->getProxyModel()->setData(targetIdx, copiedTags, TagsRole);
+                    m_panel->getActiveProxyModel()->setData(targetIdx, copiedTags, TagsRole);
                     count++;
                 }
             }
@@ -374,15 +374,15 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         for (const auto& targetIdx : indexes) {
             if (targetIdx.column() == 0) {
                 if (type == LastOperationType::SetRating) {
-                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().rating(), RatingRole);
+                    m_panel->getActiveProxyModel()->setData(targetIdx, LastOperationManager::instance().rating(), RatingRole);
                 } else if (type == LastOperationType::SetColor) {
                     QString colorVal = LastOperationManager::instance().color();
-                    m_panel->getProxyModel()->setData(targetIdx, colorVal, ColorRole);
+                    m_panel->getActiveProxyModel()->setData(targetIdx, colorVal, ColorRole);
                     QString path = targetIdx.data(PathRole).toString();
                     QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
-                    m_panel->getProxyModel()->setData(targetIdx, coloredIcon, Qt::DecorationRole);
+                    m_panel->getActiveProxyModel()->setData(targetIdx, coloredIcon, Qt::DecorationRole);
                 } else if (type == LastOperationType::PasteTags) {
-                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().tags(), TagsRole);
+                    m_panel->getActiveProxyModel()->setData(targetIdx, LastOperationManager::instance().tags(), TagsRole);
                 }
             }
         }
