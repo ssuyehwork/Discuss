@@ -4,7 +4,6 @@
 #include "ShellIconManager.h"
 #include "MetaCacheDecorator.h"
 #include "ThumbnailPipelineService.h"
-#include "ModelContract.h"
 #include <QDateTime>
 #include <QDebug>
 #include <QFileInfo>
