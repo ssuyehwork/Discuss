@@ -49,9 +49,7 @@ private:
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
     DropListView* m_listView = nullptr;
-    QLabel* m_folderHeaderLabel = nullptr;
     QLabel* m_emptyFilterHintLabel = nullptr;
-    bool m_foldersCollapsed = false;
 };
 
 class ColumnViewWidget : public QScrollArea {

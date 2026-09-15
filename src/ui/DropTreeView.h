@@ -97,7 +97,6 @@ private:
     QTimer* m_autoExpandTimer = nullptr;
     QModelIndex m_hoverIndex;
     QString m_emptyHint;
-    bool m_foldersCollapsed = false;
 };
 
 } // namespace QuarkMeta

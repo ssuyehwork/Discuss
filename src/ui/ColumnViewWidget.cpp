@@ -13,7 +13,6 @@
 #include <QDir>
 #include <QResizeEvent>
 #include <QScrollBar>
-#include <QLabel>
 
 namespace QuarkMeta {
 
@@ -32,13 +31,6 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_model->setCurrentPath(path);
     m_proxyModel = new FilterProxyModel(this);
     m_proxyModel->setSourceModel(m_model);
-
-    m_folderHeaderLabel = new QLabel(this);
-    m_folderHeaderLabel->setStyleSheet("color: #DDDDDD; font-weight: bold; font-size: 12px; padding: 4px 8px;");
-    m_folderHeaderLabel->setCursor(Qt::PointingHandCursor);
-    m_folderHeaderLabel->hide();
-    m_folderHeaderLabel->installEventFilter(this);
-    layout->addWidget(m_folderHeaderLabel);
 
     m_listView = new DropListView(this);
     m_listView->setObjectName("ColumnViewPaneListView");
@@ -69,26 +61,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         }
     };
 
-    auto updateFolderHeader = [this]() {
-        if (!m_model || !m_folderHeaderLabel) return;
-        int folderCount = 0;
-        for (int r = 0; r < m_model->rowCount(); ++r) {
-            if (m_model->data(m_model->index(r, 0), TypeRole).toString() == "folder") {
-                folderCount++;
-            }
-        }
-        if (folderCount > 0) {
-            m_folderHeaderLabel->setText(QString("子文件夹 (%1) %2").arg(folderCount).arg(m_foldersCollapsed ? "▶" : "▼"));
-            m_folderHeaderLabel->show();
-        } else {
-            m_folderHeaderLabel->hide();
-        }
-    };
-
     connect(m_proxyModel, &QAbstractItemModel::modelReset, this, checkEmptyHint);
     connect(m_proxyModel, &QAbstractItemModel::layoutChanged, this, checkEmptyHint);
-    connect(m_proxyModel, &QAbstractItemModel::modelReset, updateFolderHeader);
-    connect(m_proxyModel, &QAbstractItemModel::layoutChanged, updateFolderHeader);
 
     auto* delegate = new ColumnItemDelegate(this);
     m_listView->setItemDelegate(delegate);

@@ -62,8 +62,6 @@ private:
     std::vector<ItemGeometry> m_geometries;
     int m_totalHeight = 0;
     int m_targetRowHeight = 128;
-    bool m_foldersCollapsed = false;
-    QRect m_folderHeaderRect;
     int m_aspectRatioRole = Qt::UserRole + 2;
     int m_anchorRow = -1;
     
@@ -74,6 +72,10 @@ private:
     LayoutMode m_layoutMode = JustifiedMode;
     QTimer* m_layoutTimer = nullptr;
     bool m_layoutDirty = false;
+
+    bool m_foldersCollapsed = false;
+    QRect m_folderHeaderRect;
+    int m_folderCount = 0;
 };
 
 } // namespace QuarkMeta
