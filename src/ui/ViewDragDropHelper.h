@@ -18,6 +18,13 @@ public:
     static bool handleDragMove(QAbstractItemView* view, QDragMoveEvent* event);
     static bool handleDrop(QAbstractItemView* view, QDropEvent* event, QStringList& outPaths, QModelIndex& outTargetIdx);
     static void executeStartDrag(QAbstractItemView* view, Qt::DropActions supportedActions);
+
+    static bool isDropTarget(const QAbstractItemView* view, const QModelIndex& index);
+    static void clearHover(QAbstractItemView* view = nullptr);
+
+private:
+    static QAbstractItemView* s_hoverView;
+    static QPersistentModelIndex s_hoverIndex;
 };
 
 } // namespace QuarkMeta

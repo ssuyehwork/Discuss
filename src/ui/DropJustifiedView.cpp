@@ -23,6 +23,11 @@ void DropJustifiedView::dragMoveEvent(QDragMoveEvent* event) {
     }
 }
 
+void DropJustifiedView::dragLeaveEvent(QDragLeaveEvent* event) {
+    ViewDragDropHelper::clearHover(this);
+    JustifiedView::dragLeaveEvent(event);
+}
+
 void DropJustifiedView::dropEvent(QDropEvent* event) {
     QStringList paths;
     QModelIndex targetIdx;

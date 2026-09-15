@@ -10,6 +10,23 @@
 
 namespace QuarkMeta {
 
+QAbstractItemView* ViewDragDropHelper::s_hoverView = nullptr;
+QPersistentModelIndex ViewDragDropHelper::s_hoverIndex;
+
+bool ViewDragDropHelper::isDropTarget(const QAbstractItemView* view, const QModelIndex& index) {
+    return view && s_hoverView == view && s_hoverIndex.isValid() && s_hoverIndex == index;
+}
+
+void ViewDragDropHelper::clearHover(QAbstractItemView* view) {
+    if (view && s_hoverView != view) return;
+    QAbstractItemView* oldView = s_hoverView;
+    s_hoverView = nullptr;
+    s_hoverIndex = QPersistentModelIndex();
+    if (oldView && oldView->viewport()) {
+        oldView->viewport()->update();
+    }
+}
+
 bool ViewDragDropHelper::handleDragEnter(QAbstractItemView* /*view*/, QDragEnterEvent* event) {
     if (event->mimeData() && event->mimeData()->hasUrls()) {
         event->acceptProposedAction();
@@ -18,9 +35,21 @@ bool ViewDragDropHelper::handleDragEnter(QAbstractItemView* /*view*/, QDragEnter
     return false;
 }
 
-bool ViewDragDropHelper::handleDragMove(QAbstractItemView* /*view*/, QDragMoveEvent* event) {
+bool ViewDragDropHelper::handleDragMove(QAbstractItemView* view, QDragMoveEvent* event) {
     if (event->mimeData() && event->mimeData()->hasUrls()) {
         event->acceptProposedAction();
+
+        if (view) {
+            QModelIndex newHover = view->indexAt(event->position().toPoint());
+            if (s_hoverView != view || s_hoverIndex != newHover) {
+                QAbstractItemView* oldView = s_hoverView;
+                s_hoverView = view;
+                s_hoverIndex = newHover;
+
+                if (oldView && oldView->viewport()) oldView->viewport()->update();
+                if (view->viewport()) view->viewport()->update();
+            }
+        }
         return true;
     }
     return false;
@@ -41,9 +70,11 @@ bool ViewDragDropHelper::handleDrop(QAbstractItemView* view, QDropEvent* event, 
         outTargetIdx = view->indexAt(event->position().toPoint());
         if (!outPaths.isEmpty()) {
             event->acceptProposedAction();
+            clearHover(view);
             return true;
         }
     }
+    clearHover(view);
     return false;
 }
 

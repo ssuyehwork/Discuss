@@ -11,6 +11,7 @@
 #include <QFileInfo>
 #include "ContentPanel.h"
 #include "RenameCapableDelegate.h"
+#include "ViewDragDropHelper.h"
 #include "RatingBarLayout.h"
 #include "RowLayoutEngine.h"
 #include "../meta/MetadataManager.h"
@@ -53,7 +54,13 @@ public:
             useAlternate = view->alternatingRowColors();
         }
 
-        if (selected) {
+        bool isDropTarget = ViewDragDropHelper::isDropTarget(
+            qobject_cast<const QAbstractItemView*>(option.widget), index);
+
+        if (isDropTarget) {
+            bg = QColor("#3498db");
+            bg.setAlphaF(0.35f);
+        } else if (selected) {
             bg = QColor("#378ADD");
             bg.setAlphaF(0.15f);
         } else if (hover) {

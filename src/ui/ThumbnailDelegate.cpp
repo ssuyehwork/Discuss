@@ -1,5 +1,6 @@
 #include "ThumbnailDelegate.h"
 #include "CardLayoutEngine.h"
+#include "ViewDragDropHelper.h"
 #include "ContentPanel.h"
 #include "CardPainterHelper.h"
 #include "ElidedTextUtility.h"
@@ -63,12 +64,25 @@ void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
 
     bool isGrid = option.widget ? option.widget->property("gridMode").toBool() : false;
 
+    bool isDropTarget = ViewDragDropHelper::isDropTarget(
+        qobject_cast<const QAbstractItemView*>(option.widget), index);
+
+    // 0. 拖拽悬停背景高亮 (#3498db 0.35 alpha)
+    if (isDropTarget) {
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing);
+        painter->setBrush(QColor(0x34, 0x98, 0xdb, 0x59));
+        painter->setPen(Qt::NoPen);
+        painter->drawRoundedRect(l.coverRect, 6, 6);
+        painter->restore();
+    }
+
     // ① 绘制缩略图 Cover
     CardPainterHelper::drawCardCover(painter, l.coverRect, isSelected, hasThumb, thumb, 
                                      qvariant_cast<QIcon>(decoData), isGrid, isWaitingThumb);
 
     // ② 绘制卡片外边框
-    CardPainterHelper::drawCardBorder(painter, l.coverRect, isSelected);
+    CardPainterHelper::drawCardBorder(painter, l.coverRect, isDropTarget || isSelected);
 
     // ③ 绘制置顶标记
     if (m_pinnedRole != -1) {

@@ -40,6 +40,7 @@ void DropListView::dragMoveEvent(QDragMoveEvent* event) {
 
 void DropListView::dragLeaveEvent(QDragLeaveEvent* event) {
     clearDropHighlight();
+    ViewDragDropHelper::clearHover(this);
     QListView::dragLeaveEvent(event);
 }
 

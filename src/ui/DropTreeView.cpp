@@ -54,6 +54,11 @@ void DropTreeView::dragMoveEvent(QDragMoveEvent* event) {
     }
 }
 
+void DropTreeView::dragLeaveEvent(QDragLeaveEvent* event) {
+    ViewDragDropHelper::clearHover(this);
+    QTreeView::dragLeaveEvent(event);
+}
+
 void DropTreeView::dropEvent(QDropEvent* event) {
     QStringList paths;
     QModelIndex targetIdx;
