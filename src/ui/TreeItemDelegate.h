@@ -77,7 +77,7 @@ public:
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         if (!index.isValid()) return;
 
-        QStyleOptionViewItem opt = option;
+        QStyleOptionViewItem itemOpt = option;
         if (m_enableSectionHeaders) {
             const QAbstractItemModel* m = index.model();
             bool isFolder = (index.data(TypeRole).toString() == "folder");
@@ -110,8 +110,8 @@ public:
 
             if (hasHeaderAbove) {
                 QRect headerArea(option.rect.left(), option.rect.top(), option.rect.width(), 26);
-                opt.rect = QRect(option.rect.left(), option.rect.top() + 26,
-                                 option.rect.width(), option.rect.height() - 26);
+                itemOpt.rect = QRect(option.rect.left(), option.rect.top() + 26,
+                                     option.rect.width(), option.rect.height() - 26);
 
                 if (index.column() == 0 && !sectionText.isEmpty()) {
                     painter->save();
@@ -127,8 +127,8 @@ public:
             }
         }
 
-        bool selected = opt.state & QStyle::State_Selected;
-        bool hover = opt.state & QStyle::State_MouseOver;
+        bool selected = itemOpt.state & QStyle::State_Selected;
+        bool hover = itemOpt.state & QStyle::State_MouseOver;
 
         // 🚀【行底色彻底统一与防穿透自绘】：直接根据选中/悬停/行号奇偶绘制底色，贯穿整个单元格矩形
         painter->save();
@@ -158,18 +158,18 @@ public:
         painter->drawRect(option.rect);
         painter->restore();
 
-        QStyleOptionViewItem opt = option;
+        QStyleOptionViewItem subOpt = itemOpt;
         if (index.column() >= 1) {
-            opt.displayAlignment = Qt::AlignCenter;
+            subOpt.displayAlignment = Qt::AlignCenter;
         }
 
-        opt.state &= ~QStyle::State_Selected;
-        opt.state &= ~QStyle::State_MouseOver;
-        opt.features &= ~QStyleOptionViewItem::Alternate;
-        opt.backgroundBrush = QBrush();
+        subOpt.state &= ~QStyle::State_Selected;
+        subOpt.state &= ~QStyle::State_MouseOver;
+        subOpt.features &= ~QStyleOptionViewItem::Alternate;
+        subOpt.backgroundBrush = QBrush();
         
         if (selected) {
-            opt.palette.setColor(QPalette::Text, Qt::white);
+            subOpt.palette.setColor(QPalette::Text, Qt::white);
         }
 
         // 2026-06-16 按照 8 列架构重构：第 1, 2, 3 列由代理独立绘制；第 0 列作为名称列，具有微型圆角卡片预览（最左侧看片）
@@ -180,7 +180,7 @@ public:
             painter->setRenderHint(QPainter::Antialiasing);
             painter->setRenderHint(QPainter::SmoothPixmapTransform);
 
-            RowLayout layout = RowLayoutEngine::calculate(option.rect, option.rect.height());
+            RowLayout layout = RowLayoutEngine::calculate(itemOpt.rect, itemOpt.rect.height());
             QRect squareRect = layout.cardRect;
             QRect textRect   = layout.textRect;
 
@@ -254,9 +254,9 @@ public:
             QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
 
             painter->setPen(textColor);
-            painter->setFont(option.font);
+            painter->setFont(itemOpt.font);
 
-            QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideMiddle, textRect.width() - 10);
+            QString elidedText = itemOpt.fontMetrics.elidedText(name, Qt::ElideMiddle, textRect.width() - 10);
             painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
 
             painter->restore();
@@ -271,8 +271,8 @@ public:
 
                 int iconSize = 16;
                 // 计算单元格物理中心坐标
-                QRect centeredRect(option.rect.left() + (option.rect.width() - iconSize) / 2,
-                                   option.rect.top() + (option.rect.height() - iconSize) / 2,
+                QRect centeredRect(itemOpt.rect.left() + (itemOpt.rect.width() - iconSize) / 2,
+                                   itemOpt.rect.top() + (itemOpt.rect.height() - iconSize) / 2,
                                    iconSize, iconSize);
 
                 if (isPinned) {
@@ -280,21 +280,21 @@ public:
                 }
             } else if (col == 2) { // 星级列
                 int rating = idx0.data(RatingRole).toInt();
-                bool isSelected = option.state & QStyle::State_Selected;
+                bool isSelected = itemOpt.state & QStyle::State_Selected;
                 QString colorName = idx0.data(ColorRole).toString();
 
                 if (rating > 0 || isSelected || !colorName.isEmpty()) {
                     // 🚀【统一调用 RatingBarLayout】：彻底消灭绘制时的 18 / -4 / 12 硬编码！
-                    RatingBarMetrics rm = RatingBarLayout::calculate(option.rect, RatingBarMode::TreeRow);
+                    RatingBarMetrics rm = RatingBarLayout::calculate(itemOpt.rect, RatingBarMode::TreeRow);
 
-                    CardPainterHelper::drawRatingStars(painter, rm.banRect, option.rect, rm.starSize, rm.starSpacing, 
-                                                      option.rect.top(), option.rect.height(), rm.starsStartX,
+                    CardPainterHelper::drawRatingStars(painter, rm.banRect, itemOpt.rect, rm.starSize, rm.starSpacing,
+                                                      itemOpt.rect.top(), itemOpt.rect.height(), rm.starsStartX,
                                                       rating, colorName, isSelected);
                 }
             }
             painter->restore();
         } else {
-            QStyledItemDelegate::paint(painter, opt, index);
+            QStyledItemDelegate::paint(painter, subOpt, index);
         }
     }
 

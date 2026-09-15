@@ -108,7 +108,26 @@ void DropListView::mouseDoubleClickEvent(QMouseEvent* event) {
 
 void DropListView::paintEvent(QPaintEvent* event) {
     updateFolderHiding();
+
     QListView::paintEvent(event);
+
+    if (m_folderCount > 0) {
+        QPainter painter(viewport());
+        painter.save();
+
+        m_folderHeaderRect = QRect(0, 0, viewport()->width(), 26);
+        painter.fillRect(m_folderHeaderRect, QColor("#222222"));
+
+        painter.setPen(QColor("#A0A0A0"));
+        QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
+        painter.setFont(headerFont);
+
+        QString arrow = m_foldersCollapsed ? "▶" : "▼";
+        QString headerText = QString("  %1  文件夹 (%2)").arg(arrow).arg(m_folderCount);
+        painter.drawText(m_folderHeaderRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
+
+        painter.restore();
+    }
 }
 
 } // namespace QuarkMeta

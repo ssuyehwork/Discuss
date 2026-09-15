@@ -326,35 +326,16 @@ void JustifiedView::paintEvent(QPaintEvent*) {
         painter.save();
         painter.translate(0, -scrollY);
 
+        QRect headerRect = m_folderHeaderRect;
+        painter.fillRect(headerRect, QColor("#222222"));
+
         painter.setPen(QColor("#A0A0A0"));
         QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
         painter.setFont(headerFont);
 
         QString arrow = m_foldersCollapsed ? "▶" : "▼";
         QString headerText = QString("  %1  文件夹 (%2)").arg(arrow).arg(m_folderCount);
-
-        QFontMetrics fm(headerFont);
-        int textW = fm.horizontalAdvance(headerText) + 12;
-        QRect textRect(m_folderHeaderRect.left(), m_folderHeaderRect.top(), textW, m_folderHeaderRect.height());
-        painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
-
-        painter.restore();
-    }
-
-    if (m_fileCount > 0 && !m_fileHeaderRect.isEmpty()) {
-        painter.save();
-        painter.translate(0, -scrollY);
-
-        painter.setPen(QColor("#A0A0A0"));
-        QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
-        painter.setFont(headerFont);
-
-        QString headerText = QString("  文件 (%1)").arg(m_fileCount);
-
-        QFontMetrics fm(headerFont);
-        int textW = fm.horizontalAdvance(headerText) + 12;
-        QRect textRect(m_fileHeaderRect.left(), m_fileHeaderRect.top(), textW, m_fileHeaderRect.height());
-        painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
+        painter.drawText(headerRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
 
         painter.restore();
     }
@@ -562,12 +543,7 @@ void JustifiedView::doLayout() {
         }
     }
 
-    m_fileCount = static_cast<int>(fileIndices.size());
-
-    if (m_fileCount > 0) {
-        m_fileHeaderRect = QRect(margin, currentY, containerWidth, 32);
-        currentY += 36;
-
+    if (!fileIndices.empty()) {
         if (m_layoutMode == GridMode) {
             int itemWidth = m_targetRowHeight + cardPadding;
             int itemHeight = m_targetRowHeight + extraHeight;

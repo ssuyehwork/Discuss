@@ -76,9 +76,6 @@ private:
     bool m_foldersCollapsed = false;
     QRect m_folderHeaderRect;
     int m_folderCount = 0;
-
-    QRect m_fileHeaderRect;
-    int m_fileCount = 0;
 };
 
 } // namespace QuarkMeta
