@@ -11,6 +11,9 @@ This implementation plan normalizes view section headers across all view modes i
 4. **Adaptive Text Width & Transparent Background**:
    - Replace full-width background bar fill (`#222222`) with transparent background (`Qt::transparent`).
    - Draw text within adaptive capsule width calculated via `QFontMetrics::horizontalAdvance`.
+5. **Architectural Responsibilities**:
+   - `TreeItemDelegate`: Handles inline item section headers for `DropTreeView` and `DropListView`.
+   - `ColumnViewWidget`: Uses top layout widget (`m_folderHeaderLabel`) for section headers. `ColumnItemDelegate` stays lean without `m_enableSectionHeaders` flags, preventing MSVC `C2511`/`C2065`/`C2550` compiler signature mismatches.
 
 ## 2. Modified Files List
 - `src/ui/ContentPanel.cpp`
@@ -243,7 +246,7 @@ void DropListView::paintEvent(QPaintEvent* event) {
 ```
 
 ### 5. `src/ui/ColumnViewWidget.cpp`
-Update header text to `文件夹 (N)`, transparent background, and adaptive size policy.
+Update header text to `文件夹 (N)`, transparent background, and adaptive size policy. Do NOT modify `ColumnItemDelegate` signatures or constructor parameters.
 
 ```
 <<<<<<< SEARCH
@@ -379,16 +382,17 @@ Update `JustifiedView` header rendering to remove background fills, use adaptive
 
 ## 4. Build & Verification Steps
 1. **Compilation Verification**:
-   Run `cmake --build build --config Release` to ensure clean build.
+   Run `cmake --build build --config Release` to ensure clean build without MSVC `C2511`/`C2065`/`C2550` errors.
 2. **Behavioral Check**:
    - Check List View (`DropTreeView`): Verify first row in sections is cleanly shifted down 26px without overlapping or being obscured by a floating block.
-   - Check Column View (`ColumnViewWidget`): Verify header displays `文件夹 (N)` without `子文件夹` wording.
+   - Check Column View (`ColumnViewWidget`): Verify header displays `文件夹 (N)` without `子文件夹` wording and `ColumnItemDelegate` stays intact.
    - Check Grid View (`JustifiedView`): Verify `文件 (N)` header is static (no collapse arrow, permanent expansion) and drawn over a transparent background with dynamic text bounds.
 
 ## 5. SSOT API Reuse & Anti-Redundancy Self-Check
-- **Single Source of Truth**: Reuses `TreeItemDelegate`'s delegate-based inline header drawing architecture for list view section rendering, avoiding hardcoded overlay painting inside view classes.
+- **Single Source of Truth**: Reuses `TreeItemDelegate`'s delegate-based inline header drawing architecture for list view section rendering, avoiding hardcoded overlay painting inside view classes, while keeping `ColumnItemDelegate` signatures strictly frozen.
 
 ## 6. Header API Signature Verification
 - Verified `TreeItemDelegate` constructor in `src/ui/TreeItemDelegate.h`.
+- Verified `ColumnItemDelegate` signature in `src/ui/ColumnItemDelegate.h` (`ColumnItemDelegate(QObject* parent = nullptr)` frozen).
 - Verified `DropTreeView::paintEvent` in `src/ui/DropTreeView.h`.
 - Verified `ColumnViewPane` label setup in `src/ui/ColumnViewWidget.h`.
