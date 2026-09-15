@@ -2,6 +2,7 @@
 #include "NavPanel.h"
 #include "FavoritePanel.h"
 #include "ContentPanel.h"
+#include "ColumnViewWidget.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "AddressBar.h"
@@ -184,6 +185,12 @@ void PanelMediator::setupConnections() {
         connect(contentPanel, &ContentPanel::directorySelected, &NavigationService::instance(), [](const QString& path) {
             NavigationService::instance().navigateTo(path);
         });
+
+        if (filterPanel && contentPanel->columnView()) {
+            connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, filterPanel, [filterPanel](const QString&) {
+                filterPanel->clearAllFilters(false);
+            });
+        }
 
         if (favoritePanel) {
             connect(contentPanel, &ContentPanel::requestAddFavorite, favoritePanel, [favoritePanel](const QStringList& paths) {
