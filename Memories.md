@@ -217,6 +217,20 @@
 
 ---
 
+## 8.1 跨视图拖拽目标悬停高亮与分栏视图拖拽对齐规范 (Drag & Drop Target Alignment Architecture)
+
+为确保全软件所有内容视图（网格、列表、树状、分栏）在拖拽操作中具备一致且直观的交互体验，必须遵守以下规范：
+
+1. **跨视图悬停高亮统一与 Model 零侵入契约 (Unified Drag Target Highlight Contract)**：
+   - 拖拽过程中的悬停目标状态统一通过 `ViewDragDropHelper` 静态维持（`s_hoverView` 与 `s_hoverIndex`），绝对禁止向 `ItemModel` 数据层（如 `setData` / `IsDropTargetRole`）写入临时绘制状态；
+   - 悬停目标改变时通过 `ViewDragDropHelper::handleDragMove` 触发对应视图 `viewport()->update()`；拖拽离开 (`dragLeaveEvent`) 或放下 (`dropEvent`) 时必须调用 `clearHover` 即时清理悬停高亮；
+   - 所有 Delegate（`TreeItemDelegate`、`ThumbnailDelegate`、`ColumnItemDelegate`）在绘制背景时统一调用 `ViewDragDropHelper::isDropTarget(view, index)` 判定，绘制统一的高亮背景色（`#3498db`，透明度 `0.35f`），确保全视图高亮色彩、透明度与绘制优先级 100% 绝对一致。
+2. **分栏视图跨列拖拽目标对齐与原地刷新保护契约 (Column View Cross-Column Drop & In-Place Refresh Contract)**：
+   - 分栏视图（Miller Columns 架构）中每一列面板 (`ColumnViewPane`) 在响应 `DropListView::pathsDropped` 拖放信号时，必须明确向 `ContentPanel::onPathsDropped` 与 `ContentFileOpsHandler::onPathsDropped` 传递当前列的专属路径 `targetDirOverride` (`m_path`) 与专属代理模型 `sourceModelOverride` (`m_proxyModel`)，避免目标路径错退回全面板最右侧路径 (`m_panel->currentPath()`) 导致自我拖放阻断失败；
+   - **分栏视图级联列展现保护**：拖放异步 I/O 任务完成后，系统必须调用 `weakPanel->refreshAll()`（映射至 `m_columnView->refreshAllColumns()`）进行数据原地重新载入，绝对禁止调用全量 `loadDirectory(...)` 重置列堆栈，彻底保护第 4 列及后续展开的更深层子列不被强制关停或清空。
+
+---
+
 ## 9. 分列视图交互与编辑触发控制规范 (Column View Architecture & Edit Trigger Contract)
 
 为确保分列视图（Miller Columns 架构）具备极致流畅、符合桌面系统习惯且与其他视图高一致的交互体验，全系统必须遵守以下**分列视图交互与编辑控制规范**：
