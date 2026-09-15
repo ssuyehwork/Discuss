@@ -185,6 +185,12 @@ void PanelMediator::setupConnections() {
             NavigationService::instance().navigateTo(path);
         });
 
+        if (filterPanel && contentPanel->columnView()) {
+            connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, filterPanel, [filterPanel](const QString&) {
+                filterPanel->clearAllFilters(false);
+            });
+        }
+
         if (favoritePanel) {
             connect(contentPanel, &ContentPanel::requestAddFavorite, favoritePanel, [favoritePanel](const QStringList& paths) {
                 for (const QString& p : paths) {

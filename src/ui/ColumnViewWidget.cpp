@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QResizeEvent>
 #include <QScrollBar>
+#include <QLabel>
 
 namespace QuarkMeta {
 
@@ -44,12 +45,36 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setModel(m_proxyModel);
 
-    connect(m_proxyModel, &QAbstractItemModel::modelReset, this, &ColumnViewPane::tryPendingSelection);
-    connect(m_proxyModel, &QAbstractItemModel::layoutChanged, this, &ColumnViewPane::tryPendingSelection);
+    m_emptyFilterHintLabel = new QLabel(this);
+    m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
+    m_emptyFilterHintLabel->setWordWrap(true);
+    m_emptyFilterHintLabel->setStyleSheet("color: #888888; font-size: 12px; padding: 16px;");
+    m_emptyFilterHintLabel->hide();
+
+    auto checkEmptyHint = [this]() {
+        tryPendingSelection();
+        if (!m_model || !m_proxyModel || !m_emptyFilterHintLabel) return;
+        int fullCount = m_model->rowCount();
+        int visibleCount = m_proxyModel->rowCount();
+        int hiddenCount = fullCount - visibleCount;
+
+        if (fullCount > 0 && visibleCount == 0) {
+            m_emptyFilterHintLabel->setText(QString("所有内容已被筛选隐藏 (%1 个项目)").arg(hiddenCount));
+            m_emptyFilterHintLabel->show();
+            if (m_listView) m_listView->hide();
+        } else {
+            m_emptyFilterHintLabel->hide();
+            if (m_listView) m_listView->show();
+        }
+    };
+
+    connect(m_proxyModel, &QAbstractItemModel::modelReset, this, checkEmptyHint);
+    connect(m_proxyModel, &QAbstractItemModel::layoutChanged, this, checkEmptyHint);
 
     auto* delegate = new ColumnItemDelegate(this);
     m_listView->setItemDelegate(delegate);
     layout->addWidget(m_listView);
+    layout->addWidget(m_emptyFilterHintLabel);
 
     connect(m_listView, &DropListView::blankSpaceDoubleClicked, this, [this]() {
         int paneIdx = property("paneIndex").toInt();

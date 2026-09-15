@@ -5,6 +5,7 @@
 #include <QHBoxLayout>
 #include <QScrollArea>
 #include <QList>
+#include <QLabel>
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
 #include "DropListView.h"
@@ -47,6 +48,7 @@ private:
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
+    QLabel* m_emptyFilterHintLabel = nullptr;
     DropListView* m_listView = nullptr;
 };
 
