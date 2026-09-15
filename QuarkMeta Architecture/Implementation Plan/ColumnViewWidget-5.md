@@ -12,7 +12,20 @@ This plan introduces an empty-state filter banner/overlay in `ColumnViewPane` th
 ## 3. Detailed Line-by-Line Changes
 
 ### `src/ui/ColumnViewWidget.h`
-Add an empty overlay label pointer in `ColumnViewPane`:
+1. Forward declare `QLabel` or include `<QLabel>` header:
+
+```
+<<<<<<< SEARCH
+#include <QScrollArea>
+#include <QList>
+=======
+#include <QScrollArea>
+#include <QList>
+#include <QLabel>
+>>>>>>> REPLACE
+```
+
+2. Add `m_emptyFilterHintLabel` member variable pointer in `ColumnViewPane`:
 
 ```
 <<<<<<< SEARCH
@@ -26,7 +39,20 @@ Add an empty overlay label pointer in `ColumnViewPane`:
 ```
 
 ### `src/ui/ColumnViewWidget.cpp`
-1. Initialize `m_emptyFilterHintLabel` in `ColumnViewPane::ColumnViewPane` and connect `modelReset`/`layoutChanged` to update the hint:
+1. Ensure `#include <QLabel>` is present in includes:
+
+```
+<<<<<<< SEARCH
+#include <QResizeEvent>
+#include <QScrollBar>
+=======
+#include <QResizeEvent>
+#include <QScrollBar>
+#include <QLabel>
+>>>>>>> REPLACE
+```
+
+2. Initialize `m_emptyFilterHintLabel` in `ColumnViewPane::ColumnViewPane`:
 
 ```
 <<<<<<< SEARCH
@@ -47,7 +73,7 @@ Add an empty overlay label pointer in `ColumnViewPane`:
 >>>>>>> REPLACE
 ```
 
-2. Implement a helper method `updateEmptyFilterHint()` and connect it to model layout/reset changes in `ColumnViewPane`:
+3. Connect model reset and layout change signals to check and update the empty state label:
 
 ```
 <<<<<<< SEARCH
@@ -78,7 +104,7 @@ Add an empty overlay label pointer in `ColumnViewPane`:
 
 ## 4. Build & Verification Steps
 1. **Compilation Verification**:
-   Run `cmake --build build` to verify clean compilation with Qt MOC updates.
+   Run `cmake --build build` to verify clean compilation with Qt MOC updates and ensure no C2027 or C2664 errors occur.
 2. **Behavioral Verification**:
    - Set a restrictive filter (e.g. uncheck "Folders" or filter by a specific extension in the right Filter Panel).
    - In Column View mode, click a subfolder whose items are all hidden by the filter.
