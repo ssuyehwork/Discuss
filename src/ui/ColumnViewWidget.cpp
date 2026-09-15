@@ -13,7 +13,6 @@
 #include <QDir>
 #include <QResizeEvent>
 #include <QScrollBar>
-#include <QLabel>
 
 namespace QuarkMeta {
 
@@ -45,12 +44,6 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setModel(m_proxyModel);
 
-    m_emptyFilterHintLabel = new QLabel(this);
-    m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
-    m_emptyFilterHintLabel->setWordWrap(true);
-    m_emptyFilterHintLabel->setStyleSheet("color: #888888; font-size: 12px; padding: 16px;");
-    m_emptyFilterHintLabel->hide();
-
     auto checkEmptyHint = [this]() {
         tryPendingSelection();
         if (!m_model || !m_proxyModel || !m_emptyFilterHintLabel) return;
@@ -74,6 +67,12 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     auto* delegate = new ColumnItemDelegate(this);
     m_listView->setItemDelegate(delegate);
     layout->addWidget(m_listView);
+
+    m_emptyFilterHintLabel = new QLabel(this);
+    m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
+    m_emptyFilterHintLabel->setWordWrap(true);
+    m_emptyFilterHintLabel->setStyleSheet("color: #888888; font-size: 12px; padding: 16px;");
+    m_emptyFilterHintLabel->hide();
     layout->addWidget(m_emptyFilterHintLabel);
 
     connect(m_listView, &DropListView::blankSpaceDoubleClicked, this, [this]() {
@@ -184,6 +183,10 @@ void ColumnViewPane::loadDirectory() {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
                 weakSelf->m_model->setRecords(items);
+                if (weakSelf->m_contentPanel && weakSelf->m_proxyModel) {
+                    weakSelf->m_proxyModel->setSortType(static_cast<int>(weakSelf->m_contentPanel->currentSortType()));
+                    weakSelf->m_proxyModel->sort(0, weakSelf->m_contentPanel->currentSortOrder());
+                }
                 if (!weakSelf->m_pendingSelectPath.isEmpty()) {
                     weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
                 }

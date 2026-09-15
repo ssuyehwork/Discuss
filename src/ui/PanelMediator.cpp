@@ -2,6 +2,7 @@
 #include "NavPanel.h"
 #include "FavoritePanel.h"
 #include "ContentPanel.h"
+#include "ColumnViewWidget.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "AddressBar.h"

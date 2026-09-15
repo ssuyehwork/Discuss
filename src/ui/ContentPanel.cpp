@@ -83,8 +83,11 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     });
 
     m_sortController = new ContentSortController(this);
-    connect(m_sortController, &ContentSortController::sortCriteriaChanged, this, [this](SortType, Qt::SortOrder) {
+    connect(m_sortController, &ContentSortController::sortCriteriaChanged, this, [this](SortType type, Qt::SortOrder order) {
         m_sortController->applySortToModel(m_proxyModel);
+        if (m_columnView) {
+            m_columnView->applySort(static_cast<int>(type), order);
+        }
     });
     m_sortController->applySortToModel(m_proxyModel);
 

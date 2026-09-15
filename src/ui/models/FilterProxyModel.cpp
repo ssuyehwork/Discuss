@@ -223,14 +223,14 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
 
     // 🚀【绝对权重 1：文件夹永远在最上方】：无视升序降序反转，文件夹永远第一顺位
     if (leftRec.isDir != rightRec.isDir) {
-        return (sortOrder() == Qt::AscendingOrder) ? leftRec.isDir : !leftRec.isDir;
+        return leftRec.isDir;
     }
 
     // 🚀【绝对权重 2：置顶/加密优先】：无视升序降序反转，置顶项永远置顶
     bool leftPinned = leftRec.pinned || leftRec.encrypted;
     bool rightPinned = rightRec.pinned || rightRec.encrypted;
     if (leftPinned != rightPinned) {
-        return (sortOrder() == Qt::AscendingOrder) ? leftPinned : !rightPinned;
+        return leftPinned;
     }
 
     auto compareNames = [](const ItemRecord& l, const ItemRecord& r) {
