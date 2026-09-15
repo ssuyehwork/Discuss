@@ -69,6 +69,7 @@ void DropListView::startDrag(Qt::DropActions supportedActions) {
 
 void DropListView::updateFolderHiding() {
     m_folderCount = 0;
+    m_fileCount = 0;
     if (!model()) return;
     int total = model()->rowCount();
     for (int i = 0; i < total; ++i) {
@@ -77,6 +78,9 @@ void DropListView::updateFolderHiding() {
         if (isDir) {
             m_folderCount++;
             setRowHidden(i, m_foldersCollapsed);
+        } else {
+            m_fileCount++;
+            setRowHidden(i, m_filesCollapsed);
         }
     }
 }
@@ -85,6 +89,13 @@ void DropListView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         if (m_folderCount > 0 && m_folderHeaderRect.contains(event->pos())) {
             m_foldersCollapsed = !m_foldersCollapsed;
+            updateFolderHiding();
+            viewport()->update();
+            event->accept();
+            return;
+        }
+        if (m_fileCount > 0 && m_fileHeaderRect.contains(event->pos())) {
+            m_filesCollapsed = !m_filesCollapsed;
             updateFolderHiding();
             viewport()->update();
             event->accept();
