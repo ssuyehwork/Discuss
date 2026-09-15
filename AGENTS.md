@@ -57,6 +57,18 @@
   - **业务状态SSOT权威源** → 业务领域层（Domain），禁止副本；
   - **磁盘/数据库 IO/外部进程** → 基础设施层，必须与主线程隔离。
 
+### 2.4 既有 API 强制复用与防另起炉灶铁律 (Search & Re-use First Contract)
+1. **【查重优先与秒级检索契约 (Search First)】**：
+   在给出任何修复方案、重构或功能设计前，**AI 助手与开发者必须首先使用高效命令行（如 `grep` / `ripgrep`）或查阅模块 Controller/Mediator 的 `.h` 接口**，精准检索当前行为是否已有既有官方 API。严格禁止不经检索就凭直觉手写局部实现或另起炉灶！
+2. **【核心通用行为 SSOT 入口字典 (Core Behavior SSOT Dictionary)】**：
+   全软件横切通用行为必须且只能走唯一的真理源通道，禁止混用与滥用：
+   - **视图数据变动/文件操作后原位刷新** ➔ **唯一合法入口：`ContentPanel::refreshAll()`**（在任何拖拽、粘贴、删除、重命名完成后的回调中，**绝对禁止**私自调用 `loadDirectory` 另起炉灶，必须统一通过 `refreshAll()` 刷出变动，保持已展开列/视图视角不动）；
+   - **物理路径/视角导航切换** ➔ **唯一合法入口：`ContentPanel::loadDirectory(path)`**（仅在地址栏回车、侧边栏点击、面包屑跳转等真正改变视角的导航场景使用）；
+   - **全局配置/持久化读写** ➔ **唯一合法入口：`AppConfig::instance()`**；
+   - **跨模块状态与事件广播** ➔ **唯一合法入口：`CentralEventHub` 或对应 Mediator**。
+3. **【物理彻底清除死代码契约】**：
+   当发现另起炉灶的分散旧实现时，必须在重构方案中彻底将其物理删除并回流到 SSOT 通道，绝不保留“两套实现并存”的隐患。
+
 ---
 
 ## 3. 实施方案 (Implementation Plan) 规范
@@ -87,6 +99,7 @@ SEARCH 块中的代码必须在现有仓库中真实存在，绝不允许凭空�
 2. **Modified Files List（影响文件清单）**
 3. **Detailed Line-by-Line Changes（包含 CMakeLists.txt 在内的精准替换块）**
 4. **Build & Verification Steps（编译命令与验证方法）**
+5. **SSOT API Reuse & Anti-Redundancy Self-Check（既有 SSOT 通道复用与防另起炉灶自查）**：必须明确说明本次修改是否复用了既有 SSOT 官方 API（如 `refreshAll()`），是否存在私自另起炉灶行为。
 
 ---
 

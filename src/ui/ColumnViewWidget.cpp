@@ -390,6 +390,14 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
+        if (paneIdx + 1 < m_panes.size() &&
+            QDir::cleanPath(m_panes[paneIdx + 1]->currentPath()) == QDir::cleanPath(folderPath)) {
+            dismissSubColumns(paneIdx + 1);
+            m_activePaneIndex = paneIdx + 1;
+            emit selectionChanged();
+            return;
+        }
+
         dismissSubColumns(paneIdx);
         // 保持父列高亮：仅清空 paneIdx 右侧深层列的选区，保留 paneIdx 及其左侧父列的高亮
         for (int i = paneIdx + 1; i < m_panes.size(); ++i) {
