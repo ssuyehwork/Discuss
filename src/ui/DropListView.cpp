@@ -67,19 +67,25 @@ void DropListView::startDrag(Qt::DropActions supportedActions) {
     ViewDragDropHelper::executeStartDrag(this, supportedActions);
 }
 
+void DropListView::updateFolderHiding() {
+    m_folderCount = 0;
+    if (!model()) return;
+    int total = model()->rowCount();
+    for (int i = 0; i < total; ++i) {
+        QModelIndex idx = model()->index(i, 0);
+        bool isDir = (idx.data(TypeRole).toString() == "folder");
+        if (isDir) {
+            m_folderCount++;
+            setRowHidden(i, m_foldersCollapsed);
+        }
+    }
+}
+
 void DropListView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         if (m_folderCount > 0 && m_folderHeaderRect.contains(event->pos())) {
             m_foldersCollapsed = !m_foldersCollapsed;
-            if (model()) {
-                int total = model()->rowCount();
-                for (int i = 0; i < total; ++i) {
-                    QModelIndex idx = model()->index(i, 0);
-                    if (idx.data(TypeRole).toString() == "folder") {
-                        setRowHidden(i, m_foldersCollapsed);
-                    }
-                }
-            }
+            updateFolderHiding();
             viewport()->update();
             event->accept();
             return;
@@ -101,20 +107,7 @@ void DropListView::mouseDoubleClickEvent(QMouseEvent* event) {
 }
 
 void DropListView::paintEvent(QPaintEvent* event) {
-    m_folderCount = 0;
-    m_folderHeaderRect = QRect();
-
-    if (model()) {
-        int total = model()->rowCount();
-        for (int i = 0; i < total; ++i) {
-            QModelIndex idx = model()->index(i, 0);
-            bool isDir = (idx.data(TypeRole).toString() == "folder");
-            if (isDir) {
-                m_folderCount++;
-                setRowHidden(i, m_foldersCollapsed);
-            }
-        }
-    }
+    updateFolderHiding();
 
     QListView::paintEvent(event);
 
