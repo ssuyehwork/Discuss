@@ -137,8 +137,15 @@ void ColumnViewPane::clearSelection() {
 
 void ColumnViewPane::loadDirectory() {
     QString path = m_path;
+    bool recursive = false;
+    if (m_contentPanel && m_contentPanel->isRecursive()) {
+        if (m_contentPanel->columnView() &&
+            m_contentPanel->columnView()->rightmostPane() == this) {
+            recursive = true;
+        }
+    }
     QPointer<ColumnViewPane> weakSelf(this);
-    (void)QtConcurrent::run([weakSelf, path]() {
+    (void)QtConcurrent::run([weakSelf, path, recursive]() {
         if (!weakSelf) return;
         std::vector<ItemRecord> items;
         if (path.isEmpty() || path == "computer://") {
@@ -146,7 +153,7 @@ void ColumnViewPane::loadDirectory() {
                 items.push_back(ItemRecord::create(drive.absolutePath()));
             }
         } else {
-            items = DiskScanService::scanDirectory(path, false, std::function<bool()>());
+            items = DiskScanService::scanDirectory(path, recursive, std::function<bool()>());
         }
         MetaCacheDecorator::decorate(items);
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
