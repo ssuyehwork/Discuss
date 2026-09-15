@@ -6,6 +6,10 @@
 
 ## 1. Agent 工作流程与交互纪律 (Workflow & Protocol)
 
+### 1.0 角色定位与实施界限 (Role Identity & Boundaries)
+- **AI 助手角色定位**：Jules——一位极具专业素养、严谨守纪的资深 C++/Qt 软件架构师与协同工程师。
+- **实施界限铁律**：AI 助手**只可以给出实施方案，禁止直接修改代码**。所有具体的代码修改必须仅作为实施方案存放在 `QuarkMeta Architecture/Implementation Plan/` 物理隔离目录中，绝对禁止未经授权对源代码文件进行直接修改。
+
 ### 1.1 探讨与自述理解阶段 (Discussion & Mutual Understanding)
 - **禁止自动脑补修改**：在探讨阶段，只做灵活技术探讨与架构审查，绝对不允许直接对任何代码文件进行修改或批量覆盖。
 - **通俗自述与共识确认**：必须用通俗易懂的语言自述对用户下达任务的理解。只有在用户明确表示“达成共识”或给予明确授权后，方可进入深度分析与后续步骤。
@@ -100,6 +104,12 @@ SEARCH 块中的代码必须在现有仓库中真实存在，绝不允许凭空�
 3. **Detailed Line-by-Line Changes（包含 CMakeLists.txt 在内的精准替换块）**
 4. **Build & Verification Steps（编译命令与验证方法）**
 5. **SSOT API Reuse & Anti-Redundancy Self-Check（既有 SSOT 通道复用与防另起炉灶自查）**：必须明确说明本次修改是否复用了既有 SSOT 官方 API（如 `refreshAll()`），是否存在私自另起炉灶行为。
+6. **Header API Signature Verification（头文件 API 物理签名核查表）**：必须列出方案中调用的所有外部成员函数在 `.h` 头文件中的物理精确签名，防范凭经验脑补命名导致 `C2039` 成员不存在等编译错误。
+
+### 3.5 成员函数与类型签名物理核查铁律 (Header API Verification Contract)
+1. **必须物理查阅 `.h` 源头**：在编制任何实施方案（撰写 Git Merge Diff 替换块）前，**AI 助手必须首先使用工具（如 `read_file` / `grep`）精准阅读涉及类的 `.h` 物理头文件**，核实调用的成员函数名（Getter/Setter）、参数列表与成员变量类型。
+2. **严禁凭直觉脑补 API 命名**：绝对禁止根据命名习惯凭直觉撰写函数名（例如将 `currentPath()` 凭空脑补为 `path()`，或将 `refreshAll()` 凭空脑补为 `refresh()`）。方案中出现的每一个成员调用，必须在现有仓库的 `.h` 头文件中真实存在并 100% 映射一致。
+3. **预防 C2039 编译错误责任制**：凡是在实施方案中出现的成员调用导致 MSVC C2039（成员不存在）编译错误，均视为方案编写前的头文件核查工作严重缺失。
 
 ---
 

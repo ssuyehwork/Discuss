@@ -139,7 +139,13 @@ void ContentPanel::initUi() {
             return;
         }
         m_isRecursive = recursive;
-        loadDirectory(m_currentPath, recursive);
+        if (m_currentViewMode == ColumnView) {
+            if (m_columnView && m_columnView->rightmostPane()) {
+                m_columnView->rightmostPane()->loadDirectory();
+            }
+        } else {
+            loadDirectory(m_currentPath, recursive);
+        }
     });
 
     m_mainLayout->addWidget(m_headerWidget);
