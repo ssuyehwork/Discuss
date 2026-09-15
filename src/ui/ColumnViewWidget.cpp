@@ -60,7 +60,11 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         // 保留 installEventFilter 用于捕获按键快捷键 (m_keyHandler)
         m_listView->installEventFilter(m_contentPanel);
         connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
-        connect(m_listView, &DropListView::pathsDropped, m_contentPanel, &ContentPanel::onPathsDropped);
+        connect(m_listView, &DropListView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+            if (m_contentPanel) {
+                m_contentPanel->onPathsDropped(paths, targetIndex, m_path, m_proxyModel);
+            }
+        });
     }
 
     connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ColumnViewPane::selectionChanged);

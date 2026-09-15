@@ -160,7 +160,7 @@ public slots:
     void onSelectionChanged();
     void onCustomContextMenuRequested(const QPoint& pos);
     void onDoubleClicked(const QModelIndex& index);
-    void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+    void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), QAbstractItemModel* sourceModelOverride = nullptr);
     void loadDirectory(const QString& path, bool recursive = false);
     void setPendingSelectName(const QString& name, bool edit = false);
     void refreshAll();

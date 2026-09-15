@@ -14,6 +14,7 @@
 #include <QFile>
 #include <QApplication>
 #include <QPointer>
+#include <QDebug>
 
 namespace QuarkMeta {
 
@@ -82,18 +83,28 @@ bool ContentFileOpsHandler::resolvePasteDestination() {
     return true;
 }
 
-void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex) {
+void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride, QAbstractItemModel* sourceModelOverride) {
     if (!m_panel || paths.isEmpty()) return;
-    QString currentPath = m_panel->currentPath();
-    if (currentPath.isEmpty() || currentPath == "computer://") return;
+    
+    QString baseDir = !targetDirOverride.isEmpty() ? targetDirOverride : m_panel->currentPath();
+    if (baseDir.isEmpty() || baseDir == "computer://") return;
 
-    QString destDir = currentPath;
-    if (targetIndex.isValid() && m_panel->getProxyModel()) {
-        QModelIndex srcIdx = m_panel->getProxyModel()->mapToSource(targetIndex);
+    QString destDir = baseDir;
+    QAbstractItemModel* proxyModel = sourceModelOverride ? sourceModelOverride : m_panel->getProxyModel();
+
+    if (targetIndex.isValid() && proxyModel) {
+        QModelIndex srcIdx = targetIndex;
+        if (auto* filterProxy = qobject_cast<QSortFilterProxyModel*>(proxyModel)) {
+            srcIdx = filterProxy->mapToSource(targetIndex);
+        }
         if (srcIdx.isValid() && QFileInfo(srcIdx.data(PathRole).toString()).isDir()) {
             destDir = srcIdx.data(PathRole).toString();
         }
     }
+
+    qDebug() << "[ColumnView DragDrop Debug] Sources:" << paths 
+             << "| TargetDirOverride:" << targetDirOverride 
+             << "| Final DestDir:" << destDir;
 
     bool isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
 
