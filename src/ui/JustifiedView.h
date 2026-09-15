@@ -72,6 +72,10 @@ private:
     LayoutMode m_layoutMode = JustifiedMode;
     QTimer* m_layoutTimer = nullptr;
     bool m_layoutDirty = false;
+
+    bool m_foldersCollapsed = false;
+    QRect m_folderHeaderRect;
+    int m_folderCount = 0;
 };
 
 } // namespace QuarkMeta
