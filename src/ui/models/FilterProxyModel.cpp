@@ -230,7 +230,7 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     bool leftPinned = leftRec.pinned || leftRec.encrypted;
     bool rightPinned = rightRec.pinned || rightRec.encrypted;
     if (leftPinned != rightPinned) {
-        return (sortOrder() == Qt::AscendingOrder) ? leftPinned : !rightPinned;
+        return (sortOrder() == Qt::AscendingOrder) ? leftPinned : !leftPinned;
     }
 
     auto compareNames = [](const ItemRecord& l, const ItemRecord& r) {

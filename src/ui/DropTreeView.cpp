@@ -100,19 +100,25 @@ void DropTreeView::keyboardSearch(const QString& search) {
     Q_UNUSED(search);
 }
 
+void DropTreeView::updateFolderHiding() {
+    m_folderCount = 0;
+    if (!model()) return;
+    int total = model()->rowCount();
+    for (int i = 0; i < total; ++i) {
+        QModelIndex idx = model()->index(i, 0);
+        bool isDir = (idx.data(TypeRole).toString() == "folder");
+        if (isDir) {
+            m_folderCount++;
+            setRowHidden(i, QModelIndex(), m_foldersCollapsed);
+        }
+    }
+}
+
 void DropTreeView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         if (m_folderCount > 0 && m_folderHeaderRect.contains(event->pos())) {
             m_foldersCollapsed = !m_foldersCollapsed;
-            if (model()) {
-                int total = model()->rowCount();
-                for (int i = 0; i < total; ++i) {
-                    QModelIndex idx = model()->index(i, 0);
-                    if (idx.data(TypeRole).toString() == "folder") {
-                        setRowHidden(i, QModelIndex(), m_foldersCollapsed);
-                    }
-                }
-            }
+            updateFolderHiding();
             viewport()->update();
             event->accept();
             return;
@@ -122,20 +128,7 @@ void DropTreeView::mousePressEvent(QMouseEvent* event) {
 }
 
 void DropTreeView::paintEvent(QPaintEvent* event) {
-    m_folderCount = 0;
-    m_folderHeaderRect = QRect();
-
-    if (model()) {
-        int total = model()->rowCount();
-        for (int i = 0; i < total; ++i) {
-            QModelIndex idx = model()->index(i, 0);
-            bool isDir = (idx.data(TypeRole).toString() == "folder");
-            if (isDir) {
-                m_folderCount++;
-                setRowHidden(i, QModelIndex(), m_foldersCollapsed);
-            }
-        }
-    }
+    updateFolderHiding();
 
     QTreeView::paintEvent(event);
 
