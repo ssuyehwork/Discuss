@@ -377,6 +377,9 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
 }
 
 void ContentPanel::setViewMode(ViewMode mode) {
+    if (m_currentViewMode == mode) {
+        return;
+    }
     ViewMode oldMode = m_currentViewMode;
     m_currentViewMode = mode;
     int minZoom = (mode == ListView) ? 30 : 93;
