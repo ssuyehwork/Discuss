@@ -351,8 +351,8 @@ void ContentPanel::performBatchRename() {
     if (m_fileOpsHandler) m_fileOpsHandler->performBatchRename();
 }
 
-void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex) {
-    if (m_fileOpsHandler) m_fileOpsHandler->onPathsDropped(paths, targetIndex);
+void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride, QAbstractItemModel* sourceModelOverride) {
+    if (m_fileOpsHandler) m_fileOpsHandler->onPathsDropped(paths, targetIndex, targetDirOverride, sourceModelOverride);
 }
 
 void ContentPanel::onDoubleClicked(const QModelIndex& index) {

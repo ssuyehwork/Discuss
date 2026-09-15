@@ -1,17 +1,13 @@
-# Implementation Plan: ColumnViewWidget-2.md (Column View Drag & Drop Target Path Alignment)
+# Implementation Plan: ColumnViewWidget-3.md (Column View Drag & Drop Target Path Alignment and Post-Drop Refresh Preservation)
 
 ## Overview
-Fixes the issue where drag-and-drop operations in Column View (Miller Columns) fail when dragging items across columns (e.g., from Column 3 `H:/Test/Test-3` to Column 2 `H:/Test`).
-
-### Root Cause
-1. In `ContentFileOpsHandler::onPathsDropped`, the target directory defaults to `m_panel->currentPath()`, which represents the active/rightmost column path rather than the specific column (`ColumnViewPane`) onto which the drag-and-drop event was released.
-2. When resolving a valid target item index (`targetIndex`), `m_panel->getProxyModel()` was used. In Column View, each `ColumnViewPane` possesses its own independent `FilterProxyModel`. Attempting to map a pane-specific `targetIndex` using the global proxy model failed, returning an invalid source index.
-3. As a result, dropping onto Column 2 incorrectly resolved its destination back to Column 3 (`H:/Test/Test-3`). The same-directory self-drop guard detected that `srcDir == destDir` and silently aborted the operation.
+Fixes two critical issues in Column View (Miller Columns) during drag-and-drop operations:
+1. **Target Path & Model Mismatch**: When dragging across columns (e.g. Column 3 to Column 2), the destination directory defaulted to `m_panel->currentPath()` instead of the specific `ColumnViewPane`'s directory, causing silent drop cancellations due to self-drop guards.
+2. **Column 4 (and Sub-columns) Unexpected Closure Post-Drop**: After file operations complete, `DiskIoService` invoked `weakPanel->loadDirectory(...)`. In Column View mode, `loadDirectory` called `m_columnView->setRootPath(...)`, which forcibly wiped all open columns (`clearAllColumns()`) and rebuilt only up to the 3rd column, destroying the 4th column (and any deeper sub-columns).
 
 ### Solution
-1. Extend `ContentFileOpsHandler::onPathsDropped` and `ContentPanel::onPathsDropped` with optional parameters: `targetDirOverride` and `sourceModelOverride`.
-2. Update `ColumnViewPane` in `ColumnViewWidget.cpp` to forward its specific column path (`m_path`) and proxy model (`m_proxyModel`) when emitting drop events.
-3. Add debug logging in `ContentFileOpsHandler::onPathsDropped` to verify source paths, targeted column directory, resolved destination directory, and drag-and-drop execution results.
+1. **In-Place Column Refresh**: Replace `weakPanel->loadDirectory(...)` with `weakPanel->refreshAll()` in `ContentFileOpsHandler::onPathsDropped`. `refreshAll()` safely delegates to `m_columnView->refreshAllColumns()`, reloading file data in-place without destroying open column widgets or truncating the column stack.
+2. **Target Alignment**: Pass `targetDirOverride` (`m_path`) and `sourceModelOverride` (`m_proxyModel`) from `ColumnViewPane` to ensure drop operations accurately resolve destination directories and filter proxy indices.
 
 ---
 
@@ -27,9 +23,9 @@ Fixes the issue where drag-and-drop operations in Column View (Miller Columns) f
 ## Detailed Line-by-Line Changes
 
 ### 1. `src/ui/controllers/ContentFileOpsHandler.h`
-Add `targetDirOverride` and `sourceModelOverride` parameters to `onPathsDropped`.
+Extend `onPathsDropped` signature with optional `targetDirOverride` and `sourceModelOverride` parameters.
 
-```cpp
+```
 <<<<<<< SEARCH
     void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
 =======
@@ -38,9 +34,9 @@ Add `targetDirOverride` and `sourceModelOverride` parameters to `onPathsDropped`
 ```
 
 ### 2. `src/ui/controllers/ContentFileOpsHandler.cpp`
-Update `onPathsDropped` implementation to utilize `targetDirOverride` and `sourceModelOverride`, include `<QDebug>`, and add debug logging.
+Include `<QDebug>`, resolve target paths using overrides, and replace `loadDirectory` with `refreshAll` post-I/O execution.
 
-```cpp
+```
 <<<<<<< SEARCH
 #include <QApplication>
 #include <QPointer>
@@ -51,7 +47,7 @@ Update `onPathsDropped` implementation to utilize `targetDirOverride` and `sourc
 >>>>>>> REPLACE
 ```
 
-```cpp
+```
 <<<<<<< SEARCH
 void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex) {
     if (!m_panel || paths.isEmpty()) return;
@@ -91,10 +87,32 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
 >>>>>>> REPLACE
 ```
 
-### 3. `src/ui/ContentPanel.h`
-Add `targetDirOverride` and `sourceModelOverride` parameters to `onPathsDropped`.
+```
+<<<<<<< SEARCH
+    QPointer<ContentPanel> weakPanel(m_panel);
+    DiskIoService::instance().executeAsync(ioCtx, [weakPanel](bool success) {
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, success]() {
+            if (weakPanel && success) {
+                weakPanel->loadDirectory(weakPanel->currentPath(), weakPanel->isRecursive());
+            }
+        });
+    });
+=======
+    QPointer<ContentPanel> weakPanel(m_panel);
+    DiskIoService::instance().executeAsync(ioCtx, [weakPanel](bool success) {
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, success]() {
+            if (weakPanel && success) {
+                weakPanel->refreshAll();
+            }
+        });
+    });
+>>>>>>> REPLACE
+```
 
-```cpp
+### 3. `src/ui/ContentPanel.h`
+Extend `onPathsDropped` in `ContentPanel`.
+
+```
 <<<<<<< SEARCH
     void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
 =======
@@ -103,9 +121,9 @@ Add `targetDirOverride` and `sourceModelOverride` parameters to `onPathsDropped`
 ```
 
 ### 4. `src/ui/ContentPanel.cpp`
-Pass `targetDirOverride` and `sourceModelOverride` in `ContentPanel::onPathsDropped`.
+Forward override parameters and protect `loadDirectory` in ColumnView mode when columns are already open.
 
-```cpp
+```
 <<<<<<< SEARCH
 void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex) {
     if (m_fileOpsHandler) m_fileOpsHandler->onPathsDropped(paths, targetIndex);
@@ -117,10 +135,42 @@ void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& t
 >>>>>>> REPLACE
 ```
 
-### 5. `src/ui/ColumnViewWidget.cpp`
-Update `ColumnViewPane` signal connection for `pathsDropped` to forward `m_path` and `m_proxyModel`.
+```
+<<<<<<< SEARCH
+void ContentPanel::loadDirectory(const QString& path, bool recursive) {
+    if (m_currentViewMode == ColumnView) {
+        m_currentPath = path;
+        m_isRecursive = recursive;
+        if (m_columnView) {
+            m_columnView->setRootPath(path);
+            restoreSelections();
+        }
+        updateStatusBarStats();
+        return;
+    }
+=======
+void ContentPanel::loadDirectory(const QString& path, bool recursive) {
+    if (m_currentViewMode == ColumnView) {
+        m_currentPath = path;
+        m_isRecursive = recursive;
+        if (m_columnView) {
+            if (m_columnView->containsPath(path)) {
+                m_columnView->refreshAllColumns();
+            } else {
+                m_columnView->setRootPath(path);
+                restoreSelections();
+            }
+        }
+        updateStatusBarStats();
+        return;
+    }
+>>>>>>> REPLACE
+```
 
-```cpp
+### 5. `src/ui/ColumnViewWidget.cpp`
+Update `ColumnViewPane` signal connection to pass column-specific `m_path` and `m_proxyModel`.
+
+```
 <<<<<<< SEARCH
         connect(m_listView, &DropListView::pathsDropped, m_contentPanel, &ContentPanel::onPathsDropped);
 =======
@@ -144,7 +194,7 @@ Update `ColumnViewPane` signal connection for `pathsDropped` to forward `m_path`
 
 2. **Verification**:
    - Open Column View in QuarkMeta.
-   - Expand multiple columns (e.g., Column 1: `H:/`, Column 2: `H:/Test`, Column 3: `H:/Test/Test-3`).
-   - Drag an item from Column 3 (`H:/Test/Test-3`) and drop it onto the blank space of Column 2 (`H:/Test`).
-   - Observe debug logs outputting `[ColumnView DragDrop Debug] Sources: ("...") | TargetDirOverride: "H:/Test" | Final DestDir: "H:/Test"`.
-   - Confirm the item is successfully moved from `H:/Test/Test-3` to `H:/Test` and both columns refresh automatically.
+   - Expand to 4 columns: Column 1 (`H:/`), Column 2 (`H:/Test`), Column 3 (`H:/Test/Test-3`), Column 4 (`H:/Test/Test-3/Test-4`).
+   - Drag an item from Column 3 to Column 4 (or Column 3 to Column 2) and release left mouse button.
+   - Verify that the item moves successfully.
+   - Verify that Column 4 (and any open sub-columns) remains open and visible, and that all columns refresh in-place without flashing or collapsing.
