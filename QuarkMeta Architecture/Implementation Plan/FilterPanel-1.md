@@ -74,7 +74,7 @@ In `ColumnViewWidget::appendColumn`, check if sub-column `paneIdx + 1` already d
 =======
     connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
         if (paneIdx + 1 < m_panes.size() &&
-            QDir::cleanPath(m_panes[paneIdx + 1]->path()) == QDir::cleanPath(folderPath)) {
+            QDir::cleanPath(m_panes[paneIdx + 1]->currentPath()) == QDir::cleanPath(folderPath)) {
             dismissSubColumns(paneIdx + 1);
             m_activePaneIndex = paneIdx + 1;
             emit selectionChanged();
