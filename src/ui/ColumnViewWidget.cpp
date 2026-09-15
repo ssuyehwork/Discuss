@@ -183,6 +183,10 @@ void ColumnViewPane::loadDirectory() {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
                 weakSelf->m_model->setRecords(items);
+                if (weakSelf->m_contentPanel && weakSelf->m_proxyModel) {
+                    weakSelf->m_proxyModel->setSortType(static_cast<int>(weakSelf->m_contentPanel->currentSortType()));
+                    weakSelf->m_proxyModel->sort(0, weakSelf->m_contentPanel->currentSortOrder());
+                }
                 if (!weakSelf->m_pendingSelectPath.isEmpty()) {
                     weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
                 }
