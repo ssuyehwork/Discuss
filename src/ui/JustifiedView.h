@@ -62,6 +62,8 @@ private:
     std::vector<ItemGeometry> m_geometries;
     int m_totalHeight = 0;
     int m_targetRowHeight = 128;
+    bool m_foldersCollapsed = false;
+    QRect m_folderHeaderRect;
     int m_aspectRatioRole = Qt::UserRole + 2;
     int m_anchorRow = -1;
     

@@ -224,6 +224,14 @@ QRegion JustifiedView::visualRegionForSelection(const QItemSelection& selection)
 
 void JustifiedView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton && event->modifiers() == Qt::NoModifier) {
+        if (!m_folderHeaderRect.isEmpty() && m_folderHeaderRect.contains(event->pos())) {
+            m_foldersCollapsed = !m_foldersCollapsed;
+            doLayout();
+            viewport()->update();
+            event->accept();
+            return;
+        }
+
         QModelIndex idx = indexAt(event->pos());
         if (!idx.isValid()) {
             m_isDraggingSelection = true;
@@ -320,6 +328,29 @@ void JustifiedView::paintEvent(QPaintEvent*) {
     painter.save();
     int scrollY = verticalScrollBar()->value();
     int vHeight = viewport()->height();
+
+    // 绘制子文件夹折叠/展开 Header
+    if (!m_folderHeaderRect.isEmpty()) {
+        QRect drawHeaderRect = m_folderHeaderRect.translated(0, -scrollY);
+        if (drawHeaderRect.intersects(viewport()->rect())) {
+            painter.save();
+            painter.setPen(QColor("#DDDDDD"));
+            QFont headerFont("Microsoft YaHei", 10, QFont::Bold);
+            painter.setFont(headerFont);
+            int folderCount = 0;
+            if (model()) {
+                for (int r = 0; r < model()->rowCount(); ++r) {
+                    if (model()->data(model()->index(r, 0), TypeRole).toString() == "folder") {
+                        folderCount++;
+                    }
+                }
+            }
+            QString headerText = QString("子文件夹 (%1) %2").arg(folderCount).arg(m_foldersCollapsed ? "▶" : "▼");
+            painter.drawText(drawHeaderRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
+            painter.restore();
+        }
+    }
+
     painter.translate(0, -scrollY);
     
     auto startIt = std::lower_bound(m_geometries.begin(), m_geometries.end(), scrollY,
@@ -393,6 +424,20 @@ void JustifiedView::doLayout() {
     m_geometries.resize(count);
     int currentY = margin; 
 
+    int folderCount = 0;
+    for (int r = 0; r < count; ++r) {
+        if (model()->data(model()->index(r, 0), TypeRole).toString() == "folder") {
+            folderCount++;
+        }
+    }
+
+    if (folderCount > 0) {
+        m_folderHeaderRect = QRect(margin + 4, currentY, containerWidth, 24);
+        currentY += 28;
+    } else {
+        m_folderHeaderRect = QRect();
+    }
+
     const int cardPadding = CardLayoutEngine::totalPaddingHorizontal();
     const int extraHeight = CardLayoutEngine::extraHeight();
 
@@ -428,12 +473,19 @@ void JustifiedView::doLayout() {
                 currentX = margin + std::max(0, (containerWidth - itemWidth) / 2);
             }
 
-            for (int j = 0; j < numInRow; ++j) {
-                int itemIdx = rowStart + j;
-                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, itemHeight), itemIdx };
-                currentX += itemWidth + standardSpacing;
+            if (isCurrentDir && m_foldersCollapsed) {
+                for (int j = 0; j < numInRow; ++j) {
+                    int itemIdx = rowStart + j;
+                    m_geometries[itemIdx] = { QRect(0, 0, 0, 0), itemIdx };
+                }
+            } else {
+                for (int j = 0; j < numInRow; ++j) {
+                    int itemIdx = rowStart + j;
+                    m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, itemHeight), itemIdx };
+                    currentX += itemWidth + standardSpacing;
+                }
+                currentY += itemHeight + spacing;
             }
-            currentY += itemHeight + spacing;
         }
     } else {
         int i = 0;
@@ -499,20 +551,28 @@ void JustifiedView::doLayout() {
 
             int currentX = margin;
 
-            for (int j = 0; j < numInRow; ++j) {
-                int itemIdx = rowStart + j;
-                int itemWidth;
-
-                if (j == numInRow - 1 && rowIsJustified) {
-                    itemWidth = (containerWidth + margin) - currentX;
-                } else {
-                    itemWidth = qRound(aspectRatios[j] * actualHeight) + cardPadding;
+            bool isCurrentDir = (model()->data(model()->index(rowStart, 0), TypeRole).toString() == "folder");
+            if (isCurrentDir && m_foldersCollapsed) {
+                for (int j = 0; j < numInRow; ++j) {
+                    int itemIdx = rowStart + j;
+                    m_geometries[itemIdx] = { QRect(0, 0, 0, 0), itemIdx };
                 }
+            } else {
+                for (int j = 0; j < numInRow; ++j) {
+                    int itemIdx = rowStart + j;
+                    int itemWidth;
 
-                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, actualHeight + extraHeight), itemIdx };
-                currentX += itemWidth + spacing; 
+                    if (j == numInRow - 1 && rowIsJustified) {
+                        itemWidth = (containerWidth + margin) - currentX;
+                    } else {
+                        itemWidth = qRound(aspectRatios[j] * actualHeight) + cardPadding;
+                    }
+
+                    m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, actualHeight + extraHeight), itemIdx };
+                    currentX += itemWidth + spacing;
+                }
+                currentY += actualHeight + extraHeight + spacing;
             }
-            currentY += actualHeight + extraHeight + spacing;
         }
     }
 
