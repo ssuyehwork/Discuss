@@ -25,7 +25,7 @@ Fixes two critical issues in Column View (Miller Columns) during drag-and-drop o
 ### 1. `src/ui/controllers/ContentFileOpsHandler.h`
 Extend `onPathsDropped` signature with optional `targetDirOverride` and `sourceModelOverride` parameters.
 
-```
+```cpp
 <<<<<<< SEARCH
     void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
 =======
@@ -36,7 +36,7 @@ Extend `onPathsDropped` signature with optional `targetDirOverride` and `sourceM
 ### 2. `src/ui/controllers/ContentFileOpsHandler.cpp`
 Include `<QDebug>`, resolve target paths using overrides, and replace `loadDirectory` with `refreshAll` post-I/O execution.
 
-```
+```cpp
 <<<<<<< SEARCH
 #include <QApplication>
 #include <QPointer>
@@ -47,7 +47,7 @@ Include `<QDebug>`, resolve target paths using overrides, and replace `loadDirec
 >>>>>>> REPLACE
 ```
 
-```
+```cpp
 <<<<<<< SEARCH
 void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex) {
     if (!m_panel || paths.isEmpty()) return;
@@ -87,7 +87,7 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
 >>>>>>> REPLACE
 ```
 
-```
+```cpp
 <<<<<<< SEARCH
     QPointer<ContentPanel> weakPanel(m_panel);
     DiskIoService::instance().executeAsync(ioCtx, [weakPanel](bool success) {
@@ -112,7 +112,7 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
 ### 3. `src/ui/ContentPanel.h`
 Extend `onPathsDropped` in `ContentPanel`.
 
-```
+```cpp
 <<<<<<< SEARCH
     void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
 =======
@@ -123,7 +123,7 @@ Extend `onPathsDropped` in `ContentPanel`.
 ### 4. `src/ui/ContentPanel.cpp`
 Forward override parameters and protect `loadDirectory` in ColumnView mode when columns are already open.
 
-```
+```cpp
 <<<<<<< SEARCH
 void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex) {
     if (m_fileOpsHandler) m_fileOpsHandler->onPathsDropped(paths, targetIndex);
@@ -135,7 +135,7 @@ void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& t
 >>>>>>> REPLACE
 ```
 
-```
+```cpp
 <<<<<<< SEARCH
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (m_currentViewMode == ColumnView) {
@@ -170,7 +170,7 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
 ### 5. `src/ui/ColumnViewWidget.cpp`
 Update `ColumnViewPane` signal connection to pass column-specific `m_path` and `m_proxyModel`.
 
-```
+```cpp
 <<<<<<< SEARCH
         connect(m_listView, &DropListView::pathsDropped, m_contentPanel, &ContentPanel::onPathsDropped);
 =======

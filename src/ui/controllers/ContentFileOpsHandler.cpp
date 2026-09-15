@@ -198,7 +198,7 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
     DiskIoService::instance().executeAsync(ioCtx, [weakPanel](bool success) {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, success]() {
             if (weakPanel && success) {
-                weakPanel->loadDirectory(weakPanel->currentPath(), weakPanel->isRecursive());
+                weakPanel->refreshAll();
             }
         });
     });

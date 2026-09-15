@@ -305,8 +305,12 @@ void ContentPanel::loadDirectory(const QString& path, bool recursive) {
         m_currentPath = path;
         m_isRecursive = recursive;
         if (m_columnView) {
-            m_columnView->setRootPath(path);
-            restoreSelections();
+            if (m_columnView->containsPath(path)) {
+                m_columnView->refreshAllColumns();
+            } else {
+                m_columnView->setRootPath(path);
+                restoreSelections();
+            }
         }
         updateStatusBarStats();
         return;
