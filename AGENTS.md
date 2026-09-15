@@ -104,6 +104,12 @@ SEARCH 块中的代码必须在现有仓库中真实存在，绝不允许凭空�
 3. **Detailed Line-by-Line Changes（包含 CMakeLists.txt 在内的精准替换块）**
 4. **Build & Verification Steps（编译命令与验证方法）**
 5. **SSOT API Reuse & Anti-Redundancy Self-Check（既有 SSOT 通道复用与防另起炉灶自查）**：必须明确说明本次修改是否复用了既有 SSOT 官方 API（如 `refreshAll()`），是否存在私自另起炉灶行为。
+6. **Header API Signature Verification（头文件 API 物理签名核查表）**：必须列出方案中调用的所有外部成员函数在 `.h` 头文件中的物理精确签名，防范凭经验脑补命名导致 `C2039` 成员不存在等编译错误。
+
+### 3.5 成员函数与类型签名物理核查铁律 (Header API Verification Contract)
+1. **必须物理查阅 `.h` 源头**：在编制任何实施方案（撰写 Git Merge Diff 替换块）前，**AI 助手必须首先使用工具（如 `read_file` / `grep`）精准阅读涉及类的 `.h` 物理头文件**，核实调用的成员函数名（Getter/Setter）、参数列表与成员变量类型。
+2. **严禁凭直觉脑补 API 命名**：绝对禁止根据命名习惯凭直觉撰写函数名（例如将 `currentPath()` 凭空脑补为 `path()`，或将 `refreshAll()` 凭空脑补为 `refresh()`）。方案中出现的每一个成员调用，必须在现有仓库的 `.h` 头文件中真实存在并 100% 映射一致。
+3. **预防 C2039 编译错误责任制**：凡是在实施方案中出现的成员调用导致 MSVC C2039（成员不存在）编译错误，均视为方案编写前的头文件核查工作严重缺失。
 
 ---
 
