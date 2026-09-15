@@ -260,15 +260,12 @@ void FilterPanel::populateStats(const QuarkMeta::ScanStats& stats) {
     if (m_statsEngine) {
         m_statsEngine->updateStats(stats);
     }
+    if (m_currentStats == stats) {
+        return;
+    }
     m_currentStats = stats;
-    m_ratingCounts = stats.ratingCounts;
-    m_colorCounts = stats.colorCounts;
-    m_typeCounts = stats.typeCounts;
-    m_createDateCounts = stats.createDateCounts;
-    m_modifyDateCounts = stats.modifyDateCounts;
-    m_emptyFolderCount = stats.emptyFolderCount;
-
-    rebuildGroups();
+    populate(stats.ratingCounts, stats.colorCounts, stats.typeCounts,
+             stats.createDateCounts, stats.modifyDateCounts, stats.emptyFolderCount);
 }
 
 void FilterPanel::populate(
