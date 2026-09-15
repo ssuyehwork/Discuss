@@ -100,55 +100,8 @@ void DropTreeView::keyboardSearch(const QString& search) {
     Q_UNUSED(search);
 }
 
-void DropTreeView::updateFolderHiding() {
-    m_folderCount = 0;
-    if (!model()) return;
-    int total = model()->rowCount();
-    for (int i = 0; i < total; ++i) {
-        QModelIndex idx = model()->index(i, 0);
-        bool isDir = (idx.data(TypeRole).toString() == "folder");
-        if (isDir) {
-            m_folderCount++;
-            setRowHidden(i, QModelIndex(), m_foldersCollapsed);
-        }
-    }
-}
-
-void DropTreeView::mousePressEvent(QMouseEvent* event) {
-    if (event->button() == Qt::LeftButton) {
-        if (m_folderCount > 0 && m_folderHeaderRect.contains(event->pos())) {
-            m_foldersCollapsed = !m_foldersCollapsed;
-            updateFolderHiding();
-            viewport()->update();
-            event->accept();
-            return;
-        }
-    }
-    QTreeView::mousePressEvent(event);
-}
-
 void DropTreeView::paintEvent(QPaintEvent* event) {
-    updateFolderHiding();
-
     QTreeView::paintEvent(event);
-
-    if (m_folderCount > 0) {
-        QPainter painter(viewport());
-        painter.save();
-
-        m_folderHeaderRect = QRect(0, 0, viewport()->width(), 26);
-        painter.fillRect(m_folderHeaderRect, QColor("#222222"));
-
-        painter.setPen(QColor("#A0A0A0"));
-        QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
-        painter.setFont(headerFont);
-
-        QString arrow = m_foldersCollapsed ? "▶" : "▼";
-        QString headerText = QString("  %1  文件夹 (%2)").arg(arrow).arg(m_folderCount);
-        painter.drawText(m_folderHeaderRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
-
-        painter.restore();
-    }
 
     if (!m_emptyHint.isEmpty() && model() && model()->rowCount() == 0) {
         QPainter painter(viewport());

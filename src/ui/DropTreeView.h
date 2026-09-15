@@ -94,17 +94,9 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private:
-    void mousePressEvent(QMouseEvent* event) override;
-
     QTimer* m_autoExpandTimer = nullptr;
     QModelIndex m_hoverIndex;
     QString m_emptyHint;
-
-    void updateFolderHiding();
-
-    bool m_foldersCollapsed = false;
-    QRect m_folderHeaderRect;
-    int m_folderCount = 0;
 };
 
 } // namespace QuarkMeta

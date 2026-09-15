@@ -31,16 +31,7 @@ signals:
     void blankSpaceDoubleClicked();
 
 protected:
-    void mousePressEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
-    void paintEvent(QPaintEvent* event) override;
-
-private:
-    void updateFolderHiding();
-
-    bool m_foldersCollapsed = false;
-    QRect m_folderHeaderRect;
-    int m_folderCount = 0;
 };
 
 } // namespace QuarkMeta
