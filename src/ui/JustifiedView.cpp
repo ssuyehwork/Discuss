@@ -235,6 +235,14 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
             return;
         }
 
+        if (m_fileCount > 0 && m_fileHeaderRect.contains(contentPos)) {
+            m_filesCollapsed = !m_filesCollapsed;
+            doLayout();
+            viewport()->update();
+            event->accept();
+            return;
+        }
+
         QModelIndex idx = indexAt(event->pos());
         if (!idx.isValid()) {
             m_isDraggingSelection = true;
@@ -335,6 +343,24 @@ void JustifiedView::paintEvent(QPaintEvent*) {
 
         QString arrow = m_foldersCollapsed ? "▶" : "▼";
         QString headerText = QString("  %1  文件夹 (%2)").arg(arrow).arg(m_folderCount);
+        painter.drawText(headerRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
+
+        painter.restore();
+    }
+
+    if (m_fileCount > 0 && !m_fileHeaderRect.isEmpty()) {
+        painter.save();
+        painter.translate(0, -scrollY);
+
+        QRect headerRect = m_fileHeaderRect;
+        painter.fillRect(headerRect, QColor("#222222"));
+
+        painter.setPen(QColor("#A0A0A0"));
+        QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
+        painter.setFont(headerFont);
+
+        QString arrow = m_filesCollapsed ? "▶" : "▼";
+        QString headerText = QString("  %1  文件 (%2)").arg(arrow).arg(m_fileCount);
         painter.drawText(headerRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
 
         painter.restore();
@@ -543,8 +569,14 @@ void JustifiedView::doLayout() {
         }
     }
 
-    if (!fileIndices.empty()) {
-        if (m_layoutMode == GridMode) {
+    m_fileCount = static_cast<int>(fileIndices.size());
+
+    if (m_fileCount > 0) {
+        m_fileHeaderRect = QRect(margin, currentY, containerWidth, 32);
+        currentY += 36;
+
+        if (!m_filesCollapsed) {
+            if (m_layoutMode == GridMode) {
             int itemWidth = m_targetRowHeight + cardPadding;
             int itemHeight = m_targetRowHeight + extraHeight;
             int maxNumInRow = (containerWidth + spacing) / (itemWidth + spacing);
