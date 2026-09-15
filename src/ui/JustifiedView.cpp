@@ -577,97 +577,98 @@ void JustifiedView::doLayout() {
 
         if (!m_filesCollapsed) {
             if (m_layoutMode == GridMode) {
-            int itemWidth = m_targetRowHeight + cardPadding;
-            int itemHeight = m_targetRowHeight + extraHeight;
-            int maxNumInRow = (containerWidth + spacing) / (itemWidth + spacing);
-            if (maxNumInRow <= 0) maxNumInRow = 1;
+                int itemWidth = m_targetRowHeight + cardPadding;
+                int itemHeight = m_targetRowHeight + extraHeight;
+                int maxNumInRow = (containerWidth + spacing) / (itemWidth + spacing);
+                if (maxNumInRow <= 0) maxNumInRow = 1;
 
-            int standardSpacing = spacing;
-            if (maxNumInRow > 1) {
-                standardSpacing = (containerWidth - (maxNumInRow * itemWidth)) / (maxNumInRow - 1);
-            }
-
-            int fIdx = 0;
-            int fSize = static_cast<int>(fileIndices.size());
-            while (fIdx < fSize) {
-                int rowStart = fIdx;
-                int numInRow = 0;
-                while (fIdx < fSize && numInRow < maxNumInRow) {
-                    numInRow++;
-                    fIdx++;
+                int standardSpacing = spacing;
+                if (maxNumInRow > 1) {
+                    standardSpacing = (containerWidth - (maxNumInRow * itemWidth)) / (maxNumInRow - 1);
                 }
 
-                int currentX = margin;
-                if (maxNumInRow == 1) {
-                    currentX = margin + std::max(0, (containerWidth - itemWidth) / 2);
-                }
-
-                for (int j = 0; j < numInRow; ++j) {
-                    int itemIdx = fileIndices[rowStart + j];
-                    m_geometries.push_back({ QRect(currentX, currentY, itemWidth, itemHeight), itemIdx });
-                    currentX += itemWidth + standardSpacing;
-                }
-                currentY += itemHeight + spacing;
-            }
-        } else {
-            int fIdx = 0;
-            int fSize = static_cast<int>(fileIndices.size());
-            while (fIdx < fSize) {
-                int rowStart = fIdx;
-                double rowAspectRatioSum = 0;
-                std::vector<double> aspectRatios;
-
+                int fIdx = 0;
+                int fSize = static_cast<int>(fileIndices.size());
                 while (fIdx < fSize) {
-                    int itemIdx = fileIndices[fIdx];
-                    QModelIndex idx = model()->index(itemIdx, 0);
-                    double ar = model()->data(idx, m_aspectRatioRole).toDouble();
-                    if (ar <= 0) ar = 1.0;
+                    int rowStart = fIdx;
+                    int numInRow = 0;
+                    while (fIdx < fSize && numInRow < maxNumInRow) {
+                        numInRow++;
+                        fIdx++;
+                    }
 
-                    aspectRatios.push_back(ar);
-                    rowAspectRatioSum += ar;
+                    int currentX = margin;
+                    if (maxNumInRow == 1) {
+                        currentX = margin + std::max(0, (containerWidth - itemWidth) / 2);
+                    }
 
-                    int numInRow = (int)aspectRatios.size();
-                    double estimatedWidth = (rowAspectRatioSum * m_targetRowHeight) + (cardPadding * numInRow) + (spacing * (numInRow - 1));
-                    if (estimatedWidth > containerWidth) {
-                        if (numInRow > 1) {
-                            aspectRatios.pop_back();
-                            rowAspectRatioSum -= ar;
-                        } else {
-                            fIdx++;
+                    for (int j = 0; j < numInRow; ++j) {
+                        int itemIdx = fileIndices[rowStart + j];
+                        m_geometries.push_back({ QRect(currentX, currentY, itemWidth, itemHeight), itemIdx });
+                        currentX += itemWidth + standardSpacing;
+                    }
+                    currentY += itemHeight + spacing;
+                }
+            } else {
+                int fIdx = 0;
+                int fSize = static_cast<int>(fileIndices.size());
+                while (fIdx < fSize) {
+                    int rowStart = fIdx;
+                    double rowAspectRatioSum = 0;
+                    std::vector<double> aspectRatios;
+
+                    while (fIdx < fSize) {
+                        int itemIdx = fileIndices[fIdx];
+                        QModelIndex idx = model()->index(itemIdx, 0);
+                        double ar = model()->data(idx, m_aspectRatioRole).toDouble();
+                        if (ar <= 0) ar = 1.0;
+
+                        aspectRatios.push_back(ar);
+                        rowAspectRatioSum += ar;
+
+                        int numInRow = (int)aspectRatios.size();
+                        double estimatedWidth = (rowAspectRatioSum * m_targetRowHeight) + (cardPadding * numInRow) + (spacing * (numInRow - 1));
+                        if (estimatedWidth > containerWidth) {
+                            if (numInRow > 1) {
+                                aspectRatios.pop_back();
+                                rowAspectRatioSum -= ar;
+                            } else {
+                                fIdx++;
+                            }
+                            break;
                         }
-                        break;
-                    }
-                    fIdx++;
-                }
-
-                int numInRow = static_cast<int>(aspectRatios.size());
-                if (numInRow <= 0) break;
-
-                int actualHeight = m_targetRowHeight;
-                bool isLastRow = (fIdx == fSize);
-                bool rowIsJustified = !isLastRow;
-
-                int availableImageWidth = containerWidth - (spacing * (numInRow - 1)) - (cardPadding * numInRow);
-                if (rowIsJustified) {
-                    actualHeight = qRound(availableImageWidth / rowAspectRatioSum);
-                    actualHeight = std::max(actualHeight, (int)(m_targetRowHeight * 0.75));
-                    actualHeight = std::min(actualHeight, (int)(m_targetRowHeight * 1.5));
-                }
-
-                int currentX = margin;
-                for (int j = 0; j < numInRow; ++j) {
-                    int itemIdx = fileIndices[rowStart + j];
-                    int itemWidth;
-                    if (j == numInRow - 1 && rowIsJustified) {
-                        itemWidth = (containerWidth + margin) - currentX;
-                    } else {
-                        itemWidth = qRound(aspectRatios[j] * actualHeight) + cardPadding;
+                        fIdx++;
                     }
 
-                    m_geometries.push_back({ QRect(currentX, currentY, itemWidth, actualHeight + extraHeight), itemIdx });
-                    currentX += itemWidth + spacing;
+                    int numInRow = static_cast<int>(aspectRatios.size());
+                    if (numInRow <= 0) break;
+
+                    int actualHeight = m_targetRowHeight;
+                    bool isLastRow = (fIdx == fSize);
+                    bool rowIsJustified = !isLastRow;
+
+                    int availableImageWidth = containerWidth - (spacing * (numInRow - 1)) - (cardPadding * numInRow);
+                    if (rowIsJustified) {
+                        actualHeight = qRound(availableImageWidth / rowAspectRatioSum);
+                        actualHeight = std::max(actualHeight, (int)(m_targetRowHeight * 0.75));
+                        actualHeight = std::min(actualHeight, (int)(m_targetRowHeight * 1.5));
+                    }
+
+                    int currentX = margin;
+                    for (int j = 0; j < numInRow; ++j) {
+                        int itemIdx = fileIndices[rowStart + j];
+                        int itemWidth;
+                        if (j == numInRow - 1 && rowIsJustified) {
+                            itemWidth = (containerWidth + margin) - currentX;
+                        } else {
+                            itemWidth = qRound(aspectRatios[j] * actualHeight) + cardPadding;
+                        }
+
+                        m_geometries.push_back({ QRect(currentX, currentY, itemWidth, actualHeight + extraHeight), itemIdx });
+                        currentX += itemWidth + spacing;
+                    }
+                    currentY += actualHeight + extraHeight + spacing;
                 }
-                currentY += actualHeight + extraHeight + spacing;
             }
         }
     }
