@@ -69,7 +69,6 @@ void DropListView::startDrag(Qt::DropActions supportedActions) {
 
 void DropListView::updateFolderHiding() {
     m_folderCount = 0;
-    m_fileCount = 0;
     if (!model()) return;
     int total = model()->rowCount();
     for (int i = 0; i < total; ++i) {
@@ -78,9 +77,6 @@ void DropListView::updateFolderHiding() {
         if (isDir) {
             m_folderCount++;
             setRowHidden(i, m_foldersCollapsed);
-        } else {
-            m_fileCount++;
-            setRowHidden(i, m_filesCollapsed);
         }
     }
 }
@@ -89,13 +85,6 @@ void DropListView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         if (m_folderCount > 0 && m_folderHeaderRect.contains(event->pos())) {
             m_foldersCollapsed = !m_foldersCollapsed;
-            updateFolderHiding();
-            viewport()->update();
-            event->accept();
-            return;
-        }
-        if (m_fileCount > 0 && m_fileHeaderRect.contains(event->pos())) {
-            m_filesCollapsed = !m_filesCollapsed;
             updateFolderHiding();
             viewport()->update();
             event->accept();
@@ -119,26 +108,7 @@ void DropListView::mouseDoubleClickEvent(QMouseEvent* event) {
 
 void DropListView::paintEvent(QPaintEvent* event) {
     updateFolderHiding();
-
     QListView::paintEvent(event);
-
-    if (m_folderCount > 0) {
-        QPainter painter(viewport());
-        painter.save();
-
-        m_folderHeaderRect = QRect(0, 0, viewport()->width(), 26);
-        painter.fillRect(m_folderHeaderRect, QColor("#222222"));
-
-        painter.setPen(QColor("#A0A0A0"));
-        QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
-        painter.setFont(headerFont);
-
-        QString arrow = m_foldersCollapsed ? "▶" : "▼";
-        QString headerText = QString("  %1  文件夹 (%2)").arg(arrow).arg(m_folderCount);
-        painter.drawText(m_folderHeaderRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
-
-        painter.restore();
-    }
 }
 
 } // namespace QuarkMeta

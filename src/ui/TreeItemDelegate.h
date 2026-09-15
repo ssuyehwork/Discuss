@@ -28,23 +28,107 @@ namespace QuarkMeta {
  */
 class TreeItemDelegate : public RenameCapableDelegate {
 public:
-    explicit TreeItemDelegate(QObject* parent = nullptr, bool showStatus = true, bool drawMiniCards = false)
-        : RenameCapableDelegate(parent), m_drawMiniCards(drawMiniCards) { Q_UNUSED(showStatus); }
+    explicit TreeItemDelegate(QObject* parent = nullptr, bool showStatus = true, bool drawMiniCards = false, bool enableSectionHeaders = false)
+        : RenameCapableDelegate(parent), m_drawMiniCards(drawMiniCards), m_enableSectionHeaders(enableSectionHeaders) { Q_UNUSED(showStatus); }
 
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         QSize sz = QStyledItemDelegate::sizeHint(option, index);
         const QAbstractItemView* view = qobject_cast<const QAbstractItemView*>(option.widget);
         int zoom = view ? view->iconSize().height() + 8 : 30;
-        sz.setHeight(RowLayoutEngine::calculateRowHeight(zoom));
+        int h = RowLayoutEngine::calculateRowHeight(zoom);
+
+        if (m_enableSectionHeaders && index.isValid()) {
+            const QAbstractItemModel* m = index.model();
+            bool isFolder = (index.data(TypeRole).toString() == "folder");
+            bool hasHeaderAbove = false;
+            if (isFolder && index.row() == 0) {
+                hasHeaderAbove = true;
+            } else if (!isFolder && m) {
+                bool prevIsFolder = (index.row() > 0)
+                    ? (m->index(index.row() - 1, 0).data(TypeRole).toString() == "folder")
+                    : true;
+                if (prevIsFolder) {
+                    hasHeaderAbove = true;
+                }
+            }
+            if (hasHeaderAbove) {
+                h += 26;
+            }
+        }
+        sz.setHeight(h);
         return sz;
+    }
+
+    void countSections(const QAbstractItemModel* m, int& folderCount, int& fileFirstRow) const {
+        folderCount = 0;
+        fileFirstRow = -1;
+        if (!m) return;
+        int total = m->rowCount();
+        for (int i = 0; i < total; ++i) {
+            bool isFolder = (m->index(i, 0).data(TypeRole).toString() == "folder");
+            if (isFolder) {
+                folderCount++;
+            } else if (fileFirstRow == -1) {
+                fileFirstRow = i;
+            }
+        }
     }
 
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         if (!index.isValid()) return;
 
+        QStyleOptionViewItem opt = option;
+        if (m_enableSectionHeaders) {
+            const QAbstractItemModel* m = index.model();
+            bool isFolder = (index.data(TypeRole).toString() == "folder");
+            bool hasHeaderAbove = false;
+            QString sectionText;
 
-        bool selected = option.state & QStyle::State_Selected;
-        bool hover = option.state & QStyle::State_MouseOver;
+            if (isFolder && index.row() == 0) {
+                hasHeaderAbove = true;
+                if (index.column() == 0) {
+                    int folderCount = 0, fileFirstRow = -1;
+                    countSections(m, folderCount, fileFirstRow);
+                    sectionText = QString("▼  文件夹 (%1)").arg(folderCount);
+                }
+            } else if (!isFolder && m) {
+                bool prevIsFolder = (index.row() > 0)
+                    ? (m->index(index.row() - 1, 0).data(TypeRole).toString() == "folder")
+                    : true;
+                if (prevIsFolder) {
+                    hasHeaderAbove = true;
+                    if (index.column() == 0) {
+                        int total = m->rowCount();
+                        int fileCount = 0;
+                        for (int i = index.row(); i < total; ++i) {
+                            if (m->index(i, 0).data(TypeRole).toString() != "folder") fileCount++;
+                        }
+                        sectionText = QString("文件 (%1)").arg(fileCount);
+                    }
+                }
+            }
+
+            if (hasHeaderAbove) {
+                QRect headerArea(option.rect.left(), option.rect.top(), option.rect.width(), 26);
+                opt.rect = QRect(option.rect.left(), option.rect.top() + 26,
+                                 option.rect.width(), option.rect.height() - 26);
+
+                if (index.column() == 0 && !sectionText.isEmpty()) {
+                    painter->save();
+                    QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
+                    painter->setFont(headerFont);
+                    painter->setPen(QColor("#A0A0A0"));
+                    QFontMetrics fm(headerFont);
+                    int textW = fm.horizontalAdvance(sectionText) + 8;
+                    QRect textRect(headerArea.left() + 8, headerArea.top(), textW, headerArea.height());
+                    painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, sectionText);
+                    painter->restore();
+                }
+            }
+        }
+
+        bool selected = opt.state & QStyle::State_Selected;
+        bool hover = opt.state & QStyle::State_MouseOver;
 
         // 🚀【行底色彻底统一与防穿透自绘】：直接根据选中/悬停/行号奇偶绘制底色，贯穿整个单元格矩形
         painter->save();
@@ -227,6 +311,7 @@ public:
 
 private:
     bool m_drawMiniCards;
+    bool m_enableSectionHeaders = false;
 };
 
 } // namespace QuarkMeta

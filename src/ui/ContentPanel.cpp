@@ -213,7 +213,7 @@ void ContentPanel::initListView() {
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setRootIsDecorated(false);
-    m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true));
+    m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true, true));
     m_treeView->setModel(m_proxyModel);
     m_treeView->installEventFilter(this);
     m_treeView->viewport()->installEventFilter(this);
