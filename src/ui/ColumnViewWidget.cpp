@@ -13,7 +13,7 @@
 #include <QDir>
 #include <QResizeEvent>
 #include <QScrollBar>
- 
+
 namespace QuarkMeta {
 
 ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent)
