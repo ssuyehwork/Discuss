@@ -118,18 +118,11 @@ void ColumnViewPane::setFilterState(const FilterState& state) {
 
 void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     m_pendingSelectPath = targetPath;
-    if (m_listView && m_listView->selectionModel()) {
-        m_listView->selectionModel()->blockSignals(true);
-        tryPendingSelection();
-        m_listView->selectionModel()->blockSignals(false);
-    } else {
-        tryPendingSelection();
-    }
+    tryPendingSelection();
 }
 
 void ColumnViewPane::setPendingSelectNames(const QSet<QString>& names) {
     m_pendingSelectNames = names;
-    qDebug() << "[ColumnViewPane Debug] setPendingSelectNames count:" << names.size() << "path:" << m_path;
     tryPendingSelection();
 }
 
@@ -142,10 +135,6 @@ void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
 
 void ColumnViewPane::tryPendingSelection() {
     if (!m_proxyModel || !m_listView) return;
-
-    qDebug() << "[ColumnViewPane Debug] tryPendingSelection rowCount:" << m_proxyModel->rowCount()
-             << "pendingNames:" << m_pendingSelectNames.size()
-             << "pendingPath:" << m_pendingSelectPath;
 
     if (!m_pendingSelectNames.isEmpty() && m_proxyModel->rowCount() > 0) {
         QItemSelection sel;
@@ -232,7 +221,6 @@ void ColumnViewPane::loadDirectory() {
                     weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
                 }
                 if (!weakSelf->m_pendingSelectNames.isEmpty()) {
-                    qDebug() << "[ColumnViewPane Debug] Async load finished, triggering tryPendingSelection";
                     weakSelf->tryPendingSelection();
                 }
                 // 触发图标与缩略图提取管线
@@ -462,7 +450,9 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
-        m_activePaneIndex = pane->property("paneIndex").toInt();
+        if (pane == rightmostPane() || (pane->listView() && pane->listView()->hasFocus())) {
+            m_activePaneIndex = pane->property("paneIndex").toInt();
+        }
         emit selectionChanged();
         if (rightmostPane() && rightmostPane()->model()) {
             emit activeColumnRecordsChanged(rightmostPane()->model()->allRecords());

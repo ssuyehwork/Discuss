@@ -690,7 +690,6 @@ void ContentPanel::restoreSelections() {
     if (m_pendingSelectNames.isEmpty()) return;
 
     if (m_currentViewMode == ColumnView) {
-        qDebug() << "[ContentPanel Debug] restoreSelections in ColumnView, count:" << m_pendingSelectNames.size();
         if (m_columnView && m_columnView->rightmostPane()) {
             m_columnView->rightmostPane()->setPendingSelectNames(m_pendingSelectNames);
         }
