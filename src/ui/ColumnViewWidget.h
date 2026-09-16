@@ -85,6 +85,7 @@ public:
     void applyFilterState(const FilterState& state);
     void goUpColumn();
     void goUpColumnFromIndex(int paneIndex);
+    void clearAllSelections();
 
 signals:
     void pathNavigated(const QString& path);
@@ -109,6 +110,7 @@ private:
     QWidget* m_container = nullptr;
     QHBoxLayout* m_layout = nullptr;
     QList<ColumnViewPane*> m_panes;
+    QWidget* m_blankCanvasWidget = nullptr;
 };
 
 } // namespace QuarkMeta

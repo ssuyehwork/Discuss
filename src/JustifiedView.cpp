@@ -323,44 +323,7 @@ void JustifiedView::paintEvent(QPaintEvent*) {
     int scrollY = verticalScrollBar()->value();
     int vHeight = viewport()->height();
 
-    if (m_folderCount > 0 && !m_folderHeaderRect.isEmpty()) {
-        painter.save();
-        painter.translate(0, -scrollY);
-
-        painter.setPen(QColor("#A0A0A0"));
-        QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
-        painter.setFont(headerFont);
-
-        QIcon icon = UiHelper::getIcon(m_foldersCollapsed ? "chevron_right" : "chevron_down", QColor("#A0A0A0"), 12);
-        QRect iconRect(m_folderHeaderRect.left() + 8, m_folderHeaderRect.top() + (m_folderHeaderRect.height() - 12) / 2, 12, 12);
-        icon.paint(&painter, iconRect);
-
-        QString headerText = QString("文件夹 (%1)").arg(m_folderCount);
-        QFontMetrics fm(headerFont);
-        int textW = fm.horizontalAdvance(headerText) + 12;
-        QRect textRect(iconRect.right() + 6, m_folderHeaderRect.top(), textW, m_folderHeaderRect.height());
-        painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
-
-        painter.restore();
-    }
-
-    if (m_fileCount > 0 && !m_fileHeaderRect.isEmpty()) {
-        painter.save();
-        painter.translate(0, -scrollY);
-
-        painter.setPen(QColor("#A0A0A0"));
-        QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
-        painter.setFont(headerFont);
-
-        QString headerText = QString("  文件 (%1)").arg(m_fileCount);
-
-        QFontMetrics fm(headerFont);
-        int textW = fm.horizontalAdvance(headerText) + 12;
-        QRect textRect(m_fileHeaderRect.left(), m_fileHeaderRect.top(), textW, m_fileHeaderRect.height());
-        painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
-
-        painter.restore();
-    }
+    // 【架构归一化】：物理清理自绘文字残余，标题与折叠完全交由外部实体控件 FolderSectionHeaderBar 托管
 
     if (m_geometries.empty()) {
         painter.save();

@@ -18,6 +18,7 @@
 namespace QuarkMeta {
 
 class DropTreeView;
+class DropJustifiedView;
 class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
@@ -212,8 +213,17 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
-    FolderSectionHeaderBar* m_folderHeader = nullptr;
-    FileSectionHeaderBar* m_fileHeader = nullptr;
+    QWidget* m_listContainerWidget = nullptr;
+    FolderSectionHeaderBar* m_listFolderHeader = nullptr;
+    DropTreeView* m_folderTreeView = nullptr;
+    FileSectionHeaderBar* m_listFileHeader = nullptr;
+    FilterProxyModel* m_folderProxyModel = nullptr;
+    FilterProxyModel* m_fileProxyModel = nullptr;
+
+    QWidget* m_gridContainerWidget = nullptr;
+    FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
+    DropJustifiedView* m_folderGridView = nullptr;
+    FileSectionHeaderBar* m_gridFileHeader = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;
