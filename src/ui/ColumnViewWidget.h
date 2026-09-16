@@ -9,6 +9,7 @@
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
 #include "DropListView.h"
+#include "FolderSectionWidget.h"
 
 namespace QuarkMeta {
 
@@ -30,7 +31,9 @@ public:
     void applySort(int sortType, Qt::SortOrder sortOrder);
 
     DropListView* listView() const { return m_listView; }
+    DropListView* folderListView() const { return m_folderListView; }
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
+    FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
     DiskItemModel* model() const { return m_model; }
 
 signals:
@@ -50,6 +53,10 @@ private:
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
+    FilterProxyModel* m_folderProxyModel = nullptr;
+    FolderSectionHeaderBar* m_folderHeader = nullptr;
+    DropListView* m_folderListView = nullptr;
+    FileSectionHeaderBar* m_fileHeader = nullptr;
     DropListView* m_listView = nullptr;
     QLabel* m_emptyFilterHintLabel = nullptr;
 };

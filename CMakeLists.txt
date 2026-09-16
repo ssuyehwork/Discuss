@@ -132,6 +132,8 @@ set(SOURCES
     src/meta/MediaExtractorPipeline.h
     src/ui/BatchRenameDialog.cpp
     src/ui/BatchRenameDialog.h
+    src/ui/FolderSectionWidget.cpp
+    src/ui/FolderSectionWidget.h
     src/ui/BatchProgressDialog.h
     src/ui/FileCollisionDialog.h
     src/ui/FileCollisionDialog.cpp

@@ -22,6 +22,8 @@ class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
 class ContentStatsWorker;
+class FolderSectionHeaderBar;
+class FileSectionHeaderBar;
 
 /**
  * @brief 内容面板（面板四）：核心业务展示工作台（纯视图承载与高级意图分发）
@@ -187,6 +189,7 @@ private:
     void updateGridSize();
     void updateStatusBarStats();
     void emitSelectionChangedSignal();
+    void updateFolderSectionHeaders();
 
     // 单一事实来源配置与状态 (FilterState)
     FilterState m_currentFilter;
@@ -210,6 +213,8 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
+    FolderSectionHeaderBar* m_folderHeader = nullptr;
+    FileSectionHeaderBar* m_fileHeader = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;

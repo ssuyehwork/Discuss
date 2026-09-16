@@ -29,9 +29,58 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     m_model = new DiskItemModel(this);
     m_model->setCurrentPath(path);
-    m_proxyModel = new FilterProxyModel(this);
-    m_proxyModel->setSourceModel(m_model);
 
+    // 1. 文件夹专用代理模型 (仅放行文件夹)
+    m_folderProxyModel = new FilterProxyModel(this);
+    m_folderProxyModel->setSourceModel(m_model);
+    FilterState folderOnlyFilter;
+    folderOnlyFilter.showFolders = true;
+    folderOnlyFilter.showFiles = false;
+    m_folderProxyModel->currentFilter = folderOnlyFilter;
+
+    // 2. 文件专用代理模型 (仅放行文件)
+    m_fileProxyModel = new FilterProxyModel(this);
+    m_fileProxyModel->setSourceModel(m_model);
+    FilterState fileOnlyFilter;
+    fileOnlyFilter.showFolders = false;
+    fileOnlyFilter.showFiles = true;
+    m_fileProxyModel->currentFilter = fileOnlyFilter;
+
+    m_proxyModel = m_fileProxyModel; // 兼容对外 proxyModel()
+
+    // 3. 顶部子文件夹折叠条
+    m_folderHeader = new FolderSectionHeaderBar(this);
+    m_folderHeader->hide();
+    layout->addWidget(m_folderHeader);
+
+    // 4. 子文件夹列表视图
+    m_folderListView = new DropListView(this);
+    m_folderListView->setObjectName("ColumnViewFolderList");
+    m_folderListView->setFocusPolicy(Qt::StrongFocus);
+    m_folderListView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_folderListView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_folderListView->setDragEnabled(true);
+    m_folderListView->setAcceptDrops(true);
+    m_folderListView->setDropIndicatorShown(true);
+    m_folderListView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_folderListView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_folderListView->setModel(m_folderProxyModel);
+    m_folderListView->setItemDelegate(new ColumnItemDelegate(this));
+    m_folderListView->hide();
+    layout->addWidget(m_folderListView);
+
+    connect(m_folderHeader, &FolderSectionHeaderBar::collapseToggled, this, [this](bool collapsed) {
+        if (m_folderListView && m_folderHeader->count() > 0) {
+            m_folderListView->setVisible(!collapsed);
+        }
+    });
+
+    // 5. 内容文件区分界条
+    m_fileHeader = new FileSectionHeaderBar(this);
+    m_fileHeader->hide();
+    layout->addWidget(m_fileHeader);
+
+    // 6. 普通文件列表视图
     m_listView = new DropListView(this);
     m_listView->setObjectName("ColumnViewPaneListView");
     m_listView->setFocusPolicy(Qt::StrongFocus);
@@ -42,13 +91,36 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setDropIndicatorShown(true);
     m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_listView->setModel(m_proxyModel);
+    m_listView->setModel(m_fileProxyModel);
+    m_listView->setItemDelegate(new ColumnItemDelegate(this));
+    layout->addWidget(m_listView, 1);
 
-    auto checkEmptyHint = [this]() {
+    auto updateSectionCountsAndHints = [this]() {
         tryPendingSelection();
-        if (!m_model || !m_proxyModel || !m_emptyFilterHintLabel) return;
+        int folderCount = m_folderProxyModel ? m_folderProxyModel->rowCount() : 0;
+        int fileCount = m_fileProxyModel ? m_fileProxyModel->rowCount() : 0;
+
+        if (m_folderHeader) {
+            m_folderHeader->setCount(folderCount);
+        }
+        if (m_folderListView) {
+            if (folderCount == 0) {
+                m_folderListView->hide();
+            } else {
+                bool collapsed = m_folderHeader ? m_folderHeader->isCollapsed() : false;
+                m_folderListView->setVisible(!collapsed);
+                int folderH = qMin(180, qMax(28, folderCount * 28 + 4));
+                m_folderListView->setMaximumHeight(folderH);
+            }
+        }
+        if (m_fileHeader) {
+            m_fileHeader->setCount(fileCount);
+            m_fileHeader->setVisible(fileCount > 0 && folderCount > 0);
+        }
+
+        if (!m_model || !m_emptyFilterHintLabel) return;
         int fullCount = m_model->rowCount();
-        int visibleCount = m_proxyModel->rowCount();
+        int visibleCount = folderCount + fileCount;
         int hiddenCount = fullCount - visibleCount;
 
         if (fullCount > 0 && visibleCount == 0) {
@@ -61,12 +133,10 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         }
     };
 
-    connect(m_proxyModel, &QAbstractItemModel::modelReset, this, checkEmptyHint);
-    connect(m_proxyModel, &QAbstractItemModel::layoutChanged, this, checkEmptyHint);
-
-    auto* delegate = new ColumnItemDelegate(this);
-    m_listView->setItemDelegate(delegate);
-    layout->addWidget(m_listView);
+    connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, updateSectionCountsAndHints);
+    connect(m_folderProxyModel, &QAbstractItemModel::layoutChanged, this, updateSectionCountsAndHints);
+    connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, updateSectionCountsAndHints);
+    connect(m_fileProxyModel, &QAbstractItemModel::layoutChanged, this, updateSectionCountsAndHints);
 
     m_emptyFilterHintLabel = new QLabel(this);
     m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
@@ -75,33 +145,72 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_emptyFilterHintLabel->hide();
     layout->addWidget(m_emptyFilterHintLabel);
 
+    connect(m_folderListView, &DropListView::blankSpaceDoubleClicked, this, [this]() {
+        int paneIdx = property("paneIndex").toInt();
+        emit blankSpaceDoubleClicked(paneIdx);
+    });
     connect(m_listView, &DropListView::blankSpaceDoubleClicked, this, [this]() {
         int paneIdx = property("paneIndex").toInt();
         emit blankSpaceDoubleClicked(paneIdx);
     });
 
     if (m_contentPanel) {
-        // 保留 installEventFilter 用于捕获按键快捷键 (m_keyHandler)
+        m_folderListView->installEventFilter(m_contentPanel);
         m_listView->installEventFilter(m_contentPanel);
+        connect(m_folderListView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
         connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
+        connect(m_folderListView, &DropListView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+            if (m_contentPanel) {
+                m_contentPanel->onPathsDropped(paths, targetIndex, m_path, m_folderProxyModel);
+            }
+        });
         connect(m_listView, &DropListView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
             if (m_contentPanel) {
-                m_contentPanel->onPathsDropped(paths, targetIndex, m_path, m_proxyModel);
+                m_contentPanel->onPathsDropped(paths, targetIndex, m_path, m_fileProxyModel);
             }
         });
     }
 
-    connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ColumnViewPane::selectionChanged);
+    // 选区互斥联动与信号广播
+    connect(m_folderListView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
+        if (m_folderListView->selectionModel()->hasSelection() && m_listView->selectionModel()) {
+            QSignalBlocker blocker(m_listView->selectionModel());
+            m_listView->clearSelection();
+        }
+        emit selectionChanged();
+    });
+    connect(m_listView->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this]() {
+        if (m_listView->selectionModel()->hasSelection() && m_folderListView->selectionModel()) {
+            QSignalBlocker blocker(m_folderListView->selectionModel());
+            m_folderListView->clearSelection();
+        }
+        emit selectionChanged();
+    });
 
+    // 文件夹点击
+    connect(m_folderListView, &QListView::clicked, this, [this](const QModelIndex& index) {
+        QString itemPath = index.data(PathRole).toString();
+        int paneIdx = property("paneIndex").toInt();
+        emit folderSelected(itemPath, paneIdx);
+    });
+
+    // 文件点击
     connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
         QString itemPath = index.data(PathRole).toString();
         bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
         int paneIdx = property("paneIndex").toInt();
         if (isDir) {
             emit folderSelected(itemPath, paneIdx);
+        } else {
+            emit fileSelected(itemPath, paneIdx);
         }
     });
 
+    connect(m_folderListView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
+        if (m_contentPanel && index.isValid()) {
+            m_contentPanel->onDoubleClicked(index);
+        }
+    });
     connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
         if (m_contentPanel && index.isValid()) {
             m_contentPanel->onDoubleClicked(index);
@@ -110,9 +219,19 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 }
 
 void ColumnViewPane::setFilterState(const FilterState& state) {
-    if (m_proxyModel) {
-        m_proxyModel->currentFilter = state;
-        m_proxyModel->updateFilter();
+    if (m_folderProxyModel) {
+        FilterState s = state;
+        s.showFolders = true;
+        s.showFiles = false;
+        m_folderProxyModel->currentFilter = s;
+        m_folderProxyModel->updateFilter();
+    }
+    if (m_fileProxyModel) {
+        FilterState s = state;
+        s.showFolders = false;
+        s.showFiles = true;
+        m_fileProxyModel->currentFilter = s;
+        m_fileProxyModel->updateFilter();
     }
 }
 
@@ -128,43 +247,75 @@ void ColumnViewPane::setPendingSelectPaths(const QSet<QString>& paths) {
 }
 
 void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
-    if (m_proxyModel) {
-        m_proxyModel->setSortType(sortType);
-        m_proxyModel->sort(0, sortOrder);
+    if (m_folderProxyModel) {
+        m_folderProxyModel->setSortType(sortType);
+        m_folderProxyModel->sort(0, sortOrder);
+    }
+    if (m_fileProxyModel) {
+        m_fileProxyModel->setSortType(sortType);
+        m_fileProxyModel->sort(0, sortOrder);
     }
 }
 
 void ColumnViewPane::tryPendingSelection() {
-    if (!m_proxyModel || !m_listView) return;
+    if (!m_fileProxyModel || !m_listView) return;
 
-    if (!m_pendingSelectPaths.isEmpty() && m_proxyModel->rowCount() > 0) {
+    if (!m_pendingSelectPaths.isEmpty()) {
         QSet<QString> normalizedPending;
         normalizedPending.reserve(m_pendingSelectPaths.size());
         for (const QString& p : m_pendingSelectPaths) {
             normalizedPending.insert(QDir::toNativeSeparators(QDir::cleanPath(p)).toLower());
         }
 
-        QItemSelection sel;
-        QModelIndex lastIdx;
-        for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
-            QModelIndex idx = m_proxyModel->index(r, 0);
-            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString())).toLower();
-            if (normalizedPending.contains(itemPath)) {
-                sel.select(idx, idx);
-                lastIdx = idx;
-            }
-        }
-        if (!sel.isEmpty() && m_listView->selectionModel()) {
-            {
-                QSignalBlocker blocker(m_listView->selectionModel());
-                m_listView->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-                if (lastIdx.isValid()) {
-                    m_listView->selectionModel()->setCurrentIndex(lastIdx, QItemSelectionModel::NoUpdate);
+        // 1. 尝试在普通文件代理中选择
+        QItemSelection fileSel;
+        QModelIndex lastFileIdx;
+        if (m_fileProxyModel->rowCount() > 0) {
+            for (int r = 0; r < m_fileProxyModel->rowCount(); ++r) {
+                QModelIndex idx = m_fileProxyModel->index(r, 0);
+                QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString())).toLower();
+                if (normalizedPending.contains(itemPath)) {
+                    fileSel.select(idx, idx);
+                    lastFileIdx = idx;
                 }
             }
-            if (lastIdx.isValid()) {
-                m_listView->scrollTo(lastIdx, QAbstractItemView::PositionAtCenter);
+        }
+
+        // 2. 尝试在文件夹代理中选择
+        QItemSelection folderSel;
+        QModelIndex lastFolderIdx;
+        if (m_folderProxyModel && m_folderProxyModel->rowCount() > 0) {
+            for (int r = 0; r < m_folderProxyModel->rowCount(); ++r) {
+                QModelIndex idx = m_folderProxyModel->index(r, 0);
+                QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString())).toLower();
+                if (normalizedPending.contains(itemPath)) {
+                    folderSel.select(idx, idx);
+                    lastFolderIdx = idx;
+                }
             }
+        }
+
+        bool matchedAny = false;
+        if (!fileSel.isEmpty() && m_listView->selectionModel()) {
+            QSignalBlocker blocker(m_listView->selectionModel());
+            m_listView->selectionModel()->select(fileSel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            if (lastFileIdx.isValid()) {
+                m_listView->selectionModel()->setCurrentIndex(lastFileIdx, QItemSelectionModel::NoUpdate);
+                m_listView->scrollTo(lastFileIdx, QAbstractItemView::PositionAtCenter);
+            }
+            matchedAny = true;
+        }
+        if (!folderSel.isEmpty() && m_folderListView && m_folderListView->selectionModel()) {
+            QSignalBlocker blocker(m_folderListView->selectionModel());
+            m_folderListView->selectionModel()->select(folderSel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            if (lastFolderIdx.isValid()) {
+                m_folderListView->selectionModel()->setCurrentIndex(lastFolderIdx, QItemSelectionModel::NoUpdate);
+                m_folderListView->scrollTo(lastFolderIdx, QAbstractItemView::PositionAtCenter);
+            }
+            matchedAny = true;
+        }
+
+        if (matchedAny) {
             m_pendingSelectPaths.clear();
             m_pendingSelectPath.clear();
             emit selectionChanged();
@@ -176,28 +327,56 @@ void ColumnViewPane::tryPendingSelection() {
         QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(m_pendingSelectPath));
         QString targetName = QFileInfo(cleanTarget).fileName();
 
-        for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
-            QModelIndex idx = m_proxyModel->index(r, 0);
-            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
-            QString itemName = QFileInfo(itemPath).fileName();
+        // 优先在文件夹代理中寻找
+        if (m_folderProxyModel && m_folderListView) {
+            for (int r = 0; r < m_folderProxyModel->rowCount(); ++r) {
+                QModelIndex idx = m_folderProxyModel->index(r, 0);
+                QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+                QString itemName = QFileInfo(itemPath).fileName();
 
-            if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0 ||
-                (!targetName.isEmpty() && QString::compare(itemName, targetName, Qt::CaseInsensitive) == 0)) {
-                m_listView->setCurrentIndex(idx);
-                if (m_listView->selectionModel()) {
-                    QSignalBlocker blocker(m_listView->selectionModel());
-                    m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0 ||
+                    (!targetName.isEmpty() && QString::compare(itemName, targetName, Qt::CaseInsensitive) == 0)) {
+                    if (m_folderListView->selectionModel()) {
+                        QSignalBlocker blocker(m_folderListView->selectionModel());
+                        m_folderListView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                        m_folderListView->selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
+                    }
+                    m_folderListView->scrollTo(idx, QAbstractItemView::PositionAtCenter);
+                    m_pendingSelectPath.clear();
+                    emit selectionChanged();
+                    return;
                 }
-                m_listView->scrollTo(idx, QAbstractItemView::PositionAtCenter);
-                m_pendingSelectPath.clear();
-                emit selectionChanged();
-                break;
+            }
+        }
+
+        // 次选在文件代理中寻找
+        if (m_fileProxyModel && m_listView) {
+            for (int r = 0; r < m_fileProxyModel->rowCount(); ++r) {
+                QModelIndex idx = m_fileProxyModel->index(r, 0);
+                QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+                QString itemName = QFileInfo(itemPath).fileName();
+
+                if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0 ||
+                    (!targetName.isEmpty() && QString::compare(itemName, targetName, Qt::CaseInsensitive) == 0)) {
+                    if (m_listView->selectionModel()) {
+                        QSignalBlocker blocker(m_listView->selectionModel());
+                        m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                        m_listView->selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
+                    }
+                    m_listView->scrollTo(idx, QAbstractItemView::PositionAtCenter);
+                    m_pendingSelectPath.clear();
+                    emit selectionChanged();
+                    return;
+                }
             }
         }
     }
 }
 
 void ColumnViewPane::clearSelection() {
+    if (m_folderListView) {
+        m_folderListView->clearSelection();
+    }
     if (m_listView) {
         m_listView->clearSelection();
     }
@@ -227,9 +406,9 @@ void ColumnViewPane::loadDirectory() {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
             if (weakSelf && weakSelf->m_model) {
                 weakSelf->m_model->setRecords(items);
-                if (weakSelf->m_contentPanel && weakSelf->m_proxyModel) {
-                    weakSelf->m_proxyModel->setSortType(static_cast<int>(weakSelf->m_contentPanel->currentSortType()));
-                    weakSelf->m_proxyModel->sort(0, weakSelf->m_contentPanel->currentSortOrder());
+                if (weakSelf->m_contentPanel) {
+                    weakSelf->applySort(static_cast<int>(weakSelf->m_contentPanel->currentSortType()),
+                                        weakSelf->m_contentPanel->currentSortOrder());
                 }
                 if (!weakSelf->m_pendingSelectPaths.isEmpty()) {
                     weakSelf->tryPendingSelection();
@@ -323,12 +502,22 @@ bool ColumnViewWidget::containsPath(const QString& path) const {
 
 QStringList ColumnViewWidget::getSelectedPaths() const {
     ColumnViewPane* pane = activePane();
-    if (!pane || !pane->listView() || !pane->listView()->selectionModel()) return {};
+    if (!pane) return {};
     QStringList paths;
-    for (const auto& idx : pane->listView()->selectionModel()->selectedIndexes()) {
-        if (idx.column() == 0) {
-            QString p = idx.data(PathRole).toString();
-            if (!p.isEmpty()) paths << p;
+    if (pane->folderListView() && pane->folderListView()->selectionModel()) {
+        for (const auto& idx : pane->folderListView()->selectionModel()->selectedIndexes()) {
+            if (idx.column() == 0) {
+                QString p = idx.data(PathRole).toString();
+                if (!p.isEmpty()) paths << p;
+            }
+        }
+    }
+    if (pane->listView() && pane->listView()->selectionModel()) {
+        for (const auto& idx : pane->listView()->selectionModel()->selectedIndexes()) {
+            if (idx.column() == 0) {
+                QString p = idx.data(PathRole).toString();
+                if (!p.isEmpty()) paths << p;
+            }
         }
     }
     return paths;
@@ -336,8 +525,15 @@ QStringList ColumnViewWidget::getSelectedPaths() const {
 
 QModelIndexList ColumnViewWidget::getSelectedIndexes() const {
     ColumnViewPane* pane = activePane();
-    if (!pane || !pane->listView() || !pane->listView()->selectionModel()) return {};
-    return pane->listView()->selectionModel()->selectedIndexes();
+    if (!pane) return {};
+    if (pane->folderListView() && pane->folderListView()->selectionModel() &&
+        pane->folderListView()->selectionModel()->hasSelection()) {
+        return pane->folderListView()->selectionModel()->selectedIndexes();
+    }
+    if (pane->listView() && pane->listView()->selectionModel()) {
+        return pane->listView()->selectionModel()->selectedIndexes();
+    }
+    return {};
 }
 
 void ColumnViewWidget::applyFilterState(const FilterState& state) {
