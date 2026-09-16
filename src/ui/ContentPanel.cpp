@@ -62,9 +62,6 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_proxyModel->setFilterKeyColumn(0);
     m_proxyModel->setDynamicSortFilter(true);
 
-    m_groupingProxyModel = new GroupingProxyModel(this); 
-    m_groupingProxyModel->setSourceModel(m_proxyModel); 
-
     m_visibleTimer = new QTimer(this);
     m_visibleTimer->setSingleShot(true);
     m_visibleTimer->setInterval(60);
@@ -217,7 +214,7 @@ void ContentPanel::initListView() {
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setRootIsDecorated(false);
     m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true));
-    m_treeView->setModel(m_groupingProxyModel);
+    m_treeView->setModel(m_proxyModel);
     m_treeView->installEventFilter(this);
     m_treeView->viewport()->installEventFilter(this);
 

@@ -160,8 +160,6 @@ set(SOURCES
     src/ui/FilterStateModel.cpp
     src/ui/models/FilterProxyModel.h
     src/ui/models/FilterProxyModel.cpp
-    src/ui/models/GroupingProxyModel.h 
-    src/ui/models/GroupingProxyModel.cpp 
     src/ui/ScanStatsEngine.h
     src/ui/ScanStatsEngine.cpp
     src/ui/FilterPanel.cpp

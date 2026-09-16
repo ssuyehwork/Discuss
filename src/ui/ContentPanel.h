@@ -12,7 +12,6 @@
 #include "FilterPanel.h"
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
-#include "models/GroupingProxyModel.h"
 #include "controllers/ContentSortController.h"
 #include "../core/ModelContract.h"
 
@@ -213,7 +212,6 @@ private:
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;
     QSortFilterProxyModel* m_proxyModel = nullptr;
-    GroupingProxyModel* m_groupingProxyModel = nullptr;
     
     QTimer* m_visibleTimer = nullptr;
     QTimer* m_statsDebounceTimer = nullptr;
