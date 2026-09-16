@@ -383,6 +383,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
     if (m_currentViewMode == mode) {
         return;
     }
+    QStringList savedSelectedPaths = getSelectedPaths();
     ViewMode oldMode = m_currentViewMode;
     m_currentViewMode = mode;
     int minZoom = (mode == ListView) ? 30 : 93;
@@ -407,6 +408,13 @@ void ContentPanel::setViewMode(ViewMode mode) {
             if (!m_diskModel || m_diskModel->rowCount() == 0) {
                 loadDirectory(m_currentPath, m_isRecursive);
             }
+        }
+    }
+
+    // 🚀【视图切换选区无损同步】：在新激活的视图中同步恢复之前的选中高亮与聚焦位置
+    if (!savedSelectedPaths.isEmpty()) {
+        for (const QString& selPath : savedSelectedPaths) {
+            selectAndScrollToPath(selPath);
         }
     }
 
@@ -479,6 +487,10 @@ void ContentPanel::refreshAll() {
         if (m_columnView) m_columnView->refreshAllColumns();
         return;
     }
+    if (m_currentCategoryType == "trash") {
+        loadCategory("trash");
+        return;
+    }
     if (!m_currentPath.isEmpty() && m_currentPath != "computer://") loadDirectory(m_currentPath, m_isRecursive);
     else loadDirectory("computer://");
 }
@@ -498,13 +510,7 @@ void ContentPanel::onSelectionChanged() {
 }
 
 void ContentPanel::emitSelectionChangedSignal() {
-    QList<QModelIndex> indexes = getSelectedIndexes();
-    QStringList paths;
-    paths.reserve(qMin(indexes.size(), 50));
-    for (const auto& idx : indexes) {
-        if (idx.isValid()) paths.append(idx.data(PathRole).toString());
-        if (paths.size() >= 50) break;
-    }
+    QStringList paths = getSelectedPaths();
     emit selectionChanged(paths);
     updateStatusBarStats();
 }

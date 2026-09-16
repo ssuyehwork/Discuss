@@ -90,9 +90,10 @@ bool DiskTrashService::restoreFromDiskTrash(int id, const QString& trashPath) {
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
     QString originalPath;
+    QString actualTrashPath = trashPath;
     qint64 trashCreatedAt = 0;
     sqlite3_stmt* stmt = nullptr;
-    const char* sqlSel = "SELECT original_path, created_at FROM disk_trash WHERE id = ?";
+    const char* sqlSel = "SELECT original_path, created_at, trash_path FROM disk_trash WHERE id = ?";
     if (sqlite3_prepare_v2(db, sqlSel, -1, &stmt, nullptr) == SQLITE_OK) {
         sqlite3_bind_int(stmt, 1, id);
         if (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -101,11 +102,18 @@ bool DiskTrashService::restoreFromDiskTrash(int id, const QString& trashPath) {
                 originalPath = QString::fromWCharArray(wOrig);
             }
             trashCreatedAt = sqlite3_column_int64(stmt, 1);
+
+            if (actualTrashPath.isEmpty()) {
+                const wchar_t* wTrash = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 2));
+                if (wTrash) {
+                    actualTrashPath = QString::fromWCharArray(wTrash);
+                }
+            }
         }
         sqlite3_finalize(stmt);
     }
 
-    if (originalPath.isEmpty()) {
+    if (originalPath.isEmpty() || actualTrashPath.isEmpty()) {
         return false;
     }
 
@@ -144,8 +152,8 @@ bool DiskTrashService::restoreFromDiskTrash(int id, const QString& trashPath) {
         }
     }
 
-    if (QFile::rename(trashPath, targetPath)) {
-        QDir(QFileInfo(trashPath).absolutePath()).removeRecursively();
+    if (QFile::rename(actualTrashPath, targetPath)) {
+        QDir(QFileInfo(actualTrashPath).absolutePath()).removeRecursively();
 
         SqlTransaction trans(db);
         sqlite3_stmt* delStmt = nullptr;
