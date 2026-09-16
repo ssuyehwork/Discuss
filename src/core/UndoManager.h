@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ActionCommand.h"
+#include "CentralEventHub.h"
 #include <deque>
 #include <memory>
 #include <QObject>
@@ -44,6 +45,8 @@ public:
         
         emit canUndoChanged(!m_undoStack.empty());
         emit canRedoChanged(true);
+
+        CentralEventHub::instance().publishEvent({AppEventType::UndoRedoPerformed, "", {}, {}});
     }
 
     void redo() {
@@ -58,6 +61,8 @@ public:
         
         emit canUndoChanged(true);
         emit canRedoChanged(!m_redoStack.empty());
+
+        CentralEventHub::instance().publishEvent({AppEventType::UndoRedoPerformed, "", {}, {}});
     }
 
     bool canUndo() const { return !m_undoStack.empty(); }
