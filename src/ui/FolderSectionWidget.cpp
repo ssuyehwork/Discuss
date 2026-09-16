@@ -16,11 +16,9 @@ FolderSectionHeaderBar::FolderSectionHeaderBar(QWidget* parent)
     layout->setSpacing(6);
 
     m_titleLabel = new QLabel(this);
-    m_titleLabel->setObjectName("FolderSectionTitleLabel");
     m_titleLabel->setStyleSheet("color: #CCCCCC; font-size: 12px; font-weight: bold;");
 
     m_arrowLabel = new QLabel("▾", this);
-    m_arrowLabel->setObjectName("FolderSectionArrowLabel");
     m_arrowLabel->setStyleSheet("color: #888888; font-size: 11px;");
 
     layout->addWidget(m_titleLabel);
@@ -74,7 +72,6 @@ FileSectionHeaderBar::FileSectionHeaderBar(QWidget* parent)
     layout->setSpacing(6);
 
     m_titleLabel = new QLabel("内容 (0)", this);
-    m_titleLabel->setObjectName("FileSectionTitleLabel");
     m_titleLabel->setStyleSheet("color: #888888; font-size: 12px; font-weight: bold;");
 
     layout->addWidget(m_titleLabel);

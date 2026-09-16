@@ -34,6 +34,7 @@ public:
     DropListView* folderListView() const { return m_folderListView; }
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
     FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
+    FilterProxyModel* fileProxyModel() const { return m_fileProxyModel; }
     DiskItemModel* model() const { return m_model; }
 
 signals:
@@ -54,6 +55,7 @@ private:
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
     FilterProxyModel* m_folderProxyModel = nullptr;
+    FilterProxyModel* m_fileProxyModel = nullptr;
     FolderSectionHeaderBar* m_folderHeader = nullptr;
     DropListView* m_folderListView = nullptr;
     FileSectionHeaderBar* m_fileHeader = nullptr;

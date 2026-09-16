@@ -4,6 +4,7 @@
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
+#include <QToolButton>
 #include <QFrame>
 
 namespace QuarkMeta {
@@ -15,7 +16,6 @@ class FolderSectionHeaderBar : public QFrame {
     Q_OBJECT
 public:
     explicit FolderSectionHeaderBar(QWidget* parent = nullptr);
-    ~FolderSectionHeaderBar() override = default;
 
     void setCount(int count);
     int count() const { return m_count; }
@@ -45,7 +45,6 @@ class FileSectionHeaderBar : public QFrame {
     Q_OBJECT
 public:
     explicit FileSectionHeaderBar(QWidget* parent = nullptr);
-    ~FileSectionHeaderBar() override = default;
 
     void setCount(int count);
     int count() const { return m_count; }

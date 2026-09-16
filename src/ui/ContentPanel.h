@@ -189,7 +189,6 @@ private:
     void updateGridSize();
     void updateStatusBarStats();
     void emitSelectionChangedSignal();
-    void updateFolderSectionHeaders();
 
     // 单一事实来源配置与状态 (FilterState)
     FilterState m_currentFilter;
