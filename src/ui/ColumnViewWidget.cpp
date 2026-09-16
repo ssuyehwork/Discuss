@@ -118,7 +118,13 @@ void ColumnViewPane::setFilterState(const FilterState& state) {
 
 void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     m_pendingSelectPath = targetPath;
-    tryPendingSelection();
+    if (m_listView && m_listView->selectionModel()) {
+        m_listView->selectionModel()->blockSignals(true);
+        tryPendingSelection();
+        m_listView->selectionModel()->blockSignals(false);
+    } else {
+        tryPendingSelection();
+    }
 }
 
 void ColumnViewPane::setPendingSelectNames(const QSet<QString>& names) {
