@@ -36,6 +36,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QApplication>
+#include <QSignalBlocker>
 
 namespace QuarkMeta {
 
@@ -688,12 +689,15 @@ void ContentPanel::restoreActiveView() {
 }
 
 void ContentPanel::restoreSelections() {
-    if (m_selectionState.selectedPaths.isEmpty()) return;
+    if (m_selectionState.selectedPaths.isEmpty() || m_isRestoringSelections) return;
+
+    m_isRestoringSelections = true;
 
     if (m_currentViewMode == ColumnView) {
         if (m_columnView && m_columnView->rightmostPane()) {
             m_columnView->rightmostPane()->setPendingSelectPaths(m_selectionState.selectedPaths);
         }
+        m_isRestoringSelections = false;
         return;
     }
 
@@ -702,6 +706,7 @@ void ContentPanel::restoreSelections() {
     QSortFilterProxyModel* proxy = m_proxyModel;
 
     if (view && view->selectionModel() && diskModel && proxy) {
+        QSignalBlocker blocker(view->selectionModel());
         QItemSelection sel;
         QModelIndex lastIdx;
         const auto& recs = diskModel->allRecords();
@@ -714,6 +719,8 @@ void ContentPanel::restoreSelections() {
         view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
         if (lastIdx.isValid()) { view->scrollTo(lastIdx); if (m_isPendingEdit) view->edit(lastIdx); }
     }
+
+    m_isRestoringSelections = false;
 }
 
 void ContentPanel::setPendingSelectName(const QString& name, bool edit) {
