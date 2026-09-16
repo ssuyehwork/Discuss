@@ -24,7 +24,7 @@ public:
     void loadDirectory();
 
     void selectItemByPath(const QString& targetPath);
-    void setPendingSelectNames(const QSet<QString>& names);
+    void setPendingSelectPaths(const QSet<QString>& paths);
     void clearSelection();
     void setFilterState(const FilterState& state);
     void applySort(int sortType, Qt::SortOrder sortOrder);
@@ -46,7 +46,7 @@ private slots:
 private:
     QString m_path;
     QString m_pendingSelectPath;
-    QSet<QString> m_pendingSelectNames;
+    QSet<QString> m_pendingSelectPaths;
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
