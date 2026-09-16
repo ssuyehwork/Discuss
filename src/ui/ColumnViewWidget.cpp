@@ -121,8 +121,8 @@ void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     tryPendingSelection();
 }
 
-void ColumnViewPane::setPendingSelectNames(const QSet<QString>& names) {
-    m_pendingSelectNames = names;
+void ColumnViewPane::setPendingSelectPaths(const QSet<QString>& paths) {
+    m_pendingSelectPaths = paths;
     tryPendingSelection();
 }
 
@@ -136,15 +136,19 @@ void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
 void ColumnViewPane::tryPendingSelection() {
     if (!m_proxyModel || !m_listView) return;
 
-    if (!m_pendingSelectNames.isEmpty() && m_proxyModel->rowCount() > 0) {
+    if (!m_pendingSelectPaths.isEmpty() && m_proxyModel->rowCount() > 0) {
         QItemSelection sel;
         QModelIndex lastIdx;
         for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
             QModelIndex idx = m_proxyModel->index(r, 0);
-            QString itemName = QFileInfo(idx.data(PathRole).toString()).fileName();
-            if (m_pendingSelectNames.contains(itemName)) {
-                sel.select(idx, idx);
-                lastIdx = idx;
+            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+            for (const QString& p : m_pendingSelectPaths) {
+                QString cleanP = QDir::toNativeSeparators(QDir::cleanPath(p));
+                if (QString::compare(itemPath, cleanP, Qt::CaseInsensitive) == 0) {
+                    sel.select(idx, idx);
+                    lastIdx = idx;
+                    break;
+                }
             }
         }
         if (!sel.isEmpty() && m_listView->selectionModel()) {
@@ -153,7 +157,7 @@ void ColumnViewPane::tryPendingSelection() {
                 m_listView->setCurrentIndex(lastIdx);
                 m_listView->scrollTo(lastIdx, QAbstractItemView::PositionAtCenter);
             }
-            m_pendingSelectNames.clear();
+            m_pendingSelectPaths.clear();
             emit selectionChanged();
             return;
         }
@@ -220,7 +224,7 @@ void ColumnViewPane::loadDirectory() {
                 if (!weakSelf->m_pendingSelectPath.isEmpty()) {
                     weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
                 }
-                if (!weakSelf->m_pendingSelectNames.isEmpty()) {
+                if (!weakSelf->m_pendingSelectPaths.isEmpty()) {
                     weakSelf->tryPendingSelection();
                 }
                 // 触发图标与缩略图提取管线
