@@ -450,9 +450,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
-        if (pane == rightmostPane() || (pane->listView() && pane->listView()->hasFocus())) {
-            m_activePaneIndex = pane->property("paneIndex").toInt();
-        }
+        m_activePaneIndex = pane->property("paneIndex").toInt();
         emit selectionChanged();
         if (rightmostPane() && rightmostPane()->model()) {
             emit activeColumnRecordsChanged(rightmostPane()->model()->allRecords());
