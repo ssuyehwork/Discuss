@@ -3,6 +3,7 @@
 ## 1. Overview
 修补 `TrashService::restoreItems` 与 `DiskTrashService::restoreFromDiskTrash` 涉及的单项/多项“从回收站还原”逻辑死锁 Bug。
 解决因 `trashPath` 传递空字符串以及 SQL SELECT 未读取 `trash_path` 导致的 `QFile::rename` 物理还原失败、数据库记录在 `global.db` 的 `disk_trash` 表中无法删除彻底锁死的严重问题。
+严格遵循五道工程硬锁【依赖锁】： Domain 层 (`TrashService.cpp`) 保持纯洁，不跨层调用 View 层 `ToolTipOverlay` 或 `QCursor::pos()`。
 
 ## 2. Modified Files List
 - `src/core/DiskTrashService.cpp`
@@ -156,7 +157,7 @@ bool DiskTrashService::restoreFromDiskTrash(int id, const QString& trashPath) {
 ---
 
 ### File 2: `src/core/TrashService.cpp`
-完善 `restoreItems` 提示框与返回值保护。
+完善 `restoreItems` 返回值判定与广播，严格保持 Domain 层纯洁，避免包含 View 层的 `ToolTipOverlay` / `QCursor::pos()`。
 
 ```
 <<<<<<< SEARCH
@@ -183,7 +184,6 @@ bool TrashService::restoreItems(const QList<int>& trashIds, QWidget* parentWidge
         }
     }
     if (successCount > 0) {
-        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("成功还原 %1 个回收站项目").arg(successCount), 1500, QColor("#2ecc71"));
         MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
         emit trashOperationCompleted();
     }
@@ -215,4 +215,3 @@ cmake --build build --config Release
 | :--- | :--- | :--- |
 | `DiskTrashService` | `restoreFromDiskTrash` | `static bool restoreFromDiskTrash(int id, const QString& trashPath);` |
 | `MetadataManager` | `notifyUI` | `void notifyUI(RefreshLevel level);` |
-| `ToolTipOverlay` | `showText` | `void showText(const QPoint& globalPos, const QString& text, int timeoutMs = 1500, const QColor& bgColor = QColor("#2ecc71"));` |
