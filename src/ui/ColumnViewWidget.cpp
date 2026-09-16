@@ -136,7 +136,7 @@ void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
 void ColumnViewPane::tryPendingSelection() {
     if (!m_proxyModel || !m_listView) return;
 
-    if (!m_pendingSelectNames.isEmpty()) {
+    if (!m_pendingSelectNames.isEmpty() && m_proxyModel->rowCount() > 0) {
         QItemSelection sel;
         QModelIndex lastIdx;
         for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
@@ -219,6 +219,9 @@ void ColumnViewPane::loadDirectory() {
                 }
                 if (!weakSelf->m_pendingSelectPath.isEmpty()) {
                     weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
+                }
+                if (!weakSelf->m_pendingSelectNames.isEmpty()) {
+                    weakSelf->tryPendingSelection();
                 }
                 // 触发图标与缩略图提取管线
                 int count = weakSelf->m_model->rowCount();
