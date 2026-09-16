@@ -1885,19 +1885,24 @@ QWidget#ColumnViewPane {
     border-right: 1px solid #2D2D2D;
 }
 
-QListView#ColumnViewPaneListView {
+QFrame#FolderSectionHeaderBar, QFrame#FileSectionHeaderBar {
+    background: transparent;
+    border: none;
+}
+
+QListView#ColumnViewPaneListView, QListView#ColumnViewFolderList {
     background: transparent;
     border: none;
     color: #CCCCCC;
     outline: none;
 }
 
-QListView#ColumnViewPaneListView::item {
+QListView#ColumnViewPaneListView::item, QListView#ColumnViewFolderList::item {
     height: 28px;
     border: none;
 }
 
-QListView#ColumnViewPaneListView::item:selected {
+QListView#ColumnViewPaneListView::item:selected, QListView#ColumnViewFolderList::item:selected {
     background: #378ADD;
     color: #FFFFFF;
     outline: none;

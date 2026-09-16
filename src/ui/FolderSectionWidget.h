@@ -10,7 +10,7 @@
 namespace QuarkMeta {
 
 /**
- * @brief 文件夹折叠/伸展标题栏 (子文件夹 (N) ▾)
+ * @brief 文件夹折叠/伸展标题栏 (文件夹 (N))
  */
 class FolderSectionHeaderBar : public QFrame {
     Q_OBJECT
@@ -39,7 +39,7 @@ private:
 };
 
 /**
- * @brief 内容文件区分界标题栏 (内容 (M))
+ * @brief 文件区分界标题栏 (文件 (M))
  */
 class FileSectionHeaderBar : public QFrame {
     Q_OBJECT

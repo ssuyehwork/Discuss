@@ -56,6 +56,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     // 4. 子文件夹列表视图
     m_folderListView = new DropListView(this);
     m_folderListView->setObjectName("ColumnViewFolderList");
+    m_folderListView->setFrameShape(QFrame::NoFrame);
     m_folderListView->setFocusPolicy(Qt::StrongFocus);
     m_folderListView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_folderListView->setSelectionMode(QAbstractItemView::SingleSelection);
@@ -83,6 +84,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     // 6. 普通文件列表视图
     m_listView = new DropListView(this);
     m_listView->setObjectName("ColumnViewPaneListView");
+    m_listView->setFrameShape(QFrame::NoFrame);
     m_listView->setFocusPolicy(Qt::StrongFocus);
     m_listView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);

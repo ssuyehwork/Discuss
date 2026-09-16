@@ -3,6 +3,7 @@
 #endif
 #include "JustifiedView.h"
 #include "CardLayoutEngine.h"
+#include "ui/UiHelper.h"
 #include "../core/ModelContract.h"
 #include <QPainter>
 #include <QScrollBar>
@@ -330,12 +331,14 @@ void JustifiedView::paintEvent(QPaintEvent*) {
         QFont headerFont("Microsoft YaHei", 9, QFont::Bold);
         painter.setFont(headerFont);
 
-        QString arrow = m_foldersCollapsed ? "▶" : "▼";
-        QString headerText = QString("  %1  文件夹 (%2)").arg(arrow).arg(m_folderCount);
-        
+        QIcon icon = UiHelper::getIcon(m_foldersCollapsed ? "chevron_right" : "chevron_down", QColor("#A0A0A0"), 12);
+        QRect iconRect(m_folderHeaderRect.left() + 8, m_folderHeaderRect.top() + (m_folderHeaderRect.height() - 12) / 2, 12, 12);
+        icon.paint(&painter, iconRect);
+
+        QString headerText = QString("文件夹 (%1)").arg(m_folderCount);
         QFontMetrics fm(headerFont);
         int textW = fm.horizontalAdvance(headerText) + 12;
-        QRect textRect(m_folderHeaderRect.left(), m_folderHeaderRect.top(), textW, m_folderHeaderRect.height());
+        QRect textRect(iconRect.right() + 6, m_folderHeaderRect.top(), textW, m_folderHeaderRect.height());
         painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, headerText);
 
         painter.restore();

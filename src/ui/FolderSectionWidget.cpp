@@ -1,4 +1,5 @@
 #include "FolderSectionWidget.h"
+#include "UiHelper.h"
 #include <QMouseEvent>
 #include <QStyle>
 
@@ -8,6 +9,7 @@ FolderSectionHeaderBar::FolderSectionHeaderBar(QWidget* parent)
     : QFrame(parent)
 {
     setObjectName("FolderSectionHeaderBar");
+    setFrameShape(QFrame::NoFrame);
     setFixedHeight(28);
     setCursor(Qt::PointingHandCursor);
 
@@ -18,8 +20,7 @@ FolderSectionHeaderBar::FolderSectionHeaderBar(QWidget* parent)
     m_titleLabel = new QLabel(this);
     m_titleLabel->setStyleSheet("color: #CCCCCC; font-size: 12px; font-weight: bold;");
 
-    m_arrowLabel = new QLabel("▾", this);
-    m_arrowLabel->setStyleSheet("color: #888888; font-size: 11px;");
+    m_arrowLabel = new QLabel(this);
 
     layout->addWidget(m_titleLabel);
     layout->addWidget(m_arrowLabel);
@@ -52,10 +53,10 @@ void FolderSectionHeaderBar::mousePressEvent(QMouseEvent* event) {
 
 void FolderSectionHeaderBar::updateUi() {
     if (m_titleLabel) {
-        m_titleLabel->setText(QString("子文件夹 (%1)").arg(m_count));
+        m_titleLabel->setText(QString("文件夹 (%1)").arg(m_count));
     }
     if (m_arrowLabel) {
-        m_arrowLabel->setText(m_collapsed ? "▸" : "▾");
+        m_arrowLabel->setPixmap(UiHelper::getIcon(m_collapsed ? "chevron_right" : "chevron_down", QColor("#888888"), 12).pixmap(12, 12));
     }
 }
 
@@ -65,13 +66,14 @@ FileSectionHeaderBar::FileSectionHeaderBar(QWidget* parent)
     : QFrame(parent)
 {
     setObjectName("FileSectionHeaderBar");
+    setFrameShape(QFrame::NoFrame);
     setFixedHeight(28);
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(10, 0, 10, 0);
     layout->setSpacing(6);
 
-    m_titleLabel = new QLabel("内容 (0)", this);
+    m_titleLabel = new QLabel("文件 (0)", this);
     m_titleLabel->setStyleSheet("color: #888888; font-size: 12px; font-weight: bold;");
 
     layout->addWidget(m_titleLabel);
@@ -81,7 +83,7 @@ FileSectionHeaderBar::FileSectionHeaderBar(QWidget* parent)
 void FileSectionHeaderBar::setCount(int count) {
     m_count = count;
     if (m_titleLabel) {
-        m_titleLabel->setText(QString("内容 (%1)").arg(count));
+        m_titleLabel->setText(QString("文件 (%1)").arg(count));
     }
 }
 
