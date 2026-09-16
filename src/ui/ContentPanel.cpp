@@ -383,9 +383,10 @@ void ContentPanel::setViewMode(ViewMode mode) {
     if (m_currentViewMode == mode) {
         return;
     }
-    // 1. 在原视图中上报并更新 SelectionState (SSOT)
+    // 1. 在原视图中上报并更新 SelectionState (SSOT)，修正临时对象迭代器野指针闪退
     m_selectionState.currentFolder = m_currentPath;
-    m_selectionState.selectedPaths = QSet<QString>(getSelectedPaths().begin(), getSelectedPaths().end());
+    QStringList selList = getSelectedPaths();
+    m_selectionState.selectedPaths = QSet<QString>(selList.begin(), selList.end());
     if (!m_selectionState.selectedPaths.isEmpty()) {
         m_selectionState.focusedPath = *m_selectionState.selectedPaths.begin();
     }
