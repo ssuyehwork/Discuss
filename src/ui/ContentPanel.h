@@ -192,12 +192,7 @@ private:
     FilterState m_currentFilter;
     int m_zoomLevel = 96;
     QString m_currentPath;
-    struct SelectionState {
-        QString currentFolder;
-        QString focusedPath;
-        QSet<QString> selectedPaths;
-    };
-    SelectionState m_selectionState;
+    QSet<QString> m_pendingSelectNames;
     bool m_isPendingEdit = false;
     QString m_currentCategoryType;
     bool m_isRecursive = false;

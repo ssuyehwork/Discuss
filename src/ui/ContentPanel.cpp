@@ -383,13 +383,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
     if (m_currentViewMode == mode) {
         return;
     }
-    // 1. 在原视图中上报并更新 SelectionState (SSOT)
-    m_selectionState.currentFolder = m_currentPath;
-    m_selectionState.selectedPaths = QSet<QString>(getSelectedPaths().begin(), getSelectedPaths().end());
-    if (!m_selectionState.selectedPaths.isEmpty()) {
-        m_selectionState.focusedPath = *m_selectionState.selectedPaths.begin();
-    }
-
+    QStringList savedSelectedPaths = getSelectedPaths();
     ViewMode oldMode = m_currentViewMode;
     m_currentViewMode = mode;
     int minZoom = (mode == ListView) ? 30 : 93;
@@ -399,8 +393,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
         m_viewStack->setCurrentWidget(m_treeView);
     } else if (mode == ColumnView) {
         if (m_columnView) {
-            QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
-            m_columnView->setRootPath(targetPath);
+            m_columnView->setRootPath(m_currentPath);
             m_viewStack->setCurrentWidget(m_columnView);
         }
     } else {
@@ -409,6 +402,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
         m_viewStack->setCurrentWidget(m_gridView);
     }
 
+    // 🚀【自愈数据同步机制】：若从分栏视图切回网格/列表/瀑布流视图，且主模型处于空装载状态，自动自愈驱动 loadDirectory
     if (oldMode == ColumnView && mode != ColumnView) {
         if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
             if (!m_diskModel || m_diskModel->rowCount() == 0) {
@@ -417,8 +411,14 @@ void ContentPanel::setViewMode(ViewMode mode) {
         }
     }
 
-    // 2. 消费 SelectionState 真理源同步恢复选区
-    restoreSelections();
+    // 🚀【视图切换选区无损同步】：在新激活的视图中批量恢复之前全量选中高亮与聚焦位置
+    if (!savedSelectedPaths.isEmpty()) {
+        m_pendingSelectNames.clear();
+        for (const QString& selPath : savedSelectedPaths) {
+            m_pendingSelectNames.insert(QFileInfo(selPath).fileName());
+        }
+        restoreSelections();
+    }
 
     AppConfig::instance().setValue("ContentPanel/ViewMode", static_cast<int>(mode));
     updateGridSize();
@@ -687,12 +687,13 @@ void ContentPanel::restoreActiveView() {
 }
 
 void ContentPanel::restoreSelections() {
-    if (m_selectionState.selectedPaths.isEmpty()) return;
+    if (m_pendingSelectNames.isEmpty()) return;
 
     if (m_currentViewMode == ColumnView) {
         if (m_columnView && m_columnView->rightmostPane()) {
-            m_columnView->rightmostPane()->setPendingSelectPaths(m_selectionState.selectedPaths);
+            m_columnView->rightmostPane()->setPendingSelectNames(m_pendingSelectNames);
         }
+        m_pendingSelectNames.clear();
         return;
     }
 
@@ -705,7 +706,7 @@ void ContentPanel::restoreSelections() {
         QModelIndex lastIdx;
         const auto& recs = diskModel->allRecords();
         for (size_t i = 0; i < recs.size(); ++i) {
-            if (m_selectionState.selectedPaths.contains(recs[i].path)) {
+            if (m_pendingSelectNames.contains(QFileInfo(recs[i].path).fileName())) {
                 QModelIndex pIdx = proxy->mapFromSource(diskModel->index(static_cast<int>(i), 0));
                 if (pIdx.isValid()) { sel.select(pIdx, pIdx); lastIdx = pIdx; }
             }
@@ -713,15 +714,12 @@ void ContentPanel::restoreSelections() {
         view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
         if (lastIdx.isValid()) { view->scrollTo(lastIdx); if (m_isPendingEdit) view->edit(lastIdx); }
     }
+    m_pendingSelectNames.clear();
 }
 
 void ContentPanel::setPendingSelectName(const QString& name, bool edit) {
-    m_selectionState.selectedPaths.clear();
-    if (!name.isEmpty()) {
-        QString fullPath = m_currentPath + "/" + name;
-        m_selectionState.selectedPaths.insert(fullPath);
-        m_selectionState.focusedPath = fullPath;
-    }
+    m_pendingSelectNames.clear();
+    if (!name.isEmpty()) m_pendingSelectNames.insert(name);
     m_isPendingEdit = edit;
 }
 
