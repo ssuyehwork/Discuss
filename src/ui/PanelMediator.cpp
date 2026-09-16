@@ -622,7 +622,8 @@ void PanelMediator::setupConnections() {
             }
             contentPanel->recalculateAndEmitStats();
         } else if (event.type == QuarkMeta::AppEventType::ItemsDeleted ||
-                   event.type == QuarkMeta::AppEventType::ItemsRenamed) {
+                   event.type == QuarkMeta::AppEventType::ItemsRenamed ||
+                   event.type == QuarkMeta::AppEventType::UndoRedoPerformed) {
             contentPanel->refreshAll();
         }
     });

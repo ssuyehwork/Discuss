@@ -411,11 +411,13 @@ void ContentPanel::setViewMode(ViewMode mode) {
         }
     }
 
-    // 🚀【视图切换选区无损同步】：在新激活的视图中同步恢复之前的选中高亮与聚焦位置
+    // 🚀【视图切换选区无损同步】：在新激活的视图中批量恢复之前全量选中高亮与聚焦位置
     if (!savedSelectedPaths.isEmpty()) {
+        m_pendingSelectNames.clear();
         for (const QString& selPath : savedSelectedPaths) {
-            selectAndScrollToPath(selPath);
+            m_pendingSelectNames.insert(QFileInfo(selPath).fileName());
         }
+        restoreSelections();
     }
 
     AppConfig::instance().setValue("ContentPanel/ViewMode", static_cast<int>(mode));
@@ -686,19 +688,19 @@ void ContentPanel::restoreActiveView() {
 
 void ContentPanel::restoreSelections() {
     if (m_pendingSelectNames.isEmpty()) return;
-    QAbstractItemView* view = nullptr;
-    DiskItemModel* diskModel = m_diskModel;
-    QSortFilterProxyModel* proxy = m_proxyModel;
 
     if (m_currentViewMode == ColumnView) {
         if (m_columnView && m_columnView->rightmostPane()) {
-            view = m_columnView->rightmostPane()->listView();
-            diskModel = m_columnView->rightmostPane()->model();
-            proxy = m_columnView->rightmostPane()->proxyModel();
+            m_columnView->rightmostPane()->setPendingSelectNames(m_pendingSelectNames);
         }
-    } else {
-        view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
+        m_pendingSelectNames.clear();
+        return;
     }
+
+    QAbstractItemView* view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
+    DiskItemModel* diskModel = m_diskModel;
+    QSortFilterProxyModel* proxy = m_proxyModel;
+
     if (view && view->selectionModel() && diskModel && proxy) {
         QItemSelection sel;
         QModelIndex lastIdx;

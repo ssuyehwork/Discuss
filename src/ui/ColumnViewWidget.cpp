@@ -121,6 +121,11 @@ void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     tryPendingSelection();
 }
 
+void ColumnViewPane::setPendingSelectNames(const QSet<QString>& names) {
+    m_pendingSelectNames = names;
+    tryPendingSelection();
+}
+
 void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
     if (m_proxyModel) {
         m_proxyModel->setSortType(sortType);
@@ -129,26 +134,51 @@ void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
 }
 
 void ColumnViewPane::tryPendingSelection() {
-    if (m_pendingSelectPath.isEmpty() || !m_proxyModel || !m_listView) return;
+    if (!m_proxyModel || !m_listView) return;
 
-    QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(m_pendingSelectPath));
-    QString targetName = QFileInfo(cleanTarget).fileName();
-
-    for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
-        QModelIndex idx = m_proxyModel->index(r, 0);
-        QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
-        QString itemName = QFileInfo(itemPath).fileName();
-
-        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0 ||
-            (!targetName.isEmpty() && QString::compare(itemName, targetName, Qt::CaseInsensitive) == 0)) {
-            m_listView->setCurrentIndex(idx);
-            if (m_listView->selectionModel()) {
-                m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+    if (!m_pendingSelectNames.isEmpty()) {
+        QItemSelection sel;
+        QModelIndex lastIdx;
+        for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
+            QModelIndex idx = m_proxyModel->index(r, 0);
+            QString itemName = QFileInfo(idx.data(PathRole).toString()).fileName();
+            if (m_pendingSelectNames.contains(itemName)) {
+                sel.select(idx, idx);
+                lastIdx = idx;
             }
-            m_listView->scrollTo(idx, QAbstractItemView::PositionAtCenter);
-            m_pendingSelectPath.clear();
+        }
+        if (!sel.isEmpty() && m_listView->selectionModel()) {
+            m_listView->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            if (lastIdx.isValid()) {
+                m_listView->setCurrentIndex(lastIdx);
+                m_listView->scrollTo(lastIdx, QAbstractItemView::PositionAtCenter);
+            }
+            m_pendingSelectNames.clear();
             emit selectionChanged();
-            break;
+            return;
+        }
+    }
+
+    if (!m_pendingSelectPath.isEmpty()) {
+        QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(m_pendingSelectPath));
+        QString targetName = QFileInfo(cleanTarget).fileName();
+
+        for (int r = 0; r < m_proxyModel->rowCount(); ++r) {
+            QModelIndex idx = m_proxyModel->index(r, 0);
+            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+            QString itemName = QFileInfo(itemPath).fileName();
+
+            if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0 ||
+                (!targetName.isEmpty() && QString::compare(itemName, targetName, Qt::CaseInsensitive) == 0)) {
+                m_listView->setCurrentIndex(idx);
+                if (m_listView->selectionModel()) {
+                    m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                }
+                m_listView->scrollTo(idx, QAbstractItemView::PositionAtCenter);
+                m_pendingSelectPath.clear();
+                emit selectionChanged();
+                break;
+            }
         }
     }
 }
