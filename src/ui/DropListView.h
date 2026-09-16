@@ -32,6 +32,7 @@ signals:
 
 protected:
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
 };
 
 } // namespace QuarkMeta
