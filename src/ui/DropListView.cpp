@@ -2,6 +2,7 @@
 #include "../core/ModelContract.h"
 #include "ColumnItemDelegate.h"
 #include "ViewDragDropHelper.h"
+#include "models/GroupingProxyModel.h"
 #include <QMouseEvent>
 
 namespace QuarkMeta {
@@ -66,6 +67,22 @@ void DropListView::dropEvent(QDropEvent* event) {
 void DropListView::startDrag(Qt::DropActions supportedActions) {
     ViewDragDropHelper::executeStartDrag(this, supportedActions);
 }
+
+void DropListView::mousePressEvent(QMouseEvent* event) { 
+    QModelIndex idx = indexAt(event->pos()); 
+    if (idx.isValid()) { 
+        auto* groupModel = qobject_cast<GroupingProxyModel*>(model()); 
+        if (groupModel && groupModel->isGroupHeader(idx)) { 
+            QString groupId = idx.data(GroupingProxyModel::GroupIdRole).toString(); 
+            bool isCollapsible = idx.data(GroupingProxyModel::GroupIsCollapsibleRole).toBool(); 
+            if (isCollapsible) { 
+                groupModel->toggleGroupCollapsed(groupId); 
+                return; 
+            } 
+        } 
+    } 
+    QListView::mousePressEvent(event); 
+} 
 
 void DropListView::mouseDoubleClickEvent(QMouseEvent* event) {
     if (event && event->button() == Qt::LeftButton) {

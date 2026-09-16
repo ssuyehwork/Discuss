@@ -2,7 +2,9 @@
 #include "ViewDragDropHelper.h"
 #include "../core/ModelContract.h"
 #include "ContentPanel.h"
+#include "models/GroupingProxyModel.h"
 #include <QPainter>
+#include <QMouseEvent>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
@@ -95,6 +97,22 @@ void DropTreeView::resizeEvent(QResizeEvent* event) {
     QTreeView::resizeEvent(event);
     applyColumnPolicies();
 }
+
+void DropTreeView::mousePressEvent(QMouseEvent* event) { 
+    QModelIndex idx = indexAt(event->pos()); 
+    if (idx.isValid()) { 
+        auto* groupModel = qobject_cast<GroupingProxyModel*>(model()); 
+        if (groupModel && groupModel->isGroupHeader(idx)) { 
+            QString groupId = idx.data(GroupingProxyModel::GroupIdRole).toString(); 
+            bool isCollapsible = idx.data(GroupingProxyModel::GroupIsCollapsibleRole).toBool(); 
+            if (isCollapsible) { 
+                groupModel->toggleGroupCollapsed(groupId); 
+                return; 
+            } 
+        } 
+    } 
+    QTreeView::mousePressEvent(event); 
+} 
 
 void DropTreeView::keyboardSearch(const QString& search) {
     Q_UNUSED(search);

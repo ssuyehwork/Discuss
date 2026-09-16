@@ -93,6 +93,9 @@ protected:
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
+protected:
+    void mousePressEvent(QMouseEvent* event) override;
+
 private:
     QTimer* m_autoExpandTimer = nullptr;
     QModelIndex m_hoverIndex;
