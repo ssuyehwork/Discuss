@@ -479,6 +479,10 @@ void ContentPanel::refreshAll() {
         if (m_columnView) m_columnView->refreshAllColumns();
         return;
     }
+    if (m_currentCategoryType == "trash") {
+        loadCategory("trash");
+        return;
+    }
     if (!m_currentPath.isEmpty() && m_currentPath != "computer://") loadDirectory(m_currentPath, m_isRecursive);
     else loadDirectory("computer://");
 }

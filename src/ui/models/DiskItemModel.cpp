@@ -602,6 +602,10 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         return record.isParentExpanded;
     } else if (role == IsDropTargetRole) {
         return record.isDropTarget;
+    } else if (role == IsDiskTrashRole) {
+        return record.isDiskTrash;
+    } else if (role == DiskTrashIdRole) {
+        return record.diskTrashId;
     } else if (role == HasThumbnailRole) {
         static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
         QString ext = record.suffix.toLower();

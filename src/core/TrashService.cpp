@@ -62,12 +62,18 @@ bool TrashService::restoreItems(const QList<int>& trashIds, QWidget* parentWidge
     Q_UNUSED(parentWidget);
     if (trashIds.isEmpty()) return false;
 
+    int successCount = 0;
     for (int id : trashIds) {
-        DiskTrashService::restoreFromDiskTrash(id, "");
+        if (DiskTrashService::restoreFromDiskTrash(id, "")) {
+            successCount++;
+        }
     }
-    MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
-    emit trashOperationCompleted();
-    return true;
+    if (successCount > 0) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("成功还原 %1 个回收站项目").arg(successCount), 1500, QColor("#2ecc71"));
+        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
+        emit trashOperationCompleted();
+    }
+    return successCount > 0;
 }
 
 bool TrashService::restoreAll(QWidget* parentWidget) {
