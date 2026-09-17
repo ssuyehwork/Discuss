@@ -167,10 +167,20 @@ void ContentPanel::initUi() {
         }
         restoreSelections();
     });
-    m_viewStack->addWidget(m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView));
-    m_viewStack->addWidget(m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView));
+    m_gridScrollArea = new QScrollArea(this);
+    m_gridScrollArea->setFrameShape(QFrame::NoFrame);
+    m_gridScrollArea->setWidgetResizable(true);
+    m_gridScrollArea->setWidget(m_gridContainerWidget);
+
+    m_listScrollArea = new QScrollArea(this);
+    m_listScrollArea->setFrameShape(QFrame::NoFrame);
+    m_listScrollArea->setWidgetResizable(true);
+    m_listScrollArea->setWidget(m_listContainerWidget);
+
+    m_viewStack->addWidget(m_gridScrollArea);
+    m_viewStack->addWidget(m_listScrollArea);
     m_viewStack->addWidget(m_columnView);
-    m_viewStack->setCurrentWidget(m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView));
+    m_viewStack->setCurrentWidget(m_gridScrollArea);
 
     m_mainLayout->addWidget(m_viewStack, 1);
 }
@@ -273,8 +283,17 @@ void ContentPanel::initGridView() {
             } else {
                 bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
                 m_folderGridView->setVisible(!collapsed);
-                int cardH = m_zoomLevel + CardLayoutEngine::extraHeight() + 20;
-                m_folderGridView->setMaximumHeight(cardH);
+                // 1. 计算单张卡片占位宽与单行高度
+                int cardW = m_zoomLevel + CardLayoutEngine::totalPaddingHorizontal() + 10;
+                int rowH = m_zoomLevel + CardLayoutEngine::extraHeight() + 10;
+
+                // 2. 根据当前视口可用宽度，动态计算一行实际放几张卡
+                int availableW = m_folderGridView->width() > 100 ? m_folderGridView->width() : width();
+                int cardsPerRow = qMax(1, availableW / cardW);
+
+                // 3. 向上取整计算真实行数：6 个项目 / 8 列 = 1 行，绝不多算
+                int rows = qMax(1, (folderCount + cardsPerRow - 1) / cardsPerRow);
+                m_folderGridView->setFixedHeight(rows * rowH + 8);
             }
         }
         if (m_gridFileHeader) {
@@ -399,8 +418,8 @@ void ContentPanel::initListView() {
             } else {
                 bool collapsed = m_listFolderHeader ? m_listFolderHeader->isCollapsed() : false;
                 m_folderTreeView->setVisible(!collapsed);
-                int folderH = qMin(200, qMax(32, folderCount * 30 + 32));
-                m_folderTreeView->setMaximumHeight(folderH);
+                int folderH = qMax(32, folderCount * 30 + 32);
+                m_folderTreeView->setFixedHeight(folderH);
             }
         }
         if (m_listFileHeader) {
@@ -489,7 +508,7 @@ void ContentPanel::startVisibleTimer() {
 
 void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(sender());
-    if (!view) view = (m_viewStack && m_viewStack->currentWidget() == m_gridView) ? m_gridView : m_treeView;
+    if (!view) view = activeItemView();
     if (!view) return;
     ContentContextMenu menuHandler(this);
     menuHandler.showMenu(view, pos);
@@ -583,7 +602,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
     m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
 
     if (mode == ListView) {
-        m_viewStack->setCurrentWidget(m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView));
+        m_viewStack->setCurrentWidget(m_listScrollArea ? static_cast<QWidget*>(m_listScrollArea) : static_cast<QWidget*>(m_treeView));
     } else if (mode == ColumnView) {
         if (m_columnView) {
             QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
@@ -595,7 +614,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
         if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
         auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView);
         if (fjv) fjv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
-        m_viewStack->setCurrentWidget(m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView));
+        m_viewStack->setCurrentWidget(m_gridScrollArea ? static_cast<QWidget*>(m_gridScrollArea) : static_cast<QWidget*>(m_gridView));
     }
 
     if (oldMode == ColumnView && mode != ColumnView) {
@@ -627,14 +646,14 @@ void ContentPanel::setZoomLevel(int level) {
 }
 
 void ContentPanel::updateGridSize() {
-    if (m_viewStack->currentWidget() == m_gridContainerWidget || m_viewStack->currentWidget() == m_gridView) {
+    if (m_viewStack->currentWidget() == m_gridScrollArea || m_viewStack->currentWidget() == m_gridContainerWidget || m_viewStack->currentWidget() == m_gridView) {
         if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
             jv->setTargetRowHeight(m_zoomLevel);
         }
         if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
             fjv->setTargetRowHeight(m_zoomLevel);
         }
-    } else if (m_viewStack->currentWidget() == m_treeView || m_viewStack->currentWidget() == m_listContainerWidget) {
+    } else if (m_viewStack->currentWidget() == m_listScrollArea || m_viewStack->currentWidget() == m_treeView || m_viewStack->currentWidget() == m_listContainerWidget) {
         if (auto* dropTree = qobject_cast<DropTreeView*>(m_treeView)) {
             if (auto* hdr = qobject_cast<ContentHeaderView*>(dropTree->header())) {
                 hdr->setZoomLevel(m_zoomLevel);
@@ -787,7 +806,7 @@ void ContentPanel::selectAndScrollToItem(const QString& path) {
     for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
         QModelIndex proxyIdx = m_proxyModel->index(i, 0);
         if (proxyIdx.data(PathRole).toString() == path) {
-            QAbstractItemView* view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
+                QAbstractItemView* view = activeItemView();
             if (view && view->selectionModel()) {
                 view->scrollTo(proxyIdx);
                 view->setCurrentIndex(proxyIdx);
@@ -847,24 +866,60 @@ QList<int> ContentPanel::getSelectedTrashIds() const {
     return ids;
 }
 
-QModelIndexList ContentPanel::getSelectedIndexes() const {
-    if (!m_viewStack) return {};
-    QAbstractItemView* curView = nullptr;
+QAbstractItemView* ContentPanel::activeItemView() const {
     if (m_currentViewMode == ColumnView) {
         if (m_columnView && m_columnView->activePane()) {
-            curView = m_columnView->activePane()->listView();
+            DropListView* folderV = m_columnView->activePane()->folderListView();
+            if (folderV && (folderV->hasFocus() || (folderV->selectionModel() && folderV->selectionModel()->hasSelection()))) {
+                return folderV;
+            }
+            return m_columnView->activePane()->listView();
         }
-    } else {
-        curView = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
+        return nullptr;
     }
-    if (!curView || !curView->selectionModel()) return {};
 
+    if (m_currentViewMode == ListView) {
+        if (m_folderTreeView && (m_folderTreeView->hasFocus() ||
+            (m_folderTreeView->selectionModel() && m_folderTreeView->selectionModel()->hasSelection()))) {
+            return m_folderTreeView;
+        }
+        return m_treeView;
+    }
+
+    // GridView / JustifiedViewMode
+    if (m_folderGridView && (m_folderGridView->hasFocus() ||
+        (m_folderGridView->selectionModel() && m_folderGridView->selectionModel()->hasSelection()))) {
+        return m_folderGridView;
+    }
+    return m_gridView;
+}
+
+QModelIndexList ContentPanel::getSelectedIndexes() const {
+    if (!m_viewStack) return {};
     QModelIndexList res;
-    const auto& selected = curView->selectionModel()->selectedIndexes();
-    res.reserve(selected.size());
-    for (const auto& idx : selected) {
-        if (idx.column() == 0) {
-            res.append(idx);
+
+    // 🚀【真理源多视图巡检】：直接巡检真实子视图，不再依赖外层容器类型
+    QList<QAbstractItemView*> views;
+    if (m_currentViewMode == ColumnView) {
+        if (m_columnView && m_columnView->activePane()) {
+            if (m_columnView->activePane()->folderListView()) views << m_columnView->activePane()->folderListView();
+            if (m_columnView->activePane()->listView()) views << m_columnView->activePane()->listView();
+        }
+    } else if (m_currentViewMode == ListView) {
+        if (m_folderTreeView) views << m_folderTreeView;
+        if (m_treeView) views << m_treeView;
+    } else { // GridView / JustifiedViewMode
+        if (m_folderGridView) views << m_folderGridView;
+        if (m_gridView) views << m_gridView;
+    }
+
+    for (auto* view : views) {
+        if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
+            for (const auto& idx : view->selectionModel()->selectedIndexes()) {
+                if (idx.column() == 0) {
+                    res.append(idx);
+                }
+            }
         }
     }
     return res;
@@ -874,7 +929,7 @@ void ContentPanel::restoreActiveView() {
     if (m_currentViewMode == ColumnView) {
         m_viewStack->setCurrentWidget(m_columnView);
     } else {
-        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? (m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView)) : (m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView)));
+        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? (m_listScrollArea ? static_cast<QWidget*>(m_listScrollArea) : static_cast<QWidget*>(m_treeView)) : (m_gridScrollArea ? static_cast<QWidget*>(m_gridScrollArea) : static_cast<QWidget*>(m_gridView)));
     }
 }
 
