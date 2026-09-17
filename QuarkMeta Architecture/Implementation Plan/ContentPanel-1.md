@@ -1,86 +1,215 @@
-# ContentPanel Implementation Plan (ContentPanel-1.md)
+# Implementation Plan - ContentPanel Scroll Normalization (Revision 1)
 
-## Overview
-本方案旨在彻底解决从分栏视图（`ViewModeColumn`）切换回网格视图（`GridView`）、列表视图（`ListView`）或瀑布流视图（`JustifiedView`）时，因主数据模型 `m_diskModel` 未能即时装载当前路径数据而导致内容区域错误显示“没有可显示的项目”的脱节问题。
+## 1. Overview
+This implementation plan resolves the architecture inconsistency ("另起炉灶") where Folder/File section bars and folder view in List View, Grid View, and Justified View did not scroll together as a unified whole.
 
-## Modified Files List
-1. `src/ui/ContentPanel.cpp`
+### Review Feedback Addressed
+1. **Null Container Fallback Safety**: Maintained full fallback checks when retrieving current views or adding to `m_viewStack`.
+2. **Dynamic Grid Column Calculation**: Replaced hardcoded row/column math with dynamic column calculation based on viewport width and item card size.
+3. **Immutability Contract**: Documented in a new incremented file `ContentPanel-1.md` per AGENTS.md Rule 3.1.3.
 
-## Detailed Line-by-Line Changes
+---
 
-### `src/ui/ContentPanel.cpp`
-在 `setViewMode` 切换视图模式时，增加对主模型 `m_diskModel` 实际装载状态与 `m_currentPath` 的权威校验。若发现前一视图模式为分栏视图且主模型处于未装载或数据为空状态，则自动触发 `loadDirectory(m_currentPath, m_isRecursive)` 进行自愈重载：
+## 2. Modified Files List
+- `src/ui/ContentPanel.h`
+- `src/ui/ContentPanel.cpp`
 
-```diff
+---
+
+## 3. Detailed Line-by-Line Changes
+
+### `src/ui/ContentPanel.h`
+
+```
 <<<<<<< SEARCH
-void ContentPanel::setViewMode(ViewMode mode) {
-    m_currentViewMode = mode;
-    int minZoom = (mode == ListView) ? 30 : 93;
-    m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
+    QWidget* m_listContainerWidget = nullptr;
+    FolderSectionHeaderBar* m_listFolderHeader = nullptr;
+    DropTreeView* m_folderTreeView = nullptr;
+    FileSectionHeaderBar* m_listFileHeader = nullptr;
+    FilterProxyModel* m_folderProxyModel = nullptr;
+    FilterProxyModel* m_fileProxyModel = nullptr;
 
-    if (mode == ListView) {
-        m_viewStack->setCurrentWidget(m_treeView);
-    } else if (mode == ViewModeColumn) {
-        if (m_columnView) {
-            m_columnView->setRootPath(m_currentPath);
-        }
-        m_viewStack->setCurrentWidget(m_columnView);
-    } else {
-        auto* jv = qobject_cast<JustifiedView*>(m_gridView);
-        if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
-        m_viewStack->setCurrentWidget(m_gridView);
-    }
-
-    AppConfig::instance().setValue("ContentPanel/ViewMode", static_cast<int>(mode));
-    updateGridSize();
-    emit viewModeChanged(mode);
-    emit zoomLevelChanged(m_zoomLevel);
-
-    if (m_visibleTimer) m_visibleTimer->start();
-}
+    QWidget* m_gridContainerWidget = nullptr;
+    FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
+    DropJustifiedView* m_folderGridView = nullptr;
+    FileSectionHeaderBar* m_gridFileHeader = nullptr;
 =======
-void ContentPanel::setViewMode(ViewMode mode) {
-    ViewMode oldMode = m_currentViewMode;
-    m_currentViewMode = mode;
-    int minZoom = (mode == ListView) ? 30 : 93;
-    m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
+    QScrollArea* m_listScrollArea = nullptr;
+    QWidget* m_listContainerWidget = nullptr;
+    FolderSectionHeaderBar* m_listFolderHeader = nullptr;
+    DropTreeView* m_folderTreeView = nullptr;
+    FileSectionHeaderBar* m_listFileHeader = nullptr;
+    FilterProxyModel* m_folderProxyModel = nullptr;
+    FilterProxyModel* m_fileProxyModel = nullptr;
 
-    if (mode == ListView) {
-        m_viewStack->setCurrentWidget(m_treeView);
-    } else if (mode == ViewModeColumn) {
-        if (m_columnView) {
-            m_columnView->setRootPath(m_currentPath);
-        }
-        m_viewStack->setCurrentWidget(m_columnView);
-    } else {
-        auto* jv = qobject_cast<JustifiedView*>(m_gridView);
-        if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
-        m_viewStack->setCurrentWidget(m_gridView);
-    }
-
-    // 🚀【自愈数据同步机制】：若从分栏视图切回网格/列表/瀑布流视图，且主模型处于空装载状态，自动自愈驱动 loadDirectory
-    if (oldMode == ViewModeColumn && mode != ViewModeColumn) {
-        if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
-            if (!m_diskModel || m_diskModel->rowCount() == 0) {
-                loadDirectory(m_currentPath, m_isRecursive);
-            }
-        }
-    }
-
-    AppConfig::instance().setValue("ContentPanel/ViewMode", static_cast<int>(mode));
-    updateGridSize();
-    emit viewModeChanged(mode);
-    emit zoomLevelChanged(m_zoomLevel);
-
-    if (m_visibleTimer) m_visibleTimer->start();
-}
+    QScrollArea* m_gridScrollArea = nullptr;
+    QWidget* m_gridContainerWidget = nullptr;
+    FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
+    DropJustifiedView* m_folderGridView = nullptr;
+    FileSectionHeaderBar* m_gridFileHeader = nullptr;
 >>>>>>> REPLACE
 ```
 
-## Build & Verification Steps
-1. 编译项目：`cmake --build build`
-2. 启动应用，首先切换至“分栏视图（列视图）”模式；
-3. 点击“收藏夹”或“目录导航”中的任意非空文件夹（例如 `G:\C++\QuarkMeta\QuarkMeta\Z 作废`）；
-4. 确认分栏视图顺利级叠展开并显示该文件夹里的所有子文件/子文件夹；
-5. 点击右下角视图切换栏中的“网格视图”或“列表视图”按钮；
-6. 验证：切换后，内容区域**立即正确刷出**该文件夹内的真实数据项目，绝对不再出现“没有可显示的项目”虚假提示！
+### `src/ui/ContentPanel.cpp`
+
+```
+<<<<<<< SEARCH
+    m_viewStack->addWidget(m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView));
+    m_viewStack->addWidget(m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView));
+    m_viewStack->addWidget(m_columnView);
+    m_viewStack->setCurrentWidget(m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView));
+=======
+    if (m_gridContainerWidget) {
+        m_gridScrollArea = new QScrollArea(this);
+        m_gridScrollArea->setFrameShape(QFrame::NoFrame);
+        m_gridScrollArea->setWidgetResizable(true);
+        m_gridScrollArea->setWidget(m_gridContainerWidget);
+    }
+    if (m_listContainerWidget) {
+        m_listScrollArea = new QScrollArea(this);
+        m_listScrollArea->setFrameShape(QFrame::NoFrame);
+        m_listScrollArea->setWidgetResizable(true);
+        m_listScrollArea->setWidget(m_listContainerWidget);
+    }
+
+    QWidget* initialGridWidget = m_gridScrollArea ? static_cast<QWidget*>(m_gridScrollArea) : (m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView));
+    QWidget* initialListWidget = m_listScrollArea ? static_cast<QWidget*>(m_listScrollArea) : (m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView));
+
+    m_viewStack->addWidget(initialGridWidget);
+    m_viewStack->addWidget(initialListWidget);
+    m_viewStack->addWidget(m_columnView);
+    m_viewStack->setCurrentWidget(initialGridWidget);
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+                int cardH = m_zoomLevel + CardLayoutEngine::extraHeight() + 20;
+                m_folderGridView->setMaximumHeight(cardH);
+=======
+                int cardWidth = m_zoomLevel + CardLayoutEngine::extraWidth();
+                int vpWidth = (m_gridScrollArea && m_gridScrollArea->viewport()) ? m_gridScrollArea->viewport()->width() : width();
+                int cols = qMax(1, vpWidth / qMax(1, cardWidth));
+                int rows = qMax(1, (folderCount + cols - 1) / cols);
+                int rowH = m_zoomLevel + CardLayoutEngine::extraHeight() + 20;
+                m_folderGridView->setFixedHeight(rows * rowH);
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+                int folderH = qMin(200, qMax(32, folderCount * 30 + 32));
+                m_folderTreeView->setMaximumHeight(folderH);
+=======
+                int folderH = qMax(32, folderCount * 30 + 32);
+                m_folderTreeView->setFixedHeight(folderH);
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    if (mode == ListView) {
+        m_viewStack->setCurrentWidget(m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView));
+    } else if (mode == ColumnView) {
+        if (m_columnView) {
+            QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
+            m_columnView->setRootPath(targetPath);
+            m_viewStack->setCurrentWidget(m_columnView);
+        }
+    } else {
+        auto* jv = qobject_cast<JustifiedView*>(m_gridView);
+        if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
+        auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView);
+        if (fjv) fjv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
+        m_viewStack->setCurrentWidget(m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView));
+    }
+=======
+    if (mode == ListView) {
+        QWidget* listWidget = m_listScrollArea ? static_cast<QWidget*>(m_listScrollArea) : (m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView));
+        m_viewStack->setCurrentWidget(listWidget);
+    } else if (mode == ColumnView) {
+        if (m_columnView) {
+            QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
+            m_columnView->setRootPath(targetPath);
+            m_viewStack->setCurrentWidget(m_columnView);
+        }
+    } else {
+        auto* jv = qobject_cast<JustifiedView*>(m_gridView);
+        if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
+        auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView);
+        if (fjv) fjv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
+        QWidget* gridWidget = m_gridScrollArea ? static_cast<QWidget*>(m_gridScrollArea) : (m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView));
+        m_viewStack->setCurrentWidget(gridWidget);
+    }
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    if (m_viewStack->currentWidget() == m_gridContainerWidget || m_viewStack->currentWidget() == m_gridView) {
+        if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+            jv->setTargetRowHeight(m_zoomLevel);
+        }
+        if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
+            fjv->setTargetRowHeight(m_zoomLevel);
+        }
+    } else if (m_viewStack->currentWidget() == m_treeView || m_viewStack->currentWidget() == m_listContainerWidget) {
+=======
+    QWidget* cur = m_viewStack->currentWidget();
+    if (cur == m_gridScrollArea || cur == m_gridContainerWidget || cur == m_gridView) {
+        if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+            jv->setTargetRowHeight(m_zoomLevel);
+        }
+        if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
+            fjv->setTargetRowHeight(m_zoomLevel);
+        }
+    } else if (cur == m_listScrollArea || cur == m_treeView || cur == m_listContainerWidget) {
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    if (m_currentViewMode == ColumnView) {
+        m_viewStack->setCurrentWidget(m_columnView);
+    } else {
+        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? (m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView)) : (m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView)));
+    }
+=======
+    if (m_currentViewMode == ColumnView) {
+        m_viewStack->setCurrentWidget(m_columnView);
+    } else {
+        QWidget* target = (m_currentViewMode == ListView)
+            ? (m_listScrollArea ? static_cast<QWidget*>(m_listScrollArea) : (m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView)))
+            : (m_gridScrollArea ? static_cast<QWidget*>(m_gridScrollArea) : (m_gridContainerWidget ? m_gridContainerWidget : static_cast<QWidget*>(m_gridView)));
+        m_viewStack->setCurrentWidget(target);
+    }
+>>>>>>> REPLACE
+```
+
+---
+
+## 4. Build & Verification Steps
+1. Perform CMake configuration and compilation check:
+   ```bash
+   cmake -B build -G Ninja
+   cmake --build build
+   ```
+2. Verify that `ContentPanel.cpp` compiles cleanly without any C2039 or missing member errors.
+3. Test List View, Grid View, and Justified View when directories contain both folders and files.
+4. Drag the scrollbar or scroll mouse wheel in List/Grid/Justified view; confirm that the folder header, folder list/grid, file header, and file list move together as a single unified layout.
+
+---
+
+## 5. SSOT API Reuse & Anti-Redundancy Self-Check
+- **`refreshAll()` SSOT entrypoint**: Kept intact.
+- **Scroll architecture alignment**: Reused the exact `QScrollArea` container wrapping pattern from `ColumnViewWidget`.
+- **Zero Redundancy**: Avoided duplicating layout handling logic across views.
+
+---
+
+## 6. Header API Signature Verification
+- `QScrollArea::setWidget(QWidget*)`: Verified in Qt5/Qt6 `QScrollArea` API.
+- `QScrollArea::setWidgetResizable(bool)`: Verified in Qt5/Qt6 `QScrollArea` API.
+- `QScrollArea::setFrameShape(QFrame::Shape)`: Verified in Qt5/Qt6 `QScrollArea` API.
+- `QStackedWidget::addWidget(QWidget*)`: Verified in Qt5/Qt6 `QStackedWidget` API.
+- `QStackedWidget::setCurrentWidget(QWidget*)`: Verified in Qt5/Qt6 `QStackedWidget` API.

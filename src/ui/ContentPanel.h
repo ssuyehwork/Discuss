@@ -114,6 +114,7 @@ public:
     void setCurrentCategoryType(const QString& type) { m_currentCategoryType = type; }
 
     // 4. 视图与控制器引用
+    QAbstractItemView* activeItemView() const;
     QStackedWidget* viewStack() const { return m_viewStack; }
     QAbstractItemView* gridView() const { return m_gridView; }
     QTreeView* treeView() const;
