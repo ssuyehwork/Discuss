@@ -44,6 +44,10 @@ signals:
     void recordsLoaded(const std::vector<ItemRecord>& records);
     void blankSpaceDoubleClicked(int paneIndex);
 
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
 private slots:
     void tryPendingSelection();
 

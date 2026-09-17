@@ -18,7 +18,7 @@ FolderSectionHeaderBar::FolderSectionHeaderBar(QWidget* parent)
     layout->setSpacing(6);
 
     m_titleLabel = new QLabel(this);
-    m_titleLabel->setStyleSheet("color: #CCCCCC; font-size: 12px; font-weight: bold;");
+    m_titleLabel->setStyleSheet("color: #3498db; font-size: 12px; font-weight: bold;");
 
     m_arrowLabel = new QLabel(this);
 
@@ -56,7 +56,7 @@ void FolderSectionHeaderBar::updateUi() {
         m_titleLabel->setText(QString("文件夹 (%1)").arg(m_count));
     }
     if (m_arrowLabel) {
-        m_arrowLabel->setPixmap(UiHelper::getIcon(m_collapsed ? "chevron_right" : "chevron_down", QColor("#888888"), 12).pixmap(12, 12));
+        m_arrowLabel->setPixmap(UiHelper::getIcon(m_collapsed ? "chevron_right" : "chevron_down", QColor("#3498db"), 12).pixmap(12, 12));
     }
 }
 
@@ -74,7 +74,7 @@ FileSectionHeaderBar::FileSectionHeaderBar(QWidget* parent)
     layout->setSpacing(6);
 
     m_titleLabel = new QLabel("文件 (0)", this);
-    m_titleLabel->setStyleSheet("color: #888888; font-size: 12px; font-weight: bold;");
+    m_titleLabel->setStyleSheet("color: #3498db; font-size: 12px; font-weight: bold;");
 
     layout->addWidget(m_titleLabel);
     layout->addStretch();

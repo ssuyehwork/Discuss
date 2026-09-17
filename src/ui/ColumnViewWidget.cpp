@@ -218,6 +218,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
             m_emptyFilterHintLabel->hide();
             if (m_listView) m_listView->show();
         }
+        update();
     };
 
     connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, updateSectionCountsAndHints);
@@ -303,6 +304,23 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
             m_contentPanel->onDoubleClicked(index);
         }
     });
+}
+
+void ColumnViewPane::paintEvent(QPaintEvent* event) {
+    QWidget::paintEvent(event);
+    if (m_folderListView && m_folderListView->isVisible()) {
+        int folderBottom = m_folderListView->y() + m_folderListView->height();
+        if (folderBottom >= height()) {
+            QPainter painter(this);
+            painter.setPen(QPen(QColor("#3498db"), 1));
+            painter.drawLine(0, height() - 1, width(), height() - 1);
+        }
+    }
+}
+
+void ColumnViewPane::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    update();
 }
 
 void ColumnViewPane::setFilterState(const FilterState& state) {
