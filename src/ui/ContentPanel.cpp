@@ -9,6 +9,7 @@
 #include "controllers/ContentDataLoader.h"
 #include "controllers/ContentFileOpsHandler.h"
 #include "workers/ContentStatsWorker.h"
+#include "JustifiedView.h"
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
 #include "DropListView.h"
