@@ -190,6 +190,8 @@ void ContentPanel::initGridView() {
     // 2. 文件夹专用网格视图
     m_folderGridView = new DropJustifiedView(m_gridContainerWidget);
     m_folderGridView->setFrameShape(QFrame::NoFrame);
+    m_folderGridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_folderGridView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderGridView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_folderGridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderGridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -206,6 +208,15 @@ void ContentPanel::initGridView() {
         fDelegate->setIsEmptyRole(IsEmptyRole);
         fDelegate->setColorRole(ColorRole);
         m_folderGridView->setItemDelegate(fDelegate);
+
+        connect(fJustifiedView, &JustifiedView::contentHeightChanged, this, [this](int newHeight) {
+            if (m_folderGridView && m_folderProxyModel && m_folderProxyModel->rowCount() > 0) {
+                bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
+                if (!collapsed && newHeight > 0) {
+                    m_folderGridView->setFixedHeight(newHeight);
+                }
+            }
+        });
     }
     m_folderGridView->installEventFilter(this);
     m_folderGridView->viewport()->installEventFilter(this);
@@ -274,8 +285,10 @@ void ContentPanel::initGridView() {
             } else {
                 bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
                 m_folderGridView->setVisible(!collapsed);
-                int cardH = m_zoomLevel + CardLayoutEngine::extraHeight() + 20;
-                m_folderGridView->setMaximumHeight(cardH);
+                auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView);
+                int h = fjv ? fjv->totalHeight() : 0;
+                if (h <= 0) h = m_zoomLevel + CardLayoutEngine::extraHeight() + 20;
+                m_folderGridView->setFixedHeight(h);
             }
         }
         if (m_gridFileHeader) {
@@ -327,6 +340,7 @@ void ContentPanel::initListView() {
     m_folderTreeView->setAlternatingRowColors(true);
     m_folderTreeView->setSortingEnabled(true);
     m_folderTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_folderTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderTreeView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_folderTreeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -400,8 +414,8 @@ void ContentPanel::initListView() {
             } else {
                 bool collapsed = m_listFolderHeader ? m_listFolderHeader->isCollapsed() : false;
                 m_folderTreeView->setVisible(!collapsed);
-                int folderH = qMin(200, qMax(32, folderCount * 30 + 32));
-                m_folderTreeView->setMaximumHeight(folderH);
+                int folderH = folderCount * 28 + 36;
+                m_folderTreeView->setFixedHeight(folderH);
             }
         }
         if (m_listFileHeader) {

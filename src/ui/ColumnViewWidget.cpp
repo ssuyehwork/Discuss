@@ -197,12 +197,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
                 bool collapsed = m_folderHeader ? m_folderHeader->isCollapsed() : false;
                 m_folderListView->setVisible(!collapsed);
                 int desiredH = folderCount * 28 + 4;
-                if (fileCount > 0) {
-                    int maxAllowedH = qMax(100, height() - 120);
-                    m_folderListView->setMaximumHeight(qMin(desiredH, maxAllowedH));
-                } else {
-                    m_folderListView->setMaximumHeight(desiredH);
-                }
+                m_folderListView->setFixedHeight(desiredH);
             }
         }
         if (m_fileHeader) {
