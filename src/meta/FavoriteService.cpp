@@ -28,7 +28,7 @@ bool FavoriteService::addFavorite(const QString& path) {
     if (!fi.exists()) return false;
 
     bool isDir = fi.isDir();
-    QString finalColorHex = "#FDB70A";
+    QString finalColorHex = "#888888";
 
     if (isDir) {
         bool isDriveRoot = fi.isRoot() || cleanPath.endsWith(":\\") || cleanPath.endsWith(":/") || (cleanPath.length() == 2 && cleanPath.endsWith(':'));

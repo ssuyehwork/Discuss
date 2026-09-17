@@ -1242,7 +1242,7 @@ QPushButton#NavTrashBtn:pressed {
 }
 
 QLabel#FavoritePanelTitleLabel {
-    color: #FDB70A;
+    color: #888888;
     font-size: 13px;
     font-weight: bold;
     background: transparent;

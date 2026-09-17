@@ -4,6 +4,7 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QTreeView>
+#include <QScrollArea>
 #include <QSet>
 #include <QModelIndexList>
 #include <atomic>
@@ -213,6 +214,7 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
+    QScrollArea* m_listScrollArea = nullptr;
     QWidget* m_listContainerWidget = nullptr;
     FolderSectionHeaderBar* m_listFolderHeader = nullptr;
     DropTreeView* m_folderTreeView = nullptr;
@@ -220,6 +222,7 @@ private:
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;
 
+    QScrollArea* m_gridScrollArea = nullptr;
     QWidget* m_gridContainerWidget = nullptr;
     FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
     DropJustifiedView* m_folderGridView = nullptr;
