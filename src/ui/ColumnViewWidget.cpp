@@ -196,8 +196,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
             } else {
                 bool collapsed = m_folderHeader ? m_folderHeader->isCollapsed() : false;
                 m_folderListView->setVisible(!collapsed);
-                int desiredH = folderCount * 28 + 4;
-                m_folderListView->setFixedHeight(desiredH);
+                int folderH = qMax(28, folderCount * 28 + 4);
+                m_folderListView->setFixedHeight(folderH);
             }
         }
         if (m_fileHeader) {
@@ -308,15 +308,12 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
 void ColumnViewPane::paintEvent(QPaintEvent* event) {
     QWidget::paintEvent(event);
-    if (m_folderListView && m_folderListView->isVisible() && m_folderProxyModel) {
-        int folderCount = m_folderProxyModel->rowCount();
-        int desiredH = folderCount * 28 + 4;
+    if (m_folderListView && m_folderListView->isVisible()) {
         int folderBottom = m_folderListView->y() + m_folderListView->height();
-        if (folderBottom >= height() || (m_folderListView->maximumHeight() < desiredH && desiredH > m_folderListView->height())) {
+        if (folderBottom >= height()) {
             QPainter painter(this);
             painter.setPen(QPen(QColor("#3498db"), 1));
-            int lineY = m_folderListView->y() + m_folderListView->height() - 1;
-            painter.drawLine(0, lineY, width(), lineY);
+            painter.drawLine(0, height() - 1, width(), height() - 1);
         }
     }
 }
