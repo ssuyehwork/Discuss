@@ -1,12 +1,17 @@
-# ContentPanel-MetaPanelSelectionFix.md - ContentPanel View Stack Selection & KeyHandler Hitbox Implementation Plan
+# ContentPanel-MetaPanelSelectionFix.md - ContentPanel View Stack Selection, Context Menu & KeyHandler Hitbox Implementation Plan
 
 ## 1. Overview
-本实施方案旨在解决因引入 `FolderSectionWidget` 复合容器（`m_gridContainerWidget` / `m_listContainerWidget`）后，`ContentPanel` 中使用 `qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget())` 获取当前活动视图失败导致的四大受损功能（选中项获取、滚动定位、懒加载缩略图刷新、选择集恢复），恢复右侧元数据面板（`MetaPanel`）星级/颜色按钮交互状态，并彻底修复 `ContentKeyHandler` 中未选中卡片点击星级 Hitbox 的触发与数据提交逻辑。
+本实施方案旨在彻底排查并修复因引入 `FolderSectionWidget` 复合容器（`m_gridContainerWidget` / `m_listContainerWidget`）及独立 ProxyModel 架构（`m_folderProxyModel` 与 `m_fileProxyModel` 分线）引发的全套受损功能，包括：
+1. `ContentPanel` 中使用 `qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget())` 获取当前活动视图失败导致的五大受损功能：选中项获取 `getSelectedIndexes()`、选中路径 `getSelectedPaths()`、滚动定位 `selectAndScrollToItem()`、懒加载缩略图刷新 `refreshVisibleThumbnails()` 与右键菜单缺省 Fallback；
+2. 右侧元数据面板（`MetaPanel`）星级/颜色按钮交互解锁；
+3. `ContentKeyHandler` 中卡片/列表星级 Hitbox 点击以及快捷键（Ctrl+0~5 星级、Alt+1~9 色标、Alt+D 置顶、F4 重复操作）在文件夹子视图 (`m_folderGridView` / `m_folderTreeView`) 上的 Model 索引错位导致数据提交失败的问题；
+4. `ContentContextMenu` 中右键菜单重复操作与粘贴标签在文件夹子视图上的 Model 数据提交错位问题。
 
 ## 2. Modified Files List
 1. `src/ui/ContentPanel.h`
 2. `src/ui/ContentPanel.cpp`
 3. `src/ui/controllers/ContentKeyHandler.cpp`
+4. `src/ui/controllers/ContentContextMenu.cpp`
 
 ## 3. Detailed Line-by-Line Changes (Git Merge Diff)
 
@@ -24,6 +29,32 @@
 ```
 
 ### 3.2 `src/ui/ContentPanel.cpp`
+```
+<<<<<<< SEARCH
+void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
+    QAbstractItemView* view = qobject_cast<QAbstractItemView*>(sender());
+    if (!view) view = (m_viewStack && m_viewStack->currentWidget() == m_gridView) ? m_gridView : m_treeView;
+    if (!view) return;
+    ContentContextMenu menuHandler(this);
+    menuHandler.showMenu(view, pos);
+}
+=======
+void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
+    QAbstractItemView* view = qobject_cast<QAbstractItemView*>(sender());
+    if (!view) {
+        if (m_currentViewMode == ListView) {
+            view = m_treeView ? static_cast<QAbstractItemView*>(m_treeView) : m_folderTreeView;
+        } else if (m_currentViewMode == GridView || m_currentViewMode == JustifiedViewMode) {
+            view = m_gridView ? static_cast<QAbstractItemView*>(m_gridView) : m_folderGridView;
+        }
+    }
+    if (!view) return;
+    ContentContextMenu menuHandler(this);
+    menuHandler.showMenu(view, pos);
+}
+>>>>>>> REPLACE
+```
+
 ```
 <<<<<<< SEARCH
 void ContentPanel::refreshVisibleThumbnails() {
@@ -63,19 +94,19 @@ void ContentPanel::refreshVisibleThumbnails() {
 
     for (auto* view : views) {
         if (!view || !view->viewport() || !view->model()) continue;
-        QSortFilterProxyModel* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
-        if (!proxy) continue;
+        QAbstractItemModel* model = view->model();
 
         QRect vpRect = view->viewport()->rect();
         QModelIndex topIdx = view->indexAt(vpRect.topLeft());
         QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
 
         int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : proxy->rowCount() - 1;
+        int bottom = btmIdx.isValid() ? qMin(model->rowCount() - 1, btmIdx.row() + 4) : model->rowCount() - 1;
 
+        auto* filterProxy = qobject_cast<QSortFilterProxyModel*>(model);
         for (int r = top; r <= bottom; ++r) {
-            QModelIndex proxyIdx = proxy->index(r, 0);
-            QModelIndex srcIdx = proxy->mapToSource(proxyIdx);
+            QModelIndex proxyIdx = model->index(r, 0);
+            QModelIndex srcIdx = filterProxy ? filterProxy->mapToSource(proxyIdx) : proxyIdx;
             if (srcIdx.isValid()) visibleRows.append(srcIdx.row());
         }
     }
@@ -155,11 +186,10 @@ void ContentPanel::selectAndScrollToItem(const QString& path) {
 
     for (auto* view : views) {
         if (!view || !view->selectionModel() || !view->model()) continue;
-        QSortFilterProxyModel* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
-        if (!proxy) continue;
+        QAbstractItemModel* model = view->model();
 
-        for (int i = 0; i < proxy->rowCount(); ++i) {
-            QModelIndex proxyIdx = proxy->index(i, 0);
+        for (int i = 0; i < model->rowCount(); ++i) {
+            QModelIndex proxyIdx = model->index(i, 0);
             if (proxyIdx.data(PathRole).toString() == path) {
                 view->scrollTo(proxyIdx);
                 view->setCurrentIndex(proxyIdx);
@@ -168,6 +198,32 @@ void ContentPanel::selectAndScrollToItem(const QString& path) {
             }
         }
     }
+}
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+QStringList ContentPanel::getSelectedPaths() const {
+    QStringList paths;
+    for (const auto& idx : getSelectedIndexes()) {
+        if (idx.column() == 0) {
+            QString p = idx.data(PathRole).toString();
+            if (!p.isEmpty()) paths << p;
+        }
+    }
+    return paths;
+}
+=======
+QStringList ContentPanel::getSelectedPaths() const {
+    QStringList paths;
+    for (const auto& idx : getSelectedIndexes()) {
+        if (idx.column() == 0) {
+            QString p = idx.data(PathRole).toString();
+            if (!p.isEmpty()) paths << p;
+        }
+    }
+    return paths;
 }
 >>>>>>> REPLACE
 ```
@@ -240,54 +296,6 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 
     return res;
 }
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-    for (auto* view : views) {
-        if (!view || !view->selectionModel()) continue;
-        QSortFilterProxyModel* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
-        if (!proxy) proxy = m_proxyModel;
-        DiskItemModel* diskModel = m_diskModel;
-
-        if (diskModel && proxy) {
-            QSignalBlocker blocker(view->selectionModel());
-            QItemSelection sel;
-            QModelIndex lastIdx;
-            const auto& recs = diskModel->allRecords();
-            for (size_t i = 0; i < recs.size(); ++i) {
-                if (m_selectionState.selectedPaths.contains(recs[i].path)) {
-                    QModelIndex pIdx = proxy->mapFromSource(diskModel->index(static_cast<int>(i), 0));
-                    if (pIdx.isValid()) { sel.select(pIdx, pIdx); lastIdx = pIdx; }
-                }
-            }
-            view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-            if (lastIdx.isValid()) { view->scrollTo(lastIdx); if (m_isPendingEdit) view->edit(lastIdx); }
-        }
-    }
-=======
-    for (auto* view : views) {
-        if (!view || !view->selectionModel()) continue;
-        QSortFilterProxyModel* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
-        if (!proxy) proxy = m_proxyModel;
-        DiskItemModel* diskModel = m_diskModel;
-
-        if (diskModel && proxy) {
-            QSignalBlocker blocker(view->selectionModel());
-            QItemSelection sel;
-            QModelIndex lastIdx;
-            const auto& recs = diskModel->allRecords();
-            for (size_t i = 0; i < recs.size(); ++i) {
-                if (m_selectionState.selectedPaths.contains(recs[i].path)) {
-                    QModelIndex pIdx = proxy->mapFromSource(diskModel->index(static_cast<int>(i), 0));
-                    if (pIdx.isValid()) { sel.select(pIdx, pIdx); lastIdx = pIdx; }
-                }
-            }
-            view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-            if (lastIdx.isValid()) { view->scrollTo(lastIdx); if (m_isPendingEdit) view->edit(lastIdx); }
-        }
-    }
 >>>>>>> REPLACE
 ```
 
@@ -386,6 +394,205 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 >>>>>>> REPLACE
 ```
 
+```
+<<<<<<< SEARCH
+    // 1. Ctrl + 0~5: 评级
+    if ((keyEvent->modifiers() & Qt::ControlModifier) && (keyEvent->key() >= Qt::Key_0 && keyEvent->key() <= Qt::Key_5)) {
+        int rating = keyEvent->key() - Qt::Key_0;
+        auto indexes = view->selectionModel()->selectedIndexes();
+        for (const auto& idx : indexes) {
+            if (idx.column() == 0) m_panel->getActiveProxyModel()->setData(idx, rating, RatingRole);
+        }
+        return true;
+    }
+
+    // 2. Alt + D: 置顶/取消置顶
+    if (((keyEvent->modifiers() & Qt::AltModifier) || (keyEvent->modifiers() & (Qt::AltModifier | Qt::WindowShortcut))) && (keyEvent->key() == Qt::Key_D)) {
+        auto indexes = view->selectionModel()->selectedIndexes();
+        for (const QModelIndex& idx : indexes) {
+            if (idx.column() == 0) {
+                bool current = idx.data(IsLockedRole).toBool();
+                m_panel->getActiveProxyModel()->setData(idx, !current, IsLockedRole);
+            }
+        }
+        return true;
+    }
+
+    // 3. Alt + 1~9: 色标快速赋予
+    if ((keyEvent->modifiers() & Qt::AltModifier) && (keyEvent->key() >= Qt::Key_1 && keyEvent->key() <= Qt::Key_9)) {
+        static const QString colors[] = {
+            "#E24B4A", "#EF9F27", "#FECF0E", "#639922",
+            "#2E90FA", "#8E44AD", "#888888", "#555555", "#000000"
+        };
+        int idx = keyEvent->key() - Qt::Key_1;
+        if (idx >= 0 && idx < 9) {
+            QString colorValue = colors[idx];
+            auto indexes = view->selectionModel()->selectedIndexes();
+            for (const QModelIndex& selIdx : indexes) {
+                if (selIdx.column() == 0) {
+                    m_panel->getActiveProxyModel()->setData(selIdx, colorValue, ColorRole);
+                    QString path = selIdx.data(PathRole).toString();
+                    QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
+                    m_panel->getActiveProxyModel()->setData(selIdx, coloredIcon, Qt::DecorationRole);
+                }
+            }
+            return true;
+        }
+    }
+=======
+    // 1. Ctrl + 0~5: 评级
+    if ((keyEvent->modifiers() & Qt::ControlModifier) && (keyEvent->key() >= Qt::Key_0 && keyEvent->key() <= Qt::Key_5)) {
+        int rating = keyEvent->key() - Qt::Key_0;
+        auto indexes = view->selectionModel()->selectedIndexes();
+        for (const auto& idx : indexes) {
+            if (idx.column() == 0 && idx.model()) {
+                const_cast<QAbstractItemModel*>(idx.model())->setData(idx, rating, RatingRole);
+            }
+        }
+        return true;
+    }
+
+    // 2. Alt + D: 置顶/取消置顶
+    if (((keyEvent->modifiers() & Qt::AltModifier) || (keyEvent->modifiers() & (Qt::AltModifier | Qt::WindowShortcut))) && (keyEvent->key() == Qt::Key_D)) {
+        auto indexes = view->selectionModel()->selectedIndexes();
+        for (const QModelIndex& idx : indexes) {
+            if (idx.column() == 0 && idx.model()) {
+                bool current = idx.data(IsLockedRole).toBool();
+                const_cast<QAbstractItemModel*>(idx.model())->setData(idx, !current, IsLockedRole);
+            }
+        }
+        return true;
+    }
+
+    // 3. Alt + 1~9: 色标快速赋予
+    if ((keyEvent->modifiers() & Qt::AltModifier) && (keyEvent->key() >= Qt::Key_1 && keyEvent->key() <= Qt::Key_9)) {
+        static const QString colors[] = {
+            "#E24B4A", "#EF9F27", "#FECF0E", "#639922",
+            "#2E90FA", "#8E44AD", "#888888", "#555555", "#000000"
+        };
+        int idx = keyEvent->key() - Qt::Key_1;
+        if (idx >= 0 && idx < 9) {
+            QString colorValue = colors[idx];
+            auto indexes = view->selectionModel()->selectedIndexes();
+            for (const QModelIndex& selIdx : indexes) {
+                if (selIdx.column() == 0 && selIdx.model()) {
+                    const_cast<QAbstractItemModel*>(selIdx.model())->setData(selIdx, colorValue, ColorRole);
+                    QString path = selIdx.data(PathRole).toString();
+                    QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
+                    const_cast<QAbstractItemModel*>(selIdx.model())->setData(selIdx, coloredIcon, Qt::DecorationRole);
+                }
+            }
+            return true;
+        }
+    }
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+        auto indexes = view->selectionModel()->selectedIndexes();
+        for (const auto& targetIdx : indexes) {
+            if (targetIdx.column() == 0) {
+                if (type == LastOperationType::SetRating) {
+                    m_panel->getActiveProxyModel()->setData(targetIdx, LastOperationManager::instance().rating(), RatingRole);
+                } else if (type == LastOperationType::SetColor) {
+                    QString colorVal = LastOperationManager::instance().color();
+                    m_panel->getActiveProxyModel()->setData(targetIdx, colorVal, ColorRole);
+                    QString path = targetIdx.data(PathRole).toString();
+                    QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
+                    m_panel->getActiveProxyModel()->setData(targetIdx, coloredIcon, Qt::DecorationRole);
+                } else if (type == LastOperationType::PasteTags) {
+                    m_panel->getActiveProxyModel()->setData(targetIdx, LastOperationManager::instance().tags(), TagsRole);
+                }
+            }
+        }
+=======
+        auto indexes = view->selectionModel()->selectedIndexes();
+        for (const auto& targetIdx : indexes) {
+            if (targetIdx.column() == 0 && targetIdx.model()) {
+                auto* model = const_cast<QAbstractItemModel*>(targetIdx.model());
+                if (type == LastOperationType::SetRating) {
+                    model->setData(targetIdx, LastOperationManager::instance().rating(), RatingRole);
+                } else if (type == LastOperationType::SetColor) {
+                    QString colorVal = LastOperationManager::instance().color();
+                    model->setData(targetIdx, colorVal, ColorRole);
+                    QString path = targetIdx.data(PathRole).toString();
+                    QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
+                    model->setData(targetIdx, coloredIcon, Qt::DecorationRole);
+                } else if (type == LastOperationType::PasteTags) {
+                    model->setData(targetIdx, LastOperationManager::instance().tags(), TagsRole);
+                }
+            }
+        }
+>>>>>>> REPLACE
+```
+
+### 3.4 `src/ui/controllers/ContentContextMenu.cpp`
+```
+<<<<<<< SEARCH
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    if (type == LastOperationType::SetRating) {
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().rating(), RatingRole);
+                    } else if (type == LastOperationType::SetColor) {
+                        QString colorVal = LastOperationManager::instance().color();
+                        m_panel->getProxyModel()->setData(idx, colorVal, ColorRole);
+                        QString itemPath = idx.data(PathRole).toString();
+                        QIcon coloredIcon = ShellIconManager::getFileIcon(itemPath, 128);
+                        m_panel->getProxyModel()->setData(idx, coloredIcon, Qt::DecorationRole);
+                    } else if (type == LastOperationType::PasteTags) {
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+                    }
+                    count++;
+                }
+            }
+=======
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0 && idx.model()) {
+                    auto* model = const_cast<QAbstractItemModel*>(idx.model());
+                    if (type == LastOperationType::SetRating) {
+                        model->setData(idx, LastOperationManager::instance().rating(), RatingRole);
+                    } else if (type == LastOperationType::SetColor) {
+                        QString colorVal = LastOperationManager::instance().color();
+                        model->setData(idx, colorVal, ColorRole);
+                        QString itemPath = idx.data(PathRole).toString();
+                        QIcon coloredIcon = ShellIconManager::getFileIcon(itemPath, 128);
+                        model->setData(idx, coloredIcon, Qt::DecorationRole);
+                    } else if (type == LastOperationType::PasteTags) {
+                        model->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+                    }
+                    count++;
+                }
+            }
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0) {
+                    m_panel->getProxyModel()->setData(idx, copiedTags, TagsRole);
+                    count++;
+                }
+            }
+=======
+            auto indexes = view->selectionModel()->selectedIndexes();
+            int count = 0;
+            for (const auto& idx : indexes) {
+                if (idx.column() == 0 && idx.model()) {
+                    const_cast<QAbstractItemModel*>(idx.model())->setData(idx, copiedTags, TagsRole);
+                    count++;
+                }
+            }
+>>>>>>> REPLACE
+```
+
 ## 4. Build & Verification Steps
 1. 使用 MSVC / Visual Studio 编译环境：
    ```cmd
@@ -394,15 +601,17 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
    cmake -G "Visual Studio 17 2022" -A x64 ..
    cmake --build . --config Release
    ```
-2. 运行 QuarkMeta 应用程序并进行验证：
+2. 运行 QuarkMeta 应用程序并进行全量验证：
    - **右侧 MetaPanel 与选区联动**：点击网格/列表视图中的文件或文件夹，验证右侧 `MetaPanel` 星级/色标控件解除 Disabled 状态，能正常点击修改；
    - **缩略图延迟加载**：快速滚动网格/列表视图，验证 `refreshVisibleThumbnails()` 准确获取可见区域索引并顺畅加载缩略图；
    - **路径定位滚动**：通过地址栏或搜索定位指定项目，验证 `selectAndScrollToItem()` 能够精准滚动并选中目标；
+   - **右键上下文菜单**：在文件夹/文件容器背景或项目空白处右键点击，验证 `onCustomContextMenuRequested()` 在缺少 sender 时仍能准确获取默认 Fallback 视图呈现系统菜单；
+   - **文件夹项键盘快捷键**：在文件夹子视图（`m_folderGridView` / `m_folderTreeView`）中选中文件夹，按下 `Ctrl+1~5`（设置星级）、`Alt+1~9`（设置色标）、`Alt+D`（置顶）与 `F4`（重复上一次操作），验证 Model 准确更新数据且图标正常变色；
    - **星级 Hitbox 点击**：鼠标直接点击未选中的卡片/列表星级 Hitbox，验证能够即时自动选中该项并赋予对应的星级评级。
 
 ## 5. SSOT API Reuse & Anti-Redundancy Self-Check
 - **完整清理 `qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget())`**：排查并消除了全文件所有隐患点，支持 Composite Container 架构。
-- **数据提交映射**：使用 `selIdx.model()->setData(...)` 直接通过当前 Item 绑定的真实 Model / ProxyModel 提交数据，消除 `getActiveProxyModel()` 错位。
+- **数据提交映射**：使用 `selIdx.model()->setData(...)` 直接通过当前 Item 绑定的真实 Model / ProxyModel 提交数据，消除 `getActiveProxyModel()` / `getProxyModel()` 错位。
 
 ## 6. Header API Signature Verification
 经物理查阅 `.h` 源头，核验涉及类及成员函数精准签名如下：
@@ -412,10 +621,12 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 - `QStringList getSelectedPaths() const;`
 - `void refreshVisibleThumbnails();`
 - `void selectAndScrollToItem(const QString& path);`
+- `void onCustomContextMenuRequested(const QPoint& pos);`
 - `DropJustifiedView* folderGridView() const;`
 - `DropTreeView* folderTreeView() const;`
 
 ### `ContentKeyHandler.h`
 - `bool handleMousePress(QObject* obj, QEvent* event);`
+- `bool handleKeyPress(QObject* obj, QEvent* event);`
 
 所有物理签名 100% 绝对一致，完全防范 C2039 成员不存在等编译错误。
