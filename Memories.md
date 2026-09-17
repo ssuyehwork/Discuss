@@ -304,3 +304,21 @@
    - 全软件所有需要行内重命名能力的视图渲染代理（包括树状/列表视图代理 `TreeItemDelegate`、网格卡片视图代理 `ThumbnailDelegate` 及分栏视图代理 `ColumnItemDelegate` 等），必须统一继承抽象基类 `RenameCapableDelegate`；
    - **编辑生命周期强制统一与编译器锁**：基类 `RenameCapableDelegate` 统一实现并用 `override final` 密封 `createEditor`、`setEditorData` 与 `setModelData` 虚函数。所有具体子类 Delegate 绝对禁止且无法重新覆盖这三个函数，确保全软件重命名编辑框的创建、数据填充与模型提交逻辑 100% 绝对一致；
    - **几何边界隔离**：编辑框的布局呈现与定位边界（`updateEditorGeometry`）保留为子类虚函数，由各视图代理根据各自的卡片/行数物理布局引擎进行针对性精准绘制，实现架构统一与布局灵活度的完美结合。
+
+---
+
+## 12. 历史错误陷阱与复合容器（Composite Container）架构红线 (Anti-Patterns & Architectural Guardrails)
+
+### 12.1 复合容器 (FolderSectionWidget / Container Widget) 包装红线
+1. **严禁对 `m_viewStack->currentWidget()` 进行 `QAbstractItemView` 指针强转**：
+   - **历史教训**：为了支持“文件夹 / 文件”分类分块与折叠标题栏 (`FolderSectionWidget`)，网格视图与列表视图被分别放入了 `m_gridContainerWidget` 与 `m_listContainerWidget` 复合容器中并挂载至 `m_viewStack`。若在代码中（如 `getSelectedIndexes()`、`refreshVisibleThumbnails()`、`selectAndScrollToItem()`、`onCustomContextMenuRequested()`）盲目执行 `qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget())`，该强转 100% 返回 `nullptr`！
+   - **连锁崩溃后果**：会导致选中集上报为空 `[]`，使右侧属性面板（`MetaPanel`）星级/色标按钮被物理禁用（Disabled 灰显），同时造成滚动定位失败与缩略图延迟加载失效。
+   - **统一解决方案**：必须依据当前 `m_currentViewMode` 显式判断，归一化遍历收集该模式下的所有子 View（如 `m_folderGridView` / `m_gridView` 或 `m_folderTreeView` / `m_treeView`）。
+
+2. **独立 ProxyModel 架构下 `setData` 的模型索引归属锁**：
+   - **历史教训**：在分类分块架构下，`m_folderGridView` 绑定 `m_folderProxyModel`，`m_gridView` 绑定 `m_fileProxyModel`。快捷键处理（`ContentKeyHandler`）或右键菜单（`ContentContextMenu`）在处理修改（评级、色标、置顶、标签）时，若统一使用 `m_panel->getActiveProxyModel()->setData(...)`，会导致传入 `setData` 的 `QModelIndex` 属于 `m_folderProxyModel`，却被错误发往 `m_fileProxyModel`，触发 Index 跨 Model 错位与数据修改失败。
+   - **统一解决方案**：必须直接从被选中的 `QModelIndex` 身上获取其绑定的物理 Model 指针：`const_cast<QAbstractItemModel*>(idx.model())->setData(idx, ...)`。
+
+3. **视图区域平滑滚动与统一视口契约 (Unified ScrollViewport Contract)**：
+   - **历史教训**：严禁在 `QVBoxLayout` 中将折叠标题栏和局部 View 简单平铺堆叠，同时对局部 View 设置 `setFixedHeight` 或固定隐藏滚动条。这会导致用户在内容面板中滚动滚轮时，仅有底部的 View Viewport 内部发生偏移，而顶部的“文件夹 (X)”标题栏及文件夹区域被固定死在页面最上方无法向上滚动移出屏幕（视觉固定死锁）。
+   - **统一解决方案**：若需要整页滚动，必须使用统一的 `QScrollArea` / Viewport 承载全局内容，确保所有分区标题栏与 View 随页面滚轮统一平滑向上移动。
