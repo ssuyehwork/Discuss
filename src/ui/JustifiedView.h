@@ -19,9 +19,6 @@ public:
     LayoutMode layoutMode() const;
     int totalHeight() const { return m_totalHeight; }
 
-signals:
-    void contentHeightChanged(int newHeight);
-
     // 🚀【物理契约】：彻底切断 QAbstractItemView 对父容器的尺寸顶推
     QSize minimumSizeHint() const override { return QSize(50, 50); }
     QSize sizeHint() const override { return QSize(230, 200); }
@@ -33,6 +30,9 @@ signals:
     void reset() override;
     void doItemsLayout() override;
     void setModel(QAbstractItemModel* model) override;
+
+signals:
+    void contentHeightChanged(int newHeight);
 
 protected slots:
     void dataChanged(const QModelIndex& topLeft, const QModelIndex& bottomRight, const QList<int>& roles = QList<int>()) override;
