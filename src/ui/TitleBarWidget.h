@@ -33,7 +33,7 @@ public:
     bool isPinned() const;
     void setPinned(bool pinned);
     void setZoomLevel(int value);
-    void setWindowMaximized(bool maximized);
+    Q_INVOKABLE void setWindowMaximized(bool maximized);
     void setViewModeOption(ViewModeOption mode);
     void setDriveBarVisible(bool visible);
 
