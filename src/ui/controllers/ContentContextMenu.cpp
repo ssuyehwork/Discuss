@@ -172,7 +172,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 menu.close();
             });
 
-            bool isPinned = currentIndex.data(IsLockedRole).toBool();
+            bool isPinned = currentIndex.data(PinnedRole).toBool();
             ContextMenuFactory::buildPinToggleAction(&menu, isPinned, [this, view](bool pin) {
                 auto indexes = view->selectionModel()->selectedIndexes();
                 QStringList targetPaths;
@@ -183,11 +183,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     }
                 }
                 if (!targetPaths.isEmpty()) {
-                    for (const QString& p : targetPaths) {
-                        MetadataManager::instance().setPinned(p.toStdWString(), pin);
-                        if (m_panel) m_panel->updateItemMetadata(p);
-                    }
-                    if (m_panel) m_panel->refreshAll();
+                    AppCommand cmd;
+                    cmd.type = AppCommandType::SetPinned;
+                    cmd.targetPaths = targetPaths;
+                    cmd.params["pinned"] = pin;
+                    CoreEngine::instance().executeCommand(cmd);
                 }
             }, m_panel);
 
@@ -291,7 +291,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 menu.close();
             });
 
-            bool isPinned = currentIndex.data(IsLockedRole).toBool();
+            bool isPinned = currentIndex.data(PinnedRole).toBool();
             ContextMenuFactory::buildPinToggleAction(&menu, isPinned, [this, view](bool pin) {
                 auto indexes = view->selectionModel()->selectedIndexes();
                 QStringList targetPaths;
@@ -302,11 +302,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     }
                 }
                 if (!targetPaths.isEmpty()) {
-                    for (const QString& p : targetPaths) {
-                        MetadataManager::instance().setPinned(p.toStdWString(), pin);
-                        if (m_panel) m_panel->updateItemMetadata(p);
-                    }
-                    if (m_panel) m_panel->refreshAll();
+                    AppCommand cmd;
+                    cmd.type = AppCommandType::SetPinned;
+                    cmd.targetPaths = targetPaths;
+                    cmd.params["pinned"] = pin;
+                    CoreEngine::instance().executeCommand(cmd);
                 }
             }, m_panel);
 

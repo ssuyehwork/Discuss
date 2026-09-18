@@ -18,10 +18,16 @@ public:
     void setLayoutMode(LayoutMode mode);
     LayoutMode layoutMode() const;
 
+    int totalHeight() const { return m_totalHeight; }
+
     // 🚀【物理契约】：彻底切断 QAbstractItemView 对父容器的尺寸顶推
     QSize minimumSizeHint() const override { return QSize(50, 50); }
-    QSize sizeHint() const override { return QSize(230, 200); }
+    QSize sizeHint() const override { return QSize(230, m_totalHeight); }
 
+signals:
+    void totalHeightChanged(int height);
+
+public:
     QRect visualRect(const QModelIndex& index) const override;
     void scrollTo(const QModelIndex& index, ScrollHint hint = EnsureVisible) override;
     QModelIndex indexAt(const QPoint& point) const override;

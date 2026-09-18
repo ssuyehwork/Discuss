@@ -433,7 +433,10 @@ void JustifiedView::doLayout() {
                 m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, itemHeight), itemIdx };
                 currentX += itemWidth + standardSpacing;
             }
-            currentY += itemHeight + spacing;
+            currentY += itemHeight;
+            if (i < count) {
+                currentY += spacing;
+            }
         }
     } else {
         int i = 0;
@@ -516,9 +519,14 @@ void JustifiedView::doLayout() {
         }
     }
 
-    m_totalHeight = currentY + 10;
+    int oldHeight = m_totalHeight;
+    m_totalHeight = currentY;
     updateGeometries();
     viewport()->update();
+
+    if (oldHeight != m_totalHeight) {
+        emit totalHeightChanged(m_totalHeight);
+    }
 }
 
 } // namespace QuarkMeta

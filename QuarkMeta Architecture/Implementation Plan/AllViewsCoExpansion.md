@@ -1,25 +1,50 @@
-# QuarkMeta 实施方案：全视图（网格/流式/列表）联合撑开与统一滚动 (AllViewsCoExpansion)
+# Implementation Plan - AllViewsCoExpansion.md
 
-## 1. Overview（概述与解决的问题）
-- **问题**：网格视图（GridView/JustifiedView）与列表视图（ListView）中，普通文件区域（`m_gridView` 与 `m_treeView`）未进行物理高度撑开，导致当文件夹少、文件极大时，外层 `QScrollArea` 不超高，文件仍在底部局部滚动，折叠栏无法整页向上流动。
-- **解法**：
-  1. 关闭 `m_gridView` 与 `m_treeView` 的私有垂直滚动条；
-  2. 在 `updateGridSectionCounts()` 中计算文件的真实折行数并调用 `m_gridView->setFixedHeight(...)`；
-  3. 在 `updateListSectionCounts()` 中根据文件行数计算物理高度并调用 `m_treeView->setFixedHeight(...)`；
-  4. 让所有视图与列视图完全看齐，全由【文件夹 + 文件】联合决定整页滚动条！
+## 1. Overview
+Unify all four view modes (`GridView`, `JustifiedViewMode`, `ListView`, and `ColumnView`) under a single cohesive layout and scrolling architecture.
 
----
+Currently, `ContentPanel`'s `GridView`/`JustifiedViewMode` (`m_gridView`) and `ListView` (`m_treeView`) keep internal vertical scrollbars enabled and do not expand to fit their full content height. This creates a disjointed user experience where scrolling only moves the file section, while folder section headers remain static, unlike `ColumnView` where the entire pane scrolls as a single smooth canvas.
 
-## 2. Modified Files List（影响文件清单）
-1. `src/ui/ContentPanel.cpp`
+This plan unifies all view modes to match `ColumnView`'s canvas architecture:
+1. Turn off internal vertical scrollbars on `m_folderGridView`, `m_gridView`, `m_folderTreeView`, and `m_treeView` (`setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff)`).
+2. Connect `m_gridView` and `m_folderGridView` to `JustifiedView::totalHeightChanged` to automatically drive `setFixedHeight(m_totalHeight)`.
+3. In `ListView` mode, calculate exact content height for `m_folderTreeView` and `m_treeView` using row heights (`sizeHintForRow(0)` plus `header()->height()`) and update `setFixedHeight` dynamically.
+4. Delegate all vertical scrolling exclusively to outer containers (`m_gridScrollArea` and `m_listScrollArea`), allowing headers and views to scroll together as a single unified canvas.
 
 ---
 
-## 3. Detailed Line-by-Line Changes（精准替换块）
+## 2. Modified Files List
+- `src/ui/ContentPanel.cpp`
 
-### 修改文件：`src/ui/ContentPanel.cpp`
+---
 
-#### 替换块 A：网格与流式视图文件区域关闭私有滚动、联合撑高
+## 3. Detailed Line-by-Line Changes
+
+### File 1: `src/ui/ContentPanel.cpp`
+
+#### Change 1: Grid / Justified View setup
+Disable internal vertical scrollbars for `m_folderGridView` and `m_gridView`. Connect `m_gridView->totalHeightChanged` to automatically drive `setFixedHeight`.
+
+```
+<<<<<<< SEARCH
+    // 2. 文件夹专用网格视图
+    m_folderGridView = new DropJustifiedView(m_gridContainerWidget);
+    m_folderGridView->setFrameShape(QFrame::NoFrame);
+    m_folderGridView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_folderGridView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_folderGridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_folderGridView->setModel(m_folderProxyModel);
+=======
+    // 2. 文件夹专用网格视图
+    m_folderGridView = new DropJustifiedView(m_gridContainerWidget);
+    m_folderGridView->setFrameShape(QFrame::NoFrame);
+    m_folderGridView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_folderGridView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_folderGridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_folderGridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_folderGridView->setModel(m_folderProxyModel);
+>>>>>>> REPLACE
+```
 
 ```
 <<<<<<< SEARCH
@@ -30,52 +55,44 @@
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_gridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_gridView->setModel(m_fileProxyModel);
-
-    auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
-    if (justifiedView) {
-        justifiedView->setAspectRatioRole(AspectRatioRole);
-        auto* delegate = new ThumbnailDelegate(this);
-        delegate->setHasThumbnailRole(HasThumbnailRole);
-        delegate->setRatingRole(RatingRole);
-        delegate->setPathRole(PathRole);
-        delegate->setPinnedRole(PinnedRole);
-        delegate->setTypeRole(TypeRole);
-        delegate->setIsEmptyRole(IsEmptyRole);
-        delegate->setColorRole(ColorRole);
-        m_gridView->setItemDelegate(delegate);
-    }
-
-    m_gridView->installEventFilter(this);
-    m_gridView->viewport()->installEventFilter(this);
-    layout->addWidget(m_gridView, 1);
 =======
-    // 4. 普通文件网格视图（关闭私有垂直滚动条）
+    // 4. 普通文件网格视图
     m_gridView = new DropJustifiedView(m_gridContainerWidget);
     m_gridView->setFrameShape(QFrame::NoFrame);
     m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_gridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_gridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_gridView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_gridView->setModel(m_fileProxyModel);
+>>>>>>> REPLACE
+```
 
-    auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
-    if (justifiedView) {
-        justifiedView->setAspectRatioRole(AspectRatioRole);
-        auto* delegate = new ThumbnailDelegate(this);
-        delegate->setHasThumbnailRole(HasThumbnailRole);
-        delegate->setRatingRole(RatingRole);
-        delegate->setPathRole(PathRole);
-        delegate->setPinnedRole(PinnedRole);
-        delegate->setTypeRole(TypeRole);
-        delegate->setIsEmptyRole(IsEmptyRole);
-        delegate->setColorRole(ColorRole);
-        m_gridView->setItemDelegate(delegate);
+```
+<<<<<<< SEARCH
+    connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, updateGridSectionCounts);
+    connect(m_folderProxyModel, &QAbstractItemModel::layoutChanged, this, updateGridSectionCounts);
+    connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, updateGridSectionCounts);
+    connect(m_fileProxyModel, &QAbstractItemModel::layoutChanged, this, updateGridSectionCounts);
+=======
+    if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
+        connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int h) {
+            if (m_folderGridView && m_folderProxyModel && m_folderProxyModel->rowCount() > 0) {
+                m_folderGridView->setFixedHeight(h);
+            }
+        });
+    }
+    if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+        connect(jv, &JustifiedView::totalHeightChanged, this, [this](int h) {
+            if (m_gridView && m_fileProxyModel && m_fileProxyModel->rowCount() > 0) {
+                m_gridView->setFixedHeight(h);
+            }
+        });
     }
 
-    m_gridView->installEventFilter(this);
-    m_gridView->viewport()->installEventFilter(this);
-    layout->addWidget(m_gridView);
+    connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, updateGridSectionCounts);
+    connect(m_folderProxyModel, &QAbstractItemModel::layoutChanged, this, updateGridSectionCounts);
+    connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, updateGridSectionCounts);
+    connect(m_fileProxyModel, &QAbstractItemModel::layoutChanged, this, updateGridSectionCounts);
 >>>>>>> REPLACE
 ```
 
@@ -100,53 +117,58 @@
                 m_folderGridView->setFixedHeight(rows * rowH + 8);
             }
         }
-        if (m_gridFileHeader) {
-            m_gridFileHeader->setCount(fileCount);
-            m_gridFileHeader->setVisible(fileCount > 0 && folderCount > 0);
-        }
-    };
 =======
-        // 1. 统一计算单张卡片占位宽、单行高度与每行卡片数
-        int cardW = m_zoomLevel + CardLayoutEngine::totalPaddingHorizontal() + 10;
-        int rowH = m_zoomLevel + CardLayoutEngine::extraHeight() + 10;
-        int availableW = m_gridScrollArea && m_gridScrollArea->viewport() ? m_gridScrollArea->viewport()->width() : width();
-        int cardsPerRow = qMax(1, availableW / cardW);
-
-        // 2. 文件夹网格动态撑开
         if (m_folderGridView) {
             if (folderCount == 0) {
                 m_folderGridView->hide();
             } else {
                 bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
                 m_folderGridView->setVisible(!collapsed);
-                int folderRows = qMax(1, (folderCount + cardsPerRow - 1) / cardsPerRow);
-                m_folderGridView->setFixedHeight(folderRows * rowH + 8);
+                if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
+                    m_folderGridView->setFixedHeight(fjv->totalHeight());
+                }
             }
         }
-        if (m_gridFileHeader) {
-            m_gridFileHeader->setCount(fileCount);
-            m_gridFileHeader->setVisible(fileCount > 0 && folderCount > 0);
-        }
-
-        // 3. 🚀【文件网格同步物理撑开】：彻底消除局部滚动，联合决定整页滚动
         if (m_gridView) {
             if (fileCount == 0) {
                 m_gridView->hide();
             } else {
                 m_gridView->show();
-                int fileRows = qMax(1, (fileCount + cardsPerRow - 1) / cardsPerRow);
-                m_gridView->setFixedHeight(fileRows * rowH + 8);
+                if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+                    m_gridView->setFixedHeight(jv->totalHeight());
+                }
             }
         }
-
-        if (m_gridContainerWidget) {
-            m_gridContainerWidget->adjustSize();
-        }
-    };
 >>>>>>> REPLACE
 ```
 
-#### 替换块 B：列表视图文件区域关闭私有滚动、联合撑高
+#### Change 2: List View setup
+Disable internal vertical scrollbars on `m_folderTreeView` and `m_treeView`. Auto-expand heights using SSOT row heights.
+
+```
+<<<<<<< SEARCH
+    // 4. 文件夹列表视图
+    m_folderTreeView = new DropTreeView(m_listContainerWidget);
+    m_folderTreeView->setFrameShape(QFrame::NoFrame);
+    m_folderTreeView->setAlternatingRowColors(true);
+    m_folderTreeView->setSortingEnabled(true);
+    m_folderTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_folderTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_folderTreeView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_folderTreeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+=======
+    // 4. 文件夹列表视图
+    m_folderTreeView = new DropTreeView(m_listContainerWidget);
+    m_folderTreeView->setFrameShape(QFrame::NoFrame);
+    m_folderTreeView->setAlternatingRowColors(true);
+    m_folderTreeView->setSortingEnabled(true);
+    m_folderTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_folderTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_folderTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_folderTreeView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_folderTreeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+>>>>>>> REPLACE
+```
 
 ```
 <<<<<<< SEARCH
@@ -159,29 +181,17 @@
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_treeView->setRootIsDecorated(false);
-    m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true));
-    m_treeView->setModel(m_fileProxyModel);
-    m_treeView->installEventFilter(this);
-    m_treeView->viewport()->installEventFilter(this);
-    layout->addWidget(m_treeView, 1);
 =======
-    // 6. 文件列表视图（关闭内部垂直滚动条）
+    // 6. 文件列表视图
     m_treeView = new DropTreeView(m_listContainerWidget);
     m_treeView->setFrameShape(QFrame::NoFrame);
     m_treeView->setAlternatingRowColors(true);
     m_treeView->setSortingEnabled(true);
+    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_treeView->setRootIsDecorated(false);
-    m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true));
-    m_treeView->setModel(m_fileProxyModel);
-    m_treeView->installEventFilter(this);
-    m_treeView->viewport()->installEventFilter(this);
-    layout->addWidget(m_treeView);
 >>>>>>> REPLACE
 ```
 
@@ -197,11 +207,6 @@
                 m_folderTreeView->setFixedHeight(folderH);
             }
         }
-        if (m_listFileHeader) {
-            m_listFileHeader->setCount(fileCount);
-            m_listFileHeader->setVisible(fileCount > 0 && folderCount > 0);
-        }
-    };
 =======
         if (m_folderTreeView) {
             if (folderCount == 0) {
@@ -209,45 +214,51 @@
             } else {
                 bool collapsed = m_listFolderHeader ? m_listFolderHeader->isCollapsed() : false;
                 m_folderTreeView->setVisible(!collapsed);
-                int folderH = qMax(32, folderCount * 30 + 32);
+                int rowH = m_folderTreeView->sizeHintForRow(0);
+                if (rowH <= 0) rowH = 30;
+                int hdrH = (m_folderTreeView->header() && m_folderTreeView->header()->isVisible()) ? m_folderTreeView->header()->height() : 0;
+                int folderH = folderCount * rowH + hdrH + 2;
                 m_folderTreeView->setFixedHeight(folderH);
             }
         }
-        if (m_listFileHeader) {
-            m_listFileHeader->setCount(fileCount);
-            m_listFileHeader->setVisible(fileCount > 0 && folderCount > 0);
-        }
-        // 🚀【文件列表同步物理撑高】：消除局部内卷，联合撑大整页
         if (m_treeView) {
             if (fileCount == 0) {
                 m_treeView->hide();
             } else {
                 m_treeView->show();
-                int fileH = qMax(64, fileCount * 30 + 32);
+                int rowH = m_treeView->sizeHintForRow(0);
+                if (rowH <= 0) rowH = 30;
+                int hdrH = (m_treeView->header() && m_treeView->header()->isVisible()) ? m_treeView->header()->height() : 0;
+                int fileH = fileCount * rowH + hdrH + 2;
                 m_treeView->setFixedHeight(fileH);
             }
         }
-
-        if (m_listContainerWidget) {
-            m_listContainerWidget->adjustSize();
-        }
-    };
 >>>>>>> REPLACE
 ```
 
 ---
 
-## 4. Build & Verification Steps（编译与验证方法）
+## 4. Build & Verification Steps
+1. Configure and build:
+   ```bash
+   cmake -B build -S .
+   cmake --build build
+   ```
+2. Verification:
+   - Switch between GridView, JustifiedViewMode, ListView, and ColumnView.
+   - Verify that in all view modes, scrolling the mouse wheel over the view smoothly scrolls the entire canvas including section headers and view widgets.
+   - Verify that sub-views no longer display independent internal vertical scrollbars.
 
-### 编译命令
-```bash
-cmake --build . --config Release --target QuarkMeta
-```
+---
 
-### 验证标准
-1. **网格与流式视图测试**：
-   - 进入文件夹少、文件极大（例如 2 文件夹 + 2489 文件）的目录；
-   - 验证：右侧主垂直滚动条立即正确出现，并且滑块比例真实反映 2489 个文件的总量；
-   - 滚动滚轮时：顶部的文件夹和分界条自然随内容向上平移滑出屏幕，底部文件不再独立局部滚动！
-2. **列表视图测试**：
-   - 切换到列表视图，同样验证整页统一垂直滚动，上下平滑移动，行为与列视图 100% 绝对一致！
+## 5. SSOT API Reuse & Anti-Redundancy Self-Check
+- Reused `JustifiedView::totalHeightChanged` SSOT signal and `totalHeight()` getter.
+- Reused `QTreeView::sizeHintForRow(0)` and `QHeaderView::height()` SSOT methods.
+- Zero duplicate or split-brain height calculation code introduced.
+
+---
+
+## 6. Header API Signature Verification
+- `JustifiedView::totalHeight() const` -> `src/ui/JustifiedView.h`
+- `QTreeView::sizeHintForRow(int row) const` -> Qt `QTreeView` API
+- `QHeaderView::height() const` -> Qt `QHeaderView` API

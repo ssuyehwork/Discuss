@@ -208,7 +208,7 @@ private:
     bool m_isPendingEdit = false;
     QString m_currentCategoryType;
     bool m_isRecursive = false;
-    ViewMode m_currentViewMode = GridView;
+    ViewMode m_currentViewMode = static_cast<ViewMode>(-1);
     std::atomic<bool> m_isLoading{false};
     bool m_isContextMenuActive = false;
     std::atomic<int> m_loadRequestId{0};

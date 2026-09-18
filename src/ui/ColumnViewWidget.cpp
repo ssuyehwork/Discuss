@@ -223,7 +223,9 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
             } else {
                 bool collapsed = m_folderHeader ? m_folderHeader->isCollapsed() : false;
                 m_folderListView->setVisible(!collapsed);
-                int folderH = qMax(28, folderCount * 28 + 4);
+                int rowH = m_folderListView->sizeHintForRow(0);
+                if (rowH <= 0) rowH = 28;
+                int folderH = folderCount * rowH + 2;
                 m_folderListView->setFixedHeight(folderH);
             }
         }
@@ -236,7 +238,9 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
                 m_listView->hide();
             } else {
                 m_listView->show();
-                int fileH = qMax(28, fileCount * 28 + 4);
+                int rowH = m_listView->sizeHintForRow(0);
+                if (rowH <= 0) rowH = 28;
+                int fileH = fileCount * rowH + 2;
                 m_listView->setFixedHeight(fileH);
             }
         }

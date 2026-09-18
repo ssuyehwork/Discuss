@@ -196,6 +196,7 @@ void ContentPanel::initGridView() {
     m_folderGridView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_folderGridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderGridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_folderGridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderGridView->setModel(m_folderProxyModel);
     auto* fJustifiedView = qobject_cast<JustifiedView*>(m_folderGridView);
     if (fJustifiedView) {
@@ -232,6 +233,7 @@ void ContentPanel::initGridView() {
     m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_gridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_gridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_gridView->setModel(m_fileProxyModel);
 
     auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
@@ -251,6 +253,21 @@ void ContentPanel::initGridView() {
     m_gridView->installEventFilter(this);
     m_gridView->viewport()->installEventFilter(this);
     layout->addWidget(m_gridView, 1);
+
+    if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
+        connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int h) {
+            if (m_folderGridView && m_folderProxyModel && m_folderProxyModel->rowCount() > 0) {
+                m_folderGridView->setFixedHeight(h);
+            }
+        });
+    }
+    if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+        connect(jv, &JustifiedView::totalHeightChanged, this, [this](int h) {
+            if (m_gridView && m_fileProxyModel && m_fileProxyModel->rowCount() > 0) {
+                m_gridView->setFixedHeight(h);
+            }
+        });
+    }
 
     connect(m_folderGridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
     connect(m_folderGridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
@@ -283,22 +300,24 @@ void ContentPanel::initGridView() {
             } else {
                 bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
                 m_folderGridView->setVisible(!collapsed);
-                // 1. 计算单张卡片占位宽与单行高度
-                int cardW = m_zoomLevel + CardLayoutEngine::totalPaddingHorizontal() + 10;
-                int rowH = m_zoomLevel + CardLayoutEngine::extraHeight() + 10;
-
-                // 2. 根据当前视口可用宽度，动态计算一行实际放几张卡
-                int availableW = m_folderGridView->width() > 100 ? m_folderGridView->width() : width();
-                int cardsPerRow = qMax(1, availableW / cardW);
-
-                // 3. 向上取整计算真实行数：6 个项目 / 8 列 = 1 行，绝不多算
-                int rows = qMax(1, (folderCount + cardsPerRow - 1) / cardsPerRow);
-                m_folderGridView->setFixedHeight(rows * rowH + 8);
+                if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
+                    m_folderGridView->setFixedHeight(fjv->totalHeight());
+                }
             }
         }
         if (m_gridFileHeader) {
             m_gridFileHeader->setCount(fileCount);
             m_gridFileHeader->setVisible(fileCount > 0 && folderCount > 0);
+        }
+        if (m_gridView) {
+            if (fileCount == 0) {
+                m_gridView->hide();
+            } else {
+                m_gridView->show();
+                if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+                    m_gridView->setFixedHeight(jv->totalHeight());
+                }
+            }
         }
     };
 
@@ -345,6 +364,7 @@ void ContentPanel::initListView() {
     m_folderTreeView->setAlternatingRowColors(true);
     m_folderTreeView->setSortingEnabled(true);
     m_folderTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_folderTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderTreeView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_folderTreeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -378,6 +398,7 @@ void ContentPanel::initListView() {
     m_treeView->setAlternatingRowColors(true);
     m_treeView->setSortingEnabled(true);
     m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -422,13 +443,28 @@ void ContentPanel::initListView() {
             } else {
                 bool collapsed = m_listFolderHeader ? m_listFolderHeader->isCollapsed() : false;
                 m_folderTreeView->setVisible(!collapsed);
-                int folderH = qMax(32, folderCount * 30 + 32);
+                int rowH = m_folderTreeView->sizeHintForRow(0);
+                if (rowH <= 0) rowH = 30;
+                int hdrH = (m_folderTreeView->header() && m_folderTreeView->header()->isVisible()) ? m_folderTreeView->header()->height() : 0;
+                int folderH = folderCount * rowH + hdrH + 2;
                 m_folderTreeView->setFixedHeight(folderH);
             }
         }
         if (m_listFileHeader) {
             m_listFileHeader->setCount(fileCount);
             m_listFileHeader->setVisible(fileCount > 0 && folderCount > 0);
+        }
+        if (m_treeView) {
+            if (fileCount == 0) {
+                m_treeView->hide();
+            } else {
+                m_treeView->show();
+                int rowH = m_treeView->sizeHintForRow(0);
+                if (rowH <= 0) rowH = 30;
+                int hdrH = (m_treeView->header() && m_treeView->header()->isVisible()) ? m_treeView->header()->height() : 0;
+                int fileH = fileCount * rowH + hdrH + 2;
+                m_treeView->setFixedHeight(fileH);
+            }
         }
     };
 
