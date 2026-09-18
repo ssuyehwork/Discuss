@@ -183,6 +183,19 @@ void ContentViewCoordinator::updateListSectionCounts() {
         m_panel->m_listFileHeader->setCount(fileCount);
         m_panel->m_listFileHeader->setVisible(fileCount > 0 && folderCount > 0);
     }
+    // 补齐 AllViewsCoExpansion.md 核心契约：文件列表视图全高撑开（绝对照抄行高与边距参数）
+    if (m_panel->m_treeView) {
+        if (fileCount == 0) {
+            m_panel->m_treeView->hide();
+        } else {
+            m_panel->m_treeView->show();
+            int rowH = m_panel->m_treeView->sizeHintForRow(0);
+            if (rowH <= 0) rowH = 30;
+            int hdrH = (m_panel->m_treeView->header() && m_panel->m_treeView->header()->isVisible()) ? m_panel->m_treeView->header()->height() : 0;
+            int fileH = fileCount * rowH + hdrH + 2;
+            m_panel->m_treeView->setFixedHeight(fileH);
+        }
+    }
 }
 
 void ContentViewCoordinator::updateGridSectionCounts() {
@@ -208,6 +221,17 @@ void ContentViewCoordinator::updateGridSectionCounts() {
     if (m_panel->m_gridFileHeader) {
         m_panel->m_gridFileHeader->setCount(fileCount);
         m_panel->m_gridFileHeader->setVisible(fileCount > 0 && folderCount > 0);
+    }
+    // 补齐 AllViewsCoExpansion.md 核心契约：文件网格视图全高撑开
+    if (m_panel->m_gridView) {
+        if (fileCount == 0) {
+            m_panel->m_gridView->hide();
+        } else {
+            m_panel->m_gridView->show();
+            if (auto* jv = qobject_cast<JustifiedView*>(m_panel->m_gridView)) {
+                m_panel->m_gridView->setFixedHeight(jv->totalHeight());
+            }
+        }
     }
 }
 

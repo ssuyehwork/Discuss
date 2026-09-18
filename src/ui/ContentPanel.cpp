@@ -198,6 +198,7 @@ void ContentPanel::initGridView() {
     m_folderGridView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_folderGridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderGridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_folderGridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderGridView->setModel(m_folderProxyModel);
     auto* fJustifiedView = qobject_cast<JustifiedView*>(m_folderGridView);
     if (fJustifiedView) {
@@ -234,6 +235,7 @@ void ContentPanel::initGridView() {
     m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_gridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_gridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_gridView->setModel(m_fileProxyModel);
 
     auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
@@ -258,6 +260,13 @@ void ContentPanel::initGridView() {
         connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int height) {
             if (m_folderGridView && m_folderProxyModel && m_folderProxyModel->rowCount() > 0) {
                 m_folderGridView->setFixedHeight(height);
+            }
+        });
+    }
+    if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+        connect(jv, &JustifiedView::totalHeightChanged, this, [this](int height) {
+            if (m_gridView && m_fileProxyModel && m_fileProxyModel->rowCount() > 0) {
+                m_gridView->setFixedHeight(height);
             }
         });
     }
@@ -324,6 +333,7 @@ void ContentPanel::initListView() {
     m_folderTreeView->setAlternatingRowColors(true);
     m_folderTreeView->setSortingEnabled(true);
     m_folderTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_folderTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderTreeView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_folderTreeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -357,6 +367,7 @@ void ContentPanel::initListView() {
     m_treeView->setAlternatingRowColors(true);
     m_treeView->setSortingEnabled(true);
     m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
