@@ -24,6 +24,7 @@ class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
 class ContentStatsWorker;
+class ContentViewCoordinator;
 class FolderSectionHeaderBar;
 class FileSectionHeaderBar;
 
@@ -125,6 +126,7 @@ public:
     ContentDataLoader* dataLoader() const { return m_dataLoader; }
     ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
     ContentStatsWorker* statsWorker() const { return m_statsWorker; }
+    ContentViewCoordinator* viewCoordinator() const { return m_viewCoordinator; }
 
     // 5. 业务操作分发
     void performCopy(bool cutMode);
@@ -187,6 +189,8 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
+    friend class ContentViewCoordinator;
+
     void initUi();
     void initGridView();
     void initListView();
@@ -244,6 +248,7 @@ private:
     ContentDataLoader* m_dataLoader = nullptr;
     ContentFileOpsHandler* m_fileOpsHandler = nullptr;
     ContentStatsWorker* m_statsWorker = nullptr;
+    ContentViewCoordinator* m_viewCoordinator = nullptr;
 };
 
 } // namespace QuarkMeta
