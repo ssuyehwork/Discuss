@@ -11,6 +11,7 @@
 
 #include "ScanStats.h"
 #include "FilterPanel.h"
+#include "models/ItemModelBase.h"
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
 #include "controllers/ContentSortController.h"

@@ -12,28 +12,30 @@ namespace QuarkMeta {
             return qHash(key);
         }
     };
+
+    class ItemModelBase : public QAbstractTableModel {
+        Q_OBJECT
+    public:
+        explicit ItemModelBase(QObject* parent = nullptr) : QAbstractTableModel(parent) {}
+        virtual ~ItemModelBase() override = default;
+
+        virtual QString currentPath() const { return m_currentPath; }
+        virtual void setCurrentPath(const QString& path) { m_currentPath = path; }
+
+        // 暴露通用接口合约，由 DiskItemModel 实现
+        virtual const std::vector<QuarkMeta::ItemRecord>& allRecords() const = 0;
+        virtual void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) = 0;
+        virtual void clear() = 0;
+        virtual void updateRecordMetadata(const QString& path) = 0;
+        virtual void loadThumbnailsForRows(const QList<int>& rows) = 0;
+        virtual void migrateCache(const QString& oldPath, const QString& newPath) = 0;
+        virtual void clearCacheForFolder(const QString& folderPath) = 0;
+
+    protected:
+        QString m_currentPath;
+    };
 }
 
-class ItemModelBase : public QAbstractTableModel {
-    Q_OBJECT
-public:
-    explicit ItemModelBase(QObject* parent = nullptr) : QAbstractTableModel(parent) {}
-    virtual ~ItemModelBase() override = default;
-
-    virtual QString currentPath() const { return m_currentPath; }
-    virtual void setCurrentPath(const QString& path) { m_currentPath = path; }
-
-    // 暴露通用接口合约，由 DiskItemModel 实现
-    virtual const std::vector<QuarkMeta::ItemRecord>& allRecords() const = 0;
-    virtual void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) = 0;
-    virtual void clear() = 0;
-    virtual void updateRecordMetadata(const QString& path) = 0;
-    virtual void loadThumbnailsForRows(const QList<int>& rows) = 0;
-    virtual void migrateCache(const QString& oldPath, const QString& newPath) = 0;
-    virtual void clearCacheForFolder(const QString& folderPath) = 0;
-
-protected:
-    QString m_currentPath;
-};
+using ItemModelBase = QuarkMeta::ItemModelBase;
 
 #endif // ITEMMODELBASE_H

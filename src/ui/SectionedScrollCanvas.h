@@ -5,12 +5,12 @@
 #include <QAbstractItemView>
 #include <QSet>
 #include "models/FilterProxyModel.h"
+#include "models/ItemModelBase.h"
 
 namespace QuarkMeta {
 
 class FolderSectionHeaderBar;
 class FileSectionHeaderBar;
-class ItemModelBase;
 
 /**
  * @brief 双分区协同撑开滚动画布：封装文件夹+文件双分区、折叠联动、全高撑开与真实物理视口探测
