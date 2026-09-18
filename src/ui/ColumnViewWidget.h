@@ -63,6 +63,8 @@ private:
     FolderSectionHeaderBar* m_folderHeader = nullptr;
     DropListView* m_folderListView = nullptr;
     FileSectionHeaderBar* m_fileHeader = nullptr;
+    QScrollArea* m_paneScrollArea = nullptr;
+    QWidget* m_canvasWidget = nullptr;
     DropListView* m_listView = nullptr;
     QLabel* m_emptyFilterHintLabel = nullptr;
 };

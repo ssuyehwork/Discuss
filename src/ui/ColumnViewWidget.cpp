@@ -112,6 +112,19 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     layout->setContentsMargins(0, 0, 1, 0);
     layout->setSpacing(0);
 
+    m_paneScrollArea = new QScrollArea(this);
+    m_paneScrollArea->setObjectName("ColumnPaneScrollArea");
+    m_paneScrollArea->setWidgetResizable(true);
+    m_paneScrollArea->setFrameShape(QFrame::NoFrame);
+    m_paneScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_paneScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    m_canvasWidget = new QWidget(m_paneScrollArea);
+    m_canvasWidget->setObjectName("ColumnPaneCanvasWidget");
+    QVBoxLayout* canvasLayout = new QVBoxLayout(m_canvasWidget);
+    canvasLayout->setContentsMargins(0, 0, 0, 0);
+    canvasLayout->setSpacing(0);
+
     m_model = new DiskItemModel(this);
     m_model->setCurrentPath(path);
 
@@ -134,12 +147,12 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_proxyModel = m_fileProxyModel; // 兼容对外 proxyModel()
 
     // 3. 顶部子文件夹折叠条
-    m_folderHeader = new FolderSectionHeaderBar(this);
+    m_folderHeader = new FolderSectionHeaderBar(m_canvasWidget);
     m_folderHeader->hide();
-    layout->addWidget(m_folderHeader);
+    canvasLayout->addWidget(m_folderHeader);
 
     // 4. 子文件夹列表视图
-    m_folderListView = new DropListView(this);
+    m_folderListView = new DropListView(m_canvasWidget);
     m_folderListView->setObjectName("ColumnViewFolderList");
     m_folderListView->setFrameShape(QFrame::NoFrame);
     m_folderListView->setFocusPolicy(Qt::StrongFocus);
@@ -150,10 +163,11 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_folderListView->setDropIndicatorShown(true);
     m_folderListView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderListView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_folderListView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderListView->setModel(m_folderProxyModel);
     m_folderListView->setItemDelegate(new ColumnItemDelegate(this));
     m_folderListView->hide();
-    layout->addWidget(m_folderListView);
+    canvasLayout->addWidget(m_folderListView);
 
     connect(m_folderHeader, &FolderSectionHeaderBar::collapseToggled, this, [this](bool collapsed) {
         if (m_folderListView && m_folderHeader->count() > 0) {
@@ -162,12 +176,12 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     });
 
     // 5. 内容文件区分界条
-    m_fileHeader = new FileSectionHeaderBar(this);
+    m_fileHeader = new FileSectionHeaderBar(m_canvasWidget);
     m_fileHeader->hide();
-    layout->addWidget(m_fileHeader);
+    canvasLayout->addWidget(m_fileHeader);
 
     // 6. 普通文件列表视图
-    m_listView = new DropListView(this);
+    m_listView = new DropListView(m_canvasWidget);
     m_listView->setObjectName("ColumnViewPaneListView");
     m_listView->setFrameShape(QFrame::NoFrame);
     m_listView->setFocusPolicy(Qt::StrongFocus);
@@ -178,9 +192,22 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setDropIndicatorShown(true);
     m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setModel(m_fileProxyModel);
     m_listView->setItemDelegate(new ColumnItemDelegate(this));
-    layout->addWidget(m_listView, 1);
+    canvasLayout->addWidget(m_listView);
+
+    m_emptyFilterHintLabel = new QLabel(m_canvasWidget);
+    m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
+    m_emptyFilterHintLabel->setWordWrap(true);
+    m_emptyFilterHintLabel->setStyleSheet("color: #888888; font-size: 12px; padding: 16px;");
+    m_emptyFilterHintLabel->hide();
+    canvasLayout->addWidget(m_emptyFilterHintLabel);
+
+    canvasLayout->addStretch(1);
+
+    m_paneScrollArea->setWidget(m_canvasWidget);
+    layout->addWidget(m_paneScrollArea);
 
     auto updateSectionCountsAndHints = [this]() {
         tryPendingSelection();
@@ -204,6 +231,15 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
             m_fileHeader->setCount(fileCount);
             m_fileHeader->setVisible(fileCount > 0 && folderCount > 0);
         }
+        if (m_listView) {
+            if (fileCount == 0) {
+                m_listView->hide();
+            } else {
+                m_listView->show();
+                int fileH = qMax(28, fileCount * 28 + 4);
+                m_listView->setFixedHeight(fileH);
+            }
+        }
 
         if (!m_model || !m_emptyFilterHintLabel) return;
         int fullCount = m_model->rowCount();
@@ -216,7 +252,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
             if (m_listView) m_listView->hide();
         } else {
             m_emptyFilterHintLabel->hide();
-            if (m_listView) m_listView->show();
+            if (m_listView && fileCount > 0) m_listView->show();
         }
         update();
     };
@@ -225,13 +261,6 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     connect(m_folderProxyModel, &QAbstractItemModel::layoutChanged, this, updateSectionCountsAndHints);
     connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, updateSectionCountsAndHints);
     connect(m_fileProxyModel, &QAbstractItemModel::layoutChanged, this, updateSectionCountsAndHints);
-
-    m_emptyFilterHintLabel = new QLabel(this);
-    m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
-    m_emptyFilterHintLabel->setWordWrap(true);
-    m_emptyFilterHintLabel->setStyleSheet("color: #888888; font-size: 12px; padding: 16px;");
-    m_emptyFilterHintLabel->hide();
-    layout->addWidget(m_emptyFilterHintLabel);
 
     connect(m_folderListView, &DropListView::blankSpaceDoubleClicked, this, [this]() {
         int paneIdx = property("paneIndex").toInt();
