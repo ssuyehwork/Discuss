@@ -12,6 +12,8 @@
 #include "AppShortcutController.h"
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
+#include "Logger.h"
+#include <QElapsedTimer>
 #include "../core/NavigationService.h"
 #include "../core/TrashService.h"
 #include "../core/CoreEngine.h"
@@ -256,7 +258,12 @@ void PanelMediator::setupConnections() {
         });
 
         connect(contentPanel, &ContentPanel::selectionChanged, metaPanel, [contentPanel, metaPanel](const QStringList& paths) {
+            QElapsedTimer timer;
+            timer.start();
+
             metaPanel->setSelectedPaths(paths);
+            qint64 tSetSelected = timer.elapsed();
+
             if (paths.isEmpty()) {
                 metaPanel->setImagePreview(QPixmap());
                 metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false, 0, 0);
@@ -268,6 +275,8 @@ void PanelMediator::setupConnections() {
                 metaPanel->setPalettes({});
             } else if (paths.size() == 1) {
                 QModelIndexList selectedIndices = contentPanel->getSelectedIndexes();
+                qint64 tGetSel = timer.elapsed();
+
                 QModelIndex idx = selectedIndices.isEmpty() ? QModelIndex() : selectedIndices.first();
 
                 QString path = paths.first();
@@ -283,9 +292,12 @@ void PanelMediator::setupConnections() {
                     name, type, sizeStr, "-", mtimeStr, "-",
                     path, encrypted, 0, 0
                 );
+                qint64 tUpdateInfo = timer.elapsed();
 
                 // 🚀【双保险装载】：idx 有效走 Model，idx 无效通过 MetadataManager 兜底，扩展属性补充融合，绝不丢弃高级元数据
                 auto meta = MetadataManager::instance().getMeta(path.toStdWString());
+                qint64 tGetMeta = timer.elapsed();
+
                 QVector<QPair<QColor, float>> qPalettes;
                 qPalettes.reserve(static_cast<int>(meta.palettes.size()));
                 for (const auto& entry : meta.palettes) {
@@ -329,6 +341,10 @@ void PanelMediator::setupConnections() {
                     metaPanel->setPalettes(qPalettes);
                     metaPanel->setImagePreview(QPixmap());
                 }
+                qint64 tTotal = timer.elapsed();
+
+                Logger::log(QString("[Perf] PanelMediator::selectionChanged handler: setSelectedPaths=%1ms, getSelectedIndexes=%2ms, updateInfo=%3ms, getMeta=%4ms, setMetaUI=%5ms, total=%6ms")
+                            .arg(tSetSelected).arg(tGetSel - tSetSelected).arg(tUpdateInfo - tGetSel).arg(tGetMeta - tUpdateInfo).arg(tTotal - tGetMeta).arg(tTotal));
             }
         });
     }
