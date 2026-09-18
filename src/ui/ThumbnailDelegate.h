@@ -21,6 +21,7 @@ public:
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     bool helpEvent(QHelpEvent* event, QAbstractItemView* view, const QStyleOptionViewItem& option, const QModelIndex& index) override;
+    bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index) override;
 
     struct Metrics {
         QRect cardRect;

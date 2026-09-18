@@ -646,14 +646,14 @@ void ContentPanel::setZoomLevel(int level) {
 }
 
 void ContentPanel::updateGridSize() {
-    if (m_viewStack->currentWidget() == m_gridScrollArea || m_viewStack->currentWidget() == m_gridContainerWidget || m_viewStack->currentWidget() == m_gridView) {
+    if (m_viewStack->currentWidget() == m_gridScrollArea) {
         if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
             jv->setTargetRowHeight(m_zoomLevel);
         }
         if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
             fjv->setTargetRowHeight(m_zoomLevel);
         }
-    } else if (m_viewStack->currentWidget() == m_listScrollArea || m_viewStack->currentWidget() == m_treeView || m_viewStack->currentWidget() == m_listContainerWidget) {
+    } else if (m_viewStack->currentWidget() == m_listScrollArea) {
         if (auto* dropTree = qobject_cast<DropTreeView*>(m_treeView)) {
             if (auto* hdr = qobject_cast<ContentHeaderView*>(dropTree->header())) {
                 hdr->setZoomLevel(m_zoomLevel);
@@ -762,24 +762,44 @@ void ContentPanel::recalculateAndEmitStats() {
 }
 
 void ContentPanel::refreshVisibleThumbnails() {
-    QAbstractItemView* view = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget());
-    if (!view || !m_model || !m_proxyModel || CoreController::isShuttingDown() || !view->viewport()) return;
+    if (!m_model || CoreController::isShuttingDown()) return;
 
-    QRect vpRect = view->viewport()->rect();
-    QModelIndex topIdx = view->indexAt(vpRect.topLeft());
-    QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
-
-    int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-    int bottom = btmIdx.isValid() ? qMin(m_proxyModel->rowCount() - 1, btmIdx.row() + 4) : m_proxyModel->rowCount() - 1;
-
-    QList<int> visibleRows;
-    for (int r = top; r <= bottom; ++r) {
-        QModelIndex proxyIdx = m_proxyModel->index(r, 0);
-        QModelIndex srcIdx = m_proxyModel->mapToSource(proxyIdx);
-        if (srcIdx.isValid()) visibleRows.append(srcIdx.row());
+    QList<QAbstractItemView*> views;
+    if (m_currentViewMode == ColumnView) {
+        if (m_columnView && m_columnView->activePane()) {
+            if (m_columnView->activePane()->folderListView()) views << m_columnView->activePane()->folderListView();
+            if (m_columnView->activePane()->listView()) views << m_columnView->activePane()->listView();
+        }
+    } else if (m_currentViewMode == ListView) {
+        if (m_folderTreeView) views << m_folderTreeView;
+        if (m_treeView) views << m_treeView;
+    } else {
+        if (m_folderGridView) views << m_folderGridView;
+        if (m_gridView) views << m_gridView;
     }
 
-    m_model->loadThumbnailsForRows(visibleRows);
+    QSet<int> visibleRows;
+    for (auto* view : views) {
+        if (!view || !view->viewport()) continue;
+        auto* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
+        if (!proxy || proxy->rowCount() == 0) continue;
+
+        QRect vpRect = view->viewport()->rect();
+        QModelIndex topIdx = view->indexAt(vpRect.topLeft());
+        QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
+
+        int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
+        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : proxy->rowCount() - 1;
+
+        for (int r = top; r <= bottom; ++r) {
+            QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
+            if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
+        }
+    }
+
+    if (!visibleRows.isEmpty()) {
+        m_model->loadThumbnailsForRows(visibleRows.values());
+    }
 }
 
 void ContentPanel::selectAndScrollToPath(const QString& path) { selectAndScrollToItem(path); }
@@ -953,8 +973,6 @@ void ContentPanel::restoreSelections() {
     } else if (m_currentViewMode == GridView || m_currentViewMode == JustifiedViewMode) {
         if (m_folderGridView) views << m_folderGridView;
         if (m_gridView) views << m_gridView;
-    } else {
-        if (auto* v = qobject_cast<QAbstractItemView*>(m_viewStack->currentWidget())) views << v;
     }
 
     for (auto* view : views) {
