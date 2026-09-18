@@ -222,8 +222,6 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     const auto& rightRec = records[rightRow];
 
     // 🚀【绝对权重 1：文件夹永远在最上方】：无视升序降序反转，文件夹永远第一顺位
-    // 物理机制：Qt 在 DescendingOrder 时会对 lessThan 返回值取反 (!lessThan)
-    // 要让 leftRec.isDir 在降序时依然排在前面，必须在 DescendingOrder 时让 lessThan 返回 !leftRec.isDir，供 Qt 取反后恢复为 true
     if (leftRec.isDir != rightRec.isDir) {
         return (sortOrder() == Qt::AscendingOrder) ? leftRec.isDir : !leftRec.isDir;
     }
@@ -232,7 +230,7 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     bool leftPinned = leftRec.pinned || leftRec.encrypted;
     bool rightPinned = rightRec.pinned || rightRec.encrypted;
     if (leftPinned != rightPinned) {
-        return (sortOrder() == Qt::AscendingOrder) ? leftPinned : !leftPinned;
+        return (sortOrder() == Qt::AscendingOrder) ? leftPinned : !rightPinned;
     }
 
     auto compareNames = [](const ItemRecord& l, const ItemRecord& r) {
