@@ -24,7 +24,7 @@ class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
 class ContentStatsWorker;
-class ContentViewCoordinator;
+class SectionedScrollCanvas;
 class FolderSectionHeaderBar;
 class FileSectionHeaderBar;
 
@@ -126,7 +126,8 @@ public:
     ContentDataLoader* dataLoader() const { return m_dataLoader; }
     ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
     ContentStatsWorker* statsWorker() const { return m_statsWorker; }
-    ContentViewCoordinator* viewCoordinator() const { return m_viewCoordinator; }
+    SectionedScrollCanvas* gridCanvas() const { return m_gridCanvas; }
+    SectionedScrollCanvas* listCanvas() const { return m_listCanvas; }
 
     // 5. 业务操作分发
     void performCopy(bool cutMode);
@@ -189,13 +190,11 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
-    friend class ContentViewCoordinator;
-
     void initUi();
     void initGridView();
     void initListView();
     void updateGridSize();
-    void updateStatusBarStats();
+    void updateStatusBarStats(int cachedSelectedCount = -1);
     void emitSelectionChangedSignal();
 
     // 单一事实来源配置与状态 (FilterState)
@@ -220,23 +219,19 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
-    QScrollArea* m_listScrollArea = nullptr;
-    QWidget* m_listContainerWidget = nullptr;
-    FolderSectionHeaderBar* m_listFolderHeader = nullptr;
+
+    SectionedScrollCanvas* m_gridCanvas = nullptr;
+    SectionedScrollCanvas* m_listCanvas = nullptr;
+
+    // 保留既有指针别名：契约锁 100% 保护外部调用方（如 treeView(), gridView() 等）
     DropTreeView* m_folderTreeView = nullptr;
-    FileSectionHeaderBar* m_listFileHeader = nullptr;
+    DropTreeView* m_treeView = nullptr;
+    DropJustifiedView* m_folderGridView = nullptr;
+    QAbstractItemView* m_gridView = nullptr;
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;
 
-    QScrollArea* m_gridScrollArea = nullptr;
-    QWidget* m_gridContainerWidget = nullptr;
-    FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
-    DropJustifiedView* m_folderGridView = nullptr;
-    FileSectionHeaderBar* m_gridFileHeader = nullptr;
-
     QStackedWidget* m_viewStack = nullptr;
-    QAbstractItemView* m_gridView = nullptr;
-    DropTreeView* m_treeView = nullptr;
     class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;
@@ -248,7 +243,6 @@ private:
     ContentDataLoader* m_dataLoader = nullptr;
     ContentFileOpsHandler* m_fileOpsHandler = nullptr;
     ContentStatsWorker* m_statsWorker = nullptr;
-    ContentViewCoordinator* m_viewCoordinator = nullptr;
 };
 
 } // namespace QuarkMeta

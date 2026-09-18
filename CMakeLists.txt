@@ -132,6 +132,8 @@ set(SOURCES
     src/meta/MediaExtractorPipeline.h
     src/ui/BatchRenameDialog.cpp
     src/ui/BatchRenameDialog.h
+    src/ui/SectionedScrollCanvas.h
+    src/ui/SectionedScrollCanvas.cpp
     src/ui/FolderSectionWidget.cpp
     src/ui/FolderSectionWidget.h
     src/ui/BatchProgressDialog.h
@@ -255,8 +257,6 @@ set(SOURCES
     src/ui/controllers/ContextMenuFactory.cpp
     src/ui/controllers/ContentKeyHandler.h
     src/ui/controllers/ContentKeyHandler.cpp
-    src/ui/controllers/ContentViewCoordinator.h
-    src/ui/controllers/ContentViewCoordinator.cpp
     src/ui/controllers/ContentSortController.h
     src/ui/controllers/ContentSortController.cpp
     src/ui/controllers/ContentDataLoader.h
