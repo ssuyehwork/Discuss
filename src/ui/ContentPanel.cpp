@@ -20,6 +20,8 @@
 #include "CardLayoutEngine.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
+#include "Logger.h"
+#include <QElapsedTimer>
 
 #include "../core/AppConfig.h"
 #include "../core/CoreEngine.h"
@@ -480,7 +482,11 @@ void ContentPanel::onSelectionChanged() {
 }
 
 void ContentPanel::emitSelectionChangedSignal() {
+    QElapsedTimer timer;
+    timer.start();
     QModelIndexList selected = getSelectedIndexes();
+    qint64 tIndexes = timer.elapsed();
+
     QStringList paths;
     paths.reserve(selected.size());
     for (const auto& idx : selected) {
@@ -489,9 +495,17 @@ void ContentPanel::emitSelectionChangedSignal() {
             if (!p.isEmpty()) paths << p;
         }
     }
+    qint64 tPaths = timer.elapsed();
+
     emit selectionChanged(paths);
+    qint64 tEmit = timer.elapsed();
+
     // 消除重复调用：直接复用已有选区尺寸，禁止重复二次查询
     updateStatusBarStats(selected.size());
+    qint64 tTotal = timer.elapsed();
+
+    Logger::log(QString("[Perf] ContentPanel::emitSelectionChangedSignal: getSelectedIndexes=%1ms, parsePaths(%2)=%3ms, emitSignal=%4ms, updateStatus=%5ms, total=%6ms")
+                .arg(tIndexes).arg(paths.size()).arg(tPaths - tIndexes).arg(tEmit - tPaths).arg(tTotal - tEmit).arg(tTotal));
 }
 
 void ContentPanel::updateStatusBarStats(int cachedSelectedCount) {

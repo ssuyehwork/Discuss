@@ -10,9 +10,11 @@
 #include "TreeItemDelegate.h"
 #include "JustifiedView.h"
 #include "models/ItemModelBase.h"
+#include "Logger.h"
 #include "../core/CoreController.h"
 #include <QHeaderView>
 #include <QScrollBar>
+#include <QElapsedTimer>
 
 namespace QuarkMeta {
 
@@ -333,6 +335,8 @@ QAbstractItemView* SectionedScrollCanvas::activeItemView() const {
 }
 
 QModelIndexList SectionedScrollCanvas::getSelectedIndexes() const {
+    QElapsedTimer timer;
+    timer.start();
     QModelIndexList res;
     for (auto* view : {m_folderView, m_fileView}) {
         if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
@@ -342,6 +346,10 @@ QModelIndexList SectionedScrollCanvas::getSelectedIndexes() const {
                 }
             }
         }
+    }
+    qint64 ms = timer.elapsed();
+    if (ms > 2) {
+        Logger::log(QString("[Perf] SectionedScrollCanvas::getSelectedIndexes took %1ms (found %2 selected)").arg(ms).arg(res.size()));
     }
     return res;
 }
@@ -366,11 +374,22 @@ void SectionedScrollCanvas::refreshVisibleThumbnails(ItemModelBase* model) {
         int clampedBtmY = qBound(0, btmPoint.y(), view->height());
 
         QModelIndex topIdx = view->indexAt(QPoint(10, clampedTopY));
-        QModelIndex btmIdx = view->indexAt(QPoint(10, clampedBtmY));
+        if (!topIdx.isValid()) {
+            for (int offset = 10; offset <= 100 && !topIdx.isValid(); offset += 10) {
+                topIdx = view->indexAt(QPoint(10, clampedTopY + offset));
+            }
+        }
 
-        // 绝对照抄原数值：缓冲前后 4 行
+        QModelIndex btmIdx = view->indexAt(QPoint(10, clampedBtmY));
+        if (!btmIdx.isValid()) {
+            for (int offset = 10; offset <= 100 && !btmIdx.isValid(); offset += 10) {
+                btmIdx = view->indexAt(QPoint(10, clampedBtmY - offset));
+            }
+        }
+
+        // 绝对照抄原数值：缓冲前后 4 行，防护底层越界退化至全量加载
         int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : proxy->rowCount() - 1;
+        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : qMin(proxy->rowCount() - 1, top + 20);
 
         for (int r = top; r <= bottom; ++r) {
             QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
