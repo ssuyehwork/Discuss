@@ -36,6 +36,7 @@ public:
     FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
     FilterProxyModel* fileProxyModel() const { return m_fileProxyModel; }
     DiskItemModel* model() const { return m_model; }
+    FolderSectionHeaderBar* folderHeader() const { return m_folderHeader; }
 
 signals:
     void folderSelected(const QString& folderPath, int paneIndex);
@@ -92,6 +93,7 @@ public:
     void goUpColumn();
     void goUpColumnFromIndex(int paneIndex);
     void clearAllSelections();
+    void toggleFolderSectionCollapse();
 
 signals:
     void pathNavigated(const QString& path);

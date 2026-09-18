@@ -863,6 +863,14 @@ void ColumnViewWidget::clearAllSelections() {
     emit selectionChanged();
 }
 
+void ColumnViewWidget::toggleFolderSectionCollapse() {
+    ColumnViewPane* pane = activePane();
+    if (!pane) pane = rightmostPane();
+    if (pane && pane->folderHeader() && pane->folderHeader()->isVisible() && pane->folderHeader()->count() > 0) {
+        pane->folderHeader()->setCollapsed(!pane->folderHeader()->isCollapsed());
+    }
+}
+
 void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
     for (int i = activePaneIdx + 1; i < m_panes.size(); ++i) {
         m_panes[i]->clearSelection();

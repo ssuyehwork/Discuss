@@ -132,6 +132,7 @@ public:
     void performBatchRename();
     bool resolvePasteDestination();
     void setViewMode(ViewMode mode);
+    void toggleFolderSectionCollapse();
     void selectAndScrollToPath(const QString& path);
     void selectAndScrollToItem(const QString& path);
     QString getAdjacentFilePath(const QString& currentPath, int delta);

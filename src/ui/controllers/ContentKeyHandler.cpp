@@ -432,10 +432,14 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
 
-    // 6. Ctrl + C / X / V / Shift+N
+    // 6. Ctrl + S / C / X / V / Shift+N
     if (keyEvent->modifiers() & Qt::ControlModifier) {
         if ((keyEvent->modifiers() & Qt::ShiftModifier) && keyEvent->key() == Qt::Key_N) {
             m_panel->createNewItem("folder");
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_S) {
+            m_panel->toggleFolderSectionCollapse();
             return true;
         }
         if (keyEvent->key() == Qt::Key_C && !(keyEvent->modifiers() & Qt::ShiftModifier)) {

@@ -56,7 +56,7 @@ void FolderSectionHeaderBar::updateUi() {
         m_titleLabel->setText(QString("文件夹 (%1)").arg(m_count));
     }
     if (m_arrowLabel) {
-        m_arrowLabel->setPixmap(UiHelper::getIcon(m_collapsed ? "chevron_right" : "chevron_down", QColor("#3498db"), 12).pixmap(12, 12));
+        m_arrowLabel->setPixmap(UiHelper::getIcon(m_collapsed ? "scroll-008.svg" : "scroll-010.svg", QColor("#3498db"), 12).pixmap(12, 12));
     }
 }
 

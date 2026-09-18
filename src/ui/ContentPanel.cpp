@@ -3,6 +3,7 @@
 #endif
 #include "ContentPanel.h"
 #include "ContentHeaderWidget.h"
+#include "FolderSectionWidget.h"
 #include "controllers/ContentContextMenu.h"
 #include "controllers/ContentKeyHandler.h"
 #include "controllers/ContentSortController.h"
@@ -586,6 +587,21 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
         emit directorySelected(path);
     } else {
         emit fileActivated(path);
+    }
+}
+
+void ContentPanel::toggleFolderSectionCollapse() {
+    FolderSectionHeaderBar* header = nullptr;
+    if (m_currentViewMode == ListView) {
+        header = m_listFolderHeader;
+    } else if (m_currentViewMode == GridView || m_currentViewMode == JustifiedViewMode) {
+        header = m_gridFolderHeader;
+    } else if (m_currentViewMode == ColumnView && m_columnView) {
+        m_columnView->toggleFolderSectionCollapse();
+        return;
+    }
+    if (header && header->isVisible() && header->count() > 0) {
+        header->setCollapsed(!header->isCollapsed());
     }
 }
 
