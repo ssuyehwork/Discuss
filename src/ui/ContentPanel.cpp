@@ -59,11 +59,6 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_model = m_diskModel;
     m_model->setCurrentPath(m_currentPath);
 
-    m_proxyModel = new FilterProxyModel(this);
-    m_proxyModel->setSourceModel(m_model);
-    m_proxyModel->setFilterKeyColumn(0);
-    m_proxyModel->setDynamicSortFilter(true);
-
     m_visibleTimer = new QTimer(this);
     m_visibleTimer->setSingleShot(true);
     m_visibleTimer->setInterval(60);
@@ -86,21 +81,19 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
 
     m_sortController = new ContentSortController(this);
     connect(m_sortController, &ContentSortController::sortCriteriaChanged, this, [this](SortType type, Qt::SortOrder order) {
-        m_sortController->applySortToModel(m_proxyModel);
+        applySort();
         if (m_columnView) {
             m_columnView->applySort(static_cast<int>(type), order);
         }
     });
-    m_sortController->applySortToModel(m_proxyModel);
 
     m_dataLoader = new ContentDataLoader(this);
     m_fileOpsHandler = new ContentFileOpsHandler(this);
     m_statsWorker = new ContentStatsWorker(this);
 
     connect(m_statsWorker, &ContentStatsWorker::statsReady, this, [this](const ScanStats& stats) {
-        auto* proxy = qobject_cast<FilterProxyModel*>(m_proxyModel);
-        if (proxy) {
-            proxy->setCachedDuplicatePaths(stats.duplicatePaths);
+        if (m_fileProxyModel) {
+            m_fileProxyModel->setCachedDuplicatePaths(stats.duplicatePaths);
         }
         emit directoryStatsReady(stats);
     });
@@ -261,12 +254,18 @@ void ContentPanel::initGridView() {
     connect(m_folderGridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
     connect(m_folderGridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_folderGridView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
-    connect(m_folderGridView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
+    connect(m_folderGridView, &DropJustifiedView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+        onPathsDropped(paths, targetIndex, currentPath(), m_folderProxyModel);
+    });
 
     connect(m_gridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
     connect(m_gridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_gridView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
-    connect(m_gridView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
+    if (auto* dropJv = qobject_cast<DropJustifiedView*>(m_gridView)) {
+        connect(dropJv, &DropJustifiedView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+            onPathsDropped(paths, targetIndex, currentPath(), m_fileProxyModel);
+        });
+    }
 
     auto updateGridSectionCounts = [this]() {
         if (!m_folderProxyModel || !m_fileProxyModel) return;
@@ -396,12 +395,16 @@ void ContentPanel::initListView() {
     connect(m_folderTreeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_folderTreeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
     connect(m_folderTreeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked);
-    connect(m_folderTreeView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
+    connect(m_folderTreeView, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+        onPathsDropped(paths, targetIndex, currentPath(), m_folderProxyModel);
+    });
 
     connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
     connect(m_treeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked);
-    connect(m_treeView, SIGNAL(pathsDropped(QStringList,QModelIndex)), this, SLOT(onPathsDropped(QStringList,QModelIndex)));
+    connect(m_treeView, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+        onPathsDropped(paths, targetIndex, currentPath(), m_fileProxyModel);
+    });
 
     auto updateListSectionCounts = [this]() {
         if (!m_folderProxyModel || !m_fileProxyModel) return;
@@ -468,13 +471,15 @@ void ContentPanel::ensureSourceModelIsDiskModel() {
     if (m_model != m_diskModel) {
         m_model = m_diskModel;
         m_model->setCurrentPath(m_currentPath);
-        m_proxyModel->setSourceModel(m_model);
+        if (m_folderProxyModel) m_folderProxyModel->setSourceModel(m_model);
+        if (m_fileProxyModel) m_fileProxyModel->setSourceModel(m_model);
     }
 }
 
 void ContentPanel::applySort() {
     if (m_sortController) {
-        m_sortController->applySortToModel(m_proxyModel);
+        if (m_folderProxyModel) m_sortController->applySortToModel(m_folderProxyModel);
+        if (m_fileProxyModel) m_sortController->applySortToModel(m_fileProxyModel);
         if (m_columnView) {
             m_columnView->applySort(static_cast<int>(m_sortController->sortType()), m_sortController->sortOrder());
         }
@@ -679,10 +684,19 @@ void ContentPanel::applyFilters(const FilterState& state) {
 }
 
 void ContentPanel::applyFilters() {
-    auto* proxy = qobject_cast<FilterProxyModel*>(m_proxyModel);
-    if (proxy) {
-        proxy->currentFilter = m_currentFilter;
-        proxy->updateFilter();
+    if (m_folderProxyModel) {
+        FilterState s = m_currentFilter;
+        s.showFolders = true;
+        s.showFiles = false;
+        m_folderProxyModel->currentFilter = s;
+        m_folderProxyModel->updateFilter();
+    }
+    if (m_fileProxyModel) {
+        FilterState s = m_currentFilter;
+        s.showFolders = false;
+        s.showFiles = true;
+        m_fileProxyModel->currentFilter = s;
+        m_fileProxyModel->updateFilter();
     }
     if (m_columnView) {
         m_columnView->applyFilterState(m_currentFilter);
@@ -729,8 +743,9 @@ void ContentPanel::emitSelectionChangedSignal() {
 }
 
 void ContentPanel::updateStatusBarStats() {
-    if (!m_proxyModel) return;
-    int visibleCount = m_proxyModel->rowCount();
+    int folderCount = m_folderProxyModel ? m_folderProxyModel->rowCount() : 0;
+    int fileCount = m_fileProxyModel ? m_fileProxyModel->rowCount() : 0;
+    int visibleCount = folderCount + fileCount;
     int fullCount = m_model ? m_model->rowCount() : visibleCount;
     int hiddenCount = fullCount - visibleCount;
     int selectedCount = getSelectedIndexes().size();
@@ -822,11 +837,12 @@ void ContentPanel::selectAndScrollToItem(const QString& path) {
         }
         return;
     }
-    if (!m_proxyModel || path.isEmpty()) return;
-    for (int i = 0; i < m_proxyModel->rowCount(); ++i) {
-        QModelIndex proxyIdx = m_proxyModel->index(i, 0);
+    QSortFilterProxyModel* proxy = getActiveProxyModel();
+    if (!proxy || path.isEmpty()) return;
+    for (int i = 0; i < proxy->rowCount(); ++i) {
+        QModelIndex proxyIdx = proxy->index(i, 0);
         if (proxyIdx.data(PathRole).toString() == path) {
-                QAbstractItemView* view = activeItemView();
+            QAbstractItemView* view = activeItemView();
             if (view && view->selectionModel()) {
                 view->scrollTo(proxyIdx);
                 view->setCurrentIndex(proxyIdx);
@@ -838,12 +854,7 @@ void ContentPanel::selectAndScrollToItem(const QString& path) {
 }
 
 QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta) {
-    QSortFilterProxyModel* proxy = m_proxyModel;
-    if (m_currentViewMode == ColumnView) {
-        if (m_columnView && m_columnView->activePane()) {
-            proxy = m_columnView->activePane()->proxyModel();
-        }
-    }
+    QSortFilterProxyModel* proxy = getActiveProxyModel();
     if (!proxy || proxy->rowCount() == 0) return QString();
     int curIdx = -1;
     for (int i = 0; i < proxy->rowCount(); ++i) {
@@ -861,7 +872,11 @@ QSortFilterProxyModel* ContentPanel::getActiveProxyModel() const {
             return m_columnView->activePane()->proxyModel();
         }
     }
-    return m_proxyModel;
+    QAbstractItemView* view = activeItemView();
+    if (view && view->model()) {
+        return qobject_cast<QSortFilterProxyModel*>(view->model());
+    }
+    return m_fileProxyModel ? m_fileProxyModel : nullptr;
 }
 
 QStringList ContentPanel::getSelectedPaths() const {
@@ -978,7 +993,7 @@ void ContentPanel::restoreSelections() {
     for (auto* view : views) {
         if (!view || !view->selectionModel()) continue;
         QSortFilterProxyModel* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
-        if (!proxy) proxy = m_proxyModel;
+        if (!proxy) proxy = getActiveProxyModel();
         DiskItemModel* diskModel = m_diskModel;
 
         if (diskModel && proxy) {

@@ -596,19 +596,20 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 break;
             }
             auto indexes = view->selectionModel()->selectedIndexes();
+            auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
             int count = 0;
             for (const auto& idx : indexes) {
-                if (idx.column() == 0) {
+                if (idx.column() == 0 && model) {
                     if (type == LastOperationType::SetRating) {
-                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().rating(), RatingRole);
+                        model->setData(idx, LastOperationManager::instance().rating(), RatingRole);
                     } else if (type == LastOperationType::SetColor) {
                         QString colorVal = LastOperationManager::instance().color();
-                        m_panel->getProxyModel()->setData(idx, colorVal, ColorRole);
+                        model->setData(idx, colorVal, ColorRole);
                         QString itemPath = idx.data(PathRole).toString();
                         QIcon coloredIcon = ShellIconManager::getFileIcon(itemPath, 128);
-                        m_panel->getProxyModel()->setData(idx, coloredIcon, Qt::DecorationRole);
+                        model->setData(idx, coloredIcon, Qt::DecorationRole);
                     } else if (type == LastOperationType::PasteTags) {
-                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+                        model->setData(idx, LastOperationManager::instance().tags(), TagsRole);
                     }
                     count++;
                 }
@@ -830,10 +831,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 break;
             }
             auto indexes = view->selectionModel()->selectedIndexes();
+            auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
             int count = 0;
             for (const auto& idx : indexes) {
-                if (idx.column() == 0) {
-                    m_panel->getProxyModel()->setData(idx, copiedTags, TagsRole);
+                if (idx.column() == 0 && model) {
+                    model->setData(idx, copiedTags, TagsRole);
                     count++;
                 }
             }

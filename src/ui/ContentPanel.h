@@ -140,7 +140,7 @@ public:
 
     // 6. 模型与选中数据访问
     ItemModelBase* model() const { return m_model; }
-    QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
+    QSortFilterProxyModel* getProxyModel() const { return getActiveProxyModel(); }
     QSortFilterProxyModel* getActiveProxyModel() const;
     QStringList getSelectedPaths() const;
     QList<int> getSelectedTrashIds() const;
@@ -235,7 +235,6 @@ private:
     class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;
-    QSortFilterProxyModel* m_proxyModel = nullptr;
     
     QTimer* m_visibleTimer = nullptr;
     QTimer* m_statsDebounceTimer = nullptr;
