@@ -538,7 +538,9 @@ void ColumnViewPane::loadDirectory() {
                 items.push_back(ItemRecord::create(drive.absolutePath()));
             }
         } else {
-            items = DiskScanService::scanDirectory(path, recursive, std::function<bool()>());
+            items = DiskScanService::scanDirectory(path, recursive, [weakSelf]() {
+                return weakSelf != nullptr;
+            });
         }
         MetaCacheDecorator::decorate(items);
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {

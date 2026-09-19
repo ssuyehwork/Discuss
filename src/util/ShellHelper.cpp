@@ -62,7 +62,7 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
         fileOp.wFunc = isMove ? FO_MOVE : FO_COPY;
         fileOp.pFrom = from.c_str();
         fileOp.pTo = to.c_str();
-        fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR | FOF_NOCONFIRMATION | FOF_SILENT | FOF_MULTIDESTFILES;
+        fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR | FOF_NOCONFIRMATION | FOF_SILENT;
         
         bool ok = (SHFileOperationW(&fileOp) == 0 && !fileOp.fAnyOperationsAborted);
         if (ok) {

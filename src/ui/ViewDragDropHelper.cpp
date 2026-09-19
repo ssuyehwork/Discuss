@@ -22,6 +22,10 @@ void DragDropEventFilter::install(QAbstractItemView* view) {
     if (view->viewport()) {
         view->viewport()->installEventFilter(filter);
     }
+
+    // 🚀【核心修复】：将事件过滤器的 pathsDropped 动态信号直接桥接至宿主视图的 pathsDropped 信号
+    QObject::connect(filter, SIGNAL(pathsDropped(QStringList,QModelIndex)),
+                     view, SIGNAL(pathsDropped(QStringList,QModelIndex)));
 }
 
 void DragDropEventFilter::clearDropHighlight() {
