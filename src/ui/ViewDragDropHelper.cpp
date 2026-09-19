@@ -10,6 +10,72 @@
 
 namespace QuarkMeta {
 
+DragDropEventFilter::DragDropEventFilter(QAbstractItemView* targetView, QObject* parent)
+    : QObject(parent ? parent : targetView), m_targetView(targetView) {
+}
+
+void DragDropEventFilter::install(QAbstractItemView* view) {
+    if (!view) return;
+    view->setAcceptDrops(true);
+    auto* filter = new DragDropEventFilter(view, view);
+    view->installEventFilter(filter);
+    if (view->viewport()) {
+        view->viewport()->installEventFilter(filter);
+    }
+}
+
+void DragDropEventFilter::clearDropHighlight() {
+    if (m_currentHoverDropIdx.isValid() && m_targetView && m_targetView->model()) {
+        const_cast<QAbstractItemModel*>(m_targetView->model())->setData(m_currentHoverDropIdx, false, IsDropTargetRole);
+        m_currentHoverDropIdx = QModelIndex();
+        if (m_targetView->viewport()) m_targetView->viewport()->update();
+    }
+}
+
+bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
+    if (!m_targetView) return QObject::eventFilter(watched, event);
+
+    if (event->type() == QEvent::DragEnter) {
+        auto* dragEvent = static_cast<QDragEnterEvent*>(event);
+        if (ViewDragDropHelper::handleDragEnter(m_targetView, dragEvent)) {
+            return true;
+        }
+    } else if (event->type() == QEvent::DragMove) {
+        auto* moveEvent = static_cast<QDragMoveEvent*>(event);
+        QModelIndex hoverIdx = m_targetView->indexAt(moveEvent->position().toPoint());
+        if (m_currentHoverDropIdx != hoverIdx) {
+            clearDropHighlight();
+            if (hoverIdx.isValid()) {
+                bool isFolder = (hoverIdx.data(TypeRole).toString() == "folder") || hoverIdx.data(Qt::UserRole + 2).toBool();
+                if (isFolder) {
+                    m_currentHoverDropIdx = hoverIdx;
+                    if (m_targetView->model()) {
+                        const_cast<QAbstractItemModel*>(m_targetView->model())->setData(m_currentHoverDropIdx, true, IsDropTargetRole);
+                        if (m_targetView->viewport()) m_targetView->viewport()->update();
+                    }
+                }
+            }
+        }
+        if (ViewDragDropHelper::handleDragMove(m_targetView, moveEvent)) {
+            return true;
+        }
+    } else if (event->type() == QEvent::DragLeave) {
+        clearDropHighlight();
+        ViewDragDropHelper::clearHover(m_targetView);
+        return true;
+    } else if (event->type() == QEvent::Drop) {
+        clearDropHighlight();
+        auto* dropEv = static_cast<QDropEvent*>(event);
+        QStringList paths;
+        QModelIndex targetIdx;
+        if (ViewDragDropHelper::handleDrop(m_targetView, dropEv, paths, targetIdx)) {
+            emit pathsDropped(paths, targetIdx);
+            return true;
+        }
+    }
+    return QObject::eventFilter(watched, event);
+}
+
 QAbstractItemView* ViewDragDropHelper::s_hoverView = nullptr;
 QPersistentModelIndex ViewDragDropHelper::s_hoverIndex;
 

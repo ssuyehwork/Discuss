@@ -9,6 +9,7 @@
 #include "../DropListView.h"
 #include "../ColumnViewWidget.h"
 #include "../JustifiedView.h"
+#include "../SectionedScrollCanvas.h"
 #include "../models/DiskItemModel.h"
 #include "../models/FilterProxyModel.h"
 #include "../../core/CoreController.h"
@@ -36,12 +37,12 @@ QList<QAbstractItemView*> ContentViewCoordinator::currentActiveViews() const {
                 views << m_panel->columnView()->activePane()->listView();
             }
         }
-    } else if (mode == ContentPanel::ListView) {
-        if (m_panel->m_folderTreeView) views << m_panel->m_folderTreeView;
-        if (m_panel->m_treeView) views << m_panel->m_treeView;
-    } else { // GridView / JustifiedViewMode
-        if (m_panel->m_folderGridView) views << m_panel->m_folderGridView;
-        if (m_panel->m_gridView) views << m_panel->m_gridView;
+    } else if (mode == ContentPanel::ListView && m_panel->listCanvas()) {
+        if (m_panel->listCanvas()->folderView()) views << m_panel->listCanvas()->folderView();
+        if (m_panel->listCanvas()->fileView()) views << m_panel->listCanvas()->fileView();
+    } else if (m_panel->gridCanvas()) { // GridView / JustifiedViewMode
+        if (m_panel->gridCanvas()->folderView()) views << m_panel->gridCanvas()->folderView();
+        if (m_panel->gridCanvas()->fileView()) views << m_panel->gridCanvas()->fileView();
     }
     return views;
 }
@@ -61,24 +62,57 @@ QAbstractItemView* ContentViewCoordinator::activeItemView() const {
         return nullptr;
     }
 
-    if (mode == ContentPanel::ListView) {
-        if (m_panel->m_folderTreeView && (m_panel->m_folderTreeView->hasFocus() || 
-            (m_panel->m_folderTreeView->selectionModel() && m_panel->m_folderTreeView->selectionModel()->hasSelection()))) {
-            return m_panel->m_folderTreeView;
-        }
-        return m_panel->m_treeView;
+    if (mode == ContentPanel::ListView && m_panel->listCanvas()) {
+        return m_panel->listCanvas()->activeItemView();
     }
 
-    // GridView / JustifiedViewMode
-    if (m_panel->m_folderGridView && (m_panel->m_folderGridView->hasFocus() || 
-        (m_panel->m_folderGridView->selectionModel() && m_panel->m_folderGridView->selectionModel()->hasSelection()))) {
-        return m_panel->m_folderGridView;
+    if (m_panel->gridCanvas()) {
+        return m_panel->gridCanvas()->activeItemView();
     }
-    return m_panel->m_gridView;
+    return nullptr;
+}
+
+QSortFilterProxyModel* ContentViewCoordinator::getActiveProxyModel() const {
+    if (!m_panel) return nullptr;
+
+    auto mode = m_panel->currentViewMode();
+    if (mode == ContentPanel::ColumnView && m_panel->columnView() && m_panel->columnView()->activePane()) {
+        if (m_panel->columnView()->activePane()->proxyModel()) {
+            return m_panel->columnView()->activePane()->proxyModel();
+        }
+    }
+
+    QAbstractItemView* view = activeItemView();
+    if (view && view->model()) {
+        return qobject_cast<QSortFilterProxyModel*>(view->model());
+    }
+
+    if (mode == ContentPanel::ListView && m_panel->listCanvas()) {
+        return m_panel->listCanvas()->fileProxyModel();
+    }
+    if (m_panel->gridCanvas()) {
+        return m_panel->gridCanvas()->fileProxyModel();
+    }
+    return nullptr;
 }
 
 QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
     QModelIndexList res;
+    if (!m_panel) return res;
+
+    if (m_panel->currentViewMode() == ContentPanel::ColumnView) {
+        if (m_panel->columnView() && m_panel->columnView()->activePane()) {
+            for (auto* view : {m_panel->columnView()->activePane()->folderListView(), m_panel->columnView()->activePane()->listView()}) {
+                if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
+                    for (const auto& idx : view->selectionModel()->selectedIndexes()) {
+                        if (idx.column() == 0) res.append(idx);
+                    }
+                }
+            }
+        }
+        return res;
+    }
+
     QList<QAbstractItemView*> views = currentActiveViews();
     for (auto* view : views) {
         if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
@@ -90,6 +124,25 @@ QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
         }
     }
     return res;
+}
+
+QStringList ContentViewCoordinator::getSelectedPaths() const {
+    QStringList paths;
+    for (const auto& idx : getSelectedIndexes()) {
+        if (idx.column() == 0) {
+            QString p = idx.data(PathRole).toString();
+            if (!p.isEmpty()) paths << p;
+        }
+    }
+    return paths;
+}
+
+void ContentViewCoordinator::applyFilterStateToAllViews(const FilterState& state) {
+    if (!m_panel) return;
+
+    if (m_panel->listCanvas()) m_panel->listCanvas()->applyFilter(state);
+    if (m_panel->gridCanvas()) m_panel->gridCanvas()->applyFilter(state);
+    if (m_panel->columnView()) m_panel->columnView()->applyFilterState(state);
 }
 
 void ContentViewCoordinator::restoreSelections(const QSet<QString>& selectedPaths, bool isPendingEdit) {
@@ -157,106 +210,19 @@ void ContentViewCoordinator::refreshVisibleThumbnails() {
 }
 
 void ContentViewCoordinator::updateListSectionCounts() {
-    if (!m_panel || !m_panel->m_folderProxyModel || !m_panel->m_fileProxyModel) return;
-    int folderCount = m_panel->m_folderProxyModel->rowCount();
-    int fileCount = m_panel->m_fileProxyModel->rowCount();
-
-    if (m_panel->m_listFolderHeader) {
-        m_panel->m_listFolderHeader->setCount(folderCount);
-        m_panel->m_listFolderHeader->setVisible(folderCount > 0);
-    }
-    if (m_panel->m_folderTreeView) {
-        if (folderCount == 0) {
-            m_panel->m_folderTreeView->hide();
-        } else {
-            bool collapsed = m_panel->m_listFolderHeader ? m_panel->m_listFolderHeader->isCollapsed() : false;
-            m_panel->m_folderTreeView->setVisible(!collapsed);
-            // 绝对照抄原数值：sizeHintForRow 默认 30，偏移量 + 2
-            int rowH = m_panel->m_folderTreeView->sizeHintForRow(0);
-            if (rowH <= 0) rowH = 30;
-            int hdrH = (m_panel->m_folderTreeView->header() && m_panel->m_folderTreeView->header()->isVisible()) ? m_panel->m_folderTreeView->header()->height() : 0;
-            int folderH = folderCount * rowH + hdrH + 2;
-            m_panel->m_folderTreeView->setFixedHeight(folderH);
-        }
-    }
-    if (m_panel->m_listFileHeader) {
-        m_panel->m_listFileHeader->setCount(fileCount);
-        m_panel->m_listFileHeader->setVisible(fileCount > 0 && folderCount > 0);
-    }
-    // 补齐 AllViewsCoExpansion.md 核心契约：文件列表视图全高撑开（绝对照抄行高与边距参数）
-    if (m_panel->m_treeView) {
-        if (fileCount == 0) {
-            m_panel->m_treeView->hide();
-        } else {
-            m_panel->m_treeView->show();
-            int rowH = m_panel->m_treeView->sizeHintForRow(0);
-            if (rowH <= 0) rowH = 30;
-            int hdrH = (m_panel->m_treeView->header() && m_panel->m_treeView->header()->isVisible()) ? m_panel->m_treeView->header()->height() : 0;
-            int fileH = fileCount * rowH + hdrH + 2;
-            m_panel->m_treeView->setFixedHeight(fileH);
-        }
-    }
+    if (!m_panel || !m_panel->listCanvas()) return;
+    m_panel->listCanvas()->updateSectionCounts();
 }
 
 void ContentViewCoordinator::updateGridSectionCounts() {
-    if (!m_panel || !m_panel->m_folderProxyModel || !m_panel->m_fileProxyModel) return;
-    int folderCount = m_panel->m_folderProxyModel->rowCount();
-    int fileCount = m_panel->m_fileProxyModel->rowCount();
-
-    if (m_panel->m_gridFolderHeader) {
-        m_panel->m_gridFolderHeader->setCount(folderCount);
-        m_panel->m_gridFolderHeader->setVisible(folderCount > 0);
-    }
-    if (m_panel->m_folderGridView) {
-        if (folderCount == 0) {
-            m_panel->m_folderGridView->hide();
-        } else {
-            bool collapsed = m_panel->m_gridFolderHeader ? m_panel->m_gridFolderHeader->isCollapsed() : false;
-            m_panel->m_folderGridView->setVisible(!collapsed);
-            if (auto* fjv = qobject_cast<JustifiedView*>(m_panel->m_folderGridView)) {
-                m_panel->m_folderGridView->setFixedHeight(fjv->totalHeight());
-            }
-        }
-    }
-    if (m_panel->m_gridFileHeader) {
-        m_panel->m_gridFileHeader->setCount(fileCount);
-        m_panel->m_gridFileHeader->setVisible(fileCount > 0 && folderCount > 0);
-    }
-    // 补齐 AllViewsCoExpansion.md 核心契约：文件网格视图全高撑开
-    if (m_panel->m_gridView) {
-        if (fileCount == 0) {
-            m_panel->m_gridView->hide();
-        } else {
-            m_panel->m_gridView->show();
-            if (auto* jv = qobject_cast<JustifiedView*>(m_panel->m_gridView)) {
-                m_panel->m_gridView->setFixedHeight(jv->totalHeight());
-            }
-        }
-    }
+    if (!m_panel || !m_panel->gridCanvas()) return;
+    m_panel->gridCanvas()->updateSectionCounts();
 }
 
 void ContentViewCoordinator::updateGridSize(int zoomLevel) {
-    if (!m_panel || !m_panel->m_viewStack) return;
-
-    if (m_panel->m_viewStack->currentWidget() == m_panel->m_gridScrollArea) {
-        if (auto* jv = qobject_cast<JustifiedView*>(m_panel->m_gridView)) {
-            jv->setTargetRowHeight(zoomLevel);
-        }
-        if (auto* fjv = qobject_cast<JustifiedView*>(m_panel->m_folderGridView)) {
-            fjv->setTargetRowHeight(zoomLevel);
-        }
-    } else if (m_panel->m_viewStack->currentWidget() == m_panel->m_listScrollArea) {
-        if (auto* dropTree = qobject_cast<DropTreeView*>(m_panel->m_treeView)) {
-            if (auto* hdr = qobject_cast<ContentHeaderView*>(dropTree->header())) {
-                hdr->setZoomLevel(zoomLevel);
-            }
-        }
-        // 绝对照抄原数值：qMax(16, zoomLevel - 8)
-        if (m_panel->m_treeView) {
-            m_panel->m_treeView->setIconSize(QSize(qMax(16, zoomLevel - 8), qMax(16, zoomLevel - 8)));
-            m_panel->m_treeView->doItemsLayout();
-        }
-    }
+    if (!m_panel) return;
+    if (m_panel->gridCanvas()) m_panel->gridCanvas()->updateZoom(zoomLevel);
+    if (m_panel->listCanvas()) m_panel->listCanvas()->updateZoom(zoomLevel);
 }
 
 } // namespace QuarkMeta

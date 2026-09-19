@@ -10,6 +10,7 @@
 #include "controllers/ContentSortController.h"
 #include "controllers/ContentDataLoader.h"
 #include "controllers/ContentFileOpsHandler.h"
+#include "controllers/ContentViewCoordinator.h"
 #include "workers/ContentStatsWorker.h"
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
@@ -94,6 +95,7 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_dataLoader = new ContentDataLoader(this);
     m_fileOpsHandler = new ContentFileOpsHandler(this);
     m_statsWorker = new ContentStatsWorker(this);
+    m_viewCoordinator = new ContentViewCoordinator(this);
 
     connect(m_statsWorker, &ContentStatsWorker::statsReady, this, [this](const ScanStats& stats) {
         if (m_gridCanvas && m_gridCanvas->fileProxyModel()) {
@@ -603,29 +605,11 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
 }
 
 QSortFilterProxyModel* ContentPanel::getActiveProxyModel() const {
-    if (m_currentViewMode == ColumnView && m_columnView && m_columnView->activePane()) {
-        if (m_columnView->activePane()->proxyModel()) {
-            return m_columnView->activePane()->proxyModel();
-        }
-    }
-    QAbstractItemView* view = activeItemView();
-    if (view && view->model()) {
-        return qobject_cast<QSortFilterProxyModel*>(view->model());
-    }
-    if (m_currentViewMode == ListView && m_listCanvas) return m_listCanvas->fileProxyModel();
-    if (m_gridCanvas) return m_gridCanvas->fileProxyModel();
-    return m_fileProxyModel ? m_fileProxyModel : nullptr;
+    return m_viewCoordinator ? m_viewCoordinator->getActiveProxyModel() : nullptr;
 }
 
 QStringList ContentPanel::getSelectedPaths() const {
-    QStringList paths;
-    for (const auto& idx : getSelectedIndexes()) {
-        if (idx.column() == 0) {
-            QString p = idx.data(PathRole).toString();
-            if (!p.isEmpty()) paths << p;
-        }
-    }
-    return paths;
+    return m_viewCoordinator ? m_viewCoordinator->getSelectedPaths() : QStringList();
 }
 
 QList<int> ContentPanel::getSelectedTrashIds() const {

@@ -263,6 +263,8 @@ set(SOURCES
     src/ui/controllers/ContentDataLoader.cpp
     src/ui/controllers/ContentFileOpsHandler.h
     src/ui/controllers/ContentFileOpsHandler.cpp
+    src/ui/controllers/ContentViewCoordinator.h
+    src/ui/controllers/ContentViewCoordinator.cpp
     src/ui/workers/ContentStatsWorker.h
     src/ui/workers/ContentStatsWorker.cpp
     src/core/ActionCommand.h

@@ -27,8 +27,8 @@ static const std::vector<ColumnPolicy> kFileListColumnPolicies = {
 DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     setHeader(new ContentHeaderView(Qt::Horizontal, this));
     setDragEnabled(true);
-    setAcceptDrops(true);
     setDropIndicatorShown(true);
+    DragDropEventFilter::install(this);
 
     // 🚀【强力锁定 QPalette】：强制设定暗色 Base 与 AlternateBase，防止原生 Windows 调色板在交替行露白
     QPalette pal = palette();
@@ -42,32 +42,6 @@ DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     }
 }
 
-void DropTreeView::dragEnterEvent(QDragEnterEvent* event) {
-    if (!ViewDragDropHelper::handleDragEnter(this, event)) {
-        QTreeView::dragEnterEvent(event);
-    }
-}
-
-void DropTreeView::dragMoveEvent(QDragMoveEvent* event) {
-    if (!ViewDragDropHelper::handleDragMove(this, event)) {
-        QTreeView::dragMoveEvent(event);
-    }
-}
-
-void DropTreeView::dragLeaveEvent(QDragLeaveEvent* event) {
-    ViewDragDropHelper::clearHover(this);
-    QTreeView::dragLeaveEvent(event);
-}
-
-void DropTreeView::dropEvent(QDropEvent* event) {
-    QStringList paths;
-    QModelIndex targetIdx;
-    if (ViewDragDropHelper::handleDrop(this, event, paths, targetIdx)) {
-        emit pathsDropped(paths, targetIdx);
-    } else {
-        QTreeView::dropEvent(event);
-    }
-}
 
 void DropTreeView::startDrag(Qt::DropActions supportedActions) {
     ViewDragDropHelper::executeStartDrag(this, supportedActions);
