@@ -3,8 +3,6 @@
 #include <QEvent>
 #include <QWidget>
 #include <QLineEdit>
-#include <QTextEdit>
-#include <QPlainTextEdit>
 #include <QContextMenuEvent>
 #include <QWindow>
 #include <QGuiApplication>
@@ -57,14 +55,6 @@ bool QuarkApplication::notify(QObject* receiver, QEvent* event) {
                 if (edit->contextMenuPolicy() == Qt::DefaultContextMenu) {
                     QContextMenuEvent* cme = static_cast<QContextMenuEvent*>(event);
                     UiHelper::showLineEditContextMenu(edit, cme->pos());
-                    event->accept();
-                    return true;
-                }
-            } else if (qobject_cast<QTextEdit*>(receiver) || qobject_cast<QPlainTextEdit*>(receiver)) {
-                QWidget* textWidget = static_cast<QWidget*>(receiver);
-                if (textWidget->contextMenuPolicy() == Qt::DefaultContextMenu) {
-                    QContextMenuEvent* cme = static_cast<QContextMenuEvent*>(event);
-                    UiHelper::showTextEditContextMenu(textWidget, cme->pos());
                     event->accept();
                     return true;
                 }

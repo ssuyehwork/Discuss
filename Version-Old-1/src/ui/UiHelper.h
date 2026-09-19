@@ -235,7 +235,6 @@ public:
 
     static void setupLineEditContextMenu(QLineEdit* edit);
     static void showLineEditContextMenu(QLineEdit* edit, const QPoint& pos);
-    static void showTextEditContextMenu(QWidget* textWidget, const QPoint& pos);
     static QMenu* createMenu(QWidget* parent = nullptr);
     static QAction* setupLineEditClearButton(QLineEdit* edit);
 

@@ -28,11 +28,6 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     if (sourceRow < 0 || sourceRow >= static_cast<int>(records.size())) return false;
     const auto& record = records[sourceRow];
 
-    // 🚀【此电脑根路径豁免准则】：当加载“此电脑”(computer://)盘符列表时，盘符属于系统硬件层介质，100% 必须始终放行显示，不受常规文件夹/文件显隐或星级筛选器的过滤关断！
-    if (sourceModelPtr->currentPath() == "computer://") {
-        return true;
-    }
-
     auto* contentPanel = qobject_cast<ContentPanel*>(parent());
     bool isTrashView = contentPanel && (contentPanel->getCurrentCategoryType() == "trash");
 
@@ -222,8 +217,6 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     const auto& rightRec = records[rightRow];
 
     // 🚀【绝对权重 1：文件夹永远在最上方】：无视升序降序反转，文件夹永远第一顺位
-    // 物理机制：Qt 在 DescendingOrder 时会对 lessThan 返回值取反 (!lessThan)
-    // 要让 leftRec.isDir 在降序时依然排在前面，必须在 DescendingOrder 时让 lessThan 返回 !leftRec.isDir，供 Qt 取反后恢复为 true
     if (leftRec.isDir != rightRec.isDir) {
         return (sortOrder() == Qt::AscendingOrder) ? leftRec.isDir : !leftRec.isDir;
     }
@@ -232,7 +225,7 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     bool leftPinned = leftRec.pinned || leftRec.encrypted;
     bool rightPinned = rightRec.pinned || rightRec.encrypted;
     if (leftPinned != rightPinned) {
-        return (sortOrder() == Qt::AscendingOrder) ? leftPinned : !leftPinned;
+        return (sortOrder() == Qt::AscendingOrder) ? leftPinned : !rightPinned;
     }
 
     auto compareNames = [](const ItemRecord& l, const ItemRecord& r) {

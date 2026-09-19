@@ -5,7 +5,6 @@
 
 namespace QuarkMeta {
 
-
 /**
  * @brief 列视图专用 Delegate
  * 必须继承 RenameCapableDelegate，严禁重写 createEditor/setEditorData/setModelData。

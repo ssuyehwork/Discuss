@@ -260,12 +260,15 @@ void FilterPanel::populateStats(const QuarkMeta::ScanStats& stats) {
     if (m_statsEngine) {
         m_statsEngine->updateStats(stats);
     }
-    if (m_currentStats == stats) {
-        return;
-    }
     m_currentStats = stats;
-    populate(stats.ratingCounts, stats.colorCounts, stats.typeCounts,
-             stats.createDateCounts, stats.modifyDateCounts, stats.emptyFolderCount);
+    m_ratingCounts = stats.ratingCounts;
+    m_colorCounts = stats.colorCounts;
+    m_typeCounts = stats.typeCounts;
+    m_createDateCounts = stats.createDateCounts;
+    m_modifyDateCounts = stats.modifyDateCounts;
+    m_emptyFolderCount = stats.emptyFolderCount;
+
+    rebuildGroups();
 }
 
 void FilterPanel::populate(
@@ -471,13 +474,10 @@ void FilterPanel::rebuildGroups() {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("评级", gl);
         for (int r : {0, 1, 2, 3, 4, 5}) {
-            int cnt = m_ratingCounts.value(r, 0);
-            bool isChecked = currentSt.ratings.contains(r);
-            if (cnt <= 0 && !isChecked) continue;
-
-            QCheckBox* cb = addFilterRow(gl, ratingDisplayName(r), cnt);
+            if (!m_ratingCounts.contains(r) || m_ratingCounts[r] <= 0) continue;
+            QCheckBox* cb = addFilterRow(gl, ratingDisplayName(r), m_ratingCounts[r]);
             cb->blockSignals(true);
-            cb->setChecked(isChecked);
+            cb->setChecked(currentSt.ratings.contains(r));
             cb->blockSignals(false);
 
             ClickableRow* row = qobject_cast<ClickableRow*>(cb->parentWidget());

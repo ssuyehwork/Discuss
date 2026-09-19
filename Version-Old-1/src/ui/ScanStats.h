@@ -33,32 +33,6 @@ struct ScanStats {
     int hasThumbnailCount = 0;
 
     QSet<QString> duplicatePaths;
-
-    bool operator==(const ScanStats& o) const {
-        return ratingCounts == o.ratingCounts &&
-               colorCounts == o.colorCounts &&
-               typeCounts == o.typeCounts &&
-               createDateCounts == o.createDateCounts &&
-               modifyDateCounts == o.modifyDateCounts &&
-               emptyFolderCount == o.emptyFolderCount &&
-               hasLinkCount == o.hasLinkCount &&
-               noLinkCount == o.noLinkCount &&
-               hasNoteCount == o.hasNoteCount &&
-               noNoteCount == o.noNoteCount &&
-               hasTagCount == o.hasTagCount &&
-               noTagCount == o.noTagCount &&
-               ratioHorizontalCount == o.ratioHorizontalCount &&
-               ratioVerticalCount == o.ratioVerticalCount &&
-               ratioSquareCount == o.ratioSquareCount &&
-               ratio169Count == o.ratio169Count &&
-               duplicateCount == o.duplicateCount &&
-               uniqueCount == o.uniqueCount &&
-               noThumbnailCount == o.noThumbnailCount &&
-               hasThumbnailCount == o.hasThumbnailCount &&
-               duplicatePaths == o.duplicatePaths;
-    }
-
-    bool operator!=(const ScanStats& o) const { return !(*this == o); }
 };
 
 } // namespace QuarkMeta

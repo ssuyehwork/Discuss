@@ -4,7 +4,6 @@
 #include <QStackedWidget>
 #include <QVBoxLayout>
 #include <QTreeView>
-#include <QScrollArea>
 #include <QSet>
 #include <QModelIndexList>
 #include <atomic>
@@ -19,13 +18,10 @@
 namespace QuarkMeta {
 
 class DropTreeView;
-class DropJustifiedView;
 class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
 class ContentStatsWorker;
-class FolderSectionHeaderBar;
-class FileSectionHeaderBar;
 
 /**
  * @brief 内容面板（面板四）：核心业务展示工作台（纯视图承载与高级意图分发）
@@ -85,12 +81,7 @@ public:
     const FilterState& currentFilter() const { return m_currentFilter; }
 
     // 2. 状态与配置高阶方法
-    void setCurrentPath(const QString& path) {
-        m_currentPath = path;
-        if (m_model) {
-            m_model->setCurrentPath(path);
-        }
-    }
+    void setCurrentPath(const QString& path) { m_currentPath = path; }
     void setIsRecursive(bool recursive);
     void setLoading(bool loading) { m_isLoading = loading; }
     void ensureSourceModelIsDiskModel();
@@ -114,7 +105,6 @@ public:
     void setCurrentCategoryType(const QString& type) { m_currentCategoryType = type; }
 
     // 4. 视图与控制器引用
-    QAbstractItemView* activeItemView() const;
     QStackedWidget* viewStack() const { return m_viewStack; }
     QAbstractItemView* gridView() const { return m_gridView; }
     QTreeView* treeView() const;
@@ -132,7 +122,6 @@ public:
     void performBatchRename();
     bool resolvePasteDestination();
     void setViewMode(ViewMode mode);
-    void toggleFolderSectionCollapse();
     void selectAndScrollToPath(const QString& path);
     void selectAndScrollToItem(const QString& path);
     QString getAdjacentFilePath(const QString& currentPath, int delta);
@@ -141,8 +130,7 @@ public:
 
     // 6. 模型与选中数据访问
     ItemModelBase* model() const { return m_model; }
-    QSortFilterProxyModel* getProxyModel() const { return getActiveProxyModel(); }
-    QSortFilterProxyModel* getActiveProxyModel() const;
+    QSortFilterProxyModel* getProxyModel() const { return m_proxyModel; }
     QStringList getSelectedPaths() const;
     QList<int> getSelectedTrashIds() const;
     QModelIndexList getSelectedIndexes() const;
@@ -166,7 +154,7 @@ public slots:
     void onSelectionChanged();
     void onCustomContextMenuRequested(const QPoint& pos);
     void onDoubleClicked(const QModelIndex& index);
-    void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), QAbstractItemModel* sourceModelOverride = nullptr);
+    void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
     void loadDirectory(const QString& path, bool recursive = false);
     void setPendingSelectName(const QString& name, bool edit = false);
     void refreshAll();
@@ -198,17 +186,11 @@ private:
     FilterState m_currentFilter;
     int m_zoomLevel = 96;
     QString m_currentPath;
-    struct SelectionState {
-        QString currentFolder;
-        QString focusedPath;
-        QSet<QString> selectedPaths;
-    };
-    SelectionState m_selectionState;
-    bool m_isRestoringSelections = false;
+    QSet<QString> m_pendingSelectNames;
     bool m_isPendingEdit = false;
     QString m_currentCategoryType;
     bool m_isRecursive = false;
-    ViewMode m_currentViewMode = static_cast<ViewMode>(-1);
+    ViewMode m_currentViewMode = GridView;
     std::atomic<bool> m_isLoading{false};
     bool m_isContextMenuActive = false;
     std::atomic<int> m_loadRequestId{0};
@@ -216,19 +198,6 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
-    QScrollArea* m_listScrollArea = nullptr;
-    QWidget* m_listContainerWidget = nullptr;
-    FolderSectionHeaderBar* m_listFolderHeader = nullptr;
-    DropTreeView* m_folderTreeView = nullptr;
-    FileSectionHeaderBar* m_listFileHeader = nullptr;
-    FilterProxyModel* m_folderProxyModel = nullptr;
-    FilterProxyModel* m_fileProxyModel = nullptr;
-
-    QScrollArea* m_gridScrollArea = nullptr;
-    QWidget* m_gridContainerWidget = nullptr;
-    FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
-    DropJustifiedView* m_folderGridView = nullptr;
-    FileSectionHeaderBar* m_gridFileHeader = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;
@@ -236,6 +205,7 @@ private:
     class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;
+    QSortFilterProxyModel* m_proxyModel = nullptr;
     
     QTimer* m_visibleTimer = nullptr;
     QTimer* m_statsDebounceTimer = nullptr;

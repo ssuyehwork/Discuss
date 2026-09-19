@@ -1,6 +1,5 @@
 #include "ContentContextMenu.h"
 #include "../ContentPanel.h"
-#include "../ColumnViewWidget.h"
 #include "ContentSortController.h"
 #include "ContentKeyHandler.h"
 #include "../UiHelper.h"
@@ -68,20 +67,6 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     QFileInfo itemInfo(path);
 
     QString currentPath = m_panel->currentPath();
-
-    if (view && view->objectName() == "ColumnViewPaneListView") {
-        QWidget* parentWidget = view->parentWidget();
-        while (parentWidget && parentWidget->objectName() != "ColumnViewPane") {
-            parentWidget = parentWidget->parentWidget();
-        }
-        if (parentWidget) {
-            QuarkMeta::ColumnViewPane* pane = qobject_cast<QuarkMeta::ColumnViewPane*>(parentWidget);
-            if (pane && !pane->currentPath().isEmpty()) {
-                currentPath = pane->currentPath();
-            }
-        }
-    }
-
     QString currentCategoryType = m_panel->getCurrentCategoryType();
 
     bool isComputerRoot = (currentPath.isEmpty() || currentPath == "computer://");
@@ -172,7 +157,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 menu.close();
             });
 
-            bool isPinned = currentIndex.data(PinnedRole).toBool();
+            bool isPinned = currentIndex.data(IsLockedRole).toBool();
             ContextMenuFactory::buildPinToggleAction(&menu, isPinned, [this, view](bool pin) {
                 auto indexes = view->selectionModel()->selectedIndexes();
                 QStringList targetPaths;
@@ -183,11 +168,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     }
                 }
                 if (!targetPaths.isEmpty()) {
-                    AppCommand cmd;
-                    cmd.type = AppCommandType::SetPinned;
-                    cmd.targetPaths = targetPaths;
-                    cmd.params["pinned"] = pin;
-                    CoreEngine::instance().executeCommand(cmd);
+                    for (const QString& p : targetPaths) {
+                        MetadataManager::instance().setPinned(p.toStdWString(), pin);
+                        if (m_panel) m_panel->updateItemMetadata(p);
+                    }
+                    if (m_panel) m_panel->refreshAll();
                 }
             }, m_panel);
 
@@ -291,7 +276,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 menu.close();
             });
 
-            bool isPinned = currentIndex.data(PinnedRole).toBool();
+            bool isPinned = currentIndex.data(IsLockedRole).toBool();
             ContextMenuFactory::buildPinToggleAction(&menu, isPinned, [this, view](bool pin) {
                 auto indexes = view->selectionModel()->selectedIndexes();
                 QStringList targetPaths;
@@ -302,11 +287,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     }
                 }
                 if (!targetPaths.isEmpty()) {
-                    AppCommand cmd;
-                    cmd.type = AppCommandType::SetPinned;
-                    cmd.targetPaths = targetPaths;
-                    cmd.params["pinned"] = pin;
-                    CoreEngine::instance().executeCommand(cmd);
+                    for (const QString& p : targetPaths) {
+                        MetadataManager::instance().setPinned(p.toStdWString(), pin);
+                        if (m_panel) m_panel->updateItemMetadata(p);
+                    }
+                    if (m_panel) m_panel->refreshAll();
                 }
             }, m_panel);
 
@@ -596,20 +581,19 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 break;
             }
             auto indexes = view->selectionModel()->selectedIndexes();
-            auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
             int count = 0;
             for (const auto& idx : indexes) {
-                if (idx.column() == 0 && model) {
+                if (idx.column() == 0) {
                     if (type == LastOperationType::SetRating) {
-                        model->setData(idx, LastOperationManager::instance().rating(), RatingRole);
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().rating(), RatingRole);
                     } else if (type == LastOperationType::SetColor) {
                         QString colorVal = LastOperationManager::instance().color();
-                        model->setData(idx, colorVal, ColorRole);
+                        m_panel->getProxyModel()->setData(idx, colorVal, ColorRole);
                         QString itemPath = idx.data(PathRole).toString();
                         QIcon coloredIcon = ShellIconManager::getFileIcon(itemPath, 128);
-                        model->setData(idx, coloredIcon, Qt::DecorationRole);
+                        m_panel->getProxyModel()->setData(idx, coloredIcon, Qt::DecorationRole);
                     } else if (type == LastOperationType::PasteTags) {
-                        model->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().tags(), TagsRole);
                     }
                     count++;
                 }
@@ -831,11 +815,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 break;
             }
             auto indexes = view->selectionModel()->selectedIndexes();
-            auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
             int count = 0;
             for (const auto& idx : indexes) {
-                if (idx.column() == 0 && model) {
-                    model->setData(idx, copiedTags, TagsRole);
+                if (idx.column() == 0) {
+                    m_panel->getProxyModel()->setData(idx, copiedTags, TagsRole);
                     count++;
                 }
             }

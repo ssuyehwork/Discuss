@@ -1,9 +1,7 @@
 #include "ColumnItemDelegate.h"
-#include "../core/ModelContract.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "CardPainterHelper.h"
-#include "ViewDragDropHelper.h"
 #include "../core/ModelContract.h"
 
 #include <QPainter>
@@ -30,20 +28,12 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
 
     bool selected = (option.state & QStyle::State_Selected);
     bool hover = (option.state & QStyle::State_MouseOver);
-    bool isParentExpanded = index.data(IsParentExpandedRole).toBool();
-    bool isDropTarget = index.data(IsDropTargetRole).toBool() ||
-                       ViewDragDropHelper::isDropTarget(qobject_cast<const QAbstractItemView*>(option.widget), index);
 
     // 1. 背景绘制
     QColor bg;
-    if (isDropTarget) {
-        bg = QColor("#3498db");
-        bg.setAlphaF(0.35f);
-    } else if (selected) {
+    if (selected) {
         bg = QColor("#378ADD");
         bg.setAlphaF(0.18f);
-    } else if (isParentExpanded) {
-        bg = QColor("#334455");
     } else if (hover) {
         bg = QColor("#2A2D2E");
     } else {

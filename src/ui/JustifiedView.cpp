@@ -114,14 +114,18 @@ void JustifiedView::scrollTo(const QModelIndex& index, ScrollHint hint) {
     }
 }
 
+std::vector<JustifiedView::ItemGeometry>::const_iterator JustifiedView::geometryLowerBound(int y) const {
+    return std::lower_bound(m_geometries.begin(), m_geometries.end(), y,
+        [](const ItemGeometry& geo, int targetY) {
+            return geo.rect.bottom() < targetY;
+        });
+}
+
 QModelIndex JustifiedView::indexAt(const QPoint& point) const {
     if (m_geometries.empty()) return QModelIndex();
     int y = point.y() + verticalScrollBar()->value();
 
-    auto it = std::lower_bound(m_geometries.begin(), m_geometries.end(), y,
-        [](const ItemGeometry& geo, int targetY) {
-            return geo.rect.bottom() < targetY;
-        });
+    auto it = geometryLowerBound(y);
 
     for (; it != m_geometries.end(); ++it) {
         if (it->rect.top() > y) break;
@@ -203,7 +207,10 @@ bool JustifiedView::isIndexHidden(const QModelIndex&) const { return false; }
 void JustifiedView::setSelection(const QRect& rect, QItemSelectionModel::SelectionFlags command) {
     QRect contentsRect = rect.translated(0, verticalScrollBar()->value());
     QItemSelection selection;
-    for (const auto& geo : m_geometries) {
+    auto startIt = geometryLowerBound(contentsRect.top());
+    for (auto it = startIt; it != m_geometries.end(); ++it) {
+        const auto& geo = *it;
+        if (geo.rect.top() > contentsRect.bottom()) break;
         if (geo.rect.intersects(contentsRect)) {
             QModelIndex idx = model()->index(geo.index, 0);
             selection.select(idx, idx);
@@ -238,12 +245,10 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ShiftModifier)) {
         QModelIndex clicked = indexAt(event->pos());
         if (clicked.isValid() && m_anchorRow >= 0) {
-            int anchorVisual = -1, clickedVisual = -1;
-            for (int i = 0; i < (int)m_geometries.size(); ++i) {
-                if (m_geometries[i].index == m_anchorRow)      anchorVisual = i;
-                if (m_geometries[i].index == clicked.row())    clickedVisual = i;
-            }
-            if (anchorVisual >= 0 && clickedVisual >= 0) {
+            int anchorVisual = m_anchorRow;
+            int clickedVisual = clicked.row();
+            if (anchorVisual >= 0 && anchorVisual < (int)m_geometries.size() &&
+                clickedVisual >= 0 && clickedVisual < (int)m_geometries.size()) {
                 int vFrom = std::min(anchorVisual, clickedVisual);
                 int vTo   = std::max(anchorVisual, clickedVisual);
                 QItemSelection sel;
@@ -322,10 +327,7 @@ void JustifiedView::paintEvent(QPaintEvent*) {
     int vHeight = viewport()->height();
     painter.translate(0, -scrollY);
     
-    auto startIt = std::lower_bound(m_geometries.begin(), m_geometries.end(), scrollY,
-        [](const ItemGeometry& geo, int targetY) {
-            return geo.rect.bottom() < targetY;
-        });
+    auto startIt = geometryLowerBound(scrollY);
 
     for (auto it = startIt; it != m_geometries.end(); ++it) {
         const auto& geo = *it;

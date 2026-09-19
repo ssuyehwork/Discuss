@@ -6,7 +6,6 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QCoreApplication>
 #include <QPointer>
-#include <QDebug>
 #include <cmath>
 
 namespace QuarkMeta {
@@ -70,7 +69,6 @@ ScanStats ContentStatsWorker::calculateStats(const std::vector<ItemRecord>& reco
 }
 
 void ContentStatsWorker::processAsync(const std::vector<ItemRecord>& records, bool showHidden) {
-    qDebug() << "[ContentStatsWorkerDebug] processAsync called with recordCount:" << records.size() << "showHidden:" << showHidden;
     if (records.empty()) {
         emit statsReady(ScanStats());
         return;
@@ -79,10 +77,8 @@ void ContentStatsWorker::processAsync(const std::vector<ItemRecord>& records, bo
     QPointer<ContentStatsWorker> weakThis(this);
     (void)QtConcurrent::run([weakThis, records, showHidden]() {
         ScanStats stats = ContentStatsWorker::calculateStats(records, showHidden);
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, stats, records]() {
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, stats]() {
             if (weakThis) {
-                qDebug() << "[ContentStatsWorkerDebug] statsReady calculated & emitting for recordsCount:" << records.size()
-                         << "duplicateCount:" << stats.duplicateCount;
                 emit weakThis->statsReady(stats);
             }
         });

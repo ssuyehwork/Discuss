@@ -53,6 +53,13 @@ signals:
     void customContextMenuRequested(const QPoint& pos);
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex, QAbstractItemModel* sourceProxy);
 
+protected:
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+
 private:
     void initViews(ItemModelBase* sourceModel, QObject* eventFilter);
     void setupConnections();

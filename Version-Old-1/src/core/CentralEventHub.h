@@ -19,8 +19,7 @@ enum class AppEventType {
     FavoritesUpdated,       // 收藏夹状态变更
     ItemsDeleted,           // 文件物理擦除/删除
     ItemsRenamed,           // 文件批量或单项重命名
-    FilterStateChanged,     // 条件筛选状态变更
-    UndoRedoPerformed       // 撤销/重做事务完成
+    FilterStateChanged      // 条件筛选状态变更
 };
 
 /**

@@ -18,20 +18,11 @@ public:
 protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
-    void dragLeaveEvent(QDragLeaveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void startDrag(Qt::DropActions supportedActions) override;
 
-private:
-    QModelIndex m_currentHoverDropIdx;
-    void clearDropHighlight();
-
 signals:
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
-    void blankSpaceDoubleClicked();
-
-protected:
-    void mouseDoubleClickEvent(QMouseEvent* event) override;
 };
 
 } // namespace QuarkMeta

@@ -5,11 +5,9 @@
 #include <QHBoxLayout>
 #include <QScrollArea>
 #include <QList>
-#include <QLabel>
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
 #include "DropListView.h"
-#include "FolderSectionWidget.h"
 
 namespace QuarkMeta {
 
@@ -25,29 +23,19 @@ public:
     void loadDirectory();
 
     void selectItemByPath(const QString& targetPath);
-    void setPendingSelectPaths(const QSet<QString>& paths);
     void clearSelection();
     void setFilterState(const FilterState& state);
     void applySort(int sortType, Qt::SortOrder sortOrder);
 
-    DropListView* listView() const { return m_listView; }
-    DropListView* folderListView() const { return m_folderListView; }
+    QListView* listView() const { return m_listView; }
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
-    FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
-    FilterProxyModel* fileProxyModel() const { return m_fileProxyModel; }
     DiskItemModel* model() const { return m_model; }
-    FolderSectionHeaderBar* folderHeader() const { return m_folderHeader; }
 
 signals:
     void folderSelected(const QString& folderPath, int paneIndex);
     void fileSelected(const QString& filePath, int paneIndex);
     void selectionChanged();
     void recordsLoaded(const std::vector<ItemRecord>& records);
-    void blankSpaceDoubleClicked(int paneIndex);
-
-protected:
-    void paintEvent(QPaintEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
 
 private slots:
     void tryPendingSelection();
@@ -55,19 +43,10 @@ private slots:
 private:
     QString m_path;
     QString m_pendingSelectPath;
-    QSet<QString> m_pendingSelectPaths;
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
-    FilterProxyModel* m_folderProxyModel = nullptr;
-    FilterProxyModel* m_fileProxyModel = nullptr;
-    FolderSectionHeaderBar* m_folderHeader = nullptr;
-    DropListView* m_folderListView = nullptr;
-    FileSectionHeaderBar* m_fileHeader = nullptr;
-    QScrollArea* m_paneScrollArea = nullptr;
-    QWidget* m_canvasWidget = nullptr;
-    DropListView* m_listView = nullptr;
-    QLabel* m_emptyFilterHintLabel = nullptr;
+    QListView* m_listView = nullptr;
 };
 
 class ColumnViewWidget : public QScrollArea {
@@ -83,7 +62,6 @@ public:
     ColumnViewPane* rightmostPane() const;
     bool containsPath(const QString& path) const;
     void refreshActiveColumn();
-    void refreshAllColumns();
     void updateMetadataForPath(const QString& path);
     void applySort(int sortType, Qt::SortOrder sortOrder);
     void scrollToRightmostPane();
@@ -91,9 +69,6 @@ public:
     QModelIndexList getSelectedIndexes() const;
     void applyFilterState(const FilterState& state);
     void goUpColumn();
-    void goUpColumnFromIndex(int paneIndex);
-    void clearAllSelections();
-    void toggleFolderSectionCollapse();
 
 signals:
     void pathNavigated(const QString& path);
@@ -102,14 +77,12 @@ signals:
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
-    bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
     void dismissSubColumns(int fromIndex);
     ColumnViewPane* appendColumn(const QString& path);
     void clearOtherSelections(int activePaneIdx);
     void updatePaneWidths();
-    void updateParentHighlights();
 
     ContentPanel* m_contentPanel = nullptr;
     FilterState m_currentFilter;
@@ -118,7 +91,6 @@ private:
     QWidget* m_container = nullptr;
     QHBoxLayout* m_layout = nullptr;
     QList<ColumnViewPane*> m_panes;
-    QWidget* m_blankCanvasWidget = nullptr;
 };
 
 } // namespace QuarkMeta

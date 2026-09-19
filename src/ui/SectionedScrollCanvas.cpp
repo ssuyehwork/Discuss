@@ -12,9 +12,15 @@
 #include "models/ItemModelBase.h"
 #include "Logger.h"
 #include "../core/CoreController.h"
+#include "../core/NavigationService.h"
 #include <QHeaderView>
 #include <QScrollBar>
 #include <QElapsedTimer>
+#include <QMouseEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 
 namespace QuarkMeta {
 
@@ -22,8 +28,15 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, ItemModelBase* sou
     : QScrollArea(parent), m_type(type) {
     setFrameShape(QFrame::NoFrame);
     setWidgetResizable(true);
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    setFocusPolicy(Qt::StrongFocus);
+    setAcceptDrops(true);
 
     m_containerWidget = new QWidget(this);
+    m_containerWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_containerWidget->setFocusPolicy(Qt::StrongFocus);
+    m_containerWidget->setAcceptDrops(true);
+
     m_layout = new QVBoxLayout(m_containerWidget);
     // 绝对照抄原数值：margins 0, spacing 0
     m_layout->setContentsMargins(0, 0, 0, 0);
@@ -196,6 +209,9 @@ void SectionedScrollCanvas::setupConnections() {
     connect(m_folderView, &QAbstractItemView::doubleClicked, this, &SectionedScrollCanvas::doubleClicked);
     connect(m_fileView, &QAbstractItemView::doubleClicked, this, &SectionedScrollCanvas::doubleClicked);
 
+    connect(this, &QScrollArea::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
+    connect(m_containerWidget, &QWidget::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
+
     connect(m_folderView, &QAbstractItemView::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
     connect(m_fileView, &QAbstractItemView::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
 
@@ -352,6 +368,53 @@ QModelIndexList SectionedScrollCanvas::getSelectedIndexes() const {
         Logger::log(QString("[Perf] SectionedScrollCanvas::getSelectedIndexes took %1ms (found %2 selected)").arg(ms).arg(res.size()));
     }
     return res;
+}
+
+void SectionedScrollCanvas::mousePressEvent(QMouseEvent* event) {
+    if (m_folderView && m_folderView->selectionModel()) m_folderView->selectionModel()->clearSelection();
+    if (m_fileView && m_fileView->selectionModel()) m_fileView->selectionModel()->clearSelection();
+    QScrollArea::mousePressEvent(event);
+}
+
+void SectionedScrollCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        NavigationService::instance().goUp();
+        event->accept();
+        return;
+    }
+    QScrollArea::mouseDoubleClickEvent(event);
+}
+
+void SectionedScrollCanvas::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        QScrollArea::dragEnterEvent(event);
+    }
+}
+
+void SectionedScrollCanvas::dragMoveEvent(QDragMoveEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        QScrollArea::dragMoveEvent(event);
+    }
+}
+
+void SectionedScrollCanvas::dropEvent(QDropEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        QStringList paths;
+        for (const QUrl& url : event->mimeData()->urls()) {
+            QString localPath = url.toLocalFile();
+            if (!localPath.isEmpty()) paths << localPath;
+        }
+        if (!paths.isEmpty()) {
+            emit pathsDropped(paths, QModelIndex(), m_fileProxyModel);
+            event->acceptProposedAction();
+            return;
+        }
+    }
+    QScrollArea::dropEvent(event);
 }
 
 void SectionedScrollCanvas::refreshVisibleThumbnails(ItemModelBase* model) {
