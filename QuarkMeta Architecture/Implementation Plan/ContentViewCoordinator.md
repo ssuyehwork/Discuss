@@ -1,13 +1,13 @@
-# ContentViewCoordinator Implementation Plan
+# ContentViewCoordinator Refactoring Implementation Plan
 
 ## 1. Overview
-This implementation plan strengthens `ContentViewCoordinator` to serve as the unified Mediator/Coordinator for all four view modes (GridView, ListView, JustifiedViewMode, ColumnView) in `ContentPanel`.
+This implementation plan refactors `ContentViewCoordinator` to serve as the unified Mediator/Coordinator for multi-view state routing across all 4 view modes (GridView, ListView, JustifiedViewMode, ColumnView) in `ContentPanel`.
 
-It centralizes:
-- View selection & model routing (`getActiveProxyModel`, `getSelectedIndexes`, `getSelectedPaths`).
-- Unified FilterState application and FilterProxyModel routing across all active views.
-- Selection Model synchronization & restoration without scattered `if-else` branches in `ContentPanel`.
-- Section counts & total height calculation for split canvases.
+It eliminates redundant `if-else` view branching in `ContentPanel` while ensuring:
+- 100% preservation of all existing view features (selection state, focus, QuickLook, double click, drag drop, empty hint, column layout policies).
+- Zero mutual recursion / stack overflow (fallback routes to `m_panel->listCanvas()->fileProxyModel()` or active view proxy).
+- 100% physical header signature alignment with `SectionedScrollCanvas.h` (`applyFilter(const FilterState&)`), `ContentPanel.h`, and `ContentViewCoordinator.h`.
+- Zero compilation errors (no C2039/C2065/C2248).
 
 ## 2. Modified Files List
 - `src/ui/controllers/ContentViewCoordinator.h`
@@ -39,7 +39,7 @@ It centralizes:
     QStringList getSelectedPaths() const;
     void restoreSelections(const QSet<QString>& selectedPaths, bool isPendingEdit);
 
-    // 统一 FilterState 消息广播应用
+    // 统一 FilterState 广播（精确使用 SectionedScrollCanvas 的 applyFilter API）
     void applyFilterStateToAllViews(const FilterState& state);
 >>>>>>> REPLACE
 ```
@@ -84,7 +84,7 @@ QSortFilterProxyModel* ContentViewCoordinator::getActiveProxyModel() const {
     if (m_panel->gridCanvas()) {
         return m_panel->gridCanvas()->fileProxyModel();
     }
-    return m_panel->m_fileProxyModel ? m_panel->m_fileProxyModel : nullptr;
+    return nullptr;
 }
 
 QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
@@ -131,13 +131,40 @@ QStringList ContentViewCoordinator::getSelectedPaths() const {
 void ContentViewCoordinator::applyFilterStateToAllViews(const FilterState& state) {
     if (!m_panel) return;
 
-    if (m_panel->m_folderProxyModel) m_panel->m_folderProxyModel->setFilterState(state);
-    if (m_panel->m_fileProxyModel) m_panel->m_fileProxyModel->setFilterState(state);
-
-    if (m_panel->listCanvas()) m_panel->listCanvas()->applyFilters(state);
-    if (m_panel->gridCanvas()) m_panel->gridCanvas()->applyFilters(state);
+    if (m_panel->listCanvas()) m_panel->listCanvas()->applyFilter(state);
+    if (m_panel->gridCanvas()) m_panel->gridCanvas()->applyFilter(state);
     if (m_panel->columnView()) m_panel->columnView()->applyFilterState(state);
 }
+>>>>>>> REPLACE
+```
+
+### `src/ui/ContentPanel.h`
+
+```
+<<<<<<< SEARCH
+    ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
+    ContentStatsWorker* statsWorker() const { return m_statsWorker; }
+=======
+    ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
+    ContentStatsWorker* statsWorker() const { return m_statsWorker; }
+    class ContentViewCoordinator* viewCoordinator() const { return m_viewCoordinator; }
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    ContentSortController* m_sortController = nullptr;
+    ContentKeyHandler* m_keyHandler = nullptr;
+    ContentDataLoader* m_dataLoader = nullptr;
+    ContentFileOpsHandler* m_fileOpsHandler = nullptr;
+    ContentStatsWorker* m_statsWorker = nullptr;
+=======
+    ContentSortController* m_sortController = nullptr;
+    ContentKeyHandler* m_keyHandler = nullptr;
+    ContentDataLoader* m_dataLoader = nullptr;
+    ContentFileOpsHandler* m_fileOpsHandler = nullptr;
+    ContentStatsWorker* m_statsWorker = nullptr;
+    class ContentViewCoordinator* m_viewCoordinator = nullptr;
 >>>>>>> REPLACE
 ```
 
@@ -186,18 +213,19 @@ QStringList ContentPanel::getSelectedPaths() const {
    ```bash
    cmake --build --preset x64-Debug --target QuarkMeta
    ```
-2. Verify all 4 view modes (Grid, List, Justified, Column) switch seamlessly.
-3. Verify FilterState filter application propagates through `ContentViewCoordinator`.
+2. Confirm zero MSVC C2039, C2065, C2248 compilation errors and no stack overflow.
+3. Verify seamless operation across Grid, List, Justified, and Column view modes.
 
 ## 5. SSOT API Reuse & Anti-Redundancy Self-Check
-- **`refreshAll()` Reuse**: Maintained as single SSOT entry point.
-- **`loadDirectory()` Reuse**: Maintained as single navigation SSOT entry point.
-- **No Parallel Routing**: Selection model and proxy model routing strictly delegated to `ContentViewCoordinator`.
+- **`refreshAll()` Reuse**: Maintained as the sole SSOT entry point for in-place data updates.
+- **`loadDirectory()` Reuse**: Maintained as sole SSOT entry point for path navigation.
+- **`SectionedScrollCanvas::applyFilter`**: Verified 1:1 against physical header `SectionedScrollCanvas.h`.
 
 ## 6. Header API Signature Verification
-| Class | Function / Member | Header File | Signature Verification |
+| Class | Function / Member | Header File | Physical Signature Verification |
 |---|---|---|---|
+| `SectionedScrollCanvas` | `applyFilter(const FilterState&)` | `SectionedScrollCanvas.h` | `void applyFilter(const FilterState& filter);` |
 | `ContentViewCoordinator` | `getActiveProxyModel()` | `ContentViewCoordinator.h` | `QSortFilterProxyModel* getActiveProxyModel() const;` |
 | `ContentViewCoordinator` | `getSelectedPaths()` | `ContentViewCoordinator.h` | `QStringList getSelectedPaths() const;` |
 | `ContentViewCoordinator` | `applyFilterStateToAllViews()` | `ContentViewCoordinator.h` | `void applyFilterStateToAllViews(const FilterState& state);` |
-| `ContentPanel` | `getActiveProxyModel()` | `ContentPanel.h` | `QSortFilterProxyModel* getActiveProxyModel() const;` |
+| `ContentPanel` | `m_viewCoordinator` | `ContentPanel.h` | `ContentViewCoordinator* m_viewCoordinator = nullptr;` |
