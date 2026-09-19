@@ -314,13 +314,94 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
 }
 
 QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
-    // 1. 优先尝试 Ghostscript 矢量渲染（画质最好）
-    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token);
+    // 兼容层：默认走缩略图极速通道
+    return extractEpsThumbnail(filePath, targetSize, customTimeoutMs, token);
+}
+
+QImage FormatDecoders::extractEpsThumbnail(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    // =========================================================================
+    // 策略 1（版本 30 策略）：【内嵌图优先，GS 兜底】（追求极限速度，-r72 分辨率）
+    // =========================================================================
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return QImage();
+    }
+
+    QByteArray header = file.read(30);
+    if (header.size() < 30) {
+        return QImage();
+    }
+
+    // 第一优先级：读取 DOS 二进制头 (0xC5D0D3C6) 内嵌 TIFF 预览（纯内存解码，极速毫秒出图）
+    if (quint8(header[0]) == 0xC5 && quint8(header[1]) == 0xD0 &&
+        quint8(header[2]) == 0xD3 && quint8(header[3]) == 0xC6) {
+
+        quint32 tiffOffset = (quint8(header[20])) | (quint8(header[21]) << 8) |
+                             (quint8(header[22]) << 16) | (quint8(header[23]) << 24);
+        quint32 tiffLength = (quint8(header[24])) | (quint8(header[25]) << 8) |
+                             (quint8(header[26]) << 16) | (quint8(header[27]) << 24);
+        if (tiffOffset > 0 && tiffLength > 0) {
+            file.seek(tiffOffset);
+            QByteArray tiffData = file.read(tiffLength);
+            QImage img = decodeTiffMemorySafely(tiffData);
+            if (!img.isNull()) {
+                return img;
+            }
+        }
+    }
+
+    // 第二优先级：读取 ASCII 文本格式的 %%BeginPreview 预览块
+    file.seek(0);
+    QTextStream in(&file);
+    bool inPreview = false;
+    QString hexData;
+    int width = 0, height = 0;
+    QRegularExpression rxSpaces("\\s+");
+
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        if (line.startsWith("%%BeginPreview:")) {
+            QStringList parts = line.split(rxSpaces, Qt::SkipEmptyParts);
+            if (parts.size() >= 3) {
+                width = parts[1].toInt();
+                height = parts[2].toInt();
+                inPreview = true;
+            }
+            continue;
+        }
+        if (line.startsWith("%%EndPreview")) {
+            break;
+        }
+        if (inPreview) {
+            if (line.startsWith("%")) {
+                hexData.append(line.mid(1).trimmed());
+            }
+        }
+    }
+
+    if (!hexData.isEmpty() && width > 0 && height > 0) {
+        QByteArray binaryData = QByteArray::fromHex(hexData.toLatin1());
+        QImage img;
+        if (img.loadFromData(binaryData)) {
+            return img;
+        }
+    }
+
+    // 第三优先级（最后兜底）：Ghostscript 外部引擎，严格采用 72 DPI
+    return renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 72);
+}
+
+QImage FormatDecoders::extractEpsQuickLook(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    // =========================================================================
+    // 策略 2（版本 31 策略）：【GS 矢量优先，内嵌降级】（追求极致画质，-r144 分辨率）
+    // =========================================================================
+    // 第一优先级：Ghostscript 矢量高清光栅化，严格采用 144 DPI
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 144);
     if (!gsImg.isNull()) {
         return gsImg;
     }
 
-    // 2. Ghostscript 不可用/渲染失败时，退回内嵌预览：先试 DOS 二进制头 (C5D0D3C6) 里嵌的 TIFF 预览
+    // 第二优先级（降级）：若 GS 缺失或失败，退回尝试 DOS 二进制头内嵌 TIFF
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         return QImage();
@@ -348,13 +429,12 @@ QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize
         }
     }
 
-    // 3. 最后兜底：%%BeginPreview / %%EndPreview 内嵌 EPSI 灰网预览
+    // 第三优先级（最后兜底）：尝试 %%BeginPreview 文本预览
     file.seek(0);
     QTextStream in(&file);
     bool inPreview = false;
     QString hexData;
     int width = 0, height = 0;
-
     QRegularExpression rxSpaces("\\s+");
 
     while (!in.atEnd()) {
@@ -424,7 +504,7 @@ QString FormatDecoders::findGhostscriptExecutable() {
 
 static QSemaphore g_gsConcurrencyLimit(1); // 最多1个Ghostscript进程并发跑，避免多进程抢占CPU导致切换文件夹卡顿
 
-QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token, int dpi) {
     if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return QImage();
 
     QString gsExec = findGhostscriptExecutable();
@@ -464,7 +544,7 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
          << "-dBATCH"
          << "-dSAFER"
          << "-sDEVICE=pngalpha"
-         << QString("-r%1").arg(72)
+         << QString("-r%1").arg(dpi)
          << "-dFirstPage=1"
          << "-dLastPage=1"
          << QString("-sOutputFile=%1").arg(tempPng)

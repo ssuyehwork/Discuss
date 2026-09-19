@@ -238,18 +238,18 @@ void SectionedScrollCanvas::updateSectionCounts() {
             m_folderView->setVisible(!collapsed);
             if (m_type == CanvasType::Grid) {
                 if (auto* fjv = qobject_cast<JustifiedView*>(m_folderView)) {
-                    Logger::log(QString("[Debug] folderCount=%1 fjv->totalHeight()=%2 m_folderView->height()(before)=%3")
-                        .arg(folderCount).arg(fjv->totalHeight()).arg(m_folderView->height()));
                     m_folderView->setFixedHeight(fjv->totalHeight());
-                    Logger::log(QString("[Debug] m_folderView->height()(after)=%1").arg(m_folderView->height()));
                 }
             } else {
-                // 绝对照抄原数值：默认行高 30，边距 2
+                // 绝对照抄原数值：默认行高 30，边距 2，配合图标大小保持安全保底高度
                 auto* tv = static_cast<QTreeView*>(m_folderView);
                 int rowH = tv->sizeHintForRow(0);
+                int iconH = tv->iconSize().height();
+                if (rowH <= iconH) rowH = iconH + 10;
                 if (rowH <= 0) rowH = 30;
                 int hdrH = (tv->header() && tv->header()->isVisible()) ? tv->header()->height() : 0;
                 m_folderView->setFixedHeight(folderCount * rowH + hdrH + 2);
+                m_folderView->updateGeometry();
             }
         }
     }
@@ -268,12 +268,15 @@ void SectionedScrollCanvas::updateSectionCounts() {
                     m_fileView->setFixedHeight(jv->totalHeight());
                 }
             } else {
-                // 遵循 AllViewsCoExpansion.md：绝对照抄原数值
+                // 遵循 AllViewsCoExpansion.md：绝对照抄原数值，配合图标大小保持安全保底高度
                 auto* tv = static_cast<QTreeView*>(m_fileView);
                 int rowH = tv->sizeHintForRow(0);
+                int iconH = tv->iconSize().height();
+                if (rowH <= iconH) rowH = iconH + 10;
                 if (rowH <= 0) rowH = 30;
                 int hdrH = (tv->header() && tv->header()->isVisible()) ? tv->header()->height() : 0;
                 m_fileView->setFixedHeight(fileCount * rowH + hdrH + 2);
+                m_fileView->updateGeometry();
             }
         }
     }
@@ -284,13 +287,19 @@ void SectionedScrollCanvas::updateZoom(int zoomLevel) {
         if (auto* jv = qobject_cast<JustifiedView*>(m_fileView)) jv->setTargetRowHeight(zoomLevel);
         if (auto* fjv = qobject_cast<JustifiedView*>(m_folderView)) fjv->setTargetRowHeight(zoomLevel);
     } else {
-        auto* tree = static_cast<DropTreeView*>(m_fileView);
-        if (auto* hdr = qobject_cast<ContentHeaderView*>(tree->header())) {
-            hdr->setZoomLevel(zoomLevel);
+        QSize iconSize(qMax(16, zoomLevel - 8), qMax(16, zoomLevel - 8));
+        if (auto* folderTree = qobject_cast<DropTreeView*>(m_folderView)) {
+            folderTree->setIconSize(iconSize);
+            folderTree->doItemsLayout();
         }
-        // 绝对照抄原数值：qMax(16, zoomLevel - 8)
-        tree->setIconSize(QSize(qMax(16, zoomLevel - 8), qMax(16, zoomLevel - 8)));
-        tree->doItemsLayout();
+        if (auto* fileTree = qobject_cast<DropTreeView*>(m_fileView)) {
+            if (auto* hdr = qobject_cast<ContentHeaderView*>(fileTree->header())) {
+                hdr->setZoomLevel(zoomLevel);
+            }
+            fileTree->setIconSize(iconSize);
+            fileTree->doItemsLayout();
+        }
+        updateSectionCounts();
     }
 }
 
