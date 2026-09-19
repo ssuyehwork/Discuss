@@ -24,7 +24,7 @@ public:
         List
     };
 
-    explicit SectionedScrollCanvas(CanvasType type, ItemModelBase* sourceModel, const FilterState& initialFilter, QObject* eventFilter = nullptr, QWidget* parent = nullptr);
+    explicit SectionedScrollCanvas(CanvasType type, FilterProxyModel* folderProxy, FilterProxyModel* fileProxy, QObject* eventFilter = nullptr, QWidget* parent = nullptr);
     ~SectionedScrollCanvas() override = default;
 
     CanvasType canvasType() const { return m_type; }
@@ -35,9 +35,6 @@ public:
     FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
     FilterProxyModel* fileProxyModel() const { return m_fileProxyModel; }
 
-    void setSourceModel(ItemModelBase* model);
-    void applyFilter(const FilterState& filter);
-    void applySort(int column, Qt::SortOrder order);
     void updateSectionCounts();
     void updateZoom(int zoomLevel);
     void toggleFolderSectionCollapse();
@@ -61,7 +58,7 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
-    void initViews(ItemModelBase* sourceModel, QObject* eventFilter);
+    void initViews(QObject* eventFilter);
     void setupConnections();
 
     CanvasType m_type;

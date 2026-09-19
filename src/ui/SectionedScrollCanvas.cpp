@@ -24,8 +24,8 @@
 
 namespace QuarkMeta {
 
-SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, ItemModelBase* sourceModel, const FilterState& initialFilter, QObject* eventFilter, QWidget* parent)
-    : QScrollArea(parent), m_type(type) {
+SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* folderProxy, FilterProxyModel* fileProxy, QObject* eventFilter, QWidget* parent)
+    : QScrollArea(parent), m_type(type), m_folderProxyModel(folderProxy), m_fileProxyModel(fileProxy) {
     setFrameShape(QFrame::NoFrame);
     setWidgetResizable(true);
     setContextMenuPolicy(Qt::CustomContextMenu);
@@ -42,32 +42,12 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, ItemModelBase* sou
     m_layout->setContentsMargins(0, 0, 0, 0);
     m_layout->setSpacing(0);
 
-    // 1. 文件夹代理模型 (仅文件夹)
-    m_folderProxyModel = new FilterProxyModel(this);
-    m_folderProxyModel->setSourceModel(sourceModel);
-    m_folderProxyModel->setFilterKeyColumn(0);
-    m_folderProxyModel->setDynamicSortFilter(true);
-    FilterState folderFilter = initialFilter;
-    folderFilter.showFolders = true;
-    folderFilter.showFiles = false;
-    m_folderProxyModel->currentFilter = folderFilter;
-
-    // 2. 文件代理模型 (仅文件)
-    m_fileProxyModel = new FilterProxyModel(this);
-    m_fileProxyModel->setSourceModel(sourceModel);
-    m_fileProxyModel->setFilterKeyColumn(0);
-    m_fileProxyModel->setDynamicSortFilter(true);
-    FilterState fileFilter = initialFilter;
-    fileFilter.showFolders = false;
-    fileFilter.showFiles = true;
-    m_fileProxyModel->currentFilter = fileFilter;
-
-    // 3. 标题栏
+    // 标题栏
     m_folderHeader = new FolderSectionHeaderBar(m_containerWidget);
     m_folderHeader->hide();
     m_layout->addWidget(m_folderHeader);
 
-    initViews(sourceModel, eventFilter);
+    initViews(eventFilter);
 
     m_fileHeader = new FileSectionHeaderBar(m_containerWidget);
     m_fileHeader->hide();
@@ -80,7 +60,7 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, ItemModelBase* sou
     setupConnections();
 }
 
-void SectionedScrollCanvas::initViews(ItemModelBase* /*sourceModel*/, QObject* eventFilter) {
+void SectionedScrollCanvas::initViews(QObject* eventFilter) {
     if (m_type == CanvasType::Grid) {
         auto* folderJv = new DropJustifiedView(m_containerWidget);
         folderJv->setFrameShape(QFrame::NoFrame);
@@ -240,33 +220,6 @@ void SectionedScrollCanvas::setupConnections() {
     }
 }
 
-void SectionedScrollCanvas::setSourceModel(ItemModelBase* model) {
-    if (m_folderProxyModel) m_folderProxyModel->setSourceModel(model);
-    if (m_fileProxyModel) m_fileProxyModel->setSourceModel(model);
-}
-
-void SectionedScrollCanvas::applyFilter(const FilterState& filter) {
-    if (m_folderProxyModel) {
-        FilterState s = filter;
-        s.showFolders = true;
-        s.showFiles = false;
-        m_folderProxyModel->currentFilter = s;
-        m_folderProxyModel->updateFilter();
-    }
-    if (m_fileProxyModel) {
-        FilterState s = filter;
-        s.showFolders = false;
-        s.showFiles = true;
-        m_fileProxyModel->currentFilter = s;
-        m_fileProxyModel->updateFilter();
-    }
-}
-
-void SectionedScrollCanvas::applySort(int column, Qt::SortOrder order) {
-    if (m_folderProxyModel) m_folderProxyModel->sort(column, order);
-    if (m_fileProxyModel) m_fileProxyModel->sort(column, order);
-}
-
 void SectionedScrollCanvas::updateSectionCounts() {
     if (!m_folderProxyModel || !m_fileProxyModel) return;
     int folderCount = m_folderProxyModel->rowCount();
@@ -284,7 +237,10 @@ void SectionedScrollCanvas::updateSectionCounts() {
             m_folderView->setVisible(!collapsed);
             if (m_type == CanvasType::Grid) {
                 if (auto* fjv = qobject_cast<JustifiedView*>(m_folderView)) {
+                    Logger::log(QString("[Debug] folderCount=%1 fjv->totalHeight()=%2 m_folderView->height()(before)=%3")
+                        .arg(folderCount).arg(fjv->totalHeight()).arg(m_folderView->height()));
                     m_folderView->setFixedHeight(fjv->totalHeight());
+                    Logger::log(QString("[Debug] m_folderView->height()(after)=%1").arg(m_folderView->height()));
                 }
             } else {
                 // 绝对照抄原数值：默认行高 30，边距 2

@@ -160,14 +160,28 @@ void ContentPanel::initUi() {
     m_viewStack = new QStackedWidget(this);
     m_viewStack->setFrameShape(QFrame::NoFrame);
 
-    // 采用 SectionedScrollCanvas 归一化复合组件：彻底剥离样板
-    m_listCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::List, m_model, m_currentFilter, this, this);
+    // 统一在 ContentPanel 里构建代理模型，SectionedScrollCanvas 只负责排版/滚动
+    auto makeProxyPair = [this](bool wantFolders) {
+        auto* p = new FilterProxyModel(this);
+        p->setSourceModel(m_model);
+        p->setFilterKeyColumn(0);
+        p->setDynamicSortFilter(true);
+        FilterState s = m_currentFilter;
+        s.showFolders = wantFolders;
+        s.showFiles = !wantFolders;
+        p->currentFilter = s;
+        return p;
+    };
+    m_folderProxyModel = makeProxyPair(true);
+    m_fileProxyModel = makeProxyPair(false);
+    m_gridFolderProxyModel = makeProxyPair(true);
+    m_gridFileProxyModel = makeProxyPair(false);
+
+    m_listCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::List, m_folderProxyModel, m_fileProxyModel, this, this);
     m_treeView = static_cast<DropTreeView*>(m_listCanvas->fileView());
     m_folderTreeView = static_cast<DropTreeView*>(m_listCanvas->folderView());
-    m_folderProxyModel = m_listCanvas->folderProxyModel();
-    m_fileProxyModel = m_listCanvas->fileProxyModel();
 
-    m_gridCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::Grid, m_model, m_currentFilter, this, this);
+    m_gridCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::Grid, m_gridFolderProxyModel, m_gridFileProxyModel, this, this);
     m_gridView = m_gridCanvas->fileView();
     m_folderGridView = static_cast<DropJustifiedView*>(m_gridCanvas->folderView());
 
@@ -234,19 +248,19 @@ void ContentPanel::ensureSourceModelIsDiskModel() {
     if (m_model != m_diskModel) {
         m_model = m_diskModel;
         m_model->setCurrentPath(m_currentPath);
-        if (m_gridCanvas) m_gridCanvas->setSourceModel(m_model);
-        if (m_listCanvas) m_listCanvas->setSourceModel(m_model);
+        for (auto* p : {m_folderProxyModel, m_fileProxyModel, m_gridFolderProxyModel, m_gridFileProxyModel}) {
+            if (p) p->setSourceModel(m_model);
+        }
     }
 }
 
 void ContentPanel::applySort() {
     if (m_sortController) {
-        int col = static_cast<int>(m_sortController->sortType());
-        Qt::SortOrder order = m_sortController->sortOrder();
-        if (m_gridCanvas) m_gridCanvas->applySort(col, order);
-        if (m_listCanvas) m_listCanvas->applySort(col, order);
+        for (auto* p : {m_folderProxyModel, m_fileProxyModel, m_gridFolderProxyModel, m_gridFileProxyModel}) {
+            m_sortController->applySortToModel(p);
+        }
         if (m_columnView) {
-            m_columnView->applySort(col, order);
+            m_columnView->applySort(static_cast<int>(m_sortController->sortType()), m_sortController->sortOrder());
         }
     }
 }
@@ -445,8 +459,18 @@ void ContentPanel::applyFilters(const FilterState& state) {
 }
 
 void ContentPanel::applyFilters() {
-    if (m_gridCanvas) m_gridCanvas->applyFilter(m_currentFilter);
-    if (m_listCanvas) m_listCanvas->applyFilter(m_currentFilter);
+    auto pushFilter = [this](FilterProxyModel* p, bool wantFolders) {
+        if (!p) return;
+        FilterState s = m_currentFilter;
+        s.showFolders = wantFolders;
+        s.showFiles = !wantFolders;
+        p->currentFilter = s;
+        p->updateFilter();
+    };
+    pushFilter(m_folderProxyModel, true);
+    pushFilter(m_fileProxyModel, false);
+    pushFilter(m_gridFolderProxyModel, true);
+    pushFilter(m_gridFileProxyModel, false);
     if (m_columnView) m_columnView->applyFilterState(m_currentFilter);
     updateStatusBarStats();
 }

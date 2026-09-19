@@ -140,9 +140,7 @@ QStringList ContentViewCoordinator::getSelectedPaths() const {
 void ContentViewCoordinator::applyFilterStateToAllViews(const FilterState& state) {
     if (!m_panel) return;
 
-    if (m_panel->listCanvas()) m_panel->listCanvas()->applyFilter(state);
-    if (m_panel->gridCanvas()) m_panel->gridCanvas()->applyFilter(state);
-    if (m_panel->columnView()) m_panel->columnView()->applyFilterState(state);
+    m_panel->applyFilters(state);
 }
 
 void ContentViewCoordinator::restoreSelections(const QSet<QString>& selectedPaths, bool isPendingEdit) {

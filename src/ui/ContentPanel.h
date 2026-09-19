@@ -234,6 +234,8 @@ private:
     QAbstractItemView* m_gridView = nullptr;
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;
+    FilterProxyModel* m_gridFolderProxyModel = nullptr;
+    FilterProxyModel* m_gridFileProxyModel = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     class ColumnViewWidget* m_columnView = nullptr;
