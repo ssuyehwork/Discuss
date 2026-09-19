@@ -45,15 +45,16 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
     // 标题栏
     m_folderHeader = new FolderSectionHeaderBar(m_containerWidget);
     m_folderHeader->hide();
-    m_layout->addWidget(m_folderHeader);
+    m_layout->addWidget(m_folderHeader, 0);
 
     initViews(eventFilter);
 
     m_fileHeader = new FileSectionHeaderBar(m_containerWidget);
     m_fileHeader->hide();
-    m_layout->addWidget(m_fileHeader);
+    m_layout->addWidget(m_fileHeader, 0);
 
-    m_layout->addWidget(m_fileView);
+    m_layout->addWidget(m_fileView, 0);
+    m_layout->addStretch(1);
 
     setWidget(m_containerWidget);
 
@@ -81,7 +82,7 @@ void SectionedScrollCanvas::initViews(QObject* eventFilter) {
         folderJv->setItemDelegate(fDelegate);
         m_folderView = folderJv;
         m_folderView->hide();
-        m_layout->addWidget(m_folderView);
+        m_layout->addWidget(m_folderView, 0);
 
         auto* fileJv = new DropJustifiedView(m_containerWidget);
         fileJv->setFrameShape(QFrame::NoFrame);
@@ -120,7 +121,7 @@ void SectionedScrollCanvas::initViews(QObject* eventFilter) {
         folderTv->applyColumnPolicies();
         m_folderView = folderTv;
         m_folderView->hide();
-        m_layout->addWidget(m_folderView);
+        m_layout->addWidget(m_folderView, 0);
 
         auto* fileTv = new DropTreeView(m_containerWidget);
         fileTv->setFrameShape(QFrame::NoFrame);
