@@ -39,10 +39,6 @@ public:
     void incrementGeneration();
     void cancelAll();
 
-    /**
-     * @brief 计算二级磁盘 Hash 缓存路径
-     */
-    static QString getDiskCachePath(const QString& filePath, int targetSize);
 
     /**
      * @brief 内存缓存清理

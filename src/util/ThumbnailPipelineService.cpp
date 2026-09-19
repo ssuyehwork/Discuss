@@ -2,7 +2,6 @@
 #include "ColorPaletteEngine.h"
 #include "DiskMediaExtractor.h"
 #include <QImageReader>
-#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -22,15 +21,6 @@ ThumbnailPipelineService::ThumbnailPipelineService(QObject* parent)
     m_memoryCache.setMaxCost(kMaxMemoryCacheCount);
 }
 
-QString ThumbnailPipelineService::getDiskCachePath(const QString& filePath, int targetSize) {
-    QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
-    QByteArray hash = QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex();
-    
-    QString cacheDir = QDir::temp().filePath("QuarkMeta_Thumbnails");
-    QDir().mkpath(cacheDir);
-
-    return QDir(cacheDir).filePath(QString("%1_%2.png").arg(QString(hash.left(32))).arg(targetSize));
-}
 
 QPixmap ThumbnailPipelineService::getFromMemoryCache(const QString& filePath, int targetSize) const {
     QString key = QString("%1@%2").arg(QDir::toNativeSeparators(filePath).toLower()).arg(targetSize);
@@ -88,19 +78,7 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
                 return;
             }
 
-            QString diskPath = getDiskCachePath(path, targetSize);
-            QImage finalImg;
-
-            if (QFile::exists(diskPath)) {
-                finalImg.load(diskPath);
-            }
-
-            if (finalImg.isNull()) {
-                finalImg = decodeImageToThumbnail(path, targetSize);
-                if (!finalImg.isNull()) {
-                    finalImg.save(diskPath, "PNG");
-                }
-            }
+            QImage finalImg = decodeImageToThumbnail(path, targetSize);
 
             if (!finalImg.isNull()) {
                 if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
