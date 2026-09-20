@@ -189,7 +189,9 @@ void ContentPanel::initUi() {
     for (auto* canvas : {m_gridCanvas, m_listCanvas}) {
         connect(canvas, &SectionedScrollCanvas::selectionChanged, this, &ContentPanel::onSelectionChanged);
         connect(canvas, &SectionedScrollCanvas::doubleClicked, this, &ContentPanel::onDoubleClicked);
-        connect(canvas, &SectionedScrollCanvas::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
+        connect(canvas, &SectionedScrollCanvas::customContextMenuRequested, this, [this](const QPoint& pos) {
+            onCustomContextMenuRequested(pos);
+        });
         connect(canvas, &SectionedScrollCanvas::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx, QAbstractItemModel* proxy) {
             onPathsDropped(p, idx, currentPath(), proxy);
         });
@@ -292,6 +294,10 @@ void ContentPanel::startVisibleTimer() {
 
 void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(sender());
+    onCustomContextMenuRequested(view, pos);
+}
+
+void ContentPanel::onCustomContextMenuRequested(QAbstractItemView* view, const QPoint& pos) {
     if (!view) view = activeItemView();
     if (!view) return;
     ContentContextMenu menuHandler(this);
