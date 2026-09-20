@@ -272,6 +272,13 @@
 11. **分栏视图列分割线与边框视觉契约 (Column View Column Separator & Pane Border Contract)**：
    - 分栏视图（Miller Columns 架构）多列级联呈现时，每一列面板 (`ColumnViewPane`) 右侧必须具备物理明确的垂直分割边框线（右边框宽度 `1px`，暗色中性边框配色 `#2B2B2B` 或 `#333333`，统一声明 `border-right: 1px solid #2B2B2B;`）；
    - 通过列间右边框的物理隔离与布局间距精细化设定，确保多列级联并排时展现清晰、规整的层级视觉边界，消除列间视图粘连感与视觉漂移。
+12. **分栏视图延伸留白区布局剥离与独立定位契约 (Column Blank Canvas Layout Decoupling Contract)**：
+   - 最右侧延伸留白区 (`ColumnBlankCanvasWidget`) 必须彻底从 `ColumnViewWidget` 的主列布局 `m_layout` (`QHBoxLayout`) 中物理剥离，改由 `updatePaneWidths()` 统一进行绝对几何定位 (`setGeometry`) 与滚动条总边界支撑 (`m_container->setMinimumWidth(...)`)，禁止作为假拟“列”混入 `m_layout` 中；
+   - 彻底取消留白区的左键单击清空选区行为，避免误触造成选择集丢失。
+13. **分栏视图上下文菜单目标强绑定与视口坐标映射契约 (Column View Context Menu View-Target Binding Contract)**：
+   - 上下文菜单请求必须在触发时显式强绑定对应的视图实例（`QAbstractItemView* view`），严禁依赖全局猜测（如 `activeItemView()`）；
+   - 无论在列内文件下方空白处、空列内任意位置还是最右侧延伸留白区单击右键，坐标必须转换为目标视图 `viewport()` 的局部坐标系并一同传递给 `ContentPanel::onCustomContextMenuRequested(view, pos)`，彻底消除跨列误选中与弹窗错位缺陷；
+   - 对 `onCustomContextMenuRequested` 重载槽函数的信号连接统一使用 Lambda 包装，物理避免 MSVC `QObject::connect` 模板推导二义性（C2665）错误。
 
 ---
 
