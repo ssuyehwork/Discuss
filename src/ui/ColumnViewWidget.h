@@ -53,6 +53,8 @@ private slots:
     void tryPendingSelection();
 
 private:
+    int computeFileViewMinHeight() const;
+
     QString m_path;
     QString m_pendingSelectPath;
     QSet<QString> m_pendingSelectPaths;
