@@ -54,7 +54,6 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
     m_layout->addWidget(m_fileHeader, 0);
 
     m_layout->addWidget(m_fileView, 0);
-    m_layout->addStretch(1);
 
     setWidget(m_containerWidget);
 
@@ -172,7 +171,7 @@ void SectionedScrollCanvas::setupConnections() {
         if (auto* jv = qobject_cast<JustifiedView*>(m_fileView)) {
             connect(jv, &JustifiedView::totalHeightChanged, this, [this](int height) {
                 if (m_fileView && m_fileProxyModel && m_fileProxyModel->rowCount() > 0) {
-                    m_fileView->setFixedHeight(height);
+                    m_fileView->setFixedHeight(qMax(height, computeFileViewMinHeight()));
                 }
             });
         }
@@ -221,6 +220,14 @@ void SectionedScrollCanvas::setupConnections() {
     }
 }
 
+int SectionedScrollCanvas::computeFileViewMinHeight() const {
+    int used = 0;
+    if (m_folderHeader && m_folderHeader->isVisible()) used += m_folderHeader->height();
+    if (m_folderView && m_folderView->isVisible()) used += m_folderView->height();
+    if (m_fileHeader && m_fileHeader->isVisible()) used += m_fileHeader->height();
+    return qMax(0, viewport()->height() - used);
+}
+
 void SectionedScrollCanvas::updateSectionCounts() {
     if (!m_folderProxyModel || !m_fileProxyModel) return;
     int folderCount = m_folderProxyModel->rowCount();
@@ -265,7 +272,7 @@ void SectionedScrollCanvas::updateSectionCounts() {
             m_fileView->show();
             if (m_type == CanvasType::Grid) {
                 if (auto* jv = qobject_cast<JustifiedView*>(m_fileView)) {
-                    m_fileView->setFixedHeight(jv->totalHeight());
+                    m_fileView->setFixedHeight(qMax(jv->totalHeight(), computeFileViewMinHeight()));
                 }
             } else {
                 // 遵循 AllViewsCoExpansion.md：绝对照抄原数值，配合图标大小保持安全保底高度
@@ -275,7 +282,7 @@ void SectionedScrollCanvas::updateSectionCounts() {
                 if (rowH <= iconH) rowH = iconH + 10;
                 if (rowH <= 0) rowH = 30;
                 int hdrH = (tv->header() && tv->header()->isVisible()) ? tv->header()->height() : 0;
-                m_fileView->setFixedHeight(fileCount * rowH + hdrH + 2);
+                m_fileView->setFixedHeight(qMax(fileCount * rowH + hdrH + 2, computeFileViewMinHeight()));
                 m_fileView->updateGeometry();
             }
         }
@@ -334,6 +341,11 @@ QModelIndexList SectionedScrollCanvas::getSelectedIndexes() const {
         Logger::log(QString("[Perf] SectionedScrollCanvas::getSelectedIndexes took %1ms (found %2 selected)").arg(ms).arg(res.size()));
     }
     return res;
+}
+
+void SectionedScrollCanvas::resizeEvent(QResizeEvent* event) {
+    QScrollArea::resizeEvent(event);
+    updateSectionCounts();
 }
 
 void SectionedScrollCanvas::mousePressEvent(QMouseEvent* event) {

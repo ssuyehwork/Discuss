@@ -51,6 +51,7 @@ signals:
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex, QAbstractItemModel* sourceProxy);
 
 protected:
+    void resizeEvent(QResizeEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -60,6 +61,7 @@ protected:
 private:
     void initViews(QObject* eventFilter);
     void setupConnections();
+    int computeFileViewMinHeight() const;
 
     CanvasType m_type;
     QWidget* m_containerWidget = nullptr;
