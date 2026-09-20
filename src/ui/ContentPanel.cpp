@@ -201,13 +201,6 @@ void ContentPanel::initUi() {
 
     m_columnView = new ColumnViewWidget(this, this);
     connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_columnView, &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
-        if (!path.isEmpty() && path != m_currentPath) {
-            m_currentPath = path;
-            emit directorySelected(path);
-            updateStatusBarStats();
-        }
-    });
     connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<QuarkMeta::ItemRecord>& records) {
         if (m_statsWorker && !records.empty()) {
             m_statsWorker->processAsync(records, m_currentFilter.showHidden);
@@ -427,15 +420,10 @@ void ContentPanel::setViewMode(ViewMode mode) {
     }
 
     if (oldMode == ColumnView && mode != ColumnView) {
-        if (m_columnView) {
-            ColumnViewPane* pane = m_columnView->rightmostPane();
-            if (!pane) pane = m_columnView->activePane();
-            if (pane && !pane->currentPath().isEmpty()) {
-                m_currentPath = pane->currentPath();
-            }
-        }
         if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
-            loadDirectory(m_currentPath, m_isRecursive);
+            if (!m_diskModel || m_diskModel->rowCount() == 0) {
+                loadDirectory(m_currentPath, m_isRecursive);
+            }
         }
     }
 

@@ -279,6 +279,9 @@
    - 上下文菜单请求必须在触发时显式强绑定对应的视图实例（`QAbstractItemView* view`），严禁依赖全局猜测（如 `activeItemView()`）；
    - 无论在列内文件下方空白处、空列内任意位置还是最右侧延伸留白区单击右键，坐标必须转换为目标视图 `viewport()` 的局部坐标系并一同传递给 `ContentPanel::onCustomContextMenuRequested(view, pos)`，彻底消除跨列误选中与弹窗错位缺陷；
    - 对 `onCustomContextMenuRequested` 重载槽函数的信号连接统一使用 Lambda 包装，物理避免 MSVC `QObject::connect` 模板推导二义性（C2665）错误。
+14. **分栏视图快捷键归一化与激活列路由契约 (Column View Keyboard Shortcuts Routing Contract)**：
+   - 在分栏视图模式下，`Ctrl+V` (粘贴) 与 `Ctrl+Shift+N` / 新建命令必须动态感知并路由至当前激活列的路径 `activePane()->currentPath()`，禁止误粘贴或新建在最左侧根目录；
+   - `Backspace` (退格键) 与 `Left` (左方向键) 必须拦截并路由至 `columnView()->goUpColumn()`，平滑裁撤收起最右侧子列，禁止触发全局顶层路径跳转。
 
 ---
 
