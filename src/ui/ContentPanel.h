@@ -133,6 +133,8 @@ public:
     SectionedScrollCanvas* gridCanvas() const { return m_gridCanvas; }
     SectionedScrollCanvas* listCanvas() const { return m_listCanvas; }
 
+    QString activePath() const;
+
     // 5. 业务操作分发
     void performCopy(bool cutMode);
     void performPaste();

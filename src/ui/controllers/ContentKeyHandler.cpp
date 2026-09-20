@@ -1,5 +1,6 @@
 #include "ContentKeyHandler.h"
 #include "../ContentPanel.h"
+#include "../ColumnViewWidget.h"
 #include "../CardLayoutEngine.h"
 #include "../RatingBarLayout.h"
 #include "../ToolTipOverlay.h"
@@ -451,8 +452,9 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             return true;
         }
         if (keyEvent->key() == Qt::Key_V) {
-            if (m_panel->canPaste()) {
-                ClipboardService::instance().executePaste(m_panel->currentPath(), m_panel);
+            QString targetPath = m_panel->activePath();
+            if (m_panel->canPaste(targetPath)) {
+                ClipboardService::instance().executePaste(targetPath, m_panel);
             }
             return true;
         }
@@ -479,6 +481,10 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
 
     // 8. 导航键
     if (keyEvent->key() == Qt::Key_Backspace) {
+        if (m_panel->currentViewMode() == ContentPanel::ColumnView && m_panel->columnView()) {
+            m_panel->columnView()->goUpColumn();
+            return true;
+        }
         QDir dir(m_panel->currentPath());
         if (dir.cdUp()) emit m_panel->directorySelected(dir.absolutePath());
         return true;

@@ -786,6 +786,16 @@ ContentPanel::DataSourceType ContentPanel::dataSourceType() const {
     return (m_currentCategoryType == "path_list" || m_currentCategoryType == "search") ? DataSourceType::PathList : DataSourceType::DiskNav;
 }
 
+QString ContentPanel::activePath() const {
+    if (m_currentViewMode == ColumnView && m_columnView) {
+        ColumnViewPane* pane = m_columnView->activePane();
+        if (pane && !pane->currentPath().isEmpty()) {
+            return pane->currentPath();
+        }
+    }
+    return m_currentPath;
+}
+
 void ContentPanel::wheelEvent(QWheelEvent* event) {
     if (event->modifiers() & Qt::ControlModifier) {
         setZoomLevel(m_zoomLevel + (event->angleDelta().y() > 0 ? 8 : -8));

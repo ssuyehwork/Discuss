@@ -23,7 +23,7 @@ ContentFileOpsHandler::ContentFileOpsHandler(ContentPanel* panel)
 
 void ContentFileOpsHandler::createNewItem(const QString& type) {
     if (!m_panel) return;
-    QString currentPath = m_panel->currentPath();
+    QString currentPath = m_panel->activePath();
     if (currentPath.isEmpty() || currentPath == "computer://") return;
 
     QString baseName = (type == "folder") ? "新建文件夹" : "未命名";
