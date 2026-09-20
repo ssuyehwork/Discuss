@@ -115,7 +115,9 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     connect(&TrashService::instance(), &TrashService::trashOperationCompleted, this, &ContentPanel::refreshAll);
     connect(&PermanentDeleteService::instance(), &PermanentDeleteService::permanentDeleteCompleted, this, &ContentPanel::refreshAll);
     connect(&ClipboardService::instance(), &ClipboardService::pasteCompleted, this, [this](const QString& dir) {
-        if (m_currentPath == dir) refreshAll();
+        if (m_currentPath == dir || (m_currentViewMode == ColumnView && m_columnView && m_columnView->containsPath(dir))) {
+            refreshAll();
+        }
     });
 
     m_keyHandler = new ContentKeyHandler(this);
@@ -189,7 +191,9 @@ void ContentPanel::initUi() {
     for (auto* canvas : {m_gridCanvas, m_listCanvas}) {
         connect(canvas, &SectionedScrollCanvas::selectionChanged, this, &ContentPanel::onSelectionChanged);
         connect(canvas, &SectionedScrollCanvas::doubleClicked, this, &ContentPanel::onDoubleClicked);
-        connect(canvas, &SectionedScrollCanvas::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
+        connect(canvas, &SectionedScrollCanvas::customContextMenuRequested, this, [this](const QPoint& pos) {
+            onCustomContextMenuRequested(pos);
+        });
         connect(canvas, &SectionedScrollCanvas::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx, QAbstractItemModel* proxy) {
             onPathsDropped(p, idx, currentPath(), proxy);
         });
@@ -292,6 +296,10 @@ void ContentPanel::startVisibleTimer() {
 
 void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(sender());
+    onCustomContextMenuRequested(view, pos);
+}
+
+void ContentPanel::onCustomContextMenuRequested(QAbstractItemView* view, const QPoint& pos) {
     if (!view) view = activeItemView();
     if (!view) return;
     ContentContextMenu menuHandler(this);

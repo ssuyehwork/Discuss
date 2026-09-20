@@ -172,6 +172,7 @@ public slots:
     void setZoomLevel(int level);
     void onSelectionChanged();
     void onCustomContextMenuRequested(const QPoint& pos);
+    void onCustomContextMenuRequested(QAbstractItemView* view, const QPoint& pos);
     void onDoubleClicked(const QModelIndex& index);
     void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), QAbstractItemModel* sourceModelOverride = nullptr);
     void loadDirectory(const QString& path, bool recursive = false);

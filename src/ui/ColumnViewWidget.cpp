@@ -32,13 +32,6 @@ public:
     }
 
 protected:
-    void mousePressEvent(QMouseEvent* event) override {
-        if (event->button() == Qt::LeftButton && m_columnView) {
-            m_columnView->clearAllSelections();
-        }
-        QWidget::mousePressEvent(event);
-    }
-
     void mouseDoubleClickEvent(QMouseEvent* event) override {
         if (event->button() == Qt::LeftButton && m_columnView) {
             m_columnView->goUpColumn();
@@ -92,7 +85,14 @@ protected:
 private:
     void onContextMenuRequested(const QPoint& pos) {
         if (m_contentPanel) {
-            m_contentPanel->onCustomContextMenuRequested(mapToGlobal(pos));
+            QPoint globalPos = mapToGlobal(pos);
+            QAbstractItemView* view = m_contentPanel->activeItemView();
+            if (view && view->viewport()) {
+                QPoint viewPos = view->viewport()->mapFromGlobal(globalPos);
+                m_contentPanel->onCustomContextMenuRequested(view, viewPos);
+            } else {
+                m_contentPanel->onCustomContextMenuRequested(nullptr, globalPos);
+            }
         }
     }
 
@@ -118,12 +118,31 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_paneScrollArea->setFrameShape(QFrame::NoFrame);
     m_paneScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_paneScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_paneScrollArea->setContextMenuPolicy(Qt::CustomContextMenu);
 
     m_canvasWidget = new QWidget(m_paneScrollArea);
     m_canvasWidget->setObjectName("ColumnPaneCanvasWidget");
+    m_canvasWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     QVBoxLayout* canvasLayout = new QVBoxLayout(m_canvasWidget);
     canvasLayout->setContentsMargins(0, 0, 0, 0);
     canvasLayout->setSpacing(0);
+
+    auto handlePaneBlankContextMenu = [this](const QPoint& pos, QWidget* sourceWidget) {
+        if (!m_contentPanel) return;
+        QPoint globalPos = sourceWidget ? sourceWidget->mapToGlobal(pos) : QCursor::pos();
+        DropListView* targetView = m_listView ? m_listView : m_folderListView;
+        if (targetView && targetView->viewport()) {
+            QPoint viewPos = targetView->viewport()->mapFromGlobal(globalPos);
+            m_contentPanel->onCustomContextMenuRequested(targetView, viewPos);
+        }
+    };
+
+    connect(m_paneScrollArea, &QWidget::customContextMenuRequested, this, [this, handlePaneBlankContextMenu](const QPoint& pos) {
+        handlePaneBlankContextMenu(pos, m_paneScrollArea);
+    });
+    connect(m_canvasWidget, &QWidget::customContextMenuRequested, this, [this, handlePaneBlankContextMenu](const QPoint& pos) {
+        handlePaneBlankContextMenu(pos, m_canvasWidget);
+    });
 
     m_model = new DiskItemModel(this);
     m_model->setCurrentPath(path);
@@ -278,8 +297,16 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     if (m_contentPanel) {
         m_folderListView->installEventFilter(m_contentPanel);
         m_listView->installEventFilter(m_contentPanel);
-        connect(m_folderListView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
-        connect(m_listView, &QListView::customContextMenuRequested, m_contentPanel, &ContentPanel::onCustomContextMenuRequested);
+        connect(m_folderListView, &QListView::customContextMenuRequested, this, [this](const QPoint& pos) {
+            if (m_contentPanel) {
+                m_contentPanel->onCustomContextMenuRequested(m_folderListView, pos);
+            }
+        });
+        connect(m_listView, &QListView::customContextMenuRequested, this, [this](const QPoint& pos) {
+            if (m_contentPanel) {
+                m_contentPanel->onCustomContextMenuRequested(m_listView, pos);
+            }
+        });
         connect(m_folderListView, &DropListView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
             if (m_contentPanel) {
                 m_contentPanel->onPathsDropped(paths, targetIndex, m_path, m_folderProxyModel);
@@ -582,7 +609,7 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
     m_layout->setAlignment(Qt::AlignLeft);
 
     m_blankCanvasWidget = new ColumnBlankCanvasWidget(this, m_contentPanel, m_container);
-    m_layout->addWidget(m_blankCanvasWidget);
+    m_blankCanvasWidget->show();
 
     setWidget(m_container);
 
@@ -838,13 +865,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     m_panes.append(pane);
-    if (m_blankCanvasWidget) {
-        m_layout->removeWidget(m_blankCanvasWidget);
-    }
     m_layout->addWidget(pane);
-    if (m_blankCanvasWidget) {
-        m_layout->addWidget(m_blankCanvasWidget);
-    }
     updatePaneWidths();
     updateParentHighlights();
     for (int i = 0; i < m_panes.size(); ++i) {
@@ -908,6 +929,15 @@ void ColumnViewWidget::updatePaneWidths() {
         pane->setFixedWidth(defaultWidth);
         pane->setMinimumWidth(defaultWidth);
         pane->setMaximumWidth(defaultWidth);
+    }
+
+    int totalPanesWidth = m_panes.size() * defaultWidth;
+    int containerHeight = m_container ? m_container->height() : viewport()->height();
+    if (m_blankCanvasWidget) {
+        m_blankCanvasWidget->setGeometry(totalPanesWidth, 0, 230, qMax(containerHeight, viewport()->height()));
+    }
+    if (m_container) {
+        m_container->setMinimumWidth(totalPanesWidth + 230);
     }
 }
 
