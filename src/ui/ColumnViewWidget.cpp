@@ -1,5 +1,6 @@
 #include "ColumnViewWidget.h"
 #include "ContentPanel.h"
+#include "DualSectionPanel.h"
 #include "../core/DiskScanService.h"
 #include "../core/NavigationService.h"
 #include "../meta/MetaCacheDecorator.h"
@@ -120,30 +121,6 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_paneScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_paneScrollArea->setContextMenuPolicy(Qt::CustomContextMenu);
 
-    m_canvasWidget = new QWidget(m_paneScrollArea);
-    m_canvasWidget->setObjectName("ColumnPaneCanvasWidget");
-    m_canvasWidget->setContextMenuPolicy(Qt::CustomContextMenu);
-    QVBoxLayout* canvasLayout = new QVBoxLayout(m_canvasWidget);
-    canvasLayout->setContentsMargins(0, 0, 0, 0);
-    canvasLayout->setSpacing(0);
-
-    auto handlePaneBlankContextMenu = [this](const QPoint& pos, QWidget* sourceWidget) {
-        if (!m_contentPanel) return;
-        QPoint globalPos = sourceWidget ? sourceWidget->mapToGlobal(pos) : QCursor::pos();
-        DropListView* targetView = m_listView ? m_listView : m_folderListView;
-        if (targetView && targetView->viewport()) {
-            QPoint viewPos = targetView->viewport()->mapFromGlobal(globalPos);
-            m_contentPanel->onCustomContextMenuRequested(targetView, viewPos);
-        }
-    };
-
-    connect(m_paneScrollArea, &QWidget::customContextMenuRequested, this, [this, handlePaneBlankContextMenu](const QPoint& pos) {
-        handlePaneBlankContextMenu(pos, m_paneScrollArea);
-    });
-    connect(m_canvasWidget, &QWidget::customContextMenuRequested, this, [this, handlePaneBlankContextMenu](const QPoint& pos) {
-        handlePaneBlankContextMenu(pos, m_canvasWidget);
-    });
-
     m_model = new DiskItemModel(this);
     m_model->setCurrentPath(path);
 
@@ -165,13 +142,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     m_proxyModel = m_fileProxyModel; // 兼容对外 proxyModel()
 
-    // 3. 顶部子文件夹折叠条
-    m_folderHeader = new FolderSectionHeaderBar(m_canvasWidget);
-    m_folderHeader->hide();
-    canvasLayout->addWidget(m_folderHeader);
-
-    // 4. 子文件夹列表视图
-    m_folderListView = new DropListView(m_canvasWidget);
+    // 3. 子文件夹列表视图
+    m_folderListView = new DropListView();
     m_folderListView->setObjectName("ColumnViewFolderList");
     m_folderListView->setFrameShape(QFrame::NoFrame);
     m_folderListView->setFocusPolicy(Qt::StrongFocus);
@@ -186,15 +158,9 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_folderListView->setModel(m_folderProxyModel);
     m_folderListView->setItemDelegate(new ColumnItemDelegate(this));
     m_folderListView->hide();
-    canvasLayout->addWidget(m_folderListView);
 
-    // 5. 内容文件区分界条
-    m_fileHeader = new FileSectionHeaderBar(m_canvasWidget);
-    m_fileHeader->hide();
-    canvasLayout->addWidget(m_fileHeader);
-
-    // 6. 普通文件列表视图
-    m_listView = new DropListView(m_canvasWidget);
+    // 4. 普通文件列表视图
+    m_listView = new DropListView();
     m_listView->setObjectName("ColumnViewPaneListView");
     m_listView->setFrameShape(QFrame::NoFrame);
     m_listView->setFocusPolicy(Qt::StrongFocus);
@@ -208,75 +174,58 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setModel(m_fileProxyModel);
     m_listView->setItemDelegate(new ColumnItemDelegate(this));
-    canvasLayout->addWidget(m_listView);
 
-    m_emptyFilterHintLabel = new QLabel(m_canvasWidget);
-    m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
-    m_emptyFilterHintLabel->setWordWrap(true);
-    m_emptyFilterHintLabel->setStyleSheet("color: #888888; font-size: 12px; padding: 16px;");
-    m_emptyFilterHintLabel->hide();
-    canvasLayout->addWidget(m_emptyFilterHintLabel);
+    m_panel = new DualSectionPanel(m_folderListView, m_listView, m_folderProxyModel, m_fileProxyModel, this);
+    m_panel->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_panel->setFocusPolicy(Qt::StrongFocus);
+    m_panel->setAcceptDrops(true);
 
-    m_paneScrollArea->setWidget(m_canvasWidget);
+    m_paneScrollArea->setWidget(m_panel);
     layout->addWidget(m_paneScrollArea);
+
+    auto handlePaneBlankContextMenu = [this](const QPoint& pos, QWidget* sourceWidget) {
+        if (!m_contentPanel) return;
+        QPoint globalPos = sourceWidget ? sourceWidget->mapToGlobal(pos) : QCursor::pos();
+        DropListView* targetView = m_listView ? m_listView : m_folderListView;
+        if (targetView && targetView->viewport()) {
+            QPoint viewPos = targetView->viewport()->mapFromGlobal(globalPos);
+            m_contentPanel->onCustomContextMenuRequested(targetView, viewPos);
+        }
+    };
+
+    connect(m_paneScrollArea, &QWidget::customContextMenuRequested, this, [this, handlePaneBlankContextMenu](const QPoint& pos) {
+        handlePaneBlankContextMenu(pos, m_paneScrollArea);
+    });
+    connect(m_panel, &QWidget::customContextMenuRequested, this, [this, handlePaneBlankContextMenu](const QPoint& pos) {
+        handlePaneBlankContextMenu(pos, m_panel);
+    });
 
     auto updateSectionCountsAndHints = [this]() {
         tryPendingSelection();
+        int viewportH = m_paneScrollArea && m_paneScrollArea->viewport() ? m_paneScrollArea->viewport()->height() : 0;
+        m_panel->updateSectionCounts(viewportH);
+
         int folderCount = m_folderProxyModel ? m_folderProxyModel->rowCount() : 0;
         int fileCount = m_fileProxyModel ? m_fileProxyModel->rowCount() : 0;
 
-        if (m_folderHeader) {
-            m_folderHeader->setCount(folderCount);
-        }
-        if (m_folderListView) {
-            if (folderCount == 0) {
-                m_folderListView->hide();
-            } else {
-                bool collapsed = m_folderHeader ? m_folderHeader->isCollapsed() : false;
-                m_folderListView->setVisible(!collapsed);
-                int rowH = m_folderListView->sizeHintForRow(0);
-                if (rowH <= 0) rowH = 28;
-                int folderH = folderCount * rowH + 2;
-                m_folderListView->setFixedHeight(folderH);
-            }
-        }
-        if (m_fileHeader) {
-            m_fileHeader->setCount(fileCount);
-            m_fileHeader->setVisible(fileCount > 0 && folderCount > 0);
-        }
-        if (m_listView) {
-            if (fileCount == 0) {
-                m_listView->hide();
-            } else {
-                m_listView->show();
-                int rowH = m_listView->sizeHintForRow(0);
-                if (rowH <= 0) rowH = 28;
-                int fileH = fileCount * rowH + 2;
-                m_listView->setFixedHeight(qMax(fileH, computeFileViewMinHeight()));
-            }
+        if (m_folderListView && folderCount > 0 && m_folderListView->isVisible()) {
+            int rowH = m_folderListView->sizeHintForRow(0);
+            if (rowH <= 0) rowH = 28;
+            int folderH = folderCount * rowH + 2;
+            m_folderListView->setFixedHeight(folderH);
         }
 
-        if (!m_model || !m_emptyFilterHintLabel) return;
-        int fullCount = m_model->rowCount();
-        int visibleCount = folderCount + fileCount;
-        int hiddenCount = fullCount - visibleCount;
-
-        if (fullCount > 0 && visibleCount == 0) {
-            m_emptyFilterHintLabel->setText(QString("所有内容已被筛选隐藏 (%1 个项目)").arg(hiddenCount));
-            m_emptyFilterHintLabel->show();
-            if (m_listView) m_listView->hide();
-        } else {
-            m_emptyFilterHintLabel->hide();
-            if (m_listView && fileCount > 0) m_listView->show();
+        if (m_listView && fileCount > 0) {
+            int rowH = m_listView->sizeHintForRow(0);
+            if (rowH <= 0) rowH = 28;
+            int fileH = fileCount * rowH + 2;
+            m_listView->setFixedHeight(qMax(fileH, m_panel->fileViewMinHeight()));
         }
         update();
     };
 
-    connect(m_folderHeader, &FolderSectionHeaderBar::collapseToggled, this, [this, updateSectionCountsAndHints](bool collapsed) {
-        if (m_folderListView && m_folderHeader->count() > 0) {
-            m_folderListView->setVisible(!collapsed);
-            updateSectionCountsAndHints();
-        }
+    connect(m_panel, &DualSectionPanel::folderCollapseToggled, this, [updateSectionCountsAndHints](bool) {
+        updateSectionCountsAndHints();
     });
 
     connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, updateSectionCountsAndHints);
@@ -377,22 +326,28 @@ void ColumnViewPane::paintEvent(QPaintEvent* event) {
     }
 }
 
-int ColumnViewPane::computeFileViewMinHeight() const {
-    int used = 0;
-    if (m_folderHeader && m_folderHeader->isVisible()) used += m_folderHeader->height();
-    if (m_folderListView && m_folderListView->isVisible()) used += m_folderListView->height();
-    if (m_fileHeader && m_fileHeader->isVisible()) used += m_fileHeader->height();
-    return qMax(0, m_paneScrollArea->viewport()->height() - used);
+DropListView* ColumnViewPane::listView() const { return m_listView; }
+DropListView* ColumnViewPane::folderListView() const { return m_folderListView; }
+FolderSectionHeaderBar* ColumnViewPane::folderHeader() const { return m_panel ? m_panel->folderHeader() : nullptr; }
+
+void ColumnViewPane::refreshVisibleThumbnails() {
+    if (m_panel && m_model && m_paneScrollArea && m_paneScrollArea->viewport()) {
+        m_panel->refreshVisibleThumbnails(m_model, m_paneScrollArea->viewport());
+    }
 }
 
 void ColumnViewPane::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
-    if (m_listView && m_fileProxyModel) {
-        int fileCount = m_fileProxyModel->rowCount();
-        int rowH = m_listView->sizeHintForRow(0);
-        if (rowH <= 0) rowH = 28;
-        int fileH = fileCount * rowH + 2;
-        m_listView->setFixedHeight(qMax(fileH, computeFileViewMinHeight()));
+    if (m_panel && m_paneScrollArea && m_paneScrollArea->viewport()) {
+        int viewportH = m_paneScrollArea->viewport()->height();
+        m_panel->updateSectionCounts(viewportH);
+        if (m_listView && m_fileProxyModel && m_fileProxyModel->rowCount() > 0) {
+            int fileCount = m_fileProxyModel->rowCount();
+            int rowH = m_listView->sizeHintForRow(0);
+            if (rowH <= 0) rowH = 28;
+            int fileH = fileCount * rowH + 2;
+            m_listView->setFixedHeight(qMax(fileH, m_panel->fileViewMinHeight()));
+        }
     }
     update();
 }
@@ -596,13 +551,10 @@ void ColumnViewPane::loadDirectory() {
                 } else if (!weakSelf->m_pendingSelectPath.isEmpty()) {
                     weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
                 }
-                // 触发图标与缩略图提取管线
+                // 触发图标与缩略图提取管线 (支持按需几何视口探测)
                 int count = weakSelf->m_model->rowCount();
                 if (count > 0) {
-                    QList<int> visibleRows;
-                    visibleRows.reserve(count);
-                    for (int r = 0; r < count; ++r) visibleRows.append(r);
-                    weakSelf->m_model->loadThumbnailsForRows(visibleRows);
+                    weakSelf->refreshVisibleThumbnails();
                 }
                 emit weakSelf->recordsLoaded(weakSelf->m_model->allRecords());
             }
