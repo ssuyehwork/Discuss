@@ -132,6 +132,8 @@ set(SOURCES
     src/meta/MediaExtractorPipeline.h
     src/ui/BatchRenameDialog.cpp
     src/ui/BatchRenameDialog.h
+    src/ui/DualSectionPanel.h
+    src/ui/DualSectionPanel.cpp
     src/ui/SectionedScrollCanvas.h
     src/ui/SectionedScrollCanvas.cpp
     src/ui/FolderSectionWidget.cpp

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <QScrollArea>
-#include <QVBoxLayout>
 #include <QAbstractItemView>
 #include <QSet>
 #include "models/FilterProxyModel.h"
@@ -11,9 +10,10 @@ namespace QuarkMeta {
 
 class FolderSectionHeaderBar;
 class FileSectionHeaderBar;
+class DualSectionPanel;
 
 /**
- * @brief 双分区协同撑开滚动画布：封装文件夹+文件双分区、折叠联动、全高撑开与真实物理视口探测
+ * @brief 双分区协同撑开滚动画布：List/Grid 专属外壳，内部持有唯一的 DualSectionPanel 核心逻辑
  */
 class SectionedScrollCanvas : public QScrollArea {
     Q_OBJECT
@@ -28,10 +28,10 @@ public:
     ~SectionedScrollCanvas() override = default;
 
     CanvasType canvasType() const { return m_type; }
-    QAbstractItemView* folderView() const { return m_folderView; }
-    QAbstractItemView* fileView() const { return m_fileView; }
-    FolderSectionHeaderBar* folderHeader() const { return m_folderHeader; }
-    FileSectionHeaderBar* fileHeader() const { return m_fileHeader; }
+    QAbstractItemView* folderView() const;
+    QAbstractItemView* fileView() const;
+    FolderSectionHeaderBar* folderHeader() const;
+    FileSectionHeaderBar* fileHeader() const;
     FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
     FilterProxyModel* fileProxyModel() const { return m_fileProxyModel; }
 
@@ -39,7 +39,6 @@ public:
     void updateZoom(int zoomLevel);
     void toggleFolderSectionCollapse();
 
-    // 选区与真实物理视口探测（彻底解决全高撑开后的卡顿问题）
     QAbstractItemView* activeItemView() const;
     QModelIndexList getSelectedIndexes() const;
     void refreshVisibleThumbnails(ItemModelBase* model);
@@ -51,6 +50,7 @@ signals:
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex, QAbstractItemModel* sourceProxy);
 
 protected:
+    void resizeEvent(QResizeEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
@@ -58,16 +58,12 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
-    void initViews(QObject* eventFilter);
+    QAbstractItemView* createFolderView(QObject* eventFilter);
+    QAbstractItemView* createFileView(QObject* eventFilter);
     void setupConnections();
 
     CanvasType m_type;
-    QWidget* m_containerWidget = nullptr;
-    QVBoxLayout* m_layout = nullptr;
-    FolderSectionHeaderBar* m_folderHeader = nullptr;
-    FileSectionHeaderBar* m_fileHeader = nullptr;
-    QAbstractItemView* m_folderView = nullptr;
-    QAbstractItemView* m_fileView = nullptr;
+    DualSectionPanel* m_panel = nullptr;
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;
 };
