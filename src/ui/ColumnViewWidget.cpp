@@ -858,10 +858,13 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
+        Q_UNUSED(filePath);
         m_activePaneIndex = paneIdx;
         dismissSubColumns(paneIdx);
         clearOtherSelections(paneIdx);
-        emit pathNavigated(filePath);
+        if (paneIdx >= 0 && paneIdx < m_panes.size()) {
+            emit pathNavigated(m_panes[paneIdx]->currentPath());
+        }
     });
 
     m_panes.append(pane);
