@@ -259,8 +259,8 @@
    - **选中高亮即时同步契约**：当从外部面板（如收藏夹 `FavoritePanel`、地址栏 `AddressBar` 或快捷跳转）发起路径定位时，分栏视图除展开并加载对应路径的祖先与目标列外，必须显式在对应列中定位并高亮选中目标数据项，保障活动列与外部导航源选中的物理一致性；
    - **文本尾部省略与箭头排他区域契约**：分栏列表（`QListView`）项目名称过长时，必须统一采用 `Qt::ElideRight`（尾部 `...`）进行文本自动截断，右侧强制锁定 20px 独立画廊区域用于绘制文件夹级联指示箭头 (`chevron_right`)。禁用不必要的水平滚动条 (`ScrollBarAlwaysOff`)，杜绝横向滚动条盖住列表底部项右侧箭头的视觉缺陷。
 8. **分栏视图与主视图模式切换数据模型无缝同步契约 (Column View ViewMode Switch Model Sync Contract)**：
-   - 网格视图、列表视图和瀑布流视图统一共享全局主模型 `m_diskModel`，而分栏视图采用独立的级联多列模型。当用户在分栏视图模式下进行路径导航或深度点击后，全局路径 `m_currentPath` 会即时刷新；
-   - 当用户从分栏视图切换至网格、列表或瀑布流视图时，`ContentPanel::setViewMode` 必须自动比对主模型 `m_diskModel` 的权威路径与 `m_currentPath`。若发现主模型路径滞后或处于空状态，系统必须触发自愈重载（`loadDirectory(m_currentPath)`），保障切换回其他视图时真实数据项 0 毫秒同步呈现，彻底消除“切回网格视图显示无项目”的虚假空状态缺陷。
+   - 网格视图、列表视图和瀑布流视图统一共享全局主模型 `m_diskModel`，而分栏视图采用独立的级联多列模型。当用户在分栏视图模式下进行路径导航或深度点击后，全局路径 `m_currentPath` 会即时刷新，并通过发射 `directorySelected(path)` 同步至地址栏、面包屑与历史导航栈；
+   - 当用户从分栏视图切换至网格、列表或瀑布流视图时，`ContentPanel::setViewMode` 必须精准提取 `m_columnView` 最右侧列/激活列（`rightmostPane()` / `activePane()`）的最新实际路径更新至 `m_currentPath`，并触发自愈重载（`loadDirectory(m_currentPath)`），保障切换回其他视图时深层目录真实数据项 0 毫秒同步呈现，彻底消除弹回旧路径或“显示无项目”的虚假空状态缺陷。
 9. **分栏视图行内编辑统一编辑器与智能选区契约 (Column View In-Place Editing & Smart Selection Sync Contract)**：
    - 分栏视图（Miller Columns 架构）的专用渲染代理 `ColumnItemDelegate` 必须彻底告别依赖 Qt 默认 `QLineEdit` 的私自实现，全面归一化接入统一的 `FileNameLineEdit` 编辑器；
    - **智能扩展名保护与按键流转**：分栏视图触发行内重命名时，获取焦点的编辑器必须具备“文件只高亮选中主文件名/自动避开扩展名，文件夹全选”的智能选区逻辑，且必须完整配备统一的按键拦截处理（阻断上下方向键导致 View 焦点漂移，优化左右方向键定位至基名末端）；
