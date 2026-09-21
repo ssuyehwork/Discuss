@@ -2,12 +2,73 @@
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 
-#include <QLabel>
 #include <QStyle>
 #include <QDateTime>
-#include <QMouseEvent>
 
 namespace QuarkMeta {
+
+TabItemButton::TabItemButton(int index, QWidget* parent)
+    : QPushButton(parent), m_index(index) {
+    setObjectName("TabItem");
+    setFocusPolicy(Qt::NoFocus);
+    setFixedHeight(28);
+    setCursor(Qt::PointingHandCursor);
+
+    QHBoxLayout* itemLayout = new QHBoxLayout(this);
+    itemLayout->setContentsMargins(10, 0, 6, 0);
+    itemLayout->setSpacing(6);
+
+    m_iconLabel = new QLabel(this);
+    m_iconLabel->setObjectName("TabIconLabel");
+    m_iconLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    m_iconLabel->setFixedSize(14, 14);
+
+    m_titleLabel = new QLabel(this);
+    m_titleLabel->setObjectName("TabTitleLabel");
+    m_titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+
+    m_btnClose = new QPushButton(this);
+    m_btnClose->setObjectName("TabCloseBtn");
+    m_btnClose->setFocusPolicy(Qt::NoFocus);
+    m_btnClose->setFixedSize(16, 16);
+    m_btnClose->setIcon(UiHelper::getIcon("close", QColor("#888888")));
+    m_btnClose->setIconSize(QSize(10, 10));
+
+    connect(m_btnClose, &QPushButton::clicked, this, [this]() {
+        emit closeClicked(m_index);
+    });
+
+    connect(this, &QPushButton::clicked, this, [this]() {
+        emit tabClicked(m_index);
+    });
+
+    itemLayout->addWidget(m_iconLabel, 0, Qt::AlignVCenter);
+    itemLayout->addWidget(m_titleLabel, 0, Qt::AlignVCenter);
+    itemLayout->addWidget(m_btnClose, 0, Qt::AlignVCenter);
+}
+
+void TabItemButton::setTabTitle(const QString& title) {
+    if (m_titleLabel) {
+        m_titleLabel->setText(title);
+    }
+}
+
+void TabItemButton::setTabIcon(const QIcon& icon) {
+    if (m_iconLabel) {
+        m_iconLabel->setPixmap(icon.pixmap(14, 14));
+    }
+}
+
+void TabItemButton::setActive(bool active) {
+    setProperty("active", active);
+    if (m_titleLabel) {
+        m_titleLabel->setProperty("active", active);
+        m_titleLabel->style()->unpolish(m_titleLabel);
+        m_titleLabel->style()->polish(m_titleLabel);
+    }
+    style()->unpolish(this);
+    style()->polish(this);
+}
 
 TabBarWidget::TabBarWidget(QWidget* parent) : QWidget(parent) {
     setObjectName("TabBarWidget");
@@ -52,7 +113,7 @@ void TabBarWidget::addTab(const QString& title, const QString& url, bool switchT
 
     m_tabs.append(info);
     if (switchToNew || m_currentIndex == -1) {
-        setCurrentIndex(m_tabs.size() - 1);
+        setCurrentIndex(m_tabs.size() - 1, true);
     } else {
         rebuildTabsUi();
     }
@@ -69,7 +130,7 @@ void TabBarWidget::closeTab(int index) {
     } else if (m_currentIndex >= m_tabs.size()) {
         m_currentIndex = m_tabs.size() - 1;
     }
-    setCurrentIndex(m_currentIndex);
+    setCurrentIndex(m_currentIndex, true);
     emit tabClosed(index);
 }
 
@@ -79,35 +140,48 @@ void TabBarWidget::restoreLastClosedTab() {
     addTab(lastTab.title, lastTab.url, true);
 }
 
-void TabBarWidget::setCurrentIndex(int index) {
+void TabBarWidget::setCurrentIndex(int index, bool forceNotify) {
     if (index < 0 || index >= m_tabs.size()) return;
+    bool indexChanged = (m_currentIndex != index);
     m_currentIndex = index;
     for (int i = 0; i < m_tabs.size(); ++i) {
         m_tabs[i].active = (i == m_currentIndex);
     }
-    rebuildTabsUi();
-    emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
+    updateTabsUiState();
+    if (indexChanged || forceNotify) {
+        emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
+    }
 }
 
 void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& url) {
     if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
+    if (m_tabs[m_currentIndex].title == title && m_tabs[m_currentIndex].url == url) return;
+
     m_tabs[m_currentIndex].title = title.isEmpty() ? "此电脑" : title;
     m_tabs[m_currentIndex].url = url;
-    rebuildTabsUi();
+
+    if (m_currentIndex < m_tabWidgets.size()) {
+        auto tabBtn = m_tabWidgets[m_currentIndex];
+        tabBtn->setTabTitle(m_tabs[m_currentIndex].title);
+        tabBtn->setTabIcon(UiHelper::getIcon(url.startsWith("computer://") ? "computer" : "folder_filled", QColor("#EEEEEE")));
+    }
 }
 
-bool TabBarWidget::eventFilter(QObject* watched, QEvent* event) {
-    if (event->type() == QEvent::MouseButtonPress) {
-        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
-        if (mouseEvent->button() == Qt::LeftButton) {
-            int clickedIdx = m_tabWidgets.indexOf(qobject_cast<QWidget*>(watched));
-            if (clickedIdx != -1 && clickedIdx != m_currentIndex) {
-                setCurrentIndex(clickedIdx);
-                return true;
-            }
-        }
+void TabBarWidget::updateTabsUiState() {
+    if (m_tabWidgets.size() != m_tabs.size()) {
+        rebuildTabsUi();
+        return;
     }
-    return QWidget::eventFilter(watched, event);
+
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        const auto& tab = m_tabs[i];
+        auto tabBtn = m_tabWidgets[i];
+        tabBtn->setIndex(i);
+        tabBtn->setTabTitle(tab.title);
+        tabBtn->setTabIcon(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled",
+                                                tab.active ? QColor("#EEEEEE") : QColor("#888888")));
+        tabBtn->setActive(tab.active);
+    }
 }
 
 void TabBarWidget::rebuildTabsUi() {
@@ -122,48 +196,20 @@ void TabBarWidget::rebuildTabsUi() {
 
     for (int i = 0; i < m_tabs.size(); ++i) {
         const auto& tab = m_tabs[i];
-        QWidget* tabItem = new QWidget(this);
-        tabItem->setObjectName("TabItem");
-        tabItem->setProperty("active", tab.active);
-        tabItem->setFixedHeight(28);
-        tabItem->setCursor(Qt::PointingHandCursor);
+        TabItemButton* tabItem = new TabItemButton(i, this);
+        tabItem->setTabTitle(tab.title);
+        tabItem->setTabIcon(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled",
+                                                tab.active ? QColor("#EEEEEE") : QColor("#888888")));
+        tabItem->setActive(tab.active);
 
-        QHBoxLayout* itemLayout = new QHBoxLayout(tabItem);
-        itemLayout->setContentsMargins(10, 0, 6, 0);
-        itemLayout->setSpacing(6);
-
-        QLabel* iconLabel = new QLabel(tabItem);
-        iconLabel->setObjectName("TabIconLabel");
-        iconLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-        iconLabel->setFixedSize(14, 14);
-        iconLabel->setPixmap(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled",
-                                                tab.active ? QColor("#EEEEEE") : QColor("#888888")).pixmap(14, 14));
-
-        QLabel* titleLabel = new QLabel(tab.title, tabItem);
-        titleLabel->setObjectName("TabTitleLabel");
-        titleLabel->setProperty("active", tab.active);
-        titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-
-        QPushButton* btnClose = new QPushButton(tabItem);
-        btnClose->setObjectName("TabCloseBtn");
-        btnClose->setFocusPolicy(Qt::NoFocus);
-        btnClose->setFixedSize(16, 16);
-        btnClose->setIcon(UiHelper::getIcon("close", QColor("#888888")));
-        btnClose->setIconSize(QSize(10, 10));
-
-        connect(btnClose, &QPushButton::clicked, this, [this, i]() {
-            closeTab(i);
+        connect(tabItem, &TabItemButton::closeClicked, this, [this](int idx) {
+            closeTab(idx);
         });
 
-        itemLayout->addWidget(iconLabel, 0, Qt::AlignVCenter);
-        itemLayout->addWidget(titleLabel, 0, Qt::AlignVCenter);
-        itemLayout->addWidget(btnClose, 0, Qt::AlignVCenter);
+        connect(tabItem, &TabItemButton::tabClicked, this, [this](int idx) {
+            setCurrentIndex(idx, true);
+        });
 
-        // 刷一下属性驱动样式更新
-        tabItem->style()->unpolish(tabItem);
-        tabItem->style()->polish(tabItem);
-
-        tabItem->installEventFilter(this);
         m_tabWidgets.append(tabItem);
         m_tabsLayout->addWidget(tabItem);
     }
