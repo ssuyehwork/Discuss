@@ -2,6 +2,7 @@
 #define NOMINMAX
 #endif
 #include "TitleBarWidget.h"
+#include "TabBarWidget.h"
 #include "UiHelper.h"
 #include "HoverEventFilter.h"
 #include "SvgIconRenderer.h"
@@ -11,6 +12,11 @@
 #include <QAction>
 #include <QApplication>
 #include <QSignalBlocker>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
+#include <QFileInfo>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -24,8 +30,33 @@ TitleBarWidget::TitleBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
     : QWidget(parent) {
     setObjectName("TitleBar");
     setAttribute(Qt::WA_StyledBackground, true);
+    setAcceptDrops(true);
     setFixedHeight(34);
     initUi(hoverFilter);
+}
+
+void TitleBarWidget::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        QWidget::dragEnterEvent(event);
+    }
+}
+
+void TitleBarWidget::dropEvent(QDropEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        for (const QUrl& url : event->mimeData()->urls()) {
+            QString path = url.toLocalFile();
+            if (!path.isEmpty() && QFileInfo(path).isDir()) {
+                if (m_tabBar) {
+                    m_tabBar->openOrFocusTab(path);
+                }
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+    QWidget::dropEvent(event);
 }
 
 bool TitleBarWidget::isPinned() const {
@@ -75,9 +106,8 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_logoLabel->setObjectName("TitleLogoLabel");
     m_layout->addWidget(m_logoLabel);
 
-    m_appNameLabel = new QLabel("QuarkMeta", this);
-    m_appNameLabel->setObjectName("AppNameLabel");
-    m_layout->addWidget(m_appNameLabel);
+    m_tabBar = new TabBarWidget(this);
+    m_layout->addWidget(m_tabBar);
     m_layout->addStretch();
 
     auto createTitleBtn = [this, hoverFilter](const QString& iconKey, const QString& tip) -> QPushButton* {

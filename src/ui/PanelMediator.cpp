@@ -8,6 +8,7 @@
 #include "AddressBar.h"
 #include "SearchController.h"
 #include "TitleBarWidget.h"
+#include "TabBarWidget.h"
 #include "PanelLayoutManager.h"
 #include "AppShortcutController.h"
 #include "QuickLookWindow.h"
@@ -60,6 +61,20 @@ void PanelMediator::setupConnections() {
 
     // 0. TitleBar 与各组件的高阶编排及 UI 状态恢复/持久化
     if (titleBar) {
+        if (titleBar->tabBar()) {
+            connect(titleBar->tabBar(), &TabBarWidget::currentTabChanged, this, [](int index, const QString& url) {
+                Q_UNUSED(index);
+                NavigationService::instance().navigateTo(url);
+            });
+            connect(titleBar->tabBar(), &TabBarWidget::refreshRequested, this, []() {
+                NavigationService::instance().refresh();
+            });
+            connect(&NavigationService::instance(), &NavigationService::currentUrlChanged, this, [titleBar](const QString& url, const QString& displayPath) {
+                if (titleBar->tabBar()) {
+                    titleBar->tabBar()->updateCurrentTabTitle(displayPath, url);
+                }
+            });
+        }
         if (layoutManager) {
             connect(titleBar, &TitleBarWidget::layoutMenuRequested, layoutManager, [layoutManager](const QPoint& pos) {
                 layoutManager->showPanelContextMenu(pos);
@@ -188,9 +203,12 @@ void PanelMediator::setupConnections() {
             NavigationService::instance().navigateTo(path);
         });
 
-        if (filterPanel && contentPanel->columnView()) {
-            connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, filterPanel, [filterPanel](const QString&) {
-                filterPanel->clearAllFilters(false);
+        if (contentPanel->columnView()) {
+            connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, this, [filterPanel](const QString& path) {
+                if (filterPanel) {
+                    filterPanel->clearAllFilters(false);
+                }
+                NavigationService::instance().navigateTo(path);
             });
         }
 
