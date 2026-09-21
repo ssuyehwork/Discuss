@@ -30,6 +30,8 @@ public:
     explicit TitleBarWidget(QWidget* parent = nullptr, HoverEventFilter* hoverFilter = nullptr);
     ~TitleBarWidget() override = default;
 
+    TabBarWidget* tabBar() const { return m_tabBar; }
+
     bool isPinned() const;
     void setPinned(bool pinned);
     void setZoomLevel(int value);
@@ -51,8 +53,9 @@ private:
     void setupCreateMenu();
 
     QHBoxLayout* m_layout = nullptr;
+
     QLabel* m_logoLabel = nullptr;
-    QLabel* m_appNameLabel = nullptr;
+    TabBarWidget* m_tabBar = nullptr;
 
     QPushButton* m_btnViewMenu = nullptr;
     QSlider* m_sizeSlider = nullptr;

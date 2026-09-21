@@ -1,5 +1,7 @@
 #include "AppShortcutController.h"
 #include "SearchController.h"
+#include "TitleBarWidget.h"
+#include "TabBarWidget.h"
 #include "../core/NavigationService.h"
 #include "../core/UndoManager.h"
 #include <QApplication>
@@ -144,6 +146,32 @@ void AppShortcutController::initShortcuts() {
     connect(scClose, &QShortcut::activated, this, [this]() {
         if (m_window) {
             m_window->close();
+        }
+    });
+
+    // 7. Ctrl+T: 新建标签页
+    QShortcut* scNewTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_T), m_window);
+    scNewTab->setContext(Qt::WindowShortcut);
+    connect(scNewTab, &QShortcut::activated, this, [this]() {
+        if (m_window) {
+            if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
+                if (titleBar->tabBar()) {
+                    titleBar->tabBar()->addTab("此电脑", "computer://", true);
+                }
+            }
+        }
+    });
+
+    // 8. Ctrl+Shift+T: 恢复关闭的标签页
+    QShortcut* scRestoreTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), m_window);
+    scRestoreTab->setContext(Qt::WindowShortcut);
+    connect(scRestoreTab, &QShortcut::activated, this, [this]() {
+        if (m_window) {
+            if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
+                if (titleBar->tabBar()) {
+                    titleBar->tabBar()->restoreLastClosedTab();
+                }
+            }
         }
     });
 }
