@@ -215,7 +215,12 @@ void SectionedScrollCanvas::updateSectionCounts() {
     if (folderView && folderCount > 0 && folderView->isVisible()) {
         if (m_type == CanvasType::Grid) {
             if (auto* fjv = qobject_cast<JustifiedView*>(folderView)) {
-                folderView->setFixedHeight(fjv->totalHeight());
+                int baseH = fjv->totalHeight();
+                if (fileCount == 0) {
+                    folderView->setFixedHeight(qMax(baseH, m_panel->folderViewMinHeight()));
+                } else {
+                    folderView->setFixedHeight(baseH);
+                }
             }
         } else {
             auto* tv = static_cast<QTreeView*>(folderView);
@@ -224,7 +229,12 @@ void SectionedScrollCanvas::updateSectionCounts() {
             if (rowH <= iconH) rowH = iconH + 10;
             if (rowH <= 0) rowH = 30;
             int hdrH = (tv->header() && tv->header()->isVisible()) ? tv->header()->height() : 0;
-            folderView->setFixedHeight(folderCount * rowH + hdrH + 2);
+            int baseH = folderCount * rowH + hdrH + 2;
+            if (fileCount == 0) {
+                folderView->setFixedHeight(qMax(baseH, m_panel->folderViewMinHeight()));
+            } else {
+                folderView->setFixedHeight(baseH);
+            }
             folderView->updateGeometry();
         }
     }

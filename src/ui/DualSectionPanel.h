@@ -40,6 +40,7 @@ public:
     void updateSectionCounts(int hostViewportHeight);
     void toggleFolderSectionCollapse();
     int fileViewMinHeight() const { return computeFileViewMinHeight(m_lastHostViewportHeight); }
+    int folderViewMinHeight() const { return computeFolderViewMinHeight(m_lastHostViewportHeight); }
 
     QAbstractItemView* activeItemView() const;
     QModelIndexList getSelectedIndexes() const;
@@ -53,6 +54,7 @@ signals:
 
 private:
     int computeFileViewMinHeight(int hostViewportHeight) const;
+    int computeFolderViewMinHeight(int hostViewportHeight) const;
     void updateEmptyFilterHint();
 
     QVBoxLayout* m_layout = nullptr;

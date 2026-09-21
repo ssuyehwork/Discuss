@@ -607,9 +607,13 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == DiskTrashIdRole) {
         return record.diskTrashId;
     } else if (role == HasThumbnailRole) {
-        return UiHelper::hasPhysicalThumbnail(record) ||
-               (m_aspectRatios.contains(QDir::toNativeSeparators(path)) && m_aspectRatios.value(QDir::toNativeSeparators(path)) > 0.0) ||
-               m_iconCache.contains(path);
+        if (record.isDir || record.thumbStatus == 1) return false;
+        static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
+        QString ext = record.suffix.toLower();
+        if (iconOnlyExts.contains(ext)) return false;
+        if (m_iconCache.contains(path) || (m_aspectRatios.contains(QDir::toNativeSeparators(path)) && m_aspectRatios.value(QDir::toNativeSeparators(path)) > 0.0)) return true;
+        if (record.width > 0 && record.height > 0) return true;
+        return false;
     } else if (role == Qt::DecorationRole && index.column() == 0) {
         QString cacheKey = path;
         QIcon* cached = m_iconCache.object(cacheKey);

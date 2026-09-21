@@ -15,6 +15,7 @@ DualSectionPanel::DualSectionPanel(QAbstractItemView* folderView, QAbstractItemV
     m_layout = new QVBoxLayout(this);
     m_layout->setContentsMargins(0, 0, 0, 0);
     m_layout->setSpacing(0);
+    m_layout->setAlignment(Qt::AlignTop);
 
     m_folderHeader = new FolderSectionHeaderBar(this);
     m_folderHeader->hide();
@@ -64,6 +65,12 @@ int DualSectionPanel::computeFileViewMinHeight(int hostViewportHeight) const {
     if (m_folderHeader && m_folderHeader->isVisible()) used += m_folderHeader->height();
     if (m_folderView && m_folderView->isVisible()) used += m_folderView->height();
     if (m_fileHeader && m_fileHeader->isVisible()) used += m_fileHeader->height();
+    return qMax(0, hostViewportHeight - used);
+}
+
+int DualSectionPanel::computeFolderViewMinHeight(int hostViewportHeight) const {
+    int used = 0;
+    if (m_folderHeader && m_folderHeader->isVisible()) used += m_folderHeader->height();
     return qMax(0, hostViewportHeight - used);
 }
 

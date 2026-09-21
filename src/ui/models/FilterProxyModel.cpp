@@ -180,7 +180,7 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         if (currentFilter.duplicatePresence == FilterState::UniqueOnly && isDuplicate) return false;
     }
 
-    // 6.5 缩略图状态过滤
+    // 6.5 缩略图状态过滤 (Zero UI Main-Thread Disk I/O)
     if (currentFilter.thumbnailPresence != FilterState::ThumbAll) {
         bool hasThumb = sourceModelPtr->data(sourceModelPtr->index(sourceRow, 0), HasThumbnailRole).toBool();
         if (currentFilter.thumbnailPresence == FilterState::HasThumbnail && !hasThumb) return false;
