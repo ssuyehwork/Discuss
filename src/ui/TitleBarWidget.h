@@ -69,6 +69,10 @@ private:
     QPushButton* m_btnClose = nullptr;
 
     ViewModeOption m_currentViewMode = GridViewMode;
+
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 };
 
 } // namespace QuarkMeta

@@ -11,6 +11,10 @@
 #include <QAction>
 #include <QFileInfo>
 #include <QDir>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 
 namespace QuarkMeta {
 
@@ -100,6 +104,7 @@ void TabItemButton::contextMenuEvent(QContextMenuEvent* event) {
 TabBarWidget::TabBarWidget(QWidget* parent) : QWidget(parent) {
     setObjectName("TabBarWidget");
     setAttribute(Qt::WA_StyledBackground, true);
+    setAcceptDrops(true);
     setFixedHeight(30);
 
     m_mainLayout = new QHBoxLayout(this);
@@ -228,6 +233,45 @@ void TabBarWidget::selectPreviousTab() {
     if (m_tabs.isEmpty()) return;
     int prevIdx = (m_currentIndex - 1 + m_tabs.size()) % m_tabs.size();
     setCurrentIndex(prevIdx, true);
+}
+
+void TabBarWidget::openOrFocusTab(const QString& rawPath) {
+    if (rawPath.isEmpty()) return;
+    QString cleanTarget = QDir::cleanPath(rawPath);
+
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        if (QDir::cleanPath(m_tabs[i].url) == cleanTarget) {
+            setCurrentIndex(i, true);
+            return;
+        }
+    }
+
+    QFileInfo fi(cleanTarget);
+    QString title = fi.fileName();
+    if (title.isEmpty()) title = cleanTarget;
+    addTab(title, cleanTarget, true);
+}
+
+void TabBarWidget::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        QWidget::dragEnterEvent(event);
+    }
+}
+
+void TabBarWidget::dropEvent(QDropEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        for (const QUrl& url : event->mimeData()->urls()) {
+            QString path = url.toLocalFile();
+            if (!path.isEmpty() && QFileInfo(path).isDir()) {
+                openOrFocusTab(path);
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+    QWidget::dropEvent(event);
 }
 
 void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& url) {

@@ -63,6 +63,7 @@ public:
     int currentIndex() const { return m_currentIndex; }
     int tabCount() const { return m_tabs.size(); }
     void updateCurrentTabTitle(const QString& title, const QString& url);
+    void openOrFocusTab(const QString& path);
 
     void selectNextTab();
     void selectPreviousTab();
@@ -74,6 +75,9 @@ signals:
     void refreshRequested();
 
 private:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+
     void showTabContextMenu(int index, const QPoint& globalPos);
     void updateTabsUiState();
     void rebuildTabsUi();

@@ -142,6 +142,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     if (onItem) {
         if (isDriveRoot) {
             menu.addAction(UiHelper::getIcon("open", QColor("#EEEEEE"), 18), "打开")->setData(ContentPanel::ActionOpen);
+            menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "在新标签页中打开")->setData(ContentPanel::ActionOpenInNewTab);
             ContextMenuFactory::buildShowInExplorerAction(&menu, path, m_panel);
 
             QString currentColorStr = currentIndex.data(ColorRole).toString();
@@ -254,7 +255,9 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
         } else {
             menu.addAction(UiHelper::getIcon(isFolder ? "folder" : "open", QColor("#EEEEEE"), 18), isFolder ? "打开文件夹" : "打开")->setData(ContentPanel::ActionOpen);
-            if (!isFolder) {
+            if (isFolder) {
+                menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "在新标签页中打开")->setData(ContentPanel::ActionOpenInNewTab);
+            } else {
                 menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
             }
             ContextMenuFactory::buildShowInExplorerAction(&menu, path, m_panel);
@@ -558,6 +561,22 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         case ContentPanel::ActionOpen:
             m_panel->onDoubleClicked(currentIndex);
             break;
+        case ContentPanel::ActionOpenInNewTab: {
+            QString targetPath = path;
+            if (targetPath.isEmpty()) {
+                QStringList selected = m_panel->getSelectedPaths();
+                if (!selected.isEmpty()) targetPath = selected.first();
+            }
+            if (!targetPath.isEmpty()) {
+                if (m_panel->window()) {
+                    TitleBarWidget* titleBar = m_panel->window()->findChild<TitleBarWidget*>();
+                    if (titleBar && titleBar->tabBar()) {
+                        titleBar->tabBar()->openOrFocusTab(targetPath);
+                    }
+                }
+            }
+            break;
+        }
         case ContentPanel::ActionOpenDefault: {
             auto indexes = view->selectionModel()->selectedIndexes();
             for (const auto& idx : indexes) {

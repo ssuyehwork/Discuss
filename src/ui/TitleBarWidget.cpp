@@ -12,6 +12,11 @@
 #include <QAction>
 #include <QApplication>
 #include <QSignalBlocker>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
+#include <QFileInfo>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -25,8 +30,33 @@ TitleBarWidget::TitleBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
     : QWidget(parent) {
     setObjectName("TitleBar");
     setAttribute(Qt::WA_StyledBackground, true);
+    setAcceptDrops(true);
     setFixedHeight(34);
     initUi(hoverFilter);
+}
+
+void TitleBarWidget::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        QWidget::dragEnterEvent(event);
+    }
+}
+
+void TitleBarWidget::dropEvent(QDropEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        for (const QUrl& url : event->mimeData()->urls()) {
+            QString path = url.toLocalFile();
+            if (!path.isEmpty() && QFileInfo(path).isDir()) {
+                if (m_tabBar) {
+                    m_tabBar->openOrFocusTab(path);
+                }
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+    QWidget::dropEvent(event);
 }
 
 bool TitleBarWidget::isPinned() const {
