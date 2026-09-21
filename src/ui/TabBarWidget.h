@@ -94,6 +94,7 @@ private:
     QList<TabInfo> m_closedTabsHistory;
     QList<TabItemButton*> m_tabWidgets;
     int m_currentIndex = -1;
+    bool m_isInitializing = true;
 };
 
 } // namespace QuarkMeta

@@ -159,6 +159,7 @@ void TabBarWidget::addTab(const QString& title, const QString& url, bool switchT
     } else {
         rebuildTabsUi();
     }
+    saveStateToConfig();
 }
 
 void TabBarWidget::closeTab(int index) {
@@ -169,6 +170,7 @@ void TabBarWidget::closeTab(int index) {
         m_tabs[0].url = "computer://";
         updateTabsUiState();
         emit currentTabChanged(0, "computer://");
+        saveStateToConfig();
         return;
     }
 
@@ -181,6 +183,7 @@ void TabBarWidget::closeTab(int index) {
     }
     setCurrentIndex(m_currentIndex, true);
     emit tabClosed(index);
+    saveStateToConfig();
 }
 
 void TabBarWidget::closeOtherTabs(int index) {
@@ -248,6 +251,8 @@ void TabBarWidget::selectPreviousTab() {
 }
 
 void TabBarWidget::saveStateToConfig() {
+    if (m_isInitializing) return;
+
     QJsonArray tabArray;
     for (const auto& tab : m_tabs) {
         QJsonObject obj;
@@ -268,15 +273,25 @@ void TabBarWidget::saveStateToConfig() {
 }
 
 bool TabBarWidget::restoreStateFromConfig() {
+    m_isInitializing = true;
     QString jsonStr = AppConfig::instance().getValue("TabBar/SavedState").toString();
-    if (jsonStr.isEmpty()) return false;
+    if (jsonStr.isEmpty()) {
+        m_isInitializing = false;
+        return false;
+    }
 
     QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
-    if (!doc.isObject()) return false;
+    if (!doc.isObject()) {
+        m_isInitializing = false;
+        return false;
+    }
 
     QJsonObject stateObj = doc.object();
     QJsonArray tabArray = stateObj["tabs"].toArray();
-    if (tabArray.isEmpty()) return false;
+    if (tabArray.isEmpty()) {
+        m_isInitializing = false;
+        return false;
+    }
 
     m_tabs.clear();
     for (const auto& val : tabArray) {
@@ -302,6 +317,8 @@ bool TabBarWidget::restoreStateFromConfig() {
     }
 
     rebuildTabsUi();
+    m_isInitializing = false;
+
     if (m_currentIndex >= 0 && m_currentIndex < m_tabs.size()) {
         emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
     }
@@ -323,6 +340,7 @@ void TabBarWidget::openOrFocusTab(const QString& rawPath) {
     QString title = fi.fileName();
     if (title.isEmpty()) title = cleanTarget;
     addTab(title, cleanTarget, true);
+    saveStateToConfig();
 }
 
 void TabBarWidget::dragEnterEvent(QDragEnterEvent* event) {
@@ -381,6 +399,7 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
         QString iconKey = !m_tabs[m_currentIndex].iconKey.isEmpty() ? m_tabs[m_currentIndex].iconKey : (url.startsWith("computer://") ? "computer" : "folder_filled");
         tabBtn->setTabIcon(UiHelper::getIcon(iconKey, iconColor));
     }
+    saveStateToConfig();
 }
 
 void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
