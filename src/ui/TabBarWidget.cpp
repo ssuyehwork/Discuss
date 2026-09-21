@@ -1,7 +1,10 @@
 #include "TabBarWidget.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
+#include "ColorPicker.h"
 #include "../meta/MetadataManager.h"
+#include "../core/CoreEngine.h"
+#include "../meta/FavoriteDao.h"
 
 #include <QStyle>
 #include <QDateTime>
@@ -9,6 +12,8 @@
 #include <QContextMenuEvent>
 #include <QMenu>
 #include <QAction>
+#include <QWidgetAction>
+#include <QGridLayout>
 #include <QFileInfo>
 #include <QDir>
 #include <QDragEnterEvent>
@@ -312,9 +317,108 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
 void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
     if (index < 0 || index >= m_tabs.size()) return;
 
+    const auto& tab = m_tabs[index];
+    bool isFolder = !tab.url.startsWith("computer://") && !tab.url.isEmpty();
+
     QMenu menu(this);
     menu.setObjectName("TabContextMenu");
     UiHelper::applyMenuStyle(&menu);
+
+    if (isFolder) {
+        // 1. 颜色条组件
+        QString curColorHex = tab.color.isEmpty() ? "#888888" : tab.color;
+        QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
+        ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
+        colorPickerAction->setDefaultWidget(colorPickerWidget);
+        menu.addAction(colorPickerAction);
+
+        // 2. 图标九宫格子菜单
+        QMenu* iconMenu = menu.addMenu(UiHelper::getIcon(tab.iconKey.isEmpty() ? "folder_filled" : tab.iconKey, QColor("#EEEEEE")), "切换图标");
+        UiHelper::applyMenuStyle(iconMenu);
+
+        QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
+        QWidget* pickerWidget = new QWidget(iconMenu);
+        QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
+        pickerLayout->setContentsMargins(6, 6, 6, 6);
+        pickerLayout->setSpacing(6);
+
+        static const QList<QPair<QString, QString>> builtInIcons = {
+            {"默认文件夹", "folder_filled"}, {"照片媒体", "image_filled"}, {"相册图片", "image_picture"},
+            {"时钟历史", "clock_filled"}, {"星标收藏", "star_filled"}, {"实心星标", "star_001"},
+            {"空心星标", "star_002"}, {"爱心常用", "heart_filled"}, {"加密安全", "lock_filled"},
+            {"图书文档", "book"}, {"附加文档", "document_attach"}, {"配置管理", "settings_filled"},
+            {"网络球体", "globe_filled"}, {"主页主路径", "home_filled"}, {"标签标记", "tag_filled"},
+            {"书签指示", "bookmark_filled"}, {"音频音乐", "music_filled"}, {"视频影视", "video_filled"},
+            {"摄影相机", "camera_filled"}, {"盾牌防护", "shield_filled"}, {"物理硬盘", "hard_drive"},
+            {"云端同步", "cloud_filled"}, {"闪电极速", "zap_filled"}, {"魔法火花", "sparkles_filled"},
+            {"旗帜标记", "flag_filled"}, {"旗帜标示", "flag"}, {"礼物珍藏", "gift_filled"},
+            {"奖星勋章", "award_filled"}, {"回收废弃", "trash_filled"}, {"邮件通信", "mail_filled"},
+            {"消息通知", "message_filled"}, {"电话联系", "phone_filled"}, {"地理定位", "map_pin_filled"},
+            {"日光白天", "sun_filled"}, {"夜间月亮", "moon_filled"}, {"日历日程", "calendar_filled"},
+            {"今日任务", "today_filled"}, {"九宫网格", "grid_filled"}, {"布局排版", "layout_filled"},
+            {"数据表格", "table_filled"}, {"磁盘保存", "save_filled"}, {"魔棒工具", "wand_filled"},
+            {"附件剪辑", "paperclip"}, {"归档文件", "archive"},
+            {"OneNote笔记", "onenote"}, {"下载中心", "download"}
+        };
+
+        QColor catColor = QColor(curColorHex);
+        QList<QPair<QPushButton*, QString>> iconButtons;
+        int row = 0, col = 0;
+        for (const auto& pair : builtInIcons) {
+            QString iconKey = pair.second;
+            QPushButton* btn = new QPushButton(pickerWidget);
+            btn->setFixedSize(28, 28);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setObjectName("FavPickerIconBtn");
+            btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
+            btn->setIconSize(QSize(18, 18));
+            pickerLayout->addWidget(btn, row, col);
+
+            iconButtons.append({btn, iconKey});
+
+            connect(btn, &QPushButton::clicked, this, [this, index, iconKey]() {
+                if (index >= 0 && index < m_tabs.size()) {
+                    m_tabs[index].iconKey = iconKey;
+                    updateTabsUiState();
+                    FavoriteDao::updateFavorite(m_tabs[index].url, iconKey, m_tabs[index].color);
+                }
+            });
+
+            col++;
+            if (col >= 5) { col = 0; row++; }
+        }
+
+        pickerWidget->setLayout(pickerLayout);
+        pickerAction->setDefaultWidget(pickerWidget);
+        iconMenu->addAction(pickerAction);
+
+        connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [this, index, iconMenu, iconButtons](const QString& hexColor) {
+            if (index < 0 || index >= m_tabs.size()) return;
+
+            QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
+            m_tabs[index].color = finalColor;
+
+            QString iconKey = m_tabs[index].iconKey.isEmpty() ? "folder_filled" : m_tabs[index].iconKey;
+            QString targetPath = m_tabs[index].url;
+
+            iconMenu->setIcon(UiHelper::getIcon(iconKey, QColor(finalColor)));
+            for (const auto& btnPair : iconButtons) {
+                btnPair.first->setIcon(UiHelper::getIcon(btnPair.second, QColor(finalColor), 18));
+            }
+
+            if (!targetPath.isEmpty()) {
+                AppCommand cmd;
+                cmd.type = AppCommandType::SetColor;
+                cmd.targetPaths = {targetPath};
+                cmd.params["color"] = finalColor;
+                CoreEngine::instance().executeCommand(cmd);
+            }
+
+            updateTabsUiState();
+        });
+
+        menu.addSeparator();
+    }
 
     QAction* actRefresh = menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 16), "重新加载 (F5)");
     QAction* actDuplicate = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 16), "复制标签页");
