@@ -1,6 +1,7 @@
 #include "TabBarWidget.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
+#include "../meta/MetadataManager.h"
 
 #include <QStyle>
 #include <QDateTime>
@@ -8,6 +9,8 @@
 #include <QContextMenuEvent>
 #include <QMenu>
 #include <QAction>
+#include <QFileInfo>
+#include <QDir>
 
 namespace QuarkMeta {
 
@@ -229,15 +232,36 @@ void TabBarWidget::selectPreviousTab() {
 
 void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& url) {
     if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
-    if (m_tabs[m_currentIndex].title == title && m_tabs[m_currentIndex].url == url) return;
 
-    m_tabs[m_currentIndex].title = title.isEmpty() ? "此电脑" : title;
+    QString folderName = title;
+    if (url == "computer://" || url.isEmpty()) {
+        folderName = "此电脑";
+    } else if (title.contains("/") || title.contains("\\")) {
+        QString cleanPath = QDir::cleanPath(url);
+        QFileInfo fi(cleanPath);
+        folderName = fi.fileName();
+        if (folderName.isEmpty()) {
+            folderName = cleanPath;
+        }
+    }
+
+    QString colorHex;
+    if (!url.startsWith("computer://") && !url.isEmpty()) {
+        auto meta = MetadataManager::instance().getMeta(url.toStdWString());
+        colorHex = QString::fromStdWString(meta.manualColor);
+    }
+
+    if (m_tabs[m_currentIndex].title == folderName && m_tabs[m_currentIndex].url == url && m_tabs[m_currentIndex].color == colorHex) return;
+
+    m_tabs[m_currentIndex].title = folderName.isEmpty() ? "此电脑" : folderName;
     m_tabs[m_currentIndex].url = url;
+    m_tabs[m_currentIndex].color = colorHex;
 
     if (m_currentIndex < m_tabWidgets.size()) {
         auto tabBtn = m_tabWidgets[m_currentIndex];
         tabBtn->setTabTitle(m_tabs[m_currentIndex].title);
-        tabBtn->setTabIcon(UiHelper::getIcon(url.startsWith("computer://") ? "computer" : "folder_filled", QColor("#EEEEEE")));
+        QColor iconColor = !colorHex.isEmpty() ? QColor(colorHex) : QColor("#EEEEEE");
+        tabBtn->setTabIcon(UiHelper::getIcon(url.startsWith("computer://") ? "computer" : "folder_filled", iconColor));
     }
 }
 
@@ -290,12 +314,20 @@ void TabBarWidget::updateTabsUiState() {
     }
 
     for (int i = 0; i < m_tabs.size(); ++i) {
-        const auto& tab = m_tabs[i];
+        auto& tab = m_tabs[i];
+        if (!tab.url.startsWith("computer://") && !tab.url.isEmpty()) {
+            auto meta = MetadataManager::instance().getMeta(tab.url.toStdWString());
+            tab.color = QString::fromStdWString(meta.manualColor);
+        } else {
+            tab.color.clear();
+        }
+
         auto tabBtn = m_tabWidgets[i];
         tabBtn->setIndex(i);
         tabBtn->setTabTitle(tab.title);
-        tabBtn->setTabIcon(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled",
-                                                tab.active ? QColor("#EEEEEE") : QColor("#888888")));
+
+        QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
+        tabBtn->setTabIcon(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled", iconColor));
         tabBtn->setActive(tab.active);
     }
 }
@@ -311,11 +343,18 @@ void TabBarWidget::rebuildTabsUi() {
     }
 
     for (int i = 0; i < m_tabs.size(); ++i) {
-        const auto& tab = m_tabs[i];
+        auto& tab = m_tabs[i];
+        if (!tab.url.startsWith("computer://") && !tab.url.isEmpty()) {
+            auto meta = MetadataManager::instance().getMeta(tab.url.toStdWString());
+            tab.color = QString::fromStdWString(meta.manualColor);
+        } else {
+            tab.color.clear();
+        }
+
         TabItemButton* tabItem = new TabItemButton(i, this);
         tabItem->setTabTitle(tab.title);
-        tabItem->setTabIcon(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled",
-                                                tab.active ? QColor("#EEEEEE") : QColor("#888888")));
+        QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
+        tabItem->setTabIcon(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled", iconColor));
         tabItem->setActive(tab.active);
 
         connect(tabItem, &TabItemButton::closeClicked, this, [this](int idx) {

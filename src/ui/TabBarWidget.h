@@ -14,6 +14,7 @@ struct TabInfo {
     QString id;
     QString title;
     QString url;
+    QString color;
     bool active = false;
 };
 

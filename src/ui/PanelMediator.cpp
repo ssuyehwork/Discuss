@@ -203,9 +203,12 @@ void PanelMediator::setupConnections() {
             NavigationService::instance().navigateTo(path);
         });
 
-        if (filterPanel && contentPanel->columnView()) {
-            connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, filterPanel, [filterPanel](const QString&) {
-                filterPanel->clearAllFilters(false);
+        if (contentPanel->columnView()) {
+            connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, this, [filterPanel](const QString& path) {
+                if (filterPanel) {
+                    filterPanel->clearAllFilters(false);
+                }
+                NavigationService::instance().navigateTo(path);
             });
         }
 
