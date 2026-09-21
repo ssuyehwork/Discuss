@@ -29,10 +29,6 @@ TabBarWidget::TabBarWidget(QWidget* parent) : QWidget(parent) {
     m_btnNewTab->setIconSize(QSize(14, 14));
     m_btnNewTab->setObjectName("NewTabBtn");
     m_btnNewTab->setProperty("tooltipText", "新建标签页 (Ctrl+T)");
-    m_btnNewTab->setStyleSheet(
-        "QPushButton#NewTabBtn { background: transparent; border: none; border-radius: 4px; }"
-        "QPushButton#NewTabBtn:hover { background-color: #3E3E42; }"
-    );
 
     connect(m_btnNewTab, &QPushButton::clicked, this, [this]() {
         addTab("此电脑", "computer://", true);
@@ -127,6 +123,8 @@ void TabBarWidget::rebuildTabsUi() {
     for (int i = 0; i < m_tabs.size(); ++i) {
         const auto& tab = m_tabs[i];
         QWidget* tabItem = new QWidget(this);
+        tabItem->setObjectName("TabItem");
+        tabItem->setProperty("active", tab.active);
         tabItem->setFixedHeight(28);
         tabItem->setCursor(Qt::PointingHandCursor);
 
@@ -135,24 +133,23 @@ void TabBarWidget::rebuildTabsUi() {
         itemLayout->setSpacing(6);
 
         QLabel* iconLabel = new QLabel(tabItem);
+        iconLabel->setObjectName("TabIconLabel");
         iconLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
         iconLabel->setFixedSize(14, 14);
         iconLabel->setPixmap(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled",
                                                 tab.active ? QColor("#EEEEEE") : QColor("#888888")).pixmap(14, 14));
 
         QLabel* titleLabel = new QLabel(tab.title, tabItem);
+        titleLabel->setObjectName("TabTitleLabel");
+        titleLabel->setProperty("active", tab.active);
         titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-        titleLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(tab.active ? "#FFFFFF" : "#AAAAAA"));
 
         QPushButton* btnClose = new QPushButton(tabItem);
+        btnClose->setObjectName("TabCloseBtn");
         btnClose->setFocusPolicy(Qt::NoFocus);
         btnClose->setFixedSize(16, 16);
         btnClose->setIcon(UiHelper::getIcon("close", QColor("#888888")));
         btnClose->setIconSize(QSize(10, 10));
-        btnClose->setStyleSheet(
-            "QPushButton { background: transparent; border: none; border-radius: 8px; }"
-            "QPushButton:hover { background-color: #555555; }"
-        );
 
         connect(btnClose, &QPushButton::clicked, this, [this, i]() {
             closeTab(i);
@@ -162,16 +159,9 @@ void TabBarWidget::rebuildTabsUi() {
         itemLayout->addWidget(titleLabel, 0, Qt::AlignVCenter);
         itemLayout->addWidget(btnClose, 0, Qt::AlignVCenter);
 
-        if (tab.active) {
-            tabItem->setStyleSheet(
-                "QWidget { background-color: #2D2D2D; border-top-left-radius: 6px; border-top-right-radius: 6px; border: 1px solid #3E3E42; border-bottom: none; }"
-            );
-        } else {
-            tabItem->setStyleSheet(
-                "QWidget { background-color: #1E1E1E; border-top-left-radius: 6px; border-top-right-radius: 6px; border: 1px solid transparent; }"
-                "QWidget:hover { background-color: #252526; }"
-            );
-        }
+        // 刷一下属性驱动样式更新
+        tabItem->style()->unpolishing(tabItem);
+        tabItem->style()->polishing(tabItem);
 
         tabItem->installEventFilter(this);
         m_tabWidgets.append(tabItem);
