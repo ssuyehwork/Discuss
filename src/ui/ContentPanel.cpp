@@ -336,8 +336,19 @@ void ContentPanel::appendPaths(const QStringList& paths, int reqId) {
     if (m_dataLoader) m_dataLoader->appendPaths(paths, reqId);
 }
 
+QString ContentPanel::activePath() const {
+    if (m_currentViewMode == ColumnView && m_columnView) {
+        ColumnViewPane* pane = m_columnView->activePane();
+        if (pane && !pane->currentPath().isEmpty()) {
+            return pane->currentPath();
+        }
+    }
+    return m_currentPath;
+}
+
 bool ContentPanel::canPaste(const QString& targetOverride) const {
-    return ClipboardService::instance().canPaste(targetOverride.isEmpty() ? m_currentPath : targetOverride);
+    QString target = !targetOverride.isEmpty() ? targetOverride : activePath();
+    return ClipboardService::instance().canPaste(target);
 }
 
 void ContentPanel::performCopy(bool cutMode) {
@@ -346,7 +357,8 @@ void ContentPanel::performCopy(bool cutMode) {
 }
 
 void ContentPanel::performPaste() {
-    if (canPaste()) ClipboardService::instance().executePaste(m_currentPath, this);
+    QString target = activePath();
+    if (canPaste(target)) ClipboardService::instance().executePaste(target, this);
 }
 
 bool ContentPanel::resolvePasteDestination() {

@@ -110,7 +110,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     setMinimumWidth(220);
 
     QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 1, 0);
+    layout->setContentsMargins(0, 1, 1, 0);
     layout->setSpacing(0);
 
     m_paneScrollArea = new QScrollArea(this);
@@ -237,6 +237,19 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, updateSectionCountsAndHints);
     connect(m_fileProxyModel, &QAbstractItemModel::layoutChanged, this, updateSectionCountsAndHints);
 
+    connect(m_folderListView, &DropListView::blankSpaceClicked, this, [this]() {
+        int paneIdx = property("paneIndex").toInt();
+        if (m_contentPanel && m_contentPanel->columnView()) {
+            m_contentPanel->columnView()->activatePaneFromBlankClick(paneIdx);
+        }
+    });
+    connect(m_listView, &DropListView::blankSpaceClicked, this, [this]() {
+        int paneIdx = property("paneIndex").toInt();
+        if (m_contentPanel && m_contentPanel->columnView()) {
+            m_contentPanel->columnView()->activatePaneFromBlankClick(paneIdx);
+        }
+    });
+
     connect(m_folderListView, &DropListView::blankSpaceDoubleClicked, this, [this]() {
         int paneIdx = property("paneIndex").toInt();
         emit blankSpaceDoubleClicked(paneIdx);
@@ -245,6 +258,11 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         int paneIdx = property("paneIndex").toInt();
         emit blankSpaceDoubleClicked(paneIdx);
     });
+
+    m_paneScrollArea->installEventFilter(this);
+    m_panel->installEventFilter(this);
+    m_folderListView->installEventFilter(this);
+    m_listView->installEventFilter(this);
 
     if (m_contentPanel) {
         m_folderListView->installEventFilter(m_contentPanel);
@@ -287,47 +305,105 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         emit selectionChanged();
     });
 
-    // 文件夹点击
+    // 文件夹点击（仅选中高亮，不清空右侧子列）
     connect(m_folderListView, &QListView::clicked, this, [this](const QModelIndex& index) {
         QString itemPath = index.data(PathRole).toString();
         int paneIdx = property("paneIndex").toInt();
-        emit folderSelected(itemPath, paneIdx);
+        emit folderClicked(itemPath, paneIdx);
     });
 
-    // 文件点击
+    // 文件点击（仅选中高亮，不清空右侧子列）
     connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
         QString itemPath = index.data(PathRole).toString();
         bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
         int paneIdx = property("paneIndex").toInt();
         if (isDir) {
-            emit folderSelected(itemPath, paneIdx);
+            emit folderClicked(itemPath, paneIdx);
         } else {
-            emit fileSelected(itemPath, paneIdx);
+            emit fileClicked(itemPath, paneIdx);
         }
     });
 
+    // 文件夹双击（触发展开与挂载新列）
     connect(m_folderListView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
-        if (m_contentPanel && index.isValid()) {
-            m_contentPanel->onDoubleClicked(index);
+        if (index.isValid()) {
+            QString itemPath = index.data(PathRole).toString();
+            int paneIdx = property("paneIndex").toInt();
+            emit folderExpandRequested(itemPath, paneIdx);
         }
     });
+
+    // 文件/子文件夹双击
     connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
-        if (m_contentPanel && index.isValid()) {
-            m_contentPanel->onDoubleClicked(index);
+        if (index.isValid()) {
+            QString itemPath = index.data(PathRole).toString();
+            bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
+            int paneIdx = property("paneIndex").toInt();
+            if (isDir) {
+                emit folderExpandRequested(itemPath, paneIdx);
+            } else if (m_contentPanel) {
+                m_contentPanel->onDoubleClicked(index);
+            }
         }
     });
 }
 
+void ColumnViewPane::setActive(bool active) {
+    if (m_isActive != active) {
+        m_isActive = active;
+        update();
+    }
+}
+
 void ColumnViewPane::paintEvent(QPaintEvent* event) {
     QWidget::paintEvent(event);
+    QPainter painter(this);
+    if (m_isActive) {
+        painter.setPen(QPen(QColor("#3498db"), 1));
+        painter.drawLine(0, 0, width(), 0);
+    }
     if (m_folderListView && m_folderListView->isVisible()) {
         int folderBottom = m_folderListView->y() + m_folderListView->height();
         if (folderBottom >= height()) {
-            QPainter painter(this);
             painter.setPen(QPen(QColor("#3498db"), 1));
             painter.drawLine(0, height() - 1, width(), height() - 1);
         }
     }
+}
+
+bool ColumnViewPane::eventFilter(QObject* obj, QEvent* event) {
+    if (event && event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+        if (mouseEvent->button() == Qt::LeftButton && (obj == m_paneScrollArea || obj == m_panel)) {
+            int paneIdx = property("paneIndex").toInt();
+            if (m_contentPanel && m_contentPanel->columnView()) {
+                m_contentPanel->columnView()->activatePaneFromBlankClick(paneIdx);
+            }
+        }
+    }
+
+    if (event && event->type() == QEvent::KeyPress && (obj == m_folderListView || obj == m_listView)) {
+        QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+        int paneIdx = property("paneIndex").toInt();
+        if (keyEvent->key() == Qt::Key_Right || keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            DropListView* view = qobject_cast<DropListView*>(obj);
+            if (view && view->currentIndex().isValid()) {
+                QModelIndex idx = view->currentIndex();
+                QString itemPath = idx.data(PathRole).toString();
+                bool isDir = (idx.data(TypeRole).toString() == "folder") || idx.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
+                if (isDir && !itemPath.isEmpty()) {
+                    emit folderExpandRequested(itemPath, paneIdx);
+                    return true;
+                }
+            }
+        } else if (keyEvent->key() == Qt::Key_Left) {
+            if (paneIdx > 0 && m_contentPanel && m_contentPanel->columnView()) {
+                m_contentPanel->columnView()->focusPane(paneIdx - 1);
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 DropListView* ColumnViewPane::listView() const { return m_listView; }
@@ -522,6 +598,30 @@ void ColumnViewPane::tryPendingSelection() {
     }
 }
 
+void ColumnViewWidget::setActivePaneIndex(int newIndex) {
+    if (newIndex < 0 || newIndex >= m_panes.size()) return;
+    m_activePaneIndex = newIndex;
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (m_panes[i]) {
+            m_panes[i]->setActive(i == newIndex);
+        }
+    }
+}
+
+void ColumnViewWidget::activatePaneFromBlankClick(int paneIndex) {
+    if (paneIndex >= 0 && paneIndex < m_panes.size()) {
+        setActivePaneIndex(paneIndex);
+        ColumnViewPane* pane = m_panes[paneIndex];
+        if (pane) {
+            pane->clearSelection();
+            clearOtherSelections(paneIndex);
+            focusPane(paneIndex);
+            emit selectionChanged();
+            emit pathNavigated(pane->currentPath());
+        }
+    }
+}
+
 void ColumnViewPane::clearSelection() {
     if (m_folderListView) {
         m_folderListView->clearSelection();
@@ -637,6 +737,20 @@ ColumnViewPane* ColumnViewWidget::rightmostPane() const {
     return m_panes.isEmpty() ? nullptr : m_panes.last();
 }
 
+void ColumnViewWidget::focusPane(int paneIndex) {
+    if (paneIndex >= 0 && paneIndex < m_panes.size()) {
+        setActivePaneIndex(paneIndex);
+        ColumnViewPane* pane = m_panes[paneIndex];
+        if (pane) {
+            DropListView* view = pane->listView();
+            if (pane->folderListView() && pane->folderListView()->selectionModel() && pane->folderListView()->selectionModel()->hasSelection()) {
+                view = pane->folderListView();
+            }
+            if (view) view->setFocus();
+        }
+    }
+}
+
 bool ColumnViewWidget::containsPath(const QString& path) const {
     if (path.isEmpty()) return false;
     QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(path));
@@ -714,7 +828,7 @@ void ColumnViewWidget::setRootPath(const QString& path) {
 
     if (path == "computer://") {
         appendColumn("computer://");
-        m_activePaneIndex = 0;
+        setActivePaneIndex(0);
         updatePaneWidths();
         return;
     }
@@ -754,7 +868,7 @@ void ColumnViewWidget::setRootPath(const QString& path) {
         m_panes.last()->selectItemByPath(targetFilePath);
     }
 
-    m_activePaneIndex = m_panes.size() - 1;
+    setActivePaneIndex(m_panes.size() - 1);
 
     updatePaneWidths();
     updateParentHighlights();
@@ -790,7 +904,6 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     int newIdx = m_panes.size();
     ColumnViewPane* pane = new ColumnViewPane(path, m_contentPanel, m_container);
     pane->setProperty("paneIndex", newIdx);
-    m_activePaneIndex = newIdx;
 
     connect(pane, &ColumnViewPane::blankSpaceDoubleClicked, this, [this](int paneIdx) {
         goUpColumnFromIndex(paneIdx);
@@ -810,43 +923,61 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     connect(pane, &ColumnViewPane::selectionChanged, this, [this, pane]() {
-        m_activePaneIndex = pane->property("paneIndex").toInt();
+        setActivePaneIndex(pane->property("paneIndex").toInt());
         emit selectionChanged();
         if (rightmostPane() && rightmostPane()->model()) {
             emit activeColumnRecordsChanged(rightmostPane()->model()->allRecords());
         }
     });
 
-    connect(pane, &ColumnViewPane::folderSelected, this, [this](const QString& folderPath, int paneIdx) {
+    connect(pane, &ColumnViewPane::folderClicked, this, [this, pane](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        clearOtherSelections(paneIdx);
+        emit selectionChanged();
+        if (pane) {
+            emit pathNavigated(pane->currentPath());
+        }
+    });
+
+    connect(pane, &ColumnViewPane::fileClicked, this, [this, pane](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        clearOtherSelections(paneIdx);
+        emit selectionChanged();
+        if (pane) {
+            emit pathNavigated(pane->currentPath());
+        }
+    });
+
+    auto handleFolderExpand = [this](const QString& folderPath, int paneIdx) {
         if (paneIdx + 1 < m_panes.size() &&
             QDir::cleanPath(m_panes[paneIdx + 1]->currentPath()) == QDir::cleanPath(folderPath)) {
-            dismissSubColumns(paneIdx + 1);
-            m_activePaneIndex = paneIdx + 1;
+            setActivePaneIndex(paneIdx + 1);
+            focusPane(paneIdx + 1);
             emit selectionChanged();
             return;
         }
 
         dismissSubColumns(paneIdx);
-        // 保持父列高亮：仅清空 paneIdx 右侧深层列的选区，保留 paneIdx 及其左侧父列的高亮
-        for (int i = paneIdx + 1; i < m_panes.size(); ++i) {
-            m_panes[i]->clearSelection();
-        }
+        clearOtherSelections(paneIdx);
         appendColumn(folderPath);
         emit pathNavigated(folderPath);
         if (m_contentPanel) {
             m_contentPanel->recalculateAndEmitStats();
         }
-    });
+    };
+
+    connect(pane, &ColumnViewPane::folderExpandRequested, this, handleFolderExpand);
+    connect(pane, &ColumnViewPane::folderSelected, this, handleFolderExpand);
 
     connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
-        m_activePaneIndex = paneIdx;
-        dismissSubColumns(paneIdx);
-        clearOtherSelections(paneIdx);
+        setActivePaneIndex(paneIdx);
+        emit selectionChanged();
         emit pathNavigated(filePath);
     });
 
     m_panes.append(pane);
     m_layout->addWidget(pane);
+    setActivePaneIndex(newIdx);
     updatePaneWidths();
     updateParentHighlights();
     for (int i = 0; i < m_panes.size(); ++i) {
@@ -888,17 +1019,19 @@ void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {
 void ColumnViewWidget::updateParentHighlights() {
     for (int i = 0; i < m_panes.size(); ++i) {
         ColumnViewPane* parentPane = m_panes[i];
-        if (!parentPane || !parentPane->proxyModel()) continue;
+        if (!parentPane) continue;
 
         ColumnViewPane* childPane = (i + 1 < m_panes.size()) ? m_panes[i + 1] : nullptr;
         QString childPath = childPane ? QDir::toNativeSeparators(QDir::cleanPath(childPane->currentPath())) : "";
-        FilterProxyModel* model = parentPane->proxyModel();
 
-        for (int r = 0; r < model->rowCount(); ++r) {
-            QModelIndex idx = model->index(r, 0);
-            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
-            bool isExpandedParent = !childPath.isEmpty() && (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
-            model->setData(idx, isExpandedParent, IsParentExpandedRole);
+        for (FilterProxyModel* model : {parentPane->folderProxyModel(), parentPane->fileProxyModel()}) {
+            if (!model) continue;
+            for (int r = 0; r < model->rowCount(); ++r) {
+                QModelIndex idx = model->index(r, 0);
+                QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+                bool isExpandedParent = !childPath.isEmpty() && (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
+                model->setData(idx, isExpandedParent, IsParentExpandedRole);
+            }
         }
     }
 }
@@ -980,7 +1113,7 @@ void ColumnViewWidget::goUpColumnFromIndex(int paneIndex) {
             dismissSubColumns(m_panes.size() - 2);
             ColumnViewPane* newActive = rightmostPane();
             if (newActive) {
-                m_activePaneIndex = m_panes.size() - 1;
+                setActivePaneIndex(m_panes.size() - 1);
                 emit pathNavigated(newActive->currentPath());
                 emit selectionChanged();
             }
@@ -993,7 +1126,7 @@ void ColumnViewWidget::goUpColumnFromIndex(int paneIndex) {
         dismissSubColumns(paneIndex);
         ColumnViewPane* newActive = rightmostPane();
         if (newActive) {
-            m_activePaneIndex = m_panes.size() - 1;
+            setActivePaneIndex(m_panes.size() - 1);
             emit pathNavigated(newActive->currentPath());
             emit selectionChanged();
         }

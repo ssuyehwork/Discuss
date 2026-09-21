@@ -20,9 +20,11 @@ protected:
 
 signals:
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+    void blankSpaceClicked();
     void blankSpaceDoubleClicked();
 
 protected:
+    void mousePressEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
 };
 

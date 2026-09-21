@@ -1,65 +1,135 @@
-# ContentKeyHandler Implementation Plan
+# QuarkMeta Architecture/Implementation Plan/ContentKeyHandler.md
 
-## Overview
-This plan fixes the F4 (Repeat Last Operation) color tagging feature in `src/ui/controllers/ContentKeyHandler.cpp` and `src/ui/controllers/ContentContextMenu.cpp`. Previously, F4 set `ColorRole` on target items but omitted updating `Qt::DecorationRole` via `ShellIconManager::getFileIcon(path, 128)`, causing the view item thumbnails/icons not to repaint immediately with the newly applied color badge.
+## 1. Overview（概述与解决的问题）
 
-## Modified Files List
-- `src/ui/controllers/ContentContextMenu.cpp`
-- `src/ui/controllers/ContentKeyHandler.cpp`
+### 1.1 核心问题定位
+1. **`Ctrl + V` 与右键菜单粘贴通道分裂（违背 SSOT 契约）**：
+   - 右键菜单点击“粘贴”时，调用的是 `ContentPanel::performPaste()`，已准确走 `activePath()`（第二列 `G:\T 图片`），因此**右键菜单粘贴完全正确**；
+   - 键盘按下 `Ctrl + V` 时，`ContentKeyHandler.cpp` 违背了《AGENTS.md》第 2.4 条【核心通用行为 SSOT 入口字典】，没有复用 `performPaste()`，而是另起炉灶手写了一套粘贴触发逻辑，在底层依然传导了老旧的 `m_currentPath`（第三列 `J 截图`），导致键盘粘贴被错误地灌回第三列，引发同名文件冲突弹窗；
+2. **定焦父列时深层子列残留虚焦高亮**：
+   在第二列定焦时，第三列先前被复制的文件（`PixPin_...png`）依然挂着蓝色选中底色，造成视觉焦点与操作目标产生严重混淆。
 
-## Detailed Line-by-Line Changes
+### 1.2 解决方案
+1. **彻底物理收敛至 `performPaste()`**：
+   将 `ContentKeyHandler.cpp` 中 `Ctrl + C`、`Ctrl + X`、`Ctrl + V` 的局部手写逻辑彻底物理删除，100% 收敛至调用已验证完全正确的官方 SSOT 入口：`m_panel->performCopy(...)` 和 `m_panel->performPaste()`；
+2. **激活列时物理清除右侧深层列的旧选区**：
+   在 `ColumnViewWidget.cpp` 中，无论是点击条目（`folderClicked` / `fileClicked`）还是点击空白处（`activatePaneFromBlankClick`），在确立第 $k$ 列为活跃列的同时，调用已有的 `clearOtherSelections(k)` 清空第 $k+1 \dots N$ 列的遗留选区。
 
-### 1. `src/ui/controllers/ContentContextMenu.cpp`
+---
 
-```diff
+## 2. Modified Files List（影响文件清单）
+1. `src/ui/controllers/ContentKeyHandler.cpp`（收敛 `Ctrl+C/X/V` 快捷键至 `ContentPanel` 官方入口）
+2. `src/ui/ColumnViewWidget.cpp`（激活父列时清空右侧子列旧选区，消除视觉双高亮）
+
+---
+
+## 3. Detailed Line-by-Line Changes（精准替换块）
+
+### 3.1 `src/ui/controllers/ContentKeyHandler.cpp`
+
+```
 <<<<<<< SEARCH
-#include "../../meta/FavoriteDao.h"
-#include "../../crypto/EncryptionManager.h"
-#include "../../core/LastOperationManager.h"
+        if (keyEvent->key() == Qt::Key_C && !(keyEvent->modifiers() & Qt::ShiftModifier)) {
+            ClipboardService::instance().copyItems(m_panel->getSelectedPaths());
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_X) {
+            ClipboardService::instance().cutItems(m_panel->getSelectedPaths());
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_V) {
+            if (m_panel->canPaste()) {
+                ClipboardService::instance().executePaste(m_panel->currentPath(), m_panel);
+            }
+            return true;
+        }
 =======
-#include "../../meta/FavoriteDao.h"
-#include "../../crypto/EncryptionManager.h"
-#include "../../core/LastOperationManager.h"
-#include "../ShellIconManager.h"
+        if (keyEvent->key() == Qt::Key_C && !(keyEvent->modifiers() & Qt::ShiftModifier)) {
+            m_panel->performCopy(false);
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_X) {
+            m_panel->performCopy(true);
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_V) {
+            m_panel->performPaste();
+            return true;
+        }
 >>>>>>> REPLACE
 ```
 
-```diff
+---
+
+### 3.2 `src/ui/ColumnViewWidget.cpp`
+
+#### 替换块 1：点击空白处定焦时，清空右侧深层列的旧选区
+```
 <<<<<<< SEARCH
-                    } else if (type == LastOperationType::SetColor) {
-                        m_panel->getProxyModel()->setData(idx, LastOperationManager::instance().color(), ColorRole);
-                    } else if (type == LastOperationType::PasteTags) {
+void ColumnViewWidget::activatePaneFromBlankClick(int paneIndex) {
+    if (paneIndex >= 0 && paneIndex < m_panes.size()) {
+        setActivePaneIndex(paneIndex);
+        ColumnViewPane* pane = m_panes[paneIndex];
+        if (pane) {
+            pane->clearSelection();
+            focusPane(paneIndex);
+            emit selectionChanged();
+            emit pathNavigated(pane->currentPath());
+        }
+    }
+}
 =======
-                    } else if (type == LastOperationType::SetColor) {
-                        QString colorVal = LastOperationManager::instance().color();
-                        m_panel->getProxyModel()->setData(idx, colorVal, ColorRole);
-                        QString path = idx.data(PathRole).toString();
-                        QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
-                        m_panel->getProxyModel()->setData(idx, coloredIcon, Qt::DecorationRole);
-                    } else if (type == LastOperationType::PasteTags) {
+void ColumnViewWidget::activatePaneFromBlankClick(int paneIndex) {
+    if (paneIndex >= 0 && paneIndex < m_panes.size()) {
+        setActivePaneIndex(paneIndex);
+        ColumnViewPane* pane = m_panes[paneIndex];
+        if (pane) {
+            pane->clearSelection();
+            clearOtherSelections(paneIndex);
+            focusPane(paneIndex);
+            emit selectionChanged();
+            emit pathNavigated(pane->currentPath());
+        }
+    }
+}
 >>>>>>> REPLACE
 ```
 
-### 2. `src/ui/controllers/ContentKeyHandler.cpp`
-
-```diff
+#### 替换块 2：点击条目定焦时，清空右侧深层列的旧选区
+```
 <<<<<<< SEARCH
-                } else if (type == LastOperationType::SetColor) {
-                    m_panel->getProxyModel()->setData(targetIdx, LastOperationManager::instance().color(), ColorRole);
-                } else if (type == LastOperationType::PasteTags) {
+    connect(pane, &ColumnViewPane::folderClicked, this, [this, pane](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        emit selectionChanged();
+        if (pane) {
+            emit pathNavigated(pane->currentPath());
+        }
+    });
+
+    connect(pane, &ColumnViewPane::fileClicked, this, [this, pane](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        emit selectionChanged();
+        if (pane) {
+            emit pathNavigated(pane->currentPath());
+        }
+    });
 =======
-                } else if (type == LastOperationType::SetColor) {
-                    QString colorVal = LastOperationManager::instance().color();
-                    m_panel->getProxyModel()->setData(targetIdx, colorVal, ColorRole);
-                    QString path = targetIdx.data(PathRole).toString();
-                    QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
-                    m_panel->getProxyModel()->setData(targetIdx, coloredIcon, Qt::DecorationRole);
-                } else if (type == LastOperationType::PasteTags) {
+    connect(pane, &ColumnViewPane::folderClicked, this, [this, pane](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        clearOtherSelections(paneIdx);
+        emit selectionChanged();
+        if (pane) {
+            emit pathNavigated(pane->currentPath());
+        }
+    });
+
+    connect(pane, &ColumnViewPane::fileClicked, this, [this, pane](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        clearOtherSelections(paneIdx);
+        emit selectionChanged();
+        if (pane) {
+            emit pathNavigated(pane->currentPath());
+        }
+    });
 >>>>>>> REPLACE
 ```
-
-## Build & Verification Steps
-1. Perform a color tagging operation (e.g. via `Alt+1` or Color Picker).
-2. Select a different file or folder item in ContentPanel.
-3. Press `F4` (or trigger "Repeat Last Operation" from context menu).
-4. Verify that `ColorRole` and `Qt::DecorationRole` update synchronously, immediately repainting the color badge icon on the item card/row.

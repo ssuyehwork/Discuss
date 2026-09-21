@@ -452,17 +452,15 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
     // 6. Ctrl + C / X / V
     if (keyEvent->modifiers() & Qt::ControlModifier) {
         if (keyEvent->key() == Qt::Key_C && !(keyEvent->modifiers() & Qt::ShiftModifier)) {
-            ClipboardService::instance().copyItems(m_panel->getSelectedPaths());
+            m_panel->performCopy(false);
             return true;
         }
         if (keyEvent->key() == Qt::Key_X) {
-            ClipboardService::instance().cutItems(m_panel->getSelectedPaths());
+            m_panel->performCopy(true);
             return true;
         }
         if (keyEvent->key() == Qt::Key_V) {
-            if (m_panel->canPaste()) {
-                ClipboardService::instance().executePaste(m_panel->currentPath(), m_panel);
-            }
+            m_panel->performPaste();
             return true;
         }
     }

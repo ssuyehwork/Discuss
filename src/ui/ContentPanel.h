@@ -76,6 +76,7 @@ public:
 
     // 1. 状态与配置查询
     QString currentPath() const { return m_currentPath; }
+    QString activePath() const;
     bool isRecursive() const { return m_isRecursive; }
     int zoomLevel() const { return m_zoomLevel; }
     ViewMode currentViewMode() const { return m_currentViewMode; }
