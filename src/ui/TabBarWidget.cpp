@@ -318,15 +318,13 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
     if (index < 0 || index >= m_tabs.size()) return;
 
     const auto& tab = m_tabs[index];
-    bool isFolder = !tab.url.startsWith("computer://") && !tab.url.isEmpty();
 
     QMenu menu(this);
     menu.setObjectName("TabContextMenu");
     UiHelper::applyMenuStyle(&menu);
 
-    if (isFolder) {
-        // 1. 颜色条组件
-        QString curColorHex = tab.color.isEmpty() ? "#888888" : tab.color;
+    // 1. 颜色条组件（所有标签页无条件展示）
+    QString curColorHex = tab.color.isEmpty() ? "#888888" : tab.color;
         QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
         ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
         colorPickerAction->setDefaultWidget(colorPickerWidget);
@@ -406,7 +404,7 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
                 btnPair.first->setIcon(UiHelper::getIcon(btnPair.second, QColor(finalColor), 18));
             }
 
-            if (!targetPath.isEmpty()) {
+            if (!targetPath.isEmpty() && !targetPath.startsWith("computer://")) {
                 AppCommand cmd;
                 cmd.type = AppCommandType::SetColor;
                 cmd.targetPaths = {targetPath};
@@ -418,7 +416,6 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
         });
 
         menu.addSeparator();
-    }
 
     QAction* actRefresh = menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 16), "重新加载 (F5)");
     QAction* actDuplicate = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 16), "复制标签页");
