@@ -160,8 +160,8 @@ void TabBarWidget::rebuildTabsUi() {
         itemLayout->addWidget(btnClose, 0, Qt::AlignVCenter);
 
         // 刷一下属性驱动样式更新
-        tabItem->style()->unpolishing(tabItem);
-        tabItem->style()->polishing(tabItem);
+        tabItem->style()->unpolish(tabItem);
+        tabItem->style()->polish(tabItem);
 
         tabItem->installEventFilter(this);
         m_tabWidgets.append(tabItem);
