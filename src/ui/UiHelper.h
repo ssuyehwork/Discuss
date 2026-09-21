@@ -29,6 +29,8 @@ class QLineEdit;
 
 namespace QuarkMeta {
 
+struct ItemRecord;
+
 /**
  * @brief UI 辅助兼容及转发层 (完全解耦重构版)
  */
@@ -57,6 +59,8 @@ public:
     static inline bool isGraphicsFile(const QString& ext) {
         return ColorPaletteEngine::isGraphicsFile(ext);
     }
+
+    static bool hasPhysicalThumbnail(const ItemRecord& record);
 
     static inline bool isStandardImage(const QString& ext) {
         return ColorPaletteEngine::isStandardImage(ext);
