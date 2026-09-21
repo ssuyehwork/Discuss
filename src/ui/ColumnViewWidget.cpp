@@ -26,7 +26,6 @@ public:
     explicit ColumnBlankCanvasWidget(ColumnViewWidget* columnView, ContentPanel* contentPanel, QWidget* parent = nullptr)
         : QWidget(parent), m_columnView(columnView), m_contentPanel(contentPanel) {
         setObjectName("ColumnBlankCanvasWidget");
-        setFixedWidth(230);
         setAcceptDrops(true);
         setContextMenuPolicy(Qt::CustomContextMenu);
         connect(this, &QWidget::customContextMenuRequested, this, &ColumnBlankCanvasWidget::onContextMenuRequested);
@@ -1054,11 +1053,12 @@ void ColumnViewWidget::updatePaneWidths() {
 
     int totalPanesWidth = m_panes.size() * defaultWidth;
     int containerHeight = m_container ? m_container->height() : viewport()->height();
+    int blankWidth = qMax(230, viewport()->width() - totalPanesWidth);
     if (m_blankCanvasWidget) {
-        m_blankCanvasWidget->setGeometry(totalPanesWidth, 0, 230, qMax(containerHeight, viewport()->height()));
+        m_blankCanvasWidget->setGeometry(totalPanesWidth, 0, blankWidth, qMax(containerHeight, viewport()->height()));
     }
     if (m_container) {
-        m_container->setMinimumWidth(totalPanesWidth + 230);
+        m_container->setMinimumWidth(totalPanesWidth + blankWidth);
     }
 }
 
