@@ -1,6 +1,8 @@
 #include "ContentContextMenu.h"
 #include "../ContentPanel.h"
 #include "../ColumnViewWidget.h"
+#include "../TitleBarWidget.h"
+#include "../TabBarWidget.h"
 #include "ContentSortController.h"
 #include "ContentKeyHandler.h"
 #include "../UiHelper.h"
