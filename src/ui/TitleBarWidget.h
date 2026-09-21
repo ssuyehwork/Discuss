@@ -9,10 +9,11 @@
 namespace QuarkMeta {
 
 class HoverEventFilter;
+class TabBarWidget;
 
 /**
  * @brief 独立标题栏组件
- * 封装 LOGO、应用名称、缩放滑杆、排列视图菜单、新建菜单、盘符折叠按钮、布局重置、窗口控制按钮(置顶/最小化/最大化/关闭)
+ * 封装 LOGO、多标签页、缩放滑杆、排列视图菜单、新建菜单、盘符折叠按钮、布局重置、窗口控制按钮(置顶/最小化/最大化/关闭)
  * 纯 View 部件：完全不依赖 ContentPanel/PanelLayoutManager 的指针或头文件，且不泄漏内部控件指针。
  */
 class TitleBarWidget : public QWidget {
@@ -29,6 +30,8 @@ public:
 
     explicit TitleBarWidget(QWidget* parent = nullptr, HoverEventFilter* hoverFilter = nullptr);
     ~TitleBarWidget() override = default;
+
+    TabBarWidget* tabBar() const { return m_tabBar; }
 
     bool isPinned() const;
     void setPinned(bool pinned);
@@ -52,7 +55,7 @@ private:
 
     QHBoxLayout* m_layout = nullptr;
     QLabel* m_logoLabel = nullptr;
-    QLabel* m_appNameLabel = nullptr;
+    TabBarWidget* m_tabBar = nullptr;
 
     QPushButton* m_btnViewMenu = nullptr;
     QSlider* m_sizeSlider = nullptr;
@@ -66,6 +69,10 @@ private:
     QPushButton* m_btnClose = nullptr;
 
     ViewModeOption m_currentViewMode = GridViewMode;
+
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 };
 
 } // namespace QuarkMeta

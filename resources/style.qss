@@ -8,6 +8,67 @@ QWidget#CentralWidget { background-color: #1E1E1E; }
     border-bottom: 1px solid #333333;
 }
 
+/* 浏览器多标签页 TabBarWidget 专属精细样式 (严格消除 QWidget 级联边框) */
+QWidget#TabBarWidget {
+    background: transparent;
+    border: none;
+}
+QPushButton#NewTabBtn {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 0px;
+    outline: none;
+}
+QPushButton#NewTabBtn:hover {
+    background-color: #3E3E42;
+}
+
+QWidget#TabItem {
+    background-color: #1E1E1E;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border: 1px solid transparent;
+    border-bottom: none;
+}
+QWidget#TabItem:hover {
+    background-color: #252526;
+}
+QWidget#TabItem[active="true"] {
+    background-color: #2D2D2D;
+    border: 1px solid #3E3E42;
+    border-bottom: none;
+}
+
+QLabel#TabIconLabel {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    margin: 0px;
+}
+QLabel#TabTitleLabel {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    margin: 0px;
+    color: #AAAAAA;
+    font-size: 12px;
+}
+QLabel#TabTitleLabel[active="true"] {
+    color: #FFFFFF;
+}
+
+QPushButton#TabCloseBtn {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 0px;
+    outline: none;
+}
+QPushButton#TabCloseBtn:hover {
+    background-color: #555555;
+}
+
 /* 卡片 5px 实体物理切缝 + Dual-mode 深色风格 */
 QSplitter {
     background: transparent;
