@@ -38,6 +38,12 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
     m_panel->setAcceptDrops(true);
     setWidget(m_panel);
 
+    if (eventFilter) {
+        installEventFilter(eventFilter);
+        if (viewport()) viewport()->installEventFilter(eventFilter);
+        m_panel->installEventFilter(eventFilter);
+    }
+
     setupConnections();
 }
 

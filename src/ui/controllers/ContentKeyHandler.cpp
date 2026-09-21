@@ -263,6 +263,23 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
     QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
     if (qobject_cast<QLineEdit*>(QApplication::focusWidget())) return false;
 
+    // 面板级全局快捷键（独立于 QAbstractItemView 焦点状态）
+    if (keyEvent->modifiers() & Qt::ControlModifier) {
+        if ((keyEvent->modifiers() & Qt::ShiftModifier) && keyEvent->key() == Qt::Key_N) {
+            m_panel->createNewItem("folder");
+            return true;
+        }
+        if (keyEvent->key() == Qt::Key_S) {
+            m_panel->toggleFolderSectionCollapse();
+            return true;
+        }
+    }
+    if (keyEvent->key() == Qt::Key_Backspace) {
+        QDir dir(m_panel->currentPath());
+        if (dir.cdUp()) emit m_panel->directorySelected(dir.absolutePath());
+        return true;
+    }
+
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
     if (!view) view = qobject_cast<QAbstractItemView*>(obj->parent());
     if (!view) return false;
@@ -432,16 +449,8 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
 
-    // 6. Ctrl + S / C / X / V / Shift+N
+    // 6. Ctrl + C / X / V
     if (keyEvent->modifiers() & Qt::ControlModifier) {
-        if ((keyEvent->modifiers() & Qt::ShiftModifier) && keyEvent->key() == Qt::Key_N) {
-            m_panel->createNewItem("folder");
-            return true;
-        }
-        if (keyEvent->key() == Qt::Key_S) {
-            m_panel->toggleFolderSectionCollapse();
-            return true;
-        }
         if (keyEvent->key() == Qt::Key_C && !(keyEvent->modifiers() & Qt::ShiftModifier)) {
             ClipboardService::instance().copyItems(m_panel->getSelectedPaths());
             return true;
@@ -478,11 +487,6 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
     }
 
     // 8. 导航键
-    if (keyEvent->key() == Qt::Key_Backspace) {
-        QDir dir(m_panel->currentPath());
-        if (dir.cdUp()) emit m_panel->directorySelected(dir.absolutePath());
-        return true;
-    }
     if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
         m_panel->onDoubleClicked(view->currentIndex());
         return true;
