@@ -623,10 +623,17 @@ void ColumnViewWidget::activatePaneFromBlankClick(int paneIndex) {
 }
 
 void ColumnViewPane::clearSelection() {
-    if (m_folderListView) {
+    if (m_folderListView && m_folderListView->selectionModel()) {
+        QSignalBlocker blocker(m_folderListView->selectionModel());
+        m_folderListView->clearSelection();
+    } else if (m_folderListView) {
         m_folderListView->clearSelection();
     }
-    if (m_listView) {
+
+    if (m_listView && m_listView->selectionModel()) {
+        QSignalBlocker blocker(m_listView->selectionModel());
+        m_listView->clearSelection();
+    } else if (m_listView) {
         m_listView->clearSelection();
     }
 }
