@@ -4,6 +4,10 @@
 
 #include <QStyle>
 #include <QDateTime>
+#include <QMouseEvent>
+#include <QContextMenuEvent>
+#include <QMenu>
+#include <QAction>
 
 namespace QuarkMeta {
 
@@ -12,10 +16,12 @@ TabItemButton::TabItemButton(int index, QWidget* parent)
     setObjectName("TabItem");
     setFocusPolicy(Qt::NoFocus);
     setFixedHeight(28);
+    setMaximumWidth(180);
+    setMinimumWidth(80);
     setCursor(Qt::PointingHandCursor);
 
     QHBoxLayout* itemLayout = new QHBoxLayout(this);
-    itemLayout->setContentsMargins(10, 0, 6, 0);
+    itemLayout->setContentsMargins(8, 0, 6, 0);
     itemLayout->setSpacing(6);
 
     m_iconLabel = new QLabel(this);
@@ -26,6 +32,7 @@ TabItemButton::TabItemButton(int index, QWidget* parent)
     m_titleLabel = new QLabel(this);
     m_titleLabel->setObjectName("TabTitleLabel");
     m_titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    m_titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
     m_btnClose = new QPushButton(this);
     m_btnClose->setObjectName("TabCloseBtn");
@@ -38,18 +45,17 @@ TabItemButton::TabItemButton(int index, QWidget* parent)
         emit closeClicked(m_index);
     });
 
-    connect(this, &QPushButton::clicked, this, [this]() {
-        emit tabClicked(m_index);
-    });
-
     itemLayout->addWidget(m_iconLabel, 0, Qt::AlignVCenter);
-    itemLayout->addWidget(m_titleLabel, 0, Qt::AlignVCenter);
+    itemLayout->addWidget(m_titleLabel, 1, Qt::AlignVCenter);
     itemLayout->addWidget(m_btnClose, 0, Qt::AlignVCenter);
 }
 
 void TabItemButton::setTabTitle(const QString& title) {
     if (m_titleLabel) {
-        m_titleLabel->setText(title);
+        QFontMetrics fm(m_titleLabel->font());
+        QString elided = fm.elidedText(title, Qt::ElideRight, 110);
+        m_titleLabel->setText(elided);
+        setToolTip(title);
     }
 }
 
@@ -68,6 +74,24 @@ void TabItemButton::setActive(bool active) {
     }
     style()->unpolish(this);
     style()->polish(this);
+}
+
+void TabItemButton::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        emit tabClicked(m_index);
+        event->accept();
+        return;
+    } else if (event->button() == Qt::MiddleButton) {
+        emit middleClicked(m_index);
+        event->accept();
+        return;
+    }
+    QPushButton::mousePressEvent(event);
+}
+
+void TabItemButton::contextMenuEvent(QContextMenuEvent* event) {
+    emit customContextMenuRequested(m_index, event->globalPos());
+    event->accept();
 }
 
 TabBarWidget::TabBarWidget(QWidget* parent) : QWidget(parent) {
@@ -121,7 +145,14 @@ void TabBarWidget::addTab(const QString& title, const QString& url, bool switchT
 
 void TabBarWidget::closeTab(int index) {
     if (index < 0 || index >= m_tabs.size()) return;
-    if (m_tabs.size() <= 1) return; // 保持至少一个标签页
+    if (m_tabs.size() <= 1) {
+        // 仅剩一个标签页时，重置为默认“此电脑”
+        m_tabs[0].title = "此电脑";
+        m_tabs[0].url = "computer://";
+        updateTabsUiState();
+        emit currentTabChanged(0, "computer://");
+        return;
+    }
 
     m_closedTabsHistory.append(m_tabs[index]);
     m_tabs.removeAt(index);
@@ -132,6 +163,37 @@ void TabBarWidget::closeTab(int index) {
     }
     setCurrentIndex(m_currentIndex, true);
     emit tabClosed(index);
+}
+
+void TabBarWidget::closeOtherTabs(int index) {
+    if (index < 0 || index >= m_tabs.size()) return;
+    TabInfo target = m_tabs[index];
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        if (i != index) {
+            m_closedTabsHistory.append(m_tabs[i]);
+        }
+    }
+    m_tabs.clear();
+    m_tabs.append(target);
+    m_currentIndex = 0;
+    setCurrentIndex(0, true);
+}
+
+void TabBarWidget::closeRightTabs(int index) {
+    if (index < 0 || index >= m_tabs.size() - 1) return;
+    while (m_tabs.size() > index + 1) {
+        m_closedTabsHistory.append(m_tabs.takeAt(index + 1));
+    }
+    if (m_currentIndex > index) {
+        m_currentIndex = index;
+    }
+    setCurrentIndex(m_currentIndex, true);
+}
+
+void TabBarWidget::duplicateTab(int index) {
+    if (index < 0 || index >= m_tabs.size()) return;
+    const auto& src = m_tabs[index];
+    addTab(src.title, src.url, true);
 }
 
 void TabBarWidget::restoreLastClosedTab() {
@@ -153,6 +215,18 @@ void TabBarWidget::setCurrentIndex(int index, bool forceNotify) {
     }
 }
 
+void TabBarWidget::selectNextTab() {
+    if (m_tabs.isEmpty()) return;
+    int nextIdx = (m_currentIndex + 1) % m_tabs.size();
+    setCurrentIndex(nextIdx, true);
+}
+
+void TabBarWidget::selectPreviousTab() {
+    if (m_tabs.isEmpty()) return;
+    int prevIdx = (m_currentIndex - 1 + m_tabs.size()) % m_tabs.size();
+    setCurrentIndex(prevIdx, true);
+}
+
 void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& url) {
     if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
     if (m_tabs[m_currentIndex].title == title && m_tabs[m_currentIndex].url == url) return;
@@ -165,6 +239,48 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
         tabBtn->setTabTitle(m_tabs[m_currentIndex].title);
         tabBtn->setTabIcon(UiHelper::getIcon(url.startsWith("computer://") ? "computer" : "folder_filled", QColor("#EEEEEE")));
     }
+}
+
+void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
+    if (index < 0 || index >= m_tabs.size()) return;
+
+    QMenu menu(this);
+    menu.setObjectName("TabContextMenu");
+    UiHelper::applyMenuStyle(&menu);
+
+    QAction* actRefresh = menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 16), "重新加载 (F5)");
+    QAction* actDuplicate = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 16), "复制标签页");
+    menu.addSeparator();
+    QAction* actClose = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 16), "关闭标签页 (Ctrl+W)");
+    QAction* actCloseOthers = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 16), "关闭其他标签页");
+    QAction* actCloseRight = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 16), "关闭右侧标签页");
+    menu.addSeparator();
+    QAction* actRestore = menu.addAction(UiHelper::getIcon("history", QColor("#EEEEEE"), 16), "重新打开关闭的标签页 (Ctrl+Shift+T)");
+
+    actRestore->setEnabled(!m_closedTabsHistory.isEmpty());
+    actCloseRight->setEnabled(index < m_tabs.size() - 1);
+    actCloseOthers->setEnabled(m_tabs.size() > 1);
+
+    connect(actRefresh, &QAction::triggered, this, [this]() {
+        emit refreshRequested();
+    });
+    connect(actDuplicate, &QAction::triggered, this, [this, index]() {
+        duplicateTab(index);
+    });
+    connect(actClose, &QAction::triggered, this, [this, index]() {
+        closeTab(index);
+    });
+    connect(actCloseOthers, &QAction::triggered, this, [this, index]() {
+        closeOtherTabs(index);
+    });
+    connect(actCloseRight, &QAction::triggered, this, [this, index]() {
+        closeRightTabs(index);
+    });
+    connect(actRestore, &QAction::triggered, this, [this]() {
+        restoreLastClosedTab();
+    });
+
+    menu.exec(globalPos);
 }
 
 void TabBarWidget::updateTabsUiState() {
@@ -206,8 +322,16 @@ void TabBarWidget::rebuildTabsUi() {
             closeTab(idx);
         });
 
+        connect(tabItem, &TabItemButton::middleClicked, this, [this](int idx) {
+            closeTab(idx);
+        });
+
         connect(tabItem, &TabItemButton::tabClicked, this, [this](int idx) {
             setCurrentIndex(idx, true);
+        });
+
+        connect(tabItem, &TabItemButton::customContextMenuRequested, this, [this](int idx, const QPoint& globalPos) {
+            showTabContextMenu(idx, globalPos);
         });
 
         m_tabWidgets.append(tabItem);

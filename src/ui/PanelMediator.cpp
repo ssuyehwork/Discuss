@@ -66,6 +66,9 @@ void PanelMediator::setupConnections() {
                 Q_UNUSED(index);
                 NavigationService::instance().navigateTo(url);
             });
+            connect(titleBar->tabBar(), &TabBarWidget::refreshRequested, this, []() {
+                NavigationService::instance().refresh();
+            });
             connect(&NavigationService::instance(), &NavigationService::currentUrlChanged, this, [titleBar](const QString& url, const QString& displayPath) {
                 if (titleBar->tabBar()) {
                     titleBar->tabBar()->updateCurrentTabTitle(displayPath, url);

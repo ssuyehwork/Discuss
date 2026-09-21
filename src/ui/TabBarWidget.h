@@ -30,7 +30,13 @@ public:
 
 signals:
     void tabClicked(int index);
+    void middleClicked(int index);
     void closeClicked(int index);
+    void customContextMenuRequested(int index, const QPoint& globalPos);
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
     int m_index = -1;
@@ -48,17 +54,26 @@ public:
 
     void addTab(const QString& title = "此电脑", const QString& url = "computer://", bool switchToNew = true);
     void closeTab(int index);
+    void closeOtherTabs(int index);
+    void closeRightTabs(int index);
+    void duplicateTab(int index);
     void restoreLastClosedTab();
     void setCurrentIndex(int index, bool forceNotify = false);
     int currentIndex() const { return m_currentIndex; }
+    int tabCount() const { return m_tabs.size(); }
     void updateCurrentTabTitle(const QString& title, const QString& url);
+
+    void selectNextTab();
+    void selectPreviousTab();
 
 signals:
     void currentTabChanged(int index, const QString& url);
     void tabClosed(int index);
     void newTabRequested();
+    void refreshRequested();
 
 private:
+    void showTabContextMenu(int index, const QPoint& globalPos);
     void updateTabsUiState();
     void rebuildTabsUi();
 
@@ -70,7 +85,6 @@ private:
     QList<TabInfo> m_closedTabsHistory;
     QList<TabItemButton*> m_tabWidgets;
     int m_currentIndex = -1;
-    bool m_isUpdatingFromNav = false;
 };
 
 } // namespace QuarkMeta
