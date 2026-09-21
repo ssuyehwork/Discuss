@@ -66,6 +66,9 @@ public:
     void updateCurrentTabTitle(const QString& title, const QString& url);
     void openOrFocusTab(const QString& path);
 
+    void saveStateToConfig();
+    bool restoreStateFromConfig();
+
     void selectNextTab();
     void selectPreviousTab();
 

@@ -5,6 +5,11 @@
 #include "../meta/MetadataManager.h"
 #include "../core/CoreEngine.h"
 #include "../meta/FavoriteDao.h"
+#include "../core/AppConfig.h"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 
 #include <QStyle>
 #include <QDateTime>
@@ -207,6 +212,7 @@ void TabBarWidget::duplicateTab(int index) {
     if (index < 0 || index >= m_tabs.size()) return;
     const auto& src = m_tabs[index];
     addTab(src.title, src.url, true);
+    saveStateToConfig();
 }
 
 void TabBarWidget::restoreLastClosedTab() {
@@ -226,6 +232,7 @@ void TabBarWidget::setCurrentIndex(int index, bool forceNotify) {
     if (indexChanged || forceNotify) {
         emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
     }
+    saveStateToConfig();
 }
 
 void TabBarWidget::selectNextTab() {
@@ -238,6 +245,67 @@ void TabBarWidget::selectPreviousTab() {
     if (m_tabs.isEmpty()) return;
     int prevIdx = (m_currentIndex - 1 + m_tabs.size()) % m_tabs.size();
     setCurrentIndex(prevIdx, true);
+}
+
+void TabBarWidget::saveStateToConfig() {
+    QJsonArray tabArray;
+    for (const auto& tab : m_tabs) {
+        QJsonObject obj;
+        obj["title"] = tab.title;
+        obj["url"] = tab.url;
+        obj["color"] = tab.color;
+        obj["iconKey"] = tab.iconKey;
+        tabArray.append(obj);
+    }
+
+    QJsonObject stateObj;
+    stateObj["tabs"] = tabArray;
+    stateObj["currentIndex"] = m_currentIndex;
+
+    QString jsonStr = QString::fromUtf8(QJsonDocument(stateObj).toJson(QJsonDocument::Compact));
+    AppConfig::instance().setValue("TabBar/SavedState", jsonStr);
+    AppConfig::instance().sync();
+}
+
+bool TabBarWidget::restoreStateFromConfig() {
+    QString jsonStr = AppConfig::instance().getValue("TabBar/SavedState").toString();
+    if (jsonStr.isEmpty()) return false;
+
+    QJsonDocument doc = QJsonDocument::fromJson(jsonStr.toUtf8());
+    if (!doc.isObject()) return false;
+
+    QJsonObject stateObj = doc.object();
+    QJsonArray tabArray = stateObj["tabs"].toArray();
+    if (tabArray.isEmpty()) return false;
+
+    m_tabs.clear();
+    for (const auto& val : tabArray) {
+        QJsonObject obj = val.toObject();
+        TabInfo info;
+        info.id = QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" + QString::number(m_tabs.size());
+        info.title = obj["title"].toString("此电脑");
+        info.url = obj["url"].toString("computer://");
+        info.color = obj["color"].toString();
+        info.iconKey = obj["iconKey"].toString();
+        info.active = false;
+        m_tabs.append(info);
+    }
+
+    int savedIndex = stateObj["currentIndex"].toInt(0);
+    if (savedIndex < 0 || savedIndex >= m_tabs.size()) {
+        savedIndex = 0;
+    }
+
+    m_currentIndex = savedIndex;
+    for (int i = 0; i < m_tabs.size(); ++i) {
+        m_tabs[i].active = (i == m_currentIndex);
+    }
+
+    rebuildTabsUi();
+    if (m_currentIndex >= 0 && m_currentIndex < m_tabs.size()) {
+        emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
+    }
+    return true;
 }
 
 void TabBarWidget::openOrFocusTab(const QString& rawPath) {
@@ -294,23 +362,24 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
         }
     }
 
-    QString colorHex;
-    if (!url.startsWith("computer://") && !url.isEmpty()) {
+    QString colorHex = m_tabs[m_currentIndex].color;
+    if (colorHex.isEmpty() && !url.startsWith("computer://") && !url.isEmpty()) {
         auto meta = MetadataManager::instance().getMeta(url.toStdWString());
         colorHex = QString::fromStdWString(meta.manualColor);
     }
 
-    if (m_tabs[m_currentIndex].title == folderName && m_tabs[m_currentIndex].url == url && m_tabs[m_currentIndex].color == colorHex) return;
-
     m_tabs[m_currentIndex].title = folderName.isEmpty() ? "此电脑" : folderName;
     m_tabs[m_currentIndex].url = url;
-    m_tabs[m_currentIndex].color = colorHex;
+    if (!colorHex.isEmpty()) {
+        m_tabs[m_currentIndex].color = colorHex;
+    }
 
     if (m_currentIndex < m_tabWidgets.size()) {
         auto tabBtn = m_tabWidgets[m_currentIndex];
         tabBtn->setTabTitle(m_tabs[m_currentIndex].title);
         QColor iconColor = !colorHex.isEmpty() ? QColor(colorHex) : QColor("#EEEEEE");
-        tabBtn->setTabIcon(UiHelper::getIcon(url.startsWith("computer://") ? "computer" : "folder_filled", iconColor));
+        QString iconKey = !m_tabs[m_currentIndex].iconKey.isEmpty() ? m_tabs[m_currentIndex].iconKey : (url.startsWith("computer://") ? "computer" : "folder_filled");
+        tabBtn->setTabIcon(UiHelper::getIcon(iconKey, iconColor));
     }
 }
 
@@ -460,11 +529,9 @@ void TabBarWidget::updateTabsUiState() {
 
     for (int i = 0; i < m_tabs.size(); ++i) {
         auto& tab = m_tabs[i];
-        if (!tab.url.startsWith("computer://") && !tab.url.isEmpty()) {
+        if (tab.color.isEmpty() && !tab.url.startsWith("computer://") && !tab.url.isEmpty()) {
             auto meta = MetadataManager::instance().getMeta(tab.url.toStdWString());
             tab.color = QString::fromStdWString(meta.manualColor);
-        } else {
-            tab.color.clear();
         }
 
         auto tabBtn = m_tabWidgets[i];
@@ -472,7 +539,8 @@ void TabBarWidget::updateTabsUiState() {
         tabBtn->setTabTitle(tab.title);
 
         QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
-        tabBtn->setTabIcon(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled", iconColor));
+        QString iconKey = !tab.iconKey.isEmpty() ? tab.iconKey : (tab.url.startsWith("computer://") ? "computer" : "folder_filled");
+        tabBtn->setTabIcon(UiHelper::getIcon(iconKey, iconColor));
         tabBtn->setActive(tab.active);
     }
 }
@@ -489,17 +557,16 @@ void TabBarWidget::rebuildTabsUi() {
 
     for (int i = 0; i < m_tabs.size(); ++i) {
         auto& tab = m_tabs[i];
-        if (!tab.url.startsWith("computer://") && !tab.url.isEmpty()) {
+        if (tab.color.isEmpty() && !tab.url.startsWith("computer://") && !tab.url.isEmpty()) {
             auto meta = MetadataManager::instance().getMeta(tab.url.toStdWString());
             tab.color = QString::fromStdWString(meta.manualColor);
-        } else {
-            tab.color.clear();
         }
 
         TabItemButton* tabItem = new TabItemButton(i, this);
         tabItem->setTabTitle(tab.title);
         QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
-        tabItem->setTabIcon(UiHelper::getIcon(tab.url.startsWith("computer://") ? "computer" : "folder_filled", iconColor));
+        QString iconKey = !tab.iconKey.isEmpty() ? tab.iconKey : (tab.url.startsWith("computer://") ? "computer" : "folder_filled");
+        tabItem->setTabIcon(UiHelper::getIcon(iconKey, iconColor));
         tabItem->setActive(tab.active);
 
         connect(tabItem, &TabItemButton::closeClicked, this, [this](int idx) {
