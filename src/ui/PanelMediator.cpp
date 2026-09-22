@@ -387,7 +387,7 @@ void PanelMediator::setupConnections() {
             connect(panel, &ContentPanel::panelActivated, this, [this, panel, addressBar, filterPanel](ContentPanel* activePanel) {
                 m_activeContentPanel = activePanel;
                 if (addressBar) {
-                    addressBar->setAddressText(activePanel->currentPath());
+                    addressBar->setPath(activePanel->currentPath());
                 }
             });
         };
