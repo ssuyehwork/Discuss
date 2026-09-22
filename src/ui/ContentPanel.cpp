@@ -379,7 +379,7 @@ void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
 }
 
 void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
-    updateDragOverlay(event->pos());
+    updateDragOverlay(event->position().toPoint());
     event->acceptProposedAction();
 }
 
