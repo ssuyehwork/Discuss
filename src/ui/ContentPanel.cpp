@@ -454,15 +454,19 @@ void ContentPanel::updateDragOverlay(const QPoint& pos) {
     if (pos.x() > w * 0.75) {
         m_dragOverlayWidget->setGeometry(w / 2, 0, w / 2, h);
         m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
     } else if (pos.x() < w * 0.25) {
         m_dragOverlayWidget->setGeometry(0, 0, w / 2, h);
         m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
     } else if (pos.y() > h * 0.75) {
         m_dragOverlayWidget->setGeometry(0, h / 2, w, h / 2);
         m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
     } else if (pos.y() < h * 0.25) {
         m_dragOverlayWidget->setGeometry(0, 0, w, h / 2);
         m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
     } else {
         hideDragOverlay();
     }
