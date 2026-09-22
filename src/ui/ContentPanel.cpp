@@ -26,6 +26,7 @@
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
 #include "Logger.h"
+#include "../core/NavigationHistoryService.h"
 #include <QElapsedTimer>
 
 #include "../core/AppConfig.h"
@@ -138,6 +139,29 @@ void ContentPanel::initUi() {
     // ── 顶部 Header 区域 ──
     m_headerWidget = new ContentHeaderWidget(this);
     m_headerWidget->setFilterState(m_currentFilter);
+
+    connect(m_headerWidget, &ContentHeaderWidget::splitViewRequested, this, [this]() {
+        if (m_isSecondaryPane) {
+            emit closePaneRequested();
+            return;
+        }
+        if (isSplitMode()) {
+            closeSecondaryPane();
+        } else {
+            QStringList history = NavigationHistoryService::instance().getHistory();
+            QString lastPath;
+            for (const QString& hPath : history) {
+                if (!hPath.isEmpty() && QDir::cleanPath(hPath) != QDir::cleanPath(m_currentPath)) {
+                    lastPath = hPath;
+                    break;
+                }
+            }
+            if (lastPath.isEmpty()) {
+                lastPath = m_currentPath;
+            }
+            splitPane(Qt::Horizontal, lastPath);
+        }
+    });
 
     connect(m_headerWidget, &ContentHeaderWidget::filterStateChanged, this, [this](const FilterState& state) {
         m_currentFilter = state;

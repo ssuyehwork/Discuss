@@ -30,6 +30,7 @@ protected:
 signals:
     void filterStateChanged(const FilterState& state);
     void recursiveToggled(bool recursive);
+    void splitViewRequested();
 
 private:
     void initUi();
@@ -38,6 +39,7 @@ private:
     QLabel* m_iconLabel = nullptr;
     QLabel* m_titleLabel = nullptr;
 
+    QPushButton* m_btnSplitView = nullptr;
     QPushButton* m_btnLayers = nullptr;
     QPushButton* m_btnToggleHidden = nullptr;
     QPushButton* m_btnToggleFolders = nullptr;
