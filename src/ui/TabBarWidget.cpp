@@ -2,6 +2,7 @@
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "ColorPicker.h"
+#include "HoverEventFilter.h"
 #include "../meta/MetadataManager.h"
 #include "../core/CoreEngine.h"
 #include "../meta/FavoriteDao.h"
@@ -31,10 +32,14 @@
 
 namespace QuarkMeta {
 
-TabItemButton::TabItemButton(int index, QWidget* parent)
+TabItemButton::TabItemButton(int index, QWidget* parent, HoverEventFilter* hoverFilter)
     : QPushButton(parent), m_index(index) {
     setObjectName("TabItem");
     setFocusPolicy(Qt::NoFocus);
+    setAttribute(Qt::WA_Hover, true);
+    if (hoverFilter) {
+        installEventFilter(hoverFilter);
+    }
     setFixedHeight(28);
     setMaximumWidth(180);
     setMinimumWidth(80);
@@ -75,7 +80,7 @@ void TabItemButton::setTabTitle(const QString& title) {
         QFontMetrics fm(m_titleLabel->font());
         QString elided = fm.elidedText(title, Qt::ElideRight, 110);
         m_titleLabel->setText(elided);
-        setToolTip(title);
+        setProperty("tooltipText", title);
     }
 }
 
@@ -135,7 +140,8 @@ void TabItemButton::contextMenuEvent(QContextMenuEvent* event) {
     event->accept();
 }
 
-TabBarWidget::TabBarWidget(QWidget* parent) : QWidget(parent) {
+TabBarWidget::TabBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
+    : QWidget(parent), m_hoverFilter(hoverFilter) {
     setObjectName("TabBarWidget");
     setAttribute(Qt::WA_StyledBackground, true);
     setAcceptDrops(true);
@@ -151,11 +157,15 @@ TabBarWidget::TabBarWidget(QWidget* parent) : QWidget(parent) {
 
     m_btnNewTab = new QPushButton(this);
     m_btnNewTab->setFocusPolicy(Qt::NoFocus);
+    m_btnNewTab->setAttribute(Qt::WA_Hover, true);
     m_btnNewTab->setFixedSize(22, 22);
     m_btnNewTab->setIcon(UiHelper::getIcon("add", QColor("#EEEEEE")));
     m_btnNewTab->setIconSize(QSize(14, 14));
     m_btnNewTab->setObjectName("NewTabBtn");
     m_btnNewTab->setProperty("tooltipText", "新建标签页 (Ctrl+T)");
+    if (m_hoverFilter) {
+        m_btnNewTab->installEventFilter(m_hoverFilter);
+    }
 
     connect(m_btnNewTab, &QPushButton::clicked, this, [this]() {
         addTab("此电脑", "computer://", true);
@@ -388,7 +398,7 @@ void TabBarWidget::dropEvent(QDropEvent* event) {
         if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex")) {
             int fromIdx = event->mimeData()->data("application/x-quarkmeta-tabindex").toInt();
             if (fromIdx >= 0 && fromIdx < m_tabs.size()) {
-                QPoint dropPos = event->pos();
+                QPoint dropPos = event->position().toPoint();
                 int toIdx = m_tabs.size() - 1;
                 for (int i = 0; i < m_tabWidgets.size(); ++i) {
                     QRect rect = m_tabWidgets[i]->geometry();
@@ -650,7 +660,7 @@ void TabBarWidget::rebuildTabsUi() {
             tab.color = QString::fromStdWString(meta.manualColor);
         }
 
-        TabItemButton* tabItem = new TabItemButton(i, this);
+        TabItemButton* tabItem = new TabItemButton(i, this, m_hoverFilter);
         tabItem->setTabTitle(tab.title);
         QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
         QString iconKey = !tab.iconKey.isEmpty() ? tab.iconKey : (tab.url.startsWith("computer://") ? "computer" : "folder_filled");

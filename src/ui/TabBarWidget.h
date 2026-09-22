@@ -10,6 +10,8 @@
 
 namespace QuarkMeta {
 
+class HoverEventFilter;
+
 struct TabInfo {
     QString id;
     QString title;
@@ -22,7 +24,7 @@ struct TabInfo {
 class TabItemButton : public QPushButton {
     Q_OBJECT
 public:
-    explicit TabItemButton(int index, QWidget* parent = nullptr);
+    explicit TabItemButton(int index, QWidget* parent = nullptr, HoverEventFilter* hoverFilter = nullptr);
     int index() const { return m_index; }
     void setIndex(int index) { m_index = index; }
 
@@ -53,7 +55,7 @@ class TabBarWidget : public QWidget {
     Q_OBJECT
 
 public:
-    explicit TabBarWidget(QWidget* parent = nullptr);
+    explicit TabBarWidget(QWidget* parent = nullptr, HoverEventFilter* hoverFilter = nullptr);
     ~TabBarWidget() override = default;
 
     void addTab(const QString& title = "此电脑", const QString& url = "computer://", bool switchToNew = true);
@@ -92,6 +94,7 @@ private:
     QHBoxLayout* m_mainLayout = nullptr;
     QHBoxLayout* m_tabsLayout = nullptr;
     QPushButton* m_btnNewTab = nullptr;
+    HoverEventFilter* m_hoverFilter = nullptr;
 
     QList<TabInfo> m_tabs;
     QList<TabInfo> m_closedTabsHistory;

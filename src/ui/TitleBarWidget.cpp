@@ -106,7 +106,7 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_logoLabel->setObjectName("TitleLogoLabel");
     m_layout->addWidget(m_logoLabel);
 
-    m_tabBar = new TabBarWidget(this);
+    m_tabBar = new TabBarWidget(this, hoverFilter);
     m_layout->addWidget(m_tabBar);
     m_layout->addStretch();
 
