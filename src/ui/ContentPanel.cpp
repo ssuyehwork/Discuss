@@ -4,6 +4,8 @@
 #include "ContentPanel.h"
 #include "ContentHeaderWidget.h"
 #include "FolderSectionWidget.h"
+#include "TitleBarWidget.h"
+#include "TabBarWidget.h"
 #include <QSplitter>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -229,7 +231,22 @@ void ContentPanel::initListView() {
     // 已完整归一化迁移至 SectionedScrollCanvas
 }
 
+void ContentPanel::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        if (m_isPeerPane || m_isSplit) {
+            emit activePaneRequested(this);
+        }
+    }
+    QFrame::mousePressEvent(event);
+}
+
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
+    if (event && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn)) {
+        if (m_isPeerPane || m_isSplit) {
+            emit activePaneRequested(this);
+        }
+    }
+
     if (event && event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
@@ -319,17 +336,38 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         secLayout->setContentsMargins(0, 0, 0, 0);
 
         m_secondaryContentPanel = new ContentPanel(m_secondaryPaneContainer);
+        m_secondaryContentPanel->m_isPeerPane = true;
         secLayout->addWidget(m_secondaryContentPanel);
 
         m_paneSplitter->addWidget(m_secondaryPaneContainer);
         m_mainLayout->addWidget(m_paneSplitter, 1);
 
-        connect(m_secondaryContentPanel, &ContentPanel::directorySelected, this, [this](const QString&) {
-            if (m_isSplit) {
-                QString p1 = m_currentPath;
-                QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
-                emit dualPanePathsChanged(p1, p2);
+        connect(m_secondaryContentPanel, &ContentPanel::directorySelected, this, [this](const QString& path) {
+            if (m_isSplit && m_secondaryContentPanel) {
+                // 1. 让副窗格自身真正加载该子目录！
+                m_secondaryContentPanel->loadDirectory(path);
+                // 2. 刷新顶栏标题
+                QString folderName = QFileInfo(path).fileName();
+                if (folderName.isEmpty()) folderName = path;
+                if (m_secondaryContentPanel->m_headerWidget) {
+                    m_secondaryContentPanel->m_headerWidget->setTitleText(folderName);
+                }
+                emit dualPanePathsChanged(m_currentPath, path);
+                // 3. 将副窗格设为当前激活焦点，通知地址栏同步
+                setActivePane(m_secondaryContentPanel);
             }
+        });
+
+        connect(m_secondaryContentPanel, &ContentPanel::activePaneRequested, this, [this](ContentPanel* pane) {
+            setActivePane(pane);
+        });
+
+        connect(m_secondaryContentPanel, &ContentPanel::closePaneRequested, this, [this](ContentPanel* pane) {
+            closePane(pane);
+        });
+
+        connect(this, &ContentPanel::activePaneRequested, this, [this](ContentPanel* pane) {
+            setActivePane(pane);
         });
 
         emit secondaryPaneCreated(m_secondaryContentPanel);
@@ -340,14 +378,26 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         }
     }
 
+    if (m_headerWidget) {
+        QString mainFolderName = QFileInfo(m_currentPath).fileName();
+        if (mainFolderName.isEmpty()) mainFolderName = m_currentPath;
+        m_headerWidget->setTitleText(mainFolderName);
+    }
+
     if (m_secondaryContentPanel) {
-        m_secondaryContentPanel->loadDirectory(!secondaryPath.isEmpty() ? secondaryPath : m_currentPath);
+        QString targetPath = !secondaryPath.isEmpty() ? secondaryPath : m_currentPath;
+        m_secondaryContentPanel->loadDirectory(targetPath);
+        QString secFolderName = QFileInfo(targetPath).fileName();
+        if (secFolderName.isEmpty()) secFolderName = targetPath;
+        m_secondaryContentPanel->m_headerWidget->setTitleText(secFolderName);
     }
 
     QList<int> sizes;
     int total = (orientation == Qt::Horizontal) ? width() : height();
     sizes << total / 2 << total / 2;
     m_paneSplitter->setSizes(sizes);
+
+    setActivePane(m_secondaryContentPanel ? m_secondaryContentPanel : this);
 
     if (m_isSplit) {
         QString p1 = m_currentPath;
@@ -357,14 +407,71 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
 }
 
 void ContentPanel::closeSecondaryPane() {
+    closePane(m_secondaryContentPanel ? m_secondaryContentPanel : this);
+}
+
+void ContentPanel::closePane(ContentPanel* targetPane) {
     if (!m_isSplit) return;
 
-    m_isSplit = false;
-    if (m_secondaryPaneContainer) {
-        m_secondaryPaneContainer->hide();
+    if (targetPane == m_secondaryContentPanel) {
+        // 场景 A：用户关闭右侧窗格 -> 隐藏/销毁右侧，左侧直接恢复 100%
+        if (m_secondaryPaneContainer) m_secondaryPaneContainer->hide();
+        m_isSplit = false;
+        if (m_headerWidget) {
+            m_headerWidget->setTitleText("内容");
+        }
+        setActivePane(this);
+    } else {
+        // 场景 B：用户关闭左侧窗格 -> 把右侧窗格的路径升格给主窗格，隐藏右侧
+        QString remainPath = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : m_currentPath;
+        if (m_secondaryPaneContainer) m_secondaryPaneContainer->hide();
+        m_isSplit = false;
+        if (m_headerWidget) {
+            m_headerWidget->setTitleText("内容");
+        }
+        loadDirectory(remainPath); // 主窗格直接接管右侧路径
+        setActivePane(this);
     }
+
     emit secondaryPaneClosed();
-    emit directorySelected(m_currentPath);
+    emit directorySelected(activePane()->currentPath());
+}
+
+void ContentPanel::requestCloseThisPane() {
+    if (m_isPeerPane) {
+        emit closePaneRequested(this);
+    } else if (m_isSplit) {
+        closePane(this);
+    }
+}
+
+void ContentPanel::setActivePane(ContentPanel* pane) {
+    if (!pane) pane = this;
+
+    m_activePane = pane;
+    if (m_secondaryContentPanel) {
+        m_secondaryContentPanel->m_activePane = pane;
+    }
+
+    if (m_isSplit || m_isPeerPane) {
+        setActive(pane == this);
+        if (m_secondaryContentPanel) {
+            m_secondaryContentPanel->setActive(pane == m_secondaryContentPanel);
+        }
+    } else {
+        setActive(false);
+    }
+
+    emit activePaneChanged(pane, pane->currentPath());
+}
+
+void ContentPanel::setActive(bool active) {
+    Q_UNUSED(active);
+    // 保持自然透明，绝不添加任何红线或外边框样式
+}
+
+ContentPanel* ContentPanel::activePane() const {
+    return m_activePane ? m_activePane : const_cast<ContentPanel*>(this);
 }
 
 void ContentPanel::updateDragOverlay(const QPoint& pos) {
@@ -424,24 +531,57 @@ void ContentPanel::dropEvent(QDropEvent* event) {
     int w = width();
     int h = height();
 
+    QString targetUrl;
+    int sourceTabIndex = -1;
+
+    if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        targetUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
+    } else if (event->mimeData()->hasText()) {
+        targetUrl = event->mimeData()->text();
+    }
+
+    if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex")) {
+        sourceTabIndex = event->mimeData()->data("application/x-quarkmeta-tabindex").toInt();
+    }
+
+    // 左右边缘 25% 触发水平分屏
     if (pos.x() > w * 0.75 || pos.x() < w * 0.25) {
-        splitPane(Qt::Horizontal);
-        event->acceptProposedAction();
-    } else if (pos.y() > h * 0.75 || pos.y() < h * 0.25) {
-        splitPane(Qt::Vertical);
-        event->acceptProposedAction();
-    } else {
-        if (event->mimeData()->hasUrls()) {
-            QStringList paths;
-            for (const QUrl& url : event->mimeData()->urls()) {
-                paths << url.toLocalFile();
+        splitPane(Qt::Horizontal, targetUrl); // 传递真实目标路径
+
+        // 拆分成功后，静默移除原 TabBar 里的被拖拽标签
+        if (sourceTabIndex >= 0 && window()) {
+            if (auto titleBar = window()->findChild<TitleBarWidget*>()) {
+                if (titleBar->tabBar()) {
+                    titleBar->tabBar()->closeTabSilently(sourceTabIndex);
+                }
             }
-            onPathsDropped(paths, QModelIndex());
-            event->acceptProposedAction();
-        } else if (event->mimeData()->hasText()) {
-            splitPane(Qt::Horizontal, event->mimeData()->text());
-            event->acceptProposedAction();
         }
+        event->acceptProposedAction();
+        return;
+    }
+    // 上下边缘 25% 触发垂直分屏
+    else if (pos.y() > h * 0.75 || pos.y() < h * 0.25) {
+        splitPane(Qt::Vertical, targetUrl);
+
+        if (sourceTabIndex >= 0 && window()) {
+            if (auto titleBar = window()->findChild<TitleBarWidget*>()) {
+                if (titleBar->tabBar()) {
+                    titleBar->tabBar()->closeTabSilently(sourceTabIndex);
+                }
+            }
+        }
+        event->acceptProposedAction();
+        return;
+    }
+
+    // 中间常规落点处理
+    if (event->mimeData()->hasUrls()) {
+        QStringList paths;
+        for (const QUrl& url : event->mimeData()->urls()) {
+            paths << url.toLocalFile();
+        }
+        onPathsDropped(paths, QModelIndex());
+        event->acceptProposedAction();
     }
 }
 

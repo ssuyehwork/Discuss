@@ -74,8 +74,14 @@ public:
 
     // Dual-pane state inspection & split controls
     bool isSplitMode() const;
+    bool isPeerPane() const { return m_isPeerPane; }
     void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString());
     void closeSecondaryPane();
+    void closePane(ContentPanel* targetPane);
+    void requestCloseThisPane();
+    void setActivePane(ContentPanel* pane);
+    void setActive(bool active);
+    ContentPanel* activePane() const;
 
     QSize minimumSizeHint() const override { return QSize(230, 100); }
     void deferredInit() {}
@@ -170,6 +176,9 @@ protected:
 signals:
     void secondaryPaneCreated(ContentPanel* pane);
     void secondaryPaneClosed();
+    void activePaneChanged(ContentPanel* pane, const QString& path);
+    void activePaneRequested(ContentPanel* pane);
+    void closePaneRequested(ContentPanel* pane);
     void zoomLevelChanged(int level);
     void viewModeChanged(ViewMode mode);
     void requestQuickLook(const QString& path);
@@ -209,9 +218,12 @@ public slots:
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
 
 private:
     void initUi();
+    ContentPanel* m_activePane = nullptr;
+    bool m_isPeerPane = false;
     void initGridView();
     void initListView();
     void updateGridSize();

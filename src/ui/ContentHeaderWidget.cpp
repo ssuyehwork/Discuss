@@ -81,6 +81,12 @@ void ContentHeaderWidget::initUi() {
     m_layout->addWidget(m_btnLayers, 0, Qt::AlignVCenter);
 }
 
+void ContentHeaderWidget::setTitleText(const QString& title) {
+    if (m_titleLabel) {
+        m_titleLabel->setText(title.isEmpty() ? "内容" : title);
+    }
+}
+
 void ContentHeaderWidget::setFilterState(const FilterState& state) {
     m_filterState = state;
     if (m_btnToggleHidden) {
