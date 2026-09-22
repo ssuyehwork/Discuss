@@ -7,6 +7,7 @@
 #include <QScrollArea>
 #include <QSet>
 #include <QModelIndexList>
+#include <QSplitter>
 #include <atomic>
 
 #include "ScanStats.h"
@@ -70,6 +71,11 @@ public:
 
     explicit ContentPanel(QWidget* parent = nullptr);
     ~ContentPanel() override = default;
+
+    // Dual-pane state inspection & split controls
+    bool isSplitMode() const;
+    void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString());
+    void closeSecondaryPane();
 
     QSize minimumSizeHint() const override { return QSize(230, 100); }
     void deferredInit() {}
@@ -155,6 +161,12 @@ public:
     QList<int> getSelectedTrashIds() const;
     QModelIndexList getSelectedIndexes() const;
 
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+
 signals:
     void zoomLevelChanged(int level);
     void viewModeChanged(ViewMode mode);
@@ -225,6 +237,15 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
+
+    QSplitter* m_paneSplitter = nullptr;
+    QWidget* m_secondaryPaneContainer = nullptr;
+    QWidget* m_dragOverlayWidget = nullptr;
+    Qt::Orientation m_splitOrientation = Qt::Horizontal;
+    bool m_isSplit = false;
+
+    void updateDragOverlay(const QPoint& pos);
+    void hideDragOverlay();
 
     SectionedScrollCanvas* m_gridCanvas = nullptr;
     SectionedScrollCanvas* m_listCanvas = nullptr;

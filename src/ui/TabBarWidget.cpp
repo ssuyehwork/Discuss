@@ -2,6 +2,7 @@
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "ColorPicker.h"
+#include "HoverEventFilter.h"
 #include "../meta/MetadataManager.h"
 #include "../core/CoreEngine.h"
 #include "../meta/FavoriteDao.h"
@@ -22,9 +23,12 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QDragEnterEvent>
+#include <QDragMoveEvent>
 #include <QDropEvent>
+#include <QDrag>
 #include <QMimeData>
 #include <QUrl>
+#include <QApplication>
 
 namespace QuarkMeta {
 
@@ -72,7 +76,6 @@ void TabItemButton::setTabTitle(const QString& title) {
         QFontMetrics fm(m_titleLabel->font());
         QString elided = fm.elidedText(title, Qt::ElideRight, 110);
         m_titleLabel->setText(elided);
-        setToolTip(title);
     }
 }
 
@@ -95,6 +98,7 @@ void TabItemButton::setActive(bool active) {
 
 void TabItemButton::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
+        m_dragStartPos = event->pos();
         emit tabClicked(m_index);
         event->accept();
         return;
@@ -106,12 +110,33 @@ void TabItemButton::mousePressEvent(QMouseEvent* event) {
     QPushButton::mousePressEvent(event);
 }
 
+void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
+    if ((event->buttons() & Qt::LeftButton) && !m_dragStartPos.isNull()) {
+        if ((event->pos() - m_dragStartPos).manhattanLength() >= QApplication::startDragDistance()) {
+            QDrag* drag = new QDrag(this);
+            QMimeData* mimeData = new QMimeData();
+            mimeData->setData("application/x-quarkmeta-tabindex", QByteArray::number(m_index));
+            drag->setMimeData(mimeData);
+
+            QPixmap pixmap = grab();
+            drag->setPixmap(pixmap);
+            drag->setHotSpot(event->pos());
+
+            drag->exec(Qt::MoveAction);
+            m_dragStartPos = QPoint();
+            return;
+        }
+    }
+    QPushButton::mouseMoveEvent(event);
+}
+
 void TabItemButton::contextMenuEvent(QContextMenuEvent* event) {
     emit customContextMenuRequested(m_index, event->globalPos());
     event->accept();
 }
 
-TabBarWidget::TabBarWidget(QWidget* parent) : QWidget(parent) {
+TabBarWidget::TabBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
+    : QWidget(parent), m_hoverFilter(hoverFilter) {
     setObjectName("TabBarWidget");
     setAttribute(Qt::WA_StyledBackground, true);
     setAcceptDrops(true);
@@ -127,11 +152,15 @@ TabBarWidget::TabBarWidget(QWidget* parent) : QWidget(parent) {
 
     m_btnNewTab = new QPushButton(this);
     m_btnNewTab->setFocusPolicy(Qt::NoFocus);
+    m_btnNewTab->setAttribute(Qt::WA_Hover, true);
     m_btnNewTab->setFixedSize(22, 22);
     m_btnNewTab->setIcon(UiHelper::getIcon("add", QColor("#EEEEEE")));
     m_btnNewTab->setIconSize(QSize(14, 14));
     m_btnNewTab->setObjectName("NewTabBtn");
     m_btnNewTab->setProperty("tooltipText", "新建标签页 (Ctrl+T)");
+    if (m_hoverFilter) {
+        m_btnNewTab->installEventFilter(m_hoverFilter);
+    }
 
     connect(m_btnNewTab, &QPushButton::clicked, this, [this]() {
         addTab("此电脑", "computer://", true);
@@ -344,21 +373,66 @@ void TabBarWidget::openOrFocusTab(const QString& rawPath) {
 }
 
 void TabBarWidget::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData() && event->mimeData()->hasUrls()) {
+    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") || event->mimeData()->hasUrls())) {
         event->acceptProposedAction();
     } else {
         QWidget::dragEnterEvent(event);
     }
 }
 
+void TabBarWidget::dragMoveEvent(QDragMoveEvent* event) {
+    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") || event->mimeData()->hasUrls())) {
+        event->acceptProposedAction();
+    } else {
+        QWidget::dragMoveEvent(event);
+    }
+}
+
 void TabBarWidget::dropEvent(QDropEvent* event) {
-    if (event->mimeData() && event->mimeData()->hasUrls()) {
-        for (const QUrl& url : event->mimeData()->urls()) {
-            QString path = url.toLocalFile();
-            if (!path.isEmpty() && QFileInfo(path).isDir()) {
-                openOrFocusTab(path);
-                event->acceptProposedAction();
-                return;
+    if (event->mimeData()) {
+        if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex")) {
+            int fromIdx = event->mimeData()->data("application/x-quarkmeta-tabindex").toInt();
+            if (fromIdx >= 0 && fromIdx < m_tabs.size()) {
+                QPoint dropPos = event->position().toPoint();
+                int toIdx = m_tabs.size() - 1;
+                for (int i = 0; i < m_tabWidgets.size(); ++i) {
+                    QRect rect = m_tabWidgets[i]->geometry();
+                    if (dropPos.x() < rect.center().x()) {
+                        toIdx = i;
+                        break;
+                    }
+                }
+
+                if (fromIdx != toIdx) {
+                    TabInfo movedTab = m_tabs.takeAt(fromIdx);
+                    m_tabs.insert(toIdx, movedTab);
+
+                    if (m_currentIndex == fromIdx) {
+                        m_currentIndex = toIdx;
+                    } else if (m_currentIndex > fromIdx && m_currentIndex <= toIdx) {
+                        m_currentIndex--;
+                    } else if (m_currentIndex < fromIdx && m_currentIndex >= toIdx) {
+                        m_currentIndex++;
+                    }
+
+                    for (int i = 0; i < m_tabs.size(); ++i) {
+                        m_tabs[i].active = (i == m_currentIndex);
+                    }
+
+                    rebuildTabsUi();
+                    saveStateToConfig();
+                }
+            }
+            event->acceptProposedAction();
+            return;
+        } else if (event->mimeData()->hasUrls()) {
+            for (const QUrl& url : event->mimeData()->urls()) {
+                QString path = url.toLocalFile();
+                if (!path.isEmpty() && QFileInfo(path).isDir()) {
+                    openOrFocusTab(path);
+                    event->acceptProposedAction();
+                    return;
+                }
             }
         }
     }

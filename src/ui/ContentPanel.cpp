@@ -4,6 +4,10 @@
 #include "ContentPanel.h"
 #include "ContentHeaderWidget.h"
 #include "FolderSectionWidget.h"
+#include <QSplitter>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include "SectionedScrollCanvas.h"
 #include "controllers/ContentContextMenu.h"
 #include "controllers/ContentKeyHandler.h"
@@ -51,6 +55,7 @@ QTreeView* ContentPanel::treeView() const {
 }
 
 ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
+    setAcceptDrops(true);
     setContextMenuPolicy(Qt::CustomContextMenu);
     setObjectName("EditorContainer");
     setAttribute(Qt::WA_StyledBackground, true);
@@ -286,6 +291,129 @@ void ContentPanel::reloadThumbnailForPath(const QString& path) {
 
 bool ContentPanel::isTreeView(QObject* view) const {
     return (view == m_treeView);
+}
+
+bool ContentPanel::isSplitMode() const {
+    return m_isSplit;
+}
+
+void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
+    Q_UNUSED(secondaryPath);
+    if (m_isSplit && m_splitOrientation == orientation) return;
+
+    m_splitOrientation = orientation;
+    m_isSplit = true;
+
+    if (!m_paneSplitter) {
+        m_paneSplitter = new QSplitter(m_splitOrientation, this);
+        m_paneSplitter->setHandleWidth(2);
+        m_mainLayout->removeWidget(m_viewStack);
+        m_paneSplitter->addWidget(m_viewStack);
+
+        m_secondaryPaneContainer = new QWidget(m_paneSplitter);
+        QVBoxLayout* secLayout = new QVBoxLayout(m_secondaryPaneContainer);
+        secLayout->setContentsMargins(0, 0, 0, 0);
+
+        m_paneSplitter->addWidget(m_secondaryPaneContainer);
+        m_mainLayout->addWidget(m_paneSplitter, 1);
+    } else {
+        m_paneSplitter->setOrientation(m_splitOrientation);
+        if (m_secondaryPaneContainer) {
+            m_secondaryPaneContainer->show();
+        }
+    }
+
+    QList<int> sizes;
+    int total = (orientation == Qt::Horizontal) ? width() : height();
+    sizes << total / 2 << total / 2;
+    m_paneSplitter->setSizes(sizes);
+}
+
+void ContentPanel::closeSecondaryPane() {
+    if (!m_isSplit) return;
+
+    m_isSplit = false;
+    if (m_secondaryPaneContainer) {
+        m_secondaryPaneContainer->hide();
+    }
+}
+
+void ContentPanel::updateDragOverlay(const QPoint& pos) {
+    if (!m_dragOverlayWidget) {
+        m_dragOverlayWidget = new QWidget(this);
+        m_dragOverlayWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
+        m_dragOverlayWidget->setStyleSheet("background-color: rgba(0, 122, 255, 0.25); border: 2px solid #007AFF;");
+    }
+
+    int w = width();
+    int h = height();
+
+    if (pos.x() > w * 0.75) {
+        m_dragOverlayWidget->setGeometry(w / 2, 0, w / 2, h);
+        m_dragOverlayWidget->show();
+    } else if (pos.x() < w * 0.25) {
+        m_dragOverlayWidget->setGeometry(0, 0, w / 2, h);
+        m_dragOverlayWidget->show();
+    } else if (pos.y() > h * 0.75) {
+        m_dragOverlayWidget->setGeometry(0, h / 2, w, h / 2);
+        m_dragOverlayWidget->show();
+    } else if (pos.y() < h * 0.25) {
+        m_dragOverlayWidget->setGeometry(0, 0, w, h / 2);
+        m_dragOverlayWidget->show();
+    } else {
+        hideDragOverlay();
+    }
+}
+
+void ContentPanel::hideDragOverlay() {
+    if (m_dragOverlayWidget) {
+        m_dragOverlayWidget->hide();
+    }
+}
+
+void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData()->hasUrls() || event->mimeData()->hasText() ||
+        event->mimeData()->hasFormat("application/x-quarkmeta-tabindex")) {
+        event->acceptProposedAction();
+    }
+}
+
+void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
+    updateDragOverlay(event->position().toPoint());
+    event->acceptProposedAction();
+}
+
+void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
+    Q_UNUSED(event);
+    hideDragOverlay();
+}
+
+void ContentPanel::dropEvent(QDropEvent* event) {
+    QPoint pos = event->position().toPoint();
+    hideDragOverlay();
+
+    int w = width();
+    int h = height();
+
+    if (pos.x() > w * 0.75 || pos.x() < w * 0.25) {
+        splitPane(Qt::Horizontal);
+        event->acceptProposedAction();
+    } else if (pos.y() > h * 0.75 || pos.y() < h * 0.25) {
+        splitPane(Qt::Vertical);
+        event->acceptProposedAction();
+    } else {
+        if (event->mimeData()->hasUrls()) {
+            QStringList paths;
+            for (const QUrl& url : event->mimeData()->urls()) {
+                paths << url.toLocalFile();
+            }
+            onPathsDropped(paths, QModelIndex());
+            event->acceptProposedAction();
+        } else if (event->mimeData()->hasText()) {
+            splitPane(Qt::Horizontal, event->mimeData()->text());
+            event->acceptProposedAction();
+        }
+    }
 }
 
 void ContentPanel::startVisibleTimer() {
