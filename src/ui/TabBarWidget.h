@@ -24,7 +24,7 @@ struct TabInfo {
 class TabItemButton : public QPushButton {
     Q_OBJECT
 public:
-    explicit TabItemButton(int index, QWidget* parent = nullptr, HoverEventFilter* hoverFilter = nullptr);
+    explicit TabItemButton(int index, QWidget* parent = nullptr);
     int index() const { return m_index; }
     void setIndex(int index) { m_index = index; }
 

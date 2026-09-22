@@ -32,14 +32,10 @@
 
 namespace QuarkMeta {
 
-TabItemButton::TabItemButton(int index, QWidget* parent, HoverEventFilter* hoverFilter)
+TabItemButton::TabItemButton(int index, QWidget* parent)
     : QPushButton(parent), m_index(index) {
     setObjectName("TabItem");
     setFocusPolicy(Qt::NoFocus);
-    setAttribute(Qt::WA_Hover, true);
-    if (hoverFilter) {
-        installEventFilter(hoverFilter);
-    }
     setFixedHeight(28);
     setMaximumWidth(180);
     setMinimumWidth(80);
@@ -80,7 +76,6 @@ void TabItemButton::setTabTitle(const QString& title) {
         QFontMetrics fm(m_titleLabel->font());
         QString elided = fm.elidedText(title, Qt::ElideRight, 110);
         m_titleLabel->setText(elided);
-        setProperty("tooltipText", title);
     }
 }
 
@@ -660,7 +655,7 @@ void TabBarWidget::rebuildTabsUi() {
             tab.color = QString::fromStdWString(meta.manualColor);
         }
 
-        TabItemButton* tabItem = new TabItemButton(i, this, m_hoverFilter);
+        TabItemButton* tabItem = new TabItemButton(i, this);
         tabItem->setTabTitle(tab.title);
         QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
         QString iconKey = !tab.iconKey.isEmpty() ? tab.iconKey : (tab.url.startsWith("computer://") ? "computer" : "folder_filled");
