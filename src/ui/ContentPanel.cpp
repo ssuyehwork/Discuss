@@ -308,15 +308,40 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
     m_splitOrientation = orientation;
     m_isSplit = true;
 
+    // Remove outer border styling from main host panel while split
+    setObjectName("ContentPanelHost");
+    style()->unpolish(this);
+    style()->polish(this);
+
     if (!m_paneSplitter) {
         m_paneSplitter = new QSplitter(m_splitOrientation, this);
-        m_paneSplitter->setHandleWidth(2);
-        m_mainLayout->removeWidget(m_viewStack);
-        m_paneSplitter->addWidget(m_viewStack);
+        m_paneSplitter->setHandleWidth(5);
+        m_paneSplitter->setChildrenCollapsible(false);
 
+        // 1. Primary pane container
+        m_primaryPaneContainer = new QWidget(m_paneSplitter);
+        m_primaryPaneContainer->setObjectName("EditorContainer");
+        m_primaryPaneContainer->setAttribute(Qt::WA_StyledBackground, true);
+        QVBoxLayout* primLayout = new QVBoxLayout(m_primaryPaneContainer);
+        primLayout->setContentsMargins(0, 0, 0, 0);
+        primLayout->setSpacing(0);
+
+        if (m_topBarWidget) {
+            m_mainLayout->removeWidget(m_topBarWidget);
+            primLayout->addWidget(m_topBarWidget);
+        }
+        if (m_viewStack) {
+            m_mainLayout->removeWidget(m_viewStack);
+            primLayout->addWidget(m_viewStack, 1);
+        }
+
+        m_paneSplitter->addWidget(m_primaryPaneContainer);
+
+        // 2. Secondary pane container
         m_secondaryPaneContainer = new QWidget(m_paneSplitter);
         QVBoxLayout* secLayout = new QVBoxLayout(m_secondaryPaneContainer);
         secLayout->setContentsMargins(0, 0, 0, 0);
+        secLayout->setSpacing(0);
 
         m_secondaryContentPanel = new ContentPanel(m_secondaryPaneContainer);
         secLayout->addWidget(m_secondaryContentPanel);
@@ -335,8 +360,14 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         emit secondaryPaneCreated(m_secondaryContentPanel);
     } else {
         m_paneSplitter->setOrientation(m_splitOrientation);
+        if (m_primaryPaneContainer) {
+            m_primaryPaneContainer->show();
+        }
         if (m_secondaryPaneContainer) {
             m_secondaryPaneContainer->show();
+        }
+        if (m_paneSplitter) {
+            m_paneSplitter->show();
         }
     }
 
@@ -360,9 +391,30 @@ void ContentPanel::closeSecondaryPane() {
     if (!m_isSplit) return;
 
     m_isSplit = false;
-    if (m_secondaryPaneContainer) {
-        m_secondaryPaneContainer->hide();
+
+    if (m_paneSplitter) {
+        m_paneSplitter->hide();
     }
+
+    if (m_primaryPaneContainer) {
+        m_primaryPaneContainer->layout()->removeWidget(m_topBarWidget);
+        m_primaryPaneContainer->layout()->removeWidget(m_viewStack);
+    }
+
+    if (m_topBarWidget) {
+        m_mainLayout->addWidget(m_topBarWidget);
+        m_topBarWidget->show();
+    }
+    if (m_viewStack) {
+        m_mainLayout->addWidget(m_viewStack, 1);
+        m_viewStack->show();
+    }
+
+    // Restore standard EditorContainer styling for single-pane mode
+    setObjectName("EditorContainer");
+    style()->unpolish(this);
+    style()->polish(this);
+
     emit secondaryPaneClosed();
     emit directorySelected(m_currentPath);
 }

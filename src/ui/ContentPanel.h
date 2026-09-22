@@ -242,6 +242,7 @@ private:
     class ContentHeaderWidget* m_headerWidget = nullptr;
 
     QSplitter* m_paneSplitter = nullptr;
+    QWidget* m_primaryPaneContainer = nullptr;
     QWidget* m_secondaryPaneContainer = nullptr;
     ContentPanel* m_secondaryContentPanel = nullptr;
     QWidget* m_dragOverlayWidget = nullptr;
