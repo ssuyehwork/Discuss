@@ -7,6 +7,7 @@
 #include <QScrollArea>
 #include <QSet>
 #include <QModelIndexList>
+#include <QSplitter>
 #include <atomic>
 
 #include "ScanStats.h"
@@ -152,12 +153,6 @@ public:
 
     bool eventFilter(QObject* obj, QEvent* event) override;
 
-protected:
-    void dragEnterEvent(QDragEnterEvent* event) override;
-    void dragMoveEvent(QDragMoveEvent* event) override;
-    void dragLeaveEvent(QDragLeaveEvent* event) override;
-    void dropEvent(QDropEvent* event) override;
-
     // 6. 模型与选中数据访问
     ItemModelBase* model() const { return m_model; }
     QSortFilterProxyModel* getProxyModel() const { return getActiveProxyModel(); }
@@ -165,6 +160,12 @@ protected:
     QStringList getSelectedPaths() const;
     QList<int> getSelectedTrashIds() const;
     QModelIndexList getSelectedIndexes() const;
+
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 signals:
     void zoomLevelChanged(int level);
@@ -237,7 +238,7 @@ private:
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
 
-    class QSplitter* m_paneSplitter = nullptr;
+    QSplitter* m_paneSplitter = nullptr;
     QWidget* m_secondaryPaneContainer = nullptr;
     QWidget* m_dragOverlayWidget = nullptr;
     Qt::Orientation m_splitOrientation = Qt::Horizontal;

@@ -12,7 +12,16 @@ This implementation plan adds dual-pane horizontal/vertical splitting capabiliti
 ## 3. Detailed Line-by-Line Changes
 
 ### 3.1 `src/ui/ContentPanel.h`
-Add split-pane management, drag overlay preview widget, split state queries, and "关闭窗格" slot.
+Add `#include <QSplitter>`, split-pane management, drag overlay preview widget, split state queries, and "关闭窗格" slot while preserving `public` visibility for model and selection query methods.
+
+<<<<<<< SEARCH
+#include <QModelIndexList>
+#include <atomic>
+=======
+#include <QModelIndexList>
+#include <QSplitter>
+#include <atomic>
+>>>>>>> REPLACE
 
 <<<<<<< SEARCH
 public:
@@ -31,10 +40,12 @@ public:
 
 <<<<<<< SEARCH
 protected:
-    bool eventFilter(QObject* obj, QEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 =======
 protected:
-    bool eventFilter(QObject* obj, QEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
@@ -42,11 +53,14 @@ protected:
 >>>>>>> REPLACE
 
 <<<<<<< SEARCH
-    // Internal UI elements
+    // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
+    class ContentHeaderWidget* m_headerWidget = nullptr;
 =======
-    // Internal UI elements
+    // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
+    class ContentHeaderWidget* m_headerWidget = nullptr;
+
     QSplitter* m_paneSplitter = nullptr;
     QWidget* m_secondaryPaneContainer = nullptr;
     QWidget* m_dragOverlayWidget = nullptr;
@@ -62,52 +76,47 @@ Implement drag overlay visualization, splitter layout creation for dual pane, cr
 
 <<<<<<< SEARCH
 #include "ContentPanel.h"
-#include "ThumbnailViewWidget.h"
+#include "ContentHeaderWidget.h"
+#include "FolderSectionWidget.h"
 =======
 #include "ContentPanel.h"
-#include "ThumbnailViewWidget.h"
+#include "ContentHeaderWidget.h"
+#include "FolderSectionWidget.h"
 #include <QSplitter>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
-#include <QPainter>
 >>>>>>> REPLACE
 
 <<<<<<< SEARCH
-ContentPanel::ContentPanel(QWidget* parent)
-    : QWidget(parent)
-{
-    m_mainLayout = new QVBoxLayout(this);
-    m_mainLayout->setContentsMargins(0, 0, 0, 0);
-    m_mainLayout->setSpacing(0);
+ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    setObjectName("EditorContainer");
+    setAttribute(Qt::WA_StyledBackground, true);
+    setMinimumWidth(230);
 =======
-ContentPanel::ContentPanel(QWidget* parent)
-    : QWidget(parent)
-{
+ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     setAcceptDrops(true);
-    m_mainLayout = new QVBoxLayout(this);
-    m_mainLayout->setContentsMargins(0, 0, 0, 0);
-    m_mainLayout->setSpacing(0);
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    setObjectName("EditorContainer");
+    setAttribute(Qt::WA_StyledBackground, true);
+    setMinimumWidth(230);
 >>>>>>> REPLACE
 
 <<<<<<< SEARCH
-bool ContentPanel::isTreeView(QObject* view) const
-{
-    return view && view == m_treeView;
+bool ContentPanel::isTreeView(QObject* view) const {
+    return (view == m_treeView);
 }
 =======
-bool ContentPanel::isTreeView(QObject* view) const
-{
-    return view && view == m_treeView;
+bool ContentPanel::isTreeView(QObject* view) const {
+    return (view == m_treeView);
 }
 
-bool ContentPanel::isSplitMode() const
-{
+bool ContentPanel::isSplitMode() const {
     return m_isSplit;
 }
 
-void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath)
-{
+void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
     if (m_isSplit && m_splitOrientation == orientation) return;
 
     m_splitOrientation = orientation;
@@ -124,7 +133,7 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         secLayout->setContentsMargins(0, 0, 0, 0);
 
         m_paneSplitter->addWidget(m_secondaryPaneContainer);
-        m_mainLayout->addWidget(m_paneSplitter);
+        m_mainLayout->addWidget(m_paneSplitter, 1);
     } else {
         m_paneSplitter->setOrientation(m_splitOrientation);
         if (m_secondaryPaneContainer) {
@@ -138,8 +147,7 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
     m_paneSplitter->setSizes(sizes);
 }
 
-void ContentPanel::closeSecondaryPane()
-{
+void ContentPanel::closeSecondaryPane() {
     if (!m_isSplit) return;
 
     m_isSplit = false;
@@ -148,8 +156,7 @@ void ContentPanel::closeSecondaryPane()
     }
 }
 
-void ContentPanel::updateDragOverlay(const QPoint& pos)
-{
+void ContentPanel::updateDragOverlay(const QPoint& pos) {
     if (!m_dragOverlayWidget) {
         m_dragOverlayWidget = new QWidget(this);
         m_dragOverlayWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -176,34 +183,30 @@ void ContentPanel::updateDragOverlay(const QPoint& pos)
     }
 }
 
-void ContentPanel::hideDragOverlay()
-{
+void ContentPanel::hideDragOverlay() {
     if (m_dragOverlayWidget) {
         m_dragOverlayWidget->hide();
     }
 }
 
-void ContentPanel::dragEnterEvent(QDragEnterEvent* event)
-{
-    if (event->mimeData()->hasUrls() || event->mimeData()->hasText()) {
+void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData()->hasUrls() || event->mimeData()->hasText() ||
+        event->mimeData()->hasFormat("application/x-quarkmeta-tabindex")) {
         event->acceptProposedAction();
     }
 }
 
-void ContentPanel::dragMoveEvent(QDragMoveEvent* event)
-{
+void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
     updateDragOverlay(event->pos());
     event->acceptProposedAction();
 }
 
-void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event)
-{
+void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
     Q_UNUSED(event);
     hideDragOverlay();
 }
 
-void ContentPanel::dropEvent(QDropEvent* event)
-{
+void ContentPanel::dropEvent(QDropEvent* event) {
     QPoint pos = event->pos();
     hideDragOverlay();
 
@@ -224,6 +227,9 @@ void ContentPanel::dropEvent(QDropEvent* event)
             }
             onPathsDropped(paths, QModelIndex());
             event->acceptProposedAction();
+        } else if (event->mimeData()->hasText()) {
+            splitPane(Qt::Horizontal, event->mimeData()->text());
+            event->acceptProposedAction();
         }
     }
 }
@@ -233,24 +239,32 @@ void ContentPanel::dropEvent(QDropEvent* event)
 Inject "关闭窗格" into context menu when split pane mode is active.
 
 <<<<<<< SEARCH
-    // --- 空白处/选项通用菜单项 ---
-    menu.addSeparator();
-    QAction* refreshAction = menu.addAction(QObject::tr("刷新"));
-=======
-    // --- 窗格拆分控制 ---
-    if (m_parentPanel && m_parentPanel->isSplitMode()) {
-        QAction* closePaneAction = menu.addAction(QObject::tr("关闭窗格"));
-        QObject::connect(closePaneAction, &QAction::triggered, [this]() {
-            if (m_parentPanel) {
-                m_parentPanel->closeSecondaryPane();
-            }
-        });
-        menu.addSeparator();
+            menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
+        }
     }
 
-    // --- 空白处/选项通用菜单项 ---
     menu.addSeparator();
-    QAction* refreshAction = menu.addAction(QObject::tr("刷新"));
+
+    // 排序二级子菜单
+=======
+            menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
+        }
+    }
+
+    // --- 拆分窗格控制菜单项 ---
+    if (m_panel && m_panel->isSplitMode()) {
+        menu.addSeparator();
+        QAction* closePaneAction = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 18), "关闭窗格");
+        QObject::connect(closePaneAction, &QAction::triggered, [this]() {
+            if (m_panel) {
+                m_panel->closeSecondaryPane();
+            }
+        });
+    }
+
+    menu.addSeparator();
+
+    // 排序二级子菜单
 >>>>>>> REPLACE
 
 ## 4. Build & Verification Steps
