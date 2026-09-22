@@ -439,6 +439,34 @@ void TabBarWidget::dropEvent(QDropEvent* event) {
     QWidget::dropEvent(event);
 }
 
+void TabBarWidget::updateDualPaneTabTitle(const QString& title1, const QString& url1, const QString& title2, const QString& url2) {
+    if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
+
+    auto cleanName = [](const QString& t, const QString& u) -> QString {
+        if (u == "computer://" || u.isEmpty()) return "此电脑";
+        if (t.contains("/") || t.contains("\\")) {
+            QString cleanPath = QDir::cleanPath(u);
+            QFileInfo fi(cleanPath);
+            QString fn = fi.fileName();
+            return fn.isEmpty() ? cleanPath : fn;
+        }
+        return t.isEmpty() ? "此电脑" : t;
+    };
+
+    QString name1 = cleanName(title1, url1);
+    QString name2 = cleanName(title2, url2);
+    QString mergedTitle = name1 + " | " + name2;
+
+    m_tabs[m_currentIndex].title = mergedTitle;
+    m_tabs[m_currentIndex].url = url1;
+
+    if (m_currentIndex < m_tabWidgets.size()) {
+        auto tabBtn = m_tabWidgets[m_currentIndex];
+        tabBtn->setTabTitle(mergedTitle);
+    }
+    saveStateToConfig();
+}
+
 void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& url) {
     if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
 

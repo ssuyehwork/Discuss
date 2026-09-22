@@ -68,6 +68,7 @@ public:
     int currentIndex() const { return m_currentIndex; }
     int tabCount() const { return m_tabs.size(); }
     void updateCurrentTabTitle(const QString& title, const QString& url);
+    void updateDualPaneTabTitle(const QString& title1, const QString& url1, const QString& title2, const QString& url2);
     void openOrFocusTab(const QString& path);
 
     void saveStateToConfig();

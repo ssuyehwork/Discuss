@@ -333,7 +333,7 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
     }
 
     if (m_secondaryContentPanel) {
-        m_secondaryContentPanel->loadDirectory(!secondaryPath.isEmpty() ? secondaryPath : "computer://");
+        m_secondaryContentPanel->loadDirectory(!secondaryPath.isEmpty() ? secondaryPath : m_currentPath);
     }
 
     QList<int> sizes;
