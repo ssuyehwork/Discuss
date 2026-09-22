@@ -298,6 +298,7 @@ bool ContentPanel::isSplitMode() const {
 }
 
 void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
+    Q_UNUSED(secondaryPath);
     if (m_isSplit && m_splitOrientation == orientation) return;
 
     m_splitOrientation = orientation;
@@ -388,7 +389,7 @@ void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
 }
 
 void ContentPanel::dropEvent(QDropEvent* event) {
-    QPoint pos = event->pos();
+    QPoint pos = event->position().toPoint();
     hideDragOverlay();
 
     int w = width();
