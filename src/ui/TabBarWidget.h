@@ -38,10 +38,12 @@ signals:
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
     int m_index = -1;
+    QPoint m_dragStartPos;
     QLabel* m_iconLabel = nullptr;
     QLabel* m_titleLabel = nullptr;
     QPushButton* m_btnClose = nullptr;
@@ -80,6 +82,7 @@ signals:
 
 private:
     void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
 
     void showTabContextMenu(int index, const QPoint& globalPos);
