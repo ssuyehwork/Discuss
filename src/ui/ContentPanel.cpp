@@ -230,6 +230,10 @@ void ContentPanel::initListView() {
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
+    if (event && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn)) {
+        emit panelActivated(this);
+    }
+
     if (event && event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {

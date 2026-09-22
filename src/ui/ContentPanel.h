@@ -171,6 +171,7 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 signals:
+    void panelActivated(ContentPanel* panel);
     void secondaryPaneCreated(ContentPanel* pane);
     void secondaryPaneClosed();
     void closePaneRequested();
