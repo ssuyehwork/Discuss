@@ -71,6 +71,11 @@ public:
     explicit ContentPanel(QWidget* parent = nullptr);
     ~ContentPanel() override = default;
 
+    // Dual-pane state inspection & split controls
+    bool isSplitMode() const;
+    void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString());
+    void closeSecondaryPane();
+
     QSize minimumSizeHint() const override { return QSize(230, 100); }
     void deferredInit() {}
 
@@ -146,6 +151,12 @@ public:
     QString getAdjacentFilePath(const QString& currentPath, int delta);
 
     bool eventFilter(QObject* obj, QEvent* event) override;
+
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
     // 6. 模型与选中数据访问
     ItemModelBase* model() const { return m_model; }
@@ -225,6 +236,15 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
+
+    class QSplitter* m_paneSplitter = nullptr;
+    QWidget* m_secondaryPaneContainer = nullptr;
+    QWidget* m_dragOverlayWidget = nullptr;
+    Qt::Orientation m_splitOrientation = Qt::Horizontal;
+    bool m_isSplit = false;
+
+    void updateDragOverlay(const QPoint& pos);
+    void hideDragOverlay();
 
     SectionedScrollCanvas* m_gridCanvas = nullptr;
     SectionedScrollCanvas* m_listCanvas = nullptr;

@@ -501,6 +501,17 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         }
     }
 
+    // --- 拆分窗格控制菜单项 ---
+    if (m_panel && m_panel->isSplitMode()) {
+        menu.addSeparator();
+        QAction* closePaneAction = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 18), "关闭窗格");
+        QObject::connect(closePaneAction, &QAction::triggered, [this]() {
+            if (m_panel) {
+                m_panel->closeSecondaryPane();
+            }
+        });
+    }
+
     menu.addSeparator();
 
     // 排序二级子菜单
