@@ -182,6 +182,7 @@ signals:
     void directoryStatsReady(const QuarkMeta::ScanStats& stats);
     void statusBarStatsUpdated(int fileCount, int folderCount, int totalCount);
     void statusBarMessageReady(const QString& message);
+    void dualPanePathsChanged(const QString& path1, const QString& path2);
 
 public slots:
     void setZoomLevel(int level);

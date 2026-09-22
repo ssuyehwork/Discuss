@@ -324,6 +324,14 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         m_paneSplitter->addWidget(m_secondaryPaneContainer);
         m_mainLayout->addWidget(m_paneSplitter, 1);
 
+        connect(m_secondaryContentPanel, &ContentPanel::directorySelected, this, [this](const QString&) {
+            if (m_isSplit) {
+                QString p1 = m_currentPath;
+                QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
+                emit dualPanePathsChanged(p1, p2);
+            }
+        });
+
         emit secondaryPaneCreated(m_secondaryContentPanel);
     } else {
         m_paneSplitter->setOrientation(m_splitOrientation);
@@ -340,6 +348,12 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
     int total = (orientation == Qt::Horizontal) ? width() : height();
     sizes << total / 2 << total / 2;
     m_paneSplitter->setSizes(sizes);
+
+    if (m_isSplit) {
+        QString p1 = m_currentPath;
+        QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
+        emit dualPanePathsChanged(p1, p2);
+    }
 }
 
 void ContentPanel::closeSecondaryPane() {
@@ -350,6 +364,7 @@ void ContentPanel::closeSecondaryPane() {
         m_secondaryPaneContainer->hide();
     }
     emit secondaryPaneClosed();
+    emit directorySelected(m_currentPath);
 }
 
 void ContentPanel::updateDragOverlay(const QPoint& pos) {

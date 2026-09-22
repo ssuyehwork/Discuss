@@ -203,6 +203,18 @@ void PanelMediator::setupConnections() {
             NavigationService::instance().navigateTo(path);
         });
 
+        connect(contentPanel, &ContentPanel::dualPanePathsChanged, this, [titleBar](const QString& path1, const QString& path2) {
+            if (titleBar && titleBar->tabBar()) {
+                auto cleanName = [](const QString& u) -> QString {
+                    if (u == "computer://" || u.isEmpty()) return "此电脑";
+                    QFileInfo fi(u);
+                    QString fn = fi.fileName();
+                    return fn.isEmpty() ? u : fn;
+                };
+                titleBar->tabBar()->updateDualPaneTabTitle(cleanName(path1), path1, cleanName(path2), path2);
+            }
+        });
+
         if (contentPanel->columnView()) {
             connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, this, [filterPanel](const QString& path) {
                 if (filterPanel) {
