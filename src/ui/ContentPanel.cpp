@@ -319,7 +319,7 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         m_paneSplitter->setChildrenCollapsible(false);
 
         // 1. Primary pane container
-        m_primaryPaneContainer = new QWidget(m_paneSplitter);
+        m_primaryPaneContainer = new QFrame(m_paneSplitter);
         m_primaryPaneContainer->setObjectName("EditorContainer");
         m_primaryPaneContainer->setAttribute(Qt::WA_StyledBackground, true);
         QVBoxLayout* primLayout = new QVBoxLayout(m_primaryPaneContainer);
