@@ -115,16 +115,7 @@ void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
         if ((event->pos() - m_dragStartPos).manhattanLength() >= QApplication::startDragDistance()) {
             QDrag* drag = new QDrag(this);
             QMimeData* mimeData = new QMimeData();
-
-            // 写入专用的 Tab 拆分协议
             mimeData->setData("application/x-quarkmeta-tabindex", QByteArray::number(m_index));
-            // 获取当前 Tab 的实际 URL 路径（从父 TabBarWidget 获取）
-            TabBarWidget* tabBar = qobject_cast<TabBarWidget*>(parentWidget()->parentWidget());
-            if (tabBar && m_index >= 0 && m_index < tabBar->tabCount()) {
-                QString targetUrl = tabBar->tabUrl(m_index);
-                mimeData->setData("application/x-quarkmeta-taburl", targetUrl.toUtf8());
-                mimeData->setText(targetUrl);
-            }
             drag->setMimeData(mimeData);
 
             QPixmap pixmap = grab();
@@ -221,32 +212,6 @@ void TabBarWidget::closeTab(int index) {
     }
     setCurrentIndex(m_currentIndex, true);
     emit tabClosed(index);
-    saveStateToConfig();
-}
-
-void TabBarWidget::closeTabSilently(int index) {
-    if (index < 0 || index >= m_tabs.size()) return;
-
-    m_closedTabsHistory.append(m_tabs[index]);
-    m_tabs.removeAt(index);
-
-    if (m_tabs.isEmpty()) {
-        TabInfo info;
-        info.id = QString::number(QDateTime::currentMSecsSinceEpoch()) + "_0";
-        info.title = "此电脑";
-        info.url = "computer://";
-        info.active = true;
-        m_tabs.append(info);
-        m_currentIndex = 0;
-    } else {
-        if (index < m_currentIndex) {
-            m_currentIndex--;
-        } else if (m_currentIndex >= m_tabs.size()) {
-            m_currentIndex = m_tabs.size() - 1;
-        }
-    }
-
-    setCurrentIndex(m_currentIndex, true);
     saveStateToConfig();
 }
 

@@ -199,14 +199,6 @@ void PanelMediator::setupConnections() {
     }
 
     if (contentPanel) {
-        connect(contentPanel, &ContentPanel::activePaneChanged, this,
-                [addressBar, navPanel, filterPanel](ContentPanel* activePane, const QString& path) {
-            Q_UNUSED(activePane);
-            Q_UNUSED(filterPanel);
-            if (addressBar) addressBar->setPath(path);
-            if (navPanel) navPanel->selectPath(path == "computer://" ? "" : path);
-        });
-
         connect(contentPanel, &ContentPanel::directorySelected, &NavigationService::instance(), [](const QString& path) {
             NavigationService::instance().navigateTo(path);
         });

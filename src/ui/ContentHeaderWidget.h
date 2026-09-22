@@ -23,7 +23,6 @@ public:
     void setFilterState(const FilterState& state);
     void setRecursive(bool recursive);
     void setLayersEnabled(bool enabled, const QString& tooltip);
-    void setTitleText(const QString& title);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
