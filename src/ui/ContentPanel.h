@@ -168,6 +168,8 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 signals:
+    void secondaryPaneCreated(ContentPanel* pane);
+    void secondaryPaneClosed();
     void zoomLevelChanged(int level);
     void viewModeChanged(ViewMode mode);
     void requestQuickLook(const QString& path);
@@ -240,6 +242,7 @@ private:
 
     QSplitter* m_paneSplitter = nullptr;
     QWidget* m_secondaryPaneContainer = nullptr;
+    ContentPanel* m_secondaryContentPanel = nullptr;
     QWidget* m_dragOverlayWidget = nullptr;
     Qt::Orientation m_splitOrientation = Qt::Horizontal;
     bool m_isSplit = false;

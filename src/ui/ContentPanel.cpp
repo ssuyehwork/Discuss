@@ -298,8 +298,12 @@ bool ContentPanel::isSplitMode() const {
 }
 
 void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
-    Q_UNUSED(secondaryPath);
-    if (m_isSplit && m_splitOrientation == orientation) return;
+    if (m_isSplit && m_splitOrientation == orientation) {
+        if (m_secondaryContentPanel && !secondaryPath.isEmpty()) {
+            m_secondaryContentPanel->loadDirectory(secondaryPath);
+        }
+        return;
+    }
 
     m_splitOrientation = orientation;
     m_isSplit = true;
@@ -314,13 +318,22 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         QVBoxLayout* secLayout = new QVBoxLayout(m_secondaryPaneContainer);
         secLayout->setContentsMargins(0, 0, 0, 0);
 
+        m_secondaryContentPanel = new ContentPanel(m_secondaryPaneContainer);
+        secLayout->addWidget(m_secondaryContentPanel);
+
         m_paneSplitter->addWidget(m_secondaryPaneContainer);
         m_mainLayout->addWidget(m_paneSplitter, 1);
+
+        emit secondaryPaneCreated(m_secondaryContentPanel);
     } else {
         m_paneSplitter->setOrientation(m_splitOrientation);
         if (m_secondaryPaneContainer) {
             m_secondaryPaneContainer->show();
         }
+    }
+
+    if (m_secondaryContentPanel) {
+        m_secondaryContentPanel->loadDirectory(!secondaryPath.isEmpty() ? secondaryPath : "computer://");
     }
 
     QList<int> sizes;
@@ -336,6 +349,7 @@ void ContentPanel::closeSecondaryPane() {
     if (m_secondaryPaneContainer) {
         m_secondaryPaneContainer->hide();
     }
+    emit secondaryPaneClosed();
 }
 
 void ContentPanel::updateDragOverlay(const QPoint& pos) {
