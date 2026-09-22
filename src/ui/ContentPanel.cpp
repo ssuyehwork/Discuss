@@ -344,15 +344,21 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         secLayout->setSpacing(0);
 
         m_secondaryContentPanel = new ContentPanel(m_secondaryPaneContainer);
+        m_secondaryContentPanel->setIsSecondaryPane(true);
+        connect(m_secondaryContentPanel, &ContentPanel::closePaneRequested, this, &ContentPanel::closeSecondaryPane);
+
         secLayout->addWidget(m_secondaryContentPanel);
 
         m_paneSplitter->addWidget(m_secondaryPaneContainer);
         m_mainLayout->addWidget(m_paneSplitter, 1);
 
-        connect(m_secondaryContentPanel, &ContentPanel::directorySelected, this, [this](const QString&) {
-            if (m_isSplit) {
+        connect(m_secondaryContentPanel, &ContentPanel::directorySelected, this, [this](const QString& path) {
+            if (m_isSplit && m_secondaryContentPanel) {
+                // 1. 让副窗格自身加载被双击的下级目录
+                m_secondaryContentPanel->loadDirectory(path);
+                // 2. 向上派发双窗格路径更新
                 QString p1 = m_currentPath;
-                QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
+                QString p2 = path;
                 emit dualPanePathsChanged(p1, p2);
             }
         });
@@ -392,6 +398,14 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         QString p1 = m_currentPath;
         QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
         emit dualPanePathsChanged(p1, p2);
+    }
+}
+
+void ContentPanel::requestClosePane() {
+    if (m_isSecondaryPane) {
+        emit closePaneRequested();
+    } else if (m_isSplit) {
+        closeSecondaryPane();
     }
 }
 
@@ -484,11 +498,18 @@ void ContentPanel::dropEvent(QDropEvent* event) {
     int w = width();
     int h = height();
 
+    QString targetUrl;
+    if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        targetUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
+    } else if (event->mimeData()->hasText()) {
+        targetUrl = event->mimeData()->text();
+    }
+
     if (pos.x() > w * 0.75 || pos.x() < w * 0.25) {
-        splitPane(Qt::Horizontal);
+        splitPane(Qt::Horizontal, targetUrl);
         event->acceptProposedAction();
     } else if (pos.y() > h * 0.75 || pos.y() < h * 0.25) {
-        splitPane(Qt::Vertical);
+        splitPane(Qt::Vertical, targetUrl);
         event->acceptProposedAction();
     } else {
         if (event->mimeData()->hasUrls()) {
