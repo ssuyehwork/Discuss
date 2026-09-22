@@ -203,6 +203,18 @@ void PanelMediator::setupConnections() {
             NavigationService::instance().navigateTo(path);
         });
 
+        connect(contentPanel, &ContentPanel::dualPanePathsChanged, this, [titleBar](const QString& path1, const QString& path2) {
+            if (titleBar && titleBar->tabBar()) {
+                auto cleanName = [](const QString& u) -> QString {
+                    if (u == "computer://" || u.isEmpty()) return "此电脑";
+                    QFileInfo fi(u);
+                    QString fn = fi.fileName();
+                    return fn.isEmpty() ? u : fn;
+                };
+                titleBar->tabBar()->updateDualPaneTabTitle(cleanName(path1), path1, cleanName(path2), path2);
+            }
+        });
+
         if (contentPanel->columnView()) {
             connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, this, [filterPanel](const QString& path) {
                 if (filterPanel) {
@@ -275,95 +287,102 @@ void PanelMediator::setupConnections() {
             }
         });
 
-        connect(contentPanel, &ContentPanel::selectionChanged, metaPanel, [contentPanel, metaPanel](const QStringList& paths) {
-            QElapsedTimer timer;
-            timer.start();
+        auto wireSelectionToMeta = [metaPanel](ContentPanel* panel) {
+            if (!panel) return;
+            connect(panel, &ContentPanel::selectionChanged, metaPanel, [panel, metaPanel](const QStringList& paths) {
+                QElapsedTimer timer;
+                timer.start();
 
-            metaPanel->setSelectedPaths(paths);
-            qint64 tSetSelected = timer.elapsed();
+                metaPanel->setSelectedPaths(paths);
+                qint64 tSetSelected = timer.elapsed();
 
-            if (paths.isEmpty()) {
-                metaPanel->setImagePreview(QPixmap());
-                metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false, 0, 0);
-                metaPanel->setRating(0, false);
-                metaPanel->setColor(QString(""), false);
-                metaPanel->setTags(QStringList());
-                metaPanel->setNote(QString(""));
-                metaPanel->setURL(QString(""));
-                metaPanel->setPalettes({});
-            } else if (paths.size() == 1) {
-                QModelIndexList selectedIndices = contentPanel->getSelectedIndexes();
-                qint64 tGetSel = timer.elapsed();
-
-                QModelIndex idx = selectedIndices.isEmpty() ? QModelIndex() : selectedIndices.first();
-
-                QString path = paths.first();
-                QFileInfo fi(path);
-
-                QString name = idx.isValid() ? idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString() : fi.fileName();
-                QString type = idx.isValid() ? ((idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件") : (fi.isDir() ? "文件夹" : fi.suffix().toUpper() + " 文件");
-                QString sizeStr = idx.isValid() ? idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString() : "-";
-                QString mtimeStr = idx.isValid() ? idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString() : "-";
-                bool encrypted = idx.isValid() ? idx.data(EncryptedRole).toBool() : false;
-
-                metaPanel->updateInfo(
-                    name, type, sizeStr, "-", mtimeStr, "-",
-                    path, encrypted, 0, 0
-                );
-                qint64 tUpdateInfo = timer.elapsed();
-
-                // 🚀【双保险装载】：idx 有效走 Model，idx 无效通过 MetadataManager 兜底，扩展属性补充融合，绝不丢弃高级元数据
-                auto meta = MetadataManager::instance().getMeta(path.toStdWString());
-                qint64 tGetMeta = timer.elapsed();
-
-                QVector<QPair<QColor, float>> qPalettes;
-                qPalettes.reserve(static_cast<int>(meta.palettes.size()));
-                for (const auto& entry : meta.palettes) {
-                    qPalettes.append(qMakePair(entry.color, entry.ratio));
-                }
-
-                if (idx.isValid()) {
-                    int rating = idx.data(RatingRole).toInt();
-                    QString color = idx.data(ColorRole).toString();
-                    QStringList tags = idx.data(TagsRole).toStringList();
-                    QString note = idx.data(NoteRole).toString();
-                    QString url = idx.data(UrlRole).toString();
-
-                    int finalRating = rating > 0 ? rating : meta.rating;
-                    QString finalColor = !color.isEmpty() ? color : QString::fromStdWString(meta.manualColor);
-                    QStringList finalTags = !tags.isEmpty() ? tags : meta.tags;
-                    QString finalNote = !note.isEmpty() ? note : QString::fromStdWString(meta.note);
-                    QString finalUrl = !url.isEmpty() ? url : QString::fromStdWString(meta.url);
-
-                    metaPanel->setRating(finalRating, false);
-                    metaPanel->setColor(finalColor, false);
-                    metaPanel->setTags(finalTags);
-                    metaPanel->setNote(finalNote);
-                    metaPanel->setURL(finalUrl);
-                    metaPanel->setPalettes(qPalettes);
-
-                    QVariant decData = idx.data(Qt::DecorationRole);
-                    QPixmap previewPixmap;
-                    if (decData.canConvert<QIcon>()) {
-                        previewPixmap = decData.value<QIcon>().pixmap(128, 128);
-                    } else if (decData.canConvert<QPixmap>()) {
-                        previewPixmap = decData.value<QPixmap>();
-                    }
-                    metaPanel->setImagePreview(previewPixmap);
-                } else {
-                    metaPanel->setRating(meta.rating, false);
-                    metaPanel->setColor(QString::fromStdWString(meta.manualColor), false);
-                    metaPanel->setTags(meta.tags);
-                    metaPanel->setNote(QString::fromStdWString(meta.note));
-                    metaPanel->setURL(QString::fromStdWString(meta.url));
-                    metaPanel->setPalettes(qPalettes);
+                if (paths.isEmpty()) {
                     metaPanel->setImagePreview(QPixmap());
-                }
-                qint64 tTotal = timer.elapsed();
+                    metaPanel->updateInfo("-", "-", "-", "-", "-", "-", "-", false, 0, 0);
+                    metaPanel->setRating(0, false);
+                    metaPanel->setColor(QString(""), false);
+                    metaPanel->setTags(QStringList());
+                    metaPanel->setNote(QString(""));
+                    metaPanel->setURL(QString(""));
+                    metaPanel->setPalettes({});
+                } else if (paths.size() == 1) {
+                    QModelIndexList selectedIndices = panel->getSelectedIndexes();
+                    qint64 tGetSel = timer.elapsed();
 
-                Logger::log(QString("[Perf] PanelMediator::selectionChanged handler: setSelectedPaths=%1ms, getSelectedIndexes=%2ms, updateInfo=%3ms, getMeta=%4ms, setMetaUI=%5ms, total=%6ms")
-                            .arg(tSetSelected).arg(tGetSel - tSetSelected).arg(tUpdateInfo - tGetSel).arg(tGetMeta - tUpdateInfo).arg(tTotal - tGetMeta).arg(tTotal));
-            }
+                    QModelIndex idx = selectedIndices.isEmpty() ? QModelIndex() : selectedIndices.first();
+
+                    QString path = paths.first();
+                    QFileInfo fi(path);
+
+                    QString name = idx.isValid() ? idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString() : fi.fileName();
+                    QString type = idx.isValid() ? ((idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件") : (fi.isDir() ? "文件夹" : fi.suffix().toUpper() + " 文件");
+                    QString sizeStr = idx.isValid() ? idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString() : "-";
+                    QString mtimeStr = idx.isValid() ? idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString() : "-";
+                    bool encrypted = idx.isValid() ? idx.data(EncryptedRole).toBool() : false;
+
+                    metaPanel->updateInfo(
+                        name, type, sizeStr, "-", mtimeStr, "-",
+                        path, encrypted, 0, 0
+                    );
+                    qint64 tUpdateInfo = timer.elapsed();
+
+                    auto meta = MetadataManager::instance().getMeta(path.toStdWString());
+                    qint64 tGetMeta = timer.elapsed();
+
+                    QVector<QPair<QColor, float>> qPalettes;
+                    qPalettes.reserve(static_cast<int>(meta.palettes.size()));
+                    for (const auto& entry : meta.palettes) {
+                        qPalettes.append(qMakePair(entry.color, entry.ratio));
+                    }
+
+                    if (idx.isValid()) {
+                        int rating = idx.data(RatingRole).toInt();
+                        QString color = idx.data(ColorRole).toString();
+                        QStringList tags = idx.data(TagsRole).toStringList();
+                        QString note = idx.data(NoteRole).toString();
+                        QString url = idx.data(UrlRole).toString();
+
+                        int finalRating = rating > 0 ? rating : meta.rating;
+                        QString finalColor = !color.isEmpty() ? color : QString::fromStdWString(meta.manualColor);
+                        QStringList finalTags = !tags.isEmpty() ? tags : meta.tags;
+                        QString finalNote = !note.isEmpty() ? note : QString::fromStdWString(meta.note);
+                        QString finalUrl = !url.isEmpty() ? url : QString::fromStdWString(meta.url);
+
+                        metaPanel->setRating(finalRating, false);
+                        metaPanel->setColor(finalColor, false);
+                        metaPanel->setTags(finalTags);
+                        metaPanel->setNote(finalNote);
+                        metaPanel->setURL(finalUrl);
+                        metaPanel->setPalettes(qPalettes);
+
+                        QVariant decData = idx.data(Qt::DecorationRole);
+                        QPixmap previewPixmap;
+                        if (decData.canConvert<QIcon>()) {
+                            previewPixmap = decData.value<QIcon>().pixmap(128, 128);
+                        } else if (decData.canConvert<QPixmap>()) {
+                            previewPixmap = decData.value<QPixmap>();
+                        }
+                        metaPanel->setImagePreview(previewPixmap);
+                    } else {
+                        metaPanel->setRating(meta.rating, false);
+                        metaPanel->setColor(QString::fromStdWString(meta.manualColor), false);
+                        metaPanel->setTags(meta.tags);
+                        metaPanel->setNote(QString::fromStdWString(meta.note));
+                        metaPanel->setURL(QString::fromStdWString(meta.url));
+                        metaPanel->setPalettes(qPalettes);
+                        metaPanel->setImagePreview(QPixmap());
+                    }
+                    qint64 tTotal = timer.elapsed();
+
+                    Logger::log(QString("[Perf] PanelMediator::selectionChanged handler: setSelectedPaths=%1ms, getSelectedIndexes=%2ms, updateInfo=%3ms, getMeta=%4ms, setMetaUI=%5ms, total=%6ms")
+                                .arg(tSetSelected).arg(tGetSel - tSetSelected).arg(tUpdateInfo - tGetSel).arg(tGetMeta - tUpdateInfo).arg(tTotal - tGetMeta).arg(tTotal));
+                }
+            });
+        };
+
+        wireSelectionToMeta(contentPanel);
+        connect(contentPanel, &ContentPanel::secondaryPaneCreated, this, [wireSelectionToMeta](ContentPanel* pane) {
+            wireSelectionToMeta(pane);
         });
     }
 

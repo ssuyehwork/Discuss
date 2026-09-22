@@ -298,8 +298,12 @@ bool ContentPanel::isSplitMode() const {
 }
 
 void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
-    Q_UNUSED(secondaryPath);
-    if (m_isSplit && m_splitOrientation == orientation) return;
+    if (m_isSplit && m_splitOrientation == orientation) {
+        if (m_secondaryContentPanel && !secondaryPath.isEmpty()) {
+            m_secondaryContentPanel->loadDirectory(secondaryPath);
+        }
+        return;
+    }
 
     m_splitOrientation = orientation;
     m_isSplit = true;
@@ -314,8 +318,21 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         QVBoxLayout* secLayout = new QVBoxLayout(m_secondaryPaneContainer);
         secLayout->setContentsMargins(0, 0, 0, 0);
 
+        m_secondaryContentPanel = new ContentPanel(m_secondaryPaneContainer);
+        secLayout->addWidget(m_secondaryContentPanel);
+
         m_paneSplitter->addWidget(m_secondaryPaneContainer);
         m_mainLayout->addWidget(m_paneSplitter, 1);
+
+        connect(m_secondaryContentPanel, &ContentPanel::directorySelected, this, [this](const QString&) {
+            if (m_isSplit) {
+                QString p1 = m_currentPath;
+                QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
+                emit dualPanePathsChanged(p1, p2);
+            }
+        });
+
+        emit secondaryPaneCreated(m_secondaryContentPanel);
     } else {
         m_paneSplitter->setOrientation(m_splitOrientation);
         if (m_secondaryPaneContainer) {
@@ -323,10 +340,20 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         }
     }
 
+    if (m_secondaryContentPanel) {
+        m_secondaryContentPanel->loadDirectory(!secondaryPath.isEmpty() ? secondaryPath : m_currentPath);
+    }
+
     QList<int> sizes;
     int total = (orientation == Qt::Horizontal) ? width() : height();
     sizes << total / 2 << total / 2;
     m_paneSplitter->setSizes(sizes);
+
+    if (m_isSplit) {
+        QString p1 = m_currentPath;
+        QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
+        emit dualPanePathsChanged(p1, p2);
+    }
 }
 
 void ContentPanel::closeSecondaryPane() {
@@ -336,6 +363,8 @@ void ContentPanel::closeSecondaryPane() {
     if (m_secondaryPaneContainer) {
         m_secondaryPaneContainer->hide();
     }
+    emit secondaryPaneClosed();
+    emit directorySelected(m_currentPath);
 }
 
 void ContentPanel::updateDragOverlay(const QPoint& pos) {
