@@ -326,9 +326,9 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         primLayout->setContentsMargins(0, 0, 0, 0);
         primLayout->setSpacing(0);
 
-        if (m_topBarWidget) {
-            m_mainLayout->removeWidget(m_topBarWidget);
-            primLayout->addWidget(m_topBarWidget);
+        if (m_headerWidget) {
+            m_mainLayout->removeWidget(m_headerWidget);
+            primLayout->addWidget(m_headerWidget);
         }
         if (m_viewStack) {
             m_mainLayout->removeWidget(m_viewStack);
@@ -361,6 +361,14 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
     } else {
         m_paneSplitter->setOrientation(m_splitOrientation);
         if (m_primaryPaneContainer) {
+            if (m_headerWidget && m_primaryPaneContainer->layout()) {
+                m_mainLayout->removeWidget(m_headerWidget);
+                m_primaryPaneContainer->layout()->addWidget(m_headerWidget);
+            }
+            if (m_viewStack && m_primaryPaneContainer->layout()) {
+                m_mainLayout->removeWidget(m_viewStack);
+                m_primaryPaneContainer->layout()->addWidget(m_viewStack);
+            }
             m_primaryPaneContainer->show();
         }
         if (m_secondaryPaneContainer) {
@@ -397,13 +405,13 @@ void ContentPanel::closeSecondaryPane() {
     }
 
     if (m_primaryPaneContainer) {
-        m_primaryPaneContainer->layout()->removeWidget(m_topBarWidget);
+        m_primaryPaneContainer->layout()->removeWidget(m_headerWidget);
         m_primaryPaneContainer->layout()->removeWidget(m_viewStack);
     }
 
-    if (m_topBarWidget) {
-        m_mainLayout->addWidget(m_topBarWidget);
-        m_topBarWidget->show();
+    if (m_headerWidget) {
+        m_mainLayout->addWidget(m_headerWidget);
+        m_headerWidget->show();
     }
     if (m_viewStack) {
         m_mainLayout->addWidget(m_viewStack, 1);
