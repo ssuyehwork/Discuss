@@ -31,6 +31,19 @@ void ContentHeaderWidget::initUi() {
     m_layout->addWidget(m_titleLabel);
     m_layout->addStretch();
 
+    m_btnSplitView = new QPushButton(this);
+    m_btnSplitView->setFixedSize(24, 24);
+    m_btnSplitView->setIcon(UiHelper::getIcon("columns", QColor("#888888"), 18));
+    m_btnSplitView->setProperty("tooltipText", "双窗格分栏视图");
+    m_btnSplitView->setObjectName("ViewModeToolBtn");
+    m_btnSplitView->installEventFilter(this);
+
+    connect(m_btnSplitView, &QPushButton::clicked, this, [this]() {
+        emit splitViewRequested();
+    });
+
+    m_layout->addWidget(m_btnSplitView, 0, Qt::AlignVCenter);
+
     auto setupToggleBtn = [this](QPushButton*& btn, const QString& iconKey, const QColor& activeColor, bool defaultChecked, const QString& tooltip) {
         btn = new QPushButton(this);
         btn->setCheckable(true);

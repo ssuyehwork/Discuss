@@ -502,12 +502,12 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     }
 
     // --- 拆分窗格控制菜单项 ---
-    if (m_panel && m_panel->isSplitMode()) {
+    if (m_panel && (m_panel->isSplitMode() || m_panel->isSecondaryPane())) {
         menu.addSeparator();
         QAction* closePaneAction = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 18), "关闭窗格");
         QObject::connect(closePaneAction, &QAction::triggered, [this]() {
             if (m_panel) {
-                m_panel->closeSecondaryPane();
+                m_panel->requestClosePane();
             }
         });
     }

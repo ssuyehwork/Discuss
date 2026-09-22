@@ -116,6 +116,18 @@ void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
             QDrag* drag = new QDrag(this);
             QMimeData* mimeData = new QMimeData();
             mimeData->setData("application/x-quarkmeta-tabindex", QByteArray::number(m_index));
+
+            TabBarWidget* tabBar = qobject_cast<TabBarWidget*>(parentWidget());
+            if (!tabBar && parentWidget()) {
+                tabBar = qobject_cast<TabBarWidget*>(parentWidget()->parentWidget());
+            }
+            if (tabBar) {
+                QString url = tabBar->tabUrl(m_index);
+                if (!url.isEmpty()) {
+                    mimeData->setData("application/x-quarkmeta-taburl", url.toUtf8());
+                    mimeData->setText(url);
+                }
+            }
             drag->setMimeData(mimeData);
 
             QPixmap pixmap = grab();

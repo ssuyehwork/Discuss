@@ -380,9 +380,24 @@ void PanelMediator::setupConnections() {
             });
         };
 
+        m_activeContentPanel = contentPanel;
+
+        auto bindPanelActivation = [this, addressBar, filterPanel](ContentPanel* panel) {
+            if (!panel) return;
+            connect(panel, &ContentPanel::panelActivated, this, [this, panel, addressBar, filterPanel](ContentPanel* activePanel) {
+                m_activeContentPanel = activePanel;
+                if (addressBar) {
+                    addressBar->setPath(activePanel->currentPath());
+                }
+            });
+        };
+
+        bindPanelActivation(contentPanel);
         wireSelectionToMeta(contentPanel);
-        connect(contentPanel, &ContentPanel::secondaryPaneCreated, this, [wireSelectionToMeta](ContentPanel* pane) {
+
+        connect(contentPanel, &ContentPanel::secondaryPaneCreated, this, [this, wireSelectionToMeta, bindPanelActivation](ContentPanel* pane) {
             wireSelectionToMeta(pane);
+            bindPanelActivation(pane);
         });
     }
 

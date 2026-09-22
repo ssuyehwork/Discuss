@@ -59,6 +59,7 @@ private:
     QPointer<NavPanel> m_navPanel;
     QPointer<FavoritePanel> m_favoritePanel;
     QPointer<ContentPanel> m_contentPanel;
+    QPointer<ContentPanel> m_activeContentPanel;
     QPointer<MetaPanel> m_metaPanel;
     QPointer<FilterPanel> m_filterPanel;
     QPointer<AddressBar> m_addressBar;

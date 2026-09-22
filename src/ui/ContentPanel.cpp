@@ -26,6 +26,7 @@
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
 #include "Logger.h"
+#include "../core/NavigationHistoryService.h"
 #include <QElapsedTimer>
 
 #include "../core/AppConfig.h"
@@ -139,6 +140,29 @@ void ContentPanel::initUi() {
     m_headerWidget = new ContentHeaderWidget(this);
     m_headerWidget->setFilterState(m_currentFilter);
 
+    connect(m_headerWidget, &ContentHeaderWidget::splitViewRequested, this, [this]() {
+        if (m_isSecondaryPane) {
+            emit closePaneRequested();
+            return;
+        }
+        if (isSplitMode()) {
+            closeSecondaryPane();
+        } else {
+            QStringList history = NavigationHistoryService::instance().getHistory();
+            QString lastPath;
+            for (const QString& hPath : history) {
+                if (!hPath.isEmpty() && QDir::cleanPath(hPath) != QDir::cleanPath(m_currentPath)) {
+                    lastPath = hPath;
+                    break;
+                }
+            }
+            if (lastPath.isEmpty()) {
+                lastPath = m_currentPath;
+            }
+            splitPane(Qt::Horizontal, lastPath);
+        }
+    });
+
     connect(m_headerWidget, &ContentHeaderWidget::filterStateChanged, this, [this](const FilterState& state) {
         m_currentFilter = state;
         AppConfig::instance().setValue("ContentPanel/ShowHidden", state.showHidden);
@@ -230,6 +254,10 @@ void ContentPanel::initListView() {
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
+    if (event && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn)) {
+        emit panelActivated(this);
+    }
+
     if (event && event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
@@ -344,15 +372,21 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         secLayout->setSpacing(0);
 
         m_secondaryContentPanel = new ContentPanel(m_secondaryPaneContainer);
+        m_secondaryContentPanel->setIsSecondaryPane(true);
+        connect(m_secondaryContentPanel, &ContentPanel::closePaneRequested, this, &ContentPanel::closeSecondaryPane);
+
         secLayout->addWidget(m_secondaryContentPanel);
 
         m_paneSplitter->addWidget(m_secondaryPaneContainer);
         m_mainLayout->addWidget(m_paneSplitter, 1);
 
-        connect(m_secondaryContentPanel, &ContentPanel::directorySelected, this, [this](const QString&) {
-            if (m_isSplit) {
+        connect(m_secondaryContentPanel, &ContentPanel::directorySelected, this, [this](const QString& path) {
+            if (m_isSplit && m_secondaryContentPanel) {
+                // 1. 让副窗格自身加载被双击的下级目录
+                m_secondaryContentPanel->loadDirectory(path);
+                // 2. 向上派发双窗格路径更新
                 QString p1 = m_currentPath;
-                QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
+                QString p2 = path;
                 emit dualPanePathsChanged(p1, p2);
             }
         });
@@ -392,6 +426,14 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         QString p1 = m_currentPath;
         QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
         emit dualPanePathsChanged(p1, p2);
+    }
+}
+
+void ContentPanel::requestClosePane() {
+    if (m_isSecondaryPane) {
+        emit closePaneRequested();
+    } else if (m_isSplit) {
+        closeSecondaryPane();
     }
 }
 
@@ -440,15 +482,19 @@ void ContentPanel::updateDragOverlay(const QPoint& pos) {
     if (pos.x() > w * 0.75) {
         m_dragOverlayWidget->setGeometry(w / 2, 0, w / 2, h);
         m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
     } else if (pos.x() < w * 0.25) {
         m_dragOverlayWidget->setGeometry(0, 0, w / 2, h);
         m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
     } else if (pos.y() > h * 0.75) {
         m_dragOverlayWidget->setGeometry(0, h / 2, w, h / 2);
         m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
     } else if (pos.y() < h * 0.25) {
         m_dragOverlayWidget->setGeometry(0, 0, w, h / 2);
         m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
     } else {
         hideDragOverlay();
     }
@@ -484,11 +530,18 @@ void ContentPanel::dropEvent(QDropEvent* event) {
     int w = width();
     int h = height();
 
+    QString targetUrl;
+    if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        targetUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
+    } else if (event->mimeData()->hasText()) {
+        targetUrl = event->mimeData()->text();
+    }
+
     if (pos.x() > w * 0.75 || pos.x() < w * 0.25) {
-        splitPane(Qt::Horizontal);
+        splitPane(Qt::Horizontal, targetUrl);
         event->acceptProposedAction();
     } else if (pos.y() > h * 0.75 || pos.y() < h * 0.25) {
-        splitPane(Qt::Vertical);
+        splitPane(Qt::Vertical, targetUrl);
         event->acceptProposedAction();
     } else {
         if (event->mimeData()->hasUrls()) {
