@@ -29,6 +29,7 @@ class ContentStatsWorker;
 class SectionedScrollCanvas;
 class FolderSectionHeaderBar;
 class FileSectionHeaderBar;
+class ContentPaneSplitManager;
 
 /**
  * @brief 内容面板（面板四）：核心业务展示工作台（纯视图承载与高级意图分发）
@@ -68,6 +69,7 @@ public:
     };
 
     friend class ContentViewCoordinator;
+    friend class ContentPaneSplitManager;
 
     explicit ContentPanel(QWidget* parent = nullptr);
     ~ContentPanel() override = default;
@@ -76,13 +78,12 @@ public:
 
     // Dual-pane state inspection & split controls
     bool isSplitMode() const;
-    bool isSecondaryPane() const { return m_isSecondaryPane; }
-    void setIsSecondaryPane(bool secondary) { m_isSecondaryPane = secondary; }
-    // 兼容既有调用方：返回第一个额外窗格（原双窗格语义下等价于"副窗格"）
-    ContentPanel* secondaryContentPanel() const { return m_panes.isEmpty() ? nullptr : m_panes.first(); }
-    QList<ContentPanel*> panes() const { return m_panes; }
-    int paneCount() const { return 1 + m_panes.size(); }
-    ContentPanel* rootPane() const { return m_rootPane ? m_rootPane : const_cast<ContentPanel*>(this); }
+    bool isSecondaryPane() const;
+    void setIsSecondaryPane(bool secondary);
+    ContentPanel* secondaryContentPanel() const;
+    QList<ContentPanel*> panes() const;
+    int paneCount() const;
+    ContentPanel* rootPane() const;
     void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString());
     void closePane(ContentPanel* pane);
     void closeSecondaryPane();
@@ -149,6 +150,7 @@ public:
     ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
     ContentStatsWorker* statsWorker() const { return m_statsWorker; }
     class ContentViewCoordinator* viewCoordinator() const { return m_viewCoordinator; }
+    ContentPaneSplitManager* splitManager() const { return m_splitManager; }
     SectionedScrollCanvas* gridCanvas() const { return m_gridCanvas; }
     SectionedScrollCanvas* listCanvas() const { return m_listCanvas; }
 
@@ -255,16 +257,7 @@ private:
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
 
-    QSplitter* m_paneSplitter = nullptr;
-    QFrame* m_primaryPaneContainer = nullptr;
-    QList<QWidget*> m_paneContainers;
-    QList<ContentPanel*> m_panes;
-    ContentPanel* m_rootPane = nullptr;
-    ContentPanel* m_activePaneForSplit = nullptr;
-    QWidget* m_dragOverlayWidget = nullptr;
-    Qt::Orientation m_splitOrientation = Qt::Horizontal;
-    bool m_isSplit = false;
-    bool m_isSecondaryPane = false;
+    ContentPaneSplitManager* m_splitManager = nullptr;
 
     void redistributePaneSizes();
 
