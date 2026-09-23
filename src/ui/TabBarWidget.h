@@ -12,6 +12,13 @@ namespace QuarkMeta {
 
 class HoverEventFilter;
 
+struct TabSplitState {
+    Qt::Orientation orientation = Qt::Horizontal;
+    QStringList panePaths;
+    int activePaneIndex = 0;
+    bool isSplit = false;
+};
+
 struct TabInfo {
     QString id;
     QString title;
@@ -19,6 +26,7 @@ struct TabInfo {
     QString color;
     QString iconKey;
     bool active = false;
+    TabSplitState splitState;
 };
 
 class TabItemButton : public QPushButton {
@@ -71,6 +79,16 @@ public:
         if (index >= 0 && index < m_tabs.size()) return m_tabs[index].url;
         return QString();
     }
+    TabSplitState tabSplitState(int index) const {
+        if (index >= 0 && index < m_tabs.size()) return m_tabs[index].splitState;
+        return TabSplitState();
+    }
+    void setTabSplitState(int index, const TabSplitState& state) {
+        if (index >= 0 && index < m_tabs.size()) {
+            m_tabs[index].splitState = state;
+        }
+    }
+    void updateSplitTabTitle(const TabSplitState& state);
     void updateCurrentTabTitle(const QString& title, const QString& url);
     void updateDualPaneTabTitle(const QString& title1, const QString& url1, const QString& title2, const QString& url2);
     void openOrFocusTab(const QString& path);
@@ -82,6 +100,7 @@ public:
     void selectPreviousTab();
 
 signals:
+    void tabAboutToChange(int oldIndex);
     void currentTabChanged(int index, const QString& url);
     void tabClosed(int index);
     void newTabRequested();

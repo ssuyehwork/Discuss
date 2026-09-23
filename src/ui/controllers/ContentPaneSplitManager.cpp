@@ -1,6 +1,7 @@
 #include "ContentPaneSplitManager.h"
 #include "../ContentPanel.h"
 #include "../ContentHeaderWidget.h"
+#include "../TabBarWidget.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QStyle>
@@ -202,6 +203,64 @@ void ContentPaneSplitManager::redistributePaneSizes() {
         sizes << each;
     }
     m_paneSplitter->setSizes(sizes);
+}
+
+TabSplitState ContentPaneSplitManager::exportSplitState() const {
+    TabSplitState state;
+    if (rootPane() != m_panel) {
+        return rootPane()->m_splitManager->exportSplitState();
+    }
+
+    state.isSplit = m_isSplit;
+    state.orientation = m_splitOrientation;
+    state.panePaths.append(m_panel->currentPath());
+
+    for (int i = 0; i < m_panes.size(); ++i) {
+        if (m_panes[i]) {
+            state.panePaths.append(m_panes[i]->currentPath());
+            if (m_activePaneForSplit == m_panes[i]) {
+                state.activePaneIndex = i + 1;
+            }
+        }
+    }
+
+    if (m_activePaneForSplit == m_panel || m_activePaneForSplit == nullptr) {
+        state.activePaneIndex = 0;
+    }
+
+    return state;
+}
+
+void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
+    if (rootPane() != m_panel) {
+        rootPane()->m_splitManager->restoreSplitState(state);
+        return;
+    }
+
+    // 1. 关闭现有所有副窗格
+    while (!m_panes.isEmpty()) {
+        closePane(m_panes.last());
+    }
+
+    // 2. 还原主窗格路径
+    if (!state.panePaths.isEmpty()) {
+        m_panel->loadDirectory(state.panePaths.first());
+    }
+
+    // 3. 如果快照包含分屏且路径大于 1，则动态构建副窗格
+    if (state.isSplit && state.panePaths.size() > 1) {
+        m_splitOrientation = state.orientation;
+        for (int i = 1; i < state.panePaths.size(); ++i) {
+            splitPane(state.orientation, state.panePaths[i]);
+        }
+    }
+
+    // 4. 恢复激活窗格
+    if (state.activePaneIndex == 0 || m_panes.isEmpty()) {
+        m_panel->setActivePane(true);
+    } else if (state.activePaneIndex - 1 < m_panes.size()) {
+        m_panes[state.activePaneIndex - 1]->setActivePane(true);
+    }
 }
 
 void ContentPaneSplitManager::setActivePane(bool active) {

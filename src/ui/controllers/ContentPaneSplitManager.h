@@ -30,6 +30,9 @@ public:
     void closeSecondaryPane();
     void redistributePaneSizes();
     void setActivePane(bool active);
+
+    struct TabSplitState exportSplitState() const;
+    void restoreSplitState(const struct TabSplitState& state);
     void updateDragOverlay(const QPoint& pos);
     void hideDragOverlay();
 

@@ -3,6 +3,7 @@
 #include "FavoritePanel.h"
 #include "ContentPanel.h"
 #include "ColumnViewWidget.h"
+#include "controllers/ContentPaneSplitManager.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "AddressBar.h"
@@ -62,16 +63,38 @@ void PanelMediator::setupConnections() {
     // 0. TitleBar 与各组件的高阶编排及 UI 状态恢复/持久化
     if (titleBar) {
         if (titleBar->tabBar()) {
-            connect(titleBar->tabBar(), &TabBarWidget::currentTabChanged, this, [](int index, const QString& url) {
-                Q_UNUSED(index);
+            // 切出旧 Tab 前：快照导出旧 Tab 的完整分屏树
+            connect(titleBar->tabBar(), &TabBarWidget::tabAboutToChange, this, [this, titleBar, contentPanel](int oldIndex) {
+                ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
+                if (root && root->splitManager()) {
+                    TabSplitState state = root->splitManager()->exportSplitState();
+                    titleBar->tabBar()->setTabSplitState(oldIndex, state);
+                }
+            });
+
+            // 切换到新 Tab：还原新 Tab 的专属分屏树并通知 NavigationService
+            connect(titleBar->tabBar(), &TabBarWidget::currentTabChanged, this, [this, titleBar, contentPanel](int index, const QString& url) {
+                ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
+                if (root && root->splitManager() && titleBar->tabBar()) {
+                    TabSplitState state = titleBar->tabBar()->tabSplitState(index);
+                    root->splitManager()->restoreSplitState(state);
+                }
                 NavigationService::instance().navigateTo(url);
             });
+
             connect(titleBar->tabBar(), &TabBarWidget::refreshRequested, this, []() {
                 NavigationService::instance().refresh();
             });
-            connect(&NavigationService::instance(), &NavigationService::currentUrlChanged, this, [titleBar](const QString& url, const QString& displayPath) {
+
+            connect(&NavigationService::instance(), &NavigationService::currentUrlChanged, this, [this, titleBar, contentPanel](const QString& url, const QString& displayPath) {
+                Q_UNUSED(url);
+                Q_UNUSED(displayPath);
                 if (titleBar->tabBar()) {
-                    titleBar->tabBar()->updateCurrentTabTitle(displayPath, url);
+                    ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
+                    if (root && root->splitManager()) {
+                        TabSplitState state = root->splitManager()->exportSplitState();
+                        titleBar->tabBar()->updateSplitTabTitle(state);
+                    }
                 }
             });
         }
@@ -208,15 +231,13 @@ void PanelMediator::setupConnections() {
             NavigationService::instance().navigateTo(path);
         });
 
-        connect(contentPanel, &ContentPanel::dualPanePathsChanged, this, [titleBar](const QString& path1, const QString& path2) {
+        connect(contentPanel, &ContentPanel::dualPanePathsChanged, this, [this, titleBar, contentPanel](const QString&, const QString&) {
             if (titleBar && titleBar->tabBar()) {
-                auto cleanName = [](const QString& u) -> QString {
-                    if (u == "computer://" || u.isEmpty()) return "此电脑";
-                    QFileInfo fi(u);
-                    QString fn = fi.fileName();
-                    return fn.isEmpty() ? u : fn;
-                };
-                titleBar->tabBar()->updateDualPaneTabTitle(cleanName(path1), path1, cleanName(path2), path2);
+                ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
+                if (root && root->splitManager()) {
+                    TabSplitState state = root->splitManager()->exportSplitState();
+                    titleBar->tabBar()->updateSplitTabTitle(state);
+                }
             }
         });
 

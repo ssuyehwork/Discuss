@@ -268,6 +268,9 @@ void TabBarWidget::restoreLastClosedTab() {
 void TabBarWidget::setCurrentIndex(int index, bool forceNotify) {
     if (index < 0 || index >= m_tabs.size()) return;
     bool indexChanged = (m_currentIndex != index);
+    if (indexChanged && m_currentIndex >= 0 && m_currentIndex < m_tabs.size()) {
+        emit tabAboutToChange(m_currentIndex);
+    }
     m_currentIndex = index;
     for (int i = 0; i < m_tabs.size(); ++i) {
         m_tabs[i].active = (i == m_currentIndex);
@@ -275,6 +278,37 @@ void TabBarWidget::setCurrentIndex(int index, bool forceNotify) {
     updateTabsUiState();
     if (indexChanged || forceNotify) {
         emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
+    }
+    saveStateToConfig();
+}
+
+void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
+    if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
+
+    m_tabs[m_currentIndex].splitState = state;
+
+    auto cleanName = [](const QString& u) -> QString {
+        if (u == "computer://" || u.isEmpty()) return "此电脑";
+        QFileInfo fi(QDir::cleanPath(u));
+        QString fn = fi.fileName();
+        return fn.isEmpty() ? u : fn;
+    };
+
+    if (state.isSplit && !state.panePaths.isEmpty()) {
+        QStringList nameList;
+        for (const QString& p : state.panePaths) {
+            nameList.append(cleanName(p));
+        }
+        QString mergedTitle = nameList.join(" | ");
+        m_tabs[m_currentIndex].title = mergedTitle;
+        m_tabs[m_currentIndex].url = state.panePaths.first();
+    } else if (!state.panePaths.isEmpty()) {
+        m_tabs[m_currentIndex].title = cleanName(state.panePaths.first());
+        m_tabs[m_currentIndex].url = state.panePaths.first();
+    }
+
+    if (m_currentIndex < m_tabWidgets.size()) {
+        m_tabWidgets[m_currentIndex]->setTabTitle(m_tabs[m_currentIndex].title);
     }
     saveStateToConfig();
 }
