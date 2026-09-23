@@ -815,8 +815,25 @@ void ColumnViewPane::loadDirectory() {
 ```
 
 ### 3.6 Update `src/ui/ColumnViewWidget.h`
+```cpp
+#include "ColumnViewPane.h"
+
+namespace QuarkMeta {
+
+class ContentPanel;
+class DualSectionPanel;
+
+class ColumnViewWidget : public QScrollArea {
+```
+(Replaces the nested `class ColumnViewPane` definition in `ColumnViewWidget.h`).
+
 ```
 <<<<<<< SEARCH
+namespace QuarkMeta {
+
+class ContentPanel;
+class DualSectionPanel;
+
 class ColumnViewPane : public QWidget {
     Q_OBJECT
 public:
@@ -882,6 +899,11 @@ private:
 class ColumnViewWidget : public QScrollArea {
 =======
 #include "ColumnViewPane.h"
+
+namespace QuarkMeta {
+
+class ContentPanel;
+class DualSectionPanel;
 
 class ColumnViewWidget : public QScrollArea {
 >>>>>>> REPLACE
@@ -1608,3 +1630,6 @@ cmake --build build --config Release
 | `ContentPanel::onCustomContextMenuRequested` | `void onCustomContextMenuRequested(QAbstractItemView* view, const QPoint& pos)` | Verified |
 | `ContentPanel::onPathsDropped` | `void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), QAbstractItemModel* sourceModelOverride = nullptr)` | Verified |
 | `ContentPanel::recalculateAndEmitStats` | `void recalculateAndEmitStats()` | Verified |
+| `ContentPanel::isRecursive` | `bool isRecursive() const` | Verified |
+| `ContentPanel::columnView` | `class ColumnViewWidget* columnView() const` | Verified |
+| `ColumnViewWidget::activePane` | `ColumnViewPane* activePane() const` | Verified |
