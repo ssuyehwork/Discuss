@@ -613,10 +613,8 @@ void ColumnViewWidget::activatePaneFromBlankClick(int paneIndex) {
         ColumnViewPane* pane = m_panes[paneIndex];
         if (pane) {
             pane->clearSelection();
-            clearOtherSelections(paneIndex);
             focusPane(paneIndex);
             emit selectionChanged();
-            emit pathNavigated(pane->currentPath());
         }
     }
 }
@@ -642,7 +640,7 @@ void ColumnViewPane::loadDirectory() {
     bool recursive = false;
     if (m_contentPanel && m_contentPanel->isRecursive()) {
         if (m_contentPanel->columnView() &&
-            m_contentPanel->columnView()->rightmostPane() == this) {
+            m_contentPanel->columnView()->activePane() == this) {
             recursive = true;
         }
     }
@@ -936,22 +934,14 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
         }
     });
 
-    connect(pane, &ColumnViewPane::folderClicked, this, [this, pane](const QString&, int paneIdx) {
+    connect(pane, &ColumnViewPane::folderClicked, this, [this](const QString&, int paneIdx) {
         setActivePaneIndex(paneIdx);
-        clearOtherSelections(paneIdx);
         emit selectionChanged();
-        if (pane) {
-            emit pathNavigated(pane->currentPath());
-        }
     });
 
-    connect(pane, &ColumnViewPane::fileClicked, this, [this, pane](const QString&, int paneIdx) {
+    connect(pane, &ColumnViewPane::fileClicked, this, [this](const QString&, int paneIdx) {
         setActivePaneIndex(paneIdx);
-        clearOtherSelections(paneIdx);
         emit selectionChanged();
-        if (pane) {
-            emit pathNavigated(pane->currentPath());
-        }
     });
 
     auto handleFolderExpand = [this](const QString& folderPath, int paneIdx) {
@@ -975,10 +965,9 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     connect(pane, &ColumnViewPane::folderExpandRequested, this, handleFolderExpand);
     connect(pane, &ColumnViewPane::folderSelected, this, handleFolderExpand);
 
-    connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
+    connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString&, int paneIdx) {
         setActivePaneIndex(paneIdx);
         emit selectionChanged();
-        emit pathNavigated(filePath);
     });
 
     m_panes.append(pane);

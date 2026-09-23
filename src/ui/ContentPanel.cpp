@@ -178,8 +178,8 @@ void ContentPanel::initUi() {
         }
         m_isRecursive = recursive;
         if (m_currentViewMode == ColumnView) {
-            if (m_columnView && m_columnView->rightmostPane()) {
-                m_columnView->rightmostPane()->loadDirectory();
+            if (m_columnView && m_columnView->activePane()) {
+                m_columnView->activePane()->loadDirectory();
             }
         } else {
             loadDirectory(m_currentPath, recursive);
@@ -579,11 +579,9 @@ void ContentPanel::onCustomContextMenuRequested(QAbstractItemView* view, const Q
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (m_currentViewMode == ColumnView) {
         m_currentPath = path;
-        m_isRecursive = recursive;
+        setIsRecursive(recursive);
         if (m_columnView) {
-            if (m_columnView->containsPath(path)) {
-                m_columnView->refreshAllColumns();
-            } else {
+            if (!m_columnView->containsPath(path)) {
                 m_columnView->setRootPath(path);
                 restoreSelections();
             }

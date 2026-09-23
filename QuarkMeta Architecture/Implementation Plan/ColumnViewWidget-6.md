@@ -1,72 +1,128 @@
-# Implementation Plan - ColumnViewWidget-6.md
+# Implementation Plan - ColumnViewWidget Single-Click Decoupling & Selection Preservation
 
-## 1. Overview
-In QuarkMeta's Column View mode (`ColumnViewWidget`), changing sort criteria via the status bar sort button or context menu appears ineffective.
+## Overview
+This implementation plan resolves two major architectural defects in Column View (`ColumnViewWidget`):
+1. **Selection Eradication Defect**: Single-clicking or clicking blank canvas in a column previously invoked `clearOtherSelections(paneIdx)`, forcibly erasing active item selections in all rightward child columns.
+2. **Spurious Navigation & Filter Reset Defect**: Single-clicking an item or clicking blank space in a column previously emitted `pathNavigated(pane->currentPath())`. `PanelMediator` handled `pathNavigated` by resetting unpinned filters on `FilterPanel` (`clearAllFilters(false)`) and triggering global `NavigationService::navigateTo`, mistaking local item selection for directory navigation.
 
-### Root Causes:
-1. **Missing Mediator Link in ContentPanel**: `ContentSortController::sortCriteriaChanged` in `ContentPanel.cpp` only calls `m_sortController->applySortToModel(m_proxyModel)`, but does not pass the new sort criteria to `m_columnView->applySort(...)`.
-2. **Missing Re-Sort After Async Load**: In `ColumnViewPane::loadDirectory()`, when async disk scanning completes and sets records into `m_model`, `FilterProxyModel` is reset without re-enforcing the current `m_sortType` and `m_sortOrder`.
+### Solution
+- Remove `clearOtherSelections(paneIdx)` calls from single-click handlers (`folderClicked`, `fileClicked`) and blank space click handler (`activatePaneFromBlankClick`), preserving selections across child columns.
+- Remove `emit pathNavigated(...)` from single-click handlers (`folderClicked`, `fileClicked`, `fileSelected`) and blank space click handler (`activatePaneFromBlankClick`).
+- Retain `pathNavigated` emission exclusively during explicit folder expansion (`handleFolderExpand`) triggered by double-clicking or pressing Enter/Right keys.
 
-This implementation plan fixes both gaps to ensure Column View columns correctly apply and maintain sorting when changed or loaded.
+---
 
-## 2. Modified Files List
-- `src/ui/ContentPanel.cpp`
+## Modified Files List
 - `src/ui/ColumnViewWidget.cpp`
 
-## 3. Detailed Line-by-Line Changes
+---
 
-### `src/ui/ContentPanel.cpp`
-In `ContentPanel::ContentPanel`: Ensure `m_sortController`'s `sortCriteriaChanged` signal also forwards sort criteria to `m_columnView`.
+## Detailed Line-by-Line Changes
+
+### 1. `src/ui/ColumnViewWidget.cpp`
 
 ```
 <<<<<<< SEARCH
-    m_sortController = new ContentSortController(this);
-    connect(m_sortController, &ContentSortController::sortCriteriaChanged, this, [this](SortType, Qt::SortOrder) {
-        m_sortController->applySortToModel(m_proxyModel);
-    });
-    m_sortController->applySortToModel(m_proxyModel);
+void ColumnViewWidget::activatePaneFromBlankClick(int paneIndex) {
+    if (paneIndex >= 0 && paneIndex < m_panes.size()) {
+        setActivePaneIndex(paneIndex);
+        ColumnViewPane* pane = m_panes[paneIndex];
+        if (pane) {
+            pane->clearSelection();
+            clearOtherSelections(paneIndex);
+            focusPane(paneIndex);
+            emit selectionChanged();
+            emit pathNavigated(pane->currentPath());
+        }
+    }
+}
 =======
-    m_sortController = new ContentSortController(this);
-    connect(m_sortController, &ContentSortController::sortCriteriaChanged, this, [this](SortType type, Qt::SortOrder order) {
-        m_sortController->applySortToModel(m_proxyModel);
-        if (m_columnView) {
-            m_columnView->applySort(static_cast<int>(type), order);
+void ColumnViewWidget::activatePaneFromBlankClick(int paneIndex) {
+    if (paneIndex >= 0 && paneIndex < m_panes.size()) {
+        setActivePaneIndex(paneIndex);
+        ColumnViewPane* pane = m_panes[paneIndex];
+        if (pane) {
+            pane->clearSelection();
+            focusPane(paneIndex);
+            emit selectionChanged();
+        }
+    }
+}
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    connect(pane, &ColumnViewPane::folderClicked, this, [this, pane](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        clearOtherSelections(paneIdx);
+        emit selectionChanged();
+        if (pane) {
+            emit pathNavigated(pane->currentPath());
         }
     });
-    m_sortController->applySortToModel(m_proxyModel);
+
+    connect(pane, &ColumnViewPane::fileClicked, this, [this, pane](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        clearOtherSelections(paneIdx);
+        emit selectionChanged();
+        if (pane) {
+            emit pathNavigated(pane->currentPath());
+        }
+    });
+=======
+    connect(pane, &ColumnViewPane::folderClicked, this, [this](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        emit selectionChanged();
+    });
+
+    connect(pane, &ColumnViewPane::fileClicked, this, [this](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        emit selectionChanged();
+    });
 >>>>>>> REPLACE
 ```
-
-### `src/ui/ColumnViewWidget.cpp`
-In `ColumnViewPane::loadDirectory()`: Re-apply current sort settings to `m_proxyModel` after async directory records are set.
 
 ```
 <<<<<<< SEARCH
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
-            if (weakSelf && weakSelf->m_model) {
-                weakSelf->m_model->setRecords(items);
-                if (!weakSelf->m_pendingSelectPath.isEmpty()) {
-                    weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
-                }
+    connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString& filePath, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        emit selectionChanged();
+        emit pathNavigated(filePath);
+    });
 =======
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakSelf, items]() {
-            if (weakSelf && weakSelf->m_model) {
-                weakSelf->m_model->setRecords(items);
-                if (weakSelf->m_contentPanel && weakSelf->m_proxyModel) {
-                    weakSelf->m_proxyModel->setSortType(static_cast<int>(weakSelf->m_contentPanel->currentSortType()));
-                    weakSelf->m_proxyModel->sort(0, weakSelf->m_contentPanel->currentSortOrder());
-                }
-                if (!weakSelf->m_pendingSelectPath.isEmpty()) {
-                    weakSelf->selectItemByPath(weakSelf->m_pendingSelectPath);
-                }
+    connect(pane, &ColumnViewPane::fileSelected, this, [this](const QString&, int paneIdx) {
+        setActivePaneIndex(paneIdx);
+        emit selectionChanged();
+    });
 >>>>>>> REPLACE
 ```
 
-## 4. Build & Verification Steps
-1. **Compilation Check**:
-   Run `cmake --build build` to verify clean compilation.
-2. **Behavioral Verification**:
-   - Open QuarkMeta and switch to Column View mode.
-   - Click the status bar sort direction toggle or change sort type via context menu (e.g. Sort by Rating or Sort by Modify Date).
-   - Confirm that all columns in Column View update their row order accordingly.
-   - Expand new subfolders and verify that the newly created sub-columns automatically load with the active sort order applied.
+---
+
+## Build & Verification Steps
+1. Clean and rebuild the project using CMake.
+2. Open Column View mode.
+3. Single-click folders to expand child columns.
+4. Select a file in the rightmost column, then single-click an item in the parent column. Verify that the selection in the rightmost column is NOT erased.
+5. Set unpinned filter rules in `FilterPanel`, then single-click items in Column View. Verify that unpinned filters are NOT reset.
+6. Double-click a folder in Column View. Verify that a new column is expanded and `pathNavigated` is emitted to update the address bar and reset unpinned filters.
+
+---
+
+## SSOT API Reuse & Anti-Redundancy Self-Check
+- `setActivePaneIndex(paneIdx)` is reused as SSOT for active column focus and visual header highlight.
+- `selectionChanged()` is reused as SSOT for broadcasting selection state to `MetaPanel` and status bars.
+- `pathNavigated` remains the sole SSOT for physical folder expansion navigation, decoupled from local single clicks.
+
+---
+
+## Header API Signature Verification Table
+
+| Header File | Member Function / Type | Exact Physical Signature in `.h` | Verified Existing |
+| :--- | :--- | :--- | :--- |
+| `src/ui/ColumnViewWidget.h` | `ColumnViewWidget::setActivePaneIndex` | `void setActivePaneIndex(int newIndex);` | Yes |
+| `src/ui/ColumnViewWidget.h` | `ColumnViewWidget::activatePaneFromBlankClick` | `void activatePaneFromBlankClick(int paneIndex);` | Yes |
+| `src/ui/ColumnViewWidget.h` | `ColumnViewWidget::selectionChanged` | `void selectionChanged();` (signal) | Yes |
+| `src/ui/ColumnViewWidget.h` | `ColumnViewWidget::pathNavigated` | `void pathNavigated(const QString& path);` (signal) | Yes |
+| `src/ui/ColumnViewWidget.h` | `ColumnViewPane::clearSelection` | `void clearSelection();` | Yes |
