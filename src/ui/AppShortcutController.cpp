@@ -182,21 +182,6 @@ void AppShortcutController::initShortcuts() {
         }
     });
 
-    // 6c. Ctrl+1 ~ Ctrl+9 数字快捷切换标签
-    for (int i = 1; i <= 9; ++i) {
-        QShortcut* scNumTab = new QShortcut(QKeySequence(Qt::CTRL | (Qt::Key_0 + i)), m_window);
-        scNumTab->setContext(Qt::WindowShortcut);
-        connect(scNumTab, &QShortcut::activated, this, [this, i]() {
-            if (m_window) {
-                if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
-                    if (titleBar->tabBar()) {
-                        int targetIdx = (i == 9) ? titleBar->tabBar()->tabCount() - 1 : i - 1;
-                        titleBar->tabBar()->setCurrentIndex(targetIdx, true);
-                    }
-                }
-            }
-        });
-    }
 
     // 7. Ctrl+T: 新建标签页
     QShortcut* scNewTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_T), m_window);
