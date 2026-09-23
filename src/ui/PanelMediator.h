@@ -55,6 +55,11 @@ signals:
      */
     void statusMessageRequested(const QString& message);
 
+    /**
+     * @brief 当前激活的内容面板改变广播信号
+     */
+    void activeContentPanelChanged(ContentPanel* panel);
+
 private:
     QPointer<NavPanel> m_navPanel;
     QPointer<FavoritePanel> m_favoritePanel;

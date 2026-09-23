@@ -1033,16 +1033,32 @@ void ColumnViewWidget::updateParentHighlights() {
 
 void ColumnViewWidget::updatePaneWidths() {
     if (m_panes.isEmpty()) return;
-    int defaultWidth = 230;
-    for (auto* pane : m_panes) {
-        pane->setFixedWidth(defaultWidth);
-        pane->setMinimumWidth(defaultWidth);
-        pane->setMaximumWidth(defaultWidth);
+
+    const int minWidth = 230;
+    const int count = m_panes.size();
+    const int viewportW = viewport()->width();
+
+    // 1. 智能等比例均分算法：计算各列基准宽度并施加 230px 刚性最小下限
+    int targetWidth = count > 0 ? (viewportW / count) : minWidth;
+    int calculatedWidth = qMax(minWidth, targetWidth);
+
+    int totalPanesWidth = 0;
+    for (int i = 0; i < count; ++i) {
+        // 当视口足够大时，最后一列吸收除法余数像素，做到 100% 铺满视口
+        int paneW = (calculatedWidth > minWidth && i == count - 1)
+            ? qMax(minWidth, viewportW - calculatedWidth * (count - 1))
+            : calculatedWidth;
+
+        m_panes[i]->setMinimumWidth(minWidth);
+        m_panes[i]->setMaximumWidth(QWIDGETSIZE_MAX);
+        m_panes[i]->setFixedWidth(paneW);
+        totalPanesWidth += paneW;
     }
 
-    int totalPanesWidth = m_panes.size() * defaultWidth;
+    // 2. 空白画布与滚动容器联动 (视口充满时留白设为 0，避免弹出额外水平滚动条)
     int containerHeight = m_container ? m_container->height() : viewport()->height();
-    int blankWidth = qMax(230, viewport()->width() - totalPanesWidth);
+    int blankWidth = (totalPanesWidth < viewportW) ? qMax(230, viewportW - totalPanesWidth) : 0;
+
     if (m_blankCanvasWidget) {
         m_blankCanvasWidget->setGeometry(totalPanesWidth, 0, blankWidth, qMax(containerHeight, viewport()->height()));
     }

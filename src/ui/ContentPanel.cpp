@@ -326,30 +326,27 @@ bool ContentPanel::isSplitMode() const {
 }
 
 void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
-    if (m_isSplit && m_splitOrientation == orientation) {
-        if (m_secondaryContentPanel && !secondaryPath.isEmpty()) {
-            m_secondaryContentPanel->loadDirectory(secondaryPath);
-        }
+    if (rootPane() != this) {
+        rootPane()->splitPane(orientation, secondaryPath);
         return;
     }
 
     m_splitOrientation = orientation;
-    m_isSplit = true;
-
-    // Remove outer border styling from main host panel while split
-    setObjectName("ContentPanelHost");
-    style()->unpolish(this);
-    style()->polish(this);
 
     if (!m_paneSplitter) {
+        m_isSplit = true;
+        setProperty("isHostPanel", "true");
+        style()->unpolish(this);
+        style()->polish(this);
+
         m_paneSplitter = new QSplitter(m_splitOrientation, this);
         m_paneSplitter->setHandleWidth(5);
         m_paneSplitter->setChildrenCollapsible(false);
 
-        // 1. Primary pane container
         m_primaryPaneContainer = new QFrame(m_paneSplitter);
         m_primaryPaneContainer->setObjectName("EditorContainer");
         m_primaryPaneContainer->setAttribute(Qt::WA_StyledBackground, true);
+        m_primaryPaneContainer->setMinimumWidth(230);
         QVBoxLayout* primLayout = new QVBoxLayout(m_primaryPaneContainer);
         primLayout->setContentsMargins(0, 0, 0, 0);
         primLayout->setSpacing(0);
@@ -364,35 +361,12 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
         }
 
         m_paneSplitter->addWidget(m_primaryPaneContainer);
-
-        // 2. Secondary pane container
-        m_secondaryPaneContainer = new QWidget(m_paneSplitter);
-        QVBoxLayout* secLayout = new QVBoxLayout(m_secondaryPaneContainer);
-        secLayout->setContentsMargins(0, 0, 0, 0);
-        secLayout->setSpacing(0);
-
-        m_secondaryContentPanel = new ContentPanel(m_secondaryPaneContainer);
-        m_secondaryContentPanel->setIsSecondaryPane(true);
-        connect(m_secondaryContentPanel, &ContentPanel::closePaneRequested, this, &ContentPanel::closeSecondaryPane);
-
-        secLayout->addWidget(m_secondaryContentPanel);
-
-        m_paneSplitter->addWidget(m_secondaryPaneContainer);
         m_mainLayout->addWidget(m_paneSplitter, 1);
-
-        connect(m_secondaryContentPanel, &ContentPanel::directorySelected, this, [this](const QString& path) {
-            if (m_isSplit && m_secondaryContentPanel) {
-                // 1. 让副窗格自身加载被双击的下级目录
-                m_secondaryContentPanel->loadDirectory(path);
-                // 2. 向上派发双窗格路径更新
-                QString p1 = m_currentPath;
-                QString p2 = path;
-                emit dualPanePathsChanged(p1, p2);
-            }
-        });
-
-        emit secondaryPaneCreated(m_secondaryContentPanel);
     } else {
+        m_isSplit = true;
+        setProperty("isHostPanel", "true");
+        style()->unpolish(this);
+        style()->polish(this);
         m_paneSplitter->setOrientation(m_splitOrientation);
         if (m_primaryPaneContainer) {
             if (m_headerWidget && m_primaryPaneContainer->layout()) {
@@ -401,32 +375,129 @@ void ContentPanel::splitPane(Qt::Orientation orientation, const QString& seconda
             }
             if (m_viewStack && m_primaryPaneContainer->layout()) {
                 m_mainLayout->removeWidget(m_viewStack);
-                m_primaryPaneContainer->layout()->addWidget(m_viewStack);
+                if (QVBoxLayout* primVBox = qobject_cast<QVBoxLayout*>(m_primaryPaneContainer->layout())) {
+                    primVBox->addWidget(m_viewStack, 1);
+                } else {
+                    m_primaryPaneContainer->layout()->addWidget(m_viewStack);
+                }
             }
             m_primaryPaneContainer->show();
         }
-        if (m_secondaryPaneContainer) {
-            m_secondaryPaneContainer->show();
-        }
-        if (m_paneSplitter) {
-            m_paneSplitter->show();
-        }
+        m_paneSplitter->show();
     }
 
-    if (m_secondaryContentPanel) {
-        m_secondaryContentPanel->loadDirectory(!secondaryPath.isEmpty() ? secondaryPath : m_currentPath);
+    if (paneCount() >= kMaxPanes) {
+        ContentPanel* target = m_activePaneForSplit ? m_activePaneForSplit : this;
+        if (!secondaryPath.isEmpty()) {
+            target->loadDirectory(secondaryPath);
+        }
+        return;
     }
 
+    QWidget* container = new QWidget(m_paneSplitter);
+    container->setMinimumWidth(230);
+    QVBoxLayout* layout = new QVBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    ContentPanel* newPane = new ContentPanel(container);
+    newPane->setIsSecondaryPane(true);
+    newPane->m_rootPane = this;
+    newPane->setViewMode(m_currentViewMode);
+
+    connect(newPane, &ContentPanel::closePaneRequested, this, [this, newPane]() {
+        closePane(newPane);
+    });
+    connect(newPane, &ContentPanel::directorySelected, this, [this, newPane](const QString& path) {
+        newPane->loadDirectory(path);
+        emit dualPanePathsChanged(m_currentPath, path);
+    });
+
+    layout->addWidget(newPane);
+    m_paneSplitter->addWidget(container);
+
+    m_paneContainers.append(container);
+    m_panes.append(newPane);
+
+    newPane->loadDirectory(!secondaryPath.isEmpty() ? secondaryPath : m_currentPath);
+
+    redistributePaneSizes();
+
+    emit secondaryPaneCreated(newPane);
+}
+
+void ContentPanel::redistributePaneSizes() {
+    if (!m_paneSplitter) return;
+    int count = paneCount();
+    if (count <= 1) return;
+    int total = (m_splitOrientation == Qt::Horizontal) ? width() : height();
+    int each = total / count;
     QList<int> sizes;
-    int total = (orientation == Qt::Horizontal) ? width() : height();
-    sizes << total / 2 << total / 2;
-    m_paneSplitter->setSizes(sizes);
-
-    if (m_isSplit) {
-        QString p1 = m_currentPath;
-        QString p2 = m_secondaryContentPanel ? m_secondaryContentPanel->currentPath() : QString();
-        emit dualPanePathsChanged(p1, p2);
+    for (int i = 0; i < count; ++i) {
+        sizes << each;
     }
+    m_paneSplitter->setSizes(sizes);
+}
+
+void ContentPanel::closePane(ContentPanel* pane) {
+    if (rootPane() != this) {
+        rootPane()->closePane(pane);
+        return;
+    }
+
+    if (m_activePaneForSplit == pane) {
+        m_activePaneForSplit = nullptr;
+    }
+
+    int idx = m_panes.indexOf(pane);
+    if (idx < 0) return;
+
+    QWidget* container = m_paneContainers.takeAt(idx);
+    m_panes.removeAt(idx);
+    if (container) {
+        container->deleteLater();
+    }
+
+    if (m_panes.isEmpty()) {
+        m_isSplit = false;
+        setProperty("isHostPanel", "false");
+        style()->unpolish(this);
+        style()->polish(this);
+        if (m_paneSplitter) {
+            m_paneSplitter->hide();
+        }
+        if (m_primaryPaneContainer) {
+            m_primaryPaneContainer->layout()->removeWidget(m_headerWidget);
+            m_primaryPaneContainer->layout()->removeWidget(m_viewStack);
+        }
+        if (m_headerWidget) {
+            m_mainLayout->addWidget(m_headerWidget);
+            m_headerWidget->show();
+        }
+        if (m_viewStack) {
+            m_mainLayout->addWidget(m_viewStack, 1);
+            m_viewStack->show();
+        }
+        emit secondaryPaneClosed();
+        emit directorySelected(m_currentPath);
+    } else {
+        redistributePaneSizes();
+    }
+}
+
+void ContentPanel::closeSecondaryPane() {
+    if (rootPane() != this) {
+        rootPane()->closeSecondaryPane();
+        return;
+    }
+
+    if (m_panes.isEmpty()) return;
+
+    ContentPanel* target = m_activePaneForSplit ? m_activePaneForSplit : m_panes.last();
+    if (target == this) {
+        target = m_panes.last();
+    }
+    closePane(target);
 }
 
 void ContentPanel::requestClosePane() {
@@ -437,36 +508,24 @@ void ContentPanel::requestClosePane() {
     }
 }
 
-void ContentPanel::closeSecondaryPane() {
-    if (!m_isSplit) return;
-
-    m_isSplit = false;
-
-    if (m_paneSplitter) {
-        m_paneSplitter->hide();
+void ContentPanel::setActivePane(bool active) {
+    if (active && rootPane()) {
+        rootPane()->m_activePaneForSplit = this;
     }
 
-    if (m_primaryPaneContainer) {
-        m_primaryPaneContainer->layout()->removeWidget(m_headerWidget);
-        m_primaryPaneContainer->layout()->removeWidget(m_viewStack);
+    if (m_isSplit && m_primaryPaneContainer) {
+        m_primaryPaneContainer->setProperty("activePane", active ? "true" : "false");
+        m_primaryPaneContainer->style()->unpolish(m_primaryPaneContainer);
+        m_primaryPaneContainer->style()->polish(m_primaryPaneContainer);
+    } else {
+        setProperty("activePane", active ? "true" : "false");
+        style()->unpolish(this);
+        style()->polish(this);
     }
 
     if (m_headerWidget) {
-        m_mainLayout->addWidget(m_headerWidget);
-        m_headerWidget->show();
+        m_headerWidget->setActive(active);
     }
-    if (m_viewStack) {
-        m_mainLayout->addWidget(m_viewStack, 1);
-        m_viewStack->show();
-    }
-
-    // Restore standard EditorContainer styling for single-pane mode
-    setObjectName("EditorContainer");
-    style()->unpolish(this);
-    style()->polish(this);
-
-    emit secondaryPaneClosed();
-    emit directorySelected(m_currentPath);
 }
 
 void ContentPanel::updateDragOverlay(const QPoint& pos) {

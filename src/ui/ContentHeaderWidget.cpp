@@ -4,6 +4,7 @@
 #include "../core/AppConfig.h"
 #include <QEvent>
 #include <QCursor>
+#include <QStyle>
 
 namespace QuarkMeta {
 
@@ -122,6 +123,12 @@ void ContentHeaderWidget::setLayersEnabled(bool enabled, const QString& tooltip)
         m_btnLayers->setEnabled(enabled);
         m_btnLayers->setProperty("tooltipText", tooltip);
     }
+}
+
+void ContentHeaderWidget::setActive(bool active) {
+    setProperty("activePane", active ? "true" : "false");
+    style()->unpolish(this);
+    style()->polish(this);
 }
 
 bool ContentHeaderWidget::eventFilter(QObject* watched, QEvent* event) {

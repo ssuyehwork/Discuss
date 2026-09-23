@@ -114,12 +114,14 @@ QSplitter::handle:horizontal:hover {
     padding: 0px;
 }
 
-#ContentPanelHost {
-    background-color: transparent;
-    border: none;
-    margin: 0px;
-    padding: 0px;
+#EditorContainer[activePane="true"], ContentPanel[activePane="true"] {
+    border: 1px solid #555555;
 }
+
+#EditorContainer[isHostPanel="true"] {
+    border: none;
+}
+
 
 /* 容器标题栏样式 (回归绝对直角设计) */
 #ContainerHeader {
