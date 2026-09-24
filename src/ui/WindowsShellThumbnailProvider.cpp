@@ -84,6 +84,16 @@ QIcon WindowsShellThumbnailProvider::getFileIcon(const QString& filePath, int si
         }
     }
 
+    if (!info.isDir()) {
+        QFileIconProvider provider;
+        QIcon fastIcon = provider.icon(QFileInfo("dummy." + key));
+        if (fastIcon.isNull()) fastIcon = provider.icon(QFileIconProvider::File);
+
+        QMutexLocker locker(&fileIconMutex());
+        fileIconCache()[key] = fastIcon;
+        return fastIcon;
+    }
+
     static QIcon s_defaultFileIcon;
     static QIcon s_defaultFolderIcon;
     if (s_defaultFileIcon.isNull() || s_defaultFolderIcon.isNull()) {
@@ -138,6 +148,16 @@ QIcon WindowsShellThumbnailProvider::getFileIconFast(const QString& filePath, bo
         if (fileIconCache().contains(key)) {
             return fileIconCache()[key];
         }
+    }
+
+    if (!isDir) {
+        QFileIconProvider provider;
+        QIcon fastIcon = provider.icon(QFileInfo("dummy." + key));
+        if (fastIcon.isNull()) fastIcon = provider.icon(QFileIconProvider::File);
+
+        QMutexLocker locker(&fileIconMutex());
+        fileIconCache()[key] = fastIcon;
+        return fastIcon;
     }
 
     static QIcon s_defaultFileIcon;
