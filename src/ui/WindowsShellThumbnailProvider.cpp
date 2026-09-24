@@ -61,8 +61,20 @@ QSet<QString>& WindowsShellThumbnailProvider::loadingKeys() {
 QIcon WindowsShellThumbnailProvider::getFileIcon(const QString& filePath, int size) {
     Q_UNUSED(size);
     QFileInfo info(filePath);
-    
-    QString key = info.isDir() ? (info.isRoot() ? filePath : "folder") : info.suffix().toLower();
+
+    if (info.isDir() && !info.isRoot()) {
+        static QIcon s_folderIcon;
+        if (s_folderIcon.isNull()) {
+            s_folderIcon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
+        }
+        {
+            QMutexLocker locker(&fileIconMutex());
+            fileIconCache()["folder"] = s_folderIcon;
+        }
+        return s_folderIcon;
+    }
+
+    QString key = info.isDir() ? filePath : info.suffix().toLower();
     if (key.length() > 128) key = "unknown";
 
     {
@@ -105,7 +117,20 @@ bool WindowsShellThumbnailProvider::isIconCached(const QString& filePath, bool i
 
 QIcon WindowsShellThumbnailProvider::getFileIconFast(const QString& filePath, bool isDir, const QString& suffix) {
     bool isRoot = isDir && (filePath.endsWith(":\\") || filePath.endsWith(":/") || filePath.length() <= 3);
-    QString key = isDir ? (isRoot ? filePath : "folder") : suffix.toLower();
+
+    if (isDir && !isRoot) {
+        static QIcon s_folderIcon;
+        if (s_folderIcon.isNull()) {
+            s_folderIcon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
+        }
+        {
+            QMutexLocker locker(&fileIconMutex());
+            fileIconCache()["folder"] = s_folderIcon;
+        }
+        return s_folderIcon;
+    }
+
+    QString key = isDir ? filePath : suffix.toLower();
     if (key.length() > 128) key = "unknown";
 
     {
