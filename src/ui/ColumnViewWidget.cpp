@@ -363,8 +363,8 @@ void ColumnViewWidget::updateParentHighlights() {
 void ColumnViewWidget::updatePaneWidths() {
     if (m_panes.isEmpty()) return;
 
-    // 【架构与设计理念刚性红线】列视图各列列宽严格、永恒固定为 220 像素，严禁任何形式的等比例均分拉伸！
-    constexpr int kColumnPaneWidth = 220;
+    // 【架构与设计理念刚性红线】列视图各列列宽严格、永恒固定为 230 像素，严禁任何形式的等比例均分拉伸！
+    constexpr int kColumnPaneWidth = 230;
     const int count = m_panes.size();
     const int viewportW = viewport()->width();
 
@@ -376,7 +376,7 @@ void ColumnViewWidget::updatePaneWidths() {
 
     // 【架构与设计理念刚性红线】最右侧刻意留白画布（ColumnBlankCanvasWidget）：
     // 1. 当列总宽未占满视口时：留白宽度拉伸自适应填补视口剩余所有空间（viewportW - totalPanesWidth），避免多余横向滚动条；
-    // 2. 当列总宽超出视口时：最右侧始终保持至少 220px 刻意留白画布，确保最后一列右侧有充裕空白区域可供双击回退及拖放投递。
+    // 2. 当列总宽超出视口时：最右侧始终保持至少 230px 刻意留白画布，确保最后一列右侧有充裕空白区域可供双击回退及拖放投递。
     int blankWidth = (totalPanesWidth < viewportW)
         ? (viewportW - totalPanesWidth)
         : kColumnPaneWidth;

@@ -561,6 +561,17 @@ void ContentPanel::setViewMode(ViewMode mode) {
     if (m_currentViewMode == mode) {
         return;
     }
+
+    // 🚀【闭环防线 1：第 0 毫秒时序校正与权威路径提取】
+    // 若原视图为列视图，在采集选区快照前，优先提取最右侧列（最新展开的真实目录）作为权威路径
+    if (m_currentViewMode == ColumnView && m_columnView) {
+        ColumnViewPane* rPane = m_columnView->rightmostPane();
+        if (!rPane) rPane = m_columnView->activePane();
+        if (rPane && !rPane->currentPath().isEmpty()) {
+            m_currentPath = rPane->currentPath();
+        }
+    }
+
     // 1. 在原视图中上报并更新 SelectionState (SSOT)，修正临时对象迭代器野指针闪退
     m_selectionState.currentFolder = m_currentPath;
     QStringList selList = getSelectedPaths();
@@ -578,9 +589,14 @@ void ContentPanel::setViewMode(ViewMode mode) {
         m_viewStack->setCurrentWidget(m_listCanvas);
     } else if (mode == ColumnView) {
         if (m_columnView) {
-            QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
-            m_columnView->setRootPath(targetPath);
+            // 🚀【闭环防线 2：防过度重建与闪烁】
+            // 仅在列视图尚未包含当前路径时才执行 setRootPath 构建新列栈；
+            // 若已包含（例如切去网格后切回），完好保留既有展开列栈与滚动条位置，零销毁、零闪烁！
+            if (!m_columnView->containsPath(m_currentPath)) {
+                m_columnView->setRootPath(m_currentPath);
+            }
             m_viewStack->setCurrentWidget(m_columnView);
+            m_columnView->scrollToRightmostPane();
         }
     } else {
         auto* jv = qobject_cast<JustifiedView*>(m_gridView);
@@ -590,11 +606,11 @@ void ContentPanel::setViewMode(ViewMode mode) {
         m_viewStack->setCurrentWidget(m_gridCanvas);
     }
 
+    // 🚀【闭环防线 3：切出列视图时无条件载入数据，并驱动全局导航原子对齐】
     if (oldMode == ColumnView && mode != ColumnView) {
-        if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
-            if (!m_diskModel || m_diskModel->rowCount() == 0) {
-                loadDirectory(m_currentPath, m_isRecursive);
-            }
+        if (!m_currentPath.isEmpty()) {
+            loadDirectory(m_currentPath, m_isRecursive);
+            emit directorySelected(m_currentPath);
         }
     }
 
