@@ -57,8 +57,12 @@ QString SvgIconRenderer::getSvgDataUrl(const QString& key, const QColor& color) 
 
 QIcon SvgIconRenderer::getIcon(const QString& key, const QColor& color, int size) {
     QIcon icon;
-    QPixmap pix = getPixmap(key, QSize(size, size), color);
-    if (!pix.isNull()) icon.addPixmap(pix);
+    const int baseSz = (size > 0) ? size : 18;
+    const int sizes[] = { baseSz, baseSz * 2, baseSz * 4, 128, 256 };
+    for (int s : sizes) {
+        QPixmap pix = getPixmap(key, QSize(s, s), color);
+        if (!pix.isNull()) icon.addPixmap(pix);
+    }
     return icon;
 }
 

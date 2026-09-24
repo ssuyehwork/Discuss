@@ -615,6 +615,15 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         if (record.width > 0 && record.height > 0) return true;
         return false;
     } else if (role == Qt::DecorationRole && index.column() == 0) {
+        if (record.isDir) {
+            QColor folderColor("#888888");
+            if (!record.manualColor.isEmpty()) {
+                QColor parsed = UiHelper::parseColorName(record.manualColor);
+                if (parsed.isValid()) folderColor = parsed;
+            }
+            return UiHelper::getIcon("folder_filled", folderColor, 128);
+        }
+
         QString cacheKey = path;
         QIcon* cached = m_iconCache.object(cacheKey);
         if (cached) return *cached;
