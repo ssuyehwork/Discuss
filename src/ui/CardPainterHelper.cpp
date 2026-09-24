@@ -3,8 +3,30 @@
 #include <QPainterPath>
 #include <QFont>
 #include <QtMath>
+#include <QMap>
+#include <QMutex>
+#include <QMutexLocker>
 
 namespace QuarkMeta {
+
+static QPixmap getCachedPixmap(const QString& key, const QColor& color, int size) {
+    static QMap<QString, QPixmap> s_pixCache;
+    static QMutex s_pixMutex;
+
+    QString cKey = QString("%1_%2_%3").arg(key).arg(color.rgba()).arg(size);
+    {
+        QMutexLocker locker(&s_pixMutex);
+        auto it = s_pixCache.find(cKey);
+        if (it != s_pixCache.end()) return it.value();
+    }
+
+    QPixmap pix = UiHelper::getIcon(key, color, size).pixmap(size, size);
+    if (!pix.isNull()) {
+        QMutexLocker locker(&s_pixMutex);
+        s_pixCache[cKey] = pix;
+    }
+    return pix;
+}
 
 void CardPainterHelper::drawCardCover(QPainter* painter, const QRect& cardRect, bool isSelected, 
                                      bool hasThumb, const QPixmap& thumb, const QIcon& defaultIcon, 
@@ -80,7 +102,10 @@ void CardPainterHelper::drawCardBorder(QPainter* painter, const QRect& cardRect,
 void CardPainterHelper::drawStatusIndicators(QPainter* painter, const QRect& cardRect, bool isPinned) {
     if (isPinned) {
         QRect statusRect(cardRect.right() - 22, cardRect.top() + 8, 16, 16);
-        UiHelper::getIcon("pin_vertical", QColor("#FF551C"), 16).paint(painter, statusRect);
+        QPixmap pinPix = getCachedPixmap("pin_vertical", QColor("#FF551C"), 16);
+        if (!pinPix.isNull()) {
+            painter->drawPixmap(statusRect, pinPix);
+        }
     }
 }
 
@@ -156,10 +181,14 @@ void CardPainterHelper::drawRatingStars(QPainter* painter, const QRect& banRect,
 
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing);
-        UiHelper::getIcon("no_color", starColor, banRect.width()).paint(painter, banRect);
+
+        QPixmap banPix = getCachedPixmap("no_color", starColor, banRect.width());
+        if (!banPix.isNull()) {
+            painter->drawPixmap(banRect, banPix);
+        }
         
-        QPixmap filledStar = UiHelper::getIcon("star_filled", starColor, starSize).pixmap(starSize, starSize);
-        QPixmap emptyStar  = UiHelper::getIcon("star", emptyStarColor, starSize).pixmap(starSize, starSize);
+        QPixmap filledStar = getCachedPixmap("star_filled", starColor, starSize);
+        QPixmap emptyStar  = getCachedPixmap("star", emptyStarColor, starSize);
         
         for (int i = 0; i < 5; ++i) {
             QRect starRect(starsStartX + i * (starSize + actualSpacing), 
