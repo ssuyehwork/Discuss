@@ -268,9 +268,6 @@ void TabBarWidget::restoreLastClosedTab() {
 void TabBarWidget::setCurrentIndex(int index, bool forceNotify) {
     if (index < 0 || index >= m_tabs.size()) return;
     bool indexChanged = (m_currentIndex != index);
-    if (indexChanged && m_currentIndex >= 0 && m_currentIndex < m_tabs.size()) {
-        emit tabAboutToChange(m_currentIndex);
-    }
     m_currentIndex = index;
     for (int i = 0; i < m_tabs.size(); ++i) {
         m_tabs[i].active = (i == m_currentIndex);
@@ -278,37 +275,6 @@ void TabBarWidget::setCurrentIndex(int index, bool forceNotify) {
     updateTabsUiState();
     if (indexChanged || forceNotify) {
         emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
-    }
-    saveStateToConfig();
-}
-
-void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
-    if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
-
-    m_tabs[m_currentIndex].splitState = state;
-
-    auto cleanName = [](const QString& u) -> QString {
-        if (u == "computer://" || u.isEmpty()) return "此电脑";
-        QFileInfo fi(QDir::cleanPath(u));
-        QString fn = fi.fileName();
-        return fn.isEmpty() ? u : fn;
-    };
-
-    if (state.isSplit && !state.panePaths.isEmpty()) {
-        QStringList nameList;
-        for (const QString& p : state.panePaths) {
-            nameList.append(cleanName(p));
-        }
-        QString mergedTitle = nameList.join(" | ");
-        m_tabs[m_currentIndex].title = mergedTitle;
-        m_tabs[m_currentIndex].url = state.panePaths.first();
-    } else if (!state.panePaths.isEmpty()) {
-        m_tabs[m_currentIndex].title = cleanName(state.panePaths.first());
-        m_tabs[m_currentIndex].url = state.panePaths.first();
-    }
-
-    if (m_currentIndex < m_tabWidgets.size()) {
-        m_tabWidgets[m_currentIndex]->setTabTitle(m_tabs[m_currentIndex].title);
     }
     saveStateToConfig();
 }
@@ -335,18 +301,6 @@ void TabBarWidget::saveStateToConfig() {
         obj["url"] = tab.url;
         obj["color"] = tab.color;
         obj["iconKey"] = tab.iconKey;
-
-        QJsonObject splitObj;
-        splitObj["orientation"] = static_cast<int>(tab.splitState.orientation);
-        QJsonArray pathsArray;
-        for (const QString& p : tab.splitState.panePaths) {
-            pathsArray.append(p);
-        }
-        splitObj["panePaths"] = pathsArray;
-        splitObj["activePaneIndex"] = tab.splitState.activePaneIndex;
-        splitObj["isSplit"] = tab.splitState.isSplit;
-        obj["splitState"] = splitObj;
-
         tabArray.append(obj);
     }
 
@@ -390,18 +344,6 @@ bool TabBarWidget::restoreStateFromConfig() {
         info.color = obj["color"].toString();
         info.iconKey = obj["iconKey"].toString();
         info.active = false;
-
-        if (obj.contains("splitState") && obj["splitState"].isObject()) {
-            QJsonObject splitObj = obj["splitState"].toObject();
-            info.splitState.orientation = static_cast<Qt::Orientation>(splitObj["orientation"].toInt(static_cast<int>(Qt::Horizontal)));
-            info.splitState.activePaneIndex = splitObj["activePaneIndex"].toInt(0);
-            info.splitState.isSplit = splitObj["isSplit"].toBool(false);
-            QJsonArray pathsArray = splitObj["panePaths"].toArray();
-            for (const auto& pVal : pathsArray) {
-                info.splitState.panePaths.append(pVal.toString());
-            }
-        }
-
         m_tabs.append(info);
     }
 

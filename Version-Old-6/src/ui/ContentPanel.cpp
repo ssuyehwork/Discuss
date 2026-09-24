@@ -1,3 +1,6 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "ContentPanel.h"
 #include "ContentHeaderWidget.h"
 #include "FolderSectionWidget.h"
@@ -12,7 +15,6 @@
 #include "controllers/ContentDataLoader.h"
 #include "controllers/ContentFileOpsHandler.h"
 #include "controllers/ContentViewCoordinator.h"
-#include "controllers/ContentPaneSplitManager.h"
 #include "workers/ContentStatsWorker.h"
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
@@ -54,7 +56,6 @@ QTreeView* ContentPanel::treeView() const {
 }
 
 ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
-    m_splitManager = new ContentPaneSplitManager(this);
     setAcceptDrops(true);
     setContextMenuPolicy(Qt::CustomContextMenu);
     setObjectName("EditorContainer");
@@ -140,7 +141,7 @@ void ContentPanel::initUi() {
     m_headerWidget->setFilterState(m_currentFilter);
 
     connect(m_headerWidget, &ContentHeaderWidget::splitViewRequested, this, [this]() {
-        if (isSecondaryPane()) {
+        if (m_isSecondaryPane) {
             emit closePaneRequested();
             return;
         }
@@ -242,10 +243,6 @@ void ContentPanel::initUi() {
     m_viewStack->setCurrentWidget(m_gridCanvas);
 
     m_mainLayout->addWidget(m_viewStack, 1);
-
-    if (m_viewCoordinator) {
-        m_viewCoordinator->installActivationFilters();
-    }
 }
 
 void ContentPanel::initGridView() {
@@ -325,84 +322,258 @@ bool ContentPanel::isTreeView(QObject* view) const {
 }
 
 bool ContentPanel::isSplitMode() const {
-    return m_splitManager ? m_splitManager->isSplitMode() : false;
-}
-
-bool ContentPanel::isSecondaryPane() const {
-    return m_splitManager ? m_splitManager->isSecondaryPane() : false;
-}
-
-void ContentPanel::setIsSecondaryPane(bool secondary) {
-    if (m_splitManager) m_splitManager->setIsSecondaryPane(secondary);
-}
-
-ContentPanel* ContentPanel::secondaryContentPanel() const {
-    return m_splitManager ? m_splitManager->secondaryContentPanel() : nullptr;
-}
-
-QList<ContentPanel*> ContentPanel::panes() const {
-    return m_splitManager ? m_splitManager->panes() : QList<ContentPanel*>();
-}
-
-int ContentPanel::paneCount() const {
-    return m_splitManager ? m_splitManager->paneCount() : 1;
-}
-
-ContentPanel* ContentPanel::rootPane() const {
-    return m_splitManager ? m_splitManager->rootPane() : const_cast<ContentPanel*>(this);
+    return m_isSplit;
 }
 
 void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
-    if (m_splitManager) m_splitManager->splitPane(orientation, secondaryPath);
+    if (rootPane() != this) {
+        rootPane()->splitPane(orientation, secondaryPath);
+        return;
+    }
+
+    m_splitOrientation = orientation;
+
+    if (!m_paneSplitter) {
+        m_isSplit = true;
+        setProperty("isHostPanel", "true");
+        style()->unpolish(this);
+        style()->polish(this);
+
+        m_paneSplitter = new QSplitter(m_splitOrientation, this);
+        m_paneSplitter->setHandleWidth(5);
+        m_paneSplitter->setChildrenCollapsible(false);
+
+        m_primaryPaneContainer = new QFrame(m_paneSplitter);
+        m_primaryPaneContainer->setObjectName("EditorContainer");
+        m_primaryPaneContainer->setAttribute(Qt::WA_StyledBackground, true);
+        m_primaryPaneContainer->setMinimumWidth(230);
+        QVBoxLayout* primLayout = new QVBoxLayout(m_primaryPaneContainer);
+        primLayout->setContentsMargins(0, 0, 0, 0);
+        primLayout->setSpacing(0);
+
+        if (m_headerWidget) {
+            m_mainLayout->removeWidget(m_headerWidget);
+            primLayout->addWidget(m_headerWidget);
+        }
+        if (m_viewStack) {
+            m_mainLayout->removeWidget(m_viewStack);
+            primLayout->addWidget(m_viewStack, 1);
+        }
+
+        m_paneSplitter->addWidget(m_primaryPaneContainer);
+        m_mainLayout->addWidget(m_paneSplitter, 1);
+    } else {
+        m_isSplit = true;
+        setProperty("isHostPanel", "true");
+        style()->unpolish(this);
+        style()->polish(this);
+        m_paneSplitter->setOrientation(m_splitOrientation);
+        if (m_primaryPaneContainer) {
+            if (m_headerWidget && m_primaryPaneContainer->layout()) {
+                m_mainLayout->removeWidget(m_headerWidget);
+                m_primaryPaneContainer->layout()->addWidget(m_headerWidget);
+            }
+            if (m_viewStack && m_primaryPaneContainer->layout()) {
+                m_mainLayout->removeWidget(m_viewStack);
+                if (QVBoxLayout* primVBox = qobject_cast<QVBoxLayout*>(m_primaryPaneContainer->layout())) {
+                    primVBox->addWidget(m_viewStack, 1);
+                } else {
+                    m_primaryPaneContainer->layout()->addWidget(m_viewStack);
+                }
+            }
+            m_primaryPaneContainer->show();
+        }
+        m_paneSplitter->show();
+    }
+
+    if (paneCount() >= kMaxPanes) {
+        ContentPanel* target = m_activePaneForSplit ? m_activePaneForSplit : this;
+        if (!secondaryPath.isEmpty()) {
+            target->loadDirectory(secondaryPath);
+        }
+        return;
+    }
+
+    QWidget* container = new QWidget(m_paneSplitter);
+    container->setMinimumWidth(230);
+    QVBoxLayout* layout = new QVBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    ContentPanel* newPane = new ContentPanel(container);
+    newPane->setIsSecondaryPane(true);
+    newPane->m_rootPane = this;
+    newPane->setViewMode(m_currentViewMode);
+
+    connect(newPane, &ContentPanel::closePaneRequested, this, [this, newPane]() {
+        closePane(newPane);
+    });
+    connect(newPane, &ContentPanel::directorySelected, this, [this, newPane](const QString& path) {
+        newPane->loadDirectory(path);
+        emit dualPanePathsChanged(m_currentPath, path);
+    });
+
+    layout->addWidget(newPane);
+    m_paneSplitter->addWidget(container);
+
+    m_paneContainers.append(container);
+    m_panes.append(newPane);
+
+    newPane->loadDirectory(!secondaryPath.isEmpty() ? secondaryPath : m_currentPath);
+
+    redistributePaneSizes();
+
+    emit secondaryPaneCreated(newPane);
 }
 
 void ContentPanel::redistributePaneSizes() {
-    if (m_splitManager) m_splitManager->redistributePaneSizes();
+    if (!m_paneSplitter) return;
+    int count = paneCount();
+    if (count <= 1) return;
+    int total = (m_splitOrientation == Qt::Horizontal) ? width() : height();
+    int each = total / count;
+    QList<int> sizes;
+    for (int i = 0; i < count; ++i) {
+        sizes << each;
+    }
+    m_paneSplitter->setSizes(sizes);
 }
 
 void ContentPanel::closePane(ContentPanel* pane) {
-    if (m_splitManager) m_splitManager->closePane(pane);
+    if (rootPane() != this) {
+        rootPane()->closePane(pane);
+        return;
+    }
+
+    if (m_activePaneForSplit == pane) {
+        m_activePaneForSplit = nullptr;
+    }
+
+    int idx = m_panes.indexOf(pane);
+    if (idx < 0) return;
+
+    QWidget* container = m_paneContainers.takeAt(idx);
+    m_panes.removeAt(idx);
+    if (container) {
+        container->deleteLater();
+    }
+
+    if (m_panes.isEmpty()) {
+        m_isSplit = false;
+        setProperty("isHostPanel", "false");
+        style()->unpolish(this);
+        style()->polish(this);
+        if (m_paneSplitter) {
+            m_paneSplitter->hide();
+        }
+        if (m_primaryPaneContainer) {
+            m_primaryPaneContainer->layout()->removeWidget(m_headerWidget);
+            m_primaryPaneContainer->layout()->removeWidget(m_viewStack);
+        }
+        if (m_headerWidget) {
+            m_mainLayout->addWidget(m_headerWidget);
+            m_headerWidget->show();
+        }
+        if (m_viewStack) {
+            m_mainLayout->addWidget(m_viewStack, 1);
+            m_viewStack->show();
+        }
+        emit secondaryPaneClosed();
+        emit directorySelected(m_currentPath);
+    } else {
+        redistributePaneSizes();
+    }
 }
 
 void ContentPanel::closeSecondaryPane() {
-    if (m_splitManager) m_splitManager->closeSecondaryPane();
+    if (rootPane() != this) {
+        rootPane()->closeSecondaryPane();
+        return;
+    }
+
+    if (m_panes.isEmpty()) return;
+
+    ContentPanel* target = m_activePaneForSplit ? m_activePaneForSplit : m_panes.last();
+    if (target == this) {
+        target = m_panes.last();
+    }
+    closePane(target);
 }
 
 void ContentPanel::requestClosePane() {
-    if (isSecondaryPane()) {
+    if (m_isSecondaryPane) {
         emit closePaneRequested();
-    } else if (isSplitMode()) {
+    } else if (m_isSplit) {
         closeSecondaryPane();
     }
 }
 
 void ContentPanel::setActivePane(bool active) {
-    if (m_splitManager) m_splitManager->setActivePane(active);
+    if (active && rootPane()) {
+        rootPane()->m_activePaneForSplit = this;
+    }
+
+    if (m_isSplit && m_primaryPaneContainer) {
+        m_primaryPaneContainer->setProperty("activePane", active ? "true" : "false");
+        m_primaryPaneContainer->style()->unpolish(m_primaryPaneContainer);
+        m_primaryPaneContainer->style()->polish(m_primaryPaneContainer);
+    } else {
+        setProperty("activePane", active ? "true" : "false");
+        style()->unpolish(this);
+        style()->polish(this);
+    }
+
+    if (m_headerWidget) {
+        m_headerWidget->setActive(active);
+    }
 }
 
 void ContentPanel::updateDragOverlay(const QPoint& pos) {
-    if (m_splitManager) m_splitManager->updateDragOverlay(pos);
+    if (!m_dragOverlayWidget) {
+        m_dragOverlayWidget = new QWidget(this);
+        m_dragOverlayWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
+        m_dragOverlayWidget->setStyleSheet("background-color: rgba(0, 122, 255, 0.25); border: 2px solid #007AFF;");
+    }
+
+    int w = width();
+    int h = height();
+
+    if (pos.x() > w * 0.75) {
+        m_dragOverlayWidget->setGeometry(w / 2, 0, w / 2, h);
+        m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
+    } else if (pos.x() < w * 0.25) {
+        m_dragOverlayWidget->setGeometry(0, 0, w / 2, h);
+        m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
+    } else if (pos.y() > h * 0.75) {
+        m_dragOverlayWidget->setGeometry(0, h / 2, w, h / 2);
+        m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
+    } else if (pos.y() < h * 0.25) {
+        m_dragOverlayWidget->setGeometry(0, 0, w, h / 2);
+        m_dragOverlayWidget->show();
+        m_dragOverlayWidget->raise();
+    } else {
+        hideDragOverlay();
+    }
 }
 
 void ContentPanel::hideDragOverlay() {
-    if (m_splitManager) m_splitManager->hideDragOverlay();
+    if (m_dragOverlayWidget) {
+        m_dragOverlayWidget->hide();
+    }
 }
 
 void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
     if (event->mimeData()->hasUrls() || event->mimeData()->hasText() ||
-        event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") ||
-        event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        event->mimeData()->hasFormat("application/x-quarkmeta-tabindex")) {
         event->acceptProposedAction();
     }
 }
 
 void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
-    if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") ||
-        event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-        updateDragOverlay(event->position().toPoint());
-    } else {
-        hideDragOverlay();
-    }
+    updateDragOverlay(event->position().toPoint());
     event->acceptProposedAction();
 }
 
@@ -415,37 +586,34 @@ void ContentPanel::dropEvent(QDropEvent* event) {
     QPoint pos = event->position().toPoint();
     hideDragOverlay();
 
-    if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") ||
-        event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-        int w = width();
-        int h = height();
+    int w = width();
+    int h = height();
 
-        QString targetUrl;
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-            targetUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
-        } else if (event->mimeData()->hasText()) {
-            targetUrl = event->mimeData()->text();
-        }
-
-        if (pos.x() > w * 0.75 || pos.x() < w * 0.25) {
-            splitPane(Qt::Horizontal, targetUrl);
-            event->acceptProposedAction();
-        } else if (pos.y() > h * 0.75 || pos.y() < h * 0.25) {
-            splitPane(Qt::Vertical, targetUrl);
-            event->acceptProposedAction();
-        } else {
-            event->acceptProposedAction();
-        }
-        return;
+    QString targetUrl;
+    if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        targetUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
+    } else if (event->mimeData()->hasText()) {
+        targetUrl = event->mimeData()->text();
     }
 
-    if (event->mimeData()->hasUrls()) {
-        QStringList paths;
-        for (const QUrl& url : event->mimeData()->urls()) {
-            paths << url.toLocalFile();
-        }
-        onPathsDropped(paths, QModelIndex());
+    if (pos.x() > w * 0.75 || pos.x() < w * 0.25) {
+        splitPane(Qt::Horizontal, targetUrl);
         event->acceptProposedAction();
+    } else if (pos.y() > h * 0.75 || pos.y() < h * 0.25) {
+        splitPane(Qt::Vertical, targetUrl);
+        event->acceptProposedAction();
+    } else {
+        if (event->mimeData()->hasUrls()) {
+            QStringList paths;
+            for (const QUrl& url : event->mimeData()->urls()) {
+                paths << url.toLocalFile();
+            }
+            onPathsDropped(paths, QModelIndex());
+            event->acceptProposedAction();
+        } else if (event->mimeData()->hasText()) {
+            splitPane(Qt::Horizontal, event->mimeData()->text());
+            event->acceptProposedAction();
+        }
     }
 }
 
@@ -607,10 +775,6 @@ void ContentPanel::setViewMode(ViewMode mode) {
     emit zoomLevelChanged(m_zoomLevel);
 
     if (m_visibleTimer) m_visibleTimer->start();
-
-    if (m_viewCoordinator) {
-        m_viewCoordinator->installActivationFilters();
-    }
 }
 
 void ContentPanel::setZoomLevel(int level) {
