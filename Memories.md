@@ -283,6 +283,14 @@
    - 在分栏视图模式下，`Ctrl+V` (粘贴) 与 `Ctrl+Shift+N` / 新建命令必须动态感知并路由至当前激活列的路径 `activePane()->currentPath()`，禁止误粘贴或新建在最左侧根目录；
    - `Backspace` (退格键) 与 `Left` (左方向键) 必须拦截并路由至 `columnView()->goUpColumn()`，平滑裁撤收起最右侧子列，禁止触发全局顶层路径跳转。
 
+15. **Version-Old-6 经典列视图顶层设计理念与架构契约汇总 (Version-Old-6 Column View Master Specification)**：
+   - **单层 HBox 级联展开与祖先路径栈 (Ancestor Path Stack)**：所有列面板 (`ColumnViewPane`) 挂载于单层 `QHBoxLayout` 中。传入深层路径时向上拆分完整的祖先路径栈，从根目录开始逐级构建多列分栏，并自动定位高亮选中子目录；展开子列后父列对应项通过 `IsParentExpandedRole` 保持深青灰高亮 (`#334455`)；
+   - **文件夹/文件物理双分栏与折叠 (Dual-Section Panel)**：每个列面板内部由 `DualSectionPanel` 承载，拆分为上方文件夹专用列表（`m_folderProxyModel`）与下方文件专用列表（`m_fileProxyModel`），配合折叠标头 (`FolderSectionHeaderBar`) 根据项目数自适应动态计算列表高度；
+   - **智能等比例宽度均分与延伸留白画布 (Smart Width Allocation & Blank Canvas)**：各列设定 230px 刚性最小宽度，视口充足时按 `viewportWidth / count` 自动等均分，最后一列吸收余数像素；最右侧剥离独立的延伸留白区 (`ColumnBlankCanvasWidget`)，支持拖拽放下与双击背景回退；
+   - **严格的单击/双击语义分工**：单击文件夹/文件仅选中高亮并切换焦点，不裁撤右侧子列；双击文件夹触发 `folderExpandRequested`，裁撤当前列右侧所有子列并在右侧展开新子列；双击文件触发激活/打开；
+   - **双击空白处精准回退降级**：最右侧列或留白区双击逐级关闭最右侧列；中间父列空白处双击裁撤该列右侧所有子列；仅剩最后一列时双击空白处自动降级退回 `computer://`；
+   - **极简单行 Delegate 绘制 (28px Row Height)**：每行固定 28px 高度，包含左侧 8px 留白、5px 垂直色条（若有）、18x18px 图标/缩略图、文本区（`ElideRight`）、右侧星级评分及文件夹最右侧 `chevron_right` 级联指示箭头（空文件夹绘制虚线框及 `#41F2F2` 箭羽）。
+
 ---
 
 ## 10. 选择模型变更与元数据面板中介路由及两段式加载架构规范 (Selection Model & MetaPanel Routing Architecture)
