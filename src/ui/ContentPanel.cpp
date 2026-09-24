@@ -242,6 +242,10 @@ void ContentPanel::initUi() {
     m_viewStack->setCurrentWidget(m_gridCanvas);
 
     m_mainLayout->addWidget(m_viewStack, 1);
+
+    if (m_viewCoordinator) {
+        m_viewCoordinator->installActivationFilters();
+    }
 }
 
 void ContentPanel::initGridView() {
@@ -594,6 +598,10 @@ void ContentPanel::setViewMode(ViewMode mode) {
     emit zoomLevelChanged(m_zoomLevel);
 
     if (m_visibleTimer) m_visibleTimer->start();
+
+    if (m_viewCoordinator) {
+        m_viewCoordinator->installActivationFilters();
+    }
 }
 
 void ContentPanel::setZoomLevel(int level) {

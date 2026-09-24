@@ -458,6 +458,12 @@ void PanelMediator::setupConnections() {
     if (contentPanel) {
         (*wireContentPanel)(contentPanel);
 
+        if (searchController) {
+            connect(this, &PanelMediator::activeContentPanelChanged, this, [searchController](ContentPanel* activePanel) {
+                searchController->setActiveContentPanel(activePanel);
+            });
+        }
+
         if (metaPanel) {
             connect(this, &PanelMediator::activeContentPanelChanged, this, [contentPanel, updateMetaPanelFromPanel](ContentPanel* activePanel) {
                 std::function<void(ContentPanel*)> updateActiveState = [&updateActiveState, activePanel](ContentPanel* node) {

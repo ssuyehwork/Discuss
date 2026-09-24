@@ -44,7 +44,7 @@ SearchController::SearchController(QWidget* parent)
 }
 
 void SearchController::bindContentPanel(ContentPanel* contentPanel) {
-    m_contentPanel = contentPanel;
+    setActiveContentPanel(contentPanel);
     if (!m_contentPanel) return;
 
     connect(m_searchEdit, &QLineEdit::returnPressed, this, [this]() {

@@ -46,8 +46,12 @@ public:
     // 视图缩放几何适配
     void updateGridSize(int zoomLevel);
 
+    // 激活态事件过滤器统一安装入口：修复 panelActivated 从未被真正触发的问题
+    void installActivationFilters();
+
 private:
     ContentPanel* m_panel = nullptr;
+    QSet<QObject*> m_filteredObjects;
 };
 
 } // namespace QuarkMeta

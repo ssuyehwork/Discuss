@@ -223,4 +223,20 @@ void ContentViewCoordinator::updateGridSize(int zoomLevel) {
     if (m_panel->listCanvas()) m_panel->listCanvas()->updateZoom(zoomLevel);
 }
 
+void ContentViewCoordinator::installActivationFilters() {
+    if (!m_panel) return;
+
+    auto installOnce = [this](QObject* obj) {
+        if (!obj || m_filteredObjects.contains(obj)) return;
+        obj->installEventFilter(m_panel);
+        m_filteredObjects.insert(obj);
+    };
+
+    for (QAbstractItemView* view : currentActiveViews()) {
+        if (!view) continue;
+        installOnce(view);
+        installOnce(view->viewport());
+    }
+}
+
 } // namespace QuarkMeta
