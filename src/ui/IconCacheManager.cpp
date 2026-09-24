@@ -1,4 +1,5 @@
 #include "IconCacheManager.h"
+#include "SvgIconRenderer.h"
 #include <QFileIconProvider>
 #include <QFileInfo>
 
@@ -24,7 +25,7 @@ QIcon IconCacheManager::getCachedIcon(const QString& ext, bool isDir) {
     QFileIconProvider provider;
     QIcon icon;
     if (isDir) {
-        icon = provider.icon(QFileIconProvider::Folder);
+        icon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
     } else {
         if (key.length() > 12) key = "unknown";
         icon = provider.icon(QFileInfo("dummy." + key));
