@@ -9,6 +9,7 @@
 #include <QStandardPaths>
 #include <QFileIconProvider>
 #include <QMutexLocker>
+#include "SvgIconRenderer.h"
 #include <QtConcurrent/QtConcurrent>
 #include <QDebug>
 
@@ -60,8 +61,20 @@ QSet<QString>& WindowsShellThumbnailProvider::loadingKeys() {
 QIcon WindowsShellThumbnailProvider::getFileIcon(const QString& filePath, int size) {
     Q_UNUSED(size);
     QFileInfo info(filePath);
-    
-    QString key = info.isDir() ? (info.isRoot() ? filePath : "folder") : info.suffix().toLower();
+
+    if (info.isDir() && !info.isRoot()) {
+        static QIcon s_folderIcon;
+        if (s_folderIcon.isNull()) {
+            s_folderIcon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
+        }
+        {
+            QMutexLocker locker(&fileIconMutex());
+            fileIconCache()["folder"] = s_folderIcon;
+        }
+        return s_folderIcon;
+    }
+
+    QString key = info.isDir() ? filePath : info.suffix().toLower();
     if (key.length() > 128) key = "unknown";
 
     {
@@ -71,11 +84,21 @@ QIcon WindowsShellThumbnailProvider::getFileIcon(const QString& filePath, int si
         }
     }
 
+    if (!info.isDir()) {
+        QFileIconProvider provider;
+        QIcon fastIcon = provider.icon(QFileInfo("dummy." + key));
+        if (fastIcon.isNull()) fastIcon = provider.icon(QFileIconProvider::File);
+
+        QMutexLocker locker(&fileIconMutex());
+        fileIconCache()[key] = fastIcon;
+        return fastIcon;
+    }
+
     static QIcon s_defaultFileIcon;
     static QIcon s_defaultFolderIcon;
     if (s_defaultFileIcon.isNull() || s_defaultFolderIcon.isNull()) {
         QFileIconProvider provider;
-        s_defaultFolderIcon = provider.icon(QFileIconProvider::Folder);
+        s_defaultFolderIcon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
         s_defaultFileIcon = provider.icon(QFileIconProvider::File);
     }
     QIcon placeholderIcon = info.isDir() ? s_defaultFolderIcon : s_defaultFileIcon;
@@ -104,7 +127,20 @@ bool WindowsShellThumbnailProvider::isIconCached(const QString& filePath, bool i
 
 QIcon WindowsShellThumbnailProvider::getFileIconFast(const QString& filePath, bool isDir, const QString& suffix) {
     bool isRoot = isDir && (filePath.endsWith(":\\") || filePath.endsWith(":/") || filePath.length() <= 3);
-    QString key = isDir ? (isRoot ? filePath : "folder") : suffix.toLower();
+
+    if (isDir && !isRoot) {
+        static QIcon s_folderIcon;
+        if (s_folderIcon.isNull()) {
+            s_folderIcon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
+        }
+        {
+            QMutexLocker locker(&fileIconMutex());
+            fileIconCache()["folder"] = s_folderIcon;
+        }
+        return s_folderIcon;
+    }
+
+    QString key = isDir ? filePath : suffix.toLower();
     if (key.length() > 128) key = "unknown";
 
     {
@@ -114,11 +150,21 @@ QIcon WindowsShellThumbnailProvider::getFileIconFast(const QString& filePath, bo
         }
     }
 
+    if (!isDir) {
+        QFileIconProvider provider;
+        QIcon fastIcon = provider.icon(QFileInfo("dummy." + key));
+        if (fastIcon.isNull()) fastIcon = provider.icon(QFileIconProvider::File);
+
+        QMutexLocker locker(&fileIconMutex());
+        fileIconCache()[key] = fastIcon;
+        return fastIcon;
+    }
+
     static QIcon s_defaultFileIcon;
     static QIcon s_defaultFolderIcon;
     if (s_defaultFileIcon.isNull() || s_defaultFolderIcon.isNull()) {
         QFileIconProvider provider;
-        s_defaultFolderIcon = provider.icon(QFileIconProvider::Folder);
+        s_defaultFolderIcon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
         s_defaultFileIcon = provider.icon(QFileIconProvider::File);
     }
     QIcon placeholderIcon = isDir ? s_defaultFolderIcon : s_defaultFileIcon;
@@ -150,7 +196,7 @@ void WindowsShellThumbnailProvider::handleIconLoad(const QString& filePath, cons
             if (isRoot) {
                 icon = provider.icon(info);
             } else {
-                icon = provider.icon(QFileIconProvider::Folder);
+                icon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
             }
         } else {
             icon = provider.icon(QFileInfo("dummy." + key));
