@@ -363,30 +363,25 @@ void ColumnViewWidget::updateParentHighlights() {
 void ColumnViewWidget::updatePaneWidths() {
     if (m_panes.isEmpty()) return;
 
-    const int minWidth = 230;
+    // 【架构与设计理念刚性红线】列视图各列列宽严格、永恒固定为 220 像素，严禁任何形式的等比例均分拉伸！
+    constexpr int kColumnPaneWidth = 220;
     const int count = m_panes.size();
     const int viewportW = viewport()->width();
 
-    // 1. 智能等比例均分算法：计算各列基准宽度并施加 230px 刚性最小下限
-    int targetWidth = count > 0 ? (viewportW / count) : minWidth;
-    int calculatedWidth = qMax(minWidth, targetWidth);
-
     int totalPanesWidth = 0;
     for (int i = 0; i < count; ++i) {
-        // 当视口足够大时，最后一列吸收除法余数像素，做到 100% 铺满视口
-        int paneW = (calculatedWidth > minWidth && i == count - 1)
-            ? qMax(minWidth, viewportW - calculatedWidth * (count - 1))
-            : calculatedWidth;
-
-        m_panes[i]->setMinimumWidth(minWidth);
-        m_panes[i]->setMaximumWidth(QWIDGETSIZE_MAX);
-        m_panes[i]->setFixedWidth(paneW);
-        totalPanesWidth += paneW;
+        m_panes[i]->setFixedWidth(kColumnPaneWidth);
+        totalPanesWidth += kColumnPaneWidth;
     }
 
-    // 2. 空白画布与滚动容器联动 (视口充满时留白设为 0，避免弹出额外水平滚动条)
+    // 【架构与设计理念刚性红线】最右侧刻意留白画布（ColumnBlankCanvasWidget）：
+    // 1. 当列总宽未占满视口时：留白宽度拉伸自适应填补视口剩余所有空间（viewportW - totalPanesWidth），避免多余横向滚动条；
+    // 2. 当列总宽超出视口时：最右侧始终保持至少 220px 刻意留白画布，确保最后一列右侧有充裕空白区域可供双击回退及拖放投递。
+    int blankWidth = (totalPanesWidth < viewportW)
+        ? (viewportW - totalPanesWidth)
+        : kColumnPaneWidth;
+
     int containerHeight = m_container ? m_container->height() : viewport()->height();
-    int blankWidth = (totalPanesWidth < viewportW) ? qMax(230, viewportW - totalPanesWidth) : 0;
 
     if (m_blankCanvasWidget) {
         m_blankCanvasWidget->setGeometry(totalPanesWidth, 0, blankWidth, qMax(containerHeight, viewport()->height()));

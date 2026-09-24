@@ -274,6 +274,18 @@ void ColumnViewPane::setActive(bool active) {
 void ColumnViewPane::paintEvent(QPaintEvent* event) {
     QWidget::paintEvent(event);
     QPainter painter(this);
+    // 【架构红线 - 蓝色顶部焦点提示线设计约束】
+    // 此处绘制的顶部蓝线（颜色 #3498db，宽度 1px）是"列视图（Column View）中活跃列"的焦点视觉标识。
+    // ─────────────────────────────────────────────────────────────────────────────────
+    // ✅ 唯一合法应用范围：ColumnViewPane（列视图中的单列窗格），当 m_isActive == true 时绘制。
+    // ❌ 严禁应用范围：
+    //    - ContentPanel（内容面板/窗格）     → 其活跃状态由 ContentPaneSplitManager::setActivePane
+    //                                          通过 QSS property "activePane" 独立管理（border样式）。
+    //    - ContentHeaderWidget（面板标题栏） → 其活跃状态由 ContentHeaderWidget::setActive
+    //                                          通过 QSS property "activePane" 独立管理。
+    //    - 任何其他非 ColumnViewPane 类型的 Widget。
+    // ─────────────────────────────────────────────────────────────────────────────────
+    // 两条"活跃"状态机（列焦点 vs 窗格焦点）完全正交，绝对不可混用或合并。
     if (m_isActive) {
         painter.setPen(QPen(QColor("#3498db"), 1));
         painter.drawLine(0, 0, width(), 0);

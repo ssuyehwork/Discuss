@@ -24,6 +24,11 @@ public:
     void loadDirectory();
 
     bool isActive() const { return m_isActive; }
+    // 【架构红线】setActive / m_isActive 专属于列视图（Column View）中单列（ColumnViewPane）的焦点激活状态。
+    // 顶部蓝色焦点提示线（#3498db, 1px）由 paintEvent 根据此状态绘制。
+    // 严禁将此接口或蓝线绘制逻辑挪用至 ContentPanel（内容面板/窗格）或
+    // ContentHeaderWidget（内容面板标题栏）。窗格活跃状态由 ContentPaneSplitManager::setActivePane
+    // 通过 QSS property "activePane" 独立管理，两者完全正交，绝对不可混用。
     void setActive(bool active);
 
     void selectItemByPath(const QString& targetPath);
