@@ -185,21 +185,25 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         m_folderListView->installEventFilter(m_contentPanel);
         m_listView->installEventFilter(m_contentPanel);
         connect(m_folderListView, &QListView::customContextMenuRequested, this, [this](const QPoint& pos) {
+            emit contextMenuRequested(m_folderListView, pos);
             if (m_contentPanel) {
                 m_contentPanel->onCustomContextMenuRequested(m_folderListView, pos);
             }
         });
         connect(m_listView, &QListView::customContextMenuRequested, this, [this](const QPoint& pos) {
+            emit contextMenuRequested(m_listView, pos);
             if (m_contentPanel) {
                 m_contentPanel->onCustomContextMenuRequested(m_listView, pos);
             }
         });
         connect(m_folderListView, &DropListView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+            emit pathsDroppedSignal(paths, targetIndex, m_path);
             if (m_contentPanel) {
                 m_contentPanel->onPathsDropped(paths, targetIndex, m_path, m_folderProxyModel);
             }
         });
         connect(m_listView, &DropListView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+            emit pathsDroppedSignal(paths, targetIndex, m_path);
             if (m_contentPanel) {
                 m_contentPanel->onPathsDropped(paths, targetIndex, m_path, m_fileProxyModel);
             }

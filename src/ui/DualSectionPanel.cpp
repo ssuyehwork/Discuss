@@ -162,29 +162,31 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
     auto scanView = [&](QAbstractItemView* view, FilterProxyModel* proxy) {
         if (!view || !view->isVisible() || !proxy || proxy->rowCount() == 0) return;
 
-        // 计算宿主 ScrollArea 视口映射到当前 item view 坐标系下的可视矩形
-        QRect viewVpRect(
-            view->mapFromGlobal(hostViewport->mapToGlobal(vpRect.topLeft())),
-            view->mapFromGlobal(hostViewport->mapToGlobal(vpRect.bottomRight()))
-        );
+        QPoint topPoint = view->mapFromGlobal(hostViewport->mapToGlobal(vpRect.topLeft()));
+        QPoint btmPoint = view->mapFromGlobal(hostViewport->mapToGlobal(vpRect.bottomRight()));
 
-        int totalRows = proxy->rowCount();
-        for (int r = 0; r < totalRows; ++r) {
-            QModelIndex pIdx = proxy->index(r, 0);
-            QRect itemRect = view->visualRect(pIdx);
+        if (topPoint.y() >= view->height() || btmPoint.y() <= 0) return;
 
-            if (itemRect.isEmpty()) continue;
+        int clampedTopY = qBound(0, topPoint.y(), view->height());
+        int clampedBtmY = qBound(0, btmPoint.y(), view->height());
 
-            // 只要卡片矩形与视图视口相交（无论在哪一列、瀑布流何种排布），均认定为可见！
-            if (itemRect.intersects(viewVpRect)) {
-                QModelIndex srcIdx = proxy->mapToSource(pIdx);
-                if (srcIdx.isValid()) {
-                    visibleRows.insert(srcIdx.row());
-                }
-            } else if (itemRect.top() > viewVpRect.bottom()) {
-                // 已超出下方可视区域，由于布局自上而下，可提前结束遍历
-                break;
-            }
+        QModelIndex topIdx = view->indexAt(QPoint(10, clampedTopY));
+        if (!topIdx.isValid()) {
+            for (int offset = 10; offset <= 100 && !topIdx.isValid(); offset += 10)
+                topIdx = view->indexAt(QPoint(10, clampedTopY + offset));
+        }
+        QModelIndex btmIdx = view->indexAt(QPoint(10, clampedBtmY));
+        if (!btmIdx.isValid()) {
+            for (int offset = 10; offset <= 100 && !btmIdx.isValid(); offset += 10)
+                btmIdx = view->indexAt(QPoint(10, clampedBtmY - offset));
+        }
+
+        int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
+        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : qMin(proxy->rowCount() - 1, top + 20);
+
+        for (int r = top; r <= bottom; ++r) {
+            QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
+            if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
         }
     };
 

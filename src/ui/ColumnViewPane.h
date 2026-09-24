@@ -51,6 +51,8 @@ signals:
     void selectionChanged();
     void recordsLoaded(const std::vector<ItemRecord>& records);
     void blankSpaceDoubleClicked(int paneIndex);
+    void contextMenuRequested(QAbstractItemView* view, const QPoint& pos);
+    void pathsDroppedSignal(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDir);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
