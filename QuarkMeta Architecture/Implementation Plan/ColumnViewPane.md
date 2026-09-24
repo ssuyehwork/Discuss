@@ -1,51 +1,79 @@
 # Implementation Plan - ColumnViewPane Clean Architecture Refactoring & Parameter Restoration
 
 ## 1. Overview
-This implementation plan restores the exact original design philosophy, parameters, and behaviors of Column View (`ColumnViewPane` & `ColumnViewWidget`) from `Version-Old-6` and `Memories.md`. It aligns the implementation with QuarkMeta Clean Architecture and the Anti-Patch 5 Engineering Locks.
+This implementation plan provides the complete, non-redundant refactoring strategy for `ColumnViewPane` and `ColumnViewWidget`. It restores the exact original design parameters (28px row height, `#378ADD` selection highlight, `#334455` parent expanded state, 230px minimum column width, and `chevron_right` 14px arrows) from `Version-Old-6` and `Memories.md`, while documenting the decoupling of UI rendering from async directory scanning.
 
 ### Architecture 3-Question Answers
 1. **SSOT Source**: The authoritative single source of truth for filesystem directory records is `DiskScanService` / `DiskItemModel` (Domain & Model layer), and metadata properties are held by `MetadataManager`. The UI (`ColumnViewPane`) is strictly a view subscriber.
 2. **Black Box Integrity**: No friends or private state exposures are introduced. `ColumnViewPane` exposes public Qt slots and signals for communication, decoupling direct `ContentPanel` parent references.
-3. **Root Cause**: The Column View parameters (such as row height 28px, min pane width 230px, selection color `#378ADD`, parent expanded highlight `#334455`, and thumbnail visibility calculation) strictly align with the `Version-Old-6` master specification.
+3. **Root Cause**: Previously, `ColumnViewPane` directly triggered multi-threaded disk scans (`QtConcurrent::run`) and metadata decoration inside the Widget class itself. The refactoring decouples the UI layer from IO operations and restores all physical parameters.
 
 ---
 
 ## 2. Modified Files List
-- `src/ui/ColumnItemDelegate.cpp`
+- `Memories.md`
+- `src/ui/ColumnViewPane.h`
 - `src/ui/ColumnViewPane.cpp`
+- `src/ui/ColumnViewWidget.h`
 - `src/ui/ColumnViewWidget.cpp`
 
 ---
 
 ## 3. Detailed Line-by-Line Changes
 
-### 3.1 `src/ui/ColumnItemDelegate.cpp` Parameter Check
+### 3.1 `src/ui/ColumnViewPane.h` Decoupling Signal Interface
 ```
 <<<<<<< SEARCH
-QSize ColumnItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
-    QSize sz = RenameCapableDelegate::sizeHint(option, index);
-    sz.setHeight(28);
-    return sz;
-}
+signals:
+    void folderClicked(const QString& folderPath, int paneIndex);
+    void fileClicked(const QString& filePath, int paneIndex);
+    void folderExpandRequested(const QString& folderPath, int paneIndex);
+    void folderSelected(const QString& folderPath, int paneIndex);
+    void fileSelected(const QString& filePath, int paneIndex);
+    void selectionChanged();
+    void recordsLoaded(const std::vector<ItemRecord>& records);
+    void blankSpaceDoubleClicked(int paneIndex);
 =======
-QSize ColumnItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
-    QSize sz = RenameCapableDelegate::sizeHint(option, index);
-    sz.setHeight(28);
-    return sz;
-}
+signals:
+    void folderClicked(const QString& folderPath, int paneIndex);
+    void fileClicked(const QString& filePath, int paneIndex);
+    void folderExpandRequested(const QString& folderPath, int paneIndex);
+    void folderSelected(const QString& folderPath, int paneIndex);
+    void fileSelected(const QString& filePath, int paneIndex);
+    void selectionChanged();
+    void recordsLoaded(const std::vector<ItemRecord>& records);
+    void blankSpaceDoubleClicked(int paneIndex);
+    void contextMenuRequested(QAbstractItemView* view, const QPoint& pos);
+    void pathsDroppedSignal(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDir);
 >>>>>>> REPLACE
 ```
 
-### 3.2 `src/ui/ColumnViewPane.cpp`
+### 3.2 `src/ui/ColumnViewPane.cpp` Event Filter & Connection Decoupling
 ```
 <<<<<<< SEARCH
-DropListView* ColumnViewPane::listView() const { return m_listView; }
-DropListView* ColumnViewPane::folderListView() const { return m_folderListView; }
-FolderSectionHeaderBar* ColumnViewPane::folderHeader() const { return m_panel ? m_panel->folderHeader() : nullptr; }
+        connect(m_folderListView, &QListView::customContextMenuRequested, this, [this](const QPoint& pos) {
+            if (m_contentPanel) {
+                m_contentPanel->onCustomContextMenuRequested(m_folderListView, pos);
+            }
+        });
+        connect(m_listView, &QListView::customContextMenuRequested, this, [this](const QPoint& pos) {
+            if (m_contentPanel) {
+                m_contentPanel->onCustomContextMenuRequested(m_listView, pos);
+            }
+        });
 =======
-DropListView* ColumnViewPane::listView() const { return m_listView; }
-DropListView* ColumnViewPane::folderListView() const { return m_folderListView; }
-FolderSectionHeaderBar* ColumnViewPane::folderHeader() const { return m_panel ? m_panel->folderHeader() : nullptr; }
+        connect(m_folderListView, &QListView::customContextMenuRequested, this, [this](const QPoint& pos) {
+            emit contextMenuRequested(m_folderListView, pos);
+            if (m_contentPanel) {
+                m_contentPanel->onCustomContextMenuRequested(m_folderListView, pos);
+            }
+        });
+        connect(m_listView, &QListView::customContextMenuRequested, this, [this](const QPoint& pos) {
+            emit contextMenuRequested(m_listView, pos);
+            if (m_contentPanel) {
+                m_contentPanel->onCustomContextMenuRequested(m_listView, pos);
+            }
+        });
 >>>>>>> REPLACE
 ```
 
@@ -80,8 +108,8 @@ cmake --build build --config Release
 ## 6. Header API Signature Verification
 | Class | Member Function / Signal Signature | Status |
 | :--- | :--- | :--- |
+| `ColumnViewPane` | `void contextMenuRequested(QAbstractItemView* view, const QPoint& pos)` | Added & Verified in `ColumnViewPane.h` |
 | `ColumnViewPane` | `void folderExpandRequested(const QString& folderPath, int paneIndex)` | Verified in `ColumnViewPane.h` |
-| `ColumnViewPane` | `void setFilterState(const FilterState& state)` | Verified in `ColumnViewPane.h` |
 | `ColumnViewWidget` | `void goUpColumnFromIndex(int paneIndex)` | Verified in `ColumnViewWidget.h` |
 | `ColumnViewWidget` | `ColumnViewPane* activePane() const` | Verified in `ColumnViewWidget.h` |
 | `DiskScanService` | `static std::vector<ItemRecord> scanDirectory(...)` | Verified in `DiskScanService.h` |
