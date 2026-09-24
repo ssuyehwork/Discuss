@@ -1,10 +1,10 @@
 # Implementation Plan - DiskItemModel-1.md
 
 ## Overview
-本方案旨在为 `DiskItemModel` 中的文件夹图标增加自绘 SVG 渲染与手动色标着色逻辑，彻底摆脱系统 Shell 图标依赖，提高渲染效率并确保 UI 主题统一。
+本实施方案旨在将 `DiskItemModel` 中的文件夹图标替换为应用内置的实心 SVG 图标（`folder_filled`），并根据手动设置的色标进行即时着色（无色标时回退至默认灰色 `#888888`）。普通文件图标渲染逻辑保持 100% 现状不变。同时引入 128px 高清尺寸生成，确保 HiDPI/4K 屏幕及各视图缩放模式下视觉边缘绝对锐利清晰、无任何毛刺与模糊。
 
 ## Modified Files List
-- `QuarkMeta Architecture/Implementation Plan/DiskItemModel-1.md`
+- `src/ui/models/DiskItemModel.cpp`
 
 ## Detailed Line-by-Line Changes
 
@@ -35,7 +35,7 @@
                 QColor parsed = UiHelper::parseColorName(record.manualColor);
                 if (parsed.isValid()) folderColor = parsed;
             }
-            return UiHelper::getIcon("folder_filled", folderColor);
+            return UiHelper::getIcon("folder_filled", folderColor, 128);
         }
 
         QString cacheKey = path;
@@ -56,12 +56,27 @@
 ```
 
 ## Build & Verification Steps
-1. 方案存放在 `QuarkMeta Architecture/Implementation Plan/DiskItemModel-1.md`；
-2. 物理核查头文件与 API 准确性。
+```bash
+# 1. 配置并编译 CMake 项目
+cmake -B build -S .
+cmake --build build --config Release
+
+# 2. 交互功能与高清度验证：
+# - 启动应用进入任意包含文件夹的视图（网格、列表、分栏、树状）；
+# - 校验所有文件夹是否统一展现为精美实心 SVG 图标；
+# - 为文件夹设置红、黄、蓝等各种色标，校验图标颜色是否秒级精准响应着色；
+# - 清除色标后，校验图标是否平滑恢复为中性灰色 (#888888)；
+# - 放大网格卡片或在 HiDPI 高分屏下查看，校验图标边缘是否绝对锐利清晰、无模糊；
+# - 校验普通文件图标是否保持 100% 既有逻辑不受任何影响。
+```
 
 ## SSOT API Reuse & Anti-Redundancy Self-Check
-- 方案完全复用 `UiHelper::getIcon` 与 `UiHelper::parseColorName`，无重新造轮子行为。
+- **复用既有 SSOT 通道**：严格复用全软件统一矢量渲染入口 `UiHelper::getIcon` 与色标解析工具 `UiHelper::parseColorName`，禁止另起炉灶手写 SVG 渲染或颜色转换代码。
+- **无重复缓存**：文件夹图标直接利用 `SvgIconRenderer` 线程安全的全局 `QPixmap` 缓存，不在 `m_iconCache` 中冗余存放，彻底避免两套缓存混用。
 
 ## Header API Signature Verification
-- `UiHelper::getIcon(const QString&, const QColor&, int)`
-- `UiHelper::parseColorName(const QString&)`
+| 类名 / 模块名 | 调用的成员/方法 | 物理头文件精确签名 |
+| :--- | :--- | :--- |
+| `UiHelper` | `parseColorName` | `static inline QColor parseColorName(const QString& colorName)` (`src/ui/UiHelper.h`) |
+| `UiHelper` | `getIcon` | `static inline QIcon getIcon(const QString& key, const QColor& color, int size = 18)` (`src/ui/UiHelper.h`) |
+| `SvgIconRenderer` | `getIcon` | `static QIcon getIcon(const QString& key, const QColor& color, int size = 18)` (`src/ui/SvgIconRenderer.h`) |
