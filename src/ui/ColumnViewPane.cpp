@@ -11,6 +11,7 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QScrollBar>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
@@ -168,6 +169,12 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         int paneIdx = property("paneIndex").toInt();
         emit blankSpaceDoubleClicked(paneIdx);
     });
+
+    if (m_paneScrollArea && m_paneScrollArea->verticalScrollBar()) {
+        connect(m_paneScrollArea->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+            refreshVisibleThumbnails();
+        });
+    }
 
     m_paneScrollArea->installEventFilter(this);
     m_panel->installEventFilter(this);

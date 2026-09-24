@@ -14,6 +14,7 @@
 #include "../core/NavigationService.h"
 #include <QHeaderView>
 #include <QMouseEvent>
+#include <QScrollBar>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
@@ -45,6 +46,16 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
     }
 
     setupConnections();
+
+    if (verticalScrollBar()) {
+        connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+            if (m_folderProxyModel && m_folderProxyModel->sourceModel()) {
+                if (auto* diskModel = qobject_cast<ItemModelBase*>(m_folderProxyModel->sourceModel())) {
+                    m_panel->refreshVisibleThumbnails(diskModel, viewport());
+                }
+            }
+        });
+    }
 }
 
 QAbstractItemView* SectionedScrollCanvas::createFolderView(QObject* eventFilter) {
