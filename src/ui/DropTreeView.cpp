@@ -7,6 +7,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QAbstractProxyModel>
+#include <QScrollBar>
 #include <QStringList>
 #include <QFileInfo>
 #include "Logger.h"
@@ -68,6 +69,14 @@ void DropTreeView::applyColumnPolicies() {
 void DropTreeView::resizeEvent(QResizeEvent* event) {
     QTreeView::resizeEvent(event);
     applyColumnPolicies();
+}
+
+void DropTreeView::updateGeometries() {
+    QTreeView::updateGeometries();
+    if (m_bottomMargin > 0 && verticalScrollBar()) {
+        QScrollBar* bar = verticalScrollBar();
+        bar->setRange(bar->minimum(), bar->maximum() + m_bottomMargin);
+    }
 }
 
 void DropTreeView::keyboardSearch(const QString& search) {
