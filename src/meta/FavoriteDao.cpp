@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QDateTime>
+#include <QRandomGenerator>
 
 namespace QuarkMeta {
 
@@ -77,7 +78,8 @@ int FavoriteDao::addVirtualCategory(const QString& name, int parentId, const QSt
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-    QString virtPath = QString("virtual_cat_%1_%2").arg(QDateTime::currentMSecsSinceEpoch()).arg(qrand() % 1000);
+    quint32 randVal = QRandomGenerator::global()->generate() % 1000;
+    QString virtPath = QString("virtual_cat_%1_%2").arg(static_cast<qlonglong>(QDateTime::currentMSecsSinceEpoch())).arg(randVal);
     const char* sql = "INSERT INTO favorites (parent_id, node_type, path, name, icon_key, color_hex, sort_order, created_at) "
                       "VALUES (?, 0, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM favorites), ?);";
 
@@ -193,7 +195,7 @@ bool FavoriteDao::removeFavoriteById(int id) {
 
     const char* sql = "WITH RECURSIVE cnt(x) AS ("
                       "  SELECT ? UNION ALL SELECT id FROM favorites, cnt WHERE favorites.parent_id = cnt.x"
-                      ") DELETE FROM favorites WHERE id IN cnt;";
+                      ") DELETE FROM favorites WHERE id IN (SELECT x FROM cnt);";
 
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;

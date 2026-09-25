@@ -393,20 +393,29 @@ void FavoritePanel::updateItemThumbnail(const QString& path, const QPixmap& pix)
     if (!m_favoriteModel || pix.isNull()) return;
 
     QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(path));
-    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
-        QStandardItem* item = m_favoriteModel->item(i);
-        if (!item) continue;
-        QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(item->data(Qt::UserRole + 1).toString()));
 
-        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
-            item->setIcon(QIcon(pix));
-            item->setData(true, Qt::UserRole + 5);
-            if (m_favoriteView && m_favoriteView->viewport()) {
-                m_favoriteView->viewport()->update();
+    std::function<bool(QStandardItem*)> findAndUpdate = [&](QStandardItem* parentItem) -> bool {
+        int rowCount = parentItem ? parentItem->rowCount() : m_favoriteModel->rowCount();
+        for (int i = 0; i < rowCount; ++i) {
+            QStandardItem* item = parentItem ? parentItem->child(i) : m_favoriteModel->item(i);
+            if (!item) continue;
+
+            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(item->data(Qt::UserRole + 1).toString()));
+            if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
+                item->setIcon(QIcon(pix));
+                item->setData(true, Qt::UserRole + 5);
+                if (m_favoriteView && m_favoriteView->viewport()) {
+                    m_favoriteView->viewport()->update();
+                }
+                return true;
             }
-            break;
+
+            if (findAndUpdate(item)) return true;
         }
-    }
+        return false;
+    };
+
+    findAndUpdate(nullptr);
 }
 
 void FavoritePanel::loadFavorites() {

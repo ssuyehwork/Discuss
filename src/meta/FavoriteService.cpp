@@ -22,10 +22,19 @@ bool FavoriteService::isFavorite(const QString& path) const {
 
 bool FavoriteService::addFavorite(const QString& path, int parentId) {
     QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
-    if (cleanPath.isEmpty() || FavoriteDao::containsPath(cleanPath)) return false;
+    if (cleanPath.isEmpty()) return false;
 
     QFileInfo fi(cleanPath);
     if (!fi.exists()) return false;
+
+    bool existsAlready = FavoriteDao::containsPath(cleanPath);
+    if (existsAlready) {
+        bool ok = FavoriteDao::addFavorite(cleanPath, parentId, "folder_filled", "#888888");
+        if (ok) {
+            emit favoritesReloaded();
+        }
+        return ok;
+    }
 
     bool isDir = fi.isDir();
     QString finalColorHex = "#888888";
