@@ -33,7 +33,8 @@ public:
     void setFocusHighlight(bool visible);
     bool containsPath(const QString& path) const;
     void removeFavoriteItem(const QString& path);
-    void addFavoriteItem(const QString& path);
+    void addFavoriteItem(const QString& path, int parentId = 0);
+    void addVirtualCategory(const QString& name, int parentId = 0);
     void loadFavorites();
     void saveFavorites();
 
@@ -50,11 +51,14 @@ private slots:
 private:
     void initUi();
     void updateItemThumbnail(const QString& path, const QPixmap& pix);
+    void createAndEditCategory(int parentId = 0);
+    void sortItemsByName(bool ascending);
 
     QVBoxLayout* m_mainLayout = nullptr;
     DropTreeView* m_favoriteView = nullptr;
     QStandardItemModel* m_favoriteModel = nullptr;
     bool m_isLoading = false;
+    int m_pendingEditNodeId = 0;
 };
 
 } // namespace QuarkMeta
