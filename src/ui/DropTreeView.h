@@ -75,6 +75,7 @@ public:
 
     int rowHeight(const QModelIndex& index) const { return QTreeView::rowHeight(index); }
     void setEmptyHint(const QString& hint) { m_emptyHint = hint; }
+    void setBottomMargin(int bottom) { setViewportMargins(0, 0, 0, bottom); }
 
     void applyColumnPolicies();
 

@@ -147,7 +147,7 @@ void FavoritePanel::initUi() {
     m_favoriteView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_favoriteView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_favoriteView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    m_favoriteView->setViewportMargins(0, 0, 0, 84);
+    m_favoriteView->setBottomMargin(84);
 
     m_favoriteModel = new QStandardItemModel(this);
     m_favoriteView->setModel(m_favoriteModel);
