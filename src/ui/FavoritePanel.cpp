@@ -4,6 +4,7 @@
 #include "../util/DiskMediaExtractor.h"
 #include "ColorPicker.h"
 #include "ToolTipOverlay.h"
+#include "PresetTagsDialog.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
 #include "../meta/MetadataManager.h"
@@ -263,10 +264,11 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
 
     menu.addSeparator();
 
-    // 2. 设置预设标签（TODO 提示/暂定入口）
+    // 2. 设置预设标签（自动标签对话框 PresetTagsDialog）
     QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6")), "设置预设标签");
-    connect(presetTagAct, &QAction::triggered, this, []() {
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "设置预设标签 (TODO)", 2000, QColor("#9B59B6"));
+    connect(presetTagAct, &QAction::triggered, this, [this, nodeId]() {
+        PresetTagsDialog dlg(nodeId, this);
+        dlg.exec();
     });
 
     // 缓存图标按钮指针，以便在换色时动态刷新子菜单图标色彩

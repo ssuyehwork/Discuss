@@ -223,6 +223,8 @@ set(SOURCES
     src/ui/MetaPanel.h
     src/ui/TagSelectorOverlay.h
     src/ui/TagSelectorOverlay.cpp
+    src/ui/PresetTagsDialog.h
+    src/ui/PresetTagsDialog.cpp
     src/ui/TaskProgressToolBar.h
     src/ui/TaskProgressToolBar.cpp
     src/ui/components/ElasticEdit.h
