@@ -33,7 +33,8 @@ public:
     void setFocusHighlight(bool visible);
     bool containsPath(const QString& path) const;
     void removeFavoriteItem(const QString& path);
-    void addFavoriteItem(const QString& path);
+    void addFavoriteItem(const QString& path, int parentId = 0);
+    void addVirtualCategory(const QString& name, int parentId = 0);
     void loadFavorites();
     void saveFavorites();
 
