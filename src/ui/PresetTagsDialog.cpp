@@ -147,7 +147,7 @@ void PresetTagsDialog::onTagContainerClicked() {
         return;
     }
 
-    m_selectorOverlay = new TagSelectorOverlay(m_presetTags, nullptr);
+    m_selectorOverlay = new TagSelectorOverlay(m_presetTags, window());
 
     QPoint globalPos = m_tagContainer->mapToGlobal(QPoint(0, m_tagContainer->height() + 4));
     m_selectorOverlay->move(globalPos);
@@ -186,10 +186,23 @@ void PresetTagsDialog::onCancelClicked() {
 }
 
 bool PresetTagsDialog::eventFilter(QObject* obj, QEvent* event) {
-    if (obj == m_tagContainer && event->type() == QEvent::MouseButtonPress) {
+    if ((obj == m_tagContainer || (m_tagContainer && m_tagContainer->isAncestorOf(qobject_cast<QWidget*>(obj)))) &&
+        (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease)) {
+
+        // 如果点击发生在 TagPill（胶囊项）及其子控件上，不响应调起弹窗
+        QWidget* targetWidget = qobject_cast<QWidget*>(obj);
+        while (targetWidget && targetWidget != m_tagContainer) {
+            if (qobject_cast<TagPill*>(targetWidget)) {
+                return FramelessDialog::eventFilter(obj, event);
+            }
+            targetWidget = targetWidget->parentWidget();
+        }
+
         QMouseEvent* me = static_cast<QMouseEvent*>(event);
         if (me->button() == Qt::LeftButton) {
-            onTagContainerClicked();
+            if (event->type() == QEvent::MouseButtonRelease) {
+                onTagContainerClicked();
+            }
             return true;
         }
     }
