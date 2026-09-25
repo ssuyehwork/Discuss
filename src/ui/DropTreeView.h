@@ -75,7 +75,6 @@ public:
 
     int rowHeight(const QModelIndex& index) const { return QTreeView::rowHeight(index); }
     void setEmptyHint(const QString& hint) { m_emptyHint = hint; }
-    void setBottomMargin(int bottom) { m_bottomMargin = bottom; updateGeometries(); }
 
     void applyColumnPolicies();
 
@@ -89,13 +88,11 @@ protected:
     void keyboardSearch(const QString& search) override;
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
-    void updateGeometries() override;
 
 private:
     QTimer* m_autoExpandTimer = nullptr;
     QModelIndex m_hoverIndex;
     QString m_emptyHint;
-    int m_bottomMargin = 0;
 };
 
 } // namespace QuarkMeta

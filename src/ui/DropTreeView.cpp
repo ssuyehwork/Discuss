@@ -72,19 +72,6 @@ void DropTreeView::resizeEvent(QResizeEvent* event) {
     applyColumnPolicies();
 }
 
-void DropTreeView::updateGeometries() {
-    QTreeView::updateGeometries();
-    if (m_bottomMargin > 0 && verticalScrollBar()) {
-        QScrollBar* bar = verticalScrollBar();
-        if (bar->maximum() > 0) {
-            int extra = (verticalScrollMode() == QAbstractItemView::ScrollPerPixel)
-                        ? m_bottomMargin
-                        : qMax(1, m_bottomMargin / 28);
-            bar->setRange(bar->minimum(), bar->maximum() + extra);
-        }
-    }
-}
-
 void DropTreeView::keyboardSearch(const QString& search) {
     Q_UNUSED(search);
 }
