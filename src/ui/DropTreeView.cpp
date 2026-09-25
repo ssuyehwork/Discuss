@@ -7,7 +7,6 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QAbstractProxyModel>
-#include <QScrollBar>
 #include <QStringList>
 #include <QFileInfo>
 #include "Logger.h"
@@ -29,7 +28,6 @@ DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     setHeader(new ContentHeaderView(Qt::Horizontal, this));
     setDragEnabled(true);
     setDropIndicatorShown(true);
-    setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     DragDropEventFilter::install(this);
 
     // 🚀【强力锁定 QPalette】：强制设定暗色 Base 与 AlternateBase，防止原生 Windows 调色板在交替行露白
