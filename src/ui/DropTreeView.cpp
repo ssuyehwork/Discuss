@@ -29,6 +29,7 @@ DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     setHeader(new ContentHeaderView(Qt::Horizontal, this));
     setDragEnabled(true);
     setDropIndicatorShown(true);
+    setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     DragDropEventFilter::install(this);
 
     // 🚀【强力锁定 QPalette】：强制设定暗色 Base 与 AlternateBase，防止原生 Windows 调色板在交替行露白
@@ -75,7 +76,12 @@ void DropTreeView::updateGeometries() {
     QTreeView::updateGeometries();
     if (m_bottomMargin > 0 && verticalScrollBar()) {
         QScrollBar* bar = verticalScrollBar();
-        bar->setRange(bar->minimum(), bar->maximum() + m_bottomMargin);
+        if (bar->maximum() > 0) {
+            int extra = (verticalScrollMode() == QAbstractItemView::ScrollPerPixel)
+                        ? m_bottomMargin
+                        : qMax(1, m_bottomMargin / 28);
+            bar->setRange(bar->minimum(), bar->maximum() + extra);
+        }
     }
 }
 
