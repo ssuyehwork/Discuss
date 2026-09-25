@@ -3,6 +3,8 @@
 #include "ShellIconManager.h"
 #include "../util/DiskMediaExtractor.h"
 #include "ColorPicker.h"
+#include "ToolTipOverlay.h"
+#include "PresetTagsDialog.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
 #include "../meta/MetadataManager.h"
@@ -164,14 +166,41 @@ void FavoritePanel::initUi() {
     connect(m_favoriteModel, &QStandardItemModel::rowsInserted, this, updateFavAndSave, Qt::QueuedConnection);
     connect(m_favoriteModel, &QStandardItemModel::rowsRemoved, this, updateFavAndSave, Qt::QueuedConnection);
 
+    // 🚀【行内编辑即时落库】：用户重命名编辑完成后，即时更新 SQLite
+    connect(m_favoriteModel, &QStandardItemModel::itemChanged, this, [this](QStandardItem* item) {
+        if (!item || m_isLoading) return;
+        int nodeId = item->data(Qt::UserRole + 6).toInt();
+        if (nodeId > 0) {
+            QString name = item->text();
+            QString iconKey = item->data(Qt::UserRole + 2).toString();
+            QString colorHex = item->data(Qt::UserRole + 3).toString();
+            FavoriteDao::updateFavoriteNode(nodeId, name, iconKey, colorHex);
+        }
+    });
+
     connect(&FavoriteService::instance(), &FavoriteService::favoriteChanged, this, [this](const QString& path, bool isFav) {
         Q_UNUSED(path);
         Q_UNUSED(isFav);
         loadFavorites();
     });
+    connect(&FavoriteService::instance(), &FavoriteService::favoritesReloaded, this, [this]() {
+        loadFavorites();
+    });
 }
 
 void FavoritePanel::onFavoriteClicked(const QModelIndex& index) {
+    bool isVirtual = index.data(Qt::UserRole + 7).toBool();
+    if (isVirtual) {
+        if (m_favoriteView) {
+            if (m_favoriteView->isExpanded(index)) {
+                m_favoriteView->collapse(index);
+            } else {
+                m_favoriteView->expand(index);
+            }
+        }
+        return;
+    }
+
     QString path = index.data(Qt::UserRole + 1).toString();
     if (path.isEmpty()) return;
 
@@ -185,20 +214,62 @@ void FavoritePanel::onFavoriteClicked(const QModelIndex& index) {
 
 void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QModelIndex index = m_favoriteView->indexAt(pos);
-    if (!index.isValid()) return;
-
-    QString path = index.data(Qt::UserRole + 1).toString();
-    QString curIconKey = index.data(Qt::UserRole + 2).toString();
-    QString curColorHex = index.data(Qt::UserRole + 3).toString();
-    if (curIconKey.isEmpty()) curIconKey = "folder_filled";
-    if (curColorHex.isEmpty()) curColorHex = "#888888";
 
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
 
+    if (!index.isValid()) {
+        // 空白处右键：新建文件夹 (直接进入行内编辑)
+        QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建文件夹");
+        connect(newCatAct, &QAction::triggered, this, [this]() {
+            createAndEditCategory(0);
+        });
+
+        auto* sortMenu = menu.addMenu(UiHelper::getIcon("list_ul", QColor("#AAAAAA")), "排列");
+        UiHelper::applyMenuStyle(sortMenu);
+        QAction* sortAsc = sortMenu->addAction("按名称 (A→Z)");
+        connect(sortAsc, &QAction::triggered, this, [this]() { sortItemsByName(true); });
+        QAction* sortDesc = sortMenu->addAction("按名称 (Z→A)");
+        connect(sortDesc, &QAction::triggered, this, [this]() { sortItemsByName(false); });
+
+        menu.exec(m_favoriteView->viewport()->mapToGlobal(pos));
+        return;
+    }
+
+    QString path = index.data(Qt::UserRole + 1).toString();
+    QString curIconKey = index.data(Qt::UserRole + 2).toString();
+    QString curColorHex = index.data(Qt::UserRole + 3).toString();
+    int nodeId = index.data(Qt::UserRole + 6).toInt();
+    bool isVirtual = index.data(Qt::UserRole + 7).toBool();
+
+    if (curIconKey.isEmpty()) curIconKey = "folder_filled";
+    if (curColorHex.isEmpty()) curColorHex = "#888888";
+
     QFileInfo fi(path);
-    bool isFolder = fi.isDir();
+    bool isFolder = isVirtual ? true : fi.isDir();
     bool isItemRemoved = false;
+
+    // 1. 新建文件夹与新建子文件夹（直接创建并唤起行内编辑）
+    QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建文件夹");
+    connect(newCatAct, &QAction::triggered, this, [this]() {
+        createAndEditCategory(0);
+    });
+
+    if (isFolder) {
+        QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子文件夹");
+        connect(newSubCatAct, &QAction::triggered, this, [this, nodeId]() {
+            createAndEditCategory(nodeId);
+        });
+    }
+
+    menu.addSeparator();
+
+    // 2. 设置预设标签（自动标签对话框 PresetTagsDialog）
+    QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6")), "设置预设标签");
+    connect(presetTagAct, &QAction::triggered, this, [this, nodeId]() {
+        PresetTagsDialog dlg(nodeId, this);
+        dlg.exec();
+    });
 
     // 缓存图标按钮指针，以便在换色时动态刷新子菜单图标色彩
     QList<QPair<QPushButton*, QString>> iconButtons;
@@ -300,7 +371,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             }
 
             // 3. 全局 Command 发起设色，触发 MetadataManager 与 CentralEventHub
-            if (!targetPath.isEmpty()) {
+            if (!targetPath.isEmpty() && !targetPath.startsWith("virtual_cat_")) {
                 AppCommand cmd;
                 cmd.type = AppCommandType::SetColor;
                 cmd.targetPaths = {targetPath};
@@ -316,31 +387,63 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
         menu.addSeparator();
     }
 
-    QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "取消收藏");
-    connect(removeAct, &QAction::triggered, this, [this, path, &isItemRemoved]() {
-        isItemRemoved = true;
-        removeFavoriteItem(path);
+    // 3. 重命名 (直接唤起行内编辑框)
+    QAction* renameAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "重命名");
+    connect(renameAct, &QAction::triggered, this, [this, index]() {
+        if (m_favoriteView && index.isValid()) {
+            m_favoriteView->edit(index);
+        }
     });
 
-    // 阻塞展示菜单（期间用户可随意连点试选 100 次）
+    // 4. 删除 / 取消收藏
+    QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), isVirtual ? "删除" : "取消收藏");
+    connect(removeAct, &QAction::triggered, this, [this, path, nodeId, isVirtual, &isItemRemoved]() {
+        isItemRemoved = true;
+        if (isVirtual) {
+            FavoriteService::instance().removeFavoriteById(nodeId);
+        } else {
+            removeFavoriteItem(path);
+        }
+    });
+
+    menu.addSeparator();
+
+    // 5. 排列子菜单
+    auto* sortMenu = menu.addMenu(UiHelper::getIcon("list_ul", QColor("#AAAAAA")), "排列");
+    UiHelper::applyMenuStyle(sortMenu);
+    QAction* sortAsc = sortMenu->addAction("按名称 (A→Z)");
+    connect(sortAsc, &QAction::triggered, this, [this]() { sortItemsByName(true); });
+    QAction* sortDesc = sortMenu->addAction("按名称 (Z→A)");
+    connect(sortDesc, &QAction::triggered, this, [this]() { sortItemsByName(false); });
+
+    // 阻塞展示菜单
     menu.exec(m_favoriteView->viewport()->mapToGlobal(pos));
 
-    // 🚀【失焦退出机制】：菜单自然关闭后，仅在此处执行【唯一 1 次】物理数据库持久化！
+    // 🚀【失焦退出机制】：菜单自然关闭后物理数据库持久化！
     if (isFolder && !isItemRemoved && index.isValid()) {
         QStandardItem* item = m_favoriteModel->itemFromIndex(index);
         if (item) {
             QString finalPath = item->data(Qt::UserRole + 1).toString();
             QString finalIconKey = item->data(Qt::UserRole + 2).toString();
             QString finalColorHex = item->data(Qt::UserRole + 3).toString();
-            FavoriteDao::updateFavorite(finalPath, finalIconKey, finalColorHex);
+            QString finalName = item->text();
+            FavoriteDao::updateFavoriteNode(nodeId, finalName, finalIconKey, finalColorHex);
         }
     }
 }
 
 void FavoritePanel::onPathsDroppedToFavorite(const QStringList& paths, const QModelIndex& target) {
-    Q_UNUSED(target);
+    int parentId = 0;
+    if (target.isValid()) {
+        bool isVirtualTarget = target.data(Qt::UserRole + 7).toBool();
+        if (isVirtualTarget) {
+            parentId = target.data(Qt::UserRole + 6).toInt();
+        } else {
+            parentId = target.data(Qt::UserRole + 8).toInt();
+        }
+    }
     for (const QString& path : paths) {
-        addFavoriteItem(path);
+        addFavoriteItem(path, parentId);
     }
 }
 
@@ -348,20 +451,29 @@ void FavoritePanel::updateItemThumbnail(const QString& path, const QPixmap& pix)
     if (!m_favoriteModel || pix.isNull()) return;
 
     QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(path));
-    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
-        QStandardItem* item = m_favoriteModel->item(i);
-        if (!item) continue;
-        QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(item->data(Qt::UserRole + 1).toString()));
 
-        if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
-            item->setIcon(QIcon(pix));
-            item->setData(true, Qt::UserRole + 5);
-            if (m_favoriteView && m_favoriteView->viewport()) {
-                m_favoriteView->viewport()->update();
+    std::function<bool(QStandardItem*)> findAndUpdate = [&](QStandardItem* parentItem) -> bool {
+        int rowCount = parentItem ? parentItem->rowCount() : m_favoriteModel->rowCount();
+        for (int i = 0; i < rowCount; ++i) {
+            QStandardItem* item = parentItem ? parentItem->child(i) : m_favoriteModel->item(i);
+            if (!item) continue;
+
+            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(item->data(Qt::UserRole + 1).toString()));
+            if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
+                item->setIcon(QIcon(pix));
+                item->setData(true, Qt::UserRole + 5);
+                if (m_favoriteView && m_favoriteView->viewport()) {
+                    m_favoriteView->viewport()->update();
+                }
+                return true;
             }
-            break;
+
+            if (findAndUpdate(item)) return true;
         }
-    }
+        return false;
+    };
+
+    findAndUpdate(nullptr);
 }
 
 void FavoritePanel::loadFavorites() {
@@ -373,11 +485,17 @@ void FavoritePanel::loadFavorites() {
     auto list = FavoriteDao::getAllFavorites();
 
     QStringList pathsToExtract;
+    QMap<int, QStandardItem*> itemMap;
 
+    // First Pass: Create QStandardItems
     for (const auto& rec : list) {
-        QString nativePath = QDir::toNativeSeparators(QDir::cleanPath(rec.path));
-        QFileInfo fi(nativePath);
-        if (!fi.exists()) continue;
+        bool isVirtual = (rec.nodeType == FavoriteNodeType::VirtualCategory);
+        QString nativePath = isVirtual ? rec.path : QDir::toNativeSeparators(QDir::cleanPath(rec.path));
+
+        if (!isVirtual) {
+            QFileInfo fi(nativePath);
+            if (!fi.exists()) continue;
+        }
 
         QColor itemColor = QColor(rec.colorHex);
         if (!itemColor.isValid()) itemColor = QColor("#888888");
@@ -385,30 +503,80 @@ void FavoritePanel::loadFavorites() {
         QString iconKey = rec.iconKey.isEmpty() ? "folder_filled" : rec.iconKey;
         if (iconKey == "folder") iconKey = "folder_filled";
 
-        bool isDir = fi.isDir();
+        bool isDir = isVirtual ? true : QFileInfo(nativePath).isDir();
         QIcon icon;
 
         if (isDir) {
             icon = UiHelper::getIcon(iconKey, itemColor, 18);
         } else {
             icon = ShellIconManager::getFileIcon(nativePath);
-            QString ext = fi.suffix().toLower();
+            QString ext = QFileInfo(nativePath).suffix().toLower();
             if (UiHelper::isGraphicsFile(ext) || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf" || ext == "svg") {
                 pathsToExtract << nativePath;
             }
         }
 
-        QStandardItem* item = new QStandardItem(icon, rec.name.isEmpty() ? fi.fileName() : rec.name);
+        QString displayName = rec.name;
+        if (displayName.isEmpty() && !isVirtual) {
+            displayName = QFileInfo(nativePath).fileName();
+        }
+
+        QStandardItem* item = new QStandardItem(icon, displayName);
         item->setData(nativePath, Qt::UserRole + 1);
         item->setData(iconKey, Qt::UserRole + 2);
         item->setData(rec.colorHex, Qt::UserRole + 3);
         item->setData(isDir, Qt::UserRole + 4);
         item->setData(false, Qt::UserRole + 5);
+        item->setData(rec.id, Qt::UserRole + 6);
+        item->setData(isVirtual, Qt::UserRole + 7);
+        item->setData(rec.parentId, Qt::UserRole + 8);
 
-        m_favoriteModel->appendRow(item);
+        itemMap.insert(rec.id, item);
+    }
+
+    // Second Pass: Build Tree Hierarchy
+    for (const auto& rec : list) {
+        if (!itemMap.contains(rec.id)) continue;
+        QStandardItem* item = itemMap.value(rec.id);
+
+        if (rec.parentId > 0 && itemMap.contains(rec.parentId)) {
+            itemMap.value(rec.parentId)->appendRow(item);
+        } else {
+            m_favoriteModel->appendRow(item);
+        }
+    }
+
+    if (m_favoriteView) {
+        m_favoriteView->expandAll();
     }
 
     m_isLoading = false;
+
+    // 🚀 【时序对齐】：新建节点完成后，找到对应节点并唤起行内重命名编辑框
+    if (m_pendingEditNodeId > 0 && m_favoriteView) {
+        int targetNodeId = m_pendingEditNodeId;
+        m_pendingEditNodeId = 0;
+
+        std::function<QModelIndex(QStandardItem*)> findIndexByNodeId = [&](QStandardItem* parentItem) -> QModelIndex {
+            int rowCount = parentItem ? parentItem->rowCount() : m_favoriteModel->rowCount();
+            for (int i = 0; i < rowCount; ++i) {
+                QStandardItem* item = parentItem ? parentItem->child(i) : m_favoriteModel->item(i);
+                if (!item) continue;
+                if (item->data(Qt::UserRole + 6).toInt() == targetNodeId) {
+                    return item->index();
+                }
+                QModelIndex childIdx = findIndexByNodeId(item);
+                if (childIdx.isValid()) return childIdx;
+            }
+            return QModelIndex();
+        };
+
+        QModelIndex targetIndex = findIndexByNodeId(nullptr);
+        if (targetIndex.isValid()) {
+            m_favoriteView->setCurrentIndex(targetIndex);
+            m_favoriteView->edit(targetIndex);
+        }
+    }
 
     if (!pathsToExtract.isEmpty()) {
         QPointer<FavoritePanel> weakThis(this);
@@ -432,16 +600,24 @@ void FavoritePanel::loadFavorites() {
 void FavoritePanel::saveFavorites() {
     if (!m_favoriteModel || m_isLoading) return;
 
-    QList<QPair<QString, int>> orders;
-    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
-        QStandardItem* item = m_favoriteModel->item(i);
-        if (!item) continue;
-        QString path = item->data(Qt::UserRole + 1).toString();
-        if (!path.isEmpty()) {
-            orders.append({ path, i + 1 });
+    QList<QPair<int, int>> orders;
+    int orderCounter = 1;
+
+    std::function<void(QStandardItem*, int)> traverseAndSave = [&](QStandardItem* parentItem, int parentId) {
+        int rowCount = parentItem ? parentItem->rowCount() : m_favoriteModel->rowCount();
+        for (int i = 0; i < rowCount; ++i) {
+            QStandardItem* item = parentItem ? parentItem->child(i) : m_favoriteModel->item(i);
+            if (!item) continue;
+
+            int nodeId = item->data(Qt::UserRole + 6).toInt();
+            if (nodeId > 0) {
+                FavoriteDao::updateNodeParentAndOrder(nodeId, parentId, orderCounter++);
+                traverseAndSave(item, nodeId);
+            }
         }
-    }
-    FavoriteDao::updateSortOrders(orders);
+    };
+
+    traverseAndSave(nullptr, 0);
 }
 
 bool FavoritePanel::containsPath(const QString& path) const {
@@ -452,8 +628,51 @@ void FavoritePanel::removeFavoriteItem(const QString& path) {
     FavoriteService::instance().removeFavorite(path);
 }
 
-void FavoritePanel::addFavoriteItem(const QString& path) {
-    FavoriteService::instance().addFavorite(path);
+void FavoritePanel::addFavoriteItem(const QString& path, int parentId) {
+    FavoriteService::instance().addFavorite(path, parentId);
+}
+
+void FavoritePanel::addVirtualCategory(const QString& name, int parentId) {
+    FavoriteService::instance().addVirtualCategory(name, parentId);
+}
+
+void FavoritePanel::createAndEditCategory(int parentId) {
+    int newId = FavoriteService::instance().addVirtualCategory("新建文件夹", parentId);
+    if (newId > 0) {
+        m_pendingEditNodeId = newId;
+    }
+}
+
+void FavoritePanel::sortItemsByName(bool ascending) {
+    if (!m_favoriteModel) return;
+
+    std::function<void(QStandardItem*)> sortChildren = [&](QStandardItem* parentItem) {
+        int rowCount = parentItem ? parentItem->rowCount() : m_favoriteModel->rowCount();
+        if (rowCount <= 1) return;
+
+        QList<QStandardItem*> childItems;
+        for (int i = rowCount - 1; i >= 0; --i) {
+            QStandardItem* item = parentItem ? parentItem->takeRow(i).first() : m_favoriteModel->takeRow(i).first();
+            if (item) childItems.prepend(item);
+        }
+
+        std::sort(childItems.begin(), childItems.end(), [ascending](QStandardItem* a, QStandardItem* b) {
+            return ascending ? (a->text().localeAwareCompare(b->text()) < 0)
+                              : (a->text().localeAwareCompare(b->text()) > 0);
+        });
+
+        for (QStandardItem* item : childItems) {
+            if (parentItem) {
+                parentItem->appendRow(item);
+            } else {
+                m_favoriteModel->appendRow(item);
+            }
+            sortChildren(item);
+        }
+    };
+
+    sortChildren(nullptr);
+    saveFavorites();
 }
 
 } // namespace QuarkMeta
