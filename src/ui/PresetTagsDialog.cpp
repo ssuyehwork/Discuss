@@ -100,6 +100,7 @@ void PresetTagsDialog::loadTags() {
     for (const auto& rec : list) {
         if (rec.id == m_categoryId) {
             m_categoryName = rec.name;
+            m_presetTags = rec.presetTags;
             break;
         }
     }
@@ -178,6 +179,7 @@ void PresetTagsDialog::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void PresetTagsDialog::onSaveClicked() {
+    FavoriteDao::updatePresetTags(m_categoryId, m_presetTags);
     accept();
 }
 

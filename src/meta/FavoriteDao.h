@@ -20,6 +20,7 @@ struct FavoriteRecord {
     QString iconKey = "folder_filled";
     QString colorHex = "#888888";
     int sortOrder = 0;
+    QStringList presetTags;
 };
 
 class FavoriteDao {
@@ -33,6 +34,7 @@ public:
     static bool updateFavorite(const QString& path, const QString& iconKey, const QString& colorHex);
     static bool updateFavoriteNode(int id, const QString& name, const QString& iconKey, const QString& colorHex);
     static bool updateNodeParentAndOrder(int id, int newParentId, int sortOrder);
+    static bool updatePresetTags(int id, const QStringList& tags);
     static bool containsPath(const QString& path);
     static bool updateSortOrders(const QList<QPair<int, int>>& orders);
 };
