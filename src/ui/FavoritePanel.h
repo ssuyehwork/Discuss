@@ -51,11 +51,14 @@ private slots:
 private:
     void initUi();
     void updateItemThumbnail(const QString& path, const QPixmap& pix);
+    void createAndEditCategory(int parentId = 0);
+    void sortItemsByName(bool ascending);
 
     QVBoxLayout* m_mainLayout = nullptr;
     DropTreeView* m_favoriteView = nullptr;
     QStandardItemModel* m_favoriteModel = nullptr;
     bool m_isLoading = false;
+    int m_pendingEditNodeId = 0;
 };
 
 } // namespace QuarkMeta

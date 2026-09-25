@@ -3,6 +3,7 @@
 #include "ShellIconManager.h"
 #include "../util/DiskMediaExtractor.h"
 #include "ColorPicker.h"
+#include "ToolTipOverlay.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
 #include "../meta/MetadataManager.h"
@@ -164,9 +165,24 @@ void FavoritePanel::initUi() {
     connect(m_favoriteModel, &QStandardItemModel::rowsInserted, this, updateFavAndSave, Qt::QueuedConnection);
     connect(m_favoriteModel, &QStandardItemModel::rowsRemoved, this, updateFavAndSave, Qt::QueuedConnection);
 
+    // 🚀【行内编辑即时落库】：用户重命名编辑完成后，即时更新 SQLite
+    connect(m_favoriteModel, &QStandardItemModel::itemChanged, this, [this](QStandardItem* item) {
+        if (!item || m_isLoading) return;
+        int nodeId = item->data(Qt::UserRole + 6).toInt();
+        if (nodeId > 0) {
+            QString name = item->text();
+            QString iconKey = item->data(Qt::UserRole + 2).toString();
+            QString colorHex = item->data(Qt::UserRole + 3).toString();
+            FavoriteDao::updateFavoriteNode(nodeId, name, iconKey, colorHex);
+        }
+    });
+
     connect(&FavoriteService::instance(), &FavoriteService::favoriteChanged, this, [this](const QString& path, bool isFav) {
         Q_UNUSED(path);
         Q_UNUSED(isFav);
+        loadFavorites();
+    });
+    connect(&FavoriteService::instance(), &FavoriteService::favoritesReloaded, this, [this]() {
         loadFavorites();
     });
 }
@@ -202,11 +218,19 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     UiHelper::applyMenuStyle(&menu);
 
     if (!index.isValid()) {
-        // 空白处右键：新建顶级虚拟分类
-        QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建虚拟分类");
+        // 空白处右键：新建文件夹 (直接进入行内编辑)
+        QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建文件夹");
         connect(newCatAct, &QAction::triggered, this, [this]() {
-            addVirtualCategory("新建分类", 0);
+            createAndEditCategory(0);
         });
+
+        auto* sortMenu = menu.addMenu(UiHelper::getIcon("list_ul", QColor("#AAAAAA")), "排列");
+        UiHelper::applyMenuStyle(sortMenu);
+        QAction* sortAsc = sortMenu->addAction("按名称 (A→Z)");
+        connect(sortAsc, &QAction::triggered, this, [this]() { sortItemsByName(true); });
+        QAction* sortDesc = sortMenu->addAction("按名称 (Z→A)");
+        connect(sortDesc, &QAction::triggered, this, [this]() { sortItemsByName(false); });
+
         menu.exec(m_favoriteView->viewport()->mapToGlobal(pos));
         return;
     }
@@ -224,13 +248,26 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     bool isFolder = isVirtual ? true : fi.isDir();
     bool isItemRemoved = false;
 
-    if (isVirtual) {
-        QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子分类");
+    // 1. 新建文件夹与新建子文件夹（直接创建并唤起行内编辑）
+    QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建文件夹");
+    connect(newCatAct, &QAction::triggered, this, [this]() {
+        createAndEditCategory(0);
+    });
+
+    if (isFolder) {
+        QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子文件夹");
         connect(newSubCatAct, &QAction::triggered, this, [this, nodeId]() {
-            addVirtualCategory("新建子分类", nodeId);
+            createAndEditCategory(nodeId);
         });
-        menu.addSeparator();
     }
+
+    menu.addSeparator();
+
+    // 2. 设置预设标签（TODO 提示/暂定入口）
+    QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6")), "设置预设标签");
+    connect(presetTagAct, &QAction::triggered, this, []() {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "设置预设标签 (TODO)", 2000, QColor("#9B59B6"));
+    });
 
     // 缓存图标按钮指针，以便在换色时动态刷新子菜单图标色彩
     QList<QPair<QPushButton*, QString>> iconButtons;
@@ -348,7 +385,16 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
         menu.addSeparator();
     }
 
-    QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), isVirtual ? "删除分类" : "取消收藏");
+    // 3. 重命名 (直接唤起行内编辑框)
+    QAction* renameAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "重命名");
+    connect(renameAct, &QAction::triggered, this, [this, index]() {
+        if (m_favoriteView && index.isValid()) {
+            m_favoriteView->edit(index);
+        }
+    });
+
+    // 4. 删除 / 取消收藏
+    QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), isVirtual ? "删除" : "取消收藏");
     connect(removeAct, &QAction::triggered, this, [this, path, nodeId, isVirtual, &isItemRemoved]() {
         isItemRemoved = true;
         if (isVirtual) {
@@ -357,6 +403,16 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             removeFavoriteItem(path);
         }
     });
+
+    menu.addSeparator();
+
+    // 5. 排列子菜单
+    auto* sortMenu = menu.addMenu(UiHelper::getIcon("list_ul", QColor("#AAAAAA")), "排列");
+    UiHelper::applyMenuStyle(sortMenu);
+    QAction* sortAsc = sortMenu->addAction("按名称 (A→Z)");
+    connect(sortAsc, &QAction::triggered, this, [this]() { sortItemsByName(true); });
+    QAction* sortDesc = sortMenu->addAction("按名称 (Z→A)");
+    connect(sortDesc, &QAction::triggered, this, [this]() { sortItemsByName(false); });
 
     // 阻塞展示菜单
     menu.exec(m_favoriteView->viewport()->mapToGlobal(pos));
@@ -494,6 +550,32 @@ void FavoritePanel::loadFavorites() {
 
     m_isLoading = false;
 
+    // 🚀 【时序对齐】：新建节点完成后，找到对应节点并唤起行内重命名编辑框
+    if (m_pendingEditNodeId > 0 && m_favoriteView) {
+        int targetNodeId = m_pendingEditNodeId;
+        m_pendingEditNodeId = 0;
+
+        std::function<QModelIndex(QStandardItem*)> findIndexByNodeId = [&](QStandardItem* parentItem) -> QModelIndex {
+            int rowCount = parentItem ? parentItem->rowCount() : m_favoriteModel->rowCount();
+            for (int i = 0; i < rowCount; ++i) {
+                QStandardItem* item = parentItem ? parentItem->child(i) : m_favoriteModel->item(i);
+                if (!item) continue;
+                if (item->data(Qt::UserRole + 6).toInt() == targetNodeId) {
+                    return item->index();
+                }
+                QModelIndex childIdx = findIndexByNodeId(item);
+                if (childIdx.isValid()) return childIdx;
+            }
+            return QModelIndex();
+        };
+
+        QModelIndex targetIndex = findIndexByNodeId(nullptr);
+        if (targetIndex.isValid()) {
+            m_favoriteView->setCurrentIndex(targetIndex);
+            m_favoriteView->edit(targetIndex);
+        }
+    }
+
     if (!pathsToExtract.isEmpty()) {
         QPointer<FavoritePanel> weakThis(this);
         for (const QString& path : pathsToExtract) {
@@ -550,6 +632,45 @@ void FavoritePanel::addFavoriteItem(const QString& path, int parentId) {
 
 void FavoritePanel::addVirtualCategory(const QString& name, int parentId) {
     FavoriteService::instance().addVirtualCategory(name, parentId);
+}
+
+void FavoritePanel::createAndEditCategory(int parentId) {
+    int newId = FavoriteService::instance().addVirtualCategory("新建文件夹", parentId);
+    if (newId > 0) {
+        m_pendingEditNodeId = newId;
+    }
+}
+
+void FavoritePanel::sortItemsByName(bool ascending) {
+    if (!m_favoriteModel) return;
+
+    std::function<void(QStandardItem*)> sortChildren = [&](QStandardItem* parentItem) {
+        int rowCount = parentItem ? parentItem->rowCount() : m_favoriteModel->rowCount();
+        if (rowCount <= 1) return;
+
+        QList<QStandardItem*> childItems;
+        for (int i = rowCount - 1; i >= 0; --i) {
+            QStandardItem* item = parentItem ? parentItem->takeRow(i).first() : m_favoriteModel->takeRow(i).first();
+            if (item) childItems.prepend(item);
+        }
+
+        std::sort(childItems.begin(), childItems.end(), [ascending](QStandardItem* a, QStandardItem* b) {
+            return ascending ? (a->text().localeAwareCompare(b->text()) < 0)
+                              : (a->text().localeAwareCompare(b->text()) > 0);
+        });
+
+        for (QStandardItem* item : childItems) {
+            if (parentItem) {
+                parentItem->appendRow(item);
+            } else {
+                m_favoriteModel->appendRow(item);
+            }
+            sortChildren(item);
+        }
+    };
+
+    sortChildren(nullptr);
+    saveFavorites();
 }
 
 } // namespace QuarkMeta
