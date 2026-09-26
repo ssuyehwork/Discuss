@@ -75,7 +75,7 @@ QAbstractItemView* SectionedScrollCanvas::createFolderView(QObject* eventFilter)
         folderJv->setSelectionMode(QAbstractItemView::SingleSelection);
         folderJv->setContextMenuPolicy(Qt::CustomContextMenu);
         folderJv->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        folderJv->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        folderJv->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         folderJv->setModel(m_folderProxyModel);
         folderJv->setAspectRatioRole(AspectRatioRole);
         auto* fDelegate = new ThumbnailDelegate(this);
@@ -94,7 +94,7 @@ QAbstractItemView* SectionedScrollCanvas::createFolderView(QObject* eventFilter)
         folderTv->setAlternatingRowColors(true);
         folderTv->setSortingEnabled(true);
         folderTv->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        folderTv->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        folderTv->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         folderTv->setContextMenuPolicy(Qt::CustomContextMenu);
         folderTv->setSelectionMode(QAbstractItemView::SingleSelection);
         folderTv->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -121,7 +121,7 @@ QAbstractItemView* SectionedScrollCanvas::createFileView(QObject* eventFilter) {
         fileJv->setSelectionMode(QAbstractItemView::ExtendedSelection);
         fileJv->setContextMenuPolicy(Qt::CustomContextMenu);
         fileJv->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        fileJv->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        fileJv->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         fileJv->setModel(m_fileProxyModel);
         fileJv->setAspectRatioRole(AspectRatioRole);
         auto* delegate = new ThumbnailDelegate(this);
@@ -140,7 +140,7 @@ QAbstractItemView* SectionedScrollCanvas::createFileView(QObject* eventFilter) {
         fileTv->setAlternatingRowColors(true);
         fileTv->setSortingEnabled(true);
         fileTv->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        fileTv->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        fileTv->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         fileTv->setContextMenuPolicy(Qt::CustomContextMenu);
         fileTv->setSelectionMode(QAbstractItemView::ExtendedSelection);
         fileTv->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -175,16 +175,14 @@ void SectionedScrollCanvas::setupConnections() {
 
     if (m_type == CanvasType::Grid) {
         if (auto* fjv = qobject_cast<JustifiedView*>(folderView)) {
-            connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int height) {
-                if (m_folderProxyModel && m_folderProxyModel->rowCount() > 0) {
-                    m_panel->folderView()->setFixedHeight(height);
-                }
+            connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int) {
+                updateSectionCounts();
             });
         }
         if (auto* jv = qobject_cast<JustifiedView*>(fileView)) {
             connect(jv, &JustifiedView::totalHeightChanged, this, [this](int height) {
                 if (m_fileProxyModel && m_fileProxyModel->rowCount() > 0) {
-                    m_panel->fileView()->setFixedHeight(height);
+                    m_panel->fileView()->setFixedHeight(qMax(height, m_panel->fileViewMinHeight()));
                 }
             });
         }
@@ -268,7 +266,7 @@ void SectionedScrollCanvas::updateSectionCounts() {
     if (fileView && fileCount > 0) {
         if (m_type == CanvasType::Grid) {
             if (auto* jv = qobject_cast<JustifiedView*>(fileView)) {
-                int targetH = jv->totalHeight();
+                int targetH = qMax(jv->totalHeight(), m_panel->fileViewMinHeight());
                 if (fileView->height() != targetH) {
                     fileView->setFixedHeight(targetH);
                 }
@@ -280,7 +278,7 @@ void SectionedScrollCanvas::updateSectionCounts() {
             if (rowH <= iconH) rowH = iconH + 10;
             if (rowH <= 0) rowH = 30;
             int hdrH = (tv->header() && tv->header()->isVisible()) ? tv->header()->height() : 0;
-            int targetH = fileCount * rowH + hdrH + 2;
+            int targetH = qMax(fileCount * rowH + hdrH + 2, m_panel->fileViewMinHeight());
             if (fileView->height() != targetH) {
                 fileView->setFixedHeight(targetH);
                 fileView->updateGeometry();

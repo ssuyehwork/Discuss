@@ -33,7 +33,7 @@ DualSectionPanel::DualSectionPanel(QAbstractItemView* folderView, QAbstractItemV
 
     if (m_fileView) {
         m_fileView->setParent(this);
-        m_layout->addWidget(m_fileView, 0);
+        m_layout->addWidget(m_fileView, 1);
     }
 
     // 🚀 筛选后全隐藏提示（原 ColumnViewPane 独有，现统一给三种视图）

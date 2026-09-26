@@ -83,7 +83,7 @@ void JustifiedView::setModel(QAbstractItemModel* model) {
 
 void JustifiedView::scheduleLayout() {
     m_layoutDirty = true;
-    if (m_layoutTimer) {
+    if (m_layoutTimer && !m_layoutTimer->isActive()) {
         m_layoutTimer->start();
     }
 }
