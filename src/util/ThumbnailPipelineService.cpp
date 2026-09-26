@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include <QtConcurrent>
 #include <QMutexLocker>
+#include <QDebug>
 
 namespace QuarkMeta {
 
@@ -72,15 +73,20 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
 
     if (pathsToFetch.isEmpty()) return;
 
+    qDebug() << "[THUMB_TRACE] loadBatchAsync pathsToFetch size:" << pathsToFetch.size();
     (void)QtConcurrent::run([this, pathsToFetch, targetSize, taskGen, onSingleLoaded]() {
         for (const QString& path : pathsToFetch) {
             if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
+                qDebug() << "[THUMB_TRACE] Generation mismatch, task canceled for:" << path;
                 return;
             }
 
             QImage finalImg = DiskMediaExtractor::getCapsuleThumbnailReadOnly(path);
             if (finalImg.isNull()) {
+                qDebug() << "[THUMB_TRACE] ReadOnly cache miss in pipeline, calling decodeImageToThumbnail for:" << path;
                 finalImg = decodeImageToThumbnail(path, targetSize);
+            } else {
+                qDebug() << "[THUMB_TRACE] ReadOnly cache hit in pipeline for:" << path;
             }
 
             if (!finalImg.isNull()) {

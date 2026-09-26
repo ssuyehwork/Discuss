@@ -492,16 +492,33 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
 
         QString ext = rec.suffix.toLower();
         bool isGraphic = UiHelper::isGraphicsFile(ext);
-        if (rec.isDir || !isGraphic) continue;
+        if (rec.isDir || !isGraphic) {
+            if (!rec.isDir) {
+                qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "is NOT a graphics file (ext:" << ext << "), skipping thumbnail load.";
+            }
+            continue;
+        }
 
         QString path = rec.path;
-        if (m_iconCache.contains(path) || m_requestedPaths.contains(path)) continue;
+        if (m_iconCache.contains(path)) {
+            qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "already in m_iconCache, skipping.";
+            continue;
+        }
+        if (m_requestedPaths.contains(path)) {
+            qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "already in m_requestedPaths, skipping.";
+            continue;
+        }
 
         m_requestedPaths.insert(path);
         pathsToLoad << path;
     }
 
-    if (pathsToLoad.isEmpty()) return;
+    if (pathsToLoad.isEmpty()) {
+        qDebug() << "[THUMB_TRACE] loadThumbnailsForRows: All requested rows already cached or in-flight.";
+        return;
+    }
+
+    qDebug() << "[THUMB_TRACE] Dispatching batch async thumbnail load for" << pathsToLoad.size() << "paths:" << pathsToLoad;
 
     QPointer<DiskItemModel> weakThis(this);
     ThumbnailPipelineService::instance().loadBatchAsync(pathsToLoad, 230, [weakThis, thisGen](const QString& path, const QPixmap& pixmap) {

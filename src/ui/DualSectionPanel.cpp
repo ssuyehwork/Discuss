@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include "../core/CoreController.h"
 #include <QElapsedTimer>
+#include <QDebug>
 
 namespace QuarkMeta {
 
@@ -194,7 +195,10 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
     scanView(m_fileView, m_fileProxyModel);
 
     if (!visibleRows.isEmpty()) {
+        qDebug() << "[THUMB_TRACE] refreshVisibleThumbnails calculated visible source rows:" << visibleRows.values();
         model->loadThumbnailsForRows(visibleRows.values());
+    } else {
+        qDebug() << "[THUMB_TRACE] refreshVisibleThumbnails found ZERO visible rows in viewport.";
     }
 }
 
