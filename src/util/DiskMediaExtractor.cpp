@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -58,17 +59,17 @@ void DiskMediaExtractor::flushPendingFailures() {
 
 
 QString DiskMediaExtractor::getDiskThumbCachePath(const QString& filePath) {
-    quint64 h = qHash(QDir::toNativeSeparators(filePath).toLower(), 0);
-    QString bucket = QString("%1").arg((h >> 32) & 0xFF, 2, 16, QChar('0'));
-    QString fileKey = QString("%1.png").arg(h, 16, 16, QChar('0'));
-    QString cacheDir = QCoreApplication::applicationDirPath() + "/.QuarkMeta/disk_thumbs/fallback/" + bucket;
-    QDir().mkpath(cacheDir);
-    return cacheDir + "/" + fileKey;
+    QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
+    QString hashStr = QString::fromUtf8(QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex());
+    QString bucket = hashStr.left(2);
+    QString cacheDir = QCoreApplication::applicationDirPath() + "/.QuarkMeta/disk_thumbs/" + bucket;
+    return cacheDir + "/" + hashStr + ".png";
 }
 
 bool DiskMediaExtractor::saveDiskThumbnail(const QString& filePath, const QImage& img512) {
     if (img512.isNull()) return false;
     QString diskCachePath = getDiskThumbCachePath(filePath);
+    QDir().mkpath(QFileInfo(diskCachePath).absolutePath());
     std::lock_guard<std::mutex> lock(s_thumbFileMutex);
     return img512.save(diskCachePath, "PNG");
 }

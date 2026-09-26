@@ -18,7 +18,7 @@ JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     setFrameShape(QFrame::NoFrame);
     m_layoutTimer = new QTimer(this);
     m_layoutTimer->setSingleShot(true);
-    m_layoutTimer->setInterval(50);
+    m_layoutTimer->setInterval(120);
     connect(m_layoutTimer, &QTimer::timeout, this, &JustifiedView::onLayoutTimerTimeout);
 
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -83,7 +83,7 @@ void JustifiedView::setModel(QAbstractItemModel* model) {
 
 void JustifiedView::scheduleLayout() {
     m_layoutDirty = true;
-    if (m_layoutTimer && !m_layoutTimer->isActive()) {
+    if (m_layoutTimer) {
         m_layoutTimer->start();
     }
 }
