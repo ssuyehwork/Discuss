@@ -3,6 +3,7 @@
 #include <QScrollArea>
 #include <QAbstractItemView>
 #include <QSet>
+#include <QTimer>
 #include "models/FilterProxyModel.h"
 #include "models/ItemModelBase.h"
 
@@ -66,6 +67,7 @@ private:
     DualSectionPanel* m_panel = nullptr;
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;
+    QTimer* m_scrollThumbTimer = nullptr;
 };
 
 } // namespace QuarkMeta

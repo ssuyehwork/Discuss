@@ -26,6 +26,12 @@
 
 namespace QuarkMeta {
 
+QSize FavoriteItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
+    QSize sz = QStyledItemDelegate::sizeHint(option, index);
+    sz.setHeight(28);
+    return sz;
+}
+
 void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
     QStyleOptionViewItem opt = option;
     initStyleOption(&opt, index);
