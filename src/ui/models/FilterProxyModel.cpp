@@ -181,7 +181,8 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     }
 
     // 6.5 缩略图状态过滤 (Zero UI Main-Thread Disk I/O)
-    if (currentFilter.thumbnailPresence != FilterState::ThumbAll) {
+    if (currentFilter.thumbnailPresence != FilterState::ThumbAll &&
+        !record.isDir && UiHelper::isGraphicsFile(record.suffix.toLower())) {
         bool hasThumb = sourceModelPtr->data(sourceModelPtr->index(sourceRow, 0), HasThumbnailRole).toBool();
         if (currentFilter.thumbnailPresence == FilterState::HasThumbnail && !hasThumb) return false;
         if (currentFilter.thumbnailPresence == FilterState::NoThumbnail && hasThumb) return false;

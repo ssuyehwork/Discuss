@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include "../core/CoreController.h"
 #include <QElapsedTimer>
+#include <QDebug>
 
 namespace QuarkMeta {
 
@@ -33,7 +34,7 @@ DualSectionPanel::DualSectionPanel(QAbstractItemView* folderView, QAbstractItemV
 
     if (m_fileView) {
         m_fileView->setParent(this);
-        m_layout->addWidget(m_fileView, 0);
+        m_layout->addWidget(m_fileView, 1);
     }
 
     // 🚀 筛选后全隐藏提示（原 ColumnViewPane 独有，现统一给三种视图）
@@ -167,18 +168,21 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
 
         if (topPoint.y() >= view->height() || btmPoint.y() <= 0) return;
 
-        int clampedTopY = qBound(0, topPoint.y(), view->height());
-        int clampedBtmY = qBound(0, btmPoint.y(), view->height());
+        int clampedTopX = qBound(0, topPoint.x(), view->width() - 1);
+        int clampedTopY = qBound(0, topPoint.y(), view->height() - 1);
 
-        QModelIndex topIdx = view->indexAt(QPoint(10, clampedTopY));
+        int clampedBtmX = qBound(0, btmPoint.x(), view->width() - 1);
+        int clampedBtmY = qBound(0, btmPoint.y(), view->height() - 1);
+
+        QModelIndex topIdx = view->indexAt(QPoint(clampedTopX, clampedTopY));
         if (!topIdx.isValid()) {
             for (int offset = 10; offset <= 100 && !topIdx.isValid(); offset += 10)
-                topIdx = view->indexAt(QPoint(10, clampedTopY + offset));
+                topIdx = view->indexAt(QPoint(clampedTopX + offset, clampedTopY + offset));
         }
-        QModelIndex btmIdx = view->indexAt(QPoint(10, clampedBtmY));
+        QModelIndex btmIdx = view->indexAt(QPoint(clampedBtmX, clampedBtmY));
         if (!btmIdx.isValid()) {
             for (int offset = 10; offset <= 100 && !btmIdx.isValid(); offset += 10)
-                btmIdx = view->indexAt(QPoint(10, clampedBtmY - offset));
+                btmIdx = view->indexAt(QPoint(clampedBtmX - offset, clampedBtmY - offset));
         }
 
         int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
@@ -194,7 +198,10 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
     scanView(m_fileView, m_fileProxyModel);
 
     if (!visibleRows.isEmpty()) {
+        qDebug() << "[THUMB_TRACE] refreshVisibleThumbnails calculated visible source rows:" << visibleRows.values();
         model->loadThumbnailsForRows(visibleRows.values());
+    } else {
+        qDebug() << "[THUMB_TRACE] refreshVisibleThumbnails found ZERO visible rows in viewport.";
     }
 }
 

@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDebug>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -61,9 +62,8 @@ void DiskMediaExtractor::flushPendingFailures() {
 QString DiskMediaExtractor::getDiskThumbCachePath(const QString& filePath) {
     QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
     QString hashStr = QString::fromUtf8(QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex());
-    QString bucket = hashStr.left(2);
-    QString cacheDir = QCoreApplication::applicationDirPath() + "/.QuarkMeta/disk_thumbs/" + bucket;
-    return cacheDir + "/" + hashStr + ".png";
+    QString cacheDir = QDir::temp().filePath("QuarkMeta_Thumbnails");
+    return QDir(cacheDir).filePath(QString("%1_230.png").arg(hashStr.left(32)));
 }
 
 bool DiskMediaExtractor::saveDiskThumbnail(const QString& filePath, const QImage& img512) {
@@ -96,9 +96,17 @@ void DiskMediaExtractor::roamThumbnailCache(const QString& oldFilePath, const QS
 
 QImage DiskMediaExtractor::getCapsuleThumbnailReadOnly(const QString& filePath) {
     QString diskCachePath = getDiskThumbCachePath(filePath);
-    if (QFile::exists(diskCachePath)) {
+    bool exists = QFile::exists(diskCachePath);
+    if (exists) {
         QImage img;
-        if (img.load(diskCachePath)) return img;
+        if (img.load(diskCachePath)) {
+            qDebug() << "[THUMB_TRACE] ReadOnly Cache HIT:" << QFileInfo(filePath).fileName() << "CachePath:" << diskCachePath << "Size:" << img.size();
+            return img;
+        } else {
+            qDebug() << "[THUMB_TRACE] ReadOnly Cache Corrupt/Failed load:" << QFileInfo(filePath).fileName() << "CachePath:" << diskCachePath;
+        }
+    } else {
+        qDebug() << "[THUMB_TRACE] ReadOnly Cache MISS (file does not exist):" << QFileInfo(filePath).fileName() << "ExpectedCachePath:" << diskCachePath;
     }
     return QImage();
 }
@@ -132,6 +140,7 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
         std::wstring wFileName = fileName.toStdWString();
         auto it = cachedItems.find(wFileName);
         if (it != cachedItems.end() && it->second.thumbStatus == 1) {
+            qDebug() << "[THUMB_TRACE] Intercepted by thumb_status == 1 (Previously Failed/Skipped):" << fileName;
             return res;
         }
     }
@@ -139,11 +148,13 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
     if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return res;
 
     // 3. 解码路径：单次解码同时获取原始分辨率与 512px 缩略图
+    qDebug() << "[THUMB_TRACE] Attempting single pass decode for:" << fileName;
     DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 0, token);
     if (dec.isValid) {
         res.originalSize = dec.originalSize;
         if (res.thumbnail512.isNull() && !dec.thumbnail512.isNull()) {
-            saveDiskThumbnail(filePath, dec.thumbnail512);
+            bool saved = saveDiskThumbnail(filePath, dec.thumbnail512);
+            qDebug() << "[THUMB_TRACE] SinglePass Decode Success & Saved to Disk Cache:" << fileName << "Saved:" << saved << "Size:" << dec.thumbnail512.size();
             res.thumbnail512 = dec.thumbnail512;
         }
         res.isValid = true;
