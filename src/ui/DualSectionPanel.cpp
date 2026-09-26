@@ -168,21 +168,21 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
 
         if (topPoint.y() >= view->height() || btmPoint.y() <= 0) return;
 
-        int clampedTopX = qBound(0, topPoint.x(), view->width() - 1);
+        int clampedTopX = qBound(16, topPoint.x(), view->width() - 1);
         int clampedTopY = qBound(0, topPoint.y(), view->height() - 1);
 
-        int clampedBtmX = qBound(0, btmPoint.x(), view->width() - 1);
+        int clampedBtmX = qBound(0, btmPoint.x(), qMax(0, view->width() - 16));
         int clampedBtmY = qBound(0, btmPoint.y(), view->height() - 1);
 
         QModelIndex topIdx = view->indexAt(QPoint(clampedTopX, clampedTopY));
         if (!topIdx.isValid()) {
             for (int offset = 10; offset <= 100 && !topIdx.isValid(); offset += 10)
-                topIdx = view->indexAt(QPoint(clampedTopX + offset, clampedTopY + offset));
+                topIdx = view->indexAt(QPoint(qMin(view->width() - 1, clampedTopX + offset), clampedTopY));
         }
         QModelIndex btmIdx = view->indexAt(QPoint(clampedBtmX, clampedBtmY));
         if (!btmIdx.isValid()) {
             for (int offset = 10; offset <= 100 && !btmIdx.isValid(); offset += 10)
-                btmIdx = view->indexAt(QPoint(clampedBtmX - offset, clampedBtmY - offset));
+                btmIdx = view->indexAt(QPoint(qMax(0, clampedBtmX - offset), clampedBtmY));
         }
 
         int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
