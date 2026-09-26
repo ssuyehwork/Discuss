@@ -536,10 +536,11 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
                 int rIdx = it->second;
                 QMetaObject::invokeMethod(weakThis, [weakThis, rIdx]() {
                     if (!weakThis) return;
-                    weakThis->m_pendingThumbRows.insert(rIdx);
-                    if (weakThis->m_thumbBatchTimer && !weakThis->m_thumbBatchTimer->isActive()) {
-                        weakThis->m_thumbBatchTimer->start();
-                    }
+                    emit weakThis->dataChanged(
+                        weakThis->index(rIdx, 0),
+                        weakThis->index(rIdx, weakThis->columnCount() - 1),
+                        {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole}
+                    );
                     emit weakThis->thumbnailLoaded(rIdx);
                 }, Qt::QueuedConnection);
             }
@@ -654,10 +655,10 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         if (record.isDir || record.thumbStatus == 1) return false;
         static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
         QString ext = record.suffix.toLower();
-        if (!UiHelper::isGraphicsFile(ext) || iconOnlyExts.contains(ext)) return false;
-        if (m_iconCache.contains(path) || (m_aspectRatios.contains(QDir::toNativeSeparators(path)) && m_aspectRatios.value(QDir::toNativeSeparators(path)) > 0.0)) return true;
+        if (iconOnlyExts.contains(ext)) return false;
+        if (UiHelper::isGraphicsFile(ext)) return true;
         if (record.width > 0 && record.height > 0) return true;
-        return false;
+        return m_aspectRatios.contains(QDir::toNativeSeparators(path)) && m_aspectRatios.value(QDir::toNativeSeparators(path)) > 0.0;
     } else if (role == Qt::DecorationRole && index.column() == 0) {
         QString cacheKey = path;
         QIcon* cached = m_iconCache.object(cacheKey);
