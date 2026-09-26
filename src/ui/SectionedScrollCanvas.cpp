@@ -47,12 +47,21 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
 
     setupConnections();
 
+    m_scrollThumbTimer = new QTimer(this);
+    m_scrollThumbTimer->setSingleShot(true);
+    m_scrollThumbTimer->setInterval(60);
+    connect(m_scrollThumbTimer, &QTimer::timeout, this, [this]() {
+        if (m_folderProxyModel && m_folderProxyModel->sourceModel()) {
+            if (auto* diskModel = qobject_cast<ItemModelBase*>(m_folderProxyModel->sourceModel())) {
+                m_panel->refreshVisibleThumbnails(diskModel, viewport());
+            }
+        }
+    });
+
     if (verticalScrollBar()) {
         connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
-            if (m_folderProxyModel && m_folderProxyModel->sourceModel()) {
-                if (auto* diskModel = qobject_cast<ItemModelBase*>(m_folderProxyModel->sourceModel())) {
-                    m_panel->refreshVisibleThumbnails(diskModel, viewport());
-                }
+            if (m_scrollThumbTimer) {
+                m_scrollThumbTimer->start();
             }
         });
     }

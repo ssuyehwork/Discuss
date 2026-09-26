@@ -54,18 +54,14 @@ DiskItemModel::DiskItemModel(QObject* parent) : ItemModelBase(parent) {
 void DiskItemModel::flushPendingThumbDataChanged() {
     if (m_pendingThumbRows.isEmpty()) return;
 
-    int minRow = std::numeric_limits<int>::max();
-    int maxRow = std::numeric_limits<int>::min();
-    for (int r : m_pendingThumbRows) {
-        if (r < minRow) minRow = r;
-        if (r > maxRow) maxRow = r;
-    }
+    QSet<int> rowsToEmit = m_pendingThumbRows;
     m_pendingThumbRows.clear();
 
-    if (minRow <= maxRow && minRow >= 0 && minRow < static_cast<int>(m_allRecords.size())) {
-        int validMaxRow = qMin(maxRow, static_cast<int>(m_allRecords.size()) - 1);
-        emit dataChanged(index(minRow, 0), index(validMaxRow, columnCount() - 1),
-                          {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+    for (int r : rowsToEmit) {
+        if (r >= 0 && r < static_cast<int>(m_allRecords.size())) {
+            emit dataChanged(index(r, 0), index(r, columnCount() - 1),
+                              {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+        }
     }
 }
 

@@ -93,11 +93,6 @@ QString DiskMediaExtractor::getDiskThumbCachePathByFileId(uint32_t volSerial, ui
 }
 
 QString DiskMediaExtractor::getDiskThumbCachePath(const QString& filePath) {
-    uint32_t vol = 0;
-    uint64_t frn = 0;
-    if (fetchPhysicalFileId(filePath, vol, frn)) {
-        return getDiskThumbCachePathByFileId(vol, frn);
-    }
     quint64 h = qHash(QDir::toNativeSeparators(filePath).toLower(), 0);
     QString bucket = QString("%1").arg((h >> 32) & 0xFF, 2, 16, QChar('0'));
     QString fileKey = QString("%1.png").arg(h, 16, 16, QChar('0'));
@@ -137,7 +132,6 @@ QImage DiskMediaExtractor::getCapsuleThumbnailReadOnly(const QString& filePath) 
     QString diskCachePath = getDiskThumbCachePath(filePath);
     if (QFile::exists(diskCachePath)) {
         QImage img;
-        std::lock_guard<std::mutex> lock(s_thumbFileMutex);
         if (img.load(diskCachePath)) return img;
     }
     return QImage();
@@ -163,9 +157,22 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
         return res;
     }
 
+    // 2. 失败标记拦截路径：若 .QuarkMeta.json 中被标记 thumb_status == 1，说明此前已提取失败，直接跳过二次解码
+    {
+        std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
+        QuarkMetaJson jsonCache(parentDir.toStdWString());
+        jsonCache.load();
+        const auto& cachedItems = jsonCache.items();
+        std::wstring wFileName = fileName.toStdWString();
+        auto it = cachedItems.find(wFileName);
+        if (it != cachedItems.end() && it->second.thumbStatus == 1) {
+            return res;
+        }
+    }
+
     if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return res;
 
-    // 2. 解码路径：单次解码同时获取原始分辨率与 512px 缩略图
+    // 3. 解码路径：单次解码同时获取原始分辨率与 512px 缩略图
     DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 0, token);
     if (dec.isValid) {
         res.originalSize = dec.originalSize;
