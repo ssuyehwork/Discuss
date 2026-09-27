@@ -184,17 +184,18 @@ void ContentViewCoordinator::refreshVisibleThumbnails() {
     QSet<int> visibleRows;
 
     for (auto* view : views) {
-        if (!view || !view->viewport()) continue;
+        if (!view || !view->viewport() || !view->isVisible()) continue;
         auto* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
         if (!proxy || proxy->rowCount() == 0) continue;
 
         QRect vpRect = view->viewport()->rect();
+
+        // Exact Version-Old-8 specification: direct sampling on view's own native viewport
         QModelIndex topIdx = view->indexAt(vpRect.topLeft());
         QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
 
-        // 绝对照抄原数值：缓冲前后 4 行
-        int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : proxy->rowCount() - 1;
+        int top = topIdx.isValid() ? qMax(0, topIdx.row() - 20) : 0;
+        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 100) : proxy->rowCount() - 1;
 
         for (int r = top; r <= bottom; ++r) {
             QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
