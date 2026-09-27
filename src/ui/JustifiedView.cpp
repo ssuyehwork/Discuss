@@ -382,8 +382,8 @@ void JustifiedView::doLayout() {
         return;
     }
 
-    // 🚀【精确数学对齐】：边距微调为 6px，可用宽度精准扣减 16px 滚动条
-    const int margin = 6;
+    // 🚀【拨乱反正】：物理恢复规范标准的 10px 边距，杜绝贴边裁剪
+    const int margin = 10;
     const int spacing = 5;
     
     int scrollBarW = (verticalScrollBar() && verticalScrollBar()->isVisible()) ? verticalScrollBar()->width() : 0;
