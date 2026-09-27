@@ -33,6 +33,7 @@ class FileSectionHeaderBar;
  */
 class ContentPanel : public QFrame {
     Q_OBJECT
+    friend class ContentPaneSplitManager;
 
 public:
     enum class DataSourceType {
@@ -57,6 +58,8 @@ public:
         ColumnView
     };
 
+    static constexpr int kMaxPanes = 4;
+
     enum ContextAction {
         ActionOpen, ActionOpenDefault, ActionShowInExplorer, ActionShowInQuarkMeta, ActionNewFolder, ActionNewMd, ActionNewTxt,
         ActionPin, ActionUnpin, ActionColorTag, ActionEncrypt, ActionDecrypt, ActionChangePwd,
@@ -78,6 +81,8 @@ public:
     ViewMode currentViewMode() const { return m_currentViewMode; }
     bool canPaste(const QString& targetOverride = QString()) const;
     DataSourceType dataSourceType() const;
+    bool isSecondaryPane() const;
+    void setIsSecondaryPane(bool secondary);
     bool isContextMenuActive() const { return m_isContextMenuActive; }
     QString getCurrentCategoryType() const { return m_currentCategoryType; }
     int currentLoadRequestId() const { return m_loadRequestId.load(); }
@@ -164,6 +169,10 @@ signals:
     void directoryStatsReady(const QuarkMeta::ScanStats& stats);
     void statusBarStatsUpdated(int fileCount, int folderCount, int totalCount);
     void statusBarMessageReady(const QString& message);
+    void secondaryPaneCreated(ContentPanel* pane);
+    void secondaryPaneClosed();
+    void closePaneRequested();
+    void dualPanePathsChanged(const QString& path1, const QString& path2);
 
 public slots:
     void setZoomLevel(int level);

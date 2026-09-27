@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QList>
 #include <QString>
+#include <QStringList>
 #include <QEvent>
 
 namespace QuarkMeta {

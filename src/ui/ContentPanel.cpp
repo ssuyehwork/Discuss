@@ -918,6 +918,14 @@ ContentPanel::DataSourceType ContentPanel::dataSourceType() const {
     return (m_currentCategoryType == "path_list" || m_currentCategoryType == "search") ? DataSourceType::PathList : DataSourceType::DiskNav;
 }
 
+bool ContentPanel::isSecondaryPane() const {
+    return m_splitManager ? m_splitManager->isSecondaryPane() : false;
+}
+
+void ContentPanel::setIsSecondaryPane(bool secondary) {
+    if (m_splitManager) m_splitManager->setIsSecondaryPane(secondary);
+}
+
 void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
     if (m_splitManager) m_splitManager->splitPane(orientation, secondaryPath);
 }

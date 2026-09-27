@@ -8,6 +8,8 @@
 #include "AddressBar.h"
 #include "SearchController.h"
 #include "TitleBarWidget.h"
+#include "TabBarWidget.h"
+#include "controllers/ContentPaneSplitManager.h"
 #include "PanelLayoutManager.h"
 #include "AppShortcutController.h"
 #include "QuickLookWindow.h"

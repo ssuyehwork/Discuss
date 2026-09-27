@@ -9,6 +9,7 @@
 namespace QuarkMeta {
 
 class ContentPanel;
+struct TabSplitState;
 
 class ContentPaneSplitManager : public QObject {
     Q_OBJECT
@@ -31,8 +32,8 @@ public:
     void redistributePaneSizes();
     void setActivePane(bool active);
 
-    struct TabSplitState exportSplitState() const;
-    void restoreSplitState(const struct TabSplitState& state);
+    TabSplitState exportSplitState() const;
+    void restoreSplitState(const TabSplitState& state);
     void updateDragOverlay(const QPoint& pos);
     void hideDragOverlay();
 
