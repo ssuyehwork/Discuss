@@ -222,6 +222,16 @@ void ContentPanel::initGridView() {
     connect(m_gridFolderHeader, &FolderSectionHeaderBar::collapseToggled, this, [this](bool collapsed) {
         if (m_folderGridView && m_gridFolderHeader->count() > 0) {
             m_folderGridView->setVisible(!collapsed);
+            if (collapsed) {
+                m_folderGridView->setMinimumHeight(0);
+                m_folderGridView->setMaximumHeight(0);
+            } else if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
+                int h = fjv->totalHeight();
+                if (h > 0) {
+                    m_folderGridView->setMinimumHeight(h);
+                    m_folderGridView->setMaximumHeight(h);
+                }
+            }
         }
     });
 
@@ -255,7 +265,8 @@ void ContentPanel::initGridView() {
 
     m_gridView->installEventFilter(this);
     m_gridView->viewport()->installEventFilter(this);
-    layout->addWidget(m_gridView, 1);
+    layout->addWidget(m_gridView, 0);
+    layout->addStretch(1);
 
     if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
         connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int height) {
@@ -309,13 +320,13 @@ void ContentPanel::initGridView() {
             m_gridFolderHeader->setVisible(folderCount > 0);
         }
         if (m_folderGridView) {
-            if (folderCount == 0) {
-                m_folderGridView->hide();
+            bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
+            if (folderCount == 0 || collapsed) {
+                m_folderGridView->setVisible(false);
                 m_folderGridView->setMinimumHeight(0);
-                m_folderGridView->setMaximumHeight(QWIDGETSIZE_MAX);
+                m_folderGridView->setMaximumHeight(folderCount == 0 ? QWIDGETSIZE_MAX : 0);
             } else {
-                bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
-                m_folderGridView->setVisible(!collapsed);
+                m_folderGridView->setVisible(true);
                 if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
                     int h = fjv->totalHeight();
                     if (h > 0) {
