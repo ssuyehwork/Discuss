@@ -193,6 +193,7 @@ void ContentPanel::initGridView() {
     // 2. 文件夹专用网格视图
     m_folderGridView = new DropJustifiedView(m_gridContainerWidget);
     m_folderGridView->setFrameShape(QFrame::NoFrame);
+    m_folderGridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderGridView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_folderGridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderGridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -229,6 +230,7 @@ void ContentPanel::initGridView() {
     // 4. 普通文件网格视图
     m_gridView = new DropJustifiedView(m_gridContainerWidget);
     m_gridView->setFrameShape(QFrame::NoFrame);
+    m_gridView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_gridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -261,6 +263,19 @@ void ContentPanel::initGridView() {
             } else {
                 m_folderGridView->setMinimumHeight(0);
                 m_folderGridView->setMaximumHeight(QWIDGETSIZE_MAX);
+            }
+        });
+    }
+
+    if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+        connect(jv, &JustifiedView::totalHeightChanged, this, [this](int height) {
+            if (!m_gridView || !m_fileProxyModel) return;
+            if (m_fileProxyModel->rowCount() > 0 && height > 0) {
+                m_gridView->setMinimumHeight(height);
+                m_gridView->setMaximumHeight(height);
+            } else {
+                m_gridView->setMinimumHeight(0);
+                m_gridView->setMaximumHeight(QWIDGETSIZE_MAX);
             }
         });
     }
@@ -313,6 +328,21 @@ void ContentPanel::initGridView() {
         if (m_gridFileHeader) {
             m_gridFileHeader->setCount(fileCount);
             m_gridFileHeader->setVisible(fileCount > 0 && folderCount > 0);
+        }
+        if (m_gridView) {
+            if (fileCount == 0) {
+                m_gridView->setMinimumHeight(0);
+                m_gridView->setMaximumHeight(QWIDGETSIZE_MAX);
+            } else if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
+                int h = jv->totalHeight();
+                if (h > 0) {
+                    m_gridView->setMinimumHeight(h);
+                    m_gridView->setMaximumHeight(h);
+                } else {
+                    m_gridView->setMinimumHeight(0);
+                    m_gridView->setMaximumHeight(QWIDGETSIZE_MAX);
+                }
+            }
         }
     };
 
