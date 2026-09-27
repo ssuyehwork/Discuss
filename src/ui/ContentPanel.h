@@ -219,16 +219,14 @@ private:
     QScrollArea* m_listScrollArea = nullptr;
     QWidget* m_listContainerWidget = nullptr;
     FolderSectionHeaderBar* m_listFolderHeader = nullptr;
-    DropTreeView* m_folderTreeView = nullptr;
     FileSectionHeaderBar* m_listFileHeader = nullptr;
-    FilterProxyModel* m_folderProxyModel = nullptr;
-    FilterProxyModel* m_fileProxyModel = nullptr;
 
     QScrollArea* m_gridScrollArea = nullptr;
     QWidget* m_gridContainerWidget = nullptr;
     FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
-    DropJustifiedView* m_folderGridView = nullptr;
     FileSectionHeaderBar* m_gridFileHeader = nullptr;
+
+    FilterProxyModel* m_proxyModel = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;
