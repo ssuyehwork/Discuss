@@ -463,7 +463,7 @@ void TabBarWidget::dropEvent(QDropEvent* event) {
         if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex")) {
             int fromIdx = event->mimeData()->data("application/x-quarkmeta-tabindex").toInt();
             if (fromIdx >= 0 && fromIdx < m_tabs.size()) {
-                QPoint dropPos = event->pos();
+                QPoint dropPos = event->position().toPoint();
                 int toIdx = m_tabs.size() - 1;
                 for (int i = 0; i < m_tabWidgets.size(); ++i) {
                     QRect rect = m_tabWidgets[i]->geometry();

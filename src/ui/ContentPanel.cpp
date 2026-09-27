@@ -953,7 +953,7 @@ void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
 
 void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
     if (event->mimeData() && (event->mimeData()->hasFormat("application/x-quarkmeta-tab") || event->mimeData()->hasUrls())) {
-        if (m_splitManager) m_splitManager->updateDragOverlay(event->pos());
+        if (m_splitManager) m_splitManager->updateDragOverlay(event->position().toPoint());
         event->acceptProposedAction();
     } else {
         QFrame::dragMoveEvent(event);
@@ -975,7 +975,7 @@ void ContentPanel::dropEvent(QDropEvent* event) {
             targetUrl = event->mimeData()->urls().first().toLocalFile();
         }
         if (!targetUrl.isEmpty()) {
-            QPoint pos = event->pos();
+            QPoint pos = event->position().toPoint();
             int w = width();
             int h = height();
             if (pos.x() > w * 0.7) {
