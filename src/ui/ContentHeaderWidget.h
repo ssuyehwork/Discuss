@@ -23,6 +23,7 @@ public:
     void setFilterState(const FilterState& state);
     void setRecursive(bool recursive);
     void setLayersEnabled(bool enabled, const QString& tooltip);
+    void setActive(bool active);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

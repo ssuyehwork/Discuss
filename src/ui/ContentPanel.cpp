@@ -926,6 +926,10 @@ void ContentPanel::setIsSecondaryPane(bool secondary) {
     if (m_splitManager) m_splitManager->setIsSecondaryPane(secondary);
 }
 
+void ContentPanel::setActivePane(bool active) {
+    if (m_splitManager) m_splitManager->setActivePane(active);
+}
+
 void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
     if (m_splitManager) m_splitManager->splitPane(orientation, secondaryPath);
 }

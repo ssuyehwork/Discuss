@@ -83,6 +83,7 @@ public:
     DataSourceType dataSourceType() const;
     bool isSecondaryPane() const;
     void setIsSecondaryPane(bool secondary);
+    void setActivePane(bool active);
     bool isContextMenuActive() const { return m_isContextMenuActive; }
     QString getCurrentCategoryType() const { return m_currentCategoryType; }
     int currentLoadRequestId() const { return m_loadRequestId.load(); }
