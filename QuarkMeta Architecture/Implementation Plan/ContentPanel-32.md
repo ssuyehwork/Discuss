@@ -1,9 +1,11 @@
-# Implementation Plan - ContentPanel (QSplitter Layout Optimization)
+# Implementation Plan - ContentPanel (QSplitter Layout Fix for Grid Views)
 
 ## 1. Overview
-This implementation plan addresses layout truncation and nested scrollbar conflicts in `ContentPanel`. Previously, `m_folderGridView` relied on `setFixedHeight(height)` inside a `QScrollArea` to force-fit folder cards, causing `m_gridView` (the file section) to be squished into a narrow viewport when many folders were present.
+This implementation plan fixes the layout collapse bug (0px black screen height issue) and resolves the squished file view when directories contain large file/folder counts.
 
-To resolve this issue while preserving Qt view virtualization, delegates, model bindings, and signal-slot connections, this plan replaces the outer `m_gridScrollArea` with a vertical `QSplitter` (`m_gridSplitter`). The folder section and file section are placed in separate split panes within `m_gridSplitter`, allowing dynamic user resizing while maintaining full viewport virtual rendering and eliminating nested scrollbar conflicts.
+Previously, `ContentPanel` wrapped `m_folderGridView` and `m_gridView` inside a `QScrollArea` (`m_gridScrollArea`) and dynamically called `m_folderGridView->setFixedHeight(height)`. When opening directories with many items (e.g. 2000+ files/folders), layout calculation delays produced `totalHeight = 0`, squishing `m_folderGridView` into a 0px collapsed state and pushing `m_gridView` off-screen.
+
+To fix this issue permanently while preserving Qt viewport virtualization and delegates, this change replaces `m_gridScrollArea` with a vertical `QSplitter` (`m_gridSplitter`). Both `m_folderGridView` and `m_gridView` reside in independent split panes within `m_gridSplitter`, eliminating `setFixedHeight` hacks, preventing layout collapse, and restoring responsive section sizing.
 
 ---
 
@@ -106,7 +108,7 @@ void ContentPanel::restoreActiveView() {
 ---
 
 ### Change 3: `src/ui/ContentPanel.cpp`
-Refactor `initGridView()` to organize folder section and file section under `m_gridSplitter` while preserving all model bindings, thumbnail delegates, drag-and-drop slots, signal connections, and `updateGridSectionCounts` logic. Remove `setFixedHeight` forcing.
+Refactor `initGridView()` to organize folder and file grid views into `m_gridFolderWidget` and `m_gridFileWidget` inside `m_gridSplitter`. Remove `setFixedHeight` height forcing logic.
 
 ```
 <<<<<<< SEARCH
@@ -382,21 +384,21 @@ void ContentPanel::initGridView() {
    cmake --build build --config Release
    ```
 2. **Behavior Verification**:
-   - Open `QuarkMeta` in grid view for a directory containing both subfolders and files.
-   - Drag the vertical splitter handle between folder section and file section.
-   - Confirm that both views render thumbnails with proper delegates and scroll independently within their split panes without truncation.
+   - Open `QuarkMeta` in grid view for a directory containing both subfolders and 2000+ files (e.g. `H:\测试`).
+   - Confirm that `m_folderGridView` and `m_gridView` render within their split panes without collapsing to 0px or creating black viewports.
+   - Confirm that dragging the `QSplitter` handle dynamically resizes both section views.
 
 ---
 
 ## 5. SSOT API Reuse & Anti-Redundancy Self-Check
-- **API Reuse Check**: Retained `m_folderProxyModel`, `m_fileProxyModel`, `ThumbnailDelegate`, `onDoubleClicked`, `onSelectionChanged`, `onCustomContextMenuRequested`, and `onPathsDropped`.
-- **Anti-Redundancy**: Removed `setFixedHeight` geometry hacks and deleted the existing nested `QScrollArea` wrapper for grid view.
+- **API Reuse**: Retained existing models, proxies, delegates (`ThumbnailDelegate`), and event filters.
+- **Anti-Redundancy**: Removed `setFixedHeight(...)` calls, eliminating manual layout height forcing and timing conflicts.
 
 ---
 
 ## 6. Header API Signature Verification
 
-| Header File | Class / Struct Name | Signature Verified |
+| Header File | Class Name | Verified Signature |
 | :--- | :--- | :--- |
 | `src/ui/ContentPanel.h` | `ContentPanel` | `QSplitter* m_gridSplitter = nullptr;` |
 | `<QSplitter>` | `QSplitter` | `explicit QSplitter(Qt::Orientation orientation, QWidget *parent = nullptr)` |
