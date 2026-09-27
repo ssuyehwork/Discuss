@@ -165,6 +165,9 @@ void ContentPanel::initUi() {
     m_gridScrollArea->setFrameShape(QFrame::NoFrame);
     m_gridScrollArea->setWidgetResizable(true);
     m_gridScrollArea->setWidget(m_gridContainerWidget);
+    if (m_gridScrollArea->verticalScrollBar()) {
+        m_gridScrollArea->verticalScrollBar()->setSingleStep(32);
+    }
 
     m_listScrollArea = new QScrollArea(this);
     m_listScrollArea->setFrameShape(QFrame::NoFrame);
