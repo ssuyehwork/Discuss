@@ -930,6 +930,14 @@ void ContentPanel::setActivePane(bool active) {
     if (m_splitManager) m_splitManager->setActivePane(active);
 }
 
+void ContentPanel::updateDragOverlay(const QPoint& pos) {
+    if (m_splitManager) m_splitManager->updateDragOverlay(pos);
+}
+
+void ContentPanel::hideDragOverlay() {
+    if (m_splitManager) m_splitManager->hideDragOverlay();
+}
+
 void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
     if (m_splitManager) m_splitManager->splitPane(orientation, secondaryPath);
 }
@@ -944,50 +952,54 @@ void ContentPanel::wheelEvent(QWheelEvent* event) {
 }
 
 void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-quarkmeta-tab") || event->mimeData()->hasUrls())) {
+    if (event->mimeData()->hasUrls() || event->mimeData()->hasText() ||
+        event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") ||
+        event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
         event->acceptProposedAction();
-    } else {
-        QFrame::dragEnterEvent(event);
     }
 }
 
 void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
-    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-quarkmeta-tab") || event->mimeData()->hasUrls())) {
-        if (m_splitManager) m_splitManager->updateDragOverlay(event->position().toPoint());
-        event->acceptProposedAction();
+    if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") ||
+        event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        updateDragOverlay(event->position().toPoint());
     } else {
-        QFrame::dragMoveEvent(event);
+        hideDragOverlay();
     }
+    event->acceptProposedAction();
 }
 
 void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
-    if (m_splitManager) m_splitManager->hideDragOverlay();
-    QFrame::dragLeaveEvent(event);
+    Q_UNUSED(event);
+    hideDragOverlay();
 }
 
 void ContentPanel::dropEvent(QDropEvent* event) {
-    if (m_splitManager) m_splitManager->hideDragOverlay();
-    if (event->mimeData()) {
+    QPoint pos = event->position().toPoint();
+    hideDragOverlay();
+
+    if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") ||
+        event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        int w = width();
+        int h = height();
+
         QString targetUrl;
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-tab")) {
-            targetUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-tab"));
-        } else if (event->mimeData()->hasUrls() && !event->mimeData()->urls().isEmpty()) {
-            targetUrl = event->mimeData()->urls().first().toLocalFile();
+        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+            targetUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
+        } else if (event->mimeData()->hasText()) {
+            targetUrl = event->mimeData()->text();
         }
-        if (!targetUrl.isEmpty()) {
-            QPoint pos = event->position().toPoint();
-            int w = width();
-            int h = height();
-            if (pos.x() > w * 0.7) {
-                splitPane(Qt::Horizontal, targetUrl);
-                event->acceptProposedAction();
-                return;
-            } else if (pos.y() > h * 0.7) {
-                splitPane(Qt::Vertical, targetUrl);
-                event->acceptProposedAction();
-                return;
-            }
+
+        if (pos.x() > w * 0.75 || pos.x() < w * 0.25) {
+            splitPane(Qt::Horizontal, targetUrl);
+            event->acceptProposedAction();
+        } else if (pos.y() > h * 0.75 || pos.y() < h * 0.25) {
+            splitPane(Qt::Vertical, targetUrl);
+            event->acceptProposedAction();
+        } else {
+            event->acceptProposedAction();
         }
+        return;
     }
     QFrame::dropEvent(event);
 }

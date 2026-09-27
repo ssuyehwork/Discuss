@@ -84,6 +84,8 @@ public:
     bool isSecondaryPane() const;
     void setIsSecondaryPane(bool secondary);
     void setActivePane(bool active);
+    void updateDragOverlay(const QPoint& pos);
+    void hideDragOverlay();
     bool isContextMenuActive() const { return m_isContextMenuActive; }
     QString getCurrentCategoryType() const { return m_currentCategoryType; }
     int currentLoadRequestId() const { return m_loadRequestId.load(); }
