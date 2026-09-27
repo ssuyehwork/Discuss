@@ -151,11 +151,6 @@ void ContentPanel::initUi() {
 
     m_viewStack = new QStackedWidget(this);
     m_viewStack->setFrameShape(QFrame::NoFrame);
-
-    m_gridSplitter = new QSplitter(Qt::Vertical, this);
-    m_gridSplitter->setChildrenCollapsible(false);
-    m_gridSplitter->setHandleWidth(4);
-
     initListView();
     initGridView();
     m_columnView = new ColumnViewWidget(this, this);
@@ -166,32 +161,37 @@ void ContentPanel::initUi() {
         }
         restoreSelections();
     });
+    m_gridScrollArea = new QScrollArea(this);
+    m_gridScrollArea->setFrameShape(QFrame::NoFrame);
+    m_gridScrollArea->setWidgetResizable(true);
+    m_gridScrollArea->setWidget(m_gridContainerWidget);
 
     m_listScrollArea = new QScrollArea(this);
     m_listScrollArea->setFrameShape(QFrame::NoFrame);
     m_listScrollArea->setWidgetResizable(true);
     m_listScrollArea->setWidget(m_listContainerWidget);
 
-    m_viewStack->addWidget(m_gridSplitter);
+    m_viewStack->addWidget(m_gridScrollArea);
     m_viewStack->addWidget(m_listScrollArea);
     m_viewStack->addWidget(m_columnView);
-    m_viewStack->setCurrentWidget(m_gridSplitter);
+    m_viewStack->setCurrentWidget(m_gridScrollArea);
 
     m_mainLayout->addWidget(m_viewStack, 1);
 }
 
 void ContentPanel::initGridView() {
-    // 1. 文件夹分栏 Widget
-    m_gridFolderWidget = new QWidget(this);
-    auto* folderLayout = new QVBoxLayout(m_gridFolderWidget);
-    folderLayout->setContentsMargins(0, 0, 0, 0);
-    folderLayout->setSpacing(0);
+    m_gridContainerWidget = new QWidget(this);
+    auto* layout = new QVBoxLayout(m_gridContainerWidget);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
 
-    m_gridFolderHeader = new FolderSectionHeaderBar(m_gridFolderWidget);
+    // 1. 文件夹折叠标题栏
+    m_gridFolderHeader = new FolderSectionHeaderBar(m_gridContainerWidget);
     m_gridFolderHeader->hide();
-    folderLayout->addWidget(m_gridFolderHeader);
+    layout->addWidget(m_gridFolderHeader);
 
-    m_folderGridView = new DropJustifiedView(m_gridFolderWidget);
+    // 2. 文件夹专用网格视图
+    m_folderGridView = new DropJustifiedView(m_gridContainerWidget);
     m_folderGridView->setFrameShape(QFrame::NoFrame);
     m_folderGridView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_folderGridView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -213,7 +213,7 @@ void ContentPanel::initGridView() {
     m_folderGridView->installEventFilter(this);
     m_folderGridView->viewport()->installEventFilter(this);
     m_folderGridView->hide();
-    folderLayout->addWidget(m_folderGridView, 1);
+    layout->addWidget(m_folderGridView);
 
     connect(m_gridFolderHeader, &FolderSectionHeaderBar::collapseToggled, this, [this](bool collapsed) {
         if (m_folderGridView && m_gridFolderHeader->count() > 0) {
@@ -221,17 +221,13 @@ void ContentPanel::initGridView() {
         }
     });
 
-    // 2. 文件分栏 Widget
-    m_gridFileWidget = new QWidget(this);
-    auto* fileLayout = new QVBoxLayout(m_gridFileWidget);
-    fileLayout->setContentsMargins(0, 0, 0, 0);
-    fileLayout->setSpacing(0);
-
-    m_gridFileHeader = new FileSectionHeaderBar(m_gridFileWidget);
+    // 3. 文件分界标题栏
+    m_gridFileHeader = new FileSectionHeaderBar(m_gridContainerWidget);
     m_gridFileHeader->hide();
-    fileLayout->addWidget(m_gridFileHeader);
+    layout->addWidget(m_gridFileHeader);
 
-    m_gridView = new DropJustifiedView(m_gridFileWidget);
+    // 4. 普通文件网格视图
+    m_gridView = new DropJustifiedView(m_gridContainerWidget);
     m_gridView->setFrameShape(QFrame::NoFrame);
     m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -254,13 +250,19 @@ void ContentPanel::initGridView() {
 
     m_gridView->installEventFilter(this);
     m_gridView->viewport()->installEventFilter(this);
-    fileLayout->addWidget(m_gridView, 1);
+    layout->addWidget(m_gridView, 1);
 
-    if (m_gridSplitter) {
-        m_gridSplitter->addWidget(m_gridFolderWidget);
-        m_gridSplitter->addWidget(m_gridFileWidget);
-        m_gridSplitter->setStretchFactor(0, 1);
-        m_gridSplitter->setStretchFactor(1, 2);
+    if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
+        connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int height) {
+            if (!m_folderGridView || !m_folderProxyModel) return;
+            if (m_folderProxyModel->rowCount() > 0 && height > 0) {
+                m_folderGridView->setMinimumHeight(height);
+                m_folderGridView->setMaximumHeight(height);
+            } else {
+                m_folderGridView->setMinimumHeight(0);
+                m_folderGridView->setMaximumHeight(QWIDGETSIZE_MAX);
+            }
+        });
     }
 
     connect(m_folderGridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
@@ -284,9 +286,6 @@ void ContentPanel::initGridView() {
         int folderCount = m_folderProxyModel->rowCount();
         int fileCount = m_fileProxyModel->rowCount();
 
-        if (m_gridFolderWidget) {
-            m_gridFolderWidget->setVisible(folderCount > 0);
-        }
         if (m_gridFolderHeader) {
             m_gridFolderHeader->setCount(folderCount);
             m_gridFolderHeader->setVisible(folderCount > 0);
@@ -294,9 +293,21 @@ void ContentPanel::initGridView() {
         if (m_folderGridView) {
             if (folderCount == 0) {
                 m_folderGridView->hide();
+                m_folderGridView->setMinimumHeight(0);
+                m_folderGridView->setMaximumHeight(QWIDGETSIZE_MAX);
             } else {
                 bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
                 m_folderGridView->setVisible(!collapsed);
+                if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
+                    int h = fjv->totalHeight();
+                    if (h > 0) {
+                        m_folderGridView->setMinimumHeight(h);
+                        m_folderGridView->setMaximumHeight(h);
+                    } else {
+                        m_folderGridView->setMinimumHeight(0);
+                        m_folderGridView->setMaximumHeight(QWIDGETSIZE_MAX);
+                    }
+                }
             }
         }
         if (m_gridFileHeader) {
@@ -641,7 +652,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
         if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
         auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView);
         if (fjv) fjv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
-        m_viewStack->setCurrentWidget(m_gridSplitter ? static_cast<QWidget*>(m_gridSplitter) : static_cast<QWidget*>(m_gridView));
+        m_viewStack->setCurrentWidget(m_gridScrollArea ? static_cast<QWidget*>(m_gridScrollArea) : static_cast<QWidget*>(m_gridView));
     }
 
     if (oldMode == ColumnView && mode != ColumnView) {
@@ -673,7 +684,7 @@ void ContentPanel::setZoomLevel(int level) {
 }
 
 void ContentPanel::updateGridSize() {
-    if (m_viewStack->currentWidget() == m_gridSplitter) {
+    if (m_viewStack->currentWidget() == m_gridScrollArea) {
         if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
             jv->setTargetRowHeight(m_zoomLevel);
         }
@@ -986,7 +997,7 @@ void ContentPanel::restoreActiveView() {
     if (m_currentViewMode == ColumnView) {
         m_viewStack->setCurrentWidget(m_columnView);
     } else {
-        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? (m_listScrollArea ? static_cast<QWidget*>(m_listScrollArea) : static_cast<QWidget*>(m_treeView)) : (m_gridSplitter ? static_cast<QWidget*>(m_gridSplitter) : static_cast<QWidget*>(m_gridView)));
+        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? (m_listScrollArea ? static_cast<QWidget*>(m_listScrollArea) : static_cast<QWidget*>(m_treeView)) : (m_gridScrollArea ? static_cast<QWidget*>(m_gridScrollArea) : static_cast<QWidget*>(m_gridView)));
     }
 }
 
