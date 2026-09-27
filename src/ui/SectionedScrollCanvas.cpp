@@ -45,6 +45,7 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
         m_panel->installEventFilter(eventFilter);
     }
 
+
     setupConnections();
 
     m_scrollThumbTimer = new QTimer(this);
@@ -324,6 +325,10 @@ QModelIndexList SectionedScrollCanvas::getSelectedIndexes() const {
 
 void SectionedScrollCanvas::refreshVisibleThumbnails(ItemModelBase* model) {
     m_panel->refreshVisibleThumbnails(model, viewport());
+}
+
+bool SectionedScrollCanvas::eventFilter(QObject* obj, QEvent* event) {
+    return QScrollArea::eventFilter(obj, event);
 }
 
 void SectionedScrollCanvas::resizeEvent(QResizeEvent* event) {

@@ -179,7 +179,9 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_paneScrollArea->installEventFilter(this);
     m_panel->installEventFilter(this);
     m_folderListView->installEventFilter(this);
+    if (m_folderListView->viewport()) m_folderListView->viewport()->installEventFilter(this);
     m_listView->installEventFilter(this);
+    if (m_listView->viewport()) m_listView->viewport()->installEventFilter(this);
 
     if (m_contentPanel) {
         m_folderListView->installEventFilter(m_contentPanel);
@@ -300,6 +302,26 @@ void ColumnViewPane::paintEvent(QPaintEvent* event) {
 }
 
 bool ColumnViewPane::eventFilter(QObject* obj, QEvent* event) {
+    if (event && event->type() == QEvent::Wheel) {
+        auto* wEvent = static_cast<QWheelEvent*>(event);
+        if (!(wEvent->modifiers() & Qt::ControlModifier)) {
+            if (m_paneScrollArea && m_paneScrollArea->verticalScrollBar() && m_paneScrollArea->verticalScrollBar()->isVisible()) {
+                int delta = wEvent->angleDelta().y();
+                if (delta == 0) delta = wEvent->pixelDelta().y();
+                if (delta != 0) {
+                    QScrollBar* sb = m_paneScrollArea->verticalScrollBar();
+                    int step = sb->singleStep();
+                    if (step <= 0) step = 20;
+                    int scrollAmount = (delta / 120.0) * step * 3;
+                    if (scrollAmount == 0) scrollAmount = (delta > 0 ? -step : step);
+                    else scrollAmount = -scrollAmount;
+                    sb->setValue(sb->value() + scrollAmount);
+                    return true;
+                }
+            }
+        }
+    }
+
     if (event && event->type() == QEvent::MouseButtonPress) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent->button() == Qt::LeftButton && (obj == m_paneScrollArea || obj == m_panel)) {
