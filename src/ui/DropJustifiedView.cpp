@@ -8,7 +8,34 @@ namespace QuarkMeta {
 
 DropJustifiedView::DropJustifiedView(QWidget* parent) : JustifiedView(parent) {
     setDragEnabled(true);
-    DragDropEventFilter::install(this);
+    setAcceptDrops(true);
+}
+
+void DropJustifiedView::dragEnterEvent(QDragEnterEvent* event) {
+    if (!ViewDragDropHelper::handleDragEnter(this, event)) {
+        JustifiedView::dragEnterEvent(event);
+    }
+}
+
+void DropJustifiedView::dragMoveEvent(QDragMoveEvent* event) {
+    if (!ViewDragDropHelper::handleDragMove(this, event)) {
+        JustifiedView::dragMoveEvent(event);
+    }
+}
+
+void DropJustifiedView::dragLeaveEvent(QDragLeaveEvent* event) {
+    ViewDragDropHelper::clearHover(this);
+    JustifiedView::dragLeaveEvent(event);
+}
+
+void DropJustifiedView::dropEvent(QDropEvent* event) {
+    QStringList paths;
+    QModelIndex targetIdx;
+    if (ViewDragDropHelper::handleDrop(this, event, paths, targetIdx)) {
+        emit pathsDropped(paths, targetIdx);
+    } else {
+        JustifiedView::dropEvent(event);
+    }
 }
 
 void DropJustifiedView::startDrag(Qt::DropActions supportedActions) {

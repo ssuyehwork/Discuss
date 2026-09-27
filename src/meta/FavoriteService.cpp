@@ -20,21 +20,12 @@ bool FavoriteService::isFavorite(const QString& path) const {
     return FavoriteDao::containsPath(cleanPath);
 }
 
-bool FavoriteService::addFavorite(const QString& path, int parentId) {
+bool FavoriteService::addFavorite(const QString& path) {
     QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(path));
-    if (cleanPath.isEmpty()) return false;
+    if (cleanPath.isEmpty() || FavoriteDao::containsPath(cleanPath)) return false;
 
     QFileInfo fi(cleanPath);
     if (!fi.exists()) return false;
-
-    bool existsAlready = FavoriteDao::containsPath(cleanPath);
-    if (existsAlready) {
-        bool ok = FavoriteDao::addFavorite(cleanPath, parentId, "folder_filled", "#888888");
-        if (ok) {
-            emit favoritesReloaded();
-        }
-        return ok;
-    }
 
     bool isDir = fi.isDir();
     QString finalColorHex = "#888888";
@@ -46,25 +37,9 @@ bool FavoriteService::addFavorite(const QString& path, int parentId) {
         }
     }
 
-    bool ok = FavoriteDao::addFavorite(cleanPath, parentId, "folder_filled", finalColorHex);
+    bool ok = FavoriteDao::addFavorite(cleanPath, "folder_filled", finalColorHex);
     if (ok) {
         emit favoriteChanged(cleanPath, true);
-    }
-    return ok;
-}
-
-int FavoriteService::addVirtualCategory(const QString& name, int parentId) {
-    int newId = FavoriteDao::addVirtualCategory(name, parentId, "folder_filled", "#888888");
-    if (newId > 0) {
-        emit favoritesReloaded();
-    }
-    return newId;
-}
-
-bool FavoriteService::removeFavoriteById(int id) {
-    bool ok = FavoriteDao::removeFavoriteById(id);
-    if (ok) {
-        emit favoritesReloaded();
     }
     return ok;
 }

@@ -10,12 +10,65 @@
 #include "models/FilterProxyModel.h"
 #include "DropListView.h"
 #include "FolderSectionWidget.h"
-#include "ColumnViewPane.h"
 
 namespace QuarkMeta {
 
 class ContentPanel;
-class DualSectionPanel;
+
+class ColumnViewPane : public QWidget {
+    Q_OBJECT
+public:
+    explicit ColumnViewPane(const QString& path, ContentPanel* contentPanel = nullptr, QWidget* parent = nullptr);
+    ~ColumnViewPane() override = default;
+
+    QString currentPath() const { return m_path; }
+    void loadDirectory();
+
+    void selectItemByPath(const QString& targetPath);
+    void setPendingSelectPaths(const QSet<QString>& paths);
+    void clearSelection();
+    void setFilterState(const FilterState& state);
+    void applySort(int sortType, Qt::SortOrder sortOrder);
+
+    DropListView* listView() const { return m_listView; }
+    DropListView* folderListView() const { return m_folderListView; }
+    FilterProxyModel* proxyModel() const { return m_proxyModel; }
+    FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
+    FilterProxyModel* fileProxyModel() const { return m_fileProxyModel; }
+    DiskItemModel* model() const { return m_model; }
+    FolderSectionHeaderBar* folderHeader() const { return m_folderHeader; }
+
+signals:
+    void folderSelected(const QString& folderPath, int paneIndex);
+    void fileSelected(const QString& filePath, int paneIndex);
+    void selectionChanged();
+    void recordsLoaded(const std::vector<ItemRecord>& records);
+    void blankSpaceDoubleClicked(int paneIndex);
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
+private slots:
+    void tryPendingSelection();
+
+private:
+    QString m_path;
+    QString m_pendingSelectPath;
+    QSet<QString> m_pendingSelectPaths;
+    ContentPanel* m_contentPanel = nullptr;
+    DiskItemModel* m_model = nullptr;
+    FilterProxyModel* m_proxyModel = nullptr;
+    FilterProxyModel* m_folderProxyModel = nullptr;
+    FilterProxyModel* m_fileProxyModel = nullptr;
+    FolderSectionHeaderBar* m_folderHeader = nullptr;
+    DropListView* m_folderListView = nullptr;
+    FileSectionHeaderBar* m_fileHeader = nullptr;
+    QScrollArea* m_paneScrollArea = nullptr;
+    QWidget* m_canvasWidget = nullptr;
+    DropListView* m_listView = nullptr;
+    QLabel* m_emptyFilterHintLabel = nullptr;
+};
 
 class ColumnViewWidget : public QScrollArea {
     Q_OBJECT
@@ -28,9 +81,6 @@ public:
 
     ColumnViewPane* activePane() const;
     ColumnViewPane* rightmostPane() const;
-    void focusPane(int paneIndex);
-    void activatePaneFromBlankClick(int paneIndex);
-    void setActivePaneIndex(int newIndex);
     bool containsPath(const QString& path) const;
     void refreshActiveColumn();
     void refreshAllColumns();

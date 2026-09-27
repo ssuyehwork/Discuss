@@ -18,8 +18,7 @@ public:
      */
     static std::vector<ItemRecord> scanDirectory(const QString& path,
                                                   bool recursive,
-                                                  const std::function<bool()>& shouldContinue = std::function<bool()>(),
-                                                  int maxDepth = 16);
+                                                  const std::function<bool()>& shouldContinue);
 
     static std::vector<ItemRecord> scanDirectory(const QString& path,
                                                   bool recursive,

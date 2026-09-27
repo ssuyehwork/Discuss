@@ -45,24 +45,6 @@ void DiskItemModel::incrementGeneration() {
 
 DiskItemModel::DiskItemModel(QObject* parent) : ItemModelBase(parent) {
     m_iconCache.setMaxCost(500);
-    m_thumbBatchTimer = new QTimer(this);
-    m_thumbBatchTimer->setSingleShot(true);
-    m_thumbBatchTimer->setInterval(35);
-    connect(m_thumbBatchTimer, &QTimer::timeout, this, &DiskItemModel::flushPendingThumbDataChanged);
-}
-
-void DiskItemModel::flushPendingThumbDataChanged() {
-    if (m_pendingThumbRows.isEmpty()) return;
-
-    QSet<int> rowsToEmit = m_pendingThumbRows;
-    m_pendingThumbRows.clear();
-
-    for (int r : rowsToEmit) {
-        if (r >= 0 && r < static_cast<int>(m_allRecords.size())) {
-            emit dataChanged(index(r, 0), index(r, columnCount() - 1),
-                              {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
-        }
-    }
 }
 
 DiskItemModel::~DiskItemModel() {}
@@ -93,8 +75,6 @@ QVariant DiskItemModel::headerData(int section, Qt::Orientation orientation, int
 }
 
 void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
-    if (m_thumbBatchTimer) m_thumbBatchTimer->stop();
-    m_pendingThumbRows.clear();
     incrementGeneration();
     beginResetModel();
     m_allRecords = records;
@@ -223,8 +203,6 @@ void DiskItemModel::preloadDimensionsAsync() {
 }
 
 void DiskItemModel::clear() {
-    if (m_thumbBatchTimer) m_thumbBatchTimer->stop();
-    m_pendingThumbRows.clear();
     incrementGeneration();
     beginResetModel();
     m_allRecords.clear();
@@ -492,33 +470,16 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
 
         QString ext = rec.suffix.toLower();
         bool isGraphic = UiHelper::isGraphicsFile(ext);
-        if (rec.isDir || !isGraphic) {
-            if (!rec.isDir) {
-                qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "is NOT a graphics file (ext:" << ext << "), skipping thumbnail load.";
-            }
-            continue;
-        }
+        if (rec.isDir || !isGraphic) continue;
 
         QString path = rec.path;
-        if (m_iconCache.contains(path)) {
-            qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "already in m_iconCache, skipping.";
-            continue;
-        }
-        if (m_requestedPaths.contains(path)) {
-            qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "already in m_requestedPaths, skipping.";
-            continue;
-        }
+        if (m_iconCache.contains(path) || m_requestedPaths.contains(path)) continue;
 
         m_requestedPaths.insert(path);
         pathsToLoad << path;
     }
 
-    if (pathsToLoad.isEmpty()) {
-        qDebug() << "[THUMB_TRACE] loadThumbnailsForRows: All requested rows already cached or in-flight.";
-        return;
-    }
-
-    qDebug() << "[THUMB_TRACE] Dispatching batch async thumbnail load for" << pathsToLoad.size() << "paths:" << pathsToLoad;
+    if (pathsToLoad.isEmpty()) return;
 
     QPointer<DiskItemModel> weakThis(this);
     ThumbnailPipelineService::instance().loadBatchAsync(pathsToLoad, 230, [weakThis, thisGen](const QString& path, const QPixmap& pixmap) {
@@ -534,18 +495,9 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
             auto it = weakThis->m_pathToIndex.find(path);
             if (it != weakThis->m_pathToIndex.end()) {
                 int rIdx = it->second;
-                QMetaObject::invokeMethod(weakThis, [weakThis, path, rIdx]() {
-                    if (!weakThis) return;
-                    if (rIdx >= 0 && rIdx < static_cast<int>(weakThis->m_allRecords.size())) {
-                        if (weakThis->m_allRecords[rIdx].path == path) {
-                            weakThis->m_pendingThumbRows.insert(rIdx);
-                            if (weakThis->m_thumbBatchTimer && !weakThis->m_thumbBatchTimer->isActive()) {
-                                weakThis->m_thumbBatchTimer->start();
-                            }
-                            emit weakThis->thumbnailLoaded(rIdx);
-                        }
-                    }
-                }, Qt::QueuedConnection);
+                emit weakThis->dataChanged(weakThis->index(rIdx, 0), weakThis->index(rIdx, 0), 
+                                          {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+                emit weakThis->thumbnailLoaded(rIdx);
             }
         }
     });
@@ -655,7 +607,6 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == DiskTrashIdRole) {
         return record.diskTrashId;
     } else if (role == HasThumbnailRole) {
-        if (record.isDir || record.thumbStatus == 1) return false;
         static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
         QString ext = record.suffix.toLower();
         if (iconOnlyExts.contains(ext)) return false;

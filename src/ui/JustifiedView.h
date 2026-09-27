@@ -65,7 +65,6 @@ private:
         QRect rect;
         int index;
     };
-    std::vector<ItemGeometry>::const_iterator geometryLowerBound(int y) const;
     std::vector<ItemGeometry> m_geometries;
     int m_totalHeight = 0;
     int m_targetRowHeight = 128;

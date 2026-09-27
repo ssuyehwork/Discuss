@@ -1,7 +1,5 @@
 #include "AppShortcutController.h"
 #include "SearchController.h"
-#include "TitleBarWidget.h"
-#include "TabBarWidget.h"
 #include "../core/NavigationService.h"
 #include "../core/UndoManager.h"
 #include <QApplication>
@@ -140,72 +138,12 @@ void AppShortcutController::initShortcuts() {
         }
     });
 
-    // 6. Ctrl+W: 优先关闭当前活动标签页 (仅剩 1 个标签页时退出窗口)
+    // 6. Ctrl+W: 全局关闭/响应式退出主窗口
     QShortcut* scClose = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), m_window);
     scClose->setContext(Qt::WindowShortcut);
     connect(scClose, &QShortcut::activated, this, [this]() {
         if (m_window) {
-            if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
-                if (titleBar->tabBar()) {
-                    if (titleBar->tabBar()->tabCount() > 1) {
-                        titleBar->tabBar()->closeTab(titleBar->tabBar()->currentIndex());
-                        return;
-                    }
-                }
-            }
             m_window->close();
-        }
-    });
-
-    // 6b. Ctrl+Tab / Ctrl+Shift+Tab: 标签页循环顺序切换
-    QShortcut* scNextTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Tab), m_window);
-    scNextTab->setContext(Qt::WindowShortcut);
-    connect(scNextTab, &QShortcut::activated, this, [this]() {
-        if (m_window) {
-            if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
-                if (titleBar->tabBar()) {
-                    titleBar->tabBar()->selectNextTab();
-                }
-            }
-        }
-    });
-
-    QShortcut* scPrevTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Backtab), m_window);
-    scPrevTab->setContext(Qt::WindowShortcut);
-    connect(scPrevTab, &QShortcut::activated, this, [this]() {
-        if (m_window) {
-            if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
-                if (titleBar->tabBar()) {
-                    titleBar->tabBar()->selectPreviousTab();
-                }
-            }
-        }
-    });
-
-
-    // 7. Ctrl+T: 新建标签页
-    QShortcut* scNewTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_T), m_window);
-    scNewTab->setContext(Qt::WindowShortcut);
-    connect(scNewTab, &QShortcut::activated, this, [this]() {
-        if (m_window) {
-            if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
-                if (titleBar->tabBar()) {
-                    titleBar->tabBar()->addTab("此电脑", "computer://", true);
-                }
-            }
-        }
-    });
-
-    // 8. Ctrl+Shift+T: 恢复关闭的标签页
-    QShortcut* scRestoreTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), m_window);
-    scRestoreTab->setContext(Qt::WindowShortcut);
-    connect(scRestoreTab, &QShortcut::activated, this, [this]() {
-        if (m_window) {
-            if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
-                if (titleBar->tabBar()) {
-                    titleBar->tabBar()->restoreLastClosedTab();
-                }
-            }
         }
     });
 }

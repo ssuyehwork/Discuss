@@ -2,13 +2,13 @@
 #include "ColorPaletteEngine.h"
 #include "DiskMediaExtractor.h"
 #include <QImageReader>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QCoreApplication>
 #include <QtConcurrent>
 #include <QMutexLocker>
-#include <QDebug>
 
 namespace QuarkMeta {
 
@@ -22,6 +22,15 @@ ThumbnailPipelineService::ThumbnailPipelineService(QObject* parent)
     m_memoryCache.setMaxCost(kMaxMemoryCacheCount);
 }
 
+QString ThumbnailPipelineService::getDiskCachePath(const QString& filePath, int targetSize) {
+    QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
+    QByteArray hash = QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex();
+    
+    QString cacheDir = QDir::temp().filePath("QuarkMeta_Thumbnails");
+    QDir().mkpath(cacheDir);
+
+    return QDir(cacheDir).filePath(QString("%1_%2.png").arg(QString(hash.left(32))).arg(targetSize));
+}
 
 QPixmap ThumbnailPipelineService::getFromMemoryCache(const QString& filePath, int targetSize) const {
     QString key = QString("%1@%2").arg(QDir::toNativeSeparators(filePath).toLower()).arg(targetSize);
@@ -73,20 +82,24 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
 
     if (pathsToFetch.isEmpty()) return;
 
-    qDebug() << "[THUMB_TRACE] loadBatchAsync pathsToFetch size:" << pathsToFetch.size();
     (void)QtConcurrent::run([this, pathsToFetch, targetSize, taskGen, onSingleLoaded]() {
         for (const QString& path : pathsToFetch) {
             if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
-                qDebug() << "[THUMB_TRACE] Generation mismatch, task canceled for:" << path;
                 return;
             }
 
-            QImage finalImg = DiskMediaExtractor::getCapsuleThumbnailReadOnly(path);
+            QString diskPath = getDiskCachePath(path, targetSize);
+            QImage finalImg;
+
+            if (QFile::exists(diskPath)) {
+                finalImg.load(diskPath);
+            }
+
             if (finalImg.isNull()) {
-                qDebug() << "[THUMB_TRACE] ReadOnly cache miss in pipeline, calling decodeImageToThumbnail for:" << path;
                 finalImg = decodeImageToThumbnail(path, targetSize);
-            } else {
-                qDebug() << "[THUMB_TRACE] ReadOnly cache hit in pipeline for:" << path;
+                if (!finalImg.isNull()) {
+                    finalImg.save(diskPath, "PNG");
+                }
             }
 
             if (!finalImg.isNull()) {

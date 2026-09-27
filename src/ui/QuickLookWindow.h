@@ -49,7 +49,6 @@ private:
     
     QString detectEncoding(const QByteArray& data);
     bool isBinary(const QByteArray& data);
-    static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize);
 
     QuickLookGraphicsView* m_graphicsView = nullptr;
     QPlainTextEdit* m_textEdit = nullptr;
