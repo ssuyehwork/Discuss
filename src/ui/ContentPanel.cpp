@@ -254,8 +254,13 @@ void ContentPanel::initGridView() {
 
     if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
         connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int height) {
-            if (m_folderGridView && m_folderProxyModel && m_folderProxyModel->rowCount() > 0) {
-                m_folderGridView->setFixedHeight(height);
+            if (!m_folderGridView || !m_folderProxyModel) return;
+            if (m_folderProxyModel->rowCount() > 0 && height > 0) {
+                m_folderGridView->setMinimumHeight(height);
+                m_folderGridView->setMaximumHeight(height);
+            } else {
+                m_folderGridView->setMinimumHeight(0);
+                m_folderGridView->setMaximumHeight(QWIDGETSIZE_MAX);
             }
         });
     }
@@ -288,11 +293,20 @@ void ContentPanel::initGridView() {
         if (m_folderGridView) {
             if (folderCount == 0) {
                 m_folderGridView->hide();
+                m_folderGridView->setMinimumHeight(0);
+                m_folderGridView->setMaximumHeight(QWIDGETSIZE_MAX);
             } else {
                 bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
                 m_folderGridView->setVisible(!collapsed);
                 if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
-                    m_folderGridView->setFixedHeight(fjv->totalHeight());
+                    int h = fjv->totalHeight();
+                    if (h > 0) {
+                        m_folderGridView->setMinimumHeight(h);
+                        m_folderGridView->setMaximumHeight(h);
+                    } else {
+                        m_folderGridView->setMinimumHeight(0);
+                        m_folderGridView->setMaximumHeight(QWIDGETSIZE_MAX);
+                    }
                 }
             }
         }
