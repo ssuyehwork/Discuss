@@ -24,6 +24,7 @@ class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
 class ContentStatsWorker;
+class ContentPaneSplitManager;
 class FolderSectionHeaderBar;
 class FileSectionHeaderBar;
 
@@ -125,6 +126,9 @@ public:
     ContentDataLoader* dataLoader() const { return m_dataLoader; }
     ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
     ContentStatsWorker* statsWorker() const { return m_statsWorker; }
+    ContentPaneSplitManager* splitManager() const { return m_splitManager; }
+
+    void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString());
 
     // 5. 业务操作分发
     void performCopy(bool cutMode);
@@ -185,6 +189,10 @@ public slots:
 
 protected:
     void wheelEvent(QWheelEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     void initUi();
@@ -242,6 +250,7 @@ private:
     ContentDataLoader* m_dataLoader = nullptr;
     ContentFileOpsHandler* m_fileOpsHandler = nullptr;
     ContentStatsWorker* m_statsWorker = nullptr;
+    ContentPaneSplitManager* m_splitManager = nullptr;
 };
 
 } // namespace QuarkMeta

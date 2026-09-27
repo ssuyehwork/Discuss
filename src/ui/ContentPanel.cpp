@@ -9,7 +9,13 @@
 #include "controllers/ContentSortController.h"
 #include "controllers/ContentDataLoader.h"
 #include "controllers/ContentFileOpsHandler.h"
+#include "controllers/ContentPaneSplitManager.h"
 #include "workers/ContentStatsWorker.h"
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
 #include "DropListView.h"
@@ -50,7 +56,10 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     setContextMenuPolicy(Qt::CustomContextMenu);
     setObjectName("EditorContainer");
     setAttribute(Qt::WA_StyledBackground, true);
+    setAcceptDrops(true);
     setMinimumWidth(230);
+
+    m_splitManager = new ContentPaneSplitManager(this);
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -909,6 +918,10 @@ ContentPanel::DataSourceType ContentPanel::dataSourceType() const {
     return (m_currentCategoryType == "path_list" || m_currentCategoryType == "search") ? DataSourceType::PathList : DataSourceType::DiskNav;
 }
 
+void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
+    if (m_splitManager) m_splitManager->splitPane(orientation, secondaryPath);
+}
+
 void ContentPanel::wheelEvent(QWheelEvent* event) {
     if (event->modifiers() & Qt::ControlModifier) {
         setZoomLevel(m_zoomLevel + (event->angleDelta().y() > 0 ? 8 : -8));
@@ -916,6 +929,55 @@ void ContentPanel::wheelEvent(QWheelEvent* event) {
         return;
     }
     QFrame::wheelEvent(event);
+}
+
+void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-quarkmeta-tab") || event->mimeData()->hasUrls())) {
+        event->acceptProposedAction();
+    } else {
+        QFrame::dragEnterEvent(event);
+    }
+}
+
+void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
+    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-quarkmeta-tab") || event->mimeData()->hasUrls())) {
+        if (m_splitManager) m_splitManager->updateDragOverlay(event->pos());
+        event->acceptProposedAction();
+    } else {
+        QFrame::dragMoveEvent(event);
+    }
+}
+
+void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
+    if (m_splitManager) m_splitManager->hideDragOverlay();
+    QFrame::dragLeaveEvent(event);
+}
+
+void ContentPanel::dropEvent(QDropEvent* event) {
+    if (m_splitManager) m_splitManager->hideDragOverlay();
+    if (event->mimeData()) {
+        QString targetUrl;
+        if (event->mimeData()->hasFormat("application/x-quarkmeta-tab")) {
+            targetUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-tab"));
+        } else if (event->mimeData()->hasUrls() && !event->mimeData()->urls().isEmpty()) {
+            targetUrl = event->mimeData()->urls().first().toLocalFile();
+        }
+        if (!targetUrl.isEmpty()) {
+            QPoint pos = event->pos();
+            int w = width();
+            int h = height();
+            if (pos.x() > w * 0.7) {
+                splitPane(Qt::Horizontal, targetUrl);
+                event->acceptProposedAction();
+                return;
+            } else if (pos.y() > h * 0.7) {
+                splitPane(Qt::Vertical, targetUrl);
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+    QFrame::dropEvent(event);
 }
 
 } // namespace QuarkMeta

@@ -58,6 +58,29 @@ void PanelMediator::setupConnections() {
 
     // 0. TitleBar 与各组件的高阶编排及 UI 状态恢复/持久化
     if (titleBar) {
+        if (titleBar && titleBar->tabBar()) {
+            connect(titleBar->tabBar(), &TabBarWidget::tabAboutToChange, this, [this, titleBar, contentPanel](int oldIndex) {
+                ContentPanel* root = contentPanel ? contentPanel->splitManager()->rootPane() : nullptr;
+                if (root && root->splitManager()) {
+                    TabSplitState state = root->splitManager()->exportSplitState();
+                    titleBar->tabBar()->setTabSplitState(oldIndex, state);
+                }
+            });
+
+            connect(titleBar->tabBar(), &TabBarWidget::currentTabChanged, this, [this, titleBar, contentPanel](int index, const QString& url) {
+                Q_UNUSED(url);
+                ContentPanel* root = contentPanel ? contentPanel->splitManager()->rootPane() : nullptr;
+                if (root && root->splitManager() && titleBar->tabBar()) {
+                    TabSplitState state = titleBar->tabBar()->tabSplitState(index);
+                    root->splitManager()->restoreSplitState(state);
+                }
+            });
+
+            connect(titleBar->tabBar(), &TabBarWidget::refreshRequested, this, [contentPanel]() {
+                if (contentPanel) contentPanel->refreshAll();
+            });
+        }
+
         if (layoutManager) {
             connect(titleBar, &TitleBarWidget::layoutMenuRequested, layoutManager, [layoutManager](const QPoint& pos) {
                 layoutManager->showPanelContextMenu(pos);
