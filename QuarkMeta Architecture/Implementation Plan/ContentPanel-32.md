@@ -59,19 +59,19 @@ Update `initUi()`, `updateGridSize()`, and `restoreActiveView()` to use `m_gridS
     m_viewStack->addWidget(m_columnView);
     m_viewStack->setCurrentWidget(m_gridScrollArea);
 =======
-    m_gridSplitter = new QSplitter(Qt::Vertical, this);
-    m_gridSplitter->setChildrenCollapsible(false);
-    m_gridSplitter->setHandleWidth(4);
-
     m_listScrollArea = new QScrollArea(this);
     m_listScrollArea->setFrameShape(QFrame::NoFrame);
     m_listScrollArea->setWidgetResizable(true);
     m_listScrollArea->setWidget(m_listContainerWidget);
 
-    m_viewStack->addWidget(m_gridSplitter);
+    if (m_gridSplitter) {
+        m_viewStack->addWidget(m_gridSplitter);
+    }
     m_viewStack->addWidget(m_listScrollArea);
     m_viewStack->addWidget(m_columnView);
-    m_viewStack->setCurrentWidget(m_gridSplitter);
+    if (m_gridSplitter) {
+        m_viewStack->setCurrentWidget(m_gridSplitter);
+    }
 >>>>>>> REPLACE
 ```
 
@@ -317,12 +317,15 @@ void ContentPanel::initGridView() {
     m_gridView->viewport()->installEventFilter(this);
     fileLayout->addWidget(m_gridView, 1);
 
-    if (m_gridSplitter) {
-        m_gridSplitter->addWidget(m_gridFolderWidget);
-        m_gridSplitter->addWidget(m_gridFileWidget);
-        m_gridSplitter->setStretchFactor(0, 1);
-        m_gridSplitter->setStretchFactor(1, 2);
+    if (!m_gridSplitter) {
+        m_gridSplitter = new QSplitter(Qt::Vertical, this);
+        m_gridSplitter->setChildrenCollapsible(false);
+        m_gridSplitter->setHandleWidth(4);
     }
+    m_gridSplitter->addWidget(m_gridFolderWidget);
+    m_gridSplitter->addWidget(m_gridFileWidget);
+    m_gridSplitter->setStretchFactor(0, 1);
+    m_gridSplitter->setStretchFactor(1, 2);
 
     connect(m_folderGridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
     connect(m_folderGridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
