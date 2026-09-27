@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include <QTreeView>
 #include <QScrollArea>
+#include <QSplitter>
 #include <QSet>
 #include <QModelIndexList>
 #include <atomic>
@@ -224,8 +225,9 @@ private:
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;
 
-    QScrollArea* m_gridScrollArea = nullptr;
-    QWidget* m_gridContainerWidget = nullptr;
+    QSplitter* m_gridSplitter = nullptr;
+    QWidget* m_gridFolderWidget = nullptr;
+    QWidget* m_gridFileWidget = nullptr;
     FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
     DropJustifiedView* m_folderGridView = nullptr;
     FileSectionHeaderBar* m_gridFileHeader = nullptr;
