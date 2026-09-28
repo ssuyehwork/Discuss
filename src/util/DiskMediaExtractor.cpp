@@ -6,8 +6,6 @@
 #include <QDir>
 #include <QFile>
 #include <QCoreApplication>
-#include <QCryptographicHash>
-#include <QDebug>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -58,18 +56,59 @@ void DiskMediaExtractor::flushPendingFailures() {
     }
 }
 
+static bool fetchPhysicalFileId(const QString& filePath, uint32_t& outVol, uint64_t& outFrn) {
+#ifdef Q_OS_WIN
+    std::wstring wPath = QDir::toNativeSeparators(filePath).toStdWString();
+    HANDLE hFile = CreateFileW(wPath.c_str(), FILE_READ_ATTRIBUTES,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                               NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) return false;
+
+    BY_HANDLE_FILE_INFORMATION info;
+    if (GetFileInformationByHandle(hFile, &info)) {
+        outVol = info.dwVolumeSerialNumber;
+        outFrn = (static_cast<uint64_t>(info.nFileIndexHigh) << 32) | info.nFileIndexLow;
+        CloseHandle(hFile);
+        return true;
+    }
+    CloseHandle(hFile);
+    return false;
+#else
+    Q_UNUSED(filePath);
+    Q_UNUSED(outVol);
+    Q_UNUSED(outFrn);
+    return false;
+#endif
+}
+
+QString DiskMediaExtractor::getDiskThumbCachePathByFileId(uint32_t volSerial, uint64_t fileId) {
+    QString volStr = QString("%1").arg(volSerial, 8, 16, QChar('0')).toUpper();
+    QString bucket = QString("%1").arg((fileId >> 8) & 0xFF, 2, 16, QChar('0')).toUpper();
+    QString fileKey = QString("%1.png").arg(fileId, 16, 16, QChar('0')).toUpper();
+
+    QString cacheDir = QCoreApplication::applicationDirPath() + "/.QuarkMeta/disk_thumbs/" + volStr + "/" + bucket;
+    QDir().mkpath(cacheDir);
+
+    return cacheDir + "/" + fileKey;
+}
 
 QString DiskMediaExtractor::getDiskThumbCachePath(const QString& filePath) {
-    QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
-    QString hashStr = QString::fromUtf8(QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex());
-    QString cacheDir = QDir::temp().filePath("QuarkMeta_Thumbnails");
-    return QDir(cacheDir).filePath(QString("%1_230.png").arg(hashStr.left(32)));
+    uint32_t vol = 0;
+    uint64_t frn = 0;
+    if (fetchPhysicalFileId(filePath, vol, frn)) {
+        return getDiskThumbCachePathByFileId(vol, frn);
+    }
+    quint64 h = qHash(QDir::toNativeSeparators(filePath).toLower(), 0);
+    QString bucket = QString("%1").arg((h >> 32) & 0xFF, 2, 16, QChar('0'));
+    QString fileKey = QString("%1.png").arg(h, 16, 16, QChar('0'));
+    QString cacheDir = QCoreApplication::applicationDirPath() + "/.QuarkMeta/disk_thumbs/fallback/" + bucket;
+    QDir().mkpath(cacheDir);
+    return cacheDir + "/" + fileKey;
 }
 
 bool DiskMediaExtractor::saveDiskThumbnail(const QString& filePath, const QImage& img512) {
     if (img512.isNull()) return false;
     QString diskCachePath = getDiskThumbCachePath(filePath);
-    QDir().mkpath(QFileInfo(diskCachePath).absolutePath());
     std::lock_guard<std::mutex> lock(s_thumbFileMutex);
     return img512.save(diskCachePath, "PNG");
 }
@@ -96,17 +135,10 @@ void DiskMediaExtractor::roamThumbnailCache(const QString& oldFilePath, const QS
 
 QImage DiskMediaExtractor::getCapsuleThumbnailReadOnly(const QString& filePath) {
     QString diskCachePath = getDiskThumbCachePath(filePath);
-    bool exists = QFile::exists(diskCachePath);
-    if (exists) {
+    if (QFile::exists(diskCachePath)) {
         QImage img;
-        if (img.load(diskCachePath)) {
-            qDebug() << "[THUMB_TRACE] ReadOnly Cache HIT:" << QFileInfo(filePath).fileName() << "CachePath:" << diskCachePath << "Size:" << img.size();
-            return img;
-        } else {
-            qDebug() << "[THUMB_TRACE] ReadOnly Cache Corrupt/Failed load:" << QFileInfo(filePath).fileName() << "CachePath:" << diskCachePath;
-        }
-    } else {
-        qDebug() << "[THUMB_TRACE] ReadOnly Cache MISS (file does not exist):" << QFileInfo(filePath).fileName() << "ExpectedCachePath:" << diskCachePath;
+        std::lock_guard<std::mutex> lock(s_thumbFileMutex);
+        if (img.load(diskCachePath)) return img;
     }
     return QImage();
 }
@@ -125,36 +157,30 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
     QString parentDir = QDir::toNativeSeparators(fi.absolutePath());
     QString fileName = fi.fileName();
 
-    // 1. 极速缓存命中路径：若磁盘已存在缩略图缓存，免解码零锁瞬间返回
+    // 1. 极速缓存命中路径：若磁盘已存在缩略图缓存，免解码瞬间返回
     if (!res.thumbnail512.isNull()) {
         res.isValid = true;
-        return res;
-    }
 
-    // 2. 失败标记拦截路径：若 .QuarkMeta.json 中被标记 thumb_status == 1，说明此前已提取失败，直接跳过二次解码
-    {
         std::lock_guard<std::mutex> lock(s_jsonSaveMutex);
         QuarkMetaJson jsonCache(parentDir.toStdWString());
         jsonCache.load();
         const auto& cachedItems = jsonCache.items();
         std::wstring wFileName = fileName.toStdWString();
         auto it = cachedItems.find(wFileName);
-        if (it != cachedItems.end() && it->second.thumbStatus == 1) {
-            qDebug() << "[THUMB_TRACE] Intercepted by thumb_status == 1 (Previously Failed/Skipped):" << fileName;
-            return res;
+        if (it != cachedItems.end() && it->second.width > 0 && it->second.height > 0) {
+            res.originalSize = QSize(it->second.width, it->second.height);
         }
+        return res;
     }
 
     if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return res;
 
-    // 3. 解码路径：单次解码同时获取原始分辨率与 512px 缩略图
-    qDebug() << "[THUMB_TRACE] Attempting single pass decode for:" << fileName;
+    // 2. 解码路径：单次解码同时获取原始分辨率与 512px 缩略图
     DecodedMediaResult dec = ImageDecoderFacade::decodeSinglePass(filePath, size, 0, token);
     if (dec.isValid) {
         res.originalSize = dec.originalSize;
         if (res.thumbnail512.isNull() && !dec.thumbnail512.isNull()) {
-            bool saved = saveDiskThumbnail(filePath, dec.thumbnail512);
-            qDebug() << "[THUMB_TRACE] SinglePass Decode Success & Saved to Disk Cache:" << fileName << "Saved:" << saved << "Size:" << dec.thumbnail512.size();
+            saveDiskThumbnail(filePath, dec.thumbnail512);
             res.thumbnail512 = dec.thumbnail512;
         }
         res.isValid = true;
