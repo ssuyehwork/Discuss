@@ -126,6 +126,7 @@ QModelIndex JustifiedView::indexAt(const QPoint& point) const {
     for (; it != m_geometries.end(); ++it) {
         if (it->rect.top() > y) break;
         if (it->rect.contains(point.x(), y)) {
+            if (it->isHeader) return QModelIndex();
             return model()->index(it->index, 0);
         }
     }
@@ -204,6 +205,7 @@ void JustifiedView::setSelection(const QRect& rect, QItemSelectionModel::Selecti
     QRect contentsRect = rect.translated(0, verticalScrollBar()->value());
     QItemSelection selection;
     for (const auto& geo : m_geometries) {
+        if (geo.isHeader) continue;
         if (geo.rect.intersects(contentsRect)) {
             QModelIndex idx = model()->index(geo.index, 0);
             selection.select(idx, idx);
@@ -330,6 +332,15 @@ void JustifiedView::paintEvent(QPaintEvent*) {
     for (auto it = startIt; it != m_geometries.end(); ++it) {
         const auto& geo = *it;
         if (geo.rect.top() > scrollY + vHeight) break;
+
+        if (geo.isHeader) {
+            painter.save();
+            painter.setPen(QColor("#3498db"));
+            painter.setFont(QFont("Microsoft YaHei", 10, QFont::Bold));
+            painter.drawText(geo.rect, Qt::AlignLeft | Qt::AlignVCenter, geo.headerText);
+            painter.restore();
+            continue;
+        }
 
         QModelIndex idx = model()->index(geo.index, 0);
         QStyleOptionViewItem option;
