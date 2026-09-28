@@ -3,7 +3,6 @@
 #endif
 #include "ContentPanel.h"
 #include "ContentHeaderWidget.h"
-#include "FolderSectionWidget.h"
 #include "controllers/ContentContextMenu.h"
 #include "controllers/ContentKeyHandler.h"
 #include "controllers/ContentSortController.h"
@@ -120,32 +119,12 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
 }
 
 void ContentPanel::initUi() {
-    // ── 统一代理模型与双区物理分流代理模型预先实例化 ──
+    // ── 统一代理模型预先实例化 ──
     m_proxyModel = new FilterProxyModel(this);
     m_proxyModel->setSourceModel(m_model);
     m_proxyModel->setFilterKeyColumn(0);
     m_proxyModel->setDynamicSortFilter(true);
     m_proxyModel->currentFilter = m_currentFilter;
-
-    // 1. 文件夹专用代理模型
-    m_folderProxyModel = new FilterProxyModel(this);
-    m_folderProxyModel->setSourceModel(m_model);
-    m_folderProxyModel->setFilterKeyColumn(0);
-    m_folderProxyModel->setDynamicSortFilter(true);
-    FilterState folderFilter = m_currentFilter;
-    folderFilter.showFolders = true;
-    folderFilter.showFiles = false;
-    m_folderProxyModel->currentFilter = folderFilter;
-
-    // 2. 文件专用代理模型
-    m_fileProxyModel = new FilterProxyModel(this);
-    m_fileProxyModel->setSourceModel(m_model);
-    m_fileProxyModel->setFilterKeyColumn(0);
-    m_fileProxyModel->setDynamicSortFilter(true);
-    FilterState fileFilter = m_currentFilter;
-    fileFilter.showFolders = false;
-    fileFilter.showFiles = true;
-    m_fileProxyModel->currentFilter = fileFilter;
 
     // ── 顶部 Header 区域 ──
     m_headerWidget = new ContentHeaderWidget(this);
@@ -189,7 +168,7 @@ void ContentPanel::initUi() {
         restoreSelections();
     });
     m_viewStack->addWidget(m_gridView);
-    m_viewStack->addWidget(m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView));
+    m_viewStack->addWidget(m_treeView);
     m_viewStack->addWidget(m_columnView);
     m_viewStack->setCurrentWidget(m_gridView);
 
@@ -232,120 +211,36 @@ void ContentPanel::initGridView() {
 }
 
 void ContentPanel::initListView() {
-    m_listContainerWidget = new QWidget(this);
-    auto* layout = new QVBoxLayout(m_listContainerWidget);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
+    m_treeView = new DropTreeView(this);
+    m_treeView->setFrameShape(QFrame::NoFrame);
+    m_treeView->setAlternatingRowColors(true);
+    m_treeView->setSortingEnabled(true);
+    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_treeView->setRootIsDecorated(false);
+    m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true));
+    m_treeView->setModel(m_proxyModel);
+    m_treeView->installEventFilter(this);
+    m_treeView->viewport()->installEventFilter(this);
 
-    // 1. 文件夹分界标头与视图
-    m_listFolderHeader = new FolderSectionHeaderBar(m_listContainerWidget);
-    m_listFolderHeader->hide();
-    layout->addWidget(m_listFolderHeader);
+    auto* header = m_treeView->header();
+    if (header) {
+        header->setFixedHeight(32);
+        header->setMinimumSectionSize(0);
+    }
+    m_treeView->applyColumnPolicies();
 
-    m_folderTreeView = new DropTreeView(m_listContainerWidget);
-    m_folderTreeView->setFrameShape(QFrame::NoFrame);
-    m_folderTreeView->setAlternatingRowColors(true);
-    m_folderTreeView->setSortingEnabled(true);
-    m_folderTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_folderTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_folderTreeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    m_folderTreeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_folderTreeView->setRootIsDecorated(false);
-    m_folderTreeView->setItemDelegate(new TreeItemDelegate(this, true, true));
-    m_folderTreeView->setModel(m_folderProxyModel);
-    m_folderTreeView->installEventFilter(this);
-    m_folderTreeView->viewport()->installEventFilter(this);
-    layout->addWidget(m_folderTreeView);
-
-    auto* folderHeader = m_folderTreeView->header();
-    folderHeader->setFixedHeight(32);
-    folderHeader->setMinimumSectionSize(0);
-    m_folderTreeView->applyColumnPolicies();
-
-    // 2. 文件分界标头与视图
-    m_listFileHeader = new FileSectionHeaderBar(m_listContainerWidget);
-    m_listFileHeader->hide();
-    layout->addWidget(m_listFileHeader);
-
-    m_fileTreeView = new DropTreeView(m_listContainerWidget);
-    m_fileTreeView->setFrameShape(QFrame::NoFrame);
-    m_fileTreeView->setAlternatingRowColors(true);
-    m_fileTreeView->setSortingEnabled(true);
-    m_fileTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_fileTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_fileTreeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    m_fileTreeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_fileTreeView->setRootIsDecorated(false);
-    m_fileTreeView->setItemDelegate(new TreeItemDelegate(this, true, true));
-    m_fileTreeView->setModel(m_fileProxyModel);
-    m_fileTreeView->installEventFilter(this);
-    m_fileTreeView->viewport()->installEventFilter(this);
-    layout->addWidget(m_fileTreeView, 1);
-
-    auto* fileHeader = m_fileTreeView->header();
-    fileHeader->setFixedHeight(32);
-    fileHeader->setMinimumSectionSize(0);
-    m_fileTreeView->applyColumnPolicies();
-
-    m_treeView = m_fileTreeView;
-
-    // 信号绑定
-    connect(m_listFolderHeader, &FolderSectionHeaderBar::collapseToggled, this, [this](bool collapsed) {
-        if (m_folderTreeView) {
-            m_folderTreeView->setVisible(!collapsed);
-        }
+    connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
+    connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
+    connect(m_treeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked);
+    connect(m_treeView, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+        onPathsDropped(paths, targetIndex, currentPath(), m_proxyModel);
     });
 
-    connect(m_folderTreeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_folderTreeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
-    connect(m_folderTreeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked);
-    connect(m_folderTreeView, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
-        onPathsDropped(paths, targetIndex, currentPath(), m_folderProxyModel);
-    });
-
-    connect(m_fileTreeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_fileTreeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
-    connect(m_fileTreeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked);
-    connect(m_fileTreeView, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
-        onPathsDropped(paths, targetIndex, currentPath(), m_fileProxyModel);
-    });
-
-    auto updateListSectionCounts = [this]() {
-        int folderCount = m_folderProxyModel ? m_folderProxyModel->rowCount() : 0;
-        int fileCount = m_fileProxyModel ? m_fileProxyModel->rowCount() : 0;
-
-        if (m_listFolderHeader) {
-            m_listFolderHeader->setCount(folderCount);
-            m_listFolderHeader->setVisible(folderCount > 0);
-        }
-        if (m_folderTreeView) {
-            m_folderTreeView->setVisible(folderCount > 0 && !m_listFolderHeader->isCollapsed());
-        }
-        if (m_listFileHeader) {
-            m_listFileHeader->setCount(fileCount);
-            m_listFileHeader->setVisible(fileCount > 0);
-        }
-        if (m_fileTreeView) {
-            m_fileTreeView->setVisible(fileCount > 0);
-        }
-    };
-
-    if (m_folderProxyModel) {
-        connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, updateListSectionCounts);
-        connect(m_folderProxyModel, &QAbstractItemModel::layoutChanged, this, updateListSectionCounts);
-    }
-    if (m_fileProxyModel) {
-        connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, updateListSectionCounts);
-        connect(m_fileProxyModel, &QAbstractItemModel::layoutChanged, this, updateListSectionCounts);
-    }
-
-    if (m_folderTreeView->verticalScrollBar()) {
-        connect(m_folderTreeView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
-            if (m_visibleTimer) m_visibleTimer->start();
-        });
-    }
-    if (m_fileTreeView->verticalScrollBar()) {
-        connect(m_fileTreeView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+    if (m_treeView->verticalScrollBar()) {
+        connect(m_treeView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
             if (m_visibleTimer) m_visibleTimer->start();
         });
     }
@@ -358,10 +253,6 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
             QAbstractItemView* view = nullptr;
             if (m_gridView && (obj == m_gridView || obj == m_gridView->viewport())) {
                 view = m_gridView;
-            } else if (m_fileTreeView && (obj == m_fileTreeView || obj == m_fileTreeView->viewport())) {
-                view = m_fileTreeView;
-            } else if (m_folderTreeView && (obj == m_folderTreeView || obj == m_folderTreeView->viewport())) {
-                view = m_folderTreeView;
             } else if (m_treeView && (obj == m_treeView || obj == m_treeView->viewport())) {
                 view = m_treeView;
             }
@@ -384,16 +275,12 @@ void ContentPanel::ensureSourceModelIsDiskModel() {
         m_model = m_diskModel;
         m_model->setCurrentPath(m_currentPath);
         if (m_proxyModel) m_proxyModel->setSourceModel(m_model);
-        if (m_folderProxyModel) m_folderProxyModel->setSourceModel(m_model);
-        if (m_fileProxyModel) m_fileProxyModel->setSourceModel(m_model);
     }
 }
 
 void ContentPanel::applySort() {
     if (m_sortController) {
         if (m_proxyModel) m_sortController->applySortToModel(m_proxyModel);
-        if (m_folderProxyModel) m_sortController->applySortToModel(m_folderProxyModel);
-        if (m_fileProxyModel) m_sortController->applySortToModel(m_fileProxyModel);
         if (m_columnView) {
             m_columnView->applySort(static_cast<int>(m_sortController->sortType()), m_sortController->sortOrder());
         }
@@ -416,7 +303,7 @@ void ContentPanel::reloadThumbnailForPath(const QString& path) {
 }
 
 bool ContentPanel::isTreeView(QObject* view) const {
-    return (view == m_treeView || view == m_folderTreeView || view == m_fileTreeView);
+    return (view == m_treeView);
 }
 
 void ContentPanel::startVisibleTimer() {
@@ -504,12 +391,6 @@ void ContentPanel::onDoubleClicked(const QModelIndex& index) {
 }
 
 void ContentPanel::toggleFolderSectionCollapse() {
-    if (m_currentViewMode == ListView) {
-        if (m_listFolderHeader && m_listFolderHeader->isVisible() && m_listFolderHeader->count() > 0) {
-            m_listFolderHeader->setCollapsed(!m_listFolderHeader->isCollapsed());
-        }
-        return;
-    }
     if (m_currentViewMode == ColumnView && m_columnView) {
         m_columnView->toggleFolderSectionCollapse();
         return;
@@ -537,7 +418,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
     m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
 
     if (mode == ListView) {
-        m_viewStack->setCurrentWidget(m_listContainerWidget ? m_listContainerWidget : static_cast<QWidget*>(m_treeView));
+        m_viewStack->setCurrentWidget(m_treeView);
     } else if (mode == ColumnView) {
         if (m_columnView) {
             QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
@@ -583,18 +464,13 @@ void ContentPanel::updateGridSize() {
         if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
             jv->setTargetRowHeight(m_zoomLevel);
         }
-    } else if (m_viewStack->currentWidget() == m_listContainerWidget || m_viewStack->currentWidget() == m_treeView) {
-        QList<DropTreeView*> treeViews;
-        if (m_folderTreeView) treeViews << m_folderTreeView;
-        if (m_fileTreeView) treeViews << m_fileTreeView;
-        if (treeViews.isEmpty() && m_treeView) treeViews << m_treeView;
-
-        for (auto* dropTree : treeViews) {
-            if (auto* hdr = qobject_cast<ContentHeaderView*>(dropTree->header())) {
+    } else if (m_viewStack->currentWidget() == m_treeView) {
+        if (m_treeView) {
+            if (auto* hdr = qobject_cast<ContentHeaderView*>(m_treeView->header())) {
                 hdr->setZoomLevel(m_zoomLevel);
             }
-            dropTree->setIconSize(QSize(qMax(16, m_zoomLevel - 8), qMax(16, m_zoomLevel - 8)));
-            dropTree->doItemsLayout();
+            m_treeView->setIconSize(QSize(qMax(16, m_zoomLevel - 8), qMax(16, m_zoomLevel - 8)));
+            m_treeView->doItemsLayout();
         }
     }
     AppConfig::instance().setValue("UI/GridZoomLevel", m_zoomLevel);
@@ -617,20 +493,6 @@ void ContentPanel::applyFilters() {
     if (m_proxyModel) {
         m_proxyModel->currentFilter = m_currentFilter;
         m_proxyModel->updateFilter();
-    }
-    if (m_folderProxyModel) {
-        FilterState folderFilter = m_currentFilter;
-        folderFilter.showFolders = true;
-        folderFilter.showFiles = false;
-        m_folderProxyModel->currentFilter = folderFilter;
-        m_folderProxyModel->updateFilter();
-    }
-    if (m_fileProxyModel) {
-        FilterState fileFilter = m_currentFilter;
-        fileFilter.showFolders = false;
-        fileFilter.showFiles = true;
-        m_fileProxyModel->currentFilter = fileFilter;
-        m_fileProxyModel->updateFilter();
     }
     if (m_columnView) {
         m_columnView->applyFilterState(m_currentFilter);
@@ -717,9 +579,7 @@ void ContentPanel::refreshVisibleThumbnails() {
             if (m_columnView->activePane()->listView()) views << m_columnView->activePane()->listView();
         }
     } else if (m_currentViewMode == ListView) {
-        if (m_folderTreeView) views << m_folderTreeView;
-        if (m_fileTreeView) views << m_fileTreeView;
-        if (views.isEmpty() && m_treeView) views << m_treeView;
+        if (m_treeView) views << m_treeView;
     } else {
         if (m_gridView) views << m_gridView;
     }
@@ -854,9 +714,7 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
             if (m_columnView->activePane()->listView()) views << m_columnView->activePane()->listView();
         }
     } else if (m_currentViewMode == ListView) {
-        if (m_folderTreeView) views << m_folderTreeView;
-        if (m_fileTreeView) views << m_fileTreeView;
-        if (views.isEmpty() && m_treeView) views << m_treeView;
+        if (m_treeView) views << m_treeView;
     } else { // GridView / JustifiedViewMode
         if (m_gridView) views << m_gridView;
     }
@@ -877,7 +735,7 @@ void ContentPanel::restoreActiveView() {
     if (m_currentViewMode == ColumnView) {
         m_viewStack->setCurrentWidget(m_columnView);
     } else {
-        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? (m_listContainerWidget ? static_cast<QWidget*>(m_listContainerWidget) : static_cast<QWidget*>(m_treeView)) : static_cast<QWidget*>(m_gridView));
+        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
     }
 }
 
