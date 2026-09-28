@@ -211,9 +211,6 @@ void ContentPanel::initGridView() {
 }
 
 void ContentPanel::initListView() {
-    if (m_proxyModel) {
-        m_proxyModel->setGroupHeadersEnabled(true);
-    }
     m_treeView = new DropTreeView(this);
     m_treeView->setFrameShape(QFrame::NoFrame);
     m_treeView->setAlternatingRowColors(true);

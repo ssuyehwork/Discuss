@@ -31,12 +31,6 @@ public:
 
     bool setData(const QModelIndex& index, const QVariant& value, int role = Qt::EditRole) override;
 
-    int rowCount(const QModelIndex& parent = QModelIndex()) const override;
-    QModelIndex index(int row, int column, const QModelIndex& parent = QModelIndex()) const override;
-    QModelIndex mapToSource(const QModelIndex& proxyIndex) const override;
-    QModelIndex mapFromSource(const QModelIndex& sourceIndex) const override;
-    QVariant data(const QModelIndex& index, int role = Qt::DisplayRole) const override;
-
 protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
     bool lessThan(const QModelIndex& source_left, const QModelIndex& source_right) const override;
