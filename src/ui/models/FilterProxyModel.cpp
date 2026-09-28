@@ -30,6 +30,49 @@ bool FilterProxyModel::setData(const QModelIndex& index, const QVariant& value, 
     return QSortFilterProxyModel::setData(index, value, role);
 }
 
+int FilterProxyModel::rowCount(const QModelIndex& parent) const {
+    int baseCount = QSortFilterProxyModel::rowCount(parent);
+    if (!m_groupHeadersEnabled || parent.isValid()) {
+        return baseCount;
+    }
+    return baseCount + (baseCount > 0 ? 1 : 0);
+}
+
+QModelIndex FilterProxyModel::index(int row, int column, const QModelIndex& parent) const {
+    if (!m_groupHeadersEnabled || parent.isValid()) {
+        return QSortFilterProxyModel::index(row, column, parent);
+    }
+    return createIndex(row, column);
+}
+
+QModelIndex FilterProxyModel::mapToSource(const QModelIndex& proxyIndex) const {
+    if (!m_groupHeadersEnabled || !proxyIndex.isValid()) {
+        return QSortFilterProxyModel::mapToSource(proxyIndex);
+    }
+    if (proxyIndex.row() == 0) return QModelIndex();
+    return QSortFilterProxyModel::mapToSource(createIndex(proxyIndex.row() - 1, proxyIndex.column()));
+}
+
+QModelIndex FilterProxyModel::mapFromSource(const QModelIndex& sourceIndex) const {
+    if (!m_groupHeadersEnabled || !sourceIndex.isValid()) {
+        return QSortFilterProxyModel::mapFromSource(sourceIndex);
+    }
+    QModelIndex baseProxy = QSortFilterProxyModel::mapFromSource(sourceIndex);
+    if (!baseProxy.isValid()) return QModelIndex();
+    return createIndex(baseProxy.row() + 1, baseProxy.column());
+}
+
+QVariant FilterProxyModel::data(const QModelIndex& index, int role) const {
+    if (m_groupHeadersEnabled && index.isValid() && index.row() == 0) {
+        if (role == IsGroupHeaderRole) return true;
+        if (role == Qt::DisplayRole) return QString("内容项目");
+        if (role == TypeRole) return QString("folder_group_header");
+        if (role == IsGroupCollapsedRole) return m_foldersCollapsed;
+        return QVariant();
+    }
+    return QSortFilterProxyModel::data(index, role);
+}
+
 void FilterProxyModel::updateFilter() {
     beginFilterChange();
     endFilterChange();
