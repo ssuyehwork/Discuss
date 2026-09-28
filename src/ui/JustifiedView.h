@@ -64,6 +64,9 @@ private:
     struct ItemGeometry {
         QRect rect;
         int index;
+        bool isHeader = false;
+        QString headerText;
+        bool isCollapsed = false;
     };
     std::vector<ItemGeometry> m_geometries;
     int m_totalHeight = 0;

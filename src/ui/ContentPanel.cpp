@@ -344,7 +344,8 @@ void ContentPanel::initListView() {
     m_folderTreeView->setFrameShape(QFrame::NoFrame);
     m_folderTreeView->setAlternatingRowColors(true);
     m_folderTreeView->setSortingEnabled(true);
-    m_folderTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_folderTreeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_folderTreeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderTreeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderTreeView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_folderTreeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -377,7 +378,8 @@ void ContentPanel::initListView() {
     m_treeView->setFrameShape(QFrame::NoFrame);
     m_treeView->setAlternatingRowColors(true);
     m_treeView->setSortingEnabled(true);
-    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -386,7 +388,7 @@ void ContentPanel::initListView() {
     m_treeView->setModel(m_fileProxyModel);
     m_treeView->installEventFilter(this);
     m_treeView->viewport()->installEventFilter(this);
-    layout->addWidget(m_treeView, 1);
+    layout->addWidget(m_treeView);
 
     auto* header = m_treeView->header();
     header->setFixedHeight(32);
@@ -432,6 +434,13 @@ void ContentPanel::initListView() {
         if (m_listFileHeader) {
             m_listFileHeader->setCount(fileCount);
             m_listFileHeader->setVisible(fileCount > 0 && folderCount > 0);
+        }
+        if (m_treeView) {
+            int rowH = m_treeView->sizeHintForRow(0);
+            if (rowH <= 0) rowH = 30;
+            int hdrH = (m_treeView->header() && m_treeView->header()->isVisible()) ? m_treeView->header()->height() : 0;
+            int fileH = fileCount * rowH + hdrH + 2;
+            m_treeView->setFixedHeight(fileH);
         }
     };
 
