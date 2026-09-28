@@ -3,6 +3,7 @@
 #endif
 #include "ContentPanel.h"
 #include "ContentHeaderWidget.h"
+#include "ListViewSectionContainer.h"
 #include "controllers/ContentContextMenu.h"
 #include "controllers/ContentKeyHandler.h"
 #include "controllers/ContentSortController.h"
@@ -211,39 +212,17 @@ void ContentPanel::initGridView() {
 }
 
 void ContentPanel::initListView() {
-    m_treeView = new DropTreeView(this);
-    m_treeView->setFrameShape(QFrame::NoFrame);
-    m_treeView->setAlternatingRowColors(true);
-    m_treeView->setSortingEnabled(true);
-    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_treeView->setRootIsDecorated(false);
-    m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true));
-    m_treeView->setModel(m_proxyModel);
-    m_treeView->installEventFilter(this);
-    m_treeView->viewport()->installEventFilter(this);
+    m_listContainer = new ListViewSectionContainer(this, this);
+    m_listContainer->setModel(m_proxyModel);
+    m_treeView = m_listContainer->folderListView(); // 保留主引用指针
+    m_viewStack->addWidget(m_listContainer);
 
-    auto* header = m_treeView->header();
-    if (header) {
-        header->setFixedHeight(32);
-        header->setMinimumSectionSize(0);
-    }
-    m_treeView->applyColumnPolicies();
-
-    connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_treeView, &QTreeView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
-    connect(m_treeView, &QTreeView::doubleClicked, this, &ContentPanel::onDoubleClicked);
-    connect(m_treeView, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
-        onPathsDropped(paths, targetIndex, currentPath(), m_proxyModel);
+    connect(m_listContainer, &ListViewSectionContainer::selectionChanged, this, &ContentPanel::onSelectionChanged);
+    connect(m_listContainer, &ListViewSectionContainer::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
+    connect(m_listContainer, &ListViewSectionContainer::doubleClicked, this, &ContentPanel::onDoubleClicked);
+    connect(m_listContainer, &ListViewSectionContainer::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex, QAbstractItemModel* sourceModel) {
+        onPathsDropped(paths, targetIndex, currentPath(), sourceModel);
     });
-
-    if (m_treeView->verticalScrollBar()) {
-        connect(m_treeView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
-            if (m_visibleTimer) m_visibleTimer->start();
-        });
-    }
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
@@ -284,6 +263,9 @@ void ContentPanel::applySort() {
         if (m_columnView) {
             m_columnView->applySort(static_cast<int>(m_sortController->sortType()), m_sortController->sortOrder());
         }
+    }
+    if (m_listContainer) {
+        m_listContainer->applySort(static_cast<int>(currentSortType()), currentSortOrder());
     }
 }
 
@@ -395,6 +377,10 @@ void ContentPanel::toggleFolderSectionCollapse() {
         m_columnView->toggleFolderSectionCollapse();
         return;
     }
+    if (m_currentViewMode == ListView && m_listContainer) {
+        m_listContainer->toggleFolderSectionCollapse();
+        return;
+    }
     if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
         jv->toggleFolderSectionCollapse();
     }
@@ -496,6 +482,9 @@ void ContentPanel::applyFilters() {
     }
     if (m_columnView) {
         m_columnView->applyFilterState(m_currentFilter);
+    }
+    if (m_listContainer) {
+        m_listContainer->applyFilters(m_currentFilter);
     }
     updateStatusBarStats();
 }
