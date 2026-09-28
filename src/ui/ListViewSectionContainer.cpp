@@ -70,10 +70,6 @@ void ListViewSectionContainer::setupUi() {
         m_folderListView->setVisible(!collapsed);
     });
 
-    connect(m_fileHeader, &FileSectionHeaderBar::collapseToggled, this, [this](bool collapsed) {
-        m_fileListView->setVisible(!collapsed);
-    });
-
     // 7. 信号转发代理至 ListViewSectionContainer
     connect(m_folderListView, &QTreeView::doubleClicked, this, &ListViewSectionContainer::doubleClicked);
     connect(m_folderListView, &QTreeView::customContextMenuRequested, this, &ListViewSectionContainer::customContextMenuRequested);
@@ -169,14 +165,14 @@ void ListViewSectionContainer::applyFilters(const FilterState& state) {
         st.showFolders = true;
         st.showFiles = false;
         m_folderProxyModel->currentFilter = st;
-        m_folderProxyModel->invalidateFilter();
+        m_folderProxyModel->updateFilter();
     }
     if (m_fileProxyModel) {
         FilterState st = state;
         st.showFolders = false;
         st.showFiles = true;
         m_fileProxyModel->currentFilter = st;
-        m_fileProxyModel->invalidateFilter();
+        m_fileProxyModel->updateFilter();
     }
 
     int folderCount = m_folderProxyModel ? m_folderProxyModel->rowCount() : 0;
@@ -194,7 +190,7 @@ void ListViewSectionContainer::applyFilters(const FilterState& state) {
         m_fileHeader->setVisible(fileCount > 0);
     }
     if (m_fileListView) {
-        m_fileListView->setVisible(fileCount > 0 && (!m_fileHeader || !m_fileHeader->isCollapsed()));
+        m_fileListView->setVisible(fileCount > 0);
     }
 }
 
