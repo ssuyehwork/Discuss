@@ -3,7 +3,6 @@
 #endif
 #include "ContentPanel.h"
 #include "ContentHeaderWidget.h"
-#include "ListViewSectionContainer.h"
 #include "controllers/ContentContextMenu.h"
 #include "controllers/ContentKeyHandler.h"
 #include "controllers/ContentSortController.h"
@@ -169,7 +168,7 @@ void ContentPanel::initUi() {
         restoreSelections();
     });
     m_viewStack->addWidget(m_gridView);
-    m_viewStack->addWidget(m_listContainer);
+    m_viewStack->addWidget(m_treeView);
     m_viewStack->addWidget(m_columnView);
     m_viewStack->setCurrentWidget(m_gridView);
 
@@ -212,16 +211,25 @@ void ContentPanel::initGridView() {
 }
 
 void ContentPanel::initListView() {
-    m_listContainer = new ListViewSectionContainer(this, this);
-    m_listContainer->setModel(m_proxyModel);
-    m_treeView = m_listContainer->folderListView(); // 保留主引用指针
-    m_viewStack->addWidget(m_listContainer);
+    m_treeView = new DropTreeView(this);
+    m_treeView->setFrameShape(QFrame::NoFrame);
+    m_treeView->setAlternatingRowColors(true);
+    m_treeView->setSortingEnabled(true);
+    m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_treeView->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_treeView->setRootIsDecorated(false);
+    m_treeView->setItemDelegate(new TreeItemDelegate(this, true, true));
+    m_treeView->setModel(m_proxyModel);
+    m_treeView->installEventFilter(this);
+    m_treeView->viewport()->installEventFilter(this);
 
-    connect(m_listContainer, &ListViewSectionContainer::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_listContainer, &ListViewSectionContainer::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
-    connect(m_listContainer, &ListViewSectionContainer::doubleClicked, this, &ContentPanel::onDoubleClicked);
-    connect(m_listContainer, &ListViewSectionContainer::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex, QAbstractItemModel* sourceModel) {
-        onPathsDropped(paths, targetIndex, currentPath(), sourceModel);
+    connect(m_treeView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
+    connect(m_treeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
+    connect(m_treeView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
+    connect(m_treeView, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
+        onPathsDropped(paths, targetIndex, currentPath(), m_proxyModel);
     });
 }
 
@@ -263,9 +271,6 @@ void ContentPanel::applySort() {
         if (m_columnView) {
             m_columnView->applySort(static_cast<int>(m_sortController->sortType()), m_sortController->sortOrder());
         }
-    }
-    if (m_listContainer) {
-        m_listContainer->applySort(static_cast<int>(currentSortType()), currentSortOrder());
     }
 }
 
@@ -377,10 +382,6 @@ void ContentPanel::toggleFolderSectionCollapse() {
         m_columnView->toggleFolderSectionCollapse();
         return;
     }
-    if (m_currentViewMode == ListView && m_listContainer) {
-        m_listContainer->toggleFolderSectionCollapse();
-        return;
-    }
     if (auto* jv = qobject_cast<JustifiedView*>(m_gridView)) {
         jv->toggleFolderSectionCollapse();
     }
@@ -404,7 +405,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
     m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
 
     if (mode == ListView) {
-        m_viewStack->setCurrentWidget(m_listContainer);
+        m_viewStack->setCurrentWidget(m_treeView);
     } else if (mode == ColumnView) {
         if (m_columnView) {
             QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
@@ -482,9 +483,6 @@ void ContentPanel::applyFilters() {
     }
     if (m_columnView) {
         m_columnView->applyFilterState(m_currentFilter);
-    }
-    if (m_listContainer) {
-        m_listContainer->applyFilters(m_currentFilter);
     }
     updateStatusBarStats();
 }
@@ -685,14 +683,8 @@ QAbstractItemView* ContentPanel::activeItemView() const {
         return nullptr;
     }
 
-    if (m_currentViewMode == ListView && m_listContainer) {
-        if (m_listContainer->folderListView()->hasFocus() || m_listContainer->folderListView()->selectionModel()->hasSelection()) {
-            return m_listContainer->folderListView();
-        }
-        if (m_listContainer->fileListView()->hasFocus() || m_listContainer->fileListView()->selectionModel()->hasSelection()) {
-            return m_listContainer->fileListView();
-        }
-        return m_listContainer->folderListView();
+    if (m_currentViewMode == ListView) {
+        return m_treeView;
     }
 
     return m_gridView;
@@ -708,9 +700,8 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
         if (m_columnView && m_columnView->activePane()) {
             if (m_columnView->activePane()->listView()) views << m_columnView->activePane()->listView();
         }
-    } else if (m_currentViewMode == ListView && m_listContainer) {
-        if (m_listContainer->folderListView()) views << m_listContainer->folderListView();
-        if (m_listContainer->fileListView()) views << m_listContainer->fileListView();
+    } else if (m_currentViewMode == ListView) {
+        if (m_treeView) views << m_treeView;
     } else { // GridView / JustifiedViewMode
         if (m_gridView) views << m_gridView;
     }
@@ -730,10 +721,8 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 void ContentPanel::restoreActiveView() {
     if (m_currentViewMode == ColumnView) {
         m_viewStack->setCurrentWidget(m_columnView);
-    } else if (m_currentViewMode == ListView) {
-        m_viewStack->setCurrentWidget(m_listContainer);
     } else {
-        m_viewStack->setCurrentWidget(m_gridView);
+        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
     }
 }
 

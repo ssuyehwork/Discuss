@@ -219,7 +219,6 @@ private:
 
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;
-    class ListViewSectionContainer* m_listContainer = nullptr;
     DropTreeView* m_treeView = nullptr;
     class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
