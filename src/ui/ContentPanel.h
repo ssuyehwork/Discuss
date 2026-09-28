@@ -216,15 +216,6 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
-    QScrollArea* m_listScrollArea = nullptr;
-    QWidget* m_listContainerWidget = nullptr;
-    FolderSectionHeaderBar* m_listFolderHeader = nullptr;
-    FileSectionHeaderBar* m_listFileHeader = nullptr;
-
-    QScrollArea* m_gridScrollArea = nullptr;
-    QWidget* m_gridContainerWidget = nullptr;
-    FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
-    FileSectionHeaderBar* m_gridFileHeader = nullptr;
 
     FilterProxyModel* m_proxyModel = nullptr;
 

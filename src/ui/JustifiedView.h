@@ -18,6 +18,11 @@ public:
     void setLayoutMode(LayoutMode mode);
     LayoutMode layoutMode() const;
 
+    void toggleFolderSectionCollapse() {
+        m_folderGroupCollapsed = !m_folderGroupCollapsed;
+        scheduleLayout();
+    }
+
     int totalHeight() const { return m_totalHeight; }
 
     // 🚀【物理契约】：彻底切断 QAbstractItemView 对父容器的尺寸顶推
@@ -63,9 +68,13 @@ private:
 
     struct ItemGeometry {
         QRect rect;
-        int index;
+        int index = -1;         // Real model row index, or -1 for sentinel section header
+        bool isHeader = false;
+        QString headerText;
+        bool isFolderGroup = false;
     };
     std::vector<ItemGeometry> m_geometries;
+    bool m_folderGroupCollapsed = false;
     int m_totalHeight = 0;
     int m_targetRowHeight = 128;
     int m_aspectRatioRole = Qt::UserRole + 2;
