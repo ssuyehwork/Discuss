@@ -91,12 +91,12 @@ void ListViewSectionContainer::syncHeaderColumnWidths() {
     auto* folderHeaderView = m_folderListView->header();
     auto* fileHeaderView = m_fileListView->header();
 
-    connect(folderHeaderView, &QHeaderView::sectionResized, this, [fileHeaderView](int logicalIndex, int oldSize, int newSize) {
+    connect(folderHeaderView, &QHeaderView::sectionResized, this, [fileHeaderView](int logicalIndex, int /*oldSize*/, int newSize) {
         QSignalBlocker blocker(fileHeaderView);
         fileHeaderView->resizeSection(logicalIndex, newSize);
     });
 
-    connect(fileHeaderView, &QHeaderView::sectionResized, this, [folderHeaderView](int logicalIndex, int oldSize, int newSize) {
+    connect(fileHeaderView, &QHeaderView::sectionResized, this, [folderHeaderView](int logicalIndex, int /*oldSize*/, int newSize) {
         QSignalBlocker blocker(folderHeaderView);
         folderHeaderView->resizeSection(logicalIndex, newSize);
     });
