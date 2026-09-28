@@ -78,6 +78,7 @@ public:
 
     void applyColumnPolicies();
     void updateGroupHeaderSpanning();
+    void setModel(QAbstractItemModel* model) override;
 
 signals:
     void notesDropped(const QList<int>& noteIds, const QModelIndex& targetIndex);
@@ -93,6 +94,7 @@ protected:
     void keyboardSearch(const QString& search) override;
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
 
 private:
     QTimer* m_autoExpandTimer = nullptr;

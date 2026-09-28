@@ -24,8 +24,6 @@ class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
 class ContentStatsWorker;
-class FolderSectionHeaderBar;
-class FileSectionHeaderBar;
 
 /**
  * @brief 内容面板（面板四）：核心业务展示工作台（纯视图承载与高级意图分发）
@@ -216,19 +214,12 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
-    QWidget* m_listContainerWidget = nullptr;
-    FolderSectionHeaderBar* m_listFolderHeader = nullptr;
-    FileSectionHeaderBar* m_listFileHeader = nullptr;
 
     FilterProxyModel* m_proxyModel = nullptr;
-    FilterProxyModel* m_folderProxyModel = nullptr;
-    FilterProxyModel* m_fileProxyModel = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;
     DropTreeView* m_treeView = nullptr;
-    DropTreeView* m_folderTreeView = nullptr;
-    DropTreeView* m_fileTreeView = nullptr;
     class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;
