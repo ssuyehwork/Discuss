@@ -73,6 +73,18 @@ void DropTreeView::startDrag(Qt::DropActions supportedActions) {
     ViewDragDropHelper::executeStartDrag(this, supportedActions);
 }
 
+void DropTreeView::updateGroupHeaderSpanning() {
+    if (!model()) return;
+    int rows = model()->rowCount();
+    for (int r = 0; r < rows; ++r) {
+        QModelIndex idx = model()->index(r, 0);
+        bool isHeader = idx.data(IsGroupHeaderRole).toBool();
+        if (isHeader) {
+            setFirstColumnSpanned(r, QModelIndex(), true);
+        }
+    }
+}
+
 void DropTreeView::applyColumnPolicies() {
     QHeaderView* hdr = header();
     if (!hdr) return;

@@ -18,6 +18,12 @@ public:
     void setLayoutMode(LayoutMode mode);
     LayoutMode layoutMode() const;
 
+    void toggleFolderSectionCollapse() {
+        m_folderGroupCollapsed = !m_folderGroupCollapsed;
+        scheduleLayout();
+    }
+    bool isFolderGroupCollapsed() const { return m_folderGroupCollapsed; }
+
     int totalHeight() const { return m_totalHeight; }
 
     // 🚀【物理契约】：彻底切断 QAbstractItemView 对父容器的尺寸顶推
@@ -64,6 +70,9 @@ private:
     struct ItemGeometry {
         QRect rect;
         int index;
+        bool isHeader = false;
+        QString headerText;
+        bool isFolderGroup = false;
     };
     std::vector<ItemGeometry> m_geometries;
     int m_totalHeight = 0;
@@ -78,6 +87,7 @@ private:
     LayoutMode m_layoutMode = JustifiedMode;
     QTimer* m_layoutTimer = nullptr;
     bool m_layoutDirty = false;
+    bool m_folderGroupCollapsed = false;
 };
 
 } // namespace QuarkMeta
