@@ -6,7 +6,7 @@ This implementation plan unifies **GridView** (`GridView`) and **JustifiedView**
 It completely eliminates the legacy dual-section/dual-view split (`m_folderGridView` for folders and `m_gridView` for files, along with `FolderSectionHeaderBar`/`FileSectionHeaderBar` and empty layout spacers) which previously caused dual vertical scrollbars, drag-selection blockages, and vertical alignment bugs.
 
 The new single-view architecture:
-1. Replaces the dual-view setup with a single `DropJustifiedView` (`m_gridView`) instance operating on a single filter proxy model (`m_fileProxyModel` or a unified proxy).
+1. Replaces the dual-view setup with a single `DropJustifiedView` (`m_gridView`) instance operating directly on `m_diskModel` (or an unfiltered source model containing both folders and files).
 2. Incorporates group header rendering ("文件夹 (N)" and "文件 (M)") directly within `JustifiedView`'s layout and rendering pipeline (`paintEvent` & `doLayout`).
 3. Ensures a single native vertical scrollbar and a continuous canvas for smooth drag-selection across all items.
 
@@ -133,7 +133,7 @@ Clean up obsolete dual-view pointers (`m_folderGridView`, `m_gridFolderHeader`, 
 
 ### 4. `src/ui/ContentPanel.cpp`
 
-Streamline `initGridView()` to instantiate a single `m_gridView` inside `m_gridContainerWidget`.
+Streamline `initGridView()` to instantiate a single `m_gridView` bound to `m_diskModel` inside `m_gridContainerWidget`.
 
 ```
 <<<<<<< SEARCH
@@ -192,78 +192,8 @@ void ContentPanel::initGridView() {
     m_gridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_gridView->setModel(m_fileProxyModel);
 
-    auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
-    if (justifiedView) {
-        justifiedView->setAspectRatioRole(AspectRatioRole);
-        auto* delegate = new ThumbnailDelegate(this);
-        delegate->setHasThumbnailRole(HasThumbnailRole);
-        delegate->setRatingRole(RatingRole);
-        delegate->setPathRole(PathRole);
-        delegate->setPinnedRole(PinnedRole);
-        delegate->setTypeRole(TypeRole);
-        delegate->setIsEmptyRole(IsEmptyRole);
-        delegate->setColorRole(ColorRole);
-        m_gridView->setItemDelegate(delegate);
-    }
-
-    m_gridView->installEventFilter(this);
-    m_gridView->viewport()->installEventFilter(this);
-    layout->addWidget(m_gridView, 1);
-
-    if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
-        connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int height) {
-            if (m_folderGridView && m_folderProxyModel && m_folderProxyModel->rowCount() > 0) {
-                m_folderGridView->setFixedHeight(height);
-            }
-        });
-    }
-
-    connect(m_folderGridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
-    connect(m_folderGridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_folderGridView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
-    connect(m_folderGridView, &DropJustifiedView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
-        onPathsDropped(paths, targetIndex, currentPath(), m_folderProxyModel);
-    });
-
-    connect(m_gridView, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
-    connect(m_gridView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_gridView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
-    if (auto* dropJv = qobject_cast<DropJustifiedView*>(m_gridView)) {
-        connect(dropJv, &DropJustifiedView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
-            onPathsDropped(paths, targetIndex, currentPath(), m_fileProxyModel);
-        });
-    }
-
-    auto updateGridSectionCounts = [this]() {
-        if (!m_folderProxyModel || !m_fileProxyModel) return;
-        int folderCount = m_folderProxyModel->rowCount();
-        int fileCount = m_fileProxyModel->rowCount();
-
-        if (m_gridFolderHeader) {
-            m_gridFolderHeader->setCount(folderCount);
-            m_gridFolderHeader->setVisible(folderCount > 0);
-        }
-        if (m_folderGridView) {
-            if (folderCount == 0) {
-                m_folderGridView->hide();
-            } else {
-                bool collapsed = m_gridFolderHeader ? m_gridFolderHeader->isCollapsed() : false;
-                m_folderGridView->setVisible(!collapsed);
-                if (auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView)) {
-                    m_folderGridView->setFixedHeight(fjv->totalHeight());
-                }
-            }
-        }
-        if (m_gridFileHeader) {
-            m_gridFileHeader->setCount(fileCount);
-            m_gridFileHeader->setVisible(fileCount > 0 && folderCount > 0);
-        }
-    };
-
-    connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, updateGridSectionCounts);
-    connect(m_folderProxyModel, &QAbstractItemModel::layoutChanged, this, updateGridSectionCounts);
-    connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, updateGridSectionCounts);
-    connect(m_fileProxyModel, &QAbstractItemModel::layoutChanged, this, updateGridSectionCounts);
+    auto* delegate = new ThumbnailDelegate(this);
+    ...
 }
 =======
 void ContentPanel::initGridView() {
@@ -272,13 +202,13 @@ void ContentPanel::initGridView() {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // Single unified view for Grid & JustifiedView modes
+    // Single unified view for Grid & JustifiedView modes operating on m_diskModel
     m_gridView = new DropJustifiedView(m_gridContainerWidget);
     m_gridView->setFrameShape(QFrame::NoFrame);
     m_gridView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_gridView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_gridView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_gridView->setModel(m_fileProxyModel);
+    m_gridView->setModel(m_diskModel);
 
     auto* justifiedView = qobject_cast<JustifiedView*>(m_gridView);
     if (justifiedView) {
@@ -303,7 +233,7 @@ void ContentPanel::initGridView() {
     connect(m_gridView, &QAbstractItemView::customContextMenuRequested, this, &ContentPanel::onCustomContextMenuRequested);
     if (auto* dropJv = qobject_cast<DropJustifiedView*>(m_gridView)) {
         connect(dropJv, &DropJustifiedView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
-            onPathsDropped(paths, targetIndex, currentPath(), m_fileProxyModel);
+            onPathsDropped(paths, targetIndex, currentPath(), m_diskModel);
         });
     }
 }
@@ -321,6 +251,7 @@ void ContentPanel::initGridView() {
    ```
 2. Verify Grid & JustifiedView modes:
    - Launch application and switch between GridView and JustifiedViewMode.
+   - Confirm both folders and files render properly under single `m_gridView`.
    - Confirm there is exactly **one** vertical scrollbar for the grid/justified view.
    - Verify drag-selection box covers the entire canvas without blockage or vertical gaps.
 
