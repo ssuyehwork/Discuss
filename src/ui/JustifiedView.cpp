@@ -134,7 +134,7 @@ QModelIndex JustifiedView::indexAt(const QPoint& point) const {
         if (it->rect.top() > y) break;
         if (it->rect.contains(point.x(), y)) {
             if (it->isHeader) {
-                return QModelIndex(); // Sentinel section header is not a selectable item
+                return QModelIndex();
             }
             return model()->index(it->index, 0);
         }
@@ -355,7 +355,7 @@ void JustifiedView::paintEvent(QPaintEvent*) {
 
         if (geo.isHeader) {
             painter.save();
-            painter.fillRect(geo.rect, QColor("#202020"));
+            // 组头完全透明，直接透出画板底色 `#1E1E1E`
             
             const int iconSize = 12;
             const int marginX = 10;

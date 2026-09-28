@@ -77,6 +77,7 @@ public:
     void setEmptyHint(const QString& hint) { m_emptyHint = hint; }
 
     void applyColumnPolicies();
+    void updateGroupHeaderSpanning();
 
 signals:
     void notesDropped(const QList<int>& noteIds, const QModelIndex& targetIndex);

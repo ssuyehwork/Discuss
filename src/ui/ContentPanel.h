@@ -216,12 +216,19 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
+    QWidget* m_listContainerWidget = nullptr;
+    FolderSectionHeaderBar* m_listFolderHeader = nullptr;
+    FileSectionHeaderBar* m_listFileHeader = nullptr;
 
     FilterProxyModel* m_proxyModel = nullptr;
+    FilterProxyModel* m_folderProxyModel = nullptr;
+    FilterProxyModel* m_fileProxyModel = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     QAbstractItemView* m_gridView = nullptr;
     DropTreeView* m_treeView = nullptr;
+    DropTreeView* m_folderTreeView = nullptr;
+    DropTreeView* m_fileTreeView = nullptr;
     class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;

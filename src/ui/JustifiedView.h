@@ -22,6 +22,7 @@ public:
         m_folderGroupCollapsed = !m_folderGroupCollapsed;
         scheduleLayout();
     }
+    bool isFolderGroupCollapsed() const { return m_folderGroupCollapsed; }
 
     int totalHeight() const { return m_totalHeight; }
 
@@ -68,13 +69,12 @@ private:
 
     struct ItemGeometry {
         QRect rect;
-        int index = -1;         // Real model row index, or -1 for sentinel section header
+        int index;
         bool isHeader = false;
         QString headerText;
         bool isFolderGroup = false;
     };
     std::vector<ItemGeometry> m_geometries;
-    bool m_folderGroupCollapsed = false;
     int m_totalHeight = 0;
     int m_targetRowHeight = 128;
     int m_aspectRatioRole = Qt::UserRole + 2;
@@ -87,6 +87,7 @@ private:
     LayoutMode m_layoutMode = JustifiedMode;
     QTimer* m_layoutTimer = nullptr;
     bool m_layoutDirty = false;
+    bool m_folderGroupCollapsed = false;
 };
 
 } // namespace QuarkMeta
