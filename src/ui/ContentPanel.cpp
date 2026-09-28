@@ -169,7 +169,7 @@ void ContentPanel::initUi() {
         restoreSelections();
     });
     m_viewStack->addWidget(m_gridView);
-    m_viewStack->addWidget(m_treeView);
+    m_viewStack->addWidget(m_listContainer);
     m_viewStack->addWidget(m_columnView);
     m_viewStack->setCurrentWidget(m_gridView);
 
@@ -404,7 +404,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
     m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
 
     if (mode == ListView) {
-        m_viewStack->setCurrentWidget(m_treeView);
+        m_viewStack->setCurrentWidget(m_listContainer);
     } else if (mode == ColumnView) {
         if (m_columnView) {
             QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
@@ -685,8 +685,14 @@ QAbstractItemView* ContentPanel::activeItemView() const {
         return nullptr;
     }
 
-    if (m_currentViewMode == ListView) {
-        return m_treeView;
+    if (m_currentViewMode == ListView && m_listContainer) {
+        if (m_listContainer->folderListView()->hasFocus() || m_listContainer->folderListView()->selectionModel()->hasSelection()) {
+            return m_listContainer->folderListView();
+        }
+        if (m_listContainer->fileListView()->hasFocus() || m_listContainer->fileListView()->selectionModel()->hasSelection()) {
+            return m_listContainer->fileListView();
+        }
+        return m_listContainer->folderListView();
     }
 
     return m_gridView;
@@ -702,8 +708,9 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
         if (m_columnView && m_columnView->activePane()) {
             if (m_columnView->activePane()->listView()) views << m_columnView->activePane()->listView();
         }
-    } else if (m_currentViewMode == ListView) {
-        if (m_treeView) views << m_treeView;
+    } else if (m_currentViewMode == ListView && m_listContainer) {
+        if (m_listContainer->folderListView()) views << m_listContainer->folderListView();
+        if (m_listContainer->fileListView()) views << m_listContainer->fileListView();
     } else { // GridView / JustifiedViewMode
         if (m_gridView) views << m_gridView;
     }
@@ -723,8 +730,10 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 void ContentPanel::restoreActiveView() {
     if (m_currentViewMode == ColumnView) {
         m_viewStack->setCurrentWidget(m_columnView);
+    } else if (m_currentViewMode == ListView) {
+        m_viewStack->setCurrentWidget(m_listContainer);
     } else {
-        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
+        m_viewStack->setCurrentWidget(m_gridView);
     }
 }
 
