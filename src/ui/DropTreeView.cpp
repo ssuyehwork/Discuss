@@ -73,43 +73,6 @@ void DropTreeView::startDrag(Qt::DropActions supportedActions) {
     ViewDragDropHelper::executeStartDrag(this, supportedActions);
 }
 
-void DropTreeView::setModel(QAbstractItemModel* newModel) {
-    QTreeView::setModel(newModel);
-    if (newModel) {
-        connect(newModel, &QAbstractItemModel::modelReset, this, &DropTreeView::updateGroupHeaderSpanning, Qt::UniqueConnection);
-        connect(newModel, &QAbstractItemModel::rowsInserted, this, &DropTreeView::updateGroupHeaderSpanning, Qt::UniqueConnection);
-        connect(newModel, &QAbstractItemModel::layoutChanged, this, &DropTreeView::updateGroupHeaderSpanning, Qt::UniqueConnection);
-        updateGroupHeaderSpanning();
-    }
-}
-
-void DropTreeView::updateGroupHeaderSpanning() {
-    if (!model()) return;
-    int rows = model()->rowCount();
-    for (int r = 0; r < rows; ++r) {
-        QModelIndex idx = model()->index(r, 0);
-        bool isHeader = idx.data(IsGroupHeaderRole).toBool();
-        if (isHeader) {
-            setFirstColumnSpanned(r, QModelIndex(), true);
-        }
-    }
-}
-
-void DropTreeView::mousePressEvent(QMouseEvent* event) {
-    QModelIndex idx = indexAt(event->pos());
-    if (idx.isValid() && idx.data(IsGroupHeaderRole).toBool()) {
-        if (event->button() == Qt::LeftButton) {
-            bool currentCollapsed = idx.data(IsGroupCollapsedRole).toBool();
-            if (model()) {
-                model()->setData(idx, !currentCollapsed, IsGroupCollapsedRole);
-            }
-            event->accept();
-            return;
-        }
-    }
-    QTreeView::mousePressEvent(event);
-}
-
 void DropTreeView::applyColumnPolicies() {
     QHeaderView* hdr = header();
     if (!hdr) return;

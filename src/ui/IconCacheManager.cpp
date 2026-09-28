@@ -1,5 +1,4 @@
 #include "IconCacheManager.h"
-#include "UiHelper.h"
 #include <QFileIconProvider>
 #include <QFileInfo>
 
@@ -25,7 +24,7 @@ QIcon IconCacheManager::getCachedIcon(const QString& ext, bool isDir) {
     QFileIconProvider provider;
     QIcon icon;
     if (isDir) {
-        icon = UiHelper::getIcon("folder_filled", QColor("#888888"), 128);
+        icon = provider.icon(QFileIconProvider::Folder);
     } else {
         if (key.length() > 12) key = "unknown";
         icon = provider.icon(QFileInfo("dummy." + key));

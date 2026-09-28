@@ -8,29 +8,6 @@ namespace QuarkMeta {
 
 FilterProxyModel::FilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {}
 
-void FilterProxyModel::setGroupHeadersEnabled(bool enabled) {
-    if (m_groupHeadersEnabled != enabled) {
-        m_groupHeadersEnabled = enabled;
-        updateFilter();
-    }
-}
-
-bool FilterProxyModel::setData(const QModelIndex& index, const QVariant& value, int role) {
-    if (role == IsGroupCollapsedRole) {
-        if (index.data(TypeRole).toString() == "folder_group_header") {
-            m_foldersCollapsed = value.toBool();
-            updateFilter();
-            return true;
-        } else if (index.data(TypeRole).toString() == "file_group_header") {
-            m_filesCollapsed = value.toBool();
-            updateFilter();
-            return true;
-        }
-    }
-    return QSortFilterProxyModel::setData(index, value, role);
-}
-
-
 void FilterProxyModel::updateFilter() {
     beginFilterChange();
     endFilterChange();

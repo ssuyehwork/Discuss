@@ -2,7 +2,6 @@
 #define NOMINMAX
 #endif
 #include "JustifiedView.h"
-#include "UiHelper.h"
 #include "CardLayoutEngine.h"
 #include "../core/ModelContract.h"
 #include <QPainter>
@@ -96,16 +95,10 @@ void JustifiedView::onLayoutTimerTimeout() {
 }
 
 QRect JustifiedView::visualRect(const QModelIndex& index) const {
-    if (!index.isValid()) return QRect();
-    int targetRow = index.row();
-    for (const auto& geo : m_geometries) {
-        if (!geo.isHeader && geo.index == targetRow) {
-            QRect r = geo.rect;
-            r.translate(0, -verticalScrollBar()->value());
-            return r;
-        }
-    }
-    return QRect();
+    if (!index.isValid() || index.row() >= (int)m_geometries.size()) return QRect();
+    QRect r = m_geometries[index.row()].rect;
+    r.translate(0, -verticalScrollBar()->value());
+    return r;
 }
 
 void JustifiedView::scrollTo(const QModelIndex& index, ScrollHint hint) {
@@ -133,9 +126,6 @@ QModelIndex JustifiedView::indexAt(const QPoint& point) const {
     for (; it != m_geometries.end(); ++it) {
         if (it->rect.top() > y) break;
         if (it->rect.contains(point.x(), y)) {
-            if (it->isHeader) {
-                return QModelIndex();
-            }
             return model()->index(it->index, 0);
         }
     }
@@ -214,7 +204,7 @@ void JustifiedView::setSelection(const QRect& rect, QItemSelectionModel::Selecti
     QRect contentsRect = rect.translated(0, verticalScrollBar()->value());
     QItemSelection selection;
     for (const auto& geo : m_geometries) {
-        if (!geo.isHeader && geo.rect.intersects(contentsRect)) {
+        if (geo.rect.intersects(contentsRect)) {
             QModelIndex idx = model()->index(geo.index, 0);
             selection.select(idx, idx);
         }
@@ -234,18 +224,6 @@ QRegion JustifiedView::visualRegionForSelection(const QItemSelection& selection)
 
 void JustifiedView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton && event->modifiers() == Qt::NoModifier) {
-        int y = event->pos().y() + verticalScrollBar()->value();
-        for (const auto& geo : m_geometries) {
-            if (geo.isHeader && geo.rect.contains(event->pos().x(), y)) {
-                if (geo.isFolderGroup) {
-                    m_folderGroupCollapsed = !m_folderGroupCollapsed;
-                    scheduleLayout();
-                }
-                event->accept();
-                return;
-            }
-        }
-
         QModelIndex idx = indexAt(event->pos());
         if (!idx.isValid()) {
             m_isDraggingSelection = true;
@@ -353,50 +331,17 @@ void JustifiedView::paintEvent(QPaintEvent*) {
         const auto& geo = *it;
         if (geo.rect.top() > scrollY + vHeight) break;
 
-        if (geo.isHeader) {
-            painter.save();
-            // 组头完全透明，直接透出画板底色 `#1E1E1E`
-            
-            const int iconSize = 12;
-            const int marginX = 10;
-            const QColor headerColor("#3498db");
+        QModelIndex idx = model()->index(geo.index, 0);
+        QStyleOptionViewItem option;
+        initViewItemOption(&option); 
+        option.rect = geo.rect;
+        
+        if (selectionModel()->isSelected(idx))
+            option.state |= QStyle::State_Selected;
+        if (currentIndex() == idx)
+            option.state |= QStyle::State_HasFocus;
 
-            QFont font("Microsoft YaHei", 9, QFont::Bold);
-            painter.setFont(font);
-            painter.setPen(headerColor);
-
-            if (geo.isFolderGroup) {
-                // 1. Render group title text on the left
-                QFontMetrics fm(font);
-                int textWidth = fm.horizontalAdvance(geo.headerText);
-                QRect textRect(geo.rect.left() + marginX, geo.rect.top(), textWidth, geo.rect.height());
-                painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, geo.headerText);
-
-                // 2. Render SVG vector collapse/expand arrow icon to the right of text
-                const QString iconName = m_folderGroupCollapsed ? "scroll-008.svg" : "scroll-010.svg";
-                QPixmap arrowPixmap = UiHelper::getIcon(iconName, headerColor, iconSize).pixmap(iconSize, iconSize);
-                int iconX = textRect.right() + 6;
-                int iconY = geo.rect.top() + (geo.rect.height() - iconSize) / 2;
-                painter.drawPixmap(iconX, iconY, arrowPixmap);
-            } else {
-                QRect textRect = geo.rect.adjusted(marginX, 0, -marginX, 0);
-                painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, geo.headerText);
-            }
-
-            painter.restore();
-        } else {
-            QModelIndex idx = model()->index(geo.index, 0);
-            QStyleOptionViewItem option;
-            initViewItemOption(&option); 
-            option.rect = geo.rect;
-            
-            if (selectionModel()->isSelected(idx))
-                option.state |= QStyle::State_Selected;
-            if (currentIndex() == idx)
-                option.state |= QStyle::State_HasFocus;
-
-            itemDelegateForIndex(idx)->paint(&painter, option, idx);
-        }
+        itemDelegateForIndex(idx)->paint(&painter, option, idx);
     }
     painter.restore();
 
@@ -426,44 +371,32 @@ void JustifiedView::updateGeometries() {
 
 void JustifiedView::doLayout() {
     m_layoutDirty = false;
-    m_geometries.clear();
     if (!model()) return;
     int count = model()->rowCount();
     
     if (count == 0) {
+        m_geometries.clear();
         m_totalHeight = 0;
         updateGeometries();
         viewport()->update();
         return;
     }
 
-    const int margin = 10;
+    // 🚀【精确数学对齐】：边距微调为 6px，可用宽度精准扣减 16px 滚动条
+    const int margin = 6;
     const int spacing = 5;
-    const int headerHeight = 28;
     
     int scrollBarW = (verticalScrollBar() && verticalScrollBar()->isVisible()) ? verticalScrollBar()->width() : 0;
     int containerWidth = width() - scrollBarW - (margin * 2);
     if (containerWidth <= 0) return;
 
+    m_geometries.resize(count);
     int currentY = margin; 
 
     const int cardPadding = CardLayoutEngine::totalPaddingHorizontal();
     const int extraHeight = CardLayoutEngine::extraHeight();
 
-    std::vector<int> folderIndices;
-    std::vector<int> fileIndices;
-    for (int r = 0; r < count; ++r) {
-        QModelIndex idx = model()->index(r, 0);
-        bool isDir = (model()->data(idx, TypeRole).toString() == "folder");
-        if (isDir) {
-            folderIndices.push_back(r);
-        } else {
-            fileIndices.push_back(r);
-        }
-    }
-
-    auto layoutGridGroup = [&](const std::vector<int>& indices) {
-        if (indices.empty()) return;
+    if (m_layoutMode == GridMode) {
         int itemWidth = m_targetRowHeight + cardPadding;
         int itemHeight = m_targetRowHeight + extraHeight;
 
@@ -475,11 +408,20 @@ void JustifiedView::doLayout() {
             standardSpacing = (containerWidth - (maxNumInRow * itemWidth)) / (maxNumInRow - 1);
         }
 
-        int idxCount = static_cast<int>(indices.size());
         int i = 0;
-        while (i < idxCount) {
+        while (i < count) {
             int rowStart = i;
-            int numInRow = std::min(maxNumInRow, idxCount - i);
+            bool isCurrentDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
+
+            int numInRow = 0;
+            while (i < count && numInRow < maxNumInRow) {
+                bool isDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
+                if (isDir != isCurrentDir) {
+                    break;
+                }
+                numInRow++;
+                i++;
+            }
 
             int currentX = margin;
             if (maxNumInRow == 1) {
@@ -487,38 +429,46 @@ void JustifiedView::doLayout() {
             }
 
             for (int j = 0; j < numInRow; ++j) {
-                int modelIdx = indices[rowStart + j];
-                ItemGeometry itemGeo;
-                itemGeo.rect = QRect(currentX, currentY, itemWidth, itemHeight);
-                itemGeo.index = modelIdx;
-                itemGeo.isHeader = false;
-                m_geometries.push_back(itemGeo);
+                int itemIdx = rowStart + j;
+                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, itemHeight), itemIdx };
                 currentX += itemWidth + standardSpacing;
             }
-            i += numInRow;
-            currentY += itemHeight + spacing;
+            currentY += itemHeight;
+            if (i < count) {
+                currentY += spacing;
+            }
         }
-    };
-
-    auto layoutJustifiedGroup = [&](const std::vector<int>& indices) {
-        if (indices.empty()) return;
-        int idxCount = static_cast<int>(indices.size());
+    } else {
         int i = 0;
-        while (i < idxCount) {
+        while (i < count) {
             int rowStart = i;
 
             double rowAspectRatioSum = 0;
             std::vector<double> aspectRatios;
 
-            while (i < idxCount) {
-                int modelIdx = indices[i];
-                QModelIndex idx = model()->index(modelIdx, 0);
+            bool forceBreak = false;
+            while (i < count) {
+                QModelIndex idx = model()->index(i, 0);
                 double ar = model()->data(idx, m_aspectRatioRole).toDouble();
                 if (ar <= 0) ar = 1.0;
+                
+                QString type = model()->data(idx, TypeRole).toString();
+                bool isCurrentDir = (type == "folder");
+
+                if (i > rowStart) {
+                    QModelIndex prevIdx = model()->index(i - 1, 0);
+                    QString prevType = model()->data(prevIdx, TypeRole).toString();
+                    bool isPrevDir = (prevType == "folder");
+                    
+                    if (isCurrentDir != isPrevDir) {
+                        forceBreak = true;
+                        break;
+                    }
+                }
 
                 aspectRatios.push_back(ar);
                 rowAspectRatioSum += ar;
-
+                
                 int numInRow = (int)aspectRatios.size();
                 double estimatedWidth = (rowAspectRatioSum * m_targetRowHeight) + (cardPadding * numInRow) + (spacing * (numInRow - 1));
                 if (estimatedWidth > containerWidth) {
@@ -528,7 +478,7 @@ void JustifiedView::doLayout() {
                     } else {
                         i++;
                     }
-                    break;
+                    break; 
                 }
                 i++;
             }
@@ -538,8 +488,8 @@ void JustifiedView::doLayout() {
             if (numInRow <= 0) break;
 
             int actualHeight = m_targetRowHeight;
-            bool isLastRow = (i == idxCount);
-            bool rowIsJustified = !isLastRow;
+            bool isLastRow = (i == count);
+            bool rowIsJustified = !isLastRow && !forceBreak; 
 
             int availableImageWidth = containerWidth - (spacing * (numInRow - 1)) - (cardPadding * numInRow);
 
@@ -547,12 +497,13 @@ void JustifiedView::doLayout() {
                 actualHeight = qRound(availableImageWidth / rowAspectRatioSum);
                 actualHeight = std::max(actualHeight, (int)(m_targetRowHeight * 0.75));
                 actualHeight = std::min(actualHeight, (int)(m_targetRowHeight * 1.5));
+                rowIsJustified = true; 
             }
 
             int currentX = margin;
 
             for (int j = 0; j < numInRow; ++j) {
-                int modelIdx = indices[rowStart + j];
+                int itemIdx = rowStart + j;
                 int itemWidth;
 
                 if (j == numInRow - 1 && rowIsJustified) {
@@ -561,52 +512,10 @@ void JustifiedView::doLayout() {
                     itemWidth = qRound(aspectRatios[j] * actualHeight) + cardPadding;
                 }
 
-                ItemGeometry itemGeo;
-                itemGeo.rect = QRect(currentX, currentY, itemWidth, actualHeight + extraHeight);
-                itemGeo.index = modelIdx;
-                itemGeo.isHeader = false;
-                m_geometries.push_back(itemGeo);
-                currentX += itemWidth + spacing;
+                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, actualHeight + extraHeight), itemIdx };
+                currentX += itemWidth + spacing; 
             }
             currentY += actualHeight + extraHeight + spacing;
-        }
-    };
-
-    if (!folderIndices.empty()) {
-        ItemGeometry folderHeaderGeo;
-        folderHeaderGeo.rect = QRect(margin, currentY, containerWidth, headerHeight);
-        folderHeaderGeo.index = -1;
-        folderHeaderGeo.isHeader = true;
-        folderHeaderGeo.headerText = QString("文件夹 (%1)").arg(folderIndices.size());
-        folderHeaderGeo.isFolderGroup = true;
-        m_geometries.push_back(folderHeaderGeo);
-        currentY += headerHeight + spacing;
-
-        if (!m_folderGroupCollapsed) {
-            if (m_layoutMode == GridMode) {
-                layoutGridGroup(folderIndices);
-            } else {
-                layoutJustifiedGroup(folderIndices);
-            }
-        }
-    }
-
-    if (!fileIndices.empty()) {
-        if (!folderIndices.empty()) {
-            ItemGeometry fileHeaderGeo;
-            fileHeaderGeo.rect = QRect(margin, currentY, containerWidth, headerHeight);
-            fileHeaderGeo.index = -1;
-            fileHeaderGeo.isHeader = true;
-            fileHeaderGeo.headerText = QString("文件 (%1)").arg(fileIndices.size());
-            fileHeaderGeo.isFolderGroup = false;
-            m_geometries.push_back(fileHeaderGeo);
-            currentY += headerHeight + spacing;
-        }
-
-        if (m_layoutMode == GridMode) {
-            layoutGridGroup(fileIndices);
-        } else {
-            layoutJustifiedGroup(fileIndices);
         }
     }
 

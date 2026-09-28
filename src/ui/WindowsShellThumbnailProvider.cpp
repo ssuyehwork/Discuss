@@ -3,7 +3,6 @@
 #endif
 
 #include "WindowsShellThumbnailProvider.h"
-#include "UiHelper.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>
@@ -76,7 +75,7 @@ QIcon WindowsShellThumbnailProvider::getFileIcon(const QString& filePath, int si
     static QIcon s_defaultFolderIcon;
     if (s_defaultFileIcon.isNull() || s_defaultFolderIcon.isNull()) {
         QFileIconProvider provider;
-        s_defaultFolderIcon = UiHelper::getIcon("folder_filled", QColor("#888888"), 128);
+        s_defaultFolderIcon = provider.icon(QFileIconProvider::Folder);
         s_defaultFileIcon = provider.icon(QFileIconProvider::File);
     }
     QIcon placeholderIcon = info.isDir() ? s_defaultFolderIcon : s_defaultFileIcon;
@@ -119,7 +118,7 @@ QIcon WindowsShellThumbnailProvider::getFileIconFast(const QString& filePath, bo
     static QIcon s_defaultFolderIcon;
     if (s_defaultFileIcon.isNull() || s_defaultFolderIcon.isNull()) {
         QFileIconProvider provider;
-        s_defaultFolderIcon = UiHelper::getIcon("folder_filled", QColor("#888888"), 128);
+        s_defaultFolderIcon = provider.icon(QFileIconProvider::Folder);
         s_defaultFileIcon = provider.icon(QFileIconProvider::File);
     }
     QIcon placeholderIcon = isDir ? s_defaultFolderIcon : s_defaultFileIcon;
@@ -151,7 +150,7 @@ void WindowsShellThumbnailProvider::handleIconLoad(const QString& filePath, cons
             if (isRoot) {
                 icon = provider.icon(info);
             } else {
-                icon = UiHelper::getIcon("folder_filled", QColor("#888888"), 128);
+                icon = provider.icon(QFileIconProvider::Folder);
             }
         } else {
             icon = provider.icon(QFileInfo("dummy." + key));

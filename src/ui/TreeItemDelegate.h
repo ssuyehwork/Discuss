@@ -42,36 +42,6 @@ public:
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         if (!index.isValid()) return;
 
-        bool isHeader = index.data(IsGroupHeaderRole).toBool();
-        if (isHeader) {
-            painter->save();
-            
-            const int iconSize = 12;
-            const int marginX = 10;
-            const QColor headerColor("#3498db");
-
-            bool isCollapsed = index.data(IsGroupCollapsedRole).toBool();
-            QString headerText = index.data(Qt::DisplayRole).toString();
-
-            // 1. Draw Section Title Text
-            painter->setPen(headerColor);
-            painter->setFont(QFont("Microsoft YaHei", 9, QFont::Bold));
-            
-            QFontMetrics fm(painter->font());
-            int textWidth = fm.horizontalAdvance(headerText);
-            QRect textRect(option.rect.left() + marginX, option.rect.top(), textWidth + 4, option.rect.height());
-            painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, headerText);
-
-            // 2. Draw SVG Vector Arrow Icon
-            const QString iconName = isCollapsed ? "scroll-008.svg" : "scroll-010.svg";
-            QPixmap arrowPixmap = UiHelper::getIcon(iconName, headerColor, iconSize).pixmap(iconSize, iconSize);
-            int iconX = textRect.right() + 4;
-            int iconY = option.rect.top() + (option.rect.height() - iconSize) / 2;
-            painter->drawPixmap(iconX, iconY, arrowPixmap);
-
-            painter->restore();
-            return;
-        }
 
         bool selected = option.state & QStyle::State_Selected;
         bool hover = option.state & QStyle::State_MouseOver;
