@@ -11,7 +11,7 @@ FilterProxyModel::FilterProxyModel(QObject* parent) : QSortFilterProxyModel(pare
 void FilterProxyModel::setGroupHeadersEnabled(bool enabled) {
     if (m_groupHeadersEnabled != enabled) {
         m_groupHeadersEnabled = enabled;
-        invalidateFilter();
+        updateFilter();
     }
 }
 
@@ -19,11 +19,11 @@ bool FilterProxyModel::setData(const QModelIndex& index, const QVariant& value, 
     if (role == IsGroupCollapsedRole) {
         if (index.data(TypeRole).toString() == "folder_group_header") {
             m_foldersCollapsed = value.toBool();
-            invalidateFilter();
+            updateFilter();
             return true;
         } else if (index.data(TypeRole).toString() == "file_group_header") {
             m_filesCollapsed = value.toBool();
-            invalidateFilter();
+            updateFilter();
             return true;
         }
     }
