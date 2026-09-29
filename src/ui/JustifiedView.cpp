@@ -237,6 +237,18 @@ QRegion JustifiedView::visualRegionForSelection(const QItemSelection& selection)
 }
 
 void JustifiedView::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::RightButton) {
+        QModelIndex hitIdx = indexAt(event->pos());
+        if (hitIdx.isValid()) {
+            if (selectionModel() && !selectionModel()->isSelected(hitIdx)) {
+                selectionModel()->select(hitIdx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                selectionModel()->setCurrentIndex(hitIdx, QItemSelectionModel::NoUpdate);
+            }
+        }
+        event->accept();
+        return;
+    }
+
     if (event->button() == Qt::LeftButton && event->modifiers() == Qt::NoModifier) {
         QModelIndex idx = indexAt(event->pos());
         if (!idx.isValid()) {

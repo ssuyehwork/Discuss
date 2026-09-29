@@ -92,18 +92,6 @@ QVariant DiskItemModel::headerData(int section, Qt::Orientation orientation, int
     return QAbstractTableModel::headerData(section, orientation, role);
 }
 
-void DiskItemModel::addItemRecord(const ItemRecord& record) {
-    if (record.path.isEmpty()) return;
-    QString nPath = QDir::toNativeSeparators(record.path);
-    if (m_pathToIndex.find(nPath) != m_pathToIndex.end()) return;
-
-    int newRow = static_cast<int>(m_allRecords.size());
-    beginInsertRows(QModelIndex(), newRow, newRow);
-    m_allRecords.push_back(record);
-    m_pathToIndex[nPath] = newRow;
-    endInsertRows();
-}
-
 void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     if (m_thumbBatchTimer) m_thumbBatchTimer->stop();
     m_pendingThumbRows.clear();
@@ -494,6 +482,8 @@ void DiskItemModel::clearCacheForFolder(const QString& folderPath) {
 
 void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
     if (rows.isEmpty() || CoreController::isShuttingDown()) return;
+
+    qDebug() << "[THUMB_TRACE] DiskItemModel::loadThumbnailsForRows called with" << rows.size() << "rows.";
 
     uint64_t thisGen = m_currentGen.load(std::memory_order_relaxed);
 

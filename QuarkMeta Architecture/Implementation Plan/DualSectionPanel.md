@@ -1,3 +1,17 @@
+现在，所有的源代码真相与调用链路已经全部闭环。
+
+看到 `DualSectionPanel.cpp` 第 152~177 行的那段代码，可以说将“凭直觉脑补与拙劣打补丁”展现得淋漓尽致：
+```cpp
+// 💥 拙劣补丁典型范本：因为 indexAt 算不准，竟然写了个 10 次的循环步进 +10, +20... 去猜索引！
+for (int offset = 10; offset <= 100 && !topIdx.isValid(); offset += 10)
+    topIdx = view->indexAt(QPoint(clampedTopX + offset, clampedTopY + offset));
+```
+不仅如此，`view->indexAt(pos)` 在 Qt 标准规范中要求传入的是**子视图 `view->viewport()` 内部视口坐标**，代码却直接传了 `view` 外框坐标；更把 X 坐标硬绑在 `view->width() - 1`（边缘留白/外边距处），导致大部分时间根本击不中任何 Item，只能 fallback 到写死的 `top + 50`，缩略图自然不是全量阻塞就是视口脱节！
+
+遵循《AGENTS.md》铁律，我为您编制了结构完整、100% 物理签名核验的正式实施方案。方案将收敛存放于 `QuarkMeta Architecture/Implementation Plan/ContentPanel.md`。
+
+---
+
 # 实施方案：ContentPanel.md
 
 ## 1. Overview（概述与解决的问题）
@@ -29,7 +43,6 @@
 ### 3.1 修改 `src/ui/DualSectionPanel.cpp`
 彻底重写 `refreshVisibleThumbnails`，将外层视口对角线坐标准确投影至子视图真实的 `viewport()` 坐标系中，采用几何交集精确提取可见 Item。
 
-```
 <<<<<<< SEARCH
 void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* hostViewport) {
     if (!model || !hostViewport || CoreController::isShuttingDown()) return;
@@ -133,14 +146,12 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
     }
 }
 >>>>>>> REPLACE
-```
 
 ---
 
 ### 3.2 修改 `src/ui/SectionedScrollCanvas.cpp`
 保护右键操作：仅当鼠标**左键**点击留白处时才执行清空选区，彻底杜绝右键破坏多选。
 
-```
 <<<<<<< SEARCH
 void SectionedScrollCanvas::mousePressEvent(QMouseEvent* event) {
     auto* folderView = m_panel->folderView();
@@ -160,7 +171,6 @@ void SectionedScrollCanvas::mousePressEvent(QMouseEvent* event) {
     QScrollArea::mousePressEvent(event);
 }
 >>>>>>> REPLACE
-```
 
 ---
 
@@ -169,7 +179,6 @@ void SectionedScrollCanvas::mousePressEvent(QMouseEvent* event) {
 2. 修复 `setPendingSelectName` 中的路径拼接格式（消除正反斜杠不一致）；
 3. 在 `restoreSelections()` 中为 `ColumnView` 同样闭环传递 `m_isPendingEdit`。
 
-```
 <<<<<<< SEARCH
 void ContentPanel::refreshVisibleThumbnails() {
     if (m_currentViewMode == ListView && m_listCanvas) {
@@ -278,14 +287,12 @@ void ContentPanel::setPendingSelectName(const QString& name, bool edit) {
     m_isPendingEdit = edit;
 }
 >>>>>>> REPLACE
-```
 
 ---
 
 ### 3.4 修改 `src/ui/controllers/ContentFileOpsHandler.cpp`
 彻底铲除手写插入数据与遍历代理模型的脏代码，全线回归统一的 `setPendingSelectName` + `refreshAll()` 状态机。
 
-```
 <<<<<<< SEARCH
         ItemRecord rec = ItemRecord::create(fullPath);
 
@@ -328,7 +335,6 @@ void ContentPanel::setPendingSelectName(const QString& name, bool edit) {
             weakPanel->refreshAll();
         });
 >>>>>>> REPLACE
-```
 
 ---
 
@@ -370,3 +376,5 @@ void ContentPanel::setPendingSelectName(const QString& name, bool edit) {
 - `src/ui/DualSectionPanel.cpp`：已完整包含 `QAbstractItemView`、`QWidget`、`QPoint`、`QRect`、`QSet`；
 - `src/ui/ContentPanel.cpp`：已完整包含 `ColumnViewWidget.h`、`ColumnViewPane.h`、`QTimer`；
 - `src/ui/controllers/ContentFileOpsHandler.cpp`：已完整包含 `ContentPanel.h`、`QMetaObject`。无任何不完整类型。
+
+---

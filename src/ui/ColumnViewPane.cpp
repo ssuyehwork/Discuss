@@ -415,9 +415,10 @@ void ColumnViewPane::selectItemByPath(const QString& targetPath) {
     tryPendingSelection();
 }
 
-void ColumnViewPane::setPendingSelectPaths(const QSet<QString>& paths) {
+void ColumnViewPane::setPendingSelectPaths(const QSet<QString>& paths, bool edit) {
     m_pendingSelectPaths = paths;
     m_pendingSelectPath.clear();
+    m_isPendingEdit = edit;
     tryPendingSelection();
 }
 
@@ -469,12 +470,17 @@ void ColumnViewPane::tryPendingSelection() {
         }
 
         bool matchedAny = false;
+        DropListView* editView = nullptr;
+        QModelIndex editIdx;
+
         if (!fileSel.isEmpty() && m_listView->selectionModel()) {
             QSignalBlocker blocker(m_listView->selectionModel());
             m_listView->selectionModel()->select(fileSel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             if (lastFileIdx.isValid()) {
                 m_listView->selectionModel()->setCurrentIndex(lastFileIdx, QItemSelectionModel::NoUpdate);
                 m_listView->scrollTo(lastFileIdx, QAbstractItemView::PositionAtCenter);
+                editView = m_listView;
+                editIdx = lastFileIdx;
             }
             matchedAny = true;
         }
@@ -484,6 +490,8 @@ void ColumnViewPane::tryPendingSelection() {
             if (lastFolderIdx.isValid()) {
                 m_folderListView->selectionModel()->setCurrentIndex(lastFolderIdx, QItemSelectionModel::NoUpdate);
                 m_folderListView->scrollTo(lastFolderIdx, QAbstractItemView::PositionAtCenter);
+                editView = m_folderListView;
+                editIdx = lastFolderIdx;
             }
             matchedAny = true;
         }
@@ -491,6 +499,17 @@ void ColumnViewPane::tryPendingSelection() {
         if (matchedAny) {
             m_pendingSelectPaths.clear();
             m_pendingSelectPath.clear();
+            if (m_isPendingEdit && editView && editIdx.isValid()) {
+                m_isPendingEdit = false;
+                QPointer<DropListView> weakEditView(editView);
+                QTimer::singleShot(0, this, [weakEditView, editIdx]() {
+                    if (weakEditView && editIdx.isValid()) {
+                        weakEditView->setFocus();
+                        weakEditView->setCurrentIndex(editIdx);
+                        weakEditView->edit(editIdx);
+                    }
+                });
+            }
             emit selectionChanged();
             return;
         }

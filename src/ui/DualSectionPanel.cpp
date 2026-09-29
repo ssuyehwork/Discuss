@@ -157,40 +157,78 @@ QModelIndexList DualSectionPanel::getSelectedIndexes() const {
 void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* hostViewport) {
     if (!model || !hostViewport || CoreController::isShuttingDown()) return;
 
-    QRect vpRect = hostViewport->rect();
+    QRect hostVpRect = hostViewport->rect();
     QSet<int> visibleRows;
 
     auto scanView = [&](QAbstractItemView* view, FilterProxyModel* proxy) {
-        if (!view || !view->isVisible() || !proxy || proxy->rowCount() == 0) return;
+        if (!view || !view->isVisible() || !view->viewport() || !proxy || proxy->rowCount() == 0) return;
 
-        QPoint topPoint = view->mapFromGlobal(hostViewport->mapToGlobal(vpRect.topLeft()));
-        QPoint btmPoint = view->mapFromGlobal(hostViewport->mapToGlobal(vpRect.bottomRight()));
+        QWidget* subVp = view->viewport();
+        // 将外层 QScrollArea 视口矩形投影到子视图真实的 viewport 坐标系
+        QPoint topPoint = subVp->mapFromGlobal(hostViewport->mapToGlobal(hostVpRect.topLeft()));
+        QPoint btmPoint = subVp->mapFromGlobal(hostViewport->mapToGlobal(hostVpRect.bottomRight()));
 
-        if (topPoint.y() >= view->height() || btmPoint.y() <= 0) return;
+        // 完全在可视区域之外时直接跳过
+        if (topPoint.y() >= subVp->height() || btmPoint.y() <= 0) return;
 
-        int clampedTopX = qBound(0, topPoint.x(), view->width() - 1);
-        int clampedTopY = qBound(0, topPoint.y(), view->height() - 1);
+        // 限制在子视图可视区域内，并避开极端边缘 padding
+        int sampleTopY = qBound(0, topPoint.y(), subVp->height() - 1);
+        int sampleBtmY = qBound(0, btmPoint.y(), subVp->height() - 1);
+        int sampleLeftX = qBound(0, qMax(topPoint.x(), 12), subVp->width() - 1);
+        int sampleRightX = qBound(0, qMin(btmPoint.x(), subVp->width() - 12), subVp->width() - 1);
 
-        int clampedBtmX = qBound(0, btmPoint.x(), view->width() - 1);
-        int clampedBtmY = qBound(0, btmPoint.y(), view->height() - 1);
+        QModelIndex topIdx = view->indexAt(QPoint(sampleLeftX, sampleTopY));
+        QModelIndex btmIdx = view->indexAt(QPoint(sampleRightX, sampleBtmY));
 
-        QModelIndex topIdx = view->indexAt(QPoint(clampedTopX, clampedTopY));
+        // 若直接采样点位于卡片间隙，向中心采样
         if (!topIdx.isValid()) {
-            for (int offset = 10; offset <= 100 && !topIdx.isValid(); offset += 10)
-                topIdx = view->indexAt(QPoint(clampedTopX + offset, clampedTopY + offset));
+            topIdx = view->indexAt(QPoint(subVp->width() / 2, sampleTopY));
         }
-        QModelIndex btmIdx = view->indexAt(QPoint(clampedBtmX, clampedBtmY));
         if (!btmIdx.isValid()) {
-            for (int offset = 10; offset <= 100 && !btmIdx.isValid(); offset += 10)
-                btmIdx = view->indexAt(QPoint(clampedBtmX - offset, clampedBtmY - offset));
+            btmIdx = view->indexAt(QPoint(subVp->width() / 2, sampleBtmY));
         }
 
-        int top = topIdx.isValid() ? qMax(0, topIdx.row() - 10) : 0;
-        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 10) : qMin(proxy->rowCount() - 1, top + 50);
+        int top = -1;
+        int bottom = -1;
 
-        for (int r = top; r <= bottom; ++r) {
-            QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
-            if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
+        if (topIdx.isValid()) {
+            top = topIdx.row();
+        }
+        if (btmIdx.isValid()) {
+            bottom = btmIdx.row();
+        }
+
+        // 🚨【关键修复】：若采样的边缘坐标刚好命中卡片间隙（padding），向中心步进扫描寻找视口内第一个/最后一个有效索引
+        if (top == -1 || bottom == -1) {
+            int stepY = 16;
+            int currentY = sampleTopY;
+            while (top == -1 && currentY <= sampleBtmY) {
+                QModelIndex idx = view->indexAt(QPoint(subVp->width() / 2, currentY));
+                if (idx.isValid()) {
+                    top = idx.row();
+                }
+                currentY += stepY;
+            }
+
+            currentY = sampleBtmY;
+            while (bottom == -1 && currentY >= sampleTopY) {
+                QModelIndex idx = view->indexAt(QPoint(subVp->width() / 2, currentY));
+                if (idx.isValid()) {
+                    bottom = idx.row();
+                }
+                currentY -= stepY;
+            }
+        }
+
+        // 只有当视口内确实扫描到有效的卡片行时，才计算加载范围（前扩 4 行，后扩 4 行缓冲）；
+        // 如果视图完全为空或不在视口内部，绝对严禁退化为 0 ~ rowCount()-1 全量加载！
+        if (top != -1 && bottom != -1) {
+            int clampedTop = qMax(0, top - 4);
+            int clampedBottom = qMin(proxy->rowCount() - 1, bottom + 4);
+            for (int r = clampedTop; r <= clampedBottom; ++r) {
+                QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
+                if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
+            }
         }
     };
 
@@ -198,10 +236,10 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
     scanView(m_fileView, m_fileProxyModel);
 
     if (!visibleRows.isEmpty()) {
-        qDebug() << "[THUMB_TRACE] refreshVisibleThumbnails calculated visible source rows:" << visibleRows.values();
+        qDebug() << "[THUMB_TRACE] DualSectionPanel::refreshVisibleThumbnails - Submitting" << visibleRows.size() << "rows to loadThumbnailsForRows.";
         model->loadThumbnailsForRows(visibleRows.values());
     } else {
-        qDebug() << "[THUMB_TRACE] refreshVisibleThumbnails found ZERO visible rows in viewport.";
+        qDebug() << "[THUMB_TRACE] DualSectionPanel::refreshVisibleThumbnails - No visible rows found in viewport sampling.";
     }
 }
 

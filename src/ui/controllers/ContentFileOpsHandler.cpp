@@ -57,39 +57,10 @@ void ContentFileOpsHandler::createNewItem(const QString& type) {
 
         if (!success) return;
 
-        ItemRecord rec = ItemRecord::create(fullPath);
-
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, rec, fullPath]() {
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, finalName]() {
             if (!weakPanel) return;
-
-            if (weakPanel->currentViewMode() == ContentPanel::ColumnView && weakPanel->columnView()) {
-                weakPanel->columnView()->refreshActiveColumn();
-                return;
-            }
-
-            if (DiskItemModel* diskModel = qobject_cast<DiskItemModel*>(weakPanel->model())) {
-                diskModel->addItemRecord(rec);
-            }
-
-            weakPanel->applySort();
-            weakPanel->applyFilters();
-            weakPanel->recalculateAndEmitStats();
-
-            QSortFilterProxyModel* proxy = weakPanel->getActiveProxyModel();
-            QAbstractItemView* view = weakPanel->activeItemView();
-            if (proxy && view) {
-                for (int i = 0; i < proxy->rowCount(); ++i) {
-                    QModelIndex proxyIdx = proxy->index(i, 0);
-                    if (proxyIdx.data(PathRole).toString() == fullPath) {
-                        view->setFocus();
-                        view->scrollTo(proxyIdx);
-                        view->setCurrentIndex(proxyIdx);
-                        view->selectionModel()->select(proxyIdx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-                        view->edit(proxyIdx);
-                        break;
-                    }
-                }
-            }
+            weakPanel->setPendingSelectName(finalName, true);
+            weakPanel->refreshAll();
         });
     });
 }

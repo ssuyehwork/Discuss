@@ -336,10 +336,12 @@ void SectionedScrollCanvas::resizeEvent(QResizeEvent* event) {
 }
 
 void SectionedScrollCanvas::mousePressEvent(QMouseEvent* event) {
-    auto* folderView = m_panel->folderView();
-    auto* fileView = m_panel->fileView();
-    if (folderView && folderView->selectionModel()) folderView->selectionModel()->clearSelection();
-    if (fileView && fileView->selectionModel()) fileView->selectionModel()->clearSelection();
+    if (event->button() == Qt::LeftButton) {
+        auto* folderView = m_panel->folderView();
+        auto* fileView = m_panel->fileView();
+        if (folderView && folderView->selectionModel()) folderView->selectionModel()->clearSelection();
+        if (fileView && fileView->selectionModel()) fileView->selectionModel()->clearSelection();
+    }
     QScrollArea::mousePressEvent(event);
 }
 

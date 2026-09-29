@@ -32,7 +32,7 @@ public:
     void setActive(bool active);
 
     void selectItemByPath(const QString& targetPath);
-    void setPendingSelectPaths(const QSet<QString>& paths);
+    void setPendingSelectPaths(const QSet<QString>& paths, bool edit = false);
     void clearSelection();
     void setFilterState(const FilterState& state);
     void applySort(int sortType, Qt::SortOrder sortOrder);
@@ -71,6 +71,7 @@ private:
     QString m_path;
     QString m_pendingSelectPath;
     QSet<QString> m_pendingSelectPaths;
+    bool m_isPendingEdit = false;
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;

@@ -147,7 +147,7 @@ void ContentViewCoordinator::restoreSelections(const QSet<QString>& selectedPath
 
     if (m_panel->currentViewMode() == ContentPanel::ColumnView) {
         if (m_panel->columnView() && m_panel->columnView()->rightmostPane()) {
-            m_panel->columnView()->rightmostPane()->setPendingSelectPaths(selectedPaths);
+            m_panel->columnView()->rightmostPane()->setPendingSelectPaths(selectedPaths, isPendingEdit);
         }
         return;
     }
