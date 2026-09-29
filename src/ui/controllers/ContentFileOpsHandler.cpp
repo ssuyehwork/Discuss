@@ -43,7 +43,7 @@ void ContentFileOpsHandler::createNewItem(const QString& type) {
     }
 
     QPointer<ContentPanel> weakPanel(m_panel);
-    QtConcurrent::run([weakPanel, currentPath, finalName, fullPath, type]() {
+    (void)QtConcurrent::run([weakPanel, currentPath, finalName, fullPath, type]() {
         bool success = false;
         if (type == "folder") {
             success = QDir(currentPath).mkdir(finalName);
