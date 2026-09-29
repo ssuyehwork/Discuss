@@ -128,10 +128,18 @@ void PanelMediator::setupConnections() {
         }
     }
 
-    // 快捷键沉浸模式切换下沉
-    if (shortcutController && layoutManager) {
-        connect(shortcutController, &AppShortcutController::toggleImmersiveRequested, layoutManager, [layoutManager]() {
-            layoutManager->toggleImmersiveMode();
+    // 快捷键沉浸模式切换与新建文件夹下沉
+    if (shortcutController) {
+        if (layoutManager) {
+            connect(shortcutController, &AppShortcutController::toggleImmersiveRequested, layoutManager, [layoutManager]() {
+                layoutManager->toggleImmersiveMode();
+            });
+        }
+        connect(shortcutController, &AppShortcutController::createNewFolderRequested, this, [this, contentPanel]() {
+            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
+            if (target) {
+                target->createNewItem("folder");
+            }
         });
     }
 

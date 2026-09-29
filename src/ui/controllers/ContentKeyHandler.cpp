@@ -265,10 +265,6 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
 
     // 面板级全局快捷键（独立于 QAbstractItemView 焦点状态）
     if (keyEvent->modifiers() & Qt::ControlModifier) {
-        if ((keyEvent->modifiers() & Qt::ShiftModifier) && keyEvent->key() == Qt::Key_N) {
-            m_panel->createNewItem("folder");
-            return true;
-        }
         if (keyEvent->key() == Qt::Key_S) {
             m_panel->toggleFolderSectionCollapse();
             return true;

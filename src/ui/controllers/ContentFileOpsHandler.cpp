@@ -4,6 +4,7 @@
 #include "../ToolTipOverlay.h"
 #include "../BatchRenameDialog.h"
 #include "../FileCollisionDialog.h"
+#include "../models/DiskItemModel.h"
 #include "../../core/AppConfig.h"
 #include "../../core/ClipboardService.h"
 #include "../../core/NavigationHistoryService.h"
@@ -16,6 +17,9 @@
 #include <QApplication>
 #include <QPointer>
 #include <QDebug>
+#include <QtConcurrent/QtConcurrent>
+#include <QCoreApplication>
+#include <QMetaObject>
 
 namespace QuarkMeta {
 
@@ -30,29 +34,64 @@ void ContentFileOpsHandler::createNewItem(const QString& type) {
     QString baseName = (type == "folder") ? "新建文件夹" : "未命名";
     QString ext = (type == "md") ? ".md" : ((type == "txt") ? ".txt" : "");
     QString finalName = baseName + ext;
-    QString fullPath = currentPath + "/" + finalName;
+    QString fullPath = QDir(currentPath).filePath(finalName);
     int counter = 1;
 
     while (QFileInfo::exists(fullPath)) {
         finalName = baseName + QString(" (%1)").arg(counter++) + ext;
-        fullPath = currentPath + "/" + finalName;
+        fullPath = QDir(currentPath).filePath(finalName);
     }
 
-    if (type == "folder") {
-        QDir(currentPath).mkdir(finalName);
-    } else {
-        QFile f(fullPath);
-        if (f.open(QIODevice::WriteOnly)) {
-            f.close();
+    QPointer<ContentPanel> weakPanel(m_panel);
+    QtConcurrent::run([weakPanel, currentPath, finalName, fullPath, type]() {
+        bool success = false;
+        if (type == "folder") {
+            success = QDir(currentPath).mkdir(finalName);
+        } else {
+            QFile f(fullPath);
+            if (f.open(QIODevice::WriteOnly)) {
+                f.close();
+                success = true;
+            }
         }
-    }
 
-    m_panel->setPendingSelectName(finalName, true);
-    if (m_panel->currentViewMode() == ContentPanel::ColumnView && m_panel->columnView()) {
-        m_panel->columnView()->refreshActiveColumn();
-    } else {
-        m_panel->loadDirectory(currentPath, m_panel->isRecursive());
-    }
+        if (!success) return;
+
+        ItemRecord rec = ItemRecord::create(fullPath);
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, rec, fullPath]() {
+            if (!weakPanel) return;
+
+            if (weakPanel->currentViewMode() == ContentPanel::ColumnView && weakPanel->columnView()) {
+                weakPanel->columnView()->refreshActiveColumn();
+                return;
+            }
+
+            if (DiskItemModel* diskModel = qobject_cast<DiskItemModel*>(weakPanel->model())) {
+                diskModel->addItemRecord(rec);
+            }
+
+            weakPanel->applySort();
+            weakPanel->applyFilters();
+            weakPanel->recalculateAndEmitStats();
+
+            QSortFilterProxyModel* proxy = weakPanel->getActiveProxyModel();
+            QAbstractItemView* view = weakPanel->activeItemView();
+            if (proxy && view) {
+                for (int i = 0; i < proxy->rowCount(); ++i) {
+                    QModelIndex proxyIdx = proxy->index(i, 0);
+                    if (proxyIdx.data(PathRole).toString() == fullPath) {
+                        view->setFocus();
+                        view->scrollTo(proxyIdx);
+                        view->setCurrentIndex(proxyIdx);
+                        view->selectionModel()->select(proxyIdx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                        view->edit(proxyIdx);
+                        break;
+                    }
+                }
+            }
+        });
+    });
 }
 
 void ContentFileOpsHandler::performBatchRename() {
