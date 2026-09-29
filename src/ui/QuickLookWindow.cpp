@@ -23,6 +23,9 @@
 #include "../meta/FavoriteService.h"
 #include "controllers/ContextMenuFactory.h"
 #include "dialogs/TextExtensionDialog.h"
+#include "FormatDecoders.h"
+#include <QCryptographicHash>
+#include <QStandardPaths>
 #include <QFileInfo>
 #include <QScreen>
 #include <QApplication>
@@ -195,7 +198,10 @@ void QuickLookWindow::renderImage(const QString& path) {
                 QPainter painter(&img);
                 renderer.render(&painter);
             }
-        } else if (ext == "ai" || ext == "eps" || ext == "psd" || ext == "psb") {
+        } else if (ext == "eps") {
+            // 物理隔离与 144 DPI 高清矢量：专走 QuickLook 独立管道与独立缓存
+            img = loadOrExtractQuickLookEps(path, 2048);
+        } else if (ext == "ai" || ext == "psd" || ext == "psb") {
             img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
         } else if (QT_NATIVE_FORMATS.contains(ext)) {
             img.load(path);
@@ -293,6 +299,35 @@ void QuickLookWindow::renderText(const QString& path) {
     m_infoLabel->setText(QString("编码: %1 | 大小: %2 KB | %3").arg(encodingName).arg(QFileInfo(path).size() / 1024.0, 0, 'f', 1).arg(path));
 }
 
+
+QImage QuickLookWindow::loadOrExtractQuickLookEps(const QString& filePath, int targetSize) {
+    // 🚀【物理目录隔离铁律】：QuickLook 144 DPI 大图绝对不与缩略图共用文件夹
+    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews";
+    QDir().mkpath(cacheDir);
+
+    QFileInfo srcInfo(filePath);
+    QString hashKey = QString::fromLatin1(QCryptographicHash::hash(filePath.toUtf8(), QCryptographicHash::Md5).toHex());
+    QString cachePath = QString("%1/%2.png").arg(cacheDir, hashKey);
+    QFileInfo cacheInfo(cachePath);
+
+    // 1. 若独立缓存命中且未过期，直接毫秒载入 144 DPI 大图
+    if (cacheInfo.exists() && cacheInfo.size() > 0 && cacheInfo.lastModified() >= srcInfo.lastModified()) {
+        QImage cachedImg(cachePath);
+        if (!cachedImg.isNull()) {
+            return cachedImg;
+        }
+    }
+
+    // 2. 独立缓存未命中，调用【版本 31 策略】：-r144 GS 矢量优先提取
+    QImage highQImg = FormatDecoders::extractEpsQuickLook(filePath, targetSize);
+    if (!highQImg.isNull()) {
+        // 3. 安全异步落地到独立的 quicklook_previews 物理目录
+        highQImg.save(cachePath, "PNG");
+        return highQImg;
+    }
+
+    return QImage();
+}
 
 bool QuickLookWindow::isBinary(const QByteArray& fileData) {
     if (fileData.isEmpty()) return false;

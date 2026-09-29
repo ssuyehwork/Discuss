@@ -2,18 +2,29 @@
 #include "FileFilterService.h" 
 #include <QDir> 
 #include <QFileInfo> 
+#include <QSet>
  
 namespace QuarkMeta { 
  
 std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path, 
                                                         bool recursive, 
-                                                        const std::function<bool()>& shouldContinue) { 
+                                                        const std::function<bool()>& shouldContinue,
+                                                        int maxDepth) { 
     std::vector<ItemRecord> allItems; 
- 
-    std::function<void(const QString&, bool)> scanDir; 
-    scanDir = [&](const QString& p, bool rec) { 
+    QSet<QString> visitedDirs;
+
+    std::function<void(const QString&, bool, int)> scanDir; 
+    scanDir = [&](const QString& p, bool rec, int currentDepth) { 
+        if (currentDepth > maxDepth) return;
+
         QDir dir(p); 
         if (!dir.exists()) return; 
+
+        QString canonicalDir = dir.canonicalPath();
+        if (!canonicalDir.isEmpty()) {
+            if (visitedDirs.contains(canonicalDir)) return;
+            visitedDirs.insert(canonicalDir);
+        }
  
         QFileInfoList entries = dir.entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden, QDir::DirsFirst | QDir::Name); 
         for (const QFileInfo& info : entries) { 
@@ -27,13 +38,13 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
             ItemRecord itemRec = ItemRecord::create(absPath, nullptr); 
             allItems.push_back(itemRec); 
  
-            if (rec && info.isDir()) { 
-                scanDir(absPath, true); 
+            if (rec && info.isDir() && !info.isSymLink()) { 
+                scanDir(absPath, true, currentDepth + 1); 
             } 
         } 
     }; 
  
-    scanDir(path, recursive); 
+    scanDir(path, recursive, 0); 
     return allItems; 
 }
 

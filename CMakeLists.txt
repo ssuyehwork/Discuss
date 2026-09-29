@@ -132,6 +132,10 @@ set(SOURCES
     src/meta/MediaExtractorPipeline.h
     src/ui/BatchRenameDialog.cpp
     src/ui/BatchRenameDialog.h
+    src/ui/DualSectionPanel.h
+    src/ui/DualSectionPanel.cpp
+    src/ui/SectionedScrollCanvas.h
+    src/ui/SectionedScrollCanvas.cpp
     src/ui/FolderSectionWidget.cpp
     src/ui/FolderSectionWidget.h
     src/ui/BatchProgressDialog.h
@@ -189,6 +193,8 @@ set(SOURCES
     src/ui/DriveBarWidget.cpp
     src/ui/NavBarWidget.h
     src/ui/NavBarWidget.cpp
+    src/ui/TabBarWidget.h
+    src/ui/TabBarWidget.cpp
     src/ui/TitleBarWidget.h
     src/ui/TitleBarWidget.cpp
     src/ui/ContentHeaderWidget.h
@@ -217,6 +223,8 @@ set(SOURCES
     src/ui/MetaPanel.h
     src/ui/TagSelectorOverlay.h
     src/ui/TagSelectorOverlay.cpp
+    src/ui/PresetTagsDialog.h
+    src/ui/PresetTagsDialog.cpp
     src/ui/TaskProgressToolBar.h
     src/ui/TaskProgressToolBar.cpp
     src/ui/components/ElasticEdit.h
@@ -261,6 +269,10 @@ set(SOURCES
     src/ui/controllers/ContentDataLoader.cpp
     src/ui/controllers/ContentFileOpsHandler.h
     src/ui/controllers/ContentFileOpsHandler.cpp
+    src/ui/controllers/ContentViewCoordinator.h
+    src/ui/controllers/ContentViewCoordinator.cpp
+    src/ui/controllers/ContentPaneSplitManager.h
+    src/ui/controllers/ContentPaneSplitManager.cpp
     src/ui/workers/ContentStatsWorker.h
     src/ui/workers/ContentStatsWorker.cpp
     src/core/ActionCommand.h
@@ -305,6 +317,10 @@ set(SOURCES
     src/ui/FileNameLineEdit.cpp
     src/ui/ColumnItemDelegate.h
     src/ui/ColumnItemDelegate.cpp
+    src/ui/ColumnBlankCanvasWidget.h
+    src/ui/ColumnBlankCanvasWidget.cpp
+    src/ui/ColumnViewPane.h
+    src/ui/ColumnViewPane.cpp
     src/ui/ColumnViewWidget.h
     src/ui/ColumnViewWidget.cpp
     src/ui/RenameCapableDelegate.h

@@ -1,6 +1,8 @@
 #include "UiHelper.h"
 #include "ThemeManager.h"
 #include "SvgIcons.h"
+#include "../core/ItemRecord.h"
+#include "../util/DiskMediaExtractor.h"
 
 #include <QApplication>
 #include <QLineEdit>
@@ -146,5 +148,20 @@ void UiHelper::setupLineEditContextMenu(QLineEdit* edit) {
     });
 }
 
+bool UiHelper::hasPhysicalThumbnail(const ItemRecord& record) {
+    if (record.isDir) return false;
+    if (record.thumbStatus == 1) return false;
+
+    static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
+    QString ext = record.suffix.toLower();
+    if (iconOnlyExts.contains(ext)) return false;
+
+    if (isStandardImage(ext) && record.width > 0 && record.height > 0) {
+        return true;
+    }
+
+    QString thumbPath = DiskMediaExtractor::getDiskThumbCachePath(record.path);
+    return QFile::exists(thumbPath);
+}
 
 } // namespace QuarkMeta

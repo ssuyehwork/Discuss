@@ -14,8 +14,10 @@ public:
     static FavoriteService& instance();
 
     bool isFavorite(const QString& path) const;
-    bool addFavorite(const QString& path);
+    bool addFavorite(const QString& path, int parentId = 0);
+    int addVirtualCategory(const QString& name, int parentId = 0);
     bool removeFavorite(const QString& path);
+    bool removeFavoriteById(int id);
     bool toggleFavorite(const QString& path);
 
     QAction* buildFavoriteAction(QMenu* parentMenu, const QString& path, QObject* receiver = nullptr);

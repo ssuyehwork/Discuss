@@ -12,6 +12,28 @@ namespace QuarkMeta {
 /**
  * @brief Helper class for unified drag-and-drop behavior across item views.
  */
+class DragDropEventFilter : public QObject {
+    Q_OBJECT
+
+public:
+    explicit DragDropEventFilter(QAbstractItemView* targetView, QObject* parent = nullptr);
+    ~DragDropEventFilter() override = default;
+
+    static void install(QAbstractItemView* view);
+
+signals:
+    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+private:
+    void clearDropHighlight();
+
+    QAbstractItemView* m_targetView = nullptr;
+    QPersistentModelIndex m_currentHoverDropIdx;
+};
+
 class ViewDragDropHelper {
 public:
     static bool handleDragEnter(QAbstractItemView* view, QDragEnterEvent* event);

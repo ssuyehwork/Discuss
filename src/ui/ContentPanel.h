@@ -7,10 +7,12 @@
 #include <QScrollArea>
 #include <QSet>
 #include <QModelIndexList>
+#include <QSplitter>
 #include <atomic>
 
 #include "ScanStats.h"
 #include "FilterPanel.h"
+#include "models/ItemModelBase.h"
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
 #include "controllers/ContentSortController.h"
@@ -24,8 +26,10 @@ class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
 class ContentStatsWorker;
+class SectionedScrollCanvas;
 class FolderSectionHeaderBar;
 class FileSectionHeaderBar;
+class ContentPaneSplitManager;
 
 /**
  * @brief 内容面板（面板四）：核心业务展示工作台（纯视图承载与高级意图分发）
@@ -57,21 +61,41 @@ public:
     };
 
     enum ContextAction {
-        ActionOpen, ActionOpenDefault, ActionShowInExplorer, ActionShowInQuarkMeta, ActionNewFolder, ActionNewMd, ActionNewTxt,
+        ActionOpen, ActionOpenInNewTab, ActionOpenDefault, ActionShowInExplorer, ActionShowInQuarkMeta, ActionNewFolder, ActionNewMd, ActionNewTxt,
         ActionPin, ActionUnpin, ActionColorTag, ActionEncrypt, ActionDecrypt, ActionChangePwd,
         ActionBatchRename, ActionRename, ActionCopy, ActionCut, ActionPaste, ActionCopyTags, ActionPasteTags, ActionRepeatLastOp, ActionDelete,
         ActionPermanentDelete, ActionSecureDelete, ActionRestore, ActionRestoreAll, ActionEmptyTrash,
         ActionCopyName, ActionCopyPath, ActionAddToFavorites, ActionRefresh, ActionReextractThumbnail, ActionBatchCreate
     };
 
+    friend class ContentViewCoordinator;
+    friend class ContentPaneSplitManager;
+
     explicit ContentPanel(QWidget* parent = nullptr);
     ~ContentPanel() override = default;
+
+    static constexpr int kMaxPanes = 4;
+
+    // Dual-pane state inspection & split controls
+    bool isSplitMode() const;
+    bool isSecondaryPane() const;
+    void setIsSecondaryPane(bool secondary);
+    ContentPanel* secondaryContentPanel() const;
+    QList<ContentPanel*> panes() const;
+    int paneCount() const;
+    ContentPanel* rootPane() const;
+    void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString());
+    void closePane(ContentPanel* pane);
+    void closeSecondaryPane();
+    void requestClosePane();
+    void setActivePane(bool active);
 
     QSize minimumSizeHint() const override { return QSize(230, 100); }
     void deferredInit() {}
 
     // 1. 状态与配置查询
     QString currentPath() const { return m_currentPath; }
+    QString activePath() const;
     bool isRecursive() const { return m_isRecursive; }
     int zoomLevel() const { return m_zoomLevel; }
     ViewMode currentViewMode() const { return m_currentViewMode; }
@@ -125,6 +149,10 @@ public:
     ContentDataLoader* dataLoader() const { return m_dataLoader; }
     ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
     ContentStatsWorker* statsWorker() const { return m_statsWorker; }
+    class ContentViewCoordinator* viewCoordinator() const { return m_viewCoordinator; }
+    ContentPaneSplitManager* splitManager() const { return m_splitManager; }
+    SectionedScrollCanvas* gridCanvas() const { return m_gridCanvas; }
+    SectionedScrollCanvas* listCanvas() const { return m_listCanvas; }
 
     // 5. 业务操作分发
     void performCopy(bool cutMode);
@@ -147,7 +175,17 @@ public:
     QList<int> getSelectedTrashIds() const;
     QModelIndexList getSelectedIndexes() const;
 
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+
 signals:
+    void panelActivated(ContentPanel* panel);
+    void secondaryPaneCreated(ContentPanel* pane);
+    void secondaryPaneClosed();
+    void closePaneRequested();
     void zoomLevelChanged(int level);
     void viewModeChanged(ViewMode mode);
     void requestQuickLook(const QString& path);
@@ -160,11 +198,13 @@ signals:
     void directoryStatsReady(const QuarkMeta::ScanStats& stats);
     void statusBarStatsUpdated(int fileCount, int folderCount, int totalCount);
     void statusBarMessageReady(const QString& message);
+    void dualPanePathsChanged(const QString& path1, const QString& path2);
 
 public slots:
     void setZoomLevel(int level);
     void onSelectionChanged();
     void onCustomContextMenuRequested(const QPoint& pos);
+    void onCustomContextMenuRequested(QAbstractItemView* view, const QPoint& pos);
     void onDoubleClicked(const QModelIndex& index);
     void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), QAbstractItemModel* sourceModelOverride = nullptr);
     void loadDirectory(const QString& path, bool recursive = false);
@@ -191,7 +231,7 @@ private:
     void initGridView();
     void initListView();
     void updateGridSize();
-    void updateStatusBarStats();
+    void updateStatusBarStats(int cachedSelectedCount = -1);
     void emitSelectionChangedSignal();
 
     // 单一事实来源配置与状态 (FilterState)
@@ -216,23 +256,28 @@ private:
     // UI 组件指针
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
-    QScrollArea* m_listScrollArea = nullptr;
-    QWidget* m_listContainerWidget = nullptr;
-    FolderSectionHeaderBar* m_listFolderHeader = nullptr;
+
+    ContentPaneSplitManager* m_splitManager = nullptr;
+
+    void redistributePaneSizes();
+
+    void updateDragOverlay(const QPoint& pos);
+    void hideDragOverlay();
+
+    SectionedScrollCanvas* m_gridCanvas = nullptr;
+    SectionedScrollCanvas* m_listCanvas = nullptr;
+
+    // 保留既有指针别名：契约锁 100% 保护外部调用方（如 treeView(), gridView() 等）
     DropTreeView* m_folderTreeView = nullptr;
-    FileSectionHeaderBar* m_listFileHeader = nullptr;
+    DropTreeView* m_treeView = nullptr;
+    DropJustifiedView* m_folderGridView = nullptr;
+    QAbstractItemView* m_gridView = nullptr;
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;
-
-    QScrollArea* m_gridScrollArea = nullptr;
-    QWidget* m_gridContainerWidget = nullptr;
-    FolderSectionHeaderBar* m_gridFolderHeader = nullptr;
-    DropJustifiedView* m_folderGridView = nullptr;
-    FileSectionHeaderBar* m_gridFileHeader = nullptr;
+    FilterProxyModel* m_gridFolderProxyModel = nullptr;
+    FilterProxyModel* m_gridFileProxyModel = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
-    QAbstractItemView* m_gridView = nullptr;
-    DropTreeView* m_treeView = nullptr;
     class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;
@@ -244,6 +289,7 @@ private:
     ContentDataLoader* m_dataLoader = nullptr;
     ContentFileOpsHandler* m_fileOpsHandler = nullptr;
     ContentStatsWorker* m_statsWorker = nullptr;
+    class ContentViewCoordinator* m_viewCoordinator = nullptr;
 };
 
 } // namespace QuarkMeta

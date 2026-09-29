@@ -22,6 +22,8 @@ public:
     SearchHistoryPanel* historyPanel() const { return m_searchHistoryPanel; }
 
     void bindContentPanel(ContentPanel* contentPanel);
+    // 仅切换当前搜索目标窗格，不重复接线 UI 信号；供多窗格激活切换时调用
+    void setActiveContentPanel(ContentPanel* panel) { m_contentPanel = panel; }
 
 signals:
     void searchExecuted();

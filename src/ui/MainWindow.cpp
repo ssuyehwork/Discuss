@@ -3,6 +3,7 @@
 #endif
 #include "MainWindow.h"
 #include "TitleBarWidget.h"
+#include "TabBarWidget.h"
 #include "NavBarWidget.h"
 #include "DriveBarWidget.h"
 #include "UiHelper.h"
@@ -559,9 +560,16 @@ void MainWindow::showEvent(QShowEvent* event) {
         m_panelsInitialized = true;
         if (m_navPanel) m_navPanel->deferredInit();
 
-        QString lastPath = AppConfig::instance().getValue("MainWindow/LastPath", "computer://").toString();
-        bool isValid = lastPath.contains("://") || QDir(lastPath).exists();
-        NavigationService::instance().navigateTo(isValid ? lastPath : "computer://");
+        bool restored = false;
+        if (m_titleBarWidget && m_titleBarWidget->tabBar()) {
+            restored = m_titleBarWidget->tabBar()->restoreStateFromConfig();
+        }
+
+        if (!restored) {
+            QString lastPath = AppConfig::instance().getValue("MainWindow/LastPath", "computer://").toString();
+            bool isValid = lastPath.contains("://") || QDir(lastPath).exists();
+            NavigationService::instance().navigateTo(isValid ? lastPath : "computer://");
+        }
 
         QTimer::singleShot(500, []() {
             ToolTipOverlay::instance()->silentWarmup();
@@ -630,6 +638,9 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     }
     if (m_panelLayoutManager) {
         m_panelLayoutManager->saveLayoutState();
+    }
+    if (m_titleBarWidget && m_titleBarWidget->tabBar()) {
+        m_titleBarWidget->tabBar()->saveStateToConfig();
     }
     AppConfig::instance().sync();
     QMainWindow::closeEvent(event);

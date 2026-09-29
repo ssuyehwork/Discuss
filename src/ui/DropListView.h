@@ -16,21 +16,15 @@ public:
     explicit DropListView(QWidget* parent = nullptr);
 
 protected:
-    void dragEnterEvent(QDragEnterEvent* event) override;
-    void dragMoveEvent(QDragMoveEvent* event) override;
-    void dragLeaveEvent(QDragLeaveEvent* event) override;
-    void dropEvent(QDropEvent* event) override;
     void startDrag(Qt::DropActions supportedActions) override;
-
-private:
-    QModelIndex m_currentHoverDropIdx;
-    void clearDropHighlight();
 
 signals:
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+    void blankSpaceClicked();
     void blankSpaceDoubleClicked();
 
 protected:
+    void mousePressEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
 };
 

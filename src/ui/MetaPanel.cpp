@@ -1,6 +1,8 @@
 #include "MetaPanel.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
+#include "Logger.h"
+#include <QElapsedTimer>
 #include "components/FlowLayout.h"
 #include "../util/ShellHelper.h"
 #include <QVBoxLayout>
@@ -429,7 +431,9 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap) {
         maxW = qBound(120, maxW, 230);
         int maxH = 220;
 
-        QPixmap scaled = pixmap.scaled(QSize(maxW, maxH), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        QPixmap scaled = (pixmap.width() > maxW || pixmap.height() > maxH)
+            ? pixmap.scaled(QSize(maxW, maxH), Qt::KeepAspectRatio, Qt::SmoothTransformation)
+            : pixmap;
 
         QImage roundedImg(scaled.size(), QImage::Format_ARGB32_Premultiplied);
         roundedImg.fill(Qt::transparent);
@@ -450,11 +454,12 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap) {
         m_lblImagePreview->show();
         if (m_topPreviewBox) m_topPreviewBox->show();
     }
-    adjustFlowHeights();
-    if (m_container) m_container->adjustSize();
+    m_adjustTimer->start();
 }
 
 void MetaPanel::setSelectedPaths(const QStringList& paths) {
+    QElapsedTimer timer;
+    timer.start();
     m_selectedPaths = paths;
     m_editingPathsSnapshot = paths;
     bool hasSelection = !m_selectedPaths.isEmpty();
@@ -516,6 +521,10 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
         setColor(QString(""), false);
         setPalettes({});
         m_isInternalUpdating = false;
+    }
+    qint64 ms = timer.elapsed();
+    if (ms > 2) {
+        Logger::log(QString("[Perf] MetaPanel::setSelectedPaths(%1 paths) took %2ms").arg(paths.size()).arg(ms));
     }
 }
 
@@ -689,8 +698,6 @@ void MetaPanel::setTags(const QStringList& tags) {
         m_tagFlowLayout->addWidget(m_btnAddTagSmall);
     }
 
-    adjustFlowHeights();
-    if (m_container) m_container->adjustSize();
     m_adjustTimer->start();
 }
 
@@ -781,7 +788,6 @@ void MetaPanel::setPalettes(const QVector<QPair<QColor, float>>& palette) {
 
     m_paletteFlowLayout->invalidate();
     if (m_topPreviewBox) m_topPreviewBox->update();
-    adjustFlowHeights();
     m_adjustTimer->start();
 }
 

@@ -1,5 +1,6 @@
 #include "ContentFileOpsHandler.h"
 #include "../ContentPanel.h"
+#include "../ColumnViewWidget.h"
 #include "../ToolTipOverlay.h"
 #include "../BatchRenameDialog.h"
 #include "../FileCollisionDialog.h"
@@ -23,7 +24,7 @@ ContentFileOpsHandler::ContentFileOpsHandler(ContentPanel* panel)
 
 void ContentFileOpsHandler::createNewItem(const QString& type) {
     if (!m_panel) return;
-    QString currentPath = m_panel->currentPath();
+    QString currentPath = m_panel->activePath();
     if (currentPath.isEmpty() || currentPath == "computer://") return;
 
     QString baseName = (type == "folder") ? "新建文件夹" : "未命名";
@@ -47,7 +48,11 @@ void ContentFileOpsHandler::createNewItem(const QString& type) {
     }
 
     m_panel->setPendingSelectName(finalName, true);
-    m_panel->loadDirectory(currentPath, m_panel->isRecursive());
+    if (m_panel->currentViewMode() == ContentPanel::ColumnView && m_panel->columnView()) {
+        m_panel->columnView()->refreshActiveColumn();
+    } else {
+        m_panel->loadDirectory(currentPath, m_panel->isRecursive());
+    }
 }
 
 void ContentFileOpsHandler::performBatchRename() {
@@ -75,7 +80,7 @@ bool ContentFileOpsHandler::resolvePasteDestination() {
         ToolTipOverlay::instance()->showText(QCursor::pos(), "当前视图为回收站，不支持粘贴或拖拽导入新项目", 2000, QColor("#e81123"));
         return false;
     }
-    QString currentPath = m_panel->currentPath();
+    QString currentPath = m_panel->activePath();
     if (currentPath.isEmpty() || currentPath == "computer://") {
         ToolTipOverlay::instance()->showText(QCursor::pos(), "粘贴失败：当前未处于任何有效目录中", 2000, QColor("#e81123"));
         return false;
