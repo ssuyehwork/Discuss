@@ -170,6 +170,15 @@ void AppShortcutController::initShortcuts() {
         }
     });
 
+    // 9. Ctrl+Shift+N: 新建文件夹
+    QShortcut* scNewFolder = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N), m_window);
+    scNewFolder->setContext(Qt::WindowShortcut);
+    connect(scNewFolder, &QShortcut::activated, this, [this]() {
+        if (!isEditingFocus()) {
+            emit createNewFolderRequested();
+        }
+    });
+
     QShortcut* scPrevTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Backtab), m_window);
     scPrevTab->setContext(Qt::WindowShortcut);
     connect(scPrevTab, &QShortcut::activated, this, [this]() {
