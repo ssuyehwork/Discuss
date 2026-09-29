@@ -38,6 +38,7 @@ public:
 
     const std::vector<QuarkMeta::ItemRecord>& allRecords() const override { return m_allRecords; }
     void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) override;
+    void addItemRecord(const QuarkMeta::ItemRecord& record);
     void clear() override;
     void updateRecordMetadata(const QString& path) override;
     void loadThumbnailsForRows(const QList<int>& rows) override;

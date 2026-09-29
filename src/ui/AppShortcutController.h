@@ -35,6 +35,11 @@ signals:
      */
     void toggleImmersiveRequested();
 
+    /**
+     * @brief Ctrl+Shift+N 触发新建文件夹
+     */
+    void createNewFolderRequested();
+
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
