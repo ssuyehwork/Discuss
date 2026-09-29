@@ -5,7 +5,6 @@
 #include "DualSectionPanel.h"
 #include "FolderSectionWidget.h"
 #include "ContentHeaderWidget.h"
-#include "DropJustifiedView.h"
 #include "DropTreeView.h"
 #include "ThumbnailDelegate.h"
 #include "TreeItemDelegate.h"
@@ -71,7 +70,7 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
 QAbstractItemView* SectionedScrollCanvas::createFolderView(QObject* eventFilter) {
     QAbstractItemView* view = nullptr;
     if (m_type == CanvasType::Grid) {
-        auto* folderJv = new DropJustifiedView();
+        auto* folderJv = new JustifiedView();
         folderJv->setFrameShape(QFrame::NoFrame);
         folderJv->setSelectionMode(QAbstractItemView::SingleSelection);
         folderJv->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -117,7 +116,7 @@ QAbstractItemView* SectionedScrollCanvas::createFolderView(QObject* eventFilter)
 QAbstractItemView* SectionedScrollCanvas::createFileView(QObject* eventFilter) {
     QAbstractItemView* view = nullptr;
     if (m_type == CanvasType::Grid) {
-        auto* fileJv = new DropJustifiedView();
+        auto* fileJv = new JustifiedView();
         fileJv->setFrameShape(QFrame::NoFrame);
         fileJv->setSelectionMode(QAbstractItemView::ExtendedSelection);
         fileJv->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -204,13 +203,13 @@ void SectionedScrollCanvas::setupConnections() {
     connect(fileView, &QAbstractItemView::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
 
     if (m_type == CanvasType::Grid) {
-        if (auto* dropFolder = qobject_cast<DropJustifiedView*>(folderView)) {
-            connect(dropFolder, &DropJustifiedView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
+        if (auto* dropFolder = qobject_cast<JustifiedView*>(folderView)) {
+            connect(dropFolder, &JustifiedView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
                 emit pathsDropped(p, idx, m_folderProxyModel);
             });
         }
-        if (auto* dropFile = qobject_cast<DropJustifiedView*>(fileView)) {
-            connect(dropFile, &DropJustifiedView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
+        if (auto* dropFile = qobject_cast<JustifiedView*>(fileView)) {
+            connect(dropFile, &JustifiedView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
                 emit pathsDropped(p, idx, m_fileProxyModel);
             });
         }

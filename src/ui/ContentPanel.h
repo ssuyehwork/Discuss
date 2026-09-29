@@ -21,7 +21,7 @@
 namespace QuarkMeta {
 
 class DropTreeView;
-class DropJustifiedView;
+class JustifiedView;
 class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
@@ -270,7 +270,7 @@ private:
     // 保留既有指针别名：契约锁 100% 保护外部调用方（如 treeView(), gridView() 等）
     DropTreeView* m_folderTreeView = nullptr;
     DropTreeView* m_treeView = nullptr;
-    DropJustifiedView* m_folderGridView = nullptr;
+    JustifiedView* m_folderGridView = nullptr;
     QAbstractItemView* m_gridView = nullptr;
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;

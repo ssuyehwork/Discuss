@@ -3,6 +3,7 @@
 #endif
 #include "JustifiedView.h"
 #include "CardLayoutEngine.h"
+#include "ViewDragDropHelper.h"
 #include "../core/ModelContract.h"
 #include <QPainter>
 #include <QScrollBar>
@@ -16,6 +17,8 @@ namespace QuarkMeta {
 
 JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     setFrameShape(QFrame::NoFrame);
+    setDragEnabled(true);
+    DragDropEventFilter::install(this);
     m_layoutTimer = new QTimer(this);
     m_layoutTimer->setSingleShot(true);
     m_layoutTimer->setInterval(120);
@@ -198,6 +201,10 @@ QModelIndex JustifiedView::moveCursor(CursorAction cursorAction, Qt::KeyboardMod
     }
     
     return model()->index(row, 0);
+}
+
+void JustifiedView::startDrag(Qt::DropActions supportedActions) {
+    ViewDragDropHelper::executeStartDrag(this, supportedActions);
 }
 
 int JustifiedView::horizontalOffset() const { return 0; }

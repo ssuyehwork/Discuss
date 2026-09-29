@@ -26,6 +26,7 @@ public:
 
 signals:
     void totalHeightChanged(int height);
+    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
 
 public:
     QRect visualRect(const QModelIndex& index) const override;
@@ -43,6 +44,7 @@ protected slots:
     void onLayoutTimerTimeout();
 
 protected:
+    void startDrag(Qt::DropActions supportedActions) override;
     QModelIndex moveCursor(CursorAction cursorAction, Qt::KeyboardModifiers modifiers) override;
     int horizontalOffset() const override;
     int verticalOffset() const override;

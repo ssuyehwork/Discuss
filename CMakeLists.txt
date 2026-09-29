@@ -153,8 +153,6 @@ set(SOURCES
     src/ui/ContentPanel.h
     src/ui/DriveButton.cpp
     src/ui/DriveButton.h
-    src/ui/DropJustifiedView.cpp
-    src/ui/DropJustifiedView.h
     src/ui/ViewDragDropHelper.cpp
     src/ui/ViewDragDropHelper.h
     src/ui/DropTreeView.cpp

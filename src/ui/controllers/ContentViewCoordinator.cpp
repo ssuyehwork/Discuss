@@ -4,7 +4,6 @@
 #include "ContentViewCoordinator.h"
 #include "../ContentPanel.h"
 #include "../FolderSectionWidget.h"
-#include "../DropJustifiedView.h"
 #include "../DropTreeView.h"
 #include "../DropListView.h"
 #include "../ColumnViewWidget.h"
@@ -172,7 +171,19 @@ void ContentViewCoordinator::restoreSelections(const QSet<QString>& selectedPath
                 }
             }
             view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-            if (lastIdx.isValid()) { view->scrollTo(lastIdx); if (isPendingEdit) view->edit(lastIdx); }
+            if (lastIdx.isValid()) {
+                view->scrollTo(lastIdx);
+                if (isPendingEdit) {
+                    QPointer<QAbstractItemView> weakView(view);
+                    QTimer::singleShot(0, m_panel, [weakView, lastIdx]() {
+                        if (weakView && lastIdx.isValid()) {
+                            weakView->setFocus();
+                            weakView->setCurrentIndex(lastIdx);
+                            weakView->edit(lastIdx);
+                        }
+                    });
+                }
+            }
         }
     }
 }
