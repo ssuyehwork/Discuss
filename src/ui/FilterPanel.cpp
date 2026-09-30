@@ -1,5 +1,4 @@
 #include "FilterPanel.h"
-#include "Logger.h"
 #include "../core/AppConfig.h"
 #include <QSet>
 #include <QDate>
@@ -93,7 +92,6 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
 
     connect(m_filterModel, &FilterStateModel::stateChanged, this, [this](const FilterState& st) {
         m_filter = st;
-        Logger::log(QString("[FilterPanel] Emitting filterChanged signal for updated state."));
         emit filterChanged(st);
         updateHeaderStatus();
     });
@@ -1061,7 +1059,6 @@ QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, 
 }
 
 void FilterPanel::clearAllFilters(bool force) {
-    Logger::log(QString("[FilterPanel::clearAllFilters] Force: %1, Pinned: %2").arg(force).arg(m_isFilterPinned));
     if (!force && m_isFilterPinned) {
         return;
     }

@@ -3,7 +3,6 @@
 #endif
 #include "JustifiedView.h"
 #include "CardLayoutEngine.h"
-#include "Logger.h"
 #include "../core/ModelContract.h"
 #include <QPainter>
 #include <QScrollBar>
@@ -156,8 +155,6 @@ void JustifiedView::rowsInserted(const QModelIndex& parent, int start, int end) 
 }
 
 void JustifiedView::rowsAboutToBeRemoved(const QModelIndex& parent, int start, int end) {
-    Logger::log(QString("[JustifiedView] rowsAboutToBeRemoved range: %1 ~ %2, current model rowCount: %3")
-                .arg(start).arg(end).arg(model() ? model()->rowCount() : 0));
     doLayout();
     QAbstractItemView::rowsAboutToBeRemoved(parent, start, end);
 }
@@ -357,11 +354,7 @@ void JustifiedView::paintEvent(QPaintEvent* event) {
         }
 
         QModelIndex idx = model()->index(geo.index, 0);
-        if (!idx.isValid()) {
-            Logger::log(QString("[JustifiedView::paintEvent] Guarded invalid index at geo.index: %1 (model rowCount: %2)")
-                        .arg(geo.index).arg(model() ? model()->rowCount() : 0));
-            continue;
-        }
+        if (!idx.isValid()) continue;
 
         QStyleOptionViewItem option;
         initViewItemOption(&option); 
