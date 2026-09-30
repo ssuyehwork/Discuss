@@ -94,6 +94,9 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_dataLoader = new ContentDataLoader(this);
     m_fileOpsHandler = new ContentFileOpsHandler(this);
     m_statsWorker = new ContentStatsWorker(this);
+    m_splitManager = new ContentPaneSplitManager(this);
+    m_viewCoordinator = new ContentViewCoordinator(this);
+    setAcceptDrops(true);
 
     connect(m_statsWorker, &ContentStatsWorker::statsReady, this, [this](const ScanStats& stats) {
         if (m_fileProxyModel) {
@@ -316,6 +319,94 @@ void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     if (!view) return;
     ContentContextMenu menuHandler(this);
     menuHandler.showMenu(view, pos);
+}
+
+void ContentPanel::onCustomContextMenuRequested(QAbstractItemView* view, const QPoint& pos) {
+    if (!view) view = activeItemView();
+    if (!view) return;
+    ContentContextMenu menuHandler(this);
+    menuHandler.showMenu(view, pos);
+}
+
+bool ContentPanel::isSplitMode() const {
+    return m_splitManager ? m_splitManager->isSplitMode() : false;
+}
+
+bool ContentPanel::isSecondaryPane() const {
+    return m_splitManager ? m_splitManager->isSecondaryPane() : false;
+}
+
+void ContentPanel::setIsSecondaryPane(bool secondary) {
+    if (m_splitManager) m_splitManager->setIsSecondaryPane(secondary);
+}
+
+ContentPanel* ContentPanel::secondaryContentPanel() const {
+    return m_splitManager ? m_splitManager->secondaryContentPanel() : nullptr;
+}
+
+QList<ContentPanel*> ContentPanel::panes() const {
+    return m_splitManager ? m_splitManager->panes() : QList<ContentPanel*>{const_cast<ContentPanel*>(this)};
+}
+
+int ContentPanel::paneCount() const {
+    return m_splitManager ? m_splitManager->paneCount() : 1;
+}
+
+ContentPanel* ContentPanel::rootPane() const {
+    return m_splitManager ? m_splitManager->rootPane() : const_cast<ContentPanel*>(this);
+}
+
+void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
+    if (m_splitManager) m_splitManager->splitPane(orientation, secondaryPath);
+}
+
+void ContentPanel::closePane(ContentPanel* pane) {
+    if (m_splitManager) m_splitManager->closePane(pane);
+}
+
+void ContentPanel::closeSecondaryPane() {
+    if (m_splitManager) m_splitManager->closeSecondaryPane();
+}
+
+void ContentPanel::requestClosePane() {
+    emit closePaneRequested();
+}
+
+void ContentPanel::setActivePane(bool active) {
+    if (m_splitManager) m_splitManager->setActivePane(active);
+    if (active) emit panelActivated(this);
+}
+
+QString ContentPanel::activePath() const {
+    return m_currentPath;
+}
+
+void ContentPanel::redistributePaneSizes() {
+    if (m_splitManager) m_splitManager->redistributePaneSizes();
+}
+
+void ContentPanel::updateDragOverlay(const QPoint& pos) {
+    if (m_splitManager) m_splitManager->updateDragOverlay(pos);
+}
+
+void ContentPanel::hideDragOverlay() {
+    if (m_splitManager) m_splitManager->hideDragOverlay();
+}
+
+void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
+    QFrame::dragEnterEvent(event);
+}
+
+void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
+    QFrame::dragMoveEvent(event);
+}
+
+void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
+    QFrame::dragLeaveEvent(event);
+}
+
+void ContentPanel::dropEvent(QDropEvent* event) {
+    QFrame::dropEvent(event);
 }
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
