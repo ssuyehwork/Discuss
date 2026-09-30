@@ -72,11 +72,19 @@ void JustifiedView::doItemsLayout() {
 void JustifiedView::setModel(QAbstractItemModel* model) {
     if (this->model()) {
         disconnect(this->model(), &QAbstractItemModel::rowsRemoved, this, nullptr);
+        disconnect(this->model(), &QAbstractItemModel::modelReset, this, nullptr);
+        disconnect(this->model(), &QAbstractItemModel::layoutChanged, this, nullptr);
     }
     QAbstractItemView::setModel(model);
     if (model) {
         connect(model, &QAbstractItemModel::rowsRemoved, this, [this]() {
-            scheduleLayout();
+            doLayout();
+        });
+        connect(model, &QAbstractItemModel::modelReset, this, [this]() {
+            doLayout();
+        });
+        connect(model, &QAbstractItemModel::layoutChanged, this, [this]() {
+            doLayout();
         });
     }
 }
@@ -134,11 +142,10 @@ QModelIndex JustifiedView::indexAt(const QPoint& point) const {
 }
 
 void JustifiedView::dataChanged(const QModelIndex& topLeft, const QModelIndex& bottomRight, const QList<int>& roles) {
-    if (roles.contains(m_aspectRatioRole)) {
+    if (roles.isEmpty() || roles.contains(m_aspectRatioRole) || roles.contains(Qt::DecorationRole) || roles.contains(ColorRole)) {
         scheduleLayout();
-    } else {
-        viewport()->update();
     }
+    viewport()->update();
     QAbstractItemView::dataChanged(topLeft, bottomRight, roles);
 }
 
@@ -148,6 +155,7 @@ void JustifiedView::rowsInserted(const QModelIndex& parent, int start, int end) 
 }
 
 void JustifiedView::rowsAboutToBeRemoved(const QModelIndex& parent, int start, int end) {
+    doLayout();
     QAbstractItemView::rowsAboutToBeRemoved(parent, start, end);
 }
 
@@ -346,6 +354,8 @@ void JustifiedView::paintEvent(QPaintEvent* event) {
         }
 
         QModelIndex idx = model()->index(geo.index, 0);
+        if (!idx.isValid()) continue;
+
         QStyleOptionViewItem option;
         initViewItemOption(&option); 
         option.rect = geo.rect;
