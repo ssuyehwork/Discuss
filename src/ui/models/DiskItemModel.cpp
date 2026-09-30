@@ -42,6 +42,7 @@ void DiskItemModel::incrementGeneration() {
         }
     }
     m_currentGen.fetch_add(1, std::memory_order_relaxed);
+    ThumbnailPipelineService::instance().cancelAll();
 }
 
 DiskItemModel::DiskItemModel(QObject* parent) : ItemModelBase(parent) {

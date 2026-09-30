@@ -9,6 +9,7 @@
 #include <QMutex>
 #include <atomic>
 #include <functional>
+#include "CoreEngine.h"
 
 namespace QuarkMeta {
 
@@ -39,6 +40,8 @@ public:
     void incrementGeneration();
     void cancelAll();
 
+    std::shared_ptr<CancellationToken> currentToken() const;
+
 
     /**
      * @brief 内存缓存清理
@@ -57,6 +60,7 @@ private:
     mutable QCache<QString, QPixmap> m_memoryCache;
 
     std::atomic<uint64_t> m_currentGeneration{1};
+    std::shared_ptr<CancellationToken> m_currentToken;
     static constexpr int kMaxMemoryCacheCount = 800; // 内存最多缓存 800 张缩略图 (约 50~80MB)
 };
 

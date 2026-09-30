@@ -175,6 +175,8 @@ set(SOURCES
     src/ui/FramelessFileDialog.h
     src/ui/JustifiedView.cpp
     src/ui/JustifiedView.h
+    src/ui/DropJustifiedView.cpp
+    src/ui/DropJustifiedView.h
     src/ui/ElidedTextUtility.h
     src/ui/CardPainterHelper.cpp
     src/ui/CardPainterHelper.h

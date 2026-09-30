@@ -189,6 +189,7 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
                 if (lastVisible != -1 && r > lastVisible + 20) {
                     break;
                 }
+                continue;
             }
 
             // 几何相交：当前卡片在屏幕上可见
