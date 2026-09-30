@@ -61,9 +61,7 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
 
     if (verticalScrollBar()) {
         connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
-            if (m_scrollThumbTimer) {
-                m_scrollThumbTimer->start();
-            }
+            triggerVisibleScan();
         });
     }
 }
@@ -179,6 +177,7 @@ void SectionedScrollCanvas::setupConnections() {
             connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int) {
                 updateSectionCounts();
             });
+            connect(fjv, &JustifiedView::layoutFinished, this, &SectionedScrollCanvas::triggerVisibleScan);
         }
         if (auto* jv = qobject_cast<JustifiedView*>(fileView)) {
             connect(jv, &JustifiedView::totalHeightChanged, this, [this](int height) {
@@ -186,10 +185,14 @@ void SectionedScrollCanvas::setupConnections() {
                     m_panel->fileView()->setFixedHeight(qMax(height, m_panel->fileViewMinHeight()));
                 }
             });
+            connect(jv, &JustifiedView::layoutFinished, this, &SectionedScrollCanvas::triggerVisibleScan);
         }
     }
 
-    auto onModelChanged = [this]() { updateSectionCounts(); };
+    auto onModelChanged = [this]() {
+        updateSectionCounts();
+        triggerVisibleScan();
+    };
     connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, onModelChanged);
     connect(m_folderProxyModel, &QAbstractItemModel::layoutChanged, this, onModelChanged);
     connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, onModelChanged);
@@ -331,9 +334,16 @@ bool SectionedScrollCanvas::eventFilter(QObject* obj, QEvent* event) {
     return QScrollArea::eventFilter(obj, event);
 }
 
+void SectionedScrollCanvas::triggerVisibleScan() {
+    if (m_scrollThumbTimer) {
+        m_scrollThumbTimer->start();
+    }
+}
+
 void SectionedScrollCanvas::resizeEvent(QResizeEvent* event) {
     QScrollArea::resizeEvent(event);
     updateSectionCounts();
+    triggerVisibleScan();
 }
 
 void SectionedScrollCanvas::mousePressEvent(QMouseEvent* event) {

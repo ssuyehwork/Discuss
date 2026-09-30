@@ -63,10 +63,6 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_model = m_diskModel;
     m_model->setCurrentPath(m_currentPath);
 
-    m_visibleTimer = new QTimer(this);
-    m_visibleTimer->setSingleShot(true);
-    m_visibleTimer->setInterval(60);
-    connect(m_visibleTimer, &QTimer::timeout, this, &ContentPanel::refreshVisibleThumbnails);
 
     // 统计重算防抖定时器 (50ms)：兼顾实时响应与批量修改时的去噪
     m_statsDebounceTimer = new QTimer(this);
@@ -308,9 +304,7 @@ bool ContentPanel::isTreeView(QObject* view) const {
 }
 
 void ContentPanel::startVisibleTimer() {
-    if (m_visibleTimer) {
-        m_visibleTimer->start();
-    }
+    refreshVisibleThumbnails();
 }
 
 void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
@@ -538,7 +532,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
     emit viewModeChanged(mode);
     emit zoomLevelChanged(m_zoomLevel);
 
-    if (m_visibleTimer) m_visibleTimer->start();
+    refreshVisibleThumbnails();
 }
 
 void ContentPanel::setZoomLevel(int level) {
@@ -669,41 +663,14 @@ void ContentPanel::recalculateAndEmitStats() {
 void ContentPanel::refreshVisibleThumbnails() {
     if (!m_model || CoreController::isShuttingDown()) return;
 
-    QList<QAbstractItemView*> views;
     if (m_currentViewMode == ColumnView) {
         if (m_columnView && m_columnView->activePane()) {
-            if (m_columnView->activePane()->folderListView()) views << m_columnView->activePane()->folderListView();
-            if (m_columnView->activePane()->listView()) views << m_columnView->activePane()->listView();
+            m_columnView->activePane()->refreshVisibleThumbnails();
         }
-    } else if (m_currentViewMode == ListView) {
-        if (m_folderTreeView) views << m_folderTreeView;
-        if (m_treeView) views << m_treeView;
-    } else {
-        if (m_folderGridView) views << m_folderGridView;
-        if (m_gridView) views << m_gridView;
-    }
-
-    QSet<int> visibleRows;
-    for (auto* view : views) {
-        if (!view || !view->viewport()) continue;
-        auto* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
-        if (!proxy || proxy->rowCount() == 0) continue;
-
-        QRect vpRect = view->viewport()->rect();
-        QModelIndex topIdx = view->indexAt(vpRect.topLeft());
-        QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
-
-        int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : proxy->rowCount() - 1;
-
-        for (int r = top; r <= bottom; ++r) {
-            QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
-            if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
-        }
-    }
-
-    if (!visibleRows.isEmpty()) {
-        m_model->loadThumbnailsForRows(visibleRows.values());
+    } else if (m_currentViewMode == ListView && m_listCanvas) {
+        m_listCanvas->refreshVisibleThumbnails(m_model);
+    } else if ((m_currentViewMode == GridView || m_currentViewMode == JustifiedViewMode) && m_gridCanvas) {
+        m_gridCanvas->refreshVisibleThumbnails(m_model);
     }
 }
 

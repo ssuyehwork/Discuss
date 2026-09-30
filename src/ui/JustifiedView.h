@@ -26,8 +26,11 @@ public:
 
 signals:
     void totalHeightChanged(int height);
+    void layoutFinished();
 
 public:
+    QList<int> rowsInRange(int top, int bottom) const;
+    bool isLayoutReady() const;
     QRect visualRect(const QModelIndex& index) const override;
     void scrollTo(const QModelIndex& index, ScrollHint hint = EnsureVisible) override;
     QModelIndex indexAt(const QPoint& point) const override;

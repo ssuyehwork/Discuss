@@ -32,15 +32,6 @@ QThreadPool* DiskItemModel::thumbnailPool() {
 }
 
 void DiskItemModel::incrementGeneration() {
-    uint64_t oldGen = m_currentGen.load(std::memory_order_relaxed);
-    {
-        QMutexLocker locker(&m_genTokenMutex);
-        auto it = m_genTokens.find(oldGen);
-        if (it != m_genTokens.end()) {
-            if (it.value()) it.value()->cancel();
-            m_genTokens.erase(it);
-        }
-    }
     m_currentGen.fetch_add(1, std::memory_order_relaxed);
     ThumbnailPipelineService::instance().cancelAll();
 }
@@ -71,7 +62,7 @@ void DiskItemModel::flushPendingThumbDataChanged() {
 
     if (minRow <= maxRow) {
         emit dataChanged(index(minRow, 0), index(maxRow, columnCount() - 1),
-                          {Qt::DecorationRole, AspectRatioRole, HasThumbnailRole});
+                          {Qt::DecorationRole, HasThumbnailRole});
     }
 }
 
