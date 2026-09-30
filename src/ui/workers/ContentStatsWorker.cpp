@@ -54,10 +54,12 @@ ScanStats ContentStatsWorker::calculateStats(const std::vector<ItemRecord>& reco
                 if (std::abs(r - 1.77) <= 0.05) stats.ratio169Count++;
             }
 
-            if (UiHelper::hasPhysicalThumbnail(record)) {
-                stats.hasThumbnailCount++;
-            } else {
-                stats.noThumbnailCount++;
+            if (ColorPaletteEngine::isGraphicsFile(record.suffix.toLower())) {
+                if (record.thumbnailState == ItemRecord::ThumbnailState::Ready) {
+                    stats.hasThumbnailCount++;
+                } else {
+                    stats.noThumbnailCount++;
+                }
             }
         }
     }

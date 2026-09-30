@@ -37,6 +37,14 @@ struct ItemRecord {
     QString url;  // 2026-07-xx 支撑筛选：链接
     QString note; // 2026-07-xx 支撑筛选：备注
     QString sha256;
+    enum class ThumbnailState {
+        NotApplicable, // 文件夹或非图形文件
+        Ready,         // 缩略图已落盘并可用
+        Failed,        // 提取失败 (thumbStatus == 1)
+        Pending        // 图形文件且未提取/未失败
+    };
+
+    ThumbnailState thumbnailState = ThumbnailState::NotApplicable;
     int width = 0;
     int height = 0;
     int thumbStatus = 0; // 0: 正常/未处理, 1: 提取失败/跳过
