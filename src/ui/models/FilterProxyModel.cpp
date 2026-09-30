@@ -1,6 +1,7 @@
 #include "FilterProxyModel.h"
 #include "../ContentPanel.h"
 #include "../UiHelper.h"
+#include "../Logger.h"
 #include <QDateTime>
 #include <cmath>
 
@@ -9,6 +10,12 @@ namespace QuarkMeta {
 FilterProxyModel::FilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {}
 
 void FilterProxyModel::updateFilter() {
+    Logger::log(QString("[FilterProxyModel::updateFilter] Invalidate filter. ShowFolders: %1, ShowFiles: %2, Ratings: %3, Colors: %4, Types: %5, Kw: '%6'")
+                .arg(currentFilter.showFolders).arg(currentFilter.showFiles)
+                .arg(currentFilter.ratings.size())
+                .arg(currentFilter.colors.join(","))
+                .arg(currentFilter.types.join(","))
+                .arg(currentFilter.keyword));
     beginFilterChange();
     endFilterChange();
 }
