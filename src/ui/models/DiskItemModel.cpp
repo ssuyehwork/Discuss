@@ -19,7 +19,7 @@
 #include "MetadataManager.h"
 #include "DriveMetaDao.h"
 #include "../../core/LastOperationManager.h"
-#include "Logger.h"
+#include "../Logger.h"
 
 namespace QuarkMeta {
 
