@@ -306,7 +306,7 @@ void JustifiedView::mouseDoubleClickEvent(QMouseEvent* event) {
     emit doubleClicked(idx);
 }
 
-void JustifiedView::paintEvent(QPaintEvent*) {
+void JustifiedView::paintEvent(QPaintEvent* event) {
     QPainter painter(viewport());
     painter.fillRect(viewport()->rect(), QColor("#1E1E1E"));
 
@@ -321,17 +321,20 @@ void JustifiedView::paintEvent(QPaintEvent*) {
     
     painter.save();
     int scrollY = verticalScrollBar()->value();
-    int vHeight = viewport()->height();
     painter.translate(0, -scrollY);
     
-    auto startIt = std::lower_bound(m_geometries.begin(), m_geometries.end(), scrollY,
+    QRect dirtyRect = event->rect().translated(0, scrollY);
+    int dirtyTop = dirtyRect.top();
+    int dirtyBottom = dirtyRect.bottom();
+
+    auto startIt = std::lower_bound(m_geometries.begin(), m_geometries.end(), dirtyTop,
         [](const ItemGeometry& geo, int targetY) {
             return geo.rect.bottom() < targetY;
         });
 
     for (auto it = startIt; it != m_geometries.end(); ++it) {
         const auto& geo = *it;
-        if (geo.rect.top() > scrollY + vHeight) break;
+        if (geo.rect.top() > dirtyBottom) break;
 
         if (geo.isHeader) {
             painter.save();
