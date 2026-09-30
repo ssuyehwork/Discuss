@@ -1,4 +1,5 @@
 #include "FilterPanel.h"
+#include "Logger.h"
 #include "../core/AppConfig.h"
 #include <QSet>
 #include <QDate>
