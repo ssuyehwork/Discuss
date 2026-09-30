@@ -28,9 +28,9 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     if (sourceRow < 0 || sourceRow >= static_cast<int>(records.size())) return false;
     const auto& record = records[sourceRow];
 
-    // 🚀【此电脑根路径豁免准则】：当加载“此电脑”(computer://)盘符列表时，盘符属于系统硬件层介质，100% 必须始终放行显示，不受常规文件夹/文件显隐或星级筛选器的过滤关断！
+    // 🚀【此电脑根路径准则】：当加载“此电脑”(computer://)盘符列表时，盘符仅归属于驱动器/文件夹区，在“文件”区代理中严禁重复显示！
     if (sourceModelPtr->currentPath() == "computer://") {
-        return true;
+        return currentFilter.showFolders;
     }
 
     auto* contentPanel = qobject_cast<ContentPanel*>(parent());
