@@ -3,7 +3,6 @@
 #endif
 #include "JustifiedView.h"
 #include "CardLayoutEngine.h"
-#include "ViewDragDropHelper.h"
 #include "../core/ModelContract.h"
 #include <QPainter>
 #include <QScrollBar>
@@ -17,11 +16,9 @@ namespace QuarkMeta {
 
 JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     setFrameShape(QFrame::NoFrame);
-    setDragEnabled(true);
-    DragDropEventFilter::install(this);
     m_layoutTimer = new QTimer(this);
     m_layoutTimer->setSingleShot(true);
-    m_layoutTimer->setInterval(120);
+    m_layoutTimer->setInterval(50);
     connect(m_layoutTimer, &QTimer::timeout, this, &JustifiedView::onLayoutTimerTimeout);
 
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -117,22 +114,19 @@ void JustifiedView::scrollTo(const QModelIndex& index, ScrollHint hint) {
     }
 }
 
-std::vector<JustifiedView::ItemGeometry>::const_iterator JustifiedView::geometryLowerBound(int y) const {
-    return std::lower_bound(m_geometries.begin(), m_geometries.end(), y,
-        [](const ItemGeometry& geo, int targetY) {
-            return geo.rect.bottom() < targetY;
-        });
-}
-
 QModelIndex JustifiedView::indexAt(const QPoint& point) const {
     if (m_geometries.empty()) return QModelIndex();
     int y = point.y() + verticalScrollBar()->value();
 
-    auto it = geometryLowerBound(y);
+    auto it = std::lower_bound(m_geometries.begin(), m_geometries.end(), y,
+        [](const ItemGeometry& geo, int targetY) {
+            return geo.rect.bottom() < targetY;
+        });
 
     for (; it != m_geometries.end(); ++it) {
         if (it->rect.top() > y) break;
         if (it->rect.contains(point.x(), y)) {
+            if (it->isHeader) return QModelIndex();
             return model()->index(it->index, 0);
         }
     }
@@ -203,10 +197,6 @@ QModelIndex JustifiedView::moveCursor(CursorAction cursorAction, Qt::KeyboardMod
     return model()->index(row, 0);
 }
 
-void JustifiedView::startDrag(Qt::DropActions supportedActions) {
-    ViewDragDropHelper::executeStartDrag(this, supportedActions);
-}
-
 int JustifiedView::horizontalOffset() const { return 0; }
 int JustifiedView::verticalOffset() const { return verticalScrollBar()->value(); }
 bool JustifiedView::isIndexHidden(const QModelIndex&) const { return false; }
@@ -214,10 +204,8 @@ bool JustifiedView::isIndexHidden(const QModelIndex&) const { return false; }
 void JustifiedView::setSelection(const QRect& rect, QItemSelectionModel::SelectionFlags command) {
     QRect contentsRect = rect.translated(0, verticalScrollBar()->value());
     QItemSelection selection;
-    auto startIt = geometryLowerBound(contentsRect.top());
-    for (auto it = startIt; it != m_geometries.end(); ++it) {
-        const auto& geo = *it;
-        if (geo.rect.top() > contentsRect.bottom()) break;
+    for (const auto& geo : m_geometries) {
+        if (geo.isHeader) continue;
         if (geo.rect.intersects(contentsRect)) {
             QModelIndex idx = model()->index(geo.index, 0);
             selection.select(idx, idx);
@@ -237,18 +225,6 @@ QRegion JustifiedView::visualRegionForSelection(const QItemSelection& selection)
 }
 
 void JustifiedView::mousePressEvent(QMouseEvent* event) {
-    if (event->button() == Qt::RightButton) {
-        QModelIndex hitIdx = indexAt(event->pos());
-        if (hitIdx.isValid()) {
-            if (selectionModel() && !selectionModel()->isSelected(hitIdx)) {
-                selectionModel()->select(hitIdx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-                selectionModel()->setCurrentIndex(hitIdx, QItemSelectionModel::NoUpdate);
-            }
-        }
-        event->accept();
-        return;
-    }
-
     if (event->button() == Qt::LeftButton && event->modifiers() == Qt::NoModifier) {
         QModelIndex idx = indexAt(event->pos());
         if (!idx.isValid()) {
@@ -264,10 +240,12 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ShiftModifier)) {
         QModelIndex clicked = indexAt(event->pos());
         if (clicked.isValid() && m_anchorRow >= 0) {
-            int anchorVisual = m_anchorRow;
-            int clickedVisual = clicked.row();
-            if (anchorVisual >= 0 && anchorVisual < (int)m_geometries.size() &&
-                clickedVisual >= 0 && clickedVisual < (int)m_geometries.size()) {
+            int anchorVisual = -1, clickedVisual = -1;
+            for (int i = 0; i < (int)m_geometries.size(); ++i) {
+                if (m_geometries[i].index == m_anchorRow)      anchorVisual = i;
+                if (m_geometries[i].index == clicked.row())    clickedVisual = i;
+            }
+            if (anchorVisual >= 0 && clickedVisual >= 0) {
                 int vFrom = std::min(anchorVisual, clickedVisual);
                 int vTo   = std::max(anchorVisual, clickedVisual);
                 QItemSelection sel;
@@ -346,11 +324,23 @@ void JustifiedView::paintEvent(QPaintEvent*) {
     int vHeight = viewport()->height();
     painter.translate(0, -scrollY);
     
-    auto startIt = geometryLowerBound(scrollY);
+    auto startIt = std::lower_bound(m_geometries.begin(), m_geometries.end(), scrollY,
+        [](const ItemGeometry& geo, int targetY) {
+            return geo.rect.bottom() < targetY;
+        });
 
     for (auto it = startIt; it != m_geometries.end(); ++it) {
         const auto& geo = *it;
         if (geo.rect.top() > scrollY + vHeight) break;
+
+        if (geo.isHeader) {
+            painter.save();
+            painter.setPen(QColor("#3498db"));
+            painter.setFont(QFont("Microsoft YaHei", 10, QFont::Bold));
+            painter.drawText(geo.rect, Qt::AlignLeft | Qt::AlignVCenter, geo.headerText);
+            painter.restore();
+            continue;
+        }
 
         QModelIndex idx = model()->index(geo.index, 0);
         QStyleOptionViewItem option;

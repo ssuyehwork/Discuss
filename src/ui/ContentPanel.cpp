@@ -1,11 +1,10 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include "ContentPanel.h"
+#include "SectionedScrollCanvas.h"
 #include "ContentHeaderWidget.h"
 #include "FolderSectionWidget.h"
-#include <QSplitter>
-#include <QDragEnterEvent>
-#include <QDragMoveEvent>
-#include <QDropEvent>
-#include "SectionedScrollCanvas.h"
 #include "controllers/ContentContextMenu.h"
 #include "controllers/ContentKeyHandler.h"
 #include "controllers/ContentSortController.h"
@@ -14,7 +13,7 @@
 #include "controllers/ContentViewCoordinator.h"
 #include "controllers/ContentPaneSplitManager.h"
 #include "workers/ContentStatsWorker.h"
-#include "JustifiedView.h"
+#include "DropJustifiedView.h"
 #include "DropTreeView.h"
 #include "DropListView.h"
 #include "ColumnViewWidget.h"
@@ -23,9 +22,6 @@
 #include "CardLayoutEngine.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
-#include "Logger.h"
-#include "../core/NavigationHistoryService.h"
-#include <QElapsedTimer>
 
 #include "../core/AppConfig.h"
 #include "../core/CoreEngine.h"
@@ -54,8 +50,6 @@ QTreeView* ContentPanel::treeView() const {
 }
 
 ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
-    m_splitManager = new ContentPaneSplitManager(this);
-    setAcceptDrops(true);
     setContextMenuPolicy(Qt::CustomContextMenu);
     setObjectName("EditorContainer");
     setAttribute(Qt::WA_StyledBackground, true);
@@ -100,14 +94,10 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_dataLoader = new ContentDataLoader(this);
     m_fileOpsHandler = new ContentFileOpsHandler(this);
     m_statsWorker = new ContentStatsWorker(this);
-    m_viewCoordinator = new ContentViewCoordinator(this);
 
     connect(m_statsWorker, &ContentStatsWorker::statsReady, this, [this](const ScanStats& stats) {
-        if (m_gridCanvas && m_gridCanvas->fileProxyModel()) {
-            m_gridCanvas->fileProxyModel()->setCachedDuplicatePaths(stats.duplicatePaths);
-        }
-        if (m_listCanvas && m_listCanvas->fileProxyModel()) {
-            m_listCanvas->fileProxyModel()->setCachedDuplicatePaths(stats.duplicatePaths);
+        if (m_fileProxyModel) {
+            m_fileProxyModel->setCachedDuplicatePaths(stats.duplicatePaths);
         }
         emit directoryStatsReady(stats);
     });
@@ -120,9 +110,7 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     connect(&TrashService::instance(), &TrashService::trashOperationCompleted, this, &ContentPanel::refreshAll);
     connect(&PermanentDeleteService::instance(), &PermanentDeleteService::permanentDeleteCompleted, this, &ContentPanel::refreshAll);
     connect(&ClipboardService::instance(), &ClipboardService::pasteCompleted, this, [this](const QString& dir) {
-        if (m_currentPath == dir || (m_currentViewMode == ColumnView && m_columnView && m_columnView->containsPath(dir))) {
-            refreshAll();
-        }
+        if (m_currentPath == dir) refreshAll();
     });
 
     m_keyHandler = new ContentKeyHandler(this);
@@ -139,29 +127,6 @@ void ContentPanel::initUi() {
     m_headerWidget = new ContentHeaderWidget(this);
     m_headerWidget->setFilterState(m_currentFilter);
 
-    connect(m_headerWidget, &ContentHeaderWidget::splitViewRequested, this, [this]() {
-        if (isSecondaryPane()) {
-            emit closePaneRequested();
-            return;
-        }
-        if (isSplitMode()) {
-            closeSecondaryPane();
-        } else {
-            QStringList history = NavigationHistoryService::instance().getHistory();
-            QString lastPath;
-            for (const QString& hPath : history) {
-                if (!hPath.isEmpty() && QDir::cleanPath(hPath) != QDir::cleanPath(m_currentPath)) {
-                    lastPath = hPath;
-                    break;
-                }
-            }
-            if (lastPath.isEmpty()) {
-                lastPath = m_currentPath;
-            }
-            splitPane(Qt::Horizontal, lastPath);
-        }
-    });
-
     connect(m_headerWidget, &ContentHeaderWidget::filterStateChanged, this, [this](const FilterState& state) {
         m_currentFilter = state;
         AppConfig::instance().setValue("ContentPanel/ShowHidden", state.showHidden);
@@ -177,8 +142,8 @@ void ContentPanel::initUi() {
         }
         m_isRecursive = recursive;
         if (m_currentViewMode == ColumnView) {
-            if (m_columnView && m_columnView->activePane()) {
-                m_columnView->activePane()->loadDirectory();
+            if (m_columnView && m_columnView->rightmostPane()) {
+                m_columnView->rightmostPane()->loadDirectory();
             }
         } else {
             loadDirectory(m_currentPath, recursive);
@@ -189,44 +154,8 @@ void ContentPanel::initUi() {
 
     m_viewStack = new QStackedWidget(this);
     m_viewStack->setFrameShape(QFrame::NoFrame);
-
-    // 统一在 ContentPanel 里构建代理模型，SectionedScrollCanvas 只负责排版/滚动
-    auto makeProxyPair = [this](bool wantFolders) {
-        auto* p = new FilterProxyModel(this);
-        p->setSourceModel(m_model);
-        p->setFilterKeyColumn(0);
-        p->setDynamicSortFilter(true);
-        FilterState s = m_currentFilter;
-        s.showFolders = wantFolders;
-        s.showFiles = !wantFolders;
-        p->currentFilter = s;
-        return p;
-    };
-    m_folderProxyModel = makeProxyPair(true);
-    m_fileProxyModel = makeProxyPair(false);
-    m_gridFolderProxyModel = makeProxyPair(true);
-    m_gridFileProxyModel = makeProxyPair(false);
-
-    m_listCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::List, m_folderProxyModel, m_fileProxyModel, this, this);
-    m_treeView = static_cast<DropTreeView*>(m_listCanvas->fileView());
-    m_folderTreeView = static_cast<DropTreeView*>(m_listCanvas->folderView());
-
-    m_gridCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::Grid, m_gridFolderProxyModel, m_gridFileProxyModel, this, this);
-    m_gridView = m_gridCanvas->fileView();
-    m_folderGridView = static_cast<JustifiedView*>(m_gridCanvas->folderView());
-
-    // 统一信号透传
-    for (auto* canvas : {m_gridCanvas, m_listCanvas}) {
-        connect(canvas, &SectionedScrollCanvas::selectionChanged, this, &ContentPanel::onSelectionChanged);
-        connect(canvas, &SectionedScrollCanvas::doubleClicked, this, &ContentPanel::onDoubleClicked);
-        connect(canvas, &SectionedScrollCanvas::customContextMenuRequested, this, [this](const QPoint& pos) {
-            onCustomContextMenuRequested(pos);
-        });
-        connect(canvas, &SectionedScrollCanvas::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx, QAbstractItemModel* proxy) {
-            onPathsDropped(p, idx, currentPath(), proxy);
-        });
-    }
-
+    initListView();
+    initGridView();
     m_columnView = new ColumnViewWidget(this, this);
     connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<QuarkMeta::ItemRecord>& records) {
@@ -235,6 +164,67 @@ void ContentPanel::initUi() {
         }
         restoreSelections();
     });
+    m_gridFolderProxyModel = new FilterProxyModel(this);
+    m_gridFolderProxyModel->setSourceModel(m_model);
+    m_gridFolderProxyModel->setFilterKeyColumn(0);
+    m_gridFolderProxyModel->setDynamicSortFilter(true);
+    FilterState gridFolderFilter = m_currentFilter;
+    gridFolderFilter.showFolders = true;
+    gridFolderFilter.showFiles = false;
+    m_gridFolderProxyModel->currentFilter = gridFolderFilter;
+
+    m_gridFileProxyModel = new FilterProxyModel(this);
+    m_gridFileProxyModel->setSourceModel(m_model);
+    m_gridFileProxyModel->setFilterKeyColumn(0);
+    m_gridFileProxyModel->setDynamicSortFilter(true);
+    FilterState gridFileFilter = m_currentFilter;
+    gridFileFilter.showFolders = false;
+    gridFileFilter.showFiles = true;
+    m_gridFileProxyModel->currentFilter = gridFileFilter;
+
+    m_folderProxyModel = new FilterProxyModel(this);
+    m_folderProxyModel->setSourceModel(m_model);
+    m_folderProxyModel->setFilterKeyColumn(0);
+    m_folderProxyModel->setDynamicSortFilter(true);
+    FilterState folderOnlyFilter = m_currentFilter;
+    folderOnlyFilter.showFolders = true;
+    folderOnlyFilter.showFiles = false;
+    m_folderProxyModel->currentFilter = folderOnlyFilter;
+
+    m_fileProxyModel = new FilterProxyModel(this);
+    m_fileProxyModel->setSourceModel(m_model);
+    m_fileProxyModel->setFilterKeyColumn(0);
+    m_fileProxyModel->setDynamicSortFilter(true);
+    FilterState fileOnlyFilter = m_currentFilter;
+    fileOnlyFilter.showFolders = false;
+    fileOnlyFilter.showFiles = true;
+    m_fileProxyModel->currentFilter = fileOnlyFilter;
+
+    m_gridCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::Grid, m_gridFolderProxyModel, m_gridFileProxyModel, this, this);
+    m_listCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::List, m_folderProxyModel, m_fileProxyModel, this, this);
+
+    m_folderGridView = qobject_cast<JustifiedView*>(m_gridCanvas->folderView());
+    m_gridView = m_gridCanvas->fileView();
+    m_folderTreeView = qobject_cast<DropTreeView*>(m_listCanvas->folderView());
+    m_treeView = qobject_cast<DropTreeView*>(m_listCanvas->fileView());
+
+    connect(m_gridCanvas, &SectionedScrollCanvas::doubleClicked, this, &ContentPanel::onDoubleClicked);
+    connect(m_gridCanvas, &SectionedScrollCanvas::customContextMenuRequested, this, [this](const QPoint& pos) {
+        onCustomContextMenuRequested(m_viewCoordinator ? m_viewCoordinator->activeItemView() : nullptr, pos);
+    });
+    connect(m_gridCanvas, &SectionedScrollCanvas::selectionChanged, this, &ContentPanel::onSelectionChanged);
+    connect(m_gridCanvas, &SectionedScrollCanvas::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex, QAbstractItemModel* sourceProxy) {
+        onPathsDropped(paths, targetIndex, currentPath(), sourceProxy);
+    });
+
+    connect(m_listCanvas, &SectionedScrollCanvas::doubleClicked, this, &ContentPanel::onDoubleClicked);
+    connect(m_listCanvas, &SectionedScrollCanvas::customContextMenuRequested, this, [this](const QPoint& pos) {
+        onCustomContextMenuRequested(m_viewCoordinator ? m_viewCoordinator->activeItemView() : nullptr, pos);
+    });
+    connect(m_listCanvas, &SectionedScrollCanvas::selectionChanged, this, &ContentPanel::onSelectionChanged);
+    connect(m_listCanvas, &SectionedScrollCanvas::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex, QAbstractItemModel* sourceProxy) {
+        onPathsDropped(paths, targetIndex, currentPath(), sourceProxy);
+    });
 
     m_viewStack->addWidget(m_gridCanvas);
     m_viewStack->addWidget(m_listCanvas);
@@ -242,25 +232,17 @@ void ContentPanel::initUi() {
     m_viewStack->setCurrentWidget(m_gridCanvas);
 
     m_mainLayout->addWidget(m_viewStack, 1);
-
-    if (m_viewCoordinator) {
-        m_viewCoordinator->installActivationFilters();
-    }
 }
 
 void ContentPanel::initGridView() {
-    // 已完整归一化迁移至 SectionedScrollCanvas
+    // 逻辑已收敛归一化至 SectionedScrollCanvas
 }
 
 void ContentPanel::initListView() {
-    // 已完整归一化迁移至 SectionedScrollCanvas
+    // 逻辑已收敛归一化至 SectionedScrollCanvas
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
-    if (event && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn)) {
-        emit panelActivated(this);
-    }
-
     if (event && event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
@@ -288,17 +270,15 @@ void ContentPanel::ensureSourceModelIsDiskModel() {
     if (m_model != m_diskModel) {
         m_model = m_diskModel;
         m_model->setCurrentPath(m_currentPath);
-        for (auto* p : {m_folderProxyModel, m_fileProxyModel, m_gridFolderProxyModel, m_gridFileProxyModel}) {
-            if (p) p->setSourceModel(m_model);
-        }
+        if (m_folderProxyModel) m_folderProxyModel->setSourceModel(m_model);
+        if (m_fileProxyModel) m_fileProxyModel->setSourceModel(m_model);
     }
 }
 
 void ContentPanel::applySort() {
     if (m_sortController) {
-        for (auto* p : {m_folderProxyModel, m_fileProxyModel, m_gridFolderProxyModel, m_gridFileProxyModel}) {
-            m_sortController->applySortToModel(p);
-        }
+        if (m_folderProxyModel) m_sortController->applySortToModel(m_folderProxyModel);
+        if (m_fileProxyModel) m_sortController->applySortToModel(m_fileProxyModel);
         if (m_columnView) {
             m_columnView->applySort(static_cast<int>(m_sortController->sortType()), m_sortController->sortOrder());
         }
@@ -324,131 +304,6 @@ bool ContentPanel::isTreeView(QObject* view) const {
     return (view == m_treeView);
 }
 
-bool ContentPanel::isSplitMode() const {
-    return m_splitManager ? m_splitManager->isSplitMode() : false;
-}
-
-bool ContentPanel::isSecondaryPane() const {
-    return m_splitManager ? m_splitManager->isSecondaryPane() : false;
-}
-
-void ContentPanel::setIsSecondaryPane(bool secondary) {
-    if (m_splitManager) m_splitManager->setIsSecondaryPane(secondary);
-}
-
-ContentPanel* ContentPanel::secondaryContentPanel() const {
-    return m_splitManager ? m_splitManager->secondaryContentPanel() : nullptr;
-}
-
-QList<ContentPanel*> ContentPanel::panes() const {
-    return m_splitManager ? m_splitManager->panes() : QList<ContentPanel*>();
-}
-
-int ContentPanel::paneCount() const {
-    return m_splitManager ? m_splitManager->paneCount() : 1;
-}
-
-ContentPanel* ContentPanel::rootPane() const {
-    return m_splitManager ? m_splitManager->rootPane() : const_cast<ContentPanel*>(this);
-}
-
-void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
-    if (m_splitManager) m_splitManager->splitPane(orientation, secondaryPath);
-}
-
-void ContentPanel::redistributePaneSizes() {
-    if (m_splitManager) m_splitManager->redistributePaneSizes();
-}
-
-void ContentPanel::closePane(ContentPanel* pane) {
-    if (m_splitManager) m_splitManager->closePane(pane);
-}
-
-void ContentPanel::closeSecondaryPane() {
-    if (m_splitManager) m_splitManager->closeSecondaryPane();
-}
-
-void ContentPanel::requestClosePane() {
-    if (isSecondaryPane()) {
-        emit closePaneRequested();
-    } else if (isSplitMode()) {
-        closeSecondaryPane();
-    }
-}
-
-void ContentPanel::setActivePane(bool active) {
-    if (m_splitManager) m_splitManager->setActivePane(active);
-}
-
-void ContentPanel::updateDragOverlay(const QPoint& pos) {
-    if (m_splitManager) m_splitManager->updateDragOverlay(pos);
-}
-
-void ContentPanel::hideDragOverlay() {
-    if (m_splitManager) m_splitManager->hideDragOverlay();
-}
-
-void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData()->hasUrls() || event->mimeData()->hasText() ||
-        event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") ||
-        event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-        event->acceptProposedAction();
-    }
-}
-
-void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
-    if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") ||
-        event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-        updateDragOverlay(event->position().toPoint());
-    } else {
-        hideDragOverlay();
-    }
-    event->acceptProposedAction();
-}
-
-void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
-    Q_UNUSED(event);
-    hideDragOverlay();
-}
-
-void ContentPanel::dropEvent(QDropEvent* event) {
-    QPoint pos = event->position().toPoint();
-    hideDragOverlay();
-
-    if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") ||
-        event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-        int w = width();
-        int h = height();
-
-        QString targetUrl;
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-            targetUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
-        } else if (event->mimeData()->hasText()) {
-            targetUrl = event->mimeData()->text();
-        }
-
-        if (pos.x() > w * 0.75 || pos.x() < w * 0.25) {
-            splitPane(Qt::Horizontal, targetUrl);
-            event->acceptProposedAction();
-        } else if (pos.y() > h * 0.75 || pos.y() < h * 0.25) {
-            splitPane(Qt::Vertical, targetUrl);
-            event->acceptProposedAction();
-        } else {
-            event->acceptProposedAction();
-        }
-        return;
-    }
-
-    if (event->mimeData()->hasUrls()) {
-        QStringList paths;
-        for (const QUrl& url : event->mimeData()->urls()) {
-            paths << url.toLocalFile();
-        }
-        onPathsDropped(paths, QModelIndex());
-        event->acceptProposedAction();
-    }
-}
-
 void ContentPanel::startVisibleTimer() {
     if (m_visibleTimer) {
         m_visibleTimer->start();
@@ -457,10 +312,6 @@ void ContentPanel::startVisibleTimer() {
 
 void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(sender());
-    onCustomContextMenuRequested(view, pos);
-}
-
-void ContentPanel::onCustomContextMenuRequested(QAbstractItemView* view, const QPoint& pos) {
     if (!view) view = activeItemView();
     if (!view) return;
     ContentContextMenu menuHandler(this);
@@ -470,9 +321,11 @@ void ContentPanel::onCustomContextMenuRequested(QAbstractItemView* view, const Q
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     if (m_currentViewMode == ColumnView) {
         m_currentPath = path;
-        setIsRecursive(recursive);
+        m_isRecursive = recursive;
         if (m_columnView) {
-            if (!m_columnView->containsPath(path)) {
+            if (m_columnView->containsPath(path)) {
+                m_columnView->refreshAllColumns();
+            } else {
                 m_columnView->setRootPath(path);
                 restoreSelections();
             }
@@ -495,19 +348,8 @@ void ContentPanel::appendPaths(const QStringList& paths, int reqId) {
     if (m_dataLoader) m_dataLoader->appendPaths(paths, reqId);
 }
 
-QString ContentPanel::activePath() const {
-    if (m_currentViewMode == ColumnView && m_columnView) {
-        ColumnViewPane* pane = m_columnView->activePane();
-        if (pane && !pane->currentPath().isEmpty()) {
-            return pane->currentPath();
-        }
-    }
-    return m_currentPath;
-}
-
 bool ContentPanel::canPaste(const QString& targetOverride) const {
-    QString target = !targetOverride.isEmpty() ? targetOverride : activePath();
-    return ClipboardService::instance().canPaste(target);
+    return ClipboardService::instance().canPaste(targetOverride.isEmpty() ? m_currentPath : targetOverride);
 }
 
 void ContentPanel::performCopy(bool cutMode) {
@@ -516,8 +358,7 @@ void ContentPanel::performCopy(bool cutMode) {
 }
 
 void ContentPanel::performPaste() {
-    QString target = activePath();
-    if (canPaste(target)) ClipboardService::instance().executePaste(target, this);
+    if (canPaste()) ClipboardService::instance().executePaste(m_currentPath, this);
 }
 
 bool ContentPanel::resolvePasteDestination() {
@@ -561,17 +402,6 @@ void ContentPanel::setViewMode(ViewMode mode) {
     if (m_currentViewMode == mode) {
         return;
     }
-
-    // 🚀【闭环防线 1：第 0 毫秒时序校正与权威路径提取】
-    // 若原视图为列视图，在采集选区快照前，优先提取最右侧列（最新展开的真实目录）作为权威路径
-    if (m_currentViewMode == ColumnView && m_columnView) {
-        ColumnViewPane* rPane = m_columnView->rightmostPane();
-        if (!rPane) rPane = m_columnView->activePane();
-        if (rPane && !rPane->currentPath().isEmpty()) {
-            m_currentPath = rPane->currentPath();
-        }
-    }
-
     // 1. 在原视图中上报并更新 SelectionState (SSOT)，修正临时对象迭代器野指针闪退
     m_selectionState.currentFolder = m_currentPath;
     QStringList selList = getSelectedPaths();
@@ -586,31 +416,26 @@ void ContentPanel::setViewMode(ViewMode mode) {
     m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
 
     if (mode == ListView) {
-        m_viewStack->setCurrentWidget(m_listCanvas);
+        m_viewStack->setCurrentWidget(m_listCanvas ? static_cast<QWidget*>(m_listCanvas) : static_cast<QWidget*>(m_treeView));
     } else if (mode == ColumnView) {
         if (m_columnView) {
-            // 🚀【闭环防线 2：防过度重建与闪烁】
-            // 仅在列视图尚未包含当前路径时才执行 setRootPath 构建新列栈；
-            // 若已包含（例如切去网格后切回），完好保留既有展开列栈与滚动条位置，零销毁、零闪烁！
-            if (!m_columnView->containsPath(m_currentPath)) {
-                m_columnView->setRootPath(m_currentPath);
-            }
+            QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
+            m_columnView->setRootPath(targetPath);
             m_viewStack->setCurrentWidget(m_columnView);
-            m_columnView->scrollToRightmostPane();
         }
     } else {
         auto* jv = qobject_cast<JustifiedView*>(m_gridView);
         if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
         auto* fjv = qobject_cast<JustifiedView*>(m_folderGridView);
         if (fjv) fjv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
-        m_viewStack->setCurrentWidget(m_gridCanvas);
+        m_viewStack->setCurrentWidget(m_gridCanvas ? static_cast<QWidget*>(m_gridCanvas) : static_cast<QWidget*>(m_gridView));
     }
 
-    // 🚀【闭环防线 3：切出列视图时无条件载入数据，并驱动全局导航原子对齐】
     if (oldMode == ColumnView && mode != ColumnView) {
-        if (!m_currentPath.isEmpty()) {
-            loadDirectory(m_currentPath, m_isRecursive);
-            emit directorySelected(m_currentPath);
+        if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
+            if (!m_diskModel || m_diskModel->rowCount() == 0) {
+                loadDirectory(m_currentPath, m_isRecursive);
+            }
         }
     }
 
@@ -623,10 +448,6 @@ void ContentPanel::setViewMode(ViewMode mode) {
     emit zoomLevelChanged(m_zoomLevel);
 
     if (m_visibleTimer) m_visibleTimer->start();
-
-    if (m_viewCoordinator) {
-        m_viewCoordinator->installActivationFilters();
-    }
 }
 
 void ContentPanel::setZoomLevel(int level) {
@@ -639,8 +460,12 @@ void ContentPanel::setZoomLevel(int level) {
 }
 
 void ContentPanel::updateGridSize() {
-    if (m_gridCanvas) m_gridCanvas->updateZoom(m_zoomLevel);
-    if (m_listCanvas) m_listCanvas->updateZoom(m_zoomLevel);
+    if (m_viewCoordinator) {
+        m_viewCoordinator->updateGridSize(m_zoomLevel);
+    } else {
+        if (m_gridCanvas) m_gridCanvas->updateZoom(m_zoomLevel);
+        if (m_listCanvas) m_listCanvas->updateZoom(m_zoomLevel);
+    }
     AppConfig::instance().setValue("UI/GridZoomLevel", m_zoomLevel);
 }
 
@@ -658,19 +483,23 @@ void ContentPanel::applyFilters(const FilterState& state) {
 }
 
 void ContentPanel::applyFilters() {
-    auto pushFilter = [this](FilterProxyModel* p, bool wantFolders) {
-        if (!p) return;
+    if (m_folderProxyModel) {
         FilterState s = m_currentFilter;
-        s.showFolders = wantFolders;
-        s.showFiles = !wantFolders;
-        p->currentFilter = s;
-        p->updateFilter();
-    };
-    pushFilter(m_folderProxyModel, true);
-    pushFilter(m_fileProxyModel, false);
-    pushFilter(m_gridFolderProxyModel, true);
-    pushFilter(m_gridFileProxyModel, false);
-    if (m_columnView) m_columnView->applyFilterState(m_currentFilter);
+        s.showFolders = true;
+        s.showFiles = false;
+        m_folderProxyModel->currentFilter = s;
+        m_folderProxyModel->updateFilter();
+    }
+    if (m_fileProxyModel) {
+        FilterState s = m_currentFilter;
+        s.showFolders = false;
+        s.showFiles = true;
+        m_fileProxyModel->currentFilter = s;
+        m_fileProxyModel->updateFilter();
+    }
+    if (m_columnView) {
+        m_columnView->applyFilterState(m_currentFilter);
+    }
     updateStatusBarStats();
 }
 
@@ -707,38 +536,14 @@ void ContentPanel::onSelectionChanged() {
 }
 
 void ContentPanel::emitSelectionChangedSignal() {
-    QElapsedTimer timer;
-    timer.start();
-    QModelIndexList selected = getSelectedIndexes();
-    qint64 tIndexes = timer.elapsed();
-
-    QStringList paths;
-    paths.reserve(selected.size());
-    for (const auto& idx : selected) {
-        if (idx.column() == 0) {
-            QString p = idx.data(PathRole).toString();
-            if (!p.isEmpty()) paths << p;
-        }
-    }
-    qint64 tPaths = timer.elapsed();
-
+    QStringList paths = getSelectedPaths();
     emit selectionChanged(paths);
-    qint64 tEmit = timer.elapsed();
-
-    // 消除重复调用：直接复用已有选区尺寸，禁止重复二次查询
-    updateStatusBarStats(selected.size());
-    qint64 tTotal = timer.elapsed();
-
-    Logger::log(QString("[Perf] ContentPanel::emitSelectionChangedSignal: getSelectedIndexes=%1ms, parsePaths(%2)=%3ms, emitSignal=%4ms, updateStatus=%5ms, total=%6ms")
-                .arg(tIndexes).arg(paths.size()).arg(tPaths - tIndexes).arg(tEmit - tPaths).arg(tTotal - tEmit).arg(tTotal));
+    updateStatusBarStats();
 }
 
 void ContentPanel::updateStatusBarStats(int cachedSelectedCount) {
-    FilterProxyModel* folderProxy = (m_currentViewMode == ListView && m_listCanvas) ? m_listCanvas->folderProxyModel() : (m_gridCanvas ? m_gridCanvas->folderProxyModel() : m_folderProxyModel);
-    FilterProxyModel* fileProxy = (m_currentViewMode == ListView && m_listCanvas) ? m_listCanvas->fileProxyModel() : (m_gridCanvas ? m_gridCanvas->fileProxyModel() : m_fileProxyModel);
-
-    int folderCount = folderProxy ? folderProxy->rowCount() : 0;
-    int fileCount = fileProxy ? fileProxy->rowCount() : 0;
+    int folderCount = m_folderProxyModel ? m_folderProxyModel->rowCount() : 0;
+    int fileCount = m_fileProxyModel ? m_fileProxyModel->rowCount() : 0;
     int visibleCount = folderCount + fileCount;
     int fullCount = m_model ? m_model->rowCount() : visibleCount;
     int hiddenCount = fullCount - visibleCount;
@@ -771,38 +576,43 @@ void ContentPanel::recalculateAndEmitStats() {
 }
 
 void ContentPanel::refreshVisibleThumbnails() {
-    qDebug() << "[THUMB_TRACE] ContentPanel::refreshVisibleThumbnails called. Current view mode:" << static_cast<int>(m_currentViewMode);
+    if (!m_model || CoreController::isShuttingDown()) return;
+
+    QList<QAbstractItemView*> views;
     if (m_currentViewMode == ColumnView) {
         if (m_columnView && m_columnView->activePane()) {
-            QList<QAbstractItemView*> views;
             if (m_columnView->activePane()->folderListView()) views << m_columnView->activePane()->folderListView();
             if (m_columnView->activePane()->listView()) views << m_columnView->activePane()->listView();
-            QSet<int> visibleRows;
-            for (auto* view : views) {
-                if (!view || !view->viewport() || !view->model()) continue;
-                auto* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
-                if (!proxy || proxy->rowCount() == 0) continue;
-                QRect vpRect = view->viewport()->rect();
-                QModelIndex topIdx = view->indexAt(vpRect.topLeft());
-                QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
-                int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-                int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : proxy->rowCount() - 1;
-                for (int r = top; r <= bottom; ++r) {
-                    QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
-                    if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
-                }
-            }
-            if (!visibleRows.isEmpty() && m_columnView->activePane()->model()) {
-                m_columnView->activePane()->model()->loadThumbnailsForRows(visibleRows.values());
-            }
         }
-        return;
+    } else if (m_currentViewMode == ListView) {
+        if (m_folderTreeView) views << m_folderTreeView;
+        if (m_treeView) views << m_treeView;
+    } else {
+        if (m_folderGridView) views << m_folderGridView;
+        if (m_gridView) views << m_gridView;
     }
 
-    if (m_currentViewMode == ListView && m_listCanvas) {
-        m_listCanvas->refreshVisibleThumbnails(m_model);
-    } else if ((m_currentViewMode == GridView || m_currentViewMode == JustifiedViewMode) && m_gridCanvas) {
-        m_gridCanvas->refreshVisibleThumbnails(m_model);
+    QSet<int> visibleRows;
+    for (auto* view : views) {
+        if (!view || !view->viewport()) continue;
+        auto* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
+        if (!proxy || proxy->rowCount() == 0) continue;
+
+        QRect vpRect = view->viewport()->rect();
+        QModelIndex topIdx = view->indexAt(vpRect.topLeft());
+        QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
+
+        int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
+        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : proxy->rowCount() - 1;
+
+        for (int r = top; r <= bottom; ++r) {
+            QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
+            if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
+        }
+    }
+
+    if (!visibleRows.isEmpty()) {
+        m_model->loadThumbnailsForRows(visibleRows.values());
     }
 }
 
@@ -856,11 +666,27 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
 }
 
 QSortFilterProxyModel* ContentPanel::getActiveProxyModel() const {
-    return m_viewCoordinator ? m_viewCoordinator->getActiveProxyModel() : nullptr;
+    if (m_currentViewMode == ColumnView && m_columnView && m_columnView->activePane()) {
+        if (m_columnView->activePane()->proxyModel()) {
+            return m_columnView->activePane()->proxyModel();
+        }
+    }
+    QAbstractItemView* view = activeItemView();
+    if (view && view->model()) {
+        return qobject_cast<QSortFilterProxyModel*>(view->model());
+    }
+    return m_fileProxyModel ? m_fileProxyModel : nullptr;
 }
 
 QStringList ContentPanel::getSelectedPaths() const {
-    return m_viewCoordinator ? m_viewCoordinator->getSelectedPaths() : QStringList();
+    QStringList paths;
+    for (const auto& idx : getSelectedIndexes()) {
+        if (idx.column() == 0) {
+            QString p = idx.data(PathRole).toString();
+            if (!p.isEmpty()) paths << p;
+        }
+    }
+    return paths;
 }
 
 QList<int> ContentPanel::getSelectedTrashIds() const {
@@ -885,45 +711,59 @@ QAbstractItemView* ContentPanel::activeItemView() const {
         }
         return nullptr;
     }
-    if (m_currentViewMode == ListView && m_listCanvas) {
-        return m_listCanvas->activeItemView();
+
+    if (m_currentViewMode == ListView) {
+        if (m_folderTreeView && (m_folderTreeView->hasFocus() ||
+            (m_folderTreeView->selectionModel() && m_folderTreeView->selectionModel()->hasSelection()))) {
+            return m_folderTreeView;
+        }
+        return m_treeView;
     }
-    if (m_gridCanvas) {
-        return m_gridCanvas->activeItemView();
+
+    // GridView / JustifiedViewMode
+    if (m_folderGridView && (m_folderGridView->hasFocus() ||
+        (m_folderGridView->selectionModel() && m_folderGridView->selectionModel()->hasSelection()))) {
+        return m_folderGridView;
     }
     return m_gridView;
 }
 
 QModelIndexList ContentPanel::getSelectedIndexes() const {
+    if (!m_viewStack) return {};
+    QModelIndexList res;
+
+    // 🚀【真理源多视图巡检】：直接巡检真实子视图，不再依赖外层容器类型
+    QList<QAbstractItemView*> views;
     if (m_currentViewMode == ColumnView) {
-        QModelIndexList res;
         if (m_columnView && m_columnView->activePane()) {
-            for (auto* view : {m_columnView->activePane()->folderListView(), m_columnView->activePane()->listView()}) {
-                if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
-                    for (const auto& idx : view->selectionModel()->selectedIndexes()) {
-                        if (idx.column() == 0) res.append(idx);
-                    }
+            if (m_columnView->activePane()->folderListView()) views << m_columnView->activePane()->folderListView();
+            if (m_columnView->activePane()->listView()) views << m_columnView->activePane()->listView();
+        }
+    } else if (m_currentViewMode == ListView) {
+        if (m_folderTreeView) views << m_folderTreeView;
+        if (m_treeView) views << m_treeView;
+    } else { // GridView / JustifiedViewMode
+        if (m_folderGridView) views << m_folderGridView;
+        if (m_gridView) views << m_gridView;
+    }
+
+    for (auto* view : views) {
+        if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
+            for (const auto& idx : view->selectionModel()->selectedIndexes()) {
+                if (idx.column() == 0) {
+                    res.append(idx);
                 }
             }
         }
-        return res;
     }
-    if (m_currentViewMode == ListView && m_listCanvas) {
-        return m_listCanvas->getSelectedIndexes();
-    }
-    if (m_gridCanvas) {
-        return m_gridCanvas->getSelectedIndexes();
-    }
-    return {};
+    return res;
 }
 
 void ContentPanel::restoreActiveView() {
     if (m_currentViewMode == ColumnView) {
         m_viewStack->setCurrentWidget(m_columnView);
-    } else if (m_currentViewMode == ListView) {
-        m_viewStack->setCurrentWidget(m_listCanvas);
     } else {
-        m_viewStack->setCurrentWidget(m_gridCanvas);
+        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? (m_listCanvas ? static_cast<QWidget*>(m_listCanvas) : static_cast<QWidget*>(m_treeView)) : (m_gridCanvas ? static_cast<QWidget*>(m_gridCanvas) : static_cast<QWidget*>(m_gridView)));
     }
 }
 
@@ -934,33 +774,19 @@ void ContentPanel::restoreSelections() {
 
     if (m_currentViewMode == ColumnView) {
         if (m_columnView && m_columnView->rightmostPane()) {
-            m_columnView->rightmostPane()->setPendingSelectPaths(m_selectionState.selectedPaths, m_isPendingEdit);
-            if (m_isPendingEdit) {
-                m_isPendingEdit = false;
-                QPointer<ColumnViewWidget> weakCol = m_columnView;
-                QTimer::singleShot(0, this, [weakCol]() {
-                    if (weakCol && weakCol->rightmostPane()) {
-                        QAbstractItemView* view = weakCol->rightmostPane()->listView();
-                        if (view && view->currentIndex().isValid()) {
-                            view->setFocus();
-                            view->edit(view->currentIndex());
-                        }
-                    }
-                });
-            }
+            m_columnView->rightmostPane()->setPendingSelectPaths(m_selectionState.selectedPaths);
         }
-        m_isPendingEdit = false;
         m_isRestoringSelections = false;
         return;
     }
 
     QList<QAbstractItemView*> views;
-    if (m_currentViewMode == ListView && m_listCanvas) {
-        if (m_listCanvas->folderView()) views << m_listCanvas->folderView();
-        if (m_listCanvas->fileView()) views << m_listCanvas->fileView();
-    } else if (m_gridCanvas) {
-        if (m_gridCanvas->folderView()) views << m_gridCanvas->folderView();
-        if (m_gridCanvas->fileView()) views << m_gridCanvas->fileView();
+    if (m_currentViewMode == ListView) {
+        if (m_folderTreeView) views << m_folderTreeView;
+        if (m_treeView) views << m_treeView;
+    } else if (m_currentViewMode == GridView || m_currentViewMode == JustifiedViewMode) {
+        if (m_folderGridView) views << m_folderGridView;
+        if (m_gridView) views << m_gridView;
     }
 
     for (auto* view : views) {
@@ -981,20 +807,7 @@ void ContentPanel::restoreSelections() {
                 }
             }
             view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-            if (lastIdx.isValid()) {
-                view->scrollTo(lastIdx);
-                if (m_isPendingEdit) {
-                    m_isPendingEdit = false;
-                    QPointer<QAbstractItemView> weakView(view);
-                    QTimer::singleShot(0, this, [weakView, lastIdx]() {
-                        if (weakView && lastIdx.isValid()) {
-                            weakView->setFocus();
-                            weakView->setCurrentIndex(lastIdx);
-                            weakView->edit(lastIdx);
-                        }
-                    });
-                }
-            }
+            if (lastIdx.isValid()) { view->scrollTo(lastIdx); if (m_isPendingEdit) view->edit(lastIdx); }
         }
     }
 
@@ -1004,7 +817,7 @@ void ContentPanel::restoreSelections() {
 void ContentPanel::setPendingSelectName(const QString& name, bool edit) {
     m_selectionState.selectedPaths.clear();
     if (!name.isEmpty()) {
-        QString fullPath = QDir::toNativeSeparators(QDir::cleanPath(QDir(m_currentPath).filePath(name)));
+        QString fullPath = m_currentPath + "/" + name;
         m_selectionState.selectedPaths.insert(fullPath);
         m_selectionState.focusedPath = fullPath;
     }

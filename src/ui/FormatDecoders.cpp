@@ -313,15 +313,7 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
     return WindowsShellThumbnailProvider::getShellThumbnail(filePath, targetSize);
 }
 
-QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
-    // 兼容层：默认走缩略图极速通道
-    return extractEpsThumbnail(filePath, targetSize, customTimeoutMs, token);
-}
-
-QImage FormatDecoders::extractEpsThumbnail(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
-    // =========================================================================
-    // 策略 1（版本 30 策略）：【内嵌图优先，GS 兜底】（追求极限速度，-r72 分辨率）
-    // =========================================================================
+QImage FormatDecoders::extractEpsEmbeddedPreview(const QString& filePath) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         return QImage();
@@ -332,7 +324,7 @@ QImage FormatDecoders::extractEpsThumbnail(const QString& filePath, int targetSi
         return QImage();
     }
 
-    // 第一优先级：读取 DOS 二进制头 (0xC5D0D3C6) 内嵌 TIFF 预览（纯内存解码，极速毫秒出图）
+    // 1. 优先尝试 DOS 二进制头 (C5D0D3C6)
     if (quint8(header[0]) == 0xC5 && quint8(header[1]) == 0xD0 &&
         quint8(header[2]) == 0xD3 && quint8(header[3]) == 0xC6) {
         
@@ -350,91 +342,13 @@ QImage FormatDecoders::extractEpsThumbnail(const QString& filePath, int targetSi
         }
     }
 
-    // 第二优先级：读取 ASCII 文本格式的 %%BeginPreview 预览块
+    // 2. 普通 ASCII EPS (文本格式) 的 %%BeginPreview: 预览块解析
     file.seek(0);
     QTextStream in(&file);
     bool inPreview = false;
     QString hexData;
     int width = 0, height = 0;
-    QRegularExpression rxSpaces("\\s+");
 
-    while (!in.atEnd()) {
-        QString line = in.readLine();
-        if (line.startsWith("%%BeginPreview:")) {
-            QStringList parts = line.split(rxSpaces, Qt::SkipEmptyParts);
-            if (parts.size() >= 3) {
-                width = parts[1].toInt();
-                height = parts[2].toInt();
-                inPreview = true;
-            }
-            continue;
-        }
-        if (line.startsWith("%%EndPreview")) {
-            break;
-        }
-        if (inPreview) {
-            if (line.startsWith("%")) {
-                hexData.append(line.mid(1).trimmed());
-            }
-        }
-    }
-
-    if (!hexData.isEmpty() && width > 0 && height > 0) {
-        QByteArray binaryData = QByteArray::fromHex(hexData.toLatin1());
-        QImage img;
-        if (img.loadFromData(binaryData)) {
-            return img;
-        }
-    }
-
-    // 第三优先级（最后兜底）：Ghostscript 外部引擎，严格采用 72 DPI
-    return renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 72);
-}
-
-QImage FormatDecoders::extractEpsQuickLook(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
-    // =========================================================================
-    // 策略 2（版本 31 策略）：【GS 矢量优先，内嵌降级】（追求极致画质，-r144 分辨率）
-    // =========================================================================
-    // 第一优先级：Ghostscript 矢量高清光栅化，严格采用 144 DPI
-    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 144);
-    if (!gsImg.isNull()) {
-        return gsImg;
-    }
-
-    // 第二优先级（降级）：若 GS 缺失或失败，退回尝试 DOS 二进制头内嵌 TIFF
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        return QImage();
-    }
-
-    QByteArray header = file.read(30);
-    if (header.size() < 30) {
-        return QImage();
-    }
-
-    if (quint8(header[0]) == 0xC5 && quint8(header[1]) == 0xD0 &&
-        quint8(header[2]) == 0xD3 && quint8(header[3]) == 0xC6) {
-        
-        quint32 tiffOffset = (quint8(header[20])) | (quint8(header[21]) << 8) |
-                             (quint8(header[22]) << 16) | (quint8(header[23]) << 24);
-        quint32 tiffLength = (quint8(header[24])) | (quint8(header[25]) << 8) |
-                             (quint8(header[26]) << 16) | (quint8(header[27]) << 24);
-        if (tiffOffset > 0 && tiffLength > 0) {
-            file.seek(tiffOffset);
-            QByteArray tiffData = file.read(tiffLength);
-            QImage img = decodeTiffMemorySafely(tiffData);
-            if (!img.isNull()) {
-                return img;
-            }
-        }
-    }
-
-    // 第三优先级（最后兜底）：尝试 %%BeginPreview 文本预览
-    file.seek(0);
-    QTextStream in(&file);
-    bool inPreview = false;
-    QString hexData;
-    int width = 0, height = 0;
     QRegularExpression rxSpaces("\\s+");
 
     while (!in.atEnd()) {
@@ -467,6 +381,29 @@ QImage FormatDecoders::extractEpsQuickLook(const QString& filePath, int targetSi
     }
 
     return QImage();
+}
+
+QImage FormatDecoders::extractEpsThumbnail(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    // 自动提取：① DOS 二进制头内嵌 TIFF → ② %%BeginPreview 文本预览 → ③ Ghostscript (72 DPI)
+    QImage img = extractEpsEmbeddedPreview(filePath);
+    if (!img.isNull()) {
+        return img;
+    }
+    return renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 72);
+}
+
+QImage FormatDecoders::extractEpsQuickLook(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    // 手动双击提取：① Ghostscript (144 DPI) → ② DOS 二进制头内嵌 TIFF → ③ %%BeginPreview 文本预览
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 144);
+    if (!gsImg.isNull()) {
+        return gsImg;
+    }
+    return extractEpsEmbeddedPreview(filePath);
+}
+
+QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    // 通用兼容接口：路由至自动提取策略
+    return extractEpsThumbnail(filePath, targetSize, customTimeoutMs, token);
 }
 
 QString FormatDecoders::findGhostscriptExecutable() {

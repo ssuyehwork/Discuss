@@ -26,7 +26,6 @@ public:
 
 signals:
     void totalHeightChanged(int height);
-    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
 
 public:
     QRect visualRect(const QModelIndex& index) const override;
@@ -44,7 +43,6 @@ protected slots:
     void onLayoutTimerTimeout();
 
 protected:
-    void startDrag(Qt::DropActions supportedActions) override;
     QModelIndex moveCursor(CursorAction cursorAction, Qt::KeyboardModifiers modifiers) override;
     int horizontalOffset() const override;
     int verticalOffset() const override;
@@ -66,8 +64,10 @@ private:
     struct ItemGeometry {
         QRect rect;
         int index;
+        bool isHeader = false;
+        QString headerText;
+        bool isCollapsed = false;
     };
-    std::vector<ItemGeometry>::const_iterator geometryLowerBound(int y) const;
     std::vector<ItemGeometry> m_geometries;
     int m_totalHeight = 0;
     int m_targetRowHeight = 128;

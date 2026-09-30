@@ -54,16 +54,10 @@ ScanStats ContentStatsWorker::calculateStats(const std::vector<ItemRecord>& reco
                 if (std::abs(r - 1.77) <= 0.05) stats.ratio169Count++;
             }
 
-            static const QStringList iconOnlyExts = {"cur", "ico", "ani"};
-            QString ext = record.suffix.toLower();
-            if (UiHelper::isGraphicsFile(ext) && !iconOnlyExts.contains(ext)) {
-                if (record.thumbStatus == 1) {
-                    stats.noThumbnailCount++;
-                } else if (record.width > 0 && record.height > 0) {
-                    stats.hasThumbnailCount++;
-                } else {
-                    stats.noThumbnailCount++;
-                }
+            if (UiHelper::hasPhysicalThumbnail(record)) {
+                stats.hasThumbnailCount++;
+            } else {
+                stats.noThumbnailCount++;
             }
         }
     }

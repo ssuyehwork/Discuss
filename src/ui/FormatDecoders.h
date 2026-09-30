@@ -22,10 +22,10 @@ public:
     // 通用兼容接口（默认路由至缩略图策略）
     static QImage extractEpsPreview(const QString& filePath, int targetSize = 512, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr);
 
-    // 策略 1：日常缩略图（版本 30 策略：内嵌优先，-r72 GS 兜底，极限速度）
+    // 策略 1：自动提取缩略图（内嵌 TIFF → %%BeginPreview → GS 72 DPI 兜底）
     static QImage extractEpsThumbnail(const QString& filePath, int targetSize = 512, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr);
 
-    // 策略 2：QuickLook 快速大图（版本 31 策略：-r144 GS 矢量优先，内嵌降级兜底，极致画质）
+    // 策略 2：手动双击提取（GS 144 DPI 优先 → 内嵌 TIFF → %%BeginPreview）
     static QImage extractEpsQuickLook(const QString& filePath, int targetSize = 2048, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr);
 
     // External Process: Ghostscript 降采样渲染 (customTimeoutMs > 0 时使用自定义长效超时，默认 72 DPI)
@@ -34,6 +34,9 @@ public:
 private:
     static QString findGhostscriptExecutable();
     static QImage renderPdfAiFirstPage(const QString& filePath, int targetSize = 512);
+
+    // EPS 内嵌预览提取：DOS 二进制头 TIFF → %%BeginPreview 文本预览（不含 Ghostscript）
+    static QImage extractEpsEmbeddedPreview(const QString& filePath);
 };
 
 } // namespace QuarkMeta

@@ -79,8 +79,7 @@ void DualSectionPanel::updateEmptyFilterHint() {
     if (!m_emptyFilterHintLabel || !m_folderProxyModel || !m_fileProxyModel) return;
     bool folderEmpty = m_folderProxyModel->rowCount() == 0;
     bool fileEmpty = m_fileProxyModel->rowCount() == 0;
-    // 具体"隐藏了多少项"的判断逻辑跟原 ColumnViewPane 实现保持一致，
-    // 这里先给出统一入口，实际隐藏计数逻辑在接入阶段核对原实现后补全。
+
     if (folderEmpty && fileEmpty) {
         m_emptyFilterHintLabel->setText("所有内容已被筛选隐藏");
         m_emptyFilterHintLabel->show();
@@ -121,11 +120,6 @@ void DualSectionPanel::updateSectionCounts(int hostViewportHeight) {
     }
 
     updateEmptyFilterHint();
-    // 注意：具体的"文件区固定高度撑开"数值计算（Grid用JustifiedView::totalHeight()，
-    // List/Column用行数×行高），因为跟具体view类型（JustifiedView vs QTreeView vs QListView）
-    // 强相关，保留在 SectionedScrollCanvas / ColumnViewPane 各自的
-    // totalHeightChanged信号连接、以及本函数调用之后各自追加一行 setFixedHeight(qMax(计算值, computeFileViewMinHeight(...)))，
-    // 不在本类里做，避免这个共享类反而要认识三种不同的view子类。
 }
 
 void DualSectionPanel::toggleFolderSectionCollapse() {
@@ -164,72 +158,50 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
         if (!view || !view->isVisible() || !view->viewport() || !proxy || proxy->rowCount() == 0) return;
 
         QWidget* subVp = view->viewport();
+        QString viewTag = (view == m_folderView) ? "FolderView" : "FileView";
+
         // 将外层 QScrollArea 视口矩形投影到子视图真实的 viewport 坐标系
         QPoint topPoint = subVp->mapFromGlobal(hostViewport->mapToGlobal(hostVpRect.topLeft()));
         QPoint btmPoint = subVp->mapFromGlobal(hostViewport->mapToGlobal(hostVpRect.bottomRight()));
 
         // 完全在可视区域之外时直接跳过
-        if (topPoint.y() >= subVp->height() || btmPoint.y() <= 0) return;
-
-        // 限制在子视图可视区域内，并避开极端边缘 padding
-        int sampleTopY = qBound(0, topPoint.y(), subVp->height() - 1);
-        int sampleBtmY = qBound(0, btmPoint.y(), subVp->height() - 1);
-        int sampleLeftX = qBound(0, qMax(topPoint.x(), 12), subVp->width() - 1);
-        int sampleRightX = qBound(0, qMin(btmPoint.x(), subVp->width() - 12), subVp->width() - 1);
-
-        QModelIndex topIdx = view->indexAt(QPoint(sampleLeftX, sampleTopY));
-        QModelIndex btmIdx = view->indexAt(QPoint(sampleRightX, sampleBtmY));
-
-        // 若直接采样点位于卡片间隙，向中心采样
-        if (!topIdx.isValid()) {
-            topIdx = view->indexAt(QPoint(subVp->width() / 2, sampleTopY));
-        }
-        if (!btmIdx.isValid()) {
-            btmIdx = view->indexAt(QPoint(subVp->width() / 2, sampleBtmY));
+        if (topPoint.y() >= subVp->height() || btmPoint.y() <= 0) {
+            return;
         }
 
-        int top = -1;
-        int bottom = -1;
+        int visibleCount = 0;
+        int firstVisible = -1;
+        int lastVisible = -1;
 
-        if (topIdx.isValid()) {
-            top = topIdx.row();
-        }
-        if (btmIdx.isValid()) {
-            bottom = btmIdx.row();
-        }
+        int rowCount = proxy->rowCount();
+        for (int r = 0; r < rowCount; ++r) {
+            QModelIndex pIdx = proxy->index(r, 0);
+            QRect rRect = view->visualRect(pIdx);
 
-        // 🚨【关键修复】：若采样的边缘坐标刚好命中卡片间隙（padding），向中心步进扫描寻找视口内第一个/最后一个有效索引
-        if (top == -1 || bottom == -1) {
-            int stepY = 16;
-            int currentY = sampleTopY;
-            while (top == -1 && currentY <= sampleBtmY) {
-                QModelIndex idx = view->indexAt(QPoint(subVp->width() / 2, currentY));
-                if (idx.isValid()) {
-                    top = idx.row();
+            if (!rRect.isValid() || rRect.isEmpty()) continue;
+
+            // 卡片完全在可视视口上方，跳过找下一张
+            if (rRect.bottom() < topPoint.y()) continue;
+
+            // 卡片完全在可视视口下方
+            if (rRect.top() > btmPoint.y()) {
+                // 如果已经找到了可见项，且当前项已经彻底超出下边缘一定缓冲，退出循环
+                if (lastVisible != -1 && r > lastVisible + 20) {
+                    break;
                 }
-                currentY += stepY;
             }
 
-            currentY = sampleBtmY;
-            while (bottom == -1 && currentY >= sampleTopY) {
-                QModelIndex idx = view->indexAt(QPoint(subVp->width() / 2, currentY));
-                if (idx.isValid()) {
-                    bottom = idx.row();
-                }
-                currentY -= stepY;
-            }
+            // 几何相交：当前卡片在屏幕上可见
+            if (firstVisible == -1) firstVisible = r;
+            lastVisible = r;
+            visibleCount++;
+
+            QModelIndex srcIdx = proxy->mapToSource(pIdx);
+            if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
         }
 
-        // 只有当视口内确实扫描到有效的卡片行时，才计算加载范围（前扩 4 行，后扩 4 行缓冲）；
-        // 如果视图完全为空或不在视口内部，绝对严禁退化为 0 ~ rowCount()-1 全量加载！
-        if (top != -1 && bottom != -1) {
-            int clampedTop = qMax(0, top - 4);
-            int clampedBottom = qMin(proxy->rowCount() - 1, bottom + 4);
-            for (int r = clampedTop; r <= clampedBottom; ++r) {
-                QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
-                if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
-            }
-        }
+        qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry scan: visible rows [%2, %3], total visible: %4")
+            .arg(viewTag).arg(firstVisible).arg(lastVisible).arg(visibleCount);
     };
 
     scanView(m_folderView, m_folderProxyModel);
