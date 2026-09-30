@@ -55,7 +55,6 @@ signals:
 private:
     int computeFileViewMinHeight(int hostViewportHeight) const;
     int computeFolderViewMinHeight(int hostViewportHeight) const;
-    void updateEmptyFilterHint();
 
     QVBoxLayout* m_layout = nullptr;
     FolderSectionHeaderBar* m_folderHeader = nullptr;
@@ -64,7 +63,6 @@ private:
     QAbstractItemView* m_fileView = nullptr;
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;
-    QLabel* m_emptyFilterHintLabel = nullptr;
     int m_lastHostViewportHeight = 0;
 };
 
