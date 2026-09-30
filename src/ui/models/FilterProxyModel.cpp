@@ -180,12 +180,15 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         if (currentFilter.duplicatePresence == FilterState::UniqueOnly && isDuplicate) return false;
     }
 
-    // 6.5 缩略图状态过滤 (Zero UI Main-Thread Disk I/O)
-    if (currentFilter.thumbnailPresence != FilterState::ThumbAll &&
-        !record.isDir && UiHelper::isGraphicsFile(record.suffix.toLower())) {
-        bool hasThumb = sourceModelPtr->data(sourceModelPtr->index(sourceRow, 0), HasThumbnailRole).toBool();
-        if (currentFilter.thumbnailPresence == FilterState::HasThumbnail && !hasThumb) return false;
-        if (currentFilter.thumbnailPresence == FilterState::NoThumbnail && hasThumb) return false;
+    // 6.5 缩略图状态过滤 (统一使用 ItemRecord::thumbnailState)
+    if (currentFilter.thumbnailPresence != FilterState::ThumbAll) {
+        if (record.isDir || !ColorPaletteEngine::isGraphicsFile(record.suffix.toLower())) {
+            return false;
+        }
+
+        bool isReady = (record.thumbnailState == ItemRecord::ThumbnailState::Ready);
+        if (currentFilter.thumbnailPresence == FilterState::HasThumbnail && !isReady) return false;
+        if (currentFilter.thumbnailPresence == FilterState::NoThumbnail && isReady) return false;
     }
 
     // 7. 搜索关键词匹配

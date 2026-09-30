@@ -47,22 +47,30 @@ DiskItemModel::DiskItemModel(QObject* parent) : ItemModelBase(parent) {
 void DiskItemModel::flushPendingThumbDataChanged() {
     if (m_pendingThumbRows.isEmpty()) return;
 
-    QSet<int> rowsToEmit = m_pendingThumbRows;
+    QList<int> sortedRows = m_pendingThumbRows.values();
     m_pendingThumbRows.clear();
+    std::sort(sortedRows.begin(), sortedRows.end());
 
-    int minRow = std::numeric_limits<int>::max();
-    int maxRow = std::numeric_limits<int>::min();
+    int startRow = -1;
+    int prevRow = -1;
 
-    for (int r : rowsToEmit) {
-        if (r >= 0 && r < static_cast<int>(m_allRecords.size())) {
-            if (r < minRow) minRow = r;
-            if (r > maxRow) maxRow = r;
+    for (int r : sortedRows) {
+        if (r < 0 || r >= static_cast<int>(m_allRecords.size())) continue;
+        if (startRow == -1) {
+            startRow = r;
+            prevRow = r;
+        } else if (r == prevRow + 1) {
+            prevRow = r;
+        } else {
+            emit dataChanged(index(startRow, 0), index(prevRow, columnCount() - 1),
+                             {Qt::DecorationRole, HasThumbnailRole});
+            startRow = r;
+            prevRow = r;
         }
     }
-
-    if (minRow <= maxRow) {
-        emit dataChanged(index(minRow, 0), index(maxRow, columnCount() - 1),
-                          {Qt::DecorationRole, HasThumbnailRole});
+    if (startRow != -1) {
+        emit dataChanged(index(startRow, 0), index(prevRow, columnCount() - 1),
+                         {Qt::DecorationRole, HasThumbnailRole});
     }
 }
 
@@ -106,9 +114,21 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     m_pathToIndex.clear();
     m_requestedPaths.clear();
     int populatedMetaCount = 0;
+
+    std::vector<std::pair<int, QString>> pendingTargets;
+
     for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
         auto& rec = m_allRecords[i];
         m_pathToIndex[rec.path] = i;
+
+        if (rec.isDir || !ColorPaletteEngine::isGraphicsFile(rec.suffix.toLower())) {
+            rec.thumbnailState = ItemRecord::ThumbnailState::NotApplicable;
+        } else if (rec.thumbStatus == 1) {
+            rec.thumbnailState = ItemRecord::ThumbnailState::Failed;
+        } else {
+            rec.thumbnailState = ItemRecord::ThumbnailState::Pending;
+            pendingTargets.push_back({i, rec.path});
+        }
 
         // 🚀【内存与缓存双向同步】：把 MetaCacheDecorator 装饰到的高级元数据回写激活进 MetadataManager 内存缓存！
         std::wstring wpath = rec.path.toStdWString();
@@ -125,6 +145,85 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     }
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     endResetModel();
+
+    // 🚀【异步零卡顿】：在后台线程检测已存在的磁盘缩略图缓存，纯靠主线程回调写入 Ready 状态
+    if (!pendingTargets.empty()) {
+        uint64_t thisGen = m_currentGen.load(std::memory_order_relaxed);
+        QPointer<DiskItemModel> weakThis(this);
+
+        thumbnailPool()->start([weakThis, targets = std::move(pendingTargets), thisGen]() {
+            if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+
+            std::vector<QString> readyPaths;
+            readyPaths.reserve(targets.size());
+
+            for (const auto& target : targets) {
+                if (!weakThis || weakThis->currentGeneration() != thisGen || CoreController::isShuttingDown()) return;
+                QString thumbPath = DiskMediaExtractor::getDiskThumbCachePath(target.second);
+                if (QFile::exists(thumbPath)) {
+                    readyPaths.push_back(target.second);
+                }
+            }
+
+            if (readyPaths.empty() || !weakThis || weakThis->currentGeneration() != thisGen) return;
+
+            QMetaObject::invokeMethod(weakThis.data(), [weakThis, readyPaths = std::move(readyPaths), thisGen]() {
+                if (!weakThis || weakThis->currentGeneration() != thisGen) return;
+
+                int minRow = std::numeric_limits<int>::max();
+                int maxRow = std::numeric_limits<int>::min();
+
+                for (const QString& path : readyPaths) {
+                    auto it = weakThis->m_pathToIndex.find(path);
+                    if (it != weakThis->m_pathToIndex.end()) {
+                        int r = it->second;
+                        if (r >= 0 && r < static_cast<int>(weakThis->m_allRecords.size())) {
+                            weakThis->m_allRecords[r].thumbnailState = ItemRecord::ThumbnailState::Ready;
+                            if (r < minRow) minRow = r;
+                            if (r > maxRow) maxRow = r;
+                        }
+                    }
+                }
+
+                std::vector<int> sortedRows;
+                sortedRows.reserve(readyPaths.size());
+                for (const QString& path : readyPaths) {
+                    auto it = weakThis->m_pathToIndex.find(path);
+                    if (it != weakThis->m_pathToIndex.end() && it->second >= 0 && it->second < static_cast<int>(weakThis->m_allRecords.size())) {
+                        sortedRows.push_back(it->second);
+                    }
+                }
+                std::sort(sortedRows.begin(), sortedRows.end());
+                sortedRows.erase(std::unique(sortedRows.begin(), sortedRows.end()), sortedRows.end());
+
+                int startRow = -1;
+                int prevRow = -1;
+                for (int r : sortedRows) {
+                    if (startRow == -1) {
+                        startRow = r;
+                        prevRow = r;
+                    } else if (r == prevRow + 1) {
+                        prevRow = r;
+                    } else {
+                        emit weakThis->dataChanged(
+                            weakThis->index(startRow, 0),
+                            weakThis->index(prevRow, weakThis->columnCount() - 1),
+                            {HasThumbnailRole}
+                        );
+                        startRow = r;
+                        prevRow = r;
+                    }
+                }
+                if (startRow != -1) {
+                    emit weakThis->dataChanged(
+                        weakThis->index(startRow, 0),
+                        weakThis->index(prevRow, weakThis->columnCount() - 1),
+                        {HasThumbnailRole}
+                    );
+                }
+            }, Qt::QueuedConnection);
+        });
+    }
 
     preloadDimensionsAsync();
 }
@@ -283,7 +382,16 @@ void DiskItemModel::updateRecordMetadata(const QString& path) {
             record.tags = meta.tags;
             record.width = meta.width;
             record.height = meta.height;
+            record.thumbStatus = meta.thumbStatus;
             record.autoColor = QString::fromStdWString(meta.autoColor);
+
+            if (!record.isDir && ColorPaletteEngine::isGraphicsFile(record.suffix.toLower())) {
+                if (record.thumbStatus == 1) {
+                    record.thumbnailState = ItemRecord::ThumbnailState::Failed;
+                } else if (record.thumbnailState == ItemRecord::ThumbnailState::Failed) {
+                    record.thumbnailState = ItemRecord::ThumbnailState::Pending;
+                }
+            }
             record.added_at = meta.added_at;
 
             record.palettes.clear();
@@ -534,18 +642,29 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
             double ar = (double)pixmap.width() / pixmap.height();
             weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = ar;
 
-            QMetaObject::invokeMethod(weakThis, [weakThis, path]() {
+            QMetaObject::invokeMethod(weakThis, [weakThis, path, pixmap]() {
                 if (!weakThis) return;
+                weakThis->m_requestedPaths.remove(path);
                 auto it = weakThis->m_pathToIndex.find(path);
                 if (it != weakThis->m_pathToIndex.end()) {
                     int currentIdx = it->second;
                     if (currentIdx >= 0 && currentIdx < static_cast<int>(weakThis->m_allRecords.size())) {
                         if (weakThis->m_allRecords[currentIdx].path == path) {
-                            weakThis->m_pendingThumbRows.insert(currentIdx);
-                            if (weakThis->m_thumbBatchTimer && !weakThis->m_thumbBatchTimer->isActive()) {
-                                weakThis->m_thumbBatchTimer->start();
+                            if (!pixmap.isNull()) {
+                                weakThis->m_allRecords[currentIdx].thumbnailState = ItemRecord::ThumbnailState::Ready;
+                                weakThis->m_pendingThumbRows.insert(currentIdx);
+                                if (weakThis->m_thumbBatchTimer && !weakThis->m_thumbBatchTimer->isActive()) {
+                                    weakThis->m_thumbBatchTimer->start();
+                                }
+                                emit weakThis->thumbnailLoaded(currentIdx);
+                            } else {
+                                weakThis->m_allRecords[currentIdx].thumbnailState = ItemRecord::ThumbnailState::Failed;
+                                emit weakThis->dataChanged(
+                                    weakThis->index(currentIdx, 0),
+                                    weakThis->index(currentIdx, weakThis->columnCount() - 1),
+                                    {HasThumbnailRole}
+                                );
                             }
-                            emit weakThis->thumbnailLoaded(currentIdx);
                         }
                     }
                 }
@@ -658,9 +777,7 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == DiskTrashIdRole) {
         return record.diskTrashId;
     } else if (role == HasThumbnailRole) {
-        return UiHelper::hasPhysicalThumbnail(record) ||
-               (m_aspectRatios.contains(QDir::toNativeSeparators(path)) && m_aspectRatios.value(QDir::toNativeSeparators(path)) > 0.0) ||
-               m_iconCache.contains(path);
+        return record.thumbnailState == ItemRecord::ThumbnailState::Ready;
     } else if (role == Qt::DecorationRole && index.column() == 0) {
         QString cleanKey = QDir::cleanPath(path);
         QIcon* cached = m_iconCache.object(cleanKey);

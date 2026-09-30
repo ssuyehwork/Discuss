@@ -1,5 +1,6 @@
 #include "ItemRecord.h"
 #include "../meta/MetadataManager.h"
+#include "../util/ColorPaletteEngine.h"
 #include <QFileInfo>
 #include <QDir>
 #include <mutex>
@@ -25,6 +26,16 @@ void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
     r.palettes.clear();
     for (const auto& pe : meta.palettes) {
         r.palettes.push_back({pe.color, pe.ratio});
+    }
+
+    if (!r.isDir && ColorPaletteEngine::isGraphicsFile(r.suffix.toLower())) {
+        if (r.thumbStatus == 1) {
+            r.thumbnailState = ThumbnailState::Failed;
+        } else if (r.thumbnailState == ThumbnailState::NotApplicable || r.thumbnailState == ThumbnailState::Failed) {
+            r.thumbnailState = ThumbnailState::Pending;
+        }
+    } else {
+        r.thumbnailState = ThumbnailState::NotApplicable;
     }
 }
 
@@ -57,6 +68,14 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
         r.suffix = "";
     } else {
         r.suffix = info.suffix();
+    }
+
+    if (r.isDir || !ColorPaletteEngine::isGraphicsFile(r.suffix.toLower())) {
+        r.thumbnailState = ThumbnailState::NotApplicable;
+    } else if (r.thumbStatus == 1) {
+        r.thumbnailState = ThumbnailState::Failed;
+    } else {
+        r.thumbnailState = ThumbnailState::Pending;
     }
 
     return r;

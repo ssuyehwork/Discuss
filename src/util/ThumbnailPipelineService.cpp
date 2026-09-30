@@ -114,16 +114,16 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
                 qDebug() << "[THUMB_TRACE] ReadOnly cache hit in pipeline for:" << path;
             }
 
-            if (!finalImg.isNull()) {
+            if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
+                return;
+            }
+
+            QMetaObject::invokeMethod(qApp, [this, path, targetSize, finalImg, taskGen, onSingleLoaded]() {
                 if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
                     return;
                 }
 
-                QMetaObject::invokeMethod(qApp, [this, path, targetSize, finalImg, taskGen, onSingleLoaded]() {
-                    if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
-                        return;
-                    }
-
+                if (!finalImg.isNull()) {
                     QPixmap pix = QPixmap::fromImage(finalImg);
                     if (!pix.isNull()) {
                         QString key = QString("%1@%2").arg(QDir::toNativeSeparators(path).toLower()).arg(targetSize);
@@ -135,9 +135,17 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
                         if (onSingleLoaded) {
                             onSingleLoaded(path, pix);
                         }
+                    } else {
+                        if (onSingleLoaded) {
+                            onSingleLoaded(path, QPixmap());
+                        }
                     }
-                }, Qt::QueuedConnection);
-            }
+                } else {
+                    if (onSingleLoaded) {
+                        onSingleLoaded(path, QPixmap());
+                    }
+                }
+            }, Qt::QueuedConnection);
         }
     });
 }

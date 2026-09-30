@@ -60,7 +60,6 @@ public:
         return ColorPaletteEngine::isGraphicsFile(ext);
     }
 
-    static bool hasPhysicalThumbnail(const ItemRecord& record);
 
     static inline bool isStandardImage(const QString& ext) {
         return ColorPaletteEngine::isStandardImage(ext);
