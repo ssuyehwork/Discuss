@@ -569,6 +569,20 @@ void ContentPanel::applyFilters(const FilterState& state) {
 }
 
 void ContentPanel::applyFilters() {
+    if (m_gridFolderProxyModel) {
+        FilterState s = m_currentFilter;
+        s.showFolders = true;
+        s.showFiles = false;
+        m_gridFolderProxyModel->currentFilter = s;
+        m_gridFolderProxyModel->updateFilter();
+    }
+    if (m_gridFileProxyModel) {
+        FilterState s = m_currentFilter;
+        s.showFolders = false;
+        s.showFiles = true;
+        m_gridFileProxyModel->currentFilter = s;
+        m_gridFileProxyModel->updateFilter();
+    }
     if (m_folderProxyModel) {
         FilterState s = m_currentFilter;
         s.showFolders = true;
@@ -630,8 +644,15 @@ void ContentPanel::emitSelectionChangedSignal() {
 }
 
 void ContentPanel::updateStatusBarStats(int cachedSelectedCount) {
-    int folderCount = m_folderProxyModel ? m_folderProxyModel->rowCount() : 0;
-    int fileCount = m_fileProxyModel ? m_fileProxyModel->rowCount() : 0;
+    int folderCount = 0;
+    int fileCount = 0;
+    if (m_currentViewMode == GridView || m_currentViewMode == JustifiedViewMode) {
+        folderCount = m_gridFolderProxyModel ? m_gridFolderProxyModel->rowCount() : 0;
+        fileCount = m_gridFileProxyModel ? m_gridFileProxyModel->rowCount() : 0;
+    } else {
+        folderCount = m_folderProxyModel ? m_folderProxyModel->rowCount() : 0;
+        fileCount = m_fileProxyModel ? m_fileProxyModel->rowCount() : 0;
+    }
     int visibleCount = folderCount + fileCount;
     int fullCount = m_model ? m_model->rowCount() : visibleCount;
     int hiddenCount = fullCount - visibleCount;
