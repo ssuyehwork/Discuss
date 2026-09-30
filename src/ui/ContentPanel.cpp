@@ -22,6 +22,7 @@
 #include "CardLayoutEngine.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
+#include "Logger.h"
 
 #include "../core/AppConfig.h"
 #include "../core/CoreEngine.h"
@@ -607,6 +608,7 @@ void ContentPanel::refreshAll() {
 }
 
 void ContentPanel::updateItemMetadata(const QString& path) {
+    Logger::log(QString("[ContentPanel::updateItemMetadata] Updating metadata for path: %1").arg(path));
     if (m_model) m_model->updateRecordMetadata(path);
     if (m_folderGridView && m_folderGridView->viewport()) m_folderGridView->viewport()->update();
     if (m_gridView && m_gridView->viewport()) m_gridView->viewport()->update();

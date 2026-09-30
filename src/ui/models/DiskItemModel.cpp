@@ -19,6 +19,7 @@
 #include "MetadataManager.h"
 #include "DriveMetaDao.h"
 #include "../../core/LastOperationManager.h"
+#include "Logger.h"
 
 namespace QuarkMeta {
 
@@ -399,6 +400,7 @@ void DiskItemModel::updateRecordMetadata(const QString& path) {
                 record.palettes.push_back({pe.color, pe.ratio});
             }
 
+            Logger::log(QString("[DiskItemModel::updateRecordMetadata] Refreshed row %1 for path: %2").arg(i).arg(nPath));
             emit dataChanged(index(i, 0), index(i, columnCount() - 1), {Qt::DisplayRole, Qt::DecorationRole, RatingRole, ColorRole, HasThumbnailRole});
         }
     }
