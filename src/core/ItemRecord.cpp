@@ -1,5 +1,6 @@
 #include "ItemRecord.h"
 #include "../meta/MetadataManager.h"
+#include "../util/ColorPaletteEngine.h"
 #include <QFileInfo>
 #include <QDir>
 #include <mutex>
