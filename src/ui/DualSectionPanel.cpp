@@ -1,7 +1,10 @@
 #include "DualSectionPanel.h"
 #include "FolderSectionWidget.h"
+#include "JustifiedView.h"
 #include "Logger.h"
 #include "../core/CoreController.h"
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QElapsedTimer>
 #include <QDebug>
 
@@ -151,58 +154,76 @@ QModelIndexList DualSectionPanel::getSelectedIndexes() const {
 void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* hostViewport) {
     if (!model || !hostViewport || CoreController::isShuttingDown()) return;
 
-    QRect hostVpRect = hostViewport->rect();
+    auto* scrollArea = qobject_cast<QScrollArea*>(hostViewport->parent());
+    int scrollY = (scrollArea && scrollArea->verticalScrollBar()) ? scrollArea->verticalScrollBar()->value() : 0;
+    int vpHeight = hostViewport->height();
+
     QSet<int> visibleRows;
 
     auto scanView = [&](QAbstractItemView* view, FilterProxyModel* proxy) {
-        if (!view || !view->isVisible() || !view->viewport() || !proxy || proxy->rowCount() == 0) return;
+        if (!view || !view->isVisible() || !proxy || proxy->rowCount() == 0) return;
 
-        QWidget* subVp = view->viewport();
         QString viewTag = (view == m_folderView) ? "FolderView" : "FileView";
+        auto* jv = qobject_cast<JustifiedView*>(view);
 
-        // 将外层 QScrollArea 视口矩形投影到子视图真实的 viewport 坐标系
-        QPoint topPoint = subVp->mapFromGlobal(hostViewport->mapToGlobal(hostVpRect.topLeft()));
-        QPoint btmPoint = subVp->mapFromGlobal(hostViewport->mapToGlobal(hostVpRect.bottomRight()));
-
-        // 完全在可视区域之外时直接跳过
-        if (topPoint.y() >= subVp->height() || btmPoint.y() <= 0) {
-            return;
-        }
-
-        int visibleCount = 0;
-        int firstVisible = -1;
-        int lastVisible = -1;
-
-        int rowCount = proxy->rowCount();
-        for (int r = 0; r < rowCount; ++r) {
-            QModelIndex pIdx = proxy->index(r, 0);
-            QRect rRect = view->visualRect(pIdx);
-
-            if (!rRect.isValid() || rRect.isEmpty()) continue;
-
-            // 卡片完全在可视视口上方，跳过找下一张
-            if (rRect.bottom() < topPoint.y()) continue;
-
-            // 卡片完全在可视视口下方
-            if (rRect.top() > btmPoint.y()) {
-                // 如果已经找到了可见项，且当前项已经彻底超出下边缘一定缓冲，退出循环
-                if (lastVisible != -1 && r > lastVisible + 20) {
-                    break;
-                }
-                continue;
+        if (jv) {
+            if (!jv->isLayoutReady()) {
+                qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry not ready (dirty or unpopulated), scan deferred.").arg(viewTag);
+                return;
             }
 
-            // 几何相交：当前卡片在屏幕上可见
-            if (firstVisible == -1) firstVisible = r;
-            lastVisible = r;
-            visibleCount++;
+            int topInContent = scrollY - view->y();
+            int bottomInContent = topInContent + vpHeight;
 
-            QModelIndex srcIdx = proxy->mapToSource(pIdx);
-            if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
+            QList<int> proxyRows = jv->rowsInRange(topInContent, bottomInContent);
+            if (proxyRows.isEmpty()) {
+                qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry scan: no intersecting rows in range [%2, %3].")
+                    .arg(viewTag).arg(topInContent).arg(bottomInContent);
+                return;
+            }
+
+            for (int r : proxyRows) {
+                QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
+                if (srcIdx.isValid()) {
+                    visibleRows.insert(srcIdx.row());
+                } else {
+                    qDebug().noquote() << QString("[THUMB_TRACE] [%1] Skip row %2: invalid source index.").arg(viewTag).arg(r);
+                }
+            }
+
+            qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry scan: visible rows [%2, %3], total visible: %4")
+                .arg(viewTag).arg(proxyRows.first()).arg(proxyRows.last()).arg(proxyRows.size());
+        } else {
+            // 传统 TreeView 换算
+            int topInContent = scrollY - view->y();
+            int bottomInContent = topInContent + vpHeight;
+
+            int firstVisible = -1, lastVisible = -1, visibleCount = 0;
+            int rowCount = proxy->rowCount();
+
+            for (int r = 0; r < rowCount; ++r) {
+                QModelIndex pIdx = proxy->index(r, 0);
+                QRect rRect = view->visualRect(pIdx);
+
+                if (!rRect.isValid() || rRect.isEmpty()) {
+                    qDebug().noquote() << QString("[THUMB_TRACE] [%1] Skip row %2: invalid visualRect.").arg(viewTag).arg(r);
+                    continue;
+                }
+
+                if (rRect.bottom() < topInContent) continue;
+                if (rRect.top() > bottomInContent) break;
+
+                if (firstVisible == -1) firstVisible = r;
+                lastVisible = r;
+                visibleCount++;
+
+                QModelIndex srcIdx = proxy->mapToSource(pIdx);
+                if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
+            }
+
+            qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry scan: visible rows [%2, %3], total visible: %4")
+                .arg(viewTag).arg(firstVisible).arg(lastVisible).arg(visibleCount);
         }
-
-        qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry scan: visible rows [%2, %3], total visible: %4")
-            .arg(viewTag).arg(firstVisible).arg(lastVisible).arg(visibleCount);
     };
 
     scanView(m_folderView, m_folderProxyModel);

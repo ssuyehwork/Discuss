@@ -63,10 +63,6 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_model = m_diskModel;
     m_model->setCurrentPath(m_currentPath);
 
-    m_visibleTimer = new QTimer(this);
-    m_visibleTimer->setSingleShot(true);
-    m_visibleTimer->setInterval(60);
-    connect(m_visibleTimer, &QTimer::timeout, this, &ContentPanel::refreshVisibleThumbnails);
 
     // 统计重算防抖定时器 (50ms)：兼顾实时响应与批量修改时的去噪
     m_statsDebounceTimer = new QTimer(this);
@@ -308,9 +304,7 @@ bool ContentPanel::isTreeView(QObject* view) const {
 }
 
 void ContentPanel::startVisibleTimer() {
-    if (m_visibleTimer) {
-        m_visibleTimer->start();
-    }
+    refreshVisibleThumbnails();
 }
 
 void ContentPanel::onCustomContextMenuRequested(const QPoint& pos) {
@@ -538,7 +532,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
     emit viewModeChanged(mode);
     emit zoomLevelChanged(m_zoomLevel);
 
-    if (m_visibleTimer) m_visibleTimer->start();
+    refreshVisibleThumbnails();
 }
 
 void ContentPanel::setZoomLevel(int level) {

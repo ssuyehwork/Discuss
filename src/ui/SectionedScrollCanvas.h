@@ -43,6 +43,7 @@ public:
     QAbstractItemView* activeItemView() const;
     QModelIndexList getSelectedIndexes() const;
     void refreshVisibleThumbnails(ItemModelBase* model);
+    void triggerVisibleScan();
 
 signals:
     void selectionChanged();

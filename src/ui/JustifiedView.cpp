@@ -541,6 +541,32 @@ void JustifiedView::doLayout() {
     if (oldHeight != m_totalHeight) {
         emit totalHeightChanged(m_totalHeight);
     }
+    emit layoutFinished();
+}
+
+bool JustifiedView::isLayoutReady() const {
+    if (m_layoutDirty) return false;
+    if (!model()) return true;
+    return static_cast<int>(m_geometries.size()) >= model()->rowCount();
+}
+
+QList<int> JustifiedView::rowsInRange(int top, int bottom) const {
+    QList<int> rows;
+    if (!isLayoutReady() || m_geometries.empty()) return rows;
+
+    auto startIt = std::lower_bound(m_geometries.begin(), m_geometries.end(), top,
+        [](const ItemGeometry& geo, int targetY) {
+            return geo.rect.bottom() < targetY;
+        });
+
+    for (auto it = startIt; it != m_geometries.end(); ++it) {
+        const auto& geo = *it;
+        if (geo.rect.top() > bottom) break;
+        if (!geo.isHeader) {
+            rows.append(geo.index);
+        }
+    }
+    return rows;
 }
 
 } // namespace QuarkMeta
