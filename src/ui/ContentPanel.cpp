@@ -72,7 +72,7 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
 
     // 核心架构闭环：监听底层模型元数据变更（卡片点击、列表点击、快捷键赋予、F4重复等），自动防抖驱动统计重算与筛选器同步
     connect(m_diskModel, &QAbstractItemModel::dataChanged, this, [this](const QModelIndex&, const QModelIndex&, const QList<int>& roles) {
-        if (roles.isEmpty() || roles.contains(RatingRole) || roles.contains(ColorRole) || roles.contains(TagsRole)) {
+        if (roles.isEmpty() || roles.contains(RatingRole) || roles.contains(ColorRole) || roles.contains(TagsRole) || roles.contains(HasThumbnailRole)) {
             if (m_statsDebounceTimer) {
                 m_statsDebounceTimer->start();
             }
