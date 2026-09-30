@@ -62,7 +62,11 @@ void DiskMediaExtractor::flushPendingFailures() {
 QString DiskMediaExtractor::getDiskThumbCachePath(const QString& filePath) {
     QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
     QString hashStr = QString::fromUtf8(QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex());
-    QString cacheDir = QDir::temp().filePath("QuarkMeta_Thumbnails");
+    QString dirL1 = hashStr.left(2);
+    QString dirL2 = hashStr.mid(2, 2);
+
+    QString baseCacheDir = QDir::temp().filePath("QuarkMeta_Thumbnails");
+    QString cacheDir = QDir(baseCacheDir).filePath(QString("%1/%2").arg(dirL1, dirL2));
     return QDir(cacheDir).filePath(QString("%1_230.png").arg(hashStr.left(32)));
 }
 
