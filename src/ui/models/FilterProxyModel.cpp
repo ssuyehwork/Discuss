@@ -9,8 +9,7 @@ namespace QuarkMeta {
 FilterProxyModel::FilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {}
 
 void FilterProxyModel::updateFilter() {
-    beginFilterChange();
-    endFilterChange();
+    invalidateFilter();
 }
 
 void FilterProxyModel::setCachedDuplicatePaths(const QSet<QString>& paths) {

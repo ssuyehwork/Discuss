@@ -601,12 +601,7 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
         if (r < 0 || r >= static_cast<int>(m_allRecords.size())) continue;
         const auto& rec = m_allRecords[r];
 
-        QString ext = rec.suffix.toLower();
-        bool isGraphic = UiHelper::isGraphicsFile(ext);
-        if (rec.isDir || !isGraphic) {
-            if (!rec.isDir) {
-                qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "is NOT a graphics file (ext:" << ext << "), skipping thumbnail load.";
-            }
+        if (rec.isDir || rec.thumbnailState == ItemRecord::ThumbnailState::NotApplicable || rec.thumbnailState == ItemRecord::ThumbnailState::Failed) {
             continue;
         }
 
@@ -811,6 +806,9 @@ void DiskItemModel::reloadThumbnailForPath(const QString& path) {
     auto it = m_pathToIndex.find(nPath);
     if (it != m_pathToIndex.end()) {
         int rIdx = it->second;
+        if (rIdx >= 0 && rIdx < static_cast<int>(m_allRecords.size())) {
+            m_allRecords[rIdx].thumbnailState = ItemRecord::ThumbnailState::Pending;
+        }
         loadThumbnailsForRows({rIdx});
         emit dataChanged(
             index(rIdx, 0), 

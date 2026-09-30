@@ -98,6 +98,9 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
         if (m_fileProxyModel) {
             m_fileProxyModel->setCachedDuplicatePaths(stats.duplicatePaths);
         }
+        if (m_gridFileProxyModel) {
+            m_gridFileProxyModel->setCachedDuplicatePaths(stats.duplicatePaths);
+        }
         emit directoryStatsReady(stats);
     });
 
@@ -567,7 +570,7 @@ void ContentPanel::applyFilters(const FilterState& state) {
     applyFilters();
 }
 
-void ContentPanel::applyFilters() {
+void ContentPanel::syncFilterToAllProxies() {
     if (m_folderProxyModel) {
         FilterState s = m_currentFilter;
         s.showFolders = true;
@@ -582,6 +585,24 @@ void ContentPanel::applyFilters() {
         m_fileProxyModel->currentFilter = s;
         m_fileProxyModel->updateFilter();
     }
+    if (m_gridFolderProxyModel) {
+        FilterState s = m_currentFilter;
+        s.showFolders = true;
+        s.showFiles = false;
+        m_gridFolderProxyModel->currentFilter = s;
+        m_gridFolderProxyModel->updateFilter();
+    }
+    if (m_gridFileProxyModel) {
+        FilterState s = m_currentFilter;
+        s.showFolders = false;
+        s.showFiles = true;
+        m_gridFileProxyModel->currentFilter = s;
+        m_gridFileProxyModel->updateFilter();
+    }
+}
+
+void ContentPanel::applyFilters() {
+    syncFilterToAllProxies();
     if (m_columnView) {
         m_columnView->applyFilterState(m_currentFilter);
     }

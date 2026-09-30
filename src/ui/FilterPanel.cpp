@@ -45,7 +45,7 @@ void FilterPanel::syncUIFromFilterState() {
         ClickableRow* row = qobject_cast<ClickableRow*>(cb->parentWidget());
         if (!row) continue;
         
-        QLabel* labelWidget = row->findChild<QLabel*>();
+        QLabel* labelWidget = row->findChild<QLabel*>("FilterItemLabel");
         if (!labelWidget) continue;
         
         QString text = labelWidget->text();

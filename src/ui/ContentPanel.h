@@ -119,6 +119,7 @@ public:
     void setLoading(bool loading) { m_isLoading = loading; }
     void ensureSourceModelIsDiskModel();
     void applySort();
+    void syncFilterToAllProxies();
     void startVisibleTimer();
     void updateLayersButtonState();
     void restoreActiveView();

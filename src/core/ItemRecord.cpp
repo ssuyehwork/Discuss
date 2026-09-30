@@ -72,8 +72,6 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
 
     if (r.isDir || !ColorPaletteEngine::isGraphicsFile(r.suffix.toLower())) {
         r.thumbnailState = ThumbnailState::NotApplicable;
-    } else if (r.thumbStatus == 1) {
-        r.thumbnailState = ThumbnailState::Failed;
     } else {
         r.thumbnailState = ThumbnailState::Pending;
     }
