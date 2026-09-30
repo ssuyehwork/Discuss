@@ -40,14 +40,6 @@ DualSectionPanel::DualSectionPanel(QAbstractItemView* folderView, QAbstractItemV
         m_layout->addWidget(m_fileView, 1);
     }
 
-    // 🚀 筛选后全隐藏提示（原 ColumnViewPane 独有，现统一给三种视图）
-    m_emptyFilterHintLabel = new QLabel(this);
-    m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
-    m_emptyFilterHintLabel->setWordWrap(true);
-    m_emptyFilterHintLabel->setStyleSheet("color: #888888; font-size: 12px; padding: 16px;");
-    m_emptyFilterHintLabel->hide();
-    m_layout->addWidget(m_emptyFilterHintLabel, 0);
-
     connect(m_folderHeader, &FolderSectionHeaderBar::collapseToggled, this, [this](bool collapsed) {
         if (m_folderView && m_folderHeader->count() > 0) {
             m_folderView->setVisible(!collapsed);
@@ -76,19 +68,6 @@ int DualSectionPanel::computeFolderViewMinHeight(int hostViewportHeight) const {
     int used = 0;
     if (m_folderHeader && m_folderHeader->isVisible()) used += m_folderHeader->height();
     return qMax(0, hostViewportHeight - used);
-}
-
-void DualSectionPanel::updateEmptyFilterHint() {
-    if (!m_emptyFilterHintLabel || !m_folderProxyModel || !m_fileProxyModel) return;
-    bool folderEmpty = m_folderProxyModel->rowCount() == 0;
-    bool fileEmpty = m_fileProxyModel->rowCount() == 0;
-
-    if (folderEmpty && fileEmpty) {
-        m_emptyFilterHintLabel->setText("所有内容已被筛选隐藏");
-        m_emptyFilterHintLabel->show();
-    } else {
-        m_emptyFilterHintLabel->hide();
-    }
 }
 
 void DualSectionPanel::updateSectionCounts(int hostViewportHeight) {
@@ -121,8 +100,6 @@ void DualSectionPanel::updateSectionCounts(int hostViewportHeight) {
             m_fileView->show();
         }
     }
-
-    updateEmptyFilterHint();
 }
 
 void DualSectionPanel::toggleFolderSectionCollapse() {
