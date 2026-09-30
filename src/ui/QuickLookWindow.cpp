@@ -301,13 +301,18 @@ void QuickLookWindow::renderText(const QString& path) {
 
 
 QImage QuickLookWindow::loadOrExtractQuickLookEps(const QString& filePath, int targetSize) {
-    // 🚀【物理目录隔离铁律】：QuickLook 144 DPI 大图绝对不与缩略图共用文件夹
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews";
+    // 🚀【物理目录隔离铁律】：QuickLook 144 DPI 大图绝对不与缩略图共用文件夹 (使用 SHA256 与两级分桶)
+    QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
+    QString hashStr = QString::fromUtf8(QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex());
+    QString dirL1 = hashStr.left(2);
+    QString dirL2 = hashStr.mid(2, 2);
+
+    QString baseCacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews";
+    QString cacheDir = QDir(baseCacheDir).filePath(QString("%1/%2").arg(dirL1, dirL2));
     QDir().mkpath(cacheDir);
 
     QFileInfo srcInfo(filePath);
-    QString hashKey = QString::fromLatin1(QCryptographicHash::hash(filePath.toUtf8(), QCryptographicHash::Md5).toHex());
-    QString cachePath = QString("%1/%2.png").arg(cacheDir, hashKey);
+    QString cachePath = QDir(cacheDir).filePath(QString("%1.png").arg(hashStr));
     QFileInfo cacheInfo(cachePath);
 
     // 1. 若独立缓存命中且未过期，直接毫秒载入 144 DPI 大图
