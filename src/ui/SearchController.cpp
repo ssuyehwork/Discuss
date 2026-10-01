@@ -36,7 +36,7 @@ SearchController::SearchController(QWidget* parent)
     m_btnSearch = new QPushButton(m_searchContainer);
     m_btnSearch->setObjectName("BtnSearchAddress");
     m_btnSearch->setFixedSize(28, 30);
-    m_btnSearch->setIcon(UiHelper::getIcon("seach-3", TextMuted, 16));
+    m_btnSearch->setIcon(UiHelper::getIcon("seach-3", QColor("#FFFFFF"), 16));
     m_btnSearch->setIconSize(QSize(16, 16));
     m_btnSearch->setCursor(Qt::PointingHandCursor);
     m_btnSearch->setProperty("tooltipText", "搜索");
@@ -47,8 +47,8 @@ SearchController::SearchController(QWidget* parent)
         doSearch(m_searchEdit->text().trimmed());
     });
 
-    searchLayout->addWidget(m_searchEdit, 1);
     searchLayout->addWidget(m_btnSearch, 0);
+    searchLayout->addWidget(m_searchEdit, 1);
 
     m_searchHistoryPanel = new SearchHistoryPanel(parent);
     m_searchHistoryPanel->setCategory("global");

@@ -292,15 +292,15 @@ QLineEdit#SearchEdit {
     background: transparent;
     border: none;
     color: #EEEEEE;
-    padding-left: 8px;
+    padding-left: 6px;
     font-size: 12px;
 }
 QPushButton#BtnSearchAddress {
     background: transparent;
     border: none;
-    border-left: 1px solid #333333;
-    border-top-right-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-right: 1px solid #333333;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
 }
 QPushButton#BtnSearchAddress:hover {
     background-color: #3E3E42;
