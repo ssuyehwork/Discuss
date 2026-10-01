@@ -65,6 +65,7 @@ signals:
 private:
     QPointer<NavPanel> m_navPanel;
     QPointer<FavoritePanel> m_favoritePanel;
+    QPointer<LibraryPanel> m_libraryPanel;
     QPointer<ContentPanel> m_contentPanel;
     QPointer<ContentPanel> m_activeContentPanel;
     QPointer<MetaPanel> m_metaPanel;

@@ -40,6 +40,7 @@ PanelMediator::PanelMediator(const PanelMediatorComponents& components, QObject*
     : QObject(parent),
       m_navPanel(components.navPanel),
       m_favoritePanel(components.favoritePanel),
+      m_libraryPanel(components.libraryPanel),
       m_contentPanel(components.contentPanel),
       m_metaPanel(components.metaPanel),
       m_filterPanel(components.filterPanel),
@@ -53,6 +54,7 @@ PanelMediator::PanelMediator(const PanelMediatorComponents& components, QObject*
 void PanelMediator::setupConnections() {
     NavPanel* navPanel = m_navPanel;
     FavoritePanel* favoritePanel = m_favoritePanel;
+    LibraryPanel* libraryPanel = m_libraryPanel;
     ContentPanel* contentPanel = m_contentPanel;
     MetaPanel* metaPanel = m_metaPanel;
     FilterPanel* filterPanel = m_filterPanel;
@@ -238,8 +240,8 @@ void PanelMediator::setupConnections() {
         });
     }
 
-        if (components.libraryPanel) {
-            connect(components.libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel](const QStringList& paths) {
+        if (libraryPanel) {
+            connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel](const QStringList& paths) {
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
                     target->loadPaths(paths);
