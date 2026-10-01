@@ -36,10 +36,12 @@ SearchController::SearchController(QWidget* parent)
     m_btnSearch = new QPushButton(m_searchContainer);
     m_btnSearch->setObjectName("BtnSearchAddress");
     m_btnSearch->setFixedSize(28, 30);
-    m_btnSearch->setIcon(UiHelper::getIcon("seach-3", QColor("#FFFFFF"), 16));
+    m_btnSearch->setIcon(UiHelper::getIcon("seach-3", QColor("#CCCCCC"), 16));
     m_btnSearch->setIconSize(QSize(16, 16));
     m_btnSearch->setCursor(Qt::PointingHandCursor);
     m_btnSearch->setProperty("tooltipText", "搜索");
+    m_btnSearch->setAttribute(Qt::WA_Hover);
+    m_btnSearch->installEventFilter(this);
 
     // TODO: 预留搜索按钮扩展功能（例如高级搜索菜单或触发搜索）
     connect(m_btnSearch, &QPushButton::clicked, this, [this]() {
@@ -108,6 +110,15 @@ bool SearchController::eventFilter(QObject* watched, QEvent* event) {
         }
         return true;
     }
+
+    if (watched == m_btnSearch) {
+        if (event->type() == QEvent::Enter) {
+            m_btnSearch->setIcon(UiHelper::getIcon("seach-3", Qt::white, 16));
+        } else if (event->type() == QEvent::Leave) {
+            m_btnSearch->setIcon(UiHelper::getIcon("seach-3", QColor("#CCCCCC"), 16));
+        }
+    }
+
     return QObject::eventFilter(watched, event);
 }
 
