@@ -8,6 +8,7 @@
 
 namespace QuarkMeta {
 
+class QPushButton;
 class SearchHistoryPanel;
 class ContentPanel;
 

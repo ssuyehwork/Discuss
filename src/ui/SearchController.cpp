@@ -5,6 +5,7 @@
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include <QHBoxLayout>
+#include <QPushButton>
 
 using namespace QuarkMeta::Style;
 
