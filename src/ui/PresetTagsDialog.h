@@ -16,7 +16,7 @@ namespace QuarkMeta {
 class PresetTagsDialog : public FramelessDialog {
     Q_OBJECT
 public:
-    explicit PresetTagsDialog(int categoryId, QWidget* parent = nullptr);
+    explicit PresetTagsDialog(int categoryId, QWidget* parent = nullptr, bool isLibrary = false);
     ~PresetTagsDialog() override;
 
 protected:
@@ -38,6 +38,7 @@ private:
     void recalculateAdaptiveHeight();
 
     int m_categoryId;
+    bool m_isLibrary = false;
     QString m_categoryName;
     QStringList m_presetTags;
 

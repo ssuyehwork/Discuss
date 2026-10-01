@@ -1324,13 +1324,6 @@ QPushButton#NavTrashBtn:pressed {
     background-color: #4E4E52;
 }
 
-QLabel#FavoritePanelTitleLabel {
-    color: #888888;
-    font-size: 13px;
-    font-weight: bold;
-    background: transparent;
-    border: none;
-}
 QPushButton#FavPickerIconBtn {
     background-color: transparent;
     border: 1px solid transparent;
@@ -1989,4 +1982,29 @@ QListView#ColumnViewPaneListView::item:selected, QListView#ColumnViewFolderList:
     background: #378ADD;
     color: #FFFFFF;
     outline: none;
+}
+
+/* Sidebar Container & Dual TabBar Styles */
+QTabBar#SidebarTabBar {
+    background: transparent;
+    border: none;
+}
+
+QTabBar#SidebarTabBar::tab {
+    background: transparent;
+    color: #888888;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: bold;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+
+QTabBar#SidebarTabBar::tab:selected {
+    color: #FFFFFF;
+    border-bottom: 2px solid #378ADD;
+}
+
+QTabBar#SidebarTabBar::tab:hover:!selected {
+    color: #CCCCCC;
 }

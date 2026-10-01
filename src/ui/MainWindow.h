@@ -30,6 +30,7 @@ class DriveBarWidget;
 class NavBarWidget;
 class NavPanel;
 class FavoritePanel;
+class SidebarContainerWidget;
 class ContentPanel;
 class MetaPanel;
 class FilterPanel;
@@ -88,6 +89,7 @@ private:
 
     // 5 大核心面板与 Splitter
     NavPanel* m_navPanel = nullptr;
+    SidebarContainerWidget* m_sidebarContainer = nullptr;
     FavoritePanel* m_favoritePanel = nullptr;
     ContentPanel* m_contentPanel = nullptr;
     MetaPanel* m_metaPanel = nullptr;
