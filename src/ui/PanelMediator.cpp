@@ -205,9 +205,13 @@ void PanelMediator::setupConnections() {
 
         if (favoritePanel) {
             connect(navPanel, &NavPanel::requestAddFavorite, favoritePanel, [favoritePanel](const QString& path) {
-                favoritePanel->addFavoriteItem(path);
-                favoritePanel->saveFavorites();
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+                if (FavoriteService::instance().isFavorite(path)) {
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "该文件夹已在收藏夹中，请勿重复添加", 2000, QColor("#e81123"));
+                } else {
+                    favoritePanel->addFavoriteItem(path);
+                    favoritePanel->saveFavorites();
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+                }
             });
             connect(navPanel, &NavPanel::requestRemoveFavorite, favoritePanel, [favoritePanel](const QString& path) {
                 favoritePanel->removeFavoriteItem(path);
@@ -392,16 +396,33 @@ void PanelMediator::setupConnections() {
         // 2. 收藏夹请求
         if (favoritePanel) {
             connect(panel, &ContentPanel::requestAddFavorite, favoritePanel, [favoritePanel](const QStringList& paths) {
+                int addedCount = 0;
+                int duplicateCount = 0;
                 for (const QString& p : paths) {
-                    favoritePanel->addFavoriteItem(p);
+                    if (FavoriteService::instance().isFavorite(p)) {
+                        duplicateCount++;
+                    } else {
+                        favoritePanel->addFavoriteItem(p);
+                        addedCount++;
+                    }
                 }
-                favoritePanel->saveFavorites();
+                if (addedCount > 0) {
+                    favoritePanel->saveFavorites();
+                    if (duplicateCount == 0) {
+                        ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+                    } else {
+                        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已添加 %1 个项目 (其余 %2 个已在收藏夹中)").arg(addedCount).arg(duplicateCount), 2000, QColor("#3498db"));
+                    }
+                } else if (duplicateCount > 0) {
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "该文件夹已在收藏夹中，请勿重复添加", 2000, QColor("#e81123"));
+                }
             });
             connect(panel, &ContentPanel::requestRemoveFavorite, favoritePanel, [favoritePanel](const QStringList& paths) {
                 for (const QString& p : paths) {
                     favoritePanel->removeFavoriteItem(p);
                 }
                 favoritePanel->saveFavorites();
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
             });
         }
 

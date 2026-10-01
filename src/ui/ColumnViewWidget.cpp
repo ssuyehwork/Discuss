@@ -375,9 +375,11 @@ void ColumnViewWidget::updatePaneWidths() {
     }
 
     // 【架构与设计理念刚性红线】最右侧刻意留白画布（ColumnBlankCanvasWidget）：
-    // 1. 当列总宽未占满视口时：留白宽度拉伸自适应填补视口剩余所有空间（viewportW - totalPanesWidth）；
-    // 2. 物理刚性下限：最右侧留白画布宽度绝对不低于 230px（kColumnPaneWidth），保证双分栏拉窄时留白列不受打折挤压。
-    int blankWidth = qMax(viewportW - totalPanesWidth, kColumnPaneWidth);
+    // 1. 当列总宽未占满视口时：留白宽度拉伸自适应填补视口剩余所有空间（viewportW - totalPanesWidth），避免多余横向滚动条；
+    // 2. 当列总宽超出视口时：最右侧始终保持至少 230px 刻意留白画布，确保最后一列右侧有充裕空白区域可供双击回退及拖放投递。
+    int blankWidth = (totalPanesWidth < viewportW)
+        ? (viewportW - totalPanesWidth)
+        : kColumnPaneWidth;
 
     int containerHeight = m_container ? m_container->height() : viewport()->height();
 

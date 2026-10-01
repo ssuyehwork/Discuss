@@ -32,7 +32,6 @@
 #include "../meta/MediaExtractorPipeline.h"
 #include "../util/ThumbnailPipelineService.h"
 #include "../core/NavigationService.h"
-#include "../core/NavigationHistoryService.h"
 
 #include <QHBoxLayout>
 #include <QMouseEvent>
@@ -115,10 +114,6 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
 
     m_keyHandler = new ContentKeyHandler(this);
 
-    connect(this, &ContentPanel::closePaneRequested, this, [this]() {
-        closePane(this);
-    });
-
     initUi();
     updateGridSize();
 
@@ -130,29 +125,6 @@ void ContentPanel::initUi() {
     // ── 顶部 Header 区域 ──
     m_headerWidget = new ContentHeaderWidget(this);
     m_headerWidget->setFilterState(m_currentFilter);
-
-    connect(m_headerWidget, &ContentHeaderWidget::splitViewRequested, this, [this]() {
-        if (isSecondaryPane()) {
-            emit closePaneRequested();
-            return;
-        }
-        if (isSplitMode()) {
-            closeSecondaryPane();
-        } else {
-            QStringList history = NavigationHistoryService::instance().getHistory();
-            QString lastPath;
-            for (const QString& hPath : history) {
-                if (!hPath.isEmpty() && QDir::cleanPath(hPath) != QDir::cleanPath(m_currentPath)) {
-                    lastPath = hPath;
-                    break;
-                }
-            }
-            if (lastPath.isEmpty()) {
-                lastPath = m_currentPath;
-            }
-            splitPane(Qt::Horizontal, lastPath);
-        }
-    });
 
     connect(m_headerWidget, &ContentHeaderWidget::filterStateChanged, this, [this](const FilterState& state) {
         m_currentFilter = state;
@@ -593,13 +565,6 @@ void ContentPanel::setViewMode(ViewMode mode) {
                 loadDirectory(m_currentPath, m_isRecursive);
             }
         }
-    }
-
-    // 更新窗格及容器的动态最小宽度约束（列视图锁定 460px 保证 1列数据230px + 1列留白230px）
-    int minW = (mode == ColumnView) ? 460 : 230;
-    setMinimumWidth(minW);
-    if (parentWidget() && parentWidget()->objectName() == "EditorContainer") {
-        parentWidget()->setMinimumWidth(minW);
     }
 
     // 2. 消费 SelectionState 真理源同步恢复选区

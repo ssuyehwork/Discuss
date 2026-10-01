@@ -281,32 +281,19 @@ QLabel#BreadcrumbSep {
 }
 
 QWidget#SearchContainer {
-    background: #1E1E1E;
-    border: 1px solid #333333;
-    border-radius: 6px;
-}
-QWidget#SearchContainer[focused='true'] {
-    border: 1px solid #3498db;
+    background: transparent;
 }
 QLineEdit#SearchEdit {
-    background: transparent;
-    border: none;
+    background-color: #1E1E1E;
+    border: 1px solid #333333;
+    border-radius: 6px;
     color: #EEEEEE;
-    padding-left: 6px;
+    padding-left: 4px;
+    padding-right: 24px;
     font-size: 12px;
 }
-QPushButton#BtnSearchAddress {
-    background: transparent;
-    border: none;
-    border-right: 1px solid #333333;
-    border-top-left-radius: 6px;
-    border-bottom-left-radius: 6px;
-}
-QPushButton#BtnSearchAddress:hover {
-    background-color: #3E3E42;
-}
-QPushButton#BtnSearchAddress:pressed {
-    background-color: #4E4E52;
+QLineEdit#SearchEdit:focus {
+    border-color: #378ADD;
 }
 QLineEdit#SearchEdit QToolButton {
     border: none;
