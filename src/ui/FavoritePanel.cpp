@@ -119,24 +119,6 @@ void FavoritePanel::setFocusHighlight(bool visible) {
 }
 
 void FavoritePanel::initUi() {
-    QWidget* header = new QWidget(this);
-    header->setObjectName("ContainerHeader");
-    header->setFixedHeight(32);
-// ContainerHeader in style.qss
-    QHBoxLayout* headerLayout = new QHBoxLayout(header);
-    headerLayout->setContentsMargins(15, 0, 5, 0);
-    headerLayout->setSpacing(5);
-
-    QLabel* iconLabel = new QLabel(header);
-    iconLabel->setPixmap(UiHelper::getIcon("star_filled", QColor("#888888"), 18).pixmap(18, 18));
-    headerLayout->addWidget(iconLabel);
-
-    QLabel* titleLabel = new QLabel("收藏夹", header);
-    titleLabel->setObjectName("FavoritePanelTitleLabel");
-    headerLayout->addWidget(titleLabel);
-    headerLayout->addStretch();
-    m_mainLayout->addWidget(header);
-
     m_favoriteView = new DropTreeView(this);
     m_favoriteView->setObjectName("FavoriteTreeView");
     m_favoriteView->setHeaderHidden(true);
