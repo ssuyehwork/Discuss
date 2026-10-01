@@ -19,7 +19,7 @@ SearchController::SearchController(QWidget* parent)
 
     m_searchEdit = new QLineEdit(m_searchContainer);
     m_searchEdit->setPlaceholderText("搜索...");
-    m_searchEdit->setFixedSize(230, 32);
+    m_searchEdit->setFixedSize(230, 30);
     m_searchEdit->addAction(UiHelper::getIcon("search", TextMuted), QLineEdit::LeadingPosition);
 
     QAction* clearAction = m_searchEdit->addAction(UiHelper::getIcon("close", TextMuted), QLineEdit::TrailingPosition);
