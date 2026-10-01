@@ -209,12 +209,6 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     UiHelper::applyMenuStyle(&menu);
 
     if (!index.isValid()) {
-        // 空白处右键：新建文件夹 (直接进入行内编辑)
-        QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建文件夹");
-        connect(newCatAct, &QAction::triggered, this, [this]() {
-            createAndEditCategory(0);
-        });
-
         auto* sortMenu = menu.addMenu(UiHelper::getIcon("list_ul", QColor("#AAAAAA")), "排列");
         UiHelper::applyMenuStyle(sortMenu);
         QAction* sortAsc = sortMenu->addAction("按名称 (A→Z)");
@@ -238,28 +232,6 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QFileInfo fi(path);
     bool isFolder = isVirtual ? true : fi.isDir();
     bool isItemRemoved = false;
-
-    // 1. 新建文件夹与新建子文件夹（直接创建并唤起行内编辑）
-    QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建文件夹");
-    connect(newCatAct, &QAction::triggered, this, [this]() {
-        createAndEditCategory(0);
-    });
-
-    if (isFolder) {
-        QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子文件夹");
-        connect(newSubCatAct, &QAction::triggered, this, [this, nodeId]() {
-            createAndEditCategory(nodeId);
-        });
-    }
-
-    menu.addSeparator();
-
-    // 2. 设置预设标签（自动标签对话框 PresetTagsDialog）
-    QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6")), "设置预设标签");
-    connect(presetTagAct, &QAction::triggered, this, [this, nodeId]() {
-        PresetTagsDialog dlg(nodeId, this);
-        dlg.exec();
-    });
 
     // 缓存图标按钮指针，以便在换色时动态刷新子菜单图标色彩
     QList<QPair<QPushButton*, QString>> iconButtons;

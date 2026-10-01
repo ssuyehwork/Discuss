@@ -1,6 +1,7 @@
 #include "LibraryPanel.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
+#include "PresetTagsDialog.h"
 #include "../meta/LibraryDao.h"
 #include "../meta/LibraryService.h"
 #include <QLabel>
@@ -95,6 +96,20 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     if (index.isValid()) {
         int nodeId = index.data(Qt::UserRole + 1).toInt();
+
+        QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子分类");
+        connect(newSubCatAct, &QAction::triggered, this, [this, nodeId]() {
+            createAndEditCategory(nodeId);
+        });
+
+        QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6")), "设置预设标签");
+        connect(presetTagAct, &QAction::triggered, this, [this, nodeId]() {
+            PresetTagsDialog dlg(nodeId, this);
+            dlg.exec();
+        });
+
+        menu.addSeparator();
+
         QAction* renameAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "重命名");
         connect(renameAct, &QAction::triggered, this, [this, index]() {
             if (m_treeView) m_treeView->edit(index);
