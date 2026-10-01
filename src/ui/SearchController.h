@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QTimer>
 #include <QWidget>
 #include <QEvent>
@@ -19,6 +20,7 @@ public:
 
     QWidget* toolbarWidget() const { return m_searchContainer; }
     QLineEdit* searchEdit() const { return m_searchEdit; }
+    QPushButton* searchButton() const { return m_btnSearch; }
     SearchHistoryPanel* historyPanel() const { return m_searchHistoryPanel; }
 
     void bindContentPanel(ContentPanel* contentPanel);
@@ -36,6 +38,7 @@ private:
 
     QWidget* m_searchContainer = nullptr;
     QLineEdit* m_searchEdit = nullptr;
+    QPushButton* m_btnSearch = nullptr;
     QTimer* m_searchTimer = nullptr;
     SearchHistoryPanel* m_searchHistoryPanel = nullptr;
     ContentPanel* m_contentPanel = nullptr;
