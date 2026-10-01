@@ -49,7 +49,7 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
         m_primaryPaneContainer = new QFrame(m_paneSplitter);
         m_primaryPaneContainer->setObjectName("EditorContainer");
         m_primaryPaneContainer->setAttribute(Qt::WA_StyledBackground, true);
-        m_primaryPaneContainer->setMinimumWidth(230);
+        m_primaryPaneContainer->setMinimumWidth(m_panel->currentViewMode() == ContentPanel::ColumnView ? 460 : 230);
         QVBoxLayout* primLayout = new QVBoxLayout(m_primaryPaneContainer);
         primLayout->setContentsMargins(0, 0, 0, 0);
         primLayout->setSpacing(0);
@@ -98,12 +98,12 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
     }
 
     QWidget* container = new QWidget(m_paneSplitter);
-    container->setMinimumWidth(230);
     QVBoxLayout* layout = new QVBoxLayout(container);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
     ContentPanel* newPane = new ContentPanel(container);
+    container->setMinimumWidth(newPane->currentViewMode() == ContentPanel::ColumnView ? 460 : 230);
     newPane->setIsSecondaryPane(true);
     if (newPane->m_splitManager) {
         newPane->m_splitManager->m_rootPane = m_panel;
@@ -142,7 +142,17 @@ void ContentPaneSplitManager::closePane(ContentPanel* pane) {
     }
 
     int idx = m_panes.indexOf(pane);
-    if (idx < 0) return;
+    if (idx < 0) {
+        // 如果请求关闭的是主窗格（rootPane / m_panel），且存在副窗格，则由首个副窗格接管主窗格内容并销毁副窗格
+        if (pane == m_panel && !m_panes.isEmpty()) {
+            ContentPanel* firstSecondary = m_panes.first();
+            QString secondaryPath = firstSecondary->currentPath();
+            m_panel->setViewMode(firstSecondary->currentViewMode());
+            m_panel->loadDirectory(secondaryPath, firstSecondary->isRecursive());
+            closePane(firstSecondary);
+        }
+        return;
+    }
 
     QWidget* container = m_paneContainers.takeAt(idx);
     m_panes.removeAt(idx);
