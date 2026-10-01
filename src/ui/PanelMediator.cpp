@@ -25,6 +25,7 @@
 #include "../core/AppConfig.h"
 #include "../util/ShellHelper.h"
 #include "../meta/MetadataManager.h"
+#include "../meta/FavoriteService.h"
 #include "UiHelper.h"
 #include <QDebug>
 #include <QFileInfo>
