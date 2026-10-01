@@ -140,12 +140,10 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
     auto scanView = [&](QAbstractItemView* view, FilterProxyModel* proxy) {
         if (!view || !view->isVisible() || !proxy || proxy->rowCount() == 0) return;
 
-        QString viewTag = (view == m_folderView) ? "FolderView" : "FileView";
         auto* jv = qobject_cast<JustifiedView*>(view);
 
         if (jv) {
             if (!jv->isLayoutReady()) {
-                qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry not ready (dirty or unpopulated), scan deferred.").arg(viewTag);
                 return;
             }
 
@@ -154,8 +152,6 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
 
             QList<int> proxyRows = jv->rowsInRange(topInContent, bottomInContent);
             if (proxyRows.isEmpty()) {
-                qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry scan: no intersecting rows in range [%2, %3].")
-                    .arg(viewTag).arg(topInContent).arg(bottomInContent);
                 return;
             }
 
@@ -163,19 +159,13 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
                 QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
                 if (srcIdx.isValid()) {
                     visibleRows.insert(srcIdx.row());
-                } else {
-                    qDebug().noquote() << QString("[THUMB_TRACE] [%1] Skip row %2: invalid source index.").arg(viewTag).arg(r);
                 }
             }
-
-            qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry scan: visible rows [%2, %3], total visible: %4")
-                .arg(viewTag).arg(proxyRows.first()).arg(proxyRows.last()).arg(proxyRows.size());
         } else {
             // 传统 TreeView 换算
             int topInContent = scrollY - view->y();
             int bottomInContent = topInContent + vpHeight;
 
-            int firstVisible = -1, lastVisible = -1, visibleCount = 0;
             int rowCount = proxy->rowCount();
 
             for (int r = 0; r < rowCount; ++r) {
@@ -183,23 +173,15 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
                 QRect rRect = view->visualRect(pIdx);
 
                 if (!rRect.isValid() || rRect.isEmpty()) {
-                    qDebug().noquote() << QString("[THUMB_TRACE] [%1] Skip row %2: invalid visualRect.").arg(viewTag).arg(r);
                     continue;
                 }
 
                 if (rRect.bottom() < topInContent) continue;
                 if (rRect.top() > bottomInContent) break;
 
-                if (firstVisible == -1) firstVisible = r;
-                lastVisible = r;
-                visibleCount++;
-
                 QModelIndex srcIdx = proxy->mapToSource(pIdx);
                 if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
             }
-
-            qDebug().noquote() << QString("[THUMB_TRACE] [%1] Geometry scan: visible rows [%2, %3], total visible: %4")
-                .arg(viewTag).arg(firstVisible).arg(lastVisible).arg(visibleCount);
         }
     };
 
@@ -207,10 +189,7 @@ void DualSectionPanel::refreshVisibleThumbnails(ItemModelBase* model, QWidget* h
     scanView(m_fileView, m_fileProxyModel);
 
     if (!visibleRows.isEmpty()) {
-        qDebug() << "[THUMB_TRACE] DualSectionPanel::refreshVisibleThumbnails - Submitting" << visibleRows.size() << "rows to loadThumbnailsForRows.";
         model->loadThumbnailsForRows(visibleRows.values());
-    } else {
-        qDebug() << "[THUMB_TRACE] DualSectionPanel::refreshVisibleThumbnails - No visible rows found in viewport sampling.";
     }
 }
 

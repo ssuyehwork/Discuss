@@ -5,11 +5,13 @@
 #include <QColor>
 #include <QPair>
 #include <QVector>
+#include <QThreadPool>
 #include <vector>
 #include <string>
 #include <mutex>
 #include <atomic>
-#include "../util/DiskMediaExtractor.h"  // 复用其中声明的 s_qtGuiMutex
+#include <memory>
+#include "../util/DiskMediaExtractor.h"
 
 namespace QuarkMeta {
 
@@ -32,10 +34,6 @@ private:
     MediaExtractorPipeline(QObject* parent = nullptr);
     ~MediaExtractorPipeline() override;
 
-    void processItemDirect(const std::wstring& path);
-    void extractDimensions(const std::wstring& path, int& outW, int& outH);
-    bool extractColor(const std::wstring& path, std::wstring& outColorStr, QVector<QPair<QColor, float>>& outPalette);
-
     void dispatchWorkersIfNeeded();
     void dispatchWorkerLoop();
 
@@ -44,7 +42,8 @@ private:
     std::mutex m_queueMutex;
     std::atomic<int> m_activeCount{0}; // 正在处理解析中 of 任务数量
     std::atomic<int> m_activeWorkers{0}; // 活跃工作线程数
-    std::atomic<bool> m_isCanceled{false}; // 2026-07-27 按照 Plan-107：原子取消中止标记
+    std::shared_ptr<CancellationToken> m_token = std::make_shared<CancellationToken>(); // 当前代取消令牌，受 m_queueMutex 保护
+    QThreadPool m_workerPool; // 后台提取专用线程池，不占全局线程池
 };
 
 } // namespace QuarkMeta

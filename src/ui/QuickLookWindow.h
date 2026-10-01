@@ -11,6 +11,8 @@
 #include <QContextMenuEvent>
 #include <QThreadPool>
 #include <atomic>
+#include <memory>
+#include "CoreEngine.h"
 #include "QuickLookGraphicsView.h"
 
 namespace QuarkMeta {
@@ -49,7 +51,7 @@ private:
     
     QString detectEncoding(const QByteArray& data);
     bool isBinary(const QByteArray& data);
-    static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize);
+    static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
 
     QuickLookGraphicsView* m_graphicsView = nullptr;
     QPlainTextEdit* m_textEdit = nullptr;
@@ -63,6 +65,7 @@ private:
 
     QThreadPool m_previewThreadPool; // 专属线程池，只服务预览加载，不与批量提取共享
     std::atomic<uint64_t> m_previewGeneration{1};
+    std::shared_ptr<CancellationToken> m_previewToken; // 当前预览的取消令牌（仅 UI 线程读写）
 };
 
 } // namespace QuarkMeta

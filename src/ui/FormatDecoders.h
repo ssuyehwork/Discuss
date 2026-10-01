@@ -18,6 +18,7 @@ public:
      
     // AI 嵌套预览图与 XMP 提取
     static QImage extractAiPreview(const QString& filePath, int targetSize = 512, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr);
+    static QImage extractAiQuickLook(const QString& filePath, int targetSize = 2048, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr);
      
     // 通用兼容接口（默认路由至缩略图策略）
     static QImage extractEpsPreview(const QString& filePath, int targetSize = 512, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr);
@@ -26,7 +27,7 @@ public:
     static QImage extractEpsThumbnail(const QString& filePath, int targetSize = 512, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr);
 
     // 策略 2：手动双击提取（GS 144 DPI 优先 → 内嵌 TIFF → %%BeginPreview）
-    static QImage extractEpsQuickLook(const QString& filePath, int targetSize = 2048, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr);
+    static QImage extractEpsQuickLook(const QString& filePath, int targetSize = 2048, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr, bool* fromGhostscript = nullptr);
 
     // External Process: Ghostscript 降采样渲染 (customTimeoutMs > 0 时使用自定义长效超时，默认 72 DPI)
     static QImage renderGhostscriptSafely(const QString& filePath, int targetSize = 512, int customTimeoutMs = 0, std::shared_ptr<CancellationToken> token = nullptr, int dpi = 72);

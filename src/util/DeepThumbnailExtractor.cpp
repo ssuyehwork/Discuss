@@ -1,11 +1,24 @@
 #include "DeepThumbnailExtractor.h"
 #include "DiskMediaExtractor.h"
 #include <QtConcurrent>
+#include <QThreadPool>
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QFile>
+#include <mutex>
 
 namespace QuarkMeta {
+
+namespace {
+// 重新生成缩略图专用单线程池：单项耗时可达 45 秒，
+// 不占用前台缩略图线程池，也不占用全局线程池
+QThreadPool* deepExtractPool() {
+    static QThreadPool pool;
+    static std::once_flag flag;
+    std::call_once(flag, []() { pool.setMaxThreadCount(1); });
+    return &pool;
+}
+} // namespace
 
 DeepThumbnailExtractor& DeepThumbnailExtractor::instance() {
     static DeepThumbnailExtractor inst;
@@ -22,7 +35,7 @@ void DeepThumbnailExtractor::extractBatchAsync(
         return;
     }
 
-    (void)QtConcurrent::run([filePaths, onItemCompleted, onAllFinished]() {
+    (void)QtConcurrent::run(deepExtractPool(), [filePaths, onItemCompleted, onAllFinished]() {
         int total = filePaths.size();
         int successCount = 0;
 
@@ -33,8 +46,8 @@ void DeepThumbnailExtractor::extractBatchAsync(
                 QFile::remove(cachePath);
             }
 
-            // 2. 触发长效深度解码（强制深度模式，放宽超时至 45 秒）
-            QImage img = DiskMediaExtractor::forceExtractDeepThumbnail(filePath, 512);
+            // 2. 触发长效深度解码（重新生成档，放宽超时至 45 秒；输出与自动提取一致：230）
+            QImage img = DiskMediaExtractor::forceExtractDeepThumbnail(filePath, DiskMediaExtractor::kThumbSize);
             bool ok = !img.isNull();
             if (ok) successCount++;
 

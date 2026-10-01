@@ -6,8 +6,8 @@
 #include "../util/ColorPaletteEngine.h"
 #include "QuickLookMinimap.h"
 #include "../util/DiskMediaExtractor.h"
-#include "../util/DiskMediaExtractor.h"
 #include "StyleLibrary.h"
+#include "ImageDecoderFacade.h"
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QMenu>
@@ -53,8 +53,6 @@ static const QSet<QString> UNPREVIEWABLE_EXTS = {
     "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "exe", "dll", "msi", "sys", "iso", "dmg", "pkg", "bin", "lnk",
     "mp4", "m4v", "mov", "avi", "mkv", "wmv", "flv", "webm", "3gp", "mp3", "wav", "wma", "flac", "aac", "ogg", "m4a", "ape"
 };
-
-
 
 // ==========================================
 // QuickLookWindow 实现
@@ -166,6 +164,7 @@ void QuickLookWindow::preview(const QString& filePath) {
 
 void QuickLookWindow::closePreview() {
     m_previewGeneration.fetch_add(1, std::memory_order_relaxed);
+    if (m_previewToken) m_previewToken->cancel();
     if (m_graphicsView) {
         m_graphicsView->clear();
     }
@@ -182,11 +181,15 @@ void QuickLookWindow::renderImage(const QString& path) {
     QFileInfo fi(path);
     QString ext = fi.suffix().toLower();
 
-    // 优先读取原始像素的本地格式 (由于 Qt 可能未安装/未部署 WebP 图像解码器插件，WebP 格式应交由系统 Shell 提供高分辨率缩略图预览)
     static const QSet<QString> QT_NATIVE_FORMATS = {"png", "jpg", "jpeg", "bmp", "gif"};
 
+    // 新一次预览到来时，先取消上一次还在跑的 Ghostscript / 解码
+    if (m_previewToken) m_previewToken->cancel();
+    m_previewToken = std::make_shared<CancellationToken>();
+    std::shared_ptr<CancellationToken> token = m_previewToken;
+
     QPointer<QuickLookWindow> weakThis(this);
-    (void)QtConcurrent::run(&m_previewThreadPool, [weakThis, path, ext]() {
+    (void)QtConcurrent::run(&m_previewThreadPool, [weakThis, path, ext, token]() {
         if (!weakThis) return;
         
         QImage img;
@@ -200,19 +203,14 @@ void QuickLookWindow::renderImage(const QString& path) {
             }
         } else if (ext == "eps") {
             // 物理隔离与 144 DPI 高清矢量：专走 QuickLook 独立管道与独立缓存
-            img = loadOrExtractQuickLookEps(path, 2048);
+            img = loadOrExtractQuickLookEps(path, 2048, token);
         } else if (ext == "ai" || ext == "psd" || ext == "psb") {
-            img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
+            // 预览档：不读也不写缩略图缓存，不碰失败标记
+            img = ImageDecoderFacade::decodeSinglePass(path, 2048, ImageDecoderFacade::ExtractMode::Preview, token).thumbnail512;
         } else if (QT_NATIVE_FORMATS.contains(ext)) {
             img.load(path);
         } else {
-            img = DiskMediaExtractor::getDiskThumbnail(path, 2048);
-            if (img.isNull()) {
-                img = ShellIconManager::getShellThumbnail(path, 4096);
-                if (img.isNull()) {
-                    img.load(path);
-                }
-            }
+            img = ImageDecoderFacade::decodeSinglePass(path, 2048, ImageDecoderFacade::ExtractMode::Preview, token).thumbnail512;
         }
 
         if (!weakThis) return;
@@ -299,15 +297,14 @@ void QuickLookWindow::renderText(const QString& path) {
     m_infoLabel->setText(QString("编码: %1 | 大小: %2 KB | %3").arg(encodingName).arg(QFileInfo(path).size() / 1024.0, 0, 'f', 1).arg(path));
 }
 
-
-QImage QuickLookWindow::loadOrExtractQuickLookEps(const QString& filePath, int targetSize) {
+QImage QuickLookWindow::loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token) {
     // 🚀【物理目录隔离铁律】：QuickLook 144 DPI 大图绝对不与缩略图共用文件夹 (使用 SHA256 与两级分桶)
     QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
     QString hashStr = QString::fromUtf8(QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex());
     QString dirL1 = hashStr.left(2);
     QString dirL2 = hashStr.mid(2, 2);
 
-    QString baseCacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews";
+    QString baseCacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews_v2";
     QString cacheDir = QDir(baseCacheDir).filePath(QString("%1/%2").arg(dirL1, dirL2));
     QDir().mkpath(cacheDir);
 
@@ -323,15 +320,18 @@ QImage QuickLookWindow::loadOrExtractQuickLookEps(const QString& filePath, int t
         }
     }
 
-    // 2. 独立缓存未命中，调用【版本 31 策略】：-r144 GS 矢量优先提取
-    QImage highQImg = FormatDecoders::extractEpsQuickLook(filePath, targetSize);
-    if (!highQImg.isNull()) {
-        // 3. 安全异步落地到独立的 quicklook_previews 物理目录
-        highQImg.save(cachePath, "PNG");
-        return highQImg;
+    // 2. 独立缓存未命中：Ghostscript 144 DPI 矢量优先，内嵌预览兜底（长超时 + 可取消）
+    bool fromGhostscript = false;
+    QImage highQImg = FormatDecoders::extractEpsQuickLook(filePath, targetSize, ImageDecoderFacade::kLongTimeoutMs, token, &fromGhostscript);
+    if (highQImg.isNull()) {
+        return QImage();
     }
 
-    return QImage();
+    // 3. 只缓存 Ghostscript 高清渲染结果；内嵌预览兜底图（低质量）只显示，不进高清缓存
+    if (fromGhostscript) {
+        highQImg.save(cachePath, "PNG");
+    }
+    return highQImg;
 }
 
 bool QuickLookWindow::isBinary(const QByteArray& fileData) {
@@ -369,7 +369,6 @@ QString QuickLookWindow::detectEncoding(const QByteArray& fileData) {
 }
 
 void QuickLookWindow::keyPressEvent(QKeyEvent* event) {
-    // 支持 Ctrl+W 关闭空格文件预览窗口
     if (event->key() == Qt::Key_W && (event->modifiers() & Qt::ControlModifier)) {
         closePreview();
         event->accept();
@@ -389,14 +388,12 @@ void QuickLookWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
-    // 评分标记：1-5 键
     if (event->key() >= Qt::Key_1 && event->key() <= Qt::Key_5 && !(event->modifiers() & Qt::AltModifier)) {
         int rating = event->key() - Qt::Key_0;
         emit ratingRequested(rating);
         return;
     }
 
-    // 颜色标记：Alt + 1-9
     if (event->modifiers() & Qt::AltModifier && event->key() >= Qt::Key_1 && event->key() <= Qt::Key_9) {
         QString color;
         switch (event->key()) {
@@ -425,7 +422,6 @@ bool QuickLookWindow::eventFilter(QObject* watched, QEvent* event) {
     bool hasTextEditViewport = m_textEdit && m_textEdit->viewport();
 
     if ((watched == m_textEdit || (hasTextEditViewport && watched == m_textEdit->viewport()) || watched == m_graphicsView) && event->type() == QEvent::MouseButtonDblClick) {
-        // 2026-11-xx：如果在 QuickLookWindow 界面（或其内的视图）双击时，直接关闭窗口
         closePreview();
         return true;
     }
@@ -455,7 +451,7 @@ bool QuickLookWindow::eventFilter(QObject* watched, QEvent* event) {
         
         if (intercept) {
             keyPressEvent(keyEvent);
-            return true; // 彻底物理截断，防止被子控件内部吞没
+            return true;
         }
     }
 
@@ -486,7 +482,6 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
 
-    // 14 项选项
     QAction* actPrev = menu.addAction(UiHelper::getIcon("scroll-007", QColor("#FFFFFF"), 18), "上一个");
     QAction* actNext = menu.addAction(UiHelper::getIcon("scroll-006", QColor("#FFFFFF"), 18), "下一个");
     menu.addSeparator();
@@ -518,7 +513,6 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
 
     QAction* actTextExtSettings = menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "文本扩展名设置...");
 
-    // 根据是否显示图片启用/禁用 旋转、水平翻转、原始、自适应
     bool isImage = m_graphicsView->isVisible();
     actRotate->setEnabled(isImage);
     actFlip->setEnabled(isImage);

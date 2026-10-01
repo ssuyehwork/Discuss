@@ -12,25 +12,21 @@
 #include <QRegularExpression>
 #include <QCryptographicHash>
 #include <QImageReader>
-#include <QDebug>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
 
-// 🚨 关键修复：C++ 必须显式指定 extern "C"，告知 MSVC 按纯 C 语言函数名进行链接
 extern "C" {
 #include "tiffio.h"
 }
 
-// 自定义内存读取结构，用来在内存中模拟文件读取
 struct TiffMemoryStream {
     const char* data;
     tmsize_t size;
     tmsize_t offset;
 };
 
-// 内存读取回调函数
 static tmsize_t tiffReadProc(thandle_t clientData, void* buf, tmsize_t size) {
     auto stream = reinterpret_cast<TiffMemoryStream*>(clientData);
     if (stream->offset + size > stream->size) {
@@ -92,33 +88,28 @@ QImage FormatDecoders::decodeTiffMemorySafely(const QByteArray& tiffData, int ma
         return QImage();
     }
 
-    // 1. 获取宽高
     uint32_t width = 0, height = 0;
     TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &width);
     TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &height);
 
-    // 2.【强制安全防御】预算字节数，超过 maxMemoryMB 立即拒载
-    uint64_t requiredBytes = static_cast<uint64_t>(width) * height * 4; // RGBA 4字节
+    uint64_t requiredBytes = static_cast<uint64_t>(width) * height * 4;
     if (requiredBytes > static_cast<uint64_t>(maxMemoryMB) * 1024 * 1024 || width == 0 || height == 0) {
         TIFFClose(tif);
         return QImage();
     }
 
-    // 3. 直接分配 RGBA8888 内存
     QImage img(width, height, QImage::Format_RGBA8888);
     if (img.isNull()) {
         TIFFClose(tif);
         return QImage();
     }
 
-    // 4. 填充内存
     if (!TIFFReadRGBAImageOriented(tif, width, height, reinterpret_cast<uint32_t*>(img.bits()), ORIENTATION_TOPLEFT, 0)) {
         TIFFClose(tif);
         return QImage();
     }
     TIFFClose(tif);
 
-    // 5.【物理物理根除二次内存拷贝】禁止调用 convertToFormat！直接返回 img 句柄！
     return img;
 }
 
@@ -181,15 +172,11 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return QImage();
 
-    // 🚨 优化：AI 缩略图与 XMP 头部 100% 存在于前 2MB 内，严禁无脑读 15MB！
     QByteArray rawData = file.read(2 * 1024 * 1024);
     file.close();
 
     if (rawData.isEmpty() || CoreController::isShuttingDown()) return QImage();
 
-    // =========================================================================
-    // 通道 1：解析 PostScript %AI7_Thumbnail ~ %AI10_Thumbnail 256色索引调色板
-    // =========================================================================
     int thumbHeaderIdx = rawData.indexOf("%AI7_Thumbnail:");
     if (thumbHeaderIdx == -1) thumbHeaderIdx = rawData.indexOf("%AI8_Thumbnail:");
     if (thumbHeaderIdx == -1) thumbHeaderIdx = rawData.indexOf("%AI9_Thumbnail:");
@@ -233,7 +220,6 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
                         const uchar* palPtr = reinterpret_cast<const uchar*>(binaryData.constData());
                         
                         for (int i = 0; i < 256; ++i) {
-                            // 按 (B, G, R) 顺序解析 PostScript 调色板，防止红变蓝！
                             colorTable.append(qRgb(palPtr[i * 3 + 2], palPtr[i * 3 + 1], palPtr[i * 3]));
                         }
 
@@ -252,9 +238,6 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
         }
     }
 
-    // =========================================================================
-    // 通道 2：解析 Adobe XMP 元数据中的 Base64 预览图 (<xmpGImg:image>)
-    // =========================================================================
     int xmpStart = rawData.indexOf("<xmpGImg:image>");
     if (xmpStart != -1) {
         xmpStart += 15;
@@ -270,21 +253,16 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
         }
     }
 
-    // 通道 3：Ghostscript 矢量引擎
     QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token);
     if (!gsImg.isNull()) {
         return gsImg;
     }
 
-    // 通道 4：Windows 原生系统 PDF 引擎
     QImage pdfRenderImg = renderPdfAiFirstPage(filePath, targetSize);
     if (!pdfRenderImg.isNull()) {
         return pdfRenderImg;
     }
 
-    // =========================================================================
-    // 通道 5：检索 PDF 规范下的 JPEG / PNG 裸数据流 (\xFF\xD8\xFF)
-    // =========================================================================
     int pngStart = rawData.indexOf("\x89PNG\r\n\x1a\n");
     if (pngStart != -1) {
         int pngEnd = rawData.indexOf("IEND", pngStart);
@@ -309,8 +287,15 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
         }
     }
 
-    // 通道 6：Windows Shell 严格缩略图兜底
     return WindowsShellThumbnailProvider::getShellThumbnail(filePath, targetSize);
+}
+
+QImage FormatDecoders::extractAiQuickLook(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 144);
+    if (!gsImg.isNull()) {
+        return gsImg;
+    }
+    return extractAiPreview(filePath, targetSize, customTimeoutMs, token);
 }
 
 QImage FormatDecoders::extractEpsEmbeddedPreview(const QString& filePath) {
@@ -324,7 +309,6 @@ QImage FormatDecoders::extractEpsEmbeddedPreview(const QString& filePath) {
         return QImage();
     }
 
-    // 1. 优先尝试 DOS 二进制头 (C5D0D3C6)
     if (quint8(header[0]) == 0xC5 && quint8(header[1]) == 0xD0 &&
         quint8(header[2]) == 0xD3 && quint8(header[3]) == 0xC6) {
         
@@ -342,7 +326,6 @@ QImage FormatDecoders::extractEpsEmbeddedPreview(const QString& filePath) {
         }
     }
 
-    // 2. 普通 ASCII EPS (文本格式) 的 %%BeginPreview: 预览块解析
     file.seek(0);
     QTextStream in(&file);
     bool inPreview = false;
@@ -384,7 +367,6 @@ QImage FormatDecoders::extractEpsEmbeddedPreview(const QString& filePath) {
 }
 
 QImage FormatDecoders::extractEpsThumbnail(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
-    // 自动提取：① DOS 二进制头内嵌 TIFF → ② %%BeginPreview 文本预览 → ③ Ghostscript (72 DPI)
     QImage img = extractEpsEmbeddedPreview(filePath);
     if (!img.isNull()) {
         return img;
@@ -392,17 +374,18 @@ QImage FormatDecoders::extractEpsThumbnail(const QString& filePath, int targetSi
     return renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 72);
 }
 
-QImage FormatDecoders::extractEpsQuickLook(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
-    // 手动双击提取：① Ghostscript (144 DPI) → ② DOS 二进制头内嵌 TIFF → ③ %%BeginPreview 文本预览
+QImage FormatDecoders::extractEpsQuickLook(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token, bool* fromGhostscript) {
+    if (fromGhostscript) *fromGhostscript = false;
+
     QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 144);
     if (!gsImg.isNull()) {
+        if (fromGhostscript) *fromGhostscript = true;
         return gsImg;
     }
     return extractEpsEmbeddedPreview(filePath);
 }
 
 QImage FormatDecoders::extractEpsPreview(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
-    // 通用兼容接口：路由至自动提取策略
     return extractEpsThumbnail(filePath, targetSize, customTimeoutMs, token);
 }
 
@@ -439,20 +422,18 @@ QString FormatDecoders::findGhostscriptExecutable() {
     return cachedPath;
 }
 
-static QSemaphore g_gsConcurrencyLimit(1); // 最多1个Ghostscript进程并发跑，避免多进程抢占CPU导致切换文件夹卡顿
+static QSemaphore g_gsConcurrencyLimit(1);
 
 QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token, int dpi) {
     if ((token && token->isCanceled()) || CoreController::isShuttingDown()) return QImage();
 
     QString gsExec = findGhostscriptExecutable();
     if (gsExec.isEmpty()) {
-        qWarning() << "[GS诊断] 未找到Ghostscript可执行文件，文件:" << filePath;
         return QImage();
     }
 
     int acqWaitMs = (customTimeoutMs > 0) ? 5000 : 100;
     if (!g_gsConcurrencyLimit.tryAcquire(1, acqWaitMs)) {
-        qWarning() << "[GS诊断] 等待" << acqWaitMs << "ms未抢到并发名额，文件:" << filePath;
         return QImage();
     }
     struct ReleaseGuard {
@@ -471,8 +452,6 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
         if (fileSizeMB > 20) timeoutMs = 10000;
         else if (fileSizeMB > 5) timeoutMs = 8000;
     }
-
-    qWarning() << "[GS诊断] 开始渲染，超时设置:" << timeoutMs << "ms，文件:" << filePath;
 
     QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1_%2.png").arg(QUuid::createUuid().toString(QUuid::WithoutBraces)).arg(QString::number(qHash(filePath), 16));
 
@@ -499,7 +478,6 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
     bool finished = false;
     while (elapsed < timeoutMs) {
         if ((token && token->isCanceled()) || CoreController::isShuttingDown()) {
-            qWarning() << "[GS诊断] 收到取消信号，主动杀死 Ghostscript 进程，文件:" << filePath;
             if (process.state() == QProcess::Running) {
                 process.kill();
                 process.waitForFinished(200);
@@ -516,7 +494,7 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 
     if (finished && QFile::exists(tempPng)) {
         QImageReader reader(tempPng);
-        reader.setAllocationLimit(512); // 放宽Qt默认256MB安全上限，避免大幅面AI文件渲染出的高分辨率PNG被直接拒收
+        reader.setAllocationLimit(512);
         QSize origSize = reader.size();
         if (origSize.isValid() && (origSize.width() > targetSize || origSize.height() > targetSize)) {
             reader.setScaledSize(origSize.scaled(targetSize, targetSize, Qt::KeepAspectRatio));
@@ -527,9 +505,7 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
         if (!img.isNull()) {
             return img;
         }
-        qWarning() << "[GS诊断] 进程正常结束但输出图片解码为空，文件:" << filePath;
     } else if (!finished) {
-        qWarning() << "[GS诊断] 等待" << timeoutMs << "ms后仍未结束，判定超时，文件:" << filePath;
         if (process.state() == QProcess::Running) {
             process.kill();
             process.waitForFinished(200);

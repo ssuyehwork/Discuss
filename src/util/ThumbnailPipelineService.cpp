@@ -8,7 +8,7 @@
 #include <QCoreApplication>
 #include <QtConcurrent>
 #include <QMutexLocker>
-#include <QDebug>
+#include <QThread>
 
 namespace QuarkMeta {
 
@@ -20,8 +20,8 @@ ThumbnailPipelineService& ThumbnailPipelineService::instance() {
 ThumbnailPipelineService::ThumbnailPipelineService(QObject* parent)
     : QObject(parent) {
     m_memoryCache.setMaxCost(kMaxMemoryCacheCount);
+    m_decodePool.setMaxThreadCount(qMax(2, QThread::idealThreadCount() / 2));
 }
-
 
 QPixmap ThumbnailPipelineService::getFromMemoryCache(const QString& filePath, int targetSize) const {
     QString key = QString("%1@%2").arg(QDir::toNativeSeparators(filePath).toLower()).arg(targetSize);
@@ -56,14 +56,6 @@ void ThumbnailPipelineService::cancelAll() {
     incrementGeneration();
 }
 
-QImage ThumbnailPipelineService::decodeImageToThumbnail(const QString& filePath, int targetSize) const {
-    if (!ColorPaletteEngine::isGraphicsFile(QFileInfo(filePath).suffix())) {
-        return QImage();
-    }
-
-    return DiskMediaExtractor::getCapsuleThumbnail(filePath, targetSize);
-}
-
 void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths, 
                                               int targetSize, 
                                               std::function<void(const QString& path, const QPixmap& pixmap)> onSingleLoaded) {
@@ -92,27 +84,16 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
 
     if (pathsToFetch.isEmpty()) return;
 
-    qDebug() << "[THUMB_TRACE] loadBatchAsync pathsToFetch size:" << pathsToFetch.size();
-    (void)QtConcurrent::run([this, pathsToFetch, targetSize, taskGen, token, onSingleLoaded]() {
+    (void)QtConcurrent::run(&m_decodePool, [this, pathsToFetch, targetSize, taskGen, token, onSingleLoaded]() {
         for (const QString& path : pathsToFetch) {
             if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
-                qDebug() << "[THUMB_TRACE] Generation mismatch, task canceled for:" << path;
                 return;
             }
 
             if (token && token->isCanceled()) return;
 
-            QImage finalImg = DiskMediaExtractor::getCapsuleThumbnailReadOnly(path);
-            if (finalImg.isNull()) {
-                qDebug() << "[THUMB_TRACE] ReadOnly cache miss in pipeline, decoding for:" << path;
-                auto res = DiskMediaExtractor::getCapsuleExtractResult(path, targetSize, token);
-                finalImg = res.thumbnail512;
-                if (!finalImg.isNull()) {
-                    DiskMediaExtractor::saveDiskThumbnail(path, finalImg);
-                }
-            } else {
-                qDebug() << "[THUMB_TRACE] ReadOnly cache hit in pipeline for:" << path;
-            }
+            // 唯一入口：读缓存 / 失败拦截 / 解码 / 写缓存 / 尺寸与失败标记 全部在 DiskMediaExtractor 内完成
+            QImage finalImg = DiskMediaExtractor::getCapsuleExtractResult(path, DiskMediaExtractor::kThumbSize, token).thumbnail512;
 
             if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
                 return;

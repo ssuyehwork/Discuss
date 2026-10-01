@@ -9,6 +9,8 @@
 #include "../meta/FavoriteService.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/DriveMetaDao.h"
+#include "ThumbnailPipelineService.h"
+#include <QThreadPool>
 #include <QPainter>
 #include <QPainterPath>
 #include "../core/AppConfig.h"
@@ -587,10 +589,14 @@ void FavoritePanel::loadFavorites() {
     if (!pathsToExtract.isEmpty()) {
         QPointer<FavoritePanel> weakThis(this);
         for (const QString& path : pathsToExtract) {
-            (void)QtConcurrent::run([weakThis, path]() {
+            (void)QtConcurrent::run(ThumbnailPipelineService::instance().decodePool(), [weakThis, path]() {
                 if (!weakThis) return;
-                QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, 128);
+                // 磁盘缓存只有 230 一档；收藏面板要 128，从 230 缩小，不单独写盘
+                QImage img = DiskMediaExtractor::getCapsuleThumbnail(path, DiskMediaExtractor::kThumbSize);
                 if (!img.isNull()) {
+                    if (img.width() > 128 || img.height() > 128) {
+                        img = img.scaled(128, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                    }
                     QPixmap pix = QPixmap::fromImage(img);
                     QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, path, pix]() {
                         if (weakThis) {

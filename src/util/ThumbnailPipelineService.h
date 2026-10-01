@@ -7,6 +7,7 @@
 #include <QStringList>
 #include <QCache>
 #include <QMutex>
+#include <QThreadPool>
 #include <atomic>
 #include <functional>
 #include "CoreEngine.h"
@@ -42,11 +43,15 @@ public:
 
     std::shared_ptr<CancellationToken> currentToken() const;
 
-
     /**
      * @brief 内存缓存清理
      */
     void clearMemoryCache();
+
+    /**
+     * @brief 前台缩略图提取专用线程池（收藏面板等也共用，不占全局线程池）
+     */
+    QThreadPool* decodePool() { return &m_decodePool; }
 
 private:
     explicit ThumbnailPipelineService(QObject* parent = nullptr);
@@ -54,11 +59,10 @@ private:
     ThumbnailPipelineService(const ThumbnailPipelineService&) = delete;
     ThumbnailPipelineService& operator=(const ThumbnailPipelineService&) = delete;
 
-    QImage decodeImageToThumbnail(const QString& filePath, int targetSize) const;
-
     mutable QMutex m_cacheMutex;
     mutable QCache<QString, QPixmap> m_memoryCache;
 
+    QThreadPool m_decodePool;
     std::atomic<uint64_t> m_currentGeneration{1};
     std::shared_ptr<CancellationToken> m_currentToken;
     static constexpr int kMaxMemoryCacheCount = 800; // 内存最多缓存 800 张缩略图 (约 50~80MB)

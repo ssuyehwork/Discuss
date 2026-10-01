@@ -388,18 +388,59 @@ void ContentPanel::hideDragOverlay() {
 }
 
 void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        if (paneCount() < kMaxPanes) {
+            event->acceptProposedAction();
+            return;
+        }
+    }
     QFrame::dragEnterEvent(event);
 }
 
 void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        if (paneCount() < kMaxPanes) {
+            event->acceptProposedAction();
+            updateDragOverlay(event->pos());
+            return;
+        }
+    }
     QFrame::dragMoveEvent(event);
 }
 
 void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
+    hideDragOverlay();
     QFrame::dragLeaveEvent(event);
 }
 
 void ContentPanel::dropEvent(QDropEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        if (paneCount() < kMaxPanes) {
+            hideDragOverlay();
+            QString tabUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
+            if (tabUrl.isEmpty()) {
+                tabUrl = event->mimeData()->text();
+            }
+
+            if (!tabUrl.isEmpty()) {
+                QPoint pos = event->pos();
+                int w = width();
+                int h = height();
+                Qt::Orientation orientation = Qt::Horizontal;
+
+                if (pos.y() < h * 0.25 || pos.y() > h * 0.75) {
+                    orientation = Qt::Vertical;
+                } else {
+                    orientation = Qt::Horizontal;
+                }
+
+                splitPane(orientation, tabUrl);
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+    hideDragOverlay();
     QFrame::dropEvent(event);
 }
 
