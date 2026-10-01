@@ -98,12 +98,12 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
     }
 
     QWidget* container = new QWidget(m_paneSplitter);
-    container->setMinimumWidth(newPane->currentViewMode() == ContentPanel::ColumnView ? 460 : 230);
     QVBoxLayout* layout = new QVBoxLayout(container);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
     ContentPanel* newPane = new ContentPanel(container);
+    container->setMinimumWidth(newPane->currentViewMode() == ContentPanel::ColumnView ? 460 : 230);
     newPane->setIsSecondaryPane(true);
     if (newPane->m_splitManager) {
         newPane->m_splitManager->m_rootPane = m_panel;
