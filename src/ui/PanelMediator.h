@@ -8,6 +8,7 @@ namespace QuarkMeta {
 
 class NavPanel;
 class FavoritePanel;
+class LibraryPanel;
 class ContentPanel;
 class MetaPanel;
 class FilterPanel;
@@ -23,6 +24,7 @@ class AppShortcutController;
 struct PanelMediatorComponents {
     NavPanel* navPanel = nullptr;
     FavoritePanel* favoritePanel = nullptr;
+    LibraryPanel* libraryPanel = nullptr;
     ContentPanel* contentPanel = nullptr;
     MetaPanel* metaPanel = nullptr;
     FilterPanel* filterPanel = nullptr;

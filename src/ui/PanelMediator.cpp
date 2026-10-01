@@ -1,6 +1,7 @@
 #include "PanelMediator.h"
 #include "NavPanel.h"
 #include "FavoritePanel.h"
+#include "LibraryPanel.h"
 #include "ContentPanel.h"
 #include "ColumnViewWidget.h"
 #include "controllers/ContentPaneSplitManager.h"
@@ -236,6 +237,15 @@ void PanelMediator::setupConnections() {
             NavigationService::instance().navigateTo(fi.absolutePath());
         });
     }
+
+        if (components.libraryPanel) {
+            connect(components.libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel](const QStringList& paths) {
+                ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
+                if (target) {
+                    target->loadPaths(paths);
+                }
+            });
+        }
 
     if (contentPanel) {
         connect(contentPanel, &ContentPanel::directorySelected, &NavigationService::instance(), [](const QString& path) {

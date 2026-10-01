@@ -1977,3 +1977,28 @@ QListView#ColumnViewPaneListView::item:selected, QListView#ColumnViewFolderList:
     color: #FFFFFF;
     outline: none;
 }
+
+/* Sidebar Container & Dual TabBar Styles */
+QTabBar#SidebarTabBar {
+    background: transparent;
+    border: none;
+}
+
+QTabBar#SidebarTabBar::tab {
+    background: transparent;
+    color: #888888;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: bold;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+
+QTabBar#SidebarTabBar::tab:selected {
+    color: #FFFFFF;
+    border-bottom: 2px solid #378ADD;
+}
+
+QTabBar#SidebarTabBar::tab:hover:!selected {
+    color: #CCCCCC;
+}

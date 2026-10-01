@@ -114,6 +114,14 @@ set(SOURCES
     src/meta/FavoriteDao.cpp
     src/meta/FavoriteService.h
     src/meta/FavoriteService.cpp
+    src/meta/LibraryDao.h
+    src/meta/LibraryDao.cpp
+    src/meta/LibraryService.h
+    src/meta/LibraryService.cpp
+    src/ui/LibraryPanel.h
+    src/ui/LibraryPanel.cpp
+    src/ui/SidebarContainerWidget.h
+    src/ui/SidebarContainerWidget.cpp
     src/meta/DatabaseMigrator.h
     src/meta/BatchRenameEngine.cpp
     src/meta/BatchRenameEngine.h
