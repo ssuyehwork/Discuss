@@ -14,13 +14,15 @@ SearchController::SearchController(QWidget* parent)
     : QObject(parent) {
     m_searchContainer = new QWidget(parent);
     m_searchContainer->setObjectName("SearchContainer");
+    m_searchContainer->setFixedSize(230, 30);
+
     QHBoxLayout* searchLayout = new QHBoxLayout(m_searchContainer);
     searchLayout->setContentsMargins(0, 0, 0, 0);
+    searchLayout->setSpacing(0);
 
     m_searchEdit = new QLineEdit(m_searchContainer);
     m_searchEdit->setPlaceholderText("搜索...");
-    m_searchEdit->setFixedSize(230, 30);
-    m_searchEdit->addAction(UiHelper::getIcon("search", TextMuted), QLineEdit::LeadingPosition);
+    m_searchEdit->setObjectName("SearchEdit");
 
     QAction* clearAction = m_searchEdit->addAction(UiHelper::getIcon("close", TextMuted), QLineEdit::TrailingPosition);
     clearAction->setVisible(false);
@@ -29,10 +31,24 @@ SearchController::SearchController(QWidget* parent)
         clearAction->setVisible(!text.isEmpty());
     });
 
-    m_searchEdit->setObjectName("SearchEdit");
     UiHelper::setupLineEditContextMenu(m_searchEdit);
 
-    searchLayout->addWidget(m_searchEdit);
+    m_btnSearch = new QPushButton(m_searchContainer);
+    m_btnSearch->setObjectName("BtnSearchAddress");
+    m_btnSearch->setFixedSize(28, 30);
+    m_btnSearch->setIcon(UiHelper::getIcon("seach-3", QColor("#CCCCCC"), 16));
+    m_btnSearch->setIconSize(QSize(16, 16));
+    m_btnSearch->setCursor(Qt::PointingHandCursor);
+    m_btnSearch->setProperty("tooltipText", "搜索");
+    m_btnSearch->setAttribute(Qt::WA_Hover);
+    m_btnSearch->installEventFilter(this);
+
+    connect(m_btnSearch, &QPushButton::clicked, this, [this]() {
+        doSearch(m_searchEdit->text().trimmed());
+    });
+
+    searchLayout->addWidget(m_btnSearch, 0);
+    searchLayout->addWidget(m_searchEdit, 1);
 
     m_searchHistoryPanel = new SearchHistoryPanel(parent);
     m_searchHistoryPanel->setCategory("global");
@@ -92,6 +108,15 @@ bool SearchController::eventFilter(QObject* watched, QEvent* event) {
         }
         return true;
     }
+
+    if (watched == m_btnSearch) {
+        if (event->type() == QEvent::Enter) {
+            m_btnSearch->setIcon(UiHelper::getIcon("seach-3", Qt::white, 16));
+        } else if (event->type() == QEvent::Leave) {
+            m_btnSearch->setIcon(UiHelper::getIcon("seach-3", QColor("#CCCCCC"), 16));
+        }
+    }
+
     return QObject::eventFilter(watched, event);
 }
 

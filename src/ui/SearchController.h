@@ -35,6 +35,7 @@ private:
     void doSearch(const QString& keyword);
 
     QWidget* m_searchContainer = nullptr;
+    QPushButton* m_btnSearch = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QTimer* m_searchTimer = nullptr;
     SearchHistoryPanel* m_searchHistoryPanel = nullptr;
