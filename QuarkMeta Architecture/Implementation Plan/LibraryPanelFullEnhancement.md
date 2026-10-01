@@ -1,3 +1,92 @@
+# Implementation Plan - Full Feature Enhancement for "库" (Library) Tab
+
+## Overview
+This plan implements the complete suite of advanced Library ("库") capabilities in QuarkMeta:
+1. **Tree Hierarchy with Sub-Paths (Associated Path Children)**:
+   - Categories in `LibraryPanel` show bound physical paths as child tree items.
+   - Users can expand categories to see all associated physical folders/files, right-click to remove an associated path or locate it in the file system.
+2. **Auto-Tagging Pipeline upon Drop**:
+   - When dropping new paths onto a category configured with preset tags (via `PresetTagsDialog`), `LibraryPanel` automatically applies those tags to the dropped items in `.QuarkMeta.json` via `CoreEngine` `AppCommandType::AddTag`.
+3. **Category Customization (Icon, Color, Preset Tags)**:
+   - Complete context menu support for 50+ SVG icon selection, 50-color strip picker, and preset tags dialog (`PresetTagsDialog`).
+4. **Smart Category Path Collection**:
+   - Clicking a category gathers all associated paths (and child category paths) and loads them into `ContentPanel` via `loadPaths(paths)`.
+
+---
+
+## Modified Files List
+- `src/ui/LibraryPanel.h`
+- `src/ui/LibraryPanel.cpp`
+- `src/meta/LibraryDao.h`
+- `src/meta/LibraryDao.cpp`
+- `src/meta/LibraryService.h`
+- `src/meta/LibraryService.cpp`
+
+---
+
+## Detailed Line-by-Line Changes
+
+### 1. Update `src/ui/LibraryPanel.h`
+
+Add custom item delegate, thumbnail extraction and child path interaction methods:
+
+```cpp
+#pragma once
+
+#include <QFrame>
+#include <QTreeView>
+#include <QStandardItemModel>
+#include <QVBoxLayout>
+#include <QStyledItemDelegate>
+#include "DropTreeView.h"
+
+namespace QuarkMeta {
+
+class LibraryItemDelegate : public QStyledItemDelegate {
+    Q_OBJECT
+public:
+    explicit LibraryItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+};
+
+class LibraryPanel : public QFrame {
+    Q_OBJECT
+
+public:
+    explicit LibraryPanel(QWidget* parent = nullptr);
+    ~LibraryPanel() override = default;
+
+    void loadLibrary();
+
+signals:
+    void categoryPathsSelected(const QStringList& paths);
+    void requestLocateFile(const QString& path);
+
+private slots:
+    void onCategoryClicked(const QModelIndex& index);
+    void onCategoryContextMenu(const QPoint& pos);
+    void onPathsDroppedToCategory(const QStringList& paths, const QModelIndex& target);
+
+private:
+    void initUi();
+    void createAndEditCategory(int parentId = 0);
+
+    QVBoxLayout* m_mainLayout = nullptr;
+    DropTreeView* m_treeView = nullptr;
+    QStandardItemModel* m_model = nullptr;
+    bool m_isLoading = false;
+    int m_pendingEditNodeId = 0;
+};
+
+} // namespace QuarkMeta
+```
+
+### 2. Update `src/ui/LibraryPanel.cpp`
+
+Implement tree rendering with child paths, icon/color pickers, preset tags integration, auto-tagging on drop, and path removal:
+
+```cpp
 #include "LibraryPanel.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
@@ -192,7 +281,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6")), "设置预设标签");
     connect(presetTagAct, &QAction::triggered, this, [this, nodeId]() {
-        PresetTagsDialog dlg(nodeId, this, true);
+        PresetTagsDialog dlg(nodeId, this);
         dlg.exec();
     });
 
@@ -398,3 +487,30 @@ void LibraryPanel::createAndEditCategory(int parentId) {
 }
 
 } // namespace QuarkMeta
+```
+
+---
+
+## Build & Verification Steps
+1. Recompile standard C++ build target.
+2. In "库" (Library) tab, create a category and drag multiple folders/files into it.
+3. Observe child items dynamically expanding underneath the category node showing individual paths.
+4. Right-click a child path item in "库" and click "从分类中移除此路径". Verify the path disappears from the category tree and content panel.
+5. Configure preset tags on a Library category via "设置预设标签", drag new items onto the category, and confirm that preset tags are automatically applied to the new items.
+
+---
+
+## SSOT API Reuse & Anti-Redundancy Self-Check
+- Reuses `PresetTagsDialog` and `CoreEngine` `AppCommandType::AddTag`.
+- Reuses `LibraryDao` for thread-safe SQLite operations.
+
+---
+
+## Header API Signature Verification
+- `LibraryService::instance().addPathsToCategory(int id, const QStringList& paths)`: verified in `src/meta/LibraryService.h`.
+- `CoreEngine::instance().executeCommand(const AppCommand& cmd)`: verified in `src/core/CoreEngine.h`.
+
+---
+
+## Header Inclusion Chain & Type Completeness Check
+- `LibraryPanel.cpp`: Included `"PresetTagsDialog.h"`, `"ColorPicker.h"`, `"ShellIconManager.h"`, `"CoreEngine.h"`.

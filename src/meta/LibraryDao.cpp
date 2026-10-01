@@ -21,6 +21,7 @@ bool LibraryDao::initTable() {
                          "icon_key TEXT DEFAULT 'folder_filled', "
                          "color_hex TEXT DEFAULT '#888888', "
                          "sort_order INTEGER DEFAULT 0, "
+                         "preset_tags TEXT DEFAULT '', "
                          "created_at INTEGER);";
 
     const char* sqlPaths = "CREATE TABLE IF NOT EXISTS library_category_paths ("
@@ -31,6 +32,7 @@ bool LibraryDao::initTable() {
     char* errMsgs = nullptr;
     sqlite3_exec(db, sqlCat, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlPaths, nullptr, nullptr, &errMsgs);
+    sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN preset_tags TEXT DEFAULT '';", nullptr, nullptr, nullptr);
     return true;
 }
 
@@ -42,7 +44,7 @@ QList<LibraryCategoryRecord> LibraryDao::getAllCategories() {
     {
         std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-        const char* sql = "SELECT id, parent_id, name, icon_key, color_hex, sort_order FROM library_categories ORDER BY sort_order ASC, id ASC;";
+        const char* sql = "SELECT id, parent_id, name, icon_key, color_hex, sort_order, preset_tags FROM library_categories ORDER BY sort_order ASC, id ASC;";
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return list;
 
@@ -54,10 +56,14 @@ QList<LibraryCategoryRecord> LibraryDao::getAllCategories() {
             const char* iconStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
             const char* colorStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
             rec.sortOrder = sqlite3_column_int(stmt, 5);
+            const char* tagsStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
 
             if (nameStr) rec.name = QString::fromUtf8(nameStr);
             if (iconStr) rec.iconKey = QString::fromUtf8(iconStr);
             if (colorStr) rec.colorHex = QString::fromUtf8(colorStr);
+            if (tagsStr && strlen(tagsStr) > 0) {
+                rec.presetTags = QString::fromUtf8(tagsStr).split(',', Qt::SkipEmptyParts);
+            }
 
             list.append(rec);
         }
@@ -221,6 +227,26 @@ bool LibraryDao::removePathsFromCategory(int id, const QStringList& paths) {
     sqlite3_finalize(stmt);
     sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
     return true;
+}
+
+bool LibraryDao::updatePresetTags(int id, const QStringList& tags) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || id <= 0) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "UPDATE library_categories SET preset_tags = ? WHERE id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+
+    std::string tagsStd = tags.join(",").toStdString();
+    sqlite3_bind_text(stmt, 1, tagsStd.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, id);
+
+    bool success = (sqlite3_step(stmt) == SQLITE_DONE);
+    sqlite3_finalize(stmt);
+    sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+    return success;
 }
 
 QStringList LibraryDao::getCategoryPaths(int id) {

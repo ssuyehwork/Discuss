@@ -4,9 +4,18 @@
 #include <QTreeView>
 #include <QStandardItemModel>
 #include <QVBoxLayout>
+#include <QStyledItemDelegate>
 #include "DropTreeView.h"
 
 namespace QuarkMeta {
+
+class LibraryItemDelegate : public QStyledItemDelegate {
+    Q_OBJECT
+public:
+    explicit LibraryItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+};
 
 class LibraryPanel : public QFrame {
     Q_OBJECT
@@ -19,6 +28,7 @@ public:
 
 signals:
     void categoryPathsSelected(const QStringList& paths);
+    void requestLocateFile(const QString& path);
 
 private slots:
     void onCategoryClicked(const QModelIndex& index);
@@ -33,6 +43,7 @@ private:
     DropTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
     bool m_isLoading = false;
+    int m_pendingEditNodeId = 0;
 };
 
 } // namespace QuarkMeta
