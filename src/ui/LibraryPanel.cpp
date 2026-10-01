@@ -129,18 +129,6 @@ void LibraryPanel::initUi() {
 
 void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
     if (!index.isValid()) return;
-    bool isPathItem = index.data(Qt::UserRole + 4).toBool();
-
-    if (isPathItem) {
-        QString path = index.data(Qt::UserRole + 5).toString();
-        if (!path.isEmpty()) {
-            QFileInfo fi(path);
-            if (!fi.isDir()) {
-                emit requestLocateFile(path);
-            }
-        }
-        return;
-    }
 
     int nodeId = index.data(Qt::UserRole + 1).toInt();
     if (nodeId > 0) {
@@ -164,19 +152,6 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
         return;
     }
 
-    bool isPathItem = index.data(Qt::UserRole + 4).toBool();
-    if (isPathItem) {
-        int catId = index.data(Qt::UserRole + 6).toInt();
-        QString boundPath = index.data(Qt::UserRole + 5).toString();
-
-        QAction* removePathAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "从分类中移除此路径");
-        connect(removePathAct, &QAction::triggered, this, [catId, boundPath]() {
-            LibraryService::instance().removePathsFromCategory(catId, {boundPath});
-        });
-
-        menu.exec(m_treeView->viewport()->mapToGlobal(pos));
-        return;
-    }
 
     int nodeId = index.data(Qt::UserRole + 1).toInt();
     QString curIconKey = index.data(Qt::UserRole + 2).toString();
@@ -346,16 +321,6 @@ void LibraryPanel::loadLibrary() {
         item->setData(rec.colorHex, Qt::UserRole + 3);
         item->setData(false, Qt::UserRole + 4); // false = Category node
 
-        // 挂载绑定的物理路径作为子项 Tree Items
-        for (const QString& boundPath : rec.associatedPaths) {
-            QFileInfo fi(boundPath);
-            QIcon pathIcon = fi.isDir() ? UiHelper::getIcon("folder_filled", QColor("#378ADD"), 16) : ShellIconManager::getFileIcon(boundPath);
-            QStandardItem* pathItem = new QStandardItem(pathIcon, fi.fileName().isEmpty() ? boundPath : fi.fileName());
-            pathItem->setData(true, Qt::UserRole + 4); // true = Path node
-            pathItem->setData(boundPath, Qt::UserRole + 5);
-            pathItem->setData(rec.id, Qt::UserRole + 6);
-            item->appendRow(pathItem);
-        }
 
         itemMap.insert(rec.id, item);
     }

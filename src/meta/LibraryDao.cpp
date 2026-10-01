@@ -32,7 +32,6 @@ bool LibraryDao::initTable() {
     char* errMsgs = nullptr;
     sqlite3_exec(db, sqlCat, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlPaths, nullptr, nullptr, &errMsgs);
-    sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN preset_tags TEXT DEFAULT '';", nullptr, nullptr, nullptr);
     return true;
 }
 
