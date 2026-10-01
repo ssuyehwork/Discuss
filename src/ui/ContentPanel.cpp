@@ -401,7 +401,7 @@ void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
     if (event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
         if (paneCount() < kMaxPanes) {
             event->acceptProposedAction();
-            updateDragOverlay(event->pos());
+            updateDragOverlay(event->position().toPoint());
             return;
         }
     }
@@ -423,13 +423,15 @@ void ContentPanel::dropEvent(QDropEvent* event) {
             }
 
             if (!tabUrl.isEmpty()) {
-                QPoint pos = event->pos();
+                QPoint pos = event->position().toPoint();
                 int w = width();
                 int h = height();
                 Qt::Orientation orientation = Qt::Horizontal;
 
                 if (pos.y() < h * 0.25 || pos.y() > h * 0.75) {
                     orientation = Qt::Vertical;
+                } else if (pos.x() < w * 0.25 || pos.x() > w * 0.75) {
+                    orientation = Qt::Horizontal;
                 } else {
                     orientation = Qt::Horizontal;
                 }
