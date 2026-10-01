@@ -32,6 +32,7 @@
 #include "../meta/MediaExtractorPipeline.h"
 #include "../util/ThumbnailPipelineService.h"
 #include "../core/NavigationService.h"
+#include "../core/NavigationHistoryService.h"
 
 #include <QHBoxLayout>
 #include <QMouseEvent>
@@ -131,10 +132,25 @@ void ContentPanel::initUi() {
     m_headerWidget->setFilterState(m_currentFilter);
 
     connect(m_headerWidget, &ContentHeaderWidget::splitViewRequested, this, [this]() {
+        if (isSecondaryPane()) {
+            emit closePaneRequested();
+            return;
+        }
         if (isSplitMode()) {
             closeSecondaryPane();
         } else {
-            splitPane(Qt::Horizontal);
+            QStringList history = NavigationHistoryService::instance().getHistory();
+            QString lastPath;
+            for (const QString& hPath : history) {
+                if (!hPath.isEmpty() && QDir::cleanPath(hPath) != QDir::cleanPath(m_currentPath)) {
+                    lastPath = hPath;
+                    break;
+                }
+            }
+            if (lastPath.isEmpty()) {
+                lastPath = m_currentPath;
+            }
+            splitPane(Qt::Horizontal, lastPath);
         }
     });
 
