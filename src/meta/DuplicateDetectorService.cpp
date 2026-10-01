@@ -169,7 +169,7 @@ std::vector<DuplicateConflictGroup> DuplicateDetectorService::detectDuplicates(c
                     group.newItem.width = meta.width; 
                     group.newItem.height = meta.height;
                     group.newItem.size = size;
-                    group.newItem.thumbnail = DiskMediaExtractor::getCapsuleThumbnail(newPath, 512);
+                    group.newItem.thumbnail = DiskMediaExtractor::getCapsuleThumbnail(newPath, DiskMediaExtractor::kThumbSize);
 
                     conflicts.push_back(group);
                     break;

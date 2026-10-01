@@ -42,7 +42,7 @@ void CoreController::initializeCoreComponents() {
     QTimer* failureFlushTimer = new QTimer(QCoreApplication::instance());
     failureFlushTimer->setInterval(1000);
     QObject::connect(failureFlushTimer, &QTimer::timeout, []() {
-        (void)QtConcurrent::run(DiskMediaExtractor::flushPendingFailures);
+        (void)QtConcurrent::run(DiskMediaExtractor::flushPendingUpdates);
     });
     failureFlushTimer->start();
 }

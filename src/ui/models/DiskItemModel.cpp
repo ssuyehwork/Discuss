@@ -108,7 +108,6 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     beginResetModel();
     m_allRecords = records;
 
-    // 🚀【核心根治】：使用 MetaCacheDecorator 批量装载该目录下所有文件的 JSON 关联扩展元数据！
     MetaCacheDecorator::decorate(m_allRecords);
 
     m_pathToIndex.clear();
@@ -130,7 +129,6 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
             pendingTargets.push_back({i, rec.path});
         }
 
-        // 🚀【内存与缓存双向同步】：把 MetaCacheDecorator 装饰到的高级元数据回写激活进 MetadataManager 内存缓存！
         std::wstring wpath = rec.path.toStdWString();
         MetadataManager::instance().ensureActivated(wpath);
         if (rec.rating > 0) MetadataManager::instance().setRating(wpath, rec.rating, false);
@@ -146,7 +144,6 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     endResetModel();
 
-    // 🚀【异步零卡顿】：在后台线程检测已存在的磁盘缩略图缓存，纯靠主线程回调写入 Ready 状态
     if (!pendingTargets.empty()) {
         uint64_t thisGen = m_currentGen.load(std::memory_order_relaxed);
         QPointer<DiskItemModel> weakThis(this);
@@ -354,7 +351,6 @@ void DiskItemModel::updateRecordMetadata(const QString& path) {
             auto& record = m_allRecords[i];
             QFileInfo fileInfo(nPath);
 
-            // 针对盘符的元数据刷新
             if (fileInfo.isRoot() || nPath.endsWith(":\\") || nPath.endsWith(":/") || (nPath.length() == 2 && nPath.endsWith(':'))) {
                 std::wstring normWPath = MetadataManager::normalizePath(nPath.toStdWString());
                 auto driveRec = DriveMetaDao::getDriveMeta(normWPath);
@@ -367,7 +363,6 @@ void DiskItemModel::updateRecordMetadata(const QString& path) {
                 return;
             }
 
-            // 🚀【核心根治】：直接从内存缓存真理源 MetadataManager 读取实时最新数据，彻底消灭读脏盘与时序竞态！
             RuntimeMeta meta = MetadataManager::instance().getMeta(nPath.toStdWString());
             if (meta.rating == 0 && record.path != nPath) {
                 RuntimeMeta fallbackMeta = MetadataManager::instance().getMeta(record.path.toStdWString());
@@ -407,7 +402,6 @@ void DiskItemModel::updateRecordMetadata(const QString& path) {
 bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int role) {
     if (!index.isValid() || index.row() >= static_cast<int>(m_allRecords.size())) return false;
 
-    // 1. 处理 F2 / 右键菜单行内重命名提交
     if (role == Qt::EditRole && index.column() == 0) {
         QString newName = value.toString().trimmed();
         if (newName.isEmpty()) return false;
@@ -463,7 +457,6 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
     QString path = record.path;
     QFileInfo fileInfo(path);
 
-    // 2. 物理驱动器/盘符根目录（如 C:/, D:/）
     bool isDriveRoot = fileInfo.isRoot() || path.endsWith(":\\") || path.endsWith(":/") || (path.length() == 2 && path.endsWith(':'));
     if (isDriveRoot) {
         std::wstring normWPath = MetadataManager::normalizePath(path.toStdWString());
@@ -503,7 +496,6 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
         return false;
     }
 
-    // 3. 常规普通文件与目录：统一通过 MetadataManager 内存门面更新
     std::wstring wpath = path.toStdWString();
     bool metaUpdated = false;
 
@@ -592,8 +584,6 @@ void DiskItemModel::clearCacheForFolder(const QString& folderPath) {
 void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
     if (rows.isEmpty() || CoreController::isShuttingDown()) return;
 
-    qDebug() << "[THUMB_TRACE] DiskItemModel::loadThumbnailsForRows called with" << rows.size() << "rows.";
-
     uint64_t thisGen = m_currentGen.load(std::memory_order_relaxed);
 
     QStringList pathsToLoad;
@@ -604,19 +594,19 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
         QString ext = rec.suffix.toLower();
         bool isGraphic = UiHelper::isGraphicsFile(ext);
         if (rec.isDir || !isGraphic) {
-            if (!rec.isDir) {
-                qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "is NOT a graphics file (ext:" << ext << "), skipping thumbnail load.";
-            }
+            continue;
+        }
+
+        // 自动提取失败（thumb_status == 1）是终态：只能靠右键"重新生成缩略图"恢复，这里不再重试
+        if (rec.thumbnailState == ItemRecord::ThumbnailState::Failed) {
             continue;
         }
 
         QString path = rec.path;
         if (m_iconCache.contains(path)) {
-            qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "already in m_iconCache, skipping.";
             continue;
         }
         if (m_requestedPaths.contains(path)) {
-            qDebug() << "[THUMB_TRACE] Row" << r << "File:" << rec.filename << "already in m_requestedPaths, skipping.";
             continue;
         }
 
@@ -625,14 +615,11 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
     }
 
     if (pathsToLoad.isEmpty()) {
-        qDebug() << "[THUMB_TRACE] loadThumbnailsForRows: All requested rows already cached or in-flight.";
         return;
     }
 
-    qDebug() << "[THUMB_TRACE] Dispatching batch async thumbnail load for" << pathsToLoad.size() << "paths:" << pathsToLoad;
-
     QPointer<DiskItemModel> weakThis(this);
-    ThumbnailPipelineService::instance().loadBatchAsync(pathsToLoad, 230, [weakThis, thisGen](const QString& path, const QPixmap& pixmap) {
+    ThumbnailPipelineService::instance().loadBatchAsync(pathsToLoad, DiskMediaExtractor::kThumbSize, [weakThis, thisGen](const QString& path, const QPixmap& pixmap) {
         if (!weakThis || weakThis->currentGeneration() != thisGen) return;
 
         weakThis->m_requestedPaths.remove(path);
@@ -641,35 +628,36 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
             weakThis->m_iconCache.insert(path, new QIcon(icon));
             double ar = (double)pixmap.width() / pixmap.height();
             weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = ar;
+        }
 
-            QMetaObject::invokeMethod(weakThis, [weakThis, path, pixmap]() {
-                if (!weakThis) return;
-                weakThis->m_requestedPaths.remove(path);
-                auto it = weakThis->m_pathToIndex.find(path);
-                if (it != weakThis->m_pathToIndex.end()) {
-                    int currentIdx = it->second;
-                    if (currentIdx >= 0 && currentIdx < static_cast<int>(weakThis->m_allRecords.size())) {
-                        if (weakThis->m_allRecords[currentIdx].path == path) {
-                            if (!pixmap.isNull()) {
-                                weakThis->m_allRecords[currentIdx].thumbnailState = ItemRecord::ThumbnailState::Ready;
-                                weakThis->m_pendingThumbRows.insert(currentIdx);
-                                if (weakThis->m_thumbBatchTimer && !weakThis->m_thumbBatchTimer->isActive()) {
-                                    weakThis->m_thumbBatchTimer->start();
-                                }
-                                emit weakThis->thumbnailLoaded(currentIdx);
-                            } else {
-                                weakThis->m_allRecords[currentIdx].thumbnailState = ItemRecord::ThumbnailState::Failed;
-                                emit weakThis->dataChanged(
-                                    weakThis->index(currentIdx, 0),
-                                    weakThis->index(currentIdx, weakThis->columnCount() - 1),
-                                    {HasThumbnailRole}
-                                );
+        // 注意：下面的状态更新必须在 isNull 判断之外，空图（提取失败）才能走到 Failed 分支
+        QMetaObject::invokeMethod(weakThis, [weakThis, path, pixmap]() {
+            if (!weakThis) return;
+            weakThis->m_requestedPaths.remove(path);
+            auto it = weakThis->m_pathToIndex.find(path);
+            if (it != weakThis->m_pathToIndex.end()) {
+                int currentIdx = it->second;
+                if (currentIdx >= 0 && currentIdx < static_cast<int>(weakThis->m_allRecords.size())) {
+                    if (weakThis->m_allRecords[currentIdx].path == path) {
+                        if (!pixmap.isNull()) {
+                            weakThis->m_allRecords[currentIdx].thumbnailState = ItemRecord::ThumbnailState::Ready;
+                            weakThis->m_pendingThumbRows.insert(currentIdx);
+                            if (weakThis->m_thumbBatchTimer && !weakThis->m_thumbBatchTimer->isActive()) {
+                                weakThis->m_thumbBatchTimer->start();
                             }
+                            emit weakThis->thumbnailLoaded(currentIdx);
+                        } else {
+                            weakThis->m_allRecords[currentIdx].thumbnailState = ItemRecord::ThumbnailState::Failed;
+                            emit weakThis->dataChanged(
+                                weakThis->index(currentIdx, 0),
+                                weakThis->index(currentIdx, weakThis->columnCount() - 1),
+                                {HasThumbnailRole}
+                            );
                         }
                     }
                 }
-            }, Qt::QueuedConnection);
-        }
+            }
+        }, Qt::QueuedConnection);
     });
 }
 
@@ -743,7 +731,6 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == EncryptedRole) {
         return record.encrypted;
     } else if (role == TagsRole) {
-        // 如果 record.tags 为空，尝试从 MetadataManager 读取最新数据
         if (record.tags.isEmpty()) {
             std::wstring wpath = path.toStdWString();
             RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
@@ -811,6 +798,11 @@ void DiskItemModel::reloadThumbnailForPath(const QString& path) {
     auto it = m_pathToIndex.find(nPath);
     if (it != m_pathToIndex.end()) {
         int rIdx = it->second;
+        // 显式重载（如重新生成缩略图成功后）：解除 Failed 终态，允许再次加载 
+        if (rIdx >= 0 && rIdx < static_cast<int>(m_allRecords.size()) 
+            && m_allRecords[rIdx].thumbnailState == ItemRecord::ThumbnailState::Failed) { 
+            m_allRecords[rIdx].thumbnailState = ItemRecord::ThumbnailState::Pending; 
+        } 
         loadThumbnailsForRows({rIdx});
         emit dataChanged(
             index(rIdx, 0), 

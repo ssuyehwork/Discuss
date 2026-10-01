@@ -9,10 +9,12 @@
 
 namespace QuarkMeta {
 
-DecodedMediaResult ImageDecoderFacade::decodeSinglePass(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+DecodedMediaResult ImageDecoderFacade::decodeSinglePass(const QString& filePath, int targetSize, ExtractMode mode, std::shared_ptr<CancellationToken> token) {
     DecodedMediaResult result;
     QFileInfo info(filePath);
     QString ext = info.suffix().toLower();
+    // 自动提取用默认短超时(0)；重新生成与预览用长超时
+    const int customTimeoutMs = (mode == ExtractMode::Auto) ? 0 : kLongTimeoutMs;
 
     // 1. 特殊矢量与设计格式分流
     if (ext == "svg") {
@@ -38,13 +40,17 @@ DecodedMediaResult ImageDecoderFacade::decodeSinglePass(const QString& filePath,
         return result;
     }
     if (ext == "ai" || ext == "pdf") {
-        result.thumbnail512 = FormatDecoders::extractAiPreview(filePath, targetSize, customTimeoutMs, token);
+        result.thumbnail512 = (mode == ExtractMode::Preview) 
+            ? FormatDecoders::extractAiQuickLook(filePath, targetSize, customTimeoutMs, token) 
+            : FormatDecoders::extractAiPreview(filePath, targetSize, customTimeoutMs, token);
         result.originalSize = result.thumbnail512.size();
         result.isValid = !result.thumbnail512.isNull();
         return result;
     }
     if (ext == "eps") {
-        result.thumbnail512 = FormatDecoders::extractEpsPreview(filePath, targetSize, customTimeoutMs, token);
+        result.thumbnail512 = (mode == ExtractMode::Preview) 
+            ? FormatDecoders::extractEpsQuickLook(filePath, targetSize, customTimeoutMs, token) 
+            : FormatDecoders::extractEpsThumbnail(filePath, targetSize, customTimeoutMs, token);
         result.originalSize = result.thumbnail512.size();
         result.isValid = !result.thumbnail512.isNull();
         return result;
