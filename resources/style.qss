@@ -291,7 +291,6 @@ QLineEdit#SearchEdit {
     padding-left: 4px;
     padding-right: 24px;
     font-size: 12px;
-    height: 30px;
 }
 QLineEdit#SearchEdit:focus {
     border-color: #378ADD;
