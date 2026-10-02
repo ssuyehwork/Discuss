@@ -281,19 +281,27 @@ QLabel#BreadcrumbSep {
 }
 
 QWidget#SearchContainer {
-    background: transparent;
-}
-QLineEdit#SearchEdit {
     background-color: #1E1E1E;
     border: 1px solid #333333;
     border-radius: 6px;
+}
+QWidget#SearchContainer[focused='true'] {
+    border: 1px solid #378ADD;
+}
+QLineEdit#SearchEdit {
+    background: transparent;
+    border: none;
     color: #EEEEEE;
     padding-left: 4px;
     padding-right: 24px;
     font-size: 12px;
 }
-QLineEdit#SearchEdit:focus {
-    border-color: #378ADD;
+QPushButton#BtnSearchAddress {
+    background: transparent;
+    border: none;
+    border-right: 1px solid #333333;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
 }
 QLineEdit#SearchEdit QToolButton {
     border: none;

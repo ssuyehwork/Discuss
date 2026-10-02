@@ -5,6 +5,7 @@
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include <QHBoxLayout>
+#include <QStyle>
 
 using namespace QuarkMeta::Style;
 
@@ -14,7 +15,7 @@ SearchController::SearchController(QWidget* parent)
     : QObject(parent) {
     m_searchContainer = new QWidget(parent);
     m_searchContainer->setObjectName("SearchContainer");
-    m_searchContainer->setFixedSize(230, 32);
+    m_searchContainer->setFixedHeight(32);
 
     QHBoxLayout* searchLayout = new QHBoxLayout(m_searchContainer);
     searchLayout->setContentsMargins(0, 0, 0, 0);
@@ -23,6 +24,8 @@ SearchController::SearchController(QWidget* parent)
     m_searchEdit = new QLineEdit(m_searchContainer);
     m_searchEdit->setPlaceholderText("搜索...");
     m_searchEdit->setObjectName("SearchEdit");
+    m_searchEdit->setFixedHeight(30);
+    m_searchEdit->installEventFilter(this);
 
     QAction* clearAction = m_searchEdit->addAction(UiHelper::getIcon("close", TextMuted), QLineEdit::TrailingPosition);
     clearAction->setVisible(false);
@@ -35,10 +38,10 @@ SearchController::SearchController(QWidget* parent)
 
     m_btnSearch = new QPushButton(m_searchContainer);
     m_btnSearch->setObjectName("BtnSearchAddress");
-    m_btnSearch->setFixedSize(28, 30);
+    m_btnSearch->setFixedSize(30, 30);
     m_btnSearch->setIcon(UiHelper::getIcon("seach-3", QColor("#CCCCCC"), 16));
     m_btnSearch->setIconSize(QSize(16, 16));
-    m_btnSearch->setCursor(Qt::PointingHandCursor);
+    m_btnSearch->setCursor(Qt::ArrowCursor);
     m_btnSearch->setProperty("tooltipText", "搜索");
     m_btnSearch->setAttribute(Qt::WA_Hover);
     m_btnSearch->installEventFilter(this);
@@ -109,6 +112,14 @@ bool SearchController::eventFilter(QObject* watched, QEvent* event) {
             m_searchHistoryPanel->showBelow(m_searchEdit);
         }
         return true;
+    }
+
+    if (watched == m_searchEdit) {
+        if (event->type() == QEvent::FocusIn || event->type() == QEvent::FocusOut) {
+            m_searchContainer->setProperty("focused", event->type() == QEvent::FocusIn);
+            m_searchContainer->style()->unpolish(m_searchContainer);
+            m_searchContainer->style()->polish(m_searchContainer);
+        }
     }
 
     if (watched == m_btnSearch) {
