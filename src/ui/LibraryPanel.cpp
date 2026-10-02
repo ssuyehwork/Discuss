@@ -4,9 +4,11 @@
 #include "PresetTagsDialog.h"
 #include "ColorPicker.h"
 #include "ShellIconManager.h"
+#include "ViewDragDropHelper.h"
 #include "../meta/LibraryDao.h"
 #include "../meta/LibraryService.h"
 #include "../core/CoreEngine.h"
+#include "../core/ModelContract.h"
 #include <QLabel>
 #include <QPushButton>
 #include <QMenu>
@@ -33,7 +35,14 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
 
-    if (opt.state & QStyle::State_Selected) {
+    bool isDropTarget = index.data(IsDropTargetRole).toBool() ||
+                       ViewDragDropHelper::isDropTarget(qobject_cast<const QAbstractItemView*>(option.widget), index);
+
+    if (isDropTarget) {
+        QColor dropBg("#3498db");
+        dropBg.setAlphaF(0.35f);
+        painter->fillRect(opt.rect, dropBg);
+    } else if (opt.state & QStyle::State_Selected) {
         painter->fillRect(opt.rect, QColor("#37373D"));
     } else if (opt.state & QStyle::State_MouseOver) {
         painter->fillRect(opt.rect, QColor("#2A2D2E"));

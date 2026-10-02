@@ -12,6 +12,11 @@ namespace QuarkMeta {
 class SearchHistoryPanel;
 class ContentPanel;
 
+enum class SearchScope {
+    CurrentFolder,
+    Library
+};
+
 class SearchController : public QObject {
     Q_OBJECT
 public:
@@ -22,6 +27,7 @@ public:
     QLineEdit* searchEdit() const { return m_searchEdit; }
     QPushButton* searchButton() const { return m_btnSearch; }
     SearchHistoryPanel* historyPanel() const { return m_searchHistoryPanel; }
+    SearchScope searchScope() const { return m_searchScope; }
 
     void bindContentPanel(ContentPanel* contentPanel);
     // 仅切换当前搜索目标窗格，不重复接线 UI 信号；供多窗格激活切换时调用
@@ -35,6 +41,7 @@ protected:
 
 private:
     void doSearch(const QString& keyword);
+    void showSearchMenu();
 
     QWidget* m_searchContainer = nullptr;
     QLineEdit* m_searchEdit = nullptr;
@@ -42,6 +49,7 @@ private:
     QTimer* m_searchTimer = nullptr;
     SearchHistoryPanel* m_searchHistoryPanel = nullptr;
     ContentPanel* m_contentPanel = nullptr;
+    SearchScope m_searchScope = SearchScope::CurrentFolder;
 };
 
 } // namespace QuarkMeta

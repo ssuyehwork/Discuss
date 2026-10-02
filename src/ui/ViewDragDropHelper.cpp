@@ -50,8 +50,11 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
         if (m_currentHoverDropIdx != hoverIdx) {
             clearDropHighlight();
             if (hoverIdx.isValid()) {
-                bool isFolder = (hoverIdx.data(TypeRole).toString() == "folder") || hoverIdx.data(Qt::UserRole + 2).toBool();
-                if (isFolder) {
+                bool isTargetable = (hoverIdx.data(TypeRole).toString() == "folder") ||
+                                    (hoverIdx.data(TypeRole).toString() == "category") ||
+                                    (hoverIdx.data(Qt::UserRole + 1).toInt() > 0) ||
+                                    hoverIdx.data(Qt::UserRole + 2).toBool();
+                if (isTargetable) {
                     m_currentHoverDropIdx = hoverIdx;
                     if (m_targetView->model()) {
                         const_cast<QAbstractItemModel*>(m_targetView->model())->setData(m_currentHoverDropIdx, true, IsDropTargetRole);
