@@ -2,10 +2,13 @@
 #include "SearchHistoryPanel.h"
 #include "ContentPanel.h"
 #include "../core/SearchHistoryService.h"
+#include "../meta/LibraryDao.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include <QHBoxLayout>
 #include <QStyle>
+#include <QMenu>
+#include <QActionGroup>
 
 using namespace QuarkMeta::Style;
 
@@ -42,15 +45,11 @@ SearchController::SearchController(QWidget* parent)
     m_btnSearch->setIcon(UiHelper::getIcon("seach-7", QColor("#CCCCCC"), 16));
     m_btnSearch->setIconSize(QSize(16, 16));
     m_btnSearch->setCursor(Qt::ArrowCursor);
-    m_btnSearch->setProperty("tooltipText", "搜索");
+    m_btnSearch->setProperty("tooltipText", "搜索范围与选项");
     m_btnSearch->setAttribute(Qt::WA_Hover);
     m_btnSearch->installEventFilter(this);
 
-    // TODO: 预留搜索按钮扩展功能（例如高级搜索菜单或触发搜索）
-    connect(m_btnSearch, &QPushButton::clicked, this, [this]() {
-        // TODO: Extended search functionality
-        doSearch(m_searchEdit->text().trimmed());
-    });
+    connect(m_btnSearch, &QPushButton::clicked, this, &SearchController::showSearchMenu);
 
     searchLayout->addWidget(m_btnSearch, 0);
     searchLayout->addWidget(m_searchEdit, 1);
@@ -93,14 +92,68 @@ void SearchController::bindContentPanel(ContentPanel* contentPanel) {
     });
 }
 
+void SearchController::showSearchMenu() {
+    if (!m_btnSearch) return;
+
+    QMenu menu(m_btnSearch);
+    UiHelper::applyMenuStyle(&menu);
+
+    QActionGroup* group = new QActionGroup(&menu);
+    group->setExclusive(true);
+
+    QAction* actFolder = menu.addAction("搜索：当前文件夹");
+    actFolder->setCheckable(true);
+    actFolder->setChecked(m_searchScope == SearchScope::CurrentFolder);
+    group->addAction(actFolder);
+
+    QAction* actLibrary = menu.addAction("搜索：库");
+    actLibrary->setCheckable(true);
+    actLibrary->setChecked(m_searchScope == SearchScope::Library);
+    group->addAction(actLibrary);
+
+    connect(actFolder, &QAction::triggered, this, [this]() {
+        m_searchScope = SearchScope::CurrentFolder;
+    });
+
+    connect(actLibrary, &QAction::triggered, this, [this]() {
+        m_searchScope = SearchScope::Library;
+    });
+
+    QPoint globalPos = m_btnSearch->mapToGlobal(QPoint(0, m_btnSearch->height()));
+    menu.exec(globalPos);
+}
+
 void SearchController::doSearch(const QString& keyword) {
     if (!m_contentPanel) return;
-    m_contentPanel->search(keyword);
+
+    if (m_searchScope == SearchScope::Library) {
+        if (keyword.isEmpty()) {
+            m_contentPanel->refreshAll();
+        } else {
+            LibraryDao::initTable();
+            auto categories = LibraryDao::getAllCategories();
+            QStringList allLibraryPaths;
+            for (const auto& cat : categories) {
+                allLibraryPaths.append(cat.associatedPaths);
+            }
+            allLibraryPaths.removeDuplicates();
+
+            m_contentPanel->loadPaths(allLibraryPaths);
+            m_contentPanel->search(keyword);
+        }
+    } else {
+        m_contentPanel->search(keyword);
+    }
+
     if (!keyword.isEmpty()) {
         SearchHistoryService::instance().appendSearch("global", keyword);
-        m_searchHistoryPanel->setHistory(SearchHistoryService::instance().getHistory("global"));
+        if (m_searchHistoryPanel) {
+            m_searchHistoryPanel->setHistory(SearchHistoryService::instance().getHistory("global"));
+        }
     }
-    m_searchHistoryPanel->hide();
+    if (m_searchHistoryPanel) {
+        m_searchHistoryPanel->hide();
+    }
     emit searchExecuted();
 }
 
