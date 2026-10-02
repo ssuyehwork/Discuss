@@ -163,6 +163,7 @@ public:
     void toggleFolderSectionCollapse();
     void selectAndScrollToPath(const QString& path);
     void selectAndScrollToItem(const QString& path);
+    void selectAndEditPath(const QString& path);
     QString getAdjacentFilePath(const QString& currentPath, int delta);
 
     bool eventFilter(QObject* obj, QEvent* event) override;

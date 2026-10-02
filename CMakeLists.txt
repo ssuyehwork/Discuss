@@ -69,6 +69,8 @@ set(SOURCES
     src/core/ItemRecord.h
     src/core/DiskScanService.cpp
     src/core/DiskScanService.h
+    src/core/FileCreationService.cpp
+    src/core/FileCreationService.h
     src/core/FileFilterService.cpp
     src/core/FileFilterService.h
     src/core/VolumeOnlineManager.cpp

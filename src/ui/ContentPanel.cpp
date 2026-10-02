@@ -786,6 +786,48 @@ void ContentPanel::refreshVisibleThumbnails() {
     }
 }
 
+void ContentPanel::selectAndEditPath(const QString& path) {
+    if (path.isEmpty()) return;
+
+    bool isDir = QFileInfo(path).isDir();
+    QAbstractItemView* view = nullptr;
+    QSortFilterProxyModel* proxy = nullptr;
+
+    if (m_currentViewMode == ColumnView) {
+        if (m_columnView && m_columnView->activePane()) {
+            if (isDir) {
+                view = m_columnView->activePane()->folderListView();
+            } else {
+                view = m_columnView->activePane()->listView();
+            }
+            if (view) proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
+        }
+    } else if (m_currentViewMode == ListView) {
+        view = isDir ? static_cast<QAbstractItemView*>(m_folderTreeView) : static_cast<QAbstractItemView*>(m_treeView);
+        proxy = isDir ? m_folderProxyModel : m_fileProxyModel;
+    } else { // GridView / JustifiedViewMode
+        view = isDir ? static_cast<QAbstractItemView*>(m_folderGridView) : static_cast<QAbstractItemView*>(m_gridView);
+        proxy = isDir ? m_gridFolderProxyModel : m_gridFileProxyModel;
+    }
+
+    if (!proxy || !view) return;
+
+    for (int i = 0; i < proxy->rowCount(); ++i) {
+        QModelIndex proxyIdx = proxy->index(i, 0);
+        QString idxPath = proxyIdx.data(PathRole).toString();
+        if (QString::compare(QDir::cleanPath(idxPath), QDir::cleanPath(path), Qt::CaseInsensitive) == 0) {
+            view->setFocus();
+            view->scrollTo(proxyIdx);
+            view->setCurrentIndex(proxyIdx);
+            if (view->selectionModel()) {
+                view->selectionModel()->select(proxyIdx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+            }
+            view->edit(proxyIdx);
+            break;
+        }
+    }
+}
+
 void ContentPanel::selectAndScrollToPath(const QString& path) { selectAndScrollToItem(path); }
 void ContentPanel::selectAndScrollToItem(const QString& path) {
     if (m_currentViewMode == ColumnView) {

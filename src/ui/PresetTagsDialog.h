@@ -41,6 +41,7 @@ private:
     bool m_isLibrary = false;
     QString m_categoryName;
     QStringList m_presetTags;
+    QStringList m_initialPresetTags;
 
     QLineEdit* m_folderNameEdit = nullptr;
     QFrame* m_tagContainer = nullptr;

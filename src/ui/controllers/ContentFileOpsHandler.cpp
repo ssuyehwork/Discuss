@@ -1,5 +1,6 @@
 #include "ContentFileOpsHandler.h"
 #include "../ContentPanel.h"
+#include "../../core/FileCreationService.h"
 #include "../ColumnViewWidget.h"
 #include "../ToolTipOverlay.h"
 #include "../BatchRenameDialog.h"
@@ -27,42 +28,7 @@ ContentFileOpsHandler::ContentFileOpsHandler(ContentPanel* panel)
     : QObject(panel), m_panel(panel) {}
 
 void ContentFileOpsHandler::createNewItem(const QString& type) {
-    if (!m_panel) return;
-    QString currentPath = m_panel->activePath();
-    if (currentPath.isEmpty() || currentPath == "computer://") return;
-
-    QString baseName = (type == "folder") ? "新建文件夹" : "未命名";
-    QString ext = (type == "md") ? ".md" : ((type == "txt") ? ".txt" : "");
-    QString finalName = baseName + ext;
-    QString fullPath = QDir(currentPath).filePath(finalName);
-    int counter = 1;
-
-    while (QFileInfo::exists(fullPath)) {
-        finalName = baseName + QString(" (%1)").arg(counter++) + ext;
-        fullPath = QDir(currentPath).filePath(finalName);
-    }
-
-    QPointer<ContentPanel> weakPanel(m_panel);
-    (void)QtConcurrent::run([weakPanel, currentPath, finalName, fullPath, type]() {
-        bool success = false;
-        if (type == "folder") {
-            success = QDir(currentPath).mkdir(finalName);
-        } else {
-            QFile f(fullPath);
-            if (f.open(QIODevice::WriteOnly)) {
-                f.close();
-                success = true;
-            }
-        }
-
-        if (!success) return;
-
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, finalName]() {
-            if (!weakPanel) return;
-            weakPanel->setPendingSelectName(finalName, true);
-            weakPanel->refreshAll();
-        });
-    });
+    FileCreationService::instance().createNewItem(m_panel, type);
 }
 
 void ContentFileOpsHandler::performBatchRename() {
