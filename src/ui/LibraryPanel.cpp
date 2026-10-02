@@ -66,6 +66,17 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     painter->restore();
 }
 
+void LibraryItemDelegate::updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const {
+    Q_UNUSED(index);
+    if (!editor) return;
+
+    QRect textRect = option.rect;
+    textRect.setLeft(option.rect.left() + 33);
+    textRect.setRight(option.rect.right() - 3);
+
+    editor->setGeometry(textRect);
+}
+
 LibraryPanel::LibraryPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("LibraryContainer");
     setAttribute(Qt::WA_StyledBackground, true);
@@ -87,7 +98,7 @@ void LibraryPanel::initUi() {
         m_treeView->header()->setStretchLastSection(true);
         m_treeView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     }
-    m_treeView->setIndentation(15);
+    m_treeView->setIndentation(0);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setDragEnabled(true);
