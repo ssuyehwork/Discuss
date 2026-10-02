@@ -686,16 +686,28 @@ void ContentPanel::search(const QString& query) {
 }
 
 void ContentPanel::refreshAll() {
+    if (m_isLoading) return;
+
     if (m_currentViewMode == ColumnView) {
         if (m_columnView) m_columnView->refreshAllColumns();
         return;
     }
+
     if (m_currentCategoryType == "trash") {
         loadCategory("trash");
         return;
     }
-    if (!m_currentPath.isEmpty() && m_currentPath != "computer://") loadDirectory(m_currentPath, m_isRecursive);
-    else loadDirectory("computer://");
+
+    if (m_currentCategoryType == "library") {
+        loadPaths(m_lastLoadedLibraryPaths);
+        return;
+    }
+
+    if (!m_currentPath.isEmpty() && m_currentPath != "computer://" && !m_currentPath.startsWith("library://")) {
+        loadDirectory(m_currentPath, m_isRecursive);
+    } else if (m_currentPath == "computer://") {
+        loadDirectory("computer://");
+    }
 }
 
 void ContentPanel::updateItemMetadata(const QString& path) {

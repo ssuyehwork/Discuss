@@ -12,6 +12,9 @@ namespace QuarkMeta {
 class SidebarContainerWidget : public QFrame {
     Q_OBJECT
 
+signals:
+    void sidebarTabChanged(int index);
+
 public:
     explicit SidebarContainerWidget(QWidget* parent = nullptr);
     ~SidebarContainerWidget() override = default;

@@ -114,34 +114,18 @@ void LibraryPanel::initUi() {
 
     connect(m_model, &QStandardItemModel::itemChanged, this, [this](QStandardItem* item) {
         if (!item || m_isLoading) return;
-        bool isPathItem = item->data(Qt::UserRole + 4).toBool();
-        if (!isPathItem) {
-            int nodeId = item->data(Qt::UserRole + 1).toInt();
-            if (nodeId > 0) {
-                QString name = item->text();
-                QString iconKey = item->data(Qt::UserRole + 2).toString();
-                QString colorHex = item->data(Qt::UserRole + 3).toString();
-                LibraryDao::updateCategoryNode(nodeId, name, iconKey, colorHex);
-            }
+        int nodeId = item->data(Qt::UserRole + 1).toInt();
+        if (nodeId > 0) {
+            QString name = item->text();
+            QString iconKey = item->data(Qt::UserRole + 2).toString();
+            QString colorHex = item->data(Qt::UserRole + 3).toString();
+            LibraryDao::updateCategoryNode(nodeId, name, iconKey, colorHex);
         }
     });
 }
 
 void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
     if (!index.isValid()) return;
-    bool isPathItem = index.data(Qt::UserRole + 4).toBool();
-
-    if (isPathItem) {
-        QString path = index.data(Qt::UserRole + 5).toString();
-        if (!path.isEmpty()) {
-            QFileInfo fi(path);
-            if (!fi.isDir()) {
-                emit requestLocateFile(path);
-            }
-        }
-        return;
-    }
-
     int nodeId = index.data(Qt::UserRole + 1).toInt();
     if (nodeId > 0) {
         QStringList paths = LibraryService::instance().getCategoryPaths(nodeId);
@@ -160,20 +144,6 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
         connect(newCatAct, &QAction::triggered, this, [this]() {
             createAndEditCategory(0);
         });
-        menu.exec(m_treeView->viewport()->mapToGlobal(pos));
-        return;
-    }
-
-    bool isPathItem = index.data(Qt::UserRole + 4).toBool();
-    if (isPathItem) {
-        int catId = index.data(Qt::UserRole + 6).toInt();
-        QString boundPath = index.data(Qt::UserRole + 5).toString();
-
-        QAction* removePathAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "从分类中移除此路径");
-        connect(removePathAct, &QAction::triggered, this, [catId, boundPath]() {
-            LibraryService::instance().removePathsFromCategory(catId, {boundPath});
-        });
-
         menu.exec(m_treeView->viewport()->mapToGlobal(pos));
         return;
     }
@@ -296,10 +266,6 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QModelIndex& target) {
     if (!target.isValid() || paths.isEmpty()) return;
     int nodeId = target.data(Qt::UserRole + 1).toInt();
-    bool isPathItem = target.data(Qt::UserRole + 4).toBool();
-    if (isPathItem) {
-        nodeId = target.data(Qt::UserRole + 6).toInt();
-    }
 
     if (nodeId > 0) {
         LibraryService::instance().addPathsToCategory(nodeId, paths);
@@ -344,18 +310,6 @@ void LibraryPanel::loadLibrary() {
         item->setData(rec.id, Qt::UserRole + 1);
         item->setData(rec.iconKey, Qt::UserRole + 2);
         item->setData(rec.colorHex, Qt::UserRole + 3);
-        item->setData(false, Qt::UserRole + 4); // false = Category node
-
-        // 挂载绑定的物理路径作为子项 Tree Items
-        for (const QString& boundPath : rec.associatedPaths) {
-            QFileInfo fi(boundPath);
-            QIcon pathIcon = fi.isDir() ? UiHelper::getIcon("folder_filled", QColor("#378ADD"), 16) : ShellIconManager::getFileIcon(boundPath);
-            QStandardItem* pathItem = new QStandardItem(pathIcon, fi.fileName().isEmpty() ? boundPath : fi.fileName());
-            pathItem->setData(true, Qt::UserRole + 4); // true = Path node
-            pathItem->setData(boundPath, Qt::UserRole + 5);
-            pathItem->setData(rec.id, Qt::UserRole + 6);
-            item->appendRow(pathItem);
-        }
 
         itemMap.insert(rec.id, item);
     }

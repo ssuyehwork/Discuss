@@ -39,7 +39,7 @@ SearchController::SearchController(QWidget* parent)
     m_btnSearch = new QPushButton(m_searchContainer);
     m_btnSearch->setObjectName("BtnSearchAddress");
     m_btnSearch->setFixedSize(30, 30);
-    m_btnSearch->setIcon(UiHelper::getIcon("seach-3", QColor("#CCCCCC"), 16));
+    m_btnSearch->setIcon(UiHelper::getIcon("seach-7", QColor("#CCCCCC"), 16));
     m_btnSearch->setIconSize(QSize(16, 16));
     m_btnSearch->setCursor(Qt::ArrowCursor);
     m_btnSearch->setProperty("tooltipText", "搜索");
@@ -124,9 +124,9 @@ bool SearchController::eventFilter(QObject* watched, QEvent* event) {
 
     if (watched == m_btnSearch) {
         if (event->type() == QEvent::Enter) {
-            m_btnSearch->setIcon(UiHelper::getIcon("seach-3", Qt::white, 16));
+            m_btnSearch->setIcon(UiHelper::getIcon("seach-7", Qt::white, 16));
         } else if (event->type() == QEvent::Leave) {
-            m_btnSearch->setIcon(UiHelper::getIcon("seach-3", QColor("#CCCCCC"), 16));
+            m_btnSearch->setIcon(UiHelper::getIcon("seach-7", QColor("#CCCCCC"), 16));
         }
     }
 
