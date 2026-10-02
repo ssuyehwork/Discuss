@@ -281,32 +281,19 @@ QLabel#BreadcrumbSep {
 }
 
 QWidget#SearchContainer {
-    background: #1E1E1E;
-    border: 1px solid #333333;
-    border-radius: 6px;
-}
-QWidget#SearchContainer[focused='true'] {
-    border: 1px solid #3498db;
+    background: transparent;
 }
 QLineEdit#SearchEdit {
-    background: transparent;
-    border: none;
+    background-color: #1E1E1E;
+    border: 1px solid #333333;
+    border-radius: 6px;
     color: #EEEEEE;
-    padding-left: 6px;
+    padding-left: 4px;
+    padding-right: 24px;
     font-size: 12px;
 }
-QPushButton#BtnSearchAddress {
-    background: transparent;
-    border: none;
-    border-right: 1px solid #333333;
-    border-top-left-radius: 6px;
-    border-bottom-left-radius: 6px;
-}
-QPushButton#BtnSearchAddress:hover {
-    background-color: #3E3E42;
-}
-QPushButton#BtnSearchAddress:pressed {
-    background-color: #4E4E52;
+QLineEdit#SearchEdit:focus {
+    border-color: #378ADD;
 }
 QLineEdit#SearchEdit QToolButton {
     border: none;
@@ -1324,13 +1311,6 @@ QPushButton#NavTrashBtn:pressed {
     background-color: #4E4E52;
 }
 
-QLabel#FavoritePanelTitleLabel {
-    color: #888888;
-    font-size: 13px;
-    font-weight: bold;
-    background: transparent;
-    border: none;
-}
 QPushButton#FavPickerIconBtn {
     background-color: transparent;
     border: 1px solid transparent;
@@ -1989,4 +1969,29 @@ QListView#ColumnViewPaneListView::item:selected, QListView#ColumnViewFolderList:
     background: #378ADD;
     color: #FFFFFF;
     outline: none;
+}
+
+/* Sidebar Container & Dual TabBar Styles */
+QTabBar#SidebarTabBar {
+    background: transparent;
+    border: none;
+}
+
+QTabBar#SidebarTabBar::tab {
+    background: transparent;
+    color: #888888;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: bold;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+
+QTabBar#SidebarTabBar::tab:selected {
+    color: #FFFFFF;
+    border-bottom: 2px solid #378ADD;
+}
+
+QTabBar#SidebarTabBar::tab:hover:!selected {
+    color: #CCCCCC;
 }

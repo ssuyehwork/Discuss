@@ -1,5 +1,6 @@
 #include "PanelLayoutManager.h"
 #include "NavPanel.h"
+#include "SidebarContainerWidget.h"
 #include "FavoritePanel.h"
 #include "ContentPanel.h"
 #include "MetaPanel.h"
@@ -18,7 +19,7 @@ namespace QuarkMeta {
 PanelLayoutManager::PanelLayoutManager(QMainWindow* mainWindow,
                                        QSplitter* mainSplitter,
                                        NavPanel* navPanel,
-                                       FavoritePanel* favoritePanel,
+                                       SidebarContainerWidget* sidebarContainer,
                                        ContentPanel* contentPanel,
                                        MetaPanel* metaPanel,
                                        FilterPanel* filterPanel,
@@ -27,7 +28,7 @@ PanelLayoutManager::PanelLayoutManager(QMainWindow* mainWindow,
       m_mainWindow(mainWindow),
       m_mainSplitter(mainSplitter),
       m_navPanel(navPanel),
-      m_favoritePanel(favoritePanel),
+      m_sidebarContainer(sidebarContainer),
       m_contentPanel(contentPanel),
       m_metaPanel(metaPanel),
       m_filterPanel(filterPanel) {
@@ -62,7 +63,7 @@ void PanelLayoutManager::initLayout() {
 
     if (isImmersive) {
         if (m_navPanel) m_navPanel->setVisible(false);
-        if (m_favoritePanel) m_favoritePanel->setVisible(false);
+        if (m_sidebarContainer) m_sidebarContainer->setVisible(false);
         if (m_metaPanel) m_metaPanel->setVisible(false);
         if (m_filterPanel) m_filterPanel->setVisible(false);
         emit panelVisibilityChanged("nav", false);
@@ -79,7 +80,7 @@ void PanelLayoutManager::initLayout() {
                  << "meta=" << metaVis << "filter=" << filterVis;
 
         if (m_navPanel) m_navPanel->setVisible(navVis);
-        if (m_favoritePanel) m_favoritePanel->setVisible(favVis);
+        if (m_sidebarContainer) m_sidebarContainer->setVisible(favVis);
         if (m_metaPanel) m_metaPanel->setVisible(metaVis);
         if (m_filterPanel) m_filterPanel->setVisible(filterVis);
 
@@ -99,7 +100,7 @@ void PanelLayoutManager::resetSplitterLayout() {
     if (!m_mainSplitter) return;
 
     if (m_navPanel) m_navPanel->show();
-    if (m_favoritePanel) m_favoritePanel->show();
+    if (m_sidebarContainer) m_sidebarContainer->show();
     if (m_contentPanel) m_contentPanel->show();
     if (m_metaPanel) m_metaPanel->show();
     if (m_filterPanel) m_filterPanel->show();
@@ -125,7 +126,7 @@ void PanelLayoutManager::resetSplitterLayout() {
 
 void PanelLayoutManager::setPanelVisible(const QString& panelId, bool visible) {
     if (panelId == "nav" && m_navPanel) m_navPanel->setVisible(visible);
-    else if (panelId == "favorite" && m_favoritePanel) m_favoritePanel->setVisible(visible);
+    else if (panelId == "favorite" && m_sidebarContainer) m_sidebarContainer->setVisible(visible);
     else if (panelId == "content" && m_contentPanel) m_contentPanel->setVisible(true);
     else if (panelId == "meta" && m_metaPanel) m_metaPanel->setVisible(visible);
     else if (panelId == "filter" && m_filterPanel) m_filterPanel->setVisible(visible);
@@ -137,7 +138,7 @@ void PanelLayoutManager::setPanelVisible(const QString& panelId, bool visible) {
 
 bool PanelLayoutManager::isPanelVisible(const QString& panelId) const {
     if (panelId == "nav" && m_navPanel) return !m_navPanel->isHidden();
-    if (panelId == "favorite" && m_favoritePanel) return !m_favoritePanel->isHidden();
+    if (panelId == "favorite" && m_sidebarContainer) return !m_sidebarContainer->isHidden();
     if (panelId == "content" && m_contentPanel) return !m_contentPanel->isHidden();
     if (panelId == "meta" && m_metaPanel) return !m_metaPanel->isHidden();
     if (panelId == "filter" && m_filterPanel) return !m_filterPanel->isHidden();
@@ -174,7 +175,7 @@ void PanelLayoutManager::restorePreImmersiveState() {
     }
 
     if (m_navPanel) m_navPanel->setVisible(navVis);
-    if (m_favoritePanel) m_favoritePanel->setVisible(favVis);
+    if (m_sidebarContainer) m_sidebarContainer->setVisible(favVis);
     if (m_metaPanel) m_metaPanel->setVisible(metaVis);
     if (m_filterPanel) m_filterPanel->setVisible(filterVis);
 
@@ -196,7 +197,7 @@ void PanelLayoutManager::toggleImmersiveMode() {
     } else {
         savePreImmersiveState();
         if (m_navPanel) m_navPanel->setVisible(false);
-        if (m_favoritePanel) m_favoritePanel->setVisible(false);
+        if (m_sidebarContainer) m_sidebarContainer->setVisible(false);
         if (m_metaPanel) m_metaPanel->setVisible(false);
         if (m_filterPanel) m_filterPanel->setVisible(false);
 
@@ -226,7 +227,7 @@ void PanelLayoutManager::populatePanelMenu(QMenu* menu) {
     };
 
     addToggleAction("显示目录导航", "nav", m_navPanel);
-    addToggleAction("显示收藏夹", "favorite", m_favoritePanel);
+    addToggleAction("显示收藏夹", "favorite", m_sidebarContainer);
     addToggleAction("显示内容区", "content", m_contentPanel, false);
     addToggleAction("显示元数据栏", "meta", m_metaPanel);
     addToggleAction("显示筛选栏", "filter", m_filterPanel);
@@ -248,7 +249,7 @@ void PanelLayoutManager::updateDynamicMinimumSize() {
 
     int visibleCount = 0;
     if (m_navPanel && !m_navPanel->isHidden()) visibleCount++;
-    if (m_favoritePanel && !m_favoritePanel->isHidden()) visibleCount++;
+    if (m_sidebarContainer && !m_sidebarContainer->isHidden()) visibleCount++;
     if (m_contentPanel && !m_contentPanel->isHidden()) visibleCount++;
     if (m_metaPanel && !m_metaPanel->isHidden()) visibleCount++;
     if (m_filterPanel && !m_filterPanel->isHidden()) visibleCount++;

@@ -12,7 +12,9 @@
 #include "PanelMediator.h"
 #include "SearchController.h"
 #include "NavPanel.h"
+#include "SidebarContainerWidget.h"
 #include "FavoritePanel.h"
+#include "LibraryPanel.h"
 #include "ContentPanel.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
@@ -158,13 +160,14 @@ QWidget* MainWindow::setupCentralPanels(QWidget* parentWidget) {
     m_mainSplitter->setChildrenCollapsible(false);
 
     m_navPanel      = new NavPanel(this);      m_navPanel->setObjectName("SidebarContainer");
-    m_favoritePanel = new FavoritePanel(this); m_favoritePanel->setObjectName("FavoriteContainer");
+    m_sidebarContainer = new SidebarContainerWidget(this); m_sidebarContainer->setObjectName("FavoriteContainer");
+    m_favoritePanel = m_sidebarContainer->favoritePanel();
     m_contentPanel  = new ContentPanel(this);  m_contentPanel->setObjectName("EditorContainer");
     m_metaPanel     = new MetaPanel(this);     m_metaPanel->setObjectName("MetadataContainer");
     m_filterPanel   = new FilterPanel(this);   m_filterPanel->setObjectName("FilterContainer");
 
     m_mainSplitter->addWidget(m_navPanel);
-    m_mainSplitter->addWidget(m_favoritePanel);
+    m_mainSplitter->addWidget(m_sidebarContainer);
     m_mainSplitter->addWidget(m_contentPanel);
     m_mainSplitter->addWidget(m_metaPanel);
     m_mainSplitter->addWidget(m_filterPanel);
@@ -175,7 +178,7 @@ QWidget* MainWindow::setupCentralPanels(QWidget* parentWidget) {
 }
 
 void MainWindow::setupControllersAndMediators() {
-    m_panelLayoutManager = new PanelLayoutManager(this, m_mainSplitter, m_navPanel, m_favoritePanel, m_contentPanel, m_metaPanel, m_filterPanel, this);
+    m_panelLayoutManager = new PanelLayoutManager(this, m_mainSplitter, m_navPanel, m_sidebarContainer, m_contentPanel, m_metaPanel, m_filterPanel, this);
     m_panelLayoutManager->initLayout();
 
     m_shortcutController = new AppShortcutController(this, m_searchController, this);
@@ -191,6 +194,7 @@ void MainWindow::setupControllersAndMediators() {
     PanelMediatorComponents components;
     components.navPanel = m_navPanel;
     components.favoritePanel = m_favoritePanel;
+    components.libraryPanel = m_sidebarContainer ? m_sidebarContainer->libraryPanel() : nullptr;
     components.contentPanel = m_contentPanel;
     components.metaPanel = m_metaPanel;
     components.filterPanel = m_filterPanel;

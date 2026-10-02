@@ -11,6 +11,7 @@ namespace QuarkMeta {
 
 class NavPanel;
 class FavoritePanel;
+class SidebarContainerWidget;
 class ContentPanel;
 class MetaPanel;
 class FilterPanel;
@@ -22,7 +23,7 @@ public:
     explicit PanelLayoutManager(QMainWindow* mainWindow,
                                 QSplitter* mainSplitter,
                                 NavPanel* navPanel,
-                                FavoritePanel* favoritePanel,
+                        SidebarContainerWidget* sidebarContainer,
                                 ContentPanel* contentPanel,
                                 MetaPanel* metaPanel,
                                 FilterPanel* filterPanel,
@@ -53,7 +54,7 @@ private:
     QPointer<QSplitter> m_mainSplitter;
 
     QPointer<NavPanel> m_navPanel;
-    QPointer<FavoritePanel> m_favoritePanel;
+    QPointer<SidebarContainerWidget> m_sidebarContainer;
     QPointer<ContentPanel> m_contentPanel;
     QPointer<MetaPanel> m_metaPanel;
     QPointer<FilterPanel> m_filterPanel;

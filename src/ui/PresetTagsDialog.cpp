@@ -2,6 +2,7 @@
 #include "UiHelper.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
+#include "../meta/LibraryDao.h"
 #include "../meta/MetadataManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -15,8 +16,8 @@
 
 namespace QuarkMeta {
 
-PresetTagsDialog::PresetTagsDialog(int categoryId, QWidget* parent)
-    : FramelessDialog("设置自动标签", parent), m_categoryId(categoryId) {
+PresetTagsDialog::PresetTagsDialog(int categoryId, QWidget* parent, bool isLibrary)
+    : FramelessDialog("设置自动标签", parent), m_categoryId(categoryId), m_isLibrary(isLibrary) {
     setFixedWidth(420);
     setWindowFlags(windowFlags() & ~Qt::WindowMaximizeButtonHint);
 
@@ -96,12 +97,23 @@ void PresetTagsDialog::initUi() {
 }
 
 void PresetTagsDialog::loadTags() {
-    auto list = FavoriteDao::getAllFavorites();
-    for (const auto& rec : list) {
-        if (rec.id == m_categoryId) {
-            m_categoryName = rec.name;
-            m_presetTags = rec.presetTags;
-            break;
+    if (m_isLibrary) {
+        auto list = LibraryDao::getAllCategories();
+        for (const auto& rec : list) {
+            if (rec.id == m_categoryId) {
+                m_categoryName = rec.name;
+                m_presetTags = rec.presetTags;
+                break;
+            }
+        }
+    } else {
+        auto list = FavoriteDao::getAllFavorites();
+        for (const auto& rec : list) {
+            if (rec.id == m_categoryId) {
+                m_categoryName = rec.name;
+                m_presetTags = rec.presetTags;
+                break;
+            }
         }
     }
     m_folderNameEdit->setText(m_categoryName);
@@ -179,7 +191,11 @@ void PresetTagsDialog::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void PresetTagsDialog::onSaveClicked() {
-    FavoriteDao::updatePresetTags(m_categoryId, m_presetTags);
+    if (m_isLibrary) {
+        LibraryDao::updatePresetTags(m_categoryId, m_presetTags);
+    } else {
+        FavoriteDao::updatePresetTags(m_categoryId, m_presetTags);
+    }
     accept();
 }
 

@@ -119,24 +119,6 @@ void FavoritePanel::setFocusHighlight(bool visible) {
 }
 
 void FavoritePanel::initUi() {
-    QWidget* header = new QWidget(this);
-    header->setObjectName("ContainerHeader");
-    header->setFixedHeight(32);
-// ContainerHeader in style.qss
-    QHBoxLayout* headerLayout = new QHBoxLayout(header);
-    headerLayout->setContentsMargins(15, 0, 5, 0);
-    headerLayout->setSpacing(5);
-
-    QLabel* iconLabel = new QLabel(header);
-    iconLabel->setPixmap(UiHelper::getIcon("star_filled", QColor("#888888"), 18).pixmap(18, 18));
-    headerLayout->addWidget(iconLabel);
-
-    QLabel* titleLabel = new QLabel("收藏夹", header);
-    titleLabel->setObjectName("FavoritePanelTitleLabel");
-    headerLayout->addWidget(titleLabel);
-    headerLayout->addStretch();
-    m_mainLayout->addWidget(header);
-
     m_favoriteView = new DropTreeView(this);
     m_favoriteView->setObjectName("FavoriteTreeView");
     m_favoriteView->setHeaderHidden(true);
@@ -227,12 +209,6 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     UiHelper::applyMenuStyle(&menu);
 
     if (!index.isValid()) {
-        // 空白处右键：新建文件夹 (直接进入行内编辑)
-        QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建文件夹");
-        connect(newCatAct, &QAction::triggered, this, [this]() {
-            createAndEditCategory(0);
-        });
-
         auto* sortMenu = menu.addMenu(UiHelper::getIcon("list_ul", QColor("#AAAAAA")), "排列");
         UiHelper::applyMenuStyle(sortMenu);
         QAction* sortAsc = sortMenu->addAction("按名称 (A→Z)");
@@ -256,28 +232,6 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QFileInfo fi(path);
     bool isFolder = isVirtual ? true : fi.isDir();
     bool isItemRemoved = false;
-
-    // 1. 新建文件夹与新建子文件夹（直接创建并唤起行内编辑）
-    QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建文件夹");
-    connect(newCatAct, &QAction::triggered, this, [this]() {
-        createAndEditCategory(0);
-    });
-
-    if (isFolder) {
-        QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子文件夹");
-        connect(newSubCatAct, &QAction::triggered, this, [this, nodeId]() {
-            createAndEditCategory(nodeId);
-        });
-    }
-
-    menu.addSeparator();
-
-    // 2. 设置预设标签（自动标签对话框 PresetTagsDialog）
-    QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6")), "设置预设标签");
-    connect(presetTagAct, &QAction::triggered, this, [this, nodeId]() {
-        PresetTagsDialog dlg(nodeId, this);
-        dlg.exec();
-    });
 
     // 缓存图标按钮指针，以便在换色时动态刷新子菜单图标色彩
     QList<QPair<QPushButton*, QString>> iconButtons;
@@ -450,8 +404,27 @@ void FavoritePanel::onPathsDroppedToFavorite(const QStringList& paths, const QMo
             parentId = target.data(Qt::UserRole + 8).toInt();
         }
     }
+
+    int addedCount = 0;
+    int duplicateCount = 0;
     for (const QString& path : paths) {
-        addFavoriteItem(path, parentId);
+        if (FavoriteService::instance().isFavorite(path)) {
+            duplicateCount++;
+        } else {
+            addFavoriteItem(path, parentId);
+            addedCount++;
+        }
+    }
+
+    if (addedCount > 0) {
+        saveFavorites();
+        if (duplicateCount == 0) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+        } else {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已添加 %1 个项目 (其余 %2 个已在收藏夹中)").arg(addedCount).arg(duplicateCount), 2000, QColor("#3498db"));
+        }
+    } else if (duplicateCount > 0) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "该文件夹已在收藏夹中，请勿重复添加", 2000, QColor("#e81123"));
     }
 }
 
