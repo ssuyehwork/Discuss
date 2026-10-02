@@ -43,7 +43,13 @@ void SidebarContainerWidget::initUi() {
 
     m_mainLayout->addWidget(m_stackedWidget, 1);
 
-    connect(m_tabBar, &QTabBar::currentChanged, m_stackedWidget, &QStackedWidget::setCurrentIndex);
+    connect(m_tabBar, &QTabBar::currentChanged, this, [this](int index) {
+        m_stackedWidget->setCurrentIndex(index);
+        if (index == 1 && m_libraryPanel) {
+            m_libraryPanel->loadLibrary();
+        }
+        emit sidebarTabChanged(index);
+    });
 }
 
 } // namespace QuarkMeta

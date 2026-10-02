@@ -112,6 +112,12 @@ void ContentDataLoader::loadCategory(const QString& categoryType) {
 
 void ContentDataLoader::loadPaths(const QStringList& paths, int reqId) {
     if (!m_panel) return;
+
+    // 死穴 1 解法：如果当前处于分栏视图，自动自愈切换为网格视图以保证路径列表正常呈现
+    if (m_panel->currentViewMode() == ContentPanel::ColumnView) {
+        m_panel->setViewMode(ContentPanel::GridView);
+    }
+
     m_panel->restoreActiveView();
     m_panel->ensureSourceModelIsDiskModel();
 
@@ -131,6 +137,8 @@ void ContentDataLoader::loadPaths(const QStringList& paths, int reqId) {
     }
     if (m_panel->getCurrentCategoryType().isEmpty()) {
         m_panel->setCurrentCategoryType("path_list");
+    } else if (m_panel->getCurrentCategoryType() == "library") {
+        m_panel->setLastLoadedLibraryPaths(paths);
     }
     m_panel->updateLayersButtonState();
 

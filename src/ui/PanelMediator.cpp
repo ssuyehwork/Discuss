@@ -244,6 +244,8 @@ void PanelMediator::setupConnections() {
             connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel](const QStringList& paths) {
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
+                    target->setCurrentCategoryType("library");
+                    target->setLastLoadedLibraryPaths(paths);
                     target->loadPaths(paths);
                 }
             });

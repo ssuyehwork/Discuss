@@ -171,6 +171,8 @@ public:
     ItemModelBase* model() const { return m_model; }
     QSortFilterProxyModel* getProxyModel() const { return getActiveProxyModel(); }
     QSortFilterProxyModel* getActiveProxyModel() const;
+    QStringList lastLoadedLibraryPaths() const { return m_lastLoadedLibraryPaths; }
+    void setLastLoadedLibraryPaths(const QStringList& paths) { m_lastLoadedLibraryPaths = paths; }
     QStringList getSelectedPaths() const;
     QList<int> getSelectedTrashIds() const;
     QModelIndexList getSelectedIndexes() const;
@@ -235,6 +237,7 @@ private:
     void emitSelectionChangedSignal();
 
     // 单一事实来源配置与状态 (FilterState)
+    QStringList m_lastLoadedLibraryPaths;
     FilterState m_currentFilter;
     int m_zoomLevel = 96;
     QString m_currentPath;
