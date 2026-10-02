@@ -14,7 +14,7 @@ SearchController::SearchController(QWidget* parent)
     : QObject(parent) {
     m_searchContainer = new QWidget(parent);
     m_searchContainer->setObjectName("SearchContainer");
-    m_searchContainer->setFixedSize(230, 32);
+    m_searchContainer->setFixedSize(230, 30);
 
     QHBoxLayout* searchLayout = new QHBoxLayout(m_searchContainer);
     searchLayout->setContentsMargins(0, 0, 0, 0);
@@ -23,6 +23,7 @@ SearchController::SearchController(QWidget* parent)
     m_searchEdit = new QLineEdit(m_searchContainer);
     m_searchEdit->setPlaceholderText("搜索...");
     m_searchEdit->setObjectName("SearchEdit");
+    m_searchEdit->setFixedHeight(30);
 
     QAction* clearAction = m_searchEdit->addAction(UiHelper::getIcon("close", TextMuted), QLineEdit::TrailingPosition);
     clearAction->setVisible(false);
