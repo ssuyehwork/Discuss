@@ -5,12 +5,12 @@
 #include "UiHelper.h"
 #include "../core/NavigationService.h"
 
-#include <QLineEdit>
 #include <QResizeEvent>
 
 namespace QuarkMeta {
 
 constexpr int kLayoutEdgeMargin = 5;
+constexpr int kSearchBoxWidth = 230;
 
 NavBarWidget::NavBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
     : QWidget(parent) {
@@ -71,6 +71,7 @@ void NavBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_row1Layout->addWidget(m_addressBar, 1);
 
     if (m_searchController && m_searchController->toolbarWidget()) {
+        m_searchController->toolbarWidget()->setFixedWidth(kSearchBoxWidth);
         m_row1Layout->addWidget(m_searchController->toolbarWidget());
     }
 
@@ -81,7 +82,6 @@ void NavBarWidget::updateResponsiveLayout() {
     if (!m_searchController || !m_searchController->toolbarWidget()) return;
 
     QWidget* searchW = m_searchController->toolbarWidget();
-    QLineEdit* searchEdit = m_searchController->searchEdit();
 
     bool needTwoRow = (width() < 650);
 
@@ -89,19 +89,15 @@ void NavBarWidget::updateResponsiveLayout() {
         m_isTwoRowMode = true;
         m_row1Layout->removeWidget(searchW);
         m_mainLayout->addWidget(searchW);
-        if (searchEdit) {
-            searchEdit->setFixedWidth(QWIDGETSIZE_MAX);
-            searchEdit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        }
+        searchW->setMinimumWidth(0);
+        searchW->setMaximumWidth(QWIDGETSIZE_MAX);
         searchW->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         setFixedHeight(78);
     } else if (!needTwoRow && m_isTwoRowMode) {
         m_isTwoRowMode = false;
         m_mainLayout->removeWidget(searchW);
         m_row1Layout->addWidget(searchW);
-        if (searchEdit) {
-            searchEdit->setFixedSize(230, 32);
-        }
+        searchW->setFixedWidth(kSearchBoxWidth);
         searchW->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
         setFixedHeight(42);
     }
