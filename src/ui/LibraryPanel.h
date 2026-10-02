@@ -15,6 +15,7 @@ public:
     explicit LibraryItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+    void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 };
 
 class LibraryPanel : public QFrame {
