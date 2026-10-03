@@ -20,6 +20,9 @@ public:
 
     int totalHeight() const { return m_totalHeight; }
 
+    void setFoldersCollapsed(bool collapsed);
+    bool isFoldersCollapsed() const { return m_foldersCollapsed; }
+
     // 🚀【物理契约】：彻底切断 QAbstractItemView 对父容器的尺寸顶推
     QSize minimumSizeHint() const override { return QSize(50, 50); }
     QSize sizeHint() const override { return QSize(230, m_totalHeight); }
@@ -84,6 +87,7 @@ private:
     LayoutMode m_layoutMode = JustifiedMode;
     QTimer* m_layoutTimer = nullptr;
     bool m_layoutDirty = false;
+    bool m_foldersCollapsed = false;
 };
 
 } // namespace QuarkMeta

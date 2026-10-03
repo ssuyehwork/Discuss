@@ -1,4 +1,4 @@
-﻿# SectionedScrollCanvas-5 Implementation Plan
+# SectionedScrollCanvas-5 Implementation Plan
 
 ## 1. Overview
 This plan implements the single unified view architecture for List View and Grid View inside `SectionedScrollCanvas`, discarding `DualSectionPanel` completely.

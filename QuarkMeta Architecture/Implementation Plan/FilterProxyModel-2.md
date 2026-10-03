@@ -1,4 +1,4 @@
-﻿# FilterProxyModel-2 Implementation Plan
+# FilterProxyModel-2 Implementation Plan
 
 ## 1. Overview
 In accordance with the Single View Architecture (abandoning dual sub-views for folders and files), each view mode (List, Grid, Column) will use a **single unified FilterProxyModel** instead of maintaining two separate proxy instances (`folderProxyModel` and `fileProxyModel`).

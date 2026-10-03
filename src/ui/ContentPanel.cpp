@@ -191,44 +191,22 @@ void ContentPanel::initUi() {
         }
         restoreSelections();
     });
-    m_gridFolderProxyModel = new FilterProxyModel(this);
-    m_gridFolderProxyModel->setSourceModel(m_model);
-    m_gridFolderProxyModel->setFilterKeyColumn(0);
-    m_gridFolderProxyModel->setDynamicSortFilter(true);
-    FilterState gridFolderFilter = m_currentFilter;
-    gridFolderFilter.showFolders = true;
-    gridFolderFilter.showFiles = false;
-    m_gridFolderProxyModel->currentFilter = gridFolderFilter;
-
     m_gridFileProxyModel = new FilterProxyModel(this);
     m_gridFileProxyModel->setSourceModel(m_model);
     m_gridFileProxyModel->setFilterKeyColumn(0);
     m_gridFileProxyModel->setDynamicSortFilter(true);
-    FilterState gridFileFilter = m_currentFilter;
-    gridFileFilter.showFolders = false;
-    gridFileFilter.showFiles = true;
-    m_gridFileProxyModel->currentFilter = gridFileFilter;
-
-    m_folderProxyModel = new FilterProxyModel(this);
-    m_folderProxyModel->setSourceModel(m_model);
-    m_folderProxyModel->setFilterKeyColumn(0);
-    m_folderProxyModel->setDynamicSortFilter(true);
-    FilterState folderOnlyFilter = m_currentFilter;
-    folderOnlyFilter.showFolders = true;
-    folderOnlyFilter.showFiles = false;
-    m_folderProxyModel->currentFilter = folderOnlyFilter;
+    m_gridFileProxyModel->currentFilter = m_currentFilter;
+    m_gridFolderProxyModel = m_gridFileProxyModel;
 
     m_fileProxyModel = new FilterProxyModel(this);
     m_fileProxyModel->setSourceModel(m_model);
     m_fileProxyModel->setFilterKeyColumn(0);
     m_fileProxyModel->setDynamicSortFilter(true);
-    FilterState fileOnlyFilter = m_currentFilter;
-    fileOnlyFilter.showFolders = false;
-    fileOnlyFilter.showFiles = true;
-    m_fileProxyModel->currentFilter = fileOnlyFilter;
+    m_fileProxyModel->currentFilter = m_currentFilter;
+    m_folderProxyModel = m_fileProxyModel;
 
-    m_gridCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::Grid, m_gridFolderProxyModel, m_gridFileProxyModel, this, this);
-    m_listCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::List, m_folderProxyModel, m_fileProxyModel, this, this);
+    m_gridCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::Grid, m_gridFileProxyModel, this, this);
+    m_listCanvas = new SectionedScrollCanvas(SectionedScrollCanvas::CanvasType::List, m_fileProxyModel, this, this);
 
     m_folderGridView = qobject_cast<JustifiedView*>(m_gridCanvas->folderView());
     m_gridView = m_gridCanvas->fileView();
@@ -646,32 +624,12 @@ void ContentPanel::applyFilters(const FilterState& state) {
 }
 
 void ContentPanel::applyFilters() {
-    if (m_gridFolderProxyModel) {
-        FilterState s = m_currentFilter;
-        s.showFolders = true;
-        s.showFiles = false;
-        m_gridFolderProxyModel->currentFilter = s;
-        m_gridFolderProxyModel->updateFilter();
-    }
     if (m_gridFileProxyModel) {
-        FilterState s = m_currentFilter;
-        s.showFolders = false;
-        s.showFiles = true;
-        m_gridFileProxyModel->currentFilter = s;
+        m_gridFileProxyModel->currentFilter = m_currentFilter;
         m_gridFileProxyModel->updateFilter();
     }
-    if (m_folderProxyModel) {
-        FilterState s = m_currentFilter;
-        s.showFolders = true;
-        s.showFiles = false;
-        m_folderProxyModel->currentFilter = s;
-        m_folderProxyModel->updateFilter();
-    }
-    if (m_fileProxyModel) {
-        FilterState s = m_currentFilter;
-        s.showFolders = false;
-        s.showFiles = true;
-        m_fileProxyModel->currentFilter = s;
+    if (m_fileProxyModel && m_fileProxyModel != m_gridFileProxyModel) {
+        m_fileProxyModel->currentFilter = m_currentFilter;
         m_fileProxyModel->updateFilter();
     }
     if (m_columnView) {

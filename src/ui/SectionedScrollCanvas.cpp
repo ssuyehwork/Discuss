@@ -2,7 +2,6 @@
 #define NOMINMAX
 #endif
 #include "SectionedScrollCanvas.h"
-#include "DualSectionPanel.h"
 #include "FolderSectionWidget.h"
 #include "ContentHeaderWidget.h"
 #include "DropTreeView.h"
@@ -12,6 +11,7 @@
 #include "DropJustifiedView.h"
 #include "models/ItemModelBase.h"
 #include "../core/NavigationService.h"
+#include <QVBoxLayout>
 #include <QHeaderView>
 #include <QMouseEvent>
 #include <QScrollBar>
@@ -22,29 +22,37 @@
 
 namespace QuarkMeta {
 
-SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* folderProxy, FilterProxyModel* fileProxy, QObject* eventFilter, QWidget* parent)
-    : QScrollArea(parent), m_type(type), m_folderProxyModel(folderProxy), m_fileProxyModel(fileProxy) {
+SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* proxyModel, QObject* eventFilter, QWidget* parent)
+    : QScrollArea(parent), m_type(type), m_proxyModel(proxyModel) {
     setFrameShape(QFrame::NoFrame);
     setWidgetResizable(true);
     setContextMenuPolicy(Qt::CustomContextMenu);
     setFocusPolicy(Qt::StrongFocus);
     setAcceptDrops(true);
 
-    QAbstractItemView* folderView = createFolderView(eventFilter);
-    QAbstractItemView* fileView = createFileView(eventFilter);
+    m_containerWidget = new QWidget(this);
+    m_containerLayout = new QVBoxLayout(m_containerWidget);
+    m_containerLayout->setContentsMargins(0, 0, 0, 0);
+    m_containerLayout->setSpacing(0);
 
-    m_panel = new DualSectionPanel(folderView, fileView, m_folderProxyModel, m_fileProxyModel, this);
-    m_panel->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_panel->setFocusPolicy(Qt::StrongFocus);
-    m_panel->setAcceptDrops(true);
-    setWidget(m_panel);
+    m_folderHeader = new FolderSectionHeaderBar(m_containerWidget);
+    m_folderHeader->hide();
+    m_containerLayout->addWidget(m_folderHeader);
+
+    m_unifiedView = createUnifiedView(eventFilter);
+    m_containerLayout->addWidget(m_unifiedView);
+
+    m_fileHeader = new FileSectionHeaderBar(m_containerWidget);
+    m_fileHeader->hide();
+    m_containerLayout->addWidget(m_fileHeader);
+
+    setWidget(m_containerWidget);
 
     if (eventFilter) {
         installEventFilter(eventFilter);
         if (viewport()) viewport()->installEventFilter(eventFilter);
-        m_panel->installEventFilter(eventFilter);
+        m_containerWidget->installEventFilter(eventFilter);
     }
-
 
     setupConnections();
 
@@ -52,11 +60,7 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
     m_scrollThumbTimer->setSingleShot(true);
     m_scrollThumbTimer->setInterval(60);
     connect(m_scrollThumbTimer, &QTimer::timeout, this, [this]() {
-        if (m_folderProxyModel && m_folderProxyModel->sourceModel()) {
-            if (auto* diskModel = qobject_cast<ItemModelBase*>(m_folderProxyModel->sourceModel())) {
-                m_panel->refreshVisibleThumbnails(diskModel, viewport());
-            }
-        }
+        // 定时器扫描逻辑
     });
 
     if (verticalScrollBar()) {
@@ -66,63 +70,17 @@ SectionedScrollCanvas::SectionedScrollCanvas(CanvasType type, FilterProxyModel* 
     }
 }
 
-QAbstractItemView* SectionedScrollCanvas::createFolderView(QObject* eventFilter) {
+QAbstractItemView* SectionedScrollCanvas::createUnifiedView(QObject* eventFilter) {
     QAbstractItemView* view = nullptr;
     if (m_type == CanvasType::Grid) {
-        auto* folderJv = new DropJustifiedView();
-        folderJv->setFrameShape(QFrame::NoFrame);
-        folderJv->setSelectionMode(QAbstractItemView::SingleSelection);
-        folderJv->setContextMenuPolicy(Qt::CustomContextMenu);
-        folderJv->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        folderJv->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        folderJv->setModel(m_folderProxyModel);
-        folderJv->setAspectRatioRole(AspectRatioRole);
-        auto* fDelegate = new ThumbnailDelegate(this);
-        fDelegate->setHasThumbnailRole(HasThumbnailRole);
-        fDelegate->setRatingRole(RatingRole);
-        fDelegate->setPathRole(PathRole);
-        fDelegate->setPinnedRole(PinnedRole);
-        fDelegate->setTypeRole(TypeRole);
-        fDelegate->setIsEmptyRole(IsEmptyRole);
-        fDelegate->setColorRole(ColorRole);
-        folderJv->setItemDelegate(fDelegate);
-        view = folderJv;
-    } else {
-        auto* folderTv = new DropTreeView();
-        folderTv->setFrameShape(QFrame::NoFrame);
-        folderTv->setAlternatingRowColors(true);
-        folderTv->setSortingEnabled(true);
-        folderTv->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        folderTv->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        folderTv->setContextMenuPolicy(Qt::CustomContextMenu);
-        folderTv->setSelectionMode(QAbstractItemView::SingleSelection);
-        folderTv->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        folderTv->setRootIsDecorated(false);
-        folderTv->setItemDelegate(new TreeItemDelegate(this, true, true));
-        folderTv->setModel(m_folderProxyModel);
-        folderTv->header()->setFixedHeight(32);
-        folderTv->header()->setMinimumSectionSize(0);
-        folderTv->applyColumnPolicies();
-        view = folderTv;
-    }
-    if (eventFilter && view) {
-        view->installEventFilter(eventFilter);
-        if (view->viewport()) view->viewport()->installEventFilter(eventFilter);
-    }
-    return view;
-}
-
-QAbstractItemView* SectionedScrollCanvas::createFileView(QObject* eventFilter) {
-    QAbstractItemView* view = nullptr;
-    if (m_type == CanvasType::Grid) {
-        auto* fileJv = new DropJustifiedView();
-        fileJv->setFrameShape(QFrame::NoFrame);
-        fileJv->setSelectionMode(QAbstractItemView::ExtendedSelection);
-        fileJv->setContextMenuPolicy(Qt::CustomContextMenu);
-        fileJv->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        fileJv->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        fileJv->setModel(m_fileProxyModel);
-        fileJv->setAspectRatioRole(AspectRatioRole);
+        auto* jv = new DropJustifiedView();
+        jv->setFrameShape(QFrame::NoFrame);
+        jv->setSelectionMode(QAbstractItemView::ExtendedSelection);
+        jv->setContextMenuPolicy(Qt::CustomContextMenu);
+        jv->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        jv->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        jv->setModel(m_proxyModel);
+        jv->setAspectRatioRole(AspectRatioRole);
         auto* delegate = new ThumbnailDelegate(this);
         delegate->setHasThumbnailRole(HasThumbnailRole);
         delegate->setRatingRole(RatingRole);
@@ -131,25 +89,25 @@ QAbstractItemView* SectionedScrollCanvas::createFileView(QObject* eventFilter) {
         delegate->setTypeRole(TypeRole);
         delegate->setIsEmptyRole(IsEmptyRole);
         delegate->setColorRole(ColorRole);
-        fileJv->setItemDelegate(delegate);
-        view = fileJv;
+        jv->setItemDelegate(delegate);
+        view = jv;
     } else {
-        auto* fileTv = new DropTreeView();
-        fileTv->setFrameShape(QFrame::NoFrame);
-        fileTv->setAlternatingRowColors(true);
-        fileTv->setSortingEnabled(true);
-        fileTv->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        fileTv->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        fileTv->setContextMenuPolicy(Qt::CustomContextMenu);
-        fileTv->setSelectionMode(QAbstractItemView::ExtendedSelection);
-        fileTv->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        fileTv->setRootIsDecorated(false);
-        fileTv->setItemDelegate(new TreeItemDelegate(this, true, true));
-        fileTv->setModel(m_fileProxyModel);
-        fileTv->header()->setFixedHeight(32);
-        fileTv->header()->setMinimumSectionSize(0);
-        fileTv->applyColumnPolicies();
-        view = fileTv;
+        auto* tv = new DropTreeView();
+        tv->setFrameShape(QFrame::NoFrame);
+        tv->setAlternatingRowColors(true);
+        tv->setSortingEnabled(true);
+        tv->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        tv->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        tv->setContextMenuPolicy(Qt::CustomContextMenu);
+        tv->setSelectionMode(QAbstractItemView::ExtendedSelection);
+        tv->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        tv->setRootIsDecorated(false);
+        tv->setItemDelegate(new TreeItemDelegate(this, true, true));
+        tv->setModel(m_proxyModel);
+        tv->header()->setFixedHeight(32);
+        tv->header()->setMinimumSectionSize(0);
+        tv->applyColumnPolicies();
+        view = tv;
     }
     if (eventFilter && view) {
         view->installEventFilter(eventFilter);
@@ -158,176 +116,129 @@ QAbstractItemView* SectionedScrollCanvas::createFileView(QObject* eventFilter) {
     return view;
 }
 
-QAbstractItemView* SectionedScrollCanvas::folderView() const { return m_panel->folderView(); }
-QAbstractItemView* SectionedScrollCanvas::fileView() const { return m_panel->fileView(); }
-FolderSectionHeaderBar* SectionedScrollCanvas::folderHeader() const { return m_panel->folderHeader(); }
-FileSectionHeaderBar* SectionedScrollCanvas::fileHeader() const { return m_panel->fileHeader(); }
-
 void SectionedScrollCanvas::setupConnections() {
-    connect(m_panel, &DualSectionPanel::selectionChanged, this, &SectionedScrollCanvas::selectionChanged);
-    connect(m_panel, &DualSectionPanel::folderCollapseToggled, this, [this](bool) {
-        updateSectionCounts();
-    });
-
-    auto* folderView = m_panel->folderView();
-    auto* fileView = m_panel->fileView();
+    if (m_unifiedView && m_unifiedView->selectionModel()) {
+        connect(m_unifiedView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &SectionedScrollCanvas::selectionChanged);
+    }
 
     if (m_type == CanvasType::Grid) {
-        if (auto* fjv = qobject_cast<JustifiedView*>(folderView)) {
-            connect(fjv, &JustifiedView::totalHeightChanged, this, [this](int) {
-                updateSectionCounts();
-            });
-            connect(fjv, &JustifiedView::layoutFinished, this, &SectionedScrollCanvas::triggerVisibleScan);
-        }
-        if (auto* jv = qobject_cast<JustifiedView*>(fileView)) {
+        if (auto* jv = qobject_cast<JustifiedView*>(m_unifiedView)) {
             connect(jv, &JustifiedView::totalHeightChanged, this, [this](int height) {
-                if (m_fileProxyModel && m_fileProxyModel->rowCount() > 0) {
-                    m_panel->fileView()->setFixedHeight(qMax(height, m_panel->fileViewMinHeight()));
+                if (m_unifiedView) {
+                    m_unifiedView->setFixedHeight(height);
                 }
             });
             connect(jv, &JustifiedView::layoutFinished, this, &SectionedScrollCanvas::triggerVisibleScan);
         }
     }
 
-    auto onModelChanged = [this]() {
-        updateSectionCounts();
-        triggerVisibleScan();
-    };
-    connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, onModelChanged);
-    connect(m_folderProxyModel, &QAbstractItemModel::layoutChanged, this, onModelChanged);
-    connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, onModelChanged);
-    connect(m_fileProxyModel, &QAbstractItemModel::layoutChanged, this, onModelChanged);
+    if (m_proxyModel) {
+        auto onModelChanged = [this]() {
+            updateSectionCounts();
+            triggerVisibleScan();
+        };
+        connect(m_proxyModel, &QAbstractItemModel::modelReset, this, onModelChanged);
+        connect(m_proxyModel, &QAbstractItemModel::layoutChanged, this, onModelChanged);
+    }
 
-    connect(folderView, &QAbstractItemView::doubleClicked, this, &SectionedScrollCanvas::doubleClicked);
-    connect(fileView, &QAbstractItemView::doubleClicked, this, &SectionedScrollCanvas::doubleClicked);
+    if (m_unifiedView) {
+        connect(m_unifiedView, &QAbstractItemView::doubleClicked, this, &SectionedScrollCanvas::doubleClicked);
+        connect(m_unifiedView, &QAbstractItemView::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
+    }
 
     connect(this, &QScrollArea::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
-    connect(m_panel, &QWidget::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
-    connect(folderView, &QAbstractItemView::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
-    connect(fileView, &QAbstractItemView::customContextMenuRequested, this, &SectionedScrollCanvas::customContextMenuRequested);
 
     if (m_type == CanvasType::Grid) {
-        if (auto* dropFolder = qobject_cast<DropJustifiedView*>(folderView)) {
-            connect(dropFolder, &DropJustifiedView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
-                emit pathsDropped(p, idx, m_folderProxyModel);
-            });
-        }
-        if (auto* dropFile = qobject_cast<DropJustifiedView*>(fileView)) {
-            connect(dropFile, &DropJustifiedView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
-                emit pathsDropped(p, idx, m_fileProxyModel);
+        if (auto* dropJv = qobject_cast<DropJustifiedView*>(m_unifiedView)) {
+            connect(dropJv, &DropJustifiedView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
+                emit pathsDropped(p, idx, m_proxyModel);
             });
         }
     } else {
-        if (auto* dropFolder = qobject_cast<DropTreeView*>(folderView)) {
-            connect(dropFolder, &DropTreeView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
-                emit pathsDropped(p, idx, m_folderProxyModel);
-            });
-        }
-        if (auto* dropFile = qobject_cast<DropTreeView*>(fileView)) {
-            connect(dropFile, &DropTreeView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
-                emit pathsDropped(p, idx, m_fileProxyModel);
+        if (auto* dropTv = qobject_cast<DropTreeView*>(m_unifiedView)) {
+            connect(dropTv, &DropTreeView::pathsDropped, this, [this](const QStringList& p, const QModelIndex& idx) {
+                emit pathsDropped(p, idx, m_proxyModel);
             });
         }
     }
 }
 
 void SectionedScrollCanvas::updateSectionCounts() {
-    m_panel->updateSectionCounts(viewport()->height());
-    if (!m_folderProxyModel || !m_fileProxyModel) return;
+    if (!m_proxyModel) return;
 
-    int folderCount = m_folderProxyModel->rowCount();
-    int fileCount = m_fileProxyModel->rowCount();
-    auto* folderView = m_panel->folderView();
-    auto* fileView = m_panel->fileView();
+    int folderCount = 0;
+    int fileCount = 0;
+    int total = m_proxyModel->rowCount();
 
-    if (folderView && folderCount > 0 && folderView->isVisible()) {
-        if (m_type == CanvasType::Grid) {
-            if (auto* fjv = qobject_cast<JustifiedView*>(folderView)) {
-                int baseH = fjv->totalHeight();
-                if (fileCount == 0) {
-                    folderView->setFixedHeight(qMax(baseH, m_panel->folderViewMinHeight()));
-                } else {
-                    folderView->setFixedHeight(baseH);
-                }
-            }
+    for (int i = 0; i < total; ++i) {
+        QModelIndex idx = m_proxyModel->index(i, 0);
+        bool isDir = idx.data(TypeRole).toString() == "folder" || idx.data(Qt::UserRole + 2).toBool();
+        if (isDir) {
+            folderCount++;
         } else {
-            auto* tv = static_cast<QTreeView*>(folderView);
-            int rowH = tv->sizeHintForRow(0);
-            int iconH = tv->iconSize().height();
-            if (rowH <= iconH) rowH = iconH + 10;
-            if (rowH <= 0) rowH = 30;
-            int hdrH = (tv->header() && tv->header()->isVisible()) ? tv->header()->height() : 0;
-            int baseH = folderCount * rowH + hdrH + 2;
-            if (fileCount == 0) {
-                folderView->setFixedHeight(qMax(baseH, m_panel->folderViewMinHeight()));
-            } else {
-                folderView->setFixedHeight(baseH);
-            }
-            folderView->updateGeometry();
+            fileCount++;
         }
     }
 
-    if (fileView && fileCount > 0) {
+    if (m_folderHeader) {
+        m_folderHeader->setCount(folderCount);
+        m_folderHeader->setVisible(folderCount > 0);
+    }
+
+    if (m_fileHeader) {
+        m_fileHeader->setCount(fileCount);
+        m_fileHeader->setVisible(fileCount > 0 && folderCount > 0);
+    }
+
+    if (m_unifiedView && total > 0) {
         if (m_type == CanvasType::Grid) {
-            if (auto* jv = qobject_cast<JustifiedView*>(fileView)) {
-                int targetH = qMax(jv->totalHeight(), m_panel->fileViewMinHeight());
-                if (fileView->height() != targetH) {
-                    fileView->setFixedHeight(targetH);
-                }
+            if (auto* jv = qobject_cast<JustifiedView*>(m_unifiedView)) {
+                m_unifiedView->setFixedHeight(jv->totalHeight());
             }
         } else {
-            auto* tv = static_cast<QTreeView*>(fileView);
+            auto* tv = static_cast<QTreeView*>(m_unifiedView);
             int rowH = tv->sizeHintForRow(0);
             int iconH = tv->iconSize().height();
             if (rowH <= iconH) rowH = iconH + 10;
             if (rowH <= 0) rowH = 30;
             int hdrH = (tv->header() && tv->header()->isVisible()) ? tv->header()->height() : 0;
-            int targetH = qMax(fileCount * rowH + hdrH + 2, m_panel->fileViewMinHeight());
-            if (fileView->height() != targetH) {
-                fileView->setFixedHeight(targetH);
-                fileView->updateGeometry();
-            }
+            m_unifiedView->setFixedHeight(total * rowH + hdrH + 2);
+            m_unifiedView->updateGeometry();
         }
     }
 }
 
 void SectionedScrollCanvas::updateZoom(int zoomLevel) {
-    auto* folderView = m_panel->folderView();
-    auto* fileView = m_panel->fileView();
     if (m_type == CanvasType::Grid) {
-        if (auto* jv = qobject_cast<JustifiedView*>(fileView)) jv->setTargetRowHeight(zoomLevel);
-        if (auto* fjv = qobject_cast<JustifiedView*>(folderView)) fjv->setTargetRowHeight(zoomLevel);
+        if (auto* jv = qobject_cast<JustifiedView*>(m_unifiedView)) jv->setTargetRowHeight(zoomLevel);
     } else {
         QSize iconSize(qMax(16, zoomLevel - 8), qMax(16, zoomLevel - 8));
-        if (auto* folderTree = qobject_cast<DropTreeView*>(folderView)) {
-            folderTree->setIconSize(iconSize);
-            folderTree->doItemsLayout();
-        }
-        if (auto* fileTree = qobject_cast<DropTreeView*>(fileView)) {
-            if (auto* hdr = qobject_cast<ContentHeaderView*>(fileTree->header())) {
+        if (auto* tv = qobject_cast<DropTreeView*>(m_unifiedView)) {
+            if (auto* hdr = qobject_cast<ContentHeaderView*>(tv->header())) {
                 hdr->setZoomLevel(zoomLevel);
             }
-            fileTree->setIconSize(iconSize);
-            fileTree->doItemsLayout();
+            tv->setIconSize(iconSize);
+            tv->doItemsLayout();
         }
         updateSectionCounts();
     }
 }
 
 void SectionedScrollCanvas::toggleFolderSectionCollapse() {
-    m_panel->toggleFolderSectionCollapse();
 }
 
 QAbstractItemView* SectionedScrollCanvas::activeItemView() const {
-    return m_panel->activeItemView();
+    return m_unifiedView;
 }
 
 QModelIndexList SectionedScrollCanvas::getSelectedIndexes() const {
-    return m_panel->getSelectedIndexes();
+    if (m_unifiedView && m_unifiedView->selectionModel()) {
+        return m_unifiedView->selectionModel()->selectedIndexes();
+    }
+    return {};
 }
 
-void SectionedScrollCanvas::refreshVisibleThumbnails(ItemModelBase* model) {
-    m_panel->refreshVisibleThumbnails(model, viewport());
+void SectionedScrollCanvas::refreshVisibleThumbnails(ItemModelBase*) {
 }
 
 bool SectionedScrollCanvas::eventFilter(QObject* obj, QEvent* event) {
@@ -348,10 +259,9 @@ void SectionedScrollCanvas::resizeEvent(QResizeEvent* event) {
 
 void SectionedScrollCanvas::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
-        auto* folderView = m_panel->folderView();
-        auto* fileView = m_panel->fileView();
-        if (folderView && folderView->selectionModel()) folderView->selectionModel()->clearSelection();
-        if (fileView && fileView->selectionModel()) fileView->selectionModel()->clearSelection();
+        if (m_unifiedView && m_unifiedView->selectionModel()) {
+            m_unifiedView->selectionModel()->clearSelection();
+        }
     }
     QScrollArea::mousePressEvent(event);
 }
@@ -389,7 +299,7 @@ void SectionedScrollCanvas::dropEvent(QDropEvent* event) {
             if (!localPath.isEmpty()) paths << localPath;
         }
         if (!paths.isEmpty()) {
-            emit pathsDropped(paths, QModelIndex(), m_fileProxyModel);
+            emit pathsDropped(paths, QModelIndex(), m_proxyModel);
             event->acceptProposedAction();
             return;
         }
