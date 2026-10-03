@@ -21,6 +21,18 @@
 namespace QuarkMeta {
 
 class SearchHistoryPanel;
+class ThumbnailStatusGroup;
+class DuplicateStatusGroup;
+class LinkStatusGroup;
+class NoteStatusGroup;
+class TagStatusGroup;
+class AspectRatioGroup;
+class FileSizeGroup;
+class ColorLabelGroup;
+class RatingGroup;
+class FileTypeGroup;
+class CreateDateGroup;
+class ModifyDateGroup;
 
 class FilterPanel : public QFrame {
     Q_OBJECT
@@ -67,7 +79,11 @@ private:
     QWidget*   buildGroup(const QString& title, QVBoxLayout*& outContentLayout,
                           QHBoxLayout** outHdrLayout = nullptr);
     QCheckBox* addFilterRow(QVBoxLayout* layout, const QString& label,
-                            int count, const QColor& dotColor = Qt::transparent);
+                            int count, const QColor& dotColor = Qt::transparent,
+                            const QString& rowKey = QString());
+
+    bool isRowKeyChecked(const QString& key, const FilterState& st) const;
+    int countForRowKey(const QString& key) const;
 
     static QMap<QString, QColor> s_colorMap();
 

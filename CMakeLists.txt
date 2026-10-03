@@ -178,6 +178,30 @@ set(SOURCES
     src/ui/ScanStatsEngine.cpp
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
+    src/ui/ThumbnailStatusGroup.cpp
+    src/ui/ThumbnailStatusGroup.h
+    src/ui/DuplicateStatusGroup.cpp
+    src/ui/DuplicateStatusGroup.h
+    src/ui/LinkStatusGroup.cpp
+    src/ui/LinkStatusGroup.h
+    src/ui/NoteStatusGroup.cpp
+    src/ui/NoteStatusGroup.h
+    src/ui/TagStatusGroup.cpp
+    src/ui/TagStatusGroup.h
+    src/ui/AspectRatioGroup.cpp
+    src/ui/AspectRatioGroup.h
+    src/ui/FileSizeGroup.cpp
+    src/ui/FileSizeGroup.h
+    src/ui/ColorLabelGroup.cpp
+    src/ui/ColorLabelGroup.h
+    src/ui/RatingGroup.cpp
+    src/ui/RatingGroup.h
+    src/ui/FileTypeGroup.cpp
+    src/ui/FileTypeGroup.h
+    src/ui/CreateDateGroup.cpp
+    src/ui/CreateDateGroup.h
+    src/ui/ModifyDateGroup.cpp
+    src/ui/ModifyDateGroup.h
     src/ui/FramelessDialogBase.h
     src/ui/FramelessDialog.cpp
     src/ui/FramelessDialog.h
