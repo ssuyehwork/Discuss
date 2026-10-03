@@ -101,6 +101,18 @@ QVariant DiskItemModel::headerData(int section, Qt::Orientation orientation, int
     return QAbstractTableModel::headerData(section, orientation, role);
 }
 
+void DiskItemModel::addItemRecord(const ItemRecord& record) {
+    appendRecord(record);
+}
+
+void DiskItemModel::appendRecord(const ItemRecord& record) {
+    int newRow = static_cast<int>(m_allRecords.size());
+    beginInsertRows(QModelIndex(), newRow, newRow);
+    m_allRecords.push_back(record);
+    m_pathToIndex[record.path] = newRow;
+    endInsertRows();
+}
+
 void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
     if (m_thumbBatchTimer) m_thumbBatchTimer->stop();
     m_pendingThumbRows.clear();
