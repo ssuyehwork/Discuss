@@ -1,12 +1,7 @@
 #include "QuickLookWindow.h"
 #include "UiHelper.h"
-#include "ToolTipOverlay.h"
 #include "ShellIconManager.h"
 #include "FramelessWindowHelper.h"
-#include "../util/ColorPaletteEngine.h"
-#include "QuickLookMinimap.h"
-#include "../util/DiskMediaExtractor.h"
-#include "StyleLibrary.h"
 #include "ImageDecoderFacade.h"
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -17,9 +12,6 @@
 #include <QDir>
 #include <QDesktopServices>
 #include <QContextMenuEvent>
-#include "../util/ShellHelper.h"
-#include "FavoritePanel.h"
-#include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
 #include "controllers/ContextMenuFactory.h"
 #include "dialogs/TextExtensionDialog.h"

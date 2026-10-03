@@ -31,7 +31,6 @@ signals:
     void colorRequested(const QString& color);
     void prevRequested();
     void nextRequested();
-    void favoriteRequested(const QString& path);
     void deleteRequested(const QString& path);
 
 protected:
