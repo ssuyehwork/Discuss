@@ -2,7 +2,6 @@
 
 #include <QWidget>
 #include <QScrollArea>
-#include <QVBoxLayout>
 #include <QSet>
 #include <QPointer>
 #include "models/DiskItemModel.h"
@@ -13,7 +12,7 @@
 namespace QuarkMeta {
 
 class ContentPanel;
-class FileSectionHeaderBar;
+class DualSectionPanel;
 
 class ColumnViewPane : public QWidget {
     Q_OBJECT
@@ -38,14 +37,13 @@ public:
     void setFilterState(const FilterState& state);
     void applySort(int sortType, Qt::SortOrder sortOrder);
 
-    DropListView* listView() const { return m_unifiedListView; }
-    DropListView* folderListView() const { return m_unifiedListView; }
+    DropListView* listView() const;
+    DropListView* folderListView() const;
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
-    FilterProxyModel* folderProxyModel() const { return m_proxyModel; }
-    FilterProxyModel* fileProxyModel() const { return m_proxyModel; }
+    FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
+    FilterProxyModel* fileProxyModel() const { return m_fileProxyModel; }
     DiskItemModel* model() const { return m_model; }
-    FolderSectionHeaderBar* folderHeader() const { return m_folderHeader; }
-    FileSectionHeaderBar* fileHeader() const { return m_fileHeader; }
+    FolderSectionHeaderBar* folderHeader() const;
 
     void refreshVisibleThumbnails();
 
@@ -77,13 +75,13 @@ private:
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
+    FilterProxyModel* m_folderProxyModel = nullptr;
+    FilterProxyModel* m_fileProxyModel = nullptr;
     bool m_isActive = false;
     QScrollArea* m_paneScrollArea = nullptr;
-    QWidget* m_containerWidget = nullptr;
-    QVBoxLayout* m_containerLayout = nullptr;
-    FolderSectionHeaderBar* m_folderHeader = nullptr;
-    FileSectionHeaderBar* m_fileHeader = nullptr;
-    DropListView* m_unifiedListView = nullptr;
+    DualSectionPanel* m_panel = nullptr;
+    DropListView* m_folderListView = nullptr;
+    DropListView* m_listView = nullptr;
 };
 
 } // namespace QuarkMeta

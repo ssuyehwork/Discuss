@@ -2,7 +2,6 @@
 
 #include <QScrollArea>
 #include <QAbstractItemView>
-#include <QVBoxLayout>
 #include <QSet>
 #include <QTimer>
 #include "models/FilterProxyModel.h"
@@ -12,9 +11,10 @@ namespace QuarkMeta {
 
 class FolderSectionHeaderBar;
 class FileSectionHeaderBar;
+class DualSectionPanel;
 
 /**
- * @brief 单视图组装滚动画布：List/Grid 专属外壳，直接持有单 unifiedView 与标头
+ * @brief 双分区协同撑开滚动画布：List/Grid 专属外壳，内部持有唯一的 DualSectionPanel 核心逻辑
  */
 class SectionedScrollCanvas : public QScrollArea {
     Q_OBJECT
@@ -25,20 +25,16 @@ public:
         List
     };
 
-    explicit SectionedScrollCanvas(CanvasType type, FilterProxyModel* proxyModel, QObject* eventFilter = nullptr, QWidget* parent = nullptr);
+    explicit SectionedScrollCanvas(CanvasType type, FilterProxyModel* folderProxy, FilterProxyModel* fileProxy, QObject* eventFilter = nullptr, QWidget* parent = nullptr);
     ~SectionedScrollCanvas() override = default;
 
     CanvasType canvasType() const { return m_type; }
-    QAbstractItemView* unifiedView() const { return m_unifiedView; }
-
-    // 契约锁保护：为现有调用方保留向下兼容接口
-    QAbstractItemView* folderView() const { return m_unifiedView; }
-    QAbstractItemView* fileView() const { return m_unifiedView; }
-    FolderSectionHeaderBar* folderHeader() const { return m_folderHeader; }
-    FileSectionHeaderBar* fileHeader() const { return m_fileHeader; }
-    FilterProxyModel* proxyModel() const { return m_proxyModel; }
-    FilterProxyModel* folderProxyModel() const { return m_proxyModel; }
-    FilterProxyModel* fileProxyModel() const { return m_proxyModel; }
+    QAbstractItemView* folderView() const;
+    QAbstractItemView* fileView() const;
+    FolderSectionHeaderBar* folderHeader() const;
+    FileSectionHeaderBar* fileHeader() const;
+    FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
+    FilterProxyModel* fileProxyModel() const { return m_fileProxyModel; }
 
     void updateSectionCounts();
     void updateZoom(int zoomLevel);
@@ -65,16 +61,14 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
-    QAbstractItemView* createUnifiedView(QObject* eventFilter);
+    QAbstractItemView* createFolderView(QObject* eventFilter);
+    QAbstractItemView* createFileView(QObject* eventFilter);
     void setupConnections();
 
     CanvasType m_type;
-    QWidget* m_containerWidget = nullptr;
-    QVBoxLayout* m_containerLayout = nullptr;
-    FolderSectionHeaderBar* m_folderHeader = nullptr;
-    FileSectionHeaderBar* m_fileHeader = nullptr;
-    QAbstractItemView* m_unifiedView = nullptr;
-    FilterProxyModel* m_proxyModel = nullptr;
+    DualSectionPanel* m_panel = nullptr;
+    FilterProxyModel* m_folderProxyModel = nullptr;
+    FilterProxyModel* m_fileProxyModel = nullptr;
     QTimer* m_scrollThumbTimer = nullptr;
 };
 

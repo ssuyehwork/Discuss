@@ -46,13 +46,6 @@ JustifiedView::LayoutMode JustifiedView::layoutMode() const {
     return m_layoutMode;
 }
 
-void JustifiedView::setFoldersCollapsed(bool collapsed) {
-    if (m_foldersCollapsed != collapsed) {
-        m_foldersCollapsed = collapsed;
-        scheduleLayout();
-    }
-}
-
 void JustifiedView::setTargetRowHeight(int h) {
     if (m_targetRowHeight != h) {
         m_targetRowHeight = h;
@@ -401,65 +394,163 @@ void JustifiedView::updateGeometries() {
 }
 
 void JustifiedView::doLayout() {
-    m_geometries.clear();
-    m_totalHeight = 0;
-
-    if (!model() || model()->rowCount() == 0) {
-        emit totalHeightChanged(m_totalHeight);
-        emit layoutFinished();
+    m_layoutDirty = false;
+    if (!model()) return;
+    int count = model()->rowCount();
+    
+    if (count == 0) {
+        m_geometries.clear();
+        m_totalHeight = 0;
+        updateGeometries();
+        viewport()->update();
         return;
     }
 
-    int viewWidth = viewport()->width();
-    if (viewWidth <= 0) viewWidth = width();
-    if (viewWidth <= 0) viewWidth = 800;
+    // 🚀【精确数学对齐】：边距微调为 6px，可用宽度精准扣减 16px 滚动条
+    const int margin = 6;
+    const int spacing = 5;
+    
+    int scrollBarW = (verticalScrollBar() && verticalScrollBar()->isVisible()) ? verticalScrollBar()->width() : 0;
+    int containerWidth = width() - scrollBarW - (margin * 2);
+    if (containerWidth <= 0) return;
 
-    int spacing = 6;
-    int currentY = spacing;
-    int count = model()->rowCount();
+    m_geometries.resize(count);
+    int currentY = margin; 
 
-    // 扫描分类：提取文件夹与文件索引
-    std::vector<int> folderIndices;
-    std::vector<int> fileIndices;
+    const int cardPadding = CardLayoutEngine::totalPaddingHorizontal();
+    const int extraHeight = CardLayoutEngine::extraHeight();
 
-    for (int i = 0; i < count; ++i) {
-        QModelIndex idx = model()->index(i, 0);
-        bool isDir = idx.data(TypeRole).toString() == "folder" || idx.data(Qt::UserRole + 2).toBool();
-        if (isDir) {
-            folderIndices.push_back(i);
-        } else {
-            fileIndices.push_back(i);
+    if (m_layoutMode == GridMode) {
+        int itemWidth = m_targetRowHeight + cardPadding;
+        int itemHeight = m_targetRowHeight + extraHeight;
+
+        int maxNumInRow = (containerWidth + spacing) / (itemWidth + spacing);
+        if (maxNumInRow <= 0) maxNumInRow = 1;
+
+        int standardSpacing = spacing;
+        if (maxNumInRow > 1) {
+            standardSpacing = (containerWidth - (maxNumInRow * itemWidth)) / (maxNumInRow - 1);
+        }
+
+        int i = 0;
+        while (i < count) {
+            int rowStart = i;
+            bool isCurrentDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
+
+            int numInRow = 0;
+            while (i < count && numInRow < maxNumInRow) {
+                bool isDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
+                if (isDir != isCurrentDir) {
+                    break;
+                }
+                numInRow++;
+                i++;
+            }
+
+            int currentX = margin;
+            if (maxNumInRow == 1) {
+                currentX = margin + std::max(0, (containerWidth - itemWidth) / 2);
+            }
+
+            for (int j = 0; j < numInRow; ++j) {
+                int itemIdx = rowStart + j;
+                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, itemHeight), itemIdx };
+                currentX += itemWidth + standardSpacing;
+            }
+            currentY += itemHeight;
+            if (i < count) {
+                currentY += spacing;
+            }
+        }
+    } else {
+        int i = 0;
+        while (i < count) {
+            int rowStart = i;
+
+            double rowAspectRatioSum = 0;
+            std::vector<double> aspectRatios;
+
+            bool forceBreak = false;
+            while (i < count) {
+                QModelIndex idx = model()->index(i, 0);
+                double ar = model()->data(idx, m_aspectRatioRole).toDouble();
+                if (ar <= 0) ar = 1.0;
+                
+                QString type = model()->data(idx, TypeRole).toString();
+                bool isCurrentDir = (type == "folder");
+
+                if (i > rowStart) {
+                    QModelIndex prevIdx = model()->index(i - 1, 0);
+                    QString prevType = model()->data(prevIdx, TypeRole).toString();
+                    bool isPrevDir = (prevType == "folder");
+                    
+                    if (isCurrentDir != isPrevDir) {
+                        forceBreak = true;
+                        break;
+                    }
+                }
+
+                aspectRatios.push_back(ar);
+                rowAspectRatioSum += ar;
+                
+                int numInRow = (int)aspectRatios.size();
+                double estimatedWidth = (rowAspectRatioSum * m_targetRowHeight) + (cardPadding * numInRow) + (spacing * (numInRow - 1));
+                if (estimatedWidth > containerWidth) {
+                    if (numInRow > 1) {
+                        aspectRatios.pop_back();
+                        rowAspectRatioSum -= ar;
+                    } else {
+                        i++;
+                    }
+                    break; 
+                }
+                i++;
+            }
+
+            int rowEnd = i;
+            int numInRow = rowEnd - rowStart;
+            if (numInRow <= 0) break;
+
+            int actualHeight = m_targetRowHeight;
+            bool isLastRow = (i == count);
+            bool rowIsJustified = !isLastRow && !forceBreak; 
+
+            int availableImageWidth = containerWidth - (spacing * (numInRow - 1)) - (cardPadding * numInRow);
+
+            if (rowIsJustified) {
+                actualHeight = qRound(availableImageWidth / rowAspectRatioSum);
+                actualHeight = std::max(actualHeight, (int)(m_targetRowHeight * 0.75));
+                actualHeight = std::min(actualHeight, (int)(m_targetRowHeight * 1.5));
+                rowIsJustified = true; 
+            }
+
+            int currentX = margin;
+
+            for (int j = 0; j < numInRow; ++j) {
+                int itemIdx = rowStart + j;
+                int itemWidth;
+
+                if (j == numInRow - 1 && rowIsJustified) {
+                    itemWidth = (containerWidth + margin) - currentX;
+                } else {
+                    itemWidth = qRound(aspectRatios[j] * actualHeight) + cardPadding;
+                }
+
+                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, actualHeight + extraHeight), itemIdx };
+                currentX += itemWidth + spacing; 
+            }
+            currentY += actualHeight + extraHeight + spacing;
         }
     }
 
-    // 1. 文件夹区块布局
-    if (!folderIndices.empty() && !m_foldersCollapsed) {
-        for (int idx : folderIndices) {
-            QModelIndex modelIdx = model()->index(idx, 0);
-            double aspect = modelIdx.data(m_aspectRatioRole).toDouble();
-            if (aspect <= 0.1) aspect = 1.0;
-            int itemW = static_cast<int>(m_targetRowHeight * aspect);
+    int oldHeight = m_totalHeight;
+    m_totalHeight = currentY;
+    updateGeometries();
+    viewport()->update();
 
-            m_geometries.push_back({ QRect(spacing, currentY, itemW, m_targetRowHeight), idx, false, "", false });
-            currentY += m_targetRowHeight + spacing;
-        }
+    if (oldHeight != m_totalHeight) {
+        emit totalHeightChanged(m_totalHeight);
     }
-
-    // 2. 文件区块布局
-    if (!fileIndices.empty()) {
-        for (int idx : fileIndices) {
-            QModelIndex modelIdx = model()->index(idx, 0);
-            double aspect = modelIdx.data(m_aspectRatioRole).toDouble();
-            if (aspect <= 0.1) aspect = 1.0;
-            int itemW = static_cast<int>(m_targetRowHeight * aspect);
-
-            m_geometries.push_back({ QRect(spacing, currentY, itemW, m_targetRowHeight), idx, false, "", false });
-            currentY += m_targetRowHeight + spacing;
-        }
-    }
-
-    m_totalHeight = currentY + spacing;
-    emit totalHeightChanged(m_totalHeight);
     emit layoutFinished();
 }
 
