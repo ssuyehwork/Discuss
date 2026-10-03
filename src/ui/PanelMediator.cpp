@@ -601,20 +601,6 @@ void PanelMediator::setupConnections() {
         }
     });
 
-    connect(&QuickLookWindow::instance(), &QuickLookWindow::favoriteRequested, this, [favoritePanel](const QString& path) {
-        if (!path.isEmpty() && favoritePanel) {
-            if (favoritePanel->containsPath(path)) {
-                favoritePanel->removeFavoriteItem(path);
-                favoritePanel->saveFavorites();
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
-            } else {
-                favoritePanel->addFavoriteItem(path);
-                favoritePanel->saveFavorites();
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
-            }
-        }
-    });
-
     // 4. 统计与过滤联动 (动态支持多分栏焦点切换)
     if (filterPanel) {
         // 用于管理当前绑定面板的连接断开，防止后台窗格发送统计冲刷侧边栏
