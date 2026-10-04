@@ -122,8 +122,6 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     });
 
     m_zoomLevel = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
-    m_currentFilter.showFolders = AppConfig::instance().getValue("ContentPanel/ShowFolders", true).toBool();
-    m_currentFilter.showFiles = AppConfig::instance().getValue("ContentPanel/ShowFiles", true).toBool();
     m_currentFilter.showHidden = AppConfig::instance().getValue("ContentPanel/ShowHidden", false).toBool();
 
     connect(&TrashService::instance(), &TrashService::trashOperationCompleted, this, &ContentPanel::refreshAll);
@@ -176,8 +174,6 @@ void ContentPanel::initUi() {
     connect(m_headerWidget, &ContentHeaderWidget::filterStateChanged, this, [this](const FilterState& state) {
         m_currentFilter = state;
         AppConfig::instance().setValue("ContentPanel/ShowHidden", state.showHidden);
-        AppConfig::instance().setValue("ContentPanel/ShowFolders", state.showFolders);
-        AppConfig::instance().setValue("ContentPanel/ShowFiles", state.showFiles);
         applyFilters();
     });
 
@@ -275,9 +271,9 @@ void ContentPanel::initGridView() {
     connect(jv, &JustifiedView::layoutFinished, this, &ContentPanel::startVisibleTimer);
 
     if (m_sectionModel) {
-        connect(m_sectionModel, &QAbstractItemModel::modelReset, this, &ContentPanel::startVisibleTimer, Qt::UniqueConnection);
-        connect(m_sectionModel, &QAbstractItemModel::layoutChanged, this, &ContentPanel::startVisibleTimer, Qt::UniqueConnection);
-        connect(m_sectionModel, &QAbstractItemModel::rowsInserted, this, &ContentPanel::startVisibleTimer, Qt::UniqueConnection);
+        connect(m_sectionModel, &QAbstractItemModel::modelReset, this, &ContentPanel::startVisibleTimer);
+        connect(m_sectionModel, &QAbstractItemModel::layoutChanged, this, &ContentPanel::startVisibleTimer);
+        connect(m_sectionModel, &QAbstractItemModel::rowsInserted, this, &ContentPanel::startVisibleTimer);
     }
 }
 
@@ -337,12 +333,6 @@ void ContentPanel::initListView() {
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
-    if (event && event->type() == QEvent::Resize) {
-        if ((m_gridView && obj == m_gridView) || (m_treeView && obj == m_treeView)) {
-            startVisibleTimer();
-        }
-    }
-
     if (event && event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
@@ -703,13 +693,9 @@ void ContentPanel::updateGridSize() {
 
 void ContentPanel::applyFilters(const FilterState& state) {
     QString currentKw = m_currentFilter.keyword; // 1. 暂存当前搜索框中的活跃关键词
-    bool sf = m_currentFilter.showFolders;
-    bool sfi = m_currentFilter.showFiles;
     bool sh = m_currentFilter.showHidden;
     m_currentFilter = state;
     m_currentFilter.keyword = currentKw;          // 2. 锁定并恢复关键词，严禁被空状态冲刷
-    m_currentFilter.showFolders = sf;
-    m_currentFilter.showFiles = sfi;
     m_currentFilter.showHidden = sh;
     applyFilters();
 }

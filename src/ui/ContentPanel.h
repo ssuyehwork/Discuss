@@ -143,7 +143,6 @@ public:
     class ColumnViewWidget* columnView() const { return m_columnView; }
     DropTreeView* dropTreeView() const { return m_treeView; }
     DiskItemModel* diskModel() const { return m_diskModel; }
-    FilterProxyModel* filterProxyModel() const { return m_proxyModel; }
     ContentKeyHandler* keyHandler() const { return m_keyHandler; }
     ContentDataLoader* dataLoader() const { return m_dataLoader; }
     ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }

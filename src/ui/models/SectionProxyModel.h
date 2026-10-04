@@ -60,7 +60,8 @@ private slots:
 
 private:
     void rebuildMapping();
-    void updateCounts();
+    void rebuildReverseIndex();
+    void syncHeaders();
 
     QVector<MappingEntry> m_mapping;
     QVector<int> m_sourceToProxyMap;
@@ -69,6 +70,7 @@ private:
     bool m_folderCollapsed = false;
     int m_folderCount = 0;
     int m_fileCount = 0;
+    int m_fileSectionStartProxyRow = -1;
     QModelIndexList m_layoutChangeProxyIndexes;
     QModelIndexList m_layoutChangeSourceIndexes;
 };
