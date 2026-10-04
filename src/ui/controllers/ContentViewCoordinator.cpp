@@ -73,16 +73,6 @@ QModelIndex ContentViewCoordinator::toSourceIndex(const QModelIndex& idx, const 
     return QModelIndex();
 }
 
-QSortFilterProxyModel* ContentViewCoordinator::getActiveProxyModel() const {
-    if (!m_panel) return nullptr;
-
-    auto mode = m_panel->currentViewMode();
-    if (mode == ContentPanel::ColumnView && m_panel->columnView() && m_panel->columnView()->activePane()) {
-        return m_panel->columnView()->activePane()->proxyModel();
-    }
-
-    return m_panel->getProxyModel();
-}
 
 QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
     QModelIndexList res;
@@ -90,11 +80,10 @@ QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
 
     if (m_panel->currentViewMode() == ContentPanel::ColumnView) {
         if (m_panel->columnView() && m_panel->columnView()->activePane()) {
-            for (auto* view : {m_panel->columnView()->activePane()->folderListView(), m_panel->columnView()->activePane()->listView()}) {
-                if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
-                    for (const auto& idx : view->selectionModel()->selectedIndexes()) {
-                        if (idx.column() == 0) res.append(idx);
-                    }
+            auto* view = m_panel->columnView()->activePane()->listView();
+            if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
+                for (const auto& idx : view->selectionModel()->selectedIndexes()) {
+                    if (idx.column() == 0) res.append(idx);
                 }
             }
         }
@@ -191,7 +180,7 @@ void ContentViewCoordinator::refreshVisibleThumbnails() {
 
         auto* jv = qobject_cast<JustifiedView*>(view);
         if (jv) {
-            if (!jv->isLayoutReady()) continue;
+            if (!jv->isLayoutReady()) return;
             int scrollY = jv->verticalScrollBar() ? jv->verticalScrollBar()->value() : 0;
             int vpH = jv->viewport()->height();
             QList<int> rangeRows = jv->rowsInRange(qMax(0, scrollY - vpH / 2), scrollY + vpH + vpH / 2);

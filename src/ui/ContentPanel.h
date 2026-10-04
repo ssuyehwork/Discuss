@@ -166,8 +166,6 @@ public:
 
     // 6. 模型与选中数据访问
     ItemModelBase* model() const { return m_model; }
-    QSortFilterProxyModel* getProxyModel() const { return getActiveProxyModel(); }
-    QSortFilterProxyModel* getActiveProxyModel() const;
     QStringList lastLoadedLibraryPaths() const { return m_lastLoadedLibraryPaths; }
     void setLastLoadedLibraryPaths(const QStringList& paths) { m_lastLoadedLibraryPaths = paths; }
     QStringList getSelectedPaths() const;
