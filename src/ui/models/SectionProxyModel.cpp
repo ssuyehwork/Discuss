@@ -37,11 +37,13 @@ void SectionProxyModel::setSourceModel(QAbstractItemModel* newSourceModel) {
 void SectionProxyModel::rebuildMapping() {
     beginResetModel();
     m_mapping.clear();
+    m_sourceToProxyMap.clear();
     m_folderSourceRows.clear();
     m_fileSourceRows.clear();
 
     if (sourceModel()) {
         int total = sourceModel()->rowCount();
+        m_sourceToProxyMap.fill(-1, total);
         for (int i = 0; i < total; ++i) {
             QModelIndex srcIdx = sourceModel()->index(i, 0);
             QString typeStr = srcIdx.data(TypeRole).toString();
@@ -81,6 +83,14 @@ void SectionProxyModel::rebuildMapping() {
         }
     }
 
+    // Build O(1) reverse index from sourceRow to proxyRow
+    for (int pRow = 0; pRow < m_mapping.size(); ++pRow) {
+        int sRow = m_mapping.at(pRow).sourceRow;
+        if (sRow >= 0 && sRow < m_sourceToProxyMap.size()) {
+            m_sourceToProxyMap[sRow] = pRow;
+        }
+    }
+
     endResetModel();
 }
 
@@ -107,10 +117,9 @@ QModelIndex SectionProxyModel::mapFromSource(const QModelIndex& sourceIndex) con
     }
 
     int srcRow = sourceIndex.row();
-
-    // Fast mapping lookup
-    for (int pRow = 0; pRow < m_mapping.size(); ++pRow) {
-        if (m_mapping.at(pRow).sourceRow == srcRow) {
+    if (srcRow >= 0 && srcRow < m_sourceToProxyMap.size()) {
+        int pRow = m_sourceToProxyMap.at(srcRow);
+        if (pRow >= 0 && pRow < m_mapping.size()) {
             return createIndex(pRow, sourceIndex.column());
         }
     }
@@ -275,11 +284,12 @@ void SectionProxyModel::onSourceDataChanged(const QModelIndex& topLeft, const QM
     int maxProxyRow = -1;
 
     for (int r = topLeft.row(); r <= bottomRight.row(); ++r) {
-        QModelIndex srcIdx = sourceModel()->index(r, 0);
-        QModelIndex proxyIdx = mapFromSource(srcIdx);
-        if (proxyIdx.isValid()) {
-            if (minProxyRow == -1 || proxyIdx.row() < minProxyRow) minProxyRow = proxyIdx.row();
-            if (maxProxyRow == -1 || proxyIdx.row() > maxProxyRow) maxProxyRow = proxyIdx.row();
+        if (r >= 0 && r < m_sourceToProxyMap.size()) {
+            int pRow = m_sourceToProxyMap.at(r);
+            if (pRow >= 0) {
+                if (minProxyRow == -1 || pRow < minProxyRow) minProxyRow = pRow;
+                if (maxProxyRow == -1 || pRow > maxProxyRow) maxProxyRow = pRow;
+            }
         }
     }
 

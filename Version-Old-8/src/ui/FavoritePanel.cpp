@@ -118,7 +118,7 @@ void FavoritePanel::initUi() {
     headerLayout->setSpacing(5);
 
     QLabel* iconLabel = new QLabel(header);
-    iconLabel->setPixmap(UiHelper::getIcon("star_filled", QColor("#888888"), 18).pixmap(18, 18));
+    iconLabel->setPixmap(UiHelper::getIcon("star_filled", QColor("#FDB70A"), 18).pixmap(18, 18));
     headerLayout->addWidget(iconLabel);
 
     QLabel* titleLabel = new QLabel("收藏夹", header);
@@ -191,7 +191,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QString curIconKey = index.data(Qt::UserRole + 2).toString();
     QString curColorHex = index.data(Qt::UserRole + 3).toString();
     if (curIconKey.isEmpty()) curIconKey = "folder_filled";
-    if (curColorHex.isEmpty()) curColorHex = "#888888";
+    if (curColorHex.isEmpty()) curColorHex = "#FDB70A";
 
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
@@ -259,7 +259,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
                 if (!item) return;
 
                 QString colorHex = item->data(Qt::UserRole + 3).toString();
-                if (colorHex.isEmpty()) colorHex = "#888888";
+                if (colorHex.isEmpty()) colorHex = "#FDB70A";
 
                 QIcon newIcon = UiHelper::getIcon(iconKey, QColor(colorHex), 18);
                 item->setIcon(newIcon);
@@ -283,7 +283,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             QStandardItem* item = m_favoriteModel->itemFromIndex(index);
             if (!item) return;
 
-            QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
+            QString finalColor = hexColor.isEmpty() ? "#FDB70A" : hexColor.toUpper();
             QString iconKey = item->data(Qt::UserRole + 2).toString();
             if (iconKey.isEmpty()) iconKey = "folder_filled";
             QString targetPath = item->data(Qt::UserRole + 1).toString();
@@ -380,7 +380,7 @@ void FavoritePanel::loadFavorites() {
         if (!fi.exists()) continue;
 
         QColor itemColor = QColor(rec.colorHex);
-        if (!itemColor.isValid()) itemColor = QColor("#888888");
+        if (!itemColor.isValid()) itemColor = QColor("#FDB70A");
 
         QString iconKey = rec.iconKey.isEmpty() ? "folder_filled" : rec.iconKey;
         if (iconKey == "folder") iconKey = "folder_filled";

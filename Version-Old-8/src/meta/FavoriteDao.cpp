@@ -18,7 +18,7 @@ bool FavoriteDao::initTable() {
                       "path TEXT UNIQUE NOT NULL, "
                       "name TEXT, "
                       "icon_key TEXT DEFAULT 'folder', "
-                      "color_hex TEXT DEFAULT '#888888', "
+                      "color_hex TEXT DEFAULT '#FDB70A', "
                       "sort_order INTEGER DEFAULT 0, "
                       "created_at INTEGER);";
 

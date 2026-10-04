@@ -13,93 +13,8 @@
 #include <QDir>
 #include <QResizeEvent>
 #include <QScrollBar>
-#include <QDragEnterEvent>
-#include <QDropEvent>
-#include <QMimeData>
-#include <QPainter>
 
 namespace QuarkMeta {
-
-class ColumnBlankCanvasWidget : public QWidget {
-public:
-    explicit ColumnBlankCanvasWidget(ColumnViewWidget* columnView, ContentPanel* contentPanel, QWidget* parent = nullptr)
-        : QWidget(parent), m_columnView(columnView), m_contentPanel(contentPanel) {
-        setObjectName("ColumnBlankCanvasWidget");
-        setFixedWidth(230);
-        setAcceptDrops(true);
-        setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(this, &QWidget::customContextMenuRequested, this, &ColumnBlankCanvasWidget::onContextMenuRequested);
-    }
-
-protected:
-    void mousePressEvent(QMouseEvent* event) override {
-        if (event->button() == Qt::LeftButton && m_columnView) {
-            m_columnView->clearAllSelections();
-        }
-        QWidget::mousePressEvent(event);
-    }
-
-    void mouseDoubleClickEvent(QMouseEvent* event) override {
-        if (event->button() == Qt::LeftButton && m_columnView) {
-            m_columnView->goUpColumn();
-        }
-        QWidget::mouseDoubleClickEvent(event);
-    }
-
-    void dragEnterEvent(QDragEnterEvent* event) override {
-        if (event->mimeData() && event->mimeData()->hasUrls()) {
-            event->acceptProposedAction();
-            m_isDragHover = true;
-            update();
-        }
-    }
-
-    void dragLeaveEvent(QDragLeaveEvent* event) override {
-        m_isDragHover = false;
-        update();
-        QWidget::dragLeaveEvent(event);
-    }
-
-    void dropEvent(QDropEvent* event) override {
-        m_isDragHover = false;
-        update();
-        if (m_contentPanel && m_columnView && m_columnView->rightmostPane()) {
-            QString targetDir = m_columnView->rightmostPane()->currentPath();
-            QStringList paths;
-            for (const QUrl& url : event->mimeData()->urls()) {
-                paths << url.toLocalFile();
-            }
-            if (!paths.isEmpty()) {
-                m_contentPanel->onPathsDropped(paths, QModelIndex(), targetDir);
-                event->acceptProposedAction();
-            }
-        }
-    }
-
-    void paintEvent(QPaintEvent* event) override {
-        Q_UNUSED(event);
-        if (m_isDragHover) {
-            QPainter painter(this);
-            painter.setRenderHint(QPainter::Antialiasing);
-            QColor highlightColor("#3498db");
-            highlightColor.setAlphaF(0.35f);
-            painter.fillRect(rect(), highlightColor);
-            painter.setPen(QPen(QColor("#3498db"), 2, Qt::DashLine));
-            painter.drawRect(rect().adjusted(1, 1, -1, -1));
-        }
-    }
-
-private:
-    void onContextMenuRequested(const QPoint& pos) {
-        if (m_contentPanel) {
-            m_contentPanel->onCustomContextMenuRequested(mapToGlobal(pos));
-        }
-    }
-
-    ColumnViewWidget* m_columnView = nullptr;
-    ContentPanel* m_contentPanel = nullptr;
-    bool m_isDragHover = false;
-};
 
 ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent)
     : QWidget(parent), m_path(path), m_contentPanel(contentPanel) 
@@ -111,19 +26,6 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     QVBoxLayout* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 1, 0);
     layout->setSpacing(0);
-
-    m_paneScrollArea = new QScrollArea(this);
-    m_paneScrollArea->setObjectName("ColumnPaneScrollArea");
-    m_paneScrollArea->setWidgetResizable(true);
-    m_paneScrollArea->setFrameShape(QFrame::NoFrame);
-    m_paneScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_paneScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-
-    m_canvasWidget = new QWidget(m_paneScrollArea);
-    m_canvasWidget->setObjectName("ColumnPaneCanvasWidget");
-    QVBoxLayout* canvasLayout = new QVBoxLayout(m_canvasWidget);
-    canvasLayout->setContentsMargins(0, 0, 0, 0);
-    canvasLayout->setSpacing(0);
 
     m_model = new DiskItemModel(this);
     m_model->setCurrentPath(path);
@@ -147,12 +49,12 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_proxyModel = m_fileProxyModel; // 兼容对外 proxyModel()
 
     // 3. 顶部子文件夹折叠条
-    m_folderHeader = new FolderSectionHeaderBar(m_canvasWidget);
+    m_folderHeader = new FolderSectionHeaderBar(this);
     m_folderHeader->hide();
-    canvasLayout->addWidget(m_folderHeader);
+    layout->addWidget(m_folderHeader);
 
     // 4. 子文件夹列表视图
-    m_folderListView = new DropListView(m_canvasWidget);
+    m_folderListView = new DropListView(this);
     m_folderListView->setObjectName("ColumnViewFolderList");
     m_folderListView->setFrameShape(QFrame::NoFrame);
     m_folderListView->setFocusPolicy(Qt::StrongFocus);
@@ -163,11 +65,10 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_folderListView->setDropIndicatorShown(true);
     m_folderListView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_folderListView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_folderListView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_folderListView->setModel(m_folderProxyModel);
     m_folderListView->setItemDelegate(new ColumnItemDelegate(this));
     m_folderListView->hide();
-    canvasLayout->addWidget(m_folderListView);
+    layout->addWidget(m_folderListView);
 
     connect(m_folderHeader, &FolderSectionHeaderBar::collapseToggled, this, [this](bool collapsed) {
         if (m_folderListView && m_folderHeader->count() > 0) {
@@ -176,12 +77,12 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     });
 
     // 5. 内容文件区分界条
-    m_fileHeader = new FileSectionHeaderBar(m_canvasWidget);
+    m_fileHeader = new FileSectionHeaderBar(this);
     m_fileHeader->hide();
-    canvasLayout->addWidget(m_fileHeader);
+    layout->addWidget(m_fileHeader);
 
     // 6. 普通文件列表视图
-    m_listView = new DropListView(m_canvasWidget);
+    m_listView = new DropListView(this);
     m_listView->setObjectName("ColumnViewPaneListView");
     m_listView->setFrameShape(QFrame::NoFrame);
     m_listView->setFocusPolicy(Qt::StrongFocus);
@@ -192,22 +93,9 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_listView->setDropIndicatorShown(true);
     m_listView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setModel(m_fileProxyModel);
     m_listView->setItemDelegate(new ColumnItemDelegate(this));
-    canvasLayout->addWidget(m_listView);
-
-    m_emptyFilterHintLabel = new QLabel(m_canvasWidget);
-    m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
-    m_emptyFilterHintLabel->setWordWrap(true);
-    m_emptyFilterHintLabel->setStyleSheet("color: #888888; font-size: 12px; padding: 16px;");
-    m_emptyFilterHintLabel->hide();
-    canvasLayout->addWidget(m_emptyFilterHintLabel);
-
-    canvasLayout->addStretch(1);
-
-    m_paneScrollArea->setWidget(m_canvasWidget);
-    layout->addWidget(m_paneScrollArea);
+    layout->addWidget(m_listView, 1);
 
     auto updateSectionCountsAndHints = [this]() {
         tryPendingSelection();
@@ -223,26 +111,13 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
             } else {
                 bool collapsed = m_folderHeader ? m_folderHeader->isCollapsed() : false;
                 m_folderListView->setVisible(!collapsed);
-                int rowH = m_folderListView->sizeHintForRow(0);
-                if (rowH <= 0) rowH = 28;
-                int folderH = folderCount * rowH + 2;
-                m_folderListView->setFixedHeight(folderH);
+                int folderH = qMin(180, qMax(28, folderCount * 28 + 4));
+                m_folderListView->setMaximumHeight(folderH);
             }
         }
         if (m_fileHeader) {
             m_fileHeader->setCount(fileCount);
             m_fileHeader->setVisible(fileCount > 0 && folderCount > 0);
-        }
-        if (m_listView) {
-            if (fileCount == 0) {
-                m_listView->hide();
-            } else {
-                m_listView->show();
-                int rowH = m_listView->sizeHintForRow(0);
-                if (rowH <= 0) rowH = 28;
-                int fileH = fileCount * rowH + 2;
-                m_listView->setFixedHeight(fileH);
-            }
         }
 
         if (!m_model || !m_emptyFilterHintLabel) return;
@@ -256,15 +131,21 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
             if (m_listView) m_listView->hide();
         } else {
             m_emptyFilterHintLabel->hide();
-            if (m_listView && fileCount > 0) m_listView->show();
+            if (m_listView) m_listView->show();
         }
-        update();
     };
 
     connect(m_folderProxyModel, &QAbstractItemModel::modelReset, this, updateSectionCountsAndHints);
     connect(m_folderProxyModel, &QAbstractItemModel::layoutChanged, this, updateSectionCountsAndHints);
     connect(m_fileProxyModel, &QAbstractItemModel::modelReset, this, updateSectionCountsAndHints);
     connect(m_fileProxyModel, &QAbstractItemModel::layoutChanged, this, updateSectionCountsAndHints);
+
+    m_emptyFilterHintLabel = new QLabel(this);
+    m_emptyFilterHintLabel->setAlignment(Qt::AlignCenter);
+    m_emptyFilterHintLabel->setWordWrap(true);
+    m_emptyFilterHintLabel->setStyleSheet("color: #888888; font-size: 12px; padding: 16px;");
+    m_emptyFilterHintLabel->hide();
+    layout->addWidget(m_emptyFilterHintLabel);
 
     connect(m_folderListView, &DropListView::blankSpaceDoubleClicked, this, [this]() {
         int paneIdx = property("paneIndex").toInt();
@@ -337,23 +218,6 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
             m_contentPanel->onDoubleClicked(index);
         }
     });
-}
-
-void ColumnViewPane::paintEvent(QPaintEvent* event) {
-    QWidget::paintEvent(event);
-    if (m_folderListView && m_folderListView->isVisible()) {
-        int folderBottom = m_folderListView->y() + m_folderListView->height();
-        if (folderBottom >= height()) {
-            QPainter painter(this);
-            painter.setPen(QPen(QColor("#3498db"), 1));
-            painter.drawLine(0, height() - 1, width(), height() - 1);
-        }
-    }
-}
-
-void ColumnViewPane::resizeEvent(QResizeEvent* event) {
-    QWidget::resizeEvent(event);
-    update();
 }
 
 void ColumnViewPane::setFilterState(const FilterState& state) {
@@ -578,9 +442,6 @@ ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
     m_layout->setContentsMargins(0, 0, 0, 0);
     m_layout->setSpacing(0);
     m_layout->setAlignment(Qt::AlignLeft);
-
-    m_blankCanvasWidget = new ColumnBlankCanvasWidget(this, m_contentPanel, m_container);
-    m_layout->addWidget(m_blankCanvasWidget);
 
     setWidget(m_container);
 
@@ -836,13 +697,7 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     });
 
     m_panes.append(pane);
-    if (m_blankCanvasWidget) {
-        m_layout->removeWidget(m_blankCanvasWidget);
-    }
     m_layout->addWidget(pane);
-    if (m_blankCanvasWidget) {
-        m_layout->addWidget(m_blankCanvasWidget);
-    }
     updatePaneWidths();
     updateParentHighlights();
     for (int i = 0; i < m_panes.size(); ++i) {
@@ -856,23 +711,6 @@ ColumnViewPane* ColumnViewWidget::appendColumn(const QString& path) {
     }
     scrollToRightmostPane();
     return pane;
-}
-
-void ColumnViewWidget::clearAllSelections() {
-    for (auto* pane : m_panes) {
-        if (pane) {
-            pane->clearSelection();
-        }
-    }
-    emit selectionChanged();
-}
-
-void ColumnViewWidget::toggleFolderSectionCollapse() {
-    ColumnViewPane* pane = activePane();
-    if (!pane) pane = rightmostPane();
-    if (pane && pane->folderHeader() && pane->folderHeader()->isVisible() && pane->folderHeader()->count() > 0) {
-        pane->folderHeader()->setCollapsed(!pane->folderHeader()->isCollapsed());
-    }
 }
 
 void ColumnViewWidget::clearOtherSelections(int activePaneIdx) {

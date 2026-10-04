@@ -63,6 +63,7 @@ private:
     void updateCounts();
 
     QVector<MappingEntry> m_mapping;
+    QVector<int> m_sourceToProxyMap;
     QVector<int> m_folderSourceRows;
     QVector<int> m_fileSourceRows;
     bool m_folderCollapsed = false;
