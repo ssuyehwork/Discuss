@@ -143,6 +143,7 @@ public:
     class ColumnViewWidget* columnView() const { return m_columnView; }
     DropTreeView* dropTreeView() const { return m_treeView; }
     DiskItemModel* diskModel() const { return m_diskModel; }
+    FilterProxyModel* filterProxyModel() const { return m_proxyModel; }
     ContentKeyHandler* keyHandler() const { return m_keyHandler; }
     ContentDataLoader* dataLoader() const { return m_dataLoader; }
     ContentFileOpsHandler* fileOpsHandler() const { return m_fileOpsHandler; }
@@ -166,8 +167,6 @@ public:
 
     // 6. 模型与选中数据访问
     ItemModelBase* model() const { return m_model; }
-    QSortFilterProxyModel* getProxyModel() const { return getActiveProxyModel(); }
-    QSortFilterProxyModel* getActiveProxyModel() const;
     QStringList lastLoadedLibraryPaths() const { return m_lastLoadedLibraryPaths; }
     void setLastLoadedLibraryPaths(const QStringList& paths) { m_lastLoadedLibraryPaths = paths; }
     QStringList getSelectedPaths() const;

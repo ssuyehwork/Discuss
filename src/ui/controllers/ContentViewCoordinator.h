@@ -26,7 +26,6 @@ public:
     // 视图探测与代理模型归一化
     QList<QAbstractItemView*> currentActiveViews() const;
     QAbstractItemView* activeItemView() const;
-    QSortFilterProxyModel* getActiveProxyModel() const;
 
     // 选区与焦点计算
     QModelIndexList getSelectedIndexes() const;

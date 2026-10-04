@@ -237,7 +237,7 @@ void ContentPanel::initUi() {
 }
 
 void ContentPanel::initGridView() {
-    auto* jv = new JustifiedView(this);
+    auto* jv = new DropJustifiedView(this);
     m_gridView = jv;
     jv->setSectionModel(m_sectionModel);
     jv->setFrameShape(QFrame::NoFrame);
@@ -268,6 +268,17 @@ void ContentPanel::initGridView() {
     connect(jv, &JustifiedView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
         onPathsDropped(paths, targetIndex, currentPath());
     });
+
+    if (jv->verticalScrollBar()) {
+        connect(jv->verticalScrollBar(), &QScrollBar::valueChanged, this, &ContentPanel::startVisibleTimer);
+    }
+    connect(jv, &JustifiedView::layoutFinished, this, &ContentPanel::startVisibleTimer);
+
+    if (m_sectionModel) {
+        connect(m_sectionModel, &QAbstractItemModel::modelReset, this, &ContentPanel::startVisibleTimer, Qt::UniqueConnection);
+        connect(m_sectionModel, &QAbstractItemModel::layoutChanged, this, &ContentPanel::startVisibleTimer, Qt::UniqueConnection);
+        connect(m_sectionModel, &QAbstractItemModel::rowsInserted, this, &ContentPanel::startVisibleTimer, Qt::UniqueConnection);
+    }
 }
 
 void ContentPanel::initListView() {
@@ -301,6 +312,10 @@ void ContentPanel::initListView() {
     connect(tree, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
         onPathsDropped(paths, targetIndex, currentPath());
     });
+
+    if (tree->verticalScrollBar()) {
+        connect(tree->verticalScrollBar(), &QScrollBar::valueChanged, this, &ContentPanel::startVisibleTimer);
+    }
     connect(tree->header(), &QHeaderView::sectionClicked, this, [this](int logicalIndex) {
         if (logicalIndex == static_cast<int>(FileListColumn::Status)) return;
         SortType newType = SortType::SortByName;
@@ -322,6 +337,12 @@ void ContentPanel::initListView() {
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
+    if (event && event->type() == QEvent::Resize) {
+        if ((m_gridView && obj == m_gridView) || (m_treeView && obj == m_treeView)) {
+            startVisibleTimer();
+        }
+    }
+
     if (event && event->type() == QEvent::MouseButtonDblClick) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
@@ -670,6 +691,7 @@ void ContentPanel::setZoomLevel(int level) {
     m_zoomLevel = bounded;
     updateGridSize();
     emit zoomLevelChanged(m_zoomLevel);
+    startVisibleTimer();
 }
 
 void ContentPanel::updateGridSize() {
@@ -910,12 +932,6 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
     return model->index(targetRow, 0).data(PathRole).toString();
 }
 
-QSortFilterProxyModel* ContentPanel::getActiveProxyModel() const {
-    if (m_viewCoordinator) {
-        return m_viewCoordinator->getActiveProxyModel();
-    }
-    return m_proxyModel;
-}
 
 QStringList ContentPanel::getSelectedPaths() const {
     QStringList paths;
