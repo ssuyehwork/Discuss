@@ -43,6 +43,10 @@ ThumbnailDelegate::Metrics ThumbnailDelegate::calculateMetrics(const QStyleOptio
 void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
     if (!index.isValid()) return;
 
+    if (index.data(SectionHeaderRole).toBool()) {
+        return; // Headers are drawn directly in JustifiedView::paintEvent
+    }
+
     CardLayout l = CardLayoutEngine::calculate(option.rect, option.decorationSize.width());
     bool isSelected = (option.state & QStyle::State_Selected);
 
@@ -146,6 +150,9 @@ void ThumbnailDelegate::drawFileNameText(QPainter* painter, const QRect& textRec
 }
 
 QSize ThumbnailDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
+    if (index.data(SectionHeaderRole).toBool()) {
+        return QSize(option.rect.width(), 28);
+    }
     return QStyledItemDelegate::sizeHint(option, index);
 }
 

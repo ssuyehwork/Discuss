@@ -1,5 +1,6 @@
 #include "DropTreeView.h"
 #include "ViewDragDropHelper.h"
+#include "models/SectionProxyModel.h"
 #include "../core/ModelContract.h"
 #include "ContentPanel.h"
 #include <QPainter>
@@ -44,6 +45,57 @@ DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     }
 }
 
+
+void DropTreeView::setModel(QAbstractItemModel* model) {
+    if (this->model()) {
+        disconnect(this->model(), &QAbstractItemModel::modelReset, this, &DropTreeView::updateGroupHeaderSpanning);
+        disconnect(this->model(), &QAbstractItemModel::layoutChanged, this, &DropTreeView::updateGroupHeaderSpanning);
+        disconnect(this->model(), &QAbstractItemModel::rowsInserted, this, &DropTreeView::updateGroupHeaderSpanning);
+    }
+    QTreeView::setModel(model);
+    if (model) {
+        connect(model, &QAbstractItemModel::modelReset, this, &DropTreeView::updateGroupHeaderSpanning);
+        connect(model, &QAbstractItemModel::layoutChanged, this, &DropTreeView::updateGroupHeaderSpanning);
+        connect(model, &QAbstractItemModel::rowsInserted, this, &DropTreeView::updateGroupHeaderSpanning);
+        updateGroupHeaderSpanning();
+    }
+}
+
+void DropTreeView::updateGroupHeaderSpanning() {
+    if (!model()) return;
+    int total = model()->rowCount();
+    for (int r = 0; r < total; ++r) {
+        QModelIndex idx = model()->index(r, 0);
+        if (idx.data(SectionHeaderRole).toBool()) {
+            setFirstColumnSpanned(r, QModelIndex(), true);
+        }
+    }
+}
+
+void DropTreeView::mousePressEvent(QMouseEvent* event) {
+    QModelIndex idx = indexAt(event->pos());
+    if (idx.isValid() && idx.data(SectionHeaderRole).toBool()) {
+        if (event->button() == Qt::LeftButton) {
+            if (idx.data(SectionHeaderTextRole).toString().startsWith("文件夹")) {
+                SectionProxyModel* secModel = nullptr;
+                QAbstractItemModel* cur = model();
+                while (cur) {
+                    secModel = qobject_cast<SectionProxyModel*>(cur);
+                    if (secModel) break;
+                    auto* proxy = qobject_cast<QAbstractProxyModel*>(cur);
+                    if (proxy) cur = proxy->sourceModel();
+                    else break;
+                }
+                if (secModel) {
+                    secModel->setFolderCollapsed(!secModel->isFolderCollapsed());
+                }
+            }
+        }
+        event->accept();
+        return;
+    }
+    QTreeView::mousePressEvent(event);
+}
 
 void DropTreeView::startDrag(Qt::DropActions supportedActions) {
     ViewDragDropHelper::executeStartDrag(this, supportedActions);

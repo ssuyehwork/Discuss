@@ -7,12 +7,10 @@
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
 #include "DropListView.h"
-#include "FolderSectionWidget.h"
 
 namespace QuarkMeta {
 
 class ContentPanel;
-class DualSectionPanel;
 
 class ColumnViewPane : public QWidget {
     Q_OBJECT
@@ -37,13 +35,14 @@ public:
     void setFilterState(const FilterState& state);
     void applySort(int sortType, Qt::SortOrder sortOrder);
 
-    DropListView* listView() const;
-    DropListView* folderListView() const;
+    DropListView* listView() const { return m_listView; }
+    DropListView* folderListView() const { return m_listView; }
     FilterProxyModel* proxyModel() const { return m_proxyModel; }
-    FilterProxyModel* folderProxyModel() const { return m_folderProxyModel; }
-    FilterProxyModel* fileProxyModel() const { return m_fileProxyModel; }
+    FilterProxyModel* folderProxyModel() const { return m_proxyModel; }
+    FilterProxyModel* fileProxyModel() const { return m_proxyModel; }
+    SectionProxyModel* sectionProxyModel() const { return m_sectionProxyModel; }
     DiskItemModel* model() const { return m_model; }
-    FolderSectionHeaderBar* folderHeader() const;
+    FolderSectionHeaderBar* folderHeader() const { return nullptr; }
 
     void refreshVisibleThumbnails();
 
@@ -77,9 +76,9 @@ private:
     FilterProxyModel* m_proxyModel = nullptr;
     FilterProxyModel* m_folderProxyModel = nullptr;
     FilterProxyModel* m_fileProxyModel = nullptr;
+    SectionProxyModel* m_sectionProxyModel = nullptr;
     bool m_isActive = false;
     QScrollArea* m_paneScrollArea = nullptr;
-    DualSectionPanel* m_panel = nullptr;
     DropListView* m_folderListView = nullptr;
     DropListView* m_listView = nullptr;
 };

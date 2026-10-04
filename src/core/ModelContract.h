@@ -35,6 +35,9 @@ enum CommonRole {
     // 列视图与拖放交互角色 (UserRole + 210..220)
     IsParentExpandedRole = Qt::UserRole + 210, // 列视图父目录展开高亮
     IsDropTargetRole     = Qt::UserRole + 211, // 拖拽目标悬停高亮
+    SectionHeaderRole    = Qt::UserRole + 212, // 是否为分区标头行
+    SectionHeaderTextRole = Qt::UserRole + 213,// 分区标头显示文本
+    SectionCollapsedRole = Qt::UserRole + 214, // 文件夹分区折叠状态
 
     // 磁盘回收站专用角色
     IsDiskTrashRole     = Qt::UserRole + 208, // 是否是磁盘回收站项目

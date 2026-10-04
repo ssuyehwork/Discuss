@@ -26,7 +26,7 @@ class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
 class ContentStatsWorker;
-class SectionedScrollCanvas;
+class SectionProxyModel;
 class FolderSectionHeaderBar;
 class FileSectionHeaderBar;
 class ContentPaneSplitManager;
@@ -151,8 +151,6 @@ public:
     ContentStatsWorker* statsWorker() const { return m_statsWorker; }
     class ContentViewCoordinator* viewCoordinator() const { return m_viewCoordinator; }
     ContentPaneSplitManager* splitManager() const { return m_splitManager; }
-    SectionedScrollCanvas* gridCanvas() const { return m_gridCanvas; }
-    SectionedScrollCanvas* listCanvas() const { return m_listCanvas; }
 
     // 5. 业务操作分发
     void performCopy(bool cutMode);
@@ -268,9 +266,6 @@ private:
     void updateDragOverlay(const QPoint& pos);
     void hideDragOverlay();
 
-    SectionedScrollCanvas* m_gridCanvas = nullptr;
-    SectionedScrollCanvas* m_listCanvas = nullptr;
-
     // 保留既有指针别名：契约锁 100% 保护外部调用方（如 treeView(), gridView() 等）
     DropTreeView* m_folderTreeView = nullptr;
     DropTreeView* m_treeView = nullptr;
@@ -280,6 +275,10 @@ private:
     FilterProxyModel* m_fileProxyModel = nullptr;
     FilterProxyModel* m_gridFolderProxyModel = nullptr;
     FilterProxyModel* m_gridFileProxyModel = nullptr;
+    FilterProxyModel* m_gridProxyModel = nullptr;
+    SectionProxyModel* m_gridSectionProxyModel = nullptr;
+    FilterProxyModel* m_listProxyModel = nullptr;
+    SectionProxyModel* m_listSectionProxyModel = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     class ColumnViewWidget* m_columnView = nullptr;

@@ -76,9 +76,6 @@ void ColumnViewWidget::focusPane(int paneIndex) {
         ColumnViewPane* pane = m_panes[paneIndex];
         if (pane) {
             DropListView* view = pane->listView();
-            if (pane->folderListView() && pane->folderListView()->selectionModel() && pane->folderListView()->selectionModel()->hasSelection()) {
-                view = pane->folderListView();
-            }
             if (view) view->setFocus();
         }
     }
@@ -102,17 +99,9 @@ QStringList ColumnViewWidget::getSelectedPaths() const {
     ColumnViewPane* pane = activePane();
     if (!pane) return {};
     QStringList paths;
-    if (pane->folderListView() && pane->folderListView()->selectionModel()) {
-        for (const auto& idx : pane->folderListView()->selectionModel()->selectedIndexes()) {
-            if (idx.column() == 0) {
-                QString p = idx.data(PathRole).toString();
-                if (!p.isEmpty()) paths << p;
-            }
-        }
-    }
     if (pane->listView() && pane->listView()->selectionModel()) {
         for (const auto& idx : pane->listView()->selectionModel()->selectedIndexes()) {
-            if (idx.column() == 0) {
+            if (idx.column() == 0 && !idx.data(SectionHeaderRole).toBool()) {
                 QString p = idx.data(PathRole).toString();
                 if (!p.isEmpty()) paths << p;
             }
@@ -124,10 +113,6 @@ QStringList ColumnViewWidget::getSelectedPaths() const {
 QModelIndexList ColumnViewWidget::getSelectedIndexes() const {
     ColumnViewPane* pane = activePane();
     if (!pane) return {};
-    if (pane->folderListView() && pane->folderListView()->selectionModel() &&
-        pane->folderListView()->selectionModel()->hasSelection()) {
-        return pane->folderListView()->selectionModel()->selectedIndexes();
-    }
     if (pane->listView() && pane->listView()->selectionModel()) {
         return pane->listView()->selectionModel()->selectedIndexes();
     }
@@ -348,14 +333,13 @@ void ColumnViewWidget::updateParentHighlights() {
         ColumnViewPane* childPane = (i + 1 < m_panes.size()) ? m_panes[i + 1] : nullptr;
         QString childPath = childPane ? QDir::toNativeSeparators(QDir::cleanPath(childPane->currentPath())) : "";
 
-        for (FilterProxyModel* model : {parentPane->folderProxyModel(), parentPane->fileProxyModel()}) {
-            if (!model) continue;
-            for (int r = 0; r < model->rowCount(); ++r) {
-                QModelIndex idx = model->index(r, 0);
-                QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
-                bool isExpandedParent = !childPath.isEmpty() && (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
-                model->setData(idx, isExpandedParent, IsParentExpandedRole);
-            }
+        FilterProxyModel* model = parentPane->proxyModel();
+        if (!model) continue;
+        for (int r = 0; r < model->rowCount(); ++r) {
+            QModelIndex idx = model->index(r, 0);
+            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
+            bool isExpandedParent = !childPath.isEmpty() && (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
+            model->setData(idx, isExpandedParent, IsParentExpandedRole);
         }
     }
 }

@@ -32,6 +32,9 @@ public:
         : RenameCapableDelegate(parent), m_drawMiniCards(drawMiniCards) { Q_UNUSED(showStatus); }
 
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        if (index.data(SectionHeaderRole).toBool()) {
+            return QSize(option.rect.width(), 28);
+        }
         QSize sz = QStyledItemDelegate::sizeHint(option, index);
         const QAbstractItemView* view = qobject_cast<const QAbstractItemView*>(option.widget);
         int zoom = view ? view->iconSize().height() + 8 : 30;
@@ -42,6 +45,31 @@ public:
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         if (!index.isValid()) return;
 
+        if (index.data(SectionHeaderRole).toBool()) {
+            painter->save();
+            QRect rect = option.rect;
+            painter->fillRect(rect, QColor("#1E1E1E"));
+
+            QFont font = painter->font();
+            font.setBold(true);
+            font.setPixelSize(12);
+            painter->setFont(font);
+            painter->setPen(QColor("#3498db"));
+
+            QString text = index.data(SectionHeaderTextRole).toString();
+            QRect textRect = rect.adjusted(10, 0, -30, 0);
+            painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
+
+            if (text.startsWith("文件夹")) {
+                bool collapsed = index.data(SectionCollapsedRole).toBool();
+                QIcon arrowIcon = UiHelper::getIcon(collapsed ? "scroll-008" : "scroll-010", QColor("#3498db"), 12);
+                QRect iconRect(rect.right() - 25, rect.top() + (rect.height() - 12) / 2, 12, 12);
+                arrowIcon.paint(painter, iconRect);
+            }
+
+            painter->restore();
+            return;
+        }
 
         bool selected = option.state & QStyle::State_Selected;
         bool hover = option.state & QStyle::State_MouseOver;

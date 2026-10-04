@@ -3,6 +3,7 @@
 #endif
 #include "JustifiedView.h"
 #include "CardLayoutEngine.h"
+#include "models/SectionProxyModel.h"
 #include "../core/ModelContract.h"
 #include <QPainter>
 #include <QScrollBar>
@@ -233,8 +234,30 @@ QRegion JustifiedView::visualRegionForSelection(const QItemSelection& selection)
 }
 
 void JustifiedView::mousePressEvent(QMouseEvent* event) {
+    QModelIndex pressIdx = indexAt(event->pos());
+    if (pressIdx.isValid() && pressIdx.data(SectionHeaderRole).toBool()) {
+        if (event->button() == Qt::LeftButton) {
+            if (pressIdx.data(SectionHeaderTextRole).toString().startsWith("文件夹")) {
+                SectionProxyModel* secModel = nullptr;
+                QAbstractItemModel* cur = model();
+                while (cur) {
+                    secModel = qobject_cast<SectionProxyModel*>(cur);
+                    if (secModel) break;
+                    auto* proxy = qobject_cast<QAbstractProxyModel*>(cur);
+                    if (proxy) cur = proxy->sourceModel();
+                    else break;
+                }
+                if (secModel) {
+                    secModel->setFolderCollapsed(!secModel->isFolderCollapsed());
+                }
+            }
+        }
+        event->accept();
+        return;
+    }
+
     if (event->button() == Qt::LeftButton && event->modifiers() == Qt::NoModifier) {
-        QModelIndex idx = indexAt(event->pos());
+        QModelIndex idx = pressIdx;
         if (!idx.isValid()) {
             m_isDraggingSelection = true;
             m_dragStartPos = event->pos();
@@ -434,13 +457,20 @@ void JustifiedView::doLayout() {
 
         int i = 0;
         while (i < count) {
-            int rowStart = i;
-            bool isCurrentDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
+            QModelIndex idx = model()->index(i, 0);
+            if (idx.data(SectionHeaderRole).toBool()) {
+                int headerH = 28;
+                m_geometries[i] = { QRect(margin, currentY, containerWidth, headerH), i, true, idx.data(SectionHeaderTextRole).toString(), idx.data(SectionCollapsedRole).toBool() };
+                currentY += headerH + spacing;
+                i++;
+                continue;
+            }
 
+            int rowStart = i;
             int numInRow = 0;
             while (i < count && numInRow < maxNumInRow) {
-                bool isDir = (model()->data(model()->index(i, 0), TypeRole).toString() == "folder");
-                if (isDir != isCurrentDir) {
+                QModelIndex itemIdx = model()->index(i, 0);
+                if (itemIdx.data(SectionHeaderRole).toBool()) {
                     break;
                 }
                 numInRow++;
@@ -454,7 +484,7 @@ void JustifiedView::doLayout() {
 
             for (int j = 0; j < numInRow; ++j) {
                 int itemIdx = rowStart + j;
-                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, itemHeight), itemIdx };
+                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, itemHeight), itemIdx, false, QString(), false };
                 currentX += itemWidth + standardSpacing;
             }
             currentY += itemHeight;
@@ -465,34 +495,33 @@ void JustifiedView::doLayout() {
     } else {
         int i = 0;
         while (i < count) {
-            int rowStart = i;
+            QModelIndex idx = model()->index(i, 0);
+            if (idx.data(SectionHeaderRole).toBool()) {
+                int headerH = 28;
+                m_geometries[i] = { QRect(margin, currentY, containerWidth, headerH), i, true, idx.data(SectionHeaderTextRole).toString(), idx.data(SectionCollapsedRole).toBool() };
+                currentY += headerH + spacing;
+                i++;
+                continue;
+            }
 
+            int rowStart = i;
             double rowAspectRatioSum = 0;
             std::vector<double> aspectRatios;
 
             bool forceBreak = false;
             while (i < count) {
-                QModelIndex idx = model()->index(i, 0);
-                double ar = model()->data(idx, m_aspectRatioRole).toDouble();
-                if (ar <= 0) ar = 1.0;
-                
-                QString type = model()->data(idx, TypeRole).toString();
-                bool isCurrentDir = (type == "folder");
-
-                if (i > rowStart) {
-                    QModelIndex prevIdx = model()->index(i - 1, 0);
-                    QString prevType = model()->data(prevIdx, TypeRole).toString();
-                    bool isPrevDir = (prevType == "folder");
-                    
-                    if (isCurrentDir != isPrevDir) {
-                        forceBreak = true;
-                        break;
-                    }
+                QModelIndex curIdx = model()->index(i, 0);
+                if (curIdx.data(SectionHeaderRole).toBool()) {
+                    forceBreak = true;
+                    break;
                 }
+
+                double ar = curIdx.data(m_aspectRatioRole).toDouble();
+                if (ar <= 0) ar = 1.0;
 
                 aspectRatios.push_back(ar);
                 rowAspectRatioSum += ar;
-                
+
                 int numInRow = (int)aspectRatios.size();
                 double estimatedWidth = (rowAspectRatioSum * m_targetRowHeight) + (cardPadding * numInRow) + (spacing * (numInRow - 1));
                 if (estimatedWidth > containerWidth) {
@@ -502,7 +531,7 @@ void JustifiedView::doLayout() {
                     } else {
                         i++;
                     }
-                    break; 
+                    break;
                 }
                 i++;
             }
@@ -513,7 +542,7 @@ void JustifiedView::doLayout() {
 
             int actualHeight = m_targetRowHeight;
             bool isLastRow = (i == count);
-            bool rowIsJustified = !isLastRow && !forceBreak; 
+            bool rowIsJustified = !isLastRow && !forceBreak;
 
             int availableImageWidth = containerWidth - (spacing * (numInRow - 1)) - (cardPadding * numInRow);
 
@@ -521,7 +550,7 @@ void JustifiedView::doLayout() {
                 actualHeight = qRound(availableImageWidth / rowAspectRatioSum);
                 actualHeight = std::max(actualHeight, (int)(m_targetRowHeight * 0.75));
                 actualHeight = std::min(actualHeight, (int)(m_targetRowHeight * 1.5));
-                rowIsJustified = true; 
+                rowIsJustified = true;
             }
 
             int currentX = margin;
@@ -536,8 +565,8 @@ void JustifiedView::doLayout() {
                     itemWidth = qRound(aspectRatios[j] * actualHeight) + cardPadding;
                 }
 
-                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, actualHeight + extraHeight), itemIdx };
-                currentX += itemWidth + spacing; 
+                m_geometries[itemIdx] = { QRect(currentX, currentY, itemWidth, actualHeight + extraHeight), itemIdx, false, QString(), false };
+                currentX += itemWidth + spacing;
             }
             currentY += actualHeight + extraHeight + spacing;
         }

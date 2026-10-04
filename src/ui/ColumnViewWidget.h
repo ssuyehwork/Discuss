@@ -9,13 +9,11 @@
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
 #include "DropListView.h"
-#include "FolderSectionWidget.h"
 #include "ColumnViewPane.h"
 
 namespace QuarkMeta {
 
 class ContentPanel;
-class DualSectionPanel;
 
 class ColumnViewWidget : public QScrollArea {
     Q_OBJECT

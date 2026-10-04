@@ -3,12 +3,10 @@
 #endif
 #include "ContentViewCoordinator.h"
 #include "../ContentPanel.h"
-#include "../FolderSectionWidget.h"
 #include "../DropTreeView.h"
 #include "../DropListView.h"
 #include "../ColumnViewWidget.h"
 #include "../JustifiedView.h"
-#include "../SectionedScrollCanvas.h"
 #include "../models/DiskItemModel.h"
 #include "../models/FilterProxyModel.h"
 #include "../../core/CoreController.h"
@@ -29,19 +27,14 @@ QList<QAbstractItemView*> ContentViewCoordinator::currentActiveViews() const {
     auto mode = m_panel->currentViewMode();
     if (mode == ContentPanel::ColumnView) {
         if (m_panel->columnView() && m_panel->columnView()->activePane()) {
-            if (m_panel->columnView()->activePane()->folderListView()) {
-                views << m_panel->columnView()->activePane()->folderListView();
-            }
             if (m_panel->columnView()->activePane()->listView()) {
                 views << m_panel->columnView()->activePane()->listView();
             }
         }
-    } else if (mode == ContentPanel::ListView && m_panel->listCanvas()) {
-        if (m_panel->listCanvas()->folderView()) views << m_panel->listCanvas()->folderView();
-        if (m_panel->listCanvas()->fileView()) views << m_panel->listCanvas()->fileView();
-    } else if (m_panel->gridCanvas()) { // GridView / JustifiedViewMode
-        if (m_panel->gridCanvas()->folderView()) views << m_panel->gridCanvas()->folderView();
-        if (m_panel->gridCanvas()->fileView()) views << m_panel->gridCanvas()->fileView();
+    } else if (mode == ContentPanel::ListView) {
+        if (m_panel->dropTreeView()) views << m_panel->dropTreeView();
+    } else { // GridView / JustifiedViewMode
+        if (m_panel->gridView()) views << m_panel->gridView();
     }
     return views;
 }
@@ -52,45 +45,24 @@ QAbstractItemView* ContentViewCoordinator::activeItemView() const {
     auto mode = m_panel->currentViewMode();
     if (mode == ContentPanel::ColumnView) {
         if (m_panel->columnView() && m_panel->columnView()->activePane()) {
-            DropListView* folderV = m_panel->columnView()->activePane()->folderListView();
-            if (folderV && (folderV->hasFocus() || (folderV->selectionModel() && folderV->selectionModel()->hasSelection()))) {
-                return folderV;
-            }
             return m_panel->columnView()->activePane()->listView();
         }
         return nullptr;
     }
 
-    if (mode == ContentPanel::ListView && m_panel->listCanvas()) {
-        return m_panel->listCanvas()->activeItemView();
+    if (mode == ContentPanel::ListView) {
+        return m_panel->dropTreeView();
     }
 
-    if (m_panel->gridCanvas()) {
-        return m_panel->gridCanvas()->activeItemView();
-    }
-    return nullptr;
+    return m_panel->gridView();
 }
 
 QSortFilterProxyModel* ContentViewCoordinator::getActiveProxyModel() const {
     if (!m_panel) return nullptr;
 
-    auto mode = m_panel->currentViewMode();
-    if (mode == ContentPanel::ColumnView && m_panel->columnView() && m_panel->columnView()->activePane()) {
-        if (m_panel->columnView()->activePane()->proxyModel()) {
-            return m_panel->columnView()->activePane()->proxyModel();
-        }
-    }
-
     QAbstractItemView* view = activeItemView();
     if (view && view->model()) {
         return qobject_cast<QSortFilterProxyModel*>(view->model());
-    }
-
-    if (mode == ContentPanel::ListView && m_panel->listCanvas()) {
-        return m_panel->listCanvas()->fileProxyModel();
-    }
-    if (m_panel->gridCanvas()) {
-        return m_panel->gridCanvas()->fileProxyModel();
     }
     return nullptr;
 }
@@ -218,20 +190,8 @@ void ContentViewCoordinator::refreshVisibleThumbnails() {
     }
 }
 
-void ContentViewCoordinator::updateListSectionCounts() {
-    if (!m_panel || !m_panel->listCanvas()) return;
-    m_panel->listCanvas()->updateSectionCounts();
-}
-
-void ContentViewCoordinator::updateGridSectionCounts() {
-    if (!m_panel || !m_panel->gridCanvas()) return;
-    m_panel->gridCanvas()->updateSectionCounts();
-}
-
 void ContentViewCoordinator::updateGridSize(int zoomLevel) {
-    if (!m_panel) return;
-    if (m_panel->gridCanvas()) m_panel->gridCanvas()->updateZoom(zoomLevel);
-    if (m_panel->listCanvas()) m_panel->listCanvas()->updateZoom(zoomLevel);
+    Q_UNUSED(zoomLevel);
 }
 
 void ContentViewCoordinator::installActivationFilters() {

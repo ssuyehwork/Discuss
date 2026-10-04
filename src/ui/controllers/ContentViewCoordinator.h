@@ -33,15 +33,11 @@ public:
     QStringList getSelectedPaths() const;
     void restoreSelections(const QSet<QString>& selectedPaths, bool isPendingEdit);
 
-    // 统一 FilterState 广播（精确使用 SectionedScrollCanvas 的 applyFilter API）
+    // 统一 FilterState 广播
     void applyFilterStateToAllViews(const FilterState& state);
 
     // 缩略图视口行号探测与触发
     void refreshVisibleThumbnails();
-
-    // 分区高度与统计同步（原样移植，零数值变动）
-    void updateListSectionCounts();
-    void updateGridSectionCounts();
 
     // 视图缩放几何适配
     void updateGridSize(int zoomLevel);

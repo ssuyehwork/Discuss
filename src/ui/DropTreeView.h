@@ -77,6 +77,8 @@ public:
     void setEmptyHint(const QString& hint) { m_emptyHint = hint; }
     void setBottomMargin(int bottom) { m_bottomMargin = bottom; updateGeometries(); }
 
+    void setModel(QAbstractItemModel* model) override;
+    void updateGroupHeaderSpanning();
     void applyColumnPolicies();
 
 signals:
@@ -89,6 +91,7 @@ protected:
     void keyboardSearch(const QString& search) override;
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
 
 private:
     QTimer* m_autoExpandTimer = nullptr;
