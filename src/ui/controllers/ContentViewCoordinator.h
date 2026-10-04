@@ -33,6 +33,8 @@ public:
     QStringList getSelectedPaths() const;
     void restoreSelections(const QSet<QString>& selectedPaths, bool isPendingEdit);
 
+    static QModelIndex toSourceIndex(const QModelIndex& idx, const QAbstractItemModel* target);
+
     // 统一 FilterState 广播
     void applyFilterStateToAllViews(const FilterState& state);
 

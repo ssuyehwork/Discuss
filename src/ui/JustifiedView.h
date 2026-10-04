@@ -6,6 +6,8 @@
 
 namespace QuarkMeta {
 
+class SectionProxyModel;
+
 class JustifiedView : public QAbstractItemView {
     Q_OBJECT
 public:
@@ -27,6 +29,7 @@ public:
 signals:
     void totalHeightChanged(int height);
     void layoutFinished();
+    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
 
 public:
     QList<int> rowsInRange(int top, int bottom) const;
@@ -34,6 +37,9 @@ public:
     QRect visualRect(const QModelIndex& index) const override;
     void scrollTo(const QModelIndex& index, ScrollHint hint = EnsureVisible) override;
     QModelIndex indexAt(const QPoint& point) const override;
+
+    void setSectionModel(SectionProxyModel* secModel) { m_sectionModel = secModel; }
+    SectionProxyModel* sectionModel() const { return m_sectionModel; }
 
     void reset() override;
     void doItemsLayout() override;
@@ -84,6 +90,7 @@ private:
     LayoutMode m_layoutMode = JustifiedMode;
     QTimer* m_layoutTimer = nullptr;
     bool m_layoutDirty = false;
+    SectionProxyModel* m_sectionModel = nullptr;
 };
 
 } // namespace QuarkMeta

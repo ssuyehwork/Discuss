@@ -76,7 +76,7 @@ void DropTreeView::mousePressEvent(QMouseEvent* event) {
     QModelIndex idx = indexAt(event->pos());
     if (idx.isValid() && idx.data(SectionHeaderRole).toBool()) {
         if (event->button() == Qt::LeftButton) {
-            if (idx.data(SectionHeaderTextRole).toString().startsWith("文件夹")) {
+            if (idx.data(SectionKindRole).toInt() == 1) {
                 SectionProxyModel* secModel = nullptr;
                 QAbstractItemModel* cur = model();
                 while (cur) {

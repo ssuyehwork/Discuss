@@ -2,6 +2,7 @@
 
 #include <QWidget>
 #include <QScrollArea>
+#include <QVBoxLayout>
 #include <QSet>
 #include <QPointer>
 #include "models/DiskItemModel.h"
@@ -11,6 +12,8 @@
 namespace QuarkMeta {
 
 class ContentPanel;
+class SectionProxyModel;
+class FolderSectionHeaderBar;
 
 class ColumnViewPane : public QWidget {
     Q_OBJECT
@@ -74,8 +77,6 @@ private:
     ContentPanel* m_contentPanel = nullptr;
     DiskItemModel* m_model = nullptr;
     FilterProxyModel* m_proxyModel = nullptr;
-    FilterProxyModel* m_folderProxyModel = nullptr;
-    FilterProxyModel* m_fileProxyModel = nullptr;
     SectionProxyModel* m_sectionProxyModel = nullptr;
     bool m_isActive = false;
     QScrollArea* m_paneScrollArea = nullptr;

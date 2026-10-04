@@ -188,7 +188,7 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
         pos = view->viewport()->mapFrom(view, pos);
     }
     QModelIndex index = view->indexAt(pos);
-    if (!index.isValid()) return false;
+    if (!index.isValid() || index.data(SectionHeaderRole).toBool()) return false;
 
     // 1. 网格/自适应视图：归一化 Hitbox 查询
     if (!m_panel->isTreeView(view)) {
@@ -200,11 +200,11 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
             bool isSelected = view->selectionModel() && view->selectionModel()->isSelected(index);
             if (!isSelected) return false;
 
-            auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
+            QAbstractItemModel* model = view->model();
             if (model) {
                 auto selectedIndexes = view->selectionModel()->selectedIndexes();
                 for (const auto& selIdx : selectedIndexes) {
-                    if (selIdx.column() == 0) {
+                    if (selIdx.column() == 0 && !selIdx.data(SectionHeaderRole).toBool()) {
                         model->setData(selIdx, hitVal, RatingRole);
                     }
                 }
@@ -238,12 +238,14 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
             bool isRowSelected = treeView->selectionModel() && treeView->selectionModel()->isRowSelected(index.row(), index.parent());
             if (!isRowSelected) return false;
 
-            auto* model = qobject_cast<QSortFilterProxyModel*>(treeView->model());
+            QAbstractItemModel* model = treeView->model();
             if (model) {
                 auto selectedRows = treeView->selectionModel()->selectedRows();
                 for (const auto& selRow : selectedRows) {
                     QModelIndex targetIdx = treeView->model()->index(selRow.row(), 0, selRow.parent());
-                    model->setData(targetIdx, hitStar, RatingRole);
+                    if (!targetIdx.data(SectionHeaderRole).toBool()) {
+                        model->setData(targetIdx, hitStar, RatingRole);
+                    }
                 }
             }
 
@@ -283,22 +285,22 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
     // 1. Ctrl + 0~5: 评级
     if ((keyEvent->modifiers() & Qt::ControlModifier) && (keyEvent->key() >= Qt::Key_0 && keyEvent->key() <= Qt::Key_5)) {
         int rating = keyEvent->key() - Qt::Key_0;
-        auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
+        QAbstractItemModel* model = view->model();
         if (!model) return true;
         auto indexes = view->selectionModel()->selectedIndexes();
         for (const auto& idx : indexes) {
-            if (idx.column() == 0) model->setData(idx, rating, RatingRole);
+            if (idx.column() == 0 && !idx.data(SectionHeaderRole).toBool()) model->setData(idx, rating, RatingRole);
         }
         return true;
     }
 
     // 2. Alt + D: 置顶/取消置顶
     if (((keyEvent->modifiers() & Qt::AltModifier) || (keyEvent->modifiers() & (Qt::AltModifier | Qt::WindowShortcut))) && (keyEvent->key() == Qt::Key_D)) {
-        auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
+        QAbstractItemModel* model = view->model();
         if (!model) return true;
         auto indexes = view->selectionModel()->selectedIndexes();
         for (const QModelIndex& idx : indexes) {
-            if (idx.column() == 0) {
+            if (idx.column() == 0 && !idx.data(SectionHeaderRole).toBool()) {
                 bool current = idx.data(IsLockedRole).toBool();
                 model->setData(idx, !current, IsLockedRole);
             }
@@ -314,11 +316,11 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         };
         QString colorValue = colors[keyEvent->key() - Qt::Key_1];
 
-        auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
+        QAbstractItemModel* model = view->model();
         if (!model) return true;
         auto indexes = view->selectionModel()->selectedIndexes();
         for (const auto& idx : indexes) {
-            if (idx.column() == 0) {
+            if (idx.column() == 0 && !idx.data(SectionHeaderRole).toBool()) {
                 model->setData(idx, colorValue, ColorRole);
                 QString path = idx.data(PathRole).toString();
                 QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
@@ -368,11 +370,11 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
                 ToolTipOverlay::instance()->showText(QCursor::pos(), "剪贴板无有效标签", 1500, QColor("#e81123"));
                 return true;
             }
-            auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
+            QAbstractItemModel* model = view->model();
             auto indexes = view->selectionModel()->selectedIndexes();
             int count = 0;
             for (const auto& targetIdx : indexes) {
-                if (model && targetIdx.column() == 0) {
+                if (model && targetIdx.column() == 0 && !targetIdx.data(SectionHeaderRole).toBool()) {
                     model->setData(targetIdx, copiedTags, TagsRole);
                     count++;
                 }
@@ -396,11 +398,11 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             return true;
         }
 
-        auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
+        QAbstractItemModel* model = view->model();
         if (!model) return true;
         auto indexes = view->selectionModel()->selectedIndexes();
         for (const auto& targetIdx : indexes) {
-            if (targetIdx.column() == 0) {
+            if (targetIdx.column() == 0 && !targetIdx.data(SectionHeaderRole).toBool()) {
                 if (type == LastOperationType::SetRating) {
                     model->setData(targetIdx, LastOperationManager::instance().rating(), RatingRole);
                 } else if (type == LastOperationType::SetColor) {

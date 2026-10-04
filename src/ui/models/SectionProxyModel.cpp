@@ -1,5 +1,6 @@
 #include "SectionProxyModel.h"
 #include "../../core/ModelContract.h"
+#include <algorithm>
 
 namespace QuarkMeta {
 
@@ -84,7 +85,7 @@ void SectionProxyModel::rebuildMapping() {
 }
 
 void SectionProxyModel::updateCounts() {
-    // Rebuild mapping maintains counts
+    // Counts updated during rebuildMapping
 }
 
 QModelIndex SectionProxyModel::mapToSource(const QModelIndex& proxyIndex) const {
@@ -106,6 +107,8 @@ QModelIndex SectionProxyModel::mapFromSource(const QModelIndex& sourceIndex) con
     }
 
     int srcRow = sourceIndex.row();
+
+    // Fast mapping lookup
     for (int pRow = 0; pRow < m_mapping.size(); ++pRow) {
         if (m_mapping.at(pRow).sourceRow == srcRow) {
             return createIndex(pRow, sourceIndex.column());
@@ -144,6 +147,12 @@ QVariant SectionProxyModel::data(const QModelIndex& index, int role) const {
 
     const auto& entry = m_mapping.at(index.row());
 
+    if (role == SectionKindRole) {
+        if (entry.type == RowType::FolderHeader) return 1;
+        if (entry.type == RowType::FileHeader) return 2;
+        return 0;
+    }
+
     if (role == SectionHeaderRole) {
         return (entry.type == RowType::FolderHeader || entry.type == RowType::FileHeader);
     }
@@ -165,6 +174,22 @@ QVariant SectionProxyModel::data(const QModelIndex& index, int role) const {
         return false;
     }
 
+    if (role == SectionRowRole) {
+        if (entry.type == RowType::FolderItem) {
+            auto it = std::find(m_folderSourceRows.begin(), m_folderSourceRows.end(), entry.sourceRow);
+            if (it != m_folderSourceRows.end()) {
+                return static_cast<int>(std::distance(m_folderSourceRows.begin(), it));
+            }
+        }
+        if (entry.type == RowType::FileItem) {
+            auto it = std::find(m_fileSourceRows.begin(), m_fileSourceRows.end(), entry.sourceRow);
+            if (it != m_fileSourceRows.end()) {
+                return static_cast<int>(std::distance(m_fileSourceRows.begin(), it));
+            }
+        }
+        return -1;
+    }
+
     if (entry.sourceRow < 0) {
         return QVariant();
     }
@@ -180,15 +205,11 @@ bool SectionProxyModel::setData(const QModelIndex& index, const QVariant& value,
 
     const auto& entry = m_mapping.at(index.row());
     if (entry.sourceRow < 0) {
-        return false; // Headers cannot accept setData
+        return false;
     }
 
     QModelIndex srcIdx = mapToSource(index);
-    if (srcIdx.isValid() && sourceModel()->setData(srcIdx, value, role)) {
-        emit dataChanged(index, index, {role});
-        return true;
-    }
-    return false;
+    return srcIdx.isValid() ? sourceModel()->setData(srcIdx, value, role) : false;
 }
 
 Qt::ItemFlags SectionProxyModel::flags(const QModelIndex& index) const {
@@ -198,7 +219,7 @@ Qt::ItemFlags SectionProxyModel::flags(const QModelIndex& index) const {
 
     const auto& entry = m_mapping.at(index.row());
     if (entry.type == RowType::FolderHeader || entry.type == RowType::FileHeader) {
-        return Qt::ItemIsEnabled; // Not selectable, editable, draggable, or drop target
+        return Qt::ItemIsEnabled;
     }
 
     QModelIndex srcIdx = mapToSource(index);
@@ -212,22 +233,60 @@ void SectionProxyModel::sort(int column, Qt::SortOrder order) {
 }
 
 void SectionProxyModel::setFolderCollapsed(bool collapsed) {
-    if (m_folderCollapsed == collapsed) return;
-    m_folderCollapsed = collapsed;
-    rebuildMapping();
+    if (m_folderCollapsed == collapsed || m_folderCount == 0) return;
+
+    if (collapsed) {
+        beginRemoveRows(QModelIndex(), 1, m_folderCount);
+        m_folderCollapsed = true;
+        m_mapping.clear();
+        m_mapping.append({RowType::FolderHeader, -1});
+        if (m_fileCount > 0) {
+            if (m_folderCount > 0) m_mapping.append({RowType::FileHeader, -1});
+            for (int srcRow : m_fileSourceRows) {
+                m_mapping.append({RowType::FileItem, srcRow});
+            }
+        }
+        endRemoveRows();
+    } else {
+        beginInsertRows(QModelIndex(), 1, m_folderCount);
+        m_folderCollapsed = false;
+        m_mapping.clear();
+        m_mapping.append({RowType::FolderHeader, -1});
+        for (int srcRow : m_folderSourceRows) {
+            m_mapping.append({RowType::FolderItem, srcRow});
+        }
+        if (m_fileCount > 0) {
+            if (m_folderCount > 0) m_mapping.append({RowType::FileHeader, -1});
+            for (int srcRow : m_fileSourceRows) {
+                m_mapping.append({RowType::FileItem, srcRow});
+            }
+        }
+        endInsertRows();
+    }
+
+    QModelIndex headerIdx = index(0, 0);
+    emit dataChanged(headerIdx, headerIdx, {SectionCollapsedRole, SectionHeaderTextRole});
 }
 
 void SectionProxyModel::onSourceDataChanged(const QModelIndex& topLeft, const QModelIndex& bottomRight, const QVector<int>& roles) {
     if (!topLeft.isValid() || !bottomRight.isValid()) return;
 
+    int minProxyRow = -1;
+    int maxProxyRow = -1;
+
     for (int r = topLeft.row(); r <= bottomRight.row(); ++r) {
-        for (int c = topLeft.column(); c <= bottomRight.column(); ++c) {
-            QModelIndex srcIdx = sourceModel()->index(r, c);
-            QModelIndex proxyIdx = mapFromSource(srcIdx);
-            if (proxyIdx.isValid()) {
-                emit dataChanged(proxyIdx, proxyIdx, roles);
-            }
+        QModelIndex srcIdx = sourceModel()->index(r, 0);
+        QModelIndex proxyIdx = mapFromSource(srcIdx);
+        if (proxyIdx.isValid()) {
+            if (minProxyRow == -1 || proxyIdx.row() < minProxyRow) minProxyRow = proxyIdx.row();
+            if (maxProxyRow == -1 || proxyIdx.row() > maxProxyRow) maxProxyRow = proxyIdx.row();
         }
+    }
+
+    if (minProxyRow != -1 && maxProxyRow != -1) {
+        QModelIndex pTopLeft = index(minProxyRow, topLeft.column());
+        QModelIndex pBottomRight = index(maxProxyRow, bottomRight.column());
+        emit dataChanged(pTopLeft, pBottomRight, roles);
     }
 }
 
@@ -246,11 +305,34 @@ void SectionProxyModel::onSourceModelReset() {
 }
 
 void SectionProxyModel::onSourceLayoutAboutToBeChanged() {
+    QModelIndexList proxyList;
+    QModelIndexList sourceList;
+    for (int r = 0; r < m_mapping.size(); ++r) {
+        if (m_mapping[r].sourceRow >= 0) {
+            QModelIndex pIdx = createIndex(r, 0);
+            QModelIndex sIdx = mapToSource(pIdx);
+            if (sIdx.isValid()) {
+                proxyList.append(pIdx);
+                sourceList.append(sIdx);
+            }
+        }
+    }
+    m_layoutChangeProxyIndexes = proxyList;
+    m_layoutChangeSourceIndexes = sourceList;
     emit layoutAboutToBeChanged();
 }
 
 void SectionProxyModel::onSourceLayoutChanged() {
     rebuildMapping();
+    if (!m_layoutChangeProxyIndexes.isEmpty()) {
+        QModelIndexList newProxyIndexes;
+        for (const QModelIndex& sIdx : m_layoutChangeSourceIndexes) {
+            newProxyIndexes.append(mapFromSource(sIdx));
+        }
+        changePersistentIndexList(m_layoutChangeProxyIndexes, newProxyIndexes);
+    }
+    m_layoutChangeProxyIndexes.clear();
+    m_layoutChangeSourceIndexes.clear();
     emit layoutChanged();
 }
 

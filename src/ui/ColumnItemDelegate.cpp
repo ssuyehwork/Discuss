@@ -24,6 +24,32 @@ QSize ColumnItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QMo
 void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
     if (!index.isValid()) return;
 
+    if (index.data(SectionHeaderRole).toBool()) {
+        painter->save();
+        QRect rect = option.rect;
+        painter->fillRect(rect, QColor("#1E1E1E"));
+
+        QFont font = painter->font();
+        font.setBold(true);
+        font.setPixelSize(12);
+        painter->setFont(font);
+        painter->setPen(QColor("#3498db"));
+
+        QString text = index.data(SectionHeaderTextRole).toString();
+        QRect textRect = rect.adjusted(10, 0, -30, 0);
+        painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
+
+        if (index.data(SectionKindRole).toInt() == 1) {
+            bool collapsed = index.data(SectionCollapsedRole).toBool();
+            QIcon arrowIcon = UiHelper::getIcon(collapsed ? "scroll-008" : "scroll-010", QColor("#3498db"), 12);
+            QRect iconRect(rect.right() - 25, rect.top() + (rect.height() - 12) / 2, 12, 12);
+            arrowIcon.paint(painter, iconRect);
+        }
+
+        painter->restore();
+        return;
+    }
+
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
     painter->setRenderHint(QPainter::SmoothPixmapTransform);

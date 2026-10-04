@@ -60,7 +60,7 @@ public:
             QRect textRect = rect.adjusted(10, 0, -30, 0);
             painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
 
-            if (text.startsWith("文件夹")) {
+            if (index.data(SectionKindRole).toInt() == 1) {
                 bool collapsed = index.data(SectionCollapsedRole).toBool();
                 QIcon arrowIcon = UiHelper::getIcon(collapsed ? "scroll-008" : "scroll-010", QColor("#3498db"), 12);
                 QRect iconRect(rect.right() - 25, rect.top() + (rect.height() - 12) / 2, 12, 12);
@@ -94,8 +94,10 @@ public:
         } else if (hover) {
             bg = QColor("#2A2D2E");
         } else {
-            // 根据控件是否开启斑马纹与行号奇偶精准赋值底色
-            bg = (useAlternate && index.row() % 2 == 1) ? QColor("#252526") : QColor("#1E1E1E");
+            // 根据控件是否开启斑马纹与分区行号奇偶精准赋值底色
+            int secRow = index.data(SectionRowRole).toInt();
+            if (secRow < 0) secRow = index.row();
+            bg = (useAlternate && secRow % 2 == 1) ? QColor("#252526") : QColor("#1E1E1E");
         }
         painter->setBrush(bg);
         painter->setPen(Qt::NoPen);

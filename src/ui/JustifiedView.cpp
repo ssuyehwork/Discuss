@@ -237,16 +237,8 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
     QModelIndex pressIdx = indexAt(event->pos());
     if (pressIdx.isValid() && pressIdx.data(SectionHeaderRole).toBool()) {
         if (event->button() == Qt::LeftButton) {
-            if (pressIdx.data(SectionHeaderTextRole).toString().startsWith("文件夹")) {
-                SectionProxyModel* secModel = nullptr;
-                QAbstractItemModel* cur = model();
-                while (cur) {
-                    secModel = qobject_cast<SectionProxyModel*>(cur);
-                    if (secModel) break;
-                    auto* proxy = qobject_cast<QAbstractProxyModel*>(cur);
-                    if (proxy) cur = proxy->sourceModel();
-                    else break;
-                }
+            if (pressIdx.data(SectionKindRole).toInt() == 1) {
+                SectionProxyModel* secModel = m_sectionModel ? m_sectionModel : qobject_cast<SectionProxyModel*>(model());
                 if (secModel) {
                     secModel->setFolderCollapsed(!secModel->isFolderCollapsed());
                 }
@@ -270,7 +262,7 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
 
     if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ShiftModifier)) {
         QModelIndex clicked = indexAt(event->pos());
-        if (clicked.isValid() && m_anchorRow >= 0) {
+        if (clicked.isValid() && !clicked.data(SectionHeaderRole).toBool() && m_anchorRow >= 0) {
             int anchorVisual = -1, clickedVisual = -1;
             for (int i = 0; i < (int)m_geometries.size(); ++i) {
                 if (m_geometries[i].index == m_anchorRow)      anchorVisual = i;
@@ -281,6 +273,7 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
                 int vTo   = std::max(anchorVisual, clickedVisual);
                 QItemSelection sel;
                 for (int v = vFrom; v <= vTo; ++v) {
+                    if (m_geometries[v].isHeader) continue;
                     QModelIndex idx = model()->index(m_geometries[v].index, 0);
                     sel.select(idx, idx);
                 }
@@ -295,7 +288,7 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
 
     QAbstractItemView::mousePressEvent(event);
     QModelIndex current = currentIndex();
-    if (current.isValid()) {
+    if (current.isValid() && !current.data(SectionHeaderRole).toBool()) {
         m_anchorRow = current.row();
     } else {
         m_anchorRow = -1;
@@ -332,8 +325,12 @@ void JustifiedView::mouseDoubleClickEvent(QMouseEvent* event) {
         return;
     }
 
+    if (idx.data(SectionHeaderRole).toBool()) {
+        event->accept();
+        return;
+    }
+
     // 核心架构意图：双击 = 打开 / 预览（绝无编辑副作用）
-    // 无论是命中卡片封面、文字区域还是整卡，统一发射 doubleClicked 驱动打开/预览
     emit doubleClicked(idx);
 }
 

@@ -20,6 +20,7 @@ protected:
 
 signals:
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+    void sectionHeaderClicked(const QModelIndex& index);
     void blankSpaceClicked();
     void blankSpaceDoubleClicked();
 

@@ -18,6 +18,11 @@ void DropListView::startDrag(Qt::DropActions supportedActions) {
 void DropListView::mousePressEvent(QMouseEvent* event) {
     if (event && event->button() == Qt::LeftButton) {
         QModelIndex idx = indexAt(event->pos());
+        if (idx.isValid() && idx.data(SectionHeaderRole).toBool()) {
+            emit sectionHeaderClicked(idx);
+            event->accept();
+            return;
+        }
         if (!idx.isValid()) {
             emit blankSpaceClicked();
         }
@@ -28,6 +33,10 @@ void DropListView::mousePressEvent(QMouseEvent* event) {
 void DropListView::mouseDoubleClickEvent(QMouseEvent* event) {
     if (event && event->button() == Qt::LeftButton) {
         QModelIndex idx = indexAt(event->pos());
+        if (idx.isValid() && idx.data(SectionHeaderRole).toBool()) {
+            event->accept();
+            return;
+        }
         if (!idx.isValid()) {
             emit blankSpaceDoubleClicked();
             event->accept();

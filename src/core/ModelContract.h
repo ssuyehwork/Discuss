@@ -38,6 +38,8 @@ enum CommonRole {
     SectionHeaderRole    = Qt::UserRole + 212, // 是否为分区标头行
     SectionHeaderTextRole = Qt::UserRole + 213,// 分区标头显示文本
     SectionCollapsedRole = Qt::UserRole + 214, // 文件夹分区折叠状态
+    SectionKindRole      = Qt::UserRole + 215, // 分区角色类型 (0:普通项, 1:文件夹标头, 2:文件标头)
+    SectionRowRole       = Qt::UserRole + 216, // 分区内奇偶序号
 
     // 磁盘回收站专用角色
     IsDiskTrashRole     = Qt::UserRole + 208, // 是否是磁盘回收站项目

@@ -57,14 +57,31 @@ QAbstractItemView* ContentViewCoordinator::activeItemView() const {
     return m_panel->gridView();
 }
 
+QModelIndex ContentViewCoordinator::toSourceIndex(const QModelIndex& idx, const QAbstractItemModel* target) {
+    if (!idx.isValid() || idx.data(SectionHeaderRole).toBool()) return QModelIndex();
+
+    QModelIndex cur = idx;
+    while (cur.isValid() && cur.model() != target) {
+        auto* proxy = qobject_cast<const QAbstractProxyModel*>(cur.model());
+        if (!proxy) break;
+        cur = proxy->mapToSource(cur);
+    }
+
+    if (cur.isValid() && cur.model() == target) {
+        return cur;
+    }
+    return QModelIndex();
+}
+
 QSortFilterProxyModel* ContentViewCoordinator::getActiveProxyModel() const {
     if (!m_panel) return nullptr;
 
-    QAbstractItemView* view = activeItemView();
-    if (view && view->model()) {
-        return qobject_cast<QSortFilterProxyModel*>(view->model());
+    auto mode = m_panel->currentViewMode();
+    if (mode == ContentPanel::ColumnView && m_panel->columnView() && m_panel->columnView()->activePane()) {
+        return m_panel->columnView()->activePane()->proxyModel();
     }
-    return nullptr;
+
+    return m_panel->getProxyModel();
 }
 
 QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
@@ -126,72 +143,100 @@ void ContentViewCoordinator::restoreSelections(const QSet<QString>& selectedPath
 
     QList<QAbstractItemView*> views = currentActiveViews();
     for (auto* view : views) {
-        if (!view || !view->selectionModel()) continue;
-        QSortFilterProxyModel* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
-        if (!proxy) proxy = m_panel->getActiveProxyModel();
-        DiskItemModel* diskModel = m_panel->diskModel();
+        if (!view || !view->selectionModel() || !view->model()) continue;
+        QAbstractItemModel* viewModeModel = view->model();
 
-        if (diskModel && proxy) {
-            QSignalBlocker blocker(view->selectionModel());
-            QItemSelection sel;
-            QModelIndex lastIdx;
-            const auto& recs = diskModel->allRecords();
-            for (size_t i = 0; i < recs.size(); ++i) {
-                if (selectedPaths.contains(recs[i].path)) {
-                    QModelIndex pIdx = proxy->mapFromSource(diskModel->index(static_cast<int>(i), 0));
-                    if (pIdx.isValid()) { sel.select(pIdx, pIdx); lastIdx = pIdx; }
-                }
+        QSignalBlocker blocker(view->selectionModel());
+        QItemSelection sel;
+        QModelIndex lastIdx;
+
+        int total = viewModeModel->rowCount();
+        for (int r = 0; r < total; ++r) {
+            QModelIndex idx = viewModeModel->index(r, 0);
+            if (idx.data(SectionHeaderRole).toBool()) continue;
+            QString p = idx.data(PathRole).toString();
+            if (selectedPaths.contains(p)) {
+                sel.select(idx, idx);
+                lastIdx = idx;
             }
-            view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
-            if (lastIdx.isValid()) {
-                view->scrollTo(lastIdx);
-                if (isPendingEdit) {
-                    QPointer<QAbstractItemView> weakView(view);
-                    QTimer::singleShot(0, m_panel, [weakView, lastIdx]() {
-                        if (weakView && lastIdx.isValid()) {
-                            weakView->setFocus();
-                            weakView->setCurrentIndex(lastIdx);
-                            weakView->edit(lastIdx);
-                        }
-                    });
-                }
+        }
+
+        view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+        if (lastIdx.isValid()) {
+            view->scrollTo(lastIdx);
+            if (isPendingEdit) {
+                QPointer<QAbstractItemView> weakView(view);
+                QTimer::singleShot(0, m_panel, [weakView, lastIdx]() {
+                    if (weakView && lastIdx.isValid()) {
+                        weakView->setFocus();
+                        weakView->setCurrentIndex(lastIdx);
+                        weakView->edit(lastIdx);
+                    }
+                });
             }
         }
     }
 }
 
 void ContentViewCoordinator::refreshVisibleThumbnails() {
-    if (!m_panel || !m_panel->model() || CoreController::isShuttingDown()) return;
+    if (!m_panel || !m_panel->diskModel() || CoreController::isShuttingDown()) return;
 
     QList<QAbstractItemView*> views = currentActiveViews();
     QSet<int> visibleRows;
 
     for (auto* view : views) {
         if (!view || !view->viewport()) continue;
-        auto* proxy = qobject_cast<QSortFilterProxyModel*>(view->model());
-        if (!proxy || proxy->rowCount() == 0) continue;
+        QAbstractItemModel* model = view->model();
+        if (!model || model->rowCount() == 0) continue;
+
+        auto* jv = qobject_cast<JustifiedView*>(view);
+        if (jv) {
+            if (!jv->isLayoutReady()) continue;
+            int scrollY = jv->verticalScrollBar() ? jv->verticalScrollBar()->value() : 0;
+            int vpH = jv->viewport()->height();
+            QList<int> rangeRows = jv->rowsInRange(qMax(0, scrollY - vpH / 2), scrollY + vpH + vpH / 2);
+            for (int r : rangeRows) {
+                QModelIndex idx = model->index(r, 0);
+                QModelIndex srcIdx = toSourceIndex(idx, m_panel->diskModel());
+                if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
+            }
+            continue;
+        }
 
         QRect vpRect = view->viewport()->rect();
         QModelIndex topIdx = view->indexAt(vpRect.topLeft());
         QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
 
-        // 绝对照抄原数值：缓冲前后 4 行
         int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-        int bottom = btmIdx.isValid() ? qMin(proxy->rowCount() - 1, btmIdx.row() + 4) : proxy->rowCount() - 1;
+        int bottom = btmIdx.isValid() ? qMin(model->rowCount() - 1, btmIdx.row() + 4) : model->rowCount() - 1;
 
         for (int r = top; r <= bottom; ++r) {
-            QModelIndex srcIdx = proxy->mapToSource(proxy->index(r, 0));
+            QModelIndex idx = model->index(r, 0);
+            if (idx.data(SectionHeaderRole).toBool()) continue;
+            QModelIndex srcIdx = toSourceIndex(idx, m_panel->diskModel());
             if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
         }
     }
 
     if (!visibleRows.isEmpty()) {
-        m_panel->model()->loadThumbnailsForRows(visibleRows.values());
+        m_panel->diskModel()->loadThumbnailsForRows(visibleRows.values());
     }
 }
 
 void ContentViewCoordinator::updateGridSize(int zoomLevel) {
-    Q_UNUSED(zoomLevel);
+    if (!m_panel) return;
+    if (m_panel->gridView()) {
+        auto* jv = qobject_cast<JustifiedView*>(m_panel->gridView());
+        if (jv) jv->setTargetRowHeight(zoomLevel);
+    }
+    if (m_panel->dropTreeView()) {
+        int iconSz = qMax(16, zoomLevel - 8);
+        m_panel->dropTreeView()->setIconSize(QSize(iconSz, iconSz));
+        if (auto* header = qobject_cast<ContentHeaderView*>(m_panel->dropTreeView()->header())) {
+            header->setZoomLevel(zoomLevel);
+        }
+        m_panel->dropTreeView()->doItemsLayout();
+    }
 }
 
 void ContentViewCoordinator::installActivationFilters() {

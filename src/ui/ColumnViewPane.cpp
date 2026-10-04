@@ -37,9 +37,6 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     m_sectionProxyModel = new SectionProxyModel(this);
     m_sectionProxyModel->setSourceModel(m_proxyModel);
 
-    m_folderProxyModel = m_proxyModel;
-    m_fileProxyModel = m_proxyModel;
-
     m_listView = new DropListView(this);
     m_listView->setObjectName("ColumnViewPaneListView");
     m_listView->setFrameShape(QFrame::NoFrame);
@@ -88,7 +85,7 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         connect(m_listView, &DropListView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
             emit pathsDroppedSignal(paths, targetIndex, m_path);
             if (m_contentPanel) {
-                m_contentPanel->onPathsDropped(paths, targetIndex, m_path, m_proxyModel);
+                m_contentPanel->onPathsDropped(paths, targetIndex, m_path);
             }
         });
     }
@@ -97,14 +94,14 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
         emit selectionChanged();
     });
 
-    connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
-        if (!index.isValid()) return;
-        if (index.data(SectionHeaderRole).toBool()) {
-            if (index.data(SectionHeaderTextRole).toString().startsWith("文件夹") && m_sectionProxyModel) {
-                m_sectionProxyModel->setFolderCollapsed(!m_sectionProxyModel->isFolderCollapsed());
-            }
-            return;
+    connect(m_listView, &DropListView::sectionHeaderClicked, this, [this](const QModelIndex& index) {
+        if (index.data(SectionKindRole).toInt() == 1 && m_sectionProxyModel) {
+            m_sectionProxyModel->setFolderCollapsed(!m_sectionProxyModel->isFolderCollapsed());
         }
+    });
+
+    connect(m_listView, &QListView::clicked, this, [this](const QModelIndex& index) {
+        if (!index.isValid() || index.data(SectionHeaderRole).toBool()) return;
         QString itemPath = index.data(PathRole).toString();
         bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
         int paneIdx = property("paneIndex").toInt();
@@ -186,7 +183,7 @@ bool ColumnViewPane::eventFilter(QObject* obj, QEvent* event) {
 
     if (event && event->type() == QEvent::MouseButtonPress) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
-        if (mouseEvent->button() == Qt::LeftButton && (obj == m_paneScrollArea || obj == m_panel)) {
+        if (mouseEvent->button() == Qt::LeftButton && (obj == m_paneScrollArea || obj == this)) {
             int paneIdx = property("paneIndex").toInt();
             if (m_contentPanel && m_contentPanel->columnView()) {
                 m_contentPanel->columnView()->activatePaneFromBlankClick(paneIdx);

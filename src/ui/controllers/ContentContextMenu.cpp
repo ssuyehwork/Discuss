@@ -56,7 +56,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     if (!m_panel || !view) return;
 
     QModelIndex currentIndex = view->indexAt(pos);
-    bool onItem = currentIndex.isValid();
+    bool onItem = currentIndex.isValid() && !currentIndex.data(SectionHeaderRole).toBool();
 
     if (onItem && view->selectionModel()) {
         if (!view->selectionModel()->isSelected(currentIndex)) {
@@ -628,10 +628,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 break;
             }
             auto indexes = view->selectionModel()->selectedIndexes();
-            auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
+            QAbstractItemModel* model = view->model();
             int count = 0;
             for (const auto& idx : indexes) {
-                if (idx.column() == 0 && model) {
+                if (idx.column() == 0 && model && !idx.data(SectionHeaderRole).toBool()) {
                     if (type == LastOperationType::SetRating) {
                         model->setData(idx, LastOperationManager::instance().rating(), RatingRole);
                     } else if (type == LastOperationType::SetColor) {
@@ -863,10 +863,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 break;
             }
             auto indexes = view->selectionModel()->selectedIndexes();
-            auto* model = qobject_cast<QSortFilterProxyModel*>(view->model());
+            QAbstractItemModel* model = view->model();
             int count = 0;
             for (const auto& idx : indexes) {
-                if (idx.column() == 0 && model) {
+                if (idx.column() == 0 && model && !idx.data(SectionHeaderRole).toBool()) {
                     model->setData(idx, copiedTags, TagsRole);
                     count++;
                 }
