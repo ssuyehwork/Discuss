@@ -29,8 +29,6 @@ struct FilterState {
     QString createDateFilterText;
     QString modifyDateFilterText;
 
-    bool showFolders = true;
-    bool showFiles = true;
     bool showHidden = false;
 
     enum DuplicatePresence { DupAll, DuplicateOnly, UniqueOnly };

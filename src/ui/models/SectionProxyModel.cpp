@@ -308,6 +308,71 @@ void SectionProxyModel::onSourceDataChanged(const QModelIndex& topLeft, const QM
     }
 }
 
+void SectionProxyModel::syncHeaders() {
+    bool wantFolderHeader = (m_folderCount > 0);
+    bool wantFileHeader = (m_folderCount > 0 && m_fileCount > 0);
+
+    bool hasFolderHeader = (!m_mapping.isEmpty() && m_mapping.first().type == RowType::FolderHeader);
+    int fileHeaderIndex = -1;
+    for (int i = 0; i < m_mapping.size(); ++i) {
+        if (m_mapping[i].type == RowType::FileHeader) {
+            fileHeaderIndex = i;
+            break;
+        }
+    }
+    bool hasFileHeader = (fileHeaderIndex != -1);
+
+    // 1. Sync Folder Header
+    if (wantFolderHeader && !hasFolderHeader) {
+        beginInsertRows(QModelIndex(), 0, 0);
+        m_mapping.prepend({RowType::FolderHeader, -1});
+        rebuildReverseIndex();
+        endInsertRows();
+    } else if (!wantFolderHeader && hasFolderHeader) {
+        beginRemoveRows(QModelIndex(), 0, 0);
+        m_mapping.removeAt(0);
+        rebuildReverseIndex();
+        endRemoveRows();
+    }
+
+    // Recalculate fileHeaderIndex after FolderHeader change
+    fileHeaderIndex = -1;
+    for (int i = 0; i < m_mapping.size(); ++i) {
+        if (m_mapping[i].type == RowType::FileHeader) {
+            fileHeaderIndex = i;
+            break;
+        }
+    }
+    hasFileHeader = (fileHeaderIndex != -1);
+
+    // 2. Sync File Header
+    if (wantFileHeader && !hasFileHeader) {
+        int insertPos = 0;
+        if (!m_folderCollapsed && m_folderCount > 0) {
+            insertPos = 1 + m_folderCount;
+        } else if (m_folderCollapsed && m_folderCount > 0) {
+            insertPos = 1;
+        }
+        beginInsertRows(QModelIndex(), insertPos, insertPos);
+        m_mapping.insert(insertPos, {RowType::FileHeader, -1});
+        rebuildReverseIndex();
+        endInsertRows();
+    } else if (!wantFileHeader && hasFileHeader) {
+        beginRemoveRows(QModelIndex(), fileHeaderIndex, fileHeaderIndex);
+        m_mapping.removeAt(fileHeaderIndex);
+        rebuildReverseIndex();
+        endRemoveRows();
+    }
+
+    // 3. Notify header text changes if headers exist
+    for (int i = 0; i < m_mapping.size(); ++i) {
+        if (m_mapping[i].type == RowType::FolderHeader || m_mapping[i].type == RowType::FileHeader) {
+            QModelIndex hIdx = index(i, 0);
+            emit dataChanged(hIdx, hIdx, {SectionHeaderTextRole});
+        }
+    }
+}
+
 void SectionProxyModel::onSourceRowsInserted(const QModelIndex& parent, int start, int end) {
     Q_UNUSED(parent);
     int count = end - start + 1;
@@ -316,7 +381,20 @@ void SectionProxyModel::onSourceRowsInserted(const QModelIndex& parent, int star
         return;
     }
 
-    // Process row insertions incrementally
+    // 1. Update source row indices >= start for existing entries
+    for (int& folderSrc : m_folderSourceRows) {
+        if (folderSrc >= start) folderSrc += count;
+    }
+    for (int& fileSrc : m_fileSourceRows) {
+        if (fileSrc >= start) fileSrc += count;
+    }
+    for (auto& entry : m_mapping) {
+        if (entry.sourceRow >= start) {
+            entry.sourceRow += count;
+        }
+    }
+
+    // 2. Insert new entries
     for (int r = start; r <= end; ++r) {
         QModelIndex srcIdx = sourceModel()->index(r, 0);
         QString typeStr = srcIdx.data(TypeRole).toString();
@@ -331,19 +409,11 @@ void SectionProxyModel::onSourceRowsInserted(const QModelIndex& parent, int star
             m_folderCount++;
 
             if (!m_folderCollapsed) {
-                int targetProxyRow = 1 + insertPosInFolders;
-                if (m_folderCount == 1) { // Newly created folder header
-                    beginInsertRows(QModelIndex(), 0, 1);
-                    m_mapping.prepend({RowType::FolderItem, r});
-                    m_mapping.prepend({RowType::FolderHeader, -1});
-                    rebuildReverseIndex();
-                    endInsertRows();
-                } else {
-                    beginInsertRows(QModelIndex(), targetProxyRow, targetProxyRow);
-                    m_mapping.insert(targetProxyRow, {RowType::FolderItem, r});
-                    rebuildReverseIndex();
-                    endInsertRows();
-                }
+                int targetProxyRow = (m_mapping.isEmpty() || m_mapping.first().type != RowType::FolderHeader) ? 0 : 1 + insertPosInFolders;
+                beginInsertRows(QModelIndex(), targetProxyRow, targetProxyRow);
+                m_mapping.insert(targetProxyRow, {RowType::FolderItem, r});
+                rebuildReverseIndex();
+                endInsertRows();
             }
         } else {
             int insertPosInFiles = 0;
@@ -361,30 +431,16 @@ void SectionProxyModel::onSourceRowsInserted(const QModelIndex& parent, int star
                 }
             }
 
-            if (fileHeaderProxyRow == -1) {
-                if (m_fileCount == 1) {
-                    int insertAt = m_mapping.size();
-                    beginInsertRows(QModelIndex(), insertAt, insertAt + (m_folderCount > 0 ? 1 : 0));
-                    if (m_folderCount > 0) m_mapping.append({RowType::FileHeader, -1});
-                    m_mapping.append({RowType::FileItem, r});
-                    rebuildReverseIndex();
-                    endInsertRows();
-                }
-            } else {
-                int targetProxyRow = fileHeaderProxyRow + 1 + insertPosInFiles;
-                beginInsertRows(QModelIndex(), targetProxyRow, targetProxyRow);
-                m_mapping.insert(targetProxyRow, {RowType::FileItem, r});
-                rebuildReverseIndex();
-                endInsertRows();
-            }
+            int targetProxyRow = (fileHeaderProxyRow != -1) ? fileHeaderProxyRow + 1 + insertPosInFiles : m_mapping.size();
+            beginInsertRows(QModelIndex(), targetProxyRow, targetProxyRow);
+            m_mapping.insert(targetProxyRow, {RowType::FileItem, r});
+            rebuildReverseIndex();
+            endInsertRows();
         }
     }
 
     rebuildReverseIndex();
-    QModelIndex folderHeaderIdx = index(0, 0);
-    if (folderHeaderIdx.isValid() && folderHeaderIdx.data(SectionHeaderRole).toBool()) {
-        emit dataChanged(folderHeaderIdx, folderHeaderIdx, {SectionHeaderTextRole});
-    }
+    syncHeaders();
 }
 
 void SectionProxyModel::onSourceRowsRemoved(const QModelIndex& parent, int start, int end) {
@@ -395,7 +451,7 @@ void SectionProxyModel::onSourceRowsRemoved(const QModelIndex& parent, int start
         return;
     }
 
-    // Collect proxy rows to remove from bottom to top
+    // 1. Identify proxy rows to remove (from bottom to top)
     QVector<int> proxyRowsToRemove;
     for (int pRow = m_mapping.size() - 1; pRow >= 0; --pRow) {
         int sRow = m_mapping[pRow].sourceRow;
@@ -404,24 +460,38 @@ void SectionProxyModel::onSourceRowsRemoved(const QModelIndex& parent, int start
         }
     }
 
+    // Group contiguous proxy row removals and perform beginRemoveRows
     for (int pRow : proxyRowsToRemove) {
         beginRemoveRows(QModelIndex(), pRow, pRow);
-        int sRow = m_mapping[pRow].sourceRow;
-        m_folderSourceRows.removeOne(sRow);
-        m_fileSourceRows.removeOne(sRow);
         m_mapping.removeAt(pRow);
         rebuildReverseIndex();
         endRemoveRows();
+    }
+
+    // Update folder & file source row lists
+    for (int r = start; r <= end; ++r) {
+        m_folderSourceRows.removeOne(r);
+        m_fileSourceRows.removeOne(r);
+    }
+
+    // Adjust remaining source row numbers > end
+    for (int& folderSrc : m_folderSourceRows) {
+        if (folderSrc > end) folderSrc -= count;
+    }
+    for (int& fileSrc : m_fileSourceRows) {
+        if (fileSrc > end) fileSrc -= count;
+    }
+    for (auto& entry : m_mapping) {
+        if (entry.sourceRow > end) {
+            entry.sourceRow -= count;
+        }
     }
 
     m_folderCount = m_folderSourceRows.size();
     m_fileCount = m_fileSourceRows.size();
 
     rebuildReverseIndex();
-    QModelIndex folderHeaderIdx = index(0, 0);
-    if (folderHeaderIdx.isValid() && folderHeaderIdx.data(SectionHeaderRole).toBool()) {
-        emit dataChanged(folderHeaderIdx, folderHeaderIdx, {SectionHeaderTextRole});
-    }
+    syncHeaders();
 }
 
 void SectionProxyModel::onSourceModelReset() {

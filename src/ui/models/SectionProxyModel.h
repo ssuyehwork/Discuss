@@ -61,6 +61,7 @@ private slots:
 private:
     void rebuildMapping();
     void rebuildReverseIndex();
+    void syncHeaders();
 
     QVector<MappingEntry> m_mapping;
     QVector<int> m_sourceToProxyMap;

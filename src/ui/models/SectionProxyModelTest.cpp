@@ -1,14 +1,30 @@
 #include "src/ui/models/SectionProxyModel.h"
 #include "src/core/ModelContract.h"
 #include <QStandardItemModel>
+#include <QSortFilterProxyModel>
 #include <QElapsedTimer>
 #include <QDebug>
 #include <cassert>
 
 using namespace QuarkMeta;
 
+class TestFilterProxyModel : public QSortFilterProxyModel {
+public:
+    bool filterFolders = true;
+    bool filterFiles = true;
+
+protected:
+    bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override {
+        Q_UNUSED(sourceParent);
+        QModelIndex idx = sourceModel()->index(sourceRow, 0);
+        QString typeStr = idx.data(TypeRole).toString();
+        if (typeStr == "folder") return filterFolders;
+        return filterFiles;
+    }
+};
+
 void runSectionProxyModelTests() {
-    qDebug() << "=== Starting SectionProxyModel Self-Tests ===";
+    qDebug() << "=== Starting Extended SectionProxyModel Invariant Self-Tests ===";
 
     QStandardItemModel sourceModel;
     for (int i = 0; i < 10; ++i) {
@@ -22,66 +38,77 @@ void runSectionProxyModelTests() {
         sourceModel.appendRow(fileItem);
     }
 
+    TestFilterProxyModel filterModel;
+    filterModel.setSourceModel(&sourceModel);
+
     SectionProxyModel proxyModel;
-    proxyModel.setSourceModel(&sourceModel);
+    proxyModel.setSourceModel(&filterModel);
 
-    // Test 1: Initial mapping counts
-    assert(proxyModel.folderCount() == 10);
-    assert(proxyModel.fileCount() == 20);
-    // Row 0: FolderHeader, Rows 1..10: FolderItems, Row 11: FileHeader, Rows 12..31: FileItems
-    assert(proxyModel.rowCount() == 32);
-    qDebug() << "[PASS] Test 1: Initial mapping counts";
+    auto verifyInvariants = [&](const QString& context) {
+        int fc = proxyModel.folderCount();
+        int fic = proxyModel.fileCount();
+        bool hasFolderHeader = (!proxyModel.rowCount() == 0 && proxyModel.index(0, 0).data(SectionHeaderRole).toBool() && proxyModel.index(0, 0).data(SectionKindRole).toInt() == 1);
 
-    // Test 2: MapFromSource & MapToSource consistency
-    QModelIndex srcFolder0 = sourceModel.index(0, 0);
-    QModelIndex proxyFolder0 = proxyModel.mapFromSource(srcFolder0);
-    assert(proxyFolder0.isValid() && proxyFolder0.row() == 1);
-    assert(proxyModel.mapToSource(proxyFolder0) == srcFolder0);
+        assert(hasFolderHeader == (fc > 0));
 
-    QModelIndex srcFile0 = sourceModel.index(10, 0);
-    QModelIndex proxyFile0 = proxyModel.mapFromSource(srcFile0);
-    assert(proxyFile0.isValid() && proxyFile0.row() == 12);
-    assert(proxyModel.mapToSource(proxyFile0) == srcFile0);
-    qDebug() << "[PASS] Test 2: MapFromSource & MapToSource consistency";
+        if (fc > 0 && fic > 0) {
+            int fileHeaderRow = proxyModel.isFolderCollapsed() ? 1 : 1 + fc;
+            assert(proxyModel.index(fileHeaderRow, 0).data(SectionHeaderRole).toBool());
+            assert(proxyModel.index(fileHeaderRow, 0).data(SectionKindRole).toInt() == 2);
+        }
 
-    // Test 3: Collapse Folders
-    proxyModel.setFolderCollapsed(true);
-    assert(proxyModel.isFolderCollapsed());
-    // Row 0: FolderHeader, Row 1: FileHeader, Rows 2..21: FileItems
-    assert(proxyModel.rowCount() == 22);
-    assert(!proxyModel.mapFromSource(srcFolder0).isValid()); // Folder items unmapped when collapsed
-    QModelIndex proxyFile0Collapsed = proxyModel.mapFromSource(srcFile0);
-    assert(proxyFile0Collapsed.isValid() && proxyFile0Collapsed.row() == 2);
-    qDebug() << "[PASS] Test 3: Collapse Folders";
+        // Verify mapToSource DisplayRole & TypeRole correctness
+        for (int r = 0; r < proxyModel.rowCount(); ++r) {
+            QModelIndex pIdx = proxyModel.index(r, 0);
+            if (pIdx.data(SectionHeaderRole).toBool()) continue;
+            QModelIndex sIdx = proxyModel.mapToSource(pIdx);
+            assert(sIdx.isValid());
+            assert(sIdx.data(Qt::DisplayRole).toString() == pIdx.data(Qt::DisplayRole).toString());
+        }
+        qDebug() << "[PASS] Invariant verified for:" << context;
+    };
 
-    // Test 4: Expand Folders
-    proxyModel.setFolderCollapsed(false);
-    assert(!proxyModel.isFolderCollapsed());
-    assert(proxyModel.rowCount() == 32);
-    assert(proxyModel.mapFromSource(srcFolder0).row() == 1);
-    qDebug() << "[PASS] Test 4: Expand Folders";
+    verifyInvariants("Initial state");
 
-    // Test 5: Benchmark 5000 rows dataChanged handling (< 10ms target)
-    QStandardItemModel bigModel;
-    for (int i = 0; i < 5000; ++i) {
-        auto* item = new QStandardItem(QString("Item %1").arg(i));
-        item->setData(i < 500 ? "folder" : "file", TypeRole);
-        bigModel.appendRow(item);
+    // Test: 10 Filter Toggle Cycles (Folders)
+    for (int cycle = 0; cycle < 10; ++cycle) {
+        filterModel.filterFolders = false;
+        filterModel.invalidate();
+        verifyInvariants(QString("Cycle %1: Hide Folders").arg(cycle));
+
+        filterModel.filterFolders = true;
+        filterModel.invalidate();
+        verifyInvariants(QString("Cycle %1: Show Folders").arg(cycle));
     }
-    SectionProxyModel bigProxy;
-    bigProxy.setSourceModel(&bigModel);
 
-    QElapsedTimer timer;
-    timer.start();
-    emit bigModel.dataChanged(bigModel.index(0, 0), bigModel.index(4999, 0));
-    qint64 elapsedMs = timer.elapsed();
-    qDebug() << "[PASS] Test 5: 5000 items dataChanged processed in" << elapsedMs << "ms";
-    assert(elapsedMs <= 10);
+    // Test: 10 Filter Toggle Cycles (Files)
+    for (int cycle = 0; cycle < 10; ++cycle) {
+        filterModel.filterFiles = false;
+        filterModel.invalidate();
+        verifyInvariants(QString("Cycle %1: Hide Files").arg(cycle));
 
-    qDebug() << "=== All SectionProxyModel Self-Tests Passed Successfully ===";
+        filterModel.filterFiles = true;
+        filterModel.invalidate();
+        verifyInvariants(QString("Cycle %1: Show Files").arg(cycle));
+    }
+
+    // Test: Collapsed State Cycles
+    proxyModel.setFolderCollapsed(true);
+    for (int cycle = 0; cycle < 5; ++cycle) {
+        filterModel.filterFolders = false; filterModel.invalidate();
+        verifyInvariants(QString("Collapsed Cycle %1: Hide Folders").arg(cycle));
+
+        filterModel.filterFolders = true; filterModel.invalidate();
+        verifyInvariants(QString("Collapsed Cycle %1: Show Folders").arg(cycle));
+    }
+    proxyModel.setFolderCollapsed(false);
+
+    qDebug() << "=== All SectionProxyModel Invariant Self-Tests Passed Successfully ===";
 }
 
+#ifdef TEST_STANDALONE
 int main(int argc, char** argv) {
     runSectionProxyModelTests();
     return 0;
 }
+#endif

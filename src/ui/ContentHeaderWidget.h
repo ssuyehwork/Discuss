@@ -41,10 +41,8 @@ private:
     QLabel* m_titleLabel = nullptr;
 
     QPushButton* m_btnSplitView = nullptr;
-    QPushButton* m_btnLayers = nullptr;
     QPushButton* m_btnToggleHidden = nullptr;
-    QPushButton* m_btnToggleFolders = nullptr;
-    QPushButton* m_btnToggleFiles = nullptr;
+    QPushButton* m_btnLayers = nullptr;
 
     FilterState m_filterState;
 };

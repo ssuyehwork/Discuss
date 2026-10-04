@@ -1,5 +1,5 @@
 #include "FilterProxyModel.h"
-#include "../ContentPanel.h"
+#include "ItemModelBase.h"
 #include "../UiHelper.h"
 #include <QDateTime>
 #include <cmath>
@@ -28,26 +28,9 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     if (sourceRow < 0 || sourceRow >= static_cast<int>(records.size())) return false;
     const auto& record = records[sourceRow];
 
-    // 🚀【此电脑根路径准则】：当加载“此电脑”(computer://)盘符列表时，盘符仅归属于驱动器/文件夹区，在“文件”区代理中严禁重复显示！
-    if (sourceModelPtr->currentPath() == "computer://") {
-        return currentFilter.showFolders;
-    }
-
-    auto* contentPanel = qobject_cast<ContentPanel*>(parent());
-    bool isTrashView = contentPanel && (contentPanel->getCurrentCategoryType() == "trash");
-
     // 0. 隐藏属性过滤
     if (record.isHidden && !currentFilter.showHidden) {
         return false;
-    }
-
-    // 1. 文件夹与文件显隐控制 (showFolders/showFiles 为顶栏切换按钮的绝对关断最高优先级)
-    if (!isTrashView) {
-        if (record.isDir) {
-            if (!currentFilter.showFolders) return false;
-        } else {
-            if (!currentFilter.showFiles) return false;
-        }
     }
 
     // 2. 评级过滤

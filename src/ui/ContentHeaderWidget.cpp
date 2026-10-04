@@ -64,20 +64,6 @@ void ContentHeaderWidget::initUi() {
         emit filterStateChanged(m_filterState);
     });
 
-    setupToggleBtn(m_btnToggleFolders, "folder_filled", QColor("#FDB70A"), m_filterState.showFolders, "显示/隐藏文件夹");
-    connect(m_btnToggleFolders, &QPushButton::clicked, this, [this]() {
-        m_filterState.showFolders = m_btnToggleFolders->isChecked();
-        m_btnToggleFolders->setIcon(UiHelper::getIcon("folder_filled", m_filterState.showFolders ? QColor("#FDB70A") : QColor("#B0B0B0"), 16));
-        emit filterStateChanged(m_filterState);
-    });
-
-    setupToggleBtn(m_btnToggleFiles, "file", QColor("#2ecc71"), m_filterState.showFiles, "显示/隐藏文件");
-    connect(m_btnToggleFiles, &QPushButton::clicked, this, [this]() {
-        m_filterState.showFiles = m_btnToggleFiles->isChecked();
-        m_btnToggleFiles->setIcon(UiHelper::getIcon("file", m_filterState.showFiles ? QColor("#2ecc71") : QColor("#B0B0B0"), 16));
-        emit filterStateChanged(m_filterState);
-    });
-
     m_btnLayers = new QPushButton(this);
     m_btnLayers->setCheckable(true);
     m_btnLayers->setFixedSize(24, 24);
@@ -100,14 +86,6 @@ void ContentHeaderWidget::setFilterState(const FilterState& state) {
     if (m_btnToggleHidden) {
         m_btnToggleHidden->setChecked(state.showHidden);
         m_btnToggleHidden->setIcon(UiHelper::getIcon("eye", state.showHidden ? QColor("#3498db") : QColor("#888888"), 16));
-    }
-    if (m_btnToggleFolders) {
-        m_btnToggleFolders->setChecked(state.showFolders);
-        m_btnToggleFolders->setIcon(UiHelper::getIcon("folder_filled", state.showFolders ? QColor("#FDB70A") : QColor("#B0B0B0"), 16));
-    }
-    if (m_btnToggleFiles) {
-        m_btnToggleFiles->setChecked(state.showFiles);
-        m_btnToggleFiles->setIcon(UiHelper::getIcon("file", state.showFiles ? QColor("#2ecc71") : QColor("#B0B0B0"), 16));
     }
 }
 
