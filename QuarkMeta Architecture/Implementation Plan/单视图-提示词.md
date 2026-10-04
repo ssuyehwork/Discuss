@@ -134,3 +134,34 @@ ColumnViewPane 目前同样是 folderListView + listView 两个列表（各自�
 ---
 
 执行顺序必须是 1 → 2 → 3 → 4 → 5，每步合并前先验证编译和行为。
+
+所有实施方案文件已创建于 QuarkMeta Architecture/Implementation Plan/ 目录中，内容详尽且符合 Git Merge Diff 精准替换块标准与工程硬锁规范：
+
+第 1 步：SectionProxyModel.md
+
+新增 SectionProxyModel 类，继承 QAbstractProxyModel。
+实现 [文件夹标头行] -> [文件夹行] -> [文件标头行] -> [文件行] 行映射结构。
+在 ModelContract.h 中定义 SectionHeaderRole (UserRole+212)、SectionHeaderTextRole (UserRole+213) 及 SectionCollapsedRole (UserRole+214)。
+标头行 flags 剥离选择、编辑、拖放权限，实现不可被 Ctrl+A / 框选选中的特性；折叠状态支持 setFolderCollapsed。
+注册至 CMakeLists.txt。
+第 2 步：JustifiedViewSingleView.md
+
+改造 DropJustifiedView（网格与自适应模式），使用单一 DropJustifiedView 控件与 SectionProxyModel。
+适配 doLayout 标头独占整行（高度 28px、两端强制换行）与两端对齐逻辑。
+适配 indexAt 与 mousePressEvent 的文件夹标头点击折叠。
+ContentPanel 中移除 m_gridCanvas 与 m_folderGridView，保留唯一的 m_gridView 与 m_gridProxyModel。
+第 3 步：ListViewSingleView.md
+
+改造 DropTreeView（列表模式），使用单一 DropTreeView 控件与 SectionProxyModel。
+结合 setFirstColumnSpanned 实现标头跨全列合并；在 TreeItemDelegate 中绘制标头样式与分区奇偶斑马纹。
+ContentPanel 中移除 m_listCanvas 与 m_folderTreeView，保留唯一的 m_treeView 与 m_listProxyModel。
+第 4 步：ColumnViewSingleView.md
+
+深入排查 ColumnViewPane，废除内部的 folderListView / listView 双视图与 DualSectionPanel。
+保持 230px 固定列宽与延伸留白画布不变；各列使用单一 DropListView 绑定 SectionProxyModel。
+适配单视图下单击展开下一列、双击预览、父列高亮与空白处双击回退等既有交互。
+第 5 步：SingleViewCleanupAndVerification.md
+
+物理删除旧的双视图容器 SectionedScrollCanvas.h/.cpp、DualSectionPanel.h/.cpp 与 FolderSectionWidget.h/.cpp 并从 CMakeLists.txt 移除。
+清理 ContentPanel 与 ContentViewCoordinator 中的废弃访问器与计数方法。
+制定详细的全功能回归验证矩阵（包含 Ctrl+A 跨区多选、右键菜单保持、行内重命名、双击预览、缩略图可见区扫描等）。
