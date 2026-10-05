@@ -30,6 +30,7 @@ public:
     void closeSecondaryPane();
     void redistributePaneSizes();
     void setActivePane(bool active);
+    void refreshActiveIndicators();
 
     struct TabSplitState exportSplitState() const;
     void restoreSplitState(const struct TabSplitState& state);
