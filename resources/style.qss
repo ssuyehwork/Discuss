@@ -499,6 +499,86 @@ QPlainTextEdit#QLPlainTextEdit QScrollBar::add-page:horizontal, QPlainTextEdit#Q
     background: none;
 }
 
+/* 菜单分割线与标题层内联样式收拢 */
+QFrame#MenuSeparatorLine {
+    background-color: #444444;
+    border: none;
+}
+
+QLabel#FilterPanelTitleLabel {
+    color: #FFD700;
+}
+
+/* 预设标签弹窗 PresetTagsDialog 无损收拢 */
+QLabel#PresetFolderLabel, QLabel#PresetTagLabel {
+    color: #888888;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QLineEdit#PresetFolderNameEdit {
+    background-color: #1E1E1E;
+    border: 1px solid #3C3C3C;
+    border-radius: 4px;
+    color: #EEEEEE;
+    font-size: 12px;
+    padding: 4px;
+}
+
+QWidget#PresetTagContainer {
+    background-color: #1E1E1E;
+    border: 1px solid #3C3C3C;
+    border-radius: 4px;
+}
+
+QPushButton#PresetBtnSave {
+    background-color: #378ADD;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+QPushButton#PresetBtnSave:hover {
+    background-color: #4A90E2;
+}
+
+QPushButton#PresetBtnCancel {
+    background-color: #3E3E42;
+    color: #CCCCCC;
+    border: none;
+    border-radius: 4px;
+}
+
+QPushButton#PresetBtnCancel:hover {
+    background-color: #4E4E52;
+}
+
+/* 文件冲突弹窗 FileCollisionDialog 无损收拢 */
+QLabel#CollisionTextLabel {
+    color: #EEEEEE;
+    font-size: 13px;
+}
+
+QCheckBox#CollisionApplyAllChk {
+    color: #CCCCCC;
+    font-size: 12px;
+}
+
+QPushButton#CollisionOptionBtn {
+    background-color: #2D2D30;
+    color: #EEEEEE;
+    border: 1px solid #3E3E42;
+    border-radius: 4px;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+QPushButton#CollisionOptionBtn:hover {
+    background-color: #3E3E42;
+    border-color: #007ACC;
+}
+
 /* 批次三重构样式：悬浮浮层与历史面板外联 QSS 选择器 */
 QFrame#TagSelectorOverlay {
     background-color: #1E1E1E;

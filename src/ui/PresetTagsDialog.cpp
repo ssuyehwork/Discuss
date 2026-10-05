@@ -38,31 +38,22 @@ void PresetTagsDialog::initUi() {
     mainL->setSpacing(12);
 
     QLabel* folderNameLabel = new QLabel("分类/文件夹名", this);
-    folderNameLabel->setStyleSheet("color: #888; font-size: 11px; font-weight: bold;");
+    folderNameLabel->setObjectName("PresetFolderLabel");
     mainL->addWidget(folderNameLabel);
 
     m_folderNameEdit = new QLineEdit(this);
     m_folderNameEdit->setReadOnly(true);
     m_folderNameEdit->setFixedHeight(28);
-    m_folderNameEdit->setStyleSheet(
-        "QLineEdit { background: #151515; border: 1px solid #333; border-radius: 4px; padding: 0 8px; color: #AAA; font-size: 12px; }"
-    );
+    m_folderNameEdit->setObjectName("PresetFolderNameEdit");
     mainL->addWidget(m_folderNameEdit);
 
     QLabel* tagLabel = new QLabel("自动添加标签", this);
-    tagLabel->setStyleSheet("color: #888; font-size: 11px; font-weight: bold;");
+    tagLabel->setObjectName("PresetTagLabel");
     mainL->addWidget(tagLabel);
 
     m_tagContainer = new QFrame(this);
-    m_tagContainer->setObjectName("TagContainer");
+    m_tagContainer->setObjectName("PresetTagContainer");
     m_tagContainer->setFrameShape(QFrame::StyledPanel);
-    m_tagContainer->setStyleSheet(
-        "QFrame#TagContainer {"
-        "  background-color: #151515;"
-        "  border: 1px solid #333333;"
-        "  border-radius: 6px;"
-        "}"
-    );
     m_tagContainer->setCursor(Qt::PointingHandCursor);
     m_tagContainer->setMinimumHeight(42);
 
@@ -79,20 +70,14 @@ void PresetTagsDialog::initUi() {
     QPushButton* btnSave = new QPushButton("保存设置", this);
     btnSave->setFixedSize(90, 28);
     btnSave->setCursor(Qt::PointingHandCursor);
-    btnSave->setStyleSheet(
-        "QPushButton { background-color: #1C97EA; color: #FFF; border: none; border-radius: 4px; font-weight: bold; font-size: 11px; }"
-        "QPushButton:hover { background-color: #1886D2; }"
-    );
+    btnSave->setObjectName("PresetBtnSave");
     connect(btnSave, &QPushButton::clicked, this, &PresetTagsDialog::onSaveClicked);
     bottomL->addWidget(btnSave);
 
     QPushButton* btnCancel = new QPushButton("取消", this);
     btnCancel->setFixedSize(70, 28);
     btnCancel->setCursor(Qt::PointingHandCursor);
-    btnCancel->setStyleSheet(
-        "QPushButton { background-color: #2D2D30; color: #BBB; border: 1px solid #333; border-radius: 4px; font-size: 11px; }"
-        "QPushButton:hover { background-color: #3E3E42; color: #FFF; }"
-    );
+    btnCancel->setObjectName("PresetBtnCancel");
     connect(btnCancel, &QPushButton::clicked, this, &PresetTagsDialog::onCancelClicked);
     bottomL->addWidget(btnCancel);
 
