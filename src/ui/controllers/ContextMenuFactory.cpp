@@ -3,12 +3,23 @@
 #include "../../util/ShellHelper.h"
 #include "../ToolTipOverlay.h"
 #include "../StyleLibrary.h"
+#include "../../core/CoreEngine.h"
 #include <QApplication>
 #include <QClipboard>
 #include <QDir>
 #include <QFileInfo>
 
 namespace QuarkMeta {
+
+bool ContextMenuFactory::togglePinState(const QStringList& paths, bool pin) {
+    if (paths.isEmpty()) return false;
+
+    AppCommand cmd;
+    cmd.type = AppCommandType::SetPinned;
+    cmd.targetPaths = paths;
+    cmd.params["pinned"] = pin;
+    return CoreEngine::instance().executeCommand(cmd);
+}
 
 QAction* ContextMenuFactory::buildShowInExplorerAction(QMenu* menu, const QString& path, QObject* receiver) {
     if (!menu || path.isEmpty()) return nullptr;

@@ -14,6 +14,7 @@ public:
 
     // 核心导航调度接口
     void navigateTo(const QString& rawUrl, bool recordHistory = true);
+    void openInNewTab(const QString& rawPath);
     void goBack();
     void goForward();
     void goUp();
@@ -28,6 +29,11 @@ public:
     bool canGoUp() const;
 
 signals:
+    /**
+     * @brief 全局请求在新标签页打开路径信号
+     */
+    void requestOpenInNewTab(const QString& url);
+
     /**
      * @brief 全局统一路径变更信号 (驱动各子面板单向加载数据)
      * @param url 标准协议 URL (如 file://C:/Users 或 computer://)

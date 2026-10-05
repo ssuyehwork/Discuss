@@ -10,6 +10,11 @@ namespace QuarkMeta {
 class ContextMenuFactory {
 public:
     /**
+     * @brief 置顶/取消置顶 SSOT 统一执行入口 (驱动 CoreEngine 并且通过 CentralEventHub 发送全局状态变动)
+     */
+    static bool togglePinState(const QStringList& paths, bool pin);
+
+    /**
      * @brief 复制路径列表至剪贴板 SSOT 入口 (统一原生路径风格与 \r\n 换行符)
      */
     static bool copyPathsToClipboard(const QStringList& paths, bool showOverlay = true);

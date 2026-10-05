@@ -2,11 +2,11 @@
 
 ## 1. Overview
 Currently, toggling the "Pin/Unpin" (置顶 / 取消置顶) state of file items is implemented in three disconnected ways across the application:
-1. **Right-Click Context Menu (`buildPinToggleAction`)**: Constructs an `AppCommandType::SetPinned` command and dispatches it to `CoreEngine::instance().executeCommand(cmd)` (lines 185 and 300 of `src/ui/controllers/ContentContextMenu.cpp`).
-2. **Context Menu Actions (`ActionPin` / `ActionUnpin`)**: Directly manipulates `MetadataManager::instance().setPinned(...)` and manually calls `m_panel->updateItemMetadata(p)` and `m_panel->refreshAll()` (lines 640–655 of `src/ui/controllers/ContentContextMenu.cpp`).
-3. **Keyboard Shortcut (`Alt + D`)**: Directly calls `model->setData(idx, !current, IsLockedRole)` on ViewModel items (lines 340–350 of `src/ui/controllers/ContentKeyHandler.cpp`).
+1. **Right-Click Context Menu (`buildPinToggleAction`)**: Constructs an `AppCommandType::SetPinned` command and dispatches it to `CoreEngine::instance().executeCommand(cmd)` (lines 185 and 310 of `src/ui/controllers/ContentContextMenu.cpp`).
+2. **Context Menu Actions (`ActionPin` / `ActionUnpin`)**: Directly manipulates `MetadataManager::instance().setPinned(...)` and manually calls `m_panel->updateItemMetadata(p)` and `m_panel->refreshAll()` (lines 670–685 of `src/ui/controllers/ContentContextMenu.cpp`).
+3. **Keyboard Shortcut (`Alt + D`)**: Directly calls `model->setData(idx, !current, IsLockedRole)` on ViewModel items (lines 297–305 of `src/ui/controllers/ContentKeyHandler.cpp`).
 
-This fragmentation creates duplicate implementations, introduces role mismatches (`IsLockedRole` vs `PinnedRole`), and bypasses `CoreEngine`'s `CentralEventHub` event broadcasting.
+This fragmentation creates duplicate implementations, introduces role mismatches (`IsLockedRole` vs `PinnedRole`), and risks out-of-sync metadata state.
 
 This implementation plan unifies all Pin/Unpin actions through `CoreEngine::instance().executeCommand(AppCommandType::SetPinned)` by introducing a static SSOT helper:
 `ContextMenuFactory::togglePinState(const QStringList& paths, bool pin)`
@@ -37,7 +37,7 @@ public:
 class ContextMenuFactory {
 public:
     /**
-     * @brief 置顶/取消置顶 SSOT 统一执行入口 (驱动 CoreEngine 并且通过 CentralEventHub 发送全局状态变动)
+     * @brief 置顶/取消置顶 SSOT 统一执行入口 (支持单文件与多文件聚合广播)
      */
     static bool togglePinState(const QStringList& paths, bool pin);
 
@@ -212,7 +212,7 @@ cmake --build build --config Release
 
 ### Verification Methods
 1. **HotKey `Alt + D` Test**: Select single or multiple items, press `Alt + D`. Confirm items are pinned and `CentralEventHub` publishes `AppEventType::MetadataUpdated`.
-2. **Context Menu Test**: Select items, right-click, choose "置顶" or "取消置顶". Verify identical behavior and immediate UI update across all views.
+2. **Context Menu Test**: Select items, right-click, choose "置顶" or "取消置顶". Verify identical behavior and immediate UI update.
 3. **SSOT Inspection**: Confirm all pin state changes flow exclusively through `ContextMenuFactory::togglePinState` -> `CoreEngine::executeCommand(SetPinned)`.
 
 ---

@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QStringList>
 #include <QWidget>
+#include <QAbstractItemView>
 
 namespace QuarkMeta {
 
@@ -22,6 +23,11 @@ public:
     QStringList copiedTags() const;
     bool hasCopiedTags() const;
     void clearCopiedTags();
+
+    /**
+     * @brief 粘贴标签至目标视图选中项的 SSOT 统一入口 (包含校验、Model更新与 ToolTip 提示)
+     */
+    bool executePasteTags(QAbstractItemView* view);
 
 signals:
     void pasteCompleted(const QString& targetDir);

@@ -53,6 +53,13 @@ PanelMediator::PanelMediator(const PanelMediatorComponents& components, QObject*
 
 void PanelMediator::setupConnections() {
     NavPanel* navPanel = m_navPanel;
+
+    // 🚀【Tab页在新标签中打开路由】：从 NavigationService 接收在 Tab 栏打开请求，解耦控制器下钻
+    connect(&NavigationService::instance(), &NavigationService::requestOpenInNewTab, this, [this](const QString& url) {
+        if (m_titleBar && m_titleBar->tabBar()) {
+            m_titleBar->tabBar()->openOrFocusTab(url);
+        }
+    });
     FavoritePanel* favoritePanel = m_favoritePanel;
     LibraryPanel* libraryPanel = m_libraryPanel;
     ContentPanel* contentPanel = m_contentPanel;

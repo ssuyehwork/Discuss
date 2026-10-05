@@ -3,6 +3,8 @@
 #include "../util/DiskIoService.h"
 #include "../ui/ToolTipOverlay.h"
 #include "../ui/FileCollisionDialog.h"
+#include "ModelContract.h"
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QClipboard>
 #include <QMimeData>
@@ -38,6 +40,32 @@ bool ClipboardService::hasCopiedTags() const {
 
 void ClipboardService::clearCopiedTags() {
     m_copiedTags.clear();
+}
+
+bool ClipboardService::executePasteTags(QAbstractItemView* view) {
+    if (!view) return false;
+
+    if (m_copiedTags.isEmpty()) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "剪贴板无有效标签", 1500, QColor("#e81123"));
+        return false;
+    }
+
+    QAbstractItemModel* model = view->model();
+    if (!model) return false;
+
+    auto indexes = view->selectionModel()->selectedIndexes();
+    int count = 0;
+    for (const auto& targetIdx : indexes) {
+        if (targetIdx.column() == 0 && !targetIdx.data(SectionHeaderRole).toBool()) {
+            model->setData(targetIdx, m_copiedTags, TagsRole);
+            count++;
+        }
+    }
+
+    if (count > 0) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将标签粘贴至 %1 个项目").arg(count), 1500, QColor("#2ecc71"));
+    }
+    return count > 0;
 }
 
 void ClipboardService::copyItems(const QStringList& paths) {
