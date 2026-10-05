@@ -17,6 +17,7 @@ class SearchController;
 class TitleBarWidget;
 class PanelLayoutManager;
 class AppShortcutController;
+class PaneActivationTracker;
 
 /**
  * @brief 面板中介者组件依赖包
@@ -75,6 +76,7 @@ private:
     QPointer<TitleBarWidget> m_titleBar;
     QPointer<PanelLayoutManager> m_layoutManager;
     QPointer<AppShortcutController> m_shortcutController;
+    PaneActivationTracker* m_activationTracker = nullptr;
 
     QString m_currentQuickLookPath;
 };

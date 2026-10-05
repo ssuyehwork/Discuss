@@ -303,6 +303,8 @@ set(SOURCES
     src/ui/controllers/ContentViewCoordinator.cpp
     src/ui/controllers/ContentPaneSplitManager.h
     src/ui/controllers/ContentPaneSplitManager.cpp
+    src/ui/controllers/PaneActivationTracker.h
+    src/ui/controllers/PaneActivationTracker.cpp
     src/ui/workers/ContentStatsWorker.h
     src/ui/workers/ContentStatsWorker.cpp
     src/core/ActionCommand.h
