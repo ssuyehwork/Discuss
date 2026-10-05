@@ -462,9 +462,11 @@ void PanelMediator::setupConnections() {
             });
         }
 
-        // 3. 状态栏与焦点响应
-        connect(panel, &ContentPanel::statusBarMessageReady, this, [this](const QString& message) {
-            emit statusMessageRequested(message);
+        // 3. 状态栏与焦点响应 (仅当信息来自当前激活窗格时才刷到底栏)
+        connect(panel, &ContentPanel::statusBarMessageReady, this, [this, panel](const QString& message) {
+            if (m_activeContentPanel == panel || (!m_activeContentPanel && panel == m_contentPanel.data())) {
+                emit statusMessageRequested(message);
+            }
         });
 
         connect(panel, &ContentPanel::panelActivated, this, [this, addressBar](ContentPanel* activePanel) {

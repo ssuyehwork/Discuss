@@ -47,6 +47,8 @@ public:
     explicit PanelMediator(const PanelMediatorComponents& components, QObject* parent = nullptr);
     ~PanelMediator() override = default;
 
+    ContentPanel* activeContentPanel() const { return m_activeContentPanel.data(); }
+
     /**
      * @brief 建立各面板间的信号槽连接
      */
