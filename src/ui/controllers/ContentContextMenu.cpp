@@ -474,7 +474,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     // =========================================================================
     else {
         if (isComputerRoot) {
-            menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
+            ContextMenuFactory::buildShowInExplorerAction(&menu, "computer://", m_panel);
             menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
         } else {
             QMenu* newMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "新建...");
@@ -493,9 +493,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             menu.addSeparator();
             bool isPhysicalPath = !currentPath.isEmpty() && !currentPath.contains("://") && QDir(currentPath).exists();
-            QAction* actShowInExp = menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示");
-            actShowInExp->setData(ContentPanel::ActionShowInExplorer);
-            actShowInExp->setEnabled(isPhysicalPath);
+            QAction* actShowInExp = ContextMenuFactory::buildShowInExplorerAction(&menu, currentPath, m_panel);
+            if (actShowInExp) {
+                actShowInExp->setEnabled(isPhysicalPath);
+            }
 
             menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
         }
@@ -663,22 +664,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
                 ToolTipOverlay::instance()->showText(QCursor::pos(), "加密任务已在后台启动...", 2000);
 
-                std::string stdPwd = pwd.toStdString();
                 QPointer<ContentPanel> self(m_panel);
-                QString curDir = currentPath;
-
-                (void)QThreadPool::globalInstance()->start([self, targets, stdPwd, curDir]() {
-                    for (const QString& src : targets) {
-                        QString dest = src + ".amenc";
-                        if (EncryptionManager::instance().encryptFile(src.toStdWString(), dest.toStdWString(), stdPwd)) {
-                            QFile::remove(src);
-                            MetadataManager::instance().setEncrypted(dest.toStdWString(), true);
-                        }
-                    }
-                    QMetaObject::invokeMethod(QCoreApplication::instance(), [self, curDir]() {
-                        if (self && self->currentPath() == curDir) self->loadDirectory(curDir, self->isRecursive());
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), "加密任务处理完成", 1500, QColor("#2ecc71"));
-                    });
+                EncryptionManager::instance().encryptBatchAsync(targets, pwd.toStdString(), [self](bool success) {
+                    if (self) self->refreshAll();
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), success ? "加密任务处理完成" : "部分项目加密失败", 1500, success ? QColor("#2ecc71") : QColor("#e81123"));
                 });
             }
             break;
@@ -695,39 +684,14 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
                 ToolTipOverlay::instance()->showText(QCursor::pos(), "解密还原任务已在后台启动...", 2000);
 
-                std::string stdPwd = pwd.toStdString();
                 QPointer<ContentPanel> self(m_panel);
-                QString curDir = currentPath;
-
-                (void)QThreadPool::globalInstance()->start([self, targets, stdPwd, curDir]() {
-                    bool anySuccess = false;
-                    for (const QString& src : targets) {
-                        QString dest = src;
-                        if (dest.endsWith(".amenc", Qt::CaseInsensitive)) {
-                            dest.chop(6);
-                        } else if (dest.endsWith(".decrypted", Qt::CaseInsensitive)) {
-                            dest.chop(10);
-                        }
-
-                        if (dest == src) {
-                            dest += ".dec";
-                        }
-
-                        if (EncryptionManager::instance().decryptFile(src.toStdWString(), dest.toStdWString(), stdPwd)) {
-                            QFile::remove(src);
-                            MetadataManager::instance().setEncrypted(dest.toStdWString(), false);
-                            anySuccess = true;
-                        }
+                EncryptionManager::instance().decryptBatchAsync(targets, pwd.toStdString(), [self](bool anySuccess) {
+                    if (self) self->refreshAll();
+                    if (anySuccess) {
+                        ToolTipOverlay::instance()->showText(QCursor::pos(), "解除保护成功，文件已还原", 1500, QColor("#2ecc71"));
+                    } else {
+                        ToolTipOverlay::instance()->showText(QCursor::pos(), "解密失败，请检查密码是否正确", 2000, QColor("#e74c3c"));
                     }
-
-                    QMetaObject::invokeMethod(QCoreApplication::instance(), [self, curDir, anySuccess]() {
-                        if (self && self->currentPath() == curDir) self->loadDirectory(curDir, self->isRecursive());
-                        if (anySuccess) {
-                            ToolTipOverlay::instance()->showText(QCursor::pos(), "解除保护成功，文件已还原", 1500, QColor("#2ecc71"));
-                        } else {
-                            ToolTipOverlay::instance()->showText(QCursor::pos(), "解密失败，请检查密码是否正确", 2000, QColor("#e74c3c"));
-                        }
-                    });
                 });
             }
             break;
@@ -749,33 +713,14 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             ToolTipOverlay::instance()->showText(QCursor::pos(), "密码修改中...", 2000);
 
-            std::string stdOldPwd = oldPwd.toStdString();
-            std::string stdNewPwd = newPwd.toStdString();
             QPointer<ContentPanel> self(m_panel);
-            QString curDir = currentPath;
-
-            (void)QThreadPool::globalInstance()->start([self, targets, stdOldPwd, stdNewPwd, curDir]() {
-                bool anySuccess = false;
-                for (const QString& src : targets) {
-                    QString tempPlain = src + ".tmp_dec";
-                    if (EncryptionManager::instance().decryptFile(src.toStdWString(), tempPlain.toStdWString(), stdOldPwd)) {
-                        if (EncryptionManager::instance().encryptFile(tempPlain.toStdWString(), src.toStdWString(), stdNewPwd)) {
-                            QFile::remove(tempPlain);
-                            anySuccess = true;
-                        } else {
-                            QFile::remove(tempPlain);
-                        }
-                    }
+            EncryptionManager::instance().changePasswordBatchAsync(targets, oldPwd.toStdString(), newPwd.toStdString(), [self](bool anySuccess) {
+                if (self) self->refreshAll();
+                if (anySuccess) {
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "保护密码修改成功", 1500, QColor("#2ecc71"));
+                } else {
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "原密码错误，修改失败", 2000, QColor("#e74c3c"));
                 }
-
-                QMetaObject::invokeMethod(QCoreApplication::instance(), [self, curDir, anySuccess]() {
-                    if (self && self->currentPath() == curDir) self->loadDirectory(curDir, self->isRecursive());
-                    if (anySuccess) {
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), "保护密码修改成功", 1500, QColor("#2ecc71"));
-                    } else {
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), "原密码错误，修改失败", 2000, QColor("#e74c3c"));
-                    }
-                });
             });
             break;
         }

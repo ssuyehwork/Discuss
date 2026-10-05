@@ -287,6 +287,7 @@ void NavPanel::onTreeContextMenu(const QPoint& pos) {
     UiHelper::applyMenuStyle(&menu);
 
     FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+    ContextMenuFactory::buildCopyNameAction(&menu, QStringList{path}, this);
     ContextMenuFactory::buildCopyPathAction(&menu, QStringList{path}, this);
 
     menu.exec(m_treeView->viewport()->mapToGlobal(pos));
