@@ -159,6 +159,13 @@ int SectionProxyModel::columnCount(const QModelIndex& parent) const {
     return sourceModel() ? sourceModel()->columnCount() : 1;
 }
 
+QVariant SectionProxyModel::headerData(int section, Qt::Orientation orientation, int role) const {
+    if (sourceModel()) {
+        return sourceModel()->headerData(section, orientation, role);
+    }
+    return QAbstractProxyModel::headerData(section, orientation, role);
+}
+
 QVariant SectionProxyModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= m_mapping.size()) {
         return QVariant();
