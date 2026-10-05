@@ -581,12 +581,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 if (!selected.isEmpty()) targetPath = selected.first();
             }
             if (!targetPath.isEmpty()) {
-                if (m_panel->window()) {
-                    TitleBarWidget* titleBar = m_panel->window()->findChild<TitleBarWidget*>();
-                    if (titleBar && titleBar->tabBar()) {
-                        titleBar->tabBar()->openOrFocusTab(targetPath);
-                    }
-                }
+                NavigationService::instance().openInNewTab(targetPath);
             }
             break;
         }
@@ -648,12 +643,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     if (!p.isEmpty()) targetPaths << p;
                 }
             }
+            if (targetPaths.isEmpty() && !path.isEmpty()) {
+                targetPaths << path;
+            }
             if (!targetPaths.isEmpty()) {
-                for (const QString& p : targetPaths) {
-                    MetadataManager::instance().setPinned(p.toStdWString(), pin);
-                    if (m_panel) m_panel->updateItemMetadata(p);
-                }
-                if (m_panel) m_panel->refreshAll();
+                ContextMenuFactory::togglePinState(targetPaths, pin);
             }
             break;
         }
@@ -827,23 +821,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             break;
         }
         case ContentPanel::ActionPasteTags: {
-            QStringList copiedTags = ClipboardService::instance().copiedTags();
-            if (copiedTags.isEmpty()) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "剪贴板无有效标签", 1500, QColor("#e81123"));
-                break;
-            }
-            auto indexes = view->selectionModel()->selectedIndexes();
-            QAbstractItemModel* model = view->model();
-            int count = 0;
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0 && model && !idx.data(SectionHeaderRole).toBool()) {
-                    model->setData(idx, copiedTags, TagsRole);
-                    count++;
-                }
-            }
-            if (count > 0) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将标签粘贴至 %1 个项目").arg(count), 1500, QColor("#2ecc71"));
-            }
+            ClipboardService::instance().executePasteTags(view);
             break;
         }
         case ContentPanel::ActionBatchCreate: {

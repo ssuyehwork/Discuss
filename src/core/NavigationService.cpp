@@ -60,6 +60,12 @@ void NavigationService::emitNavState() {
     emit navStateChanged(canGoBack(), canGoForward(), canGoUp());
 }
 
+void NavigationService::openInNewTab(const QString& rawPath) {
+    if (rawPath.isEmpty()) return;
+    QString normUrl = normalizeUrl(rawPath);
+    emit requestOpenInNewTab(normUrl);
+}
+
 void NavigationService::navigateTo(const QString& rawUrl, bool recordHistory) {
     if (rawUrl.isEmpty()) return;
 
