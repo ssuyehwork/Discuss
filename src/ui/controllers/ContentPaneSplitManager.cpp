@@ -143,8 +143,9 @@ void ContentPaneSplitManager::closePane(ContentPanel* pane) {
         return;
     }
 
-    if (m_activePaneForSplit == pane) {
-        m_activePaneForSplit = nullptr;
+    ContentPanel* root = rootPane();
+    if (root && root->m_splitManager && root->m_splitManager->m_activePaneForSplit == pane) {
+        root->m_splitManager->m_activePaneForSplit = nullptr;
     }
 
     int idx = m_panes.indexOf(pane);
