@@ -2,16 +2,87 @@
 #define NOMINMAX
 #endif
 #include "EncryptionManager.h"
+#include "../meta/MetadataManager.h"
 #include <windows.h>
 #include <bcrypt.h>
 #include <vector>
 #include <fstream>
 #include <filesystem>
 #include <QString>
+#include <QThreadPool>
+#include <QCoreApplication>
+#include <QMetaObject>
+#include <QDir>
+#include <QFile>
 
 #pragma comment(lib, "bcrypt.lib")
 
 namespace QuarkMeta {
+
+void EncryptionManager::encryptBatchAsync(const QStringList& targets, const std::string& password, std::function<void(bool success)> onFinished) {
+    (void)QThreadPool::globalInstance()->start([targets, password, onFinished]() {
+        bool allOk = true;
+        for (const QString& src : targets) {
+            QString dest = src + ".amenc";
+            if (EncryptionManager::instance().encryptFile(src.toStdWString(), dest.toStdWString(), password)) {
+                QFile::remove(src);
+                MetadataManager::instance().setEncrypted(dest.toStdWString(), true);
+            } else {
+                allOk = false;
+            }
+        }
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [onFinished, allOk]() {
+            if (onFinished) onFinished(allOk);
+        });
+    });
+}
+
+void EncryptionManager::decryptBatchAsync(const QStringList& targets, const std::string& password, std::function<void(bool anySuccess)> onFinished) {
+    (void)QThreadPool::globalInstance()->start([targets, password, onFinished]() {
+        bool anySuccess = false;
+        for (const QString& src : targets) {
+            QString dest = src;
+            if (dest.endsWith(".amenc", Qt::CaseInsensitive)) {
+                dest.chop(6);
+            } else if (dest.endsWith(".decrypted", Qt::CaseInsensitive)) {
+                dest.chop(10);
+            }
+
+            if (dest == src) {
+                dest += ".dec";
+            }
+
+            if (EncryptionManager::instance().decryptFile(src.toStdWString(), dest.toStdWString(), password)) {
+                QFile::remove(src);
+                MetadataManager::instance().setEncrypted(dest.toStdWString(), false);
+                anySuccess = true;
+            }
+        }
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [onFinished, anySuccess]() {
+            if (onFinished) onFinished(anySuccess);
+        });
+    });
+}
+
+void EncryptionManager::changePasswordBatchAsync(const QStringList& targets, const std::string& oldPassword, const std::string& newPassword, std::function<void(bool anySuccess)> onFinished) {
+    (void)QThreadPool::globalInstance()->start([targets, oldPassword, newPassword, onFinished]() {
+        bool anySuccess = false;
+        for (const QString& src : targets) {
+            QString tempPlain = src + ".tmp_dec";
+            if (EncryptionManager::instance().decryptFile(src.toStdWString(), tempPlain.toStdWString(), oldPassword)) {
+                if (EncryptionManager::instance().encryptFile(tempPlain.toStdWString(), src.toStdWString(), newPassword)) {
+                    QFile::remove(tempPlain);
+                    anySuccess = true;
+                } else {
+                    QFile::remove(tempPlain);
+                }
+            }
+        }
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [onFinished, anySuccess]() {
+            if (onFinished) onFinished(anySuccess);
+        });
+    });
+}
 
 EncryptionManager& EncryptionManager::instance() {
     static EncryptionManager inst;
