@@ -1,32 +1,56 @@
 # Implementation Plan: ContentPaneSplitManager-4.md
 
 ## 1. Overview（概述与解决的问题）
-本实施方案旨在全面清理多窗格（Multi-Pane Split View）架构中积累的 9 大核心重构缺陷与逻辑混乱问题，严格对齐 `Memories.md` 第 13 章《QuarkMeta 多窗格（分屏）功能设计理念》与 Clean Architecture 规范：
+本实施方案旨在全面清理多窗格（Multi-Pane Split View）架构中积累的 13 大核心重构缺陷与逻辑混乱问题，严格对齐 `Memories.md` 第 13 章《QuarkMeta 多窗格（分屏）功能设计理念》与 Clean Architecture 规范：
 
-1. **激活事件捕获复活**：将无引用的死代码 `PaneActivationTracker` 正式安装到 `qApp`，实现全应用统一捕获 `MouseButtonPress` 与 `FocusIn` 事件，精准驱动 `ContentPanel` 窗格激活。
+1. **激活事件捕获复活**：将无引用的死代码 `PaneActivationTracker` 正式安装到 `qApp` 并注册至 `CMakeLists.txt`，实现全应用统一捕获 `MouseButtonPress` 与 `FocusIn` 事件，精准驱动 `ContentPanel` 窗格激活。
 2. **SSOT 真理源收敛**：消灭 `m_activePaneForSplit` 等散落状态变量，将 `PanelMediator::m_activeContentPanel` 确立为全系统唯一权威的当前激活窗格，周边侧边栏、地址栏、搜索框、筛选器及元数据面板 100% 动态跟随。
-3. **4 窗格上限与超限路径覆盖 (Section 13.1)**：达到 4 窗格上限后，继续发起分屏绝不创建第 5 个窗格，而是直接将新路径覆盖更新至“当前激活窗格”。
-4. **单层 Splitter 平铺与自动等分尺寸 (Section 13.2)**：消除多层 `QSplitter` 嵌套风险，在新增/关闭/切换窗格时通过真实的视口几何算力按 `total / count` 精准等分布局。
-5. **平滑窗格生命周期管理 (Section 13.3 & 13.5)**：重构窗格关闭逻辑，剥离关闭主窗格时的硬偷路径逻辑；单窗格模式下彻底隐匿激活边框，仅在多分屏状态下对激活窗格绘制 1px 高亮蓝框。
-6. ** Tab 状态与标题规则对齐 (Section 13.4)**： Tab 标题在分屏模式下严格按照 `文件夹A | 文件夹B` 格式输出（含相同路径重复显示不合并）；Tab 切换时平滑复用与恢复多窗格快照，避免频繁摧毁重建。
-7. **拖拽语义严密隔离 (Section 13.6)**：严密限制 `application/x-quarkmeta-taburl` MIME 类型，彻底隔离普通文件/文件夹拖拽与分屏拖拽手势。
+3. **底栏视图模式与排序控制随动**：重构 `MainWindow` 中底栏的视图切换按钮（网格、列表、自适应、分栏）及排序方向按钮，使其动态获取并作用于当前激活窗格 `activeContentPanel()`，且按钮高亮随激活窗格即时随动。
+4. **底栏统计消息竞争隔离**：限制 `statusBarMessageReady` 广播，仅当消息来自当前激活窗格时才更新底栏，杜绝非激活窗格后台更新导致的统计信息冲刷覆盖。
+5. **4 窗格上限与超限路径覆盖 (Section 13.1)**：达到 4 窗格上限后，继续发起分屏绝不创建第 5 个窗格，而是直接将新路径覆盖更新至“当前激活窗格”。
+6. **单层 Splitter 平铺与自动等分尺寸 (Section 13.2)**：消除多层 `QSplitter` 嵌套风险，在新增/关闭/切换窗格时通过真实的视口几何算力按 `total / count` 精准等分布局。
+7. **平滑窗格生命周期管理 (Section 13.3 & 13.5)**：重构窗格关闭逻辑，剥离关闭主窗格时的硬偷路径逻辑；单窗格模式下彻底隐匿激活边框，仅在多分屏状态下对激活窗格绘制 1px 高亮蓝框。
+8. **Tab 状态与标题规则对齐 (Section 13.4)**：Tab 标题在分屏模式下严格按照 `文件夹A | 文件夹B` 格式输出（含相同路径重复显示不合并）；Tab 切换时平滑复用与恢复多窗格快照，避免频繁摧毁重建。
+9. **拖拽语义严密隔离 (Section 13.6)**：严密限制 `application/x-quarkmeta-taburl` MIME 类型，彻底隔离普通文件/文件夹拖拽与分屏拖拽手势。
 
 ---
 
 ## 2. Modified Files List（影响文件清单）
-1. `src/ui/controllers/PaneActivationTracker.h`
-2. `src/ui/controllers/PaneActivationTracker.cpp`
-3. `src/ui/controllers/ContentPaneSplitManager.h`
-4. `src/ui/controllers/ContentPaneSplitManager.cpp`
-5. `src/ui/PanelMediator.h`
-6. `src/ui/PanelMediator.cpp`
-7. `src/ui/TabBarWidget.cpp`
+1. `CMakeLists.txt`
+2. `src/ui/controllers/PaneActivationTracker.h`
+3. `src/ui/controllers/PaneActivationTracker.cpp`
+4. `src/ui/controllers/ContentPaneSplitManager.h`
+5. `src/ui/controllers/ContentPaneSplitManager.cpp`
+6. `src/ui/PanelMediator.h`
+7. `src/ui/PanelMediator.cpp`
+8. `src/ui/MainWindow.h`
+9. `src/ui/MainWindow.cpp`
+10. `src/ui/TabBarWidget.cpp`
 
 ---
 
 ## 3. Detailed Line-by-Line Changes（包含 CMakeLists.txt 在内的精准替换块）
 
-### 3.1 `src/ui/controllers/PaneActivationTracker.h`
+### 3.1 `CMakeLists.txt`
+在 CMake 构建文件中注册 `PaneActivationTracker` 源码与头文件，防止 MOC 编译缺失引发符号未定义链接错误。
+
+```
+<<<<<<< SEARCH
+    src/ui/controllers/ContentViewCoordinator.h
+    src/ui/controllers/ContentViewCoordinator.cpp
+    src/ui/controllers/ContentPaneSplitManager.h
+    src/ui/controllers/ContentPaneSplitManager.cpp
+=======
+    src/ui/controllers/ContentViewCoordinator.h
+    src/ui/controllers/ContentViewCoordinator.cpp
+    src/ui/controllers/ContentPaneSplitManager.h
+    src/ui/controllers/ContentPaneSplitManager.cpp
+    src/ui/controllers/PaneActivationTracker.h
+    src/ui/controllers/PaneActivationTracker.cpp
+>>>>>>> REPLACE
+```
+
+### 3.2 `src/ui/controllers/PaneActivationTracker.h`
 补齐注释与类型支持，确保可被 `PanelMediator` 完美复用。
 
 ```
@@ -59,7 +83,7 @@ protected:
 >>>>>>> REPLACE
 ```
 
-### 3.2 `src/ui/controllers/PaneActivationTracker.cpp`
+### 3.3 `src/ui/controllers/PaneActivationTracker.cpp`
 确保在任意 `ContentPanel` 的子控件上触发鼠标点击或聚焦时，精准向上溯源找到所属的 `ContentPanel` 并发射 `paneInteracted` 信号。
 
 ```
@@ -110,8 +134,8 @@ bool PaneActivationTracker::eventFilter(QObject* watched, QEvent* event) {
 >>>>>>> REPLACE
 ```
 
-### 3.3 `src/ui/controllers/ContentPaneSplitManager.h`
-更新接口，增加当前激活窗格感知与超限处理。
+### 3.4 `src/ui/controllers/ContentPaneSplitManager.h`
+更新接口，清理散落的成员变量声明。
 
 ```
 <<<<<<< SEARCH
@@ -124,7 +148,7 @@ bool PaneActivationTracker::eventFilter(QObject* watched, QEvent* event) {
 >>>>>>> REPLACE
 ```
 
-### 3.4 `src/ui/controllers/ContentPaneSplitManager.cpp`
+### 3.5 `src/ui/controllers/ContentPaneSplitManager.cpp`
 优化分屏上限判断（达到 4 个窗格时更新激活窗格路径）、平铺 Splitter 宽度按视口尺寸均匀分配、并纠正单窗格与多分屏时的激活高亮边框样式控制。
 
 ```
@@ -196,18 +220,28 @@ void ContentPaneSplitManager::setActivePane(bool active) {
 >>>>>>> REPLACE
 ```
 
-### 3.5 `src/ui/PanelMediator.h`
-添加 `PaneActivationTracker` 成员与头文件包含。
+### 3.6 `src/ui/PanelMediator.h`
+暴露 `activeContentPanel()` Getter 方法供 `MainWindow` 视图按钮路由使用。
 
 ```
 <<<<<<< SEARCH
 class PanelMediator : public QObject {
     Q_OBJECT
+
+public:
+    explicit PanelMediator(const PanelMediatorComponents& components, QObject* parent = nullptr);
+    ~PanelMediator() override = default;
 =======
 class PaneActivationTracker;
 
 class PanelMediator : public QObject {
     Q_OBJECT
+
+public:
+    explicit PanelMediator(const PanelMediatorComponents& components, QObject* parent = nullptr);
+    ~PanelMediator() override = default;
+
+    ContentPanel* activeContentPanel() const { return m_activeContentPanel.data(); }
 >>>>>>> REPLACE
 ```
 
@@ -224,8 +258,8 @@ class PanelMediator : public QObject {
 >>>>>>> REPLACE
 ```
 
-### 3.6 `src/ui/PanelMediator.cpp`
-在 `PanelMediator` 构造与 `setupConnections` 中实例化并安装 `PaneActivationTracker` 到 `qApp`，全应用捕获窗格交互并驱动 `activeContentPanelChanged` 广播；在接收到激活改变时，高亮激活窗格、更新地址栏、搜索框、筛选器与元数据面板。
+### 3.7 `src/ui/PanelMediator.cpp`
+在 `PanelMediator` 构造与 `setupConnections` 中实例化并安装 `PaneActivationTracker` 到 `qApp`，全应用捕获窗格交互并驱动 `activeContentPanelChanged` 广播；隔离非激活窗格的 `statusBarMessageReady`。
 
 ```
 <<<<<<< SEARCH
@@ -272,6 +306,22 @@ class PanelMediator : public QObject {
 
 ```
 <<<<<<< SEARCH
+        // 3. 状态栏与焦点响应
+        connect(panel, &ContentPanel::statusBarMessageReady, this, [this](const QString& message) {
+            emit statusMessageRequested(message);
+        });
+=======
+        // 3. 状态栏与焦点响应 (仅当信息来自当前激活窗格时才刷到底栏)
+        connect(panel, &ContentPanel::statusBarMessageReady, this, [this, panel](const QString& message) {
+            if (m_activeContentPanel == panel || (!m_activeContentPanel && panel == m_contentPanel.data())) {
+                emit statusMessageRequested(message);
+            }
+        });
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
     if (contentPanel) {
         (*wireContentPanel)(contentPanel);
 =======
@@ -293,7 +343,135 @@ class PanelMediator : public QObject {
 >>>>>>> REPLACE
 ```
 
-### 3.7 `src/ui/TabBarWidget.cpp`
+### 3.8 `src/ui/MainWindow.cpp`
+重构底栏视图切换与排序方向按钮的信号槽连接，使其动态获取并作用于 `activeContentPanel()`，且更新 `updateStatusBarButtonHighlights()` 指向当前激活窗格。
+
+```
+<<<<<<< SEARCH
+    connect(m_btnToggleSortOrder, &QPushButton::clicked, this, [this]() {
+        if (m_contentPanel) {
+            Qt::SortOrder current = m_contentPanel->currentSortOrder();
+            Qt::SortOrder next = (current == Qt::AscendingOrder) ? Qt::DescendingOrder : Qt::AscendingOrder;
+            m_contentPanel->setSortOrder(next);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    connect(m_btnToggleColumn, &QPushButton::clicked, this, [this]() {
+        if (m_contentPanel) {
+            m_contentPanel->setViewMode(ContentPanel::ColumnView);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    connect(m_btnToggleJustified, &QPushButton::clicked, this, [this]() {
+        if (m_contentPanel) {
+            m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    connect(m_btnToggleGrid, &QPushButton::clicked, this, [this]() {
+        if (m_contentPanel) {
+            m_contentPanel->setViewMode(ContentPanel::GridView);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    connect(m_btnToggleList, &QPushButton::clicked, this, [this]() {
+        if (m_contentPanel) {
+            m_contentPanel->setViewMode(ContentPanel::ListView);
+            updateStatusBarButtonHighlights();
+        }
+    });
+=======
+    auto getActivePanel = [this]() -> ContentPanel* {
+        if (m_panelMediator && m_panelMediator->activeContentPanel()) {
+            return m_panelMediator->activeContentPanel();
+        }
+        return m_contentPanel;
+    };
+
+    connect(m_btnToggleSortOrder, &QPushButton::clicked, this, [this, getActivePanel]() {
+        ContentPanel* target = getActivePanel();
+        if (target) {
+            Qt::SortOrder current = target->currentSortOrder();
+            Qt::SortOrder next = (current == Qt::AscendingOrder) ? Qt::DescendingOrder : Qt::AscendingOrder;
+            target->setSortOrder(next);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    connect(m_btnToggleColumn, &QPushButton::clicked, this, [this, getActivePanel]() {
+        ContentPanel* target = getActivePanel();
+        if (target) {
+            target->setViewMode(ContentPanel::ColumnView);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    connect(m_btnToggleJustified, &QPushButton::clicked, this, [this, getActivePanel]() {
+        ContentPanel* target = getActivePanel();
+        if (target) {
+            target->setViewMode(ContentPanel::JustifiedViewMode);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    connect(m_btnToggleGrid, &QPushButton::clicked, this, [this, getActivePanel]() {
+        ContentPanel* target = getActivePanel();
+        if (target) {
+            target->setViewMode(ContentPanel::GridView);
+            updateStatusBarButtonHighlights();
+        }
+    });
+
+    connect(m_btnToggleList, &QPushButton::clicked, this, [this, getActivePanel]() {
+        ContentPanel* target = getActivePanel();
+        if (target) {
+            target->setViewMode(ContentPanel::ListView);
+            updateStatusBarButtonHighlights();
+        }
+    });
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    if (m_contentPanel) {
+        ContentPanel::ViewMode mode = m_contentPanel->currentViewMode();
+        if (m_btnToggleColumn)    m_btnToggleColumn->setChecked(mode == ContentPanel::ColumnView);
+        if (m_btnToggleJustified) m_btnToggleJustified->setChecked(mode == ContentPanel::JustifiedViewMode);
+        if (m_btnToggleGrid)      m_btnToggleGrid->setChecked(mode == ContentPanel::GridView);
+        if (m_btnToggleList)      m_btnToggleList->setChecked(mode == ContentPanel::ListView);
+
+        Qt::SortOrder sortOrd = m_contentPanel->currentSortOrder();
+        if (m_btnToggleSortOrder) {
+            bool isAsc = (sortOrd == Qt::AscendingOrder);
+            m_btnToggleSortOrder->setIcon(UiHelper::getIcon(isAsc ? "arrow_up_long" : "arrow_down_long", QColor("#EEEEEE"), 18));
+            m_btnToggleSortOrder->setProperty("tooltipText", isAsc ? "升序 状态中" : "降序 状态中");
+        }
+    }
+=======
+    ContentPanel* targetPanel = (m_panelMediator && m_panelMediator->activeContentPanel()) ? m_panelMediator->activeContentPanel() : m_contentPanel;
+    if (targetPanel) {
+        ContentPanel::ViewMode mode = targetPanel->currentViewMode();
+        if (m_btnToggleColumn)    m_btnToggleColumn->setChecked(mode == ContentPanel::ColumnView);
+        if (m_btnToggleJustified) m_btnToggleJustified->setChecked(mode == ContentPanel::JustifiedViewMode);
+        if (m_btnToggleGrid)      m_btnToggleGrid->setChecked(mode == ContentPanel::GridView);
+        if (m_btnToggleList)      m_btnToggleList->setChecked(mode == ContentPanel::ListView);
+
+        Qt::SortOrder sortOrd = targetPanel->currentSortOrder();
+        if (m_btnToggleSortOrder) {
+            bool isAsc = (sortOrd == Qt::AscendingOrder);
+            m_btnToggleSortOrder->setIcon(UiHelper::getIcon(isAsc ? "arrow_up_long" : "arrow_down_long", QColor("#EEEEEE"), 18));
+            m_btnToggleSortOrder->setProperty("tooltipText", isAsc ? "升序 状态中" : "降序 状态中");
+        }
+    }
+>>>>>>> REPLACE
+```
+
+### 3.9 `src/ui/TabBarWidget.cpp`
 规范多窗格下 Tab 标题的格式输出，确保重复路径不合并，完美遵从 `Memories.md` 规范。
 
 ```
@@ -374,15 +552,17 @@ cmake --build build --config Debug
 ```
 
 ### 4.2 验证方法
-1. **激活焦点验证**：启动程序，开启双窗格或四窗格分屏，点击不同窗格的文件列表区域或空白处，核验高亮蓝框是否精准随焦点转移，且地址栏路径、元数据面板与搜索框是否 100% 同步转移。
-2. **单窗格高亮隐匿验证**：关闭所有副窗格退回单窗格模式，核验主窗格四周是否无任何蓝框悬挂。
-3. **4 窗格超限验证**：在已建立 4 个窗格的状态下，再次点击分屏按钮或拖拽标签页到边缘，核验是否成功将新路径载入至“当前激活窗格”而未建第 5 个窗格。
-4. **Tab 标题规范验证**：分屏打开相同文件夹（如两个 `Download`），核验 Tab 标题是否严格显示为 `Download | Download`。
+1. **底栏视图模式随动验证**：开启双窗格或多窗格分屏，分别点击主窗格与副窗格。切换至副窗格后，点击底栏“列表视图”/“网格视图”/“排序方向”按钮，核验改变的是否是副窗格的视图模式和排序方向，且底栏按钮高亮状态是否与副窗格保持一致。
+2. **底栏统计隔离验证**：在副窗格进行操作并选中文件，核验底栏文本是否为当前副窗格的选中统计，主窗格后台事件是否不再抢占冲刷底栏信息。
+3. **激活焦点验证**：启动程序，开启双窗格或四窗格分屏，点击不同窗格的文件列表区域或空白处，核验高亮蓝框是否精准随焦点转移，且地址栏路径、元数据面板与搜索框是否 100% 同步转移。
+4. **单窗格高亮隐匿验证**：关闭所有副窗格退回单窗格模式，核验主窗格四周是否无任何蓝框悬挂。
+5. **4 窗格超限验证**：在已建立 4 个窗格的状态下，再次点击分屏按钮或拖拽标签页到边缘，核验是否成功将新路径载入至“当前激活窗格”而未建第 5 个窗格。
+6. **Tab 标题规范验证**：分屏打开相同文件夹（如两个 `Download`），核验 Tab 标题是否严格显示为 `Download | Download`。
 
 ---
 
 ## 5. SSOT API Reuse & Anti-Redundancy Self-Check（既有 SSOT 通道复用与防另起炉灶自查）
-- **真理源路由**：本次修改复用了 `PanelMediator::activeContentPanelChanged` 统一信号广播，消灭了局部私存激活状态；
+- **真理源路由**：本次修改复用了 `PanelMediator::activeContentPanelChanged` 统一信号广播与 `MainWindow::activeContentPanel()` 入口，消灭了局部私存激活状态；
 - **刷新接口复用**：窗格数据更新统一调用 `ContentPanel::refreshAll()` 或 `loadDirectory()`，没有新建二次数据载入管道。
 
 ---
@@ -390,6 +570,7 @@ cmake --build build --config Debug
 ## 6. Header API Signature Verification（头文件 API 物理签名核查表）
 | 类名 / 结构体 | 成员函数 / 属性精确签名 | 物理头文件 |
 | :--- | :--- | :--- |
+| `PanelMediator` | `ContentPanel* activeContentPanel() const` | `src/ui/PanelMediator.h` |
 | `PaneActivationTracker` | `explicit PaneActivationTracker(QObject* parent = nullptr)` | `src/ui/controllers/PaneActivationTracker.h` |
 | `PaneActivationTracker` | `void paneInteracted(ContentPanel* panel)` (signal) | `src/ui/controllers/PaneActivationTracker.h` |
 | `ContentPaneSplitManager` | `void setActivePane(bool active)` | `src/ui/controllers/ContentPaneSplitManager.h` |
