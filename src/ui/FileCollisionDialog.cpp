@@ -50,7 +50,7 @@ void FileCollisionDialog::setupUi(const QString& firstFileName, const QString& t
                                       .arg(cleanFileName.toHtmlEscaped())
                                       .arg(cleanDirName.toHtmlEscaped()), area);
     textLabel->setWordWrap(true);
-    textLabel->setStyleSheet("color: #EEEEEE; font-size: 13px;");
+    textLabel->setObjectName("CollisionTextLabel");
     msgLayout->addWidget(textLabel, 1, Qt::AlignVCenter);
 
     mainLayout->addLayout(msgLayout, 1);
@@ -60,11 +60,7 @@ void FileCollisionDialog::setupUi(const QString& firstFileName, const QString& t
     btmLayout->setSpacing(10);
 
     m_chkApplyToAll = new QCheckBox("是否应用于全部文件？", area);
-    m_chkApplyToAll->setStyleSheet(
-        "QCheckBox { color: #CCCCCC; font-size: 13px; }"
-        "QCheckBox::indicator { width: 14px; height: 14px; border: 1px solid #666666; border-radius: 2px; background: #2D2D30; }"
-        "QCheckBox::indicator:checked { background: #378ADD; border-color: #378ADD; }"
-    );
+    m_chkApplyToAll->setObjectName("CollisionApplyAllChk");
     btmLayout->addWidget(m_chkApplyToAll, 0, Qt::AlignVCenter);
 
     btmLayout->addStretch(1);
@@ -74,24 +70,7 @@ void FileCollisionDialog::setupUi(const QString& firstFileName, const QString& t
         btn->setFixedHeight(28);
         btn->setMinimumWidth(72);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(
-            "QPushButton {"
-            "  background-color: transparent;"
-            "  color: #EEEEEE;"
-            "  border: 1px solid #666666;"
-            "  border-radius: 14px;"
-            "  padding-left: 12px;"
-            "  padding-right: 12px;"
-            "  font-size: 13px;"
-            "}"
-            "QPushButton:hover {"
-            "  background-color: #3E3E42;"
-            "  border-color: #888888;"
-            "}"
-            "QPushButton:pressed {"
-            "  background-color: #505054;"
-            "}"
-        );
+        btn->setObjectName("CollisionOptionBtn");
         connect(btn, &QPushButton::clicked, this, [this, action]() {
             m_selectedAction = action;
             accept();

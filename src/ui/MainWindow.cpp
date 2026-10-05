@@ -443,13 +443,13 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     sepLineSort->setFrameShape(QFrame::VLine);
     sepLineSort->setFixedWidth(1);
     sepLineSort->setFixedHeight(14);
-    sepLineSort->setStyleSheet("background-color: #444444; border: none;");
+    sepLineSort->setObjectName("MenuSeparatorLine");
 
     QFrame* sepLine = new QFrame(m_statusBarWidget);
     sepLine->setFrameShape(QFrame::VLine);
     sepLine->setFixedWidth(1);
     sepLine->setFixedHeight(14);
-    sepLine->setStyleSheet("background-color: #444444; border: none;");
+    sepLine->setObjectName("MenuSeparatorLine");
 
     statusL->setSpacing(4);
     statusL->addWidget(m_btnToggleSortOrder);
