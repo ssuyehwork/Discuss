@@ -474,7 +474,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     // =========================================================================
     else {
         if (isComputerRoot) {
-            menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示")->setData(ContentPanel::ActionShowInExplorer);
+            ContextMenuFactory::buildShowInExplorerAction(&menu, "computer://", m_panel);
             menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
         } else {
             QMenu* newMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "新建...");
@@ -493,9 +493,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             menu.addSeparator();
             bool isPhysicalPath = !currentPath.isEmpty() && !currentPath.contains("://") && QDir(currentPath).exists();
-            QAction* actShowInExp = menu.addAction(UiHelper::getIcon("folder_search", QColor("#EEEEEE"), 18), "在“资源管理器”中显示");
-            actShowInExp->setData(ContentPanel::ActionShowInExplorer);
-            actShowInExp->setEnabled(isPhysicalPath);
+            QAction* actShowInExp = ContextMenuFactory::buildShowInExplorerAction(&menu, currentPath, m_panel);
+            if (actShowInExp) {
+                actShowInExp->setEnabled(isPhysicalPath);
+            }
 
             menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
         }
