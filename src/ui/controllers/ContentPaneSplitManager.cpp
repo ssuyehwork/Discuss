@@ -90,9 +90,13 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
     }
 
     if (paneCount() >= ContentPanel::kMaxPanes) {
-        ContentPanel* target = m_activePaneForSplit ? m_activePaneForSplit : m_panel;
-        if (!secondaryPath.isEmpty()) {
-            target->loadDirectory(secondaryPath);
+        ContentPanel* root = rootPane();
+        ContentPanel* activeTarget = root;
+        if (m_activePaneForSplit) {
+            activeTarget = m_activePaneForSplit;
+        }
+        if (!secondaryPath.isEmpty() && activeTarget) {
+            activeTarget->loadDirectory(secondaryPath);
         }
         return;
     }

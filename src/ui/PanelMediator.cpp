@@ -5,6 +5,7 @@
 #include "ContentPanel.h"
 #include "ColumnViewWidget.h"
 #include "controllers/ContentPaneSplitManager.h"
+#include "controllers/PaneActivationTracker.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "AddressBar.h"
@@ -16,6 +17,7 @@
 #include "QuickLookWindow.h"
 #include "ToolTipOverlay.h"
 #include "Logger.h"
+#include <QApplication>
 #include <QElapsedTimer>
 #include "../core/NavigationService.h"
 #include "../core/TrashService.h"
@@ -307,6 +309,18 @@ void PanelMediator::setupConnections() {
             }
         }
     });
+
+    // 安装全应用窗格激活事件过滤器
+    if (!m_activationTracker) {
+        m_activationTracker = new PaneActivationTracker(this);
+        qApp->installEventFilter(m_activationTracker);
+
+        connect(m_activationTracker, &PaneActivationTracker::paneInteracted, this, [this](ContentPanel* panel) {
+            if (panel && m_activeContentPanel != panel) {
+                panel->setActivePane(true);
+            }
+        });
+    }
 
     // 2. 内容面板 (主/副窗格) 统一全功能绑定
     m_activeContentPanel = contentPanel;

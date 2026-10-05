@@ -297,7 +297,7 @@ void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
     if (state.isSplit && !state.panePaths.isEmpty()) {
         QStringList nameList;
         for (const QString& p : state.panePaths) {
-            nameList.append(cleanName(p));
+            nameList.append(cleanName(p)); // 保持完整映射，哪怕路径相同也重复保留，绝对不进行去重合并
         }
         QString mergedTitle = nameList.join(" | ");
         m_tabs[m_currentIndex].title = mergedTitle;
