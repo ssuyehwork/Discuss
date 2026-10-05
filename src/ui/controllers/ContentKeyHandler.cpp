@@ -337,14 +337,20 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
 
     // 2. Alt + D: 置顶/取消置顶
     if (((keyEvent->modifiers() & Qt::AltModifier) || (keyEvent->modifiers() & (Qt::AltModifier | Qt::WindowShortcut))) && (keyEvent->key() == Qt::Key_D)) {
-        QAbstractItemModel* model = view->model();
-        if (!model) return true;
         auto indexes = view->selectionModel()->selectedIndexes();
+        QStringList targetPaths;
+        bool anyUnpinned = false;
         for (const QModelIndex& idx : indexes) {
             if (idx.column() == 0 && !idx.data(SectionHeaderRole).toBool()) {
-                bool current = idx.data(IsLockedRole).toBool();
-                model->setData(idx, !current, IsLockedRole);
+                QString p = idx.data(PathRole).toString();
+                if (!p.isEmpty()) {
+                    targetPaths << p;
+                    if (!idx.data(PinnedRole).toBool()) anyUnpinned = true;
+                }
             }
+        }
+        if (!targetPaths.isEmpty()) {
+            ContextMenuFactory::togglePinState(targetPaths, anyUnpinned);
         }
         return true;
     }

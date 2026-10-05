@@ -648,12 +648,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                     if (!p.isEmpty()) targetPaths << p;
                 }
             }
+            if (targetPaths.isEmpty() && !path.isEmpty()) {
+                targetPaths << path;
+            }
             if (!targetPaths.isEmpty()) {
-                for (const QString& p : targetPaths) {
-                    MetadataManager::instance().setPinned(p.toStdWString(), pin);
-                    if (m_panel) m_panel->updateItemMetadata(p);
-                }
-                if (m_panel) m_panel->refreshAll();
+                ContextMenuFactory::togglePinState(targetPaths, pin);
             }
             break;
         }
