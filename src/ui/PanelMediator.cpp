@@ -469,6 +469,10 @@ void PanelMediator::setupConnections() {
             }
         });
 
+        connect(panel, &ContentPanel::directorySelected, &NavigationService::instance(), [](const QString& path) {
+            NavigationService::instance().navigateTo(path);
+        });
+
         connect(panel, &ContentPanel::panelActivated, this, [this, addressBar](ContentPanel* activePanel) {
             if (m_activeContentPanel != activePanel) {
                 m_activeContentPanel = activePanel;

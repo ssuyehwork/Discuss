@@ -118,8 +118,10 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
         closePane(newPane);
     });
     connect(newPane, &ContentPanel::directorySelected, m_panel, [this, newPane](const QString& path) {
+        newPane->setActivePane(true);
         newPane->loadDirectory(path);
         emit m_panel->dualPanePathsChanged(m_panel->currentPath(), path);
+        emit newPane->panelActivated(newPane);
     });
 
     layout->addWidget(newPane);
