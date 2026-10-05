@@ -581,12 +581,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 if (!selected.isEmpty()) targetPath = selected.first();
             }
             if (!targetPath.isEmpty()) {
-                if (m_panel->window()) {
-                    TitleBarWidget* titleBar = m_panel->window()->findChild<TitleBarWidget*>();
-                    if (titleBar && titleBar->tabBar()) {
-                        titleBar->tabBar()->openOrFocusTab(targetPath);
-                    }
-                }
+                NavigationService::instance().openInNewTab(targetPath);
             }
             break;
         }
