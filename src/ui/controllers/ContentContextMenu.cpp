@@ -618,37 +618,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             break;
         }
         case ContentPanel::ActionRepeatLastOp: {
-            if (!LastOperationManager::instance().hasOperation()) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未记录任何可重复的操作", 1500, QColor("#e81123"));
-                break;
-            }
-            LastOperationType type = LastOperationManager::instance().type();
-            if (type == LastOperationType::MoveToFolder) {
-                ContentKeyHandler::executeMoveToFolder(m_panel, LastOperationManager::instance().destination());
-                break;
-            }
-            auto indexes = view->selectionModel()->selectedIndexes();
-            QAbstractItemModel* model = view->model();
-            int count = 0;
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0 && model && !idx.data(SectionHeaderRole).toBool()) {
-                    if (type == LastOperationType::SetRating) {
-                        model->setData(idx, LastOperationManager::instance().rating(), RatingRole);
-                    } else if (type == LastOperationType::SetColor) {
-                        QString colorVal = LastOperationManager::instance().color();
-                        model->setData(idx, colorVal, ColorRole);
-                        QString itemPath = idx.data(PathRole).toString();
-                        QIcon coloredIcon = ShellIconManager::getFileIcon(itemPath, 128);
-                        model->setData(idx, coloredIcon, Qt::DecorationRole);
-                    } else if (type == LastOperationType::PasteTags) {
-                        model->setData(idx, LastOperationManager::instance().tags(), TagsRole);
-                    }
-                    count++;
-                }
-            }
-            if (count > 0) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已对 %1 个项目重复执行上一次操作").arg(count), 1500, QColor("#2ecc71"));
-            }
+            ContentKeyHandler::executeRepeatLastOp(m_panel, view);
             break;
         }
         case ContentPanel::ActionShowInExplorer: {

@@ -27,6 +27,11 @@ public:
      */
     static bool executeMoveToFolder(ContentPanel* panel, const QString& targetDir);
 
+    /**
+     * @brief 重复上一次操作 SSOT 统一入口 (快捷键 F4 与 右键菜单 "重复上一次操作" 共同调用)
+     */
+    static bool executeRepeatLastOp(ContentPanel* panel, QAbstractItemView* view);
+
 private:
     bool handleWheel(QObject* obj, QEvent* event);
     bool handleMousePress(QObject* obj, QEvent* event);
