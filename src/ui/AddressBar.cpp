@@ -86,6 +86,7 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
         UiHelper::applyMenuStyle(&menu);
 
         FavoriteService::instance().buildFavoriteAction(&menu, nativePath, this);
+        ContextMenuFactory::buildCopyNameAction(&menu, QStringList{nativePath}, this);
         ContextMenuFactory::buildCopyPathAction(&menu, QStringList{nativePath}, this);
 
         menu.exec(globalPos);

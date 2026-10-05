@@ -28,6 +28,20 @@ public:
     static QAction* buildCopyPathAction(QMenu* menu, const QStringList& paths, QObject* receiver = nullptr);
     static QAction* buildCopyNameAction(QMenu* menu, const QStringList& paths, QObject* receiver = nullptr);
     static QAction* buildPinToggleAction(QMenu* menu, bool isPinned, std::function<void(bool)> onToggle, QObject* receiver = nullptr);
+
+    /**
+     * @brief 构建“切换图标”二级菜单 SSOT 入口 (内置内置图标库与 ColorStripPicker 颜色选择)
+     * @param parentMenu 父级右键菜单
+     * @param curIconKey 当前图标 key
+     * @param curColorHex 当前颜色 hex
+     * @param onIconSelected 图标被选中时的回调 (iconKey)
+     * @param onColorSelected 颜色被选中时的回调 (colorHex)
+     */
+    static QMenu* buildIconPickerMenu(QMenu* parentMenu,
+                                      const QString& curIconKey,
+                                      const QString& curColorHex,
+                                      std::function<void(const QString& iconKey)> onIconSelected,
+                                      std::function<void(const QString& colorHex)> onColorSelected);
 };
 
 } // namespace QuarkMeta

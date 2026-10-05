@@ -386,46 +386,49 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     });
 
     connect(m_btnToggleSortOrder, &QPushButton::clicked, this, [this]() {
-        if (m_contentPanel) {
-            Qt::SortOrder current = m_contentPanel->currentSortOrder();
+        ContentPanel* target = m_panelMediator ? m_panelMediator->activeContentPanel() : m_contentPanel;
+        if (target) {
+            Qt::SortOrder current = target->currentSortOrder();
             Qt::SortOrder next = (current == Qt::AscendingOrder) ? Qt::DescendingOrder : Qt::AscendingOrder;
-            m_contentPanel->setSortOrder(next);
+            target->setSortOrder(next);
             updateStatusBarButtonHighlights();
         }
     });
 
     connect(m_btnToggleColumn, &QPushButton::clicked, this, [this]() {
-        if (m_contentPanel) {
-            m_contentPanel->setViewMode(ContentPanel::ColumnView);
+        ContentPanel* target = m_panelMediator ? m_panelMediator->activeContentPanel() : m_contentPanel;
+        if (target) {
+            target->setViewMode(ContentPanel::ColumnView);
             updateStatusBarButtonHighlights();
         }
     });
 
     connect(m_btnToggleJustified, &QPushButton::clicked, this, [this]() {
-        if (m_contentPanel) {
-            m_contentPanel->setViewMode(ContentPanel::JustifiedViewMode);
+        ContentPanel* target = m_panelMediator ? m_panelMediator->activeContentPanel() : m_contentPanel;
+        if (target) {
+            target->setViewMode(ContentPanel::JustifiedViewMode);
             updateStatusBarButtonHighlights();
         }
     });
 
     connect(m_btnToggleGrid, &QPushButton::clicked, this, [this]() {
-        if (m_contentPanel) {
-            m_contentPanel->setViewMode(ContentPanel::GridView);
+        ContentPanel* target = m_panelMediator ? m_panelMediator->activeContentPanel() : m_contentPanel;
+        if (target) {
+            target->setViewMode(ContentPanel::GridView);
             updateStatusBarButtonHighlights();
         }
     });
 
     connect(m_btnToggleList, &QPushButton::clicked, this, [this]() {
-        if (m_contentPanel) {
-            m_contentPanel->setViewMode(ContentPanel::ListView);
+        ContentPanel* target = m_panelMediator ? m_panelMediator->activeContentPanel() : m_contentPanel;
+        if (target) {
+            target->setViewMode(ContentPanel::ListView);
             updateStatusBarButtonHighlights();
         }
     });
 
-    if (m_contentPanel) {
-        connect(m_contentPanel, &ContentPanel::viewModeChanged, this, [this](ContentPanel::ViewMode) {
-            updateStatusBarButtonHighlights();
-        });
+    if (m_panelMediator) {
+        connect(m_panelMediator, &PanelMediator::activePaneStateChanged, this, &MainWindow::updateStatusBarButtonHighlights);
     }
 
     connect(m_btnResetLayout, &QPushButton::clicked, this, [this]() {
@@ -505,14 +508,15 @@ void MainWindow::updateStatusBarButtonHighlights() {
     QSignalBlocker b11(m_btnToggleSortOrder);
     QSignalBlocker b12(m_btnToggleColumn);
 
-    if (m_contentPanel) {
-        ContentPanel::ViewMode mode = m_contentPanel->currentViewMode();
+    ContentPanel* target = m_panelMediator ? m_panelMediator->activeContentPanel() : m_contentPanel;
+    if (target) {
+        ContentPanel::ViewMode mode = target->currentViewMode();
         if (m_btnToggleColumn)    m_btnToggleColumn->setChecked(mode == ContentPanel::ColumnView);
         if (m_btnToggleJustified) m_btnToggleJustified->setChecked(mode == ContentPanel::JustifiedViewMode);
         if (m_btnToggleGrid)      m_btnToggleGrid->setChecked(mode == ContentPanel::GridView);
         if (m_btnToggleList)      m_btnToggleList->setChecked(mode == ContentPanel::ListView);
 
-        Qt::SortOrder sortOrd = m_contentPanel->currentSortOrder();
+        Qt::SortOrder sortOrd = target->currentSortOrder();
         if (m_btnToggleSortOrder) {
             bool isAsc = (sortOrd == Qt::AscendingOrder);
             m_btnToggleSortOrder->setIcon(UiHelper::getIcon(isAsc ? "arrow_up_long" : "arrow_down_long", QColor("#EEEEEE"), 18));

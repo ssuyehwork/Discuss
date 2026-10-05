@@ -228,20 +228,5 @@ void ContentViewCoordinator::updateGridSize(int zoomLevel) {
     }
 }
 
-void ContentViewCoordinator::installActivationFilters() {
-    if (!m_panel) return;
-
-    auto installOnce = [this](QObject* obj) {
-        if (!obj || m_filteredObjects.contains(obj)) return;
-        obj->installEventFilter(m_panel);
-        m_filteredObjects.insert(obj);
-    };
-
-    for (QAbstractItemView* view : currentActiveViews()) {
-        if (!view) continue;
-        installOnce(view);
-        installOnce(view->viewport());
-    }
-}
 
 } // namespace QuarkMeta

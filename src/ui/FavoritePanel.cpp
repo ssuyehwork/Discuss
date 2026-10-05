@@ -9,6 +9,7 @@
 #include "../meta/FavoriteService.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/DriveMetaDao.h"
+#include "controllers/ContextMenuFactory.h"
 #include "ThumbnailPipelineService.h"
 #include <QThreadPool>
 #include <QPainter>
@@ -237,57 +238,8 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QList<QPair<QPushButton*, QString>> iconButtons;
 
     if (isFolder) {
-        // 1. 颜色条组件
-        QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
-        ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
-        colorPickerAction->setDefaultWidget(colorPickerWidget);
-        menu.addAction(colorPickerAction);
-
-        // 2. 图标九宫格子菜单
-        QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "切换图标");
-        UiHelper::applyMenuStyle(iconMenu);
-
-        QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
-        QWidget* pickerWidget = new QWidget(iconMenu);
-        QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
-        pickerLayout->setContentsMargins(6, 6, 6, 6);
-        pickerLayout->setSpacing(6);
-
-        static const QList<QPair<QString, QString>> builtInIcons = {
-            {"默认文件夹", "folder_filled"}, {"照片媒体", "image_filled"}, {"相册图片", "image_picture"},
-            {"时钟历史", "clock_filled"}, {"星标收藏", "star_filled"}, {"实心星标", "star_001"},
-            {"空心星标", "star_002"}, {"爱心常用", "heart_filled"}, {"加密安全", "lock_filled"},
-            {"图书文档", "book"}, {"附加文档", "document_attach"}, {"配置管理", "settings_filled"},
-            {"网络球体", "globe_filled"}, {"主页主路径", "home_filled"}, {"标签标记", "tag_filled"},
-            {"书签指示", "bookmark_filled"}, {"音频音乐", "music_filled"}, {"视频影视", "video_filled"},
-            {"摄影相机", "camera_filled"}, {"盾牌防护", "shield_filled"}, {"物理硬盘", "hard_drive"},
-            {"云端同步", "cloud_filled"}, {"闪电极速", "zap_filled"}, {"魔法火花", "sparkles_filled"},
-            {"旗帜标记", "flag_filled"}, {"旗帜标示", "flag"}, {"礼物珍藏", "gift_filled"},
-            {"奖星勋章", "award_filled"}, {"回收废弃", "trash_filled"}, {"邮件通信", "mail_filled"},
-            {"消息通知", "message_filled"}, {"电话联系", "phone_filled"}, {"地理定位", "map_pin_filled"},
-            {"日光白天", "sun_filled"}, {"夜间月亮", "moon_filled"}, {"日历日程", "calendar_filled"},
-            {"今日任务", "today_filled"}, {"九宫网格", "grid_filled"}, {"布局排版", "layout_filled"},
-            {"数据表格", "table_filled"}, {"磁盘保存", "save_filled"}, {"魔棒工具", "wand_filled"},
-            {"附件剪辑", "paperclip"}, {"归档文件", "archive"},
-            {"OneNote笔记", "onenote"}, {"下载中心", "download"}
-        };
-
-        QColor catColor = QColor(curColorHex);
-        int row = 0, col = 0;
-        for (const auto& pair : builtInIcons) {
-            QString iconKey = pair.second;
-            QPushButton* btn = new QPushButton(pickerWidget);
-            btn->setFixedSize(28, 28);
-            btn->setCursor(Qt::PointingHandCursor);
-            btn->setObjectName("FavPickerIconBtn");
-            btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
-            btn->setIconSize(QSize(18, 18));
-            pickerLayout->addWidget(btn, row, col);
-
-            iconButtons.append({btn, iconKey});
-
-            // 🚀【持续点击 0ms 就地预览，绝对不调用 close()】
-            connect(btn, &QPushButton::clicked, this, [this, index, iconKey]() {
+        ContextMenuFactory::buildIconPickerMenu(&menu, curIconKey, curColorHex,
+            [this, index](const QString& iconKey) {
                 QStandardItem* item = m_favoriteModel->itemFromIndex(index);
                 if (!item) return;
 
@@ -301,52 +253,33 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
                 if (m_favoriteView && m_favoriteView->viewport()) {
                     m_favoriteView->viewport()->update();
                 }
-            });
+            },
+            [this, index](const QString& hexColor) {
+                QStandardItem* item = m_favoriteModel->itemFromIndex(index);
+                if (!item) return;
 
-            col++;
-            if (col >= 5) { col = 0; row++; }
-        }
+                QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
+                QString iconKey = item->data(Qt::UserRole + 2).toString();
+                if (iconKey.isEmpty()) iconKey = "folder_filled";
+                QString targetPath = item->data(Qt::UserRole + 1).toString();
 
-        pickerWidget->setLayout(pickerLayout);
-        pickerAction->setDefaultWidget(pickerWidget);
-        iconMenu->addAction(pickerAction);
+                QIcon newIcon = UiHelper::getIcon(iconKey, QColor(finalColor), 18);
+                item->setIcon(newIcon);
+                item->setData(finalColor, Qt::UserRole + 3);
 
-        // 🚀【持续改色 0ms 就地预览，绝对不调用 close()】
-        connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [this, index, iconMenu, iconButtons](const QString& hexColor) {
-            QStandardItem* item = m_favoriteModel->itemFromIndex(index);
-            if (!item) return;
+                if (!targetPath.isEmpty() && !targetPath.startsWith("virtual_cat_")) {
+                    AppCommand cmd;
+                    cmd.type = AppCommandType::SetColor;
+                    cmd.targetPaths = {targetPath};
+                    cmd.params["color"] = finalColor;
+                    CoreEngine::instance().executeCommand(cmd);
+                }
 
-            QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
-            QString iconKey = item->data(Qt::UserRole + 2).toString();
-            if (iconKey.isEmpty()) iconKey = "folder_filled";
-            QString targetPath = item->data(Qt::UserRole + 1).toString();
-
-            // 1. 实时就地刷新左侧收藏项
-            QIcon newIcon = UiHelper::getIcon(iconKey, QColor(finalColor), 18);
-            item->setIcon(newIcon);
-            item->setData(finalColor, Qt::UserRole + 3);
-
-            // 2. 联动刷新子菜单自身的头部图标与内部 50 个小图标颜色
-            iconMenu->setIcon(UiHelper::getIcon("folder_filled", QColor(finalColor)));
-            for (const auto& btnPair : iconButtons) {
-                btnPair.first->setIcon(UiHelper::getIcon(btnPair.second, QColor(finalColor), 18));
+                if (m_favoriteView && m_favoriteView->viewport()) {
+                    m_favoriteView->viewport()->update();
+                }
             }
-
-            // 3. 全局 Command 发起设色，触发 MetadataManager 与 CentralEventHub
-            if (!targetPath.isEmpty() && !targetPath.startsWith("virtual_cat_")) {
-                AppCommand cmd;
-                cmd.type = AppCommandType::SetColor;
-                cmd.targetPaths = {targetPath};
-                cmd.params["color"] = finalColor;
-                CoreEngine::instance().executeCommand(cmd);
-            }
-
-            if (m_favoriteView && m_favoriteView->viewport()) {
-                m_favoriteView->viewport()->update();
-            }
-        });
-
-        menu.addSeparator();
+        );
     }
 
     // 3. 重命名 (直接唤起行内编辑框)
@@ -358,15 +291,20 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     });
 
     // 4. 删除 / 取消收藏
-    QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), isVirtual ? "删除" : "取消收藏");
-    connect(removeAct, &QAction::triggered, this, [this, path, nodeId, isVirtual, &isItemRemoved]() {
-        isItemRemoved = true;
-        if (isVirtual) {
+    if (isVirtual) {
+        QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除");
+        connect(removeAct, &QAction::triggered, this, [this, nodeId, &isItemRemoved]() {
+            isItemRemoved = true;
             FavoriteService::instance().removeFavoriteById(nodeId);
-        } else {
-            removeFavoriteItem(path);
+        });
+    } else {
+        QAction* favAct = FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+        if (favAct) {
+            connect(favAct, &QAction::triggered, this, [&isItemRemoved]() {
+                isItemRemoved = true;
+            });
         }
-    });
+    }
 
     menu.addSeparator();
 

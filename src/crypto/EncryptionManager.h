@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <functional>
+#include <QStringList>
 
 namespace QuarkMeta {
 
@@ -46,6 +48,21 @@ public:
      * @brief 解密文件并保存至指定物理路径
      */
     bool decryptFile(const std::wstring& amencPath, const std::wstring& destPath, const std::string& password);
+
+    /**
+     * @brief 异步批量加密文件
+     */
+    void encryptBatchAsync(const QStringList& targets, const std::string& password, std::function<void(bool success)> onFinished);
+
+    /**
+     * @brief 异步批量解密文件
+     */
+    void decryptBatchAsync(const QStringList& targets, const std::string& password, std::function<void(bool anySuccess)> onFinished);
+
+    /**
+     * @brief 异步批量修改密码
+     */
+    void changePasswordBatchAsync(const QStringList& targets, const std::string& oldPassword, const std::string& newPassword, std::function<void(bool anySuccess)> onFinished);
 
     /**
      * @brief 解密文件并持有句柄 (RAII)

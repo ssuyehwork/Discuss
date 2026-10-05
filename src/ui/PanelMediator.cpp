@@ -5,6 +5,7 @@
 #include "ContentPanel.h"
 #include "ColumnViewWidget.h"
 #include "controllers/ContentPaneSplitManager.h"
+#include "controllers/PaneActivationTracker.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "AddressBar.h"
@@ -28,6 +29,7 @@
 #include "../meta/MetadataManager.h"
 #include "../meta/FavoriteService.h"
 #include "UiHelper.h"
+#include <QApplication>
 #include <QDebug>
 #include <QFileInfo>
 #include <QFile>
@@ -49,6 +51,17 @@ PanelMediator::PanelMediator(const PanelMediatorComponents& components, QObject*
       m_titleBar(components.titleBar),
       m_layoutManager(components.layoutManager),
       m_shortcutController(components.shortcutController) {
+    m_activationTracker = new PaneActivationTracker(this);
+    qApp->installEventFilter(m_activationTracker);
+    connect(m_activationTracker, &PaneActivationTracker::paneInteracted, this, [this](ContentPanel* panel) {
+        if (panel && m_activeContentPanel != panel) {
+            panel->setActivePane(true);
+        }
+    });
+}
+
+ContentPanel* PanelMediator::activeContentPanel() const {
+    return m_activeContentPanel ? m_activeContentPanel.data() : m_contentPanel.data();
 }
 
 void PanelMediator::setupConnections() {
@@ -126,15 +139,10 @@ void PanelMediator::setupConnections() {
             titleBar->setZoomLevel(boundZoom);
             contentPanel->setZoomLevel(boundZoom);
 
-            connect(titleBar, &TitleBarWidget::zoomLevelChanged, this, [this, contentPanel](int value) {
-                ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
+            connect(titleBar, &TitleBarWidget::zoomLevelChanged, this, [this](int value) {
+                ContentPanel* target = activeContentPanel();
                 if (target) target->setZoomLevel(value);
                 AppConfig::instance().setValue("UI/GridZoomLevel", value);
-            });
-
-            connect(contentPanel, &ContentPanel::zoomLevelChanged, this, [titleBar](int level) {
-                if (titleBar) titleBar->setZoomLevel(level);
-                AppConfig::instance().setValue("UI/GridZoomLevel", level);
             });
         }
     }
@@ -449,14 +457,49 @@ void PanelMediator::setupConnections() {
         }
 
         // 3. 状态栏与焦点响应
-        connect(panel, &ContentPanel::statusBarMessageReady, this, [this](const QString& message) {
-            emit statusMessageRequested(message);
+        connect(panel, &ContentPanel::statusBarMessageReady, this, [this, panel](const QString& message) {
+            if (panel == activeContentPanel()) {
+                emit statusMessageRequested(message);
+            }
         });
 
-        connect(panel, &ContentPanel::panelActivated, this, [this, addressBar](ContentPanel* activePanel) {
+        connect(panel, &ContentPanel::viewModeChanged, this, [this, panel]() {
+            if (panel == activeContentPanel()) {
+                emit activePaneStateChanged();
+            }
+        });
+
+        if (panel->sortController()) {
+            connect(panel->sortController(), &ContentSortController::sortCriteriaChanged, this, [this, panel]() {
+                if (panel == activeContentPanel()) {
+                    emit activePaneStateChanged();
+                }
+            });
+        }
+
+        connect(panel, &ContentPanel::zoomLevelChanged, this, [this, panel, titleBar](int level) {
+            if (panel == activeContentPanel()) {
+                if (titleBar) titleBar->setZoomLevel(level);
+                AppConfig::instance().setValue("UI/GridZoomLevel", level);
+            }
+        });
+
+        if (panel->columnView()) {
+            connect(panel->columnView(), &ColumnViewWidget::pathNavigated, this, [panel, filterPanel](const QString& path) {
+                if (filterPanel) {
+                    filterPanel->clearAllFilters(false);
+                }
+                NavigationService::instance().navigateTo(path);
+            });
+        }
+
+        connect(panel, &ContentPanel::panelActivated, this, [this, addressBar, titleBar](ContentPanel* activePanel) {
             if (m_activeContentPanel != activePanel) {
                 m_activeContentPanel = activePanel;
                 emit activeContentPanelChanged(activePanel);
+                emit activePaneStateChanged();
+                if (titleBar) titleBar->setZoomLevel(activePanel->zoomLevel());
+                activePanel->refreshStatusBar();
             }
             if (addressBar) {
                 addressBar->setPath(activePanel->currentPath());
@@ -826,20 +869,26 @@ void PanelMediator::setupConnections() {
         });
     }
 
-    // 7. 全局事件总线 CentralEventHub 增量通知响应
+    // 7. 全局事件总线 CentralEventHub 增量通知响应：遍历根窗格及其所有副窗格，消除刷新死角
     connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [this, contentPanel, metaPanel](const QuarkMeta::AppEvent& event) {
-        ContentPanel* activeOrRoot = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
-        if (!activeOrRoot) return;
+        ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
+        if (!root) return;
+
+        QList<ContentPanel*> allPanes;
+        allPanes.append(root);
+        if (root->splitManager()) {
+            allPanes.append(root->splitManager()->panes());
+        }
 
         if (event.type == QuarkMeta::AppEventType::MetadataUpdated) {
             if (!event.targetPath.isEmpty()) {
-                activeOrRoot->updateItemMetadata(event.targetPath);
-                if (contentPanel && contentPanel != activeOrRoot) {
-                    contentPanel->updateItemMetadata(event.targetPath);
+                for (ContentPanel* p : allPanes) {
+                    if (p) p->updateItemMetadata(event.targetPath);
                 }
                 if (metaPanel) {
+                    ContentPanel* active = activeContentPanel();
                     QString targetClean = QDir::cleanPath(event.targetPath);
-                    for (const QString& p : activeOrRoot->getSelectedPaths()) {
+                    for (const QString& p : active->getSelectedPaths()) {
                         if (QString::compare(QDir::cleanPath(p), targetClean, Qt::CaseInsensitive) == 0) {
                             if (event.payload.contains("field") && event.payload["field"].toString() == "color") {
                                 QString newColor = event.payload.value("value").toString();
@@ -853,26 +902,25 @@ void PanelMediator::setupConnections() {
                     }
                 }
             } else if (!event.paths.isEmpty()) {
-                for (const QString& p : event.paths) {
-                    activeOrRoot->updateItemMetadata(p);
-                    if (contentPanel && contentPanel != activeOrRoot) {
-                        contentPanel->updateItemMetadata(p);
+                for (ContentPanel* p : allPanes) {
+                    if (!p) continue;
+                    for (const QString& itemP : event.paths) {
+                        p->updateItemMetadata(itemP);
                     }
                 }
             } else {
-                activeOrRoot->refreshAll();
-                if (contentPanel && contentPanel != activeOrRoot) {
-                    contentPanel->refreshAll();
+                for (ContentPanel* p : allPanes) {
+                    if (p) p->refreshAll();
                 }
             }
-            activeOrRoot->recalculateAndEmitStats();
+            if (activeContentPanel()) activeContentPanel()->recalculateAndEmitStats();
         } else if (event.type == QuarkMeta::AppEventType::ItemsDeleted ||
                    event.type == QuarkMeta::AppEventType::ItemsRenamed ||
                    event.type == QuarkMeta::AppEventType::UndoRedoPerformed) {
-            activeOrRoot->refreshAll();
-            if (contentPanel && contentPanel != activeOrRoot) {
-                contentPanel->refreshAll();
+            for (ContentPanel* p : allPanes) {
+                if (p) p->refreshAll();
             }
+            if (activeContentPanel()) activeContentPanel()->recalculateAndEmitStats();
         }
     });
 }

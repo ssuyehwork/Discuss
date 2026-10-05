@@ -51,6 +51,11 @@ public:
      */
     void setupConnections();
 
+    /**
+     * @brief 获取当前焦点 ContentPanel (若为空则降级返回主窗格)
+     */
+    ContentPanel* activeContentPanel() const;
+
 signals:
     /**
      * @brief 统一向 MainWindow 发送状态栏消息更新请求
@@ -62,7 +67,13 @@ signals:
      */
     void activeContentPanelChanged(ContentPanel* panel);
 
+    /**
+     * @brief 焦点窗格视图模式/排序状态改变信号
+     */
+    void activePaneStateChanged();
+
 private:
+    class PaneActivationTracker* m_activationTracker = nullptr;
     QPointer<NavPanel> m_navPanel;
     QPointer<FavoritePanel> m_favoritePanel;
     QPointer<LibraryPanel> m_libraryPanel;

@@ -136,7 +136,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     topL->addWidget(m_iconLabel);
 
     m_titleLabel = new QLabel("筛选", topBar);
-    m_titleLabel->setObjectName("FilterPanelTitleLabel");
+    m_titleLabel->setObjectName("FilterTitleLabel");
     topL->addWidget(m_titleLabel);
 
     m_btnClearAll = new QPushButton(topBar);
@@ -848,6 +848,7 @@ void FilterPanel::updateHeaderStatus() {
     
     QColor brandYellow = QColor("#f1c40f");
     m_iconLabel->setPixmap(UiHelper::getIcon("filter_funnel_outline", brandYellow, 18).pixmap(18, 18));
+    m_titleLabel->setStyleSheet(QString("color: %1;").arg(brandYellow.name()));
     m_titleLabel->style()->unpolish(m_titleLabel);
     m_titleLabel->style()->polish(m_titleLabel);
     m_titleLabel->update();
