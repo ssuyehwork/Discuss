@@ -129,6 +129,8 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
     redistributePaneSizes();
 
     emit m_panel->secondaryPaneCreated(newPane);
+
+    refreshActiveIndicators();
 }
 
 void ContentPaneSplitManager::closePane(ContentPanel* pane) {
@@ -185,6 +187,8 @@ void ContentPaneSplitManager::closePane(ContentPanel* pane) {
     } else {
         redistributePaneSizes();
     }
+
+    refreshActiveIndicators();
 }
 
 void ContentPaneSplitManager::closeSecondaryPane() {
@@ -271,25 +275,62 @@ void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
     } else if (state.activePaneIndex - 1 < m_panes.size()) {
         m_panes[state.activePaneIndex - 1]->setActivePane(true);
     }
+
+    refreshActiveIndicators();
 }
 
 void ContentPaneSplitManager::setActivePane(bool active) {
-    if (active && rootPane()) {
-        rootPane()->m_splitManager->m_activePaneForSplit = m_panel;
+    ContentPanel* root = rootPane();
+    if (root && root->m_splitManager) {
+        if (active) {
+            root->m_splitManager->m_activePaneForSplit = m_panel;
+        }
+        root->m_splitManager->refreshActiveIndicators();
+    }
+}
+
+void ContentPaneSplitManager::refreshActiveIndicators() {
+    if (rootPane() != m_panel) {
+        rootPane()->m_splitManager->refreshActiveIndicators();
+        return;
     }
 
-    if (m_isSplit && m_primaryPaneContainer) {
-        m_primaryPaneContainer->setProperty("activePane", active ? "true" : "false");
-        m_primaryPaneContainer->style()->unpolish(m_primaryPaneContainer);
-        m_primaryPaneContainer->style()->polish(m_primaryPaneContainer);
-    } else {
-        m_panel->setProperty("activePane", active ? "true" : "false");
-        m_panel->style()->unpolish(m_panel);
-        m_panel->style()->polish(m_panel);
+    auto setPaneActiveProperty = [](QWidget* widget, bool shown) {
+        if (!widget) return;
+        QString valStr = shown ? "true" : "false";
+        if (widget->property("activePane").toString() != valStr) {
+            widget->setProperty("activePane", valStr);
+            if (widget->style()) {
+                widget->style()->unpolish(widget);
+                widget->style()->polish(widget);
+            }
+        }
+    };
+
+    bool isSplit = isSplitMode();
+
+    // 根窗格激活判定
+    bool rootActive = (m_activePaneForSplit == nullptr || m_activePaneForSplit == m_panel);
+    bool rootShown = isSplit && rootActive;
+
+    if (m_primaryPaneContainer) {
+        setPaneActiveProperty(m_primaryPaneContainer, rootShown);
+    }
+    setPaneActiveProperty(m_panel, false);
+    if (m_panel && m_panel->m_headerWidget) {
+        m_panel->m_headerWidget->setActive(rootShown);
     }
 
-    if (m_panel->m_headerWidget) {
-        m_panel->m_headerWidget->setActive(active);
+    // 副窗格激活判定
+    for (ContentPanel* pane : m_panes) {
+        if (!pane) continue;
+        bool paneActive = (m_activePaneForSplit == pane);
+        bool paneShown = isSplit && paneActive;
+
+        setPaneActiveProperty(pane, paneShown);
+        if (pane->m_headerWidget) {
+            pane->m_headerWidget->setActive(paneShown);
+        }
     }
 }
 
