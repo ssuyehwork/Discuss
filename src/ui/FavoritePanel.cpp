@@ -358,15 +358,20 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     });
 
     // 4. 删除 / 取消收藏
-    QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), isVirtual ? "删除" : "取消收藏");
-    connect(removeAct, &QAction::triggered, this, [this, path, nodeId, isVirtual, &isItemRemoved]() {
-        isItemRemoved = true;
-        if (isVirtual) {
+    if (isVirtual) {
+        QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除");
+        connect(removeAct, &QAction::triggered, this, [this, nodeId, &isItemRemoved]() {
+            isItemRemoved = true;
             FavoriteService::instance().removeFavoriteById(nodeId);
-        } else {
-            removeFavoriteItem(path);
+        });
+    } else {
+        QAction* favAct = FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+        if (favAct) {
+            connect(favAct, &QAction::triggered, this, [&isItemRemoved]() {
+                isItemRemoved = true;
+            });
         }
-    });
+    }
 
     menu.addSeparator();
 
