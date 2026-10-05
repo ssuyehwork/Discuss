@@ -20,17 +20,48 @@ QAction* ContextMenuFactory::buildShowInExplorerAction(QMenu* menu, const QStrin
     return action;
 }
 
+bool ContextMenuFactory::copyPathsToClipboard(const QStringList& paths, bool showOverlay) {
+    if (paths.isEmpty()) return false;
+
+    QStringList cleanPaths;
+    for (const auto& p : paths) {
+        if (!p.isEmpty()) {
+            cleanPaths << QDir::toNativeSeparators(p);
+        }
+    }
+    if (cleanPaths.isEmpty()) return false;
+
+    QApplication::clipboard()->setText(cleanPaths.join("\r\n"));
+    if (showOverlay) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径至剪贴板", 1500, Style::SuccessGreen);
+    }
+    return true;
+}
+
+bool ContextMenuFactory::copyNamesToClipboard(const QStringList& paths, bool showOverlay) {
+    if (paths.isEmpty()) return false;
+
+    QStringList names;
+    for (const auto& p : paths) {
+        if (!p.isEmpty()) {
+            names << QFileInfo(p).fileName();
+        }
+    }
+    if (names.isEmpty()) return false;
+
+    QApplication::clipboard()->setText(names.join("\r\n"));
+    if (showOverlay) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制名称至剪贴板", 1500, Style::SuccessGreen);
+    }
+    return true;
+}
+
 QAction* ContextMenuFactory::buildCopyPathAction(QMenu* menu, const QStringList& paths, QObject* receiver) {
     if (!menu || paths.isEmpty()) return nullptr;
 
     QAction* action = menu->addAction(UiHelper::getIcon("link", QColor("#EEEEEE"), 18), "复制完整路径");
     QObject::connect(action, &QAction::triggered, receiver ? receiver : menu, [paths]() {
-        QStringList cleanPaths;
-        for (const auto& p : paths) {
-            cleanPaths << QDir::toNativeSeparators(p);
-        }
-        QApplication::clipboard()->setText(cleanPaths.join("\n"));
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径至剪贴板", 1500, Style::SuccessGreen);
+        copyPathsToClipboard(paths, true);
     });
     return action;
 }
@@ -40,12 +71,7 @@ QAction* ContextMenuFactory::buildCopyNameAction(QMenu* menu, const QStringList&
 
     QAction* action = menu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "复制名称");
     QObject::connect(action, &QAction::triggered, receiver ? receiver : menu, [paths]() {
-        QStringList names;
-        for (const auto& p : paths) {
-            names << QFileInfo(p).fileName();
-        }
-        QApplication::clipboard()->setText(names.join("\n"));
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制名称至剪贴板", 1500, Style::SuccessGreen);
+        copyNamesToClipboard(paths, true);
     });
     return action;
 }

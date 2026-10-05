@@ -13,6 +13,7 @@
 #include "../../core/ModelContract.h"
 #include "../../util/DiskIoService.h"
 #include "../../core/LastOperationManager.h"
+#include "ContextMenuFactory.h"
 #include <QPointer>
 
 #include <QWheelEvent>
@@ -33,6 +34,46 @@ namespace QuarkMeta {
 
 ContentKeyHandler::ContentKeyHandler(ContentPanel* panel, QObject* parent)
     : QObject(parent), m_panel(panel) {
+}
+
+bool ContentKeyHandler::executeRepeatLastOp(ContentPanel* panel, QAbstractItemView* view) {
+    if (!LastOperationManager::instance().hasOperation()) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), "尚未记录任何可重复的操作", 1500, QColor("#e81123"));
+        return false;
+    }
+
+    LastOperationType type = LastOperationManager::instance().type();
+    if (type == LastOperationType::MoveToFolder) {
+        return executeMoveToFolder(panel, LastOperationManager::instance().destination());
+    }
+
+    if (!view) return false;
+    QAbstractItemModel* model = view->model();
+    if (!model) return false;
+
+    auto indexes = view->selectionModel()->selectedIndexes();
+    int count = 0;
+    for (const auto& idx : indexes) {
+        if (idx.column() == 0 && !idx.data(SectionHeaderRole).toBool()) {
+            if (type == LastOperationType::SetRating) {
+                model->setData(idx, LastOperationManager::instance().rating(), RatingRole);
+            } else if (type == LastOperationType::SetColor) {
+                QString colorVal = LastOperationManager::instance().color();
+                model->setData(idx, colorVal, ColorRole);
+                QString itemPath = idx.data(PathRole).toString();
+                QIcon coloredIcon = ShellIconManager::getFileIcon(itemPath, 128);
+                model->setData(idx, coloredIcon, Qt::DecorationRole);
+            } else if (type == LastOperationType::PasteTags) {
+                model->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+            }
+            count++;
+        }
+    }
+
+    if (count > 0) {
+        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已对 %1 个项目重复执行上一次操作").arg(count), 1500, QColor("#2ecc71"));
+    }
+    return count > 0;
 }
 
 bool ContentKeyHandler::executeMoveToFolder(ContentPanel* panel, const QString& targetDir) {
@@ -359,9 +400,9 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             QStringList paths;
             auto indexes = view->selectionModel()->selectedIndexes();
             for (const auto& selIdx : indexes) {
-                if (selIdx.column() == 0) paths << QDir::toNativeSeparators(selIdx.data(PathRole).toString());
+                if (selIdx.column() == 0) paths << selIdx.data(PathRole).toString();
             }
-            if (!paths.isEmpty()) QApplication::clipboard()->setText(paths.join("\r\n"));
+            ContextMenuFactory::copyPathsToClipboard(paths, false);
             return true;
         }
         if (keyEvent->key() == Qt::Key_V) {
@@ -388,34 +429,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
 
     // 5. F4: 重复上一次操作 (星级 / 标记颜色 / 粘贴标签 / 快捷移入)
     if (keyEvent->key() == Qt::Key_F4) {
-        if (!LastOperationManager::instance().hasOperation()) {
-            return true;
-        }
-
-        LastOperationType type = LastOperationManager::instance().type();
-        if (type == LastOperationType::MoveToFolder) {
-            executeMoveToFolder(m_panel, LastOperationManager::instance().destination());
-            return true;
-        }
-
-        QAbstractItemModel* model = view->model();
-        if (!model) return true;
-        auto indexes = view->selectionModel()->selectedIndexes();
-        for (const auto& targetIdx : indexes) {
-            if (targetIdx.column() == 0 && !targetIdx.data(SectionHeaderRole).toBool()) {
-                if (type == LastOperationType::SetRating) {
-                    model->setData(targetIdx, LastOperationManager::instance().rating(), RatingRole);
-                } else if (type == LastOperationType::SetColor) {
-                    QString colorVal = LastOperationManager::instance().color();
-                    model->setData(targetIdx, colorVal, ColorRole);
-                    QString path = targetIdx.data(PathRole).toString();
-                    QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
-                    model->setData(targetIdx, coloredIcon, Qt::DecorationRole);
-                } else if (type == LastOperationType::PasteTags) {
-                    model->setData(targetIdx, LastOperationManager::instance().tags(), TagsRole);
-                }
-            }
-        }
+        executeRepeatLastOp(m_panel, view);
         return true;
     }
 
