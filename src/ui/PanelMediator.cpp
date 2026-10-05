@@ -317,7 +317,12 @@ void PanelMediator::setupConnections() {
 
         connect(m_activationTracker, &PaneActivationTracker::paneInteracted, this, [this](ContentPanel* panel) {
             if (panel && m_activeContentPanel != panel) {
-                panel->setActivePane(true);
+                if (m_activeContentPanel) {
+                    m_activeContentPanel->setActivePane(false);
+                }
+                m_activeContentPanel = panel;
+                m_activeContentPanel->setActivePane(true);
+                emit activeContentPanelChanged(m_activeContentPanel);
             }
         });
     }
