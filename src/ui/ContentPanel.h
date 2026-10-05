@@ -26,9 +26,7 @@ class ContentKeyHandler;
 class ContentDataLoader;
 class ContentFileOpsHandler;
 class ContentStatsWorker;
-class SectionedScrollCanvas;
-class FolderSectionHeaderBar;
-class FileSectionHeaderBar;
+class SectionProxyModel;
 class ContentPaneSplitManager;
 
 /**
@@ -151,8 +149,6 @@ public:
     ContentStatsWorker* statsWorker() const { return m_statsWorker; }
     class ContentViewCoordinator* viewCoordinator() const { return m_viewCoordinator; }
     ContentPaneSplitManager* splitManager() const { return m_splitManager; }
-    SectionedScrollCanvas* gridCanvas() const { return m_gridCanvas; }
-    SectionedScrollCanvas* listCanvas() const { return m_listCanvas; }
 
     // 5. 业务操作分发
     void performCopy(bool cutMode);
@@ -170,8 +166,6 @@ public:
 
     // 6. 模型与选中数据访问
     ItemModelBase* model() const { return m_model; }
-    QSortFilterProxyModel* getProxyModel() const { return getActiveProxyModel(); }
-    QSortFilterProxyModel* getActiveProxyModel() const;
     QStringList lastLoadedLibraryPaths() const { return m_lastLoadedLibraryPaths; }
     void setLastLoadedLibraryPaths(const QStringList& paths) { m_lastLoadedLibraryPaths = paths; }
     QStringList getSelectedPaths() const;
@@ -209,7 +203,7 @@ public slots:
     void onCustomContextMenuRequested(const QPoint& pos);
     void onCustomContextMenuRequested(QAbstractItemView* view, const QPoint& pos);
     void onDoubleClicked(const QModelIndex& index);
-    void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), QAbstractItemModel* sourceModelOverride = nullptr);
+    void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString());
     void loadDirectory(const QString& path, bool recursive = false);
     void setPendingSelectName(const QString& name, bool edit = false);
     void refreshAll();
@@ -268,18 +262,10 @@ private:
     void updateDragOverlay(const QPoint& pos);
     void hideDragOverlay();
 
-    SectionedScrollCanvas* m_gridCanvas = nullptr;
-    SectionedScrollCanvas* m_listCanvas = nullptr;
-
-    // 保留既有指针别名：契约锁 100% 保护外部调用方（如 treeView(), gridView() 等）
-    DropTreeView* m_folderTreeView = nullptr;
     DropTreeView* m_treeView = nullptr;
-    JustifiedView* m_folderGridView = nullptr;
     QAbstractItemView* m_gridView = nullptr;
-    FilterProxyModel* m_folderProxyModel = nullptr;
-    FilterProxyModel* m_fileProxyModel = nullptr;
-    FilterProxyModel* m_gridFolderProxyModel = nullptr;
-    FilterProxyModel* m_gridFileProxyModel = nullptr;
+    FilterProxyModel* m_proxyModel = nullptr;
+    SectionProxyModel* m_sectionModel = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
     class ColumnViewWidget* m_columnView = nullptr;

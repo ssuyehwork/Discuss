@@ -142,12 +142,6 @@ set(SOURCES
     src/meta/MediaExtractorPipeline.h
     src/ui/BatchRenameDialog.cpp
     src/ui/BatchRenameDialog.h
-    src/ui/DualSectionPanel.h
-    src/ui/DualSectionPanel.cpp
-    src/ui/SectionedScrollCanvas.h
-    src/ui/SectionedScrollCanvas.cpp
-    src/ui/FolderSectionWidget.cpp
-    src/ui/FolderSectionWidget.h
     src/ui/BatchProgressDialog.h
     src/ui/FileCollisionDialog.h
     src/ui/FileCollisionDialog.cpp
@@ -174,6 +168,8 @@ set(SOURCES
     src/ui/FilterStateModel.cpp
     src/ui/models/FilterProxyModel.h
     src/ui/models/FilterProxyModel.cpp
+    src/ui/models/SectionProxyModel.h
+    src/ui/models/SectionProxyModel.cpp
     src/ui/ScanStatsEngine.h
     src/ui/ScanStatsEngine.cpp
     src/ui/FilterPanel.cpp
