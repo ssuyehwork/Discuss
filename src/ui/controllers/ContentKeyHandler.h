@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QEvent>
 
+class QAbstractItemView;
+
 namespace QuarkMeta {
 
 class ContentPanel;
