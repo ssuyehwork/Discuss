@@ -821,23 +821,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             break;
         }
         case ContentPanel::ActionPasteTags: {
-            QStringList copiedTags = ClipboardService::instance().copiedTags();
-            if (copiedTags.isEmpty()) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "剪贴板无有效标签", 1500, QColor("#e81123"));
-                break;
-            }
-            auto indexes = view->selectionModel()->selectedIndexes();
-            QAbstractItemModel* model = view->model();
-            int count = 0;
-            for (const auto& idx : indexes) {
-                if (idx.column() == 0 && model && !idx.data(SectionHeaderRole).toBool()) {
-                    model->setData(idx, copiedTags, TagsRole);
-                    count++;
-                }
-            }
-            if (count > 0) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将标签粘贴至 %1 个项目").arg(count), 1500, QColor("#2ecc71"));
-            }
+            ClipboardService::instance().executePasteTags(view);
             break;
         }
         case ContentPanel::ActionBatchCreate: {
