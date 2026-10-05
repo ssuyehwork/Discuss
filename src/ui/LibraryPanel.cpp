@@ -9,6 +9,7 @@
 #include "../meta/LibraryService.h"
 #include "../core/CoreEngine.h"
 #include "../core/ModelContract.h"
+#include "controllers/ContextMenuFactory.h"
 #include <QLabel>
 #include <QPushButton>
 #include <QMenu>
@@ -188,48 +189,8 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     menu.addSeparator();
 
-    // 1. 颜色条组件
-    QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
-    ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
-    colorPickerAction->setDefaultWidget(colorPickerWidget);
-    menu.addAction(colorPickerAction);
-
-    // 2. 切换图标
-    QMenu* iconMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "切换图标");
-    UiHelper::applyMenuStyle(iconMenu);
-
-    QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
-    QWidget* pickerWidget = new QWidget(iconMenu);
-    QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
-    pickerLayout->setContentsMargins(6, 6, 6, 6);
-    pickerLayout->setSpacing(6);
-
-    static const QList<QPair<QString, QString>> builtInIcons = {
-        {"默认文件夹", "folder_filled"}, {"照片媒体", "image_filled"}, {"相册图片", "image_picture"},
-        {"时钟历史", "clock_filled"}, {"星标收藏", "star_filled"}, {"实心星标", "star_001"},
-        {"空心星标", "star_002"}, {"爱心常用", "heart_filled"}, {"加密安全", "lock_filled"},
-        {"图书文档", "book"}, {"配置管理", "settings_filled"}, {"网络球体", "globe_filled"},
-        {"主页主路径", "home_filled"}, {"标签标记", "tag_filled"}, {"书签指示", "bookmark_filled"},
-        {"音频音乐", "music_filled"}, {"视频影视", "video_filled"}, {"摄影相机", "camera_filled"},
-        {"盾牌防护", "shield_filled"}, {"物理硬盘", "hard_drive"}, {"云端同步", "cloud_filled"},
-        {"闪电极速", "zap_filled"}, {"魔法火花", "sparkles_filled"}, {"旗帜标记", "flag_filled"}
-    };
-
-    QColor catColor = QColor(curColorHex);
-    int row = 0, col = 0;
-    QList<QPair<QPushButton*, QString>> iconButtons;
-    for (const auto& pair : builtInIcons) {
-        QString iconKey = pair.second;
-        QPushButton* btn = new QPushButton(pickerWidget);
-        btn->setFixedSize(28, 28);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
-        btn->setIconSize(QSize(18, 18));
-        pickerLayout->addWidget(btn, row, col);
-
-        iconButtons.append({btn, iconKey});
-
-        connect(btn, &QPushButton::clicked, this, [this, index, iconKey]() {
+    ContextMenuFactory::buildIconPickerMenu(&menu, curIconKey, curColorHex,
+        [this, index](const QString& iconKey) {
             QStandardItem* item = m_model->itemFromIndex(index);
             if (!item) return;
 
@@ -242,33 +203,23 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
             int nodeId = item->data(Qt::UserRole + 1).toInt();
             LibraryDao::updateCategoryNode(nodeId, item->text(), iconKey, colorHex);
-        });
+        },
+        [this, index](const QString& hexColor) {
+            QStandardItem* item = m_model->itemFromIndex(index);
+            if (!item) return;
 
-        col++;
-        if (col >= 4) { col = 0; row++; }
-    }
+            QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
+            QString iconKey = item->data(Qt::UserRole + 2).toString();
+            if (iconKey.isEmpty()) iconKey = "folder_filled";
 
-    pickerWidget->setLayout(pickerLayout);
-    pickerAction->setDefaultWidget(pickerWidget);
-    iconMenu->addAction(pickerAction);
+            QIcon newIcon = UiHelper::getIcon(iconKey, QColor(finalColor), 18);
+            item->setIcon(newIcon);
+            item->setData(finalColor, Qt::UserRole + 3);
 
-    connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [this, index, iconMenu, iconButtons](const QString& hexColor) {
-        QStandardItem* item = m_model->itemFromIndex(index);
-        if (!item) return;
-
-        QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
-        QString iconKey = item->data(Qt::UserRole + 2).toString();
-        if (iconKey.isEmpty()) iconKey = "folder_filled";
-
-        QIcon newIcon = UiHelper::getIcon(iconKey, QColor(finalColor), 18);
-        item->setIcon(newIcon);
-        item->setData(finalColor, Qt::UserRole + 3);
-
-        int nodeId = item->data(Qt::UserRole + 1).toInt();
-        LibraryDao::updateCategoryNode(nodeId, item->text(), iconKey, finalColor);
-    });
-
-    menu.addSeparator();
+            int nodeId = item->data(Qt::UserRole + 1).toInt();
+            LibraryDao::updateCategoryNode(nodeId, item->text(), iconKey, finalColor);
+        }
+    );
 
     QAction* renameAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "重命名");
     connect(renameAct, &QAction::triggered, this, [this, index]() {
