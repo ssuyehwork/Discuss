@@ -890,20 +890,17 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         }
         case ContentPanel::ActionCopyName: {
             QModelIndexList indexes = m_panel->getSelectedIndexes();
-            QStringList targetNames;
+            QStringList targetPaths;
             for (const auto& idx : indexes) {
                 if (idx.column() == 0) {
                     QString p = idx.data(PathRole).toString();
-                    if (!p.isEmpty()) targetNames << QFileInfo(p).fileName();
+                    if (!p.isEmpty()) targetPaths << p;
                 }
             }
-            if (targetNames.isEmpty() && !path.isEmpty()) {
-                targetNames << QFileInfo(path).fileName();
+            if (targetPaths.isEmpty() && !path.isEmpty()) {
+                targetPaths << path;
             }
-            if (!targetNames.isEmpty()) {
-                QApplication::clipboard()->setText(targetNames.join("\r\n"));
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制文件名到剪贴板", 1200, QColor("#2ecc71"));
-            }
+            ContextMenuFactory::copyNamesToClipboard(targetPaths, true);
             break;
         }
         case ContentPanel::ActionCopyPath: {
@@ -912,15 +909,13 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             for (const auto& idx : indexes) {
                 if (idx.column() == 0) {
                     QString p = idx.data(PathRole).toString();
-                    if (!p.isEmpty()) targetPaths << QDir::toNativeSeparators(p);
+                    if (!p.isEmpty()) targetPaths << p;
                 }
             }
             if (targetPaths.isEmpty() && !path.isEmpty()) {
-                targetPaths << QDir::toNativeSeparators(path);
+                targetPaths << path;
             }
-            if (!targetPaths.isEmpty()) {
-                QApplication::clipboard()->setText(targetPaths.join("\n"));
-            }
+            ContextMenuFactory::copyPathsToClipboard(targetPaths, true);
             break;
         }
         case ContentPanel::ActionRefresh:

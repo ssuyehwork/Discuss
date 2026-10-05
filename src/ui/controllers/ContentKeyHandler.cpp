@@ -13,6 +13,7 @@
 #include "../../core/ModelContract.h"
 #include "../../util/DiskIoService.h"
 #include "../../core/LastOperationManager.h"
+#include "ContextMenuFactory.h"
 #include <QPointer>
 
 #include <QWheelEvent>
@@ -399,9 +400,9 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             QStringList paths;
             auto indexes = view->selectionModel()->selectedIndexes();
             for (const auto& selIdx : indexes) {
-                if (selIdx.column() == 0) paths << QDir::toNativeSeparators(selIdx.data(PathRole).toString());
+                if (selIdx.column() == 0) paths << selIdx.data(PathRole).toString();
             }
-            if (!paths.isEmpty()) QApplication::clipboard()->setText(paths.join("\r\n"));
+            ContextMenuFactory::copyPathsToClipboard(paths, false);
             return true;
         }
         if (keyEvent->key() == Qt::Key_V) {
