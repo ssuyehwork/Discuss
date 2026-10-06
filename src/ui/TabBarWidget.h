@@ -49,11 +49,13 @@ signals:
 protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
     int m_index = -1;
     QPoint m_dragStartPos;
+    bool m_isDragging = false;
     QLabel* m_iconLabel = nullptr;
     QLabel* m_titleLabel = nullptr;
     QPushButton* m_btnClose = nullptr;

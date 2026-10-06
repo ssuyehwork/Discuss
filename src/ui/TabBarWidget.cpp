@@ -99,7 +99,7 @@ void TabItemButton::setActive(bool active) {
 void TabItemButton::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         m_dragStartPos = event->pos();
-        emit tabClicked(m_index);
+        m_isDragging = false;
         event->accept();
         return;
     } else if (event->button() == Qt::MiddleButton) {
@@ -113,6 +113,7 @@ void TabItemButton::mousePressEvent(QMouseEvent* event) {
 void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
     if ((event->buttons() & Qt::LeftButton) && !m_dragStartPos.isNull()) {
         if ((event->pos() - m_dragStartPos).manhattanLength() >= QApplication::startDragDistance()) {
+            m_isDragging = true;
             QDrag* drag = new QDrag(this);
             QMimeData* mimeData = new QMimeData();
             mimeData->setData("application/x-quarkmeta-tabindex", QByteArray::number(m_index));
@@ -132,7 +133,11 @@ void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
 
             QPixmap pixmap = grab();
             drag->setPixmap(pixmap);
-            drag->setHotSpot(event->pos());
+
+            QPoint clampedHotSpot = m_dragStartPos;
+            clampedHotSpot.setX(qBound(0, clampedHotSpot.x(), width() - 1));
+            clampedHotSpot.setY(qBound(0, clampedHotSpot.y(), height() - 1));
+            drag->setHotSpot(clampedHotSpot);
 
             drag->exec(Qt::MoveAction);
             m_dragStartPos = QPoint();
@@ -140,6 +145,18 @@ void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
         }
     }
     QPushButton::mouseMoveEvent(event);
+}
+
+void TabItemButton::mouseReleaseEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        if (!m_isDragging) {
+            emit tabClicked(m_index);
+        }
+        m_isDragging = false;
+        event->accept();
+        return;
+    }
+    QPushButton::mouseReleaseEvent(event);
 }
 
 void TabItemButton::contextMenuEvent(QContextMenuEvent* event) {

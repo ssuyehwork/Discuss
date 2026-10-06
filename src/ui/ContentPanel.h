@@ -82,7 +82,7 @@ public:
     QList<ContentPanel*> panes() const;
     int paneCount() const;
     ContentPanel* rootPane() const;
-    void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString());
+    void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString(), bool insertBefore = false);
     void closePane(ContentPanel* pane);
     void closeSecondaryPane();
     void requestClosePane();

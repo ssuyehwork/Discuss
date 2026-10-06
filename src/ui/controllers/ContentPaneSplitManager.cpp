@@ -26,11 +26,41 @@ bool ContentPaneSplitManager::isSplitMode() const {
     return m_isSplit;
 }
 
-void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
+ContentPaneSplitManager::SplitEvaluationResult ContentPaneSplitManager::evaluateSplitDrop(const QPoint& pos, const QSize& refSize) {
+    SplitEvaluationResult res;
+    int w = refSize.width();
+    int h = refSize.height();
+    if (w <= 0 || h <= 0) return res;
+
+    if (pos.x() < w * 0.25) {
+        res.isValid = true;
+        res.orientation = Qt::Horizontal;
+        res.insertBefore = true;
+        res.highlightRect = QRect(0, 0, w / 2, h);
+    } else if (pos.x() > w * 0.75) {
+        res.isValid = true;
+        res.orientation = Qt::Horizontal;
+        res.insertBefore = false;
+        res.highlightRect = QRect(w / 2, 0, w / 2, h);
+    } else if (pos.y() < h * 0.25) {
+        res.isValid = true;
+        res.orientation = Qt::Vertical;
+        res.insertBefore = true;
+        res.highlightRect = QRect(0, 0, w, h / 2);
+    } else if (pos.y() > h * 0.75) {
+        res.isValid = true;
+        res.orientation = Qt::Vertical;
+        res.insertBefore = false;
+        res.highlightRect = QRect(0, h / 2, w, h / 2);
+    }
+    return res;
+}
+
+void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QString& secondaryPath, bool insertBefore) {
     if (!m_panel) return;
 
     if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->splitPane(orientation, secondaryPath);
+        rootPane()->m_splitManager->splitPane(orientation, secondaryPath, insertBefore);
         return;
     }
 
@@ -125,10 +155,15 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
     });
 
     layout->addWidget(newPane);
-    m_paneSplitter->addWidget(container);
-
-    m_paneContainers.append(container);
-    m_panes.append(newPane);
+    if (insertBefore) {
+        m_paneSplitter->insertWidget(0, container);
+        m_paneContainers.prepend(container);
+        m_panes.prepend(newPane);
+    } else {
+        m_paneSplitter->addWidget(container);
+        m_paneContainers.append(container);
+        m_panes.append(newPane);
+    }
 
     newPane->loadDirectory(!secondaryPath.isEmpty() ? secondaryPath : m_panel->currentPath());
 
@@ -342,34 +377,21 @@ void ContentPaneSplitManager::refreshActiveIndicators() {
 }
 
 void ContentPaneSplitManager::updateDragOverlay(const QPoint& pos) {
+    SplitEvaluationResult eval = evaluateSplitDrop(pos, m_panel->size());
+    if (!eval.isValid) {
+        hideDragOverlay();
+        return;
+    }
+
     if (!m_dragOverlayWidget) {
         m_dragOverlayWidget = new QWidget(m_panel);
         m_dragOverlayWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
         m_dragOverlayWidget->setStyleSheet("background-color: rgba(0, 122, 255, 0.25); border: 2px solid #007AFF;");
     }
 
-    int w = m_panel->width();
-    int h = m_panel->height();
-
-    if (pos.x() > w * 0.75) {
-        m_dragOverlayWidget->setGeometry(w / 2, 0, w / 2, h);
-        m_dragOverlayWidget->show();
-        m_dragOverlayWidget->raise();
-    } else if (pos.x() < w * 0.25) {
-        m_dragOverlayWidget->setGeometry(0, 0, w / 2, h);
-        m_dragOverlayWidget->show();
-        m_dragOverlayWidget->raise();
-    } else if (pos.y() > h * 0.75) {
-        m_dragOverlayWidget->setGeometry(0, h / 2, w, h / 2);
-        m_dragOverlayWidget->show();
-        m_dragOverlayWidget->raise();
-    } else if (pos.y() < h * 0.25) {
-        m_dragOverlayWidget->setGeometry(0, 0, w, h / 2);
-        m_dragOverlayWidget->show();
-        m_dragOverlayWidget->raise();
-    } else {
-        hideDragOverlay();
-    }
+    m_dragOverlayWidget->setGeometry(eval.highlightRect);
+    m_dragOverlayWidget->show();
+    m_dragOverlayWidget->raise();
 }
 
 void ContentPaneSplitManager::hideDragOverlay() {
