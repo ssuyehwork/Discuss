@@ -2,7 +2,7 @@
 
 ## 1. Overview
 This implementation plan addresses cross-pane drag-and-drop refresh and multi-pane split view defects in QuarkMeta:
-1. **Simultaneous Dual-Pane Drop Refresh Fix**: When dragging files between split panes (Primary -> Secondary OR Secondary -> Primary), `ContentFileOpsHandler` previously only invoked `refreshAll()` on the target panel (`m_panel`). By retrieving all split panes associated with `m_panel->panes()` and calling `p->refreshAll()` on all open panels upon `DiskIoService` completion, both source and target panels (and any additional split panes) refresh simultaneously in place.
+1. **Simultaneous Dual-Pane Drop Refresh Fix**: When dragging items between split panes (Primary -> Secondary OR Secondary -> Primary), `ContentFileOpsHandler` previously only invoked `refreshAll()` on the destination panel (`m_panel`). By retrieving all active split panes associated with `m_panel->panes()` and calling `pane->refreshAll()` on each panel upon `DiskIoService` completion, both source and target panels (and any additional split panes) refresh simultaneously in place upon releasing the left mouse button and completing the file operation.
 2. **Multi-Pane List Mode Column Header Title Loss Fix**: `SectionProxyModel` wraps proxy and disk models in `ContentPanel`. Overriding `headerData(...)` in `SectionProxyModel` to proxy requests to `sourceModel()->headerData(...)` restores column header titles ("名称", "状态", "评分", "尺寸", "类型", "大小", "修改日期") in list view mode.
 3. **Active Pane Focus Routing Fix**: `PanelMediator`'s `PaneActivationTracker::paneInteracted` handler now updates `m_activeContentPanel` and broadcasts `emit activeContentPanelChanged(m_activeContentPanel)`, ensuring status bar controls and peripheral widgets track the currently active split pane.
 
@@ -125,7 +125,7 @@ QVariant SectionProxyModel::data(const QModelIndex& index, int role) const {
 2. Verify cross-pane drop simultaneous refresh:
    - Open split pane view (Primary & Secondary panes).
    - Drag item from primary pane to secondary pane or from secondary pane to primary pane.
-   - Upon mouse button release and file move/copy completion, verify both primary and secondary panes invoke `refreshAll()` simultaneously.
+   - Upon releasing left mouse button and completing disk operation, verify both primary and secondary panes invoke `refreshAll()` simultaneously.
 3. Verify list view header rendering:
    - Switch active pane to List View mode.
    - Verify column headers ("名称", "评分", "尺寸", "类型", "大小", "修改日期") display correct labels instead of `0`.

@@ -175,7 +175,17 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
     DiskIoService::instance().executeAsync(ioCtx, [weakPanel](bool success) {
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, success]() {
             if (weakPanel && success) {
-                weakPanel->refreshAll();
+                ContentPanel* root = weakPanel->rootPane();
+                if (root) {
+                    root->refreshAll();
+                    for (ContentPanel* pane : root->panes()) {
+                        if (pane && pane != root) {
+                            pane->refreshAll();
+                        }
+                    }
+                } else {
+                    weakPanel->refreshAll();
+                }
             }
         });
     });
