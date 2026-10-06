@@ -21,10 +21,10 @@ static const std::vector<ColumnPolicy> kFileListColumnPolicies = {
     { FileListColumn::Status,       40,  QHeaderView::Fixed,   0,   true  }, // 恒定隐藏
     { FileListColumn::Rating,       100, QHeaderView::Fixed,   350, false }, // >=350px
     { FileListColumn::Dimension,    100, QHeaderView::Fixed,   480, false }, // >=480px
-    { FileListColumn::Type,         60,  QHeaderView::Fixed,   600, false }, // >=600px
-    { FileListColumn::Size,         80,  QHeaderView::Fixed,   600, false }, // >=600px
-    { FileListColumn::ModifiedDate, 130, QHeaderView::Fixed,   720, false }, // >=720px
-    { FileListColumn::CreatedDate,  130, QHeaderView::Fixed,   850, false }, // >=850px
+    { FileListColumn::Type,         60,  QHeaderView::Fixed,   230, false }, // >=230px
+    { FileListColumn::Size,         80,  QHeaderView::Fixed,   230, false }, // >=230px
+    { FileListColumn::ModifiedDate, 130, QHeaderView::Fixed,   230, false }, // >=230px
+    { FileListColumn::CreatedDate,  130, QHeaderView::Fixed,   230, false }, // >=230px
 };
 
 DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {

@@ -641,8 +641,7 @@ void ContentPanel::setViewMode(ViewMode mode) {
         }
     }
 
-    // 更新窗格及容器的动态最小宽度约束（列视图锁定 460px 保证 1列数据230px + 1列留白230px）
-    int minW = (mode == ColumnView) ? 460 : 230;
+    int minW = 230;
     setMinimumWidth(minW);
     if (parentWidget() && parentWidget()->objectName() == "EditorContainer") {
         parentWidget()->setMinimumWidth(minW);
