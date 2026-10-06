@@ -428,8 +428,8 @@ ContentPanel* ContentPanel::rootPane() const {
     return m_splitManager ? m_splitManager->rootPane() : const_cast<ContentPanel*>(this);
 }
 
-void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath) {
-    if (m_splitManager) m_splitManager->splitPane(orientation, secondaryPath);
+void ContentPanel::splitPane(Qt::Orientation orientation, const QString& secondaryPath, bool insertBefore) {
+    if (m_splitManager) m_splitManager->splitPane(orientation, secondaryPath, insertBefore);
 }
 
 void ContentPanel::closePane(ContentPanel* pane) {
@@ -502,21 +502,12 @@ void ContentPanel::dropEvent(QDropEvent* event) {
 
             if (!tabUrl.isEmpty()) {
                 QPoint pos = event->position().toPoint();
-                int w = width();
-                int h = height();
-                Qt::Orientation orientation = Qt::Horizontal;
-
-                if (pos.y() < h * 0.25 || pos.y() > h * 0.75) {
-                    orientation = Qt::Vertical;
-                } else if (pos.x() < w * 0.25 || pos.x() > w * 0.75) {
-                    orientation = Qt::Horizontal;
-                } else {
-                    orientation = Qt::Horizontal;
+                ContentPaneSplitManager::SplitEvaluationResult eval = ContentPaneSplitManager::evaluateSplitDrop(pos, size());
+                if (eval.isValid) {
+                    splitPane(eval.orientation, tabUrl, eval.insertBefore);
+                    event->acceptProposedAction();
+                    return;
                 }
-
-                splitPane(orientation, tabUrl);
-                event->acceptProposedAction();
-                return;
             }
         }
     }

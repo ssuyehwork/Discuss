@@ -25,7 +25,16 @@ public:
     int paneCount() const { return 1 + m_panes.size(); }
     ContentPanel* rootPane() const;
 
-    void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString());
+    struct SplitEvaluationResult {
+        bool isValid = false;
+        Qt::Orientation orientation = Qt::Horizontal;
+        bool insertBefore = false;
+        QRect highlightRect;
+    };
+
+    static SplitEvaluationResult evaluateSplitDrop(const QPoint& pos, const QSize& refSize);
+
+    void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString(), bool insertBefore = false);
     void closePane(ContentPanel* pane);
     void closeSecondaryPane();
     void redistributePaneSizes();
