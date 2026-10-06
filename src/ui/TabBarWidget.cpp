@@ -38,7 +38,7 @@ TabItemButton::TabItemButton(int index, QWidget* parent)
     setObjectName("TabItem");
     setFocusPolicy(Qt::NoFocus);
     setFixedHeight(28);
-    setMaximumWidth(180);
+    setMaximumWidth(240);
     setMinimumWidth(80);
     setCursor(Qt::PointingHandCursor);
 
@@ -73,11 +73,22 @@ TabItemButton::TabItemButton(int index, QWidget* parent)
 }
 
 void TabItemButton::setTabTitle(const QString& title) {
-    if (m_titleLabel) {
-        QFontMetrics fm(m_titleLabel->font());
-        QString elided = fm.elidedText(title, Qt::ElideRight, 110);
-        m_titleLabel->setText(elided);
-    }
+    m_rawTitle = title;
+    updateElidedTitle();
+}
+
+void TabItemButton::updateElidedTitle() {
+    if (!m_titleLabel || m_rawTitle.isEmpty()) return;
+    int availWidth = width() - 56;
+    if (availWidth < 10) availWidth = 10;
+    QFontMetrics fm(m_titleLabel->font());
+    QString elided = fm.elidedText(m_rawTitle, Qt::ElideRight, availWidth);
+    m_titleLabel->setText(elided);
+}
+
+void TabItemButton::resizeEvent(QResizeEvent* event) {
+    QPushButton::resizeEvent(event);
+    updateElidedTitle();
 }
 
 void TabItemButton::setTabIcon(const QIcon& icon) {
@@ -884,7 +895,7 @@ void TabBarWidget::rebuildTabsUi() {
         });
 
         connect(tabItem, &TabItemButton::tabClicked, this, [this](int idx) {
-            setCurrentIndex(idx, true);
+            setCurrentIndex(idx, false);
         });
 
         connect(tabItem, &TabItemButton::customContextMenuRequested, this, [this](int idx, const QPoint& globalPos) {

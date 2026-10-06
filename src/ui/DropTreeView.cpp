@@ -32,6 +32,9 @@ DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     setDragEnabled(true);
     setDropIndicatorShown(true);
     setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     DragDropEventFilter::install(this);
 
     // 🚀【强力锁定 QPalette】：强制设定暗色 Base 与 AlternateBase，防止原生 Windows 调色板在交替行露白
@@ -106,9 +109,8 @@ void DropTreeView::applyColumnPolicies() {
     QHeaderView* hdr = header();
     if (!hdr) return;
 
-    int currentWidth = viewport() ? viewport()->width() : width();
-    const int minNameWidth = 230; // 强保名称列最小 230px 宽，不可更改
-    int remainingForFixedColumns = currentWidth - minNameWidth;
+    const int minNameWidth = 230; // 强保名称列最小 230px 宽
+    hdr->setMinimumSectionSize(minNameWidth);
 
     for (const auto& policy : kFileListColumnPolicies) {
         int colIdx = static_cast<int>(policy.column);
@@ -117,20 +119,15 @@ void DropTreeView::applyColumnPolicies() {
             continue;
         }
 
+        setColumnHidden(colIdx, false);
         if (policy.column == FileListColumn::Name) {
-            setColumnHidden(colIdx, false);
-            hdr->setSectionResizeMode(colIdx, policy.resizeMode);
-            continue;
-        }
-
-        // 针对固定宽度的扩展列：仅当剩余空间能够完满容纳该列时才展示，否则隐藏
-        if (policy.fixedWidth > 0 && remainingForFixedColumns >= policy.fixedWidth) {
-            setColumnHidden(colIdx, false);
+            hdr->setSectionResizeMode(colIdx, QHeaderView::Interactive);
+            if (hdr->sectionSize(colIdx) < minNameWidth) {
+                hdr->resizeSection(colIdx, minNameWidth);
+            }
+        } else if (policy.fixedWidth > 0) {
             hdr->setSectionResizeMode(colIdx, policy.resizeMode);
             hdr->resizeSection(colIdx, policy.fixedWidth);
-            remainingForFixedColumns -= policy.fixedWidth;
-        } else {
-            setColumnHidden(colIdx, true);
         }
     }
 }

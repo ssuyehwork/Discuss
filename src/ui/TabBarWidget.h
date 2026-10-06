@@ -7,6 +7,7 @@
 #include <QList>
 #include <QString>
 #include <QEvent>
+#include <QResizeEvent>
 
 namespace QuarkMeta {
 
@@ -52,11 +53,15 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
+    void updateElidedTitle();
+
     int m_index = -1;
     QPoint m_dragStartPos;
     bool m_isDragging = false;
+    QString m_rawTitle;
     QLabel* m_iconLabel = nullptr;
     QLabel* m_titleLabel = nullptr;
     QPushButton* m_btnClose = nullptr;
