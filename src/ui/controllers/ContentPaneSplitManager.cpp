@@ -79,7 +79,7 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
         m_primaryPaneContainer = new QFrame(m_paneSplitter);
         m_primaryPaneContainer->setObjectName("EditorContainer");
         m_primaryPaneContainer->setAttribute(Qt::WA_StyledBackground, true);
-        m_primaryPaneContainer->setMinimumWidth(m_panel->currentViewMode() == ContentPanel::ColumnView ? 460 : 230);
+        m_primaryPaneContainer->setMinimumWidth(ContentPanel::kMinPaneWidth);
         QVBoxLayout* primLayout = new QVBoxLayout(m_primaryPaneContainer);
         primLayout->setContentsMargins(0, 0, 0, 0);
         primLayout->setSpacing(0);
@@ -137,7 +137,7 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
     layout->setSpacing(0);
 
     ContentPanel* newPane = new ContentPanel(container);
-    container->setMinimumWidth(newPane->currentViewMode() == ContentPanel::ColumnView ? 460 : 230);
+    container->setMinimumWidth(ContentPanel::kMinPaneWidth);
     newPane->setIsSecondaryPane(true);
     if (newPane->m_splitManager) {
         newPane->m_splitManager->m_rootPane = m_panel;
@@ -152,6 +152,7 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
         newPane->loadDirectory(path);
         emit m_panel->dualPanePathsChanged(m_panel->currentPath(), path);
         emit newPane->panelActivated(newPane);
+        notifyLayoutChanged();
     });
 
     layout->addWidget(newPane);
@@ -171,7 +172,39 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
 
     emit m_panel->secondaryPaneCreated(newPane);
 
+    updateContainerMinimumWidth();
     refreshActiveIndicators();
+    notifyLayoutChanged();
+}
+
+void ContentPaneSplitManager::notifyLayoutChanged() {
+    if (m_blockLayoutSignals) return;
+
+    if (!m_layoutDebounceTimer) {
+        m_layoutDebounceTimer = new QTimer(this);
+        m_layoutDebounceTimer->setSingleShot(true);
+        m_layoutDebounceTimer->setInterval(0);
+        connect(m_layoutDebounceTimer, &QTimer::timeout, this, [this]() {
+            if (!m_blockLayoutSignals) {
+                emit layoutChanged();
+            }
+        });
+    }
+
+    if (!m_layoutDebounceTimer->isActive()) {
+        m_layoutDebounceTimer->start();
+    }
+}
+
+void ContentPaneSplitManager::updateContainerMinimumWidth() {
+    if (m_primaryPaneContainer) {
+        m_primaryPaneContainer->setMinimumWidth(ContentPanel::kMinPaneWidth);
+    }
+    for (QWidget* container : m_paneContainers) {
+        if (container) {
+            container->setMinimumWidth(ContentPanel::kMinPaneWidth);
+        }
+    }
 }
 
 void ContentPaneSplitManager::closePane(ContentPanel* pane) {
@@ -230,7 +263,9 @@ void ContentPaneSplitManager::closePane(ContentPanel* pane) {
         redistributePaneSizes();
     }
 
+    updateContainerMinimumWidth();
     refreshActiveIndicators();
+    notifyLayoutChanged();
 }
 
 void ContentPaneSplitManager::closeSecondaryPane() {
@@ -269,19 +304,32 @@ TabSplitState ContentPaneSplitManager::exportSplitState() const {
 
     state.isSplit = m_isSplit;
     state.orientation = m_splitOrientation;
-    state.panePaths.append(m_panel->currentPath());
 
-    for (int i = 0; i < m_panes.size(); ++i) {
-        if (m_panes[i]) {
-            state.panePaths.append(m_panes[i]->currentPath());
-            if (m_activePaneForSplit == m_panes[i]) {
-                state.activePaneIndex = i + 1;
-            }
-        }
+    if (!m_paneSplitter || m_paneSplitter->count() == 0) {
+        state.panePaths.append(m_panel->currentPath());
+        state.primaryIndex = 0;
+        state.activePaneIndex = 0;
+        return state;
     }
 
-    if (m_activePaneForSplit == m_panel || m_activePaneForSplit == nullptr) {
-        state.activePaneIndex = 0;
+    for (int i = 0; i < m_paneSplitter->count(); ++i) {
+        QWidget* w = m_paneSplitter->widget(i);
+        if (w == m_primaryPaneContainer) {
+            state.panePaths.append(m_panel->currentPath());
+            state.primaryIndex = state.panePaths.size() - 1;
+            if (m_activePaneForSplit == nullptr || m_activePaneForSplit == m_panel) {
+                state.activePaneIndex = state.panePaths.size() - 1;
+            }
+        } else {
+            int cIdx = m_paneContainers.indexOf(w);
+            if (cIdx >= 0 && cIdx < m_panes.size() && m_panes[cIdx]) {
+                ContentPanel* pane = m_panes[cIdx];
+                state.panePaths.append(pane->currentPath());
+                if (m_activePaneForSplit == pane) {
+                    state.activePaneIndex = state.panePaths.size() - 1;
+                }
+            }
+        }
     }
 
     return state;
@@ -293,32 +341,57 @@ void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
         return;
     }
 
+    m_blockLayoutSignals = true;
+
     // 1. 关闭现有所有副窗格
     while (!m_panes.isEmpty()) {
         closePane(m_panes.last());
     }
 
-    // 2. 还原主窗格路径
-    if (!state.panePaths.isEmpty()) {
-        m_panel->loadDirectory(state.panePaths.first());
+    if (state.panePaths.isEmpty()) {
+        updateContainerMinimumWidth();
+        refreshActiveIndicators();
+        m_blockLayoutSignals = false;
+        notifyLayoutChanged();
+        return;
     }
 
-    // 3. 如果快照包含分屏且路径大于 1，则动态构建副窗格
+    int primIdx = qBound(0, state.primaryIndex, state.panePaths.size() - 1);
+
+    // 2. 还原主窗格路径
+    m_panel->loadDirectory(state.panePaths[primIdx]);
+
+    // 3. 如果快照包含分屏且路径大于 1，则按屏幕物理顺序动态构建副窗格
     if (state.isSplit && state.panePaths.size() > 1) {
         m_splitOrientation = state.orientation;
-        for (int i = 1; i < state.panePaths.size(); ++i) {
-            splitPane(state.orientation, state.panePaths[i]);
+
+        for (int i = primIdx - 1; i >= 0; --i) {
+            splitPane(state.orientation, state.panePaths[i], true);
+        }
+
+        for (int i = primIdx + 1; i < state.panePaths.size(); ++i) {
+            splitPane(state.orientation, state.panePaths[i], false);
         }
     }
 
     // 4. 恢复激活窗格
-    if (state.activePaneIndex == 0 || m_panes.isEmpty()) {
+    int activeIdx = qBound(0, state.activePaneIndex, state.panePaths.size() - 1);
+    if (activeIdx == primIdx) {
         m_panel->setActivePane(true);
-    } else if (state.activePaneIndex - 1 < m_panes.size()) {
-        m_panes[state.activePaneIndex - 1]->setActivePane(true);
+    } else {
+        int secIdx = (activeIdx < primIdx) ? activeIdx : (activeIdx - 1);
+        if (secIdx >= 0 && secIdx < m_panes.size()) {
+            m_panes[secIdx]->setActivePane(true);
+        } else {
+            m_panel->setActivePane(true);
+        }
     }
 
+    updateContainerMinimumWidth();
     refreshActiveIndicators();
+
+    m_blockLayoutSignals = false;
+    notifyLayoutChanged();
 }
 
 void ContentPaneSplitManager::setActivePane(bool active) {

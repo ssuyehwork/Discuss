@@ -15,6 +15,7 @@ class HoverEventFilter;
 struct TabSplitState {
     Qt::Orientation orientation = Qt::Horizontal;
     QStringList panePaths;
+    int primaryIndex = 0;
     int activePaneIndex = 0;
     bool isSplit = false;
 };
@@ -73,6 +74,8 @@ public:
     void closeOtherTabs(int index);
     void closeRightTabs(int index);
     void duplicateTab(int index);
+    void mergeTab(int sourceIndex, int targetIndex);
+    void splitTab(int tabIndex);
     void restoreLastClosedTab();
     void setCurrentIndex(int index, bool forceNotify = false);
     int currentIndex() const { return m_currentIndex; }
@@ -92,7 +95,6 @@ public:
     }
     void updateSplitTabTitle(const TabSplitState& state);
     void updateCurrentTabTitle(const QString& title, const QString& url);
-    void updateDualPaneTabTitle(const QString& title1, const QString& url1, const QString& title2, const QString& url2);
     void openOrFocusTab(const QString& path);
 
     void saveStateToConfig();
@@ -107,6 +109,8 @@ signals:
     void tabClosed(int index);
     void newTabRequested();
     void refreshRequested();
+    void mergeRequested(int sourceIndex, int targetIndex);
+    void splitRequested(int tabIndex);
 
 private:
     void dragEnterEvent(QDragEnterEvent* event) override;

@@ -99,6 +99,36 @@ void PanelMediator::setupConnections() {
                 NavigationService::instance().refresh();
             });
 
+            connect(titleBar->tabBar(), &TabBarWidget::mergeRequested, this, [this, titleBar, contentPanel](int sourceIndex, int targetIndex) {
+                ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
+                if (root && root->splitManager() && titleBar->tabBar()) {
+                    TabSplitState state = root->splitManager()->exportSplitState();
+                    titleBar->tabBar()->setTabSplitState(titleBar->tabBar()->currentIndex(), state);
+
+                    TabSplitState srcState = titleBar->tabBar()->tabSplitState(sourceIndex);
+                    TabSplitState tgtState = titleBar->tabBar()->tabSplitState(targetIndex);
+
+                    int srcCount = (srcState.isSplit && !srcState.panePaths.isEmpty()) ? srcState.panePaths.size() : 1;
+                    int tgtCount = (tgtState.isSplit && !tgtState.panePaths.isEmpty()) ? tgtState.panePaths.size() : 1;
+
+                    if (srcCount + tgtCount > ContentPanel::kMaxPanes) {
+                        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("窗格数量超出上限%1窗格，不支持合并").arg(ContentPanel::kMaxPanes), 2000, QColor("#e81123"));
+                        return;
+                    }
+
+                    titleBar->tabBar()->mergeTab(sourceIndex, targetIndex);
+                }
+            });
+
+            connect(titleBar->tabBar(), &TabBarWidget::splitRequested, this, [this, titleBar, contentPanel](int tabIndex) {
+                ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
+                if (root && root->splitManager() && titleBar->tabBar()) {
+                    TabSplitState state = root->splitManager()->exportSplitState();
+                    titleBar->tabBar()->setTabSplitState(titleBar->tabBar()->currentIndex(), state);
+                    titleBar->tabBar()->splitTab(tabIndex);
+                }
+            });
+
         }
         if (layoutManager) {
             connect(titleBar, &TitleBarWidget::layoutMenuRequested, layoutManager, [layoutManager](const QPoint& pos) {
@@ -196,15 +226,6 @@ void PanelMediator::setupConnections() {
                 targetPanel->loadDirectory(url);
             }
         }
-
-        // 🚀【核心根治】：在 targetPanel 加载完最新目录路径后，统一刷出最新快照给 TabBar，确保 Tab 标题与地址栏路径 100% 同步！
-        if (titleBar && titleBar->tabBar()) {
-            ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
-            if (root && root->splitManager()) {
-                TabSplitState state = root->splitManager()->exportSplitState();
-                titleBar->tabBar()->updateSplitTabTitle(state);
-            }
-        }
     });
 
     if (navPanel) {
@@ -265,15 +286,15 @@ void PanelMediator::setupConnections() {
             NavigationService::instance().navigateTo(path);
         });
 
-        connect(contentPanel, &ContentPanel::dualPanePathsChanged, this, [this, titleBar, contentPanel](const QString&, const QString&) {
-            if (titleBar && titleBar->tabBar()) {
-                ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
-                if (root && root->splitManager()) {
-                    TabSplitState state = root->splitManager()->exportSplitState();
+        ContentPanel* rootPanel = contentPanel ? contentPanel->rootPane() : nullptr;
+        if (rootPanel && rootPanel->splitManager()) {
+            connect(rootPanel->splitManager(), &ContentPaneSplitManager::layoutChanged, this, [this, titleBar, rootPanel]() {
+                if (titleBar && titleBar->tabBar()) {
+                    TabSplitState state = rootPanel->splitManager()->exportSplitState();
                     titleBar->tabBar()->updateSplitTabTitle(state);
                 }
-            }
-        });
+            });
+        }
 
         if (contentPanel->columnView()) {
             connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, this, [filterPanel](const QString& path) {
@@ -542,16 +563,15 @@ void PanelMediator::setupConnections() {
 
         if (metaPanel) {
             connect(this, &PanelMediator::activeContentPanelChanged, this, [contentPanel, updateMetaPanelFromPanel](ContentPanel* activePanel) {
-                std::function<void(ContentPanel*)> updateActiveState = [&updateActiveState, activePanel](ContentPanel* node) {
-                    if (!node) return;
-                    node->setActivePane(node == activePanel);
-                    if (node->isSplitMode()) {
-                        for (ContentPanel* pane : node->panes()) {
-                            updateActiveState(pane);
+                ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
+                if (root) {
+                    root->setActivePane(root == activePanel);
+                    for (ContentPanel* pane : root->panes()) {
+                        if (pane && pane != root) {
+                            pane->setActivePane(pane == activePanel);
                         }
                     }
-                };
-                updateActiveState(contentPanel);
+                }
                 updateMetaPanelFromPanel(activePanel);
             });
         }

@@ -72,14 +72,28 @@ public:
     explicit ContentPanel(QWidget* parent = nullptr);
     ~ContentPanel() override = default;
 
+    static constexpr int kMinPaneWidth = 230;
     static constexpr int kMaxPanes = 4;
 
     // Dual-pane state inspection & split controls
+    /**
+     * @brief 检查当前整个窗格组（主窗格 + 所有副窗格）是否处于分屏模式
+     * @note 无论在主窗格还是副窗格上调用，均返回整个窗格组的统一分屏状态。禁止调用方对此类方法执行递归调用！
+     */
     bool isSplitMode() const;
     bool isSecondaryPane() const;
     void setIsSecondaryPane(bool secondary);
     ContentPanel* secondaryContentPanel() const;
+
+    /**
+     * @brief 获取当前整个分屏窗格组的全部副窗格列表（扁平一维列表，不含主窗格）
+     * @note 无论在主窗格还是副窗格上调用，均返回整个窗格组的扁平副窗格列表。禁止调用方对此列表进行递归遍历！
+     */
     QList<ContentPanel*> panes() const;
+
+    /**
+     * @brief 获取当前整个分屏窗格组的总窗格数（主窗格 1 + 全部副窗格数）
+     */
     int paneCount() const;
     ContentPanel* rootPane() const;
     void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString(), bool insertBefore = false);
@@ -88,7 +102,7 @@ public:
     void requestClosePane();
     void setActivePane(bool active);
 
-    QSize minimumSizeHint() const override { return QSize(m_currentViewMode == ColumnView ? 460 : 230, 100); }
+    QSize minimumSizeHint() const override { return QSize(kMinPaneWidth, 100); }
     void deferredInit() {}
 
     // 1. 状态与配置查询
@@ -107,12 +121,7 @@ public:
     const FilterState& currentFilter() const { return m_currentFilter; }
 
     // 2. 状态与配置高阶方法
-    void setCurrentPath(const QString& path) {
-        m_currentPath = path;
-        if (m_model) {
-            m_model->setCurrentPath(path);
-        }
-    }
+    void setCurrentPath(const QString& path);
     void setIsRecursive(bool recursive);
     void setLoading(bool loading) { m_isLoading = loading; }
     void ensureSourceModelIsDiskModel();
