@@ -47,17 +47,61 @@ protected:
         painter->drawLine(rect.topRight(), rect.bottomRight());
 
         QString title = model() ? model()->headerData(logicalIndex, orientation(), Qt::DisplayRole).toString() : QString();
-        painter->setPen(QColor("#B0B0B0"));
+        bool isSorted = (sortIndicatorSection() == logicalIndex && logicalIndex >= 0);
+        QColor textColor = isSorted ? QColor("#FFFFFF") : QColor("#B0B0B0");
+        painter->setPen(textColor);
         painter->setFont(font());
+
+        QFontMetrics fm(font());
+        int textWidth = fm.horizontalAdvance(title);
 
         if (logicalIndex == 0) {
             int textStartX = rect.left() + RowLayoutEngine::calculateHeaderTextStartX(m_zoomLevel);
             QRect textRect = rect;
             textRect.setLeft(textStartX);
             painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, title);
+
+            if (isSorted) {
+                int arrowX = textStartX + textWidth + 6;
+                drawSortArrow(painter, arrowX, rect.center().y(), sortIndicatorOrder(), textColor);
+            }
         } else {
-            painter->drawText(rect, Qt::AlignCenter, title);
+            if (isSorted) {
+                int arrowWidth = 7;
+                int gap = 6;
+                int totalWidth = textWidth + gap + arrowWidth;
+                int startX = rect.left() + (rect.width() - totalWidth) / 2;
+
+                QRect textRect(startX, rect.top(), textWidth + 2, rect.height());
+                painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, title);
+
+                int arrowX = startX + textWidth + gap;
+                drawSortArrow(painter, arrowX, rect.center().y(), sortIndicatorOrder(), textColor);
+            } else {
+                painter->drawText(rect, Qt::AlignCenter, title);
+            }
         }
+        painter->restore();
+    }
+
+private:
+    static void drawSortArrow(QPainter* painter, int x, int centerY, Qt::SortOrder order, const QColor& color) {
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(color);
+
+        QPolygonF triangle;
+        if (order == Qt::AscendingOrder) {
+            triangle << QPointF(x, centerY + 2.5)
+                     << QPointF(x + 7.0, centerY + 2.5)
+                     << QPointF(x + 3.5, centerY - 3.5);
+        } else {
+            triangle << QPointF(x, centerY - 2.5)
+                     << QPointF(x + 7.0, centerY - 2.5)
+                     << QPointF(x + 3.5, centerY + 3.5);
+        }
+        painter->drawPolygon(triangle);
         painter->restore();
     }
 

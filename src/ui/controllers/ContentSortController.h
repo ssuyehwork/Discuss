@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QSortFilterProxyModel>
+#include "../../core/ModelContract.h"
 
 namespace QuarkMeta {
 
@@ -29,6 +30,9 @@ public:
     void setSortType(SortType type);
     void setSortOrder(Qt::SortOrder order);
     void setSortCriteria(SortType type, Qt::SortOrder order);
+
+    static FileListColumn columnForSortType(SortType type);
+    static SortType sortTypeForColumn(FileListColumn col);
 
     void applySortToModel(QSortFilterProxyModel* proxyModel);
     void loadFromConfig();

@@ -58,7 +58,8 @@ enum class FileListColumn : int {
     Type = 4,        // 类型 (固定 60px)
     Size = 5,        // 大小 (固定 80px)
     ModifiedDate = 6,// 修改日期 (固定 130px)
-    Count = 7
+    CreatedDate = 7, // 创建日期 (固定 130px)
+    Count = 8
 };
 
 } // namespace QuarkMeta
