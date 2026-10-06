@@ -17,6 +17,34 @@ void ContentSortController::loadFromConfig() {
     m_sortOrder = static_cast<Qt::SortOrder>(savedOrder);
 }
 
+FileListColumn ContentSortController::columnForSortType(SortType type) {
+    switch (type) {
+        case SortType::SortByName: return FileListColumn::Name;
+        case SortType::SortByRating: return FileListColumn::Rating;
+        case SortType::SortByDimension: return FileListColumn::Dimension;
+        case SortType::SortByExtension: return FileListColumn::Type;
+        case SortType::SortBySize: return FileListColumn::Size;
+        case SortType::SortByModifyDate: return FileListColumn::ModifiedDate;
+        case SortType::SortByCreateDate: return FileListColumn::CreatedDate;
+        case SortType::SortByAddedDate: default: break;
+    }
+    return static_cast<FileListColumn>(-1);
+}
+
+SortType ContentSortController::sortTypeForColumn(FileListColumn col) {
+    switch (col) {
+        case FileListColumn::Name: return SortType::SortByName;
+        case FileListColumn::Rating: return SortType::SortByRating;
+        case FileListColumn::Dimension: return SortType::SortByDimension;
+        case FileListColumn::Type: return SortType::SortByExtension;
+        case FileListColumn::Size: return SortType::SortBySize;
+        case FileListColumn::ModifiedDate: return SortType::SortByModifyDate;
+        case FileListColumn::CreatedDate: return SortType::SortByCreateDate;
+        case FileListColumn::Status: case FileListColumn::Count: default: break;
+    }
+    return static_cast<SortType>(-1);
+}
+
 void ContentSortController::saveToConfig() {
     AppConfig::instance().setValue("ContentPanel/RightClickSortType", static_cast<int>(m_sortType));
     AppConfig::instance().setValue("ContentPanel/RightClickSortOrder", static_cast<int>(m_sortOrder));

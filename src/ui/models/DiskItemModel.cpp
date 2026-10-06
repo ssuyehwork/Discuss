@@ -87,14 +87,15 @@ int DiskItemModel::columnCount(const QModelIndex&) const {
 
 QVariant DiskItemModel::headerData(int section, Qt::Orientation orientation, int role) const {
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
-        switch (section) {
-            case 0: return QString("名称");
-            case 1: return QString("状态");
-            case 2: return QString("评分");
-            case 3: return QString("尺寸");
-            case 4: return QString("类型");
-            case 5: return QString("大小");
-            case 6: return QString("修改日期");
+        switch (static_cast<FileListColumn>(section)) {
+            case FileListColumn::Name: return QString("名称");
+            case FileListColumn::Status: return QString("状态");
+            case FileListColumn::Rating: return QString("评分");
+            case FileListColumn::Dimension: return QString("尺寸");
+            case FileListColumn::Type: return QString("类型");
+            case FileListColumn::Size: return QString("大小");
+            case FileListColumn::ModifiedDate: return QString("修改日期");
+            case FileListColumn::CreatedDate: return QString("创建日期");
             default: break;
         }
     }
@@ -688,36 +689,45 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     const auto& record = m_allRecords[index.row()];
     QString path = record.path;
 
+    static auto formatDateTime = [](long long msecs) -> QString {
+        if (msecs <= 0) return "-";
+        return QDateTime::fromMSecsSinceEpoch(msecs).toString("dd-MM-yyyy HH:mm");
+    };
+
     if (role == Qt::DisplayRole || role == Qt::EditRole) {
-        switch (index.column()) {
-            case 0: {
+        switch (static_cast<FileListColumn>(index.column())) {
+            case FileListColumn::Name: {
                 int lastSlash = std::max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
                 if (lastSlash == -1) return path;
                 QString name = path.mid(lastSlash + 1);
                 if (name.isEmpty() && path.length() >= 2 && path[1] == ':') return path;
                 return name;
             }
-            case 3: {
+            case FileListColumn::Dimension: {
                 if (record.isDir) return "-";
                 if (record.width > 0 && record.height > 0) {
                     return QString("%1 x %2").arg(record.width).arg(record.height);
                 }
                 return "-";
             }
-            case 4: {
+            case FileListColumn::Type: {
                 if (record.isDir) return "文件夹";
                 int lastDot = path.lastIndexOf('.');
                 return (lastDot != -1) ? path.mid(lastDot + 1).toUpper() : "";
             }
-            case 5: {
+            case FileListColumn::Size: {
                 if (record.isDir) return "-";
                 if (record.size < 1024) return QString::number(record.size) + " B";
                 if (record.size < 1024 * 1024) return QString::number(record.size / 1024.0, 'f', 1) + " KB";
                 return QString::number(record.size / (1024.0 * 1024.0), 'f', 1) + " MB";
             }
-            case 6: {
-                return QDateTime::fromMSecsSinceEpoch(record.mtime).toString("dd-MM-yyyy HH:mm");
+            case FileListColumn::ModifiedDate: {
+                return formatDateTime(record.mtime);
             }
+            case FileListColumn::CreatedDate: {
+                return formatDateTime(record.ctime);
+            }
+            default: break;
         }
     } else if (role == PathRole) {
         return path;

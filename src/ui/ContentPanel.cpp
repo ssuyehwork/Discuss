@@ -88,22 +88,8 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     connect(m_sortController, &ContentSortController::sortCriteriaChanged, this, [this](SortType type, Qt::SortOrder order) {
         applySort();
         if (m_treeView && m_treeView->header()) {
-            int col = -1;
-            switch (type) {
-                case SortType::SortByName: col = static_cast<int>(FileListColumn::Name); break;
-                case SortType::SortByRating: col = static_cast<int>(FileListColumn::Rating); break;
-                case SortType::SortByDimension: col = static_cast<int>(FileListColumn::Dimension); break;
-                case SortType::SortByExtension: col = static_cast<int>(FileListColumn::Type); break;
-                case SortType::SortBySize: col = static_cast<int>(FileListColumn::Size); break;
-                case SortType::SortByModifyDate: col = static_cast<int>(FileListColumn::ModifiedDate); break;
-                default: break;
-            }
-            if (col >= 0) {
-                m_treeView->header()->setSortIndicator(col, order);
-            }
-        }
-        if (m_columnView) {
-            m_columnView->applySort(static_cast<int>(type), order);
+            FileListColumn colEnum = ContentSortController::columnForSortType(type);
+            m_treeView->header()->setSortIndicator(static_cast<int>(colEnum), order);
         }
     });
 
@@ -314,22 +300,21 @@ void ContentPanel::initListView() {
     }
     connect(tree->header(), &QHeaderView::sectionClicked, this, [this](int logicalIndex) {
         if (logicalIndex == static_cast<int>(FileListColumn::Status)) return;
-        SortType newType = SortType::SortByName;
-        switch (static_cast<FileListColumn>(logicalIndex)) {
-            case FileListColumn::Name: newType = SortType::SortByName; break;
-            case FileListColumn::Rating: newType = SortType::SortByRating; break;
-            case FileListColumn::Dimension: newType = SortType::SortByDimension; break;
-            case FileListColumn::Type: newType = SortType::SortByExtension; break;
-            case FileListColumn::Size: newType = SortType::SortBySize; break;
-            case FileListColumn::ModifiedDate: newType = SortType::SortByModifyDate; break;
-            default: return;
-        }
+        FileListColumn col = static_cast<FileListColumn>(logicalIndex);
+        SortType newType = ContentSortController::sortTypeForColumn(col);
+        if (static_cast<int>(newType) < 0) return;
+
         if (currentSortType() == newType) {
             setSortOrder(currentSortOrder() == Qt::AscendingOrder ? Qt::DescendingOrder : Qt::AscendingOrder);
         } else {
             setSortCriteria(newType, Qt::AscendingOrder);
         }
     });
+
+    if (m_sortController && tree->header()) {
+        FileListColumn initCol = ContentSortController::columnForSortType(m_sortController->sortType());
+        tree->header()->setSortIndicator(static_cast<int>(initCol), m_sortController->sortOrder());
+    }
 }
 
 bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
