@@ -88,7 +88,7 @@ public:
     void requestClosePane();
     void setActivePane(bool active);
 
-    QSize minimumSizeHint() const override { return QSize(230, 100); }
+    QSize minimumSizeHint() const override { return QSize(m_currentViewMode == ColumnView ? 460 : 230, 100); }
     void deferredInit() {}
 
     // 1. 状态与配置查询
