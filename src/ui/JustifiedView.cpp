@@ -22,7 +22,8 @@ JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     m_layoutTimer->setInterval(50);
     connect(m_layoutTimer, &QTimer::timeout, this, &JustifiedView::onLayoutTimerTimeout);
 
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    horizontalScrollBar()->setRange(0, 0);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     verticalScrollBar()->setSingleStep(20);
     

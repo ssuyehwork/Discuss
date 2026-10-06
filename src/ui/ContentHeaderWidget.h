@@ -20,6 +20,7 @@ public:
     explicit ContentHeaderWidget(QWidget* parent = nullptr);
     ~ContentHeaderWidget() override = default;
 
+    void setTitle(const QString& title);
     void setFilterState(const FilterState& state);
     void setRecursive(bool recursive);
     void setLayersEnabled(bool enabled, const QString& tooltip);

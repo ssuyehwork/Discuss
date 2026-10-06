@@ -17,14 +17,14 @@ namespace QuarkMeta {
 
 // 声明式规则表：单一真理来源 (Single Source of Truth)
 static const std::vector<ColumnPolicy> kFileListColumnPolicies = {
-    { FileListColumn::Name,         0,   QHeaderView::Stretch, 0,   false }, // 始终显示并拉伸 (强保最小 230px)
+    { FileListColumn::Name,         0,   QHeaderView::Stretch, 0,   false }, // 始终显示并拉伸
     { FileListColumn::Status,       40,  QHeaderView::Fixed,   0,   true  }, // 恒定隐藏
-    { FileListColumn::Rating,       100, QHeaderView::Fixed,   0,   false }, // 按空间动态计算 (>= 230 + 100)
-    { FileListColumn::Dimension,    100, QHeaderView::Fixed,   0,   false }, // 按空间动态计算
-    { FileListColumn::Type,         60,  QHeaderView::Fixed,   0,   false }, // 按空间动态计算
-    { FileListColumn::Size,         80,  QHeaderView::Fixed,   0,   false }, // 按空间动态计算
-    { FileListColumn::ModifiedDate, 130, QHeaderView::Fixed,   0,   false }, // 按空间动态计算
-    { FileListColumn::CreatedDate,  130, QHeaderView::Fixed,   0,   false }, // 按空间动态计算
+    { FileListColumn::Rating,       100, QHeaderView::Fixed,   350, false }, // 容器 >= 350px 时显示
+    { FileListColumn::Dimension,    100, QHeaderView::Fixed,   480, false }, // 容器 >= 480px 时显示
+    { FileListColumn::Type,         60,  QHeaderView::Fixed,   600, false }, // 容器 >= 600px 时显示
+    { FileListColumn::Size,         80,  QHeaderView::Fixed,   600, false }, // 容器 >= 600px 时显示
+    { FileListColumn::ModifiedDate, 130, QHeaderView::Fixed,   720, false }, // 容器 >= 720px 时显示
+    { FileListColumn::CreatedDate,  130, QHeaderView::Fixed,   850, false }, // 容器 >= 850px 时显示
 };
 
 DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
@@ -32,8 +32,7 @@ DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     setDragEnabled(true);
     setDropIndicatorShown(true);
     setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     DragDropEventFilter::install(this);
 
@@ -109,8 +108,8 @@ void DropTreeView::applyColumnPolicies() {
     QHeaderView* hdr = header();
     if (!hdr) return;
 
-    const int minNameWidth = 230; // 强保名称列最小 230px 宽
-    hdr->setMinimumSectionSize(minNameWidth);
+    hdr->setMinimumSectionSize(0);
+    int currentWidth = viewport() ? viewport()->width() : width();
 
     for (const auto& policy : kFileListColumnPolicies) {
         int colIdx = static_cast<int>(policy.column);
@@ -119,15 +118,20 @@ void DropTreeView::applyColumnPolicies() {
             continue;
         }
 
-        setColumnHidden(colIdx, false);
         if (policy.column == FileListColumn::Name) {
-            hdr->setSectionResizeMode(colIdx, QHeaderView::Interactive);
-            if (hdr->sectionSize(colIdx) < minNameWidth) {
-                hdr->resizeSection(colIdx, minNameWidth);
-            }
-        } else if (policy.fixedWidth > 0) {
+            setColumnHidden(colIdx, false);
             hdr->setSectionResizeMode(colIdx, policy.resizeMode);
-            hdr->resizeSection(colIdx, policy.fixedWidth);
+            continue;
+        }
+
+        if (currentWidth >= policy.minContainerWidth) {
+            setColumnHidden(colIdx, false);
+            hdr->setSectionResizeMode(colIdx, policy.resizeMode);
+            if (policy.fixedWidth > 0) {
+                hdr->resizeSection(colIdx, policy.fixedWidth);
+            }
+        } else {
+            setColumnHidden(colIdx, true);
         }
     }
 }

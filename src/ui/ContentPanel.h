@@ -261,6 +261,8 @@ private:
     std::atomic<int> m_loadRequestId{0};
 
     // UI 组件指针
+    void updateHeaderTitle();
+
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
 

@@ -5,6 +5,7 @@
 #include "ColorPicker.h"
 #include "ToolTipOverlay.h"
 #include "PresetTagsDialog.h"
+#include "dialogs/FramelessConfirmDialog.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
 #include "../meta/MetadataManager.h"
@@ -196,6 +197,21 @@ void FavoritePanel::onFavoriteClicked(const QModelIndex& index) {
     if (path.isEmpty()) return;
 
     QFileInfo fi(path);
+    if (!fi.exists()) {
+        int recId = index.data(Qt::UserRole + 6).toInt();
+        QString msg = QString("无法找到路径：%1\n该文件或文件夹可能已被移动、重命名或删除。\n\n是否将其从收藏夹中移除？").arg(path);
+        FramelessConfirmDialog dlg("提示", msg, FramelessConfirmDialog::OkCancel, "alert_warning", QColor("#e74c3c"), this);
+        if (dlg.exec() == QDialog::Accepted) {
+            if (recId > 0) {
+                FavoriteService::instance().removeFavoriteById(recId);
+            } else {
+                FavoriteService::instance().removeFavorite(path);
+            }
+            loadFavorites();
+        }
+        return;
+    }
+
     if (fi.isDir()) {
         emit directorySelected(path);
     } else {

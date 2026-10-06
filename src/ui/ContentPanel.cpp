@@ -276,9 +276,8 @@ void ContentPanel::initListView() {
     tree->setSortingEnabled(false);
     tree->header()->setSectionsClickable(true);
     tree->header()->setFixedHeight(32);
-    tree->header()->setMinimumSectionSize(230);
+    tree->header()->setMinimumSectionSize(0);
     tree->applyColumnPolicies();
-    tree->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     tree->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     auto* delegate = new TreeItemDelegate(this, true, true);
@@ -528,11 +527,39 @@ void ContentPanel::dropEvent(QDropEvent* event) {
     QFrame::dropEvent(event);
 }
 
+void ContentPanel::updateHeaderTitle() {
+    if (!m_headerWidget) return;
+    if (!isSplitMode()) {
+        m_headerWidget->setTitle("内容");
+        return;
+    }
+
+    if (m_currentPath.isEmpty() || m_currentPath == "computer://") {
+        m_headerWidget->setTitle("此电脑");
+        return;
+    }
+    if (m_currentPath == "trash://") {
+        m_headerWidget->setTitle("回收站");
+        return;
+    }
+
+    QString cleanP = QDir::cleanPath(m_currentPath);
+    QFileInfo fi(cleanP);
+    if (fi.isRoot() || cleanP.endsWith(":\\") || cleanP.endsWith(":/") || (cleanP.length() == 2 && cleanP.endsWith(':'))) {
+        m_headerWidget->setTitle(cleanP);
+        return;
+    }
+
+    QString folderName = fi.fileName();
+    m_headerWidget->setTitle(folderName.isEmpty() ? cleanP : folderName);
+}
+
 void ContentPanel::setCurrentPath(const QString& path) {
     m_currentPath = path;
     if (m_model) {
         m_model->setCurrentPath(path);
     }
+    updateHeaderTitle();
     ContentPanel* root = rootPane();
     if (root && root->splitManager()) {
         emit root->splitManager()->layoutChanged();
@@ -540,6 +567,7 @@ void ContentPanel::setCurrentPath(const QString& path) {
 }
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
+    updateHeaderTitle();
     if (m_currentViewMode == ColumnView) {
         setCurrentPath(path);
         m_isRecursive = recursive;

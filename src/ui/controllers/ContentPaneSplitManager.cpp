@@ -432,8 +432,11 @@ void ContentPaneSplitManager::refreshActiveIndicators() {
         setPaneActiveProperty(m_primaryPaneContainer, rootShown);
     }
     setPaneActiveProperty(m_panel, false);
-    if (m_panel && m_panel->m_headerWidget) {
-        m_panel->m_headerWidget->setActive(rootShown);
+    if (m_panel) {
+        m_panel->updateHeaderTitle();
+        if (m_panel->m_headerWidget) {
+            m_panel->m_headerWidget->setActive(rootShown);
+        }
     }
 
     // 副窗格激活判定
@@ -442,6 +445,7 @@ void ContentPaneSplitManager::refreshActiveIndicators() {
         bool paneActive = (m_activePaneForSplit == pane);
         bool paneShown = isSplit && paneActive;
 
+        pane->updateHeaderTitle();
         setPaneActiveProperty(pane, paneShown);
         if (pane->m_headerWidget) {
             pane->m_headerWidget->setActive(paneShown);
