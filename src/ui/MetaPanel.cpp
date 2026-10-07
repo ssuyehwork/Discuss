@@ -1,4 +1,5 @@
 #include "MetaPanel.h"
+#include "ColorPicker.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
 #include "Logger.h"
@@ -218,51 +219,15 @@ void MetaPanel::initUi() {
     starLayout->addStretch();
     ratingColorLayout->addWidget(ratingRow);
 
-    QWidget* colorRow = new QWidget(m_ratingColorBox);
-    colorRow->setObjectName("MetaColorRow");
-    QHBoxLayout* colorLayout = new QHBoxLayout(colorRow);
-    colorLayout->setContentsMargins(0, 2, 0, 2);
-    colorLayout->setSpacing(6);
-
-    QPushButton* btnNoColor = new QPushButton(colorRow);
-    btnNoColor->setFixedSize(22, 22);
-    btnNoColor->setCursor(Qt::PointingHandCursor);
-    btnNoColor->setIcon(UiHelper::getIcon("no_color", QColor("#888888"), 16));
-    btnNoColor->setIconSize(QSize(16, 16));
-    btnNoColor->setProperty("tooltipText", "无色标");
-    btnNoColor->installEventFilter(this);
-    btnNoColor->setObjectName("MetaBtnNoColor");
-    connect(btnNoColor, &QPushButton::clicked, this, [this]() { setColor(QString(""), true); });
-    colorLayout->addWidget(btnNoColor);
-
-    static const QVector<QPair<QString, QString>> s_colorMap = {
-        {"红色", "#E24B4A"}, {"橙色", "#EF9F27"}, {"黄色", "#FECF0E"}, {"绿色", "#639922"},
-        {"青色", "#1D9E75"}, {"蓝色", "#378ADD"}, {"紫色", "#7F77DD"}, {"灰色", "#5F5E5A"}
-    };
-
-    for (const auto& pair : s_colorMap) {
-        QPushButton* btnColor = new QPushButton(colorRow);
-        btnColor->setObjectName("MetaPanelColorBtn");
-        btnColor->setFixedSize(16, 16);
-        btnColor->setCursor(Qt::PointingHandCursor);
-        btnColor->setProperty("tooltipText", pair.first);
-        btnColor->setProperty("hexColor", pair.second);
-        btnColor->installEventFilter(this);
-        btnColor->setStyleSheet(QString("background-color: %1;").arg(pair.second));
-
-        QString hex = pair.second;
-        connect(btnColor, &QPushButton::clicked, this, [this, hex]() {
-            if (m_currentColorHex.compare(hex, Qt::CaseInsensitive) == 0) {
-                setColor(QString(""), true);
-            } else {
-                setColor(hex, true);
-            }
-        });
-        m_colorBtns.append(btnColor);
-        colorLayout->addWidget(btnColor);
-    }
-    colorLayout->addStretch();
-    ratingColorLayout->addWidget(colorRow);
+    m_colorStripPicker = new ColorStripPicker("", m_ratingColorBox);
+    connect(m_colorStripPicker, &ColorStripPicker::colorSelected, this, [this](const QString& hex) {
+        if (m_currentColorHex.compare(hex, Qt::CaseInsensitive) == 0) {
+            setColor(QString(""), true);
+        } else {
+            setColor(hex, true);
+        }
+    });
+    ratingColorLayout->addWidget(m_colorStripPicker);
     m_containerLayout->addWidget(m_ratingColorBox);
 
     // 6. 标签管理区
@@ -714,25 +679,24 @@ void MetaPanel::setRating(int rating, bool fromUser) {
     }
 
     if (fromUser && !m_selectedPaths.isEmpty() && !m_isReadOnlyMode) {
-        emit ratingChanged(m_selectedPaths, rating);
+        QStringList pathsCopy = m_selectedPaths;
+        QTimer::singleShot(0, this, [this, pathsCopy, rating]() {
+            emit ratingChanged(pathsCopy, rating);
+        });
     }
 }
 
 void MetaPanel::setColor(const QString& hexColor, bool fromUser) {
     m_currentColorHex = hexColor;
-
-    for (QPushButton* btn : m_colorBtns) {
-        QString hex = btn->property("hexColor").toString();
-        bool active = (!hexColor.isEmpty() && hex.compare(hexColor, Qt::CaseInsensitive) == 0);
-
-        btn->setProperty("active", active);
-        btn->setStyleSheet(QString("background-color: %1;").arg(hex));
-        btn->style()->unpolish(btn);
-        btn->style()->polish(btn);
+    if (m_colorStripPicker) {
+        m_colorStripPicker->setSelectedColor(hexColor);
     }
 
     if (fromUser && !m_selectedPaths.isEmpty() && !m_isReadOnlyMode) {
-        emit colorChanged(m_selectedPaths, hexColor);
+        QStringList pathsCopy = m_selectedPaths;
+        QTimer::singleShot(0, this, [this, pathsCopy, hexColor]() {
+            emit colorChanged(pathsCopy, hexColor);
+        });
     }
 }
 
@@ -741,6 +705,7 @@ void MetaPanel::setColor(const std::wstring& color, bool fromUser) {
 }
 
 void MetaPanel::setNote(const QString& note) {
+    if (m_isUserEditing) return;
     m_isInternalUpdating = true;
     m_noteEdit->setPlainText(note);
     m_noteEdit->adjustHeight();
@@ -753,6 +718,7 @@ void MetaPanel::setNote(const std::wstring& note) {
 }
 
 void MetaPanel::setURL(const QString& url) {
+    if (m_isUserEditing) return;
     m_isInternalUpdating = true;
     m_linkEdit->setText(url);
     m_linkEdit->setCursorPosition(0);
@@ -839,11 +805,19 @@ bool MetaPanel::eventFilter(QObject* watched, QEvent* event) {
 
     if (watched == m_noteEdit && event->type() == QEvent::FocusOut) {
         if (!m_editingPathsSnapshot.isEmpty()) {
-            emit noteEdited(m_editingPathsSnapshot, m_noteEdit->toPlainText());
+            QStringList pathsCopy = m_editingPathsSnapshot;
+            QString textCopy = m_noteEdit->toPlainText();
+            QTimer::singleShot(0, this, [this, pathsCopy, textCopy]() {
+                emit noteEdited(pathsCopy, textCopy);
+            });
         }
     } else if (watched == m_linkEdit && event->type() == QEvent::FocusOut) {
         if (!m_editingPathsSnapshot.isEmpty()) {
-            emit linkEdited(m_editingPathsSnapshot, m_linkEdit->text().trimmed());
+            QStringList pathsCopy = m_editingPathsSnapshot;
+            QString linkCopy = m_linkEdit->text().trimmed();
+            QTimer::singleShot(0, this, [this, pathsCopy, linkCopy]() {
+                emit linkEdited(pathsCopy, linkCopy);
+            });
         }
     } else if (watched == m_nameEdit && event->type() == QEvent::FocusOut) {
         if (m_editingPathsSnapshot.size() > 1) return true;

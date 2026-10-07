@@ -87,6 +87,7 @@ class ColorStripPicker : public QWidget {
     Q_OBJECT
 public:
     explicit ColorStripPicker(const QString& currentColorHex, QWidget* parent = nullptr);
+    void setSelectedColor(const QString& hex);
 signals:
     void colorSelected(const QString& hexColor);
 protected:

@@ -23,6 +23,8 @@
 
 namespace QuarkMeta {
 
+class ColorStripPicker;
+
 class MetaPanel : public QFrame {
     Q_OBJECT
 public:
@@ -91,7 +93,7 @@ private:
 
     QWidget* m_ratingColorBox = nullptr;
     QList<QPushButton*> m_starBtns;
-    QList<QPushButton*> m_colorBtns;
+    ColorStripPicker* m_colorStripPicker = nullptr;
     int m_currentRating = 0;
     QString m_currentColorHex;
 

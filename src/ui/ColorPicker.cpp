@@ -340,6 +340,11 @@ ColorStripPicker::ColorStripPicker(const QString& currentColorHex, QWidget* pare
     }
 }
 
+void ColorStripPicker::setSelectedColor(const QString& hex) {
+    m_selectedColor = hex;
+    update();
+}
+
 void ColorStripPicker::paintEvent(QPaintEvent* event) {
     Q_UNUSED(event);
     QPainter painter(this);
@@ -363,8 +368,10 @@ void ColorStripPicker::paintEvent(QPaintEvent* event) {
             painter.drawEllipse(QPoint(cx, y), m_circleRadius, m_circleRadius);
         }
         
-        // 2. 悬停状态：绘制突出亮白圈
-        if (i == m_hoveredIndex) {
+        // 2. 悬停与选中状态：高精度抗锯齿亮白圈
+        bool isSelected = (!m_selectedColor.isEmpty() && m_items[i].hex.compare(m_selectedColor, Qt::CaseInsensitive) == 0) ||
+                          (m_selectedColor.isEmpty() && i == 0 && m_hoveredIndex == 0);
+        if (i == m_hoveredIndex || isSelected) {
             painter.setBrush(Qt::NoBrush);
             // 亮白画笔，宽度 1.5 像素
             QPen pen(QColor("#FFFFFF"), 1.5);
