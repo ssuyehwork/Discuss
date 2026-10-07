@@ -1,4 +1,5 @@
 #include "ThemeManager.h"
+#include "UiHelper.h"
 #include <QFile>
 #include <QDebug>
 
@@ -20,6 +21,8 @@ QString ThemeManager::getGlobalStyleSheet() const {
     QFile file(":/style.qss");
     if (file.open(QFile::ReadOnly)) {
         QString content = QLatin1String(file.readAll());
+        QString arrowPath = UiHelper::getSvgTempFilePath("chevron_down", QColor("#AAAAAA"));
+        content += QString("\nQComboBox::down-arrow { image: url(\"%1\"); }\n").arg(arrowPath);
         return content;
     }
 

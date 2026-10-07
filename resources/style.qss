@@ -1888,6 +1888,11 @@ QComboBox::drop-down {
     width: 20px;
     border-left: none;
 }
+QComboBox::down-arrow {
+    width: 10px;
+    height: 10px;
+    margin-right: 4px;
+}
 QComboBox QAbstractItemView {
     background-color: #252526;
     border: 1px solid #333333;
