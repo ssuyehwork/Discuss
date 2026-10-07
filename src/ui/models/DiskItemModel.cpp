@@ -33,7 +33,7 @@ QThreadPool* DiskItemModel::thumbnailPool() {
 
 void DiskItemModel::incrementGeneration() {
     m_currentGen.fetch_add(1, std::memory_order_relaxed);
-    ThumbnailPipelineService::instance().cancelAll();
+    m_requestedPaths.clear();
 }
 
 DiskItemModel::DiskItemModel(QObject* parent) : ItemModelBase(parent) {
@@ -633,9 +633,11 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
 
     QPointer<DiskItemModel> weakThis(this);
     ThumbnailPipelineService::instance().loadBatchAsync(pathsToLoad, DiskMediaExtractor::kThumbSize, [weakThis, thisGen](const QString& path, const QPixmap& pixmap) {
-        if (!weakThis || weakThis->currentGeneration() != thisGen) return;
+        if (!weakThis) return;
 
         weakThis->m_requestedPaths.remove(path);
+        if (weakThis->currentGeneration() != thisGen) return;
+
         if (!pixmap.isNull()) {
             QIcon icon(pixmap);
             weakThis->m_iconCache.insert(path, new QIcon(icon));

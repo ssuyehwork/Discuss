@@ -100,11 +100,9 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
             }
 
             QMetaObject::invokeMethod(qApp, [this, path, targetSize, finalImg, taskGen, onSingleLoaded]() {
-                if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
-                    return;
-                }
+                if (!onSingleLoaded) return;
 
-                if (!finalImg.isNull()) {
+                if (m_currentGeneration.load(std::memory_order_relaxed) == taskGen && !finalImg.isNull()) {
                     QPixmap pix = QPixmap::fromImage(finalImg);
                     if (!pix.isNull()) {
                         QString key = QString("%1@%2").arg(QDir::toNativeSeparators(path).toLower()).arg(targetSize);
@@ -112,19 +110,12 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
                             QMutexLocker locker(&m_cacheMutex);
                             m_memoryCache.insert(key, new QPixmap(pix), 1);
                         }
-
-                        if (onSingleLoaded) {
-                            onSingleLoaded(path, pix);
-                        }
+                        onSingleLoaded(path, pix);
                     } else {
-                        if (onSingleLoaded) {
-                            onSingleLoaded(path, QPixmap());
-                        }
-                    }
-                } else {
-                    if (onSingleLoaded) {
                         onSingleLoaded(path, QPixmap());
                     }
+                } else {
+                    onSingleLoaded(path, QPixmap());
                 }
             }, Qt::QueuedConnection);
         }
