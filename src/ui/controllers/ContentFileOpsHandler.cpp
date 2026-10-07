@@ -35,7 +35,7 @@ void ContentFileOpsHandler::performBatchRename() {
     if (!m_panel) return;
     std::vector<std::wstring> originalPaths;
     for (const auto& idx : m_panel->getSelectedIndexes()) {
-        if (idx.column() == 0) {
+        if (idx.column() == static_cast<int>(FileListColumn::Name)) {
             QString p = idx.data(PathRole).toString();
             if (!p.isEmpty()) {
                 originalPaths.push_back(QDir::toNativeSeparators(p).toStdWString());

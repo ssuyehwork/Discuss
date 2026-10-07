@@ -65,7 +65,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         }
     }
 
-    QModelIndex col0Index = onItem ? currentIndex.sibling(currentIndex.row(), 0) : QModelIndex();
+    QModelIndex col0Index = onItem ? currentIndex.sibling(currentIndex.row(), static_cast<int>(FileListColumn::Name)) : QModelIndex();
     QString path = onItem ? col0Index.data(PathRole).toString() : "";
     QFileInfo itemInfo(path);
 
@@ -157,7 +157,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 auto indexes = view->selectionModel()->selectedIndexes();
                 QStringList targetPaths;
                 for (const auto& idx : indexes) {
-                    if (idx.column() == 0) {
+                    if (idx.column() == static_cast<int>(FileListColumn::Name)) {
                         QString p = idx.data(PathRole).toString();
                         if (!p.isEmpty()) targetPaths << p;
                     }

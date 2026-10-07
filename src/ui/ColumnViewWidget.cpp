@@ -102,7 +102,7 @@ QStringList ColumnViewWidget::getSelectedPaths() const {
     QStringList paths;
     if (pane->listView() && pane->listView()->selectionModel()) {
         for (const auto& idx : pane->listView()->selectionModel()->selectedIndexes()) {
-            if (idx.column() == 0 && !idx.data(SectionHeaderRole).toBool()) {
+            if (idx.column() == static_cast<int>(FileListColumn::Name) && !idx.data(SectionHeaderRole).toBool()) {
                 QString p = idx.data(PathRole).toString();
                 if (!p.isEmpty()) paths << p;
             }

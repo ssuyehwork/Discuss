@@ -23,8 +23,8 @@ static const std::vector<ColumnPolicy> kFileListColumnPolicies = {
     { FileListColumn::Dimension,    100, QHeaderView::Fixed, false },
     { FileListColumn::Type,         60,  QHeaderView::Fixed, false },
     { FileListColumn::Size,         80,  QHeaderView::Fixed, false },
-    { FileListColumn::ModifiedDate, 130, QHeaderView::Fixed, false },
     { FileListColumn::CreatedDate,  130, QHeaderView::Fixed, false },
+    { FileListColumn::ModifiedDate, 130, QHeaderView::Fixed, false },
 };
 
 DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {

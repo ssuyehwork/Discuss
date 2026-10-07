@@ -56,7 +56,7 @@ bool ClipboardService::executePasteTags(QAbstractItemView* view) {
     auto indexes = view->selectionModel()->selectedIndexes();
     int count = 0;
     for (const auto& targetIdx : indexes) {
-        if (targetIdx.column() == 0 && !targetIdx.data(SectionHeaderRole).toBool()) {
+        if (targetIdx.column() == static_cast<int>(FileListColumn::Name) && !targetIdx.data(SectionHeaderRole).toBool()) {
             model->setData(targetIdx, m_copiedTags, TagsRole);
             count++;
         }

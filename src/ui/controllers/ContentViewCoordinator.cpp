@@ -83,7 +83,7 @@ QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
             auto* view = m_panel->columnView()->activePane()->listView();
             if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
                 for (const auto& idx : view->selectionModel()->selectedIndexes()) {
-                    if (idx.column() == 0) res.append(idx);
+                    if (idx.column() == static_cast<int>(FileListColumn::Name)) res.append(idx);
                 }
             }
         }
@@ -94,7 +94,7 @@ QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
     for (auto* view : views) {
         if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
             for (const auto& idx : view->selectionModel()->selectedIndexes()) {
-                if (idx.column() == 0) {
+                if (idx.column() == static_cast<int>(FileListColumn::Name)) {
                     res.append(idx);
                 }
             }
@@ -106,7 +106,7 @@ QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
 QStringList ContentViewCoordinator::getSelectedPaths() const {
     QStringList paths;
     for (const auto& idx : getSelectedIndexes()) {
-        if (idx.column() == 0) {
+        if (idx.column() == static_cast<int>(FileListColumn::Name)) {
             QString p = idx.data(PathRole).toString();
             if (!p.isEmpty()) paths << p;
         }

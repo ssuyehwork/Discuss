@@ -159,7 +159,7 @@ void ViewDragDropHelper::executeStartDrag(QAbstractItemView* view, Qt::DropActio
 
     QList<QUrl> urls;
     for (const QModelIndex& idx : indexes) {
-        if (idx.column() != 0) continue;
+        if (idx.column() != static_cast<int>(FileListColumn::Name)) continue;
 
         QString path = idx.data(PathRole).toString();
         if (path.isEmpty()) {

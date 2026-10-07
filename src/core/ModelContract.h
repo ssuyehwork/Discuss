@@ -57,8 +57,8 @@ enum class FileListColumn : int {
     Dimension = 3,   // 尺寸 (固定 100px)
     Type = 4,        // 类型 (固定 60px)
     Size = 5,        // 大小 (固定 80px)
-    ModifiedDate = 6,// 修改日期 (固定 130px)
-    CreatedDate = 7, // 创建日期 (固定 130px)
+    CreatedDate = 6, // 创建日期 (固定 130px)
+    ModifiedDate = 7,// 修改日期 (固定 130px)
     Count = 8
 };
 

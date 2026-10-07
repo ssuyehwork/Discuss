@@ -118,9 +118,9 @@ public:
             opt.palette.setColor(QPalette::Text, Qt::white);
         }
 
-        // 2026-06-16 按照 8 列架构重构：第 1, 2, 3 列由代理独立绘制；第 0 列作为名称列，具有微型圆角卡片预览（最左侧看片）
+        // 按照 8 列架构重构：状态列、评分列由代理独立绘制；Name 列作为名称列，具有微型圆角卡片预览
         int col = index.column();
-        if (col == 0 && m_drawMiniCards) {
+        if (col == static_cast<int>(FileListColumn::Name) && m_drawMiniCards) {
             // 自定义绘制名称列与最左侧圆角卡片
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing);
@@ -206,13 +206,13 @@ public:
             painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
 
             painter->restore();
-        } else if (col == 1 || col == 2) {
+        } else if (col == static_cast<int>(FileListColumn::Status) || col == static_cast<int>(FileListColumn::Rating)) {
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing);
 
-            QModelIndex idx0 = index.model()->index(index.row(), 0);
+            QModelIndex idx0 = index.model()->index(index.row(), static_cast<int>(FileListColumn::Name));
 
-            if (col == 1) { // 🚨 物理修复 ①：状态列图标在单元格内部 100% 水平+垂直绝对居中！
+            if (col == static_cast<int>(FileListColumn::Status)) { // 状态列图标在单元格内部 100% 水平+垂直绝对居中
                 bool isPinned = idx0.data(IsLockedRole).toBool();
 
                 int iconSize = 16;
@@ -224,7 +224,7 @@ public:
                 if (isPinned) {
                     UiHelper::getIcon("pin_vertical", QColor("#FF551C"), 16).paint(painter, centeredRect, Qt::AlignCenter);
                 }
-            } else if (col == 2) { // 星级列
+            } else if (col == static_cast<int>(FileListColumn::Rating)) { // 星级列
                 int rating = idx0.data(RatingRole).toInt();
                 bool isSelected = option.state & QStyle::State_Selected;
                 QString colorName = idx0.data(ColorRole).toString();
@@ -245,7 +245,7 @@ public:
     }
 
     void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
-        if (index.column() == 0 && m_drawMiniCards) {
+        if (index.column() == static_cast<int>(FileListColumn::Name) && m_drawMiniCards) {
             RowLayout layout = RowLayoutEngine::calculate(option.rect, option.rect.height());
             editor->setGeometry(layout.editorRect);
         } else {

@@ -54,7 +54,7 @@ bool ContentKeyHandler::executeRepeatLastOp(ContentPanel* panel, QAbstractItemVi
     auto indexes = view->selectionModel()->selectedIndexes();
     int count = 0;
     for (const auto& idx : indexes) {
-        if (idx.column() == 0 && !idx.data(SectionHeaderRole).toBool()) {
+        if (idx.column() == static_cast<int>(FileListColumn::Name) && !idx.data(SectionHeaderRole).toBool()) {
             if (type == LastOperationType::SetRating) {
                 model->setData(idx, LastOperationManager::instance().rating(), RatingRole);
             } else if (type == LastOperationType::SetColor) {

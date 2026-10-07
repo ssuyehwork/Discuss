@@ -94,8 +94,8 @@ QVariant DiskItemModel::headerData(int section, Qt::Orientation orientation, int
             case FileListColumn::Dimension: return QString("尺寸");
             case FileListColumn::Type: return QString("类型");
             case FileListColumn::Size: return QString("大小");
-            case FileListColumn::ModifiedDate: return QString("修改日期");
             case FileListColumn::CreatedDate: return QString("创建日期");
+            case FileListColumn::ModifiedDate: return QString("修改日期");
             default: break;
         }
     }
@@ -677,7 +677,7 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
 Qt::ItemFlags DiskItemModel::flags(const QModelIndex& index) const {
     if (!index.isValid()) return QAbstractTableModel::flags(index);
     Qt::ItemFlags f = QAbstractTableModel::flags(index) | Qt::ItemIsDragEnabled;
-    if (index.column() == 0) {
+    if (index.column() == static_cast<int>(FileListColumn::Name)) {
         f |= Qt::ItemIsEditable;
     }
     return f;
@@ -721,11 +721,11 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
                 if (record.size < 1024 * 1024) return QString::number(record.size / 1024.0, 'f', 1) + " KB";
                 return QString::number(record.size / (1024.0 * 1024.0), 'f', 1) + " MB";
             }
-            case FileListColumn::ModifiedDate: {
-                return formatDateTime(record.mtime);
-            }
             case FileListColumn::CreatedDate: {
                 return formatDateTime(record.ctime);
+            }
+            case FileListColumn::ModifiedDate: {
+                return formatDateTime(record.mtime);
             }
             default: break;
         }
@@ -787,7 +787,7 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         return record.diskTrashId;
     } else if (role == HasThumbnailRole) {
         return record.thumbnailState == ItemRecord::ThumbnailState::Ready;
-    } else if (role == Qt::DecorationRole && index.column() == 0) {
+    } else if (role == Qt::DecorationRole && index.column() == static_cast<int>(FileListColumn::Name)) {
         QString cleanKey = QDir::cleanPath(path);
         QIcon* cached = m_iconCache.object(cleanKey);
         if (!cached) {

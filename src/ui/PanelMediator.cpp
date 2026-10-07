@@ -372,10 +372,10 @@ void PanelMediator::setupConnections() {
             QString path = paths.first();
             QFileInfo fi(path);
 
-            QString name = idx.isValid() ? idx.sibling(idx.row(), 0).data(Qt::DisplayRole).toString() : fi.fileName();
-            QString type = idx.isValid() ? ((idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), 4).data(Qt::DisplayRole).toString() + " 文件") : (fi.isDir() ? "文件夹" : fi.suffix().toUpper() + " 文件");
-            QString sizeStr = idx.isValid() ? idx.sibling(idx.row(), 5).data(Qt::DisplayRole).toString() : "-";
-            QString mtimeStr = idx.isValid() ? idx.sibling(idx.row(), 6).data(Qt::DisplayRole).toString() : "-";
+            QString name = idx.isValid() ? idx.sibling(idx.row(), static_cast<int>(FileListColumn::Name)).data(Qt::DisplayRole).toString() : fi.fileName();
+            QString type = idx.isValid() ? ((idx.data(TypeRole).toString() == "folder") ? "文件夹" : idx.sibling(idx.row(), static_cast<int>(FileListColumn::Type)).data(Qt::DisplayRole).toString() + " 文件") : (fi.isDir() ? "文件夹" : fi.suffix().toUpper() + " 文件");
+            QString sizeStr = idx.isValid() ? idx.sibling(idx.row(), static_cast<int>(FileListColumn::Size)).data(Qt::DisplayRole).toString() : "-";
+            QString mtimeStr = idx.isValid() ? idx.sibling(idx.row(), static_cast<int>(FileListColumn::ModifiedDate)).data(Qt::DisplayRole).toString() : "-";
             bool encrypted = idx.isValid() ? idx.data(EncryptedRole).toBool() : false;
 
             metaPanel->updateInfo(

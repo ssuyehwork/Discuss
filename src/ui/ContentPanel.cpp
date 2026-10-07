@@ -967,7 +967,7 @@ QString ContentPanel::getAdjacentFilePath(const QString& currentPath, int delta)
 QStringList ContentPanel::getSelectedPaths() const {
     QStringList paths;
     for (const auto& idx : getSelectedIndexes()) {
-        if (idx.column() == 0) {
+        if (idx.column() == static_cast<int>(FileListColumn::Name)) {
             QString p = idx.data(PathRole).toString();
             if (!p.isEmpty()) paths << p;
         }
