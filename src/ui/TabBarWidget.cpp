@@ -557,6 +557,13 @@ bool TabBarWidget::restoreStateFromConfig() {
     return true;
 }
 
+void TabBarWidget::openInNewTab(const QString& rawPath) {
+    if (rawPath.isEmpty()) return;
+    QString cleanTarget = (rawPath == "computer://" || rawPath == "trash://") ? rawPath : QDir::cleanPath(rawPath);
+    QString title = cleanNameForTab(cleanTarget);
+    addTab(title, cleanTarget, true);
+}
+
 void TabBarWidget::openOrFocusTab(const QString& rawPath) {
     if (rawPath.isEmpty()) return;
     QString cleanTarget = QDir::cleanPath(rawPath);

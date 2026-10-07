@@ -248,7 +248,7 @@ void ColumnViewPane::setPendingSelectPaths(const QSet<QString>& paths, bool edit
 void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
     if (m_proxyModel) {
         m_proxyModel->setSortType(sortType);
-        m_proxyModel->sort(0, sortOrder);
+        m_proxyModel->sort(static_cast<int>(FileListColumn::Name), sortOrder);
     }
 }
 

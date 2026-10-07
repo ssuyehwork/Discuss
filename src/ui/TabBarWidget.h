@@ -101,6 +101,7 @@ public:
     void updateSplitTabTitle(const TabSplitState& state);
     void updateCurrentTabTitle(const QString& title, const QString& url);
     void openOrFocusTab(const QString& path);
+    void openInNewTab(const QString& path);
 
     void saveStateToConfig();
     bool restoreStateFromConfig();

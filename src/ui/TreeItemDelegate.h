@@ -218,48 +218,39 @@ public:
                 painter->restore();
             }
 
-            // 4. 文本排版向右偏移：使用统一文本矩形
+            // 4. 文本排版向右偏移：使用统一文本矩形，并绘制内联置顶图标
             QString name = index.data(Qt::DisplayRole).toString();
             QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
 
             painter->setPen(textColor);
             painter->setFont(option.font);
 
-            QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideMiddle, textRect.width() - 10);
-            painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
+            bool isPinned = index.data(PinnedRole).toBool();
+            int pinRightX = textRect.right() - CardPainterHelper::kPinRightPadding;
+            int pinW = CardPainterHelper::drawInlinePinIcon(painter, pinRightX, textRect.top(), textRect.height(), isPinned);
+
+            int reservedW = (pinW > 0) ? (pinW + CardPainterHelper::kPinToRatingGap) : 0;
+            QRect actualTextRect = textRect.adjusted(0, 0, -reservedW, 0);
+            QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideMiddle, actualTextRect.width() - 10);
+            painter->drawText(actualTextRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
 
             painter->restore();
-        } else if (col == static_cast<int>(FileListColumn::Status) || col == static_cast<int>(FileListColumn::Rating)) {
+        } else if (col == static_cast<int>(FileListColumn::Rating)) {
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing);
 
             QModelIndex idx0 = index.model()->index(index.row(), static_cast<int>(FileListColumn::Name));
 
-            if (col == static_cast<int>(FileListColumn::Status)) { // 状态列图标在单元格内部 100% 水平+垂直绝对居中
-                bool isPinned = idx0.data(IsLockedRole).toBool();
+            int rating = idx0.data(RatingRole).toInt();
+            bool isSelected = option.state & QStyle::State_Selected;
+            QString colorName = idx0.data(ColorRole).toString();
 
-                int iconSize = 16;
-                // 计算单元格物理中心坐标
-                QRect centeredRect(option.rect.left() + (option.rect.width() - iconSize) / 2,
-                                   option.rect.top() + (option.rect.height() - iconSize) / 2,
-                                   iconSize, iconSize);
+            if (rating > 0 || isSelected || !colorName.isEmpty()) {
+                RatingBarMetrics rm = RatingBarLayout::calculate(option.rect, RatingBarMode::TreeRow);
 
-                if (isPinned) {
-                    UiHelper::getIcon("pin_vertical", QColor("#FF551C"), 16).paint(painter, centeredRect, Qt::AlignCenter);
-                }
-            } else if (col == static_cast<int>(FileListColumn::Rating)) { // 星级列
-                int rating = idx0.data(RatingRole).toInt();
-                bool isSelected = option.state & QStyle::State_Selected;
-                QString colorName = idx0.data(ColorRole).toString();
-
-                if (rating > 0 || isSelected || !colorName.isEmpty()) {
-                    // 🚀【统一调用 RatingBarLayout】：彻底消灭绘制时的 18 / -4 / 12 硬编码！
-                    RatingBarMetrics rm = RatingBarLayout::calculate(option.rect, RatingBarMode::TreeRow);
-
-                    CardPainterHelper::drawRatingStars(painter, rm.banRect, option.rect, rm.starSize, rm.starSpacing, 
-                                                      option.rect.top(), option.rect.height(), rm.starsStartX,
-                                                      rating, colorName, isSelected);
-                }
+                CardPainterHelper::drawRatingStars(painter, rm.banRect, option.rect, rm.starSize, rm.starSpacing, 
+                                                  option.rect.top(), option.rect.height(), rm.starsStartX,
+                                                  rating, colorName, isSelected);
             }
             painter->restore();
         } else {
