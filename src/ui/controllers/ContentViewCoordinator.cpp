@@ -212,7 +212,6 @@ QSet<int> ContentViewCoordinator::calculateVisibleSourceRows(QAbstractItemView* 
     QModelIndex topIdx = view->indexAt(vpRect.topLeft());
     QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
 
-    // 预载缓冲区扩展：由原先的 4 行扩展至 15 行（约 1-2 个屏幕高度），实现无感平滑滚动
     int top = topIdx.isValid() ? qMax(0, topIdx.row() - 15) : 0;
     int bottom = btmIdx.isValid() ? qMin(model->rowCount() - 1, btmIdx.row() + 15) : model->rowCount() - 1;
 

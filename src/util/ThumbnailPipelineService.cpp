@@ -86,9 +86,17 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
 
     (void)QtConcurrent::run(&m_decodePool, [this, pathsToFetch, targetSize, taskGen, token, onSingleLoaded]() {
         for (const QString& path : pathsToFetch) {
-            QImage finalImg;
-            if (m_currentGeneration.load(std::memory_order_relaxed) == taskGen && (!token || !token->isCanceled())) {
-                finalImg = DiskMediaExtractor::getCapsuleExtractResult(path, DiskMediaExtractor::kThumbSize, token).thumbnail512;
+            if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
+                return;
+            }
+
+            if (token && token->isCanceled()) return;
+
+            // 唯一入口：读缓存 / 失败拦截 / 解码 / 写缓存 / 尺寸与失败标记 全部在 DiskMediaExtractor 内完成
+            QImage finalImg = DiskMediaExtractor::getCapsuleExtractResult(path, DiskMediaExtractor::kThumbSize, token).thumbnail512;
+
+            if (m_currentGeneration.load(std::memory_order_relaxed) != taskGen) {
+                return;
             }
 
             QMetaObject::invokeMethod(qApp, [this, path, targetSize, finalImg, taskGen, onSingleLoaded]() {
