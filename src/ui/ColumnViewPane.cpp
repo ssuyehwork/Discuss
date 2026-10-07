@@ -1,5 +1,6 @@
 #include "ColumnViewPane.h"
 #include "ContentPanel.h"
+#include "controllers/ContentViewCoordinator.h"
 #include "models/SectionProxyModel.h"
 #include "ColumnViewWidget.h"
 #include "ColumnItemDelegate.h"
@@ -56,8 +57,25 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
 
     layout->addWidget(m_listView);
 
-    connect(m_proxyModel, &QAbstractItemModel::modelReset, this, [this]() { tryPendingSelection(); });
-    connect(m_proxyModel, &QAbstractItemModel::layoutChanged, this, [this]() { tryPendingSelection(); });
+    m_visibleTimer = new QTimer(this);
+    m_visibleTimer->setSingleShot(true);
+    m_visibleTimer->setInterval(60);
+    connect(m_visibleTimer, &QTimer::timeout, this, &ColumnViewPane::refreshVisibleThumbnails);
+
+    if (m_listView->verticalScrollBar()) {
+        connect(m_listView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+            if (m_visibleTimer) m_visibleTimer->start();
+        });
+    }
+
+    connect(m_proxyModel, &QAbstractItemModel::modelReset, this, [this]() {
+        tryPendingSelection();
+        if (m_visibleTimer) m_visibleTimer->start();
+    });
+    connect(m_proxyModel, &QAbstractItemModel::layoutChanged, this, [this]() {
+        tryPendingSelection();
+        if (m_visibleTimer) m_visibleTimer->start();
+    });
 
     connect(m_listView, &DropListView::blankSpaceClicked, this, [this]() {
         int paneIdx = property("paneIndex").toInt();
@@ -216,13 +234,19 @@ bool ColumnViewPane::eventFilter(QObject* obj, QEvent* event) {
 }
 
 void ColumnViewPane::refreshVisibleThumbnails() {
-    if (m_listView && m_listView->viewport()) {
+    if (!m_listView || !m_model) return;
+    QSet<int> visibleRows = ContentViewCoordinator::calculateVisibleSourceRows(m_listView, m_model);
+    if (!visibleRows.isEmpty()) {
+        m_model->loadThumbnailsForRows(visibleRows.values());
+    }
+    if (m_listView->viewport()) {
         m_listView->viewport()->update();
     }
 }
 
 void ColumnViewPane::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
+    if (m_visibleTimer) m_visibleTimer->start();
     update();
 }
 

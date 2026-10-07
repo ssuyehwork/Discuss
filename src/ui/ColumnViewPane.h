@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include <QSet>
 #include <QPointer>
+#include <QTimer>
 #include "models/DiskItemModel.h"
 #include "models/FilterProxyModel.h"
 #include "DropListView.h"
@@ -82,6 +83,7 @@ private:
     QScrollArea* m_paneScrollArea = nullptr;
     DropListView* m_folderListView = nullptr;
     DropListView* m_listView = nullptr;
+    QTimer* m_visibleTimer = nullptr;
 };
 
 } // namespace QuarkMeta

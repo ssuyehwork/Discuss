@@ -192,24 +192,35 @@ void ContentViewCoordinator::refreshVisibleThumbnails() {
             continue;
         }
 
-        QRect vpRect = view->viewport()->rect();
-        QModelIndex topIdx = view->indexAt(vpRect.topLeft());
-        QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
-
-        int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-        int bottom = btmIdx.isValid() ? qMin(model->rowCount() - 1, btmIdx.row() + 4) : model->rowCount() - 1;
-
-        for (int r = top; r <= bottom; ++r) {
-            QModelIndex idx = model->index(r, 0);
-            if (idx.data(SectionHeaderRole).toBool()) continue;
-            QModelIndex srcIdx = toSourceIndex(idx, m_panel->diskModel());
-            if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
-        }
+        QSet<int> rows = calculateVisibleSourceRows(view, m_panel->diskModel());
+        visibleRows.unite(rows);
     }
 
     if (!visibleRows.isEmpty()) {
         m_panel->diskModel()->loadThumbnailsForRows(visibleRows.values());
     }
+}
+
+QSet<int> ContentViewCoordinator::calculateVisibleSourceRows(QAbstractItemView* view, const QAbstractItemModel* targetDiskModel) {
+    QSet<int> visibleRows;
+    if (!view || !view->viewport() || !targetDiskModel) return visibleRows;
+    QAbstractItemModel* model = view->model();
+    if (!model || model->rowCount() == 0) return visibleRows;
+
+    QRect vpRect = view->viewport()->rect();
+    QModelIndex topIdx = view->indexAt(vpRect.topLeft());
+    QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
+
+    int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
+    int bottom = btmIdx.isValid() ? qMin(model->rowCount() - 1, btmIdx.row() + 4) : model->rowCount() - 1;
+
+    for (int r = top; r <= bottom; ++r) {
+        QModelIndex idx = model->index(r, 0);
+        if (idx.data(SectionHeaderRole).toBool()) continue;
+        QModelIndex srcIdx = toSourceIndex(idx, targetDiskModel);
+        if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
+    }
+    return visibleRows;
 }
 
 void ContentViewCoordinator::updateGridSize(int zoomLevel) {
