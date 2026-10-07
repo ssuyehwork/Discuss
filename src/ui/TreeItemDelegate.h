@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <algorithm>
 #include "ContentPanel.h"
 #include "RenameCapableDelegate.h"
 #include "ViewDragDropHelper.h"
@@ -165,21 +166,43 @@ public:
                 } else {
                     QIcon icon = qvariant_cast<QIcon>(decoData);
                     if (!icon.isNull()) {
-                        int iconSize = qRound(squareRect.width() * 0.75);
-                        QRect iconRect(squareRect.center().x() - iconSize / 2,
-                                       squareRect.center().y() - iconSize / 2,
-                                       iconSize, iconSize);
-                        icon.paint(painter, iconRect, Qt::AlignCenter);
+                        int iconW = qRound(squareRect.width() * 0.75);
+                        int iconH = qRound(squareRect.height() * 0.75);
+                        if (squareRect.width() > 70 || squareRect.height() > 69) {
+                            iconW = std::min(iconW, 45);
+                            iconH = std::min(iconH, 35);
+                        }
+                        QPixmap iconPixmap = icon.pixmap(QSize(iconW, iconH));
+                        if (!iconPixmap.isNull() && (iconPixmap.width() > iconW || iconPixmap.height() > iconH)) {
+                            iconPixmap = iconPixmap.scaled(QSize(iconW, iconH), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                        }
+                        if (!iconPixmap.isNull()) {
+                            QRect iconRect(squareRect.center().x() - iconPixmap.width() / 2,
+                                           squareRect.center().y() - iconPixmap.height() / 2,
+                                           iconPixmap.width(), iconPixmap.height());
+                            painter->drawPixmap(iconRect, iconPixmap);
+                        }
                     }
                 }
             } else {
                 QIcon icon = qvariant_cast<QIcon>(decoData);
                 if (!icon.isNull()) {
-                    int iconSize = qRound(squareRect.width() * 0.75);
-                    QRect iconRect(squareRect.center().x() - iconSize / 2,
-                                   squareRect.center().y() - iconSize / 2,
-                                   iconSize, iconSize);
-                    icon.paint(painter, iconRect, Qt::AlignCenter);
+                    int iconW = qRound(squareRect.width() * 0.75);
+                    int iconH = qRound(squareRect.height() * 0.75);
+                    if (squareRect.width() > 70 || squareRect.height() > 69) {
+                        iconW = std::min(iconW, 45);
+                        iconH = std::min(iconH, 35);
+                    }
+                    QPixmap iconPixmap = icon.pixmap(QSize(iconW, iconH));
+                    if (!iconPixmap.isNull() && (iconPixmap.width() > iconW || iconPixmap.height() > iconH)) {
+                        iconPixmap = iconPixmap.scaled(QSize(iconW, iconH), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                    }
+                    if (!iconPixmap.isNull()) {
+                        QRect iconRect(squareRect.center().x() - iconPixmap.width() / 2,
+                                       squareRect.center().y() - iconPixmap.height() / 2,
+                                       iconPixmap.width(), iconPixmap.height());
+                        painter->drawPixmap(iconRect, iconPixmap);
+                    }
                 }
             }
 
