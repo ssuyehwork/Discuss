@@ -2,7 +2,9 @@
 #include "../ContentPanel.h"
 #include "../ContentHeaderWidget.h"
 #include "../TabBarWidget.h"
+#include "ToolTipOverlay.h"
 #include <QHBoxLayout>
+#include <QCursor>
 #include <QVBoxLayout>
 #include <QStyle>
 #include <QDir>
@@ -24,6 +26,13 @@ ContentPanel* ContentPaneSplitManager::rootPane() const {
 
 bool ContentPaneSplitManager::isSplitMode() const {
     return m_isSplit;
+}
+
+Qt::Orientation ContentPaneSplitManager::splitOrientation() const {
+    if (rootPane() != m_panel) {
+        return rootPane()->m_splitManager->splitOrientation();
+    }
+    return m_splitOrientation;
 }
 
 ContentPaneSplitManager::SplitEvaluationResult ContentPaneSplitManager::evaluateSplitDrop(const QPoint& pos, const QSize& refSize) {
@@ -197,13 +206,77 @@ void ContentPaneSplitManager::notifyLayoutChanged() {
 }
 
 void ContentPaneSplitManager::updateContainerMinimumWidth() {
+    bool isVert = (m_splitOrientation == Qt::Vertical);
+    int minW = isVert ? 0 : ContentPanel::kMinPaneWidth;
+    int minH = isVert ? ContentPanel::kMinPaneHeight : 0;
+
     if (m_primaryPaneContainer) {
-        m_primaryPaneContainer->setMinimumWidth(ContentPanel::kMinPaneWidth);
+        m_primaryPaneContainer->setMinimumWidth(minW);
+        m_primaryPaneContainer->setMinimumHeight(minH);
     }
     for (QWidget* container : m_paneContainers) {
         if (container) {
-            container->setMinimumWidth(ContentPanel::kMinPaneWidth);
+            container->setMinimumWidth(minW);
+            container->setMinimumHeight(minH);
         }
+    }
+}
+
+void ContentPaneSplitManager::setSplitOrientation(Qt::Orientation target) {
+    if (rootPane() != m_panel) {
+        rootPane()->m_splitManager->setSplitOrientation(target);
+        return;
+    }
+
+    if (m_splitOrientation == target) return;
+
+    int count = paneCount();
+    if (target == Qt::Vertical && m_paneSplitter) {
+        int availH = m_paneSplitter->height();
+        int reqH = count * ContentPanel::kMinPaneHeight;
+        if (availH > 0 && availH < reqH) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "内容区高度不足，无法垂直排列", 2000, QColor("#e81123"));
+            return;
+        }
+    }
+
+    m_splitOrientation = target;
+    if (m_paneSplitter) {
+        m_paneSplitter->setOrientation(target);
+    }
+
+    updateContainerMinimumWidth();
+    redistributePaneSizes();
+    notifyLayoutChanged();
+}
+
+void ContentPaneSplitManager::updateOrientationPreviewOverlay(Qt::Orientation target) {
+    if (rootPane() != m_panel) {
+        rootPane()->m_splitManager->updateOrientationPreviewOverlay(target);
+        return;
+    }
+
+    if (!m_paneSplitter) return;
+
+    if (!m_orientationPreviewWidget) {
+        m_orientationPreviewWidget = new QWidget(m_panel);
+        m_orientationPreviewWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
+        m_orientationPreviewWidget->setStyleSheet("background-color: rgba(0, 122, 255, 0.25); border: 2px solid #007AFF;");
+    }
+
+    m_orientationPreviewWidget->setGeometry(m_paneSplitter->geometry());
+    m_orientationPreviewWidget->show();
+    m_orientationPreviewWidget->raise();
+}
+
+void ContentPaneSplitManager::hideOrientationPreviewOverlay() {
+    if (rootPane() != m_panel) {
+        rootPane()->m_splitManager->hideOrientationPreviewOverlay();
+        return;
+    }
+
+    if (m_orientationPreviewWidget) {
+        m_orientationPreviewWidget->hide();
     }
 }
 
@@ -287,7 +360,11 @@ void ContentPaneSplitManager::redistributePaneSizes() {
     if (!m_paneSplitter) return;
     int count = paneCount();
     if (count <= 1) return;
-    int total = (m_splitOrientation == Qt::Horizontal) ? m_panel->width() : m_panel->height();
+    int handleW = m_paneSplitter->handleWidth();
+    int total = (m_splitOrientation == Qt::Horizontal)
+        ? (m_paneSplitter->width() - handleW * (count - 1))
+        : (m_paneSplitter->height() - handleW * (count - 1));
+    if (total <= 0) total = (m_splitOrientation == Qt::Horizontal) ? m_panel->width() : m_panel->height();
     int each = total / count;
     QList<int> sizes;
     for (int i = 0; i < count; ++i) {

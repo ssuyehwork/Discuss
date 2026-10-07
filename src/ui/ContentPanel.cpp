@@ -157,6 +157,22 @@ void ContentPanel::initUi() {
         }
     });
 
+    connect(m_headerWidget, &ContentHeaderWidget::orientationToggleRequested, this, [this](Qt::Orientation target) {
+        if (!m_splitManager) return;
+        m_splitManager->setSplitOrientation(target);
+    });
+
+    connect(m_headerWidget, &ContentHeaderWidget::orientationDragStarted, this, [this](Qt::Orientation target) {
+        if (!m_splitManager) return;
+        m_splitManager->updateOrientationPreviewOverlay(target);
+    });
+
+    connect(m_headerWidget, &ContentHeaderWidget::orientationDragEnded, this, [this](bool apply) {
+        Q_UNUSED(apply);
+        if (!m_splitManager) return;
+        m_splitManager->hideOrientationPreviewOverlay();
+    });
+
     connect(m_headerWidget, &ContentHeaderWidget::filterStateChanged, this, [this](const FilterState& state) {
         m_currentFilter = state;
         AppConfig::instance().setValue("ContentPanel/ShowHidden", state.showHidden);
@@ -404,6 +420,12 @@ bool ContentPanel::isSplitMode() const {
     ContentPanel* root = rootPane();
     if (root && root != this) return root->isSplitMode();
     return m_splitManager ? m_splitManager->isSplitMode() : false;
+}
+
+Qt::Orientation ContentPanel::splitOrientation() const {
+    ContentPanel* root = rootPane();
+    if (root && root != this) return root->splitOrientation();
+    return m_splitManager ? m_splitManager->splitOrientation() : Qt::Horizontal;
 }
 
 bool ContentPanel::isSecondaryPane() const {

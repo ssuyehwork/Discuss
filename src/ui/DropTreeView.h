@@ -20,9 +20,8 @@ namespace QuarkMeta {
  */
 struct ColumnPolicy {
     FileListColumn column;
-    int fixedWidth;                     // 固定宽度（Stretch 列为 0）
-    QHeaderView::ResizeMode resizeMode; // Stretch 或 Fixed
-    int minContainerWidth;              // 容器达到多少宽度时才激活展示 (0 表示始终保留)
+    int fixedWidth;                     // 固定宽度（Name 列为 0）
+    QHeaderView::ResizeMode resizeMode; // Fixed 或 Interactive
     bool alwaysHidden;                  // 是否常态隐藏 (如 Status 列)
 };
 
@@ -142,6 +141,7 @@ private:
     QModelIndex m_hoverIndex;
     QString m_emptyHint;
     int m_bottomMargin = 0;
+    bool m_isApplyingPolicies = false;
 };
 
 } // namespace QuarkMeta

@@ -17,14 +17,14 @@ namespace QuarkMeta {
 
 // 声明式规则表：单一真理来源 (Single Source of Truth)
 static const std::vector<ColumnPolicy> kFileListColumnPolicies = {
-    { FileListColumn::Name,         0,   QHeaderView::Stretch, 0,   false }, // 始终显示并拉伸
-    { FileListColumn::Status,       40,  QHeaderView::Fixed,   0,   true  }, // 恒定隐藏
-    { FileListColumn::Rating,       100, QHeaderView::Fixed,   350, false }, // 容器 >= 350px 时显示
-    { FileListColumn::Dimension,    100, QHeaderView::Fixed,   480, false }, // 容器 >= 480px 时显示
-    { FileListColumn::Type,         60,  QHeaderView::Fixed,   600, false }, // 容器 >= 600px 时显示
-    { FileListColumn::Size,         80,  QHeaderView::Fixed,   600, false }, // 容器 >= 600px 时显示
-    { FileListColumn::ModifiedDate, 130, QHeaderView::Fixed,   720, false }, // 容器 >= 720px 时显示
-    { FileListColumn::CreatedDate,  130, QHeaderView::Fixed,   850, false }, // 容器 >= 850px 时显示
+    { FileListColumn::Name,         0,   QHeaderView::Fixed, false },
+    { FileListColumn::Status,       40,  QHeaderView::Fixed, true  },
+    { FileListColumn::Rating,       100, QHeaderView::Fixed, false },
+    { FileListColumn::Dimension,    100, QHeaderView::Fixed, false },
+    { FileListColumn::Type,         60,  QHeaderView::Fixed, false },
+    { FileListColumn::Size,         80,  QHeaderView::Fixed, false },
+    { FileListColumn::ModifiedDate, 130, QHeaderView::Fixed, false },
+    { FileListColumn::CreatedDate,  130, QHeaderView::Fixed, false },
 };
 
 DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
@@ -32,7 +32,8 @@ DropTreeView::DropTreeView(QWidget* parent) : QTreeView(parent) {
     setDragEnabled(true);
     setDropIndicatorShown(true);
     setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     DragDropEventFilter::install(this);
 
@@ -105,11 +106,28 @@ void DropTreeView::startDrag(Qt::DropActions supportedActions) {
 }
 
 void DropTreeView::applyColumnPolicies() {
+    if (m_isApplyingPolicies) return;
+    m_isApplyingPolicies = true;
+
     QHeaderView* hdr = header();
-    if (!hdr) return;
+    if (!hdr) {
+        m_isApplyingPolicies = false;
+        return;
+    }
 
     hdr->setMinimumSectionSize(0);
-    int currentWidth = viewport() ? viewport()->width() : width();
+
+    int totalVisibleFixedWidth = 0;
+    for (const auto& policy : kFileListColumnPolicies) {
+        if (policy.alwaysHidden) continue;
+        if (policy.column != FileListColumn::Name) {
+            totalVisibleFixedWidth += policy.fixedWidth;
+        }
+    }
+
+    int availWidth = viewport() ? viewport()->width() : width();
+    int minPaneW = ContentPanel::kMinPaneWidth;
+    int calculatedNameWidth = std::max(minPaneW, availWidth - totalVisibleFixedWidth);
 
     for (const auto& policy : kFileListColumnPolicies) {
         int colIdx = static_cast<int>(policy.column);
@@ -118,22 +136,17 @@ void DropTreeView::applyColumnPolicies() {
             continue;
         }
 
-        if (policy.column == FileListColumn::Name) {
-            setColumnHidden(colIdx, false);
-            hdr->setSectionResizeMode(colIdx, policy.resizeMode);
-            continue;
-        }
+        setColumnHidden(colIdx, false);
+        hdr->setSectionResizeMode(colIdx, QHeaderView::Fixed);
 
-        if (currentWidth >= policy.minContainerWidth) {
-            setColumnHidden(colIdx, false);
-            hdr->setSectionResizeMode(colIdx, policy.resizeMode);
-            if (policy.fixedWidth > 0) {
-                hdr->resizeSection(colIdx, policy.fixedWidth);
-            }
+        if (policy.column == FileListColumn::Name) {
+            hdr->resizeSection(colIdx, calculatedNameWidth);
         } else {
-            setColumnHidden(colIdx, true);
+            hdr->resizeSection(colIdx, policy.fixedWidth);
         }
     }
+
+    m_isApplyingPolicies = false;
 }
 
 void DropTreeView::resizeEvent(QResizeEvent* event) {

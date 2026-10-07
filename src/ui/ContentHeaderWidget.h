@@ -28,14 +28,23 @@ public:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 
 signals:
     void filterStateChanged(const FilterState& state);
     void recursiveToggled(bool recursive);
     void splitViewRequested();
+    void orientationToggleRequested(Qt::Orientation target);
+    void orientationDragStarted(Qt::Orientation target);
+    void orientationDragUpdated(const QPoint& globalPos);
+    void orientationDragEnded(bool apply);
 
 private:
     void initUi();
+    class ContentPanel* owningPanel() const;
+    bool evaluateOrientationToggle(const QPoint& currentPos, Qt::Orientation& targetOri) const;
 
     QHBoxLayout* m_layout = nullptr;
     QLabel* m_iconLabel = nullptr;
@@ -46,6 +55,8 @@ private:
     QPushButton* m_btnLayers = nullptr;
 
     FilterState m_filterState;
+    QPoint m_dragStartPos;
+    bool m_isDraggingHeader = false;
 };
 
 } // namespace QuarkMeta
