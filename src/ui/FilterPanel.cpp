@@ -800,7 +800,10 @@ QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, 
         QLabel* dot = new QLabel(row);
         dot->setObjectName("FilterItemDot");
         dot->setFixedSize(10, 10);
-        dot->setStyleSheet(QString("background: %1;").arg(dotColor.name()));
+        QPalette pal = dot->palette();
+        pal.setColor(QPalette::Window, dotColor);
+        dot->setAutoFillBackground(true);
+        dot->setPalette(pal);
         rl->addWidget(dot);
     }
 

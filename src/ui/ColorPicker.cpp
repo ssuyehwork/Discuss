@@ -301,7 +301,10 @@ void ColorPicker::updateColorFromHsv() {
 }
 
 void ColorPicker::updatePreview() {
-    m_previewBlock->setStyleSheet(QString("background: %1;").arg(m_color.name()));
+    QPalette pal = m_previewBlock->palette();
+    pal.setColor(QPalette::Window, m_color);
+    m_previewBlock->setAutoFillBackground(true);
+    m_previewBlock->setPalette(pal);
     m_hexEdit->setText(m_color.name().toUpper());
 }
 

@@ -260,8 +260,8 @@ void ContentPaneSplitManager::updateOrientationPreviewOverlay(Qt::Orientation ta
 
     if (!m_orientationPreviewWidget) {
         m_orientationPreviewWidget = new QWidget(m_panel);
+        m_orientationPreviewWidget->setObjectName("OrientationPreviewWidget");
         m_orientationPreviewWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
-        m_orientationPreviewWidget->setStyleSheet("background-color: rgba(0, 122, 255, 0.25); border: 2px solid #007AFF;");
     }
 
     m_orientationPreviewWidget->setGeometry(m_paneSplitter->geometry());
@@ -539,8 +539,8 @@ void ContentPaneSplitManager::updateDragOverlay(const QPoint& pos) {
 
     if (!m_dragOverlayWidget) {
         m_dragOverlayWidget = new QWidget(m_panel);
+        m_dragOverlayWidget->setObjectName("DragOverlayWidget");
         m_dragOverlayWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
-        m_dragOverlayWidget->setStyleSheet("background-color: rgba(0, 122, 255, 0.25); border: 2px solid #007AFF;");
     }
 
     m_dragOverlayWidget->setGeometry(eval.highlightRect);
