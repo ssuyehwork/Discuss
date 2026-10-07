@@ -183,7 +183,8 @@ void ContentViewCoordinator::refreshVisibleThumbnails() {
             if (!jv->isLayoutReady()) return;
             int scrollY = jv->verticalScrollBar() ? jv->verticalScrollBar()->value() : 0;
             int vpH = jv->viewport()->height();
-            QList<int> rangeRows = jv->rowsInRange(qMax(0, scrollY - vpH / 2), scrollY + vpH + vpH / 2);
+            int bufferH = static_cast<int>(vpH * 1.5);
+            QList<int> rangeRows = jv->rowsInRange(qMax(0, scrollY - bufferH), scrollY + vpH + bufferH);
             for (int r : rangeRows) {
                 QModelIndex idx = model->index(r, 0);
                 QModelIndex srcIdx = toSourceIndex(idx, m_panel->diskModel());
@@ -211,8 +212,8 @@ QSet<int> ContentViewCoordinator::calculateVisibleSourceRows(QAbstractItemView* 
     QModelIndex topIdx = view->indexAt(vpRect.topLeft());
     QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
 
-    int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-    int bottom = btmIdx.isValid() ? qMin(model->rowCount() - 1, btmIdx.row() + 4) : model->rowCount() - 1;
+    int top = topIdx.isValid() ? qMax(0, topIdx.row() - 15) : 0;
+    int bottom = btmIdx.isValid() ? qMin(model->rowCount() - 1, btmIdx.row() + 15) : model->rowCount() - 1;
 
     for (int r = top; r <= bottom; ++r) {
         QModelIndex idx = model->index(r, 0);
