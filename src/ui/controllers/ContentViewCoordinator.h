@@ -33,6 +33,7 @@ public:
     void restoreSelections(const QSet<QString>& selectedPaths, bool isPendingEdit);
 
     static QModelIndex toSourceIndex(const QModelIndex& idx, const QAbstractItemModel* target);
+    static QSet<int> calculateVisibleSourceRows(QAbstractItemView* view, const QAbstractItemModel* targetDiskModel);
 
     // 统一 FilterState 广播
     void applyFilterStateToAllViews(const FilterState& state);

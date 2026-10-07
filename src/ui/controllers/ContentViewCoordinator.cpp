@@ -183,7 +183,8 @@ void ContentViewCoordinator::refreshVisibleThumbnails() {
             if (!jv->isLayoutReady()) return;
             int scrollY = jv->verticalScrollBar() ? jv->verticalScrollBar()->value() : 0;
             int vpH = jv->viewport()->height();
-            QList<int> rangeRows = jv->rowsInRange(qMax(0, scrollY - vpH / 2), scrollY + vpH + vpH / 2);
+            int bufferH = static_cast<int>(vpH * 1.5);
+            QList<int> rangeRows = jv->rowsInRange(qMax(0, scrollY - bufferH), scrollY + vpH + bufferH);
             for (int r : rangeRows) {
                 QModelIndex idx = model->index(r, 0);
                 QModelIndex srcIdx = toSourceIndex(idx, m_panel->diskModel());
@@ -192,24 +193,36 @@ void ContentViewCoordinator::refreshVisibleThumbnails() {
             continue;
         }
 
-        QRect vpRect = view->viewport()->rect();
-        QModelIndex topIdx = view->indexAt(vpRect.topLeft());
-        QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
-
-        int top = topIdx.isValid() ? qMax(0, topIdx.row() - 4) : 0;
-        int bottom = btmIdx.isValid() ? qMin(model->rowCount() - 1, btmIdx.row() + 4) : model->rowCount() - 1;
-
-        for (int r = top; r <= bottom; ++r) {
-            QModelIndex idx = model->index(r, 0);
-            if (idx.data(SectionHeaderRole).toBool()) continue;
-            QModelIndex srcIdx = toSourceIndex(idx, m_panel->diskModel());
-            if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
-        }
+        QSet<int> rows = calculateVisibleSourceRows(view, m_panel->diskModel());
+        visibleRows.unite(rows);
     }
 
     if (!visibleRows.isEmpty()) {
         m_panel->diskModel()->loadThumbnailsForRows(visibleRows.values());
     }
+}
+
+QSet<int> ContentViewCoordinator::calculateVisibleSourceRows(QAbstractItemView* view, const QAbstractItemModel* targetDiskModel) {
+    QSet<int> visibleRows;
+    if (!view || !view->viewport() || !targetDiskModel) return visibleRows;
+    QAbstractItemModel* model = view->model();
+    if (!model || model->rowCount() == 0) return visibleRows;
+
+    QRect vpRect = view->viewport()->rect();
+    QModelIndex topIdx = view->indexAt(vpRect.topLeft());
+    QModelIndex btmIdx = view->indexAt(vpRect.bottomRight());
+
+    // 预载缓冲区扩展：由原先的 4 行扩展至 15 行（约 1-2 个屏幕高度），实现无感平滑滚动
+    int top = topIdx.isValid() ? qMax(0, topIdx.row() - 15) : 0;
+    int bottom = btmIdx.isValid() ? qMin(model->rowCount() - 1, btmIdx.row() + 15) : model->rowCount() - 1;
+
+    for (int r = top; r <= bottom; ++r) {
+        QModelIndex idx = model->index(r, 0);
+        if (idx.data(SectionHeaderRole).toBool()) continue;
+        QModelIndex srcIdx = toSourceIndex(idx, targetDiskModel);
+        if (srcIdx.isValid()) visibleRows.insert(srcIdx.row());
+    }
+    return visibleRows;
 }
 
 void ContentViewCoordinator::updateGridSize(int zoomLevel) {

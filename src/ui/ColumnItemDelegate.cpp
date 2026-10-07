@@ -85,19 +85,48 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
     // 2. 左侧图标 (文件 / 文件夹)
     bool isFolder = (index.data(TypeRole).toString() == "folder");
     bool isEmpty = index.data(IsEmptyRole).toBool();
+    bool hasThumbnail = index.data(HasThumbnailRole).toBool();
     QVariant deco = index.data(Qt::DecorationRole);
 
     int iconSize = 18;
     QRect iconRect(rect.left(), rect.top() + (rect.height() - iconSize) / 2, iconSize, iconSize);
 
-    if (deco.canConvert<QIcon>() && !deco.value<QIcon>().isNull()) {
-        deco.value<QIcon>().paint(painter, iconRect, Qt::AlignCenter);
-    } else if (deco.canConvert<QPixmap>() && !deco.value<QPixmap>().isNull()) {
-        QPixmap pix = deco.value<QPixmap>();
-        painter->drawPixmap(iconRect, pix.scaled(iconRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    if (hasThumbnail) {
+        QPixmap pix;
+        if (deco.canConvert<QIcon>() && !deco.value<QIcon>().isNull()) {
+            pix = deco.value<QIcon>().pixmap(iconRect.size());
+        } else if (deco.canConvert<QPixmap>() && !deco.value<QPixmap>().isNull()) {
+            pix = deco.value<QPixmap>();
+        }
+        if (!pix.isNull()) {
+            painter->save();
+            QPainterPath clipPath;
+            clipPath.addRoundedRect(iconRect, 3, 3);
+            painter->setClipPath(clipPath);
+
+            QSize scaledSize = pix.size().scaled(iconRect.size(), Qt::KeepAspectRatio);
+            QRect targetRect(
+                iconRect.left() + (iconRect.width() - scaledSize.width()) / 2,
+                iconRect.top() + (iconRect.height() - scaledSize.height()) / 2,
+                scaledSize.width(),
+                scaledSize.height()
+            );
+            painter->drawPixmap(targetRect, pix);
+            painter->restore();
+        } else {
+            QIcon fallbackIcon = UiHelper::getIcon("file", QColor("#888888"), 18);
+            fallbackIcon.paint(painter, iconRect, Qt::AlignCenter);
+        }
     } else {
-        QIcon fallbackIcon = UiHelper::getIcon(isFolder ? "folder" : "file", QColor("#888888"), 18);
-        fallbackIcon.paint(painter, iconRect, Qt::AlignCenter);
+        if (deco.canConvert<QIcon>() && !deco.value<QIcon>().isNull()) {
+            deco.value<QIcon>().paint(painter, iconRect, Qt::AlignCenter);
+        } else if (deco.canConvert<QPixmap>() && !deco.value<QPixmap>().isNull()) {
+            QPixmap pix = deco.value<QPixmap>();
+            painter->drawPixmap(iconRect, pix.scaled(iconRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        } else {
+            QIcon fallbackIcon = UiHelper::getIcon(isFolder ? "folder" : "file", QColor("#888888"), 18);
+            fallbackIcon.paint(painter, iconRect, Qt::AlignCenter);
+        }
     }
 
     // 空文件夹虚线提示
@@ -125,26 +154,50 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
         }
     }
 
-    // 4. 绘制文字与右侧元数据 (动态调整星级与箭头宽度)
-    int rightMargin = isDir ? 22 : 6;
-    if (rating > 0) rightMargin += 32;
+    // 4. 从右向左依次计算右侧组件布局：文件夹箭头 -> 星级 -> 置顶图标
+    int rightX = option.rect.right() - (isDir ? 22 : 6);
+
+    // 计算星级组件位置 (若 rating > 0)
+    int starSize = 12;
+    int numWidth = 12;
+    int starRightX = rightX;
+    QRect starIconRect;
+    QRect numRect;
+
+    if (rating > 0) {
+        starIconRect = QRect(starRightX - numWidth - starSize, option.rect.top() + (option.rect.height() - starSize) / 2, starSize, starSize);
+        numRect = QRect(starRightX - numWidth, option.rect.top() + (option.rect.height() - starSize) / 2, numWidth, starSize);
+        rightX = starIconRect.left();
+    }
+
+    // 置顶图标位置 (仅当置顶时，在星级/箭头左侧间隔 2px 处绘制)
+    bool isPinned = index.data(PinnedRole).toBool();
+    int pinRightX = rightX;
+    if (isPinned) {
+        pinRightX -= CardPainterHelper::kPinToRatingGap;
+    }
+    int pinW = CardPainterHelper::drawInlinePinIcon(painter, pinRightX, option.rect.top(), option.rect.height(), isPinned);
+
+    if (pinW > 0) {
+        rightX = pinRightX - pinW;
+    }
+
+    // 确定文本可用有效区域
+    rightX -= CardPainterHelper::kPinToRatingGap;
+    int availableWidth = rightX - (option.rect.left() + 32);
+    if (availableWidth < 10) availableWidth = 10;
+
+    QRect actualTextRect(option.rect.left() + 32, option.rect.top(), availableWidth, option.rect.height());
 
     QString name = index.data(Qt::DisplayRole).toString();
-    QRect textRect = option.rect.adjusted(32, 0, -rightMargin, 0);
     QColor textColor = selected ? QColor("#FFFFFF") : QColor("#EEEEEE");
     painter->setPen(textColor);
     painter->setFont(option.font);
-    QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideRight, textRect.width());
-    painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
+    QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideRight, actualTextRect.width());
+    painter->drawText(actualTextRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
 
     // 5. 绘制星级标示 (若 rating > 0)
     if (rating > 0) {
-        int starRight = option.rect.right() - (isDir ? 22 : 6);
-        int starSize = 12;
-        int numWidth = 12;
-        QRect starIconRect(starRight - numWidth - starSize, option.rect.top() + (option.rect.height() - starSize) / 2, starSize, starSize);
-        QRect numRect(starRight - numWidth, option.rect.top() + (option.rect.height() - starSize) / 2, numWidth, starSize);
-
         QColor orangeColor = QColor("#FF551C");
         QIcon starIcon = UiHelper::getIcon("star_filled", orangeColor, starSize);
         starIcon.paint(painter, starIconRect, Qt::AlignCenter);

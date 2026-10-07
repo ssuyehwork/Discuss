@@ -59,7 +59,7 @@ void PanelMediator::setupConnections() {
     // 🚀【Tab页在新标签中打开路由】：从 NavigationService 接收在 Tab 栏打开请求，解耦控制器下钻
     connect(&NavigationService::instance(), &NavigationService::requestOpenInNewTab, this, [this](const QString& url) {
         if (m_titleBar && m_titleBar->tabBar()) {
-            m_titleBar->tabBar()->openOrFocusTab(url);
+            m_titleBar->tabBar()->openInNewTab(url);
         }
     });
     FavoritePanel* favoritePanel = m_favoritePanel;
