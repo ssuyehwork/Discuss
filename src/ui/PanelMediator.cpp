@@ -391,12 +391,12 @@ void PanelMediator::setupConnections() {
             QString mtimeStr = idx.isValid() ? idx.sibling(idx.row(), static_cast<int>(FileListColumn::ModifiedDate)).data(Qt::DisplayRole).toString() : "-";
             bool encrypted = idx.isValid() ? idx.data(EncryptedRole).toBool() : false;
 
-            auto meta = MetadataManager::instance().getMeta(path.toStdWString());
-
             metaPanel->updateInfo(
                 name, type, sizeStr, "-", mtimeStr, "-",
-                path, encrypted, meta.width, meta.height
+                path, encrypted, 0, 0
             );
+
+            auto meta = MetadataManager::instance().getMeta(path.toStdWString());
 
             QVector<QPair<QColor, float>> qPalettes;
             qPalettes.reserve(static_cast<int>(meta.palettes.size()));
@@ -425,14 +425,13 @@ void PanelMediator::setupConnections() {
                 metaPanel->setPalettes(qPalettes);
 
                 QVariant decData = idx.data(Qt::DecorationRole);
-                bool hasThumb = idx.data(HasThumbnailRole).toBool();
                 QPixmap previewPixmap;
                 if (decData.canConvert<QIcon>()) {
                     previewPixmap = decData.value<QIcon>().pixmap(128, 128);
                 } else if (decData.canConvert<QPixmap>()) {
                     previewPixmap = decData.value<QPixmap>();
                 }
-                metaPanel->setImagePreview(previewPixmap, !hasThumb);
+                metaPanel->setImagePreview(previewPixmap);
             } else {
                 metaPanel->setRating(meta.rating, false);
                 metaPanel->setColor(QString::fromStdWString(meta.manualColor), false);

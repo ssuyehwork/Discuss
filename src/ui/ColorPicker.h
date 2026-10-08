@@ -105,8 +105,8 @@ private:
     QList<ColorItem> m_items;
     int m_hoveredIndex = -1;
     QString m_selectedColor;
-    int m_circleRadius = 8;
-    int m_spacing = 7;
+    int m_circleRadius = 7;  // 半径 7，直径 14
+    int m_spacing = 5;       // 间隔 5
 };
 
 } // namespace QuarkMeta
