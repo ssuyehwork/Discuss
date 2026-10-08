@@ -28,14 +28,8 @@ SearchController::SearchController(QWidget* parent)
     m_searchEdit->setPlaceholderText("搜索...");
     m_searchEdit->setObjectName("SearchEdit");
     m_searchEdit->setFixedHeight(30);
+    m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->installEventFilter(this);
-
-    QAction* clearAction = m_searchEdit->addAction(UiHelper::getIcon("close", TextMuted), QLineEdit::TrailingPosition);
-    clearAction->setVisible(false);
-    connect(clearAction, &QAction::triggered, m_searchEdit, &QLineEdit::clear);
-    connect(m_searchEdit, &QLineEdit::textChanged, this, [clearAction](const QString& text) {
-        clearAction->setVisible(!text.isEmpty());
-    });
 
     UiHelper::setupLineEditContextMenu(m_searchEdit);
 
