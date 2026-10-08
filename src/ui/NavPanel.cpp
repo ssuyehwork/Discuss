@@ -260,7 +260,7 @@ void NavPanel::onTreeContextMenu(const QPoint& pos) {
         QMenu menu(this);
         UiHelper::applyMenuStyle(&menu);
 
-        QAction* actRestore = menu.addAction(UiHelper::getIcon("sync", QColor("#EEEEEE"), 18), "还原全部");
+        QAction* actRestore = menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "还原全部");
         QAction* actEmpty = menu.addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "清空回收站");
 
         connect(actRestore, &QAction::triggered, this, [this]() {

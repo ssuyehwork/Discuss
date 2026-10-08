@@ -40,6 +40,11 @@ signals:
      */
     void createNewFolderRequested();
 
+    /**
+     * @brief Ctrl+Shift+E 触发提取文本内容至剪贴板
+     */
+    void extractContentRequested();
+
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 

@@ -47,7 +47,7 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
 
     m_btnRefresh = new QPushButton(m_addressContainer);
     m_btnRefresh->setFixedSize(30, 30);
-    m_btnRefresh->setIcon(UiHelper::getIcon("sync", QColor("#CCCCCC"), 16));
+    m_btnRefresh->setIcon(UiHelper::getIcon("refresh", QColor("#CCCCCC"), 16));
     m_btnRefresh->setProperty("tooltipText", "刷新 (F5)");
     m_btnRefresh->setCursor(Qt::ArrowCursor);
     m_btnRefresh->setObjectName("BtnRefreshAddress");
@@ -149,13 +149,13 @@ bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
 
     if (obj == m_btnRefresh) {
         if (event->type() == QEvent::HoverEnter || event->type() == QEvent::Enter) {
-            m_btnRefresh->setIcon(UiHelper::getIcon("sync", Qt::white, 16));
+            m_btnRefresh->setIcon(UiHelper::getIcon("refresh", Qt::white, 16));
             QString text = m_btnRefresh->property("tooltipText").toString();
             if (!text.isEmpty()) {
                 ToolTipOverlay::instance()->showText(QCursor::pos(), text, 0);
             }
         } else if (event->type() == QEvent::HoverLeave || event->type() == QEvent::Leave) {
-            m_btnRefresh->setIcon(UiHelper::getIcon("sync", QColor("#CCCCCC"), 16));
+            m_btnRefresh->setIcon(UiHelper::getIcon("refresh", QColor("#CCCCCC"), 16));
             ToolTipOverlay::hideTip();
         }
     }

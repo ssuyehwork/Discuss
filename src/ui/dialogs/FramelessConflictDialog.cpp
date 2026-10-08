@@ -37,7 +37,7 @@ FramelessConflictDialog::FramelessConflictDialog(const QString& title, const QSt
     btnLayout->addStretch();
 
     auto* btnAutoRename = new QPushButton("同存");
-    btnAutoRename->setIcon(UiHelper::getIcon("sync", QColor("#EEEEEE"), 14));
+    btnAutoRename->setIcon(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 14));
     btnAutoRename->setFixedHeight(32);
     btnAutoRename->setCursor(Qt::PointingHandCursor);
     btnAutoRename->setObjectName("FramelessBtnOk");

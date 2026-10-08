@@ -378,7 +378,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
     }
 
     // 4. Ctrl + Shift + C / V / R
-    if (keyEvent->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier)) {
+    if ((keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier)) == (Qt::ControlModifier | Qt::ShiftModifier)) {
         if (keyEvent->key() == Qt::Key_C) {
             // 优先检查选中项目是否有标签，有标签则复制标签；若无标签，则保留原有的复制路径逻辑
             QModelIndex idx = view->currentIndex();

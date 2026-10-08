@@ -24,6 +24,16 @@ public:
      */
     static bool copyNamesToClipboard(const QStringList& paths, bool showOverlay = true);
 
+    /**
+     * @brief 提取文件文本内容至剪贴板 SSOT 入口 (快捷键 Ctrl+Shift+E 与 右键菜单 "支持提取内容" 共同调用)
+     */
+    static bool extractContentToClipboard(const QString& path);
+
+    /**
+     * @brief 构建“提取内容”右键菜单项 (自动处理可提取/不可提取状态与点击回调)
+     */
+    static QAction* buildExtractContentAction(QMenu* menu, const QString& path, QObject* receiver = nullptr);
+
     static QAction* buildShowInExplorerAction(QMenu* menu, const QString& path, QObject* receiver = nullptr);
     static QAction* buildCopyPathAction(QMenu* menu, const QStringList& paths, QObject* receiver = nullptr);
     static QAction* buildCopyNameAction(QMenu* menu, const QStringList& paths, QObject* receiver = nullptr);

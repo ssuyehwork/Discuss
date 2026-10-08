@@ -478,7 +478,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     QAction* actNext = menu.addAction(UiHelper::getIcon("scroll-006", QColor("#FFFFFF"), 18), "下一个");
     menu.addSeparator();
 
-    QAction* actRotate = menu.addAction(UiHelper::getIcon("sync", QColor("#FFFFFF"), 18), "旋转");
+    QAction* actRotate = menu.addAction(UiHelper::getIcon("refresh", QColor("#FFFFFF"), 18), "旋转");
     QAction* actFlip = menu.addAction(UiHelper::getIcon("split_v", QColor("#FFFFFF"), 18), "水平翻转");
     QAction* actOrig = menu.addAction(UiHelper::getIcon("image_picture", QColor("#FFFFFF"), 18), "原始");
     QAction* actFit = menu.addAction(UiHelper::getIcon("resize2", QColor("#FFFFFF"), 18), "自适应");
@@ -500,6 +500,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
 
     ContextMenuFactory::buildCopyNameAction(&menu, QStringList{m_currentPath}, this);
     ContextMenuFactory::buildCopyPathAction(&menu, QStringList{m_currentPath}, this);
+    ContextMenuFactory::buildExtractContentAction(&menu, m_currentPath, this);
     FavoriteService::instance().buildFavoriteAction(&menu, m_currentPath, this);
     menu.addSeparator();
 

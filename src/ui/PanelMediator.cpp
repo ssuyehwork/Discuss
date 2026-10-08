@@ -6,6 +6,7 @@
 #include "ColumnViewWidget.h"
 #include "controllers/ContentPaneSplitManager.h"
 #include "controllers/PaneActivationTracker.h"
+#include "controllers/ContextMenuFactory.h"
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "AddressBar.h"
@@ -182,6 +183,18 @@ void PanelMediator::setupConnections() {
             ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
             if (target) {
                 target->createNewItem("folder");
+            }
+        });
+
+        connect(shortcutController, &AppShortcutController::extractContentRequested, this, [this, contentPanel]() {
+            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
+            if (target) {
+                QStringList selectedPaths = target->getSelectedPaths();
+                if (!selectedPaths.isEmpty()) {
+                    ContextMenuFactory::extractContentToClipboard(selectedPaths.first());
+                } else {
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "未选择任何可提取内容的文件", 1200, QColor("#e81123"));
+                }
             }
         });
     }

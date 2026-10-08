@@ -217,6 +217,15 @@ void AppShortcutController::initShortcuts() {
             }
         }
     });
+
+    // 10. Ctrl+Shift+E: 提取文件文本内容至剪贴板
+    QShortcut* scExtract = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), m_window);
+    scExtract->setContext(Qt::WindowShortcut);
+    connect(scExtract, &QShortcut::activated, this, [this]() {
+        if (!isEditingFocus()) {
+            emit extractContentRequested();
+        }
+    });
 }
 
 } // namespace QuarkMeta
