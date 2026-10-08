@@ -332,9 +332,8 @@ int ColorPicker::currentTolerance() const {
 // --- ColorStripPicker 实现 ---
 ColorStripPicker::ColorStripPicker(const QString& currentColorHex, QWidget* parent)
     : QWidget(parent), m_selectedColor(currentColorHex) {
-    // 9个直径为14像素的圆，间距为5像素。
-    // 总宽度：左侧预留12像素 + 9 * 14像素圆 + 8 * 5像素间隔 + 右侧预留12像素 = 12 + 126 + 40 + 12 = 190像素
-    setFixedSize(190, 26);
+    // 9个直径为18像素的圆，间距为4像素，起始边距2像素（使圆心位于 x=11，与 22px 宽的清除按钮完全靠左线对齐）。
+    setFixedSize(210, 26);
     setMouseTracking(true);
     setCursor(Qt::PointingHandCursor);
 
@@ -355,11 +354,12 @@ void ColorStripPicker::paintEvent(QPaintEvent* event) {
     
     // 保持完全透明底色
     
-    int startX = 12; // 起始左边距
+    int startX = 2; // 起始左边距（圆心位于 2 + 9 = 11px，与星级行首个按钮 22px 宽度完美轴向对齐）
     int y = rect().height() / 2;
+    int diameter = m_circleRadius * 2;
     
     for (int i = 0; i < m_items.size(); ++i) {
-        int cx = startX + i * (14 + m_spacing) + m_circleRadius;
+        int cx = startX + i * (diameter + m_spacing) + m_circleRadius;
         
         // 1. 绘制色块本身（第一个无颜色选项采用标准的 no_color 图标）
         if (i == 0) {
@@ -388,9 +388,10 @@ void ColorStripPicker::paintEvent(QPaintEvent* event) {
 void ColorStripPicker::mouseMoveEvent(QMouseEvent* event) {
     int newHovered = -1;
     int cy = rect().height() / 2;
-    int startX = 12;
+    int startX = 2;
+    int diameter = m_circleRadius * 2;
     for (int i = 0; i < m_items.size(); ++i) {
-        int cx = startX + i * (14 + m_spacing) + m_circleRadius;
+        int cx = startX + i * (diameter + m_spacing) + m_circleRadius;
         int dx = event->pos().x() - cx;
         int dy = event->pos().y() - cy;
         if (dx * dx + dy * dy <= (m_circleRadius + 2) * (m_circleRadius + 2)) { // 感应半径
