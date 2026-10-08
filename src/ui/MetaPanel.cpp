@@ -385,36 +385,59 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     });
 }
 
-void MetaPanel::setImagePreview(const QPixmap& pixmap) {
+void MetaPanel::setImagePreview(const QPixmap& pixmap, bool isDefaultIcon) {
     if (!m_lblImagePreview) return;
     if (pixmap.isNull()) {
         m_lblImagePreview->clear();
         m_lblImagePreview->hide();
         if (m_topPreviewBox) m_topPreviewBox->hide();
     } else {
-        int maxW = m_container ? (m_container->width() - 16) : 214;
-        maxW = qBound(120, maxW, 230);
-        int maxH = 220;
+        if (isDefaultIcon) {
+            // 非图形图像（默认文件/文件夹图标）：预览画布 220x220px，图标强缩放至 35x45px 并居中
+            QSize canvasSize(220, 220);
+            QPixmap canvas(canvasSize);
+            canvas.fill(Qt::transparent);
 
-        QPixmap scaled = (pixmap.width() > maxW || pixmap.height() > maxH)
-            ? pixmap.scaled(QSize(maxW, maxH), Qt::KeepAspectRatio, Qt::SmoothTransformation)
-            : pixmap;
+            // 强制将默认 OS 图标（通常为 16x16 / 32x32）等比例缩放到 35x45 目标范围
+            QPixmap iconScaled = pixmap.scaled(QSize(35, 45), Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
-        QImage roundedImg(scaled.size(), QImage::Format_ARGB32_Premultiplied);
-        roundedImg.fill(Qt::transparent);
-        {
-            QPainter painter(&roundedImg);
-            painter.setRenderHint(QPainter::Antialiasing);
-            painter.setRenderHint(QPainter::SmoothPixmapTransform);
+            {
+                QPainter painter(&canvas);
+                painter.setRenderHint(QPainter::Antialiasing);
+                painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
-            QPainterPath path;
-            path.addRoundedRect(QRectF(0, 0, scaled.width(), scaled.height()), 4.0, 4.0);
-            painter.setClipPath(path);
-            painter.drawPixmap(0, 0, scaled);
+                int x = (220 - iconScaled.width()) / 2;
+                int y = (220 - iconScaled.height()) / 2;
+                painter.drawPixmap(x, y, iconScaled);
+            }
+
+            m_lblImagePreview->setPixmap(canvas);
+            m_lblImagePreview->setFixedSize(canvasSize);
+        } else {
+            int maxW = m_container ? (m_container->width() - 16) : 214;
+            maxW = qBound(120, maxW, 230);
+            int maxH = 220;
+
+            QPixmap scaled = (pixmap.width() > maxW || pixmap.height() > maxH)
+                ? pixmap.scaled(QSize(maxW, maxH), Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                : pixmap;
+
+            QImage roundedImg(scaled.size(), QImage::Format_ARGB32_Premultiplied);
+            roundedImg.fill(Qt::transparent);
+            {
+                QPainter painter(&roundedImg);
+                painter.setRenderHint(QPainter::Antialiasing);
+                painter.setRenderHint(QPainter::SmoothPixmapTransform);
+
+                QPainterPath path;
+                path.addRoundedRect(QRectF(0, 0, scaled.width(), scaled.height()), 4.0, 4.0);
+                painter.setClipPath(path);
+                painter.drawPixmap(0, 0, scaled);
+            }
+
+            m_lblImagePreview->setPixmap(QPixmap::fromImage(roundedImg));
+            m_lblImagePreview->setFixedSize(scaled.size());
         }
-
-        m_lblImagePreview->setPixmap(QPixmap::fromImage(roundedImg));
-        m_lblImagePreview->setFixedSize(scaled.size());
 
         m_lblImagePreview->show();
         if (m_topPreviewBox) m_topPreviewBox->show();

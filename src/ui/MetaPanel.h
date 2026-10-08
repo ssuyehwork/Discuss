@@ -38,7 +38,7 @@ public:
                     const QString& ctime, const QString& mtime, const QString& atime,
                     const QString& path, bool encrypted, int width = 0, int height = 0);
 
-    void setImagePreview(const QPixmap& pixmap);
+    void setImagePreview(const QPixmap& pixmap, bool isDefaultIcon = false);
     void setSelectedPaths(const QStringList& paths);
     void setPalettes(const QVector<QPair<QColor, float>>& palette);
     void setTags(const QStringList& tags);
