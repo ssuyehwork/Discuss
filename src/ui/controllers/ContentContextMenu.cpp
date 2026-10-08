@@ -305,6 +305,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "复制")->setData(ContentPanel::ActionCopy);
             menu.addAction(UiHelper::getIcon("cut", QColor("#EEEEEE"), 18), "剪切")->setData(ContentPanel::ActionCut);
+            menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "创建副本")->setData(ContentPanel::ActionDuplicate);
 
             if (!isComputerRoot && !currentPath.isEmpty()) {
                 std::wstring volSerial = MetadataManager::getVolumeSerialNumber(path.toStdWString());
@@ -710,6 +711,39 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         case ContentPanel::ActionCut:
             ClipboardService::instance().cutItems(m_panel->getSelectedPaths());
             break;
+        case ContentPanel::ActionDuplicate: {
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            if (selectedPaths.isEmpty() && !path.isEmpty()) {
+                selectedPaths << path;
+            }
+            if (!selectedPaths.isEmpty()) {
+                QString targetDir = isFolder ? QFileInfo(path).absolutePath() : currentPath;
+                if (targetDir.isEmpty() || targetDir.contains("://")) {
+                    targetDir = QFileInfo(selectedPaths.first()).absolutePath();
+                }
+
+                DiskIoContext ioCtx;
+                ioCtx.sources = selectedPaths;
+                ioCtx.destination = targetDir;
+                ioCtx.isMove = false;
+                ioCtx.autoRenameAll = true;
+
+                QPointer<ContentPanel> weakPanel(m_panel);
+                DiskIoService::instance().executeAsync(ioCtx, [weakPanel](bool success) {
+                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, success]() {
+                        if (weakPanel) {
+                            if (success) {
+                                weakPanel->refreshAll();
+                                ToolTipOverlay::instance()->showText(QCursor::pos(), "副本创建成功", 1500, QColor("#2ecc71"));
+                            } else {
+                                ToolTipOverlay::instance()->showText(QCursor::pos(), "创建副本失败：物理写入未能完成", 2000, QColor("#e81123"));
+                            }
+                        }
+                    });
+                });
+            }
+            break;
+        }
         case ContentPanel::ActionPaste:
             ClipboardService::instance().executePaste(isFolder ? path : currentPath, m_panel);
             break;

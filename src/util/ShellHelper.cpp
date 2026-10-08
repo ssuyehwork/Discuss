@@ -46,8 +46,8 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
                 int counter = 1;
                 while (QFile::exists(destPath)) {
                     QString newFileName = suffix.isEmpty() 
-                        ? QString("%1 (%2)").arg(baseName).arg(counter++)
-                        : QString("%1 (%2).%3").arg(baseName).arg(counter++).arg(suffix);
+                        ? QString("%1-%2").arg(baseName).arg(counter++)
+                        : QString("%1-%2.%3").arg(baseName).arg(counter++).arg(suffix);
                     destPath = QDir(destDir).filePath(newFileName);
                 }
             } else if (shouldOverwrite) {

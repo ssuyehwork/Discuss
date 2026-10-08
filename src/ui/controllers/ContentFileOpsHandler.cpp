@@ -1,5 +1,6 @@
 #include "ContentFileOpsHandler.h"
 #include "../ContentPanel.h"
+#include "../ViewDragDropHelper.h"
 #include "../../core/FileCreationService.h"
 #include "../ColumnViewWidget.h"
 #include "../ToolTipOverlay.h"
@@ -94,17 +95,32 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
         }
     }
 
-    // 0. 原地/同目录拖放保护：剔除源目录与目标目录一模一样的项目
+    // 0. 原地/同目录拖放保护与 Ctrl+Drag 100px 距门禁
+    bool isCtrlPressed = (QApplication::keyboardModifiers() & Qt::ControlModifier);
     QStringList externalPaths;
+
     for (const QString& src : paths) {
         QFileInfo srcInfo(src);
-        if (QDir::cleanPath(srcInfo.absolutePath()) != QDir::cleanPath(QDir(destDir).absolutePath())) {
+        bool isSameDirectory = (QDir::cleanPath(srcInfo.absolutePath()) == QDir::cleanPath(QDir(destDir).absolutePath()));
+
+        if (isSameDirectory) {
+            if (isCtrlPressed) {
+                // 判断 Ctrl+Drag 拖拽物理距离，防止 Ctrl+Click 多选误触
+                QPoint dragStartPos = ViewDragDropHelper::lastDragStartPos();
+                QPoint dropPos = QCursor::pos();
+                int dragDistance = (dropPos - dragStartPos).manhattanLength();
+
+                if (dragDistance >= 100) {
+                    externalPaths.append(src);
+                }
+            }
+        } else {
             externalPaths.append(src);
         }
     }
 
     if (externalPaths.isEmpty()) {
-        // 全为同目录内自拖放，直接静默恢复/忽略，绝不误触同名冲突弹窗
+        // 全为同目录内自拖放且未触发 Ctrl+Drag 100px 门禁，静默处理
         return;
     }
 

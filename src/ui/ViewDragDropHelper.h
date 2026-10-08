@@ -38,8 +38,9 @@ class ViewDragDropHelper {
 public:
     static bool handleDragEnter(QAbstractItemView* view, QDragEnterEvent* event);
     static bool handleDragMove(QAbstractItemView* view, QDragMoveEvent* event);
-    static bool handleDrop(QAbstractItemView* view, QDropEvent* event, QStringList& outPaths, QModelIndex& outTargetIdx);
+    static bool handleDrop(QAbstractItemView* view, QDropEvent* event, QStringList& outPaths, QModelIndex& outTargetIdx, QPoint* outStartPos = nullptr);
     static void executeStartDrag(QAbstractItemView* view, Qt::DropActions supportedActions);
+    static QPoint lastDragStartPos() { return s_lastDragStartPos; }
 
     static bool isDropTarget(const QAbstractItemView* view, const QModelIndex& index);
     static void clearHover(QAbstractItemView* view = nullptr);
@@ -47,6 +48,7 @@ public:
 private:
     static QAbstractItemView* s_hoverView;
     static QPersistentModelIndex s_hoverIndex;
+    static QPoint s_lastDragStartPos;
 };
 
 } // namespace QuarkMeta

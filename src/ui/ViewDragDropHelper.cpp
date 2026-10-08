@@ -86,6 +86,7 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
 
 QAbstractItemView* ViewDragDropHelper::s_hoverView = nullptr;
 QPersistentModelIndex ViewDragDropHelper::s_hoverIndex;
+QPoint ViewDragDropHelper::s_lastDragStartPos;
 
 bool ViewDragDropHelper::isDropTarget(const QAbstractItemView* view, const QModelIndex& index) {
     return view && s_hoverView == view && s_hoverIndex.isValid() && s_hoverIndex == index;
@@ -129,9 +130,10 @@ bool ViewDragDropHelper::handleDragMove(QAbstractItemView* view, QDragMoveEvent*
     return false;
 }
 
-bool ViewDragDropHelper::handleDrop(QAbstractItemView* view, QDropEvent* event, QStringList& outPaths, QModelIndex& outTargetIdx) {
+bool ViewDragDropHelper::handleDrop(QAbstractItemView* view, QDropEvent* event, QStringList& outPaths, QModelIndex& outTargetIdx, QPoint* outStartPos) {
     outPaths.clear();
     outTargetIdx = QModelIndex();
+    if (outStartPos) *outStartPos = s_lastDragStartPos;
 
     if (event->mimeData() && event->mimeData()->hasUrls()) {
         const QList<QUrl> urls = event->mimeData()->urls();
@@ -153,6 +155,11 @@ bool ViewDragDropHelper::handleDrop(QAbstractItemView* view, QDropEvent* event, 
 }
 
 void ViewDragDropHelper::executeStartDrag(QAbstractItemView* view, Qt::DropActions supportedActions) {
+    if (view && view->viewport()) {
+        s_lastDragStartPos = view->viewport()->mapFromGlobal(QCursor::pos());
+    } else {
+        s_lastDragStartPos = QCursor::pos();
+    }
     if (!view || !view->selectionModel()) return;
     QModelIndexList indexes = view->selectionModel()->selectedIndexes();
     if (indexes.isEmpty()) return;
