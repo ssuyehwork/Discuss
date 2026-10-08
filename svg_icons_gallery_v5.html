@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>SVG Icons Gallery - Full Functional</title>
+<style>
+/* 完全保留你样板中的所有样式 */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d0d14;color:#e2e8f0;min-height:100vh}
+header{background:linear-gradient(135deg,#0f1a2e,#1a0f2e);border-bottom:1px solid #1e2a40;padding:16px 24px;position:sticky;top:0;z-index:100}
+.header-top{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+h1{font-size:17px;font-weight:700;background:linear-gradient(135deg,#60a5fa,#a78bfa,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+
+/* 新增：粘贴区域样式 */
+.input-area { background: #1a1b26; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #3b82f6; }
+#rawPaste { width: 100%; height: 60px; background: #0f172a; color: #94a3b8; border: 1px solid #1e293b; border-radius: 6px; padding: 8px; font-size: 12px; margin-bottom: 8px; }
+.parse-btn { background: #3b82f6; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+
+.stats{display:flex;gap:6px;flex-wrap:wrap}
+.stat{background:#ffffff08;border:1px solid #ffffff10;border-radius:20px;padding:2px 10px;font-size:11px;white-space:nowrap}
+.stat span{font-weight:700}
+.stat.s-total span{color:#60a5fa}.stat.s-travel span{color:#34d399}.stat.s-filled span{color:#f59e0b}.stat.s-show span{color:#a78bfa}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.search-wrap{position:relative;flex:1;min-width:150px;max-width:260px}
+.search-wrap svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#475569;pointer-events:none}
+#searchInput{width:100%;background:#0d1829;border:1px solid #1e2a40;border-radius:8px;padding:6px 10px 6px 28px;color:#e2e8f0;font-size:12px;outline:none;transition:border-color .2s}
+#searchInput:focus{border-color:#60a5fa}
+.filter-btns{display:flex;gap:4px;flex-wrap:wrap}
+.filter-btn{background:#0d1829;border:1px solid #1e2a40;color:#64748b;border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.filter-btn.active{background:#60a5fa22;border-color:#60a5fa;color:#60a5fa}
+.filter-btn.filled.active{background:#f59e0b22;border-color:#f59e0b;color:#f59e0b}
+.filter-btn.travel.active{background:#34d39922;border-color:#34d399;color:#34d399}
+
+.right-tools{display:flex;align-items:center;gap:6px;margin-left:auto}
+.size-btns{display:flex;gap:3px}
+.size-btn{background:#0d1829;border:1px solid #1e2a40;color:#64748b;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer;transition:all .15s}
+.size-btn.active{background:#60a5fa22;border-color:#60a5fa;color:#60a5fa}
+.color-btns{display:flex;gap:3px}
+.color-dot{width:17px;height:17px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
+.color-dot.active{border-color:#fff}
+
+main{padding:20px}
+.section{margin-bottom:20px}
+.section-title{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.badge{border-radius:10px;padding:1px 7px;font-size:10px;text-transform:none;letter-spacing:0}
+.badge-blue{background:#60a5fa22;color:#60a5fa}.badge-green{background:#34d39922;color:#34d399}.badge-purple{background:#a78bfa22;color:#a78bfa}.badge-amber{background:#f59e0b22;color:#f59e0b}
+.divider{width:100%;height:1px;background:linear-gradient(90deg,#1e2a40,transparent);margin-bottom:7px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.icon-card{background:#0d1829;border:1px solid #1a2438;border-radius:9px;padding:13px 5px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:all .15s;position:relative}
+.icon-card:hover{transform:translateY(-2px); border-color: #60a5fa88;}
+.icon-card.copied{border-color:#4ade80!important;background:#0a2215}
+.icon-svg{width:30px;height:30px;display:flex;align-items:center;justify-content:center}
+.icon-svg svg{width:20px;height:20px;display:block; fill: none; stroke: currentColor; stroke-width: 2;}
+/* 处理实心图标 */
+.icon-card.is-filled .icon-svg svg { fill: currentColor; stroke: none; }
+
+.icon-name{font-size:9.5px;color:#475569;text-align:center;word-break:break-all;line-height:1.3;max-width:82px}
+.copy-tag{position:absolute;bottom:2px;right:3px;font-size:8px;color:#4ade80;opacity:0;transition:opacity .15s}
+.icon-card.copied .copy-tag{opacity:1}
+.grid.sm{grid-template-columns:repeat(auto-fill,minmax(64px,1fr))}
+.grid.lg{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
+</style>
+</head>
+<body>
+<header>
+  <div class="input-area" id="parserUI">
+    <textarea id="rawPaste" placeholder="直接粘贴 SvgIcons.h 的全部内容..."></textarea>
+    <button class="parse-btn" onclick="initAndParse()">立即解析并显示 426 个图标</button>
+  </div>
+  <div class="header-top">
+    <h1>✦ SVG Icons Gallery</h1>
+    <div class="stats">
+      <div class="stat s-total">总计 <span id="totalCount">0</span></div>
+      <div class="stat s-filled">● 实心 <span id="filledCount">0</span></div>
+      <div class="stat s-travel">✈️ 旅游 <span id="travelCount">0</span></div>
+      <div class="stat s-show">显示 <span id="showCount">0</span></div>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="searchInput" placeholder="搜索图标名称…"/>
+    </div>
+    <div class="filter-btns">
+      <button class="filter-btn all active" onclick="setFilter('all',this)">🗂 全部</button>
+      <button class="filter-btn filled" onclick="setFilter('filled',this)">● 实心</button>
+      <button class="filter-btn travel" onclick="setFilter('travel',this)">✈️ 旅游</button>
+    </div>
+    <div class="right-tools">
+      <div class="size-btns">
+        <button class="size-btn" onclick="setSize('sm',this)">小</button>
+        <button class="size-btn active" onclick="setSize('md',this)">中</button>
+        <button class="size-btn" onclick="setSize('lg',this)">大</button>
+      </div>
+      <div class="color-btns">
+        <div class="color-dot active" style="background:#e2e8f0" onclick="setColor('#e2e8f0',this)"></div>
+        <div class="color-dot" style="background:#34d399" onclick="setColor('#34d399',this)"></div>
+        <div class="color-dot" style="background:#60a5fa" onclick="setColor('#60a5fa',this)"></div>
+        <div class="color-dot" style="background:#f87171" onclick="setColor('#f87171',this)"></div>
+      </div>
+    </div>
+  </div>
+</header>
+<main id="main"></main>
+
+<script>
+// 1. 完全保留你样板中的分类数据
+const categories = {"导航与布局": ["home", "home_filled", "home_screen", "menu", "layout", "layout_filled", "columns", "columns_filled", "grid", "grid_filled", "table", "table_filled", "zoom_in", "zoom_out", "maximize_2", "minimize_2", "external_link", "log_in", "log_out", "sliders", "crop", "sidebar_open", "sidebar_open_filled", "panel_right", "panel_right_filled", "fullscreen", "shrink", "sidebar", "sidebar_filled", "sidebar_right", "sidebar_right_filled"], "用户与社交": ["user", "user_filled", "users", "users_filled", "user_plus", "user_minus", "user_check", "contact", "heart", "heart_filled", "thumbs_up", "thumbs_up_filled", "thumbs_down", "thumbs_down_filled", "share", "share_filled", "award", "award_filled", "gift", "gift_filled", "flag", "flag_filled"], "标记与收藏": ["bookmark", "bookmark_filled", "star", "star_filled", "tag", "tag_filled", "pin", "pin_tilted", "pin_vertical"], "状态圆形": ["check_circle", "check_circle_filled", "x_circle", "x_circle_filled", "alert_circle", "alert_circle_filled", "alert_triangle", "alert_triangle_filled", "info", "info_filled", "help", "help_filled", "minus_circle", "minus_circle_filled", "plus_circle", "plus_circle_filled", "stop_circle", "stop_circle_filled"], "时间日历": ["clock", "clock_filled", "calendar", "calendar_filled", "today", "today_filled", "clock_history"], "文件操作": ["file", "file_filled", "folder", "folder_filled", "image", "image_filled", "copy", "copy_filled", "save", "save_filled", "trash", "trash_filled", "layers", "layers_filled", "file_pdf", "file_word", "file_ppt", "file_executable"], "✈️ 航空与飞行": ["plane", "plane_takeoff", "plane_landing", "helicopter", "airport"], "🚢 水上交通": ["sailboat", "ship", "gondola", "pier"], "🚂 陆上交通": ["train", "bus", "car", "bicycle", "taxi", "cable_car"], "🏨 住宿": ["hotel", "bed", "tent", "home_map", "cottage"], "🗺️ 地图与导航": ["map_pin", "map_pin_filled", "waypoints", "route", "road", "signpost", "double_signpost"], "🏰 景点与地标": ["mountain", "mountain_snow", "palm_tree", "beach", "lighthouse", "castle", "ferris_wheel", "temple", "statue", "museum"], "🎒 旅行装备": ["luggage", "suitcase", "backpack", "passport", "boarding_pass", "binoculars", "ticket"], "🏄 户外活动": ["surfing", "hiking", "swimming", "ski", "fishing", "campfire", "adventure"], "🌅 自然风光": ["sunset", "sunrise", "waves", "forest", "flower", "fireworks", "hot_spring"], "🍜 美食与饮品": ["utensils", "wine", "beer", "ice_cream", "cake", "coffee_shop"], "🌍 国际旅行": ["globe_2", "earth", "currency_exchange"]};
+const travelIconNames = new Set(["plane", "plane_takeoff", "plane_landing", "helicopter", "airport", "sailboat", "ship", "gondola", "pier", "train", "bus", "car", "bicycle", "taxi", "cable_car", "hotel", "bed", "tent", "home_map", "cottage", "map_pin", "map_pin_filled", "waypoints", "route", "road", "signpost", "double_signpost", "mountain", "mountain_snow", "palm_tree", "beach", "lighthouse", "castle", "ferris_wheel", "temple", "statue", "museum", "luggage", "suitcase", "backpack", "passport", "boarding_pass", "binoculars", "ticket", "surfing", "hiking", "swimming", "ski", "fishing", "campfire", "adventure", "sunset", "sunrise", "waves", "forest", "flower", "fireworks", "hot_spring", "utensils", "wine", "beer", "ice_cream", "cake", "coffee_shop", "globe_2", "earth", "currency_exchange"]);
+
+let allIcons = [];
+let cur = {color:'#e2e8f0', filter:'all', size:'md', q:''};
+
+// 2. 解析逻辑：从你粘贴的 C++ 代码中提取数据
+function initAndParse() {
+    const raw = document.getElementById('rawPaste').value;
+    const regex = /\{"([^"]+)",\s*R"svg\(([\s\S]*?)\)svg"\}/g;
+    let match;
+    allIcons = [];
+    while ((match = regex.exec(raw)) !== null) {
+        allIcons.push({ name: match[1], svg: match[2] });
+    }
+    
+    if (allIcons.length === 0) {
+        alert("未能识别 C++ 代码，请检查粘贴的内容是否包含 {\"name\", R\"svg(...)svg\"}");
+        return;
+    }
+
+    document.getElementById('totalCount').textContent = allIcons.length;
+    document.getElementById('parserUI').style.display = 'none'; // 解析成功后隐藏输入框
+    render();
+}
+
+function buildCard(icon) {
+    const isT = travelIconNames.has(icon.name);
+    const isF = icon.name.endsWith('_filled');
+    const d = document.createElement('div');
+    d.className = 'icon-card ' + (isF ? 'is-filled ' : '') + (isT ? 'travel-icon ' : '');
+    d.innerHTML = `<div class="icon-svg" style="color:${cur.color}">${icon.svg}</div><div class="icon-name">${icon.name}</div><span class="copy-tag">✓</span>`;
+    d.addEventListener('click', () => {
+        navigator.clipboard.writeText(icon.name);
+        d.classList.add('copied'); setTimeout(() => d.classList.remove('copied'), 1000);
+    });
+    return d;
+}
+
+function render() {
+    const main = document.getElementById('main'); main.innerHTML = '';
+    let filtered = allIcons;
+
+    // 过滤逻辑
+    if (cur.filter === 'travel') filtered = filtered.filter(i => travelIconNames.has(i.name));
+    if (cur.filter === 'filled') filtered = filtered.filter(i => i.name.endsWith('_filled'));
+    
+    // 搜索逻辑（完全保留样板中的模糊搜索）
+    if (cur.q) {
+        filtered = filtered.filter(i => i.name.toLowerCase().includes(cur.q));
+    }
+
+    document.getElementById('showCount').textContent = filtered.length;
+    document.getElementById('filledCount').textContent = allIcons.filter(i => i.name.endsWith('_filled')).length;
+    document.getElementById('travelCount').textContent = allIcons.filter(i => travelIconNames.has(i.name)).length;
+
+    if (!filtered.length) { main.innerHTML = '<div class="no-results">😕 没有找到匹配的图标</div>'; return; }
+
+    // 分类显示逻辑
+    const catOrder = Object.keys(categories);
+    const displayedInCat = new Set();
+
+    catOrder.forEach(cat => {
+        const ci = filtered.filter(i => categories[cat].includes(i.name));
+        if (!ci.length) return;
+        
+        const sec = document.createElement('div'); sec.className = 'section';
+        sec.innerHTML = `<div class="section-title">${cat}<span class="badge">${ci.length}</span></div><div class="divider"></div>`;
+        const g = document.createElement('div');
+        g.className = 'grid ' + (cur.size !== 'md' ? cur.size : '');
+        ci.forEach(icon => {
+            g.appendChild(buildCard(icon));
+            displayedInCat.add(icon.name);
+        });
+        sec.appendChild(g); main.appendChild(sec);
+    });
+
+    // 处理未分类图标
+    const unc = filtered.filter(i => !displayedInCat.has(i.name));
+    if (unc.length) {
+        const sec = document.createElement('div'); sec.className = 'section';
+        sec.innerHTML = `<div class="section-title">未分类图标<span class="badge badge-purple">${unc.length}</span></div><div class="divider"></div>`;
+        const g = document.createElement('div');
+        g.className = 'grid ' + (cur.size !== 'md' ? cur.size : '');
+        unc.forEach(icon => g.appendChild(buildCard(icon)));
+        sec.appendChild(g); main.appendChild(sec);
+    }
+}
+
+// 工具函数
+function setFilter(f, btn) {
+    cur.filter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); render();
+}
+function setSize(s, btn) {
+    cur.size = s;
+    document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); render();
+}
+function setColor(c, el) {
+    cur.color = c;
+    document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+    el.classList.add('active'); render();
+}
+document.getElementById('searchInput').addEventListener('input', function() {
+    cur.q = this.value.trim().toLowerCase();
+    render();
+});
+</script>
+</body>
+</html>
