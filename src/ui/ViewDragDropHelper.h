@@ -22,7 +22,7 @@ public:
     static void install(QAbstractItemView* view);
 
 signals:
-    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex, Qt::DropAction action);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -38,7 +38,7 @@ class ViewDragDropHelper {
 public:
     static bool handleDragEnter(QAbstractItemView* view, QDragEnterEvent* event);
     static bool handleDragMove(QAbstractItemView* view, QDragMoveEvent* event);
-    static bool handleDrop(QAbstractItemView* view, QDropEvent* event, QStringList& outPaths, QModelIndex& outTargetIdx, QPoint* outStartPos = nullptr);
+    static bool handleDrop(QAbstractItemView* view, QDropEvent* event, QStringList& outPaths, QModelIndex& outTargetIdx, Qt::DropAction* outAction = nullptr, QPoint* outStartPos = nullptr);
     static void executeStartDrag(QAbstractItemView* view, Qt::DropActions supportedActions);
     static QPoint lastDragStartPos() { return s_lastDragStartPos; }
 

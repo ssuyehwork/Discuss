@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QUrl>
 #include <QItemSelectionModel>
+#include <QApplication>
 
 namespace QuarkMeta {
 
@@ -24,8 +25,8 @@ void DragDropEventFilter::install(QAbstractItemView* view) {
     }
 
     // 🚀【核心修复】：将事件过滤器的 pathsDropped 动态信号直接桥接至宿主视图的 pathsDropped 信号
-    QObject::connect(filter, SIGNAL(pathsDropped(QStringList,QModelIndex)),
-                     view, SIGNAL(pathsDropped(QStringList,QModelIndex)));
+    QObject::connect(filter, SIGNAL(pathsDropped(QStringList,QModelIndex,Qt::DropAction)),
+                     view, SIGNAL(pathsDropped(QStringList,QModelIndex,Qt::DropAction)));
 }
 
 void DragDropEventFilter::clearDropHighlight() {
@@ -76,8 +77,9 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
         auto* dropEv = static_cast<QDropEvent*>(event);
         QStringList paths;
         QModelIndex targetIdx;
-        if (ViewDragDropHelper::handleDrop(m_targetView, dropEv, paths, targetIdx)) {
-            emit pathsDropped(paths, targetIdx);
+        Qt::DropAction action = Qt::CopyAction;
+        if (ViewDragDropHelper::handleDrop(m_targetView, dropEv, paths, targetIdx, &action)) {
+            emit pathsDropped(paths, targetIdx, action);
             return true;
         }
     }
@@ -130,10 +132,11 @@ bool ViewDragDropHelper::handleDragMove(QAbstractItemView* view, QDragMoveEvent*
     return false;
 }
 
-bool ViewDragDropHelper::handleDrop(QAbstractItemView* view, QDropEvent* event, QStringList& outPaths, QModelIndex& outTargetIdx, QPoint* outStartPos) {
+bool ViewDragDropHelper::handleDrop(QAbstractItemView* view, QDropEvent* event, QStringList& outPaths, QModelIndex& outTargetIdx, Qt::DropAction* outAction, QPoint* outStartPos) {
     outPaths.clear();
     outTargetIdx = QModelIndex();
     if (outStartPos) *outStartPos = s_lastDragStartPos;
+    if (outAction) *outAction = event->dropAction();
 
     if (event->mimeData() && event->mimeData()->hasUrls()) {
         const QList<QUrl> urls = event->mimeData()->urls();
@@ -155,11 +158,7 @@ bool ViewDragDropHelper::handleDrop(QAbstractItemView* view, QDropEvent* event, 
 }
 
 void ViewDragDropHelper::executeStartDrag(QAbstractItemView* view, Qt::DropActions supportedActions) {
-    if (view && view->viewport()) {
-        s_lastDragStartPos = view->viewport()->mapFromGlobal(QCursor::pos());
-    } else {
-        s_lastDragStartPos = QCursor::pos();
-    }
+    s_lastDragStartPos = QCursor::pos();
     if (!view || !view->selectionModel()) return;
     QModelIndexList indexes = view->selectionModel()->selectedIndexes();
     if (indexes.isEmpty()) return;
@@ -191,7 +190,11 @@ void ViewDragDropHelper::executeStartDrag(QAbstractItemView* view, Qt::DropActio
     drag->setPixmap(pixmap);
     drag->setHotSpot(QPoint(0, 0));
 
-    drag->exec(supportedActions | Qt::CopyAction, Qt::MoveAction);
+    bool isCtrl = (QApplication::keyboardModifiers() & Qt::ControlModifier);
+    Qt::DropAction defaultAction = isCtrl ? Qt::CopyAction : Qt::MoveAction;
+
+    drag->exec(supportedActions | Qt::CopyAction | Qt::MoveAction, defaultAction);
+    s_lastDragStartPos = QPoint();
 }
 
 } // namespace QuarkMeta

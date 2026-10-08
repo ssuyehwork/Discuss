@@ -65,7 +65,7 @@ bool ContentFileOpsHandler::resolvePasteDestination() {
     return true;
 }
 
-void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride) {
+void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride, Qt::DropAction action) {
     if (!m_panel || paths.isEmpty()) return;
     
     QString baseDir = !targetDirOverride.isEmpty() ? targetDirOverride : m_panel->currentPath();
@@ -82,9 +82,11 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
 
     qDebug() << "[ColumnView DragDrop Debug] Sources:" << paths 
              << "| TargetDirOverride:" << targetDirOverride 
-             << "| Final DestDir:" << destDir;
+             << "| Final DestDir:" << destDir
+             << "| DropAction:" << action;
 
-    bool isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
+    bool isCopyOperation = (action == Qt::CopyAction) || (QApplication::keyboardModifiers() & Qt::ControlModifier);
+    bool isMove = !isCopyOperation;
 
     if (!destDir.isEmpty() && destDir != "computer://") {
         NavigationHistoryService::recordRecentVisitedFolder(QDir::toNativeSeparators(destDir).toStdWString());
@@ -95,23 +97,24 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
         }
     }
 
-    // 0. 原地/同目录拖放保护与 Ctrl+Drag 100px 距门禁
-    bool isCtrlPressed = (QApplication::keyboardModifiers() & Qt::ControlModifier);
+    // 0. 原地/同目录拖放保护与 Ctrl+Drag 副本创建门禁
     QStringList externalPaths;
+    bool isDuplicateCopy = false;
 
     for (const QString& src : paths) {
         QFileInfo srcInfo(src);
         bool isSameDirectory = (QDir::cleanPath(srcInfo.absolutePath()) == QDir::cleanPath(QDir(destDir).absolutePath()));
 
         if (isSameDirectory) {
-            if (isCtrlPressed) {
-                // 判断 Ctrl+Drag 拖拽物理距离，防止 Ctrl+Click 多选误触
+            if (isCopyOperation) {
+                // 判断 Ctrl+Drag 拖拽物理距离（全物理坐标对比），防止 Ctrl+Click 多选误触（门禁设为 50px）
                 QPoint dragStartPos = ViewDragDropHelper::lastDragStartPos();
                 QPoint dropPos = QCursor::pos();
-                int dragDistance = (dropPos - dragStartPos).manhattanLength();
+                int dragDistance = (dragStartPos.isNull()) ? 100 : (dropPos - dragStartPos).manhattanLength();
 
-                if (dragDistance >= 100) {
+                if (dragDistance >= 50) {
                     externalPaths.append(src);
+                    isDuplicateCopy = true;
                 }
             }
         } else {
@@ -120,17 +123,19 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
     }
 
     if (externalPaths.isEmpty()) {
-        // 全为同目录内自拖放且未触发 Ctrl+Drag 100px 门禁，静默处理
+        // 全为同目录内自拖放且未触发 Ctrl+Drag 副本创建门禁，静默处理
         return;
     }
 
-    // 1. 仅对来自外部目录的项目检测目标文件夹中的同名冲突文件
+    // 1. 仅对非同目录副本创建的项目检测目标文件夹中的同名冲突文件
     QStringList conflictingSources;
-    for (const QString& src : externalPaths) {
-        QString fileName = QFileInfo(src).fileName();
-        QString destPath = QDir(destDir).filePath(fileName);
-        if (QFile::exists(destPath)) {
-            conflictingSources.append(src);
+    if (!isDuplicateCopy) {
+        for (const QString& src : externalPaths) {
+            QString fileName = QFileInfo(src).fileName();
+            QString destPath = QDir(destDir).filePath(fileName);
+            if (QFile::exists(destPath)) {
+                conflictingSources.append(src);
+            }
         }
     }
 
@@ -138,6 +143,12 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
     ioCtx.sources = externalPaths;
     ioCtx.destination = destDir;
     ioCtx.isMove = isMove;
+
+    if (isDuplicateCopy) {
+        // 同目录 Ctrl+Drag 专属意图：强制自动追加序号重命名（如 filename-1.ext），绕过冲突弹窗
+        ioCtx.autoRenameAll = true;
+        ioCtx.isMove = false;
+    }
 
     if (!conflictingSources.isEmpty()) {
         QStringList activeSources = externalPaths;

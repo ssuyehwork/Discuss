@@ -263,8 +263,8 @@ void ContentPanel::initGridView() {
     connect(jv, &QAbstractItemView::customContextMenuRequested, this, [this](const QPoint& pos) {
         onCustomContextMenuRequested(m_gridView, pos);
     });
-    connect(jv, &JustifiedView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
-        onPathsDropped(paths, targetIndex, currentPath());
+    connect(jv, &JustifiedView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex, Qt::DropAction action) {
+        onPathsDropped(paths, targetIndex, currentPath(), action);
     });
 
     if (jv->verticalScrollBar()) {
@@ -307,8 +307,8 @@ void ContentPanel::initListView() {
     connect(tree, &QAbstractItemView::customContextMenuRequested, this, [this](const QPoint& pos) {
         onCustomContextMenuRequested(m_treeView, pos);
     });
-    connect(tree, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
-        onPathsDropped(paths, targetIndex, currentPath());
+    connect(tree, &DropTreeView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex, Qt::DropAction action) {
+        onPathsDropped(paths, targetIndex, currentPath(), action);
     });
 
     if (tree->verticalScrollBar()) {
@@ -644,8 +644,8 @@ void ContentPanel::performBatchRename() {
     if (m_fileOpsHandler) m_fileOpsHandler->performBatchRename();
 }
 
-void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride) {
-    if (m_fileOpsHandler) m_fileOpsHandler->onPathsDropped(paths, targetIndex, targetDirOverride);
+void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride, Qt::DropAction action) {
+    if (m_fileOpsHandler) m_fileOpsHandler->onPathsDropped(paths, targetIndex, targetDirOverride, action);
 }
 
 void ContentPanel::onDoubleClicked(const QModelIndex& index) {

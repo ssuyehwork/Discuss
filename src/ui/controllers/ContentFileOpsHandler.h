@@ -17,7 +17,7 @@ public:
     void createNewItem(const QString& type);
     void performBatchRename();
     bool resolvePasteDestination();
-    void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString());
+    void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), Qt::DropAction action = Qt::CopyAction);
 
 private:
     ContentPanel* m_panel = nullptr;

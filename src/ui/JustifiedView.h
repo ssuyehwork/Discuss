@@ -29,7 +29,7 @@ public:
 signals:
     void totalHeightChanged(int height);
     void layoutFinished();
-    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex, Qt::DropAction action = Qt::CopyAction);
 
 public:
     QList<int> rowsInRange(int top, int bottom) const;

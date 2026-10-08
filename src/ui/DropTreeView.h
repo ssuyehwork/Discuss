@@ -126,7 +126,7 @@ public:
 
 signals:
     void notesDropped(const QList<int>& noteIds, const QModelIndex& targetIndex);
-    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex, Qt::DropAction action);
 
 protected:
     void startDrag(Qt::DropActions supportedActions) override;

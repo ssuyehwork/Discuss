@@ -19,7 +19,7 @@ protected:
     void startDrag(Qt::DropActions supportedActions) override;
 
 signals:
-    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex);
+    void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex, Qt::DropAction action);
     void sectionHeaderClicked(const QModelIndex& index);
     void blankSpaceClicked();
     void blankSpaceDoubleClicked();
