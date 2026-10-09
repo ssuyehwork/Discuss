@@ -5,9 +5,11 @@
 #include <QString>
 #include <QTimer>
 #include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include <string>
 #include <functional>
+#include <memory>
 
 namespace QuarkMeta {
 
@@ -23,6 +25,16 @@ public:
     void updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater);
 
     /**
+     * @brief 一致性读取指定物理文件夹的所有条目 ItemMeta (大小写不敏感匹配)
+     */
+    QuarkMetaJson::ItemMap readFolderMeta(const std::wstring& folderPath);
+
+    /**
+     * @brief 一致性读取指定文件的 ItemMeta，成功找到返回 true
+     */
+    bool readItemMeta(const std::wstring& filePath, ItemMeta& outMeta);
+
+    /**
      * @brief 物理迁移文件夹缓存文件 (.QuarkMeta.json)
      */
     bool migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath);
@@ -33,9 +45,9 @@ public:
     bool renameItem(const QString& folderPath, const QString& oldName, const QString& newName);
 
     /**
-     * @brief 强制立即将所有未落盘的脏目录 JSON 刷入物理磁盘
+     * @brief 强制立即将所有未落盘的脏目录 JSON 刷入物理磁盘 (sync 为 true 时在当前线程同步写入)
      */
-    void flushAllDirtyBuffers();
+    void flushAllDirtyBuffers(bool sync = false);
 
 private slots:
     void onFlushTimeout();
@@ -46,11 +58,16 @@ private:
     QuarkMetaJsonStore(const QuarkMetaJsonStore&) = delete;
     QuarkMetaJsonStore& operator=(const QuarkMetaJsonStore&) = delete;
 
+    static std::wstring normalizeFolderPath(const std::wstring& path);
+
     std::mutex m_storeMutex;
-    // 目录路径 -> 内存中待合并的 JSON 对象
-    std::unordered_map<std::wstring, QuarkMetaJson> m_dirtyBufferMap;
+    // 规范化目录路径 -> 内存中缓存的 JSON 对象指针
+    std::unordered_map<std::wstring, std::shared_ptr<QuarkMetaJson>> m_folderCacheMap;
+    // 标记需要写盘落盘的规范化目录路径集合
+    std::unordered_set<std::wstring> m_dirtyFolderPaths;
+
     QTimer* m_flushTimer = nullptr;
-    static constexpr int kFlushDebounceMs = 50; // 50ms 内同目录修改自动合流为 1 次原子写盘
+    static constexpr int kFlushDebounceMs = 50; // 50ms 防抖
 };
 
 } // namespace QuarkMeta

@@ -13,7 +13,7 @@ namespace QuarkMeta {
 
 class ColorLabelGroup {
 public:
-    using AddFilterRowFunc = std::function<QCheckBox*(QVBoxLayout* layout, const QString& label, int count, const QColor& color)>;
+    using AddFilterRowFunc = std::function<QCheckBox*(QVBoxLayout* layout, const QString& label, int count, const QColor& color, const QString& rowKey)>;
 
     static void populate(QWidget* parentWidget,
                          QVBoxLayout* contentLayout,

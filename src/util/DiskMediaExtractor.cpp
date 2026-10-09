@@ -1,6 +1,6 @@
 #include "DiskMediaExtractor.h" 
 #include "../ui/ImageDecoderFacade.h" 
-#include "../meta/QuarkMetaJson.h" 
+#include "../meta/QuarkMetaJsonStore.h"
 #include "../meta/MetadataDefs.h" 
 #include <QFileInfo> 
 #include <QDir> 
@@ -100,23 +100,18 @@ bool DiskMediaExtractor::isMarkedFailed(const QString& folderPath, const QString
     { 
         QMutexLocker locker(&s_failureMutex); 
         if (s_failureLoadedFolders.contains(folderPath)) { 
-            return s_failedNames.value(folderPath).contains(fileName); 
+            bool failed = s_failedNames.value(folderPath).contains(fileName);
+            if (failed) {
+                qDebug() << "[AutoColor] [DiskMediaExtractor] Intercepted by failure mark:" << fileName;
+            }
+            return failed;
         } 
     } 
  
-    // 该文件夹首次查询：只读一次 .QuarkMeta.json，之后全部查内存 
-    std::lock_guard<std::mutex> jsonLock(s_jsonSaveMutex); 
-    { 
-        QMutexLocker locker(&s_failureMutex); 
-        if (s_failureLoadedFolders.contains(folderPath)) { 
-            return s_failedNames.value(folderPath).contains(fileName); 
-        } 
-    } 
- 
-    QuarkMetaJson jsonCache(folderPath.toStdWString()); 
-    jsonCache.load(); 
+    // 该文件夹首次查询：统一通过 Store 内存一致性接口读取
+    auto itemsMap = QuarkMetaJsonStore::instance().readFolderMeta(folderPath.toStdWString());
     QSet<QString> persisted; 
-    for (const auto& kv : jsonCache.items()) { 
+    for (const auto& kv : itemsMap) {
         if (kv.second.thumbStatus == 1) { 
             persisted.insert(QString::fromStdWString(kv.first)); 
         } 
@@ -125,7 +120,11 @@ bool DiskMediaExtractor::isMarkedFailed(const QString& folderPath, const QString
     QMutexLocker locker(&s_failureMutex); 
     s_failedNames[folderPath].unite(persisted); 
     s_failureLoadedFolders.insert(folderPath); 
-    return s_failedNames.value(folderPath).contains(fileName); 
+    bool failed = s_failedNames.value(folderPath).contains(fileName);
+    if (failed) {
+        qDebug() << "[AutoColor] [DiskMediaExtractor] Intercepted by failure mark:" << fileName;
+    }
+    return failed;
 } 
  
 void DiskMediaExtractor::scheduleFailureMark(const QString& folderPath, const QString& fileName) { 
@@ -158,44 +157,22 @@ void DiskMediaExtractor::flushPendingUpdates() {
     for (auto it = failures.constBegin(); it != failures.constEnd(); ++it) folders.insert(it.key()); 
     for (auto it = sizes.constBegin(); it != sizes.constEnd(); ++it) folders.insert(it.key()); 
  
-    std::lock_guard<std::mutex> lock(s_jsonSaveMutex); 
     for (const QString& folder : folders) { 
-        QuarkMetaJson jsonCache(folder.toStdWString()); 
-        jsonCache.load(); 
-        auto& items = jsonCache.items(); 
-        bool changed = false; 
- 
         for (const QString& fileName : failures.value(folder)) { 
-            const std::wstring wName = fileName.toStdWString(); 
-            if (items.find(wName) == items.end()) { 
-                ItemMeta empty; 
-                empty.type = L"file"; 
-                items[wName] = empty; 
-            } 
-            if (items[wName].thumbStatus != 1) { 
-                items[wName].thumbStatus = 1; 
-                changed = true; 
-            } 
+            QString fullPath = QDir(folder).filePath(fileName);
+            QuarkMetaJsonStore::instance().updateItemMeta(fullPath.toStdWString(), [](ItemMeta& meta) {
+                meta.thumbStatus = 1;
+            });
         } 
  
         const QHash<QString, QSize> folderSizes = sizes.value(folder); 
         for (auto it = folderSizes.constBegin(); it != folderSizes.constEnd(); ++it) { 
-            const std::wstring wName = it.key().toStdWString(); 
-            if (items.find(wName) == items.end()) { 
-                ItemMeta empty; 
-                empty.type = L"file"; 
-                items[wName] = empty; 
-            } 
-            auto& meta = items[wName]; 
-            if (meta.width != it.value().width() || meta.height != it.value().height()) { 
-                meta.width = it.value().width(); 
-                meta.height = it.value().height(); 
-                changed = true; 
-            } 
-        } 
- 
-        if (changed) { 
-            jsonCache.save(); 
+            QString fullPath = QDir(folder).filePath(it.key());
+            QSize sz = it.value();
+            QuarkMetaJsonStore::instance().updateItemMeta(fullPath.toStdWString(), [sz](ItemMeta& meta) {
+                meta.width = sz.width();
+                meta.height = sz.height();
+            });
         } 
     } 
 } 
@@ -354,6 +331,7 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
  
     // 5. 解码失败：非取消情况下入队合并落盘 thumb_status = 1 
     if (!isTaskCanceled(token)) { 
+        qDebug() << "[AutoColor] [DiskMediaExtractor] Decode failed for:" << fileName;
         scheduleFailureMark(parentDir, fileName); 
     } 
     return res; 
@@ -386,44 +364,24 @@ QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, in
     const QString fileName = fi.fileName(); 
     const std::wstring wFileName = fileName.toStdWString(); 
  
-    { 
-        std::lock_guard<std::mutex> lock(s_jsonSaveMutex); 
-        QuarkMetaJson jsonCache(parentDir.toStdWString()); 
-        jsonCache.load(); 
-        auto& cachedItems = jsonCache.items(); 
-        if (cachedItems.find(wFileName) == cachedItems.end()) { 
-            ItemMeta emptyMeta; 
-            emptyMeta.type = L"file"; 
-            cachedItems[wFileName] = emptyMeta; 
-        } 
-        auto& fileMeta = cachedItems[wFileName]; 
-        bool changed = false; 
-        if (fileMeta.thumbStatus != 0) { 
-            fileMeta.thumbStatus = 0; 
-            changed = true; 
-        } 
+    QuarkMetaJsonStore::instance().updateItemMeta(filePath.toStdWString(), [dec](ItemMeta& fileMeta) {
+        fileMeta.thumbStatus = 0;
         if (dec.originalSize.isValid() && dec.originalSize.width() > 0) { 
-            if (fileMeta.width != dec.originalSize.width() || fileMeta.height != dec.originalSize.height()) { 
-                fileMeta.width = dec.originalSize.width(); 
-                fileMeta.height = dec.originalSize.height(); 
-                changed = true; 
-            } 
+            fileMeta.width = dec.originalSize.width();
+            fileMeta.height = dec.originalSize.height();
         } 
-        if (changed) { 
-            jsonCache.save(); 
-        } 
- 
-        // 内存失败名单与待落盘队列同步清除，避免旧的 1 再次拦截或被延迟写回 
-        { 
-            QMutexLocker locker(&s_failureMutex); 
-            auto it = s_failedNames.find(parentDir); 
-            if (it != s_failedNames.end()) it->remove(fileName); 
-        } 
-        { 
-            QMutexLocker locker(&s_pendingMutex); 
-            auto it = s_pendingFailures.find(parentDir); 
-            if (it != s_pendingFailures.end()) it->remove(fileName); 
-        } 
+    });
+
+    // 内存失败名单与待落盘队列同步清除，避免旧的 1 再次拦截或被延迟写回
+    {
+        QMutexLocker locker(&s_failureMutex);
+        auto it = s_failedNames.find(parentDir);
+        if (it != s_failedNames.end()) it->remove(fileName);
+    }
+    {
+        QMutexLocker locker(&s_pendingMutex);
+        auto it = s_pendingFailures.find(parentDir);
+        if (it != s_pendingFailures.end()) it->remove(fileName);
     } 
  
     return dec.thumbnail512; 
