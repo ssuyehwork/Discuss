@@ -16,21 +16,20 @@ namespace QuarkMeta {
 
 namespace {
 
-class SliderAreaToolTipFilter : public QObject {
+class SliderToolTipFilter : public QObject {
 public:
-    explicit SliderAreaToolTipFilter(QSlider* slider, QObject* parent = nullptr)
-        : QObject(parent), m_slider(slider) {}
+    explicit SliderToolTipFilter(QObject* parent = nullptr) : QObject(parent) {}
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override {
-        Q_UNUSED(watched);
-        if (!m_slider) return false;
+        QSlider* slider = qobject_cast<QSlider*>(watched);
+        if (!slider) return false;
 
         switch (event->type()) {
             case QEvent::MouseMove:
             case QEvent::MouseButtonPress: {
                 QPoint globalPos = QCursor::pos();
-                ToolTipOverlay::instance()->showText(globalPos, QString("%1%").arg(m_slider->value()), 0);
+                ToolTipOverlay::instance()->showText(globalPos, QString("%1%").arg(slider->value()), 0);
                 break;
             }
             case QEvent::MouseButtonRelease:
@@ -43,9 +42,6 @@ protected:
         }
         return false;
     }
-
-private:
-    QSlider* m_slider = nullptr;
 };
 
 } // namespace
@@ -161,8 +157,9 @@ void AutoColorGroup::populate(QWidget* parentWidget,
         filterModel->setState(st);
     });
 
-    // 占比滑条事件过滤器：鼠标在上面移动、按下或拖动时显示 ToolTipOverlay 百分比，离开或释放隐去
-    SliderAreaToolTipFilter* tipFilter = new SliderAreaToolTipFilter(areaSlider, container);
+    // 滑条事件过滤器：鼠标在上面移动、按下或拖动时显示 ToolTipOverlay 百分比，离开或释放隐去
+    SliderToolTipFilter* tipFilter = new SliderToolTipFilter(container);
+    accSlider->installEventFilter(tipFilter);
     areaSlider->installEventFilter(tipFilter);
 
     // 4. 小标题 "标准色系" + 12 个色块
