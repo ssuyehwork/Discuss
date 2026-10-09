@@ -38,32 +38,64 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         if (!currentFilter.ratings.contains(record.rating)) return false;
     }
 
-    // 3. 颜色标记过滤
-    if (!currentFilter.colors.isEmpty()) {
-        bool matchColor = false;
-        static const QMap<QString, QString> s_colorHexMap = {
+    // 3. 🚨 物理隔离：手动标注颜色过滤 (只针对 record.manualColor)
+    if (!currentFilter.manualColors.isEmpty()) {
+        bool matchManual = false;
+        static const QMap<QString, QString> s_manualHexMap = {
             {"红色", "#E24B4A"}, {"橙色", "#EF9F27"}, {"黄色", "#FECF0E"},
             {"绿色", "#639922"}, {"青色", "#1D9E75"}, {"蓝色", "#378ADD"},
             {"紫色", "#7F77DD"}, {"灰色", "#5F5E5A"}
         };
 
-        for (const QString& colName : currentFilter.colors) {
-            if (colName == "无色标" || colName.isEmpty()) {
-                if (record.manualColor.isEmpty() && record.autoColor.isEmpty()) {
-                    matchColor = true;
+        for (const QString& mc : currentFilter.manualColors) {
+            if (mc == "无色标" || mc.isEmpty()) {
+                if (record.manualColor.isEmpty()) {
+                    matchManual = true;
                     break;
                 }
             } else {
-                QString targetHex = s_colorHexMap.value(colName, colName);
+                QString targetHex = s_manualHexMap.value(mc, mc);
                 if (record.manualColor.compare(targetHex, Qt::CaseInsensitive) == 0 ||
-                    record.manualColor.contains(colName, Qt::CaseInsensitive) ||
-                    record.autoColor.contains(colName, Qt::CaseInsensitive)) {
-                    matchColor = true;
+                    record.manualColor.contains(mc, Qt::CaseInsensitive)) {
+                    matchManual = true;
                     break;
                 }
             }
         }
-        if (!matchColor) return false;
+        if (!matchManual) return false;
+    }
+
+    // 3.5 🚨 物理隔离：自动提取色彩过滤 (只针对 record.autoColor & record.palettes)
+    if (!currentFilter.colors.isEmpty()) {
+        bool matchAuto = false;
+
+        auto calculateMatchedArea = [&](const QColor& targetCol) -> float {
+            if (!targetCol.isValid()) return 0.0f;
+            float totalArea = 0.0f;
+            if (!record.palettes.empty()) {
+                for (const auto& pe : record.palettes) {
+                    if (UiHelper::calculateDeltaE(targetCol, pe.first) < currentFilter.colorTolerance) {
+                        totalArea += pe.second;
+                    }
+                }
+            } else if (!record.autoColor.isEmpty()) {
+                QColor recordCol = UiHelper::parseColorName(record.autoColor);
+                if (UiHelper::calculateDeltaE(targetCol, recordCol) < currentFilter.colorTolerance) {
+                    totalArea = 1.0f;
+                }
+            }
+            return totalArea;
+        };
+
+        for (const QString& fc : currentFilter.colors) {
+            QColor targetCol = UiHelper::parseColorName(fc);
+            float area = calculateMatchedArea(targetCol);
+            if (area > 0.0f && (area * 100.0f >= static_cast<float>(currentFilter.minColorArea))) {
+                matchAuto = true;
+                break;
+            }
+        }
+        if (!matchAuto) return false;
     }
 
     // 4. 类型过滤

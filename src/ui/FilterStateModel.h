@@ -8,7 +8,10 @@ namespace QuarkMeta {
 
 struct FilterState {
     QList<int>   ratings;
-    QStringList  colors;
+    QStringList  colors;          // 自动提取色彩过滤色 (Hex 字符串，如 #E24B4A)
+    QStringList  manualColors;    // 手动标注颜色过滤 (红、橙、黄、绿、青、蓝、紫、灰、无色标)
+    int          colorTolerance = 30; // 准确度 (容差 0~100)
+    int          minColorArea = 0;    // 占比 (0~100)
     QString      keyword;
     QStringList  types;
     QStringList  createDates;
@@ -38,7 +41,7 @@ struct FilterState {
     ThumbnailPresence thumbnailPresence = ThumbAll;
 
     bool isEmpty() const {
-        return ratings.isEmpty() && colors.isEmpty() && keyword.isEmpty() && types.isEmpty() &&
+        return ratings.isEmpty() && colors.isEmpty() && manualColors.isEmpty() && keyword.isEmpty() && types.isEmpty() &&
                createDates.isEmpty() && modifyDates.isEmpty() &&
                linkPresence == All && notePresence == All && tagPresence == All && ratio == AspectAny &&
                minSize == -1 && maxSize == -1 &&
