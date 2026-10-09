@@ -265,6 +265,10 @@ set(SOURCES
     src/ui/components/FlowLayout.cpp
     src/ui/components/ColorPill.h
     src/ui/components/ColorPill.cpp
+    src/ui/components/InlineHueSlider.cpp
+    src/ui/components/InlineHueSlider.h
+    src/ui/components/ColorBlock.cpp
+    src/ui/components/ColorBlock.h
     src/ui/NavPanel.cpp
     src/ui/NavPanel.h
     src/ui/FavoritePanel.cpp

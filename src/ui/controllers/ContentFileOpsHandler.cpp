@@ -162,30 +162,30 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
                 return; // 用户取消
             }
 
-            CollisionResolveAction action = dialog.selectedAction();
+            CollisionResolveAction resolveAct = dialog.selectedAction();
             bool applyToAll = dialog.applyToAll();
 
-            if (action == CollisionResolveAction::Cancel) {
+            if (resolveAct == CollisionResolveAction::Cancel) {
                 return;
             }
 
             if (applyToAll) {
-                if (action == CollisionResolveAction::AutoResolve) {
+                if (resolveAct == CollisionResolveAction::AutoResolve) {
                     ioCtx.autoRenameAll = true;
-                } else if (action == CollisionResolveAction::Replace) {
+                } else if (resolveAct == CollisionResolveAction::Replace) {
                     ioCtx.overwriteAll = true;
-                } else if (action == CollisionResolveAction::Skip) {
+                } else if (resolveAct == CollisionResolveAction::Skip) {
                     for (int j = i; j < conflictingSources.size(); ++j) {
                         activeSources.removeOne(conflictingSources.at(j));
                     }
                 }
                 break;
             } else {
-                if (action == CollisionResolveAction::AutoResolve) {
+                if (resolveAct == CollisionResolveAction::AutoResolve) {
                     ioCtx.autoRenameFiles.insert(srcFile);
-                } else if (action == CollisionResolveAction::Replace) {
+                } else if (resolveAct == CollisionResolveAction::Replace) {
                     ioCtx.overwriteFiles.insert(srcFile);
-                } else if (action == CollisionResolveAction::Skip) {
+                } else if (resolveAct == CollisionResolveAction::Skip) {
                     activeSources.removeOne(srcFile);
                 }
             }
