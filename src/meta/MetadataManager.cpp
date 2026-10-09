@@ -272,6 +272,17 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
                 meta.palettes.emplace_back(p.first, p.second);
             }
         });
+
+        // 落地写入 .QuarkMeta.json 侧车文件
+        QuarkMetaJsonStore::instance().updateItemMeta(nPath, [&item](ItemMeta& meta) {
+            meta.width = item.width;
+            meta.height = item.height;
+            meta.autoColor = item.autoColor;
+            meta.palettes.clear();
+            for (const auto& p : item.palettes) {
+                meta.palettes.push_back({p.first, p.second});
+            }
+        });
     }
 }
 

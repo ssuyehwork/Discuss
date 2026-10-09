@@ -354,7 +354,7 @@ void ColorStripPicker::paintEvent(QPaintEvent* event) {
     
     // 保持完全透明底色
     
-    int startX = 3; // 起始左边距（圆心位于 2 + 9 = 11px，与星级行首个按钮 22px 宽度完美轴向对齐）
+    int startX = 2; // 起始左边距（圆心位于 2 + 9 = 11px，与星级行首个按钮 22px 宽度完美轴向对齐）
     int y = rect().height() / 2;
     int diameter = m_circleRadius * 2;
     

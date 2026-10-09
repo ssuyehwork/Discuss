@@ -20,6 +20,46 @@
 
 namespace QuarkMeta {
 
+class ColorBlock : public QWidget {
+    Q_OBJECT
+public:
+    explicit ColorBlock(const QColor& color, QWidget* parent = nullptr);
+    void setChecked(bool checked);
+    bool isChecked() const { return m_checked; }
+    void setCount(int count) { m_count = count; }
+signals:
+    void clicked(const QColor& color);
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void enterEvent(QEnterEvent* event) override;
+    void leaveEvent(QEvent* event) override;
+private:
+    QColor m_color;
+    bool m_checked = false;
+    bool m_hovered = false;
+    int m_count = 0;
+};
+
+class InlineHueSlider : public QWidget {
+    Q_OBJECT
+public:
+    explicit InlineHueSlider(QWidget* parent = nullptr);
+    void setHue(int h);
+    int hue() const { return m_h; }
+signals:
+    void hueChanged(int h);
+    void sliderReleased();
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+private:
+    void updateFromPos(int x);
+    int m_h = 0;
+};
+
 class SearchHistoryPanel;
 class ThumbnailStatusGroup;
 class DuplicateStatusGroup;

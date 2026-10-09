@@ -33,6 +33,131 @@ using namespace QuarkMeta::Style;
 
 namespace QuarkMeta {
 
+// ── ColorBlock 实现 ──────────────────────────────────────────────────────────
+ColorBlock::ColorBlock(const QColor& color, QWidget* parent)
+    : QWidget(parent), m_color(color) {
+    setFixedSize(20, 20);
+    setCursor(Qt::PointingHandCursor);
+}
+
+void ColorBlock::setChecked(bool checked) {
+    if (m_checked != checked) {
+        m_checked = checked;
+        update();
+    }
+}
+
+void ColorBlock::paintEvent(QPaintEvent* event) {
+    Q_UNUSED(event);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    QRect bounds = rect().adjusted(2, 2, -2, -2);
+    painter.setBrush(m_color);
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(bounds, 4, 4);
+
+    if (m_checked) {
+        painter.setPen(QPen(Qt::white, 2));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(bounds.adjusted(-1, -1, 1, 1), 4, 4);
+    } else if (m_hovered) {
+        painter.setPen(QPen(QColor(255, 255, 255, 120), 1));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(bounds, 4, 4);
+    }
+}
+
+void ColorBlock::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        emit clicked(m_color);
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void ColorBlock::enterEvent(QEnterEvent* event) {
+    m_hovered = true;
+    update();
+    QWidget::enterEvent(event);
+}
+
+void ColorBlock::leaveEvent(QEvent* event) {
+    m_hovered = false;
+    update();
+    QWidget::leaveEvent(event);
+}
+
+// ── InlineHueSlider 实现 ─────────────────────────────────────────────────────
+InlineHueSlider::InlineHueSlider(QWidget* parent) : QWidget(parent) {
+    setFixedHeight(20);
+    setCursor(Qt::PointingHandCursor);
+}
+
+void InlineHueSlider::setHue(int h) {
+    int clamped = qBound(0, h, 359);
+    if (m_h != clamped) {
+        m_h = clamped;
+        update();
+    }
+}
+
+void InlineHueSlider::updateFromPos(int x) {
+    int w = width() - 10;
+    if (w <= 0) return;
+    int relX = qBound(0, x - 5, w);
+    int newHue = static_cast<int>(std::round((static_cast<double>(relX) / w) * 359.0));
+    if (m_h != newHue) {
+        m_h = newHue;
+        update();
+        emit hueChanged(m_h);
+    }
+}
+
+void InlineHueSlider::paintEvent(QPaintEvent* event) {
+    Q_UNUSED(event);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    QRect barRect = rect().adjusted(5, 6, -5, -6);
+
+    QLinearGradient grad(barRect.left(), 0, barRect.right(), 0);
+    for (int i = 0; i <= 360; i += 30) {
+        double pos = static_cast<double>(i) / 360.0;
+        grad.setColorAt(pos, QColor::fromHsv(i % 360, 255, 255));
+    }
+    painter.setBrush(grad);
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(barRect, 3, 3);
+
+    int handleX = barRect.left() + static_cast<int>(std::round((static_cast<double>(m_h) / 359.0) * barRect.width()));
+    int handleY = barRect.center().y();
+
+    painter.setPen(QPen(Qt::white, 2));
+    painter.setBrush(QColor::fromHsv(m_h, 255, 255));
+    painter.drawEllipse(QPoint(handleX, handleY), 5, 5);
+}
+
+void InlineHueSlider::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        updateFromPos(event->pos().x());
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void InlineHueSlider::mouseMoveEvent(QMouseEvent* event) {
+    if (event->buttons() & Qt::LeftButton) {
+        updateFromPos(event->pos().x());
+    }
+    QWidget::mouseMoveEvent(event);
+}
+
+void InlineHueSlider::mouseReleaseEvent(QMouseEvent* event) {
+    if (event->button() == Qt::LeftButton) {
+        emit sliderReleased();
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
 QMap<QString, QColor> FilterPanel::s_colorMap() {
     QMap<QString, QColor> map;
     for (const auto& item : Style::getColorPalette()) {
