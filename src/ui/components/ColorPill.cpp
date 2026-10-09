@@ -24,13 +24,16 @@ void ColorPill::setData(const QColor& color, float ratio) {
 void ColorPill::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(m_color);
-    painter.drawRoundedRect(rect(), 4, 4);
+
     if (m_hovered) {
-        painter.setBrush(Qt::NoBrush);
+        QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
         painter.setPen(QPen(Qt::white, 1.0));
-        painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 4, 4);
+        painter.setBrush(m_color);
+        painter.drawRoundedRect(r, 3.5, 3.5);
+    } else {
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(m_color);
+        painter.drawRoundedRect(rect(), 4, 4);
     }
 }
 
