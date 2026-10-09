@@ -86,24 +86,6 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     hueLayout->addWidget(hueSlider);
     groupLayout->addWidget(hueContainer);
 
-    QObject::connect(hueSlider, &InlineHueSlider::sliderReleased, container, [filterModel, hueSlider, requestRebuild]() {
-        int h = hueSlider->hue();
-        QColor col;
-        if (h == 1000) col = Qt::black;
-        else if (h == 1001) col = QColor("#808080");
-        else if (h == 1002) col = Qt::white;
-        else col = QColor::fromHsv(h, 220, 220);
-
-        QString hex = col.name().toUpper();
-        pushRecent(hex);
-
-        FilterState st = filterModel->state();
-        st.colors = QStringList{ hex };
-        filterModel->setState(st);
-
-        if (requestRebuild) requestRebuild();
-    });
-
     // 2. "准确度:" 行
     QWidget* accRow = new QWidget(container);
     QHBoxLayout* accLayout = new QHBoxLayout(accRow);
@@ -115,7 +97,7 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     QSlider* accSlider = new QSlider(Qt::Horizontal, accRow);
     accSlider->setObjectName("FilterColorSlider");
     accSlider->setRange(0, 100);
-    accSlider->setValue(currentState.colorTolerance);
+    accSlider->setValue(currentState.colorTolerance > 0 ? currentState.colorTolerance : 10);
 
     accLayout->addWidget(accLabel);
     accLayout->addWidget(accSlider, 1);
@@ -132,7 +114,27 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     QSlider* areaSlider = new QSlider(Qt::Horizontal, areaRow);
     areaSlider->setObjectName("FilterColorSlider");
     areaSlider->setRange(0, 100);
-    areaSlider->setValue(currentState.minColorArea);
+    areaSlider->setValue(currentState.minColorArea > 0 ? currentState.minColorArea : 10);
+
+    QObject::connect(hueSlider, &InlineHueSlider::sliderReleased, container, [filterModel, hueSlider, requestRebuild, accSlider, areaSlider]() {
+        int h = hueSlider->hue();
+        QColor col;
+        if (h == 1000) col = Qt::black;
+        else if (h == 1001) col = QColor("#808080");
+        else if (h == 1002) col = Qt::white;
+        else col = QColor::fromHsv(h, 220, 220);
+
+        QString hex = col.name().toUpper();
+        pushRecent(hex);
+
+        FilterState st = filterModel->state();
+        st.colors = QStringList{ hex };
+        st.colorTolerance = accSlider->value();
+        st.minColorArea = areaSlider->value();
+        filterModel->setState(st);
+
+        if (requestRebuild) requestRebuild();
+    });
 
     areaLayout->addWidget(areaLabel);
     areaLayout->addWidget(areaSlider, 1);

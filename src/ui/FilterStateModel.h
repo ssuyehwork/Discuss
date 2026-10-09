@@ -10,8 +10,8 @@ struct FilterState {
     QList<int>   ratings;
     QStringList  colors;          // 自动提取色彩过滤色 (Hex 字符串，如 #E24B4A)
     QStringList  manualColors;    // 手动标注颜色过滤 (红、橙、黄、绿、青、蓝、紫、灰、无色标)
-    int          colorTolerance = 30; // 准确度 (容差 0~100)
-    int          minColorArea = 0;    // 占比 (0~100)
+    int          colorTolerance = 10; // 准确度 (容差 0~100，默认 10%)
+    int          minColorArea = 10;   // 占比 (0~100，默认 10%)
     QString      keyword;
     QStringList  types;
     QStringList  createDates;
