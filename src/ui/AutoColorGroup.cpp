@@ -56,7 +56,7 @@ void AutoColorGroup::pushRecent(const QString& hex) {
         hexUpper = "#" + hexUpper;
     }
 
-    QStringList recent = AppConfig::instance().value("Filter/RecentColors").toStringList();
+    QStringList recent = AppConfig::instance().getValue("Filter/RecentColors").toStringList();
     recent.removeAll(hexUpper);
     recent.prepend(hexUpper);
     while (recent.size() > 50) {
@@ -202,7 +202,7 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     groupLayout->addWidget(stdColorWidget);
 
     // 5. 小标题 "最近筛选" + 最近使用色块
-    QStringList recentColors = AppConfig::instance().value("Filter/RecentColors").toStringList();
+    QStringList recentColors = AppConfig::instance().getValue("Filter/RecentColors").toStringList();
     if (!recentColors.isEmpty()) {
         QLabel* lblRecent = new QLabel("最近筛选", container);
         lblRecent->setObjectName("FilterColorSubTitleRecent");
