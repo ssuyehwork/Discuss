@@ -7,6 +7,7 @@
 #include "TagStatusGroup.h"
 #include "AspectRatioGroup.h"
 #include "FileSizeGroup.h"
+#include "AutoColorGroup.h"
 #include "ColorLabelGroup.h"
 #include "RatingGroup.h"
 #include "FileTypeGroup.h"
@@ -103,6 +104,13 @@ void FilterPanel::syncUIFromFilterState() {
         cb->blockSignals(true);
         cb->setChecked(shouldCheck);
         cb->blockSignals(false);
+    }
+
+    QList<ColorBlock*> allBlocks = findChildren<ColorBlock*>();
+    for (auto* block : allBlocks) {
+        block->blockSignals(true);
+        block->setChecked(currentSt.colors.contains(block->color().name().toUpper()));
+        block->blockSignals(false);
     }
 }
 
@@ -493,6 +501,10 @@ void FilterPanel::rebuildGroups() {
         QHBoxLayout* hdrLayout = nullptr;
         QWidget* g = buildGroup("颜色标记", gl, &hdrLayout);
 
+        AutoColorGroup::populate(g, gl, m_filterModel, [this]() {
+            rebuildGroups();
+        });
+
         ColorLabelGroup::populate(g, gl, m_filterModel, m_colorCounts, currentSt,
             [this](QVBoxLayout* layout, const QString& label, int count, const QColor& color, const QString& rowKey) {
                 return addFilterRow(layout, label, count, color, rowKey);
@@ -879,6 +891,7 @@ void FilterPanel::setMirrorSource(bool isMirror) {
 
 void FilterPanel::selectColor(const QColor& color) {
     QString hex = color.name().toUpper();
+    AutoColorGroup::pushRecent(hex);
     
     FilterState st = m_filterModel->state();
     st.colors.clear();

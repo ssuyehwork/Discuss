@@ -188,6 +188,8 @@ set(SOURCES
     src/ui/AspectRatioGroup.h
     src/ui/FileSizeGroup.cpp
     src/ui/FileSizeGroup.h
+    src/ui/AutoColorGroup.cpp
+    src/ui/AutoColorGroup.h
     src/ui/ColorLabelGroup.cpp
     src/ui/ColorLabelGroup.h
     src/ui/RatingGroup.cpp
