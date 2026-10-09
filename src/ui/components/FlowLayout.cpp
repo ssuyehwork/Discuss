@@ -27,68 +27,67 @@ int FlowLayout::doLayout(const QRect &rect, bool testOnly) const {
     int left, top, right, bottom;
     getContentsMargins(&left, &top, &right, &bottom);
     QRect effectiveRect = rect.adjusted(+left, +top, -right, -bottom);
-    int x = effectiveRect.x();
     int y = effectiveRect.y();
     int lineHeight = 0;
 
-    QList<QLayoutItem*> rowItems;
+    struct LineItem {
+        QLayoutItem* item;
+        int width;
+        int height;
+    };
+    QList<LineItem> currentLine;
 
-    for (QLayoutItem *item : itemList) {
-        int spaceX = horizontalSpacing();
-        int spaceY = verticalSpacing();
-        int itemW = item->sizeHint().width();
-        int nextX = x + itemW + spaceX;
-
-        if (nextX - spaceX > effectiveRect.right() && lineHeight > 0) {
-            if (!testOnly && !rowItems.isEmpty()) {
-                int rowW = x - spaceX - effectiveRect.x();
-                int xOffset = 0;
-                if (m_alignment & Qt::AlignHCenter) {
-                    xOffset = qMax(0, (effectiveRect.width() - rowW) / 2);
-                } else if (m_alignment & Qt::AlignRight) {
-                    xOffset = qMax(0, effectiveRect.width() - rowW);
-                }
-                if (xOffset > 0) {
-                    for (QLayoutItem* rowItem : rowItems) {
-                        QRect g = rowItem->geometry();
-                        rowItem->setGeometry(g.translated(xOffset, 0));
-                    }
-                }
-            }
-            rowItems.clear();
-
-            x = effectiveRect.x();
-            y = y + lineHeight + spaceY;
-            nextX = x + itemW + spaceX;
-            lineHeight = 0;
-        }
-
-        if (!testOnly) {
-            item->setGeometry(QRect(QPoint(x, y), item->sizeHint()));
-            rowItems.append(item);
-        }
-
-        x = nextX;
-        lineHeight = qMax(lineHeight, item->sizeHint().height());
-    }
-
-    if (!testOnly && !rowItems.isEmpty()) {
-        int rowW = x - horizontalSpacing() - effectiveRect.x();
+    auto flushLine = [this, &effectiveRect, &y, &lineHeight, testOnly](QList<LineItem>& line, int lineWidth) {
+        if (line.isEmpty()) return;
         int xOffset = 0;
         if (m_alignment & Qt::AlignHCenter) {
-            xOffset = qMax(0, (effectiveRect.width() - rowW) / 2);
+            xOffset = qMax(0, (effectiveRect.width() - lineWidth) / 2);
         } else if (m_alignment & Qt::AlignRight) {
-            xOffset = qMax(0, effectiveRect.width() - rowW);
+            xOffset = qMax(0, effectiveRect.width() - lineWidth);
         }
-        if (xOffset > 0) {
-            for (QLayoutItem* rowItem : rowItems) {
-                QRect g = rowItem->geometry();
-                rowItem->setGeometry(g.translated(xOffset, 0));
+
+        int currX = effectiveRect.x() + xOffset;
+        for (const auto& li : line) {
+            if (!testOnly) {
+                li.item->setGeometry(QRect(QPoint(currX, y), li.item->sizeHint()));
             }
+            currX += li.width + horizontalSpacing();
         }
+        y += lineHeight + verticalSpacing();
+        line.clear();
+        lineHeight = 0;
+    };
+
+    for (QLayoutItem *item : itemList) {
+        int itemW = item->sizeHint().width();
+        int itemH = item->sizeHint().height();
+
+        int currentLineWidth = 0;
+        for (const auto& li : currentLine) {
+            currentLineWidth += li.width + horizontalSpacing();
+        }
+
+        if (!currentLine.isEmpty() && (currentLineWidth + itemW > effectiveRect.width())) {
+            flushLine(currentLine, currentLineWidth - horizontalSpacing());
+        }
+
+        currentLine.append({item, itemW, itemH});
+        lineHeight = qMax(lineHeight, itemH);
     }
 
-    return y + lineHeight - rect.y() + bottom;
+    if (!currentLine.isEmpty()) {
+        int currentLineWidth = 0;
+        for (const auto& li : currentLine) {
+            currentLineWidth += li.width + horizontalSpacing();
+        }
+        flushLine(currentLine, currentLineWidth - horizontalSpacing());
+    }
+
+    int totalH = y - rect.y() + bottom;
+    if (y > effectiveRect.y()) {
+        totalH -= verticalSpacing();
+    }
+    return totalH;
 }
 
 } // namespace QuarkMeta

@@ -109,14 +109,14 @@ void MetaPanel::initUi() {
     m_containerLayout->setContentsMargins(8, 8, 8, 8);
     m_containerLayout->setSpacing(8);
 
-    // 1. 顶部预览与色板区
+    // 1. 顶部预览区
     m_topPreviewBox = new QWidget(m_container);
     m_topPreviewBox->setObjectName("TopPreviewBox");
     m_topPreviewBox->setFixedWidth(200);
     // TopPreviewBox style in style.qss
     QVBoxLayout* previewLayout = new QVBoxLayout(m_topPreviewBox);
     previewLayout->setContentsMargins(0, 0, 0, 0);
-    previewLayout->setSpacing(10);
+    previewLayout->setSpacing(0);
 
     m_lblImagePreview = new QLabel(m_topPreviewBox);
     m_lblImagePreview->setAlignment(Qt::AlignCenter);
@@ -126,13 +126,16 @@ void MetaPanel::initUi() {
     m_lblImagePreview->hide();
     previewLayout->addWidget(m_lblImagePreview, 0, Qt::AlignCenter);
 
-    m_paletteContainer = new QWidget(m_topPreviewBox);
+    m_paletteContainer = new QWidget(m_container);
+    m_paletteContainer->setObjectName("MetaPaletteContainer");
     m_paletteFlowLayout = new FlowLayout(m_paletteContainer, 0, 4, 4);
+    m_paletteFlowLayout->setContentsMargins(0, 2, 0, 0); // 8px container layout spacing + 2px top margin = 10px total gap
     m_paletteFlowLayout->setFlowAlignment(Qt::AlignHCenter);
-    previewLayout->addWidget(m_paletteContainer);
+    m_paletteContainer->hide();
 
     m_topPreviewBox->hide();
-    m_containerLayout->addWidget(m_topPreviewBox);
+    m_containerLayout->addWidget(m_topPreviewBox, 0, Qt::AlignHCenter);
+    m_containerLayout->addWidget(m_paletteContainer, 0, Qt::AlignHCenter);
 
     // 2. 文件名编辑区
     m_nameEdit = new ElasticEdit(m_container);
@@ -569,13 +572,25 @@ void MetaPanel::adjustFlowHeights() {
         bool hasPreview = (m_lblImagePreview && !m_lblImagePreview->pixmap().isNull());
         if (hasPreview) {
             m_topPreviewBox->show();
-            int paletteH = (m_paletteContainer && m_paletteContainer->isVisible() && m_paletteFlowLayout && m_paletteFlowLayout->count() > 0) ? m_paletteContainer->height() : 0;
-            int totalH = 200 + (paletteH > 0 ? (10 + paletteH) : 0);
-            m_topPreviewBox->setFixedSize(200, totalH);
+            m_topPreviewBox->setFixedSize(200, 200);
         } else {
             m_topPreviewBox->hide();
             m_topPreviewBox->setFixedHeight(0);
         }
+    }
+    if (m_paletteContainer && m_paletteFlowLayout) {
+        bool hasPalette = (m_paletteFlowLayout->count() > 0);
+        if (hasPalette) {
+            int contentH = m_paletteFlowLayout->heightForWidth(m_paletteContainer->width() > 0 ? m_paletteContainer->width() : 200);
+            contentH = qMax(20, contentH);
+            m_paletteContainer->show();
+            m_paletteContainer->setFixedWidth(200);
+            m_paletteContainer->setFixedHeight(contentH);
+        } else {
+            m_paletteContainer->setFixedHeight(0);
+            m_paletteContainer->hide();
+        }
+        m_paletteFlowLayout->activate();
     }
     if (m_tagContainer && m_tagFlowLayout) {
         bool hasTags = (m_tagFlowLayout->count() > (m_btnAddTagSmall ? 1 : 0));
@@ -747,17 +762,21 @@ void MetaPanel::setPalettes(const QVector<QPair<QColor, float>>& palette) {
         delete item;
     }
 
-    for (const auto& entry : palette) {
-        ColorPill* pill = new ColorPill(entry.first, entry.second, m_paletteContainer);
-        pill->setObjectName("MetaColorPill");
-        connect(pill, &ColorPill::colorSelected, this, [this](const QColor& c){ emit searchByColor(c); });
-        connect(pill, &ColorPill::requestSetAsPrimary, this, &MetaPanel::setAsPrimaryColor);
-        pill->show();
-        m_paletteFlowLayout->addWidget(pill);
+    if (palette.isEmpty()) {
+        if (m_paletteContainer) m_paletteContainer->hide();
+    } else {
+        for (const auto& entry : palette) {
+            ColorPill* pill = new ColorPill(entry.first, entry.second, m_paletteContainer);
+            pill->setObjectName("MetaColorPill");
+            connect(pill, &ColorPill::colorSelected, this, [this](const QColor& c){ emit searchByColor(c); });
+            connect(pill, &ColorPill::requestSetAsPrimary, this, &MetaPanel::setAsPrimaryColor);
+            pill->show();
+            m_paletteFlowLayout->addWidget(pill);
+        }
+        if (m_paletteContainer) m_paletteContainer->show();
     }
 
     m_paletteFlowLayout->invalidate();
-    if (m_topPreviewBox) m_topPreviewBox->update();
     m_adjustTimer->start();
 }
 
