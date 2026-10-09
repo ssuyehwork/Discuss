@@ -17,6 +17,7 @@ public:
     void setChecked(bool checked);
     bool isChecked() const { return m_checked; }
     void setCount(int count) { m_count = count; }
+    QColor color() const { return m_color; }
 
 signals:
     void clicked(const QColor& color);

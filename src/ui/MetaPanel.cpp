@@ -128,6 +128,7 @@ void MetaPanel::initUi() {
 
     m_paletteContainer = new QWidget(m_container);
     m_paletteContainer->setObjectName("MetaPaletteContainer");
+    m_paletteContainer->setFixedWidth(200); // 刚性锁定宽度 200
     m_paletteFlowLayout = new FlowLayout(m_paletteContainer, 0, 4, 4);
     m_paletteFlowLayout->setContentsMargins(0, 2, 0, 0); // 8px container layout spacing + 2px top margin = 10px total gap
     m_paletteFlowLayout->setFlowAlignment(Qt::AlignHCenter);
@@ -578,26 +579,31 @@ void MetaPanel::adjustFlowHeights() {
             m_topPreviewBox->setFixedHeight(0);
         }
     }
+    // 🚀【核心修复】：强制锁定以 200 宽度进行折行测算，杜绝首帧宽度未就绪导致的高度暴涨
     if (m_paletteContainer && m_paletteFlowLayout) {
         bool hasPalette = (m_paletteFlowLayout->count() > 0);
         if (hasPalette) {
-            int contentH = m_paletteFlowLayout->heightForWidth(m_paletteContainer->width() > 0 ? m_paletteContainer->width() : 200);
+            // 恒定以 200 像素的标准容器宽度做 heightForWidth 测试计算
+            int contentH = m_paletteFlowLayout->heightForWidth(200);
             contentH = qMax(20, contentH);
-            m_paletteContainer->show();
             m_paletteContainer->setFixedWidth(200);
             m_paletteContainer->setFixedHeight(contentH);
+            m_paletteContainer->show();
         } else {
             m_paletteContainer->setFixedHeight(0);
             m_paletteContainer->hide();
         }
         m_paletteFlowLayout->activate();
     }
+
     if (m_tagContainer && m_tagFlowLayout) {
         bool hasTags = (m_tagFlowLayout->count() > (m_btnAddTagSmall ? 1 : 0));
         if (hasTags) {
             if (m_btnAddTagBig) m_btnAddTagBig->hide();
             if (m_btnAddTagSmall) m_btnAddTagSmall->show();
-            int contentH = m_tagFlowLayout->heightForWidth(m_tagContainer->width());
+            // 标签容器同样做保底处理，宽度如果还没布局就保底为 200
+            int tagW = m_tagContainer->width() > 0 ? m_tagContainer->width() : 200;
+            int contentH = m_tagFlowLayout->heightForWidth(tagW);
             contentH = qMax(26, contentH);
             m_tagContainer->show();
             m_tagContainer->setFixedHeight(contentH);
@@ -608,6 +614,10 @@ void MetaPanel::adjustFlowHeights() {
             m_tagContainer->hide();
         }
         m_tagFlowLayout->activate();
+    }
+
+    if (m_container) {
+        m_container->adjustSize();
     }
 }
 

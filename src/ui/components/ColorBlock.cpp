@@ -1,13 +1,14 @@
 #include "ColorBlock.h"
 #include "../ToolTipOverlay.h"
 #include <QPainter>
+#include <QPen>
 #include <QCursor>
 
 namespace QuarkMeta {
 
 ColorBlock::ColorBlock(const QColor& color, QWidget* parent) 
     : QWidget(parent), m_color(color) {
-    setFixedSize(16, 16);
+    setFixedSize(15, 15);
     setCursor(Qt::PointingHandCursor);
 }
 
@@ -20,14 +21,15 @@ void ColorBlock::paintEvent(QPaintEvent*) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(m_color);
-    painter.drawRoundedRect(rect(), 3, 3);
-
-    if (m_checked || m_hovered) {
-        painter.setBrush(Qt::NoBrush);
-        painter.setPen(QPen(Qt::white, 1.5));
-        painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 3, 3);
+    QRectF r = rect().adjusted(1, 1, -1, -1);
+    if (m_checked) {
+        painter.setPen(QPen(QColor("#378ADD"), 1.5));
+        painter.setBrush(m_color);
+        painter.drawRoundedRect(r, 2.0, 2.0);
+    } else {
+        painter.setPen(m_hovered ? QPen(QColor("#AAAAAA"), 1.0) : Qt::NoPen);
+        painter.setBrush(m_color);
+        painter.drawRoundedRect(r, 2.0, 2.0);
     }
 }
 
@@ -40,7 +42,10 @@ void ColorBlock::mousePressEvent(QMouseEvent* event) {
 void ColorBlock::enterEvent(QEnterEvent*) {
     m_hovered = true;
     update();
-    QString tip = QString("颜色: %1\n匹配项: %2").arg(m_color.name().toUpper()).arg(m_count);
+    QString tip = QString("颜色: %1").arg(m_color.name().toUpper());
+    if (m_count >= 0) {
+        tip += QString("\n匹配项: %1").arg(m_count);
+    }
     ToolTipOverlay::instance()->showText(QCursor::pos(), tip, 0);
 }
 
