@@ -112,15 +112,15 @@ void MetaPanel::initUi() {
     // 1. 顶部预览与色板区
     m_topPreviewBox = new QWidget(m_container);
     m_topPreviewBox->setObjectName("TopPreviewBox");
-    m_topPreviewBox->setFixedSize(210, 210);
+    m_topPreviewBox->setFixedWidth(200);
     // TopPreviewBox style in style.qss
     QVBoxLayout* previewLayout = new QVBoxLayout(m_topPreviewBox);
     previewLayout->setContentsMargins(0, 0, 0, 0);
-    previewLayout->setSpacing(0);
+    previewLayout->setSpacing(10);
 
     m_lblImagePreview = new QLabel(m_topPreviewBox);
     m_lblImagePreview->setAlignment(Qt::AlignCenter);
-    m_lblImagePreview->setFixedSize(210, 210);
+    m_lblImagePreview->setFixedSize(200, 200);
     m_lblImagePreview->setObjectName("MetaImagePreview");
     // MetaImagePreview style in style.qss
     m_lblImagePreview->hide();
@@ -128,6 +128,7 @@ void MetaPanel::initUi() {
 
     m_paletteContainer = new QWidget(m_topPreviewBox);
     m_paletteFlowLayout = new FlowLayout(m_paletteContainer, 0, 4, 4);
+    m_paletteFlowLayout->setFlowAlignment(Qt::AlignHCenter);
     previewLayout->addWidget(m_paletteContainer);
 
     m_topPreviewBox->hide();
@@ -394,11 +395,11 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap, bool isDefaultIcon) {
         m_lblImagePreview->hide();
         if (m_topPreviewBox) m_topPreviewBox->hide();
     } else {
-        QSize canvasSize(210, 210);
+        QSize canvasSize(200, 200);
         QPixmap canvas(canvasSize);
         canvas.fill(Qt::transparent);
 
-        QSize targetSize = isDefaultIcon ? QSize(35, 45) : QSize(210, 210);
+        QSize targetSize = isDefaultIcon ? QSize(35, 45) : QSize(200, 200);
         QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
         {
@@ -406,8 +407,8 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap, bool isDefaultIcon) {
             painter.setRenderHint(QPainter::Antialiasing);
             painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
-            int x = (210 - scaled.width()) / 2;
-            int y = (210 - scaled.height()) / 2;
+            int x = (200 - scaled.width()) / 2;
+            int y = (200 - scaled.height()) / 2;
 
             if (!isDefaultIcon) {
                 QPainterPath path;
@@ -422,7 +423,6 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap, bool isDefaultIcon) {
 
         m_lblImagePreview->show();
         if (m_topPreviewBox) {
-            m_topPreviewBox->setFixedSize(canvasSize);
             m_topPreviewBox->show();
         }
     }
@@ -569,7 +569,9 @@ void MetaPanel::adjustFlowHeights() {
         bool hasPreview = (m_lblImagePreview && !m_lblImagePreview->pixmap().isNull());
         if (hasPreview) {
             m_topPreviewBox->show();
-            m_topPreviewBox->setFixedSize(210, 210);
+            int paletteH = (m_paletteContainer && m_paletteContainer->isVisible() && m_paletteFlowLayout && m_paletteFlowLayout->count() > 0) ? m_paletteContainer->height() : 0;
+            int totalH = 200 + (paletteH > 0 ? (10 + paletteH) : 0);
+            m_topPreviewBox->setFixedSize(200, totalH);
         } else {
             m_topPreviewBox->hide();
             m_topPreviewBox->setFixedHeight(0);
