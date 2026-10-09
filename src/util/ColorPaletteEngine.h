@@ -25,6 +25,7 @@ public:
     
     static QColor extractDominantColorFromImage(const QImage& preScaledImage);
     static QVector<QPair<QColor, float>> extractPaletteFromImage(const QImage& preScaledImage, int maxColors = 5);
+    static QVector<QPair<QColor, float>> extractWeightedPalette(const QImage& preScaledImage);
 
     // 3. 颜色量化与标准名称/Hex 映射
     static QColor quantizeToStandardColor(const QColor& color);
@@ -44,6 +45,7 @@ private:
     };
 
     static LabColor rgbToLab(const QColor& rgb);
+    static double deltaE76(const QColor& c1, const QColor& c2);
     static double degToRad(double deg);
     static double radToDeg(double rad);
 };

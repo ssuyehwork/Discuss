@@ -1,4 +1,5 @@
 #include "FilterPanel.h"
+#include "components/ColorDot.h"
 #include "ThumbnailStatusGroup.h"
 #include "DuplicateStatusGroup.h"
 #include "LinkStatusGroup.h"
@@ -77,8 +78,8 @@ void FilterPanel::syncUIFromFilterState() {
         else if (text == "无评级") shouldCheck = currentSt.ratings.contains(0);
         else if (text.contains("★")) shouldCheck = currentSt.ratings.contains(text.count("★"));
         
-        else if (text == "无色标") shouldCheck = (currentSt.colors.contains("无色标") || currentSt.colors.contains(""));
-        else if (currentSt.colors.contains(text)) shouldCheck = true;
+        else if (text == "无色标") shouldCheck = (currentSt.manualColors.contains("无色标") || currentSt.manualColors.contains(""));
+        else if (currentSt.manualColors.contains(text)) shouldCheck = true;
 
         else if (currentSt.types.contains(text)) shouldCheck = true;
         else if (currentSt.createDates.contains(text)) shouldCheck = true;
@@ -493,8 +494,8 @@ void FilterPanel::rebuildGroups() {
         QWidget* g = buildGroup("颜色标记", gl, &hdrLayout);
 
         ColorLabelGroup::populate(g, gl, m_filterModel, m_colorCounts, currentSt,
-            [this](QVBoxLayout* layout, const QString& label, int count, const QColor& color) {
-                return addFilterRow(layout, label, count, color);
+            [this](QVBoxLayout* layout, const QString& label, int count, const QColor& color, const QString& rowKey) {
+                return addFilterRow(layout, label, count, color, rowKey);
             });
 
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
@@ -699,9 +700,11 @@ bool FilterPanel::isRowKeyChecked(const QString& key, const FilterState& st) con
     if (prefix == "rating") {
         return st.ratings.contains(value.toInt());
     } else if (prefix == "color") {
-        if (st.colors.contains(value)) return true;
+        if (st.manualColors.contains(value)) return true;
+        QString valUpper = value.toUpper();
+        if (!valUpper.isEmpty() && st.manualColors.contains(valUpper)) return true;
         for (const auto& item : Style::getColorPalette()) {
-            if (item.hex == value && st.colors.contains(item.name)) return true;
+            if ((item.hex.toUpper() == valUpper || item.hex == value) && st.manualColors.contains(item.name)) return true;
         }
         return false;
     } else if (prefix == "type") {
@@ -798,13 +801,7 @@ QCheckBox* FilterPanel::addFilterRow(QVBoxLayout* layout, const QString& label, 
     rl->addWidget(cb);
 
     if (dotColor.isValid() && dotColor != Qt::transparent) {
-        QLabel* dot = new QLabel(row);
-        dot->setObjectName("FilterItemDot");
-        dot->setFixedSize(10, 10);
-        QPalette pal = dot->palette();
-        pal.setColor(QPalette::Window, dotColor);
-        dot->setAutoFillBackground(true);
-        dot->setPalette(pal);
+        ColorDot* dot = new ColorDot(dotColor, row);
         rl->addWidget(dot);
     }
 

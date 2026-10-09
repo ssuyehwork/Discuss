@@ -1556,10 +1556,6 @@ QWidget#ContentHeaderWidget {
 
 
 
-/* FilterPanel 分类圆点基础静态样式 */
-QLabel#FilterItemDot {
-    border-radius: 5px;
-}
 
 /* FilterPanel 标题标签基础静态样式 */
 QLabel#FilterTitleLabel {

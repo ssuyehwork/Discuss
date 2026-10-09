@@ -15,22 +15,29 @@ void ColorLabelGroup::populate(QWidget* parentWidget,
     const auto& colorsList = Style::getColorPalette();
 
     for (const auto& item : colorsList) {
+        QString hexUpper = item.hex.toUpper();
+        QString rowKey = QString("color:%1").arg(hexUpper);
+
         int cnt = colorCounts.value(item.hex, colorCounts.value(item.name, 0));
-        bool isChecked = (currentState.colors.contains(item.name) || currentState.colors.contains(item.hex));
+        bool isChecked = (currentState.manualColors.contains(item.name) ||
+                          (!hexUpper.isEmpty() && currentState.manualColors.contains(hexUpper)) ||
+                          (!item.hex.isEmpty() && currentState.manualColors.contains(item.hex)));
 
         if (cnt == 0 && !isChecked) {
             continue;
         }
 
-        QCheckBox* cb = addFilterRow(contentLayout, item.name, cnt, item.color);
+        QCheckBox* cb = addFilterRow(contentLayout, item.name, cnt, item.color, rowKey);
         cb->setChecked(isChecked);
-        QObject::connect(cb, &QCheckBox::checkStateChanged, contextObj, [filterModel, name = item.name, hex = item.hex](Qt::CheckState state) {
+        QObject::connect(cb, &QCheckBox::checkStateChanged, contextObj, [filterModel, name = item.name, hexUpper](Qt::CheckState state) {
             FilterState st = filterModel->state();
             if (state == Qt::Checked) {
-                if (!st.colors.contains(name)) st.colors.append(name);
+                if (!st.manualColors.contains(name)) st.manualColors.append(name);
             } else {
-                st.colors.removeAll(name);
-                st.colors.removeAll(hex);
+                st.manualColors.removeAll(name);
+                if (!hexUpper.isEmpty()) {
+                    st.manualColors.removeAll(hexUpper);
+                }
             }
             filterModel->setState(st);
         });

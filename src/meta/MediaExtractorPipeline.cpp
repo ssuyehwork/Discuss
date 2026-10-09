@@ -139,47 +139,86 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             m_activeCount.fetch_add(static_cast<int>(batch.size())); 
         } 
  
+        auto startTime = std::chrono::steady_clock::now();
+        int batchSuccessCount = 0;
+        int batchFailureCount = 0;
+
         std::vector<MetadataManager::ExtractedFeatureItem> results; 
         results.reserve(batch.size()); 
- 
+
         for (const auto& path : batch) { 
-            if (token->isCanceled() || CoreController::isShuttingDown()) break; 
- 
+            if (token->isCanceled() || CoreController::isShuttingDown()) {
+                qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: Canceled for:" << QString::fromStdWString(path);
+                batchFailureCount++;
+                break;
+            }
+
             QString qPath = QString::fromStdWString(path); 
             QFileInfo info(qPath); 
- 
+            if (!info.exists()) {
+                qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: File not exists:" << qPath;
+                batchFailureCount++;
+                continue;
+            }
+
+            long long origSize = info.size();
+            long long origMtime = info.lastModified().toMSecsSinceEpoch();
+
             MetadataManager::ExtractedFeatureItem item; 
             item.path = path; 
-            item.mtime = info.lastModified().toMSecsSinceEpoch(); 
-            item.fileSize = info.size(); 
- 
+            item.mtime = origMtime; 
+            item.fileSize = origSize; 
+
             if (info.isFile() && ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) { 
-                // 唯一入口：读缓存 / 失败拦截 / 解码 / 写缓存 全部在 DiskMediaExtractor 内完成 
                 DiskMediaExtractor::ExtractResult res = DiskMediaExtractor::getCapsuleExtractResult(qPath, DiskMediaExtractor::kThumbSize, token); 
-                if (res.isValid) { 
-                    // 缓存命中时不带原始尺寸，补读文件头尺寸 
-                    QSize sz = res.originalSize.isValid() ? res.originalSize : DiskMediaExtractor::fastExtractImageSize(qPath); 
-                    if (sz.isValid()) { 
-                        item.width = sz.width(); 
-                        item.height = sz.height(); 
-                    } 
- 
-                    // 内存 128 像素内快速测色 
-                    auto pal = ColorPaletteEngine::extractPaletteFromImage(res.thumbnail512); 
-                    if (!pal.isEmpty()) { 
-                        QColor dominant = ColorPaletteEngine::quantizeToStandardColor(pal.first().first); 
-                        item.autoColor = dominant.name().toUpper().toStdWString(); 
-                        item.palettes.assign(pal.begin(), pal.end()); 
-                    } 
+                if (!res.isValid || res.thumbnail512.isNull()) {
+                    qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: Thumbnail extraction failed for:" << qPath;
+                    batchFailureCount++;
+                    continue;
+                }
+
+                QSize sz = res.originalSize.isValid() ? res.originalSize : DiskMediaExtractor::fastExtractImageSize(qPath); 
+                if (sz.isValid()) { 
+                    item.width = sz.width(); 
+                    item.height = sz.height(); 
                 } 
-            } 
- 
-            results.push_back(item); 
+
+                // 使用 Section I 的权威算法 extractWeightedPalette 提取调色板（最多 10 项）
+                auto pal = ColorPaletteEngine::extractWeightedPalette(res.thumbnail512); 
+                if (pal.isEmpty()) {
+                    QImage fullImg(qPath);
+                    if (!fullImg.isNull()) {
+                        pal = ColorPaletteEngine::extractWeightedPalette(fullImg);
+                    }
+                }
+
+                if (pal.isEmpty()) {
+                    qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: Palette extraction empty for:" << qPath;
+                    batchFailureCount++;
+                    continue;
+                }
+
+                // autoColor = 调色板第一项颜色，直接转大写 #RRGGBB，不做任何标准色量化
+                QColor domColor = pal.first().first;
+                item.autoColor = domColor.name().toUpper().toStdWString();
+                item.palettes.assign(pal.begin(), pal.end());
+
+                results.push_back(item);
+                batchSuccessCount++;
+            } else {
+                qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: Not a graphics file:" << qPath;
+                batchFailureCount++;
+            }
         } 
- 
-        if (!results.empty() && !token->isCanceled() && !CoreController::isShuttingDown()) { 
+
+        // 即使 token 被取消，本批已经完成的单个文件结果仍要写入！
+        if (!results.empty()) { 
             MetadataManager::instance().updateExtractedMediaFeaturesBatch(results); 
         } 
+
+        auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count();
+        qDebug() << "[AutoColor] [MediaExtractorPipeline] Batch process finished - Success:" << batchSuccessCount 
+                 << "Failure:" << batchFailureCount << "ElapsedMs:" << elapsedMs;
  
         { 
             std::lock_guard<std::mutex> lock(m_queueMutex); 

@@ -146,48 +146,75 @@ void MetadataManager::notifyFullUIRebuild() {
     QMetaObject::invokeMethod(this, "triggerUiSignalTimer", Qt::QueuedConnection);
 }
 
-void MetadataManager::registerItem(const std::wstring& path) {
-    std::wstring nPath = normalizePath(path);
+bool MetadataManager::shouldExtractMediaFeatures(const std::wstring& path, long long pSize, long long pMtime) {
+    QString qPath = QString::fromStdWString(path);
+    QFileInfo info(qPath);
+    if (!info.isFile() || !ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) {
+        return false; // 非图片文件，不用提取
+    }
 
-    long long pSize = 0, pMtime = 0;
-    if (fetchWinApiMetadataDirect(nPath, &pSize, nullptr, nullptr, &pMtime, nullptr)) {
-        if (MetaMemoryCache::instance().contains(nPath)) {
-            RuntimeMeta meta = MetaMemoryCache::instance().getMeta(nPath);
-            bool metadataValid = true;
-            QFileInfo info(QString::fromStdWString(nPath));
-            if (info.isFile() && ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) {
-                if (meta.width <= 0 || meta.height <= 0 || meta.autoColor.empty()) {
-                    metadataValid = false;
-                }
-            }
-            if (meta.fileSize == pSize && meta.mtime == pMtime && metadataValid) {
-                return;
+    ItemMeta meta;
+    if (QuarkMetaJsonStore::instance().readItemMeta(path, meta)) {
+        if (!meta.autoColor.empty() && !meta.palettes.empty() && meta.width > 0 && meta.height > 0) {
+            if (meta.size == pSize && meta.modificationTime == pMtime) {
+                return false; // 已新鲜，跳过
             }
         }
     }
+    return true;
+}
 
-    if (MetaMemoryCache::instance().contains(nPath)) {
-        MetaMemoryCache::instance().update(nPath, [pSize, pMtime](RuntimeMeta& m) {
-            m.fileSize = pSize;
-            m.mtime = pMtime;
-        });
+void MetadataManager::registerItem(const std::wstring& path) {
+    std::wstring nPath = normalizePath(path);
+    ensureActivated(nPath);
+
+    long long pSize = 0, pMtime = 0;
+    fetchWinApiMetadataDirect(nPath, &pSize, nullptr, nullptr, &pMtime, nullptr);
+
+    int pendingCount = 1;
+    int skippedFreshCount = 0;
+    int enqueuedCount = 0;
+
+    if (!shouldExtractMediaFeatures(nPath, pSize, pMtime)) {
+        skippedFreshCount = 1;
+    } else {
+        enqueuedCount = 1;
+        MediaExtractorPipeline::instance().enqueue(nPath);
     }
 
-    ensureActivated(nPath);
-    MediaExtractorPipeline::instance().enqueue(nPath);
+    qDebug() << "[AutoColor] [MetadataManager] Enqueue check - Pending:" << pendingCount 
+             << "SkippedFresh:" << skippedFreshCount << "Enqueued:" << enqueuedCount;
 }
 
 void MetadataManager::registerItemsAsync(const QStringList& paths) {
     if (paths.isEmpty()) return;
-    
+
     (void)QtConcurrent::run([this, paths]() {
-        std::vector<std::wstring> stdPaths;
+        std::vector<std::wstring> enqueuedPaths;
+        int pendingCount = paths.size();
+        int skippedFreshCount = 0;
+
         for (const auto& qp : paths) {
             std::wstring nPath = normalizePath(qp.toStdWString());
             ensureActivated(nPath);
-            stdPaths.push_back(nPath);
+
+            long long pSize = 0, pMtime = 0;
+            fetchWinApiMetadataDirect(nPath, &pSize, nullptr, nullptr, &pMtime, nullptr);
+
+            if (shouldExtractMediaFeatures(nPath, pSize, pMtime)) {
+                enqueuedPaths.push_back(nPath);
+            } else {
+                skippedFreshCount++;
+            }
         }
-        MediaExtractorPipeline::instance().enqueueBatch(stdPaths);
+
+        int enqueuedCount = enqueuedPaths.size();
+        qDebug() << "[AutoColor] [MetadataManager] Enqueue check - Pending:" << pendingCount 
+                 << "SkippedFresh:" << skippedFreshCount << "Enqueued:" << enqueuedCount;
+
+        if (!enqueuedPaths.empty()) {
+            MediaExtractorPipeline::instance().enqueueBatch(enqueuedPaths);
+        }
     });
 }
 
@@ -256,34 +283,104 @@ void MetadataManager::setSha256(const std::wstring& path, const std::string& sha
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
-void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<ExtractedFeatureItem>& items) {
-    if (items.empty()) return;
+void MetadataManager::seedMemoryCacheBatch(const std::vector<ItemRecord>& records) {
+    for (const auto& rec : records) {
+        std::wstring nPath = normalizePath(rec.path.toStdWString());
+        QFileInfo info(rec.path);
+        if (info.isRoot() || rec.path.endsWith(":\\") || rec.path.endsWith(":/")) {
+            continue; // 盘符根目录不参与
+        }
 
-    for (const auto& item : items) {
-        std::wstring nPath = normalizePath(item.path);
-        MetaMemoryCache::instance().update(nPath, [&item](RuntimeMeta& meta) {
-            meta.width = item.width;
-            meta.height = item.height;
-            if (item.mtime > 0) meta.mtime = item.mtime;
-            if (item.fileSize > 0) meta.fileSize = item.fileSize;
-            meta.autoColor = item.autoColor;
-            meta.palettes.clear();
-            for (const auto& p : item.palettes) {
-                meta.palettes.emplace_back(p.first, p.second);
-            }
-        });
+        ensureActivated(nPath);
 
-        // 落地写入 .QuarkMeta.json 侧车文件
-        QuarkMetaJsonStore::instance().updateItemMeta(nPath, [&item](ItemMeta& meta) {
-            meta.width = item.width;
-            meta.height = item.height;
-            meta.autoColor = item.autoColor;
-            meta.palettes.clear();
-            for (const auto& p : item.palettes) {
-                meta.palettes.push_back({p.first, p.second});
+        MetaMemoryCache::instance().update(nPath, [&rec](RuntimeMeta& m) {
+            m.rating = rec.rating;
+            m.manualColor = rec.manualColor.toStdWString();
+            m.pinned = rec.pinned;
+            m.tags = rec.tags;
+            m.note = rec.note.toStdWString();
+            m.url = rec.url.toStdWString();
+            m.width = rec.width;
+            m.height = rec.height;
+            m.autoColor = rec.autoColor.toStdWString();
+            m.thumbStatus = (rec.thumbnailState == ItemRecord::ThumbnailState::Failed) ? 1 : 0;
+            m.added_at = rec.added_at;
+            m.palettes.clear();
+            for (const auto& pe : rec.palettes) {
+                m.palettes.push_back(PaletteEntry(pe.first, pe.second));
             }
         });
     }
+}
+
+void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<ExtractedFeatureItem>& items) {
+    if (items.empty()) return;
+
+    int actualWritten = 0;
+    int skippedSame = 0;
+
+    for (const auto& item : items) {
+        std::wstring nPath = normalizePath(item.path);
+        
+        QFileInfo info(QString::fromStdWString(nPath));
+        if (!info.isFile() || !ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) continue;
+        if (item.width <= 0 || item.height <= 0 || item.autoColor.empty() || item.palettes.empty()) continue;
+
+        RuntimeMeta meta = MetaMemoryCache::instance().getMeta(nPath);
+
+        // 判断新值与已有值是否完全相同
+        bool sameValue = (meta.width == item.width &&
+                          meta.height == item.height &&
+                          meta.autoColor == item.autoColor &&
+                          meta.fileSize == item.fileSize &&
+                          meta.mtime == item.mtime &&
+                          meta.palettes.size() == item.palettes.size());
+        if (sameValue) {
+            bool palettesMatch = true;
+            for (size_t i = 0; i < item.palettes.size(); ++i) {
+                if (meta.palettes[i].color != item.palettes[i].first ||
+                    std::abs(meta.palettes[i].ratio - item.palettes[i].second) > 0.0001f) {
+                    palettesMatch = false;
+                    break;
+                }
+            }
+            if (palettesMatch) {
+                skippedSame++;
+                continue;
+            }
+        }
+
+        // 值发生变化，更新内存缓存
+        MetaMemoryCache::instance().update(nPath, [&item](RuntimeMeta& rMeta) {
+            rMeta.width = item.width;
+            rMeta.height = item.height;
+            rMeta.autoColor = item.autoColor;
+            if (item.fileSize > 0) rMeta.fileSize = item.fileSize;
+            if (item.mtime > 0) rMeta.mtime = item.mtime;
+            rMeta.palettes.clear();
+            for (const auto& p : item.palettes) {
+                rMeta.palettes.push_back(PaletteEntry(p.first, p.second));
+            }
+        });
+
+        // 仅写这几项落地写入 .QuarkMeta.json 侧车文件：width, height, autoColor, palettes, file_size, file_mtime
+        QuarkMetaJsonStore::instance().updateItemMeta(nPath, [&item](ItemMeta& jsonMeta) {
+            jsonMeta.width = item.width;
+            jsonMeta.height = item.height;
+            jsonMeta.autoColor = item.autoColor;
+            jsonMeta.size = item.fileSize;
+            jsonMeta.modificationTime = item.mtime;
+            jsonMeta.palettes.clear();
+            for (const auto& p : item.palettes) {
+                jsonMeta.palettes.push_back(PaletteEntry(p.first, p.second));
+            }
+        });
+
+        actualWritten++;
+        notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+    }
+
+    qDebug() << "[AutoColor] [MetadataManager] Batch write complete - Written:" << actualWritten << "SkippedSame:" << skippedSame;
 }
 
 void MetadataManager::updateExtractedMediaFeatures( 

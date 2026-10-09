@@ -12,6 +12,7 @@
 #include <limits>
 #include <QThreadPool>
 #include "../../meta/QuarkMetaJson.h"
+#include "../../meta/QuarkMetaJsonStore.h"
 #include "../../meta/MetadataDefs.h"
 #include "CoreController.h"
 #include "DiskMediaExtractor.h"
@@ -142,18 +143,13 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
             pendingTargets.push_back({i, rec.path});
         }
 
-        std::wstring wpath = rec.path.toStdWString();
-        MetadataManager::instance().ensureActivated(wpath);
-        if (rec.rating > 0) MetadataManager::instance().setRating(wpath, rec.rating, false);
-        if (!rec.manualColor.isEmpty()) MetadataManager::instance().setColor(wpath, rec.manualColor.toStdWString(), false);
-        if (!rec.tags.isEmpty()) MetadataManager::instance().setTags(wpath, rec.tags, false);
-        if (!rec.note.isEmpty()) MetadataManager::instance().setNote(wpath, rec.note.toStdWString(), false);
-        if (!rec.url.isEmpty()) MetadataManager::instance().setURL(wpath, rec.url.toStdWString(), false);
-
         if (rec.rating > 0 || !rec.manualColor.isEmpty() || !rec.tags.isEmpty() || !rec.note.isEmpty()) {
             populatedMetaCount++;
         }
     }
+
+    // Section F: 一次性播种内存缓存，不触发侧车 .QuarkMeta.json 写盘
+    MetadataManager::instance().seedMemoryCacheBatch(m_allRecords);
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     endResetModel();
 
@@ -278,28 +274,11 @@ void DiskItemModel::preloadDimensionsAsync() {
 
         if (dimMap.empty() || !weakThis || weakThis->currentGeneration() != thisGen) return;
 
-        QFileInfo firstFi(targets.front().path);
-        QString parentDir = QDir::toNativeSeparators(firstFi.absolutePath());
-
-        {
-            std::lock_guard<std::mutex> lock(DiskMediaExtractor::s_jsonSaveMutex);
-            QuarkMetaJson jsonCache(parentDir.toStdWString());
-            jsonCache.load();
-            auto& cachedItems = jsonCache.items();
-
-            for (const auto& pair : dimMap) {
-                const std::wstring& fileName = pair.first;
-                const auto& dims = pair.second;
-                if (cachedItems.find(fileName) == cachedItems.end()) {
-                    ItemMeta emptyMeta;
-                    emptyMeta.type = L"file";
-                    cachedItems[fileName] = emptyMeta;
-                }
-                auto& fileMeta = cachedItems[fileName];
-                fileMeta.width = dims.first;
-                fileMeta.height = dims.second;
-            }
-            jsonCache.save();
+        for (const auto& item : resolvedSizes) {
+            QuarkMetaJsonStore::instance().updateItemMeta(item.first.toStdWString(), [sz = item.second](ItemMeta& meta) {
+                meta.width = sz.width();
+                meta.height = sz.height();
+            });
         }
 
         QMetaObject::invokeMethod(weakThis.data(), [weakThis, resolvedSizes = std::move(resolvedSizes), thisGen]() {

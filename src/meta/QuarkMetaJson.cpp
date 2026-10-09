@@ -24,7 +24,12 @@ QuarkMetaJson::QuarkMetaJson(const std::wstring& folderPath)
     m_filePath = path + L".QuarkMeta.json";
 }
 
+static std::wstring normalizeItemKey(const std::wstring& name) {
+    return QString::fromStdWString(name).toLower().toStdWString();
+}
+
 bool QuarkMetaJson::load() {
+    m_loadFailed = false;
     QFile file(toQString(m_filePath));
     if (!file.exists()) {
         m_folder = FolderMeta();
@@ -32,12 +37,18 @@ bool QuarkMetaJson::load() {
         return true;
     }
 
-    if (!file.open(QIODevice::ReadOnly)) return false;
+    if (!file.open(QIODevice::ReadOnly)) {
+        m_loadFailed = true;
+        return false;
+    }
     QByteArray data = file.readAll();
     file.close();
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
-    if (doc.isNull() || !doc.isObject()) return false;
+    if (doc.isNull() || !doc.isObject()) {
+        m_loadFailed = true;
+        return false;
+    }
 
     QJsonObject root = doc.object();
     if (root.contains("folder") && root.value("folder").isObject()) {
@@ -48,7 +59,7 @@ bool QuarkMetaJson::load() {
     if (root.contains("items") && root.value("items").isObject()) {
         QJsonObject itemsObj = root.value("items").toObject();
         for (auto it = itemsObj.begin(); it != itemsObj.end(); ++it) {
-            std::wstring key = toStdWString(it.key());
+            std::wstring key = normalizeItemKey(toStdWString(it.key()));
             ItemMeta item = entryToItem(it.value().toObject());
             auto existingIt = m_items.find(key);
             if (existingIt != m_items.end()) {
@@ -65,6 +76,8 @@ bool QuarkMetaJson::load() {
                 if (item.thumbStatus > 0) existingIt->second.thumbStatus = item.thumbStatus;
                 if (item.addedAt > 0) existingIt->second.addedAt = item.addedAt;
                 if (!item.palettes.empty()) existingIt->second.palettes = item.palettes;
+                if (item.size > 0) existingIt->second.size = item.size;
+                if (item.modificationTime > 0) existingIt->second.modificationTime = item.modificationTime;
             } else {
                 m_items[key] = item;
             }
@@ -316,6 +329,8 @@ QJsonObject QuarkMetaJson::itemToEntry(const ItemMeta& meta) {
     obj.insert("auto_color", toQString(meta.autoColor));
     obj.insert("added_at", meta.addedAt);
     if (meta.thumbStatus > 0) obj.insert("thumb_status", meta.thumbStatus);
+    if (meta.size > 0) obj.insert("file_size", meta.size);
+    if (meta.modificationTime > 0) obj.insert("file_mtime", meta.modificationTime);
 
     QJsonArray tagsArr; for (const auto& t : meta.tags) tagsArr.append(toQString(t));
     obj.insert("tags", tagsArr);
@@ -353,6 +368,8 @@ ItemMeta QuarkMetaJson::entryToItem(const QJsonObject& obj) {
     meta.autoColor = toStdWString(obj.value("auto_color").toString());
     meta.addedAt = obj.value("added_at").toVariant().toLongLong();
     meta.thumbStatus = obj.value("thumb_status").toInt(0);
+    meta.size = obj.value("file_size").toVariant().toLongLong();
+    meta.modificationTime = obj.value("file_mtime").toVariant().toLongLong();
 
     if (obj.contains("tags") && obj.value("tags").isArray()) {
         for (const auto& v : obj.value("tags").toArray()) meta.tags.push_back(toStdWString(v.toString()));

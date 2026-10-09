@@ -61,6 +61,8 @@ public:
      */
     bool load();
 
+    bool isLoadFailed() const { return m_loadFailed; }
+
     /**
      * @brief 安全保存当前元数据至对应的 JSON 文件中
      */
@@ -99,6 +101,7 @@ private:
     
     FolderMeta m_folder;
     ItemMap m_items;
+    bool m_loadFailed = false;
 
     static QJsonObject folderToEntry(const FolderMeta& meta);
     static FolderMeta entryToFolder(const QJsonObject& obj);
