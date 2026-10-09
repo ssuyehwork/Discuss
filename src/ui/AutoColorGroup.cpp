@@ -23,6 +23,7 @@ public:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override {
+        Q_UNUSED(watched);
         if (!m_slider) return false;
 
         switch (event->type()) {
