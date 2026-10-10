@@ -13,6 +13,7 @@
 #include <QHeaderView>
 #include <QScrollBar>
 #include <QSignalBlocker>
+#include <QDir>
 
 namespace QuarkMeta {
 

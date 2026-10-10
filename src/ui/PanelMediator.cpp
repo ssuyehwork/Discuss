@@ -231,6 +231,11 @@ void PanelMediator::setupConnections() {
         if (navPanel) navPanel->selectPath(url == "computer://" ? "" : url);
 
         if (targetPanel) {
+            QString goUpChild = NavigationService::instance().takePendingGoUpChildPath();
+            if (!goUpChild.isEmpty() && url != "computer://" && url != "trash://") {
+                targetPanel->setPendingSelectPath(goUpChild, false);
+            }
+
             if (url == "computer://") {
                 targetPanel->loadDirectory("computer://");
             } else if (url == "trash://") {
