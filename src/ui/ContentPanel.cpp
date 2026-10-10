@@ -1021,25 +1021,35 @@ void ContentPanel::restoreActiveView() {
 }
 
 void ContentPanel::restoreSelections() {
-    if (m_selectionState.selectedPaths.isEmpty() || m_isRestoringSelections) return;
+    if (!m_viewCoordinator || m_isRestoringSelections) return;
 
     m_isRestoringSelections = true;
 
-    if (m_viewCoordinator) {
-        m_viewCoordinator->restoreSelections(m_selectionState.selectedPaths, m_isPendingEdit);
+    if (!m_pendingSelectPath.isEmpty()) {
+        QString targetPath = m_pendingSelectPath;
+        bool isEdit = m_pendingIsEdit;
+        m_pendingSelectPath.clear();
+        m_pendingIsEdit = false;
+
+        QSet<QString> targetSet;
+        targetSet.insert(targetPath);
+        m_viewCoordinator->restoreSelections(targetSet, isEdit);
+    } else if (!m_selectionState.selectedPaths.isEmpty()) {
+        m_viewCoordinator->restoreSelections(m_selectionState.selectedPaths, false);
     }
 
     m_isRestoringSelections = false;
 }
 
+void ContentPanel::setPendingSelectPath(const QString& fullPath, bool edit) {
+    if (fullPath.isEmpty()) return;
+    m_pendingSelectPath = QDir::toNativeSeparators(QDir::cleanPath(fullPath));
+    m_pendingIsEdit = edit;
+}
+
 void ContentPanel::setPendingSelectName(const QString& name, bool edit) {
-    m_selectionState.selectedPaths.clear();
-    if (!name.isEmpty()) {
-        QString fullPath = m_currentPath + "/" + name;
-        m_selectionState.selectedPaths.insert(fullPath);
-        m_selectionState.focusedPath = fullPath;
-    }
-    m_isPendingEdit = edit;
+    if (name.isEmpty()) return;
+    setPendingSelectPath(QDir(m_currentPath).filePath(name), edit);
 }
 
 void ContentPanel::updateLayersButtonState() {

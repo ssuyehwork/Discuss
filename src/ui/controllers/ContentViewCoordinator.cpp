@@ -135,24 +135,39 @@ void ContentViewCoordinator::restoreSelections(const QSet<QString>& selectedPath
         if (!view || !view->selectionModel() || !view->model()) continue;
         QAbstractItemModel* viewModeModel = view->model();
 
-        QSignalBlocker blocker(view->selectionModel());
         QItemSelection sel;
         QModelIndex lastIdx;
+
+        auto matchesAny = [&selectedPaths](const QString& itemPath) {
+            QString nItem = QDir::toNativeSeparators(QDir::cleanPath(itemPath));
+            for (const QString& sp : selectedPaths) {
+                QString nTarget = QDir::toNativeSeparators(QDir::cleanPath(sp));
+                if (QString::compare(nItem, nTarget, Qt::CaseInsensitive) == 0) {
+                    return true;
+                }
+            }
+            return false;
+        };
 
         int total = viewModeModel->rowCount();
         for (int r = 0; r < total; ++r) {
             QModelIndex idx = viewModeModel->index(r, 0);
             if (idx.data(SectionHeaderRole).toBool()) continue;
             QString p = idx.data(PathRole).toString();
-            if (selectedPaths.contains(p)) {
+            if (matchesAny(p)) {
                 sel.select(idx, idx);
                 lastIdx = idx;
             }
         }
 
-        view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
         if (lastIdx.isValid()) {
+            view->setCurrentIndex(lastIdx);
+            view->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             view->scrollTo(lastIdx);
+            if (m_panel) {
+                emit m_panel->selectionChanged(m_panel->getSelectedPaths());
+            }
+
             if (isPendingEdit) {
                 QPointer<QAbstractItemView> weakView(view);
                 QTimer::singleShot(0, m_panel, [weakView, lastIdx]() {

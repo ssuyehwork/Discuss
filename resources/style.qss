@@ -105,11 +105,18 @@ QSplitter::handle:horizontal:hover {
 }
 
 /* 核心容器样式 - 彻底消除 margin，由 QSplitter 5px 句柄原生提供栏间 5px 物理间距，确保面板精确呈现 230px 物理满额宽度 */
-#SidebarContainer, #FavoriteContainer, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
+#SidebarContainer, #SidebarContainerWidget, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
     background-color: #1E1E1E;
     border: 1px solid #333333;
     border-radius: 0px;
     color: #EEEEEE;
+    margin: 0px;
+    padding: 0px;
+}
+
+#FavoriteContainer, #LibraryContainer {
+    background-color: #1E1E1E;
+    border: none;
     margin: 0px;
     padding: 0px;
 }

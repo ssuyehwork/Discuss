@@ -20,6 +20,8 @@ public:
     void goUp();
     void refresh();
 
+    QString takePendingGoUpChildPath();
+
     // 状态查询接口
     QString currentUrl() const { return m_currentUrl; }
     QString currentDisplayPath() const;
@@ -58,6 +60,7 @@ private:
     QString m_currentUrl;
     QList<QString> m_history;
     int m_currentIndex = -1;
+    QString m_pendingGoUpChildPath;
     static constexpr int kMaxHistoryDepth = 100;
 };
 
