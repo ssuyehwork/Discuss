@@ -149,6 +149,7 @@ QList<ItemMeta> LibraryDao::getCategoryIndexedItems(int categoryId) {
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         ItemMeta meta;
         const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        if (pStr) meta.originalName = QString::fromUtf8(pStr).toStdWString();
         meta.rating = sqlite3_column_int(stmt, 1);
         const char* mcStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
         const char* acStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
