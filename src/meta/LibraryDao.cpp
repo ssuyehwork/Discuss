@@ -302,8 +302,23 @@ bool LibraryDao::removeCategoryById(int id) {
     bool success = (sqlite3_step(stmt) == SQLITE_DONE);
     sqlite3_finalize(stmt);
 
-    const char* sqlClean = "DELETE FROM library_category_paths WHERE category_id = ?;";
-    if (sqlite3_prepare_v2(db, sqlClean, -1, &stmt, nullptr) == SQLITE_OK) {
+    const char* sqlCleanPaths = "DELETE FROM library_category_paths WHERE category_id IN ("
+                                "  WITH RECURSIVE cnt(x) AS ("
+                                "    SELECT ? UNION ALL SELECT id FROM library_categories, cnt WHERE library_categories.parent_id = cnt.x"
+                                "  ) SELECT x FROM cnt"
+                                ");";
+    if (sqlite3_prepare_v2(db, sqlCleanPaths, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, id);
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+    }
+
+    const char* sqlCleanIndex = "DELETE FROM library_item_index WHERE category_id IN ("
+                                "  WITH RECURSIVE cnt(x) AS ("
+                                "    SELECT ? UNION ALL SELECT id FROM library_categories, cnt WHERE library_categories.parent_id = cnt.x"
+                                "  ) SELECT x FROM cnt"
+                                ");";
+    if (sqlite3_prepare_v2(db, sqlCleanIndex, -1, &stmt, nullptr) == SQLITE_OK) {
         sqlite3_bind_int(stmt, 1, id);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
@@ -319,20 +334,45 @@ bool LibraryDao::addPathsToCategory(int id, const QStringList& paths) {
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-    const char* sql = "INSERT OR IGNORE INTO library_category_paths (category_id, path) VALUES (?, ?);";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+    // 1. 先清除被操作路径已有的所有旧分类关联与旧索引记录
+    const char* delPathsSql = "DELETE FROM library_category_paths WHERE path = ?;";
+    const char* delIndexSql = "DELETE FROM library_item_index WHERE file_path = ?;";
 
-    for (const QString& p : paths) {
-        QString cleanP = QDir::toNativeSeparators(QDir::cleanPath(p));
-        std::string pStd = cleanP.toStdString();
-        sqlite3_bind_int(stmt, 1, id);
-        sqlite3_bind_text(stmt, 2, pStd.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_step(stmt);
-        sqlite3_reset(stmt);
+    sqlite3_stmt* stmtDelP = nullptr;
+    sqlite3_stmt* stmtDelI = nullptr;
+    if (sqlite3_prepare_v2(db, delPathsSql, -1, &stmtDelP, nullptr) == SQLITE_OK &&
+        sqlite3_prepare_v2(db, delIndexSql, -1, &stmtDelI, nullptr) == SQLITE_OK) {
+        for (const QString& p : paths) {
+            std::string pStd = QDir::toNativeSeparators(QDir::cleanPath(p)).toStdString();
+
+            sqlite3_bind_text(stmtDelP, 1, pStd.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_step(stmtDelP);
+            sqlite3_reset(stmtDelP);
+
+            sqlite3_bind_text(stmtDelI, 1, pStd.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_step(stmtDelI);
+            sqlite3_reset(stmtDelI);
+        }
+    }
+    if (stmtDelP) sqlite3_finalize(stmtDelP);
+    if (stmtDelI) sqlite3_finalize(stmtDelI);
+
+    // 2. 如果目标分类大于 0（即具体分类 B，而非“未分类” -2），插入新分类关联
+    if (id > 0) {
+        const char* sql = "INSERT OR IGNORE INTO library_category_paths (category_id, path) VALUES (?, ?);";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            for (const QString& p : paths) {
+                std::string pStd = QDir::toNativeSeparators(QDir::cleanPath(p)).toStdString();
+                sqlite3_bind_int(stmt, 1, id);
+                sqlite3_bind_text(stmt, 2, pStd.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(stmt);
+                sqlite3_reset(stmt);
+            }
+            sqlite3_finalize(stmt);
+        }
     }
 
-    sqlite3_finalize(stmt);
     sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
     return true;
 }
@@ -416,29 +456,42 @@ QStringList LibraryDao::getCategoryPaths(int id) {
             }
             sqlite3_finalize(stmt);
         }
-    } else if (id == -3) {
-        // 未标签：获取 library_item_index 中 tags 为空/NULL 的文件路径
-        const char* sql = "SELECT DISTINCT file_path FROM library_item_index WHERE tags IS NULL OR tags = '';";
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                if (pStr) paths.append(QString::fromUtf8(pStr));
-            }
-            sqlite3_finalize(stmt);
-        }
     } else {
-        // 常规用户分类 ID > 0
-        const char* sql = "SELECT path FROM library_category_paths WHERE category_id = ?;";
+        // 常规用户分类 ID > 0：递归获取当前分类及其所有下级子分类绑定关联的所有路径
+        const char* sql = "WITH RECURSIVE cat_tree(x) AS ("
+                          "  SELECT ? UNION ALL SELECT id FROM library_categories, cat_tree WHERE library_categories.parent_id = cat_tree.x"
+                          ") SELECT DISTINCT path FROM library_category_paths WHERE category_id IN (SELECT x FROM cat_tree);";
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return paths;
 
         sqlite3_bind_int(stmt, 1, id);
+        QStringList invalidPaths;
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            if (pStr) paths.append(QString::fromUtf8(pStr));
+            if (pStr) {
+                QString path = QString::fromUtf8(pStr);
+                if (QFileInfo::exists(path)) {
+                    paths.append(path);
+                } else {
+                    invalidPaths.append(path);
+                }
+            }
         }
         sqlite3_finalize(stmt);
+
+        // 自动自愈：擦除磁盘上已不存在的无效路径
+        if (!invalidPaths.isEmpty()) {
+            const char* delSql = "DELETE FROM library_category_paths WHERE path = ?;";
+            if (sqlite3_prepare_v2(db, delSql, -1, &stmt, nullptr) == SQLITE_OK) {
+                for (const QString& invP : invalidPaths) {
+                    std::string pStd = invP.toStdString();
+                    sqlite3_bind_text(stmt, 1, pStd.c_str(), -1, SQLITE_TRANSIENT);
+                    sqlite3_step(stmt);
+                    sqlite3_reset(stmt);
+                }
+                sqlite3_finalize(stmt);
+            }
+        }
     }
     return paths;
 }

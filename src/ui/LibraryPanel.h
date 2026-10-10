@@ -39,6 +39,7 @@ private slots:
 private:
     void initUi();
     void createAndEditCategory(int parentId = 0);
+    QStandardItem* findItemByNodeId(QStandardItem* parent, int nodeId);
 
     QVBoxLayout* m_mainLayout = nullptr;
     DropTreeView* m_treeView = nullptr;

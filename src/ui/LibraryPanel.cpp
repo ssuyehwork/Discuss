@@ -116,7 +116,7 @@ void LibraryPanel::initUi() {
         m_treeView->header()->setStretchLastSection(true);
         m_treeView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     }
-    m_treeView->setIndentation(0);
+    m_treeView->setIndentation(16);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setDragEnabled(true);
@@ -286,14 +286,23 @@ void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QMod
             }
         }
 
-        // 自动将预设标签批量加至入库文件
+        // 自动将当前分类及其所有祖先分类的预设标签递归合并加至入库文件
         auto categories = LibraryDao::getAllCategories();
-        QStringList presetTags;
+        QMap<int, LibraryCategoryRecord> catMap;
         for (const auto& cat : categories) {
-            if (cat.id == nodeId) {
-                presetTags = cat.presetTags;
-                break;
+            catMap.insert(cat.id, cat);
+        }
+
+        QStringList presetTags;
+        int currentId = nodeId;
+        while (currentId > 0 && catMap.contains(currentId)) {
+            const auto& curCat = catMap.value(currentId);
+            for (const QString& tag : curCat.presetTags) {
+                if (!presetTags.contains(tag)) {
+                    presetTags.append(tag);
+                }
             }
+            currentId = curCat.parentId;
         }
 
         if (!presetTags.isEmpty()) {
@@ -335,7 +344,6 @@ void LibraryPanel::loadLibrary() {
 
     addSystemItem("全部数据", "all_data", "#3498db", -1);
     addSystemItem("未分类", "uncategorized", "#95a5a6", -2);
-    addSystemItem("未标签", "untagged", "#7f8c8d", -3);
 
     // 2. 加载用户自定义分类 (带动态计数与完整树构建)
     auto list = LibraryDao::getAllCategories();
@@ -371,17 +379,35 @@ void LibraryPanel::loadLibrary() {
 
     if (m_pendingEditNodeId > 0 && m_treeView) {
         int targetNodeId = m_pendingEditNodeId;
-        m_pendingEditNodeId = 0;
+        QTimer::singleShot(0, this, [this, targetNodeId]() {
+            if (m_pendingEditNodeId != targetNodeId) return;
+            m_pendingEditNodeId = 0;
 
-        for (int i = 0; i < m_model->rowCount(); ++i) {
-            QStandardItem* item = m_model->item(i);
-            if (item && item->data(Qt::UserRole + 1).toInt() == targetNodeId) {
-                m_treeView->setCurrentIndex(item->index());
-                m_treeView->edit(item->index());
-                break;
+            QStandardItem* targetItem = findItemByNodeId(m_model->invisibleRootItem(), targetNodeId);
+            if (targetItem && m_treeView) {
+                QModelIndex parentIdx = targetItem->parent() ? targetItem->parent()->index() : QModelIndex();
+                if (parentIdx.isValid()) {
+                    m_treeView->expand(parentIdx);
+                }
+                m_treeView->setCurrentIndex(targetItem->index());
+                m_treeView->edit(targetItem->index());
             }
-        }
+        });
     }
+}
+
+QStandardItem* LibraryPanel::findItemByNodeId(QStandardItem* parent, int nodeId) {
+    if (!parent) return nullptr;
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem* child = parent->child(i);
+        if (!child) continue;
+        if (child->data(Qt::UserRole + 1).toInt() == nodeId) {
+            return child;
+        }
+        QStandardItem* found = findItemByNodeId(child, nodeId);
+        if (found) return found;
+    }
+    return nullptr;
 }
 
 void LibraryPanel::createAndEditCategory(int parentId) {

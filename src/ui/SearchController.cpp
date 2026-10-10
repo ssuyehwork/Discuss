@@ -125,11 +125,7 @@ void SearchController::doSearch(const QString& keyword) {
             m_contentPanel->refreshAll();
         } else {
             LibraryDao::initTable();
-            auto categories = LibraryDao::getAllCategories();
-            QStringList allLibraryPaths;
-            for (const auto& cat : categories) {
-                allLibraryPaths.append(cat.associatedPaths);
-            }
+            QStringList allLibraryPaths = LibraryDao::getCategoryPaths(-1);
             allLibraryPaths.removeDuplicates();
 
             m_contentPanel->loadPaths(allLibraryPaths);
