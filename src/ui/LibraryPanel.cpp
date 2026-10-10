@@ -369,17 +369,19 @@ void LibraryPanel::loadLibrary() {
     if (m_treeView) m_treeView->expandAll();
     m_isLoading = false;
 
-    if (m_pendingEditNodeId > 0 && m_treeView) {
+    if (m_pendingEditNodeId > 0 && m_treeView && itemMap.contains(m_pendingEditNodeId)) {
         int targetNodeId = m_pendingEditNodeId;
         m_pendingEditNodeId = 0;
 
-        for (int i = 0; i < m_model->rowCount(); ++i) {
-            QStandardItem* item = m_model->item(i);
-            if (item && item->data(Qt::UserRole + 1).toInt() == targetNodeId) {
-                m_treeView->setCurrentIndex(item->index());
-                m_treeView->edit(item->index());
-                break;
-            }
+        QStandardItem* targetItem = itemMap.value(targetNodeId);
+        if (targetItem) {
+            QModelIndex targetIdx = targetItem->index();
+            m_treeView->setCurrentIndex(targetIdx);
+            QTimer::singleShot(0, m_treeView, [this, targetIdx]() {
+                if (m_treeView) {
+                    m_treeView->edit(targetIdx);
+                }
+            });
         }
     }
 }
@@ -388,7 +390,6 @@ void LibraryPanel::createAndEditCategory(int parentId) {
     int newId = LibraryService::instance().createCategory("新建分类", parentId);
     if (newId > 0) {
         m_pendingEditNodeId = newId;
-        loadLibrary();
     }
 }
 
