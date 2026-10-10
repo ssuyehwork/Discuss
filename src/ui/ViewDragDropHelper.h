@@ -43,6 +43,7 @@ public:
     static QPoint lastDragStartPos() { return s_lastDragStartPos; }
 
     static bool isDropTarget(const QWidget* widget, const QModelIndex& index);
+    static void setHoverTarget(QAbstractItemView* view, const QModelIndex& index);
     static void clearHover(QAbstractItemView* view = nullptr);
 
 private:
