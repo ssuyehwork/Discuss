@@ -48,23 +48,20 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
     } else if (event->type() == QEvent::DragMove) {
         auto* moveEvent = static_cast<QDragMoveEvent*>(event);
         QModelIndex hoverIdx = m_targetView->indexAt(moveEvent->position().toPoint());
-        if (m_currentHoverDropIdx != hoverIdx) {
-            clearDropHighlight();
-            if (hoverIdx.isValid()) {
-                int nodeId = hoverIdx.data(Qt::UserRole + 1).toInt();
-                bool isTargetable = !hoverIdx.data(SectionHeaderRole).toBool() &&
-                                    ((hoverIdx.data(TypeRole).toString() == "folder") ||
-                                     (hoverIdx.data(TypeRole).toString() == "category") ||
-                                     (nodeId > 0 || nodeId == -2) ||
-                                     hoverIdx.data(Qt::UserRole + 2).toBool());
-                if (isTargetable) {
-                    m_currentHoverDropIdx = hoverIdx;
-                    if (m_targetView->model()) {
-                        const_cast<QAbstractItemModel*>(m_targetView->model())->setData(m_currentHoverDropIdx, true, IsDropTargetRole);
-                        if (m_targetView->viewport()) m_targetView->viewport()->update();
-                    }
-                }
+        if (hoverIdx.isValid()) {
+            int nodeId = hoverIdx.data(Qt::UserRole + 1).toInt();
+            QString typeStr = hoverIdx.data(TypeRole).toString();
+            bool isTargetable = !hoverIdx.data(SectionHeaderRole).toBool() &&
+                                (typeStr == "folder" || typeStr == "category" ||
+                                 nodeId > 0 || nodeId == -2 ||
+                                 hoverIdx.data(Qt::UserRole + 2).toBool());
+            if (isTargetable) {
+                ViewDragDropHelper::setHoverTarget(m_targetView, hoverIdx);
+            } else {
+                ViewDragDropHelper::clearHover(m_targetView);
             }
+        } else {
+            ViewDragDropHelper::clearHover(m_targetView);
         }
         if (ViewDragDropHelper::handleDragMove(m_targetView, moveEvent)) {
             return true;
@@ -91,8 +88,23 @@ QAbstractItemView* ViewDragDropHelper::s_hoverView = nullptr;
 QPersistentModelIndex ViewDragDropHelper::s_hoverIndex;
 QPoint ViewDragDropHelper::s_lastDragStartPos;
 
-bool ViewDragDropHelper::isDropTarget(const QAbstractItemView* view, const QModelIndex& index) {
-    return view && s_hoverView == view && s_hoverIndex.isValid() && s_hoverIndex == index;
+bool ViewDragDropHelper::isDropTarget(const QWidget* widget, const QModelIndex& index) {
+    if (!widget || !s_hoverView || !s_hoverIndex.isValid()) return false;
+    if (widget == s_hoverView || widget == s_hoverView->viewport()) {
+        return s_hoverIndex == index;
+    }
+    return false;
+}
+
+void ViewDragDropHelper::setHoverTarget(QAbstractItemView* view, const QModelIndex& index) {
+    if (!view) return;
+    if (s_hoverView != view || s_hoverIndex != index) {
+        QAbstractItemView* oldView = s_hoverView;
+        s_hoverView = view;
+        s_hoverIndex = index;
+        if (oldView && oldView->viewport()) oldView->viewport()->update();
+        if (view->viewport()) view->viewport()->update();
+    }
 }
 
 void ViewDragDropHelper::clearHover(QAbstractItemView* view) {
@@ -113,21 +125,9 @@ bool ViewDragDropHelper::handleDragEnter(QAbstractItemView* /*view*/, QDragEnter
     return false;
 }
 
-bool ViewDragDropHelper::handleDragMove(QAbstractItemView* view, QDragMoveEvent* event) {
+bool ViewDragDropHelper::handleDragMove(QAbstractItemView* /*view*/, QDragMoveEvent* event) {
     if (event->mimeData() && event->mimeData()->hasUrls()) {
         event->acceptProposedAction();
-
-        if (view) {
-            QModelIndex newHover = view->indexAt(event->position().toPoint());
-            if (s_hoverView != view || s_hoverIndex != newHover) {
-                QAbstractItemView* oldView = s_hoverView;
-                s_hoverView = view;
-                s_hoverIndex = newHover;
-
-                if (oldView && oldView->viewport()) oldView->viewport()->update();
-                if (view->viewport()) view->viewport()->update();
-            }
-        }
         return true;
     }
     return false;

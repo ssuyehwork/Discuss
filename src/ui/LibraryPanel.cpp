@@ -21,6 +21,8 @@
 #include <QDir>
 #include <QCursor>
 #include <QPainter>
+#include <QLineEdit>
+#include <QTimer>
 
 namespace QuarkMeta {
 
@@ -38,7 +40,7 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     painter->setRenderHint(QPainter::Antialiasing);
 
     bool isDropTarget = index.data(IsDropTargetRole).toBool() ||
-                       ViewDragDropHelper::isDropTarget(qobject_cast<const QAbstractItemView*>(option.widget), index);
+                       ViewDragDropHelper::isDropTarget(option.widget, index);
 
     if (isDropTarget) {
         QColor dropBg("#3498db");
@@ -321,6 +323,8 @@ void LibraryPanel::loadLibrary() {
         int count = LibraryDao::getCategoryPaths(sysId).size();
         QIcon icon = UiHelper::getIcon(iconKey, QColor(colorHex), 18);
         QStandardItem* item = new QStandardItem(icon, name);
+        item->setData("system", TypeRole);
+        item->setData(sysId, IdRole);
         item->setData(sysId, Qt::UserRole + 1);
         item->setData(iconKey, Qt::UserRole + 2);
         item->setData(colorHex, Qt::UserRole + 3);
@@ -333,7 +337,7 @@ void LibraryPanel::loadLibrary() {
     addSystemItem("未分类", "uncategorized", "#95a5a6", -2);
     addSystemItem("未标签", "untagged", "#7f8c8d", -3);
 
-    // 2. 加载用户自定义分类 (带动态计数)
+    // 2. 加载用户自定义分类 (带动态计数与完整树构建)
     auto list = LibraryDao::getAllCategories();
 
     QMap<int, QStandardItem*> itemMap;
@@ -341,6 +345,8 @@ void LibraryPanel::loadLibrary() {
         int count = LibraryDao::getCategoryPaths(rec.id).size();
         QIcon icon = UiHelper::getIcon(rec.iconKey, QColor(rec.colorHex), 18);
         QStandardItem* item = new QStandardItem(icon, rec.name);
+        item->setData("category", TypeRole);
+        item->setData(rec.id, IdRole);
         item->setData(rec.id, Qt::UserRole + 1);
         item->setData(rec.iconKey, Qt::UserRole + 2);
         item->setData(rec.colorHex, Qt::UserRole + 3);
