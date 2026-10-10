@@ -17,6 +17,10 @@ public:
     bool removePathsFromCategory(int id, const QStringList& paths);
     QStringList getCategoryPaths(int id) const;
 
+    bool indexItem(int categoryId, const QString& filePath, const ItemMeta& meta);
+    bool unindexItem(int categoryId, const QString& filePath);
+    QList<ItemMeta> getIndexedItems(int categoryId) const;
+
 signals:
     void libraryChanged();
 

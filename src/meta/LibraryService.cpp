@@ -47,4 +47,20 @@ QStringList LibraryService::getCategoryPaths(int id) const {
     return LibraryDao::getCategoryPaths(id);
 }
 
+bool LibraryService::indexItem(int categoryId, const QString& filePath, const ItemMeta& meta) {
+    bool ok = LibraryDao::indexItemMetadata(categoryId, filePath, meta);
+    if (ok) emit libraryChanged();
+    return ok;
+}
+
+bool LibraryService::unindexItem(int categoryId, const QString& filePath) {
+    bool ok = LibraryDao::removeIndexedItem(categoryId, filePath);
+    if (ok) emit libraryChanged();
+    return ok;
+}
+
+QList<ItemMeta> LibraryService::getIndexedItems(int categoryId) const {
+    return LibraryDao::getCategoryIndexedItems(categoryId);
+}
+
 } // namespace QuarkMeta

@@ -3,6 +3,7 @@
 #include <QString>
 #include <QStringList>
 #include <QList>
+#include "MetadataDefs.h"
 
 namespace QuarkMeta {
 
@@ -30,6 +31,11 @@ public:
     static bool removePathsFromCategory(int id, const QStringList& paths);
     static QStringList getCategoryPaths(int id);
     static bool updatePresetTags(int id, const QStringList& tags);
+
+    static bool initItemIndexTable();
+    static bool indexItemMetadata(int categoryId, const QString& filePath, const ItemMeta& meta);
+    static bool removeIndexedItem(int categoryId, const QString& filePath);
+    static QList<ItemMeta> getCategoryIndexedItems(int categoryId);
 };
 
 } // namespace QuarkMeta
