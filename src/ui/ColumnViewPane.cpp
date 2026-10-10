@@ -300,7 +300,6 @@ void ColumnViewPane::tryPendingSelection() {
         }
 
         if (!sel.isEmpty() && m_listView->selectionModel()) {
-            QSignalBlocker blocker(m_listView->selectionModel());
             m_listView->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             if (lastIdx.isValid()) {
                 m_listView->selectionModel()->setCurrentIndex(lastIdx, QItemSelectionModel::NoUpdate);
@@ -327,7 +326,6 @@ void ColumnViewPane::tryPendingSelection() {
             if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0 ||
                 (!targetName.isEmpty() && QString::compare(itemName, targetName, Qt::CaseInsensitive) == 0)) {
                 if (m_listView->selectionModel()) {
-                    QSignalBlocker blocker(m_listView->selectionModel());
                     m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
                     m_listView->selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
                 }

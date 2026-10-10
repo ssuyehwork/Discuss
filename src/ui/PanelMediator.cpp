@@ -231,6 +231,11 @@ void PanelMediator::setupConnections() {
         if (navPanel) navPanel->selectPath(url == "computer://" ? "" : url);
 
         if (targetPanel) {
+            QString goUpChild = NavigationService::instance().takePendingGoUpChildPath();
+            if (!goUpChild.isEmpty() && url != "computer://" && url != "trash://") {
+                targetPanel->setPendingSelectPath(goUpChild, false);
+            }
+
             if (url == "computer://") {
                 targetPanel->loadDirectory("computer://");
             } else if (url == "trash://") {
@@ -274,12 +279,11 @@ void PanelMediator::setupConnections() {
         });
 
         connect(favoritePanel, &FavoritePanel::requestLocateFile, this, [this, contentPanel](const QString& path) {
-            QFileInfo fi(path);
-            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
+            ContentPanel* target = (m_activeContentPanel && m_activeContentPanel->isVisible()) ? m_activeContentPanel.data() : contentPanel;
             if (target) {
-                target->setPendingSelectName(fi.fileName(), false);
+                target->setPendingSelectPath(path, false);
             }
-            NavigationService::instance().navigateTo(fi.absolutePath());
+            NavigationService::instance().navigateTo(QFileInfo(path).absolutePath());
         });
     }
 
