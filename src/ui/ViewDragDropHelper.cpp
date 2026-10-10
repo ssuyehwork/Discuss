@@ -91,8 +91,12 @@ QAbstractItemView* ViewDragDropHelper::s_hoverView = nullptr;
 QPersistentModelIndex ViewDragDropHelper::s_hoverIndex;
 QPoint ViewDragDropHelper::s_lastDragStartPos;
 
-bool ViewDragDropHelper::isDropTarget(const QAbstractItemView* view, const QModelIndex& index) {
-    return view && s_hoverView == view && s_hoverIndex.isValid() && s_hoverIndex == index;
+bool ViewDragDropHelper::isDropTarget(const QWidget* widget, const QModelIndex& index) {
+    if (!widget || !s_hoverView || !s_hoverIndex.isValid()) return false;
+    if (widget == s_hoverView || widget == s_hoverView->viewport()) {
+        return s_hoverIndex == index;
+    }
+    return false;
 }
 
 void ViewDragDropHelper::clearHover(QAbstractItemView* view) {
