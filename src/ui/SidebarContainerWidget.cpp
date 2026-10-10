@@ -26,6 +26,7 @@ void SidebarContainerWidget::initUi() {
 
     m_tabBar = new QTabBar(header);
     m_tabBar->setObjectName("SidebarTabBar");
+    m_tabBar->setDrawBase(false);
     m_tabBar->addTab("收藏夹");
     m_tabBar->addTab("库");
     m_tabBar->setCursor(Qt::PointingHandCursor);

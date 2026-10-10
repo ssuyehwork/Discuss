@@ -120,6 +120,9 @@ void SearchController::showSearchMenu() {
 void SearchController::doSearch(const QString& keyword) {
     if (!m_contentPanel) return;
 
+    // 1. 优先同步与重置 ContentPanel 内部的搜索关键词，消除残存过滤词
+    m_contentPanel->search(keyword);
+
     if (m_searchScope == SearchScope::Library) {
         if (keyword.isEmpty()) {
             m_contentPanel->refreshAll();
@@ -131,8 +134,6 @@ void SearchController::doSearch(const QString& keyword) {
             m_contentPanel->loadPaths(allLibraryPaths);
             m_contentPanel->search(keyword);
         }
-    } else {
-        m_contentPanel->search(keyword);
     }
 
     if (!keyword.isEmpty()) {
