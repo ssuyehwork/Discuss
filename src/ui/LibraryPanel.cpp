@@ -69,7 +69,7 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 
     QString text = index.data(Qt::DisplayRole).toString();
     int count = index.data(Qt::UserRole + 9).toInt();
-    if (count > 0) {
+    if (count >= 0) {
         text += QString(" (%1)").arg(count);
     }
 
