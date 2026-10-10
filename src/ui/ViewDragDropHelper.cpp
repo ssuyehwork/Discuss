@@ -51,10 +51,11 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
         if (m_currentHoverDropIdx != hoverIdx) {
             clearDropHighlight();
             if (hoverIdx.isValid()) {
+                int nodeId = hoverIdx.data(Qt::UserRole + 1).toInt();
                 bool isTargetable = !hoverIdx.data(SectionHeaderRole).toBool() &&
                                     ((hoverIdx.data(TypeRole).toString() == "folder") ||
                                      (hoverIdx.data(TypeRole).toString() == "category") ||
-                                     (hoverIdx.data(Qt::UserRole + 1).toInt() > 0) ||
+                                     (nodeId > 0 || nodeId == -2) ||
                                      hoverIdx.data(Qt::UserRole + 2).toBool());
                 if (isTargetable) {
                     m_currentHoverDropIdx = hoverIdx;

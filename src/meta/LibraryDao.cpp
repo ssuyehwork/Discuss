@@ -315,7 +315,7 @@ bool LibraryDao::removeCategoryById(int id) {
 
 bool LibraryDao::addPathsToCategory(int id, const QStringList& paths) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db || id <= 0 || paths.isEmpty()) return false;
+    if (!db || id == 0 || paths.isEmpty()) return false;
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
@@ -384,20 +384,62 @@ bool LibraryDao::updatePresetTags(int id, const QStringList& tags) {
 QStringList LibraryDao::getCategoryPaths(int id) {
     QStringList paths;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db || id <= 0) return paths;
+    if (!db || id == 0) return paths;
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-    const char* sql = "SELECT path FROM library_category_paths WHERE category_id = ?;";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return paths;
+    if (id == -1) {
+        // 全部数据：获取库中所有关联路径 + 索引文件路径 (去重)
+        const char* sql = "SELECT DISTINCT path FROM library_category_paths "
+                          "UNION "
+                          "SELECT DISTINCT file_path FROM library_item_index;";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                if (pStr) paths.append(QString::fromUtf8(pStr));
+            }
+            sqlite3_finalize(stmt);
+        }
+    } else if (id == -2) {
+        // 未分类：获取关联于 category_id <= 0 的路径，或存在于库中但未归属于任何正数 ID 分类的路径
+        const char* sql = "SELECT DISTINCT path FROM library_category_paths WHERE category_id <= 0 "
+                          "UNION "
+                          "SELECT DISTINCT file_path FROM library_item_index WHERE file_path NOT IN (SELECT path FROM library_category_paths WHERE category_id > 0) "
+                          "EXCEPT "
+                          "SELECT DISTINCT path FROM library_category_paths WHERE category_id > 0;";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                if (pStr) paths.append(QString::fromUtf8(pStr));
+            }
+            sqlite3_finalize(stmt);
+        }
+    } else if (id == -3) {
+        // 未标签：获取 library_item_index 中 tags 为空/NULL 的文件路径
+        const char* sql = "SELECT DISTINCT file_path FROM library_item_index WHERE tags IS NULL OR tags = '';";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                if (pStr) paths.append(QString::fromUtf8(pStr));
+            }
+            sqlite3_finalize(stmt);
+        }
+    } else {
+        // 常规用户分类 ID > 0
+        const char* sql = "SELECT path FROM library_category_paths WHERE category_id = ?;";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return paths;
 
-    sqlite3_bind_int(stmt, 1, id);
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        if (pStr) paths.append(QString::fromUtf8(pStr));
+        sqlite3_bind_int(stmt, 1, id);
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            if (pStr) paths.append(QString::fromUtf8(pStr));
+        }
+        sqlite3_finalize(stmt);
     }
-    sqlite3_finalize(stmt);
     return paths;
 }
 
