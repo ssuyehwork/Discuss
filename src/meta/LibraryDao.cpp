@@ -389,8 +389,10 @@ QStringList LibraryDao::getCategoryPaths(int id) {
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
     if (id == -1) {
-        // 全部数据：获取库中所有关联路径 (去重)
-        const char* sql = "SELECT DISTINCT path FROM library_category_paths;";
+        // 全部数据：获取库中所有关联路径 + 索引文件路径 (去重)
+        const char* sql = "SELECT DISTINCT path FROM library_category_paths "
+                          "UNION "
+                          "SELECT DISTINCT file_path FROM library_item_index;";
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
             while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -400,8 +402,10 @@ QStringList LibraryDao::getCategoryPaths(int id) {
             sqlite3_finalize(stmt);
         }
     } else if (id == -2) {
-        // 未分类：获取仅关联于 category_id <= 0 的路径，或存在于分类路径表中但不在正数 ID 分类中的路径
+        // 未分类：获取关联于 category_id <= 0 的路径，或存在于库中但未归属于任何正数 ID 分类的路径
         const char* sql = "SELECT DISTINCT path FROM library_category_paths WHERE category_id <= 0 "
+                          "UNION "
+                          "SELECT DISTINCT file_path FROM library_item_index WHERE file_path NOT IN (SELECT path FROM library_category_paths WHERE category_id > 0) "
                           "EXCEPT "
                           "SELECT DISTINCT path FROM library_category_paths WHERE category_id > 0;";
         sqlite3_stmt* stmt = nullptr;
@@ -413,7 +417,7 @@ QStringList LibraryDao::getCategoryPaths(int id) {
             sqlite3_finalize(stmt);
         }
     } else if (id == -3) {
-        // 未标签：获取 library_item_index 中 tags 为空/NULL 的文件路径，或库路径下无标签的文件
+        // 未标签：获取 library_item_index 中 tags 为空/NULL 的文件路径
         const char* sql = "SELECT DISTINCT file_path FROM library_item_index WHERE tags IS NULL OR tags = '';";
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {

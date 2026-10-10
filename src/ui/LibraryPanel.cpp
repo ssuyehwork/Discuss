@@ -68,6 +68,11 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     }
 
     QString text = index.data(Qt::DisplayRole).toString();
+    int count = index.data(Qt::UserRole + 9).toInt();
+    if (count > 0) {
+        text += QString(" (%1)").arg(count);
+    }
+
     painter->setPen((opt.state & QStyle::State_Selected) ? QColor("#FFFFFF") : QColor("#EEEEEE"));
     painter->setFont(opt.font);
 
@@ -131,19 +136,22 @@ void LibraryPanel::initUi() {
     connect(m_treeView, &DropTreeView::pathsDropped, this, &LibraryPanel::onPathsDroppedToCategory);
 
     connect(&LibraryService::instance(), &LibraryService::libraryChanged, this, [this]() {
-        loadLibrary();
+        QTimer::singleShot(0, this, [this]() {
+            loadLibrary();
+        });
     });
 
     connect(m_model, &QStandardItemModel::itemChanged, this, [this](QStandardItem* item) {
         if (!item || m_isLoading) return;
         int nodeId = item->data(Qt::UserRole + 1).toInt();
         if (nodeId > 0) {
-            QString name = item->data(Qt::EditRole).toString();
-            if (name.isEmpty()) name = item->text();
+            QString name = item->text();
             QString iconKey = item->data(Qt::UserRole + 2).toString();
             QString colorHex = item->data(Qt::UserRole + 3).toString();
             LibraryDao::updateCategoryNode(nodeId, name, iconKey, colorHex);
-            loadLibrary();
+            QTimer::singleShot(0, this, [this]() {
+                loadLibrary();
+            });
         }
     });
 }
@@ -151,7 +159,7 @@ void LibraryPanel::initUi() {
 void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
     if (!index.isValid()) return;
     int nodeId = index.data(Qt::UserRole + 1).toInt();
-    if (nodeId > 0) {
+    if (nodeId != 0) {
         QStringList paths = LibraryService::instance().getCategoryPaths(nodeId);
         emit categoryPathsSelected(paths);
     }
@@ -311,14 +319,12 @@ void LibraryPanel::loadLibrary() {
     // 1. 注入 3 个固定系统分类 (带动态计数)
     auto addSystemItem = [this](const QString& name, const QString& iconKey, const QString& colorHex, int sysId) {
         int count = LibraryDao::getCategoryPaths(sysId).size();
-        QString displayName = QString("%1 (%2)").arg(name).arg(count);
         QIcon icon = UiHelper::getIcon(iconKey, QColor(colorHex), 18);
-        QStandardItem* item = new QStandardItem(icon, displayName);
-        item->setData(displayName, Qt::DisplayRole);
-        item->setData(name, Qt::EditRole);
+        QStandardItem* item = new QStandardItem(icon, name);
         item->setData(sysId, Qt::UserRole + 1);
         item->setData(iconKey, Qt::UserRole + 2);
         item->setData(colorHex, Qt::UserRole + 3);
+        item->setData(count, Qt::UserRole + 9);
         item->setEditable(false);
         m_model->appendRow(item);
     };
@@ -332,15 +338,13 @@ void LibraryPanel::loadLibrary() {
 
     QMap<int, QStandardItem*> itemMap;
     for (const auto& rec : list) {
-        int count = rec.associatedPaths.size();
-        QString displayName = QString("%1 (%2)").arg(rec.name).arg(count);
+        int count = LibraryDao::getCategoryPaths(rec.id).size();
         QIcon icon = UiHelper::getIcon(rec.iconKey, QColor(rec.colorHex), 18);
-        QStandardItem* item = new QStandardItem(icon, displayName);
-        item->setData(displayName, Qt::DisplayRole);
-        item->setData(rec.name, Qt::EditRole);
+        QStandardItem* item = new QStandardItem(icon, rec.name);
         item->setData(rec.id, Qt::UserRole + 1);
         item->setData(rec.iconKey, Qt::UserRole + 2);
         item->setData(rec.colorHex, Qt::UserRole + 3);
+        item->setData(count, Qt::UserRole + 9);
 
         itemMap.insert(rec.id, item);
     }
