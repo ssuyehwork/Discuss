@@ -7,6 +7,7 @@
 #include "ViewDragDropHelper.h"
 #include "../meta/LibraryDao.h"
 #include "../meta/LibraryService.h"
+#include "../meta/QuarkMetaJsonStore.h"
 #include "../core/CoreEngine.h"
 #include "../core/ModelContract.h"
 #include "controllers/ContextMenuFactory.h"
@@ -240,6 +241,28 @@ void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QMod
 
     if (nodeId > 0) {
         LibraryService::instance().addPathsToCategory(nodeId, paths);
+
+        // 🚀【索引建库】：无损读取每个项目的 .QuarkMeta.json 并写入中心 library_item_index
+        for (const QString& path : paths) {
+            QFileInfo fi(path);
+            if (fi.isDir()) {
+                QDir dir(path);
+                QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+                for (const auto& entry : entries) {
+                    ItemMeta meta;
+                    std::wstring wPath = entry.absoluteFilePath().toStdWString();
+                    if (QuarkMetaJsonStore::instance().readItemMeta(wPath, meta)) {
+                        LibraryService::instance().indexItem(nodeId, entry.absoluteFilePath(), meta);
+                    }
+                }
+            } else if (fi.isFile()) {
+                ItemMeta meta;
+                std::wstring wPath = path.toStdWString();
+                if (QuarkMetaJsonStore::instance().readItemMeta(wPath, meta)) {
+                    LibraryService::instance().indexItem(nodeId, path, meta);
+                }
+            }
+        }
 
         // 自动将预设标签批量加至入库文件
         auto categories = LibraryDao::getAllCategories();
