@@ -207,9 +207,11 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     menu.addSeparator();
 
+    QPersistentModelIndex persistentIdx(index);
     ContextMenuFactory::buildIconPickerMenu(&menu, curIconKey, curColorHex,
-        [this, index](const QString& iconKey) {
-            QStandardItem* item = m_model->itemFromIndex(index);
+        [this, persistentIdx](const QString& iconKey) {
+            if (!persistentIdx.isValid()) return;
+            QStandardItem* item = m_model ? m_model->itemFromIndex(persistentIdx) : nullptr;
             if (!item) return;
 
             QString colorHex = item->data(Qt::UserRole + 3).toString();
@@ -222,8 +224,9 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
             int nodeId = item->data(Qt::UserRole + 1).toInt();
             LibraryDao::updateCategoryNode(nodeId, item->text(), iconKey, colorHex);
         },
-        [this, index](const QString& hexColor) {
-            QStandardItem* item = m_model->itemFromIndex(index);
+        [this, persistentIdx](const QString& hexColor) {
+            if (!persistentIdx.isValid()) return;
+            QStandardItem* item = m_model ? m_model->itemFromIndex(persistentIdx) : nullptr;
             if (!item) return;
 
             QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
@@ -344,6 +347,7 @@ void LibraryPanel::loadLibrary() {
 
     addSystemItem("全部数据", "all_data", "#3498db", -1);
     addSystemItem("未分类", "uncategorized", "#95a5a6", -2);
+    addSystemItem("未标签", "untagged", "#7f8c8d", -3);
 
     // 2. 加载用户自定义分类 (带动态计数与完整树构建)
     auto list = LibraryDao::getAllCategories();

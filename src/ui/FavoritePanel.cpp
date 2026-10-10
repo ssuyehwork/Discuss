@@ -254,9 +254,11 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QList<QPair<QPushButton*, QString>> iconButtons;
 
     if (isFolder) {
+        QPersistentModelIndex persistentIdx(index);
         ContextMenuFactory::buildIconPickerMenu(&menu, curIconKey, curColorHex,
-            [this, index](const QString& iconKey) {
-                QStandardItem* item = m_favoriteModel->itemFromIndex(index);
+            [this, persistentIdx](const QString& iconKey) {
+                if (!persistentIdx.isValid()) return;
+                QStandardItem* item = m_favoriteModel ? m_favoriteModel->itemFromIndex(persistentIdx) : nullptr;
                 if (!item) return;
 
                 QString colorHex = item->data(Qt::UserRole + 3).toString();
@@ -270,8 +272,9 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
                     m_favoriteView->viewport()->update();
                 }
             },
-            [this, index](const QString& hexColor) {
-                QStandardItem* item = m_favoriteModel->itemFromIndex(index);
+            [this, persistentIdx](const QString& hexColor) {
+                if (!persistentIdx.isValid()) return;
+                QStandardItem* item = m_favoriteModel ? m_favoriteModel->itemFromIndex(persistentIdx) : nullptr;
                 if (!item) return;
 
                 QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
@@ -297,6 +300,9 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             }
         );
     }
+
+    // 复制名称 (SSOT 入口)
+    ContextMenuFactory::buildCopyNameAction(&menu, {path}, this);
 
     // 3. 重命名 (直接唤起行内编辑框)
     QAction* renameAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "重命名");

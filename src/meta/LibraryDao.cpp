@@ -456,6 +456,19 @@ QStringList LibraryDao::getCategoryPaths(int id) {
             }
             sqlite3_finalize(stmt);
         }
+    } else if (id == -3) {
+        // 未标签：获取库中所有无标签（tags 为空或 NULL）的项的路径
+        const char* sql = "SELECT DISTINCT file_path FROM library_item_index WHERE tags IS NULL OR tags = '' "
+                          "UNION "
+                          "SELECT DISTINCT path FROM library_category_paths WHERE path NOT IN (SELECT file_path FROM library_item_index WHERE tags IS NOT NULL AND tags != '');";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                if (pStr) paths.append(QString::fromUtf8(pStr));
+            }
+            sqlite3_finalize(stmt);
+        }
     } else {
         // 常规用户分类 ID > 0：递归获取当前分类及其所有下级子分类绑定关联的所有路径
         const char* sql = "WITH RECURSIVE cat_tree(x) AS ("
