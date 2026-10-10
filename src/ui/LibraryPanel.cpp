@@ -171,6 +171,11 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
     }
 
     int nodeId = index.data(Qt::UserRole + 1).toInt();
+    if (nodeId < 0) {
+        // 系统分类禁止弹出修改菜单
+        return;
+    }
+
     QString curIconKey = index.data(Qt::UserRole + 2).toString();
     QString curColorHex = index.data(Qt::UserRole + 3).toString();
 
@@ -236,10 +241,15 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 }
 
 void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QModelIndex& target) {
-    if (!target.isValid() || paths.isEmpty()) return;
-    int nodeId = target.data(Qt::UserRole + 1).toInt();
+    if (paths.isEmpty()) return;
 
-    if (nodeId > 0) {
+    // 拖拽到空白处时默认为“未分类” (-2)，拖到具体分类上则为对应的分类 ID
+    int nodeId = -2;
+    if (target.isValid()) {
+        nodeId = target.data(Qt::UserRole + 1).toInt();
+    }
+
+    if (nodeId > 0 || nodeId == -2) {
         LibraryService::instance().addPathsToCategory(nodeId, paths);
 
         // 🚀【索引建库】：无损读取每个项目的 .QuarkMeta.json 并写入中心 library_item_index
@@ -295,6 +305,23 @@ void LibraryPanel::loadLibrary() {
     m_model->clear();
 
     LibraryDao::initTable();
+
+    // 1. 注入 3 个固定系统分类
+    auto addSystemItem = [this](const QString& name, const QString& iconKey, const QString& colorHex, int sysId) {
+        QIcon icon = UiHelper::getIcon(iconKey, QColor(colorHex), 18);
+        QStandardItem* item = new QStandardItem(icon, name);
+        item->setData(sysId, Qt::UserRole + 1);
+        item->setData(iconKey, Qt::UserRole + 2);
+        item->setData(colorHex, Qt::UserRole + 3);
+        item->setEditable(false);
+        m_model->appendRow(item);
+    };
+
+    addSystemItem("全部数据", "all_data", "#3498db", -1);
+    addSystemItem("未分类", "uncategorized", "#95a5a6", -2);
+    addSystemItem("未标签", "untagged", "#7f8c8d", -3);
+
+    // 2. 加载用户自定义分类
     auto list = LibraryDao::getAllCategories();
 
     QMap<int, QStandardItem*> itemMap;
