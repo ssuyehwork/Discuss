@@ -265,10 +265,8 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
                 if (colorHex.isEmpty()) colorHex = "#888888";
 
                 QIcon newIcon = UiHelper::getIcon(iconKey, QColor(colorHex), 18);
-                if (m_favoriteModel) m_favoriteModel->blockSignals(true);
                 item->setIcon(newIcon);
                 item->setData(iconKey, Qt::UserRole + 2);
-                if (m_favoriteModel) m_favoriteModel->blockSignals(false);
 
                 if (m_favoriteView && m_favoriteView->viewport()) {
                     m_favoriteView->viewport()->update();
@@ -285,10 +283,8 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
                 QString targetPath = item->data(Qt::UserRole + 1).toString();
 
                 QIcon newIcon = UiHelper::getIcon(iconKey, QColor(finalColor), 18);
-                if (m_favoriteModel) m_favoriteModel->blockSignals(true);
                 item->setIcon(newIcon);
                 item->setData(finalColor, Qt::UserRole + 3);
-                if (m_favoriteModel) m_favoriteModel->blockSignals(false);
 
                 if (!targetPath.isEmpty() && !targetPath.startsWith("virtual_cat_")) {
                     AppCommand cmd;

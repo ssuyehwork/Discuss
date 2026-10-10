@@ -218,10 +218,8 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
             if (colorHex.isEmpty()) colorHex = "#888888";
 
             QIcon newIcon = UiHelper::getIcon(iconKey, QColor(colorHex), 18);
-            if (m_model) m_model->blockSignals(true);
             item->setIcon(newIcon);
             item->setData(iconKey, Qt::UserRole + 2);
-            if (m_model) m_model->blockSignals(false);
 
             int nodeId = item->data(Qt::UserRole + 1).toInt();
             LibraryDao::updateCategoryNode(nodeId, item->text(), iconKey, colorHex);
@@ -236,10 +234,8 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
             if (iconKey.isEmpty()) iconKey = "folder_filled";
 
             QIcon newIcon = UiHelper::getIcon(iconKey, QColor(finalColor), 18);
-            if (m_model) m_model->blockSignals(true);
             item->setIcon(newIcon);
             item->setData(finalColor, Qt::UserRole + 3);
-            if (m_model) m_model->blockSignals(false);
 
             int nodeId = item->data(Qt::UserRole + 1).toInt();
             LibraryDao::updateCategoryNode(nodeId, item->text(), iconKey, finalColor);
