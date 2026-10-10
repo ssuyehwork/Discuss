@@ -116,7 +116,10 @@ QMenu* ContextMenuFactory::buildIconPickerMenu(QMenu* parentMenu,
         {"回收废弃", "trash_filled"}, {"邮件通信", "mail_filled"}, {"电话联系", "phone_filled"},
         {"日历日程", "calendar_filled"}, {"今日任务", "today_filled"}, {"数据表格", "table_filled"},
         {"磁盘保存", "save_filled"}, {"附件剪辑", "paperclip"}, {"归档文件", "archive"},
-        {"OneNote笔记", "onenote"}, {"下载中心", "download"}
+        {"OneNote笔记", "onenote"}, {"下载中心", "download"}, {"全部数据", "all_data"},
+        {"托管文件夹", "folder_managed"}, {"托管文件", "file_managed"}, {"ZIP压缩包", "zip"},
+        {"下载图标", "download-svgrepo-com"}, {"云端下载", "cloud_download"}, {"Word文档", "file_word"},
+        {"棕榈树", "palm_tree"}, {"代码文件夹", "folder-code-svgrepo-com"}
     };
 
     QColor catColor = QColor(colorHex);
