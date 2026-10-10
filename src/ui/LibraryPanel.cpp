@@ -21,6 +21,8 @@
 #include <QDir>
 #include <QCursor>
 #include <QPainter>
+#include <QLineEdit>
+#include <QTimer>
 
 namespace QuarkMeta {
 
@@ -335,7 +337,7 @@ void LibraryPanel::loadLibrary() {
     addSystemItem("未分类", "uncategorized", "#95a5a6", -2);
     addSystemItem("未标签", "untagged", "#7f8c8d", -3);
 
-    // 2. 加载用户自定义分类 (带动态计数)
+    // 2. 加载用户自定义分类 (带动态计数与完整树构建)
     auto list = LibraryDao::getAllCategories();
 
     QMap<int, QStandardItem*> itemMap;

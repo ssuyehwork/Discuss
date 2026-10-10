@@ -389,7 +389,7 @@ QStringList LibraryDao::getCategoryPaths(int id) {
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
     if (id == -1) {
-        // 全部数据：获取库中所有关联路径 + 索引文件路径 (去重)
+        // 全部数据：获取库中所有关联路径与索引文件路径 (去重)
         const char* sql = "SELECT DISTINCT path FROM library_category_paths "
                           "UNION "
                           "SELECT DISTINCT file_path FROM library_item_index;";
