@@ -254,24 +254,29 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     QList<QPair<QPushButton*, QString>> iconButtons;
 
     if (isFolder) {
+        QPersistentModelIndex persistentIdx(index);
         ContextMenuFactory::buildIconPickerMenu(&menu, curIconKey, curColorHex,
-            [this, index](const QString& iconKey) {
-                QStandardItem* item = m_favoriteModel->itemFromIndex(index);
+            [this, persistentIdx](const QString& iconKey) {
+                if (!persistentIdx.isValid()) return;
+                QStandardItem* item = m_favoriteModel ? m_favoriteModel->itemFromIndex(persistentIdx) : nullptr;
                 if (!item) return;
 
                 QString colorHex = item->data(Qt::UserRole + 3).toString();
                 if (colorHex.isEmpty()) colorHex = "#888888";
 
                 QIcon newIcon = UiHelper::getIcon(iconKey, QColor(colorHex), 18);
+                if (m_favoriteModel) m_favoriteModel->blockSignals(true);
                 item->setIcon(newIcon);
                 item->setData(iconKey, Qt::UserRole + 2);
+                if (m_favoriteModel) m_favoriteModel->blockSignals(false);
 
                 if (m_favoriteView && m_favoriteView->viewport()) {
                     m_favoriteView->viewport()->update();
                 }
             },
-            [this, index](const QString& hexColor) {
-                QStandardItem* item = m_favoriteModel->itemFromIndex(index);
+            [this, persistentIdx](const QString& hexColor) {
+                if (!persistentIdx.isValid()) return;
+                QStandardItem* item = m_favoriteModel ? m_favoriteModel->itemFromIndex(persistentIdx) : nullptr;
                 if (!item) return;
 
                 QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
@@ -280,8 +285,10 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
                 QString targetPath = item->data(Qt::UserRole + 1).toString();
 
                 QIcon newIcon = UiHelper::getIcon(iconKey, QColor(finalColor), 18);
+                if (m_favoriteModel) m_favoriteModel->blockSignals(true);
                 item->setIcon(newIcon);
                 item->setData(finalColor, Qt::UserRole + 3);
+                if (m_favoriteModel) m_favoriteModel->blockSignals(false);
 
                 if (!targetPath.isEmpty() && !targetPath.startsWith("virtual_cat_")) {
                     AppCommand cmd;
