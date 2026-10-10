@@ -138,10 +138,12 @@ void LibraryPanel::initUi() {
         if (!item || m_isLoading) return;
         int nodeId = item->data(Qt::UserRole + 1).toInt();
         if (nodeId > 0) {
-            QString name = item->text();
+            QString name = item->data(Qt::EditRole).toString();
+            if (name.isEmpty()) name = item->text();
             QString iconKey = item->data(Qt::UserRole + 2).toString();
             QString colorHex = item->data(Qt::UserRole + 3).toString();
             LibraryDao::updateCategoryNode(nodeId, name, iconKey, colorHex);
+            loadLibrary();
         }
     });
 }
@@ -306,10 +308,14 @@ void LibraryPanel::loadLibrary() {
 
     LibraryDao::initTable();
 
-    // 1. 注入 3 个固定系统分类
+    // 1. 注入 3 个固定系统分类 (带动态计数)
     auto addSystemItem = [this](const QString& name, const QString& iconKey, const QString& colorHex, int sysId) {
+        int count = LibraryDao::getCategoryPaths(sysId).size();
+        QString displayName = QString("%1 (%2)").arg(name).arg(count);
         QIcon icon = UiHelper::getIcon(iconKey, QColor(colorHex), 18);
-        QStandardItem* item = new QStandardItem(icon, name);
+        QStandardItem* item = new QStandardItem(icon, displayName);
+        item->setData(displayName, Qt::DisplayRole);
+        item->setData(name, Qt::EditRole);
         item->setData(sysId, Qt::UserRole + 1);
         item->setData(iconKey, Qt::UserRole + 2);
         item->setData(colorHex, Qt::UserRole + 3);
@@ -321,13 +327,17 @@ void LibraryPanel::loadLibrary() {
     addSystemItem("未分类", "uncategorized", "#95a5a6", -2);
     addSystemItem("未标签", "untagged", "#7f8c8d", -3);
 
-    // 2. 加载用户自定义分类
+    // 2. 加载用户自定义分类 (带动态计数)
     auto list = LibraryDao::getAllCategories();
 
     QMap<int, QStandardItem*> itemMap;
     for (const auto& rec : list) {
+        int count = rec.associatedPaths.size();
+        QString displayName = QString("%1 (%2)").arg(rec.name).arg(count);
         QIcon icon = UiHelper::getIcon(rec.iconKey, QColor(rec.colorHex), 18);
-        QStandardItem* item = new QStandardItem(icon, rec.name);
+        QStandardItem* item = new QStandardItem(icon, displayName);
+        item->setData(displayName, Qt::DisplayRole);
+        item->setData(rec.name, Qt::EditRole);
         item->setData(rec.id, Qt::UserRole + 1);
         item->setData(rec.iconKey, Qt::UserRole + 2);
         item->setData(rec.colorHex, Qt::UserRole + 3);
