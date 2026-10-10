@@ -216,6 +216,7 @@ public slots:
     void onDoubleClicked(const QModelIndex& index);
     void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), Qt::DropAction action = Qt::CopyAction);
     void loadDirectory(const QString& path, bool recursive = false);
+    void setPendingSelectPath(const QString& fullPath, bool edit = false);
     void setPendingSelectName(const QString& name, bool edit = false);
     void refreshAll();
     void updateItemMetadata(const QString& path);
@@ -255,6 +256,8 @@ private:
     SelectionState m_selectionState;
     bool m_isRestoringSelections = false;
     bool m_isPendingEdit = false;
+    QString m_pendingSelectPath;
+    bool m_pendingIsEdit = false;
     QString m_currentCategoryType;
     bool m_isRecursive = false;
     ViewMode m_currentViewMode = static_cast<ViewMode>(-1);

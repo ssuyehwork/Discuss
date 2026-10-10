@@ -114,18 +114,28 @@ void NavigationService::goForward() {
     }
 }
 
+QString NavigationService::takePendingGoUpChildPath() {
+    QString path = m_pendingGoUpChildPath;
+    m_pendingGoUpChildPath.clear();
+    return path;
+}
+
 void NavigationService::goUp() {
     if (!canGoUp()) return;
 
+    QString departingPath = m_currentUrl;
     QDir dir(m_currentUrl);
     if (dir.isRoot()) {
+        m_pendingGoUpChildPath.clear();
         navigateTo("computer://");
         return;
     }
 
     if (dir.cdUp()) {
+        m_pendingGoUpChildPath = departingPath;
         navigateTo(dir.absolutePath());
     } else {
+        m_pendingGoUpChildPath.clear();
         navigateTo("computer://");
     }
 }
