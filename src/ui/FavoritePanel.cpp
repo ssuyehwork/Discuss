@@ -305,6 +305,9 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
         );
     }
 
+    // 复制名称 (SSOT 入口)
+    ContextMenuFactory::buildCopyNameAction(&menu, {path}, this);
+
     // 3. 重命名 (直接唤起行内编辑框)
     QAction* renameAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "重命名");
     connect(renameAct, &QAction::triggered, this, [this, index]() {
