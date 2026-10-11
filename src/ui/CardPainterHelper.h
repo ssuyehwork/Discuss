@@ -12,6 +12,10 @@ namespace QuarkMeta {
 
 class CardPainterHelper {
 public:
+    // 0. 默认图标渲染与逻辑尺寸计算
+    static QSize defaultIconLogicalSize(const QSize& areaSize);
+    static QPixmap renderDefaultIcon(const QIcon& icon, const QSize& areaSize, qreal devicePixelRatio);
+
     // 1. 绘制主体卡片底色及缩略图 Cover
     static void drawCardCover(QPainter* painter, const QRect& cardRect, bool isSelected, 
                              bool hasThumb, const QPixmap& thumb, const QIcon& defaultIcon, 

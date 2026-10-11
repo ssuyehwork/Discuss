@@ -1,5 +1,6 @@
 #include "MetaPanel.h"
 #include "ColorPicker.h"
+#include "CardPainterHelper.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
 #include "Logger.h"
@@ -392,7 +393,7 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     });
 }
 
-void MetaPanel::setImagePreview(const QPixmap& pixmap, bool isDefaultIcon) {
+void MetaPanel::setImagePreview(const QPixmap& pixmap) {
     if (!m_lblImagePreview) return;
     if (pixmap.isNull()) {
         m_lblImagePreview->clear();
@@ -403,7 +404,7 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap, bool isDefaultIcon) {
         QPixmap canvas(canvasSize);
         canvas.fill(Qt::transparent);
 
-        QSize targetSize = isDefaultIcon ? QSize(35, 45) : QSize(200, 200);
+        QSize targetSize(200, 200);
         QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
         {
@@ -414,16 +415,53 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap, bool isDefaultIcon) {
             int x = (200 - scaled.width()) / 2;
             int y = (200 - scaled.height()) / 2;
 
-            if (!isDefaultIcon) {
-                QPainterPath path;
-                path.addRoundedRect(QRectF(x, y, scaled.width(), scaled.height()), 4.0, 4.0);
-                painter.setClipPath(path);
-            }
+            QPainterPath path;
+            path.addRoundedRect(QRectF(x, y, scaled.width(), scaled.height()), 4.0, 4.0);
+            painter.setClipPath(path);
             painter.drawPixmap(x, y, scaled);
         }
 
         m_lblImagePreview->setPixmap(canvas);
         m_lblImagePreview->setFixedSize(canvasSize);
+
+        m_lblImagePreview->show();
+        if (m_topPreviewBox) {
+            m_topPreviewBox->show();
+        }
+    }
+    m_adjustTimer->start();
+}
+
+void MetaPanel::setDefaultIconPreview(const QIcon& icon) {
+    if (!m_lblImagePreview) return;
+    if (icon.isNull()) {
+        m_lblImagePreview->clear();
+        m_lblImagePreview->hide();
+        if (m_topPreviewBox) m_topPreviewBox->hide();
+    } else {
+        qreal dpr = devicePixelRatioF();
+        QSize logicalCanvasSize(200, 200);
+        QSize physicalCanvasSize = logicalCanvasSize * dpr;
+
+        QPixmap canvas(physicalCanvasSize);
+        canvas.fill(Qt::transparent);
+        canvas.setDevicePixelRatio(dpr);
+
+        QPixmap iconPx = CardPainterHelper::renderDefaultIcon(icon, logicalCanvasSize, dpr);
+        if (!iconPx.isNull()) {
+            QPainter painter(&canvas);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setRenderHint(QPainter::SmoothPixmapTransform);
+
+            QSizeF iconLogicalSize = iconPx.deviceIndependentSize();
+            int x = qRound((200.0 - iconLogicalSize.width()) / 2.0);
+            int y = qRound((200.0 - iconLogicalSize.height()) / 2.0);
+
+            painter.drawPixmap(x, y, iconPx);
+        }
+
+        m_lblImagePreview->setPixmap(canvas);
+        m_lblImagePreview->setFixedSize(logicalCanvasSize);
 
         m_lblImagePreview->show();
         if (m_topPreviewBox) {

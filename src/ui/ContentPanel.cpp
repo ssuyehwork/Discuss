@@ -135,26 +135,49 @@ void ContentPanel::initUi() {
     m_headerWidget->setFilterState(m_currentFilter);
 
     connect(m_headerWidget, &ContentHeaderWidget::splitViewRequested, this, [this]() {
-        if (isSecondaryPane()) {
-            emit closePaneRequested();
-            return;
-        }
+        // 1. 如果当前处于双窗格（或多窗格）状态，这个按钮的唯一天职就是：【关闭当前这扇窗格】！
         if (isSplitMode()) {
-            closeSecondaryPane();
-        } else {
-            QStringList history = NavigationHistoryService::instance().getHistory();
-            QString lastPath;
-            for (const QString& hPath : history) {
-                if (!hPath.isEmpty() && QDir::cleanPath(hPath) != QDir::cleanPath(m_currentPath)) {
-                    lastPath = hPath;
-                    break;
+            if (isSecondaryPane()) {
+                // 点击副窗格按钮：直接关掉副窗格自己，主窗格保留不变
+                emit closePaneRequested();
+            } else {
+                // 🚀【修正被偷换的概念】：点击主窗格按钮，就是要“干掉主窗格，留下副窗格”！
+                ContentPanel* secPanel = secondaryContentPanel();
+                if (secPanel) {
+                    // ① 瞬时提取副窗格的所有状态真理（路径、模式、递归、缩放）
+                    QString targetPath = secPanel->currentPath();
+                    ViewMode targetMode = secPanel->currentViewMode();
+                    bool targetRecursive = secPanel->isRecursive();
+                    int targetZoom = secPanel->zoomLevel();
+
+                    // ② 让主窗格全面接管副窗格的内容与视态
+                    setViewMode(targetMode);
+                    setIsRecursive(targetRecursive);
+                    setZoomLevel(targetZoom);
+                    loadDirectory(targetPath, targetRecursive);
+
+                    // ③ 销毁副窗格，退出分屏
+                    closePane(secPanel);
+                } else {
+                    closeSecondaryPane();
                 }
             }
-            if (lastPath.isEmpty()) {
-                lastPath = m_currentPath;
-            }
-            splitPane(Qt::Horizontal, lastPath);
+            return;
         }
+
+        // 2. 如果当前是单窗格状态，点击则是：【开启分屏】
+        QStringList history = NavigationHistoryService::instance().getHistory();
+        QString lastPath;
+        for (const QString& hPath : history) {
+            if (!hPath.isEmpty() && QDir::cleanPath(hPath) != QDir::cleanPath(m_currentPath)) {
+                lastPath = hPath;
+                break;
+            }
+        }
+        if (lastPath.isEmpty()) {
+            lastPath = m_currentPath;
+        }
+        splitPane(Qt::Horizontal, lastPath);
     });
 
     connect(m_headerWidget, &ContentHeaderWidget::filterStateChanged, this, [this](const FilterState& state) {

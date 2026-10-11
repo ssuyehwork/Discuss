@@ -13,7 +13,8 @@ endif()
 
 # 强制 MSVC 编译器及选项 (文档红线: /W4 /O2)
 if(MSVC)
-    add_compile_options(/W4 /O2 /utf-8 /Zm1000)
+    add_compile_options(/W4 /O2 /utf-8 /Zm1000 /Zi)
+    add_link_options(/DEBUG /OPT:REF /OPT:ICF)
 endif()
 
 # 全局屏蔽 MSVC 针对标准 C 函数 (如 strcpy 等) 抛出的 C4996 安全警告
