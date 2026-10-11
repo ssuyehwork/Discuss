@@ -119,7 +119,7 @@ QMenu* ContextMenuFactory::buildIconPickerMenu(QMenu* parentMenu,
         {"OneNote笔记", "onenote"}, {"下载中心", "download"}, {"全部数据", "all_data"},
         {"托管文件夹", "folder_managed"}, {"托管文件", "file_managed"}, {"ZIP压缩包", "zip"},
         {"下载图标", "download-svgrepo-com"}, {"云端下载", "cloud_download"}, {"Word文档", "file_word"},
-        {"棕榈树", "palm_tree"}, {"代码文件夹", "folder-code-svgrepo-com"}
+        {"棕榈树", "palm_tree"}, {"代码文件夹", "folder-code-svgrepo-com"}, {"下载盒", "archive-svgrepo-com"}
     };
 
     QColor catColor = QColor(colorHex);
