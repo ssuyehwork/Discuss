@@ -59,7 +59,6 @@ public:
     void setSplitOrientation(Qt::Orientation target);
     void restoreSplitState(const struct TabSplitState& state);
     void updateDragOverlayGlobal(const QPoint& globalPos, ContentPanel* sourcePane = nullptr);
-    void updateDragOverlay(const QPoint& pos);
     void hideDragOverlay();
     void updateContainerMinimumWidth();
     void notifyLayoutChanged();
@@ -74,6 +73,7 @@ private:
     ContentPanel* m_panel = nullptr;
     QSplitter* m_paneSplitter = nullptr;
     QFrame* m_primaryPaneContainer = nullptr;
+public:
     // 窗格树节点数据结构
     struct PaneNode {
         bool isSplitter = false;
@@ -86,6 +86,9 @@ private:
         PaneNode* parent = nullptr;
     };
 
+    PaneNode* rootNode() const { return m_rootNode; }
+
+private:
     PaneNode* m_rootNode = nullptr;
 
     void collectPanesDepthFirst(PaneNode* node, QList<ContentPanel*>& list) const;

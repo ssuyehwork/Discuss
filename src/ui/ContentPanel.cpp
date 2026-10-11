@@ -470,7 +470,7 @@ void ContentPanel::redistributePaneSizes() {
 }
 
 void ContentPanel::updateDragOverlay(const QPoint& pos) {
-    if (m_splitManager) m_splitManager->updateDragOverlay(pos);
+    if (m_splitManager) m_splitManager->updateDragOverlayGlobal(mapToGlobal(pos));
 }
 
 void ContentPanel::hideDragOverlay() {
