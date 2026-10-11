@@ -27,8 +27,8 @@ public:
      * @brief 获取管理的全部副窗格列表（扁平一维列表）
      * @note 严禁调用方对列表中的各副窗格再次递归调用 panes()。
      */
-    QList<ContentPanel*> panes() const { return m_panes; }
-    int paneCount() const { return 1 + m_panes.size(); }
+    QList<ContentPanel*> panes() const;
+    int paneCount() const;
     ContentPanel* rootPane() const;
 
     struct SplitEvaluationResult {
@@ -36,11 +36,15 @@ public:
         Qt::Orientation orientation = Qt::Horizontal;
         bool insertBefore = false;
         QRect highlightRect;
+        ContentPanel* targetPanel = nullptr;
     };
 
+    SplitEvaluationResult evaluateDropAtPosition(const QPoint& globalPos, ContentPanel* sourcePane);
     static SplitEvaluationResult evaluateSplitDrop(const QPoint& pos, const QSize& refSize);
 
+    void movePane(ContentPanel* sourcePane, ContentPanel* targetPane, Qt::Orientation orientation, bool insertBefore);
     void splitPane(Qt::Orientation orientation, const QString& secondaryPath = QString(), bool insertBefore = false);
+    void splitPaneAtTarget(ContentPanel* targetPane, Qt::Orientation orientation, const QString& secondaryPath = QString(), bool insertBefore = false);
     void closePane(ContentPanel* pane);
     void closeSecondaryPane();
     void redistributePaneSizes();
@@ -50,10 +54,9 @@ public:
     struct TabSplitState exportSplitState() const;
     void setSplitOrientation(Qt::Orientation target);
     void restoreSplitState(const struct TabSplitState& state);
+    void updateDragOverlayGlobal(const QPoint& globalPos, ContentPanel* sourcePane = nullptr);
     void updateDragOverlay(const QPoint& pos);
     void hideDragOverlay();
-    void updateOrientationPreviewOverlay(Qt::Orientation target);
-    void hideOrientationPreviewOverlay();
     void updateContainerMinimumWidth();
     void notifyLayoutChanged();
 
@@ -67,8 +70,27 @@ private:
     ContentPanel* m_panel = nullptr;
     QSplitter* m_paneSplitter = nullptr;
     QFrame* m_primaryPaneContainer = nullptr;
-    QList<QWidget*> m_paneContainers;
-    QList<ContentPanel*> m_panes;
+    // 窗格树节点数据结构
+    struct PaneNode {
+        bool isSplitter = false;
+        Qt::Orientation orientation = Qt::Horizontal;
+        QPointer<QSplitter> splitter = nullptr;
+        QPointer<QWidget> container = nullptr;
+        QPointer<ContentPanel> panel = nullptr;
+        bool isPrimary = false;
+        QList<PaneNode*> children;
+        PaneNode* parent = nullptr;
+    };
+
+    PaneNode* m_rootNode = nullptr;
+
+    void collectPanesDepthFirst(PaneNode* node, QList<ContentPanel*>& list) const;
+    void collectNodesDepthFirst(PaneNode* node, QList<PaneNode*>& list) const;
+    PaneNode* findNodeForPanel(PaneNode* node, ContentPanel* panel) const;
+    void normalizeTree(PaneNode* node);
+    void deleteNodeRecursive(PaneNode* node);
+    struct PaneTreeNode exportNodeRecursive(PaneNode* node) const;
+    PaneNode* importNodeRecursive(const struct PaneTreeNode& treeNode, QWidget* parentWidget);
     ContentPanel* m_rootPane = nullptr;
     ContentPanel* m_activePaneForSplit = nullptr;
     QWidget* m_dragOverlayWidget = nullptr;

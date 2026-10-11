@@ -494,58 +494,118 @@ void ContentPanel::hideDragOverlay() {
 }
 
 void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-        if (paneCount() < kMaxPanes) {
+    if (event->mimeData()) {
+        if (event->mimeData()->hasFormat("application/x-quarkmeta-panemove")) {
             event->acceptProposedAction();
             return;
+        }
+        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+            if (paneCount() < kMaxPanes) {
+                event->acceptProposedAction();
+                return;
+            }
         }
     }
     QFrame::dragEnterEvent(event);
 }
 
 void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
-    if (event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-        if (paneCount() < kMaxPanes) {
-            ContentPaneSplitManager::SplitEvaluationResult eval = ContentPaneSplitManager::evaluateSplitDrop(event->position().toPoint(), size());
-            if (eval.isValid) {
-                updateDragOverlay(event->position().toPoint());
-                event->acceptProposedAction();
-            } else {
-                hideDragOverlay();
-                event->ignore();
+    if (event->mimeData()) {
+        if (event->mimeData()->hasFormat("application/x-quarkmeta-panemove")) {
+            quintptr ptrVal = event->mimeData()->data("application/x-quarkmeta-panemove").toULongLong();
+            ContentPanel* srcPanel = reinterpret_cast<ContentPanel*>(ptrVal);
+            QPoint globalPos = mapToGlobal(event->position().toPoint());
+            ContentPanel* root = rootPane();
+            if (root && root->splitManager()) {
+                ContentPaneSplitManager::SplitEvaluationResult eval = root->splitManager()->evaluateDropAtPosition(globalPos, srcPanel);
+                if (eval.isValid) {
+                    root->splitManager()->updateDragOverlayGlobal(globalPos, srcPanel);
+                    event->acceptProposedAction();
+                } else {
+                    root->splitManager()->hideDragOverlay();
+                    event->ignore();
+                }
             }
             return;
+        }
+        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+            if (paneCount() < kMaxPanes) {
+                QPoint globalPos = mapToGlobal(event->position().toPoint());
+                ContentPanel* root = rootPane();
+                if (root && root->splitManager()) {
+                    ContentPaneSplitManager::SplitEvaluationResult eval = root->splitManager()->evaluateDropAtPosition(globalPos, nullptr);
+                    if (eval.isValid) {
+                        root->splitManager()->updateDragOverlayGlobal(globalPos, nullptr);
+                        event->acceptProposedAction();
+                    } else {
+                        root->splitManager()->hideDragOverlay();
+                        event->ignore();
+                    }
+                }
+                return;
+            }
         }
     }
     QFrame::dragMoveEvent(event);
 }
 
 void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
-    hideDragOverlay();
+    ContentPanel* root = rootPane();
+    if (root && root->splitManager()) {
+        root->splitManager()->hideDragOverlay();
+    }
     QFrame::dragLeaveEvent(event);
 }
 
 void ContentPanel::dropEvent(QDropEvent* event) {
-    if (event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
-        if (paneCount() < kMaxPanes) {
-            hideDragOverlay();
-            QString tabUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
-            if (tabUrl.isEmpty()) {
-                tabUrl = event->mimeData()->text();
+    ContentPanel* root = rootPane();
+    if (event->mimeData()) {
+        if (event->mimeData()->hasFormat("application/x-quarkmeta-panemove")) {
+            if (root && root->splitManager()) {
+                root->splitManager()->hideDragOverlay();
             }
-
-            if (!tabUrl.isEmpty()) {
-                QPoint pos = event->position().toPoint();
-                ContentPaneSplitManager::SplitEvaluationResult eval = ContentPaneSplitManager::evaluateSplitDrop(pos, size());
-                if (eval.isValid) {
-                    splitPane(eval.orientation, tabUrl, eval.insertBefore);
+            quintptr ptrVal = event->mimeData()->data("application/x-quarkmeta-panemove").toULongLong();
+            ContentPanel* srcPanel = reinterpret_cast<ContentPanel*>(ptrVal);
+            QPoint globalPos = mapToGlobal(event->position().toPoint());
+            if (root && root->splitManager()) {
+                ContentPaneSplitManager::SplitEvaluationResult eval = root->splitManager()->evaluateDropAtPosition(globalPos, srcPanel);
+                if (eval.isValid && eval.targetPanel) {
+                    root->splitManager()->movePane(srcPanel, eval.targetPanel, eval.orientation, eval.insertBefore);
                     event->acceptProposedAction();
                     return;
+                } else {
+                    ToolTipOverlay::instance()->showText(QCursor::pos(), "空间不足，无法放置到此处", 2000, QColor("#e81123"));
+                }
+            }
+            return;
+        }
+        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+            if (root && root->splitManager()) {
+                root->splitManager()->hideDragOverlay();
+            }
+            if (paneCount() < kMaxPanes) {
+                QString tabUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
+                if (tabUrl.isEmpty()) {
+                    tabUrl = event->mimeData()->text();
+                }
+
+                if (!tabUrl.isEmpty()) {
+                    QPoint globalPos = mapToGlobal(event->position().toPoint());
+                    if (root && root->splitManager()) {
+                        ContentPaneSplitManager::SplitEvaluationResult eval = root->splitManager()->evaluateDropAtPosition(globalPos, nullptr);
+                        if (eval.isValid && eval.targetPanel) {
+                            root->splitManager()->splitPaneAtTarget(eval.targetPanel, eval.orientation, tabUrl, eval.insertBefore);
+                            event->acceptProposedAction();
+                            return;
+                        }
+                    }
                 }
             }
         }
     }
-    hideDragOverlay();
+    if (root && root->splitManager()) {
+        root->splitManager()->hideDragOverlay();
+    }
     QFrame::dropEvent(event);
 }
 

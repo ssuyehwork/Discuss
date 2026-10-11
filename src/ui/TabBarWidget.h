@@ -13,12 +13,21 @@ namespace QuarkMeta {
 
 class HoverEventFilter;
 
+struct PaneTreeNode {
+    bool isSplitter = false;
+    Qt::Orientation orientation = Qt::Horizontal;
+    QString path;
+    bool isPrimary = false;
+    QList<PaneTreeNode> children;
+};
+
 struct TabSplitState {
     Qt::Orientation orientation = Qt::Horizontal;
     QStringList panePaths;
     int primaryIndex = 0;
     int activePaneIndex = 0;
     bool isSplit = false;
+    PaneTreeNode rootNode;
 };
 
 struct TabInfo {
