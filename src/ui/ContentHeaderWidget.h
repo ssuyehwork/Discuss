@@ -36,10 +36,6 @@ signals:
     void filterStateChanged(const FilterState& state);
     void recursiveToggled(bool recursive);
     void splitViewRequested();
-    void orientationToggleRequested(Qt::Orientation target);
-    void orientationDragStarted(Qt::Orientation target);
-    void orientationDragUpdated(const QPoint& globalPos);
-    void orientationDragEnded(bool apply);
 
 private:
     void initUi();

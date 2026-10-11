@@ -468,6 +468,22 @@ void TabBarWidget::saveStateToConfig() {
         obj["color"] = tab.color;
         obj["iconKey"] = tab.iconKey;
 
+        std::function<QJsonObject(const PaneTreeNode&)> serializeTreeNode = [&](const PaneTreeNode& node) -> QJsonObject {
+            QJsonObject nObj;
+            nObj["isSplitter"] = node.isSplitter;
+            nObj["orientation"] = static_cast<int>(node.orientation);
+            nObj["path"] = node.path;
+            nObj["isPrimary"] = node.isPrimary;
+            if (node.isSplitter) {
+                QJsonArray childrenArray;
+                for (const auto& child : node.children) {
+                    childrenArray.append(serializeTreeNode(child));
+                }
+                nObj["children"] = childrenArray;
+            }
+            return nObj;
+        };
+
         QJsonObject splitObj;
         splitObj["orientation"] = static_cast<int>(tab.splitState.orientation);
         QJsonArray pathsArray;
@@ -478,6 +494,7 @@ void TabBarWidget::saveStateToConfig() {
         splitObj["primaryIndex"] = tab.splitState.primaryIndex;
         splitObj["activePaneIndex"] = tab.splitState.activePaneIndex;
         splitObj["isSplit"] = tab.splitState.isSplit;
+        splitObj["treeNode"] = serializeTreeNode(tab.splitState.rootNode);
         obj["splitState"] = splitObj;
 
         tabArray.append(obj);
@@ -523,6 +540,21 @@ bool TabBarWidget::restoreStateFromConfig() {
         info.iconKey = obj["iconKey"].toString();
         info.active = false;
 
+        std::function<PaneTreeNode(const QJsonObject&)> deserializeTreeNode = [&](const QJsonObject& nObj) -> PaneTreeNode {
+            PaneTreeNode node;
+            node.isSplitter = nObj["isSplitter"].toBool(false);
+            node.orientation = static_cast<Qt::Orientation>(nObj["orientation"].toInt(static_cast<int>(Qt::Horizontal)));
+            node.path = nObj["path"].toString();
+            node.isPrimary = nObj["isPrimary"].toBool(false);
+            if (node.isSplitter && nObj.contains("children")) {
+                QJsonArray childrenArray = nObj["children"].toArray();
+                for (const auto& cVal : childrenArray) {
+                    node.children.append(deserializeTreeNode(cVal.toObject()));
+                }
+            }
+            return node;
+        };
+
         if (obj.contains("splitState") && obj["splitState"].isObject()) {
             QJsonObject splitObj = obj["splitState"].toObject();
             info.splitState.orientation = static_cast<Qt::Orientation>(splitObj["orientation"].toInt(static_cast<int>(Qt::Horizontal)));
@@ -532,6 +564,9 @@ bool TabBarWidget::restoreStateFromConfig() {
             QJsonArray pathsArray = splitObj["panePaths"].toArray();
             for (const auto& pVal : pathsArray) {
                 info.splitState.panePaths.append(pVal.toString());
+            }
+            if (splitObj.contains("treeNode") && splitObj["treeNode"].isObject()) {
+                info.splitState.rootNode = deserializeTreeNode(splitObj["treeNode"].toObject());
             }
         }
 

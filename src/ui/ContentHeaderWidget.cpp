@@ -7,6 +7,8 @@
 #include <QStyle>
 #include <QMouseEvent>
 #include <QApplication>
+#include <QDrag>
+#include <QMimeData>
 #include "ContentPanel.h"
 
 namespace QuarkMeta {
@@ -128,28 +130,6 @@ ContentPanel* ContentHeaderWidget::owningPanel() const {
     return nullptr;
 }
 
-bool ContentHeaderWidget::evaluateOrientationToggle(const QPoint& currentPos, Qt::Orientation& targetOri) const {
-    ContentPanel* panel = owningPanel();
-    if (!panel || !panel->isSplitMode() || m_dragStartPos.isNull()) {
-        return false;
-    }
-
-    Qt::Orientation currentOri = panel->splitOrientation();
-    QPoint delta = currentPos - m_dragStartPos;
-    int threshold = QApplication::startDragDistance();
-
-    if (currentOri == Qt::Horizontal && delta.y() >= threshold) {
-        targetOri = Qt::Vertical;
-        return true;
-    } else if (currentOri == Qt::Vertical && delta.x() >= threshold) {
-        targetOri = Qt::Horizontal;
-        return true;
-    }
-
-    targetOri = currentOri;
-    return false;
-}
-
 void ContentHeaderWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         QWidget* child = childAt(event->pos());
@@ -171,14 +151,24 @@ void ContentHeaderWidget::mouseMoveEvent(QMouseEvent* event) {
         if ((event->pos() - m_dragStartPos).manhattanLength() >= QApplication::startDragDistance()) {
             ContentPanel* panel = owningPanel();
             if (panel && panel->isSplitMode()) {
-                Qt::Orientation targetOri;
-                evaluateOrientationToggle(event->pos(), targetOri);
+                m_isDraggingHeader = true;
 
-                if (!m_isDraggingHeader) {
-                    m_isDraggingHeader = true;
-                    emit orientationDragStarted(targetOri);
-                }
-                emit orientationDragUpdated(event->globalPosition().toPoint());
+                QDrag* drag = new QDrag(this);
+                QMimeData* mimeData = new QMimeData();
+                mimeData->setData("application/x-quarkmeta-panemove", QByteArray::number(reinterpret_cast<quintptr>(panel)));
+                drag->setMimeData(mimeData);
+
+                QPixmap pixmap = grab();
+                drag->setPixmap(pixmap);
+
+                QPoint hotSpot = m_dragStartPos;
+                hotSpot.setX(qBound(0, hotSpot.x(), width() - 1));
+                hotSpot.setY(qBound(0, hotSpot.y(), height() - 1));
+                drag->setHotSpot(hotSpot);
+
+                drag->exec(Qt::MoveAction);
+                m_isDraggingHeader = false;
+                m_dragStartPos = QPoint();
                 event->accept();
                 return;
             }
@@ -189,22 +179,7 @@ void ContentHeaderWidget::mouseMoveEvent(QMouseEvent* event) {
 
 void ContentHeaderWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
-        if (m_isDraggingHeader) {
-            ContentPanel* panel = owningPanel();
-            if (panel && panel->isSplitMode()) {
-                Qt::Orientation targetOri;
-                bool shouldToggle = evaluateOrientationToggle(event->pos(), targetOri);
-
-                emit orientationDragEnded(shouldToggle);
-                if (shouldToggle) {
-                    emit orientationToggleRequested(targetOri);
-                }
-            }
-            m_isDraggingHeader = false;
-            m_dragStartPos = QPoint();
-            event->accept();
-            return;
-        }
+        m_isDraggingHeader = false;
         m_dragStartPos = QPoint();
     }
     QWidget::mouseReleaseEvent(event);
