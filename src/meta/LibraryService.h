@@ -13,10 +13,12 @@ class LibraryService : public QObject {
 public:
     static LibraryService& instance();
 
+    bool isInLibrary(const QString& path) const;
     int createCategory(const QString& name, int parentId = 0);
     bool removeCategory(int id);
     bool addPathsToCategory(int id, const QStringList& paths);
     bool removePathsFromCategory(int id, const QStringList& paths);
+    bool removePathsFromLibrary(const QStringList& paths);
     QStringList getCategoryPaths(int id) const;
 
     bool indexItem(int categoryId, const QString& filePath, const ItemMeta& meta);

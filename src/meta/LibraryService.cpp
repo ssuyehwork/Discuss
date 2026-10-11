@@ -14,6 +14,12 @@ LibraryService::LibraryService(QObject* parent) : QObject(parent) {
     LibraryDao::initTable();
 }
 
+bool LibraryService::isInLibrary(const QString& path) const {
+    if (path.isEmpty()) return false;
+    QStringList allPaths = LibraryDao::getCategoryPaths(-1);
+    return allPaths.contains(path, Qt::CaseInsensitive);
+}
+
 int LibraryService::createCategory(const QString& name, int parentId) {
     int id = LibraryDao::addCategory(name, parentId);
     if (id > 0) {
@@ -46,6 +52,15 @@ bool LibraryService::removePathsFromCategory(int id, const QStringList& paths) {
     return ok;
 }
 
+bool LibraryService::removePathsFromLibrary(const QStringList& paths) {
+    if (paths.isEmpty()) return false;
+    bool ok = LibraryDao::addPathsToCategory(0, paths); // category_id = 0 清除归属与索引
+    if (ok) {
+        emit libraryChanged();
+    }
+    return ok;
+}
+
 QStringList LibraryService::getCategoryPaths(int id) const {
     return LibraryDao::getCategoryPaths(id);
 }
@@ -69,18 +84,41 @@ QList<ItemMeta> LibraryService::getIndexedItems(int categoryId) const {
 QAction* LibraryService::buildLibraryAction(QMenu* parentMenu, const QStringList& targetPaths, QObject* receiver) {
     if (!parentMenu || targetPaths.isEmpty()) return nullptr;
 
-    QIcon libIcon = UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18);
-    QAction* action = parentMenu->addAction(libIcon, "添加至“库”");
-
-    connect(action, &QAction::triggered, receiver ? receiver : parentMenu, [this, targetPaths]() {
-        if (addPathsToCategory(-2, targetPaths)) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将 %1 个项目归入未分类").arg(targetPaths.size()), 1500, QColor("#2ecc71"));
-        } else {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "归入失败", 1500, QColor("#e81123"));
+    bool anyInLibrary = false;
+    for (const QString& path : targetPaths) {
+        if (isInLibrary(path)) {
+            anyInLibrary = true;
+            break;
         }
-    });
+    }
 
-    return action;
+    if (anyInLibrary) {
+        QIcon removeIcon = UiHelper::getIcon("close", QColor("#EEEEEE"), 18);
+        QAction* action = parentMenu->addAction(removeIcon, "从“库”中移除");
+
+        connect(action, &QAction::triggered, receiver ? receiver : parentMenu, [this, targetPaths]() {
+            if (removePathsFromLibrary(targetPaths)) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将 %1 个项目从库中移除").arg(targetPaths.size()), 1500, QColor("#2ecc71"));
+            } else {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "移除失败", 1500, QColor("#e81123"));
+            }
+        });
+
+        return action;
+    } else {
+        QIcon addIcon = UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18);
+        QAction* action = parentMenu->addAction(addIcon, "添加至“库”");
+
+        connect(action, &QAction::triggered, receiver ? receiver : parentMenu, [this, targetPaths]() {
+            if (addPathsToCategory(-2, targetPaths)) {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将 %1 个项目归入未分类").arg(targetPaths.size()), 1500, QColor("#2ecc71"));
+            } else {
+                ToolTipOverlay::instance()->showText(QCursor::pos(), "归入失败", 1500, QColor("#e81123"));
+            }
+        });
+
+        return action;
+    }
 }
 
 } // namespace QuarkMeta
