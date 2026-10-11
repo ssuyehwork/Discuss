@@ -7,6 +7,37 @@
 
 namespace QuarkMeta {
 
+QSize CardPainterHelper::defaultIconLogicalSize(const QSize& areaSize) {
+    if (areaSize.width() < 70 && areaSize.height() < 70) {
+        int w = qRound(areaSize.width() * 0.65);
+        int h = qRound(areaSize.height() * 0.65);
+        return QSize(w, h);
+    }
+    return QSize(35, 45);
+}
+
+QPixmap CardPainterHelper::renderDefaultIcon(const QIcon& icon, const QSize& areaSize, qreal devicePixelRatio) {
+    if (icon.isNull()) return QPixmap();
+
+    QSize target = defaultIconLogicalSize(areaSize);
+    QSize physicalTarget = target * devicePixelRatio;
+
+    QPixmap px = icon.pixmap(physicalTarget);
+    if (px.isNull()) {
+        px = icon.pixmap(35, 45);
+    }
+
+    if (!px.isNull() && (px.width() > physicalTarget.width() || px.height() > physicalTarget.height())) {
+        px = px.scaled(physicalTarget, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+
+    if (!px.isNull()) {
+        px.setDevicePixelRatio(devicePixelRatio);
+    }
+
+    return px;
+}
+
 void CardPainterHelper::drawCardCover(QPainter* painter, const QRect& cardRect, bool isSelected, 
                                      bool hasThumb, const QPixmap& thumb, const QIcon& defaultIcon, 
                                      bool isGridMode, bool isWaitingThumb) {
@@ -40,26 +71,15 @@ void CardPainterHelper::drawCardCover(QPainter* painter, const QRect& cardRect, 
                          targetSize.width(), targetSize.height());
         painter->drawPixmap(targetRect, thumb);
     } else if (!defaultIcon.isNull()) {
-        int iconW = qRound(cardRect.width() * 0.65);
-        int iconH = qRound(cardRect.height() * 0.65);
-        if (cardRect.width() > 70 || cardRect.height() > 69) {
-            iconW = std::min(iconW, 45);
-            iconH = std::min(iconH, 35);
-        }
-
-        QPixmap iconPixmap = defaultIcon.pixmap(QSize(iconW, iconH));
-        if (iconPixmap.isNull()) {
-            iconPixmap = defaultIcon.pixmap(45, 35);
-        }
-
-        if (!iconPixmap.isNull() && (iconPixmap.width() > iconW || iconPixmap.height() > iconH)) {
-            iconPixmap = iconPixmap.scaled(QSize(iconW, iconH), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        }
-
+        qreal dpr = painter->device() ? painter->device()->devicePixelRatioF() : 1.0;
+        QPixmap iconPixmap = renderDefaultIcon(defaultIcon, cardRect.size(), dpr);
         if (!iconPixmap.isNull()) {
-            QRect iconRect(cardRect.center().x() - iconPixmap.width() / 2,
-                           cardRect.center().y() - iconPixmap.height() / 2,
-                           iconPixmap.width(), iconPixmap.height());
+            QSizeF logicalSize = iconPixmap.deviceIndependentSize();
+            int w = qRound(logicalSize.width());
+            int h = qRound(logicalSize.height());
+            QRect iconRect(cardRect.center().x() - w / 2,
+                           cardRect.center().y() - h / 2,
+                           w, h);
 
             painter->drawPixmap(iconRect, iconPixmap);
         }

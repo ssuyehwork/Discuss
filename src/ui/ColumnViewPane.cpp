@@ -169,13 +169,6 @@ void ColumnViewPane::paintEvent(QPaintEvent* event) {
         painter.setPen(QPen(QColor("#3498db"), 1));
         painter.drawLine(0, 0, width(), 0);
     }
-    if (m_folderListView && m_folderListView->isVisible()) {
-        int folderBottom = m_folderListView->y() + m_folderListView->height();
-        if (folderBottom >= height()) {
-            painter.setPen(QPen(QColor("#3498db"), 1));
-            painter.drawLine(0, height() - 1, width(), height() - 1);
-        }
-    }
 }
 
 bool ColumnViewPane::eventFilter(QObject* obj, QEvent* event) {

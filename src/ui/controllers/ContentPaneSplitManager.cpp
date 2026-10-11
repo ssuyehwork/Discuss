@@ -122,11 +122,12 @@ void ContentPaneSplitManager::normalizeTree(PaneNode* node) {
         // 规范化 1：展平相同方向的子 Splitter 节点，并重建 QSplitter 挂载关系
         QList<PaneNode*> newChildren;
         for (PaneNode* child : node->children) {
-            if (child->isSplitter && child->orientation == node->orientation) {
+            if (child && child->isSplitter && child->orientation == node->orientation) {
                 if (node->splitter && child->splitter) {
                     int childIdx = node->splitter->indexOf(child->splitter);
                     for (int g = 0; g < child->children.size(); ++g) {
                         PaneNode* grandChild = child->children[g];
+                        if (!grandChild) continue;
                         grandChild->parent = node;
                         newChildren.append(grandChild);
 
@@ -143,7 +144,7 @@ void ContentPaneSplitManager::normalizeTree(PaneNode* node) {
                     child->splitter->deleteLater();
                     delete child;
                 }
-            } else {
+            } else if (child) {
                 newChildren.append(child);
             }
         }
@@ -152,34 +153,36 @@ void ContentPaneSplitManager::normalizeTree(PaneNode* node) {
         // 规范化 2：如果 Splitter 只剩 1 个子节点，替换为该子节点，并将组件正确重挂至上级
         if (node->children.size() == 1) {
             PaneNode* soleChild = node->children.first();
-            soleChild->parent = node->parent;
+            if (soleChild) {
+                soleChild->parent = node->parent;
 
-            QWidget* soleWidget = soleChild->isSplitter ? static_cast<QWidget*>(soleChild->splitter.data()) : soleChild->container.data();
+                QWidget* soleWidget = soleChild->isSplitter ? static_cast<QWidget*>(soleChild->splitter.data()) : soleChild->container.data();
 
-            if (node->parent) {
-                int idx = node->parent->children.indexOf(node);
-                if (idx >= 0) {
-                    node->parent->children[idx] = soleChild;
-                    if (node->parent->splitter && soleWidget) {
-                        node->parent->splitter->replaceWidget(idx, soleWidget);
+                if (node->parent) {
+                    int idx = node->parent->children.indexOf(node);
+                    if (idx >= 0) {
+                        node->parent->children[idx] = soleChild;
+                        if (node->parent->splitter && soleWidget) {
+                            node->parent->splitter->replaceWidget(idx, soleWidget);
+                        }
+                    }
+                } else {
+                    m_rootNode = soleChild;
+                    if (m_panel && m_panel->m_mainLayout && soleWidget) {
+                        if (node->splitter) {
+                            m_panel->m_mainLayout->removeWidget(node->splitter);
+                        }
+                        m_panel->m_mainLayout->addWidget(soleWidget, 1);
+                        soleWidget->show();
                     }
                 }
-            } else {
-                m_rootNode = soleChild;
-                if (m_panel && m_panel->m_mainLayout && soleWidget) {
-                    if (node->splitter) {
-                        m_panel->m_mainLayout->removeWidget(node->splitter);
-                    }
-                    m_panel->m_mainLayout->addWidget(soleWidget, 1);
-                    soleWidget->show();
-                }
-            }
 
-            node->children.clear();
-            if (node->splitter) {
-                node->splitter->deleteLater();
+                node->children.clear();
+                if (node->splitter) {
+                    node->splitter->deleteLater();
+                }
+                delete node;
             }
-            delete node;
         }
     }
 }
@@ -1030,11 +1033,6 @@ void ContentPaneSplitManager::updateDragOverlayGlobal(const QPoint& globalPos, C
     m_dragOverlayWidget->setGeometry(eval.highlightRect);
     m_dragOverlayWidget->show();
     m_dragOverlayWidget->raise();
-}
-
-void ContentPaneSplitManager::updateDragOverlay(const QPoint& pos) {
-    QPoint globalPos = m_panel->mapToGlobal(pos);
-    updateDragOverlayGlobal(globalPos, nullptr);
 }
 
 void ContentPaneSplitManager::hideDragOverlay() {
