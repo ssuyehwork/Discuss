@@ -114,6 +114,24 @@ QSplitter::handle:horizontal:hover {
     padding: 0px;
 }
 
+/* LibraryPanel 搜索过滤框与容器外联 QSS 选择器 */
+QWidget#LibraryFilterContainer {
+    background-color: transparent;
+    border-top: 1px solid #2D2D2D;
+}
+QLineEdit#LibraryFilterEdit {
+    background: #2D2D2D;
+    color: #CCCCCC;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 0px 6px;
+    font-size: 11px;
+}
+QLineEdit#LibraryFilterEdit:focus {
+    border-color: #378ADD;
+    color: #FFFFFF;
+}
+
 #FavoriteContainer, #LibraryContainer {
     background-color: #1E1E1E;
     border: none;

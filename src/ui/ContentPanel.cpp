@@ -157,7 +157,9 @@ void ContentPanel::initUi() {
                     loadDirectory(targetPath, targetRecursive);
 
                     // ③ 销毁副窗格，退出分屏
-                    closePane(secPanel);
+                    if (m_splitManager) {
+                        m_splitManager->closePane(secPanel);
+                    }
                 } else {
                     closeSecondaryPane();
                 }

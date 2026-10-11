@@ -357,8 +357,8 @@ bool LibraryDao::addPathsToCategory(int id, const QStringList& paths) {
     if (stmtDelP) sqlite3_finalize(stmtDelP);
     if (stmtDelI) sqlite3_finalize(stmtDelI);
 
-    // 2. 如果目标分类大于 0（即具体分类 B，而非“未分类” -2），插入新分类关联
-    if (id > 0) {
+    // 2. 当 id > 0 或 id == -2 时，都向 library_category_paths 写入一行（category_id 取传入的 id，-2 表示未分类）
+    if (id > 0 || id == -2) {
         const char* sql = "INSERT OR IGNORE INTO library_category_paths (category_id, path) VALUES (?, ?);";
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
@@ -442,32 +442,37 @@ QStringList LibraryDao::getCategoryPaths(int id) {
             sqlite3_finalize(stmt);
         }
     } else if (id == -2) {
-        // 未分类：获取关联于 category_id <= 0 的路径，或存在于库中但未归属于任何正数 ID 分类的路径
-        const char* sql = "SELECT DISTINCT path FROM library_category_paths WHERE category_id <= 0 "
-                          "UNION "
-                          "SELECT DISTINCT file_path FROM library_item_index WHERE file_path NOT IN (SELECT path FROM library_category_paths WHERE category_id > 0) "
-                          "EXCEPT "
-                          "SELECT DISTINCT path FROM library_category_paths WHERE category_id > 0;";
+        // 未分类：只返回 library_category_paths 中 category_id <= 0 的路径（去重），过滤掉磁盘不存在的无效路径并擦除记录
+        const char* sql = "SELECT DISTINCT path FROM library_category_paths WHERE category_id <= 0;";
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            QStringList invalidPaths;
             while (sqlite3_step(stmt) == SQLITE_ROW) {
                 const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                if (pStr) paths.append(QString::fromUtf8(pStr));
+                if (pStr) {
+                    QString path = QString::fromUtf8(pStr);
+                    if (QFileInfo::exists(path)) {
+                        paths.append(path);
+                    } else {
+                        invalidPaths.append(path);
+                    }
+                }
             }
             sqlite3_finalize(stmt);
-        }
-    } else if (id == -3) {
-        // 未标签：获取库中所有无标签（tags 为空或 NULL）的项的路径
-        const char* sql = "SELECT DISTINCT file_path FROM library_item_index WHERE tags IS NULL OR tags = '' "
-                          "UNION "
-                          "SELECT DISTINCT path FROM library_category_paths WHERE path NOT IN (SELECT file_path FROM library_item_index WHERE tags IS NOT NULL AND tags != '');";
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                if (pStr) paths.append(QString::fromUtf8(pStr));
+
+            // 擦除磁盘上已不存在的无效路径
+            if (!invalidPaths.isEmpty()) {
+                const char* delSql = "DELETE FROM library_category_paths WHERE path = ?;";
+                if (sqlite3_prepare_v2(db, delSql, -1, &stmt, nullptr) == SQLITE_OK) {
+                    for (const QString& invP : invalidPaths) {
+                        std::string pStd = invP.toStdString();
+                        sqlite3_bind_text(stmt, 1, pStd.c_str(), -1, SQLITE_TRANSIENT);
+                        sqlite3_step(stmt);
+                        sqlite3_reset(stmt);
+                    }
+                    sqlite3_finalize(stmt);
+                }
             }
-            sqlite3_finalize(stmt);
         }
     } else {
         // 常规用户分类 ID > 0：递归获取当前分类及其所有下级子分类绑定关联的所有路径

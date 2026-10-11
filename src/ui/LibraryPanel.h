@@ -4,10 +4,26 @@
 #include <QTreeView>
 #include <QStandardItemModel>
 #include <QVBoxLayout>
+#include <QLineEdit>
 #include <QStyledItemDelegate>
 #include "DropTreeView.h"
 
 namespace QuarkMeta {
+
+class LibraryTreeView : public DropTreeView {
+    Q_OBJECT
+public:
+    explicit LibraryTreeView(QWidget* parent = nullptr) : DropTreeView(parent) {}
+    ~LibraryTreeView() override = default;
+
+protected:
+    void drawBranches(QPainter* painter, const QRect& rect, const QModelIndex& index) const override {
+        if (index.isValid() && index.data(Qt::UserRole + 1).toInt() == 0) {
+            return;
+        }
+        DropTreeView::drawBranches(painter, rect, index);
+    }
+};
 
 class LibraryItemDelegate : public QStyledItemDelegate {
     Q_OBJECT
@@ -16,6 +32,20 @@ public:
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+    bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index) override;
+
+    void setFilterKeyword(const QString& keyword) { m_filterKeyword = keyword; }
+
+    static QRect addBtnRect(const QRect& optionRect);
+
+signals:
+    void requestAddCategory();
+    void requestToggleSection();
+
+private:
+    void paintHighlightedText(QPainter* painter, const QRect& rect, const QString& text, const QString& keyword, const QFont& font, const QColor& normalColor, const QColor& matchColor) const;
+
+    QString m_filterKeyword;
 };
 
 class LibraryPanel : public QFrame {
@@ -26,6 +56,8 @@ public:
     ~LibraryPanel() override = default;
 
     void loadLibrary();
+    void saveLibraryOrder();
+    void sortCategoriesByName(bool ascending);
 
 signals:
     void categoryPathsSelected(const QStringList& paths);
@@ -35,15 +67,19 @@ private slots:
     void onCategoryClicked(const QModelIndex& index);
     void onCategoryContextMenu(const QPoint& pos);
     void onPathsDroppedToCategory(const QStringList& paths, const QModelIndex& target);
+    void toggleSection();
 
 private:
     void initUi();
     void createAndEditCategory(int parentId = 0);
+    void filterTreeNodes(const QString& keyword);
     QStandardItem* findItemByNodeId(QStandardItem* parent, int nodeId);
 
     QVBoxLayout* m_mainLayout = nullptr;
-    DropTreeView* m_treeView = nullptr;
+    LibraryTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
+    LibraryItemDelegate* m_delegate = nullptr;
+    QLineEdit* m_filterEdit = nullptr;
     bool m_isLoading = false;
     int m_pendingEditNodeId = 0;
 };

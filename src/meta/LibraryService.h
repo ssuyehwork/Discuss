@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QObject>
+#include <QMenu>
+#include <QAction>
 #include "LibraryDao.h"
 
 namespace QuarkMeta {
@@ -20,6 +22,8 @@ public:
     bool indexItem(int categoryId, const QString& filePath, const ItemMeta& meta);
     bool unindexItem(int categoryId, const QString& filePath);
     QList<ItemMeta> getIndexedItems(int categoryId) const;
+
+    QAction* buildLibraryAction(QMenu* parentMenu, const QStringList& targetPaths, QObject* receiver = nullptr);
 
 signals:
     void libraryChanged();

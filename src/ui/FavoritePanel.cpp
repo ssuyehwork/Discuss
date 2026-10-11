@@ -232,6 +232,8 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
         connect(sortAsc, &QAction::triggered, this, [this]() { sortItemsByName(true); });
         QAction* sortDesc = sortMenu->addAction("按名称 (Z→A)");
         connect(sortDesc, &QAction::triggered, this, [this]() { sortItemsByName(false); });
+        QAction* sortManual = sortMenu->addAction("手动");
+        connect(sortManual, &QAction::triggered, this, [this]() { loadFavorites(); });
 
         menu.exec(m_favoriteView->viewport()->mapToGlobal(pos));
         return;
@@ -337,6 +339,8 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     connect(sortAsc, &QAction::triggered, this, [this]() { sortItemsByName(true); });
     QAction* sortDesc = sortMenu->addAction("按名称 (Z→A)");
     connect(sortDesc, &QAction::triggered, this, [this]() { sortItemsByName(false); });
+    QAction* sortManual = sortMenu->addAction("手动");
+    connect(sortManual, &QAction::triggered, this, [this]() { loadFavorites(); });
 
     // 阻塞展示菜单
     menu.exec(m_favoriteView->viewport()->mapToGlobal(pos));

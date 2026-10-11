@@ -1,4 +1,7 @@
 #include "LibraryService.h"
+#include "../ui/UiHelper.h"
+#include "../ui/ToolTipOverlay.h"
+#include <QCursor>
 
 namespace QuarkMeta {
 
@@ -61,6 +64,23 @@ bool LibraryService::unindexItem(int categoryId, const QString& filePath) {
 
 QList<ItemMeta> LibraryService::getIndexedItems(int categoryId) const {
     return LibraryDao::getCategoryIndexedItems(categoryId);
+}
+
+QAction* LibraryService::buildLibraryAction(QMenu* parentMenu, const QStringList& targetPaths, QObject* receiver) {
+    if (!parentMenu || targetPaths.isEmpty()) return nullptr;
+
+    QIcon libIcon = UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18);
+    QAction* action = parentMenu->addAction(libIcon, "添加至“库”");
+
+    connect(action, &QAction::triggered, receiver ? receiver : parentMenu, [this, targetPaths]() {
+        if (addPathsToCategory(-2, targetPaths)) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将 %1 个项目归入未分类").arg(targetPaths.size()), 1500, QColor("#2ecc71"));
+        } else {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), "归入失败", 1500, QColor("#e81123"));
+        }
+    });
+
+    return action;
 }
 
 } // namespace QuarkMeta

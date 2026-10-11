@@ -29,6 +29,7 @@
 #include "../../meta/MetadataManager.h"
 #include "../../meta/FavoriteDao.h"
 #include "../../meta/FavoriteService.h"
+#include "../../meta/LibraryService.h"
 #include "ContextMenuFactory.h"
 #include "../../crypto/EncryptionManager.h"
 #include "../../core/LastOperationManager.h"
@@ -195,6 +196,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             }, m_panel);
 
             FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
+            
+            QStringList selPathsDrive = m_panel->getSelectedPaths();
+            if (selPathsDrive.isEmpty() && !path.isEmpty()) selPathsDrive << path;
+            LibraryService::instance().buildLibraryAction(&menu, selPathsDrive, m_panel);
 
             menu.addSeparator();
 
@@ -300,6 +305,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             }, m_panel);
 
             FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
+
+            QStringList selPathsItem = m_panel->getSelectedPaths();
+            if (selPathsItem.isEmpty() && !path.isEmpty()) selPathsItem << path;
+            LibraryService::instance().buildLibraryAction(&menu, selPathsItem, m_panel);
 
             menu.addSeparator();
 
