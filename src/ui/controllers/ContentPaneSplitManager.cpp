@@ -130,7 +130,7 @@ void ContentPaneSplitManager::normalizeTree(PaneNode* node) {
                         grandChild->parent = node;
                         newChildren.append(grandChild);
 
-                        QWidget* gWidget = grandChild->isSplitter ? static_cast<QWidget*>(grandChild->splitter) : static_cast<QWidget*>(grandChild->container);
+                        QWidget* gWidget = grandChild->isSplitter ? static_cast<QWidget*>(grandChild->splitter.data()) : grandChild->container.data();
                         if (gWidget) {
                             if (childIdx >= 0) {
                                 node->splitter->insertWidget(childIdx + g, gWidget);
@@ -154,7 +154,7 @@ void ContentPaneSplitManager::normalizeTree(PaneNode* node) {
             PaneNode* soleChild = node->children.first();
             soleChild->parent = node->parent;
 
-            QWidget* soleWidget = soleChild->isSplitter ? static_cast<QWidget*>(soleChild->splitter) : static_cast<QWidget*>(soleChild->container);
+            QWidget* soleWidget = soleChild->isSplitter ? static_cast<QWidget*>(soleChild->splitter.data()) : soleChild->container.data();
 
             if (node->parent) {
                 int idx = node->parent->children.indexOf(node);
@@ -671,12 +671,6 @@ void ContentPaneSplitManager::updateContainerMinimumWidth() {
         m_primaryPaneContainer->setMinimumWidth(minW);
         m_primaryPaneContainer->setMinimumHeight(minH);
     }
-    for (QWidget* container : m_paneContainers) {
-        if (container) {
-            container->setMinimumWidth(minW);
-            container->setMinimumHeight(minH);
-        }
-    }
 }
 
 void ContentPaneSplitManager::setSplitOrientation(Qt::Orientation target) {
@@ -687,54 +681,17 @@ void ContentPaneSplitManager::setSplitOrientation(Qt::Orientation target) {
 
     if (m_splitOrientation == target) return;
 
-    int count = paneCount();
-    if (target == Qt::Vertical && m_paneSplitter) {
-        int availH = m_paneSplitter->height();
-        int reqH = count * ContentPanel::kMinPaneHeight;
-        if (availH > 0 && availH < reqH) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "内容区高度不足，无法垂直排列", 2000, QColor("#e81123"));
-            return;
-        }
-    }
-
     m_splitOrientation = target;
-    if (m_paneSplitter) {
-        m_paneSplitter->setOrientation(target);
+    if (m_rootNode && m_rootNode->isSplitter) {
+        m_rootNode->orientation = target;
+        if (m_rootNode->splitter) {
+            m_rootNode->splitter->setOrientation(target);
+        }
     }
 
     updateContainerMinimumWidth();
     redistributePaneSizes();
     notifyLayoutChanged();
-}
-
-void ContentPaneSplitManager::updateOrientationPreviewOverlay(Qt::Orientation target) {
-    if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->updateOrientationPreviewOverlay(target);
-        return;
-    }
-
-    if (!m_paneSplitter) return;
-
-    if (!m_orientationPreviewWidget) {
-        m_orientationPreviewWidget = new QWidget(m_panel);
-        m_orientationPreviewWidget->setObjectName("OrientationPreviewWidget");
-        m_orientationPreviewWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
-    }
-
-    m_orientationPreviewWidget->setGeometry(m_paneSplitter->geometry());
-    m_orientationPreviewWidget->show();
-    m_orientationPreviewWidget->raise();
-}
-
-void ContentPaneSplitManager::hideOrientationPreviewOverlay() {
-    if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->hideOrientationPreviewOverlay();
-        return;
-    }
-
-    if (m_orientationPreviewWidget) {
-        m_orientationPreviewWidget->hide();
-    }
 }
 
 void ContentPaneSplitManager::closePane(ContentPanel* pane) {
@@ -825,11 +782,12 @@ void ContentPaneSplitManager::closeSecondaryPane() {
         return;
     }
 
-    if (m_panes.isEmpty()) return;
+    QList<ContentPanel*> allPanes = panes();
+    if (allPanes.isEmpty()) return;
 
-    ContentPanel* target = m_activePaneForSplit ? m_activePaneForSplit : m_panes.last();
+    ContentPanel* target = m_activePaneForSplit ? m_activePaneForSplit : allPanes.last();
     if (target == m_panel) {
-        target = m_panes.last();
+        target = allPanes.last();
     }
     closePane(target);
 }
@@ -1037,7 +995,8 @@ void ContentPaneSplitManager::refreshActiveIndicators() {
     }
 
     // 副窗格激活判定
-    for (ContentPanel* pane : m_panes) {
+    QList<ContentPanel*> secPanes = panes();
+    for (ContentPanel* pane : secPanes) {
         if (!pane) continue;
         bool paneActive = (m_activePaneForSplit == pane);
         bool paneShown = isSplit && paneActive;

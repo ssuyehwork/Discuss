@@ -6,6 +6,10 @@
 #include <QPoint>
 #include <QSplitter>
 #include <QTimer>
+#include <QPointer>
+#include <QWidget>
+
+#include "../TabBarWidget.h"
 
 namespace QuarkMeta {
 
@@ -76,7 +80,7 @@ private:
         Qt::Orientation orientation = Qt::Horizontal;
         QPointer<QSplitter> splitter = nullptr;
         QPointer<QWidget> container = nullptr;
-        QPointer<ContentPanel> panel = nullptr;
+        ContentPanel* panel = nullptr;
         bool isPrimary = false;
         QList<PaneNode*> children;
         PaneNode* parent = nullptr;
