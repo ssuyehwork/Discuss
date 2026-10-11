@@ -4,6 +4,7 @@
 #include <QTreeView>
 #include <QStandardItemModel>
 #include <QVBoxLayout>
+#include <QLineEdit>
 #include <QStyledItemDelegate>
 #include "DropTreeView.h"
 
@@ -16,6 +17,12 @@ public:
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+
+    void setFilterKeyword(const QString& keyword) { m_filterKeyword = keyword; }
+    static QRect getAddButtonRect(const QRect& optionRect);
+
+private:
+    QString m_filterKeyword;
 };
 
 class LibraryPanel : public QFrame {
@@ -39,11 +46,14 @@ private slots:
 private:
     void initUi();
     void createAndEditCategory(int parentId = 0);
+    void filterTreeNodes(const QString& keyword);
     QStandardItem* findItemByNodeId(QStandardItem* parent, int nodeId);
 
     QVBoxLayout* m_mainLayout = nullptr;
     DropTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
+    LibraryItemDelegate* m_delegate = nullptr;
+    QLineEdit* m_filterEdit = nullptr;
     bool m_isLoading = false;
     int m_pendingEditNodeId = 0;
 };
