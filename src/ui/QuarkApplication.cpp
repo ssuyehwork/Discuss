@@ -1,5 +1,6 @@
 #include "QuarkApplication.h"
 #include "UiHelper.h"
+#include "LocalShortcutInterceptor.h"
 #include <QEvent>
 #include <QWidget>
 #include <QLineEdit>
@@ -48,6 +49,14 @@ void QuarkApplication::performGlobalSelfHealing(QWidget* widget) {
 }
 
 bool QuarkApplication::notify(QObject* receiver, QEvent* event) {
+    if (event) {
+        if (event->type() == QEvent::ApplicationActivate) {
+            LocalShortcutInterceptor::instance().updateFocusState(true);
+        } else if (event->type() == QEvent::ApplicationDeactivate) {
+            LocalShortcutInterceptor::instance().updateFocusState(false);
+        }
+    }
+
     if (event && receiver) {
         QEvent::Type type = event->type();
 

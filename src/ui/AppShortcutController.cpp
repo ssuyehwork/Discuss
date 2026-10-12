@@ -2,6 +2,7 @@
 #include "SearchController.h"
 #include "TitleBarWidget.h"
 #include "TabBarWidget.h"
+#include "LocalShortcutInterceptor.h"
 #include "../core/NavigationService.h"
 #include "../core/UndoManager.h"
 #include <QApplication>
@@ -104,46 +105,58 @@ bool AppShortcutController::eventFilter(QObject* watched, QEvent* event) {
 void AppShortcutController::initShortcuts() {
     if (!m_window) return;
 
+    LocalShortcutInterceptor::instance().unregisterAllShortcuts();
+
     // 1. F5: 局内刷新当前目录
+    auto fnRefresh = []() {
+        NavigationService::instance().refresh();
+    };
     QShortcut* scRefresh = new QShortcut(QKeySequence(Qt::Key_F5), m_window);
     scRefresh->setContext(Qt::WindowShortcut);
-    connect(scRefresh, &QShortcut::activated, this, []() {
-        NavigationService::instance().refresh();
-    });
+    connect(scRefresh, &QShortcut::activated, this, fnRefresh);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::Key_F5), fnRefresh);
 
-    // 2. Ctrl+Z: 局内文件撤销 (输入框获焦时 Qt 底层优先响应文字撤销)
+    // 2. Ctrl+Z: 局内文件撤销
+    auto fnUndo = []() {
+        if (!isEditingFocus()) UndoManager::instance().undo();
+    };
     QShortcut* scUndo = new QShortcut(QKeySequence::Undo, m_window);
     scUndo->setContext(Qt::WindowShortcut);
-    connect(scUndo, &QShortcut::activated, this, []() {
-        UndoManager::instance().undo();
-    });
+    connect(scUndo, &QShortcut::activated, this, fnUndo);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence::Undo, fnUndo);
 
     // 3. Ctrl+Shift+Z / Ctrl+Y: 局内文件重做
+    auto fnRedo = []() {
+        if (!isEditingFocus()) UndoManager::instance().redo();
+    };
     QShortcut* scRedo = new QShortcut(QKeySequence::Redo, m_window);
     scRedo->setContext(Qt::WindowShortcut);
-    connect(scRedo, &QShortcut::activated, this, []() {
-        UndoManager::instance().redo();
-    });
+    connect(scRedo, &QShortcut::activated, this, fnRedo);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence::Redo, fnRedo);
 
     // 4. Alt+Q: 局内切换窗口置顶
+    auto fnPin = [this]() {
+        emit togglePinRequested();
+    };
     QShortcut* scPin = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Q), m_window);
     scPin->setContext(Qt::WindowShortcut);
-    connect(scPin, &QShortcut::activated, this, &AppShortcutController::togglePinRequested);
+    connect(scPin, &QShortcut::activated, this, fnPin);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::ALT | Qt::Key_Q), fnPin);
 
     // 5. Ctrl+F: 局内聚焦搜索栏
-    QShortcut* scFind = new QShortcut(QKeySequence::Find, m_window);
-    scFind->setContext(Qt::WindowShortcut);
-    connect(scFind, &QShortcut::activated, this, [this]() {
+    auto fnFind = [this]() {
         if (m_searchController && m_searchController->searchEdit()) {
             m_searchController->searchEdit()->setFocus(Qt::ShortcutFocusReason);
             m_searchController->searchEdit()->selectAll();
         }
-    });
+    };
+    QShortcut* scFind = new QShortcut(QKeySequence::Find, m_window);
+    scFind->setContext(Qt::WindowShortcut);
+    connect(scFind, &QShortcut::activated, this, fnFind);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence::Find, fnFind);
 
-    // 6. Ctrl+W: 优先关闭当前活动标签页 (仅剩 1 个标签页时退出窗口)
-    QShortcut* scClose = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), m_window);
-    scClose->setContext(Qt::WindowShortcut);
-    connect(scClose, &QShortcut::activated, this, [this]() {
+    // 6. Ctrl+W: 优先关闭当前活动标签页
+    auto fnClose = [this]() {
         if (m_window) {
             if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
                 if (titleBar->tabBar()) {
@@ -155,12 +168,14 @@ void AppShortcutController::initShortcuts() {
             }
             m_window->close();
         }
-    });
+    };
+    QShortcut* scClose = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), m_window);
+    scClose->setContext(Qt::WindowShortcut);
+    connect(scClose, &QShortcut::activated, this, fnClose);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::CTRL | Qt::Key_W), fnClose);
 
-    // 6b. Ctrl+Tab / Ctrl+Shift+Tab: 标签页循环顺序切换
-    QShortcut* scNextTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Tab), m_window);
-    scNextTab->setContext(Qt::WindowShortcut);
-    connect(scNextTab, &QShortcut::activated, this, [this]() {
+    // 6b. Ctrl+Tab: 标签页顺序切换
+    auto fnNextTab = [this]() {
         if (m_window) {
             if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
                 if (titleBar->tabBar()) {
@@ -168,20 +183,14 @@ void AppShortcutController::initShortcuts() {
                 }
             }
         }
-    });
+    };
+    QShortcut* scNextTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Tab), m_window);
+    scNextTab->setContext(Qt::WindowShortcut);
+    connect(scNextTab, &QShortcut::activated, this, fnNextTab);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::CTRL | Qt::Key_Tab), fnNextTab);
 
-    // 9. Ctrl+Shift+N: 新建文件夹
-    QShortcut* scNewFolder = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N), m_window);
-    scNewFolder->setContext(Qt::WindowShortcut);
-    connect(scNewFolder, &QShortcut::activated, this, [this]() {
-        if (!isEditingFocus()) {
-            emit createNewFolderRequested();
-        }
-    });
-
-    QShortcut* scPrevTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Backtab), m_window);
-    scPrevTab->setContext(Qt::WindowShortcut);
-    connect(scPrevTab, &QShortcut::activated, this, [this]() {
+    // 6c. Ctrl+Shift+Tab: 标签页逆序切换
+    auto fnPrevTab = [this]() {
         if (m_window) {
             if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
                 if (titleBar->tabBar()) {
@@ -189,13 +198,14 @@ void AppShortcutController::initShortcuts() {
                 }
             }
         }
-    });
-
+    };
+    QShortcut* scPrevTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Backtab), m_window);
+    scPrevTab->setContext(Qt::WindowShortcut);
+    connect(scPrevTab, &QShortcut::activated, this, fnPrevTab);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Backtab), fnPrevTab);
 
     // 7. Ctrl+T: 新建标签页
-    QShortcut* scNewTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_T), m_window);
-    scNewTab->setContext(Qt::WindowShortcut);
-    connect(scNewTab, &QShortcut::activated, this, [this]() {
+    auto fnNewTab = [this]() {
         if (m_window) {
             if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
                 if (titleBar->tabBar()) {
@@ -203,12 +213,14 @@ void AppShortcutController::initShortcuts() {
                 }
             }
         }
-    });
+    };
+    QShortcut* scNewTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_T), m_window);
+    scNewTab->setContext(Qt::WindowShortcut);
+    connect(scNewTab, &QShortcut::activated, this, fnNewTab);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::CTRL | Qt::Key_T), fnNewTab);
 
     // 8. Ctrl+Shift+T: 恢复关闭的标签页
-    QShortcut* scRestoreTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), m_window);
-    scRestoreTab->setContext(Qt::WindowShortcut);
-    connect(scRestoreTab, &QShortcut::activated, this, [this]() {
+    auto fnRestoreTab = [this]() {
         if (m_window) {
             if (auto titleBar = m_window->findChild<TitleBarWidget*>()) {
                 if (titleBar->tabBar()) {
@@ -216,16 +228,33 @@ void AppShortcutController::initShortcuts() {
                 }
             }
         }
-    });
+    };
+    QShortcut* scRestoreTab = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), m_window);
+    scRestoreTab->setContext(Qt::WindowShortcut);
+    connect(scRestoreTab, &QShortcut::activated, this, fnRestoreTab);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_T), fnRestoreTab);
+
+    // 9. Ctrl+Shift+N: 新建文件夹
+    auto fnNewFolder = [this]() {
+        if (!isEditingFocus()) {
+            emit createNewFolderRequested();
+        }
+    };
+    QShortcut* scNewFolder = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N), m_window);
+    scNewFolder->setContext(Qt::WindowShortcut);
+    connect(scNewFolder, &QShortcut::activated, this, fnNewFolder);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N), fnNewFolder);
 
     // 10. Ctrl+Shift+E: 提取文件文本内容至剪贴板
-    QShortcut* scExtract = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), m_window);
-    scExtract->setContext(Qt::WindowShortcut);
-    connect(scExtract, &QShortcut::activated, this, [this]() {
+    auto fnExtract = [this]() {
         if (!isEditingFocus()) {
             emit extractContentRequested();
         }
-    });
+    };
+    QShortcut* scExtract = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), m_window);
+    scExtract->setContext(Qt::WindowShortcut);
+    connect(scExtract, &QShortcut::activated, this, fnExtract);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), fnExtract);
 }
 
 } // namespace QuarkMeta
