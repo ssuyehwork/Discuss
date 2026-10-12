@@ -257,16 +257,13 @@ void TagSelectorOverlay::populateGrid() {
         m_gridFlowLayout->addWidget(lblRec);
 
         for (const QString& recTag : m_recommendedTags) {
-            QPushButton* btn = new QPushButton(m_tagGridWidget);
+            QPushButton* btn = new QPushButton(recTag, m_tagGridWidget);
             btn->setObjectName("TagOverlayRecBtn");
             btn->setCheckable(true);
             btn->setCursor(Qt::PointingHandCursor);
             btn->setFixedHeight(22);
-
-            bool isSelected = m_selectedTags.contains(recTag);
-            btn->setText(recTag);
-            btn->setIcon(UiHelper::getIcon(isSelected ? "check" : "star_filled", isSelected ? QColor("#FFFFFF") : QColor("#378ADD"), 12));
-            btn->setIconSize(QSize(12, 12));
+            btn->setProperty("tagText", recTag);
+            btn->setProperty("isRecommended", true);
 
             m_tagButtons.append(btn);
             m_gridFlowLayout->addWidget(btn);
@@ -283,11 +280,13 @@ void TagSelectorOverlay::populateGrid() {
             continue;
         }
 
-        QPushButton* btn = new QPushButton(m_tagGridWidget);
+        QPushButton* btn = new QPushButton(tag, m_tagGridWidget);
         btn->setObjectName("TagOverlayBtn");
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(22);
+        btn->setProperty("tagText", tag);
+        btn->setProperty("isRecommended", false);
 
         m_tagButtons.append(btn);
         m_gridFlowLayout->addWidget(btn);
@@ -317,10 +316,12 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
 }
 
 void TagSelectorOverlay::updateSelectionHighlight() {
-    for (int i = 0; i < m_displayedTags.size(); ++i) {
-        QString tag = m_displayedTags[i];
+    for (int i = 0; i < m_tagButtons.size(); ++i) {
         QPushButton* btn = m_tagButtons[i];
+        if (!btn) continue;
 
+        QString tag = btn->property("tagText").toString();
+        bool isRec = btn->property("isRecommended").toBool();
         bool isSelected = m_selectedTags.contains(tag);
         bool isFocused = (i == m_currentTagIndex);
 
@@ -328,6 +329,8 @@ void TagSelectorOverlay::updateSelectionHighlight() {
 
         if (isSelected) {
             btn->setIcon(UiHelper::getIcon("check", QColor("#FFFFFF"), 12));
+        } else if (isRec) {
+            btn->setIcon(UiHelper::getIcon("star_filled", QColor("#378ADD"), 12));
         } else {
             btn->setIcon(UiHelper::getIcon("clock", QColor("#888888"), 12));
         }
