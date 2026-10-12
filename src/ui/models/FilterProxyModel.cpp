@@ -2,6 +2,7 @@
 #include "ItemModelBase.h"
 #include "../UiHelper.h"
 #include <QDateTime>
+#include <QRegularExpression>
 #include <cmath>
 
 namespace QuarkMeta {
@@ -206,27 +207,42 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
         if (currentFilter.thumbnailPresence == FilterState::NoThumbnail && isReady) return false;
     }
 
-    // 7. 搜索关键词匹配
+    // 7. 搜索关键词匹配 (支持分行、顿号、逗号切割的多项目 OR 匹配)
     if (!currentFilter.keyword.isEmpty()) {
-        const QString& kw = currentFilter.keyword;
-        bool match = record.filename.contains(kw, Qt::CaseInsensitive);
+        static const QRegularExpression sepRegex("[\r\n、,，]+");
+        QStringList keywords = currentFilter.keyword.split(sepRegex, Qt::SkipEmptyParts);
 
-        if (!match) {
-            for (const QString& tag : record.tags) {
-                if (tag.contains(kw, Qt::CaseInsensitive)) {
-                    match = true;
+        if (!keywords.isEmpty()) {
+            bool anyMatch = false;
+            for (const QString& rawKw : keywords) {
+                QString kw = rawKw.trimmed();
+                if (kw.isEmpty()) continue;
+
+                bool match = record.filename.contains(kw, Qt::CaseInsensitive);
+
+                if (!match) {
+                    for (const QString& tag : record.tags) {
+                        if (tag.contains(kw, Qt::CaseInsensitive)) {
+                            match = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!match && !record.note.isEmpty()) {
+                    if (record.note.contains(kw, Qt::CaseInsensitive)) {
+                        match = true;
+                    }
+                }
+
+                if (match) {
+                    anyMatch = true;
                     break;
                 }
             }
-        }
 
-        if (!match && !record.note.isEmpty()) {
-            if (record.note.contains(kw, Qt::CaseInsensitive)) {
-                match = true;
-            }
+            if (!anyMatch) return false;
         }
-
-        if (!match) return false;
     }
 
     return true;

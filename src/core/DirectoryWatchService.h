@@ -97,6 +97,7 @@ private:
     void onRawEventsBatch(const WatchKey& key, const QStringList& dirtyNames, bool overflow);
     void onDirectoryLostInternal(const WatchKey& key, const QString& dirPath);
     void checkDebounceTimers();
+    void removeRetiredItem(const WatchKey& key);
 
 #ifdef Q_OS_WIN
     static VOID WINAPI notificationCompletionRoutine(DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped);
@@ -104,6 +105,7 @@ private:
 
     QMutex m_mutex;
     QHash<WatchKey, std::shared_ptr<WatchItem>> m_watches;
+    QHash<WatchKey, std::shared_ptr<WatchItem>> m_retiredItems;
     QList<std::shared_ptr<WatchItem>> m_pendingStarts;
     QList<std::shared_ptr<WatchItem>> m_pendingStops;
 
