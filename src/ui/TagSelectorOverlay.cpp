@@ -13,6 +13,11 @@
 namespace QuarkMeta {
 
 
+TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent)
+    : TagSelectorOverlay(initialSelected, QStringList{}, parent)
+{
+}
+
 TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths, QWidget* parent)
     : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), 
       m_selectedTags(initialSelected) 
