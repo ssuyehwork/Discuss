@@ -27,6 +27,7 @@
 #include <QCoreApplication>
 #include <QtConcurrent>
 #include <QPointer>
+#include <QTimer>
 
 namespace QuarkMeta {
 
@@ -144,19 +145,113 @@ void FavoritePanel::initUi() {
     m_favoriteView->setModel(m_favoriteModel);
     m_favoriteView->setItemDelegate(new FavoriteItemDelegate(this));
 
-
     m_mainLayout->addWidget(m_favoriteView, 1);
 
+    // 启用树内拖拽重排序底座
+    m_favoriteView->setInternalReorderEnabled(true);
+
+    m_favoriteView->setInternalDragValidator([](const QModelIndex& index) {
+        if (!index.isValid()) return false;
+        int nodeId = index.data(Qt::UserRole + 6).toInt();
+        return nodeId > 0;
+    });
+
+    m_favoriteView->setInternalDropValidator([this](const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone) -> bool {
+        if (sources.isEmpty()) return false;
+
+        auto isSourceOrDescendant = [](const QModelIndex& idx, const QList<QPersistentModelIndex>& srcList) -> bool {
+            QModelIndex cur = idx;
+            while (cur.isValid()) {
+                for (const QPersistentModelIndex& psrc : srcList) {
+                    if (psrc.isValid() && psrc == cur) return true;
+                }
+                cur = cur.parent();
+            }
+            return false;
+        };
+
+        // 1. 检查目标节点或其父节点是否属于被拖动节点或其后代
+        if (zone == InternalDropZone::OnItem) {
+            if (isSourceOrDescendant(target, sources)) return false;
+        } else if (zone == InternalDropZone::Above || zone == InternalDropZone::Below) {
+            for (const QPersistentModelIndex& psrc : sources) {
+                if (psrc.isValid() && psrc == target) return false;
+            }
+            if (target.parent().isValid() && isSourceOrDescendant(target.parent(), sources)) return false;
+        }
+
+        // 2. 位置变化检查
+        QStandardItem* targetParentItem = nullptr;
+        int destRow = 0;
+
+        if (zone == InternalDropZone::OnItem) {
+            if (target.isValid()) {
+                targetParentItem = m_favoriteModel->itemFromIndex(target);
+                if (targetParentItem) destRow = targetParentItem->rowCount();
+            }
+        } else if (zone == InternalDropZone::Above) {
+            if (target.isValid()) {
+                targetParentItem = target.parent().isValid() ? m_favoriteModel->itemFromIndex(target.parent()) : m_favoriteModel->invisibleRootItem();
+                destRow = target.row();
+            }
+        } else if (zone == InternalDropZone::Below) {
+            if (target.isValid()) {
+                targetParentItem = target.parent().isValid() ? m_favoriteModel->itemFromIndex(target.parent()) : m_favoriteModel->invisibleRootItem();
+                destRow = target.row() + 1;
+            }
+        } else if (zone == InternalDropZone::Blank) {
+            targetParentItem = m_favoriteModel->invisibleRootItem();
+            destRow = targetParentItem->rowCount();
+        }
+
+        if (!targetParentItem) {
+            targetParentItem = m_favoriteModel->invisibleRootItem();
+            destRow = targetParentItem->rowCount();
+        }
+
+        bool anyChanged = false;
+        for (const QPersistentModelIndex& psrc : sources) {
+            if (!psrc.isValid()) continue;
+            QStandardItem* srcItem = m_favoriteModel->itemFromIndex(psrc);
+            if (!srcItem) continue;
+
+            QStandardItem* srcParentItem = srcItem->parent() ? srcItem->parent() : m_favoriteModel->invisibleRootItem();
+            int srcRow = srcItem->row();
+
+            if (srcParentItem != targetParentItem) {
+                anyChanged = true;
+                break;
+            } else {
+                if (zone == InternalDropZone::OnItem || zone == InternalDropZone::Blank) {
+                    if (srcRow != targetParentItem->rowCount() - 1) {
+                        anyChanged = true;
+                        break;
+                    }
+                } else if (zone == InternalDropZone::Above) {
+                    if (srcRow != destRow && srcRow != destRow - 1) {
+                        anyChanged = true;
+                        break;
+                    }
+                } else if (zone == InternalDropZone::Below) {
+                    if (srcRow != destRow && srcRow != destRow - 1) {
+                        anyChanged = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return anyChanged;
+    });
+
+    connect(m_favoriteView, &DropTreeView::internalMoveRequested, this, &FavoritePanel::onInternalMoveRequested);
     connect(m_favoriteView, &QTreeView::clicked, this, &FavoritePanel::onFavoriteClicked);
     connect(m_favoriteView, &QWidget::customContextMenuRequested, this, &FavoritePanel::onFavoriteContextMenu);
     connect(m_favoriteView, &DropTreeView::pathsDropped, this, &FavoritePanel::onPathsDroppedToFavorite);
 
-    auto updateFavAndSave = [this](){
-        if (!m_isLoading) saveFavorites();
-    };
-    connect(m_favoriteModel, &QStandardItemModel::rowsMoved, this, updateFavAndSave, Qt::QueuedConnection);
-    connect(m_favoriteModel, &QStandardItemModel::rowsInserted, this, updateFavAndSave, Qt::QueuedConnection);
-    connect(m_favoriteModel, &QStandardItemModel::rowsRemoved, this, updateFavAndSave, Qt::QueuedConnection);
+    connect(m_favoriteModel, &QStandardItemModel::rowsMoved, this, &FavoritePanel::markOrderDirty, Qt::DirectConnection);
+    connect(m_favoriteModel, &QStandardItemModel::rowsInserted, this, &FavoritePanel::markOrderDirty, Qt::DirectConnection);
+    connect(m_favoriteModel, &QStandardItemModel::rowsRemoved, this, &FavoritePanel::markOrderDirty, Qt::DirectConnection);
 
     // 🚀【行内编辑即时落库】：用户重命名编辑完成后，即时更新 SQLite
     connect(m_favoriteModel, &QStandardItemModel::itemChanged, this, [this](QStandardItem* item) {
@@ -178,6 +273,137 @@ void FavoritePanel::initUi() {
     connect(&FavoriteService::instance(), &FavoriteService::favoritesReloaded, this, [this]() {
         loadFavorites();
     });
+}
+
+void FavoritePanel::markOrderDirty() {
+    if (m_isLoading) return;
+    m_orderDirty = true;
+    QTimer::singleShot(0, this, &FavoritePanel::flushOrder);
+}
+
+void FavoritePanel::flushOrder() {
+    if (!m_orderDirty) return;
+    saveFavorites();
+    m_orderDirty = false;
+}
+
+void FavoritePanel::onInternalMoveRequested(const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone) {
+    if (sources.isEmpty() || !m_favoriteModel) return;
+
+    QStandardItem* parentItem = nullptr;
+    int destRow = 0;
+
+    if (zone == InternalDropZone::OnItem) {
+        if (target.isValid()) {
+            parentItem = m_favoriteModel->itemFromIndex(target);
+            if (parentItem) {
+                destRow = parentItem->rowCount();
+            }
+        }
+    } else if (zone == InternalDropZone::Above) {
+        if (target.isValid()) {
+            parentItem = target.parent().isValid() ? m_favoriteModel->itemFromIndex(target.parent()) : m_favoriteModel->invisibleRootItem();
+            destRow = target.row();
+        }
+    } else if (zone == InternalDropZone::Below) {
+        if (target.isValid()) {
+            parentItem = target.parent().isValid() ? m_favoriteModel->itemFromIndex(target.parent()) : m_favoriteModel->invisibleRootItem();
+            destRow = target.row() + 1;
+        }
+    } else if (zone == InternalDropZone::Blank) {
+        parentItem = m_favoriteModel->invisibleRootItem();
+        destRow = parentItem->rowCount();
+    }
+
+    if (!parentItem) {
+        parentItem = m_favoriteModel->invisibleRootItem();
+        destRow = parentItem->rowCount();
+    }
+
+    // 记录展开状态
+    QMap<int, bool> expandedMap;
+    std::function<void(QStandardItem*)> saveExpandedStates = [&](QStandardItem* pItem) {
+        int rCount = pItem ? pItem->rowCount() : m_favoriteModel->rowCount();
+        for (int i = 0; i < rCount; ++i) {
+            QStandardItem* child = pItem ? pItem->child(i) : m_favoriteModel->item(i);
+            if (!child) continue;
+            int nodeId = child->data(Qt::UserRole + 6).toInt();
+            if (nodeId > 0 && m_favoriteView) {
+                expandedMap[nodeId] = m_favoriteView->isExpanded(child->index());
+            }
+            saveExpandedStates(child);
+        }
+    };
+    saveExpandedStates(nullptr);
+
+    // 转换 itemsToMove
+    QList<QStandardItem*> itemsToMove;
+    for (const QPersistentModelIndex& pidx : sources) {
+        if (pidx.isValid()) {
+            QStandardItem* item = m_favoriteModel->itemFromIndex(pidx);
+            if (item) itemsToMove.append(item);
+        }
+    }
+    if (itemsToMove.isEmpty()) return;
+
+    QList<QStandardItem*> movedItemsList;
+    for (QStandardItem* item : itemsToMove) {
+        QStandardItem* srcParent = item->parent() ? item->parent() : m_favoriteModel->invisibleRootItem();
+        int srcRow = item->row();
+
+        QList<QStandardItem*> rowItems = srcParent->takeRow(srcRow);
+        if (rowItems.isEmpty()) continue;
+
+        int insertRow = destRow;
+        if (srcParent == parentItem && srcRow < insertRow) {
+            insertRow--;
+        }
+
+        parentItem->insertRow(insertRow, rowItems);
+        destRow = insertRow + 1;
+        movedItemsList.append(rowItems.first());
+    }
+
+    // 恢复展开状态
+    std::function<void(QStandardItem*)> restoreExpandedStates = [&](QStandardItem* pItem) {
+        int rCount = pItem ? pItem->rowCount() : m_favoriteModel->rowCount();
+        for (int i = 0; i < rCount; ++i) {
+            QStandardItem* child = pItem ? pItem->child(i) : m_favoriteModel->item(i);
+            if (!child) continue;
+            int nodeId = child->data(Qt::UserRole + 6).toInt();
+            if (nodeId > 0 && expandedMap.contains(nodeId) && m_favoriteView) {
+                m_favoriteView->setExpanded(child->index(), expandedMap.value(nodeId));
+            }
+            restoreExpandedStates(child);
+        }
+    };
+    restoreExpandedStates(nullptr);
+
+    // 目标若是虚拟文件夹，展开它
+    if (zone == InternalDropZone::OnItem && target.isValid() && target.data(Qt::UserRole + 7).toBool()) {
+        m_favoriteView->setExpanded(target, true);
+    }
+
+    // 更新新父节点的 id (顶层为 0)
+    int newParentNodeId = 0;
+    if (parentItem != m_favoriteModel->invisibleRootItem()) {
+        newParentNodeId = parentItem->data(Qt::UserRole + 6).toInt();
+    }
+    for (QStandardItem* movedItem : movedItemsList) {
+        movedItem->setData(newParentNodeId, Qt::UserRole + 8);
+    }
+
+    // 恢复选中状态
+    if (m_favoriteView && m_favoriteView->selectionModel()) {
+        m_favoriteView->selectionModel()->clearSelection();
+        for (QStandardItem* movedItem : movedItemsList) {
+            m_favoriteView->selectionModel()->select(movedItem->index(), QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        }
+    }
+
+    // 落地保存
+    saveFavorites();
+    m_orderDirty = false;
 }
 
 void FavoritePanel::onFavoriteClicked(const QModelIndex& index) {
@@ -382,6 +608,7 @@ void FavoritePanel::onPathsDroppedToFavorite(const QStringList& paths, const QMo
 
     if (addedCount > 0) {
         saveFavorites();
+        m_orderDirty = false;
         if (duplicateCount == 0) {
             ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
         } else {
@@ -549,10 +776,10 @@ void FavoritePanel::loadFavorites() {
 void FavoritePanel::saveFavorites() {
     if (!m_favoriteModel || m_isLoading) return;
 
-    QList<QPair<int, int>> orders;
+    QList<NodeOrderEntry> entries;
     int orderCounter = 1;
 
-    std::function<void(QStandardItem*, int)> traverseAndSave = [&](QStandardItem* parentItem, int parentId) {
+    std::function<void(QStandardItem*, int)> traverseAndCollect = [&](QStandardItem* parentItem, int parentId) {
         int rowCount = parentItem ? parentItem->rowCount() : m_favoriteModel->rowCount();
         for (int i = 0; i < rowCount; ++i) {
             QStandardItem* item = parentItem ? parentItem->child(i) : m_favoriteModel->item(i);
@@ -560,13 +787,22 @@ void FavoritePanel::saveFavorites() {
 
             int nodeId = item->data(Qt::UserRole + 6).toInt();
             if (nodeId > 0) {
-                FavoriteDao::updateNodeParentAndOrder(nodeId, parentId, orderCounter++);
-                traverseAndSave(item, nodeId);
+                NodeOrderEntry entry;
+                entry.id = nodeId;
+                entry.parentId = parentId;
+                entry.sortOrder = orderCounter++;
+                entries.append(entry);
+
+                traverseAndCollect(item, nodeId);
             }
         }
     };
 
-    traverseAndSave(nullptr, 0);
+    traverseAndCollect(nullptr, 0);
+
+    if (!entries.isEmpty()) {
+        FavoriteDao::updateNodesParentAndOrder(entries);
+    }
 }
 
 bool FavoritePanel::containsPath(const QString& path) const {
@@ -622,6 +858,7 @@ void FavoritePanel::sortItemsByName(bool ascending) {
 
     sortChildren(nullptr);
     saveFavorites();
+    m_orderDirty = false;
 }
 
 } // namespace QuarkMeta

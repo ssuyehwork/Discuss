@@ -67,6 +67,9 @@ private slots:
     void onCategoryClicked(const QModelIndex& index);
     void onCategoryContextMenu(const QPoint& pos);
     void onPathsDroppedToCategory(const QStringList& paths, const QModelIndex& target);
+    void onInternalMoveRequested(const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone);
+    void markOrderDirty();
+    void flushOrder();
     void toggleSection();
 
 private:
@@ -81,6 +84,7 @@ private:
     LibraryItemDelegate* m_delegate = nullptr;
     QLineEdit* m_filterEdit = nullptr;
     bool m_isLoading = false;
+    bool m_orderDirty = false;
     int m_pendingEditNodeId = 0;
 };
 

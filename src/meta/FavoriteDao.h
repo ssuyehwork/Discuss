@@ -6,6 +6,15 @@
 
 namespace QuarkMeta {
 
+#ifndef QUARKMETA_NODEORDERENTRY_DEFINED
+#define QUARKMETA_NODEORDERENTRY_DEFINED
+struct NodeOrderEntry {
+    int id = 0;
+    int parentId = 0;
+    int sortOrder = 0;
+};
+#endif
+
 enum class FavoriteNodeType {
     VirtualCategory = 0,
     RealPath = 1
@@ -34,6 +43,7 @@ public:
     static bool updateFavorite(const QString& path, const QString& iconKey, const QString& colorHex);
     static bool updateFavoriteNode(int id, const QString& name, const QString& iconKey, const QString& colorHex);
     static bool updateNodeParentAndOrder(int id, int newParentId, int sortOrder);
+    static bool updateNodesParentAndOrder(const QList<NodeOrderEntry>& entries);
     static bool updatePresetTags(int id, const QStringList& tags);
     static bool containsPath(const QString& path);
     static bool updateSortOrders(const QList<QPair<int, int>>& orders);

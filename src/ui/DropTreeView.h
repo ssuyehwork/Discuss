@@ -5,14 +5,19 @@
 #include <QHeaderView>
 #include <QPainter>
 #include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDragLeaveEvent>
 #include <QDropEvent>
 #include <QMimeData>
 #include <QTimer>
+#include <functional>
 #include <vector>
 #include "RowLayoutEngine.h"
 #include "../core/ModelContract.h"
 
 namespace QuarkMeta {
+
+enum class InternalDropZone { Above, OnItem, Below, Blank };
 
 /**
  * @brief 列表视图列策略配置 (ColumnPolicy)
@@ -124,12 +129,23 @@ public:
     void updateGroupHeaderSpanning();
     void applyColumnPolicies();
 
+    // 树内拖拽排序配置 API
+    void setInternalReorderEnabled(bool enabled);
+    void setInternalDragValidator(std::function<bool(const QModelIndex&)> canDragNode);
+    void setInternalDropValidator(std::function<bool(const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone)> canDrop);
+
 signals:
     void notesDropped(const QList<int>& noteIds, const QModelIndex& targetIndex);
     void pathsDropped(const QStringList& paths, const QModelIndex& targetIndex, Qt::DropAction action);
+    void internalMoveRequested(const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone);
 
 protected:
     void startDrag(Qt::DropActions supportedActions) override;
+
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
     void keyboardSearch(const QString& search) override;
     void paintEvent(QPaintEvent* event) override;
@@ -137,11 +153,29 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
 
 private:
+    InternalDropZone calculateDropZone(const QPoint& pos, QModelIndex& outTargetIndex) const;
+    void clearInternalDropIndicator();
+    void updateEdgeScroll(const QPoint& pos);
+    void stopEdgeScroll();
+
     QTimer* m_autoExpandTimer = nullptr;
     QModelIndex m_hoverIndex;
     QString m_emptyHint;
     int m_bottomMargin = 0;
     bool m_isApplyingPolicies = false;
+
+    // 树内拖拽排序状态成员
+    bool m_internalReorderEnabled = false;
+    std::function<bool(const QModelIndex&)> m_internalDragValidator;
+    std::function<bool(const QList<QPersistentModelIndex>&, const QModelIndex&, InternalDropZone)> m_internalDropValidator;
+
+    QList<QPersistentModelIndex> m_internalDragSources;
+    QModelIndex m_indicatorIndex;
+    InternalDropZone m_indicatorZone = InternalDropZone::Blank;
+    bool m_showIndicator = false;
+
+    QTimer* m_edgeScrollTimer = nullptr;
+    int m_edgeScrollDelta = 0;
 };
 
 } // namespace QuarkMeta

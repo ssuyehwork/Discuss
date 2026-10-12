@@ -42,11 +42,17 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
 
     if (event->type() == QEvent::DragEnter) {
         auto* dragEvent = static_cast<QDragEnterEvent*>(event);
+        if (dragEvent->mimeData() && dragEvent->mimeData()->hasFormat("application/x-quarkmeta-tree-nodes")) {
+            return false;
+        }
         if (ViewDragDropHelper::handleDragEnter(m_targetView, dragEvent)) {
             return true;
         }
     } else if (event->type() == QEvent::DragMove) {
         auto* moveEvent = static_cast<QDragMoveEvent*>(event);
+        if (moveEvent->mimeData() && moveEvent->mimeData()->hasFormat("application/x-quarkmeta-tree-nodes")) {
+            return false;
+        }
         QModelIndex hoverIdx = m_targetView->indexAt(moveEvent->position().toPoint());
         if (hoverIdx.isValid()) {
             int nodeId = hoverIdx.data(Qt::UserRole + 1).toInt();
@@ -69,10 +75,13 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
     } else if (event->type() == QEvent::DragLeave) {
         clearDropHighlight();
         ViewDragDropHelper::clearHover(m_targetView);
-        return true;
+        return false;
     } else if (event->type() == QEvent::Drop) {
         clearDropHighlight();
         auto* dropEv = static_cast<QDropEvent*>(event);
+        if (dropEv->mimeData() && dropEv->mimeData()->hasFormat("application/x-quarkmeta-tree-nodes")) {
+            return false;
+        }
         QStringList paths;
         QModelIndex targetIdx;
         Qt::DropAction action = Qt::CopyAction;

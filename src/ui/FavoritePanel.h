@@ -48,6 +48,9 @@ private slots:
     void onFavoriteClicked(const QModelIndex& index);
     void onFavoriteContextMenu(const QPoint& pos);
     void onPathsDroppedToFavorite(const QStringList& paths, const QModelIndex& target);
+    void onInternalMoveRequested(const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone);
+    void markOrderDirty();
+    void flushOrder();
 
 private:
     void initUi();
@@ -59,6 +62,7 @@ private:
     DropTreeView* m_favoriteView = nullptr;
     QStandardItemModel* m_favoriteModel = nullptr;
     bool m_isLoading = false;
+    bool m_orderDirty = false;
     int m_pendingEditNodeId = 0;
 };
 

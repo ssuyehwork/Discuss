@@ -294,6 +294,106 @@ void LibraryPanel::initUi() {
 
     m_mainLayout->addWidget(m_treeView, 1);
 
+    // 启用树内拖拽重排序底座
+    m_treeView->setInternalReorderEnabled(true);
+
+    m_treeView->setInternalDragValidator([this](const QModelIndex& index) {
+        if (!index.isValid()) return false;
+        if (m_filterEdit && !m_filterEdit->text().trimmed().isEmpty()) {
+            return false;
+        }
+        int nodeId = index.data(Qt::UserRole + 1).toInt();
+        return nodeId > 0;
+    });
+
+    m_treeView->setInternalDropValidator([this](const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone) -> bool {
+        if (sources.isEmpty()) return false;
+        if (m_filterEdit && !m_filterEdit->text().trimmed().isEmpty()) return false;
+
+        // 校验 sources 节点：全为 nodeId > 0
+        for (const QPersistentModelIndex& psrc : sources) {
+            if (!psrc.isValid()) return false;
+            int srcId = psrc.data(Qt::UserRole + 1).toInt();
+            if (srcId <= 0) return false;
+        }
+
+        auto isSourceOrDescendant = [](const QModelIndex& idx, const QList<QPersistentModelIndex>& srcList) -> bool {
+            QModelIndex cur = idx;
+            while (cur.isValid()) {
+                for (const QPersistentModelIndex& psrc : srcList) {
+                    if (psrc.isValid() && psrc == cur) return true;
+                }
+                cur = cur.parent();
+            }
+            return false;
+        };
+
+        QStandardItem* sectionItem = findItemByNodeId(m_model->invisibleRootItem(), 0);
+        if (!sectionItem) return false;
+
+        QStandardItem* targetParentItem = nullptr;
+        int destRow = 0;
+
+        if (zone == InternalDropZone::OnItem) {
+            if (!target.isValid()) return false;
+            int targetId = target.data(Qt::UserRole + 1).toInt();
+            if (targetId <= 0) return false; // 系统行或标题行不能作为 OnItem 目标
+
+            if (isSourceOrDescendant(target, sources)) return false;
+
+            targetParentItem = m_model->itemFromIndex(target);
+            if (targetParentItem) destRow = targetParentItem->rowCount();
+        } else if (zone == InternalDropZone::Above || zone == InternalDropZone::Below) {
+            if (!target.isValid()) return false;
+            int targetId = target.data(Qt::UserRole + 1).toInt();
+            if (targetId <= 0) return false; // 系统行或标题行不能作为 Above/Below 目标
+
+            for (const QPersistentModelIndex& psrc : sources) {
+                if (psrc.isValid() && psrc == target) return false;
+            }
+            if (target.parent().isValid() && isSourceOrDescendant(target.parent(), sources)) return false;
+
+            targetParentItem = target.parent().isValid() ? m_model->itemFromIndex(target.parent()) : sectionItem;
+            destRow = (zone == InternalDropZone::Above) ? target.row() : target.row() + 1;
+        } else if (zone == InternalDropZone::Blank) {
+            targetParentItem = sectionItem;
+            destRow = sectionItem->rowCount();
+        }
+
+        if (!targetParentItem) return false;
+
+        bool anyChanged = false;
+        for (const QPersistentModelIndex& psrc : sources) {
+            if (!psrc.isValid()) continue;
+            QStandardItem* srcItem = m_model->itemFromIndex(psrc);
+            if (!srcItem) continue;
+
+            QStandardItem* srcParentItem = srcItem->parent() ? srcItem->parent() : sectionItem;
+            int srcRow = srcItem->row();
+
+            if (srcParentItem != targetParentItem) {
+                anyChanged = true;
+                break;
+            } else {
+                if (zone == InternalDropZone::OnItem || zone == InternalDropZone::Blank) {
+                    if (srcRow != targetParentItem->rowCount() - 1) {
+                        anyChanged = true;
+                        break;
+                    }
+                } else if (zone == InternalDropZone::Above || zone == InternalDropZone::Below) {
+                    if (srcRow != destRow && srcRow != destRow - 1) {
+                        anyChanged = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return anyChanged;
+    });
+
+    connect(m_treeView, &DropTreeView::internalMoveRequested, this, &LibraryPanel::onInternalMoveRequested);
+
     // 底部搜索过滤框部件创建与配置
     QWidget* filterContainer = new QWidget(this);
     filterContainer->setObjectName("LibraryFilterContainer");
@@ -326,12 +426,9 @@ void LibraryPanel::initUi() {
     connect(m_treeView, &QWidget::customContextMenuRequested, this, &LibraryPanel::onCategoryContextMenu);
     connect(m_treeView, &DropTreeView::pathsDropped, this, &LibraryPanel::onPathsDroppedToCategory);
 
-    auto updateLibAndSave = [this]() {
-        if (!m_isLoading) saveLibraryOrder();
-    };
-    connect(m_model, &QStandardItemModel::rowsMoved, this, updateLibAndSave, Qt::QueuedConnection);
-    connect(m_model, &QStandardItemModel::rowsInserted, this, updateLibAndSave, Qt::QueuedConnection);
-    connect(m_model, &QStandardItemModel::rowsRemoved, this, updateLibAndSave, Qt::QueuedConnection);
+    connect(m_model, &QStandardItemModel::rowsMoved, this, &LibraryPanel::markOrderDirty, Qt::DirectConnection);
+    connect(m_model, &QStandardItemModel::rowsInserted, this, &LibraryPanel::markOrderDirty, Qt::DirectConnection);
+    connect(m_model, &QStandardItemModel::rowsRemoved, this, &LibraryPanel::markOrderDirty, Qt::DirectConnection);
 
     connect(&LibraryService::instance(), &LibraryService::libraryChanged, this, [this]() {
         QTimer::singleShot(0, this, [this]() {
@@ -354,27 +451,167 @@ void LibraryPanel::initUi() {
     });
 }
 
+void LibraryPanel::markOrderDirty() {
+    if (m_isLoading) return;
+    m_orderDirty = true;
+    QTimer::singleShot(0, this, &LibraryPanel::flushOrder);
+}
+
+void LibraryPanel::flushOrder() {
+    if (!m_orderDirty) return;
+    saveLibraryOrder();
+    m_orderDirty = false;
+}
+
+void LibraryPanel::onInternalMoveRequested(const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone) {
+    if (sources.isEmpty() || !m_model) return;
+
+    QStandardItem* sectionItem = findItemByNodeId(m_model->invisibleRootItem(), 0);
+    if (!sectionItem) return;
+
+    QStandardItem* parentItem = nullptr;
+    int destRow = 0;
+
+    if (zone == InternalDropZone::OnItem) {
+        if (target.isValid()) {
+            parentItem = m_model->itemFromIndex(target);
+            if (parentItem) {
+                destRow = parentItem->rowCount();
+            }
+        }
+    } else if (zone == InternalDropZone::Above) {
+        if (target.isValid()) {
+            parentItem = (target.parent().isValid() && target.parent().data(Qt::UserRole + 1).toInt() != 0)
+                         ? m_model->itemFromIndex(target.parent())
+                         : sectionItem;
+            destRow = target.row();
+        }
+    } else if (zone == InternalDropZone::Below) {
+        if (target.isValid()) {
+            parentItem = (target.parent().isValid() && target.parent().data(Qt::UserRole + 1).toInt() != 0)
+                         ? m_model->itemFromIndex(target.parent())
+                         : sectionItem;
+            destRow = target.row() + 1;
+        }
+    } else if (zone == InternalDropZone::Blank) {
+        parentItem = sectionItem;
+        destRow = sectionItem->rowCount();
+    }
+
+    if (!parentItem) {
+        parentItem = sectionItem;
+        destRow = sectionItem->rowCount();
+    }
+
+    // 1. 记录展开状态
+    QMap<int, bool> expandedMap;
+    std::function<void(QStandardItem*)> saveExpandedStates = [&](QStandardItem* pItem) {
+        int rCount = pItem ? pItem->rowCount() : m_model->rowCount();
+        for (int i = 0; i < rCount; ++i) {
+            QStandardItem* child = pItem ? pItem->child(i) : m_model->item(i);
+            if (!child) continue;
+            int nodeId = child->data(Qt::UserRole + 1).toInt();
+            if (nodeId > 0 && m_treeView) {
+                expandedMap[nodeId] = m_treeView->isExpanded(child->index());
+            }
+            saveExpandedStates(child);
+        }
+    };
+    saveExpandedStates(sectionItem);
+
+    // 2. 转换 itemsToMove
+    QList<QStandardItem*> itemsToMove;
+    for (const QPersistentModelIndex& pidx : sources) {
+        if (pidx.isValid()) {
+            QStandardItem* item = m_model->itemFromIndex(pidx);
+            if (item) itemsToMove.append(item);
+        }
+    }
+    if (itemsToMove.isEmpty()) return;
+
+    QList<QStandardItem*> movedItemsList;
+    for (QStandardItem* item : itemsToMove) {
+        QStandardItem* srcParent = item->parent() ? item->parent() : sectionItem;
+        int srcRow = item->row();
+
+        QList<QStandardItem*> rowItems = srcParent->takeRow(srcRow);
+        if (rowItems.isEmpty()) continue;
+
+        int insertRow = destRow;
+        if (srcParent == parentItem && srcRow < insertRow) {
+            insertRow--;
+        }
+
+        parentItem->insertRow(insertRow, rowItems);
+        destRow = insertRow + 1;
+        movedItemsList.append(rowItems.first());
+    }
+
+    // 3. 恢复展开状态
+    std::function<void(QStandardItem*)> restoreExpandedStates = [&](QStandardItem* pItem) {
+        int rCount = pItem ? pItem->rowCount() : m_model->rowCount();
+        for (int i = 0; i < rCount; ++i) {
+            QStandardItem* child = pItem ? pItem->child(i) : m_model->item(i);
+            if (!child) continue;
+            int nodeId = child->data(Qt::UserRole + 1).toInt();
+            if (nodeId > 0 && expandedMap.contains(nodeId) && m_treeView) {
+                m_treeView->setExpanded(child->index(), expandedMap.value(nodeId));
+            }
+            restoreExpandedStates(child);
+        }
+    };
+    restoreExpandedStates(sectionItem);
+
+    // 4. 若放入某分类内部，展开该分类
+    if (zone == InternalDropZone::OnItem && target.isValid() && target.data(Qt::UserRole + 1).toInt() > 0) {
+        m_treeView->setExpanded(target, true);
+    }
+
+    // 5. 恢复选中状态
+    if (m_treeView && m_treeView->selectionModel()) {
+        m_treeView->selectionModel()->clearSelection();
+        for (QStandardItem* movedItem : movedItemsList) {
+            m_treeView->selectionModel()->select(movedItem->index(), QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        }
+    }
+
+    // 6. 落库保存
+    saveLibraryOrder();
+    m_orderDirty = false;
+}
+
 void LibraryPanel::saveLibraryOrder() {
     if (!m_model || m_isLoading) return;
 
     QStandardItem* sectionItem = findItemByNodeId(m_model->invisibleRootItem(), 0);
     if (!sectionItem) return;
 
+    QList<NodeOrderEntry> entries;
     int orderCounter = 1;
-    std::function<void(QStandardItem*, int)> traverseAndSave = [&](QStandardItem* parentItem, int parentId) {
+
+    std::function<void(QStandardItem*, int)> traverseAndCollect = [&](QStandardItem* parentItem, int parentId) {
         int rowCount = parentItem->rowCount();
         for (int i = 0; i < rowCount; ++i) {
             QStandardItem* child = parentItem->child(i);
             if (!child) continue;
             int nodeId = child->data(Qt::UserRole + 1).toInt();
             if (nodeId > 0) {
-                LibraryDao::updateNodeParentAndOrder(nodeId, parentId, orderCounter++);
-                traverseAndSave(child, nodeId);
+                NodeOrderEntry entry;
+                entry.id = nodeId;
+                entry.parentId = parentId;
+                entry.sortOrder = orderCounter++;
+                entries.append(entry);
+
+                traverseAndCollect(child, nodeId);
             }
         }
     };
 
-    traverseAndSave(sectionItem, 0);
+    traverseAndCollect(sectionItem, 0);
+
+    if (!entries.isEmpty()) {
+        LibraryDao::updateNodesParentAndOrder(entries);
+    }
 }
 
 void LibraryPanel::sortCategoriesByName(bool ascending) {
@@ -406,6 +643,7 @@ void LibraryPanel::sortCategoriesByName(bool ascending) {
 
     sortChildren(sectionItem);
     saveLibraryOrder();
+    m_orderDirty = false;
 }
 
 void LibraryPanel::toggleSection() {

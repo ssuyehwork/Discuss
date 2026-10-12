@@ -212,6 +212,36 @@ bool FavoriteDao::updateNodeParentAndOrder(int id, int newParentId, int sortOrde
     return success;
 }
 
+bool FavoriteDao::updateNodesParentAndOrder(const QList<NodeOrderEntry>& entries) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || entries.isEmpty()) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+
+    const char* sql = "UPDATE favorites SET parent_id = ?, sort_order = ? WHERE id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
+        return false;
+    }
+
+    for (const auto& entry : entries) {
+        if (entry.id <= 0) continue;
+        sqlite3_bind_int(stmt, 1, entry.parentId);
+        sqlite3_bind_int(stmt, 2, entry.sortOrder);
+        sqlite3_bind_int(stmt, 3, entry.id);
+        sqlite3_step(stmt);
+        sqlite3_reset(stmt);
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+    sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+    return true;
+}
+
 bool FavoriteDao::removeFavoriteById(int id) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db || id <= 0) return false;
