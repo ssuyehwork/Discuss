@@ -2554,23 +2554,96 @@ namespace SvgIcons {
         {"search-8.svg", R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 909.37866 848.83797"><defs><style>.cls-1{fill:#fff;}</style></defs><path class="cls-1" d="M751.749,839.72375l-138.938-138.938a312.03474,312.03474,0,0,0,59.53041-183.824c0-173.14781-140.36756-313.51538-313.51538-313.51538S45.31067,343.81389,45.31067,516.9617,185.67824,830.47708,358.82605,830.47708a312.03514,312.03514,0,0,0,183.82409-59.53046l138.938,138.938A49.61123,49.61123,0,1,0,751.749,839.72375ZM541.33962,629.31439A214.22028,214.22028,0,0,1,358.82605,731.2566c-118.35527,0-214.295-95.93969-214.295-214.2949a214.22039,214.22039,0,0,1,214.295-214.295c118.35527,0,214.295,95.93969,214.295,214.295A213.275,213.275,0,0,1,541.33962,629.31439Z" transform="translate(-45.31067 -75.58101)"/><polygon class="cls-1" points="744.199 194.645 909.379 0 579.02 0 744.199 194.645"/></svg>)svg"},
         {"file_eps", R"svg(<?xml version="1.0" encoding="utf-8"?>
 <svg version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 800 800" style="enable-background:new 0 0 800 800;" xml:space="preserve">
+	 viewBox="0 0 800 800" style="enable-background:new 0 0 800 800;" xml:space="preserve" fill="currentColor">
 <style type="text/css">
 	.st0{fill-rule:evenodd;clip-rule:evenodd;}
+	.st1{fill:none;}
 </style>
 <title>file_eps [#1727]</title>
 <desc>Created with Sketch.</desc>
 <g>
-	<polygon class="st0" fill="currentColor" points="559.2,0 0,0 0,400 80,400 80,80 480,80 480,320 720,320 720,400 800,400 800,257.5 	"/>
-	<path fill="currentColor" d="M250,799.7H0V479h240.2v55.9H90v75.6h139.6v55.7H90v77.6h160V799.7z"/>
-	<path fill="currentColor" d="M526.1,799.7h-69.8l-49.5-106.4c-1.8-3.9-3.6-10.8-5.5-20.9h-0.7c-1,5-3.1,12.1-6.4,21.5l-49.7,105.8H274l88.6-160.5
-		L281.7,479h71.6l41.2,98.1c3.3,8,6.2,16.8,8.6,26.5h0.7c2.5-8.7,5.5-17.9,9.1-27.5l45.4-97.1H524l-83.4,159L526.1,799.7z"/>
-	<path fill="currentColor" d="M800,534.9h-87v264.8h-65.2V534.9H561V479h239V534.9z"/>
+	<polygon class="st0" points="559.2,0 0,0 0,400 80,400 80,80 480,80 480,320 720,320 720,400 800,400 800,257.5 	"/>
+	<polygon points="93,532.9 93,603.5 242,603.5 242,675.4 93,675.4 93,737.5 242,737.5 242,800.9 0,800.9 0,478 242,478 242,532.9 	
+		"/>
+	<g>
+		<polygon class="st1" points="446.5,478 403.6,561.5 360.7,478 		"/>
+		<polygon class="st1" points="446.6,800.9 360.7,800.9 403.6,717.3 		"/>
+		<polygon points="443.6,639.4 526,799.7 525.4,800.9 446.6,800.9 403.6,717.3 360.7,800.9 281.9,800.9 281.2,799.7 363.6,639.4 
+			281.2,479.1 281.8,478 360.7,478 403.6,561.5 446.5,478 525.4,478 526,479.1 		"/>
+	</g>
+	<polygon points="709,478.5 654,478.5 563,478.5 563,546.5 645.5,546.5 645.5,800.5 717.5,800.5 717.5,546.5 800,546.5 800,478.5 	
+		"/>
 </g>
 </svg>)svg"},
-        {"Ext.svg", R"svg(<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><text x="7" y="10" font-size="5" font-weight="bold" fill="currentColor" stroke="none">EXT</text></svg>)svg"},
-        {"Ext", R"svg(<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><text x="7" y="10" font-size="5" font-weight="bold" fill="currentColor" stroke="none">EXT</text></svg>)svg"},
-        {"ext", R"svg(<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><text x="7" y="10" font-size="5" font-weight="bold" fill="currentColor" stroke="none">EXT</text></svg>)svg"},
+        {"Ext.svg", R"svg(<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 800 800" style="enable-background:new 0 0 800 800;" xml:space="preserve" fill="currentColor">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;}
+	.st1{fill:none;}
+</style>
+<title>file_eps [#1727]</title>
+<desc>Created with Sketch.</desc>
+<g>
+	<polygon class="st0" points="559.2,0 0,0 0,400 80,400 80,80 480,80 480,320 720,320 720,400 800,400 800,257.5 	"/>
+	<polygon points="93,532.9 93,603.5 242,603.5 242,675.4 93,675.4 93,737.5 242,737.5 242,800.9 0,800.9 0,478 242,478 242,532.9 	
+		"/>
+	<g>
+		<polygon class="st1" points="446.5,478 403.6,561.5 360.7,478 		"/>
+		<polygon class="st1" points="446.6,800.9 360.7,800.9 403.6,717.3 		"/>
+		<polygon points="443.6,639.4 526,799.7 525.4,800.9 446.6,800.9 403.6,717.3 360.7,800.9 281.9,800.9 281.2,799.7 363.6,639.4 
+			281.2,479.1 281.8,478 360.7,478 403.6,561.5 446.5,478 525.4,478 526,479.1 		"/>
+	</g>
+	<polygon points="709,478.5 654,478.5 563,478.5 563,546.5 645.5,546.5 645.5,800.5 717.5,800.5 717.5,546.5 800,546.5 800,478.5 	
+		"/>
+</g>
+</svg>)svg"},
+        {"Ext", R"svg(<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 800 800" style="enable-background:new 0 0 800 800;" xml:space="preserve" fill="currentColor">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;}
+	.st1{fill:none;}
+</style>
+<title>file_eps [#1727]</title>
+<desc>Created with Sketch.</desc>
+<g>
+	<polygon class="st0" points="559.2,0 0,0 0,400 80,400 80,80 480,80 480,320 720,320 720,400 800,400 800,257.5 	"/>
+	<polygon points="93,532.9 93,603.5 242,603.5 242,675.4 93,675.4 93,737.5 242,737.5 242,800.9 0,800.9 0,478 242,478 242,532.9 	
+		"/>
+	<g>
+		<polygon class="st1" points="446.5,478 403.6,561.5 360.7,478 		"/>
+		<polygon class="st1" points="446.6,800.9 360.7,800.9 403.6,717.3 		"/>
+		<polygon points="443.6,639.4 526,799.7 525.4,800.9 446.6,800.9 403.6,717.3 360.7,800.9 281.9,800.9 281.2,799.7 363.6,639.4 
+			281.2,479.1 281.8,478 360.7,478 403.6,561.5 446.5,478 525.4,478 526,479.1 		"/>
+	</g>
+	<polygon points="709,478.5 654,478.5 563,478.5 563,546.5 645.5,546.5 645.5,800.5 717.5,800.5 717.5,546.5 800,546.5 800,478.5 	
+		"/>
+</g>
+</svg>)svg"},
+        {"ext", R"svg(<?xml version="1.0" encoding="utf-8"?>
+<svg version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 800 800" style="enable-background:new 0 0 800 800;" xml:space="preserve" fill="currentColor">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;}
+	.st1{fill:none;}
+</style>
+<title>file_eps [#1727]</title>
+<desc>Created with Sketch.</desc>
+<g>
+	<polygon class="st0" points="559.2,0 0,0 0,400 80,400 80,80 480,80 480,320 720,320 720,400 800,400 800,257.5 	"/>
+	<polygon points="93,532.9 93,603.5 242,603.5 242,675.4 93,675.4 93,737.5 242,737.5 242,800.9 0,800.9 0,478 242,478 242,532.9 	
+		"/>
+	<g>
+		<polygon class="st1" points="446.5,478 403.6,561.5 360.7,478 		"/>
+		<polygon class="st1" points="446.6,800.9 360.7,800.9 403.6,717.3 		"/>
+		<polygon points="443.6,639.4 526,799.7 525.4,800.9 446.6,800.9 403.6,717.3 360.7,800.9 281.9,800.9 281.2,799.7 363.6,639.4 
+			281.2,479.1 281.8,478 360.7,478 403.6,561.5 446.5,478 525.4,478 526,479.1 		"/>
+	</g>
+	<polygon points="709,478.5 654,478.5 563,478.5 563,546.5 645.5,546.5 645.5,800.5 717.5,800.5 717.5,546.5 800,546.5 800,478.5 	
+		"/>
+</g>
+</svg>)svg"},
     };
 }
 
