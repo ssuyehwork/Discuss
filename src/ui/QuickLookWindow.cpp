@@ -504,7 +504,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     FavoriteService::instance().buildFavoriteAction(&menu, m_currentPath, this);
     menu.addSeparator();
 
-    QAction* actTextExtSettings = menu.addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "文本扩展名设置...");
+    QAction* actTextExtSettings = menu.addAction(UiHelper::getIcon("Ext.svg", QColor("#EEEEEE"), 18), "文本扩展名设置...");
 
     bool isImage = m_graphicsView->isVisible();
     actRotate->setEnabled(isImage);
