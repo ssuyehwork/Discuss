@@ -253,7 +253,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             }
             ContextMenuFactory::buildShowInExplorerAction(&menu, path, m_panel);
 
-            if (m_panel && m_panel->isRecursive()) {
+            if (m_panel && (m_panel->isRecursive() || m_panel->getCurrentCategoryType() == "library")) {
                 menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18), "在 QuarkMeta 中显示")->setData(ContentPanel::ActionShowInQuarkMeta);
             }
 

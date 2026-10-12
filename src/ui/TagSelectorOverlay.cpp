@@ -13,11 +13,12 @@
 namespace QuarkMeta {
 
 
-TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent)
+TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths, QWidget* parent)
     : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), 
       m_selectedTags(initialSelected) 
 {
     setObjectName("TagSelectorOverlay");
+    extractRecommendedTags(candidatePaths);
     setFrameShape(QFrame::StyledPanel);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
@@ -134,6 +135,35 @@ void TagSelectorOverlay::initUi() {
     resize(savedSize.expandedTo(QSize(250, 150)));
 }
 
+void TagSelectorOverlay::extractRecommendedTags(const QStringList& paths) {
+    m_recommendedTags.clear();
+    QSet<QString> seen;
+
+    static const QRegularExpression splitRegex("[_\\-\\s\\+\\.\\(\\)\\[\\]【】]+");
+
+    for (const QString& path : paths) {
+        if (path.isEmpty() || path.startsWith("trash://")) continue;
+        QFileInfo info(path);
+        QString baseName = info.completeBaseName();
+        if (baseName.isEmpty()) continue;
+
+        QStringList tokens = baseName.split(splitRegex, Qt::SkipEmptyParts);
+        for (QString token : tokens) {
+            token = token.trimmed();
+            if (token.isEmpty()) continue;
+
+            bool isPureNum = false;
+            token.toInt(&isPureNum);
+            if (isPureNum) continue;
+
+            if (!seen.contains(token)) {
+                seen.insert(token);
+                m_recommendedTags.append(token);
+            }
+        }
+    }
+}
+
 void TagSelectorOverlay::loadTagsAndGroups() {
     m_lexiconGroups = TagLexiconService::instance().getAllTagGroups();
     
@@ -211,8 +241,42 @@ void TagSelectorOverlay::populateGrid() {
     }
 
     m_tagButtons.clear();
+
+    QString kw = m_searchEdit ? m_searchEdit->text().trimmed() : "";
+    bool showRec = (kw.isEmpty() && !m_recommendedTags.isEmpty());
+
+    if (showRec) {
+        QLabel* lblRec = new QLabel("推荐", m_tagGridWidget);
+        lblRec->setObjectName("TagOverlayBlueLabel");
+        lblRec->setStyleSheet("color: #378ADD; font-weight: bold; font-size: 13px; margin-right: 4px;");
+        m_gridFlowLayout->addWidget(lblRec);
+
+        for (const QString& recTag : m_recommendedTags) {
+            QPushButton* btn = new QPushButton(m_tagGridWidget);
+            btn->setObjectName("TagOverlayRecBtn");
+            btn->setCheckable(true);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setFixedHeight(22);
+
+            bool isSelected = m_selectedTags.contains(recTag);
+            btn->setText(recTag);
+            btn->setIcon(UiHelper::getIcon(isSelected ? "check" : "star_filled", isSelected ? QColor("#FFFFFF") : QColor("#378ADD"), 12));
+            btn->setIconSize(QSize(12, 12));
+
+            m_tagButtons.append(btn);
+            m_gridFlowLayout->addWidget(btn);
+
+            connect(btn, &QPushButton::clicked, this, [this, recTag]() {
+                toggleTagSelection(recTag);
+            });
+        }
+    }
+
     for (int i = 0; i < m_displayedTags.size(); ++i) {
         QString tag = m_displayedTags[i];
+        if (showRec && m_recommendedTags.contains(tag)) {
+            continue;
+        }
 
         QPushButton* btn = new QPushButton(m_tagGridWidget);
         btn->setObjectName("TagOverlayBtn");

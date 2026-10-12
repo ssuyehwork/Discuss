@@ -17,7 +17,7 @@ namespace QuarkMeta {
 class TagSelectorOverlay : public QFrame {
     Q_OBJECT
 public:
-    TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent = nullptr);
+    TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths = {}, QWidget* parent = nullptr);
     ~TagSelectorOverlay() override;
 
 signals:
@@ -49,6 +49,9 @@ private:
 
     QStringList m_selectedTags;
     QStringList m_displayedTags;
+    QStringList m_recommendedTags;
+
+    void extractRecommendedTags(const QStringList& paths);
     QMap<QString, int> m_allTagCounts;
     QList<TagGroup> m_lexiconGroups;
 

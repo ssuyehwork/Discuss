@@ -138,7 +138,7 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
         emit zoomLevelChanged(value);
     });
 
-    m_btnToggleDriveBar = createTitleBtn("chevrons_down", "展开/收起盘符管理栏");
+    m_btnToggleDriveBar = createTitleBtn("chevrons_down", "展开/收起插件栏");
     m_btnToggleDriveBar->setCheckable(true);
     m_btnToggleDriveBar->setChecked(true);
     connect(m_btnToggleDriveBar, &QPushButton::toggled, this, [this](bool checked) {

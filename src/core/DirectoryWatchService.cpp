@@ -87,6 +87,7 @@ void DirectoryWatchService::unwatch(const QString& dirPath, bool includeSubtree)
         auto item = it.value();
         item->isStopping = true;
         m_watches.erase(it);
+        m_retiredItems.insert(key, item);
         m_pendingStops.append(item);
 
         if (m_workerThread) {
@@ -105,6 +106,7 @@ void DirectoryWatchService::stopAll() {
 
         for (auto it = m_watches.begin(); it != m_watches.end(); ++it) {
             it.value()->isStopping = true;
+            m_retiredItems.insert(it.key(), it.value());
             m_pendingStops.append(it.value());
         }
         m_watches.clear();
@@ -170,12 +172,18 @@ void DirectoryWatchService::onDirectoryLostInternal(const WatchKey& key, const Q
             auto item = it.value();
             item->isStopping = true;
             m_watches.erase(it);
+            m_retiredItems.insert(key, item);
             m_pendingStops.append(item);
         }
         m_debounceMap.remove(key);
     }
 
     emit watchedDirectoryLost(dirPath);
+}
+
+void DirectoryWatchService::removeRetiredItem(const WatchKey& key) {
+    QMutexLocker locker(&m_mutex);
+    m_retiredItems.remove(key);
 }
 
 void DirectoryWatchService::checkDebounceTimers() {
@@ -227,6 +235,9 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
                 DirectoryWatchService::instance().onDirectoryLostInternal(key, path);
             }, Qt::QueuedConnection);
         }
+        QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [key = item->key]() {
+            DirectoryWatchService::instance().removeRetiredItem(key);
+        }, Qt::QueuedConnection);
         return;
     }
 
@@ -345,6 +356,11 @@ void DirectoryWatchService::WorkerThread::run() {
             itemsToCleanup.append(it.value());
         }
         m_service->m_watches.clear();
+
+        for (auto it = m_service->m_retiredItems.begin(); it != m_service->m_retiredItems.end(); ++it) {
+            itemsToCleanup.append(it.value());
+        }
+        m_service->m_retiredItems.clear();
     }
 
 #ifdef Q_OS_WIN
