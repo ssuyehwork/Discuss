@@ -619,7 +619,6 @@ void MainWindow::updateStatusBar() {
 
 void MainWindow::changeEvent(QEvent* event) {
     if (event->type() == QEvent::ActivationChange) {
-        LocalShortcutInterceptor::instance().updateFocusState(isActiveWindow() && !isMinimized());
         if (isActiveWindow()) {
             if (QWidget::mouseGrabber()) {
                 QWidget::mouseGrabber()->releaseMouse();
@@ -633,12 +632,9 @@ void MainWindow::changeEvent(QEvent* event) {
         }
     } else if (event->type() == QEvent::WindowStateChange) {
         if (isMinimized()) {
-            LocalShortcutInterceptor::instance().updateFocusState(false);
             if (m_searchController && m_searchController->historyPanel()) {
                 m_searchController->historyPanel()->hide();
             }
-        } else {
-            LocalShortcutInterceptor::instance().updateFocusState(isActiveWindow());
         }
         if (m_titleBarWidget) {
 #ifdef Q_OS_WIN

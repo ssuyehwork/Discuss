@@ -1,5 +1,4 @@
 #include "LocalShortcutInterceptor.h"
-#include "AppShortcutController.h"
 #include <QApplication>
 #include <QMetaObject>
 #include <QKeyCombination>
@@ -50,6 +49,74 @@ ShortcutKeyCombo LocalShortcutInterceptor::parseQtKey(int key, Qt::KeyboardModif
 #ifdef Q_OS_WIN
         combo.vkCode = VK_ESCAPE;
 #endif
+    } else if (cleanKey == Qt::Key_Return || cleanKey == Qt::Key_Enter) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_RETURN;
+#endif
+    } else if (cleanKey == Qt::Key_Backspace) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_BACK;
+#endif
+    } else if (cleanKey == Qt::Key_Delete) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_DELETE;
+#endif
+    } else if (cleanKey == Qt::Key_Left) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_LEFT;
+#endif
+    } else if (cleanKey == Qt::Key_Right) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_RIGHT;
+#endif
+    } else if (cleanKey == Qt::Key_Up) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_UP;
+#endif
+    } else if (cleanKey == Qt::Key_Down) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_DOWN;
+#endif
+    } else if (cleanKey == Qt::Key_Slash) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_2;
+#endif
+    } else if (cleanKey == Qt::Key_Minus) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_MINUS;
+#endif
+    } else if (cleanKey == Qt::Key_Equal || cleanKey == Qt::Key_Plus) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_PLUS;
+#endif
+    } else if (cleanKey == Qt::Key_Comma) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_COMMA;
+#endif
+    } else if (cleanKey == Qt::Key_Period) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_PERIOD;
+#endif
+    } else if (cleanKey == Qt::Key_Semicolon) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_1;
+#endif
+    } else if (cleanKey == Qt::Key_Apostrophe) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_7;
+#endif
+    } else if (cleanKey == Qt::Key_BracketLeft) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_4;
+#endif
+    } else if (cleanKey == Qt::Key_BracketRight) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_6;
+#endif
+    } else if (cleanKey == Qt::Key_Backslash) {
+#ifdef Q_OS_WIN
+        combo.vkCode = VK_OEM_5;
+#endif
     }
 
     return combo;
@@ -77,6 +144,10 @@ void LocalShortcutInterceptor::registerProtectedShortcut(int key, Qt::KeyboardMo
 
 void LocalShortcutInterceptor::unregisterAllShortcuts() {
     m_callbacks.clear();
+}
+
+void LocalShortcutInterceptor::setEditFocusPredicate(std::function<bool()> predicate) {
+    m_editFocusPredicate = predicate;
 }
 
 void LocalShortcutInterceptor::updateFocusState(bool isActive) {
@@ -130,6 +201,13 @@ LRESULT CALLBACK LocalShortcutInterceptor::LowLevelKeyboardProc(int nCode, WPARA
 bool LocalShortcutInterceptor::handleLowLevelKey(int vkCode, bool ctrl, bool shift, bool alt) {
     if (!m_isActive) return false;
 
+    // 焦点在文本输入框/可编辑单元格时，让渡所有常见编辑按键的处理
+    if (m_editFocusPredicate && m_editFocusPredicate()) {
+        if (vkCode == 'C' || vkCode == 'V' || vkCode == 'X' || vkCode == 'A' || vkCode == 'Z' || vkCode == 'Y' || vkCode == VK_TAB || vkCode == VK_RETURN || vkCode == VK_BACK || vkCode == VK_DELETE) {
+            return false;
+        }
+    }
+
     ShortcutKeyCombo combo;
     combo.vkCode = vkCode;
     combo.ctrl = ctrl;
@@ -137,10 +215,6 @@ bool LocalShortcutInterceptor::handleLowLevelKey(int vkCode, bool ctrl, bool shi
     combo.alt = alt;
 
     if (m_callbacks.contains(combo)) {
-        if (AppShortcutController::isEditingFocus() && (vkCode == 'C' || vkCode == 'V' || vkCode == 'X' || vkCode == 'A' || vkCode == VK_TAB)) {
-            return false;
-        }
-
         auto callback = m_callbacks.value(combo);
         if (callback) {
             QMetaObject::invokeMethod(this, [callback]() {

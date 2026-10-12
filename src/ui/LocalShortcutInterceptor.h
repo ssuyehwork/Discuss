@@ -43,6 +43,8 @@ public:
     void updateFocusState(bool isActive);
     bool isActive() const { return m_isActive; }
 
+    void setEditFocusPredicate(std::function<bool()> predicate);
+
     static ShortcutKeyCombo parseKeySequence(const QKeySequence& sequence);
     static ShortcutKeyCombo parseQtKey(int key, Qt::KeyboardModifiers modifiers);
 
@@ -67,6 +69,7 @@ private:
 #endif
 
     QMap<ShortcutKeyCombo, std::function<void()>> m_callbacks;
+    std::function<bool()> m_editFocusPredicate;
 };
 
 } // namespace QuarkMeta
