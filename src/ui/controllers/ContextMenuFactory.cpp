@@ -181,7 +181,7 @@ bool ContextMenuFactory::copyPathsToClipboard(const QStringList& paths, bool sho
     return true;
 }
 
-bool ContextMenuFactory::copyNamesToClipboard(const QStringList& paths, bool showOverlay) {
+bool ContextMenuFactory::copyNamesToClipboard(const QStringList& paths, NameDelimiter delimiter, bool showOverlay) {
     if (paths.isEmpty()) return false;
 
     QStringList names;
@@ -192,11 +192,28 @@ bool ContextMenuFactory::copyNamesToClipboard(const QStringList& paths, bool sho
     }
     if (names.isEmpty()) return false;
 
-    QApplication::clipboard()->setText(names.join("\r\n"));
+    QString sep;
+    switch (delimiter) {
+        case NameDelimiter::NewLine:
+            sep = "\r\n";
+            break;
+        case NameDelimiter::Enumeration:
+            sep = "、";
+            break;
+        case NameDelimiter::Comma:
+            sep = ",";
+            break;
+    }
+
+    QApplication::clipboard()->setText(names.join(sep));
     if (showOverlay) {
         ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制名称至剪贴板", 1500, Style::SuccessGreen);
     }
     return true;
+}
+
+bool ContextMenuFactory::copyNamesToClipboard(const QStringList& paths, bool showOverlay) {
+    return copyNamesToClipboard(paths, NameDelimiter::NewLine, showOverlay);
 }
 
 QAction* ContextMenuFactory::buildCopyPathAction(QMenu* menu, const QStringList& paths, QObject* receiver) {
@@ -212,11 +229,27 @@ QAction* ContextMenuFactory::buildCopyPathAction(QMenu* menu, const QStringList&
 QAction* ContextMenuFactory::buildCopyNameAction(QMenu* menu, const QStringList& paths, QObject* receiver) {
     if (!menu || paths.isEmpty()) return nullptr;
 
-    QAction* action = menu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "复制名称");
-    QObject::connect(action, &QAction::triggered, receiver ? receiver : menu, [paths]() {
-        copyNamesToClipboard(paths, true);
+    QMenu* subMenu = menu->addMenu(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "复制名称");
+    UiHelper::applyMenuStyle(subMenu);
+
+    QObject* target = receiver ? receiver : menu;
+
+    QAction* actNewLine = subMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "分行名称");
+    QObject::connect(actNewLine, &QAction::triggered, target, [paths]() {
+        copyNamesToClipboard(paths, NameDelimiter::NewLine, true);
     });
-    return action;
+
+    QAction* actEnum = subMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "顿号分割名称");
+    QObject::connect(actEnum, &QAction::triggered, target, [paths]() {
+        copyNamesToClipboard(paths, NameDelimiter::Enumeration, true);
+    });
+
+    QAction* actComma = subMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE"), 18), "逗号分割名称");
+    QObject::connect(actComma, &QAction::triggered, target, [paths]() {
+        copyNamesToClipboard(paths, NameDelimiter::Comma, true);
+    });
+
+    return subMenu->menuAction();
 }
 
 QAction* ContextMenuFactory::buildPinToggleAction(QMenu* menu, bool isPinned, std::function<void(bool)> onToggle, QObject* receiver) {

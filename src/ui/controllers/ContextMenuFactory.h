@@ -20,7 +20,21 @@ public:
     static bool copyPathsToClipboard(const QStringList& paths, bool showOverlay = true);
 
     /**
-     * @brief 复制文件名列表至剪贴板 SSOT 入口 (统一 \r\n 换行符)
+     * @brief 文件名分隔符枚举类型
+     */
+    enum class NameDelimiter {
+        NewLine,       ///< 分行名称 (\r\n)
+        Enumeration,   ///< 顿号分割名称 (、)
+        Comma          ///< 逗号分割名称 (,)
+    };
+
+    /**
+     * @brief 复制文件名列表至剪贴板 SSOT 入口 (支持指定分隔符)
+     */
+    static bool copyNamesToClipboard(const QStringList& paths, NameDelimiter delimiter, bool showOverlay = true);
+
+    /**
+     * @brief 复制文件名列表至剪贴板 SSOT 入口重载 (默认使用 NewLine 分行)
      */
     static bool copyNamesToClipboard(const QStringList& paths, bool showOverlay = true);
 
