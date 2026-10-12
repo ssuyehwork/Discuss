@@ -255,6 +255,17 @@ void AppShortcutController::initShortcuts() {
     scExtract->setContext(Qt::WindowShortcut);
     connect(scExtract, &QShortcut::activated, this, fnExtract);
     LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), fnExtract);
+
+    // 11. Ctrl+R: 切换递归显示子文件夹中的项目
+    auto fnRecursive = [this]() {
+        if (!isEditingFocus()) {
+            emit toggleRecursiveRequested();
+        }
+    };
+    QShortcut* scRecursive = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_R), m_window);
+    scRecursive->setContext(Qt::WindowShortcut);
+    connect(scRecursive, &QShortcut::activated, this, fnRecursive);
+    LocalShortcutInterceptor::instance().registerProtectedShortcut(QKeySequence(Qt::CTRL | Qt::Key_R), fnRecursive);
 }
 
 } // namespace QuarkMeta

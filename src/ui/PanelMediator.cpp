@@ -197,6 +197,15 @@ void PanelMediator::setupConnections() {
                 }
             }
         });
+
+        connect(shortcutController, &AppShortcutController::toggleRecursiveRequested, this, [this, contentPanel]() {
+            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
+            if (target && !target->currentPath().isEmpty() && target->currentPath() != "computer://") {
+                bool nextState = !target->isRecursive();
+                target->setIsRecursive(nextState);
+                target->loadDirectory(target->currentPath(), nextState);
+            }
+        });
     }
 
     // 搜索控制器与 ContentPanel 绑定及状态更新

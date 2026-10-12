@@ -45,6 +45,11 @@ signals:
      */
     void extractContentRequested();
 
+    /**
+     * @brief Ctrl+R 触发切换递归显示子文件夹中的项目
+     */
+    void toggleRecursiveRequested();
+
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
