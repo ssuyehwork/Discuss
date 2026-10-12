@@ -30,6 +30,7 @@
 #include "meta/MediaExtractorPipeline.h"
 #include "meta/DatabaseManager.h"
 #include "core/CoreController.h"
+#include "core/DirectoryWatchService.h"
 
 /**
  * @brief 自定义日志重定向。极速格式化日志内容后投递到异步缓冲区，杜绝同步磁盘等待。
@@ -55,7 +56,10 @@ void onApplicationAboutToQuit(HANDLE hMutex) {
     // 1. 立即设置停机原子标记
     QuarkMeta::CoreController::requestShutdown();
 
-    // 2. 立即熔断提图后台流水线
+    // 2. 停止所有目录变更监听
+    QuarkMeta::DirectoryWatchService::instance().stopAll();
+
+    // 3. 立即熔断提图后台流水线
     QuarkMeta::MediaExtractorPipeline::instance().cancelAll();
 
     // 3. 限时 200ms 排空线程池，绝不无限期死等

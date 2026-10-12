@@ -46,8 +46,11 @@ public:
     void migrateCache(const QString& oldPath, const QString& newPath) override;
     void clearCacheForFolder(const QString& folderPath) override;
 
+    // 增量更新接口
+    QStringList applyIncrementalChanges(const std::vector<QuarkMeta::ItemRecord>& records, const QStringList& removedPaths);
+
     // 异步全文件夹文件头极速尺寸提取流水线
-    void preloadDimensionsAsync();
+    void preloadDimensionsAsync(const QStringList& targetPaths = QStringList());
 
     // 强制重载指定路径的内存缩略图与宽高比缓存，并触发视图重绘
     void reloadThumbnailForPath(const QString& path);

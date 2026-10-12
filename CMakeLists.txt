@@ -88,6 +88,8 @@ set(SOURCES
     src/core/ClipboardService.cpp
     src/core/DeviceWatcher.h
     src/core/DeviceWatcher.cpp
+    src/core/DirectoryWatchService.h
+    src/core/DirectoryWatchService.cpp
     src/core/TaskProgressService.h
     src/core/TaskProgressService.cpp
     src/core/AppConfig.h
@@ -312,6 +314,8 @@ set(SOURCES
     src/ui/controllers/ContentViewCoordinator.cpp
     src/ui/controllers/ContentPaneSplitManager.h
     src/ui/controllers/ContentPaneSplitManager.cpp
+    src/ui/controllers/ContentChangeWatcher.h
+    src/ui/controllers/ContentChangeWatcher.cpp
     src/ui/controllers/PaneActivationTracker.h
     src/ui/controllers/PaneActivationTracker.cpp
     src/ui/workers/ContentStatsWorker.h

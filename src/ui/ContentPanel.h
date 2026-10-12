@@ -28,6 +28,7 @@ class ContentFileOpsHandler;
 class ContentStatsWorker;
 class SectionProxyModel;
 class ContentPaneSplitManager;
+class ContentChangeWatcher;
 
 /**
  * @brief 内容面板（面板四）：核心业务展示工作台（纯视图承载与高级意图分发）
@@ -121,11 +122,13 @@ public:
     int loadRequestId() const { return m_loadRequestId.load(); }
     int incrementLoadRequestId() { return ++m_loadRequestId; }
     const FilterState& currentFilter() const { return m_currentFilter; }
+    bool isLoading() const { return m_isLoading.load(); }
 
     // 2. 状态与配置高阶方法
     void setCurrentPath(const QString& path);
     void setIsRecursive(bool recursive);
-    void setLoading(bool loading) { m_isLoading = loading; }
+    void setLoading(bool loading);
+    void notifyRecordsChanged();
     void ensureSourceModelIsDiskModel();
     void applySort();
     void startVisibleTimer();
@@ -144,7 +147,7 @@ public:
     void setSortOrder(Qt::SortOrder order) { if (m_sortController) m_sortController->setSortOrder(order); }
     void setSortCriteria(SortType type, Qt::SortOrder order) { if (m_sortController) m_sortController->setSortCriteria(type, order); }
     void setContextMenuActive(bool active) { m_isContextMenuActive = active; }
-    void setCurrentCategoryType(const QString& type) { m_currentCategoryType = type; }
+    void setCurrentCategoryType(const QString& type);
 
     // 4. 视图与控制器引用
     QAbstractItemView* activeItemView() const;
@@ -296,6 +299,7 @@ private:
     ContentFileOpsHandler* m_fileOpsHandler = nullptr;
     ContentStatsWorker* m_statsWorker = nullptr;
     class ContentViewCoordinator* m_viewCoordinator = nullptr;
+    ContentChangeWatcher* m_changeWatcher = nullptr;
 };
 
 } // namespace QuarkMeta

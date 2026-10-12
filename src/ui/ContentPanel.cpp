@@ -11,6 +11,7 @@
 #include "controllers/ContentFileOpsHandler.h"
 #include "controllers/ContentViewCoordinator.h"
 #include "controllers/ContentPaneSplitManager.h"
+#include "controllers/ContentChangeWatcher.h"
 #include "workers/ContentStatsWorker.h"
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
@@ -98,6 +99,7 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
     m_statsWorker = new ContentStatsWorker(this);
     m_splitManager = new ContentPaneSplitManager(this);
     m_viewCoordinator = new ContentViewCoordinator(this);
+    m_changeWatcher = new ContentChangeWatcher(this);
     setAcceptDrops(true);
 
     connect(m_statsWorker, &ContentStatsWorker::statsReady, this, [this](const ScanStats& stats) {
@@ -383,10 +385,35 @@ void ContentPanel::applySort() {
     }
 }
 
+void ContentPanel::setLoading(bool loading) {
+    bool wasLoading = m_isLoading.exchange(loading);
+    if (wasLoading && !loading) {
+        if (m_changeWatcher) {
+            m_changeWatcher->onLoadFinished();
+        }
+    }
+}
+
+void ContentPanel::notifyRecordsChanged() {
+    startVisibleTimer();
+    recalculateAndEmitStats();
+    updateStatusBarStats();
+}
+
+void ContentPanel::setCurrentCategoryType(const QString& type) {
+    m_currentCategoryType = type;
+    if (m_changeWatcher) {
+        m_changeWatcher->updateTarget();
+    }
+}
+
 void ContentPanel::setIsRecursive(bool recursive) {
     m_isRecursive = recursive;
     if (m_headerWidget) {
         m_headerWidget->setRecursive(recursive);
+    }
+    if (m_changeWatcher) {
+        m_changeWatcher->updateTarget();
     }
 }
 
@@ -655,6 +682,9 @@ void ContentPanel::setCurrentPath(const QString& path) {
     if (root && root->splitManager()) {
         emit root->splitManager()->layoutChanged();
     }
+    if (m_changeWatcher) {
+        m_changeWatcher->updateTarget();
+    }
 }
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
@@ -786,6 +816,10 @@ void ContentPanel::setViewMode(ViewMode mode) {
     emit zoomLevelChanged(m_zoomLevel);
 
     refreshVisibleThumbnails();
+
+    if (m_changeWatcher) {
+        m_changeWatcher->updateTarget();
+    }
 }
 
 void ContentPanel::setZoomLevel(int level) {

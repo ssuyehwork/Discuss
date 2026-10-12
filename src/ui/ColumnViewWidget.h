@@ -43,6 +43,16 @@ public:
     void clearAllSelections();
     void toggleFolderSectionCollapse();
 
+    QStringList columnPaths() const {
+        QStringList paths;
+        for (auto* pane : m_panes) {
+            if (pane && !pane->currentPath().isEmpty()) {
+                paths.append(pane->currentPath());
+            }
+        }
+        return paths;
+    }
+
 signals:
     void pathNavigated(const QString& path);
     void selectionChanged();

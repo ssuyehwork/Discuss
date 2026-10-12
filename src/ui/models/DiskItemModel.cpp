@@ -240,14 +240,24 @@ struct SizeTarget {
     QString suffix;
 };
 
-void DiskItemModel::preloadDimensionsAsync() {
+void DiskItemModel::preloadDimensionsAsync(const QStringList& targetPaths) {
     uint64_t thisGen = m_currentGen.load(std::memory_order_relaxed);
+
+    QSet<QString> filterSet;
+    if (!targetPaths.isEmpty()) {
+        for (const QString& tp : targetPaths) {
+            filterSet.insert(QDir::cleanPath(tp).toLower());
+        }
+    }
 
     std::vector<SizeTarget> targets;
     targets.reserve(m_allRecords.size());
     for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
         const auto& rec = m_allRecords[i];
         if (!rec.isDir && rec.width == 0 && UiHelper::isGraphicsFile(rec.suffix)) {
+            if (!filterSet.isEmpty() && !filterSet.contains(QDir::cleanPath(rec.path).toLower())) {
+                continue;
+            }
             targets.push_back({i, rec.path, rec.suffix});
         }
     }
@@ -788,6 +798,190 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     }
 
     return QVariant();
+}
+
+QStringList DiskItemModel::applyIncrementalChanges(const std::vector<ItemRecord>& records, const QStringList& removedPaths) {
+    // 1. 构建临时规范化键映射，避免 O(n·k)
+    std::unordered_map<QString, int, QuarkMeta::QStringHash> normPathMap;
+    normPathMap.reserve(m_allRecords.size());
+    for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
+        normPathMap[QDir::cleanPath(m_allRecords[i].path).toLower()] = i;
+    }
+
+    auto findRowForPath = [this, &normPathMap](const QString& path) -> int {
+        auto it = m_pathToIndex.find(path);
+        if (it != m_pathToIndex.end()) {
+            return it->second;
+        }
+        QString normKey = QDir::cleanPath(path).toLower();
+        auto normIt = normPathMap.find(normKey);
+        if (normIt != normPathMap.end()) {
+            return normIt->second;
+        }
+        return -1;
+    };
+
+    // 2. 先处理删除
+    std::vector<int> rowsToDelete;
+    for (const QString& remPath : removedPaths) {
+        int r = findRowForPath(remPath);
+        if (r >= 0 && r < static_cast<int>(m_allRecords.size())) {
+            rowsToDelete.push_back(r);
+        }
+    }
+
+    if (!rowsToDelete.empty()) {
+        std::sort(rowsToDelete.begin(), rowsToDelete.end());
+        rowsToDelete.erase(std::unique(rowsToDelete.begin(), rowsToDelete.end()), rowsToDelete.end());
+
+        // 记录哪些原始行被删除，用于重映射 m_pendingThumbRows
+        QSet<int> deletedRowsSet(rowsToDelete.begin(), rowsToDelete.end());
+
+        // 按连续区间分组（倒序处理）
+        struct Interval { int start; int end; };
+        std::vector<Interval> intervals;
+
+        int curStart = rowsToDelete.back();
+        int curEnd = rowsToDelete.back();
+
+        for (int i = static_cast<int>(rowsToDelete.size()) - 2; i >= 0; --i) {
+            int r = rowsToDelete[i];
+            if (r == curStart - 1) {
+                curStart = r;
+            } else {
+                intervals.push_back({curStart, curEnd});
+                curStart = r;
+                curEnd = r;
+            }
+        }
+        intervals.push_back({curStart, curEnd});
+
+        // 逐个区间执行删除并清理缓存
+        for (const auto& iv : intervals) {
+            for (int r = iv.start; r <= iv.end; ++r) {
+                const QString& p = m_allRecords[r].path;
+                m_iconCache.remove(p);
+                m_iconCache.remove(QDir::cleanPath(p));
+                m_aspectRatios.remove(QDir::toNativeSeparators(p));
+                m_requestedPaths.remove(p);
+            }
+
+            beginRemoveRows(QModelIndex(), iv.start, iv.end);
+            m_allRecords.erase(m_allRecords.begin() + iv.start, m_allRecords.begin() + iv.end + 1);
+            endRemoveRows();
+        }
+
+        // 全量重建 m_pathToIndex 和 normPathMap
+        m_pathToIndex.clear();
+        normPathMap.clear();
+        normPathMap.reserve(m_allRecords.size());
+        for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
+            m_pathToIndex[m_allRecords[i].path] = i;
+            normPathMap[QDir::cleanPath(m_allRecords[i].path).toLower()] = i;
+        }
+
+        // 重映射 m_pendingThumbRows
+        QSet<int> newPendingRows;
+        for (int oldRow : m_pendingThumbRows) {
+            if (deletedRowsSet.contains(oldRow)) continue;
+
+            int deletedBefore = 0;
+            for (int delRow : rowsToDelete) {
+                if (delRow < oldRow) {
+                    deletedBefore++;
+                } else {
+                    break;
+                }
+            }
+            int newRow = oldRow - deletedBefore;
+            if (newRow >= 0 && newRow < static_cast<int>(m_allRecords.size())) {
+                newPendingRows.insert(newRow);
+            }
+        }
+        m_pendingThumbRows = newPendingRows;
+    }
+
+    // 3. 处理已存在记录更新
+    std::vector<int> updatedRows;
+    std::vector<ItemRecord> newRecords;
+
+    for (const auto& inRec : records) {
+        int r = findRowForPath(inRec.path);
+        if (r >= 0 && r < static_cast<int>(m_allRecords.size())) {
+            auto& rec = m_allRecords[r];
+            rec.filename = inRec.filename;
+            rec.suffix = inRec.suffix;
+            rec.size = inRec.size;
+            rec.ctime = inRec.ctime;
+            rec.mtime = inRec.mtime;
+            rec.isDir = inRec.isDir;
+            rec.isEmpty = inRec.isEmpty;
+            rec.encrypted = inRec.encrypted;
+            rec.isDiskTrash = inRec.isDiskTrash;
+            rec.diskTrashId = inRec.diskTrashId;
+            updatedRows.push_back(r);
+        } else {
+            newRecords.push_back(inRec);
+        }
+    }
+
+    if (!updatedRows.empty()) {
+        std::sort(updatedRows.begin(), updatedRows.end());
+        updatedRows.erase(std::unique(updatedRows.begin(), updatedRows.end()), updatedRows.end());
+
+        int startRow = -1;
+        int prevRow = -1;
+        for (int r : updatedRows) {
+            if (startRow == -1) {
+                startRow = r;
+                prevRow = r;
+            } else if (r == prevRow + 1) {
+                prevRow = r;
+            } else {
+                emit dataChanged(index(startRow, 0), index(prevRow, columnCount() - 1));
+                startRow = r;
+                prevRow = r;
+            }
+        }
+        if (startRow != -1) {
+            emit dataChanged(index(startRow, 0), index(prevRow, columnCount() - 1));
+        }
+    }
+
+    // 4. 处理新记录插入
+    QStringList addedPaths;
+    if (!newRecords.empty()) {
+        MetaCacheDecorator::decorate(newRecords);
+
+        for (auto& rec : newRecords) {
+            if (rec.isDir || !ColorPaletteEngine::isGraphicsFile(rec.suffix.toLower())) {
+                rec.thumbnailState = ItemRecord::ThumbnailState::NotApplicable;
+            } else if (rec.thumbStatus == 1) {
+                rec.thumbnailState = ItemRecord::ThumbnailState::Failed;
+            } else {
+                rec.thumbnailState = ItemRecord::ThumbnailState::Pending;
+            }
+            addedPaths.append(rec.path);
+        }
+
+        MetadataManager::instance().seedMemoryCacheBatch(newRecords);
+
+        int firstNewRow = static_cast<int>(m_allRecords.size());
+        int lastNewRow = firstNewRow + static_cast<int>(newRecords.size()) - 1;
+
+        beginInsertRows(QModelIndex(), firstNewRow, lastNewRow);
+        for (size_t i = 0; i < newRecords.size(); ++i) {
+            int rowIdx = firstNewRow + static_cast<int>(i);
+            m_allRecords.push_back(newRecords[i]);
+            m_pathToIndex[newRecords[i].path] = rowIdx;
+        }
+        m_iconCache.setMaxCost(qMax(m_iconCache.maxCost(), static_cast<int>(m_allRecords.size()) + 50));
+        endInsertRows();
+
+        preloadDimensionsAsync(addedPaths);
+    }
+
+    return addedPaths;
 }
 
 void DiskItemModel::reloadThumbnailForPath(const QString& path) {
