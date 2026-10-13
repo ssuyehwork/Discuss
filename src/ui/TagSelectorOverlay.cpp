@@ -131,7 +131,7 @@ void TagSelectorOverlay::initUi() {
     m_tagGridWidget->setAttribute(Qt::WA_StyledBackground, true);
     m_tagGridWidget->setObjectName("TagSelectorGridWidget");
     m_tagGridWidget->setFocusPolicy(Qt::StrongFocus);
-    m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 0, 6, 6);
+    m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 10, 6, 6);
     m_tagGridWidget->setLayout(m_gridFlowLayout);
 
     m_scrollArea = new QScrollArea(this);
