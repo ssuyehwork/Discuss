@@ -68,7 +68,7 @@ void FileCollisionDialog::setupUi(const QString& firstFileName, const QString& t
     auto createCapsuleBtn = [this, area](const QString& text, CollisionResolveAction action) {
         QPushButton* btn = new QPushButton(text, area);
         btn->setFixedHeight(28);
-        btn->setMinimumWidth(72);
+        btn->setMinimumWidth(76);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setObjectName("CollisionOptionBtn");
         connect(btn, &QPushButton::clicked, this, [this, action]() {

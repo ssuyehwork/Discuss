@@ -52,6 +52,13 @@ public:
     static bool roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove);
 
     /**
+     * @brief 规范化键名：转换为小写字符串以实现大小写无关的严格一致匹配
+     */
+    static std::wstring normalizeItemKey(const std::wstring& name) {
+        return QString::fromStdWString(name).toLower().toStdWString();
+    }
+
+    /**
      * @param folderPath 目标物理文件夹的完整路径
      */
     explicit QuarkMetaJson(const std::wstring& folderPath);
