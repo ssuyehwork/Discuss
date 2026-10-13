@@ -208,7 +208,7 @@ void MetadataManager::registerItemsAsync(const QStringList& paths) {
             }
         }
 
-        int enqueuedCount = enqueuedPaths.size();
+        int enqueuedCount = static_cast<int>(enqueuedPaths.size());
         qDebug() << "[AutoColor] [MetadataManager] Enqueue check - Pending:" << pendingCount 
                  << "SkippedFresh:" << skippedFreshCount << "Enqueued:" << enqueuedCount;
 
@@ -334,10 +334,10 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
                           meta.autoColor == item.autoColor &&
                           meta.fileSize == item.fileSize &&
                           meta.mtime == item.mtime &&
-                          meta.palettes.size() == item.palettes.size());
+                          meta.palettes.size() == static_cast<size_t>(item.palettes.size()));
         if (sameValue) {
             bool palettesMatch = true;
-            for (size_t i = 0; i < item.palettes.size(); ++i) {
+            for (size_t i = 0; i < static_cast<size_t>(item.palettes.size()); ++i) {
                 if (meta.palettes[i].color != item.palettes[i].first ||
                     std::abs(meta.palettes[i].ratio - item.palettes[i].second) > 0.0001f) {
                     palettesMatch = false;

@@ -341,7 +341,7 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     }
 
     QWidget* topWidget = this->topLevelWidget();
-    m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), m_selectedPaths, topWidget);
+    m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), topWidget);
 
     if (topWidget) {
         // 1. 忠实尊重窗口自己的真实尺寸，绝对不改动大小！
