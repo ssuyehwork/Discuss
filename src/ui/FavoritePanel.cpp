@@ -1,6 +1,7 @@
 #include "FavoritePanel.h"
 #include "UiHelper.h"
 #include "ShellIconManager.h"
+#include "WindowsShellThumbnailProvider.h"
 #include "../util/DiskMediaExtractor.h"
 #include "ColorPicker.h"
 #include "ToolTipOverlay.h"
@@ -54,8 +55,15 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
         painter->fillRect(opt.rect, Qt::transparent);
     }
 
-    // 几何布局
-    int leftMargin = 10;
+    // 几何布局（根据树层级深度计算缩进，保证子节点图标与文本排版层次清晰）
+    int depth = 0;
+    QModelIndex parentIdx = index.parent();
+    while (parentIdx.isValid()) {
+        depth++;
+        parentIdx = parentIdx.parent();
+    }
+
+    int leftMargin = 10 + depth * 14;
     int iconSize = 18;
     int spacing = 8;
 
@@ -273,6 +281,9 @@ void FavoritePanel::initUi() {
     connect(&FavoriteService::instance(), &FavoriteService::favoritesReloaded, this, [this]() {
         loadFavorites();
     });
+
+    // 🚀【系统图标异步回写】：当后台线程完成文件真实扩展名/程序图标提取时，即时刷新收藏项图标
+    connect(&IconLoadNotifier::instance(), &IconLoadNotifier::iconLoaded, this, &FavoritePanel::refreshItemIcons, Qt::QueuedConnection);
 }
 
 void FavoritePanel::markOrderDirty() {
@@ -616,6 +627,42 @@ void FavoritePanel::onPathsDroppedToFavorite(const QStringList& paths, const QMo
         }
     } else if (duplicateCount > 0) {
         ToolTipOverlay::instance()->showText(QCursor::pos(), "该文件夹已在收藏夹中，请勿重复添加", 2000, QColor("#e81123"));
+    }
+}
+
+void FavoritePanel::refreshItemIcons() {
+    if (!m_favoriteModel || m_isLoading) return;
+
+    std::function<void(QStandardItem*)> updateIconsRecursive = [&](QStandardItem* parentItem) {
+        int count = parentItem ? parentItem->rowCount() : m_favoriteModel->rowCount();
+        for (int i = 0; i < count; ++i) {
+            QStandardItem* item = parentItem ? parentItem->child(i) : m_favoriteModel->item(i);
+            if (!item) continue;
+
+            bool isDir = item->data(Qt::UserRole + 4).toBool();
+            bool hasCustomThumb = item->data(Qt::UserRole + 5).toBool();
+            bool isVirtual = item->data(Qt::UserRole + 7).toBool();
+
+            // 仅对非文件夹、且尚未被自定义大缩略图接管的普通文件更新真实系统文件图标
+            if (!isDir && !isVirtual && !hasCustomThumb) {
+                QString itemPath = item->data(Qt::UserRole + 1).toString();
+                if (!itemPath.isEmpty()) {
+                    QIcon newIcon = ShellIconManager::getFileIcon(itemPath);
+                    if (!newIcon.isNull()) {
+                        item->setIcon(newIcon);
+                    }
+                }
+            }
+
+            if (item->hasChildren()) {
+                updateIconsRecursive(item);
+            }
+        }
+    };
+
+    updateIconsRecursive(nullptr);
+    if (m_favoriteView && m_favoriteView->viewport()) {
+        m_favoriteView->viewport()->update();
     }
 }
 

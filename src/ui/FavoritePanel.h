@@ -54,6 +54,7 @@ private slots:
 
 private:
     void initUi();
+    void refreshItemIcons();
     void updateItemThumbnail(const QString& path, const QPixmap& pix);
     void createAndEditCategory(int parentId = 0);
     void sortItemsByName(bool ascending);
