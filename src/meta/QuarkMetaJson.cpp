@@ -26,10 +26,6 @@ QuarkMetaJson::QuarkMetaJson(const std::wstring& folderPath)
     m_filePath = path + L".QuarkMeta.json";
 }
 
-static std::wstring normalizeItemKey(const std::wstring& name) {
-    return QString::fromStdWString(name).toLower().toStdWString();
-}
-
 bool QuarkMetaJson::load() {
     m_loadFailed = false;
     QFile file(toQString(m_filePath));
@@ -63,26 +59,7 @@ bool QuarkMetaJson::load() {
         for (auto it = itemsObj.begin(); it != itemsObj.end(); ++it) {
             std::wstring key = normalizeItemKey(toStdWString(it.key()));
             ItemMeta item = entryToItem(it.value().toObject());
-            auto existingIt = m_items.find(key);
-            if (existingIt != m_items.end()) {
-                if (item.rating > 0) existingIt->second.rating = item.rating;
-                if (!item.color.empty()) existingIt->second.color = item.color;
-                if (!item.autoColor.empty()) existingIt->second.autoColor = item.autoColor;
-                if (!item.tags.empty()) existingIt->second.tags = item.tags;
-                if (item.pinned) existingIt->second.pinned = item.pinned;
-                if (!item.note.empty()) existingIt->second.note = item.note;
-                if (!item.url.empty()) existingIt->second.url = item.url;
-                if (item.encrypted) existingIt->second.encrypted = item.encrypted;
-                if (item.width > 0) existingIt->second.width = item.width;
-                if (item.height > 0) existingIt->second.height = item.height;
-                if (item.thumbStatus > 0) existingIt->second.thumbStatus = item.thumbStatus;
-                if (item.addedAt > 0) existingIt->second.addedAt = item.addedAt;
-                if (!item.palettes.empty()) existingIt->second.palettes = item.palettes;
-                if (item.size > 0) existingIt->second.size = item.size;
-                if (item.modificationTime > 0) existingIt->second.modificationTime = item.modificationTime;
-            } else {
-                m_items[key] = item;
-            }
+            m_items[key] = item;
         }
     }
     return true;
@@ -123,10 +100,13 @@ bool QuarkMetaJson::renameItem(const QString& folderPath, const QString& oldName
     QuarkMetaJson meta(folderPath.toStdWString());
     if (!meta.load()) return false;
     auto& items = meta.items();
-    auto it = items.find(oldName.toStdWString());
+    std::wstring oldKey = normalizeItemKey(oldName.toStdWString());
+    std::wstring newKey = normalizeItemKey(newName.toStdWString());
+    auto it = items.find(oldKey);
     if (it != items.end()) {
-        items[newName.toStdWString()] = it->second;
+        ItemMeta itemMeta = it->second;
         items.erase(it);
+        items[newKey] = itemMeta;
         return meta.save();
     }
     return true;
@@ -147,7 +127,7 @@ std::unordered_map<std::wstring, ItemMeta> QuarkMetaJson::readFolderMeta(const s
 void QuarkMetaJson::updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater) {
     QFileInfo info(QString::fromStdWString(filePath));
     std::wstring folderPath = info.absolutePath().toStdWString();
-    std::wstring fileName = info.fileName().toStdWString();
+    std::wstring fileName = normalizeItemKey(info.fileName().toStdWString());
 
     QuarkMetaJson parentJson(folderPath);
     parentJson.load();
@@ -200,8 +180,8 @@ bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& 
 
     QString oldParent = QDir::toNativeSeparators(oldInfo.absolutePath());
     QString newParent = QDir::toNativeSeparators(newInfo.absolutePath());
-    std::wstring oldFileName = oldInfo.fileName().toStdWString();
-    std::wstring newFileName = newInfo.fileName().toStdWString();
+    std::wstring oldKey = normalizeItemKey(oldInfo.fileName().toStdWString());
+    std::wstring newKey = normalizeItemKey(newInfo.fileName().toStdWString());
 
     static std::mutex s_jsonRoamMutex;
     std::lock_guard<std::mutex> lock(s_jsonRoamMutex);
@@ -210,26 +190,36 @@ bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& 
     QuarkMetaJson oldJson(oldParent.toStdWString());
     if (!oldJson.load()) return false;
 
+    // 2. 加载目标目录 .QuarkMeta.json 准备覆盖/替换
+    QuarkMetaJson newJson(newParent.toStdWString());
+    newJson.load();
+
     auto& oldItems = oldJson.items();
-    auto it = oldItems.find(oldFileName);
+    auto& newItems = newJson.items();
+
+    // “替换”语义：先强行抹除目标位置同名的旧条目
+    newItems.erase(newKey);
+
+    auto it = oldItems.find(oldKey);
     if (it == oldItems.end()) {
-        // 源文件无任何用户标记或尺寸，无需转移
-        return true;
+        // 源无任何用户标记：目标同名条目已被清理，保存目标配置后返回
+        if (isMove) {
+            oldJson.save();
+        }
+        return newJson.save();
     }
 
-    // 2. 整包深拷贝（星级、颜色、标签、尺寸、宽高比、备注、链接、失败状态等 100% 完整继承）
+    // 整包深拷贝（星级、颜色、标签、尺寸、宽高比、备注、链接、失败状态等 100% 完整继承）
     ItemMeta metaPackage = it->second;
 
-    // 3. 如果是【移动 (Move)】，从源 JSON 中抹除该条目并落盘
+    // 如果是【移动 (Move)】，从源 JSON 中抹除该条目并落盘
     if (isMove) {
         oldItems.erase(it);
         oldJson.save();
     }
 
-    // 4. 写入目标目录 .QuarkMeta.json 并物理原子落盘
-    QuarkMetaJson newJson(newParent.toStdWString());
-    newJson.load();
-    newJson.items()[newFileName] = metaPackage;
+    // 写入目标目录 .QuarkMeta.json (使用统一规范化的键名) 并物理原子落盘
+    newItems[newKey] = metaPackage;
     bool saveOk = newJson.save();
 
     if (saveOk) {

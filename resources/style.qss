@@ -595,8 +595,8 @@ QPushButton#CollisionOptionBtn {
     color: #EEEEEE;
     border: 1px solid #3E3E42;
     border-radius: 4px;
-    padding: 8px 12px;
-    text-align: left;
+    padding: 2px 10px;
+    text-align: center;
 }
 
 QPushButton#CollisionOptionBtn:hover {
@@ -1873,7 +1873,7 @@ QCheckBox::indicator:hover { border: 1px solid #666; }
 QCheckBox::indicator:checked { 
     border: 1px solid #378ADD; 
     background: #1E1E1E; 
-    image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzc4QUREIiBzdHJva2Utd2lkdGg9IjMuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSIyMCA2IDkgMTcgNCAxMiI+PC9wb2x5bGluZT48L3N2Zz4=);
+    image: url(:/Icon/check.svg);
 }
 
 /* 统一输入框与多行文本框样式 */
