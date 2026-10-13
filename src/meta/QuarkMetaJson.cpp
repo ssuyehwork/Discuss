@@ -66,16 +66,25 @@ bool QuarkMetaJson::load() {
 }
 
 bool QuarkMetaJson::save() const {
-    QJsonObject root;
-    root.insert("version", "2");
-    root.insert("folder", folderToEntry(m_folder));
-
     QJsonObject itemsObj;
     for (const auto& [name, meta] : m_items) {
         if (meta.hasUserOperations()) {
             itemsObj.insert(toQString(name), itemToEntry(meta));
         }
     }
+
+    // 零残留物理自愈：当所有子项目的元数据都被移除且文件夹自身为默认配置时，自动物理物理物理擦除 .QuarkMeta.json
+    if (itemsObj.isEmpty() && m_folder.isDefault()) {
+        QString realPath = toQString(m_filePath);
+        if (QFile::exists(realPath)) {
+            QFile::remove(realPath);
+        }
+        return true;
+    }
+
+    QJsonObject root;
+    root.insert("version", "2");
+    root.insert("folder", folderToEntry(m_folder));
     root.insert("items", itemsObj);
 
     QByteArray jsonData = QJsonDocument(root).toJson(QJsonDocument::Indented);
