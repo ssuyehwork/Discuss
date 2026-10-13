@@ -193,4 +193,11 @@ bool QuarkMetaJsonStore::renameItem(const QString& folderPath, const QString& ol
     return QuarkMetaJson::renameItem(folderPath, oldName, newName);
 }
 
+void QuarkMetaJsonStore::invalidateFolderCache(const std::wstring& folderPath) {
+    std::wstring normFolder = normalizeFolderPath(folderPath);
+    std::lock_guard<std::mutex> lock(m_storeMutex);
+    m_folderCacheMap.erase(normFolder);
+    m_dirtyFolderPaths.erase(normFolder); // 同步清除脏标记，防止用已驱逐的旧快照回写磁盘
+}
+
 } // namespace QuarkMeta

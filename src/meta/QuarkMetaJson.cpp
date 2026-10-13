@@ -1,6 +1,7 @@
 #include "QuarkMetaJson.h"
 #include "MetaMemoryCache.h"
 #include "MetadataManager.h"
+#include "QuarkMetaJsonStore.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -66,16 +67,25 @@ bool QuarkMetaJson::load() {
 }
 
 bool QuarkMetaJson::save() const {
-    QJsonObject root;
-    root.insert("version", "2");
-    root.insert("folder", folderToEntry(m_folder));
-
     QJsonObject itemsObj;
     for (const auto& [name, meta] : m_items) {
         if (meta.hasUserOperations()) {
             itemsObj.insert(toQString(name), itemToEntry(meta));
         }
     }
+
+    // 零残留物理自愈：当所有子项目的元数据都被移除且文件夹自身为默认配置时，自动物理物理物理擦除 .QuarkMeta.json
+    if (itemsObj.isEmpty() && m_folder.isDefault()) {
+        QString realPath = toQString(m_filePath);
+        if (QFile::exists(realPath)) {
+            QFile::remove(realPath);
+        }
+        return true;
+    }
+
+    QJsonObject root;
+    root.insert("version", "2");
+    root.insert("folder", folderToEntry(m_folder));
     root.insert("items", itemsObj);
 
     QByteArray jsonData = QJsonDocument(root).toJson(QJsonDocument::Indented);
@@ -223,38 +233,12 @@ bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& 
     bool saveOk = newJson.save();
 
     if (saveOk) {
-        std::wstring newWPath = MetadataManager::normalizePath(newInfo.absoluteFilePath().toStdWString());
-        std::wstring oldWPath = MetadataManager::normalizePath(oldInfo.absoluteFilePath().toStdWString());
-
-        // 同步更新 MetaMemoryCache 内存缓存真理源，确保 UI 秒级感知
-        MetadataManager::instance().ensureActivated(newWPath);
-        MetaMemoryCache::instance().update(newWPath, [&metaPackage](RuntimeMeta& rMeta) {
-            rMeta.rating = metaPackage.rating;
-            rMeta.manualColor = metaPackage.color;
-            rMeta.autoColor = metaPackage.autoColor;
-            rMeta.pinned = metaPackage.pinned;
-            rMeta.note = metaPackage.note;
-            rMeta.url = metaPackage.url;
-            rMeta.encrypted = metaPackage.encrypted;
-            rMeta.width = metaPackage.width;
-            rMeta.height = metaPackage.height;
-            rMeta.thumbStatus = metaPackage.thumbStatus;
-            rMeta.fileSize = metaPackage.size;
-            rMeta.mtime = metaPackage.modificationTime;
-            rMeta.added_at = metaPackage.addedAt;
-
-            rMeta.tags.clear();
-            for (const auto& t : metaPackage.tags) {
-                rMeta.tags.append(QString::fromStdWString(t));
-            }
-
-            rMeta.palettes = metaPackage.palettes;
-        });
-
+        // 驱逐目标文件夹的 Store 内存缓存快照，确保下次 readFolderMeta() 强制重读磁盘最新 JSON
+        QuarkMetaJsonStore::instance().invalidateFolderCache(newParent.toStdWString());
         if (isMove) {
-            MetaMemoryCache::instance().remove(oldWPath);
+            // 移动时同步驱逐源文件夹缓存（元数据已从源 JSON 物理抹除）
+            QuarkMetaJsonStore::instance().invalidateFolderCache(oldParent.toStdWString());
         }
-
         MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, newFilePath);
     }
 

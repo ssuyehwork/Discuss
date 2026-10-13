@@ -3,8 +3,5 @@
         <file>style.qss</file>
         <file>app_icon.png</file>
         <file>app_icon.ico</file>
-        <file>Icon/arrow_right.svg</file>
-        <file>Icon/arrow_down.svg</file>
-        <file>Icon/check.svg</file>
     </qresource>
 </RCC>

@@ -21,8 +21,20 @@ QString ThemeManager::getGlobalStyleSheet() const {
     QFile file(":/style.qss");
     if (file.open(QFile::ReadOnly)) {
         QString content = QLatin1String(file.readAll());
-        QString arrowPath = UiHelper::getSvgTempFilePath("chevron_down", QColor("#AAAAAA"));
-        content += QString("\nQComboBox::down-arrow { image: url(\"%1\"); }\n").arg(arrowPath);
+
+        // 从 SvgIcons 统一动态提取图标，彻底解除对物理 Icon/*.svg 文件的依赖
+        QString comboArrowPath = UiHelper::getSvgTempFilePath("chevron_down", QColor("#AAAAAA"));
+        QString checkPath = UiHelper::getSvgTempFilePath("check", QColor("#378ADD"));
+        QString treeArrowRight = UiHelper::getSvgTempFilePath("chevron_right", QColor("#378ADD"));
+        QString treeArrowDown = UiHelper::getSvgTempFilePath("chevron_down", QColor("#378ADD"));
+
+        content += QString(
+            "\nQComboBox::down-arrow { image: url(\"%1\"); }\n"
+            "QCheckBox::indicator:checked { image: url(\"%2\"); }\n"
+            "QTreeView::branch:has-children:closed { image: url(\"%3\"); }\n"
+            "QTreeView::branch:has-children:open { image: url(\"%4\"); }\n"
+        ).arg(comboArrowPath, checkPath, treeArrowRight, treeArrowDown);
+
         return content;
     }
 

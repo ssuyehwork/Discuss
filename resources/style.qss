@@ -1873,7 +1873,6 @@ QCheckBox::indicator:hover { border: 1px solid #666; }
 QCheckBox::indicator:checked { 
     border: 1px solid #378ADD; 
     background: #1E1E1E; 
-    image: url(:/Icon/check.svg);
 }
 
 /* 统一输入框与多行文本框样式 */
@@ -1987,12 +1986,6 @@ QTreeView {
 }
 QTreeView::branch {
     background: transparent;
-}
-QTreeView::branch:has-children:closed {
-    image: url(:/Icon/arrow_right.svg);
-}
-QTreeView::branch:has-children:open {
-    image: url(:/Icon/arrow_down.svg);
 }
 QTreeView::item {
     height: 28px;

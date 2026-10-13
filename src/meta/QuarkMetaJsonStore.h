@@ -49,6 +49,12 @@ public:
      */
     void flushAllDirtyBuffers(bool sync = false);
 
+    /**
+     * @brief 驱逐指定文件夹的内存缓存快照，使下次 readFolderMeta() 强制从磁盘重新加载
+     * @param folderPath 目标物理文件夹路径（原始大小写，内部自动规范化）
+     */
+    void invalidateFolderCache(const std::wstring& folderPath);
+
 private slots:
     void onFlushTimeout();
 
