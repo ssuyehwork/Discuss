@@ -261,6 +261,27 @@ bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& 
     return saveOk;
 }
 
+bool QuarkMetaJson::removeItemMetadata(const QString& filePath) {
+    if (filePath.isEmpty()) return true;
+    QFileInfo info(filePath);
+    QString parentDir = QDir::toNativeSeparators(info.absolutePath());
+    std::wstring fileNameKey = normalizeItemKey(info.fileName().toStdWString());
+
+    static std::mutex s_jsonRemoveMutex;
+    std::lock_guard<std::mutex> lock(s_jsonRemoveMutex);
+
+    QuarkMetaJson json(parentDir.toStdWString());
+    if (!json.load()) return false;
+
+    if (json.items().erase(fileNameKey) > 0) {
+        json.save();
+    }
+    std::wstring wPath = MetadataManager::normalizePath(filePath.toStdWString());
+    MetaMemoryCache::instance().remove(wPath);
+    MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, filePath);
+    return true;
+}
+
 bool QuarkMetaJson::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
     if (oldFolderPath == newFolderPath) return true;
     
