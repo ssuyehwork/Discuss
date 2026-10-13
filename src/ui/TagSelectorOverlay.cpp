@@ -146,7 +146,7 @@ void TagSelectorOverlay::loadTagsAndGroups() {
     };
 
     addGroupItem("全部", "all_data");
-    addGroupItem("未分类", "uncategorized");
+    addGroupItem("未分类", "uncategorized-2");
 
     for (const auto& grp : m_lexiconGroups) {
         if (grp.id > 0) {

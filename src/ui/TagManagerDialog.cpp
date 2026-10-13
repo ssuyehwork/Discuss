@@ -194,7 +194,7 @@ void TagManagerDialog::refreshSidebar() {
     };
 
     createSideBtn(0, "all_data", "全部标签");
-    createSideBtn(-1, "uncategorized", "未分类标签");
+    createSideBtn(-1, "uncategorized-2", "未分类标签");
     createSideBtn(-2, "star_filled", "常用标签");
 
     // 动态加载自定义分组

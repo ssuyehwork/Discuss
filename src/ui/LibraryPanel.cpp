@@ -955,7 +955,7 @@ void LibraryPanel::loadLibrary() {
     };
 
     addSystemItem("全部数据", "all_data", "#3498db", -1);
-    addSystemItem("未分类", "uncategorized", "#95a5a6", -2);
+    addSystemItem("未分类", "uncategorized-2", "#95a5a6", -2);
 
     // 2. 构建 "文件夹(N)" 折叠分组 Header 节点 (不可选中、不可拖放)
     auto list = LibraryDao::getAllCategories();
