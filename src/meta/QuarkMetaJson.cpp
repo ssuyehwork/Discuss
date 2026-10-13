@@ -1,6 +1,7 @@
 #include "QuarkMetaJson.h"
 #include "MetaMemoryCache.h"
 #include "MetadataManager.h"
+#include "QuarkMetaJsonStore.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -214,8 +215,16 @@ bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& 
         // 源无任何用户标记：目标同名条目已被清理，保存目标配置后返回
         if (isMove) {
             oldJson.save();
+            QuarkMetaJsonStore::instance().invalidateCache(oldParent.toStdWString());
         }
-        return newJson.save();
+        bool ok = newJson.save();
+        if (ok) {
+            QuarkMetaJsonStore::instance().invalidateCache(newParent.toStdWString());
+            std::wstring newWPath = MetadataManager::normalizePath(newInfo.absoluteFilePath().toStdWString());
+            MetaMemoryCache::instance().remove(newWPath);
+            MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, newFilePath);
+        }
+        return ok;
     }
 
     // 整包深拷贝（星级、颜色、标签、尺寸、宽高比、备注、链接、失败状态等 100% 完整继承）
@@ -232,6 +241,11 @@ bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& 
     bool saveOk = newJson.save();
 
     if (saveOk) {
+        // 失效源目录与目标目录在 QuarkMetaJsonStore 中的内存快照
+        if (isMove) {
+            QuarkMetaJsonStore::instance().invalidateCache(oldParent.toStdWString());
+        }
+        QuarkMetaJsonStore::instance().invalidateCache(newParent.toStdWString());
         std::wstring newWPath = MetadataManager::normalizePath(newInfo.absoluteFilePath().toStdWString());
         std::wstring oldWPath = MetadataManager::normalizePath(oldInfo.absoluteFilePath().toStdWString());
 
@@ -284,6 +298,7 @@ bool QuarkMetaJson::removeItemMetadata(const QString& filePath) {
 
     if (json.items().erase(fileNameKey) > 0) {
         json.save();
+        QuarkMetaJsonStore::instance().invalidateCache(parentDir.toStdWString());
     }
     std::wstring wPath = MetadataManager::normalizePath(filePath.toStdWString());
     MetaMemoryCache::instance().remove(wPath);

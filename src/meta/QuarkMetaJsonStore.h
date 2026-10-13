@@ -45,6 +45,11 @@ public:
     bool renameItem(const QString& folderPath, const QString& oldName, const QString& newName);
 
     /**
+     * @brief 使指定物理文件夹的内存缓存失效，迫使下次读取重新从磁盘载入
+     */
+    void invalidateCache(const std::wstring& folderPath);
+
+    /**
      * @brief 强制立即将所有未落盘的脏目录 JSON 刷入物理磁盘 (sync 为 true 时在当前线程同步写入)
      */
     void flushAllDirtyBuffers(bool sync = false);

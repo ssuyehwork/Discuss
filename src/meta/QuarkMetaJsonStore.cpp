@@ -188,8 +188,16 @@ bool QuarkMetaJsonStore::migrateFolderCache(const QString& oldFolderPath, const 
     return QuarkMetaJson::migrateFolderCache(oldFolderPath, newFolderPath);
 }
 
+void QuarkMetaJsonStore::invalidateCache(const std::wstring& folderPath) {
+    std::wstring normFolder = normalizeFolderPath(folderPath);
+    std::lock_guard<std::mutex> lock(m_storeMutex);
+    m_folderCacheMap.erase(normFolder);
+    m_dirtyFolderPaths.erase(normFolder);
+}
+
 bool QuarkMetaJsonStore::renameItem(const QString& folderPath, const QString& oldName, const QString& newName) {
     flushAllDirtyBuffers();
+    invalidateCache(folderPath.toStdWString());
     return QuarkMetaJson::renameItem(folderPath, oldName, newName);
 }
 

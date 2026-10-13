@@ -245,6 +245,25 @@ void MetadataManager::ensureActivated(const std::wstring& nPath) {
     }
 
     if (success) {
+        ItemMeta jsonMeta;
+        if (QuarkMetaJsonStore::instance().readItemMeta(nPath, jsonMeta)) {
+            rm.rating = jsonMeta.rating;
+            rm.manualColor = jsonMeta.color;
+            rm.pinned = jsonMeta.pinned;
+            rm.note = jsonMeta.note;
+            rm.url = jsonMeta.url;
+            rm.encrypted = jsonMeta.encrypted;
+            rm.width = jsonMeta.width;
+            rm.height = jsonMeta.height;
+            rm.autoColor = jsonMeta.autoColor;
+            rm.thumbStatus = jsonMeta.thumbStatus;
+            rm.added_at = jsonMeta.addedAt;
+            rm.tags.clear();
+            for (const auto& t : jsonMeta.tags) {
+                rm.tags.append(QString::fromStdWString(t));
+            }
+            rm.palettes = jsonMeta.palettes;
+        }
         MetaMemoryCache::instance().put(nPath, rm);
     }
 }
