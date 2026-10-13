@@ -72,6 +72,9 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
             overallOk = false;
         }
     }
+    if (overallOk) {
+        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, destDir);
+    }
     return overallOk;
 #else
     Q_UNUSED(sourcePaths);

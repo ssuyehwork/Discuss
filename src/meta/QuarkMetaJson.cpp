@@ -1,4 +1,6 @@
 #include "QuarkMetaJson.h"
+#include "MetaMemoryCache.h"
+#include "MetadataManager.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -228,7 +230,45 @@ bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& 
     QuarkMetaJson newJson(newParent.toStdWString());
     newJson.load();
     newJson.items()[newFileName] = metaPackage;
-    return newJson.save();
+    bool saveOk = newJson.save();
+
+    if (saveOk) {
+        std::wstring newWPath = MetadataManager::normalizePath(newInfo.absoluteFilePath().toStdWString());
+        std::wstring oldWPath = MetadataManager::normalizePath(oldInfo.absoluteFilePath().toStdWString());
+
+        // 同步更新 MetaMemoryCache 内存缓存真理源，确保 UI 秒级感知
+        MetadataManager::instance().ensureActivated(newWPath);
+        MetaMemoryCache::instance().update(newWPath, [&metaPackage](RuntimeMeta& rMeta) {
+            rMeta.rating = metaPackage.rating;
+            rMeta.manualColor = metaPackage.color;
+            rMeta.autoColor = metaPackage.autoColor;
+            rMeta.pinned = metaPackage.pinned;
+            rMeta.note = metaPackage.note;
+            rMeta.url = metaPackage.url;
+            rMeta.encrypted = metaPackage.encrypted;
+            rMeta.width = metaPackage.width;
+            rMeta.height = metaPackage.height;
+            rMeta.thumbStatus = metaPackage.thumbStatus;
+            rMeta.fileSize = metaPackage.size;
+            rMeta.mtime = metaPackage.modificationTime;
+            rMeta.added_at = metaPackage.addedAt;
+
+            rMeta.tags.clear();
+            for (const auto& t : metaPackage.tags) {
+                rMeta.tags.append(QString::fromStdWString(t));
+            }
+
+            rMeta.palettes = metaPackage.palettes;
+        });
+
+        if (isMove) {
+            MetaMemoryCache::instance().remove(oldWPath);
+        }
+
+        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, newFilePath);
+    }
+
+    return saveOk;
 }
 
 bool QuarkMetaJson::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
