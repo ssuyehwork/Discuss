@@ -9,11 +9,23 @@
 #include <QApplication>
 #include <QScreen>
 #include <QScrollBar>
+#include <QFileInfo>
+#include <QRegularExpression>
 
 namespace QuarkMeta {
 
 
 TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent)
+    : TagSelectorOverlay(initialSelected, QStringList(), parent)
+{
+}
+
+TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const QSet<QString>& candidatePaths, QWidget* parent)
+    : TagSelectorOverlay(initialSelected, candidatePaths.values(), parent)
+{
+}
+
+TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths, QWidget* parent)
     : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), 
       m_selectedTags(initialSelected) 
 {
@@ -25,6 +37,7 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
 
     m_framelessHelper = FramelessWindowHelper::apply(this, nullptr);
 
+    extractRecommendedTags(candidatePaths);
     initUi();
     loadTagsAndGroups();
     
@@ -118,7 +131,7 @@ void TagSelectorOverlay::initUi() {
     m_tagGridWidget->setAttribute(Qt::WA_StyledBackground, true);
     m_tagGridWidget->setObjectName("TagSelectorGridWidget");
     m_tagGridWidget->setFocusPolicy(Qt::StrongFocus);
-    m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 10, 6, 6);
+    m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 0, 6, 6);
     m_tagGridWidget->setLayout(m_gridFlowLayout);
 
     m_scrollArea = new QScrollArea(this);
@@ -132,6 +145,35 @@ void TagSelectorOverlay::initUi() {
     setMinimumSize(250, 150);
     QSize savedSize = AppConfig::instance().getValue("TagSelectorOverlay/Size", QSize(400, 240)).toSize();
     resize(savedSize.expandedTo(QSize(250, 150)));
+}
+
+void TagSelectorOverlay::extractRecommendedTags(const QStringList& paths) {
+    m_recommendedTags.clear();
+    QSet<QString> seen;
+    
+    static const QRegularExpression splitRegex("[_\\-\\s\\+\\.\\(\\)\\[\\]【】]+");
+
+    for (const QString& path : paths) {
+        if (path.isEmpty() || path.startsWith("trash://")) continue;
+        QFileInfo info(path);
+        QString baseName = info.completeBaseName();
+        if (baseName.isEmpty()) continue;
+
+        QStringList tokens = baseName.split(splitRegex, Qt::SkipEmptyParts);
+        for (QString token : tokens) {
+            token = token.trimmed();
+            if (token.isEmpty()) continue;
+            
+            bool isPureNum = false;
+            token.toInt(&isPureNum);
+            if (isPureNum) continue;
+
+            if (!seen.contains(token)) {
+                seen.insert(token);
+                m_recommendedTags.append(token);
+            }
+        }
+    }
 }
 
 void TagSelectorOverlay::loadTagsAndGroups() {
@@ -194,6 +236,14 @@ void TagSelectorOverlay::filterTags() {
         }
     }
 
+    if (currentGrp == "全部" && kw.isEmpty() && !m_recommendedTags.isEmpty()) {
+        for (int i = m_recommendedTags.size() - 1; i >= 0; --i) {
+            QString recTag = m_recommendedTags[i];
+            m_displayedTags.removeAll(recTag);
+            m_displayedTags.prepend(recTag);
+        }
+    }
+
     if (!kw.isEmpty() && !m_displayedTags.contains(kw, Qt::CaseInsensitive)) {
         m_displayedTags.prepend(kw);
     }
@@ -210,9 +260,45 @@ void TagSelectorOverlay::populateGrid() {
         delete item;
     }
 
-    m_tagButtons.clear();
+    m_tagButtonMap.clear();
+
+    QString kw = m_searchEdit->text().trimmed();
+    QString currentGrp = m_groupList->currentItem() ? m_groupList->currentItem()->text() : "全部";
+    bool hasRec = (currentGrp == "全部" && kw.isEmpty() && !m_recommendedTags.isEmpty());
+
+    if (hasRec) {
+        QLabel* lblRec = new QLabel("推荐", m_tagGridWidget);
+        lblRec->setObjectName("TagOverlayRecHeader");
+        lblRec->setStyleSheet("color: #3498db; font-weight: bold; padding-right: 4px;");
+        m_gridFlowLayout->addWidget(lblRec);
+
+        for (const QString& recTag : m_recommendedTags) {
+            QPushButton* btn = new QPushButton(m_tagGridWidget);
+            btn->setObjectName("TagOverlayRecBtn");
+            btn->setCheckable(true);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setFixedHeight(22);
+
+            m_tagButtonMap.insert(recTag, btn);
+            m_gridFlowLayout->addWidget(btn);
+
+            connect(btn, &QPushButton::clicked, this, [this, recTag]() {
+                toggleTagSelection(recTag);
+            });
+        }
+
+        QWidget* lineBreak = new QWidget(m_tagGridWidget);
+        lineBreak->setFixedWidth(10000);
+        lineBreak->setFixedHeight(0);
+        m_gridFlowLayout->addWidget(lineBreak);
+    }
+
     for (int i = 0; i < m_displayedTags.size(); ++i) {
         QString tag = m_displayedTags[i];
+
+        if (hasRec && m_recommendedTags.contains(tag)) {
+            continue;
+        }
 
         QPushButton* btn = new QPushButton(m_tagGridWidget);
         btn->setObjectName("TagOverlayBtn");
@@ -220,7 +306,7 @@ void TagSelectorOverlay::populateGrid() {
         btn->setCursor(Qt::PointingHandCursor);
         btn->setFixedHeight(22);
 
-        m_tagButtons.append(btn);
+        m_tagButtonMap.insert(tag, btn);
         m_gridFlowLayout->addWidget(btn);
 
         connect(btn, &QPushButton::clicked, this, [this, tag]() {
@@ -248,17 +334,21 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
 }
 
 void TagSelectorOverlay::updateSelectionHighlight() {
-    for (int i = 0; i < m_displayedTags.size(); ++i) {
-        QString tag = m_displayedTags[i];
-        QPushButton* btn = m_tagButtons[i];
+    for (auto it = m_tagButtonMap.cbegin(); it != m_tagButtonMap.cend(); ++it) {
+        const QString& tag = it.key();
+        QPushButton* btn = it.value();
+        if (!btn) continue;
 
         bool isSelected = m_selectedTags.contains(tag);
-        bool isFocused = (i == m_currentTagIndex);
+        int tagIdx = m_displayedTags.indexOf(tag);
+        bool isFocused = (tagIdx >= 0 && tagIdx == m_currentTagIndex);
 
         btn->setText(tag);
 
         if (isSelected) {
             btn->setIcon(UiHelper::getIcon("check", QColor("#FFFFFF"), 12));
+        } else if (m_recommendedTags.contains(tag)) {
+            btn->setIcon(UiHelper::getIcon("sparkles", QColor("#3498db"), 12));
         } else {
             btn->setIcon(UiHelper::getIcon("clock", QColor("#888888"), 12));
         }

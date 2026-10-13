@@ -76,7 +76,7 @@ void MetaTagSection::openTagSelectorOverlay(QWidget* targetAnchor) {
     if (m_selectedPaths.isEmpty()) return;
 
     if (!m_tagSelectorOverlay) {
-        m_tagSelectorOverlay = new TagSelectorOverlay({}, this);
+        m_tagSelectorOverlay = new TagSelectorOverlay(QStringList(), m_selectedPaths, this);
         connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& currentTags) {
             emit tagsChanged(m_selectedPaths, currentTags);
         });

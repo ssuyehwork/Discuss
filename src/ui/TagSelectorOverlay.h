@@ -18,6 +18,8 @@ class TagSelectorOverlay : public QFrame {
     Q_OBJECT
 public:
     TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent = nullptr);
+    TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths, QWidget* parent = nullptr);
+    TagSelectorOverlay(const QStringList& initialSelected, const QSet<QString>& candidatePaths, QWidget* parent = nullptr);
     ~TagSelectorOverlay() override;
 
 signals:
@@ -44,11 +46,13 @@ private:
     void updateSelectionHighlight();
     void handleGridNavigation(int key);
     void handleGroupNavigation(int key);
+    void extractRecommendedTags(const QStringList& paths);
 
     void closeOverlay();
 
     QStringList m_selectedTags;
     QStringList m_displayedTags;
+    QStringList m_recommendedTags;
     QMap<QString, int> m_allTagCounts;
     QList<TagGroup> m_lexiconGroups;
 
@@ -58,7 +62,7 @@ private:
     QScrollArea* m_scrollArea = nullptr;
     QWidget* m_tagGridWidget = nullptr;
     FlowLayout* m_gridFlowLayout = nullptr;
-    QList<QPushButton*> m_tagButtons;
+    QMap<QString, QPushButton*> m_tagButtonMap;
     int m_currentTagIndex = -1;
 
     bool m_isClosing = false;
