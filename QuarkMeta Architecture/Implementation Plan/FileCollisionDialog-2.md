@@ -1,9 +1,8 @@
-# Implementation Plan - FileCollisionDialog-1.md
+# Implementation Plan - FileCollisionDialog-2.md
 
 ## Overview
 本实施方案旨在解决文件同名冲突对话框 (`FileCollisionDialog`) 中的 UI 视觉与交互体验问题：
 1. **按钮文字截断**：调整 `FileCollisionDialog.cpp` 中胶囊按钮的 `minimumWidth` 以及 `resources/style.qss` 中的 padding 与文本对齐方式，解决“同存”、“替换”、“跳过”、“取消”按钮内文字被边界挤压截断缺陷。
-2. **复选框打勾图标不显示**：将 `resources/style.qss` 中 `QCheckBox::indicator:checked` 原 Base64 Data-URI 格式 SVG 修正为标准的 SVG 资源文件路径 `:/Icon/check.svg`，解决“是否应用于全部文件？”勾选框打勾（√）未能呈现的缺陷。
 
 ---
 
@@ -51,7 +50,7 @@
 ---
 
 ### 2. `resources/style.qss`
-规整 `CollisionOptionBtn` 按钮 Padding 与居中文本，并修复复选框选中图标路径：
+规整 `CollisionOptionBtn` 按钮 Padding 与居中文本：
 
 ```
 <<<<<<< SEARCH
@@ -75,22 +74,6 @@ QPushButton#CollisionOptionBtn {
 >>>>>>> REPLACE
 ```
 
-```
-<<<<<<< SEARCH
-QCheckBox::indicator:checked {
-    border: 1px solid #378ADD;
-    background: #1E1E1E;
-    image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMzc4QUREIiBzdHJva2Utd2lkdGg9IjMuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSIyMCA2IDkgMTcgNCAxMiI+PC9wb2x5bGluZT48L3N2Zz4=);
-}
-=======
-QCheckBox::indicator:checked {
-    border: 1px solid #378ADD;
-    background: #1E1E1E;
-    image: url(:/Icon/check.svg);
-}
->>>>>>> REPLACE
-```
-
 ---
 
 ## Build & Verification Steps
@@ -102,8 +85,7 @@ QCheckBox::indicator:checked {
    ```
 
 2. **功能与视觉对账**：
-   - 唤出 `FileCollisionDialog` 弹窗，核查“同存”、“替换”、“跳过”、“取消”四个按钮字样无截断，居中完整显示；
-   - 点击“是否应用于全部文件？”，核查勾选框中心正常呈现清晰打勾（√）图案。
+   - 唤出 `FileCollisionDialog` 弹窗，核查“同存”、“替换”、“跳过”、“取消”四个按钮字样无截断，居中完整显示。
 
 ---
 
