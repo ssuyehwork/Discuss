@@ -102,6 +102,11 @@ public:
      */
     static void updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater);
 
+    /**
+     * @brief 静态辅助方法：抹除并落盘指定物理路径对应文件的元数据记录（彻底清除孤儿条目）
+     */
+    static bool removeItemMetadata(const QString& filePath);
+
 private:
     std::wstring m_folderPath;
     std::wstring m_filePath; // 映射到物理文件夹中的 .QuarkMeta.json 路径

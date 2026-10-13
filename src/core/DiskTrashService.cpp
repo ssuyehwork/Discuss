@@ -1,5 +1,6 @@
 #include "DiskTrashService.h"
 #include "../meta/DatabaseManager.h"
+#include "../meta/QuarkMetaJson.h"
 #include <QFileInfo>
 #include <QDateTime>
 #include <QDir>
@@ -41,6 +42,9 @@ bool DiskTrashService::moveToDiskTrash(const QStringList& paths) {
         QString dest = QDir::toNativeSeparators(itemContainerDir + "/" + info.fileName());
 
         if (QFile::rename(p, dest)) {
+            // 物理移动成功后，漫游元数据至回收站专属 .QuarkMeta.json (同时物理擦除原目录中的孤儿元数据)
+            QuarkMetaJson::roamItemMetadata(p, dest, true);
+
             sqlite3* db = DatabaseManager::instance().getGlobalDb();
             if (!db) {
                 allOk = false;
@@ -153,6 +157,9 @@ bool DiskTrashService::restoreFromDiskTrash(int id, const QString& trashPath) {
     }
 
     if (QFile::rename(actualTrashPath, targetPath)) {
+        // 从回收站反向漫游元数据回真实目标物理目录
+        QuarkMetaJson::roamItemMetadata(actualTrashPath, targetPath, true);
+
         QDir(QFileInfo(actualTrashPath).absolutePath()).removeRecursively();
 
         SqlTransaction trans(db);
@@ -192,6 +199,9 @@ bool DiskTrashService::restoreToDirectory(const QString& trashPath, const QStrin
     }
 
     if (moved) {
+        // 还原至指定目录时反向漫游元数据
+        QuarkMetaJson::roamItemMetadata(trashPath, dest, true);
+
         QDir(QFileInfo(trashPath).absolutePath()).removeRecursively();
 
         std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
