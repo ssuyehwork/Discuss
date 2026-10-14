@@ -281,7 +281,7 @@ QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int
     QString dirL1 = hashStr.left(2);
     QString dirL2 = hashStr.mid(2, 2);
 
-    QString baseCacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews_v2";
+    QString baseCacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews";
     QString cacheDir = QDir(baseCacheDir).filePath(QString("%1/%2").arg(dirL1, dirL2));
     QDir().mkpath(cacheDir);
 
@@ -327,7 +327,7 @@ QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int
         return QImage();
     }
 
-    // 3. 将高质量预览图缓存至 quicklook_previews_v2
+    // 3. 将高质量预览图缓存至 quicklook_previews
     if (shouldSaveCache) {
         highQImg.save(cachePath, "PNG");
     }
