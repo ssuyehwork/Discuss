@@ -128,7 +128,6 @@ int main(int argc, char *argv[]) {
     a.setWindowIcon(QIcon(":/app_icon.ico"));
 
     a.setApplicationName("QuarkMeta");
-    a.setOrganizationName("QuarkMeta");
 
     // -------------------------------------------------------------
     // 重构 4：COM 亲和性。在 QApplication 实例化后，安全初始化 COM 环境
