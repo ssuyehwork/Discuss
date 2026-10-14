@@ -310,10 +310,25 @@ void DiskItemModel::preloadDimensionsAsync(const QStringList& targetPaths) {
                 }
             }
 
-            if (!weakThis->m_allRecords.empty()) {
+            int minRow = std::numeric_limits<int>::max();
+            int maxRow = std::numeric_limits<int>::min();
+
+            for (const auto& item : resolvedSizes) {
+                const QString& path = item.first;
+                auto it = weakThis->m_pathToIndex.find(path);
+                if (it != weakThis->m_pathToIndex.end()) {
+                    int r = it->second;
+                    if (r >= 0 && r < static_cast<int>(weakThis->m_allRecords.size())) {
+                        if (r < minRow) minRow = r;
+                        if (r > maxRow) maxRow = r;
+                    }
+                }
+            }
+
+            if (minRow <= maxRow && minRow >= 0) {
                 emit weakThis->dataChanged(
-                    weakThis->index(0, 0),
-                    weakThis->index(static_cast<int>(weakThis->m_allRecords.size()) - 1, weakThis->columnCount() - 1),
+                    weakThis->index(minRow, 0),
+                    weakThis->index(maxRow, weakThis->columnCount() - 1),
                     {Qt::DisplayRole, AspectRatioRole}
                 );
             }
