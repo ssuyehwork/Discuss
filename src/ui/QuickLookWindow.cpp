@@ -184,26 +184,7 @@ void QuickLookWindow::renderImage(const QString& path) {
     (void)QtConcurrent::run(&m_previewThreadPool, [weakThis, path, ext, token]() { 
         if (!weakThis) return;
         
-        QImage img;
-        if (ext == "svg") {
-            QSvgRenderer renderer(path);
-            if (renderer.isValid()) {
-                img = QImage(2048, 2048, QImage::Format_ARGB32);
-                img.fill(Qt::transparent);
-                QPainter painter(&img);
-                renderer.render(&painter);
-            }
-        } else if (ext == "eps") { 
-            // 物理隔离与 144 DPI 高清矢量：专走 QuickLook 独立管道与独立缓存 
-            img = loadOrExtractQuickLookEps(path, 2048, token); 
-        } else if (ext == "ai" || ext == "psd" || ext == "psb") { 
-            // 预览档：不读也不写缩略图缓存，不碰失败标记 
-            img = ImageDecoderFacade::decodeSinglePass(path, 2048, ImageDecoderFacade::ExtractMode::Preview, token).thumbnail512; 
-        } else if (QT_NATIVE_FORMATS.contains(ext)) { 
-            img.load(path); 
-        } else { 
-            img = ImageDecoderFacade::decodeSinglePass(path, 2048, ImageDecoderFacade::ExtractMode::Preview, token).thumbnail512; 
-        }
+        QImage img = loadOrExtractQuickLookImage(path, 2048, token);
 
         if (!weakThis) return;
         QMetaObject::invokeMethod(weakThis.data(), [weakThis, img, path]() {
@@ -290,7 +271,11 @@ void QuickLookWindow::renderText(const QString& path) {
 }
 
 QImage QuickLookWindow::loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token) {
-    // 🚀【物理目录隔离铁律】：QuickLook 144 DPI 大图绝对不与缩略图共用文件夹 (使用 SHA256 与两级分桶)
+    return loadOrExtractQuickLookImage(filePath, targetSize, token);
+}
+
+QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token) {
+    // 🚀【全图形图像 QuickLook 统一缓存架构】：使用 SHA256 与两级分桶
     QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
     QString hashStr = QString::fromUtf8(QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex());
     QString dirL1 = hashStr.left(2);
@@ -304,7 +289,7 @@ QImage QuickLookWindow::loadOrExtractQuickLookEps(const QString& filePath, int t
     QString cachePath = QDir(cacheDir).filePath(QString("%1.png").arg(hashStr));
     QFileInfo cacheInfo(cachePath);
 
-    // 1. 若独立缓存命中且未过期，直接毫秒载入 144 DPI 大图
+    // 1. 若独立缓存命中且未过期，直接 0ms 秒级载入高清预览图
     if (cacheInfo.exists() && cacheInfo.size() > 0 && cacheInfo.lastModified() >= srcInfo.lastModified()) {
         QImage cachedImg(cachePath);
         if (!cachedImg.isNull()) {
@@ -312,18 +297,41 @@ QImage QuickLookWindow::loadOrExtractQuickLookEps(const QString& filePath, int t
         }
     }
 
-    // 2. 独立缓存未命中：Ghostscript 144 DPI 矢量优先，内嵌预览兜底（长超时 + 可取消） 
-    bool fromGhostscript = false; 
-    QImage highQImg = FormatDecoders::extractEpsQuickLook(filePath, targetSize, ImageDecoderFacade::kLongTimeoutMs, token, &fromGhostscript); 
-    if (highQImg.isNull()) { 
-        return QImage(); 
-    } 
- 
-    // 3. 只缓存 Ghostscript 高清渲染结果；内嵌预览兜底图（低质量）只显示，不进高清缓存 
-    if (fromGhostscript) { 
-        highQImg.save(cachePath, "PNG"); 
-    } 
-    return highQImg; 
+    // 2. 缓存未命中：按图形格式提取高清 2048px 预览图
+    QString ext = srcInfo.suffix().toLower();
+    QImage highQImg;
+    bool shouldSaveCache = true;
+
+    if (ext == "eps") {
+        bool fromGhostscript = false;
+        highQImg = FormatDecoders::extractEpsQuickLook(filePath, targetSize, ImageDecoderFacade::kLongTimeoutMs, token, &fromGhostscript);
+        if (!fromGhostscript) shouldSaveCache = false; // 仅缓存高质量 Ghostscript 渲染
+    } else if (ext == "svg") {
+        QSvgRenderer renderer(filePath);
+        if (renderer.isValid()) {
+            highQImg = QImage(targetSize, targetSize, QImage::Format_ARGB32);
+            highQImg.fill(Qt::transparent);
+            QPainter painter(&highQImg);
+            renderer.render(&painter);
+        }
+    } else {
+        static const QSet<QString> nativeFormats = {"png", "jpg", "jpeg", "bmp", "gif"};
+        if (nativeFormats.contains(ext)) {
+            highQImg.load(filePath);
+        } else {
+            highQImg = ImageDecoderFacade::decodeSinglePass(filePath, targetSize, ImageDecoderFacade::ExtractMode::Preview, token).thumbnail512;
+        }
+    }
+
+    if (highQImg.isNull()) {
+        return QImage();
+    }
+
+    // 3. 将高质量预览图缓存至 quicklook_previews_v2
+    if (shouldSaveCache) {
+        highQImg.save(cachePath, "PNG");
+    }
+    return highQImg;
 }
 
 bool QuickLookWindow::isBinary(const QByteArray& fileData) {
