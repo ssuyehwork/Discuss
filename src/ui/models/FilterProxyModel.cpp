@@ -9,35 +9,13 @@ namespace QuarkMeta {
 
 FilterProxyModel::FilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {}
 
-void FilterProxyModel::setSortType(int type) {
-    if (m_sortType != type) {
-        m_sortType = type;
-        if (sortColumn() == -1) {
-            sort(0, m_sortOrder);
-        } else {
-            invalidate();
-        }
-    }
-}
-
-void FilterProxyModel::setSortOrder(Qt::SortOrder order) {
-    if (m_sortOrder != order) {
-        m_sortOrder = order;
-        if (sortColumn() == -1) {
-            sort(0, m_sortOrder);
-        } else {
-            invalidate();
-        }
-    }
-}
-
 void FilterProxyModel::setSortCriteria(int type, Qt::SortOrder order) {
-    bool changed = (m_sortType != type || m_sortOrder != order);
+    bool typeChanged = (m_sortType != type);
     m_sortType = type;
-    m_sortOrder = order;
-    if (sortColumn() == -1) {
-        sort(0, m_sortOrder);
-    } else if (changed) {
+
+    if (sortColumn() != 0 || sortOrder() != order) {
+        sort(0, order);
+    } else if (typeChanged) {
         invalidate();
     }
 }
