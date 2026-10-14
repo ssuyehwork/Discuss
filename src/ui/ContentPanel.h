@@ -222,7 +222,7 @@ public slots:
     void setPendingSelectPath(const QString& fullPath, bool edit = false);
     void setPendingSelectName(const QString& name, bool edit = false);
     void refreshAll();
-    void updateItemMetadata(const QString& path);
+    void updateItemMetadata(QString path);
     void migrateModelCache(const QString& oldPath, const QString& newPath);
     void clearFolderCache(const QString& folderPath);
     void search(const QString& query);

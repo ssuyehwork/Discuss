@@ -348,7 +348,8 @@ void DiskItemModel::clear() {
     endResetModel();
 }
 
-void DiskItemModel::updateRecordMetadata(const QString& path) {
+void DiskItemModel::updateRecordMetadata(QString path) {
+    if (path.isEmpty()) return;
     QString nPath = QDir::toNativeSeparators(path);
     auto it = m_pathToIndex.find(nPath);
     if (it == m_pathToIndex.end()) {

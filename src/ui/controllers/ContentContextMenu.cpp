@@ -202,7 +202,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             if (selPathsDrive.isEmpty() && !path.isEmpty()) selPathsDrive << path;
             LibraryService::instance().buildLibraryAction(&menu, selPathsDrive, m_panel);
 
-            QAction* actCreateFolderWithItemsDrive = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 18), "用所选项目新建文件夹(N)");
+            int driveItemCount = selPathsDrive.size() > 0 ? static_cast<int>(selPathsDrive.size()) : 1;
+            QAction* actCreateFolderWithItemsDrive = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 18), QString("用所选项目新建文件夹(%1)").arg(driveItemCount));
             actCreateFolderWithItemsDrive->setData(ContentPanel::ActionCreateFolderWithSelectedItems);
 
             menu.addSeparator();
@@ -314,7 +315,8 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             if (selPathsItem.isEmpty() && !path.isEmpty()) selPathsItem << path;
             LibraryService::instance().buildLibraryAction(&menu, selPathsItem, m_panel);
 
-            QAction* actCreateFolderWithItems = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 18), "用所选项目新建文件夹(N)");
+            int selItemCount = selPathsItem.size() > 0 ? static_cast<int>(selPathsItem.size()) : 1;
+            QAction* actCreateFolderWithItems = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 18), QString("用所选项目新建文件夹(%1)").arg(selItemCount));
             actCreateFolderWithItems->setData(ContentPanel::ActionCreateFolderWithSelectedItems);
 
             menu.addSeparator();
