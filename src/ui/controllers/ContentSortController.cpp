@@ -81,10 +81,10 @@ void ContentSortController::setSortCriteria(SortType type, Qt::SortOrder order) 
 void ContentSortController::applySortToModel(QSortFilterProxyModel* proxyModel) {
     if (!proxyModel) return;
     if (auto* proxy = qobject_cast<FilterProxyModel*>(proxyModel)) {
-        proxy->setSortCriteria(static_cast<int>(m_sortType), m_sortOrder);
-    } else {
-        proxyModel->sort(0, m_sortOrder);
+        proxy->setSortType(static_cast<int>(m_sortType));
+        proxy->setSortOrder(m_sortOrder);
     }
+    proxyModel->sort(0, m_sortOrder);
 }
 
 } // namespace QuarkMeta
