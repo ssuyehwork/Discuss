@@ -3,6 +3,8 @@
 #include <QVariant>
 #include <QString>
 #include <QMutex>
+#include <QStandardPaths>
+#include <QDir>
 
 namespace QuarkMeta {
 
@@ -35,6 +37,15 @@ public:
     void sync() {
         QMutexLocker lock(&m_mutex);
         m_settings.sync();
+    }
+
+    QString getGlobalCacheDir() const {
+        QMutexLocker lock(&m_mutex);
+        QString customPath = m_settings.value("Cache/CustomLocation").toString();
+        if (!customPath.isEmpty() && QDir(customPath).exists()) {
+            return customPath + "/cache";
+        }
+        return QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
     }
 
 private:

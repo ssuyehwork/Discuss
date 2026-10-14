@@ -13,6 +13,7 @@
 #include <QDesktopServices>
 #include <QContextMenuEvent>
 #include "../meta/FavoriteService.h"
+#include "../core/AppConfig.h"
 #include "controllers/ContextMenuFactory.h"
 #include "dialogs/TextExtensionDialog.h"
 #include "FormatDecoders.h"
@@ -281,7 +282,7 @@ QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int
     QString dirL1 = hashStr.left(2);
     QString dirL2 = hashStr.mid(2, 2);
 
-    QString baseCacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews";
+    QString baseCacheDir = AppConfig::instance().getGlobalCacheDir() + "/quicklook_previews";
     QString cacheDir = QDir(baseCacheDir).filePath(QString("%1/%2").arg(dirL1, dirL2));
     QDir().mkpath(cacheDir);
 

@@ -2,6 +2,7 @@
 #include "../ui/ImageDecoderFacade.h" 
 #include "../meta/QuarkMetaJsonStore.h" 
 #include "../meta/MetadataDefs.h" 
+#include "../core/AppConfig.h"
 #include <QFileInfo> 
 #include <QDir> 
 #include <QFile> 
@@ -188,7 +189,7 @@ QString DiskMediaExtractor::getDiskThumbCachePathByFileId(uint32_t volSerial, ui
     QString bucket = QString("%1").arg((fileId >> 8) & 0xFF, 2, 16, QChar('0')).toUpper(); 
     QString fileKey = QString("%1.png").arg(fileId, 16, 16, QChar('0')).toUpper(); 
  
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/disk_thumbs/" + volStr + "/" + bucket;
+    QString cacheDir = AppConfig::instance().getGlobalCacheDir() + "/disk_thumbs/" + volStr + "/" + bucket;
     return cacheDir + "/" + fileKey; 
 } 
  
@@ -201,7 +202,7 @@ QString DiskMediaExtractor::getDiskThumbCachePath(const QString& filePath) {
     quint64 h = qHash(QDir::toNativeSeparators(filePath).toLower(), 0); 
     QString bucket = QString("%1").arg((h >> 32) & 0xFF, 2, 16, QChar('0')); 
     QString fileKey = QString("%1.png").arg(h, 16, 16, QChar('0')); 
-    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/disk_thumbs/fallback/" + bucket + "/" + fileKey;
+    return AppConfig::instance().getGlobalCacheDir() + "/disk_thumbs/fallback/" + bucket + "/" + fileKey;
 } 
  
 // ============================================================================ 
