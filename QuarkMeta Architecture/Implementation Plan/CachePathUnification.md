@@ -1,14 +1,18 @@
-# Implementation Plan - QuickLook Window Graphic Image Preview & Caching Architecture Unification
+# Implementation Plan - Single-Level AppData Directory & Unified Cache Structure
 
 ## 1. Overview
-This implementation plan unifies the QuickLook preview and caching architecture in `QuickLookWindow` across all supported graphic image types (`.png`, `.jpg`, `.jpeg`, `.bmp`, `.gif`, `.svg`, `.eps`, `.ai`, `.psd`, `.psb`, `.webp`, `.tiff`, etc.).
-1. Replaces isolated, EPS-only caching logic with a generalized, unified static helper `loadOrExtractQuickLookImage`.
-2. All complex graphic formats (e.g. EPS, AI, PSD, PSB, SVG, TIFF, etc.) and native images utilize the unified QuickLook high-resolution (`quicklook_previews_v2`) disk caching pipeline.
-3. Once cached, subsequent QuickLook previews (triggered via Spacebar) across all graphic image types achieve 0ms instant loading without re-decoding.
+This implementation plan resolves the path redundancy and fragmented cache directory structure across QuarkMeta:
+1. Removes duplicate `a.setOrganizationName("QuarkMeta")` in `src/main.cpp` so that `QStandardPaths::CacheLocation` resolves to a clean single-level path (`AppData/Local/QuarkMeta/cache`) without `QuarkMeta/QuarkMeta` repetition.
+2. Unifies all cache directories under a centralized `cache/` root directory:
+   - File item thumbnails: `cache/disk_thumbs/` (in `DiskMediaExtractor.cpp`)
+   - QuickLook preview cache: `cache/quicklook_previews/` (in `QuickLookWindow.cpp`)
+3. Generalizes `QuickLookWindow` preview caching so that all graphic image types (`.png`, `.jpg`, `.jpeg`, `.bmp`, `.gif`, `.svg`, `.eps`, `.ai`, `.psd`, `.psb`, etc.) utilize the unified QuickLook high-resolution preview cache (`cache/quicklook_previews/`).
 
 ---
 
 ## 2. Modified Files List
+- `src/main.cpp`
+- `src/util/DiskMediaExtractor.cpp`
 - `src/ui/QuickLookWindow.h`
 - `src/ui/QuickLookWindow.cpp`
 
@@ -16,8 +20,39 @@ This implementation plan unifies the QuickLook preview and caching architecture 
 
 ## 3. Detailed Line-by-Line Changes
 
-### 3.1 `src/ui/QuickLookWindow.h`
-Generalize private static helper method signature from `loadOrExtractQuickLookEps` to `loadOrExtractQuickLookImage`:
+### 3.1 `src/main.cpp`
+Remove redundant `setOrganizationName` call to eliminate double `QuarkMeta/QuarkMeta` directory nesting:
+
+```cpp
+<<<<<<< SEARCH
+    a.setApplicationName("QuarkMeta");
+    a.setOrganizationName("QuarkMeta");
+=======
+    a.setApplicationName("QuarkMeta");
+>>>>>>> REPLACE
+```
+
+### 3.2 `src/util/DiskMediaExtractor.cpp`
+Update thumbnail cache path to align under the unified `cache/disk_thumbs/` directory:
+
+```cpp
+<<<<<<< SEARCH
+    QString cacheDir = QCoreApplication::applicationDirPath() + "/.QuarkMeta/disk_thumbs/" + volStr + "/" + bucket;
+=======
+    QString cacheDir = QCoreApplication::applicationDirPath() + "/.QuarkMeta/cache/disk_thumbs/" + volStr + "/" + bucket;
+>>>>>>> REPLACE
+```
+
+```cpp
+<<<<<<< SEARCH
+    return QCoreApplication::applicationDirPath() + "/.QuarkMeta/disk_thumbs/fallback/" + bucket + "/" + fileKey;
+=======
+    return QCoreApplication::applicationDirPath() + "/.QuarkMeta/cache/disk_thumbs/fallback/" + bucket + "/" + fileKey;
+>>>>>>> REPLACE
+```
+
+### 3.3 `src/ui/QuickLookWindow.h`
+Add `loadOrExtractQuickLookImage` static helper declaration in `QuickLookWindow.h`:
 
 ```cpp
 <<<<<<< SEARCH
@@ -32,8 +67,8 @@ Generalize private static helper method signature from `loadOrExtractQuickLookEp
 >>>>>>> REPLACE
 ```
 
-### 3.2 `src/ui/QuickLookWindow.cpp`
-Implement unified `loadOrExtractQuickLookImage` and update `renderImage` and `loadOrExtractQuickLookEps` forwarding:
+### 3.4 `src/ui/QuickLookWindow.cpp`
+Update QuickLook cache path to `cache/quicklook_previews` and unify image preview caching:
 
 ```cpp
 <<<<<<< SEARCH
@@ -106,13 +141,13 @@ QImage QuickLookWindow::loadOrExtractQuickLookEps(const QString& filePath, int t
 }
 
 QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token) {
-    // 🚀【全图形图像 QuickLook 统一缓存架构】：使用 SHA256 与两级分桶
+    // 🚀【全图形图像 QuickLook 统一缓存架构】：使用 SHA256 与两级分桶，收拢于 cache/quicklook_previews/
     QByteArray normalized = QDir::toNativeSeparators(filePath).toLower().toUtf8();
     QString hashStr = QString::fromUtf8(QCryptographicHash::hash(normalized, QCryptographicHash::Sha256).toHex());
     QString dirL1 = hashStr.left(2);
     QString dirL2 = hashStr.mid(2, 2);
 
-    QString baseCacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews_v2";
+    QString baseCacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/quicklook_previews";
     QString cacheDir = QDir(baseCacheDir).filePath(QString("%1/%2").arg(dirL1, dirL2));
     QDir().mkpath(cacheDir);
 
@@ -158,7 +193,7 @@ QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int
         return QImage();
     }
 
-    // 3. 将高质量预览图缓存至 quicklook_previews_v2
+    // 3. 将高质量预览图缓存至 cache/quicklook_previews/
     if (shouldSaveCache) {
         highQImg.save(cachePath, "PNG");
     }
@@ -172,18 +207,19 @@ QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int
 ## 4. Build & Verification Steps
 1. Recompile QuarkMeta target using CMake:
    `cmake --build build`
-2. Run QuarkMeta application and select various graphic image files (`.png`, `.jpg`, `.svg`, `.eps`, `.psd`, `.ai`).
-3. Press `Spacebar` to trigger QuickLook preview.
-4. Verify that:
-   - High-resolution preview renders smoothly across all graphic image types.
-   - QuickLook preview cache is generated in `quicklook_previews_v2` directory.
-   - Subsequent Spacebar triggers achieve instant 0ms preview loading from cache.
+2. Launch QuarkMeta app on Windows.
+3. Check AppData Cache directory:
+   - Confirm that the AppData path is now a clean single level: `AppData/Local/QuarkMeta/cache`.
+   - Confirm that QuickLook preview cache is generated in `AppData/Local/QuarkMeta/cache/quicklook_previews/`.
+4. Check executable folder `.QuarkMeta` cache:
+   - Confirm that file item thumbnails are saved in `.QuarkMeta/cache/disk_thumbs/`.
+5. Test QuickLook preview by pressing `Spacebar` on various image files (`.png`, `.jpg`, `.svg`, `.eps`, `.psd`, `.ai`).
 
 ---
 
 ## 5. SSOT API Reuse & Anti-Redundancy Self-Check
-- **Unified Pipeline SSOT**: Reuses `ImageDecoderFacade::decodeSinglePass` and `FormatDecoders::extractEpsQuickLook` while routing all QuickLook image previews through a single, non-redundant caching pipeline (`loadOrExtractQuickLookImage`).
-- **Zero Anti-Pattern**: Does not duplicate decoder logic; strictly centralizes QuickLook preview caching.
+- **Cache SSOT Unification**: All cache subdirectories (`disk_thumbs`, `quicklook_previews`) are now unified under a single `cache/` root directory.
+- **Single AppName SSOT**: `QApplication::setApplicationName("QuarkMeta")` acts as the single SSOT for the application name without redundant `OrganizationName` nesting.
 
 ---
 
@@ -192,14 +228,13 @@ QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int
 | :--- | :--- | :--- |
 | `static QImage loadOrExtractQuickLookImage(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token)` | `src/ui/QuickLookWindow.h` | 100% Exact Match |
 | `static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token)` | `src/ui/QuickLookWindow.h` | 100% Exact Match |
-| `void renderImage(const QString& path)` | `src/ui/QuickLookWindow.h` | 100% Exact Match |
+| `QString getDiskThumbCachePath(const QString& filePath)` | `src/util/DiskMediaExtractor.h` | 100% Exact Match |
 
 ---
 
 ## 7. Header Inclusion Chain & Type Completeness Check
 | Inclusion / Type Name | File | Purpose & Completeness Check |
 | :--- | :--- | :--- |
-| `#include <QImage>` | `src/ui/QuickLookWindow.h` | Provides `QImage` complete type. |
-| `#include <QString>` | `src/ui/QuickLookWindow.h` | Provides `QString` complete type. |
+| `#include <QStandardPaths>` | `src/ui/QuickLookWindow.cpp` | Provides `QStandardPaths::writableLocation(QStandardPaths::CacheLocation)`. |
+| `#include <QCoreApplication>` | `src/util/DiskMediaExtractor.cpp` | Provides `QCoreApplication::applicationDirPath()`. |
 | `#include "CoreEngine.h"` | `src/ui/QuickLookWindow.h` | Provides `CancellationToken` smart pointer type definition. |
-| `ImageDecoderFacade.h`, `FormatDecoders.h` | `src/ui/QuickLookWindow.cpp` | Provides decoder facade and EPS format decoder interfaces. |
