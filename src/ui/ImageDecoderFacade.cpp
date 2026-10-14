@@ -175,8 +175,37 @@ QSize ImageDecoderFacade::readImageDimensions(const QString& filePath) {
         }
     }
 
-    // 4. SVG 文件尺寸嗅探
+    // 4. SVG 文件头 4KB 毫秒级轻量正则嗅探
     if (ext == "svg") {
+        QFile file(filePath);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray head = file.read(4096);
+            file.close();
+
+            QString headStr = QString::fromUtf8(head);
+
+            // 1. 优先匹配 viewBox="0 0 24 24" 或 viewBox="0 0 1000 1000"
+            static QRegularExpression rxViewBox(R"(viewBox\s*=\s*["']\s*([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)\s*["'])", QRegularExpression::CaseInsensitiveOption);
+            auto matchVB = rxViewBox.match(headStr);
+            if (matchVB.hasMatch()) {
+                double w = matchVB.captured(3).toDouble() - matchVB.captured(1).toDouble();
+                double h = matchVB.captured(4).toDouble() - matchVB.captured(2).toDouble();
+                if (w > 0 && h > 0) return QSize(qRound(w), qRound(h));
+            }
+
+            // 2. 匹配 width="24" height="24" 或 width="24px" height="24px"
+            static QRegularExpression rxWidth(R"(width\s*=\s*["']\s*([\d\.]+)(?:px)?\s*["'])", QRegularExpression::CaseInsensitiveOption);
+            static QRegularExpression rxHeight(R"(height\s*=\s*["']\s*([\d\.]+)(?:px)?\s*["'])", QRegularExpression::CaseInsensitiveOption);
+            auto matchW = rxWidth.match(headStr);
+            auto matchH = rxHeight.match(headStr);
+            if (matchW.hasMatch() && matchH.hasMatch()) {
+                double w = matchW.captured(1).toDouble();
+                double h = matchH.captured(1).toDouble();
+                if (w > 0 && h > 0) return QSize(qRound(w), qRound(h));
+            }
+        }
+
+        // 3. 保底后备逻辑：非标准 SVG 走 QSvgRenderer 解析
         QSvgRenderer renderer(filePath);
         if (renderer.isValid()) {
             QRectF vb = renderer.viewBoxF();
