@@ -343,6 +343,8 @@ set(SOURCES
     src/ui/dialogs/FramelessInputDialog.cpp
     src/ui/dialogs/TextExtensionDialog.h
     src/ui/dialogs/TextExtensionDialog.cpp
+    src/ui/dialogs/CacheLocationDialog.h
+    src/ui/dialogs/CacheLocationDialog.cpp
     src/ui/dialogs/FramelessColorPicker.h
     src/ui/dialogs/FramelessColorPicker.cpp
     src/ui/dialogs/FramelessConfirmDialog.h

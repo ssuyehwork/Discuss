@@ -2,6 +2,7 @@
 #include "UiHelper.h"
 #include "TagManagerDialog.h"
 #include "dialogs/TextExtensionDialog.h"
+#include "dialogs/CacheLocationDialog.h"
 #include "ToolTipOverlay.h"
 #include "../core/NavigationService.h"
 #include "../core/AppConfig.h"
@@ -70,22 +71,32 @@ void DriveBarWidget::initUi() {
         dlg.exec();
     });
 
+    m_btnSaveThumbnail = createIconButton("save-Thumbnail", QColor("#3498db"), "缩略图与缓存位置设置");
+    connect(m_btnSaveThumbnail, &QPushButton::clicked, this, [this]() {
+        CacheLocationDialog dlg(this);
+        dlg.exec();
+    });
+
     // 默认加至布局并依配置显隐
     m_driveBarLayout->addWidget(m_btnTagManager);
     m_driveBarLayout->addWidget(m_btnTextExtension);
+    m_driveBarLayout->addWidget(m_btnSaveThumbnail);
     m_driveBarLayout->addStretch();
 
     refreshPinnedButtons();
 }
 
 void DriveBarWidget::refreshPinnedButtons() {
-    QStringList pinnedList = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext"}).toStringList();
+    QStringList pinnedList = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail"}).toStringList();
 
     if (m_btnTagManager) {
         m_btnTagManager->setVisible(pinnedList.contains("tag"));
     }
     if (m_btnTextExtension) {
         m_btnTextExtension->setVisible(pinnedList.contains("text_ext"));
+    }
+    if (m_btnSaveThumbnail) {
+        m_btnSaveThumbnail->setVisible(pinnedList.contains("save_thumbnail"));
     }
 }
 
@@ -96,7 +107,7 @@ void DriveBarWidget::setupExtensionMenu() {
     connect(m_btnExtensionManager, &QPushButton::clicked, this, [this, extMenu]() {
         extMenu->clear();
 
-        QStringList pinnedList = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext"}).toStringList();
+        QStringList pinnedList = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail"}).toStringList();
 
         // 支持持续选择：重写 action 交互避免触发后自动销毁关闭菜单
         QAction* actTag = extMenu->addAction(UiHelper::getIcon("tag", QColor("#1abc9c"), 18), "标签管理");
@@ -104,7 +115,7 @@ void DriveBarWidget::setupExtensionMenu() {
         actTag->setChecked(pinnedList.contains("tag"));
 
         connect(actTag, &QAction::triggered, this, [this](bool checked) {
-            QStringList currentPinned = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext"}).toStringList();
+            QStringList currentPinned = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail"}).toStringList();
             if (checked && !currentPinned.contains("tag")) {
                 currentPinned.append("tag");
             } else if (!checked) {
@@ -121,11 +132,28 @@ void DriveBarWidget::setupExtensionMenu() {
         actTextExt->setChecked(pinnedList.contains("text_ext"));
 
         connect(actTextExt, &QAction::triggered, this, [this](bool checked) {
-            QStringList currentPinned = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext"}).toStringList();
+            QStringList currentPinned = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail"}).toStringList();
             if (checked && !currentPinned.contains("text_ext")) {
                 currentPinned.append("text_ext");
             } else if (!checked) {
                 currentPinned.removeAll("text_ext");
+            }
+            AppConfig::instance().setValue("DriveBar/PinnedExtensions", currentPinned);
+            AppConfig::instance().sync();
+
+            refreshPinnedButtons();
+        });
+
+        QAction* actSaveThumb = extMenu->addAction(UiHelper::getIcon("save-Thumbnail", QColor("#3498db"), 18), "缩略图与缓存位置设置");
+        actSaveThumb->setCheckable(true);
+        actSaveThumb->setChecked(pinnedList.contains("save_thumbnail"));
+
+        connect(actSaveThumb, &QAction::triggered, this, [this](bool checked) {
+            QStringList currentPinned = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail"}).toStringList();
+            if (checked && !currentPinned.contains("save_thumbnail")) {
+                currentPinned.append("save_thumbnail");
+            } else if (!checked) {
+                currentPinned.removeAll("save_thumbnail");
             }
             AppConfig::instance().setValue("DriveBar/PinnedExtensions", currentPinned);
             AppConfig::instance().sync();
