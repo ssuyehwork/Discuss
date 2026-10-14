@@ -23,8 +23,9 @@ public:
     void updateFilter();
     void setCachedDuplicatePaths(const QSet<QString>& paths);
 
-    void setSortType(int type) { m_sortType = type; }
-    void setSortOrder(Qt::SortOrder order) { m_sortOrder = order; }
+    void setSortType(int type);
+    void setSortOrder(Qt::SortOrder order);
+    void setSortCriteria(int type, Qt::SortOrder order);
 
 
 protected:
