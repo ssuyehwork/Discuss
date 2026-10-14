@@ -203,8 +203,12 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             LibraryService::instance().buildLibraryAction(&menu, selPathsDrive, m_panel);
 
             int driveItemCount = selPathsDrive.size() > 0 ? static_cast<int>(selPathsDrive.size()) : 1;
-            QAction* actCreateFolderWithItemsDrive = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 18), QString("用所选项目新建文件夹(%1)").arg(driveItemCount));
-            actCreateFolderWithItemsDrive->setData(ContentPanel::ActionCreateFolderWithSelectedItems);
+            QMenu* newMenuDrive = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "新建...");
+            UiHelper::applyMenuStyle(newMenuDrive);
+            newMenuDrive->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹")->setData(ContentPanel::ActionNewFolder);
+            newMenuDrive->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown")->setData(ContentPanel::ActionNewMd);
+            newMenuDrive->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建纯文本文件 (txt)")->setData(ContentPanel::ActionNewTxt);
+            newMenuDrive->addAction(UiHelper::getIcon("folder", QColor("#EEEEEE")), QString("用所选项目新建文件夹(%1)").arg(driveItemCount))->setData(ContentPanel::ActionCreateFolderWithSelectedItems);
 
             menu.addSeparator();
 
@@ -316,8 +320,12 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             LibraryService::instance().buildLibraryAction(&menu, selPathsItem, m_panel);
 
             int selItemCount = selPathsItem.size() > 0 ? static_cast<int>(selPathsItem.size()) : 1;
-            QAction* actCreateFolderWithItems = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 18), QString("用所选项目新建文件夹(%1)").arg(selItemCount));
-            actCreateFolderWithItems->setData(ContentPanel::ActionCreateFolderWithSelectedItems);
+            QMenu* newMenuItem = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "新建...");
+            UiHelper::applyMenuStyle(newMenuItem);
+            newMenuItem->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹")->setData(ContentPanel::ActionNewFolder);
+            newMenuItem->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown")->setData(ContentPanel::ActionNewMd);
+            newMenuItem->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建纯文本文件 (txt)")->setData(ContentPanel::ActionNewTxt);
+            newMenuItem->addAction(UiHelper::getIcon("folder", QColor("#EEEEEE")), QString("用所选项目新建文件夹(%1)").arg(selItemCount))->setData(ContentPanel::ActionCreateFolderWithSelectedItems);
 
             menu.addSeparator();
 
@@ -415,6 +423,17 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             ContextMenuFactory::buildExtractContentAction(moreMenu, path, m_panel);
 
+            if (!isFolder) {
+                moreMenu->addSeparator();
+                moreMenu->addAction(UiHelper::getIcon("repeat", QColor("#EEEEEE"), 18), "重新提取缩略图")->setData(ContentPanel::ActionReextractThumbnail);
+
+                QMenu* cryptoMenu = moreMenu->addMenu(UiHelper::getIcon("shield", QColor("#EEEEEE"), 18), "外壳保护");
+                UiHelper::applyMenuStyle(cryptoMenu);
+                cryptoMenu->addAction(UiHelper::getIcon("lock", QColor("#EEEEEE"), 18), "执行外壳保护")->setData(ContentPanel::ActionEncrypt);
+                cryptoMenu->addAction(UiHelper::getIcon("unlock", QColor("#EEEEEE"), 18), "解除保护")->setData(ContentPanel::ActionDecrypt);
+                cryptoMenu->addAction(UiHelper::getIcon("key", QColor("#EEEEEE"), 18), "修改保护密码")->setData(ContentPanel::ActionChangePwd);
+            }
+
             QString nativePath = QDir::toNativeSeparators(path);
             QStringList itemTags;
             if (!nativePath.isEmpty()) {
@@ -444,16 +463,6 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             menu.addSeparator();
             menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
-
-            if (!isFolder) {
-                menu.addAction(UiHelper::getIcon("repeat", QColor("#EEEEEE"), 18), "重新提取缩略图")->setData(ContentPanel::ActionReextractThumbnail);
-
-                QMenu* cryptoMenu = menu.addMenu(UiHelper::getIcon("shield", QColor("#EEEEEE"), 18), "外壳保护");
-                UiHelper::applyMenuStyle(cryptoMenu);
-                cryptoMenu->addAction(UiHelper::getIcon("lock", QColor("#EEEEEE"), 18), "执行外壳保护")->setData(ContentPanel::ActionEncrypt);
-                cryptoMenu->addAction(UiHelper::getIcon("unlock", QColor("#EEEEEE"), 18), "解除保护")->setData(ContentPanel::ActionDecrypt);
-                cryptoMenu->addAction(UiHelper::getIcon("key", QColor("#EEEEEE"), 18), "修改保护密码")->setData(ContentPanel::ActionChangePwd);
-            }
         }
     }
     // =========================================================================
