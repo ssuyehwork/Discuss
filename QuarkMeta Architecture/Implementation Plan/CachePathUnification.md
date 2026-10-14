@@ -2,8 +2,8 @@
 
 ## 1. Overview
 This implementation plan resolves the path redundancy and fragmented cache directory structure across QuarkMeta:
-1. Removes duplicate `a.setOrganizationName("QuarkMeta")` in `src/main.cpp` so that `QStandardPaths::CacheLocation` resolves to a clean single-level path (`AppData/Local/QuarkMeta/cache`) without `QuarkMeta/QuarkMeta` repetition.
-2. Unifies all cache directories under a centralized `cache/` root directory:
+1. Removes duplicate `a.setOrganizationName("QuarkMeta")` in `src/main.cpp` so that `QStandardPaths::CacheLocation` resolves to a clean single-level path (`C:/Users/<Username>/AppData/Local/QuarkMeta/cache/`) without `QuarkMeta/QuarkMeta` repetition.
+2. Unifies all cache directories under the exact same centralized `QStandardPaths::CacheLocation` (`cache/`) root directory:
    - File item thumbnails: `cache/disk_thumbs/` (in `DiskMediaExtractor.cpp`)
    - QuickLook preview cache: `cache/quicklook_previews/` (in `QuickLookWindow.cpp`)
 3. Generalizes `QuickLookWindow` preview caching so that all graphic image types (`.png`, `.jpg`, `.jpeg`, `.bmp`, `.gif`, `.svg`, `.eps`, `.ai`, `.psd`, `.psb`, etc.) utilize the unified QuickLook high-resolution preview cache (`cache/quicklook_previews/`).
@@ -33,13 +33,13 @@ Remove redundant `setOrganizationName` call to eliminate double `QuarkMeta/Quark
 ```
 
 ### 3.2 `src/util/DiskMediaExtractor.cpp`
-Update thumbnail cache path to align under the unified `cache/disk_thumbs/` directory:
+Update thumbnail cache path to use `QStandardPaths::CacheLocation` so that all thumbnails reside inside the exact same `cache/` root folder:
 
 ```cpp
 <<<<<<< SEARCH
     QString cacheDir = QCoreApplication::applicationDirPath() + "/.QuarkMeta/disk_thumbs/" + volStr + "/" + bucket;
 =======
-    QString cacheDir = QCoreApplication::applicationDirPath() + "/.QuarkMeta/cache/disk_thumbs/" + volStr + "/" + bucket;
+    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/disk_thumbs/" + volStr + "/" + bucket;
 >>>>>>> REPLACE
 ```
 
@@ -47,7 +47,7 @@ Update thumbnail cache path to align under the unified `cache/disk_thumbs/` dire
 <<<<<<< SEARCH
     return QCoreApplication::applicationDirPath() + "/.QuarkMeta/disk_thumbs/fallback/" + bucket + "/" + fileKey;
 =======
-    return QCoreApplication::applicationDirPath() + "/.QuarkMeta/cache/disk_thumbs/fallback/" + bucket + "/" + fileKey;
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/disk_thumbs/fallback/" + bucket + "/" + fileKey;
 >>>>>>> REPLACE
 ```
 
@@ -209,16 +209,15 @@ QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int
    `cmake --build build`
 2. Launch QuarkMeta app on Windows.
 3. Check AppData Cache directory:
-   - Confirm that the AppData path is now a clean single level: `AppData/Local/QuarkMeta/cache`.
+   - Confirm that the AppData path is now a clean single level: `AppData/Local/QuarkMeta/cache/`.
+   - Confirm that file item thumbnails are saved in `AppData/Local/QuarkMeta/cache/disk_thumbs/`.
    - Confirm that QuickLook preview cache is generated in `AppData/Local/QuarkMeta/cache/quicklook_previews/`.
-4. Check executable folder `.QuarkMeta` cache:
-   - Confirm that file item thumbnails are saved in `.QuarkMeta/cache/disk_thumbs/`.
-5. Test QuickLook preview by pressing `Spacebar` on various image files (`.png`, `.jpg`, `.svg`, `.eps`, `.psd`, `.ai`).
+4. Test QuickLook preview by pressing `Spacebar` on various image files (`.png`, `.jpg`, `.svg`, `.eps`, `.psd`, `.ai`).
 
 ---
 
 ## 5. SSOT API Reuse & Anti-Redundancy Self-Check
-- **Cache SSOT Unification**: All cache subdirectories (`disk_thumbs`, `quicklook_previews`) are now unified under a single `cache/` root directory.
+- **Cache SSOT Unification**: Both `disk_thumbs` and `quicklook_previews` are now 100% unified under the exact same `QStandardPaths::CacheLocation` (`AppData/Local/QuarkMeta/cache/`) root directory.
 - **Single AppName SSOT**: `QApplication::setApplicationName("QuarkMeta")` acts as the single SSOT for the application name without redundant `OrganizationName` nesting.
 
 ---
@@ -235,6 +234,5 @@ QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int
 ## 7. Header Inclusion Chain & Type Completeness Check
 | Inclusion / Type Name | File | Purpose & Completeness Check |
 | :--- | :--- | :--- |
-| `#include <QStandardPaths>` | `src/ui/QuickLookWindow.cpp` | Provides `QStandardPaths::writableLocation(QStandardPaths::CacheLocation)`. |
-| `#include <QCoreApplication>` | `src/util/DiskMediaExtractor.cpp` | Provides `QCoreApplication::applicationDirPath()`. |
+| `#include <QStandardPaths>` | `src/ui/QuickLookWindow.cpp`, `src/util/DiskMediaExtractor.cpp` | Provides `QStandardPaths::writableLocation(QStandardPaths::CacheLocation)`. |
 | `#include "CoreEngine.h"` | `src/ui/QuickLookWindow.h` | Provides `CancellationToken` smart pointer type definition. |
