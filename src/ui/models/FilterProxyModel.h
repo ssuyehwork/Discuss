@@ -23,8 +23,7 @@ public:
     void updateFilter();
     void setCachedDuplicatePaths(const QSet<QString>& paths);
 
-    void setSortType(int type) { m_sortType = type; }
-    void setSortOrder(Qt::SortOrder order) { m_sortOrder = order; }
+    void setSortCriteria(int type, Qt::SortOrder order);
 
 
 protected:
@@ -34,7 +33,6 @@ protected:
 private:
     QSet<QString> m_cachedDuplicatePaths;
     int m_sortType = 0;
-    Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
 };
 
 } // namespace QuarkMeta
