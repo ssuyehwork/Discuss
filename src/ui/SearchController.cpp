@@ -25,8 +25,8 @@ SearchController::SearchController(QWidget* parent)
     searchLayout->setSpacing(0);
 
     m_searchEdit = new QLineEdit(m_searchContainer);
-    m_searchEdit->setPlaceholderText("搜索...");
     m_searchEdit->setObjectName("SearchEdit");
+    updatePlaceholderText();
     m_searchEdit->setFixedHeight(30);
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->installEventFilter(this);
@@ -86,6 +86,15 @@ void SearchController::bindContentPanel(ContentPanel* contentPanel) {
     });
 }
 
+void SearchController::updatePlaceholderText() {
+    if (!m_searchEdit) return;
+    if (m_searchScope == SearchScope::Library) {
+        m_searchEdit->setPlaceholderText("搜索：库");
+    } else {
+        m_searchEdit->setPlaceholderText("搜索：当前文件夹");
+    }
+}
+
 void SearchController::showSearchMenu() {
     if (!m_btnSearch) return;
 
@@ -107,10 +116,12 @@ void SearchController::showSearchMenu() {
 
     connect(actFolder, &QAction::triggered, this, [this]() {
         m_searchScope = SearchScope::CurrentFolder;
+        updatePlaceholderText();
     });
 
     connect(actLibrary, &QAction::triggered, this, [this]() {
         m_searchScope = SearchScope::Library;
+        updatePlaceholderText();
     });
 
     QPoint globalPos = m_btnSearch->mapToGlobal(QPoint(0, m_btnSearch->height()));

@@ -43,6 +43,7 @@
 #include <QDir>
 #include <QApplication>
 #include <QSignalBlocker>
+#include <QDebug>
 
 namespace QuarkMeta {
 
@@ -775,8 +776,26 @@ void ContentPanel::setViewMode(ViewMode mode) {
     QStringList selList = getSelectedPaths();
     m_selectionState.selectedPaths = QSet<QString>(selList.begin(), selList.end());
     if (!m_selectionState.selectedPaths.isEmpty()) {
-        m_selectionState.focusedPath = *m_selectionState.selectedPaths.begin();
+        QString focusedCandidate;
+        QAbstractItemView* view = activeItemView();
+        if (view) {
+            QModelIndex curIdx = view->currentIndex();
+            if (curIdx.isValid() && !curIdx.data(SectionHeaderRole).toBool()) {
+                focusedCandidate = curIdx.data(PathRole).toString();
+            }
+        }
+        if (!focusedCandidate.isEmpty()) {
+            m_selectionState.focusedPath = focusedCandidate;
+        } else {
+            m_selectionState.focusedPath = *m_selectionState.selectedPaths.begin();
+        }
+    } else {
+        m_selectionState.focusedPath.clear();
     }
+    qDebug() << "[ContentPanel::setViewMode] Mode:" << static_cast<int>(mode)
+             << "m_currentPath:" << m_currentPath
+             << "selectedCount:" << m_selectionState.selectedPaths.size()
+             << "focusedPath:" << m_selectionState.focusedPath;
 
     ViewMode oldMode = m_currentViewMode;
     m_currentViewMode = mode;
@@ -798,10 +817,8 @@ void ContentPanel::setViewMode(ViewMode mode) {
     }
 
     if (oldMode == ColumnView && mode != ColumnView) {
-        if (!m_currentPath.isEmpty() && m_currentPath != "computer://") {
-            if (!m_diskModel || m_diskModel->rowCount() == 0) {
-                loadDirectory(m_currentPath, m_isRecursive);
-            }
+        if (!m_currentPath.isEmpty()) {
+            loadDirectory(m_currentPath, m_isRecursive);
         }
     }
 

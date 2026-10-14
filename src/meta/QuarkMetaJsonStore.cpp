@@ -14,17 +14,17 @@ QuarkMetaJsonStore& QuarkMetaJsonStore::instance() {
 
 QuarkMetaJsonStore::QuarkMetaJsonStore(QObject* parent)
     : QObject(parent) {
+    m_flushTimer = new QTimer(this);
+    m_flushTimer->setSingleShot(true);
+    m_flushTimer->setInterval(kFlushDebounceMs);
+    connect(m_flushTimer, &QTimer::timeout, this, &QuarkMetaJsonStore::onFlushTimeout);
+
     if (auto* app = QCoreApplication::instance()) {
         this->moveToThread(app->thread());
         connect(app, &QCoreApplication::aboutToQuit, this, [this]() {
             flushAllDirtyBuffers(true);
         });
     }
-
-    m_flushTimer = new QTimer(this);
-    m_flushTimer->setSingleShot(true);
-    m_flushTimer->setInterval(kFlushDebounceMs);
-    connect(m_flushTimer, &QTimer::timeout, this, &QuarkMetaJsonStore::onFlushTimeout);
 }
 
 QuarkMetaJsonStore::~QuarkMetaJsonStore() {
