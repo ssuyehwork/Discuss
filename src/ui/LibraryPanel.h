@@ -18,8 +18,11 @@ public:
 
 protected:
     void drawBranches(QPainter* painter, const QRect& rect, const QModelIndex& index) const override {
-        if (index.isValid() && index.data(Qt::UserRole + 1).toInt() == 0) {
-            return;
+        if (index.isValid()) {
+            int nodeId = index.data(Qt::UserRole + 1).toInt();
+            if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
+                return;
+            }
         }
         DropTreeView::drawBranches(painter, rect, index);
     }
@@ -39,8 +42,8 @@ public:
     static QRect addBtnRect(const QRect& optionRect);
 
 signals:
-    void requestAddCategory();
-    void requestToggleSection();
+    void requestAddCategory(int nodeId);
+    void requestToggleSection(int nodeId);
 
 private:
     void paintHighlightedText(QPainter* painter, const QRect& rect, const QString& text, const QString& keyword, const QFont& font, const QColor& normalColor, const QColor& matchColor) const;
@@ -77,6 +80,7 @@ private:
     void createAndEditCategory(int parentId = 0);
     void filterTreeNodes(const QString& keyword);
     QStandardItem* findItemByNodeId(QStandardItem* parent, int nodeId);
+    void toggleSectionByNodeId(int nodeId);
 
     QVBoxLayout* m_mainLayout = nullptr;
     LibraryTreeView* m_treeView = nullptr;

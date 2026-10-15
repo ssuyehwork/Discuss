@@ -49,19 +49,21 @@ bool LibraryItemDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, 
     }
 
     int nodeId = index.data(Qt::UserRole + 1).toInt();
-    if (nodeId == 0) {
+    if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
         if (event->type() == QEvent::MouseButtonDblClick) {
             return true;
         }
         if (event->type() == QEvent::MouseButtonRelease) {
             QMouseEvent* mouseEv = static_cast<QMouseEvent*>(event);
             if (mouseEv && mouseEv->button() == Qt::LeftButton) {
-                QRect btnRect = addBtnRect(option.rect);
-                if (btnRect.contains(mouseEv->pos())) {
-                    emit requestAddCategory();
-                } else {
-                    emit requestToggleSection();
+                if (nodeId == -20 || nodeId == 0) {
+                    QRect btnRect = addBtnRect(option.rect);
+                    if (btnRect.contains(mouseEv->pos())) {
+                        emit requestAddCategory(nodeId);
+                        return true;
+                    }
                 }
+                emit requestToggleSection(nodeId);
                 return true;
             }
         }
@@ -162,16 +164,19 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 
     int nodeId = index.data(Qt::UserRole + 1).toInt();
 
-    // 1. 渲染自定义分类折叠分组 Header (nodeId == 0)，不得绘制选中/拖放背景
-    if (nodeId == 0) {
+    // 1. 渲染三大分组 Header (快速访问 -10, 智能文件夹 -20, 文件夹 0)，不得绘制选中/拖放背景
+    if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
         painter->fillRect(opt.rect, Qt::transparent);
 
         const QTreeView* treeView = qobject_cast<const QTreeView*>(option.widget);
         bool isExpanded = treeView ? treeView->isExpanded(index) : true;
-        int customCount = index.data(Qt::UserRole + 9).toInt();
+        int countVal = index.data(Qt::UserRole + 9).toInt();
 
-        // 绘制标题文字 "文件夹(N)"
-        QString sectionText = QString("文件夹(%1)").arg(customCount);
+        QString sectionText;
+        if (nodeId == -10) sectionText = QString("快速访问(%1)").arg(countVal);
+        else if (nodeId == -20) sectionText = QString("智能文件夹(%1)").arg(countVal);
+        else sectionText = QString("文件夹(%1)").arg(countVal);
+
         QFont hdrFont = opt.font;
         hdrFont.setPointSize(10);
         hdrFont.setBold(true);
@@ -192,10 +197,12 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
         QRect arrowRect(arrowLeft, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
         arrowIcon.paint(painter, arrowRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
 
-        // 绘制右侧加号按钮 (+) 图标 ("add")
-        QRect addRect = addBtnRect(opt.rect);
-        QIcon addIcon = UiHelper::getIcon("add", (opt.state & QStyle::State_MouseOver) ? QColor("#FFFFFF") : QColor("#888888"), 16);
-        addIcon.paint(painter, addRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        // 智能文件夹与文件夹分组右侧绘制加号按钮 (+) 图标 ("add")
+        if (nodeId == -20 || nodeId == 0) {
+            QRect addRect = addBtnRect(opt.rect);
+            QIcon addIcon = UiHelper::getIcon("add", (opt.state & QStyle::State_MouseOver) ? QColor("#FFFFFF") : QColor("#888888"), 16);
+            addIcon.paint(painter, addRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        }
 
         painter->restore();
         return;
@@ -339,10 +346,15 @@ void LibraryPanel::initUi() {
     m_delegate = new LibraryItemDelegate(this);
     m_treeView->setItemDelegate(m_delegate);
 
-    connect(m_delegate, &LibraryItemDelegate::requestAddCategory, this, [this]() {
-        createAndEditCategory(0);
+    connect(m_delegate, &LibraryItemDelegate::requestAddCategory, this, [this](int nodeId) {
+        if (nodeId == -20) {
+            // 智能文件夹创建逻辑
+            createAndEditCategory(0);
+        } else {
+            createAndEditCategory(0);
+        }
     });
-    connect(m_delegate, &LibraryItemDelegate::requestToggleSection, this, &LibraryPanel::toggleSection);
+    connect(m_delegate, &LibraryItemDelegate::requestToggleSection, this, &LibraryPanel::toggleSectionByNodeId);
 
     m_mainLayout->addWidget(m_treeView, 1);
 
@@ -698,23 +710,33 @@ void LibraryPanel::sortCategoriesByName(bool ascending) {
     m_orderDirty = false;
 }
 
-void LibraryPanel::toggleSection() {
+void LibraryPanel::toggleSectionByNodeId(int nodeId) {
     if (!m_model || !m_treeView) return;
     if (m_filterEdit && !m_filterEdit->text().trimmed().isEmpty()) {
         return;
     }
-    QStandardItem* sectionItem = findItemByNodeId(m_model->invisibleRootItem(), 0);
+    QStandardItem* sectionItem = findItemByNodeId(m_model->invisibleRootItem(), nodeId);
     if (!sectionItem) return;
     QModelIndex idx = sectionItem->index();
     bool isExpanded = m_treeView->isExpanded(idx);
     m_treeView->setExpanded(idx, !isExpanded);
-    AppConfig::instance().setValue("Library/CustomSectionCollapsed", isExpanded);
+
+    QString configKey;
+    if (nodeId == -10) configKey = "Library/QuickAccessSectionCollapsed";
+    else if (nodeId == -20) configKey = "Library/SmartFolderSectionCollapsed";
+    else configKey = "Library/CustomSectionCollapsed";
+
+    AppConfig::instance().setValue(configKey, isExpanded);
+}
+
+void LibraryPanel::toggleSection() {
+    toggleSectionByNodeId(0);
 }
 
 void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
     if (!index.isValid()) return;
     int nodeId = index.data(Qt::UserRole + 1).toInt();
-    if (nodeId == 0) {
+    if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
         return;
     }
 
@@ -742,7 +764,7 @@ void LibraryPanel::filterTreeNodes(const QString& keyword) {
             }
         }
 
-        if (nodeId == 0) {
+        if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
             return true;
         }
 
@@ -757,15 +779,17 @@ void LibraryPanel::filterTreeNodes(const QString& keyword) {
         QStandardItem* topItem = m_model->item(i);
         if (!topItem) continue;
         int nodeId = topItem->data(Qt::UserRole + 1).toInt();
-        if (nodeId < 0) {
+        if (nodeId == -1 || nodeId == -2) {
             m_treeView->setRowHidden(i, QModelIndex(), false);
-        } else if (nodeId == 0) {
+        } else if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
             filterRecursive(topItem);
             m_treeView->setRowHidden(i, QModelIndex(), false);
             if (!keyword.isEmpty()) {
                 m_treeView->expand(topItem->index());
             } else {
-                bool sectionCollapsed = AppConfig::instance().getValue("Library/CustomSectionCollapsed", false).toBool();
+                QString cfgKey = (nodeId == -10) ? "Library/QuickAccessSectionCollapsed" :
+                                 (nodeId == -20) ? "Library/SmartFolderSectionCollapsed" : "Library/CustomSectionCollapsed";
+                bool sectionCollapsed = AppConfig::instance().getValue(cfgKey, false).toBool();
                 m_treeView->setExpanded(topItem->index(), !sectionCollapsed);
             }
         }
@@ -798,8 +822,28 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
     }
 
     int nodeId = index.data(Qt::UserRole + 1).toInt();
-    if (nodeId < 0) {
-        // 系统分类禁止弹出修改菜单
+    if (nodeId == -1 || nodeId == -2) {
+        // 固定系统分类禁止弹出修改菜单
+        return;
+    }
+
+    if (nodeId == -10) {
+        // 快速访问分组右键菜单
+        QAction* clearAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "清空快速访问");
+        connect(clearAct, &QAction::triggered, this, [this]() {
+            // 清空快速访问快捷方式
+        });
+        menu.exec(m_treeView->viewport()->mapToGlobal(pos));
+        return;
+    }
+
+    if (nodeId == -20) {
+        // 智能文件夹分组右键菜单
+        QAction* newSmartAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建智能文件夹");
+        connect(newSmartAct, &QAction::triggered, this, [this]() {
+            createAndEditCategory(0);
+        });
+        menu.exec(m_treeView->viewport()->mapToGlobal(pos));
         return;
     }
 
@@ -910,8 +954,8 @@ void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QMod
         nodeId = target.data(Qt::UserRole + 1).toInt();
     }
 
-    // 拖到“全部数据”(-1) 或 “文件夹(N)”标题行(0) 时：静默返回，不做任何处理，也不弹任何提示
-    if (nodeId == -1 || nodeId == 0) {
+    // 拖到系统分类(-1)、快速访问(-10)、智能文件夹(-20) 或 “文件夹(N)”标题行(0) 时：静默返回，不做任何处理
+    if (nodeId == -1 || nodeId == -10 || nodeId == -20 || nodeId == 0) {
         return;
     }
 
@@ -1009,7 +1053,23 @@ void LibraryPanel::loadLibrary() {
     addSystemItem("全部数据", "all_data", "#3498db", -1);
     addSystemItem("未分类", "uncategorized-2", "#95a5a6", -2);
 
-    // 2. 构建 "文件夹(N)" 折叠分组 Header 节点 (不可选中、不可拖放)
+    // 2. 构建三大折叠分组 Header 节点 (-10 快速访问, -20 智能文件夹, 0 文件夹)
+    QStandardItem* quickAccessHeader = new QStandardItem();
+    quickAccessHeader->setData("section", TypeRole);
+    quickAccessHeader->setData(-10, IdRole);
+    quickAccessHeader->setData(-10, Qt::UserRole + 1);
+    quickAccessHeader->setData(0, Qt::UserRole + 9);
+    quickAccessHeader->setFlags(Qt::ItemIsEnabled);
+    m_model->appendRow(quickAccessHeader);
+
+    QStandardItem* smartFolderHeader = new QStandardItem();
+    smartFolderHeader->setData("section", TypeRole);
+    smartFolderHeader->setData(-20, IdRole);
+    smartFolderHeader->setData(-20, Qt::UserRole + 1);
+    smartFolderHeader->setData(0, Qt::UserRole + 9);
+    smartFolderHeader->setFlags(Qt::ItemIsEnabled);
+    m_model->appendRow(smartFolderHeader);
+
     auto list = LibraryDao::getAllCategories();
     int customCount = list.size();
 
@@ -1051,6 +1111,12 @@ void LibraryPanel::loadLibrary() {
     // 重建树后先 expandAll()，再按保存的折叠状态设置标题行的展开/折叠
     if (m_treeView) {
         m_treeView->expandAll();
+        bool qaCollapsed = AppConfig::instance().getValue("Library/QuickAccessSectionCollapsed", false).toBool();
+        m_treeView->setExpanded(quickAccessHeader->index(), !qaCollapsed);
+
+        bool sfCollapsed = AppConfig::instance().getValue("Library/SmartFolderSectionCollapsed", false).toBool();
+        m_treeView->setExpanded(smartFolderHeader->index(), !sfCollapsed);
+
         bool sectionCollapsed = AppConfig::instance().getValue("Library/CustomSectionCollapsed", false).toBool();
         m_treeView->setExpanded(sectionItem->index(), !sectionCollapsed);
     }
