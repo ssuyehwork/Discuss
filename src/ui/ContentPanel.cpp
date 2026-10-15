@@ -361,6 +361,9 @@ bool ContentPanel::eventFilter(QObject* obj, QEvent* event) {
                     NavigationService::instance().goUp();
                     return true;
                 }
+                if (idx.data(SectionHeaderRole).toBool()) {
+                    return true;
+                }
             }
         }
     }

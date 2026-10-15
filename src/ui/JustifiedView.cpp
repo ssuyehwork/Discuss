@@ -3,6 +3,7 @@
 #endif
 #include "JustifiedView.h"
 #include "CardLayoutEngine.h"
+#include "UiHelper.h"
 #include "models/SectionProxyModel.h"
 #include "../core/ModelContract.h"
 #include <QPainter>
@@ -136,7 +137,6 @@ QModelIndex JustifiedView::indexAt(const QPoint& point) const {
     for (; it != m_geometries.end(); ++it) {
         if (it->rect.top() > y) break;
         if (it->rect.contains(point.x(), y)) {
-            if (it->isHeader) return QModelIndex();
             return model()->index(it->index, 0);
         }
     }
@@ -369,7 +369,13 @@ void JustifiedView::paintEvent(QPaintEvent* event) {
             painter.save();
             painter.setPen(QColor("#3498db"));
             painter.setFont(QFont("Microsoft YaHei", 10, QFont::Bold));
-            painter.drawText(geo.rect, Qt::AlignLeft | Qt::AlignVCenter, geo.headerText);
+
+            QIcon arrowIcon = UiHelper::getIcon(geo.isCollapsed ? "chevron_right" : "chevron_down", QColor("#3498db"), 14);
+            QRect iconRect(geo.rect.left(), geo.rect.top() + (geo.rect.height() - 14) / 2, 14, 14);
+            arrowIcon.paint(&painter, iconRect, Qt::AlignCenter);
+
+            QRect textRect = geo.rect.adjusted(18, 0, 0, 0);
+            painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, geo.headerText);
             painter.restore();
             continue;
         }
