@@ -130,6 +130,19 @@ void PanelMediator::setupConnections() {
                 }
             });
 
+            connect(titleBar->tabBar(), &TabBarWidget::folderDroppedOnTab, this, [this, titleBar, contentPanel](int tabIndex, const QString& folderPath) {
+                if (!titleBar || !titleBar->tabBar()) return;
+                titleBar->tabBar()->setCurrentIndex(tabIndex, true);
+                ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
+                if (root) {
+                    if (root->paneCount() >= ContentPanel::kMaxPanes) {
+                        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("窗格数量超出上限%1窗格，不支持继续分屏").arg(ContentPanel::kMaxPanes), 2000, QColor("#e81123"));
+                        return;
+                    }
+                    root->splitPane(Qt::Horizontal, folderPath);
+                }
+            });
+
         }
         if (layoutManager) {
             connect(titleBar, &TitleBarWidget::layoutMenuRequested, layoutManager, [layoutManager](const QPoint& pos) {
