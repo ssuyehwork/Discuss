@@ -674,9 +674,24 @@ void TabBarWidget::dropEvent(QDropEvent* event) {
             for (const QUrl& url : event->mimeData()->urls()) {
                 QString path = url.toLocalFile();
                 if (!path.isEmpty() && QFileInfo(path).isDir()) {
-                    openOrFocusTab(path);
-                    event->acceptProposedAction();
-                    return;
+                    QPoint dropPos = event->position().toPoint();
+                    int hitTabIdx = -1;
+                    for (int i = 0; i < m_tabWidgets.size(); ++i) {
+                        if (m_tabWidgets[i] && m_tabWidgets[i]->geometry().contains(dropPos)) {
+                            hitTabIdx = i;
+                            break;
+                        }
+                    }
+
+                    if (hitTabIdx != -1) {
+                        emit folderDroppedOnTab(hitTabIdx, path);
+                        event->acceptProposedAction();
+                        return;
+                    } else {
+                        openOrFocusTab(path);
+                        event->acceptProposedAction();
+                        return;
+                    }
                 }
             }
         }

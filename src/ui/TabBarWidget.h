@@ -126,6 +126,7 @@ signals:
     void refreshRequested();
     void mergeRequested(int sourceIndex, int targetIndex);
     void splitRequested(int tabIndex);
+    void folderDroppedOnTab(int tabIndex, const QString& folderPath);
 
 private:
     void dragEnterEvent(QDragEnterEvent* event) override;
