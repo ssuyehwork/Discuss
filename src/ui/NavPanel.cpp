@@ -11,6 +11,10 @@
 #include "../core/TrashService.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
+#include "../meta/LibraryService.h"
+#include "../core/ClipboardService.h"
+#include "../core/NavigationService.h"
+#include "TabBarWidget.h"
 #include "controllers/ContextMenuFactory.h"
 #include <QHeaderView>
 #include <QScrollBar>
@@ -286,9 +290,61 @@ void NavPanel::onTreeContextMenu(const QPoint& pos) {
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
 
+    // 1. 打开文件夹
+    QAction* actOpenFolder = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 18), "打开文件夹");
+    connect(actOpenFolder, &QAction::triggered, this, [this, path]() {
+        emit directorySelected(path);
+    });
+
+    // 2. 标签页级联子菜单
+    QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
+    UiHelper::applyMenuStyle(tabCascadeMenu);
+
+    QAction* actOpenNewTab = tabCascadeMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "在新标签页中打开");
+    connect(actOpenNewTab, &QAction::triggered, this, [path]() {
+        NavigationService::instance().openInNewTab(path);
+    });
+
+    QMenu* openInExistingTabMenu = tabCascadeMenu->addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), "在标签页中打开");
+    UiHelper::applyMenuStyle(openInExistingTabMenu);
+
+    TabBarWidget* tabBar = window() ? window()->findChild<TabBarWidget*>() : nullptr;
+    if (tabBar) {
+        int count = tabBar->tabCount();
+        for (int i = 0; i < count; ++i) {
+            QString tabTitle = tabBar->tabTitle(i);
+            QAction* actMergeTab = openInExistingTabMenu->addAction(UiHelper::getIcon("tab", QColor("#EEEEEE"), 16), tabTitle);
+            connect(actMergeTab, &QAction::triggered, this, [this, tabBar, i, path]() {
+                tabBar->setCurrentIndex(i, true);
+                ContentPanel* contentPanel = window() ? window()->findChild<ContentPanel*>() : nullptr;
+                if (contentPanel) {
+                    contentPanel->splitPane(Qt::Horizontal, path, false);
+                }
+            });
+        }
+    }
+
+    // 3. 在“资源管理器”中显示
+    ContextMenuFactory::buildShowInExplorerAction(&menu, path, this);
+
+    menu.addSeparator();
+
+    // 4. 置顶 / 收藏夹 / 库
     FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+    LibraryService::instance().buildLibraryAction(&menu, QStringList{path}, this);
+
+    menu.addSeparator();
+
+    // 5. 复制名称 / 复制完整路径
     ContextMenuFactory::buildCopyNameAction(&menu, QStringList{path}, this);
     ContextMenuFactory::buildCopyPathAction(&menu, QStringList{path}, this);
+
+    // 6. 粘贴到此文件夹
+    QAction* actPaste = menu.addAction(UiHelper::getIcon("paste", QColor("#EEEEEE"), 18), "粘贴到此文件夹");
+    actPaste->setEnabled(ClipboardService::instance().canPaste(path));
+    connect(actPaste, &QAction::triggered, this, [this, path]() {
+        ClipboardService::instance().executePaste(path, this);
+    });
 
     menu.exec(m_treeView->viewport()->mapToGlobal(pos));
 }

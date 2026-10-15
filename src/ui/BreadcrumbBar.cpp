@@ -1,11 +1,44 @@
 #include "BreadcrumbBar.h"
 #include <QMouseEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 #include <QDir>
 #include <QFileInfo>
 #include <QLabel>
 #include "UiHelper.h"
 
 namespace QuarkMeta {
+
+BreadcrumbNodeButton::BreadcrumbNodeButton(const QString& name, const QString& fullPath, QWidget* parent)
+    : QPushButton(name, parent), m_fullPath(fullPath) {
+    setAcceptDrops(true);
+}
+
+void BreadcrumbNodeButton::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        QPushButton::dragEnterEvent(event);
+    }
+}
+
+void BreadcrumbNodeButton::dropEvent(QDropEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        QStringList paths;
+        for (const QUrl& url : event->mimeData()->urls()) {
+            QString p = url.toLocalFile();
+            if (!p.isEmpty()) paths.append(p);
+        }
+        if (!paths.isEmpty()) {
+            emit pathsDroppedNode(paths, m_fullPath);
+            event->acceptProposedAction();
+            return;
+        }
+    }
+    QPushButton::dropEvent(event);
+}
 
 BreadcrumbBar::BreadcrumbBar(QWidget* parent) : QWidget(parent) {
     m_layout = new QHBoxLayout(this);
@@ -154,7 +187,7 @@ void BreadcrumbBar::clearButtons() {
 }
 
 void BreadcrumbBar::addLevel(const QString& name, const QString& fullPath) {
-    QPushButton* btn = new QPushButton(name, this);
+    BreadcrumbNodeButton* btn = new BreadcrumbNodeButton(name, fullPath, this);
     btn->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     btn->setFixedHeight(24);
     btn->setObjectName("BreadcrumbNodeBtn");
@@ -165,6 +198,9 @@ void BreadcrumbBar::addLevel(const QString& name, const QString& fullPath) {
     });
     connect(btn, &QPushButton::customContextMenuRequested, [this, btn, fullPath](const QPoint& pos) {
         emit favoriteToggleRequested(fullPath, btn->mapToGlobal(pos));
+    });
+    connect(btn, &BreadcrumbNodeButton::pathsDroppedNode, this, [this](const QStringList& paths, const QString& targetPath) {
+        emit pathsDroppedNode(paths, targetPath);
     });
 
     m_layout->addWidget(btn);

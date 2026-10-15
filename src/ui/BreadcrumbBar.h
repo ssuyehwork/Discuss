@@ -11,6 +11,23 @@ namespace QuarkMeta {
  * @brief 面包屑导航栏部件
  * 将路径拆分为层级按钮，支持点击跳转；自感知超长截断状态
  */
+class BreadcrumbNodeButton : public QPushButton {
+    Q_OBJECT
+public:
+    explicit BreadcrumbNodeButton(const QString& name, const QString& fullPath, QWidget* parent = nullptr);
+    const QString& fullPath() const { return m_fullPath; }
+
+signals:
+    void pathsDroppedNode(const QStringList& paths, const QString& targetPath);
+
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+
+private:
+    QString m_fullPath;
+};
+
 class BreadcrumbBar : public QWidget {
     Q_OBJECT
 
@@ -44,6 +61,7 @@ signals:
      * @brief 用户右键点击某个层级按钮时发出，用于告知外部触发收藏菜单
      */
     void favoriteToggleRequested(const QString& fullPath, const QPoint& globalPos);
+    void pathsDroppedNode(const QStringList& paths, const QString& targetPath);
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;
