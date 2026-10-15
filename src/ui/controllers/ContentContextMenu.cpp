@@ -14,6 +14,7 @@
 #include "../BatchCreateDialog.h"
 #include "../FramelessDialog.h"
 #include "../dialogs/FramelessInputDialog.h"
+#include "../dialogs/CreateFolderWithItemsDialog.h"
 #include "../../util/ShellHelper.h"
 #include "../../util/DeepThumbnailExtractor.h"
 #include "../../core/TrashService.h"
@@ -201,6 +202,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             if (selPathsDrive.isEmpty() && !path.isEmpty()) selPathsDrive << path;
             LibraryService::instance().buildLibraryAction(&menu, selPathsDrive, m_panel);
 
+            int driveItemCount = selPathsDrive.size() > 0 ? static_cast<int>(selPathsDrive.size()) : 1;
+            QAction* actCreateFolderWithItemsDrive = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 18), QString("用所选项目新建文件夹(%1)").arg(driveItemCount));
+            actCreateFolderWithItemsDrive->setData(ContentPanel::ActionCreateFolderWithSelectedItems);
+
             menu.addSeparator();
 
             QAction* actItemPaste = menu.addAction(UiHelper::getIcon("paste", QColor("#EEEEEE"), 18), "粘贴");
@@ -309,6 +314,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             QStringList selPathsItem = m_panel->getSelectedPaths();
             if (selPathsItem.isEmpty() && !path.isEmpty()) selPathsItem << path;
             LibraryService::instance().buildLibraryAction(&menu, selPathsItem, m_panel);
+
+            int selItemCount = selPathsItem.size() > 0 ? static_cast<int>(selPathsItem.size()) : 1;
+            QAction* actCreateFolderWithItems = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 18), QString("用所选项目新建文件夹(%1)").arg(selItemCount));
+            actCreateFolderWithItems->setData(ContentPanel::ActionCreateFolderWithSelectedItems);
 
             menu.addSeparator();
 
@@ -607,6 +616,19 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         case ContentPanel::ActionNewFolder:
             m_panel->createNewItem("folder");
             break;
+        case ContentPanel::ActionCreateFolderWithSelectedItems: {
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            if (selectedPaths.isEmpty() && !path.isEmpty()) {
+                selectedPaths << path;
+            }
+            if (!selectedPaths.isEmpty()) {
+                CreateFolderWithItemsDialog dlg(currentPath, selectedPaths, m_panel);
+                if (dlg.exec() == QDialog::Accepted) {
+                    m_panel->refreshAll();
+                }
+            }
+            break;
+        }
         case ContentPanel::ActionNewMd:
             m_panel->createNewItem("md");
             break;

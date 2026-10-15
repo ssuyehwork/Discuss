@@ -775,14 +775,15 @@ void PanelMediator::setupConnections() {
 
         connect(metaPanel, &MetaPanel::ratingChanged, this, [activeOrRootPanel](const QStringList& paths, int rating) {
             if (paths.isEmpty()) return;
+            QStringList safePaths = paths;
             AppCommand cmd;
             cmd.type = AppCommandType::SetRating;
-            cmd.targetPaths = paths;
+            cmd.targetPaths = safePaths;
             cmd.params["rating"] = rating;
             CoreEngine::instance().executeCommand(cmd);
             ContentPanel* target = activeOrRootPanel();
             if (target) {
-                for (const QString& p : paths) {
+                for (const QString& p : safePaths) {
                     target->updateItemMetadata(p);
                 }
                 target->recalculateAndEmitStats();
@@ -791,14 +792,15 @@ void PanelMediator::setupConnections() {
 
         connect(metaPanel, &MetaPanel::colorChanged, this, [activeOrRootPanel](const QStringList& paths, const QString& hexColor) {
             if (paths.isEmpty()) return;
+            QStringList safePaths = paths;
             AppCommand cmd;
             cmd.type = AppCommandType::SetColor;
-            cmd.targetPaths = paths;
+            cmd.targetPaths = safePaths;
             cmd.params["color"] = hexColor;
             CoreEngine::instance().executeCommand(cmd);
             ContentPanel* target = activeOrRootPanel();
             if (target) {
-                for (const QString& p : paths) {
+                for (const QString& p : safePaths) {
                     target->updateItemMetadata(p);
                 }
                 target->recalculateAndEmitStats();
@@ -807,28 +809,30 @@ void PanelMediator::setupConnections() {
 
         connect(metaPanel, &MetaPanel::primaryColorChanged, this, [activeOrRootPanel](const QString& path, const QColor& color) {
             if (path.isEmpty()) return;
+            QString safePath = path;
             AppCommand cmd;
             cmd.type = AppCommandType::SetColor;
-            cmd.targetPaths = {path};
+            cmd.targetPaths = {safePath};
             cmd.params["color"] = color.name(QColor::HexRgb);
             CoreEngine::instance().executeCommand(cmd);
             ContentPanel* target = activeOrRootPanel();
             if (target) {
-                target->updateItemMetadata(path);
+                target->updateItemMetadata(safePath);
                 target->recalculateAndEmitStats();
             }
         });
 
         connect(metaPanel, &MetaPanel::tagAddRequested, this, [activeOrRootPanel](const QStringList& paths, const QString& newTag) {
             if (!paths.isEmpty() && !newTag.isEmpty()) {
+                QStringList safePaths = paths;
                 AppCommand cmd;
                 cmd.type = AppCommandType::AddTag;
-                cmd.targetPaths = paths;
+                cmd.targetPaths = safePaths;
                 cmd.params["tag"] = newTag;
                 CoreEngine::instance().executeCommand(cmd);
                 ContentPanel* target = activeOrRootPanel();
                 if (target) {
-                    for (const QString& p : paths) {
+                    for (const QString& p : safePaths) {
                         target->updateItemMetadata(p);
                     }
                     target->recalculateAndEmitStats();
@@ -838,14 +842,15 @@ void PanelMediator::setupConnections() {
 
         connect(metaPanel, &MetaPanel::tagRemoveRequested, this, [activeOrRootPanel](const QStringList& paths, const QString& removeTag) {
             if (!paths.isEmpty() && !removeTag.isEmpty()) {
+                QStringList safePaths = paths;
                 AppCommand cmd;
                 cmd.type = AppCommandType::RemoveTag;
-                cmd.targetPaths = paths;
+                cmd.targetPaths = safePaths;
                 cmd.params["tag"] = removeTag;
                 CoreEngine::instance().executeCommand(cmd);
                 ContentPanel* target = activeOrRootPanel();
                 if (target) {
-                    for (const QString& p : paths) {
+                    for (const QString& p : safePaths) {
                         target->updateItemMetadata(p);
                     }
                     target->recalculateAndEmitStats();
