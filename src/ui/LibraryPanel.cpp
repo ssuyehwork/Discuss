@@ -173,7 +173,7 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
         // 绘制标题文字 "文件夹(N)"
         QString sectionText = QString("文件夹(%1)").arg(customCount);
         QFont hdrFont = opt.font;
-        hdrFont.setPointSize(11);
+        hdrFont.setPointSize(10);
         hdrFont.setBold(true);
 
         QFontMetrics fm(hdrFont);
