@@ -254,6 +254,14 @@ QImage DiskMediaExtractor::getCapsuleThumbnailReadOnly(const QString& filePath) 
     return img; 
 } 
  
+void DiskMediaExtractor::roamThumbnailCacheBatch(const QList<QPair<QString, QString>>& pairs, bool isMove) {
+    if (pairs.isEmpty()) return;
+
+    for (const auto& pair : pairs) {
+        roamThumbnailCache(pair.first, pair.second, isMove);
+    }
+}
+
 void DiskMediaExtractor::roamThumbnailCache(const QString& oldFilePath, const QString& newFilePath, bool isMove) { 
     QString oldThumbPath = getDiskThumbCachePath(oldFilePath); 
     QString newThumbPath = getDiskThumbCachePath(newFilePath); 

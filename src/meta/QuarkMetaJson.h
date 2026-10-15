@@ -4,6 +4,8 @@
 #include <vector>
 #include <map>
 #include <QString>
+#include <QList>
+#include <QPair>
 #include <QJsonObject>
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -50,6 +52,13 @@ public:
      * @param isMove true 为剪切/移动（抹除源数据）；false 为复制（深克隆副本）
      */
     static bool roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove);
+
+    /**
+     * @brief 批量物理漫游元数据包：按源/目标文件夹归类合并（Group by folder），单次 JSON 读写落盘
+     * @param pairs 源绝对路径与目标绝对路径映射对
+     * @param isMove true 为剪切/移动（抹除源数据）；false 为复制（深克隆副本）
+     */
+    static bool roamBatchMetadata(const QList<QPair<QString, QString>>& pairs, bool isMove);
 
     /**
      * @brief 规范化键名：转换为小写字符串以实现大小写无关的严格一致匹配

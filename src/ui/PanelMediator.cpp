@@ -251,6 +251,9 @@ void PanelMediator::setupConnections() {
 
         if (addressBar) addressBar->setPath(displayPath);
         if (navPanel) navPanel->selectPath(url == "computer://" ? "" : url);
+        if (titleBar && titleBar->tabBar()) {
+            titleBar->tabBar()->updateCurrentTabTitle(displayPath, url);
+        }
 
         if (targetPanel) {
             QString goUpChild = NavigationService::instance().takePendingGoUpChildPath();

@@ -3,6 +3,8 @@
  
 #include <QImage> 
 #include <QString> 
+#include <QList>
+#include <QPair>
 #include <QSize> 
 #include <QMutex> 
 #include <QHash> 
@@ -38,6 +40,7 @@ public:
     static QImage getCapsuleThumbnailReadOnly(const QString& filePath); 
     static bool saveDiskThumbnail(const QString& filePath, const QImage& img); 
     static void roamThumbnailCache(const QString& oldFilePath, const QString& newFilePath, bool isMove); 
+    static void roamThumbnailCacheBatch(const QList<QPair<QString, QString>>& pairs, bool isMove); 
  
     // ---- 档位①：自动提取 ---- 
     static ExtractResult getCapsuleExtractResult(const QString& filePath, int size = kThumbSize, std::shared_ptr<CancellationToken> token = {}); 

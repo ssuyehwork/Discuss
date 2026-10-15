@@ -30,8 +30,14 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
                                    const QSet<QString>& overwriteFiles, const QSet<QString>& autoRenameFiles) {
 #ifdef Q_OS_WIN
     if (sourcePaths.isEmpty() || destDir.isEmpty()) return false;
-    
-    bool overallOk = true;
+
+    QList<QPair<QString, QString>> pathPairs;
+    pathPairs.reserve(sourcePaths.size());
+
+    std::wstring fromBuffer;
+    std::wstring toBuffer;
+    QSet<QString> allocatedDestPaths;
+
     for (const QString& p : sourcePaths) {
         QFileInfo info(p);
         QString destPath = QDir(destDir).filePath(info.fileName());
@@ -39,12 +45,12 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
         bool shouldAutoRename = autoRenameAll || autoRenameFiles.contains(p);
         bool shouldOverwrite = overwriteAll || overwriteFiles.contains(p);
 
-        if (QFile::exists(destPath)) {
+        if (QFile::exists(destPath) || allocatedDestPaths.contains(destPath.toLower())) {
             if (shouldAutoRename) {
                 QString baseName = info.completeBaseName();
                 QString suffix = info.suffix();
                 int counter = 1;
-                while (QFile::exists(destPath)) {
+                while (QFile::exists(destPath) || allocatedDestPaths.contains(destPath.toLower())) {
                     QString newFileName = suffix.isEmpty() 
                         ? QString("%1-%2").arg(baseName).arg(counter++)
                         : QString("%1-%2.%3").arg(baseName).arg(counter++).arg(suffix);
@@ -55,27 +61,35 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
             }
         }
 
-        std::wstring from = QDir::toNativeSeparators(p).toStdWString() + L'\0' + L'\0';
-        std::wstring to = QDir::toNativeSeparators(destPath).toStdWString() + L'\0' + L'\0';
+        allocatedDestPaths.insert(destPath.toLower());
+        pathPairs.append(qMakePair(p, destPath));
 
-        SHFILEOPSTRUCTW fileOp = { 0 };
-        fileOp.wFunc = isMove ? FO_MOVE : FO_COPY;
-        fileOp.pFrom = from.c_str();
-        fileOp.pTo = to.c_str();
-        fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR | FOF_NOCONFIRMATION | FOF_SILENT;
-        
-        bool ok = (SHFileOperationW(&fileOp) == 0 && !fileOp.fAnyOperationsAborted);
-        if (ok) {
-            QuarkMetaJson::roamItemMetadata(p, destPath, isMove);
-            DiskMediaExtractor::roamThumbnailCache(p, destPath, isMove);
-        } else {
-            overallOk = false;
-        }
+        std::wstring fromStr = QDir::toNativeSeparators(p).toStdWString();
+        std::wstring toStr = QDir::toNativeSeparators(destPath).toStdWString();
+
+        fromBuffer.append(fromStr);
+        fromBuffer.push_back(L'\0');
+
+        toBuffer.append(toStr);
+        toBuffer.push_back(L'\0');
     }
-    if (overallOk) {
+
+    fromBuffer.push_back(L'\0');
+    toBuffer.push_back(L'\0');
+
+    SHFILEOPSTRUCTW fileOp = { 0 };
+    fileOp.wFunc = isMove ? FO_MOVE : FO_COPY;
+    fileOp.pFrom = fromBuffer.c_str();
+    fileOp.pTo = toBuffer.c_str();
+    fileOp.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMMKDIR | FOF_NOCONFIRMATION | FOF_SILENT | FOF_MULTIDESTFILES;
+
+    bool ok = (SHFileOperationW(&fileOp) == 0 && !fileOp.fAnyOperationsAborted);
+    if (ok && !pathPairs.isEmpty()) {
+        QuarkMetaJson::roamBatchMetadata(pathPairs, isMove);
+        DiskMediaExtractor::roamThumbnailCacheBatch(pathPairs, isMove);
         MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, destDir);
     }
-    return overallOk;
+    return ok;
 #else
     Q_UNUSED(sourcePaths);
     Q_UNUSED(destDir);

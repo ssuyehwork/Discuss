@@ -874,14 +874,6 @@ void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
         m_rootNode = nullptr;
     }
 
-    if (state.panePaths.isEmpty()) {
-        updateContainerMinimumWidth();
-        refreshActiveIndicators();
-        m_blockLayoutSignals = false;
-        notifyLayoutChanged();
-        return;
-    }
-
     // 2. 如果序列化数据包含分屏树结构（isSplit == true），则按树层次还原；否则为单窗格
     if (state.isSplit && (state.rootNode.isSplitter || !state.rootNode.children.isEmpty())) {
         m_rootNode = importNodeRecursive(state.rootNode, m_panel);
@@ -895,11 +887,7 @@ void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
             }
         }
     } else {
-        // 兼容与普通单窗格/旧平铺配置恢复
-        int primIdx = qBound(0, state.primaryIndex, state.panePaths.size() - 1);
-        if (!state.panePaths.isEmpty()) {
-            m_panel->loadDirectory(state.panePaths[primIdx]);
-        }
+        // 兼容与普通单窗格/新建标签页/旧平铺配置恢复
         if (m_primaryPaneContainer) {
             if (m_panel->m_headerWidget && m_primaryPaneContainer->layout()) {
                 m_primaryPaneContainer->layout()->removeWidget(m_panel->m_headerWidget);
@@ -919,12 +907,17 @@ void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
             m_panel->m_viewStack->show();
         }
 
-        if (state.isSplit && state.panePaths.size() > 1) {
-            for (int i = primIdx - 1; i >= 0; --i) {
-                splitPane(state.orientation, state.panePaths[i], true);
-            }
-            for (int i = primIdx + 1; i < state.panePaths.size(); ++i) {
-                splitPane(state.orientation, state.panePaths[i], false);
+        if (!state.panePaths.isEmpty()) {
+            int primIdx = qBound(0, state.primaryIndex, state.panePaths.size() - 1);
+            m_panel->loadDirectory(state.panePaths[primIdx]);
+
+            if (state.isSplit && state.panePaths.size() > 1) {
+                for (int i = primIdx - 1; i >= 0; --i) {
+                    splitPane(state.orientation, state.panePaths[i], true);
+                }
+                for (int i = primIdx + 1; i < state.panePaths.size(); ++i) {
+                    splitPane(state.orientation, state.panePaths[i], false);
+                }
             }
         }
     }

@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDir>
+#include <QMap>
 #include <mutex>
 
 #ifndef NOMINMAX
@@ -180,6 +181,113 @@ void QuarkMetaJson::updateItemMeta(const std::wstring& filePath, std::function<v
 
 bool QuarkMetaJson::migrateItemMetadata(const QString& oldFilePath, const QString& newFilePath) { 
     return roamItemMetadata(oldFilePath, newFilePath, true);
+}
+
+bool QuarkMetaJson::roamBatchMetadata(const QList<QPair<QString, QString>>& pairs, bool isMove) {
+    if (pairs.isEmpty()) return false;
+
+    struct TransferItem {
+        QString oldPath;
+        QString newPath;
+        std::wstring oldName;
+        std::wstring newName;
+        ItemMeta meta;
+        bool hasMeta = false;
+    };
+
+    // 1. 按源文件夹归类 Group by source folder
+    QMap<QString, QList<TransferItem>> srcFolderMap;
+    for (const auto& pair : pairs) {
+        QFileInfo oldFi(pair.first);
+        QFileInfo newFi(pair.second);
+
+        TransferItem item;
+        item.oldPath = pair.first;
+        item.newPath = pair.second;
+        item.oldName = oldFi.fileName().toStdWString();
+        item.newName = newFi.fileName().toStdWString();
+
+        QString srcFolder = oldFi.absolutePath();
+        srcFolderMap[srcFolder].append(item);
+    }
+
+    QList<TransferItem> allTransfers;
+
+    // 2. 读取并在移动场景下抹除源端元数据 (仅对每一个源文件夹加载一次和保存一次)
+    for (auto it = srcFolderMap.begin(); it != srcFolderMap.end(); ++it) {
+        QString srcDir = it.key();
+        QList<TransferItem>& itemsInDir = it.value();
+
+        QuarkMetaJson srcMeta(srcDir.toStdWString());
+        bool srcLoaded = srcMeta.load();
+
+        for (auto& item : itemsInDir) {
+            std::wstring normKey = normalizeItemKey(item.oldName);
+            if (srcLoaded) {
+                auto mIt = srcMeta.items().find(normKey);
+                if (mIt == srcMeta.items().end()) {
+                    // 大小写敏感降级匹配
+                    for (auto entry = srcMeta.items().begin(); entry != srcMeta.items().end(); ++entry) {
+                        if (QString::fromStdWString(entry->first).compare(QString::fromStdWString(item.oldName), Qt::CaseInsensitive) == 0) {
+                            mIt = entry;
+                            break;
+                        }
+                    }
+                }
+
+                if (mIt != srcMeta.items().end()) {
+                    item.meta = mIt->second;
+                    item.hasMeta = true;
+                    if (isMove) {
+                        srcMeta.items().erase(mIt);
+                    }
+                }
+            }
+
+            // 仅在移动操作时更新数据库与内存映射，避免复制操作损坏源端元数据
+            if (isMove) {
+                MetadataManager::instance().renameItem(item.oldPath.toStdWString(), item.newPath.toStdWString());
+            }
+            allTransfers.append(item);
+        }
+
+        if (isMove && srcLoaded) {
+            srcMeta.save();
+            QuarkMetaJsonStore::instance().invalidateFolderCache(srcDir.toStdWString());
+        }
+    }
+
+    // 3. 按目标文件夹归类 Group by destination folder 并在目标端保存
+    QMap<QString, QList<TransferItem>> destFolderMap;
+    for (const auto& item : allTransfers) {
+        QFileInfo newFi(item.newPath);
+        QString destFolder = newFi.absolutePath();
+        destFolderMap[destFolder].append(item);
+    }
+
+    for (auto it = destFolderMap.begin(); it != destFolderMap.end(); ++it) {
+        QString destDir = it.key();
+        const QList<TransferItem>& itemsInDir = it.value();
+
+        QuarkMetaJson destMeta(destDir.toStdWString());
+        destMeta.load();
+
+        bool destModified = false;
+        for (const auto& item : itemsInDir) {
+            if (item.hasMeta) {
+                std::wstring destKey = normalizeItemKey(item.newName);
+                destMeta.items()[destKey] = item.meta;
+                destModified = true;
+            }
+        }
+
+        if (destModified) {
+            destMeta.save();
+            QuarkMetaJsonStore::instance().invalidateFolderCache(destDir.toStdWString());
+        }
+    }
+
+    return true;
 }
 
 bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove) {
