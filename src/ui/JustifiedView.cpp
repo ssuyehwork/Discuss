@@ -368,14 +368,24 @@ void JustifiedView::paintEvent(QPaintEvent* event) {
         if (geo.isHeader) {
             painter.save();
             painter.setPen(QColor("#3498db"));
-            painter.setFont(QFont("Microsoft YaHei", 10, QFont::Bold));
+            QFont font("Microsoft YaHei", 10, QFont::Bold);
+            painter.setFont(font);
 
-            QIcon arrowIcon = UiHelper::getIcon(geo.isCollapsed ? "chevron_right" : "chevron_down", QColor("#3498db"), 14);
-            QRect iconRect(geo.rect.left(), geo.rect.top() + (geo.rect.height() - 14) / 2, 14, 14);
-            arrowIcon.paint(&painter, iconRect, Qt::AlignCenter);
+            QFontMetrics fm(font);
+            int leftX = geo.rect.left() + 10;
+            int textW = fm.horizontalAdvance(geo.headerText);
 
-            QRect textRect = geo.rect.adjusted(18, 0, 0, 0);
+            QRect textRect(leftX, geo.rect.top(), textW + 10, geo.rect.height());
             painter.drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, geo.headerText);
+
+            if (geo.isFolderHeader) {
+                int iconSize = 14;
+                int iconX = leftX + textW + 6;
+                QRect iconRect(iconX, geo.rect.top() + (geo.rect.height() - iconSize) / 2, iconSize, iconSize);
+                QIcon arrowIcon = UiHelper::getIcon(geo.isCollapsed ? "chevron_right" : "chevron_down", QColor("#3498db"), iconSize);
+                arrowIcon.paint(&painter, iconRect, Qt::AlignCenter);
+            }
+
             painter.restore();
             continue;
         }
@@ -464,7 +474,8 @@ void JustifiedView::doLayout() {
             QModelIndex idx = model()->index(i, 0);
             if (idx.data(SectionHeaderRole).toBool()) {
                 int headerH = 28;
-                m_geometries[i] = { QRect(margin, currentY, containerWidth, headerH), i, true, idx.data(SectionHeaderTextRole).toString(), idx.data(SectionCollapsedRole).toBool() };
+                bool isFolderHeader = (idx.data(SectionKindRole).toInt() == 1);
+                m_geometries[i] = { QRect(margin, currentY, containerWidth, headerH), i, true, idx.data(SectionHeaderTextRole).toString(), idx.data(SectionCollapsedRole).toBool(), isFolderHeader };
                 currentY += headerH + spacing;
                 i++;
                 continue;
@@ -502,7 +513,8 @@ void JustifiedView::doLayout() {
             QModelIndex idx = model()->index(i, 0);
             if (idx.data(SectionHeaderRole).toBool()) {
                 int headerH = 28;
-                m_geometries[i] = { QRect(margin, currentY, containerWidth, headerH), i, true, idx.data(SectionHeaderTextRole).toString(), idx.data(SectionCollapsedRole).toBool() };
+                bool isFolderHeader = (idx.data(SectionKindRole).toInt() == 1);
+                m_geometries[i] = { QRect(margin, currentY, containerWidth, headerH), i, true, idx.data(SectionHeaderTextRole).toString(), idx.data(SectionCollapsedRole).toBool(), isFolderHeader };
                 currentY += headerH + spacing;
                 i++;
                 continue;

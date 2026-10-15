@@ -58,13 +58,20 @@ public:
             painter->setPen(QColor("#3498db"));
 
             QString text = index.data(SectionHeaderTextRole).toString();
-            QRect textRect = rect.adjusted(10, 0, -30, 0);
+
+            QFontMetrics fm(font);
+            int leftX = rect.left() + 10;
+            int textW = fm.horizontalAdvance(text);
+
+            QRect textRect(leftX, rect.top(), textW + 10, rect.height());
             painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, text);
 
             if (index.data(SectionKindRole).toInt() == 1) {
                 bool collapsed = index.data(SectionCollapsedRole).toBool();
-                QIcon arrowIcon = UiHelper::getIcon(collapsed ? "scroll-008" : "scroll-010", QColor("#3498db"), 12);
-                QRect iconRect(rect.right() - 25, rect.top() + (rect.height() - 12) / 2, 12, 12);
+                int arrowX = leftX + textW + 6;
+                int iconSize = 12;
+                QRect iconRect(arrowX, rect.top() + (rect.height() - iconSize) / 2, iconSize, iconSize);
+                QIcon arrowIcon = UiHelper::getIcon(collapsed ? "chevron_right" : "chevron_down", QColor("#3498db"), iconSize);
                 arrowIcon.paint(painter, iconRect);
             }
 

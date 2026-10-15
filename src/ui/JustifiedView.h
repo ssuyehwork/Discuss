@@ -76,6 +76,7 @@ private:
         bool isHeader = false;
         QString headerText;
         bool isCollapsed = false;
+        bool isFolderHeader = false;
     };
     std::vector<ItemGeometry> m_geometries;
     int m_totalHeight = 0;

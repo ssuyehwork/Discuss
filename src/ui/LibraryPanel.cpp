@@ -65,6 +65,32 @@ bool LibraryItemDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, 
                 return true;
             }
         }
+    } else if (nodeId > 0 && model && model->hasChildren(index)) {
+        if (event->type() == QEvent::MouseButtonRelease) {
+            QMouseEvent* mouseEv = static_cast<QMouseEvent*>(event);
+            if (mouseEv && mouseEv->button() == Qt::LeftButton) {
+                // 计算该节点图标左侧折叠箭头的区域
+                int customDepth = 0;
+                QModelIndex parentIdx = index.parent();
+                while (parentIdx.isValid()) {
+                    if (parentIdx.data(Qt::UserRole + 1).toInt() > 0) {
+                        customDepth++;
+                    }
+                    parentIdx = parentIdx.parent();
+                }
+                int arrowSize = 14;
+                int arrowLeft = option.rect.left() + 10 + customDepth * 14;
+                QRect arrowClickRect(arrowLeft - 2, option.rect.top() + (option.rect.height() - arrowSize) / 2 - 2, arrowSize + 4, arrowSize + 4);
+
+                if (arrowClickRect.contains(mouseEv->pos())) {
+                    QTreeView* treeView = qobject_cast<QTreeView*>(const_cast<QWidget*>(option.widget));
+                    if (treeView) {
+                        treeView->setExpanded(index, !treeView->isExpanded(index));
+                        return true;
+                    }
+                }
+            }
+        }
     }
 
     return QStyledItemDelegate::editorEvent(event, model, option, index);
@@ -192,17 +218,43 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
     }
 
     // 2. 渲染系统分类与普通自定义分类节点 (nodeId != 0)
-    int leftMargin = 10;
+    int customDepth = 0;
+    QModelIndex parentIdx = index.parent();
+    while (parentIdx.isValid()) {
+        if (parentIdx.data(Qt::UserRole + 1).toInt() > 0) {
+            customDepth++;
+        }
+        parentIdx = parentIdx.parent();
+    }
+
+    int arrowSize = 14;
+    int arrowSpacing = 4;
+    int leftMargin = 10 + customDepth * 14;
     int iconSize = 18;
     int spacing = 8;
     int rightMargin = 10;
+
+    // 若当前为包含子分类的父分类节点，在其图标左侧绘制折叠箭头 (chevron_down / chevron_right)
+    const QTreeView* treeView = qobject_cast<const QTreeView*>(option.widget);
+    bool hasChildren = index.model() ? index.model()->hasChildren(index) : false;
+    bool isExpanded = treeView ? treeView->isExpanded(index) : true;
+
+    if (nodeId > 0 && hasChildren) {
+        QString arrowKey = isExpanded ? "chevron_down" : "chevron_right";
+        QIcon arrowIcon = UiHelper::getIcon(arrowKey, QColor("#888888"), arrowSize);
+        QRect arrowRect(opt.rect.left() + leftMargin, opt.rect.top() + (opt.rect.height() - arrowSize) / 2, arrowSize, arrowSize);
+        arrowIcon.paint(painter, arrowRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+    }
+
+    // 父节点的图标向右平移 (arrowSize + arrowSpacing)，保持与子节点/无子节点图标对齐
+    int iconLeft = opt.rect.left() + leftMargin + (nodeId > 0 ? (arrowSize + arrowSpacing) : 0);
 
     int count = index.data(Qt::UserRole + 9).toInt();
     QString countStr = (count >= 0) ? QString::number(count) : "";
     int countWidth = countStr.isEmpty() ? 0 : (opt.fontMetrics.horizontalAdvance(countStr) + 12);
 
-    QRect iconRect(opt.rect.left() + leftMargin, opt.rect.top() + (opt.rect.height() - iconSize) / 2, iconSize, iconSize);
-    QRect textRect(iconRect.right() + spacing, opt.rect.top(), opt.rect.width() - leftMargin - iconSize - spacing - countWidth - rightMargin, opt.rect.height());
+    QRect iconRect(iconLeft, opt.rect.top() + (opt.rect.height() - iconSize) / 2, iconSize, iconSize);
+    QRect textRect(iconRect.right() + spacing, opt.rect.top(), opt.rect.width() - (iconLeft - opt.rect.left()) - iconSize - spacing - countWidth - rightMargin, opt.rect.height());
 
     QVariant decoData = index.data(Qt::DecorationRole);
     if (decoData.canConvert<QIcon>()) {
@@ -271,7 +323,7 @@ void LibraryPanel::initUi() {
         m_treeView->header()->setStretchLastSection(true);
         m_treeView->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     }
-    m_treeView->setIndentation(16);
+    m_treeView->setIndentation(0);
     m_treeView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setDragEnabled(true);
