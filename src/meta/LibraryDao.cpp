@@ -51,6 +51,7 @@ bool LibraryDao::initTable() {
     sqlite3_exec(db, sqlPaths, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlIndex, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN preset_tags TEXT DEFAULT '';", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN is_pinned INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
     return true;
 }
 
@@ -176,7 +177,7 @@ QList<LibraryCategoryRecord> LibraryDao::getAllCategories() {
     {
         std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-        const char* sql = "SELECT id, parent_id, name, icon_key, color_hex, sort_order, preset_tags FROM library_categories ORDER BY sort_order ASC, id ASC;";
+        const char* sql = "SELECT id, parent_id, name, icon_key, color_hex, sort_order, preset_tags, is_pinned FROM library_categories ORDER BY sort_order ASC, id ASC;";
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return list;
 
@@ -189,6 +190,7 @@ QList<LibraryCategoryRecord> LibraryDao::getAllCategories() {
             const char* colorStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
             rec.sortOrder = sqlite3_column_int(stmt, 5);
             const char* tagsStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+            rec.isPinned = (sqlite3_column_int(stmt, 7) != 0);
 
             if (nameStr) rec.name = QString::fromUtf8(nameStr);
             if (iconStr) rec.iconKey = QString::fromUtf8(iconStr);
@@ -238,6 +240,25 @@ int LibraryDao::addCategory(const QString& name, int parentId, const QString& ic
     sqlite3_finalize(stmt);
     sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
     return newId;
+}
+
+bool LibraryDao::setCategoryPinned(int id, bool pinned) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || id <= 0) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "UPDATE library_categories SET is_pinned = ? WHERE id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+
+    sqlite3_bind_int(stmt, 1, pinned ? 1 : 0);
+    sqlite3_bind_int(stmt, 2, id);
+
+    bool success = (sqlite3_step(stmt) == SQLITE_DONE);
+    sqlite3_finalize(stmt);
+    sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+    return success;
 }
 
 bool LibraryDao::updateCategoryNode(int id, const QString& name, const QString& iconKey, const QString& colorHex) {

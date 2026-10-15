@@ -23,6 +23,7 @@ struct LibraryCategoryRecord {
     QString iconKey = "folder_filled";
     QString colorHex = "#888888";
     int sortOrder = 0;
+    bool isPinned = false;
     QStringList presetTags;
     QStringList associatedPaths;
 };
@@ -33,6 +34,7 @@ public:
     static QList<LibraryCategoryRecord> getAllCategories();
     static int addCategory(const QString& name, int parentId = 0, const QString& iconKey = "folder_filled", const QString& colorHex = "#888888");
     static bool updateCategoryNode(int id, const QString& name, const QString& iconKey, const QString& colorHex);
+    static bool setCategoryPinned(int id, bool pinned);
     static bool updateNodeParentAndOrder(int id, int newParentId, int sortOrder);
     static bool updateNodesParentAndOrder(const QList<NodeOrderEntry>& entries);
     static bool removeCategoryById(int id);

@@ -401,7 +401,10 @@ void LibraryPanel::initUi() {
         if (zone == InternalDropZone::OnItem) {
             if (!target.isValid()) return false;
             int targetId = target.data(Qt::UserRole + 1).toInt();
-            if (targetId <= 0) return false; // 系统行或标题行不能作为 OnItem 目标
+            if (targetId == -10) {
+                return true; // 允许拖拽放置到快速访问标头上以置顶
+            }
+            if (targetId <= 0) return false; // 其他系统行或标题行不能作为 OnItem 目标
 
             if (isSourceOrDescendant(target, sources)) return false;
 
@@ -538,6 +541,21 @@ void LibraryPanel::onInternalMoveRequested(const QList<QPersistentModelIndex>& s
 
     if (zone == InternalDropZone::OnItem) {
         if (target.isValid()) {
+            int targetId = target.data(Qt::UserRole + 1).toInt();
+            if (targetId == -10) {
+                // 拖拽到“快速访问”标头：将选中的节点全量触发置顶
+                for (const QPersistentModelIndex& pidx : sources) {
+                    if (pidx.isValid()) {
+                        int srcId = pidx.data(Qt::UserRole + 1).toInt();
+                        if (srcId > 0) {
+                            LibraryDao::setCategoryPinned(srcId, true);
+                        }
+                    }
+                }
+                loadLibrary();
+                return;
+            }
+
             parentItem = m_model->itemFromIndex(target);
             if (parentItem) {
                 destRow = parentItem->rowCount();
@@ -869,9 +887,25 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     QString curIconKey = index.data(Qt::UserRole + 2).toString();
     QString curColorHex = index.data(Qt::UserRole + 3).toString();
+    bool isPinned = index.data(Qt::UserRole + 4).toBool();
 
     if (curIconKey.isEmpty()) curIconKey = "folder_filled";
     if (curColorHex.isEmpty()) curColorHex = "#888888";
+
+    // 绘制置顶/取消置顶菜单项
+    if (isPinned) {
+        QAction* unpinAct = menu.addAction(UiHelper::getIcon("star_filled", QColor("#F39C12")), "从“快速访问”移除");
+        connect(unpinAct, &QAction::triggered, this, [this, nodeId]() {
+            onPinCategoryTriggered(nodeId, false);
+        });
+    } else {
+        QAction* pinAct = menu.addAction(UiHelper::getIcon("star", QColor("#EEEEEE")), "添加至“快速访问”");
+        connect(pinAct, &QAction::triggered, this, [this, nodeId]() {
+            onPinCategoryTriggered(nodeId, true);
+        });
+    }
+
+    menu.addSeparator();
 
     QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子分类");
     connect(newSubCatAct, &QAction::triggered, this, [this, nodeId]() {
@@ -1053,12 +1087,20 @@ void LibraryPanel::loadLibrary() {
     addSystemItem("全部数据", "all_data", "#3498db", -1);
     addSystemItem("未分类", "uncategorized-2", "#95a5a6", -2);
 
+    auto list = LibraryDao::getAllCategories();
+
+    // 计算置顶项数量
+    int pinnedCount = 0;
+    for (const auto& rec : list) {
+        if (rec.isPinned) pinnedCount++;
+    }
+
     // 2. 构建三大折叠分组 Header 节点 (-10 快速访问, -20 智能文件夹, 0 文件夹)
     QStandardItem* quickAccessHeader = new QStandardItem();
     quickAccessHeader->setData("section", TypeRole);
     quickAccessHeader->setData(-10, IdRole);
     quickAccessHeader->setData(-10, Qt::UserRole + 1);
-    quickAccessHeader->setData(0, Qt::UserRole + 9);
+    quickAccessHeader->setData(pinnedCount, Qt::UserRole + 9);
     quickAccessHeader->setFlags(Qt::ItemIsEnabled);
     m_model->appendRow(quickAccessHeader);
 
@@ -1070,7 +1112,6 @@ void LibraryPanel::loadLibrary() {
     smartFolderHeader->setFlags(Qt::ItemIsEnabled);
     m_model->appendRow(smartFolderHeader);
 
-    auto list = LibraryDao::getAllCategories();
     int customCount = list.size();
 
     QStandardItem* sectionItem = new QStandardItem();
@@ -1092,9 +1133,23 @@ void LibraryPanel::loadLibrary() {
         item->setData(rec.id, Qt::UserRole + 1);
         item->setData(rec.iconKey, Qt::UserRole + 2);
         item->setData(rec.colorHex, Qt::UserRole + 3);
+        item->setData(rec.isPinned, Qt::UserRole + 4);
         item->setData(count, Qt::UserRole + 9);
 
         itemMap.insert(rec.id, item);
+
+        // 若被置顶，在快速访问标头下挂载镜像节点
+        if (rec.isPinned) {
+            QStandardItem* pinnedMirrorItem = new QStandardItem(icon, rec.name);
+            pinnedMirrorItem->setData("category", TypeRole);
+            pinnedMirrorItem->setData(rec.id, IdRole);
+            pinnedMirrorItem->setData(rec.id, Qt::UserRole + 1);
+            pinnedMirrorItem->setData(rec.iconKey, Qt::UserRole + 2);
+            pinnedMirrorItem->setData(rec.colorHex, Qt::UserRole + 3);
+            pinnedMirrorItem->setData(true, Qt::UserRole + 4);
+            pinnedMirrorItem->setData(count, Qt::UserRole + 9);
+            quickAccessHeader->appendRow(pinnedMirrorItem);
+        }
     }
 
     for (const auto& rec : list) {
@@ -1159,6 +1214,12 @@ QStandardItem* LibraryPanel::findItemByNodeId(QStandardItem* parent, int nodeId)
         if (found) return found;
     }
     return nullptr;
+}
+
+void LibraryPanel::onPinCategoryTriggered(int nodeId, bool pin) {
+    if (nodeId <= 0) return;
+    LibraryDao::setCategoryPinned(nodeId, pin);
+    loadLibrary();
 }
 
 void LibraryPanel::createAndEditCategory(int parentId) {

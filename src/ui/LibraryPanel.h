@@ -69,6 +69,7 @@ signals:
 private slots:
     void onCategoryClicked(const QModelIndex& index);
     void onCategoryContextMenu(const QPoint& pos);
+    void onPinCategoryTriggered(int nodeId, bool pin);
     void onPathsDroppedToCategory(const QStringList& paths, const QModelIndex& target);
     void onInternalMoveRequested(const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone);
     void markOrderDirty();
