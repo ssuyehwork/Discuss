@@ -94,6 +94,10 @@ public:
     void setCurrentIndex(int index, bool forceNotify = false);
     int currentIndex() const { return m_currentIndex; }
     int tabCount() const { return m_tabs.size(); }
+    QString tabTitle(int index) const {
+        if (index >= 0 && index < m_tabs.size()) return m_tabs[index].title;
+        return QString();
+    }
     QString tabUrl(int index) const {
         if (index >= 0 && index < m_tabs.size()) return m_tabs[index].url;
         return QString();
