@@ -40,6 +40,7 @@ public:
 
     void setImagePreview(const QPixmap& pixmap);
     void setDefaultIconPreview(const QIcon& icon);
+    void setMultiSelectionPreview(const QList<QPixmap>& pixmaps);
     void setSelectedPaths(const QStringList& paths);
     void setPalettes(const QVector<QPair<QColor, float>>& palette);
     void setTags(const QStringList& tags);

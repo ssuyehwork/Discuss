@@ -29,6 +29,12 @@
 
 namespace QuarkMeta {
 
+namespace {
+constexpr int kMultiPreviewCardSize = 130;
+constexpr double kMultiPreviewAngleStep = 6.0;
+constexpr int kMultiPreviewMaxCards = 5;
+}
+
 MetaPanel::MetaPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("MetadataContainer");
     setAttribute(Qt::WA_StyledBackground, true);
@@ -447,6 +453,77 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap) {
     m_adjustTimer->start();
 }
 
+void MetaPanel::setMultiSelectionPreview(const QList<QPixmap>& pixmaps) {
+    if (!m_lblImagePreview) return;
+
+    QList<QPixmap> validPixmaps;
+    for (const auto& px : pixmaps) {
+        if (!px.isNull()) {
+            validPixmaps.append(px);
+            if (validPixmaps.size() >= kMultiPreviewMaxCards) break;
+        }
+    }
+
+    if (validPixmaps.isEmpty()) {
+        setImagePreview(QPixmap());
+        return;
+    }
+
+    qreal dpr = devicePixelRatioF();
+    QSize logicalCanvasSize(200, 200);
+    QSize physicalCanvasSize = logicalCanvasSize * dpr;
+
+    QPixmap canvas(physicalCanvasSize);
+    canvas.fill(Qt::transparent);
+    canvas.setDevicePixelRatio(dpr);
+
+    QPainter painter(&canvas);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+
+    for (int k = validPixmaps.size() - 1; k >= 0; --k) {
+        const QPixmap& srcPx = validPixmaps[k];
+        QSize targetCardSize(kMultiPreviewCardSize, kMultiPreviewCardSize);
+        QPixmap scaled = srcPx.scaled(targetCardSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+        double angle = 0.0;
+        if (k >= 1) {
+            double stepMultiplier = std::ceil(k / 2.0);
+            double baseAngle = kMultiPreviewAngleStep * stepMultiplier;
+            angle = (k % 2 == 1) ? -baseAngle : baseAngle;
+        }
+
+        painter.save();
+        painter.translate(100.0, 100.0);
+        painter.rotate(angle);
+
+        double w = scaled.width();
+        double h = scaled.height();
+        QRectF cardRect(-w / 2.0, -h / 2.0, w, h);
+
+        QPainterPath path;
+        path.addRoundedRect(cardRect, 4.0, 4.0);
+        painter.setClipPath(path);
+        painter.drawPixmap(cardRect.topLeft(), scaled);
+
+        painter.setClipping(false);
+        QPen pen(QColor("#4a4a4a"), 1.0);
+        painter.setPen(pen);
+        painter.drawRoundedRect(cardRect, 4.0, 4.0);
+
+        painter.restore();
+    }
+
+    m_lblImagePreview->setPixmap(canvas);
+    m_lblImagePreview->setFixedSize(logicalCanvasSize);
+
+    m_lblImagePreview->show();
+    if (m_topPreviewBox) {
+        m_topPreviewBox->show();
+    }
+    m_adjustTimer->start();
+}
+
 void MetaPanel::setDefaultIconPreview(const QIcon& icon) {
     if (!m_lblImagePreview) return;
     if (icon.isNull()) {
@@ -524,7 +601,8 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
         m_isInternalUpdating = true;
         setImagePreview(QPixmap());
         if (m_nameEdit) {
-            m_nameEdit->setPlainText(QString("已选中 %1 个项目").arg(m_selectedPaths.size()));
+            m_nameEdit->setHtml(QString("已选中 <span style=\"color:#3498db;\">%1</span> 个项目").arg(m_selectedPaths.size()));
+            m_nameEdit->adjustHeight();
         }
         if (m_noteEdit) {
             m_noteEdit->clear();

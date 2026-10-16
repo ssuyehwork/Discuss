@@ -479,6 +479,122 @@ void PanelMediator::setupConnections() {
                 metaPanel->setPalettes(qPalettes);
                 metaPanel->setImagePreview(QPixmap());
             }
+        } else if (paths.size() > 1) {
+            QModelIndexList selectedIndices = panel->getSelectedIndexes();
+            QMap<QString, QModelIndex> pathToIndexMap;
+            for (const QModelIndex& idx : selectedIndices) {
+                if (idx.isValid()) {
+                    QString p = idx.data(PathRole).toString();
+                    if (!p.isEmpty()) {
+                        pathToIndexMap[p] = idx;
+                    }
+                }
+            }
+
+            bool firstItem = true;
+            bool sameRating = true;
+            bool sameColor = true;
+            bool sameNote = true;
+            bool sameUrl = true;
+
+            int commonRating = 0;
+            QString commonColor;
+            QString commonNote;
+            QString commonUrl;
+
+            QSet<QString> commonTags;
+            bool commonTagsInitialized = false;
+
+            QList<QPixmap> multiPreviewPixmaps;
+
+            for (int i = 0; i < paths.size(); ++i) {
+                const QString& path = paths[i];
+                QModelIndex idx = pathToIndexMap.value(path, QModelIndex());
+
+                int itemRating = 0;
+                QString itemColor;
+                QStringList itemTags;
+                QString itemNote;
+                QString itemUrl;
+
+                auto meta = MetadataManager::instance().getMeta(path.toStdWString());
+
+                if (idx.isValid()) {
+                    int r = idx.data(RatingRole).toInt();
+                    QString c = idx.data(ColorRole).toString();
+                    QStringList t = idx.data(TagsRole).toStringList();
+                    QString n = idx.data(NoteRole).toString();
+                    QString u = idx.data(UrlRole).toString();
+
+                    itemRating = r > 0 ? r : meta.rating;
+                    itemColor = !c.isEmpty() ? c : QString::fromStdWString(meta.manualColor);
+                    itemTags = !t.isEmpty() ? t : meta.tags;
+                    itemNote = !n.isEmpty() ? n : QString::fromStdWString(meta.note);
+                    itemUrl = !u.isEmpty() ? u : QString::fromStdWString(meta.url);
+
+                    if (multiPreviewPixmaps.size() < 5) {
+                        QVariant decData = idx.data(Qt::DecorationRole);
+                        QPixmap px;
+                        if (decData.canConvert<QIcon>()) {
+                            px = decData.value<QIcon>().pixmap(128, 128);
+                        } else if (decData.canConvert<QPixmap>()) {
+                            px = decData.value<QPixmap>();
+                        }
+                        if (!px.isNull()) {
+                            multiPreviewPixmaps.append(px);
+                        }
+                    }
+                } else {
+                    itemRating = meta.rating;
+                    itemColor = QString::fromStdWString(meta.manualColor);
+                    itemTags = meta.tags;
+                    itemNote = QString::fromStdWString(meta.note);
+                    itemUrl = QString::fromStdWString(meta.url);
+
+                    if (multiPreviewPixmaps.size() < 5) {
+                        QFileInfo fi(path);
+                        QPixmap px;
+                        if (fi.isDir()) {
+                            px = UiHelper::getIcon("folder", QColor("#3498db"), 128).pixmap(128, 128);
+                        } else {
+                            px = UiHelper::getIcon("file_eps", QColor("#888888"), 128).pixmap(128, 128);
+                        }
+                        if (!px.isNull()) {
+                            multiPreviewPixmaps.append(px);
+                        }
+                    }
+                }
+
+                if (firstItem) {
+                    firstItem = false;
+                    commonRating = itemRating;
+                    commonColor = itemColor;
+                    commonNote = itemNote;
+                    commonUrl = itemUrl;
+
+                    commonTags = QSet<QString>(itemTags.begin(), itemTags.end());
+                    commonTagsInitialized = true;
+                } else {
+                    if (sameRating && itemRating != commonRating) sameRating = false;
+                    if (sameColor && itemColor.compare(commonColor, Qt::CaseInsensitive) != 0) sameColor = false;
+                    if (sameNote && itemNote != commonNote) sameNote = false;
+                    if (sameUrl && itemUrl != commonUrl) sameUrl = false;
+
+                    if (commonTagsInitialized) {
+                        QSet<QString> currentSet(itemTags.begin(), itemTags.end());
+                        commonTags.intersect(currentSet);
+                    }
+                }
+            }
+
+            metaPanel->setRating(sameRating ? commonRating : 0, false);
+            metaPanel->setColor(sameColor ? commonColor : QString(""), false);
+            metaPanel->setNote(sameNote ? commonNote : QString(""));
+            metaPanel->setURL(sameUrl ? commonUrl : QString(""));
+            metaPanel->setTags(commonTags.values());
+
+            metaPanel->setPalettes({});
+            metaPanel->setMultiSelectionPreview(multiPreviewPixmaps);
         }
     };
 
