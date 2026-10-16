@@ -1,6 +1,6 @@
 # AGENTS.md - QuarkMeta 开发者与 AI 助手协同指南
 
-语言：始终中文
+语言：只允许使用中文解答/答复，杜绝使用英文为用户解答，包括：“Running code review” 和 “Ready for review” 两部分只可使用中文
 
 ---
 
