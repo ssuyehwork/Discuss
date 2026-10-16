@@ -625,7 +625,9 @@ QPushButton#TagSelectorBtn:hover {
 }
 
 /* TagSelectorOverlay 标签按钮 1:1 无损迁移 */
-QPushButton#TagOverlayBtn {
+QPushButton#TagOverlayBtn,
+QPushButton#TagOverlayRecBtn,
+QPushButton#TagOverlayRecentBtn {
     background-color: transparent;
     color: #BBBBBB;
     border: 1px solid #333333;
@@ -636,20 +638,26 @@ QPushButton#TagOverlayBtn {
 }
 
 /* 未选中状态悬停 */
-QPushButton#TagOverlayBtn[selected="false"]:hover {
+QPushButton#TagOverlayBtn[selected="false"]:hover,
+QPushButton#TagOverlayRecBtn[selected="false"]:hover,
+QPushButton#TagOverlayRecentBtn[selected="false"]:hover {
     border-color: #1ABC9C;
     color: #FFFFFF;
 }
 
 /* 已选中状态 */
-QPushButton#TagOverlayBtn[selected="true"] {
+QPushButton#TagOverlayBtn[selected="true"],
+QPushButton#TagOverlayRecBtn[selected="true"],
+QPushButton#TagOverlayRecentBtn[selected="true"] {
     background-color: rgba(28, 151, 234, 0.35);
     color: #FFFFFF;
     border: 1px solid #1C97EA;
 }
 
 /* 键盘聚焦状态（优先于普通悬停） */
-QPushButton#TagOverlayBtn[focused="true"] {
+QPushButton#TagOverlayBtn[focused="true"],
+QPushButton#TagOverlayRecBtn[focused="true"],
+QPushButton#TagOverlayRecentBtn[focused="true"] {
     border: 1px solid #1C97EA;
     color: #FFFFFF;
 }

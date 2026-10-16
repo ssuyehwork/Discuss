@@ -215,6 +215,8 @@ void TagSelectorOverlay::filterAndPopulate() {
         btn->setFixedHeight(24);
 
         bool isSelected = m_selectedTags.contains(recTag);
+        btn->setChecked(isSelected);
+        btn->setProperty("selected", isSelected ? "true" : "false");
         btn->setText(recTag);
         btn->setIcon(UiHelper::getIcon(isSelected ? "check" : "star_filled", isSelected ? QColor("#FFFFFF") : QColor("#378ADD"), 12));
         btn->setIconSize(QSize(12, 12));
@@ -242,6 +244,8 @@ void TagSelectorOverlay::filterAndPopulate() {
         btn->setFixedHeight(24);
 
         bool isSelected = m_selectedTags.contains(tag);
+        btn->setChecked(isSelected);
+        btn->setProperty("selected", isSelected ? "true" : "false");
         btn->setText(tag);
         btn->setIcon(UiHelper::getIcon(isSelected ? "check" : "clock", isSelected ? QColor("#FFFFFF") : QColor("#888888"), 12));
         btn->setIconSize(QSize(12, 12));
