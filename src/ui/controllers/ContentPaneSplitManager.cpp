@@ -30,14 +30,14 @@ ContentPanel* ContentPaneSplitManager::rootPane() const {
 
 bool ContentPaneSplitManager::isSplitMode() const {
     if (rootPane() != m_panel) {
-        return rootPane()->m_splitManager->isSplitMode();
+        return rootPane()->splitManager()->isSplitMode();
     }
     return paneCount() > 1;
 }
 
 Qt::Orientation ContentPaneSplitManager::splitOrientation() const {
     if (rootPane() != m_panel) {
-        return rootPane()->m_splitManager->splitOrientation();
+        return rootPane()->splitManager()->splitOrientation();
     }
     if (m_rootNode && m_rootNode->isSplitter) {
         return m_rootNode->orientation;
@@ -80,7 +80,7 @@ ContentPaneSplitManager::PaneNode* ContentPaneSplitManager::findNodeForPanel(Pan
 
 QList<ContentPanel*> ContentPaneSplitManager::panes() const {
     if (rootPane() != m_panel) {
-        return rootPane()->m_splitManager->panes();
+        return rootPane()->splitManager()->panes();
     }
     QList<ContentPanel*> list;
     if (m_rootNode) {
@@ -92,7 +92,7 @@ QList<ContentPanel*> ContentPaneSplitManager::panes() const {
 
 int ContentPaneSplitManager::paneCount() const {
     if (rootPane() != m_panel) {
-        return rootPane()->m_splitManager->paneCount();
+        return rootPane()->splitManager()->paneCount();
     }
     QList<ContentPanel*> list;
     if (m_rootNode) {
@@ -168,11 +168,11 @@ void ContentPaneSplitManager::normalizeTree(PaneNode* node) {
                     }
                 } else {
                     m_rootNode = soleChild;
-                    if (m_panel && m_panel->m_mainLayout && soleWidget) {
+                    if (m_panel && m_panel->mainLayout() && soleWidget) {
                         if (node->splitter) {
-                            m_panel->m_mainLayout->removeWidget(node->splitter);
+                            m_panel->mainLayout()->removeWidget(node->splitter);
                         }
-                        m_panel->m_mainLayout->addWidget(soleWidget, 1);
+                        m_panel->mainLayout()->addWidget(soleWidget, 1);
                         soleWidget->show();
                     }
                 }
@@ -210,7 +210,7 @@ PaneTreeNode ContentPaneSplitManager::exportNodeRecursive(PaneNode* node) const 
 ContentPaneSplitManager::SplitEvaluationResult ContentPaneSplitManager::evaluateDropAtPosition(const QPoint& globalPos, ContentPanel* sourcePane) {
     SplitEvaluationResult res;
     if (rootPane() != m_panel) {
-        return rootPane()->m_splitManager->evaluateDropAtPosition(globalPos, sourcePane);
+        return rootPane()->splitManager()->evaluateDropAtPosition(globalPos, sourcePane);
     }
 
     QList<ContentPanel*> allPanes;
@@ -321,7 +321,7 @@ void ContentPaneSplitManager::movePane(ContentPanel* sourcePane, ContentPanel* t
     if (!sourcePane || !targetPane || sourcePane == targetPane) return;
 
     if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->movePane(sourcePane, targetPane, orientation, insertBefore);
+        rootPane()->splitManager()->movePane(sourcePane, targetPane, orientation, insertBefore);
         return;
     }
 
@@ -365,7 +365,7 @@ void ContentPaneSplitManager::movePane(ContentPanel* sourcePane, ContentPanel* t
             }
         } else {
             m_rootNode = newSplitterNode;
-            m_panel->m_mainLayout->addWidget(newSplitter, 1);
+            m_panel->mainLayout()->addWidget(newSplitter, 1);
         }
 
         targetLeaf->parent = newSplitterNode;
@@ -440,13 +440,13 @@ ContentPaneSplitManager::PaneNode* ContentPaneSplitManager::importNodeRecursive(
                 primLayout->setContentsMargins(0, 0, 0, 0);
                 primLayout->setSpacing(0);
 
-                if (m_panel->m_headerWidget) {
-                    m_panel->m_mainLayout->removeWidget(m_panel->m_headerWidget);
-                    primLayout->addWidget(m_panel->m_headerWidget);
+                if (m_panel->headerWidget()) {
+                    m_panel->mainLayout()->removeWidget(m_panel->headerWidget());
+                    primLayout->addWidget(m_panel->headerWidget());
                 }
-                if (m_panel->m_viewStack) {
-                    m_panel->m_mainLayout->removeWidget(m_panel->m_viewStack);
-                    primLayout->addWidget(m_panel->m_viewStack, 1);
+                if (m_panel->viewStack()) {
+                    m_panel->mainLayout()->removeWidget(m_panel->viewStack());
+                    primLayout->addWidget(m_panel->viewStack(), 1);
                 }
             } else {
                 m_primaryPaneContainer->setParent(parentWidget);
@@ -465,8 +465,8 @@ ContentPaneSplitManager::PaneNode* ContentPaneSplitManager::importNodeRecursive(
             ContentPanel* newPane = new ContentPanel(container);
             container->setMinimumWidth(ContentPanel::kMinPaneWidth);
             newPane->setIsSecondaryPane(true);
-            if (newPane->m_splitManager) {
-                newPane->m_splitManager->m_rootPane = m_panel;
+            if (newPane->splitManager()) {
+                newPane->splitManager()->m_rootPane = m_panel;
             }
             newPane->setViewMode(m_panel->currentViewMode());
 
@@ -499,7 +499,7 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
     if (!m_panel) return;
 
     if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->splitPane(orientation, secondaryPath, insertBefore);
+        rootPane()->splitManager()->splitPane(orientation, secondaryPath, insertBefore);
         return;
     }
 
@@ -526,13 +526,13 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
         primLayout->setContentsMargins(0, 0, 0, 0);
         primLayout->setSpacing(0);
 
-        if (m_panel->m_headerWidget) {
-            m_panel->m_mainLayout->removeWidget(m_panel->m_headerWidget);
-            primLayout->addWidget(m_panel->m_headerWidget);
+        if (m_panel->headerWidget()) {
+            m_panel->mainLayout()->removeWidget(m_panel->headerWidget());
+            primLayout->addWidget(m_panel->headerWidget());
         }
-        if (m_panel->m_viewStack) {
-            m_panel->m_mainLayout->removeWidget(m_panel->m_viewStack);
-            primLayout->addWidget(m_panel->m_viewStack, 1);
+        if (m_panel->viewStack()) {
+            m_panel->mainLayout()->removeWidget(m_panel->viewStack());
+            primLayout->addWidget(m_panel->viewStack(), 1);
         }
 
         m_rootNode = new PaneNode();
@@ -556,8 +556,8 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
     ContentPanel* newPane = new ContentPanel(newContainer);
     newContainer->setMinimumWidth(ContentPanel::kMinPaneWidth);
     newPane->setIsSecondaryPane(true);
-    if (newPane->m_splitManager) {
-        newPane->m_splitManager->m_rootPane = m_panel;
+    if (newPane->splitManager()) {
+        newPane->splitManager()->m_rootPane = m_panel;
     }
     newPane->setViewMode(m_panel->currentViewMode());
 
@@ -611,7 +611,7 @@ void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QStri
             }
         } else {
             m_rootNode = newSplitterNode;
-            m_panel->m_mainLayout->addWidget(newSplitter, 1);
+            m_panel->mainLayout()->addWidget(newSplitter, 1);
         }
 
         targetLeaf->parent = newSplitterNode;
@@ -678,7 +678,7 @@ void ContentPaneSplitManager::updateContainerMinimumWidth() {
 
 void ContentPaneSplitManager::setSplitOrientation(Qt::Orientation target) {
     if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->setSplitOrientation(target);
+        rootPane()->splitManager()->setSplitOrientation(target);
         return;
     }
 
@@ -699,7 +699,7 @@ void ContentPaneSplitManager::setSplitOrientation(Qt::Orientation target) {
 
 void ContentPaneSplitManager::closePane(ContentPanel* pane) {
     if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->closePane(pane);
+        rootPane()->splitManager()->closePane(pane);
         return;
     }
 
@@ -748,25 +748,25 @@ void ContentPaneSplitManager::closePane(ContentPanel* pane) {
         m_rootNode = nullptr;
 
         if (m_primaryPaneContainer) {
-            if (m_panel->m_headerWidget && m_primaryPaneContainer->layout()) {
-                m_primaryPaneContainer->layout()->removeWidget(m_panel->m_headerWidget);
-                m_panel->m_headerWidget->setParent(m_panel);
+            if (m_panel->headerWidget() && m_primaryPaneContainer->layout()) {
+                m_primaryPaneContainer->layout()->removeWidget(m_panel->headerWidget());
+                m_panel->headerWidget()->setParent(m_panel);
             }
-            if (m_panel->m_viewStack && m_primaryPaneContainer->layout()) {
-                m_primaryPaneContainer->layout()->removeWidget(m_panel->m_viewStack);
-                m_panel->m_viewStack->setParent(m_panel);
+            if (m_panel->viewStack() && m_primaryPaneContainer->layout()) {
+                m_primaryPaneContainer->layout()->removeWidget(m_panel->viewStack());
+                m_panel->viewStack()->setParent(m_panel);
             }
             m_primaryPaneContainer->deleteLater();
             m_primaryPaneContainer = nullptr;
         }
 
-        if (m_panel->m_headerWidget) {
-            m_panel->m_mainLayout->addWidget(m_panel->m_headerWidget);
-            m_panel->m_headerWidget->show();
+        if (m_panel->headerWidget()) {
+            m_panel->mainLayout()->addWidget(m_panel->headerWidget());
+            m_panel->headerWidget()->show();
         }
-        if (m_panel->m_viewStack) {
-            m_panel->m_mainLayout->addWidget(m_panel->m_viewStack, 1);
-            m_panel->m_viewStack->show();
+        if (m_panel->viewStack()) {
+            m_panel->mainLayout()->addWidget(m_panel->viewStack(), 1);
+            m_panel->viewStack()->show();
         }
         emit m_panel->secondaryPaneClosed();
         emit m_panel->directorySelected(m_panel->currentPath());
@@ -781,7 +781,7 @@ void ContentPaneSplitManager::closePane(ContentPanel* pane) {
 
 void ContentPaneSplitManager::closeSecondaryPane() {
     if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->closeSecondaryPane();
+        rootPane()->splitManager()->closeSecondaryPane();
         return;
     }
 
@@ -822,7 +822,7 @@ void ContentPaneSplitManager::redistributePaneSizes() {
 TabSplitState ContentPaneSplitManager::exportSplitState() const {
     TabSplitState state;
     if (rootPane() != m_panel) {
-        return rootPane()->m_splitManager->exportSplitState();
+        return rootPane()->splitManager()->exportSplitState();
     }
 
     QList<ContentPanel*> allPanes;
@@ -857,7 +857,7 @@ TabSplitState ContentPaneSplitManager::exportSplitState() const {
 
 void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
     if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->restoreSplitState(state);
+        rootPane()->splitManager()->restoreSplitState(state);
         return;
     }
 
@@ -879,32 +879,32 @@ void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
         m_rootNode = importNodeRecursive(state.rootNode, m_panel);
         if (m_rootNode) {
             if (m_rootNode->splitter) {
-                m_panel->m_mainLayout->addWidget(m_rootNode->splitter, 1);
+                m_panel->mainLayout()->addWidget(m_rootNode->splitter, 1);
                 m_rootNode->splitter->show();
             } else if (m_rootNode->container) {
-                m_panel->m_mainLayout->addWidget(m_rootNode->container, 1);
+                m_panel->mainLayout()->addWidget(m_rootNode->container, 1);
                 m_rootNode->container->show();
             }
         }
     } else {
         // 兼容与普通单窗格/新建标签页/旧平铺配置恢复
         if (m_primaryPaneContainer) {
-            if (m_panel->m_headerWidget && m_primaryPaneContainer->layout()) {
-                m_primaryPaneContainer->layout()->removeWidget(m_panel->m_headerWidget);
+            if (m_panel->headerWidget() && m_primaryPaneContainer->layout()) {
+                m_primaryPaneContainer->layout()->removeWidget(m_panel->headerWidget());
             }
-            if (m_panel->m_viewStack && m_primaryPaneContainer->layout()) {
-                m_primaryPaneContainer->layout()->removeWidget(m_panel->m_viewStack);
+            if (m_panel->viewStack() && m_primaryPaneContainer->layout()) {
+                m_primaryPaneContainer->layout()->removeWidget(m_panel->viewStack());
             }
             m_primaryPaneContainer->deleteLater();
             m_primaryPaneContainer = nullptr;
         }
-        if (m_panel->m_headerWidget) {
-            m_panel->m_mainLayout->addWidget(m_panel->m_headerWidget);
-            m_panel->m_headerWidget->show();
+        if (m_panel->headerWidget()) {
+            m_panel->mainLayout()->addWidget(m_panel->headerWidget());
+            m_panel->headerWidget()->show();
         }
-        if (m_panel->m_viewStack) {
-            m_panel->m_mainLayout->addWidget(m_panel->m_viewStack, 1);
-            m_panel->m_viewStack->show();
+        if (m_panel->viewStack()) {
+            m_panel->mainLayout()->addWidget(m_panel->viewStack(), 1);
+            m_panel->viewStack()->show();
         }
 
         if (!state.panePaths.isEmpty()) {
@@ -947,17 +947,17 @@ void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
 
 void ContentPaneSplitManager::setActivePane(bool active) {
     ContentPanel* root = rootPane();
-    if (root && root->m_splitManager) {
+    if (root && root->splitManager()) {
         if (active) {
-            root->m_splitManager->m_activePaneForSplit = m_panel;
+            root->splitManager()->m_activePaneForSplit = m_panel;
         }
-        root->m_splitManager->refreshActiveIndicators();
+        root->splitManager()->refreshActiveIndicators();
     }
 }
 
 void ContentPaneSplitManager::refreshActiveIndicators() {
     if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->refreshActiveIndicators();
+        rootPane()->splitManager()->refreshActiveIndicators();
         return;
     }
 
@@ -985,8 +985,8 @@ void ContentPaneSplitManager::refreshActiveIndicators() {
     setPaneActiveProperty(m_panel, false);
     if (m_panel) {
         m_panel->updateHeaderTitle();
-        if (m_panel->m_headerWidget) {
-            m_panel->m_headerWidget->setActive(rootShown);
+        if (m_panel->headerWidget()) {
+            m_panel->headerWidget()->setActive(rootShown);
         }
     }
 
@@ -999,15 +999,15 @@ void ContentPaneSplitManager::refreshActiveIndicators() {
 
         pane->updateHeaderTitle();
         setPaneActiveProperty(pane, paneShown);
-        if (pane->m_headerWidget) {
-            pane->m_headerWidget->setActive(paneShown);
+        if (pane->headerWidget()) {
+            pane->headerWidget()->setActive(paneShown);
         }
     }
 }
 
 void ContentPaneSplitManager::updateDragOverlayGlobal(const QPoint& globalPos, ContentPanel* sourcePane) {
     if (rootPane() != m_panel) {
-        rootPane()->m_splitManager->updateDragOverlayGlobal(globalPos, sourcePane);
+        rootPane()->splitManager()->updateDragOverlayGlobal(globalPos, sourcePane);
         return;
     }
 

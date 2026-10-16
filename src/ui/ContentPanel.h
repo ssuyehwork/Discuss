@@ -67,9 +67,6 @@ public:
         ActionCopyName, ActionCopyPath, ActionAddToFavorites, ActionRefresh, ActionReextractThumbnail, ActionBatchCreate
     };
 
-    friend class ContentViewCoordinator;
-    friend class ContentPaneSplitManager;
-
     explicit ContentPanel(QWidget* parent = nullptr);
     ~ContentPanel() override = default;
 
@@ -125,6 +122,7 @@ public:
     bool isLoading() const { return m_isLoading.load(); }
 
     // 2. 状态与配置高阶方法
+    void updateHeaderTitle();
     void setCurrentPath(const QString& path);
     void setIsRecursive(bool recursive);
     void setLoading(bool loading);
@@ -151,6 +149,8 @@ public:
 
     // 4. 视图与控制器引用
     QAbstractItemView* activeItemView() const;
+    QVBoxLayout* mainLayout() const { return m_mainLayout; }
+    class ContentHeaderWidget* headerWidget() const { return m_headerWidget; }
     QStackedWidget* viewStack() const { return m_viewStack; }
     QAbstractItemView* gridView() const { return m_gridView; }
     QTreeView* treeView() const;
@@ -269,8 +269,6 @@ private:
     std::atomic<int> m_loadRequestId{0};
 
     // UI 组件指针
-    void updateHeaderTitle();
-
     QVBoxLayout* m_mainLayout = nullptr;
     class ContentHeaderWidget* m_headerWidget = nullptr;
 
