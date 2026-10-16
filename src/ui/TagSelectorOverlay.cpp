@@ -13,10 +13,11 @@
 namespace QuarkMeta {
 
 
-TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent)
+TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths, QWidget* parent)
     : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), 
       m_selectedTags(initialSelected) 
 {
+    Q_UNUSED(candidatePaths);
     setObjectName("TagSelectorOverlay");
     setFrameShape(QFrame::StyledPanel);
     setFocusPolicy(Qt::StrongFocus);
@@ -30,27 +31,9 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
     
     m_searchEdit->installEventFilter(this);
     m_tagGridWidget->installEventFilter(this);
-
-    qApp->installEventFilter(this);
-    connect(qApp, &QApplication::focusChanged, this, [this](QWidget* old, QWidget* now) {
-        Q_UNUSED(old);
-        if (m_isClosing || !isVisible()) return;
-
-        if (now && (now == this || this->isAncestorOf(now))) {
-            return;
-        }
-
-        if (now && !this->isAncestorOf(now)) {
-            closeOverlay();
-        }
-    });
 }
 
-TagSelectorOverlay::~TagSelectorOverlay() {
-    if (qApp) {
-        qApp->removeEventFilter(this);
-    }
-}
+TagSelectorOverlay::~TagSelectorOverlay() = default;
 
 void TagSelectorOverlay::closeOverlay() {
     if (m_isClosing) return;

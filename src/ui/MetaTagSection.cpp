@@ -75,12 +75,19 @@ void MetaTagSection::openTagSelectorOverlay(QWidget* targetAnchor) {
     Q_UNUSED(targetAnchor);
     if (m_selectedPaths.isEmpty()) return;
 
-    if (!m_tagSelectorOverlay) {
-        m_tagSelectorOverlay = new TagSelectorOverlay({}, this);
-        connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& currentTags) {
-            emit tagsChanged(m_selectedPaths, currentTags);
-        });
+    // 🔒【路径快照锁定】：锁定唤起时刻的目标项目路径，绝不随外部视图刷新的 m_selectedPaths 变动而脱节
+    const QStringList targetPathsSnapshot = m_selectedPaths;
+
+    if (m_tagSelectorOverlay) {
+        m_tagSelectorOverlay->close();
     }
+
+    m_tagSelectorOverlay = new TagSelectorOverlay({}, targetPathsSnapshot, this);
+    connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this, targetPathsSnapshot](const QStringList& currentTags) {
+        if (!targetPathsSnapshot.isEmpty()) {
+            emit tagsChanged(targetPathsSnapshot, currentTags);
+        }
+    });
 
     m_tagSelectorOverlay->show();
 }
