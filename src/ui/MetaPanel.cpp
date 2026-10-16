@@ -2,6 +2,7 @@
 #include "ColorPicker.h"
 #include "CardPainterHelper.h"
 #include "UiHelper.h"
+#include <memory>
 #include "ToolTipOverlay.h"
 #include "Logger.h"
 #include <QElapsedTimer>
@@ -375,21 +376,37 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
 
     m_tagSelectorOverlay->show();
 
-    connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& newSelectedTags) {
+    // 1. 浮层打开瞬时，保存决议绑定的固定目标项目快照，不随 m_selectedPaths 动态漂移
+    const QStringList targetPaths = m_selectedPaths;
+
+    // 2. 浮层局部的已提交标签集合，打开时用 m_currentTagsSet 初始化
+    auto appliedTagsSet = std::make_shared<QSet<QString>>(m_currentTagsSet);
+
+    connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this, targetPaths, appliedTagsSet](const QStringList& newSelectedTags) {
+        if (targetPaths.isEmpty()) return;
+
         QSet<QString> newSet(newSelectedTags.begin(), newSelectedTags.end());
 
+        // 新增的标签：与浮层局部的已提交集合比对
         for (const QString& t : newSet) {
-            if (!m_currentTagsSet.contains(t)) {
-                emit tagAddRequested(m_selectedPaths, t);
+            if (!appliedTagsSet->contains(t)) {
+                emit tagAddRequested(targetPaths, t);
             }
         }
-        for (const QString& t : m_currentTagsSet) {
+        // 移除的标签：与浮层局部的已提交集合比对
+        for (const QString& t : *appliedTagsSet) {
             if (!newSet.contains(t)) {
-                emit tagRemoveRequested(m_selectedPaths, t);
+                emit tagRemoveRequested(targetPaths, t);
             }
         }
 
-        setTags(newSelectedTags);
+        // 更新浮层局部的已提交状态
+        *appliedTagsSet = newSet;
+
+        // 仅在当前主选区依然与浮层固定目标一致时，才更新 MetaPanel 面板上的标签呈现
+        if (m_selectedPaths == targetPaths) {
+            setTags(newSelectedTags);
+        }
     });
 }
 

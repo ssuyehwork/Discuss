@@ -1,6 +1,8 @@
 #include "SmartFolderDialog.h"
 #include "../UiHelper.h"
 #include <QScrollArea>
+#include <QPainter>
+#include <QPixmap>
 
 namespace QuarkMeta {
 
@@ -71,11 +73,23 @@ void SmartFolderRuleRow::onTypeChanged(int index) {
 
         m_valueEdit->hide();
         m_valueCombo->clear();
-        m_valueCombo->addItem("1 星", "1");
-        m_valueCombo->addItem("2 星", "2");
-        m_valueCombo->addItem("3 星", "3");
-        m_valueCombo->addItem("4 星", "4");
-        m_valueCombo->addItem("5 星", "5");
+        {
+            int starSize = 14;
+            int spacing = 2;
+            for (int r = 1; r <= 5; ++r) {
+                int totalW = r * starSize + (r - 1) * spacing;
+                QPixmap pix(totalW, starSize);
+                pix.fill(Qt::transparent);
+                QPainter painter(&pix);
+                QPixmap starPix = UiHelper::getIcon("star_filled", QColor("#CCCCCC"), starSize).pixmap(starSize, starSize);
+                for (int i = 0; i < r; ++i) {
+                    painter.drawPixmap(i * (starSize + spacing), 0, starPix);
+                }
+                painter.end();
+                m_valueCombo->addItem(QIcon(pix), "", QString::number(r));
+            }
+        }
+        m_valueCombo->setIconSize(QSize(14 * 5 + 2 * 4, 14));
         m_valueCombo->show();
         break;
 
