@@ -838,39 +838,33 @@ void PanelMediator::setupConnections() {
             }
         });
 
-        connect(metaPanel, &MetaPanel::tagAddRequested, this, [activeOrRootPanel](const QStringList& paths, const QString& newTag) {
+        connect(metaPanel, &MetaPanel::tagAddRequested, this, [](const QStringList& paths, const QString& newTag) {
             if (!paths.isEmpty() && !newTag.isEmpty()) {
-                QStringList safePaths = paths;
                 AppCommand cmd;
                 cmd.type = AppCommandType::AddTag;
-                cmd.targetPaths = safePaths;
+                cmd.targetPaths = paths;
                 cmd.params["tag"] = newTag;
                 CoreEngine::instance().executeCommand(cmd);
-                ContentPanel* target = activeOrRootPanel();
-                if (target) {
-                    for (const QString& p : safePaths) {
-                        target->updateItemMetadata(p);
-                    }
-                    target->recalculateAndEmitStats();
-                }
             }
         });
 
-        connect(metaPanel, &MetaPanel::tagRemoveRequested, this, [activeOrRootPanel](const QStringList& paths, const QString& removeTag) {
+        connect(metaPanel, &MetaPanel::tagRemoveRequested, this, [](const QStringList& paths, const QString& removeTag) {
             if (!paths.isEmpty() && !removeTag.isEmpty()) {
-                QStringList safePaths = paths;
                 AppCommand cmd;
                 cmd.type = AppCommandType::RemoveTag;
-                cmd.targetPaths = safePaths;
+                cmd.targetPaths = paths;
                 cmd.params["tag"] = removeTag;
                 CoreEngine::instance().executeCommand(cmd);
-                ContentPanel* target = activeOrRootPanel();
-                if (target) {
-                    for (const QString& p : safePaths) {
-                        target->updateItemMetadata(p);
-                    }
-                    target->recalculateAndEmitStats();
+            }
+        });
+
+        connect(metaPanel, &MetaPanel::tagBatchApplyFinished, this, [activeOrRootPanel](const QStringList& paths) {
+            ContentPanel* target = activeOrRootPanel();
+            if (target && !paths.isEmpty()) {
+                for (const QString& p : paths) {
+                    target->updateItemMetadata(p);
                 }
+                target->recalculateAndEmitStats();
             }
         });
 

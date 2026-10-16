@@ -406,6 +406,12 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
             setTags(newSelectedTags);
         }
     });
+
+    connect(m_tagSelectorOverlay, &TagSelectorOverlay::overlayClosed, this, [this, targetPathsSnapshot]() {
+        if (!targetPathsSnapshot.isEmpty()) {
+            emit tagBatchApplyFinished(targetPathsSnapshot);
+        }
+    });
 }
 
 void MetaPanel::setImagePreview(const QPixmap& pixmap) {

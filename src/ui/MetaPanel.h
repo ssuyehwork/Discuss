@@ -57,6 +57,7 @@ signals:
     void colorChanged(const QStringList& paths, const QString& hexColor);
     void tagAddRequested(const QStringList& paths, const QString& tag);
     void tagRemoveRequested(const QStringList& paths, const QString& tag);
+    void tagBatchApplyFinished(const QStringList& paths);
     void noteEdited(const QStringList& paths, const QString& newNote);
     void linkEdited(const QStringList& paths, const QString& newLink);
     void primaryColorChanged(const QString& path, const QColor& color);

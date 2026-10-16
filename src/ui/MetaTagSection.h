@@ -23,6 +23,7 @@ signals:
     void tagAddRequested(const QStringList& paths, const QString& tag);
     void tagRemoveRequested(const QStringList& paths, const QString& tag);
     void tagsChanged(const QStringList& paths, const QStringList& tags);
+    void tagBatchApplyFinished(const QStringList& paths);
 
 private:
     FlowLayout* m_tagFlowLayout = nullptr;

@@ -89,6 +89,12 @@ void MetaTagSection::openTagSelectorOverlay(QWidget* targetAnchor) {
         }
     });
 
+    connect(m_tagSelectorOverlay, &TagSelectorOverlay::overlayClosed, this, [this, targetPathsSnapshot]() {
+        if (!targetPathsSnapshot.isEmpty()) {
+            emit tagBatchApplyFinished(targetPathsSnapshot);
+        }
+    });
+
     m_tagSelectorOverlay->show();
 }
 
