@@ -2,6 +2,7 @@
 
 #include <QFrame>
 #include <QLineEdit>
+#include <QShowEvent>
 #include <QListWidget>
 #include <QScrollArea>
 #include <QLabel>
@@ -17,7 +18,7 @@ namespace QuarkMeta {
 class TagSelectorOverlay : public QFrame {
     Q_OBJECT
 public:
-    TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent = nullptr);
+    TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths = {}, QWidget* parent = nullptr);
     ~TagSelectorOverlay() override;
 
 signals:
@@ -30,6 +31,7 @@ protected:
     void hideEvent(QHideEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void showEvent(QShowEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
@@ -37,29 +39,30 @@ protected:
 
 private:
     void initUi();
-    void loadTagsAndGroups();
-    void filterTags();
-    void populateGrid();
+    void loadRecentAndRecommendedTags(const QStringList& candidatePaths);
+    void filterAndPopulate();
     void toggleTagSelection(const QString& tag);
-    void updateSelectionHighlight();
-    void handleGridNavigation(int key);
-    void handleGroupNavigation(int key);
-
+    void recordRecentTag(const QString& tag);
     void closeOverlay();
 
     QStringList m_selectedTags;
-    QStringList m_displayedTags;
-    QMap<QString, int> m_allTagCounts;
-    QList<TagGroup> m_lexiconGroups;
+    QStringList m_recentTags;
+    QStringList m_recommendedTags;
 
     QLineEdit* m_searchEdit = nullptr;
-    QPushButton* m_btnToggleSidebar = nullptr;
-    QListWidget* m_groupList = nullptr;
     QScrollArea* m_scrollArea = nullptr;
-    QWidget* m_tagGridWidget = nullptr;
-    FlowLayout* m_gridFlowLayout = nullptr;
-    QList<QPushButton*> m_tagButtons;
-    int m_currentTagIndex = -1;
+    QWidget* m_bodyContainer = nullptr;
+    QVBoxLayout* m_bodyLayout = nullptr;
+
+    QWidget* m_recSectionWidget = nullptr;
+    FlowLayout* m_recFlowLayout = nullptr;
+    QPushButton* m_recHeaderBtn = nullptr;
+    bool m_recExpanded = true;
+
+    QWidget* m_recentSectionWidget = nullptr;
+    FlowLayout* m_recentFlowLayout = nullptr;
+    QPushButton* m_recentHeaderBtn = nullptr;
+    bool m_recentExpanded = true;
 
     bool m_isClosing = false;
     bool m_isDragging = false;
