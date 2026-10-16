@@ -6,6 +6,8 @@
 #include "ShellIconManager.h"
 #include "ViewDragDropHelper.h"
 #include "../meta/LibraryDao.h"
+#include "../meta/SmartFolderDao.h"
+#include "dialogs/SmartFolderDialog.h"
 #include "../meta/LibraryService.h"
 #include "../meta/QuarkMetaJsonStore.h"
 #include "../core/CoreEngine.h"
@@ -348,8 +350,15 @@ void LibraryPanel::initUi() {
 
     connect(m_delegate, &LibraryItemDelegate::requestAddCategory, this, [this](int nodeId) {
         if (nodeId == -20) {
-            // 智能文件夹创建逻辑：传入 parentId = -20
-            createAndEditCategory(-20);
+            // 触发智能文件夹规则配置对话框
+            SmartFolderDialog dlg(this);
+            if (dlg.exec() == QDialog::Accepted) {
+                SmartFolderRecord rec = dlg.getRecord();
+                int id = SmartFolderDao::addSmartFolder(rec);
+                if (id > 0) {
+                    loadLibrary();
+                }
+            }
         } else {
             createAndEditCategory(0);
         }
@@ -758,6 +767,12 @@ void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
         return;
     }
 
+    if (index.data(TypeRole).toString() == "smart_folder") {
+        SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(nodeId);
+        // 此处可发出智能文件夹选中信号或触发关联的过滤逻辑
+        return;
+    }
+
     QStringList paths = LibraryService::instance().getCategoryPaths(nodeId);
     emit categoryPathsSelected(paths);
 }
@@ -839,6 +854,32 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
         return;
     }
 
+    if (index.data(TypeRole).toString() == "smart_folder") {
+        int smartFolderId = index.data(Qt::UserRole + 1).toInt();
+        // 右键具体的智能文件夹节点
+        QAction* editRuleAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "编辑规则");
+        connect(editRuleAct, &QAction::triggered, this, [this, smartFolderId]() {
+            SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(smartFolderId);
+            SmartFolderDialog dlg(rec, this);
+            if (dlg.exec() == QDialog::Accepted) {
+                SmartFolderRecord updatedRec = dlg.getRecord();
+                if (SmartFolderDao::updateSmartFolder(updatedRec)) {
+                    loadLibrary();
+                }
+            }
+        });
+
+        QAction* deleteSmartAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除智能文件夹");
+        connect(deleteSmartAct, &QAction::triggered, this, [this, smartFolderId]() {
+            if (SmartFolderDao::removeSmartFolderById(smartFolderId)) {
+                loadLibrary();
+            }
+        });
+
+        menu.exec(m_treeView->viewport()->mapToGlobal(pos));
+        return;
+    }
+
     int nodeId = index.data(Qt::UserRole + 1).toInt();
     if (nodeId == -1 || nodeId == -2) {
         // 固定系统分类禁止弹出修改菜单
@@ -859,7 +900,14 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
         // 智能文件夹分组右键菜单
         QAction* newSmartAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建智能文件夹");
         connect(newSmartAct, &QAction::triggered, this, [this]() {
-            createAndEditCategory(-20);
+            SmartFolderDialog dlg(this);
+            if (dlg.exec() == QDialog::Accepted) {
+                SmartFolderRecord rec = dlg.getRecord();
+                int id = SmartFolderDao::addSmartFolder(rec);
+                if (id > 0) {
+                    loadLibrary();
+                }
+            }
         });
         menu.exec(m_treeView->viewport()->mapToGlobal(pos));
         return;
@@ -1095,6 +1143,10 @@ void LibraryPanel::loadLibrary() {
         if (rec.isPinned) pinnedCount++;
     }
 
+    // 加载所有智能文件夹
+    SmartFolderDao::initTable();
+    auto smartFolders = SmartFolderDao::getAllSmartFolders();
+
     // 2. 构建三大折叠分组 Header 节点 (-10 快速访问, -20 智能文件夹, 0 文件夹)
     QStandardItem* quickAccessHeader = new QStandardItem();
     quickAccessHeader->setData("section", TypeRole);
@@ -1108,9 +1160,21 @@ void LibraryPanel::loadLibrary() {
     smartFolderHeader->setData("section", TypeRole);
     smartFolderHeader->setData(-20, IdRole);
     smartFolderHeader->setData(-20, Qt::UserRole + 1);
-    smartFolderHeader->setData(0, Qt::UserRole + 9);
+    smartFolderHeader->setData(smartFolders.size(), Qt::UserRole + 9);
     smartFolderHeader->setFlags(Qt::ItemIsEnabled);
     m_model->appendRow(smartFolderHeader);
+
+    for (const auto& sfRec : smartFolders) {
+        QIcon sfIcon = UiHelper::getIcon(sfRec.iconKey, QColor(sfRec.colorHex), 18);
+        QStandardItem* sfItem = new QStandardItem(sfIcon, sfRec.name);
+        sfItem->setData("smart_folder", TypeRole);
+        sfItem->setData(sfRec.id, IdRole);
+        sfItem->setData(sfRec.id, Qt::UserRole + 1);
+        sfItem->setData(sfRec.iconKey, Qt::UserRole + 2);
+        sfItem->setData(sfRec.colorHex, Qt::UserRole + 3);
+        sfItem->setEditable(false);
+        smartFolderHeader->appendRow(sfItem);
+    }
 
     int customCount = list.size();
 

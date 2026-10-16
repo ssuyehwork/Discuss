@@ -121,6 +121,8 @@ set(SOURCES
     src/meta/FavoriteService.cpp
     src/meta/LibraryDao.h
     src/meta/LibraryDao.cpp
+    src/meta/SmartFolderDao.h
+    src/meta/SmartFolderDao.cpp
     src/meta/LibraryService.h
     src/meta/LibraryService.cpp
     src/ui/LibraryPanel.h
@@ -347,6 +349,8 @@ set(SOURCES
     src/ui/dialogs/CacheLocationDialog.cpp
     src/ui/dialogs/CreateFolderWithItemsDialog.h
     src/ui/dialogs/CreateFolderWithItemsDialog.cpp
+    src/ui/dialogs/SmartFolderDialog.h
+    src/ui/dialogs/SmartFolderDialog.cpp
     src/ui/dialogs/FramelessColorPicker.h
     src/ui/dialogs/FramelessColorPicker.cpp
     src/ui/dialogs/FramelessConfirmDialog.h
