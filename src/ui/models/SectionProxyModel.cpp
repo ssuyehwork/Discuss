@@ -512,13 +512,16 @@ void SectionProxyModel::onSourceLayoutAboutToBeChanged() {
 
     if (!sourceModel()) return;
 
+    int cols = sourceModel()->columnCount();
     for (int r = 0; r < m_mapping.size(); ++r) {
         if (m_mapping[r].sourceRow >= 0) {
-            QModelIndex pIdx = createIndex(r, 0);
-            QModelIndex sIdx = mapToSource(pIdx);
-            if (sIdx.isValid()) {
-                m_layoutChangeProxyIndexes.append(pIdx);
-                m_layoutChangeSourceIndexes.append(sIdx);
+            for (int c = 0; c < cols; ++c) {
+                QModelIndex pIdx = createIndex(r, c);
+                QModelIndex sIdx = mapToSource(pIdx);
+                if (sIdx.isValid()) {
+                    m_layoutChangeProxyIndexes.append(pIdx);
+                    m_layoutChangeSourceIndexes.append(QPersistentModelIndex(sIdx));
+                }
             }
         }
     }
@@ -567,8 +570,12 @@ void SectionProxyModel::onSourceLayoutChanged() {
 
     if (!m_layoutChangeProxyIndexes.isEmpty()) {
         QModelIndexList newProxyIndexes;
-        for (const QModelIndex& sIdx : m_layoutChangeSourceIndexes) {
-            newProxyIndexes.append(mapFromSource(sIdx));
+        for (const QPersistentModelIndex& sIdx : m_layoutChangeSourceIndexes) {
+            if (sIdx.isValid()) {
+                newProxyIndexes.append(mapFromSource(sIdx));
+            } else {
+                newProxyIndexes.append(QModelIndex());
+            }
         }
         changePersistentIndexList(m_layoutChangeProxyIndexes, newProxyIndexes);
     }

@@ -73,7 +73,7 @@ private:
     int m_fileCount = 0;
     int m_fileSectionStartProxyRow = -1;
     QModelIndexList m_layoutChangeProxyIndexes;
-    QModelIndexList m_layoutChangeSourceIndexes;
+    QList<QPersistentModelIndex> m_layoutChangeSourceIndexes;
 };
 
 } // namespace QuarkMeta
