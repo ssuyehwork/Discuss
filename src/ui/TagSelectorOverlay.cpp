@@ -50,7 +50,11 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const
     });
 }
 
-TagSelectorOverlay::~TagSelectorOverlay() = default;
+TagSelectorOverlay::~TagSelectorOverlay() {
+    if (qApp) {
+        qApp->removeEventFilter(this);
+    }
+}
 
 void TagSelectorOverlay::closeOverlay() {
     if (m_isClosing) return;
