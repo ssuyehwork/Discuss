@@ -17,7 +17,8 @@ namespace QuarkMeta {
 class TagSelectorOverlay : public QFrame {
     Q_OBJECT
 public:
-    TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths = {}, QWidget* parent = nullptr);
+    TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent = nullptr);
+    TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths, QWidget* parent = nullptr);
     ~TagSelectorOverlay() override;
 
 signals:

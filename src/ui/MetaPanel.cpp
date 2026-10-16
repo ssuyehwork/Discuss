@@ -342,7 +342,8 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     }
 
     QWidget* topWidget = this->topLevelWidget();
-    m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), topWidget);
+    const QStringList targetPathsSnapshot = m_selectedPaths;
+    m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), targetPathsSnapshot, topWidget);
 
     if (topWidget) {
         // 1. 忠实尊重窗口自己的真实尺寸，绝对不改动大小！
@@ -375,9 +376,6 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     }
 
     m_tagSelectorOverlay->show();
-
-    // 1. 🔒【路径快照锁定】：浮层打开瞬时，保存决议绑定的固定目标项目快照，不随 m_selectedPaths 动态漂移
-    const QStringList targetPathsSnapshot = m_selectedPaths;
 
     // 2. 浮层局部的已提交标签集合，打开时用 m_currentTagsSet 初始化
     auto appliedTagsSet = std::make_shared<QSet<QString>>(m_currentTagsSet);
