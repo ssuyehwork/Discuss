@@ -469,6 +469,8 @@ void MetaPanel::setMultiSelectionPreview(const QList<QPixmap>& pixmaps) {
         return;
     }
 
+    std::reverse(validPixmaps.begin(), validPixmaps.end());
+
     qreal dpr = devicePixelRatioF();
     QSize logicalCanvasSize(200, 200);
     QSize physicalCanvasSize = logicalCanvasSize * dpr;
