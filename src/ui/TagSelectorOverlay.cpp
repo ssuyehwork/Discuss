@@ -22,7 +22,6 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const
     : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), 
       m_selectedTags(initialSelected) 
 {
-    Q_UNUSED(candidatePaths);
     setObjectName("TagSelectorOverlay");
     setFrameShape(QFrame::StyledPanel);
     setFocusPolicy(Qt::StrongFocus);
@@ -32,10 +31,23 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const
     m_framelessHelper = FramelessWindowHelper::apply(this, nullptr);
 
     initUi();
-    loadTagsAndGroups();
+    loadRecentAndRecommendedTags(candidatePaths);
     
     m_searchEdit->installEventFilter(this);
-    m_tagGridWidget->installEventFilter(this);
+
+    qApp->installEventFilter(this);
+    connect(qApp, &QApplication::focusChanged, this, [this](QWidget* old, QWidget* now) {
+        Q_UNUSED(old);
+        if (m_isClosing || !isVisible()) return;
+
+        if (now && (now == this || this->isAncestorOf(now))) {
+            return;
+        }
+
+        if (now && !this->isAncestorOf(now)) {
+            closeOverlay();
+        }
+    });
 }
 
 TagSelectorOverlay::~TagSelectorOverlay() = default;
@@ -56,168 +68,185 @@ void TagSelectorOverlay::closeEvent(QCloseEvent* event) {
     QFrame::closeEvent(event);
 }
 
+void TagSelectorOverlay::showEvent(QShowEvent* event) {
+    QFrame::showEvent(event);
+    if (m_searchEdit) {
+        m_searchEdit->setFocus();
+        m_searchEdit->selectAll();
+    }
+}
+
 void TagSelectorOverlay::initUi() {
     QVBoxLayout* mainL = new QVBoxLayout(this);
     mainL->setContentsMargins(10, 10, 10, 10);
     mainL->setSpacing(8);
 
+    // 1. 顶部搜索框 (唤醒自动定焦)
     QHBoxLayout* topSearchLayout = new QHBoxLayout();
     topSearchLayout->setContentsMargins(0, 0, 0, 0);
     topSearchLayout->setSpacing(6);
 
     m_searchEdit = new QLineEdit(this);
     m_searchEdit->setPlaceholderText("搜索...");
-    m_searchEdit->setFixedHeight(26);
+    m_searchEdit->setFixedHeight(28);
     m_searchEdit->setObjectName("TagSelectorSearchEdit");
     UiHelper::setupLineEditContextMenu(m_searchEdit);
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this]() {
-        filterTags();
+        filterAndPopulate();
     });
     topSearchLayout->addWidget(m_searchEdit, 1);
-
-    m_btnToggleSidebar = new QPushButton(this);
-    m_btnToggleSidebar->setFixedSize(26, 26);
-    m_btnToggleSidebar->setCheckable(true);
-    m_btnToggleSidebar->setChecked(true);
-    m_btnToggleSidebar->setIcon(UiHelper::getIcon("sidebar", QColor("#AAAAAA"), 16));
-    m_btnToggleSidebar->setIconSize(QSize(16, 16));
-    m_btnToggleSidebar->setCursor(Qt::PointingHandCursor);
-    m_btnToggleSidebar->setObjectName("TagSelectorToggleBtn");
-    connect(m_btnToggleSidebar, &QPushButton::toggled, this, [this](bool checked) {
-        m_groupList->setVisible(checked);
-    });
-    topSearchLayout->addWidget(m_btnToggleSidebar);
-
     mainL->addLayout(topSearchLayout);
 
-    QHBoxLayout* bodyL = new QHBoxLayout();
-    bodyL->setSpacing(8);
-
-    m_groupList = new QListWidget(this);
-    m_groupList->setFixedWidth(110);
-    m_groupList->setFocusPolicy(Qt::StrongFocus);
-    m_groupList->setObjectName("TagSelectorGroupList");
-    connect(m_groupList, &QListWidget::currentRowChanged, this, [this]() {
-        filterTags();
-    });
-    bodyL->addWidget(m_groupList);
-
-    m_tagGridWidget = new QWidget(this);
-    m_tagGridWidget->setAttribute(Qt::WA_StyledBackground, true);
-    m_tagGridWidget->setObjectName("TagSelectorGridWidget");
-    m_tagGridWidget->setFocusPolicy(Qt::StrongFocus);
-    m_gridFlowLayout = new FlowLayout(m_tagGridWidget, 10, 6, 6);
-    m_tagGridWidget->setLayout(m_gridFlowLayout);
-
+    // 2. 智能折叠分组主体滚动区
     m_scrollArea = new QScrollArea(this);
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setObjectName("TagSelectorScrollArea");
-    m_scrollArea->setWidget(m_tagGridWidget);
-    bodyL->addWidget(m_scrollArea, 1);
 
-    mainL->addLayout(bodyL, 1);
+    m_bodyContainer = new QWidget(m_scrollArea);
+    m_bodyLayout = new QVBoxLayout(m_bodyContainer);
+    m_bodyLayout->setContentsMargins(4, 4, 4, 4);
+    m_bodyLayout->setSpacing(10);
 
-    setMinimumSize(250, 150);
-    QSize savedSize = AppConfig::instance().getValue("TagSelectorOverlay/Size", QSize(400, 240)).toSize();
-    resize(savedSize.expandedTo(QSize(250, 150)));
+    // 第一组: 推荐
+    m_recHeaderBtn = new QPushButton(m_bodyContainer);
+    m_recHeaderBtn->setCursor(Qt::PointingHandCursor);
+    m_recHeaderBtn->setStyleSheet("QPushButton { text-align: left; font-weight: bold; color: #CCCCCC; background: transparent; border: none; font-size: 13px; }");
+    connect(m_recHeaderBtn, &QPushButton::clicked, this, [this]() {
+        m_recExpanded = !m_recExpanded;
+        m_recSectionWidget->setVisible(m_recExpanded);
+    });
+    m_bodyLayout->addWidget(m_recHeaderBtn);
+
+    m_recSectionWidget = new QWidget(m_bodyContainer);
+    m_recFlowLayout = new FlowLayout(m_recSectionWidget, 0, 6, 6);
+    m_bodyLayout->addWidget(m_recSectionWidget);
+
+    // 第二组: 最近使用 (最多 50 个)
+    m_recentHeaderBtn = new QPushButton(m_bodyContainer);
+    m_recentHeaderBtn->setCursor(Qt::PointingHandCursor);
+    m_recentHeaderBtn->setStyleSheet("QPushButton { text-align: left; font-weight: bold; color: #CCCCCC; background: transparent; border: none; font-size: 13px; }");
+    connect(m_recentHeaderBtn, &QPushButton::clicked, this, [this]() {
+        m_recentExpanded = !m_recentExpanded;
+        m_recentSectionWidget->setVisible(m_recentExpanded);
+    });
+    m_bodyLayout->addWidget(m_recentHeaderBtn);
+
+    m_recentSectionWidget = new QWidget(m_bodyContainer);
+    m_recentFlowLayout = new FlowLayout(m_recentSectionWidget, 0, 6, 6);
+    m_bodyLayout->addWidget(m_recentSectionWidget);
+
+    m_bodyLayout->addStretch(1);
+    m_scrollArea->setWidget(m_bodyContainer);
+    mainL->addWidget(m_scrollArea, 1);
+
+    setMinimumSize(300, 220);
+    QSize savedSize = AppConfig::instance().getValue("TagSelectorOverlay/Size", QSize(400, 260)).toSize();
+    resize(savedSize.expandedTo(QSize(300, 220)));
 }
 
-void TagSelectorOverlay::loadTagsAndGroups() {
-    m_lexiconGroups = TagLexiconService::instance().getAllTagGroups();
-    
-    m_groupList->clear();
+void TagSelectorOverlay::loadRecentAndRecommendedTags(const QStringList& candidatePaths) {
+    // 1. 从 AppConfig 读取最近使用标签 (最多 50 个)
+    m_recentTags = AppConfig::instance().getValue("TagSelectorOverlay/RecentTags", QStringList()).toStringList();
 
-    auto addGroupItem = [this](const QString& name, const QString& iconKey) {
-        QListWidgetItem* item = new QListWidgetItem(name, m_groupList);
-        item->setIcon(UiHelper::getIcon(iconKey, QColor("#AAAAAA"), 14));
-        return item;
+    // 2. 解析推荐标签 (仅纯内存管理)
+    m_recommendedTags.clear();
+    QSet<QString> seen;
+    static const QRegularExpression splitRegex("[_\\-\\s\\+\\.\\(\\)\\[\\]【】]+");
+
+    for (const QString& path : candidatePaths) {
+        if (path.isEmpty() || path.startsWith("trash://")) continue;
+        QFileInfo info(path);
+        QString baseName = info.completeBaseName();
+        if (baseName.isEmpty()) continue;
+
+        QStringList tokens = baseName.split(splitRegex, Qt::SkipEmptyParts);
+        for (QString token : tokens) {
+            token = token.trimmed();
+            if (token.isEmpty()) continue;
+            bool isPureNum = false;
+            token.toInt(&isPureNum);
+            if (isPureNum) continue;
+
+            if (!seen.contains(token)) {
+                seen.insert(token);
+                m_recommendedTags.append(token);
+            }
+        }
+    }
+
+    filterAndPopulate();
+}
+
+void TagSelectorOverlay::filterAndPopulate() {
+    QString kw = m_searchEdit ? m_searchEdit->text().trimmed().toLower() : "";
+
+    // 1. 清理现有 FlowLayout Widgets
+    auto clearLayout = [](FlowLayout* layout) {
+        if (!layout) return;
+        QLayoutItem* item;
+        while ((item = layout->takeAt(0)) != nullptr) {
+            if (item->widget()) item->widget()->deleteLater();
+            delete item;
+        }
     };
+    clearLayout(m_recFlowLayout);
+    clearLayout(m_recentFlowLayout);
 
-    addGroupItem("全部", "all_data");
-    addGroupItem("未分类", "uncategorized-2");
-
-    for (const auto& grp : m_lexiconGroups) {
-        if (grp.id > 0) {
-            addGroupItem(grp.name, "folder_filled");
+    // 2. 渲染【第一组：推荐】
+    QStringList filteredRec;
+    for (const QString& t : m_recommendedTags) {
+        if (kw.isEmpty() || t.toLower().contains(kw)) {
+            filteredRec.append(t);
         }
     }
+    m_recHeaderBtn->setText(QString(" 推荐 (%1)").arg(filteredRec.size()));
+    m_recHeaderBtn->setVisible(!filteredRec.isEmpty());
+    m_recSectionWidget->setVisible(m_recExpanded && !filteredRec.isEmpty());
 
-    m_groupList->setCurrentRow(0);
-}
-
-void TagSelectorOverlay::filterTags() {
-    QString kw = m_searchEdit->text().trimmed();
-    QString currentGrp = m_groupList->currentItem() ? m_groupList->currentItem()->text() : "全部";
-
-    m_displayedTags.clear();
-
-    if (currentGrp == "未分类") {
-        QSet<QString> groupedTags;
-        for (const auto& grp : m_lexiconGroups) {
-            if (grp.id > 0) {
-                for (const auto& t : grp.tags) groupedTags.insert(t.name);
-            }
-        }
-        QStringList allMaster = TagLexiconService::instance().getAllTagNames();
-        for (const QString& tag : allMaster) {
-            if (groupedTags.contains(tag)) continue;
-            if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
-            m_displayedTags.append(tag);
-        }
-    } else if (currentGrp != "全部" && currentGrp != "未分类") {
-        for (const auto& grp : m_lexiconGroups) {
-            if (grp.name == currentGrp) {
-                for (const auto& t : grp.tags) {
-                    if (!kw.isEmpty() && !t.name.toLower().contains(kw.toLower())) continue;
-                    m_displayedTags.append(t.name);
-                }
-                break;
-            }
-        }
-    } else {
-        QStringList allMaster = TagLexiconService::instance().getAllTagNames();
-        for (const QString& tag : allMaster) {
-            if (!kw.isEmpty() && !tag.toLower().contains(kw.toLower())) continue;
-            m_displayedTags.append(tag);
-        }
-    }
-
-    if (!kw.isEmpty() && !m_displayedTags.contains(kw, Qt::CaseInsensitive)) {
-        m_displayedTags.prepend(kw);
-    }
-
-    populateGrid();
-}
-
-void TagSelectorOverlay::populateGrid() {
-    QLayoutItem* item;
-    while ((item = m_gridFlowLayout->takeAt(0)) != nullptr) {
-        if (item->widget()) {
-            item->widget()->deleteLater();
-        }
-        delete item;
-    }
-
-    m_tagButtons.clear();
-    for (int i = 0; i < m_displayedTags.size(); ++i) {
-        QString tag = m_displayedTags[i];
-
-        QPushButton* btn = new QPushButton(m_tagGridWidget);
-        btn->setObjectName("TagOverlayBtn");
+    for (const QString& recTag : filteredRec) {
+        QPushButton* btn = new QPushButton(m_recSectionWidget);
+        btn->setObjectName("TagOverlayRecBtn");
         btn->setCheckable(true);
         btn->setCursor(Qt::PointingHandCursor);
-        btn->setFixedHeight(22);
+        btn->setFixedHeight(24);
 
-        m_tagButtons.append(btn);
-        m_gridFlowLayout->addWidget(btn);
+        bool isSelected = m_selectedTags.contains(recTag);
+        btn->setText(recTag);
+        btn->setIcon(UiHelper::getIcon(isSelected ? "check" : "star_filled", isSelected ? QColor("#FFFFFF") : QColor("#378ADD"), 12));
+        btn->setIconSize(QSize(12, 12));
 
+        m_recFlowLayout->addWidget(btn);
+        connect(btn, &QPushButton::clicked, this, [this, recTag]() {
+            toggleTagSelection(recTag);
+        });
+    }
+
+    // 3. 渲染【第二组：最近使用 (限制 50 个)】
+    QStringList filteredRecent;
+    for (const QString& t : m_recentTags) {
+        if (kw.isEmpty() || t.toLower().contains(kw)) {
+            filteredRecent.append(t);
+        }
+    }
+    m_recentHeaderBtn->setText(QString(" 最近使用 (%1)").arg(filteredRecent.size()));
+
+    for (const QString& tag : filteredRecent) {
+        QPushButton* btn = new QPushButton(m_recentSectionWidget);
+        btn->setObjectName("TagOverlayRecentBtn");
+        btn->setCheckable(true);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setFixedHeight(24);
+
+        bool isSelected = m_selectedTags.contains(tag);
+        btn->setText(tag);
+        btn->setIcon(UiHelper::getIcon(isSelected ? "check" : "clock", isSelected ? QColor("#FFFFFF") : QColor("#888888"), 12));
+        btn->setIconSize(QSize(12, 12));
+
+        m_recentFlowLayout->addWidget(btn);
         connect(btn, &QPushButton::clicked, this, [this, tag]() {
             toggleTagSelection(tag);
         });
     }
-
-    m_currentTagIndex = -1;
-    updateSelectionHighlight();
 }
 
 void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
@@ -227,65 +256,24 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
     if (m_selectedTags.contains(cleanTag)) {
         m_selectedTags.removeAll(cleanTag);
     } else {
+        // 🔒【点选绑定契约】：只有点选时才写入 SQLite 标签词库，并记录至 RecentTags (上限 50 个)
         TagLexiconService::instance().addTag(cleanTag);
+        recordRecentTag(cleanTag);
         m_selectedTags.append(cleanTag);
     }
 
-    updateSelectionHighlight();
+    filterAndPopulate();
     emit selectionChanged(m_selectedTags);
 }
 
-void TagSelectorOverlay::updateSelectionHighlight() {
-    for (int i = 0; i < m_displayedTags.size(); ++i) {
-        QString tag = m_displayedTags[i];
-        QPushButton* btn = m_tagButtons[i];
-
-        bool isSelected = m_selectedTags.contains(tag);
-        bool isFocused = (i == m_currentTagIndex);
-
-        btn->setText(tag);
-
-        if (isSelected) {
-            btn->setIcon(UiHelper::getIcon("check", QColor("#FFFFFF"), 12));
-        } else {
-            btn->setIcon(UiHelper::getIcon("clock", QColor("#888888"), 12));
-        }
-        btn->setIconSize(QSize(12, 12));
-
-        btn->setProperty("selected", isSelected);
-        btn->setProperty("focused", isFocused);
-        btn->style()->unpolish(btn);
-        btn->style()->polish(btn);
+void TagSelectorOverlay::recordRecentTag(const QString& tag) {
+    if (tag.isEmpty()) return;
+    m_recentTags.removeAll(tag);
+    m_recentTags.prepend(tag);
+    while (m_recentTags.size() > 50) {
+        m_recentTags.removeLast();
     }
-}
-
-void TagSelectorOverlay::handleGridNavigation(int key) {
-    if (m_displayedTags.isEmpty()) return;
-    int rowCount = m_displayedTags.size();
-    if (m_currentTagIndex < 0) {
-        m_currentTagIndex = 0;
-    } else {
-        if (key == Qt::Key_Left) {
-            m_currentTagIndex = (m_currentTagIndex - 1 + rowCount) % rowCount;
-        } else if (key == Qt::Key_Right) {
-            m_currentTagIndex = (m_currentTagIndex + 1) % rowCount;
-        } else if (key == Qt::Key_Up) {
-            m_currentTagIndex = qMax(0, m_currentTagIndex - 4);
-        } else if (key == Qt::Key_Down) {
-            m_currentTagIndex = qMin(rowCount - 1, m_currentTagIndex + 4);
-        }
-    }
-    updateSelectionHighlight();
-}
-
-void TagSelectorOverlay::handleGroupNavigation(int key) {
-    int row = m_groupList->currentRow();
-    int count = m_groupList->count();
-    if (key == Qt::Key_Up) {
-        m_groupList->setCurrentRow((row - 1 + count) % count);
-    } else if (key == Qt::Key_Down) {
-        m_groupList->setCurrentRow((row + 1) % count);
-    }
+    AppConfig::instance().setValue("TagSelectorOverlay/RecentTags", m_recentTags);
 }
 
 void TagSelectorOverlay::resizeEvent(QResizeEvent* event) {
@@ -361,45 +349,16 @@ bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
             return true;
         }
 
-        if (ke->key() == Qt::Key_Tab) {
-            if (m_searchEdit->hasFocus()) {
-                m_groupList->setFocus();
-            } else if (m_groupList->hasFocus()) {
-                m_tagGridWidget->setFocus();
-            } else {
-                m_searchEdit->setFocus();
-            }
-            updateSelectionHighlight();
-            ke->accept();
-            return true;
-        }
-
-        if (ke->key() == Qt::Key_Up || ke->key() == Qt::Key_Down || ke->key() == Qt::Key_Left || ke->key() == Qt::Key_Right) {
-            if (m_tagGridWidget->hasFocus() || obj == m_tagGridWidget) {
-                handleGridNavigation(ke->key());
-                ke->accept();
-                return true;
-            } else if (m_groupList->hasFocus()) {
-                handleGroupNavigation(ke->key());
-                ke->accept();
-                return true;
-            }
-        }
-
         if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) {
-            if (m_searchEdit->hasFocus()) {
+            if (m_searchEdit && m_searchEdit->hasFocus()) {
                 QString kw = m_searchEdit->text().trimmed();
                 if (!kw.isEmpty()) {
                     toggleTagSelection(kw);
                     m_searchEdit->clear();
                 }
-            } else if (m_tagGridWidget->hasFocus() || obj == m_tagGridWidget) {
-                if (m_currentTagIndex >= 0 && m_currentTagIndex < m_displayedTags.size()) {
-                    toggleTagSelection(m_displayedTags[m_currentTagIndex]);
-                }
+                ke->accept();
+                return true;
             }
-            ke->accept();
-            return true;
         }
     }
     return QFrame::eventFilter(obj, event);
