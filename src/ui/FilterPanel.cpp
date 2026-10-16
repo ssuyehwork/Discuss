@@ -281,7 +281,7 @@ void FilterPanel::clearStats() {
     m_createDateCounts.clear();
     m_modifyDateCounts.clear();
     m_emptyFolderCount = 0;
-    rebuildGroups();
+    syncUIFromFilterState();
 }
 
 void FilterPanel::populateStats(const QuarkMeta::ScanStats& stats) {
@@ -851,7 +851,7 @@ void FilterPanel::clearAllFilters(bool force) {
     if (m_editCreateDate) m_editCreateDate->clear();
     if (m_editModifyDate) m_editModifyDate->clear();
     
-    rebuildGroups();
+    syncUIFromFilterState();
 }
 
 void FilterPanel::updateHeaderStatus() {
@@ -898,7 +898,7 @@ void FilterPanel::selectColor(const QColor& color) {
     st.colors.append(hex);
 
     m_filterModel->setState(st);
-    rebuildGroups();
+    syncUIFromFilterState();
 }
 
 } // namespace QuarkMeta
