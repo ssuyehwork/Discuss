@@ -66,6 +66,9 @@ private:
 
     static std::wstring normalizeFolderPath(const std::wstring& path);
 
+    void prefetchFolderJson(const std::wstring& folderPath);
+    std::shared_ptr<QuarkMetaJson> getOrLoadFolderLocked(const std::wstring& normFolder, const std::wstring& folderPath);
+
     std::mutex m_storeMutex;
     // 规范化目录路径 -> 内存中缓存的 JSON 对象指针
     std::unordered_map<std::wstring, std::shared_ptr<QuarkMetaJson>> m_folderCacheMap;

@@ -38,6 +38,38 @@ std::wstring QuarkMetaJsonStore::normalizeFolderPath(const std::wstring& path) {
     return qp.toStdWString();
 }
 
+void QuarkMetaJsonStore::prefetchFolderJson(const std::wstring& folderPath) {
+    if (folderPath.empty()) return;
+    std::wstring normFolder = normalizeFolderPath(folderPath);
+
+    {
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        if (m_folderCacheMap.find(normFolder) != m_folderCacheMap.end()) {
+            return;
+        }
+    }
+
+    auto jsonPtr = std::make_shared<QuarkMetaJson>(folderPath);
+    jsonPtr->load();
+
+    {
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        m_folderCacheMap.emplace(normFolder, jsonPtr);
+    }
+}
+
+std::shared_ptr<QuarkMetaJson> QuarkMetaJsonStore::getOrLoadFolderLocked(const std::wstring& normFolder, const std::wstring& folderPath) {
+    auto it = m_folderCacheMap.find(normFolder);
+    if (it != m_folderCacheMap.end() && it->second) {
+        return it->second;
+    }
+
+    auto jsonPtr = std::make_shared<QuarkMetaJson>(folderPath);
+    jsonPtr->load();
+    m_folderCacheMap[normFolder] = jsonPtr;
+    return jsonPtr;
+}
+
 void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater) {
     if (!updater) return;
 
@@ -46,17 +78,18 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
     std::wstring fileName = info.fileName().toLower().toStdWString();
     std::wstring normFolder = normalizeFolderPath(folderPath);
 
+    prefetchFolderJson(folderPath);
+
+    if (info.isDir()) {
+        prefetchFolderJson(info.absoluteFilePath().toStdWString());
+    }
+
     {
         std::lock_guard<std::mutex> lock(m_storeMutex);
 
-        auto it = m_folderCacheMap.find(normFolder);
-        if (it == m_folderCacheMap.end()) {
-            auto jsonPtr = std::make_shared<QuarkMetaJson>(folderPath);
-            jsonPtr->load();
-            it = m_folderCacheMap.emplace(normFolder, jsonPtr).first;
-        }
+        auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
 
-        ItemMeta& meta = it->second->items()[fileName];
+        ItemMeta& meta = jsonPtr->items()[fileName];
         meta.type = info.isDir() ? L"folder" : L"file";
         updater(meta);
 
@@ -67,14 +100,9 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
             std::wstring selfDirPath = info.absoluteFilePath().toStdWString();
             std::wstring normSelfDir = normalizeFolderPath(selfDirPath);
 
-            auto selfIt = m_folderCacheMap.find(normSelfDir);
-            if (selfIt == m_folderCacheMap.end()) {
-                auto selfJsonPtr = std::make_shared<QuarkMetaJson>(selfDirPath);
-                selfJsonPtr->load();
-                selfIt = m_folderCacheMap.emplace(normSelfDir, selfJsonPtr).first;
-            }
+            auto selfJsonPtr = getOrLoadFolderLocked(normSelfDir, selfDirPath);
 
-            FolderMeta& fMeta = selfIt->second->folder();
+            FolderMeta& fMeta = selfJsonPtr->folder();
             ItemMeta dummyItem;
             dummyItem.rating = fMeta.rating;
             dummyItem.color = fMeta.color;
@@ -111,18 +139,13 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
 }
 
 QuarkMetaJson::ItemMap QuarkMetaJsonStore::readFolderMeta(const std::wstring& folderPath) {
+    if (folderPath.empty()) return {};
+    prefetchFolderJson(folderPath);
+
     std::wstring normFolder = normalizeFolderPath(folderPath);
     std::lock_guard<std::mutex> lock(m_storeMutex);
 
-    auto it = m_folderCacheMap.find(normFolder);
-    if (it != m_folderCacheMap.end()) {
-        return it->second->items();
-    }
-
-    auto jsonPtr = std::make_shared<QuarkMetaJson>(folderPath);
-    jsonPtr->load();
-    m_folderCacheMap[normFolder] = jsonPtr;
-
+    auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
     return jsonPtr->items();
 }
 
@@ -131,9 +154,15 @@ bool QuarkMetaJsonStore::readItemMeta(const std::wstring& filePath, ItemMeta& ou
     std::wstring folderPath = info.absolutePath().toStdWString();
     std::wstring fileName = info.fileName().toLower().toStdWString();
 
-    auto folderMetaMap = readFolderMeta(folderPath);
-    auto it = folderMetaMap.find(fileName);
-    if (it != folderMetaMap.end()) {
+    prefetchFolderJson(folderPath);
+
+    std::wstring normFolder = normalizeFolderPath(folderPath);
+    std::lock_guard<std::mutex> lock(m_storeMutex);
+
+    auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+    const auto& itemsMap = jsonPtr->items();
+    auto it = itemsMap.find(fileName);
+    if (it != itemsMap.end()) {
         outMeta = it->second;
         return true;
     }
