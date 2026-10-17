@@ -137,6 +137,8 @@ set(SOURCES
     src/meta/MetadataDefs.h
     src/meta/QuarkMetaJsonStore.h
     src/meta/QuarkMetaJsonStore.cpp
+    src/meta/MetaIndexService.h
+    src/meta/MetaIndexService.cpp
     src/meta/MetaDbRepository.h
     src/meta/MetaDbRepository.cpp
     src/meta/MetaMemoryCache.h

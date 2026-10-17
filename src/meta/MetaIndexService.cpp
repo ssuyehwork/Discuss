@@ -30,9 +30,7 @@ MetaIndexService& MetaIndexService::instance() {
 }
 
 MetaIndexService::MetaIndexService(QObject* parent) : QObject(parent) {
-    QString dbDir = DatabaseManager::getAppDir();
-    QDir().mkpath(dbDir);
-    m_dbPath = QDir::toNativeSeparators(dbDir + "/index.db").toStdWString();
+    m_dbPath = DatabaseManager::getGlobalDbPath().toStdWString();
 
     if (auto* app = QCoreApplication::instance()) {
         connect(app, &QCoreApplication::aboutToQuit, this, [this]() {
@@ -55,13 +53,7 @@ void MetaIndexService::init() {
     }
 
     if (!initSchema(m_writeDb)) {
-        qWarning() << "[MetaIndexService] Schema corrupted. Rebuilding index.db...";
-        sqlite3_close(m_writeDb);
-        m_writeDb = nullptr;
-        QFile::remove(QString::fromStdWString(m_dbPath));
-        if (openDatabase(m_dbPath, &m_writeDb, false)) {
-            initSchema(m_writeDb);
-        }
+        qWarning() << "[MetaIndexService] Schema initialization failed for QuarkMeta.store.";
     }
 
     // 2. 初始化独立只读连接
@@ -155,6 +147,7 @@ bool MetaIndexService::initSchema(sqlite3* db) {
 
 void MetaIndexService::enqueueFolder(const std::wstring& folderPath) {
     if (folderPath.empty() || m_stopping.load()) return;
+    init();
 
     std::wstring norm = normalizePath(folderPath);
     {
@@ -338,6 +331,7 @@ void MetaIndexService::processFolder(sqlite3* db, const std::wstring& normFolder
 QStringList MetaIndexService::searchGlobal(const QString& keyword, const QString& scopeFolderPath, int limit) {
     QStringList results;
     if (keyword.trimmed().isEmpty()) return results;
+    init();
 
     std::lock_guard<std::mutex> lock(m_readMutex);
     if (!m_readDb) return results;

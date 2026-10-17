@@ -32,7 +32,7 @@
 namespace QuarkMeta {
 
 namespace {
-constexpr double kMultiPreviewAngleStep = 3.0;
+constexpr double kMultiPreviewAngleStep = 4.0;
 
 QPixmap renderThumbnailLayer(const QPixmap& pixmap) {
     QSize canvasSize(200, 200);
@@ -517,16 +517,19 @@ void MetaPanel::setMultiSelectionPreview(const QList<MetaPreviewItem>& items) {
     for (int k = validLayers.size() - 1; k >= 0; --k) {
         const QPixmap& layer = validLayers[k];
 
-        double angle = 0.0;
-        if (k >= 1) {
-            double stepMultiplier = std::ceil(k / 2.0);
-            double baseAngle = kMultiPreviewAngleStep * stepMultiplier;
-            angle = (k % 2 == 1) ? -baseAngle : baseAngle;
-        }
+        // 🎯 核心修复：多选时所有卡片（包含最顶层 k=0 卡片）全部参与交替倾斜，确保顶层卡片本身倾斜，一眼直观辨识多选状态
+        double stepMultiplier = std::ceil((k + 1) / 2.0);
+        double baseAngle = kMultiPreviewAngleStep * stepMultiplier;
+        double angle = (k % 2 == 0) ? -baseAngle : baseAngle;
+        double scale = 1.0 - (0.04 * k); // 逐层微缩 4%，露出下层边角
+        double offsetY = -3.0 * k;      // 逐层向上微平移 3px
 
         painter.save();
-        painter.translate(100.0, 100.0);
+        painter.translate(100.0, 100.0 + offsetY);
         painter.rotate(angle);
+        if (scale < 1.0) {
+            painter.scale(scale, scale);
+        }
         painter.drawPixmap(QPointF(-100.0, -100.0), layer);
         painter.restore();
     }

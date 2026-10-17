@@ -68,7 +68,7 @@ QString DatabaseManager::getAppDir() {
 
 QString DatabaseManager::getGlobalDbPath() {
     QString dir = QDir::toNativeSeparators(getAppDir() + "/.QuarkMeta");
-    return QDir::toNativeSeparators(dir + "/global.db");
+    return QDir::toNativeSeparators(dir + "/QuarkMeta.store");
 }
 
 bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {

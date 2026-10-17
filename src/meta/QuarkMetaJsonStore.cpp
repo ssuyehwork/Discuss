@@ -1,4 +1,5 @@
 #include "QuarkMetaJsonStore.h"
+#include "MetaIndexService.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QCoreApplication>
@@ -200,6 +201,11 @@ void QuarkMetaJsonStore::flushAllDirtyBuffers(bool sync) {
             bool ok = jsonSnapshot.save();
             qDebug() << "[AutoColor] [QuarkMetaJsonStore] Flushed dirty buffer for folder, items count:" 
                      << jsonSnapshot.items().size() << "status:" << ok;
+
+            // 🎯【阶段二挂钩】：仅在物理落盘成功后，投递给后台独立索引器（0ms 异步内存投递，单向流动）
+            if (ok) {
+                MetaIndexService::instance().enqueueFolder(jsonSnapshot.folderPath());
+            }
         }
     };
 

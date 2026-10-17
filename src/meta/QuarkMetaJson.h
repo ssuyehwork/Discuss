@@ -91,6 +91,9 @@ public:
     ItemMap& items() { return m_items; }
     const ItemMap& items() const { return m_items; }
 
+    // 供派生索引器获取关联的物理目录路径
+    const std::wstring& folderPath() const { return m_folderPath; }
+
     /**
      * @brief 移除指定文件名的元数据条目
      */
