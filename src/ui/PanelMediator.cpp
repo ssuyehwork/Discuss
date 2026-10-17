@@ -505,7 +505,7 @@ void PanelMediator::setupConnections() {
             QSet<QString> commonTags;
             bool commonTagsInitialized = false;
 
-            QList<QPixmap> multiPreviewPixmaps;
+            QList<MetaPreviewItem> multiPreviewItems;
 
             for (int i = 0; i < paths.size(); ++i) {
                 const QString& path = paths[i];
@@ -532,16 +532,25 @@ void PanelMediator::setupConnections() {
                     itemNote = !n.isEmpty() ? n : QString::fromStdWString(meta.note);
                     itemUrl = !u.isEmpty() ? u : QString::fromStdWString(meta.url);
 
-                    if (multiPreviewPixmaps.size() < 5) {
+                    if (multiPreviewItems.size() < MetaPanel::kMultiPreviewMaxCards) {
+                        MetaPreviewItem item;
                         QVariant decData = idx.data(Qt::DecorationRole);
-                        QPixmap px;
-                        if (decData.canConvert<QIcon>()) {
-                            px = decData.value<QIcon>().pixmap(128, 128);
-                        } else if (decData.canConvert<QPixmap>()) {
-                            px = decData.value<QPixmap>();
+                        bool hasThumb = idx.data(HasThumbnailRole).toBool();
+                        if (hasThumb) {
+                            item.hasThumbnail = true;
+                            if (decData.canConvert<QIcon>()) {
+                                item.thumbnail = decData.value<QIcon>().pixmap(128, 128);
+                            } else if (decData.canConvert<QPixmap>()) {
+                                item.thumbnail = decData.value<QPixmap>();
+                            }
+                        } else {
+                            item.hasThumbnail = false;
+                            if (decData.canConvert<QIcon>()) {
+                                item.icon = decData.value<QIcon>();
+                            }
                         }
-                        if (!px.isNull()) {
-                            multiPreviewPixmaps.append(px);
+                        if ((item.hasThumbnail && !item.thumbnail.isNull()) || (!item.hasThumbnail && !item.icon.isNull())) {
+                            multiPreviewItems.append(item);
                         }
                     }
                 } else {
@@ -551,16 +560,17 @@ void PanelMediator::setupConnections() {
                     itemNote = QString::fromStdWString(meta.note);
                     itemUrl = QString::fromStdWString(meta.url);
 
-                    if (multiPreviewPixmaps.size() < 5) {
+                    if (multiPreviewItems.size() < MetaPanel::kMultiPreviewMaxCards) {
+                        MetaPreviewItem item;
+                        item.hasThumbnail = false;
                         QFileInfo fi(path);
-                        QPixmap px;
                         if (fi.isDir()) {
-                            px = UiHelper::getIcon("folder", QColor("#3498db"), 128).pixmap(128, 128);
+                            item.icon = UiHelper::getIcon("folder", QColor("#3498db"), 128);
                         } else {
-                            px = UiHelper::getIcon("file_eps", QColor("#888888"), 128).pixmap(128, 128);
+                            item.icon = UiHelper::getIcon("file_eps", QColor("#888888"), 128);
                         }
-                        if (!px.isNull()) {
-                            multiPreviewPixmaps.append(px);
+                        if (!item.icon.isNull()) {
+                            multiPreviewItems.append(item);
                         }
                     }
                 }
@@ -594,7 +604,7 @@ void PanelMediator::setupConnections() {
             metaPanel->setTags(commonTags.values());
 
             metaPanel->setPalettes({});
-            metaPanel->setMultiSelectionPreview(multiPreviewPixmaps);
+            metaPanel->setMultiSelectionPreview(multiPreviewItems);
         }
     };
 

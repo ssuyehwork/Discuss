@@ -26,13 +26,60 @@
 #include <QRegularExpression>
 #include <QPainter>
 #include <QPainterPath>
+#include <algorithm>
+#include <cmath>
 
 namespace QuarkMeta {
 
 namespace {
-constexpr int kMultiPreviewCardSize = 130;
-constexpr double kMultiPreviewAngleStep = 6.0;
-constexpr int kMultiPreviewMaxCards = 5;
+constexpr double kMultiPreviewAngleStep = 3.0;
+
+QPixmap renderThumbnailLayer(const QPixmap& pixmap) {
+    QSize canvasSize(200, 200);
+    QPixmap canvas(canvasSize);
+    canvas.fill(Qt::transparent);
+
+    QSize targetSize(200, 200);
+    QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+    {
+        QPainter painter(&canvas);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+
+        int x = (200 - scaled.width()) / 2;
+        int y = (200 - scaled.height()) / 2;
+
+        QPainterPath path;
+        path.addRoundedRect(QRectF(x, y, scaled.width(), scaled.height()), 4.0, 4.0);
+        painter.setClipPath(path);
+        painter.drawPixmap(x, y, scaled);
+    }
+    return canvas;
+}
+
+QPixmap renderIconLayer(const QIcon& icon, qreal dpr) {
+    QSize logicalCanvasSize(200, 200);
+    QSize physicalCanvasSize = logicalCanvasSize * dpr;
+
+    QPixmap canvas(physicalCanvasSize);
+    canvas.fill(Qt::transparent);
+    canvas.setDevicePixelRatio(dpr);
+
+    QPixmap iconPx = CardPainterHelper::renderDefaultIcon(icon, logicalCanvasSize, dpr);
+    if (!iconPx.isNull()) {
+        QPainter painter(&canvas);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+
+        QSizeF iconLogicalSize = iconPx.deviceIndependentSize();
+        int x = qRound((200.0 - iconLogicalSize.width()) / 2.0);
+        int y = qRound((200.0 - iconLogicalSize.height()) / 2.0);
+
+        painter.drawPixmap(x, y, iconPx);
+    }
+    return canvas;
+}
 }
 
 MetaPanel::MetaPanel(QWidget* parent) : QFrame(parent) {
@@ -421,29 +468,9 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap) {
         m_lblImagePreview->hide();
         if (m_topPreviewBox) m_topPreviewBox->hide();
     } else {
-        QSize canvasSize(200, 200);
-        QPixmap canvas(canvasSize);
-        canvas.fill(Qt::transparent);
-
-        QSize targetSize(200, 200);
-        QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-
-        {
-            QPainter painter(&canvas);
-            painter.setRenderHint(QPainter::Antialiasing);
-            painter.setRenderHint(QPainter::SmoothPixmapTransform);
-
-            int x = (200 - scaled.width()) / 2;
-            int y = (200 - scaled.height()) / 2;
-
-            QPainterPath path;
-            path.addRoundedRect(QRectF(x, y, scaled.width(), scaled.height()), 4.0, 4.0);
-            painter.setClipPath(path);
-            painter.drawPixmap(x, y, scaled);
-        }
-
+        QPixmap canvas = renderThumbnailLayer(pixmap);
         m_lblImagePreview->setPixmap(canvas);
-        m_lblImagePreview->setFixedSize(canvasSize);
+        m_lblImagePreview->setFixedSize(QSize(200, 200));
 
         m_lblImagePreview->show();
         if (m_topPreviewBox) {
@@ -453,23 +480,27 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap) {
     m_adjustTimer->start();
 }
 
-void MetaPanel::setMultiSelectionPreview(const QList<QPixmap>& pixmaps) {
+void MetaPanel::setMultiSelectionPreview(const QList<MetaPreviewItem>& items) {
     if (!m_lblImagePreview) return;
 
-    QList<QPixmap> validPixmaps;
-    for (const auto& px : pixmaps) {
-        if (!px.isNull()) {
-            validPixmaps.append(px);
-            if (validPixmaps.size() >= kMultiPreviewMaxCards) break;
+    QList<QPixmap> validLayers;
+    for (const auto& item : items) {
+        if (item.hasThumbnail && !item.thumbnail.isNull()) {
+            validLayers.append(renderThumbnailLayer(item.thumbnail));
+        } else if (!item.icon.isNull()) {
+            validLayers.append(renderIconLayer(item.icon, devicePixelRatioF()));
+        } else {
+            continue;
         }
+        if (validLayers.size() >= kMultiPreviewMaxCards) break;
     }
 
-    if (validPixmaps.isEmpty()) {
+    if (validLayers.isEmpty()) {
         setImagePreview(QPixmap());
         return;
     }
 
-    std::reverse(validPixmaps.begin(), validPixmaps.end());
+    std::reverse(validLayers.begin(), validLayers.end());
 
     qreal dpr = devicePixelRatioF();
     QSize logicalCanvasSize(200, 200);
@@ -483,10 +514,8 @@ void MetaPanel::setMultiSelectionPreview(const QList<QPixmap>& pixmaps) {
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
-    for (int k = validPixmaps.size() - 1; k >= 0; --k) {
-        const QPixmap& srcPx = validPixmaps[k];
-        QSize targetCardSize(kMultiPreviewCardSize, kMultiPreviewCardSize);
-        QPixmap scaled = srcPx.scaled(targetCardSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    for (int k = validLayers.size() - 1; k >= 0; --k) {
+        const QPixmap& layer = validLayers[k];
 
         double angle = 0.0;
         if (k >= 1) {
@@ -498,21 +527,7 @@ void MetaPanel::setMultiSelectionPreview(const QList<QPixmap>& pixmaps) {
         painter.save();
         painter.translate(100.0, 100.0);
         painter.rotate(angle);
-
-        double w = scaled.width();
-        double h = scaled.height();
-        QRectF cardRect(-w / 2.0, -h / 2.0, w, h);
-
-        QPainterPath path;
-        path.addRoundedRect(cardRect, 4.0, 4.0);
-        painter.setClipPath(path);
-        painter.drawPixmap(cardRect.topLeft(), scaled);
-
-        painter.setClipping(false);
-        QPen pen(QColor("#4a4a4a"), 1.0);
-        painter.setPen(pen);
-        painter.drawRoundedRect(cardRect, 4.0, 4.0);
-
+        painter.drawPixmap(QPointF(-100.0, -100.0), layer);
         painter.restore();
     }
 
@@ -533,29 +548,9 @@ void MetaPanel::setDefaultIconPreview(const QIcon& icon) {
         m_lblImagePreview->hide();
         if (m_topPreviewBox) m_topPreviewBox->hide();
     } else {
-        qreal dpr = devicePixelRatioF();
-        QSize logicalCanvasSize(200, 200);
-        QSize physicalCanvasSize = logicalCanvasSize * dpr;
-
-        QPixmap canvas(physicalCanvasSize);
-        canvas.fill(Qt::transparent);
-        canvas.setDevicePixelRatio(dpr);
-
-        QPixmap iconPx = CardPainterHelper::renderDefaultIcon(icon, logicalCanvasSize, dpr);
-        if (!iconPx.isNull()) {
-            QPainter painter(&canvas);
-            painter.setRenderHint(QPainter::Antialiasing);
-            painter.setRenderHint(QPainter::SmoothPixmapTransform);
-
-            QSizeF iconLogicalSize = iconPx.deviceIndependentSize();
-            int x = qRound((200.0 - iconLogicalSize.width()) / 2.0);
-            int y = qRound((200.0 - iconLogicalSize.height()) / 2.0);
-
-            painter.drawPixmap(x, y, iconPx);
-        }
-
+        QPixmap canvas = renderIconLayer(icon, devicePixelRatioF());
         m_lblImagePreview->setPixmap(canvas);
-        m_lblImagePreview->setFixedSize(logicalCanvasSize);
+        m_lblImagePreview->setFixedSize(QSize(200, 200));
 
         m_lblImagePreview->show();
         if (m_topPreviewBox) {

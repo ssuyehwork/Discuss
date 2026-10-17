@@ -15,6 +15,9 @@
 #include <QPointer>
 #include <QAction>
 #include <QSet>
+#include <QPixmap>
+#include <QIcon>
+#include <QList>
 #include "components/ElasticEdit.h"
 #include "TagSelectorOverlay.h"
 #include "components/TagPill.h"
@@ -23,11 +26,19 @@
 
 namespace QuarkMeta {
 
+struct MetaPreviewItem {
+    bool hasThumbnail = false;
+    QPixmap thumbnail;
+    QIcon icon;
+};
+
 class ColorStripPicker;
 
 class MetaPanel : public QFrame {
     Q_OBJECT
 public:
+    static constexpr int kMultiPreviewMaxCards = 5;
+
     explicit MetaPanel(QWidget* parent = nullptr);
     ~MetaPanel() override = default;
 
@@ -40,7 +51,7 @@ public:
 
     void setImagePreview(const QPixmap& pixmap);
     void setDefaultIconPreview(const QIcon& icon);
-    void setMultiSelectionPreview(const QList<QPixmap>& pixmaps);
+    void setMultiSelectionPreview(const QList<MetaPreviewItem>& items);
     void setSelectedPaths(const QStringList& paths);
     void setPalettes(const QVector<QPair<QColor, float>>& palette);
     void setTags(const QStringList& tags);
