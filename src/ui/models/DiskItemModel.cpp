@@ -640,20 +640,20 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
     ThumbnailPipelineService::instance().loadBatchAsync(pathsToLoad, DiskMediaExtractor::kThumbSize, [weakThis, thisGen](const QString& path, const QPixmap& pixmap) {
         if (!weakThis) return;
 
-        weakThis->m_requestedPaths.remove(path);
-        if (weakThis->currentGeneration() != thisGen) return;
+        // 🚀【主线程归一化/跨线程锁隔离】：所有的 m_requestedPaths/m_iconCache/m_aspectRatios 修改必须统一置于主线程回调内，
+        // 彻底杜绝后台工作线程并发写入 QMap/QCache 导致主线程遍历 QMapNode 时死循环引发的 UI 假死与“应用程序没有响应”！
+        QMetaObject::invokeMethod(weakThis.data(), [weakThis, path, pixmap, thisGen]() {
+            if (!weakThis || weakThis->currentGeneration() != thisGen) return;
 
-        if (!pixmap.isNull()) {
-            QIcon icon(pixmap);
-            weakThis->m_iconCache.insert(path, new QIcon(icon));
-            double ar = (double)pixmap.width() / pixmap.height();
-            weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = ar;
-        }
-
-        // 注意：下面的状态更新必须在 isNull 判断之外，空图（提取失败）才能走到 Failed 分支
-        QMetaObject::invokeMethod(weakThis, [weakThis, path, pixmap]() {
-            if (!weakThis) return;
             weakThis->m_requestedPaths.remove(path);
+
+            if (!pixmap.isNull()) {
+                QIcon icon(pixmap);
+                weakThis->m_iconCache.insert(path, new QIcon(icon));
+                double ar = (double)pixmap.width() / pixmap.height();
+                weakThis->m_aspectRatios[QDir::toNativeSeparators(path)] = ar;
+            }
+
             auto it = weakThis->m_pathToIndex.find(path);
             if (it != weakThis->m_pathToIndex.end()) {
                 int currentIdx = it->second;
