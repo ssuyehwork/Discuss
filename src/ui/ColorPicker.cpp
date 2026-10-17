@@ -332,8 +332,8 @@ int ColorPicker::currentTolerance() const {
 // --- ColorStripPicker 实现 ---
 ColorStripPicker::ColorStripPicker(const QString& currentColorHex, QWidget* parent)
     : QWidget(parent), m_selectedColor(currentColorHex) {
-    // 9个直径为18像素的圆，间距为4像素，起始边距2像素（使圆心位于 x=11，与 22px 宽的清除按钮完全靠左线对齐）。
-    setFixedSize(210, 26);
+    // 9个直径为16像素的圆，间距为8像素，起始边距4像素（叠加 MetaPanel 8px 容器边距实现 12px 总边距）。
+    setFixedSize(220, 26);
     setMouseTracking(true);
     setCursor(Qt::PointingHandCursor);
 
@@ -354,7 +354,7 @@ void ColorStripPicker::paintEvent(QPaintEvent* event) {
     
     // 保持完全透明底色
     
-    int startX = 2; // 起始左边距（圆心位于 2 + 9 = 11px，与星级行首个按钮 22px 宽度完美轴向对齐）
+    int startX = 3; // 起始左边距由 2px 调整为 3px（叠加 MetaPanel 8px 容器边距后，总间距正好为 12px）
     int y = rect().height() / 2;
     int diameter = m_circleRadius * 2;
     
@@ -388,7 +388,7 @@ void ColorStripPicker::paintEvent(QPaintEvent* event) {
 void ColorStripPicker::mouseMoveEvent(QMouseEvent* event) {
     int newHovered = -1;
     int cy = rect().height() / 2;
-    int startX = 2;
+    int startX = 3; // 起始左边距调整为 3px，确保鼠标感应区域与绘制坐标一致
     int diameter = m_circleRadius * 2;
     for (int i = 0; i < m_items.size(); ++i) {
         int cx = startX + i * (diameter + m_spacing) + m_circleRadius;
