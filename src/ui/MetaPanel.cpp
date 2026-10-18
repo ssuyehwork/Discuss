@@ -343,6 +343,7 @@ void MetaPanel::initUi() {
     QVBoxLayout* pathL = new QVBoxLayout(pathBox);
     pathL->setContentsMargins(0, 0, 0, 0);
     pathL->setSpacing(6);
+    pathL->setSizeConstraint(QLayout::SetMinimumSize);
 
     m_pathEdit = new ElasticEdit(pathBox);
     m_pathEdit->setReadOnly(true);
