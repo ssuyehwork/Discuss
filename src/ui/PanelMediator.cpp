@@ -523,6 +523,7 @@ void PanelMediator::setupConnections() {
             bool commonTagsInitialized = false;
 
             QList<MetaPreviewItem> multiPreviewItems;
+            int previewStartIdx = qMax(0, paths.size() - MetaPanel::kMultiPreviewMaxCards);
 
             for (int i = 0; i < paths.size(); ++i) {
                 const QString& path = paths[i];
@@ -549,7 +550,7 @@ void PanelMediator::setupConnections() {
                     itemNote = !n.isEmpty() ? n : QString::fromStdWString(meta.note);
                     itemUrl = !u.isEmpty() ? u : QString::fromStdWString(meta.url);
 
-                    if (multiPreviewItems.size() < MetaPanel::kMultiPreviewMaxCards) {
+                    if (i >= previewStartIdx && multiPreviewItems.size() < MetaPanel::kMultiPreviewMaxCards) {
                         MetaPreviewItem item;
                         QVariant decData = idx.data(Qt::DecorationRole);
                         bool hasThumb = idx.data(HasThumbnailRole).toBool();
@@ -577,7 +578,7 @@ void PanelMediator::setupConnections() {
                     itemNote = QString::fromStdWString(meta.note);
                     itemUrl = QString::fromStdWString(meta.url);
 
-                    if (multiPreviewItems.size() < MetaPanel::kMultiPreviewMaxCards) {
+                    if (i >= previewStartIdx && multiPreviewItems.size() < MetaPanel::kMultiPreviewMaxCards) {
                         MetaPreviewItem item;
                         item.hasThumbnail = false;
                         QFileInfo fi(path);
