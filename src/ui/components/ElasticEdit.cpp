@@ -9,19 +9,19 @@
 namespace QuarkMeta {
 
 ElasticEdit::ElasticEdit(QWidget* parent) : QTextEdit(parent) {
-    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setLineWrapMode(QTextEdit::WidgetWidth);
     QTextOption opt = document()->defaultTextOption();
     opt.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     document()->setDefaultTextOption(opt);
-    document()->setDocumentMargin(0);
+    document()->setDocumentMargin(2); // 留出 2px 文档内边距，保证字不贴顶且不切字
     connect(this, &QTextEdit::textChanged, this, &ElasticEdit::adjustHeight);
 }
 
 void ElasticEdit::adjustHeight() {
-    int horizontalPadding = 20;
-    int verticalPadding = 8;
+    int horizontalPadding = 16;
+    int verticalPadding = 6;
     int border = 2;
     int w = width();
     if (w > 50) {

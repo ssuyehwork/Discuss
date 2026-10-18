@@ -32,7 +32,7 @@
 namespace QuarkMeta {
 
 namespace {
-constexpr double kMultiPreviewAngleStep = 4.0;
+constexpr double kMultiPreviewAngleStep = 3.0;
 
 QPixmap renderThumbnailLayer(const QPixmap& pixmap) {
     QSize canvasSize(200, 200);
@@ -126,7 +126,6 @@ QWidget* MetaPanel::createCollapsibleSection(const QString& title, QWidget* cont
         contentWidget->setVisible(nowVisible);
         updateHeaderText(nowVisible);
         adjustFlowHeights();
-        if (m_container) m_container->adjustSize();
     });
 
     sectionLayout->addWidget(btnHeader);
@@ -168,7 +167,7 @@ void MetaPanel::initUi() {
     // 1. 顶部预览区
     m_topPreviewBox = new QWidget(m_container);
     m_topPreviewBox->setObjectName("TopPreviewBox");
-    m_topPreviewBox->setMaximumWidth(200);
+    m_topPreviewBox->setFixedSize(200, 200);
     // TopPreviewBox style in style.qss
     QVBoxLayout* previewLayout = new QVBoxLayout(m_topPreviewBox);
     previewLayout->setContentsMargins(0, 0, 0, 0);
@@ -343,9 +342,10 @@ void MetaPanel::initUi() {
     QWidget* pathBox = new QWidget(m_container);
     QVBoxLayout* pathL = new QVBoxLayout(pathBox);
     pathL->setContentsMargins(0, 0, 0, 0);
-    pathL->setSpacing(6);
+    pathL->setSpacing(5);
+    pathL->setSizeConstraint(QLayout::SetMinimumSize);
 
-    m_pathEdit = new QLineEdit(pathBox);
+    m_pathEdit = new ElasticEdit(pathBox);
     m_pathEdit->setReadOnly(true);
     m_pathEdit->setObjectName("MetaPathEdit");
     pathL->addWidget(m_pathEdit);
@@ -359,7 +359,7 @@ void MetaPanel::initUi() {
     m_btnCopyPath->setCursor(Qt::PointingHandCursor);
     m_btnCopyPath->setObjectName("BtnCopyPath");
     connect(m_btnCopyPath, &QPushButton::clicked, this, [this]() {
-        QString p = m_pathEdit->text().trimmed();
+        QString p = m_pathEdit->toPlainText().trimmed();
         if (!p.isEmpty() && !p.startsWith("已选中")) {
             QApplication::clipboard()->setText(QDir::toNativeSeparators(p));
             ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径", 1200, QColor("#2ecc71"));
@@ -372,7 +372,7 @@ void MetaPanel::initUi() {
     m_btnOpenLocation->setCursor(Qt::PointingHandCursor);
     m_btnOpenLocation->setObjectName("BtnOpenLocation");
     connect(m_btnOpenLocation, &QPushButton::clicked, this, [this]() {
-        QString p = m_pathEdit->text().trimmed();
+        QString p = m_pathEdit->toPlainText().trimmed();
         if (!p.isEmpty() && !p.startsWith("已选中")) {
             ShellHelper::openInExplorer(p);
         }
@@ -526,12 +526,12 @@ void MetaPanel::setMultiSelectionPreview(const QList<MetaPreviewItem>& items) {
         double offsetY = -3.0 * k;      // 逐层向上微平移 3px
 
         painter.save();
-        painter.translate(100.0, 100.0 + offsetY);
+        painter.translate(95.0, 95.0 + offsetY);
         painter.rotate(angle);
         if (scale < 1.0) {
             painter.scale(scale, scale);
         }
-        painter.drawPixmap(QPointF(-100.0, -100.0), layer);
+        painter.drawPixmap(QPointF(-95.0, -95.0), layer);
         painter.restore();
     }
 
@@ -705,27 +705,18 @@ void MetaPanel::adjustFlowHeights() {
         bool hasPreview = (m_lblImagePreview && !m_lblImagePreview->pixmap().isNull());
         if (hasPreview) {
             m_topPreviewBox->show();
-            m_topPreviewBox->setFixedSize(200, 200);
         } else {
             m_topPreviewBox->hide();
-            m_topPreviewBox->setFixedHeight(0);
         }
     }
-    // 🚀【核心修复】：强制锁定以 200 宽度进行折行测算，杜绝首帧宽度未就绪导致的高度暴涨
-    if (m_paletteContainer && m_paletteFlowLayout) {
-        bool hasPalette = (m_paletteFlowLayout->count() > 0);
+
+    if (m_paletteContainer) {
+        bool hasPalette = (m_paletteFlowLayout && m_paletteFlowLayout->count() > 0);
         if (hasPalette) {
-            // 恒定以 200 像素的标准容器宽度做 heightForWidth 测试计算
-            int contentH = m_paletteFlowLayout->heightForWidth(200);
-            contentH = qMax(20, contentH);
-            m_paletteContainer->setFixedWidth(200);
-            m_paletteContainer->setFixedHeight(contentH);
             m_paletteContainer->show();
         } else {
-            m_paletteContainer->setFixedHeight(0);
             m_paletteContainer->hide();
         }
-        m_paletteFlowLayout->activate();
     }
 
     if (m_tagContainer && m_tagFlowLayout) {
@@ -733,23 +724,13 @@ void MetaPanel::adjustFlowHeights() {
         if (hasTags) {
             if (m_btnAddTagBig) m_btnAddTagBig->hide();
             if (m_btnAddTagSmall) m_btnAddTagSmall->show();
-            // 标签容器同样做保底处理，宽度如果还没布局就保底为 200
-            int tagW = m_tagContainer->width() > 0 ? m_tagContainer->width() : 200;
-            int contentH = m_tagFlowLayout->heightForWidth(tagW);
-            contentH = qMax(26, contentH);
             m_tagContainer->show();
-            m_tagContainer->setFixedHeight(contentH);
         } else {
             if (m_btnAddTagSmall) m_btnAddTagSmall->hide();
             if (m_btnAddTagBig) m_btnAddTagBig->show();
-            m_tagContainer->setFixedHeight(0);
             m_tagContainer->hide();
         }
         m_tagFlowLayout->activate();
-    }
-
-    if (m_container) {
-        m_container->adjustSize();
     }
 }
 
@@ -778,8 +759,8 @@ void MetaPanel::updateInfo(const QString& n, const QString& t, const QString& s,
         lblMtime->setText(mt);
         lblAtime->setText(at);
         
-        m_pathEdit->setText(p);
-        m_pathEdit->setCursorPosition(0);
+        m_pathEdit->setPlainText(p);
+        m_pathEdit->adjustHeight();
     }
 
     lblEncrypted->setText(e ? "已加密" : "未加密");
@@ -923,7 +904,7 @@ void MetaPanel::setPalettes(const QVector<QPair<QColor, float>>& palette) {
 }
 
 void MetaPanel::setAsPrimaryColor(const QColor& color) {
-    QString currentPath = m_pathEdit->text().trimmed();
+    QString currentPath = m_pathEdit->toPlainText().trimmed();
     if (!currentPath.isEmpty() && !currentPath.startsWith("已选中")) {
         emit primaryColorChanged(currentPath, color);
     }
