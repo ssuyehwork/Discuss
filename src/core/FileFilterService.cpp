@@ -10,6 +10,7 @@ bool FileFilterService::isAuxiliaryFile(const QString& path) {
  
     // 1. 过滤内部配置文件与缩略图 
     if (fileName.endsWith(".QuarkMeta.json", Qt::CaseInsensitive) || 
+        fileName.endsWith(".QuarkMeta.json.tmp", Qt::CaseInsensitive) || 
         fileName.endsWith("_thumbnail.png", Qt::CaseInsensitive)) { 
         return true;  
     } 

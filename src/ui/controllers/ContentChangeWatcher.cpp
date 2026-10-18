@@ -145,6 +145,20 @@ void ContentChangeWatcher::onDirectoryChanged(const QString& dirPath, const QStr
     }
     if (!hit && !m_watchedIncludeSubtree) return;
 
+    // 先过滤辅助文件：只含辅助文件的变化，不触发任何刷新，包括递归与分栏视图
+    QStringList effectiveNames;
+    if (!overflow) {
+        for (const QString& rawName : dirtyNames) {
+            QString absP = QDir(dirPath).filePath(rawName);
+            if (!FileFilterService::isAuxiliaryFile(absP)) {
+                effectiveNames.append(rawName);
+            }
+        }
+        if (effectiveNames.isEmpty()) {
+            return;
+        }
+    }
+
     if (m_panel->isRecursive()) {
         m_panel->refreshAll();
         return;
@@ -155,22 +169,14 @@ void ContentChangeWatcher::onDirectoryChanged(const QString& dirPath, const QStr
         return;
     }
 
-    if (overflow || dirtyNames.size() > 500) {
+    if (overflow || effectiveNames.size() > 500) {
         m_pendingDirtyNames.clear();
         m_panel->refreshAll();
         return;
     }
 
-    // 过滤辅助文件
-    for (const QString& rawName : dirtyNames) {
-        QString absP = QDir(dirPath).filePath(rawName);
-        if (!FileFilterService::isAuxiliaryFile(absP)) {
-            m_pendingDirtyNames.insert(rawName);
-        }
-    }
-
-    if (m_pendingDirtyNames.isEmpty()) {
-        return;
+    for (const QString& rawName : effectiveNames) {
+        m_pendingDirtyNames.insert(rawName);
     }
 
     m_pendingDirPath = dirPath;
