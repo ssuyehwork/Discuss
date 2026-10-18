@@ -1,5 +1,6 @@
 #include "SmartFolderDao.h"
 #include "DatabaseManager.h"
+#include "LibraryDao.h"
 #include <sqlite3.h>
 #include <QJsonDocument>
 #include <QDateTime>
@@ -210,6 +211,58 @@ bool SmartFolderDao::updateSmartFolder(const SmartFolderRecord& rec) {
     sqlite3_finalize(stmt);
     sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
     return success;
+}
+
+int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
+    if (rec.rules.isEmpty()) return 0;
+
+    auto allItems = LibraryDao::getCategoryIndexedItems(-1);
+    if (allItems.isEmpty()) return 0;
+
+    int count = 0;
+    bool isAllMode = (rec.matchMode == "ALL");
+
+    for (const auto& item : allItems) {
+        bool match = isAllMode;
+        for (const auto& rule : rec.rules) {
+            bool rulePassed = false;
+            if (rule.type == SmartRuleType::Rating) {
+                int rVal = rule.value.toInt();
+                if (rule.op == SmartRuleOperator::GreaterOrEqual) rulePassed = (item.rating >= rVal);
+                else if (rule.op == SmartRuleOperator::Equals) rulePassed = (item.rating == rVal);
+                else if (rule.op == SmartRuleOperator::LessOrEqual) rulePassed = (item.rating <= rVal);
+            } else if (rule.type == SmartRuleType::Extension) {
+                QString ext = QString::fromStdWString(item.originalName);
+                if (rule.op == SmartRuleOperator::Equals || rule.op == SmartRuleOperator::Contains) {
+                    rulePassed = ext.endsWith("." + rule.value, Qt::CaseInsensitive) || ext.contains(rule.value, Qt::CaseInsensitive);
+                }
+            } else if (rule.type == SmartRuleType::Color) {
+                rulePassed = (QString::fromStdWString(item.color).compare(rule.value, Qt::CaseInsensitive) == 0);
+            } else if (rule.type == SmartRuleType::Tag) {
+                for (const auto& t : item.tags) {
+                    if (QString::fromStdWString(t).compare(rule.value, Qt::CaseInsensitive) == 0) {
+                        rulePassed = true;
+                        break;
+                    }
+                }
+            } else if (rule.type == SmartRuleType::Keyword) {
+                QString name = QString::fromStdWString(item.originalName);
+                QString note = QString::fromStdWString(item.note);
+                QString url = QString::fromStdWString(item.url);
+                rulePassed = name.contains(rule.value, Qt::CaseInsensitive) ||
+                             note.contains(rule.value, Qt::CaseInsensitive) ||
+                             url.contains(rule.value, Qt::CaseInsensitive);
+            }
+
+            if (isAllMode) {
+                if (!rulePassed) { match = false; break; }
+            } else {
+                if (rulePassed) { match = true; break; }
+            }
+        }
+        if (match) count++;
+    }
+    return count;
 }
 
 bool SmartFolderDao::removeSmartFolderById(int id) {

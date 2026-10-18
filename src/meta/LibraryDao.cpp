@@ -131,16 +131,19 @@ bool LibraryDao::removeIndexedItem(int categoryId, const QString& filePath) {
 QList<ItemMeta> LibraryDao::getCategoryIndexedItems(int categoryId) {
     QList<ItemMeta> list;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db || categoryId <= 0) return list;
+    if (!db || categoryId == 0) return list;
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-    const char* sql = "SELECT file_path, rating, manual_color, auto_color, tags, note, link, width, height "
-                      "FROM library_item_index WHERE category_id = ?;";
+    const char* sql = (categoryId == -1) ?
+                      "SELECT file_path, rating, manual_color, auto_color, tags, note, link, width, height FROM library_item_index;" :
+                      "SELECT file_path, rating, manual_color, auto_color, tags, note, link, width, height FROM library_item_index WHERE category_id = ?;";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return list;
 
-    sqlite3_bind_int(stmt, 1, categoryId);
+    if (categoryId != -1) {
+        sqlite3_bind_int(stmt, 1, categoryId);
+    }
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         ItemMeta meta;
         const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));

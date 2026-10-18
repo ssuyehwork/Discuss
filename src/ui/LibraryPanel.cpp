@@ -1147,6 +1147,7 @@ void LibraryPanel::loadLibrary() {
     m_model->appendRow(smartFolderHeader);
 
     for (const auto& sfRec : smartFolders) {
+        int countVal = SmartFolderDao::countMatchingItems(sfRec);
         QIcon sfIcon = UiHelper::getIcon(sfRec.iconKey, QColor(sfRec.colorHex), 18);
         QStandardItem* sfItem = new QStandardItem(sfIcon, sfRec.name);
         sfItem->setData("smart_folder", TypeRole);
@@ -1154,6 +1155,7 @@ void LibraryPanel::loadLibrary() {
         sfItem->setData(sfRec.id, Qt::UserRole + 1);
         sfItem->setData(sfRec.iconKey, Qt::UserRole + 2);
         sfItem->setData(sfRec.colorHex, Qt::UserRole + 3);
+        sfItem->setData(countVal, Qt::UserRole + 9);
         sfItem->setEditable(false);
         smartFolderHeader->appendRow(sfItem);
     }
