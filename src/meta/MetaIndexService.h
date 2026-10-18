@@ -44,6 +44,11 @@ public:
     void enqueueFolder(const std::wstring& folderPath);
 
     /**
+     * @brief 异步分类索引钩子：将分类及其包含的路径投递至后台队列，由后台线程处理索引（0ms UI 阻断）
+     */
+    void enqueueCategoryIndexing(int categoryId, const QStringList& paths);
+
+    /**
      * @brief 跨文件夹全局搜索接口（走独立只读连接，WAL 模式下并发无锁）
      * @param keyword 搜索关键词 (匹配文件名、备注、标签)
      * @param scopeFolderPath 限定的父文件夹（为空表示全局跨盘跨文件夹搜索）
@@ -71,7 +76,13 @@ private:
     // 任务队列与防抖合并
     std::mutex m_queueMutex;
     std::condition_variable m_cv;
+    struct CategoryTask {
+        int categoryId;
+        QStringList paths;
+    };
+
     std::unordered_map<std::wstring, std::wstring> m_pendingFolders; // normFolder -> rawFolder
+    std::vector<CategoryTask> m_pendingCategoryTasks;
     
     std::thread m_workerThread;
     std::atomic<bool> m_stopping{false};
