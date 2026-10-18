@@ -136,6 +136,8 @@ bool MetaIndexService::initSchema(sqlite3* db) {
         );
         CREATE INDEX IF NOT EXISTS idx_items_folder ON items_index(folder_path);
         CREATE INDEX IF NOT EXISTS idx_items_name ON items_index(name);
+        CREATE INDEX IF NOT EXISTS idx_items_filter ON items_index(rating, color, type, file_mtime);
+        CREATE INDEX IF NOT EXISTS idx_items_tags ON items_index(tags);
     )";
 
     char* errMsg = nullptr;
