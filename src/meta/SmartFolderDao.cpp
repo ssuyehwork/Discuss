@@ -4,6 +4,7 @@
 #include <sqlite3.h>
 #include <QJsonDocument>
 #include <QDateTime>
+#include <QFileInfo>
 
 namespace QuarkMeta {
 
@@ -224,6 +225,11 @@ int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
 
     for (const auto& item : allItems) {
         bool match = isAllMode;
+        QString pathStr = QString::fromStdWString(item.originalName);
+        QFileInfo fi(pathStr);
+        QString fileName = fi.fileName();
+        QString suffix = fi.suffix();
+
         for (const auto& rule : rec.rules) {
             bool rulePassed = false;
             if (rule.type == SmartRuleType::Rating) {
@@ -232,10 +238,10 @@ int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
                 else if (rule.op == SmartRuleOperator::Equals) rulePassed = (item.rating == rVal);
                 else if (rule.op == SmartRuleOperator::LessOrEqual) rulePassed = (item.rating <= rVal);
             } else if (rule.type == SmartRuleType::Extension) {
-                QString ext = QString::fromStdWString(item.originalName);
-                if (rule.op == SmartRuleOperator::Equals || rule.op == SmartRuleOperator::Contains) {
-                    rulePassed = ext.endsWith("." + rule.value, Qt::CaseInsensitive) || ext.contains(rule.value, Qt::CaseInsensitive);
-                }
+                QString targetExt = rule.value;
+                if (targetExt.startsWith('.')) targetExt.remove(0, 1);
+                rulePassed = (suffix.compare(targetExt, Qt::CaseInsensitive) == 0) ||
+                             (fileName.endsWith("." + targetExt, Qt::CaseInsensitive));
             } else if (rule.type == SmartRuleType::Color) {
                 rulePassed = (QString::fromStdWString(item.color).compare(rule.value, Qt::CaseInsensitive) == 0);
             } else if (rule.type == SmartRuleType::Tag) {
@@ -246,10 +252,10 @@ int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
                     }
                 }
             } else if (rule.type == SmartRuleType::Keyword) {
-                QString name = QString::fromStdWString(item.originalName);
                 QString note = QString::fromStdWString(item.note);
                 QString url = QString::fromStdWString(item.url);
-                rulePassed = name.contains(rule.value, Qt::CaseInsensitive) ||
+                rulePassed = fileName.contains(rule.value, Qt::CaseInsensitive) ||
+                             pathStr.contains(rule.value, Qt::CaseInsensitive) ||
                              note.contains(rule.value, Qt::CaseInsensitive) ||
                              url.contains(rule.value, Qt::CaseInsensitive);
             }

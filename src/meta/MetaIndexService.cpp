@@ -137,7 +137,24 @@ bool MetaIndexService::initSchema(sqlite3* db) {
         CREATE INDEX IF NOT EXISTS idx_items_folder ON items_index(folder_path);
         CREATE INDEX IF NOT EXISTS idx_items_name ON items_index(name);
         CREATE INDEX IF NOT EXISTS idx_items_filter ON items_index(rating, color, type, file_mtime);
-        CREATE INDEX IF NOT EXISTS idx_items_tags ON items_index(tags);
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
+            name,
+            note,
+            tags,
+            tokenize = 'unicode61'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS idx_items_ai AFTER INSERT ON items_index BEGIN
+            INSERT INTO items_fts(rowid, name, note, tags) VALUES (new.rowid, new.name, new.note, new.tags);
+        END;
+        CREATE TRIGGER IF NOT EXISTS idx_items_ad AFTER DELETE ON items_index BEGIN
+            DELETE FROM items_fts WHERE rowid = old.rowid;
+        END;
+        CREATE TRIGGER IF NOT EXISTS idx_items_au AFTER UPDATE ON items_index BEGIN
+            DELETE FROM items_fts WHERE rowid = old.rowid;
+            INSERT INTO items_fts(rowid, name, note, tags) VALUES (new.rowid, new.name, new.note, new.tags);
+        END;
     )";
 
     char* errMsg = nullptr;
@@ -385,9 +402,9 @@ QStringList MetaIndexService::searchGlobal(const QString& keyword, const QString
     std::string sql;
     bool hasScope = !scopeFolderPath.trimmed().isEmpty();
     if (hasScope) {
-        sql = "SELECT path FROM items_index WHERE folder_path LIKE ? AND (name LIKE ? OR note LIKE ? OR tags LIKE ?) LIMIT ?;";
+        sql = "SELECT i.path FROM items_index i JOIN items_fts f ON i.rowid = f.rowid WHERE i.folder_path LIKE ? AND f MATCH ? LIMIT ?;";
     } else {
-        sql = "SELECT path FROM items_index WHERE (name LIKE ? OR note LIKE ? OR tags LIKE ?) LIMIT ?;";
+        sql = "SELECT i.path FROM items_index i JOIN items_fts f ON i.rowid = f.rowid WHERE f MATCH ? LIMIT ?;";
     }
 
     sqlite3_stmt* stmt = nullptr;
@@ -395,17 +412,17 @@ QStringList MetaIndexService::searchGlobal(const QString& keyword, const QString
         return results;
     }
 
-    QString pattern = "%" + keyword.trimmed() + "%";
-    QByteArray patternUtf8 = pattern.toUtf8();
+    QString cleanKeyword = keyword.trimmed();
+    cleanKeyword.replace("\"", "");
+    QString ftsQuery = QString("\"%1\"*").arg(cleanKeyword);
+    QByteArray ftsQueryUtf8 = ftsQuery.toUtf8();
 
     int idx = 1;
     if (hasScope) {
         QString scopePattern = QString::fromStdWString(normalizePath(scopeFolderPath.toStdWString())) + "%";
         sqlite3_bind_text(stmt, idx++, scopePattern.toUtf8().constData(), -1, SQLITE_TRANSIENT);
     }
-    sqlite3_bind_text(stmt, idx++, patternUtf8.constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, idx++, patternUtf8.constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, idx++, patternUtf8.constData(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, idx++, ftsQueryUtf8.constData(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int(stmt, idx++, limit);
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {

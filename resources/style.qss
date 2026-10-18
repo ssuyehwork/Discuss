@@ -1606,8 +1606,11 @@ QLabel#MetaPanelTitleLabel {
     background: transparent;
     border: none;
 }
-QScrollArea#MetaScrollArea {
+QScrollArea#MetaScrollArea, QScrollArea#MetadataScrollArea {
     border: none;
+    background: transparent;
+}
+QWidget#MetadataContainerInner {
     background: transparent;
 }
 QWidget#TopPreviewBox {

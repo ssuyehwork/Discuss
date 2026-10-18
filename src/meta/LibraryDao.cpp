@@ -29,6 +29,8 @@ bool LibraryDao::initTable() {
                            "path TEXT NOT NULL, "
                            "PRIMARY KEY(category_id, path));";
 
+    const char* sqlPathsIdx = "CREATE INDEX IF NOT EXISTS idx_category_paths_path ON library_category_paths(path);";
+
     const char* sqlIndex = "CREATE TABLE IF NOT EXISTS library_item_index ("
                            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                            "category_id INTEGER NOT NULL, "
@@ -49,6 +51,7 @@ bool LibraryDao::initTable() {
     char* errMsgs = nullptr;
     sqlite3_exec(db, sqlCat, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlPaths, nullptr, nullptr, &errMsgs);
+    sqlite3_exec(db, sqlPathsIdx, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlIndex, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN preset_tags TEXT DEFAULT '';", nullptr, nullptr, nullptr);
     sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN is_pinned INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);

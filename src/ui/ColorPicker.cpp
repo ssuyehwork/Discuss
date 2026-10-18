@@ -143,7 +143,7 @@ void HueSlider::mouseMoveEvent(QMouseEvent* event) {
 // --- ColorPicker ---
 ColorPicker::ColorPicker(QWidget* parent) : QWidget(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint) {
     setAttribute(Qt::WA_DeleteOnClose);
-    setFixedSize(220, 320); // 2026-05-17 按照用户要求：高度由 280 扩大到 320，容纳准确度滑条行
+    setFixedSize(210, 320); // 2026-05-17 按照用户要求：高度由 280 扩大到 320，容纳准确度滑条行
 // ColorPicker style in style.qss
 
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
@@ -333,7 +333,7 @@ int ColorPicker::currentTolerance() const {
 ColorStripPicker::ColorStripPicker(const QString& currentColorHex, QWidget* parent)
     : QWidget(parent), m_selectedColor(currentColorHex) {
     // 9个直径为16像素的圆，间距为8像素，起始边距4像素（叠加 MetaPanel 8px 容器边距实现 12px 总边距）。
-    setFixedSize(220, 26);
+    setFixedSize(210, 26);
     setMouseTracking(true);
     setCursor(Qt::PointingHandCursor);
 
