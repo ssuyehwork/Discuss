@@ -4,12 +4,17 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <QThreadPool>
+#include <QList>
+#include <QPair>
 #include <unordered_map>
 #include <unordered_set>
 #include <mutex>
 #include <string>
 #include <functional>
 #include <memory>
+#include <vector>
+#include <cstdint>
 
 namespace QuarkMeta {
 
@@ -44,6 +49,9 @@ public:
      */
     bool renameItem(const QString& folderPath, const QString& oldName, const QString& newName);
 
+    bool transferItems(const QList<QPair<QString, QString>>& pairs, bool isMove, bool replaceDestWhenSourceMissing);
+    bool removeItem(const QString& filePath);
+
     /**
      * @brief 强制立即将所有未落盘的脏目录 JSON 刷入物理磁盘 (sync 为 true 时在当前线程同步写入)
      */
@@ -69,11 +77,25 @@ private:
     void prefetchFolderJson(const std::wstring& folderPath);
     std::shared_ptr<QuarkMetaJson> getOrLoadFolderLocked(const std::wstring& normFolder, const std::wstring& folderPath);
 
+    struct FlushTicket {
+        std::wstring normFolder;
+        uint64_t revision;
+        QuarkMetaJson snapshot;
+        FlushTicket(const std::wstring& n, uint64_t r, const QuarkMetaJson& s) : normFolder(n), revision(r), snapshot(s) {}
+    };
+    void markDirtyLocked(const std::wstring& normFolder);   // 调用方必须已持有 m_storeMutex
+    void saveTicket(const FlushTicket& ticket);              // 内部加 m_saveMutex；锁顺序固定为 m_storeMutex → m_saveMutex，持有 m_saveMutex 时不得获取 m_storeMutex
+    void scheduleFlush();
+
     std::mutex m_storeMutex;
     // 规范化目录路径 -> 内存中缓存的 JSON 对象指针
     std::unordered_map<std::wstring, std::shared_ptr<QuarkMetaJson>> m_folderCacheMap;
     // 标记需要写盘落盘的规范化目录路径集合
     std::unordered_set<std::wstring> m_dirtyFolderPaths;
+    std::unordered_map<std::wstring, uint64_t> m_folderRevision;  // 受 m_storeMutex 保护
+    std::unordered_map<std::wstring, uint64_t> m_savedRevision;   // 受 m_saveMutex 保护
+    std::mutex m_saveMutex;
+    QThreadPool m_flushPool;
 
     QTimer* m_flushTimer = nullptr;
     static constexpr int kFlushDebounceMs = 50; // 50ms 防抖

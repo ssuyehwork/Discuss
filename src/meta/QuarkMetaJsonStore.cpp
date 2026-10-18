@@ -15,6 +15,7 @@ QuarkMetaJsonStore& QuarkMetaJsonStore::instance() {
 
 QuarkMetaJsonStore::QuarkMetaJsonStore(QObject* parent)
     : QObject(parent) {
+    m_flushPool.setMaxThreadCount(1);
     m_flushTimer = new QTimer(this);
     m_flushTimer->setSingleShot(true);
     m_flushTimer->setInterval(kFlushDebounceMs);
@@ -24,12 +25,14 @@ QuarkMetaJsonStore::QuarkMetaJsonStore(QObject* parent)
         this->moveToThread(app->thread());
         connect(app, &QCoreApplication::aboutToQuit, this, [this]() {
             flushAllDirtyBuffers(true);
+            m_flushPool.waitForDone();
         });
     }
 }
 
 QuarkMetaJsonStore::~QuarkMetaJsonStore() {
     flushAllDirtyBuffers(true);
+    m_flushPool.waitForDone();
 }
 
 std::wstring QuarkMetaJsonStore::normalizeFolderPath(const std::wstring& path) {
@@ -94,7 +97,7 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
         meta.type = info.isDir() ? L"folder" : L"file";
         updater(meta);
 
-        m_dirtyFolderPaths.insert(normFolder);
+        markDirtyLocked(normFolder);
 
         // 如果是文件夹，同步更新自身目录内部的 .QuarkMeta.json 镜像
         if (info.isDir()) {
@@ -127,16 +130,11 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
             fMeta.tags = dummyItem.tags;
             fMeta.palettes = dummyItem.palettes;
 
-            m_dirtyFolderPaths.insert(normSelfDir);
+            markDirtyLocked(normSelfDir);
         }
     }
 
-    // 🚀【50ms 自动防抖】：安全跨线程通知 UI 主线程启动定时器
-    QMetaObject::invokeMethod(this, [this]() {
-        if (m_flushTimer && !m_flushTimer->isActive()) {
-            m_flushTimer->start();
-        }
-    }, Qt::QueuedConnection);
+    scheduleFlush();
 }
 
 QuarkMetaJson::ItemMap QuarkMetaJsonStore::readFolderMeta(const std::wstring& folderPath) {
@@ -170,69 +168,198 @@ bool QuarkMetaJsonStore::readItemMeta(const std::wstring& filePath, ItemMeta& ou
     return false;
 }
 
+void QuarkMetaJsonStore::markDirtyLocked(const std::wstring& normFolder) {
+    m_dirtyFolderPaths.insert(normFolder);
+    ++m_folderRevision[normFolder];
+}
+
+void QuarkMetaJsonStore::scheduleFlush() {
+    QMetaObject::invokeMethod(this, [this]() {
+        if (m_flushTimer && !m_flushTimer->isActive()) {
+            m_flushTimer->start();
+        }
+    }, Qt::QueuedConnection);
+}
+
+void QuarkMetaJsonStore::saveTicket(const FlushTicket& ticket) {
+    if (ticket.snapshot.isLoadFailed()) {
+        qDebug() << "[QuarkMetaJsonStore] Skipped flushing for folder due to load failure";
+        return;
+    }
+    std::lock_guard<std::mutex> saveLock(m_saveMutex);
+    uint64_t& saved = m_savedRevision[ticket.normFolder];
+    if (saved >= ticket.revision) return;   // 更新的快照已落盘，丢弃过期快照
+    bool ok = ticket.snapshot.save();
+    if (ok) saved = ticket.revision;
+    qDebug() << "[QuarkMetaJsonStore] Flushed dirty buffer for folder, items count:"
+             << ticket.snapshot.items().size() << "status:" << ok;
+}
+
 void QuarkMetaJsonStore::onFlushTimeout() {
     flushAllDirtyBuffers();
 }
 
 void QuarkMetaJsonStore::flushAllDirtyBuffers(bool sync) {
-    std::vector<QuarkMetaJson> snapshotsToSave;
+    std::vector<FlushTicket> tickets;
     {
         std::lock_guard<std::mutex> lock(m_storeMutex);
         if (m_dirtyFolderPaths.empty()) return;
-
         for (const auto& normFolder : m_dirtyFolderPaths) {
             auto it = m_folderCacheMap.find(normFolder);
             if (it != m_folderCacheMap.end() && it->second) {
-                snapshotsToSave.push_back(*(it->second)); // 锁保护下深拷贝快照
+                tickets.emplace_back(normFolder, m_folderRevision[normFolder], *(it->second));
             }
         }
         m_dirtyFolderPaths.clear();
     }
-
-    if (snapshotsToSave.empty()) return;
-
-    auto doSave = [](std::vector<QuarkMetaJson> snapshots) {
-        for (auto& jsonSnapshot : snapshots) {
-            if (jsonSnapshot.isLoadFailed()) {
-                qDebug() << "[AutoColor] [QuarkMetaJsonStore] Skipped flushing for folder due to load failure";
-                continue;
-            }
-
-            bool ok = jsonSnapshot.save();
-            qDebug() << "[AutoColor] [QuarkMetaJsonStore] Flushed dirty buffer for folder, items count:" 
-                     << jsonSnapshot.items().size() << "status:" << ok;
-
-            // 🎯【阶段二挂钩】：仅在物理落盘成功后，投递给后台独立索引器（0ms 异步内存投递，单向流动）
-            if (ok) {
-                MetaIndexService::instance().enqueueFolder(jsonSnapshot.folderPath());
-            }
-        }
-    };
-
+    if (tickets.empty()) return;
     if (sync) {
-        doSave(std::move(snapshotsToSave));
+        for (const auto& t : tickets) saveTicket(t);
     } else {
-        (void)QtConcurrent::run([snapshotsToSave = std::move(snapshotsToSave), doSave]() mutable {
-            doSave(std::move(snapshotsToSave));
+        m_flushPool.start([this, tickets]() {
+            for (const auto& t : tickets) saveTicket(t);
         });
     }
-}
-
-bool QuarkMetaJsonStore::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
-    flushAllDirtyBuffers();
-    return QuarkMetaJson::migrateFolderCache(oldFolderPath, newFolderPath);
-}
-
-bool QuarkMetaJsonStore::renameItem(const QString& folderPath, const QString& oldName, const QString& newName) {
-    flushAllDirtyBuffers();
-    return QuarkMetaJson::renameItem(folderPath, oldName, newName);
 }
 
 void QuarkMetaJsonStore::invalidateFolderCache(const std::wstring& folderPath) {
     std::wstring normFolder = normalizeFolderPath(folderPath);
     std::lock_guard<std::mutex> lock(m_storeMutex);
+    auto it = m_folderCacheMap.find(normFolder);
+    if (it != m_folderCacheMap.end() && it->second && m_dirtyFolderPaths.count(normFolder) > 0) {
+        FlushTicket ticket(normFolder, m_folderRevision[normFolder], *(it->second));
+        saveTicket(ticket);   // 先同步落盘再驱逐，防止丢失未落盘修改
+    }
+    m_dirtyFolderPaths.erase(normFolder);
     m_folderCacheMap.erase(normFolder);
-    m_dirtyFolderPaths.erase(normFolder); // 同步清除脏标记，防止用已驱逐的旧快照回写磁盘
+}
+
+bool QuarkMetaJsonStore::renameItem(const QString& folderPath, const QString& oldName, const QString& newName) {
+    if (oldName == newName) return true;
+    std::wstring wFolder = folderPath.toStdWString();
+    prefetchFolderJson(wFolder);
+    std::wstring normFolder = normalizeFolderPath(wFolder);
+    std::wstring oldKey = QuarkMetaJson::normalizeItemKey(oldName.toStdWString());
+    std::wstring newKey = QuarkMetaJson::normalizeItemKey(newName.toStdWString());
+    bool ok = true;
+    {
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        auto json = getOrLoadFolderLocked(normFolder, wFolder);
+        if (json->isLoadFailed()) {
+            ok = false;
+        } else {
+            auto& items = json->items();
+            auto it = items.find(oldKey);
+            if (it != items.end()) {
+                ItemMeta meta = it->second;
+                items.erase(it);
+                items[newKey] = meta;
+                markDirtyLocked(normFolder);
+            }
+        }
+    }
+    scheduleFlush();
+    return ok;
+}
+
+bool QuarkMetaJsonStore::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
+    flushAllDirtyBuffers(true);
+    bool ok = QuarkMetaJson::migrateFolderCache(oldFolderPath, newFolderPath);
+    invalidateFolderCache(oldFolderPath.toStdWString());
+    invalidateFolderCache(newFolderPath.toStdWString());
+    return ok;
+}
+
+bool QuarkMetaJsonStore::removeItem(const QString& filePath) {
+    if (filePath.isEmpty()) return true;
+    QFileInfo info(filePath);
+    std::wstring folderPath = QDir::toNativeSeparators(info.absolutePath()).toStdWString();
+    std::wstring key = QuarkMetaJson::normalizeItemKey(info.fileName().toStdWString());
+    prefetchFolderJson(folderPath);
+    std::wstring normFolder = normalizeFolderPath(folderPath);
+    bool ok = true;
+    {
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        auto json = getOrLoadFolderLocked(normFolder, folderPath);
+        if (json->isLoadFailed()) {
+            ok = false;
+        } else if (json->items().erase(key) > 0) {
+            markDirtyLocked(normFolder);
+        }
+    }
+    scheduleFlush();
+    return ok;
+}
+
+bool QuarkMetaJsonStore::transferItems(const QList<QPair<QString, QString>>& pairs, bool isMove, bool replaceDestWhenSourceMissing) {
+    if (pairs.isEmpty()) return false;
+
+    struct Entry {
+        std::wstring srcFolder, destFolder, srcNorm, destNorm, srcKey, destKey;
+        ItemMeta meta;
+        bool hasMeta = false;
+        bool valid = true;
+    };
+    std::vector<Entry> entries;
+    entries.reserve(pairs.size());
+    for (const auto& pair : pairs) {
+        if (pair.first == pair.second) continue;
+        QFileInfo oldInfo(pair.first);
+        QFileInfo newInfo(pair.second);
+        Entry e;
+        e.srcFolder = QDir::toNativeSeparators(oldInfo.absolutePath()).toStdWString();
+        e.destFolder = QDir::toNativeSeparators(newInfo.absolutePath()).toStdWString();
+        e.srcNorm = normalizeFolderPath(e.srcFolder);
+        e.destNorm = normalizeFolderPath(e.destFolder);
+        e.srcKey = QuarkMetaJson::normalizeItemKey(oldInfo.fileName().toStdWString());
+        e.destKey = QuarkMetaJson::normalizeItemKey(newInfo.fileName().toStdWString());
+        entries.push_back(std::move(e));
+    }
+    if (entries.empty()) return true;
+
+    for (const auto& e : entries) {
+        prefetchFolderJson(e.srcFolder);
+        prefetchFolderJson(e.destFolder);
+    }
+
+    bool allOk = true;
+    {
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        // 阶段一：读取源条目；移动时从源抹除
+        for (auto& e : entries) {
+            auto srcJson = getOrLoadFolderLocked(e.srcNorm, e.srcFolder);
+            auto destJson = getOrLoadFolderLocked(e.destNorm, e.destFolder);
+            if (srcJson->isLoadFailed() || destJson->isLoadFailed()) {
+                e.valid = false;
+                allOk = false;
+                continue;
+            }
+            auto& srcItems = srcJson->items();
+            auto it = srcItems.find(e.srcKey);
+            if (it != srcItems.end()) {
+                e.meta = it->second;
+                e.hasMeta = true;
+                if (isMove) {
+                    srcItems.erase(it);
+                    markDirtyLocked(e.srcNorm);
+                }
+            }
+        }
+        // 阶段二：写入目标
+        for (auto& e : entries) {
+            if (!e.valid) continue;
+            auto destJson = getOrLoadFolderLocked(e.destNorm, e.destFolder);
+            auto& destItems = destJson->items();
+            if (e.hasMeta) {
+                destItems[e.destKey] = e.meta;
+                markDirtyLocked(e.destNorm);
+            } else if (replaceDestWhenSourceMissing) {
+                if (destItems.erase(e.destKey) > 0) markDirtyLocked(e.destNorm);
+            }
+        }
+    }
+    scheduleFlush();
+    return allOk;
 }
 
 } // namespace QuarkMeta

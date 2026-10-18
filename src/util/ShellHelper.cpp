@@ -16,6 +16,7 @@
 #include "../meta/MetadataManager.h"
 #include "../meta/StatisticsService.h"
 #include "../meta/QuarkMetaJson.h"
+#include "../meta/QuarkMetaJsonStore.h"
 #include "../core/DiskTrashService.h"
 #include "DiskMediaExtractor.h"
 
@@ -30,6 +31,7 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
                                    const QSet<QString>& overwriteFiles, const QSet<QString>& autoRenameFiles) {
 #ifdef Q_OS_WIN
     if (sourcePaths.isEmpty() || destDir.isEmpty()) return false;
+    QuarkMetaJsonStore::instance().flushAllDirtyBuffers(true);
 
     QList<QPair<QString, QString>> pathPairs;
     pathPairs.reserve(sourcePaths.size());
@@ -127,6 +129,7 @@ void ShellHelper::openInExplorer(const QString& path) {
 }
 
 bool ShellHelper::renameItem(const QString& oldPath, const QString& newPath) {
+    QuarkMetaJsonStore::instance().flushAllDirtyBuffers(true);
     if (QFile::rename(oldPath, newPath)) {
         // 1. 物理漫游迁移 .QuarkMeta.json 元数据 
         QuarkMetaJson::migrateItemMetadata(oldPath, newPath);
