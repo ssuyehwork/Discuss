@@ -522,8 +522,8 @@ void MetaPanel::setMultiSelectionPreview(const QList<MetaPreviewItem>& items) {
         double stepMultiplier = std::ceil((k + 1) / 2.0);
         double baseAngle = kMultiPreviewAngleStep * stepMultiplier;
         double angle = (k % 2 == 0) ? -baseAngle : baseAngle;
-        double scale = 1.0 - (0.10 * k); // 逐层微缩 10%，露出下层边角
-        double offsetY = -3.0 * k;      // 逐层向上微平移 3px
+        double scale = 1.0 - (0.04 * (k + 1)); // 顶层同步微缩 4% (0.96)，后续逐层按 4% 递减
+        double offsetY = 0.0 * k;             // 逐层向上微平移 0px
 
         painter.save();
         painter.translate(100.0, 100.0 + offsetY);
