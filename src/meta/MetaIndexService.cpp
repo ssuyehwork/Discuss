@@ -2,6 +2,7 @@
 #include "DatabaseManager.h"
 #include "QuarkMetaJson.h"
 #include "QuarkMetaJsonStore.h"
+#include "LibraryService.h"
 #include <QDir>
 #include <QFileInfo>
 #include <QCoreApplication>
@@ -157,6 +158,17 @@ void MetaIndexService::enqueueFolder(const std::wstring& folderPath) {
     m_cv.notify_one();
 }
 
+void MetaIndexService::enqueueCategoryIndexing(int categoryId, const QStringList& paths) {
+    if (categoryId <= 0 || paths.isEmpty() || m_stopping.load()) return;
+    init();
+
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_pendingCategoryTasks.push_back({categoryId, paths});
+    }
+    m_cv.notify_one();
+}
+
 void MetaIndexService::workerThreadLoop() {
 #ifdef Q_OS_WIN
     // 操作系统级后台低优先级让步：不争抢前台 I/O 和 CPU
@@ -164,7 +176,8 @@ void MetaIndexService::workerThreadLoop() {
 #endif
 
     while (!m_stopping.load()) {
-        std::unordered_map<std::wstring, std::wstring> batch;
+        std::unordered_map<std::wstring, std::wstring> currentBatch;
+        std::vector<CategoryTask> categoryBatch;
 
         {
             std::unique_lock<std::mutex> lock(m_queueMutex);
@@ -174,22 +187,53 @@ void MetaIndexService::workerThreadLoop() {
             });
 
             if (m_stopping.load()) break;
-            if (m_pendingFolders.empty()) {
+            if (m_pendingFolders.empty() && m_pendingCategoryTasks.empty()) {
                 m_cv.wait(lock, [this]() {
-                    return !m_pendingFolders.empty() || m_stopping.load();
+                    return !m_pendingFolders.empty() || !m_pendingCategoryTasks.empty() || m_stopping.load();
                 });
                 if (m_stopping.load()) break;
             }
 
-            batch.swap(m_pendingFolders);
+            currentBatch.swap(m_pendingFolders);
+            categoryBatch.swap(m_pendingCategoryTasks);
         }
 
-        if (batch.empty() || !m_writeDb) continue;
+        // 1. 处理分类路径后台批量索引任务
+        for (const auto& task : categoryBatch) {
+            if (m_stopping.load()) break;
+            for (const QString& path : task.paths) {
+                if (m_stopping.load()) break;
+                QFileInfo fi(path);
+                if (fi.isDir()) {
+                    QDir dir(path);
+                    QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+                    for (const auto& entry : entries) {
+                        if (m_stopping.load()) break;
+                        ItemMeta meta;
+                        std::wstring wPath = entry.absoluteFilePath().toStdWString();
+                        if (QuarkMetaJsonStore::instance().readItemMeta(wPath, meta)) {
+                            LibraryService::instance().indexItem(task.categoryId, entry.absoluteFilePath(), meta);
+                        }
+                    }
+                } else if (fi.isFile()) {
+                    ItemMeta meta;
+                    std::wstring wPath = path.toStdWString();
+                    if (QuarkMetaJsonStore::instance().readItemMeta(wPath, meta)) {
+                        LibraryService::instance().indexItem(task.categoryId, path, meta);
+                    }
+                }
+            }
+        }
 
-        // 显式大事务处理整个批次
+        if (currentBatch.empty() || !m_writeDb) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+
+        // 2. 显式大事务处理已落盘文件夹批次
         sqlite3_exec(m_writeDb, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
 
-        for (const auto& kv : batch) {
+        for (const auto& kv : currentBatch) {
             if (m_stopping.load()) break;
             processFolder(m_writeDb, kv.first, kv.second);
         }

@@ -9,6 +9,7 @@
 #include "../meta/SmartFolderDao.h"
 #include "dialogs/SmartFolderDialog.h"
 #include "../meta/LibraryService.h"
+#include "../meta/MetaIndexService.h"
 #include "../meta/QuarkMetaJsonStore.h"
 #include "../core/CoreEngine.h"
 #include "../core/ModelContract.h"
@@ -1055,27 +1056,8 @@ void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QMod
             return;
         }
 
-        // 目标为自定义分类 (nodeId > 0)：执行子项索引与预设标签逻辑
-        for (const QString& path : paths) {
-            QFileInfo fi(path);
-            if (fi.isDir()) {
-                QDir dir(path);
-                QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-                for (const auto& entry : entries) {
-                    ItemMeta meta;
-                    std::wstring wPath = entry.absoluteFilePath().toStdWString();
-                    if (QuarkMetaJsonStore::instance().readItemMeta(wPath, meta)) {
-                        LibraryService::instance().indexItem(nodeId, entry.absoluteFilePath(), meta);
-                    }
-                }
-            } else if (fi.isFile()) {
-                ItemMeta meta;
-                std::wstring wPath = path.toStdWString();
-                if (QuarkMetaJsonStore::instance().readItemMeta(wPath, meta)) {
-                    LibraryService::instance().indexItem(nodeId, path, meta);
-                }
-            }
-        }
+        // 目标为自定义分类 (nodeId > 0)：将文件索引异步投递至 MetaIndexService 后台线程处理，UI 0ms 卡顿
+        MetaIndexService::instance().enqueueCategoryIndexing(nodeId, paths);
 
         auto categories = LibraryDao::getAllCategories();
         QMap<int, LibraryCategoryRecord> catMap;
