@@ -770,7 +770,7 @@ void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
 
     if (index.data(TypeRole).toString() == "smart_folder") {
         SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(nodeId);
-        // 此处可发出智能文件夹选中信号或触发关联的过滤逻辑
+        emit smartFolderSelected(rec);
         return;
     }
 

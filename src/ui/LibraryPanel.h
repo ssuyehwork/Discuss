@@ -7,6 +7,7 @@
 #include <QLineEdit>
 #include <QStyledItemDelegate>
 #include "DropTreeView.h"
+#include "../meta/SmartFolderDao.h"
 
 namespace QuarkMeta {
 
@@ -64,6 +65,7 @@ public:
 
 signals:
     void categoryPathsSelected(const QStringList& paths);
+    void smartFolderSelected(const SmartFolderRecord& record);
     void requestLocateFile(const QString& path);
 
 private slots:
