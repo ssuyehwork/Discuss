@@ -522,16 +522,16 @@ void MetaPanel::setMultiSelectionPreview(const QList<MetaPreviewItem>& items) {
         double stepMultiplier = std::ceil((k + 1) / 2.0);
         double baseAngle = kMultiPreviewAngleStep * stepMultiplier;
         double angle = (k % 2 == 0) ? -baseAngle : baseAngle;
-        double scale = 1.0 - (0.04 * (k + 1)); // 顶层同步微缩 4% (0.96)，后续逐层按 4% 递减
-        double offsetY = 0.0 * k;             // 逐层向上微平移 0px
+        double scale = 0.96;       // 所有卡片统一微缩 4% (0.96)，不再逐层递减
+        double offsetY = 0.0 * k;  // 逐层向上微平移 0px
 
         painter.save();
-        painter.translate(95.0, 95.0 + offsetY);
+        painter.translate(100.0, 100.0 + offsetY);
         painter.rotate(angle);
         if (scale < 1.0) {
             painter.scale(scale, scale);
         }
-        painter.drawPixmap(QPointF(-95.0, -95.0), layer);
+        painter.drawPixmap(QPointF(-100.0, -100.0), layer);
         painter.restore();
     }
 
