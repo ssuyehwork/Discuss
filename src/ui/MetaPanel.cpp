@@ -35,11 +35,11 @@ namespace {
 constexpr double kMultiPreviewAngleStep = 4.0;
 
 QPixmap renderThumbnailLayer(const QPixmap& pixmap) {
-    QSize canvasSize(200, 200);
+    QSize canvasSize(190, 190);
     QPixmap canvas(canvasSize);
     canvas.fill(Qt::transparent);
 
-    QSize targetSize(200, 200);
+    QSize targetSize(190, 190);
     QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
     {
@@ -47,8 +47,8 @@ QPixmap renderThumbnailLayer(const QPixmap& pixmap) {
         painter.setRenderHint(QPainter::Antialiasing);
         painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
-        int x = (200 - scaled.width()) / 2;
-        int y = (200 - scaled.height()) / 2;
+        int x = (190 - scaled.width()) / 2;
+        int y = (190 - scaled.height()) / 2;
 
         QPainterPath path;
         path.addRoundedRect(QRectF(x, y, scaled.width(), scaled.height()), 4.0, 4.0);
@@ -59,7 +59,7 @@ QPixmap renderThumbnailLayer(const QPixmap& pixmap) {
 }
 
 QPixmap renderIconLayer(const QIcon& icon, qreal dpr) {
-    QSize logicalCanvasSize(200, 200);
+    QSize logicalCanvasSize(190, 190);
     QSize physicalCanvasSize = logicalCanvasSize * dpr;
 
     QPixmap canvas(physicalCanvasSize);
@@ -73,8 +73,8 @@ QPixmap renderIconLayer(const QIcon& icon, qreal dpr) {
         painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
         QSizeF iconLogicalSize = iconPx.deviceIndependentSize();
-        int x = qRound((200.0 - iconLogicalSize.width()) / 2.0);
-        int y = qRound((200.0 - iconLogicalSize.height()) / 2.0);
+        int x = qRound((190.0 - iconLogicalSize.width()) / 2.0);
+        int y = qRound((190.0 - iconLogicalSize.height()) / 2.0);
 
         painter.drawPixmap(x, y, iconPx);
     }
@@ -175,7 +175,7 @@ void MetaPanel::initUi() {
 
     m_lblImagePreview = new QLabel(m_topPreviewBox);
     m_lblImagePreview->setAlignment(Qt::AlignCenter);
-    m_lblImagePreview->setMaximumSize(200, 200);
+    m_lblImagePreview->setMaximumSize(190, 190);
     m_lblImagePreview->setObjectName("MetaImagePreview");
     // MetaImagePreview style in style.qss
     m_lblImagePreview->hide();
@@ -342,7 +342,7 @@ void MetaPanel::initUi() {
     QWidget* pathBox = new QWidget(m_container);
     QVBoxLayout* pathL = new QVBoxLayout(pathBox);
     pathL->setContentsMargins(0, 0, 0, 0);
-    pathL->setSpacing(6);
+    pathL->setSpacing(5);
     pathL->setSizeConstraint(QLayout::SetMinimumSize);
 
     m_pathEdit = new ElasticEdit(pathBox);
@@ -471,7 +471,7 @@ void MetaPanel::setImagePreview(const QPixmap& pixmap) {
     } else {
         QPixmap canvas = renderThumbnailLayer(pixmap);
         m_lblImagePreview->setPixmap(canvas);
-        m_lblImagePreview->setMaximumSize(QSize(200, 200));
+        m_lblImagePreview->setMaximumSize(QSize(190, 190));
 
         m_lblImagePreview->show();
         if (m_topPreviewBox) {
@@ -504,7 +504,7 @@ void MetaPanel::setMultiSelectionPreview(const QList<MetaPreviewItem>& items) {
     std::reverse(validLayers.begin(), validLayers.end());
 
     qreal dpr = devicePixelRatioF();
-    QSize logicalCanvasSize(200, 200);
+    QSize logicalCanvasSize(190, 190);
     QSize physicalCanvasSize = logicalCanvasSize * dpr;
 
     QPixmap canvas(physicalCanvasSize);
@@ -526,12 +526,12 @@ void MetaPanel::setMultiSelectionPreview(const QList<MetaPreviewItem>& items) {
         double offsetY = -3.0 * k;      // 逐层向上微平移 3px
 
         painter.save();
-        painter.translate(100.0, 100.0 + offsetY);
+        painter.translate(95.0, 95.0 + offsetY);
         painter.rotate(angle);
         if (scale < 1.0) {
             painter.scale(scale, scale);
         }
-        painter.drawPixmap(QPointF(-100.0, -100.0), layer);
+        painter.drawPixmap(QPointF(-95.0, -95.0), layer);
         painter.restore();
     }
 
@@ -554,7 +554,7 @@ void MetaPanel::setDefaultIconPreview(const QIcon& icon) {
     } else {
         QPixmap canvas = renderIconLayer(icon, devicePixelRatioF());
         m_lblImagePreview->setPixmap(canvas);
-        m_lblImagePreview->setMaximumSize(QSize(200, 200));
+        m_lblImagePreview->setMaximumSize(QSize(190, 190));
 
         m_lblImagePreview->show();
         if (m_topPreviewBox) {
