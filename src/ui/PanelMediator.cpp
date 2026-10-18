@@ -313,7 +313,10 @@ void PanelMediator::setupConnections() {
     }
 
         if (libraryPanel) {
-            connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel](const QStringList& paths) {
+            connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel, filterPanel](const QStringList& paths) {
+                if (filterPanel) {
+                    filterPanel->clearAllFilters(false);
+                }
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
                     target->setCurrentCategoryType("library");
