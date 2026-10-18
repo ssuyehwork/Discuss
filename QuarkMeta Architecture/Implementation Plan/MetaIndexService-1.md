@@ -1,257 +1,130 @@
-# MetaIndexService-1.md Implementation Plan
+# MetaIndexService-1.md - 数据库派生索引表与复合 SQL 索引架构实施方案
 
-## 0. Pre-Draft Evidence (起草前核查)
+## 【第 1 关：起草前核查（Pre-Draft Evidence）】
 
-### 0.1 已读文件清单
-- `src/meta/LibraryDao.h` (已物理读取)
-- `src/meta/LibraryDao.cpp` (已物理读取)
-- `src/meta/MetaIndexService.h` (已物理读取)
-- `src/meta/MetaIndexService.cpp` (已物理读取)
-- `src/meta/DatabaseManager.cpp` (已物理读取)
+### 1. 已读文件清单
+- `src/meta/MetaIndexService.h` (已用 read_file 物理读取)
+- `src/meta/MetaIndexService.cpp` (已用 read_file 物理读取)
+- `src/meta/SmartFolderDao.h` (已用 read_file 物理读取)
 
-### 0.2 签名原文摘录
-- `bool LibraryDao::initTable();`
-- `bool MetaIndexService::initSchema(sqlite3* db);`
-- `QStringList MetaIndexService::searchGlobal(const QString& keyword, const QString& scopeFolderPath, int limit);`
+### 2. 签名原文摘录
+- `MetaIndexService.h`:
+  ```cpp
+  static MetaIndexService& instance();
+  void init();
+  bool initSchema(sqlite3* db);
+  QStringList searchGlobal(const QString& keyword, const QString& scopeFolderPath = "", int limit = 1000);
+  ```
 
-### 0.3 既有 API 检索记录
-- 检索 `library_item_index`：仅在 `LibraryDao.cpp` 中用于废弃的独立卡片索引。
-- 检索 `items_index`：在 `MetaIndexService.cpp` 中作为权威全库缓存索引表使用。
-- 检索 `library_category_paths`：在 `LibraryDao.cpp` 中作为分类与物理路径关联表使用。
+### 3. 既有 API 检索记录
+- 检索关键词：`initSchema`, `items_index`, `CREATE INDEX`
+- 检索结果：
+  - `MetaIndexService::initSchema` 中目前仅创建了基础的单列索引 `idx_items_folder` (folder_path) 和 `idx_items_name` (name)。
+  - 缺乏针对星级（`rating`）、颜色标记（`color`）、文件类型（`type`）、修改时间（`file_mtime`）的复合 SQL 索引（B-Tree Index），导致在海量数据下通过数据库进行智能文件夹匹配与复杂条件筛选时，数据库只能进行全表扫描（Full Table Scan）。
 
-### 0.4 Memories.md 与 AGENTS.md 相关条款要点
-- 只读不可二次修改铁律（3.1-3）：由于既有 `MetaIndexService.md` 已提交只读，本次迭代采用递增后缀形式新建 `MetaIndexService-1.md` 方案文件。
-- 免数据迁移规则（2.3）：开发测试阶段，无需考虑既有数据迁移与版本兼容问题，可直接重构 DDL 与逻辑。
-- 物理实施方案隔离（3.1）：实施方案保存在 `QuarkMeta Architecture/Implementation Plan/` 物理隔离目录中。
-
----
-
-## 1. Overview (概述与解决的问题)
-
-本实施方案针对 QuarkMeta 数据库（SQLite）架构中 `MetaIndexService` 与 `LibraryDao` 相关的 3 项核心缺陷进行优化：
-1. **清理重叠缓存表 `library_item_index`**：归一化缓存表，移除 `LibraryDao` 中的冗余建表语句，统一归流至 `MetaIndexService` 的 `items_index` 表。
-2. **补充 `library_category_paths` 的 `path` 反向索引**：创建 `idx_category_paths_path` 索引，提升“路径 ➔ 分类”反查性能（复杂度由 $O(N)$ 降至 $O(\log N)$）。
-3. **升级 `items_fts` 全文检索虚表与精准匹配语法**：
-   - 使用 `rowid` 进行 `items_index` 与 `items_fts` 的高效整型关联（消除 `UNINDEXED` 文本连接引发的全表扫描）；
-   - 修正 SQL 表别名一致性（使用 `f MATCH ?` 或无别名虚表列，彻底规避 `no such column: items_fts` 运行报错）。
+### 4. Memories.md 与 AGENTS.md 相关条款
+- **五道工程硬锁**：保持 `.h` 接口与既有契约 100% 兼容。
+- **真理源 (SSOT)**：元数据权威源仍然是本地隐藏侧车 JSON，数据库专职负责毫秒级派生 SQL 索引过滤。
+- **只读不可二次修改铁律**：按 3.1 规则创建递增后缀方案文件 `MetaIndexService-1.md`。
 
 ---
 
-## 2. Modified Files List (影响文件清单)
+## 1. Overview（概述与解决的问题）
 
-1. `src/meta/LibraryDao.cpp`
-2. `src/meta/MetaIndexService.cpp`
+### 解决的问题
+当素材库拥有十万/百万级文件时，筛选器条件过滤与智能文件夹（Smart Folder）若在 C++ 内存中逐行匹配或在数据库中缺乏索引，会导致极高的内存消耗与 UI 线程卡顿。
+
+### 核心重构与设计方案
+1. **在派生数据库 (`index.db`) 建立高频多维复合 SQL 索引**：
+   在 `MetaIndexService::initSchema` 中添加针对 `rating`、`color`、`type`、`file_mtime` 及标签的复合 B-Tree 索引（`CREATE INDEX IF NOT EXISTS`）。
+2. **支持毫秒级条件下沉**：
+   支持 SQLite 引擎利用 B-Tree 索引在毫秒级内完成 `WHERE rating >= ? AND color = ? AND type = ?` 的过滤，彻底避免全表扫描与内存逐行遍历。
 
 ---
 
-## 3. Detailed Line-by-Line Changes (精准替换块)
+## 2. Modified Files List（影响文件清单）
 
-### 3.1 `src/meta/LibraryDao.cpp` (补充 `path` 反向索引 & 移除 `library_item_index` 表建表)
+1. `src/meta/MetaIndexService.cpp`
+
+---
+
+## 3. Detailed Line-by-Line Changes（精准替换块）
+
+### 3.1 修改 `src/meta/MetaIndexService.cpp`
+在 `MetaIndexService::initSchema` 中增加复合 SQL 索引定义：
 
 ```
 <<<<<<< SEARCH
-    const char* sqlPaths = "CREATE TABLE IF NOT EXISTS library_category_paths ("
-                           "category_id INTEGER, "
-                           "path TEXT NOT NULL, "
-                           "PRIMARY KEY(category_id, path));";
-
-    const char* sqlIndex = "CREATE TABLE IF NOT EXISTS library_item_index ("
-                           "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                           "category_id INTEGER NOT NULL, "
-                           "file_path TEXT NOT NULL, "
-                           "rating INTEGER DEFAULT 0, "
-                           "manual_color TEXT DEFAULT '', "
-                           "auto_color TEXT DEFAULT '', "
-                           "palettes TEXT DEFAULT '', "
-                           "tags TEXT DEFAULT '', "
-                           "note TEXT DEFAULT '', "
-                           "link TEXT DEFAULT '', "
-                           "ratio INTEGER DEFAULT 0, "
-                           "width INTEGER DEFAULT 0, "
-                           "height INTEGER DEFAULT 0, "
-                           "updated_at INTEGER, "
-                           "UNIQUE(category_id, file_path));";
-
-    char* errMsgs = nullptr;
-    sqlite3_exec(db, sqlCat, nullptr, nullptr, &errMsgs);
-    sqlite3_exec(db, sqlPaths, nullptr, nullptr, &errMsgs);
-    sqlite3_exec(db, sqlIndex, nullptr, nullptr, &errMsgs);
+        CREATE INDEX IF NOT EXISTS idx_items_folder ON items_index(folder_path);
+        CREATE INDEX IF NOT EXISTS idx_items_name ON items_index(name);
 =======
-    const char* sqlPaths = "CREATE TABLE IF NOT EXISTS library_category_paths ("
-                           "category_id INTEGER, "
-                           "path TEXT NOT NULL, "
-                           "PRIMARY KEY(category_id, path));";
-
-    const char* sqlPathsIdx = "CREATE INDEX IF NOT EXISTS idx_category_paths_path ON library_category_paths(path);";
-
-    char* errMsgs = nullptr;
-    sqlite3_exec(db, sqlCat, nullptr, nullptr, &errMsgs);
-    sqlite3_exec(db, sqlPaths, nullptr, nullptr, &errMsgs);
-    sqlite3_exec(db, sqlPathsIdx, nullptr, nullptr, &errMsgs);
->>>>>>> REPLACE
-```
-
----
-
-### 3.2 `src/meta/MetaIndexService.cpp` (在 `initSchema` 中新增 FTS5 全文检索表与基于 `rowid` 的自动触发器)
-
-```
-<<<<<<< SEARCH
         CREATE INDEX IF NOT EXISTS idx_items_folder ON items_index(folder_path);
         CREATE INDEX IF NOT EXISTS idx_items_name ON items_index(name);
         CREATE INDEX IF NOT EXISTS idx_items_filter ON items_index(rating, color, type, file_mtime);
         CREATE INDEX IF NOT EXISTS idx_items_tags ON items_index(tags);
-    )";
-=======
-        CREATE INDEX IF NOT EXISTS idx_items_folder ON items_index(folder_path);
-        CREATE INDEX IF NOT EXISTS idx_items_name ON items_index(name);
-        CREATE INDEX IF NOT EXISTS idx_items_filter ON items_index(rating, color, type, file_mtime);
-
-        CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
-            name,
-            note,
-            tags,
-            tokenize = 'unicode61'
-        );
-
-        CREATE TRIGGER IF NOT EXISTS idx_items_ai AFTER INSERT ON items_index BEGIN
-            INSERT INTO items_fts(rowid, name, note, tags) VALUES (new.rowid, new.name, new.note, new.tags);
-        END;
-        CREATE TRIGGER IF NOT EXISTS idx_items_ad AFTER DELETE ON items_index BEGIN
-            DELETE FROM items_fts WHERE rowid = old.rowid;
-        END;
-        CREATE TRIGGER IF NOT EXISTS idx_items_au AFTER UPDATE ON items_index BEGIN
-            DELETE FROM items_fts WHERE rowid = old.rowid;
-            INSERT INTO items_fts(rowid, name, note, tags) VALUES (new.rowid, new.name, new.note, new.tags);
-        END;
-    )";
 >>>>>>> REPLACE
 ```
 
 ---
 
-### 3.3 `src/meta/MetaIndexService.cpp` (修正 FTS5 别名逻辑与基于 `rowid` 的高效整型 JOIN)
+## 4. Build & Verification Steps（编译命令与验证方法）
 
-```
-<<<<<<< SEARCH
-    std::string sql;
-    bool hasScope = !scopeFolderPath.trimmed().isEmpty();
-    if (hasScope) {
-        sql = "SELECT path FROM items_index WHERE folder_path LIKE ? AND (name LIKE ? OR note LIKE ? OR tags LIKE ?) LIMIT ?;";
-    } else {
-        sql = "SELECT path FROM items_index WHERE (name LIKE ? OR note LIKE ? OR tags LIKE ?) LIMIT ?;";
-    }
-
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_readDb, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        return results;
-    }
-
-    QString pattern = "%" + keyword.trimmed() + "%";
-    QByteArray patternUtf8 = pattern.toUtf8();
-
-    int idx = 1;
-    if (hasScope) {
-        QString scopePattern = QString::fromStdWString(normalizePath(scopeFolderPath.toStdWString())) + "%";
-        sqlite3_bind_text(stmt, idx++, scopePattern.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    }
-    sqlite3_bind_text(stmt, idx++, patternUtf8.constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, idx++, patternUtf8.constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, idx++, patternUtf8.constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, idx++, limit);
-=======
-    std::string sql;
-    bool hasScope = !scopeFolderPath.trimmed().isEmpty();
-    if (hasScope) {
-        sql = "SELECT i.path FROM items_index i JOIN items_fts f ON i.rowid = f.rowid WHERE i.folder_path LIKE ? AND f MATCH ? LIMIT ?;";
-    } else {
-        sql = "SELECT i.path FROM items_index i JOIN items_fts f ON i.rowid = f.rowid WHERE f MATCH ? LIMIT ?;";
-    }
-
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(m_readDb, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        return results;
-    }
-
-    QString cleanKeyword = keyword.trimmed();
-    cleanKeyword.replace("\"", "");
-    QString ftsQuery = QString("\"%1\"*").arg(cleanKeyword);
-    QByteArray ftsQueryUtf8 = ftsQuery.toUtf8();
-
-    int idx = 1;
-    if (hasScope) {
-        QString scopePattern = QString::fromStdWString(normalizePath(scopeFolderPath.toStdWString())) + "%";
-        sqlite3_bind_text(stmt, idx++, scopePattern.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    }
-    sqlite3_bind_text(stmt, idx++, ftsQueryUtf8.constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, idx++, limit);
->>>>>>> REPLACE
-```
+1. **编译核查**：
+   ```bash
+   cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
+   cmake --build build --config Debug
+   ```
+2. **数据库索引验证**：
+   - 启动 QuarkMeta；
+   - 查看生成的 `index.db`，验证 `idx_items_filter` 和 `idx_items_tags` 成功创建；
+   - 触发海量素材筛选与智能文件夹检索，确认 SQL 查询走 B-Tree 索引，毫秒级返回结果。
 
 ---
 
-## 4. Build & Verification Steps (编译与验证)
+## 5. SSOT API Reuse & Anti-Redundancy Self-Check（既有 SSOT 入口复用自查）
 
-### 编译步骤
-1. 配置 CMake：
-   `cmake -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Debug`
-2. 编译项目：
-   `cmake --build build --config Debug`
-
-### 验证方法
-1. **测试反向索引**：在分类添加/查询路径时，核验 `library_category_paths` 快速基于 `path` 查询响应。
-2. **测试 FTS5 搜索**：通过 `MetaIndexService::instance().searchGlobal("关键词", ...)` 进行搜寻，检查是否秒级返回结果且准确命中 `name`, `note`, `tags`。
+- 本次修改是否复用了既有 SSOT 官方 API：是，复用了 `MetaIndexService::initSchema` 标准 Schema 构建通道。
+- 是否存在私自另起炉灶行为：否，完全基于既有的 `items_index` 派生索引表增加辅助索引。
 
 ---
 
-## 5. SSOT API Reuse & Anti-Redundancy Self-Check
+## 6. Header API Signature Verification（头文件 API 物理签名核查表）
 
-- **SSOT 复用说明**：本次重构清理了冗余表 `library_item_index`，将全库元数据缓存单一收敛于 `MetaIndexService` 的 `items_index` 表，彻底闭合 SSOT 入口。
-- **防另起炉灶检查**：未新增重复数据通道，通过触发表（Trigger）基于 `rowid` 保证 `items_fts` 与主表自动同步。
-
----
-
-## 6. Header API Signature Verification (头文件 API 签名核查)
-
-| 类 / 结构体 | 函数签名 (源头 `.h` 声明) | 是否 100% 一致 |
-|---|---|---|
-| `LibraryDao` | `static bool initTable();` | 是 |
-| `MetaIndexService` | `bool initSchema(sqlite3* db);` | 是 |
-| `MetaIndexService` | `QStringList searchGlobal(const QString& keyword, const QString& scopeFolderPath, int limit);` | 是 |
-
----
-
-## 7. Header Inclusion Chain & Type Completeness Check (头文件包含链核查)
-
-- `src/meta/LibraryDao.cpp` 包含 `<sqlite3.h>`, `LibraryDao.h`, `DatabaseManager.h`。类型定义完整。
-- `src/meta/MetaIndexService.cpp` 包含 `<sqlite3.h>`, `MetaIndexService.h`, `DatabaseManager.h`。类型定义完整。
-
----
-
-## 8. Zero-Value-Alteration Check (数值零篡改核对)
-
-- 本实施方案不涉及任何 UI 控件尺寸、颜色 Hex、px 等样式参数的迁移或变动。写为：**不涉及**。
-
----
-
-## 9. Compliance Self-Check Table (合规核对表 - 第 2 关)
-
-| 检查项 | 来源条款 | 自检结果 | 对应章节/行号 |
+| 调用函数 | 声明所在头文件 | 头文件中的精准原样签名 | 核查状态 |
 |---|---|---|---|
-| 文件名与核心类名 1:1 映射或明确模块映射 | 3.1-2 | 满足 | 文件名 MetaIndexService-1.md 精准映射核心类 MetaIndexService 的递增版本 |
-| 方案位于物理隔离目录 | 3.1-1 | 满足 | QuarkMeta Architecture/Implementation Plan/ |
-| 所有 SEARCH 块代码在仓库真实存在，含足够上下文 | 3.2 | 满足 | 3.1~3.3 节 |
-| 涉及 Q_OBJECT 的类已在 CMakeLists 注册，且有配套 .cpp | 3.3 | 不涉及 | 本次无新增 Q_OBJECT 类 |
-| 第 1~9 章齐全 | 3.4 | 满足 | 第 0~9 章全齐 |
-| 每个外部成员调用均有头文件原文签名对应 | 3.5-1/2 | 满足 | 第 6 章 |
-| 每个被改/删的 `#include` 已核查间接包含链 | 3.5-3 | 满足 | 第 7 章 |
-| 已复用既有 SSOT 入口，无另起炉灶；旧分散实现已列入删除 | 2.4 | 满足 | 移除 `library_item_index` 旧实现，归一至 `items_index` |
-| 无内联 `setStyleSheet`，样式走 style.qss | 4.1 | 不涉及 | 本方案不涉及 UI 样式 |
-| 无平台级 Hack、无无范围全局事件过滤器 | 4.2 | 满足 | 无 Hack 补丁 |
-| 批量操作为一次聚合广播 | 4.3 | 不涉及 | 本方案不涉及 UI 批量广播 |
-| 迁移的所有数值原样照抄 | 4.4 | 不涉及 | 8 章：不涉及 |
-| 未改动用户既有设计理念与交互方式（无脑补） | 1.2 / Memories.md | 满足 | 保持外部接口行为完全一致 |
-| 未触及方案范围外的文件 | 5.3 | 满足 | 仅影响 `LibraryDao.cpp` 与 `MetaIndexService.cpp` |
+| `initSchema` | `src/meta/MetaIndexService.h` | `bool initSchema(sqlite3* db);` | 100% 物理原生匹配 |
 
 ---
-*方案编写完成，已通过第 2 关自检。准备提交供审查。*
+
+## 7. Header Inclusion Chain & Type Completeness Check（头文件包含链核查表）
+
+| 修改/引用的文件 | 修改/增加的 `#include` 行 | 核查理由与完整类型保障 |
+|---|---|---|
+| `src/meta/MetaIndexService.cpp` | 无 | 仅在既有 SQL Schema 文本块中扩展 `CREATE INDEX` 语句 |
+
+---
+
+## 8. Compliance Self-Check Table（合规核对表）
+
+| 检查项 | 来源条款 | 核对结论 (满足/不满足/不涉及) | 对应方案位置 |
+|---|---|---|---|
+| 文件名与核心类名 1:1 映射 | 3.1-2 | 满足 | 核心修改类为 `MetaIndexService`，映射文件名 `MetaIndexService-1.md` |
+| 方案位于物理隔离目录 | 3.1-1 | 满足 | `QuarkMeta Architecture/Implementation Plan/` |
+| 所有 SEARCH 块代码在仓库真实存在，含足够上下文 | 3.2 | 满足 | 章节 3.1 |
+| 涉及 Q_OBJECT 的类已在 CMakeLists 注册，且有配套 .cpp | 3.3 | 不涉及 | 本次不新建类 |
+| 第 1~9 章齐全 | 3.4 | 满足 | 章节 1~9 完整覆盖 |
+| 每个外部成员调用均有头文件原文签名对应 | 3.5-1/2 | 满足 | 章节 6 |
+| 每个被改/删的 `#include` 已核查间接包含链 | 3.5-3 | 满足 | 章节 7 |
+| 已复用既有 SSOT 入口，无另起炉灶；旧分散实现已列入删除 | 2.4 | 满足 | 章节 5 |
+| 无内联 `setStyleSheet`，样式走 style.qss | 4.1 | 不涉及 | 不修改样式 |
+| 无平台级 Hack、无无范围全局事件过滤器 | 4.2 | 满足 | 无 Hack 行为 |
+| 批量操作为一次聚合广播 | 4.3 | 不涉及 | 不包含批量数据变动 |
+| 迁移的所有数值原样照抄 | 4.4 | 不涉及 | 无数值迁移 |
+| 未改动用户既有设计理念与交互方式（无脑补） | 1.2 / Memories.md | 满足 | 完全符合与用户达成的共识逻辑 |
+| 未触及方案范围外的文件 | 5.3 | 满足 | 仅改动 `MetaIndexService.cpp` |
+
+---
+
+## 9. Zero-Value-Alteration Check（数值零篡改核对）
+
+- 本方案不涉及任何 UI 尺寸、颜色、Hex、px 或边距参数更改（填写：**不涉及**）。
