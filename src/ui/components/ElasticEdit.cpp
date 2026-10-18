@@ -1,5 +1,6 @@
 #include "ElasticEdit.h"
 #include <QTextDocument>
+#include <QAbstractTextDocumentLayout>
 #include <QKeyEvent>
 #include <QResizeEvent>
 #include <QScrollArea>
@@ -9,8 +10,8 @@
 namespace QuarkMeta {
 
 ElasticEdit::ElasticEdit(QWidget* parent) : QTextEdit(parent) {
-    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setLineWrapMode(QTextEdit::WidgetWidth);
     QTextOption opt = document()->defaultTextOption();
     opt.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
@@ -20,18 +21,19 @@ ElasticEdit::ElasticEdit(QWidget* parent) : QTextEdit(parent) {
 }
 
 void ElasticEdit::adjustHeight() {
-    int horizontalPadding = 20;
-    int verticalPadding = 8;
-    int border = 2;
+    QMargins margins = contentsMargins();
+    int hMargin = margins.left() + margins.right() + 12; // 精准匹配 QSS 左右 padding (6px * 2) + 边框
+    int vMargin = margins.top() + margins.bottom() + 8;  // 精准匹配 QSS 上下 padding (4px * 2) + 边框
+
     int w = width();
-    if (w > 50) {
-        int textW = w - horizontalPadding - border;
-        if (document()->textWidth() != textW) {
+    if (w > 30) {
+        int textW = qMax(10, w - hMargin);
+        if (qAbs(document()->textWidth() - textW) > 1.0) {
             document()->setTextWidth(textW);
         }
     }
-    qreal docHeight = document()->size().height();
-    int newHeight = qMax(28, (int)qCeil(docHeight + verticalPadding + border)); 
+    qreal docHeight = document()->documentLayout()->documentSize().height();
+    int newHeight = qMax(24, (int)qCeil(docHeight + vMargin));
     if (this->height() != newHeight) {
         setFixedHeight(newHeight);
         updateGeometry(); 

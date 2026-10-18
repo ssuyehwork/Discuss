@@ -167,7 +167,7 @@ void MetaPanel::initUi() {
     // 1. 顶部预览区
     m_topPreviewBox = new QWidget(m_container);
     m_topPreviewBox->setObjectName("TopPreviewBox");
-    m_topPreviewBox->setMaximumWidth(200);
+    m_topPreviewBox->setFixedSize(200, 200);
     // TopPreviewBox style in style.qss
     QVBoxLayout* previewLayout = new QVBoxLayout(m_topPreviewBox);
     previewLayout->setContentsMargins(0, 0, 0, 0);
