@@ -17,6 +17,7 @@ QSize CardPainterHelper::defaultIconLogicalSize(const QSize& areaSize) {
     return QSize(35, 45);
 }
 
+// 禁止修改 renderDefaultIcon 函数
 QPixmap CardPainterHelper::renderDefaultIcon(const QIcon& icon, const QSize& areaSize, qreal devicePixelRatio) {
     if (icon.isNull()) return QPixmap();
 
