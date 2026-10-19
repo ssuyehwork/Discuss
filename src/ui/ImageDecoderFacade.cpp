@@ -114,14 +114,23 @@ QSize ImageDecoderFacade::readImageDimensions(const QString& filePath) {
     QFileInfo info(filePath);
     QString ext = info.suffix().toLower();
 
-    // 1. AI / PDF 文件头毫秒级尺寸嗅探 (解析 /MediaBox [0 0 W H] 或 %AI5_ArtBox [0 0 W H])
+    // 1. AI / PDF 文件头毫秒级尺寸嗅探 (解析 /CropBox [0 0 W H] / /MediaBox [0 0 W H] / %%BoundingBox)
     if (ext == "ai" || ext == "pdf") {
         QFile file(filePath);
         if (file.open(QIODevice::ReadOnly)) {
             QByteArray head = file.read(64 * 1024);
             file.close();
+
+            // 1. 匹配 /CropBox [ 0 0 595.28 841.89 ]
+            static QRegularExpression rxCropBox(R"(/CropBox\s*\[\s*([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)\s*\])");
+            auto matchCrop = rxCropBox.match(head);
+            if (matchCrop.hasMatch()) {
+                double w = matchCrop.captured(3).toDouble() - matchCrop.captured(1).toDouble();
+                double h = matchCrop.captured(4).toDouble() - matchCrop.captured(2).toDouble();
+                if (w > 0 && h > 0) return QSize(qRound(w), qRound(h));
+            }
             
-            // 匹配 /MediaBox [ 0 0 595.28 841.89 ]
+            // 2. 匹配 /MediaBox [ 0 0 595.28 841.89 ]
             static QRegularExpression rxMediaBox(R"(/MediaBox\s*\[\s*([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)\s+([\d\.\-]+)\s*\])");
             auto match = rxMediaBox.match(head);
             if (match.hasMatch()) {
@@ -130,7 +139,7 @@ QSize ImageDecoderFacade::readImageDimensions(const QString& filePath) {
                 if (w > 0 && h > 0) return QSize(qRound(w), qRound(h));
             }
 
-            // 匹配 PostScript %%BoundingBox: 0 0 595 842
+            // 3. 匹配 PostScript %%BoundingBox: 0 0 595 842
             static QRegularExpression rxBBox(R"(%%BoundingBox:\s*([\d\-]+)\s+([\d\-]+)\s+([\d\-]+)\s+([\d\-]+))");
             auto matchBBox = rxBBox.match(head);
             if (matchBBox.hasMatch()) {

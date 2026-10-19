@@ -80,19 +80,20 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     // 3.5 🚨 物理隔离：自动提取色彩过滤 (只针对 record.autoColor & record.palettes)
     if (!currentFilter.colors.isEmpty()) {
         bool matchAuto = false;
+        double maxDeltaE = (currentFilter.colorTolerance / 100.0) * FilterState::kMaxSimilarityDeltaE;
 
         auto calculateMatchedArea = [&](const QColor& targetCol) -> float {
             if (!targetCol.isValid()) return 0.0f;
             float totalArea = 0.0f;
             if (!record.palettes.empty()) {
                 for (const auto& pe : record.palettes) {
-                    if (UiHelper::calculateDeltaE(targetCol, pe.first) < currentFilter.colorTolerance) {
+                    if (UiHelper::calculateDeltaE(targetCol, pe.first) <= maxDeltaE) {
                         totalArea += pe.second;
                     }
                 }
             } else if (!record.autoColor.isEmpty()) {
                 QColor recordCol = UiHelper::parseColorName(record.autoColor);
-                if (UiHelper::calculateDeltaE(targetCol, recordCol) < currentFilter.colorTolerance) {
+                if (UiHelper::calculateDeltaE(targetCol, recordCol) <= maxDeltaE) {
                     totalArea = 1.0f;
                 }
             }

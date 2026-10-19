@@ -173,7 +173,6 @@ public:
     void persistAsync(const std::wstring& path, bool notify = true);
 
 signals:
-    void metaChanged(const QString& path);
     void pendingSyncChanged(bool hasPending);
 
 private slots:

@@ -2167,3 +2167,81 @@ QLabel#FilterColorSubTitleRecent {
     margin-top: 8px;
     margin-left: 5px;
 }
+
+/* =================================================================== 
+   TagSelectorOverlay Styles 
+   =================================================================== */ 
+QPushButton#TagSelectorHeaderBtn { 
+    text-align: left; 
+    font-weight: bold; 
+    color: #CCCCCC; 
+    background: transparent; 
+    border: none; 
+    font-size: 13px; 
+} 
+ 
+/* =================================================================== 
+   CreateFolderWithItemsDialog Styles 
+   =================================================================== */ 
+QLabel#CreateFolderTitleLabel { 
+    color: #EEEEEE; 
+} 
+ 
+QLabel#CreateFolderSubtitleLabel { 
+    color: #AAAAAA; 
+} 
+ 
+QLineEdit#CreateFolderNameEdit { 
+    background-color: #1E1E1E; 
+    color: #EEEEEE; 
+    border: 1px solid #3498db; 
+    border-radius: 6px; 
+    padding: 0 12px; 
+    font-size: 13px; 
+} 
+ 
+QLineEdit#CreateFolderNameEdit:focus { 
+    border: 1px solid #5dedff; 
+} 
+ 
+QPushButton#CreateFolderCancelBtn { 
+    background-color: #2D2D2D; 
+    color: #EEEEEE; 
+    border: 1px solid #3E3E3E; 
+    border-radius: 6px; 
+    font-size: 13px; 
+} 
+ 
+QPushButton#CreateFolderCancelBtn:hover { 
+    background-color: #383838; 
+} 
+ 
+QPushButton#CreateFolderCreateBtn { 
+    background-color: #3498db; 
+    color: #FFFFFF; 
+    border: none; 
+    border-radius: 6px; 
+    font-size: 13px; 
+    font-weight: bold; 
+    padding: 0 16px; 
+} 
+ 
+QPushButton#CreateFolderCreateBtn:hover { 
+    background-color: #2980b9; 
+} 
+ 
+/* =================================================================== 
+   SmartFolderDialog Styles 
+   =================================================================== */ 
+QLabel#SmartFolderLabel { 
+    color: #CCCCCC; 
+    font-size: 13px; 
+} 
+ 
+QFrame#SmartFolderSeparatorLine { 
+    color: #333333; 
+} 
+ 
+QScrollArea#SmartFolderScrollArea, QScrollArea#SmartFolderScrollArea QWidget { 
+    background: transparent; 
+} 

@@ -174,13 +174,13 @@ void SmartFolderDialog::setupUi() {
     topLayout->setSpacing(12);
 
     QLabel* nameLabel = new QLabel("名称:", bodyWidget);
-    nameLabel->setStyleSheet("color: #CCCCCC; font-size: 13px;");
+    nameLabel->setObjectName("SmartFolderLabel");
 
     m_nameEdit = new QLineEdit(bodyWidget);
     m_nameEdit->setText(m_record.name);
 
     QLabel* modeLabel = new QLabel("匹配:", bodyWidget);
-    modeLabel->setStyleSheet("color: #CCCCCC; font-size: 13px;");
+    modeLabel->setObjectName("SmartFolderLabel");
 
     m_matchModeCombo = new QComboBox(bodyWidget);
     m_matchModeCombo->addItem("符合以下所有条件 (AND)", "ALL");
@@ -201,14 +201,14 @@ void SmartFolderDialog::setupUi() {
     // 分割线
     QFrame* line = new QFrame(bodyWidget);
     line->setFrameShape(QFrame::HLine);
-    line->setStyleSheet("color: #333333;");
+    line->setObjectName("SmartFolderSeparatorLine");
     bodyLayout->addWidget(line);
 
     // 规则列表区域
     QScrollArea* scrollArea = new QScrollArea(bodyWidget);
+    scrollArea->setObjectName("SmartFolderScrollArea");
     scrollArea->setWidgetResizable(true);
     scrollArea->setFrameShape(QFrame::NoFrame);
-    scrollArea->setStyleSheet("QScrollArea { background: transparent; } QWidget { background: transparent; }");
 
     QWidget* scrollContent = new QWidget(scrollArea);
     m_rulesLayout = new QVBoxLayout(scrollContent);

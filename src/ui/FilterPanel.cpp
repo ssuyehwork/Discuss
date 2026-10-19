@@ -920,7 +920,7 @@ void FilterPanel::selectColor(const QColor& color) {
     st.colors.append(hex);
 
     m_filterModel->setState(st);
-    syncUIFromFilterState();
+    rebuildGroups();
 }
 
 } // namespace QuarkMeta

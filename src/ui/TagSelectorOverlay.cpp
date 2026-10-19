@@ -113,8 +113,8 @@ void TagSelectorOverlay::initUi() {
 
     // 第一组: 推荐
     m_recHeaderBtn = new QPushButton(m_bodyContainer);
+    m_recHeaderBtn->setObjectName("TagSelectorHeaderBtn");
     m_recHeaderBtn->setCursor(Qt::PointingHandCursor);
-    m_recHeaderBtn->setStyleSheet("QPushButton { text-align: left; font-weight: bold; color: #CCCCCC; background: transparent; border: none; font-size: 13px; }");
     connect(m_recHeaderBtn, &QPushButton::clicked, this, [this]() {
         m_recExpanded = !m_recExpanded;
         m_recSectionWidget->setVisible(m_recExpanded);
@@ -127,8 +127,8 @@ void TagSelectorOverlay::initUi() {
 
     // 第二组: 最近使用 (最多 50 个)
     m_recentHeaderBtn = new QPushButton(m_bodyContainer);
+    m_recentHeaderBtn->setObjectName("TagSelectorHeaderBtn");
     m_recentHeaderBtn->setCursor(Qt::PointingHandCursor);
-    m_recentHeaderBtn->setStyleSheet("QPushButton { text-align: left; font-weight: bold; color: #CCCCCC; background: transparent; border: none; font-size: 13px; }");
     connect(m_recentHeaderBtn, &QPushButton::clicked, this, [this]() {
         m_recentExpanded = !m_recentExpanded;
         m_recentSectionWidget->setVisible(m_recentExpanded);

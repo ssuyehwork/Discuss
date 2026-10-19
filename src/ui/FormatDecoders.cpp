@@ -455,6 +455,14 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
 
     QString tempPng = QDir::tempPath() + QString("/gs_thumb_%1_%2.png").arg(QUuid::createUuid().toString(QUuid::WithoutBraces)).arg(QString::number(qHash(filePath), 16));
 
+    QString ext = QFileInfo(filePath).suffix().toLower();
+    QString cropArg;
+    if (ext == "ai" || ext == "pdf") {
+        cropArg = "-dUseCropBox";
+    } else if (ext == "eps") {
+        cropArg = "-dEPSCrop";
+    }
+
     QStringList args;
     args << "-dNOPAUSE"
          << "-dBATCH"
@@ -462,8 +470,11 @@ QImage FormatDecoders::renderGhostscriptSafely(const QString& filePath, int targ
          << "-sDEVICE=pngalpha"
          << QString("-r%1").arg(dpi)
          << "-dFirstPage=1"
-         << "-dLastPage=1"
-         << QString("-sOutputFile=%1").arg(tempPng)
+         << "-dLastPage=1";
+    if (!cropArg.isEmpty()) {
+        args << cropArg;
+    }
+    args << QString("-sOutputFile=%1").arg(tempPng)
          << QDir::toNativeSeparators(filePath);
 
     QProcess process;

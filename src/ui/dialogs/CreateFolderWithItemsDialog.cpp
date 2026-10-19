@@ -55,17 +55,17 @@ void CreateFolderWithItemsDialog::setupUi() {
     titleTextLayout->setSpacing(4);
 
     QLabel* titleLabel = new QLabel("添加文件夹", this);
+    titleLabel->setObjectName("CreateFolderTitleLabel");
     QFont titleFont = titleLabel->font();
     titleFont.setPointSize(12);
     titleFont.setBold(true);
     titleLabel->setFont(titleFont);
-    titleLabel->setStyleSheet("color: #EEEEEE;");
 
     QLabel* subtitleLabel = new QLabel("输入新的文件夹名称", this);
+    subtitleLabel->setObjectName("CreateFolderSubtitleLabel");
     QFont subFont = subtitleLabel->font();
     subFont.setPointSize(9);
     subtitleLabel->setFont(subFont);
-    subtitleLabel->setStyleSheet("color: #AAAAAA;");
 
     titleTextLayout->addWidget(titleLabel);
     titleTextLayout->addWidget(subtitleLabel);
@@ -77,19 +77,7 @@ void CreateFolderWithItemsDialog::setupUi() {
     // 2. 单行文件夹名称输入框
     m_nameEdit = new QLineEdit("新建文件夹", this);
     m_nameEdit->setFixedHeight(38);
-    m_nameEdit->setStyleSheet(R"(
-        QLineEdit {
-            background-color: #1E1E1E;
-            color: #EEEEEE;
-            border: 1px solid #3498db;
-            border-radius: 6px;
-            padding: 0 12px;
-            font-size: 13px;
-        }
-        QLineEdit:focus {
-            border: 1.5px solid #3498db;
-        }
-    )");
+    m_nameEdit->setObjectName("CreateFolderNameEdit");
     UiHelper::setupLineEditContextMenu(m_nameEdit);
     connect(m_nameEdit, &QLineEdit::returnPressed, this, &CreateFolderWithItemsDialog::onCreateAndMigrate);
     mainLayout->addWidget(m_nameEdit);
@@ -103,38 +91,14 @@ void CreateFolderWithItemsDialog::setupUi() {
     m_btnCancel = new QPushButton("取消", this);
     m_btnCancel->setFixedSize(120, 36);
     m_btnCancel->setCursor(Qt::PointingHandCursor);
-    m_btnCancel->setStyleSheet(R"(
-        QPushButton {
-            background-color: #2D2D2D;
-            color: #EEEEEE;
-            border: 1px solid #3E3E3E;
-            border-radius: 6px;
-            font-size: 13px;
-        }
-        QPushButton:hover {
-            background-color: #383838;
-        }
-    )");
+    m_btnCancel->setObjectName("CreateFolderCancelBtn");
     connect(m_btnCancel, &QPushButton::clicked, this, &QDialog::reject);
 
     m_btnCreate = new QPushButton("新的文件夹名称", this);
     m_btnCreate->setFixedHeight(36);
     m_btnCreate->setMinimumWidth(150);
     m_btnCreate->setCursor(Qt::PointingHandCursor);
-    m_btnCreate->setStyleSheet(R"(
-        QPushButton {
-            background-color: #3498db;
-            color: #FFFFFF;
-            border: none;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: bold;
-            padding: 0 16px;
-        }
-        QPushButton:hover {
-            background-color: #2980b9;
-        }
-    )");
+    m_btnCreate->setObjectName("CreateFolderCreateBtn");
     connect(m_btnCreate, &QPushButton::clicked, this, &CreateFolderWithItemsDialog::onCreateAndMigrate);
 
     btnLayout->addWidget(m_btnCancel);

@@ -30,6 +30,7 @@
 #include "../ui/UiHelper.h"
 #include "MediaExtractorPipeline.h"
 #include "../util/ShellHelper.h"
+#include "../core/CentralEventHub.h"
 
 #include <windows.h>
 #include <objbase.h>
@@ -81,10 +82,10 @@ MetadataManager::MetadataManager(QObject* parent) : QObject(parent) {
         }
 
         if (hasReloadAll || paths.size() > 50) {
-            emit metaChanged("__RELOAD_ALL__");
+            Q_UNUSED(hasReloadAll);
         } else {
             for (const auto& p : paths) {
-                emit metaChanged(p);
+                Q_UNUSED(p);
             }
         }
     });
@@ -318,6 +319,7 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
 
     int actualWritten = 0;
     int skippedSame = 0;
+    QStringList writtenPaths;
 
     for (const auto& item : items) {
         std::wstring nPath = normalizePath(item.path);
@@ -377,7 +379,23 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
         });
 
         actualWritten++;
+        writtenPaths.append(QString::fromStdWString(nPath));
         notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
+    }
+
+    if (!writtenPaths.isEmpty()) {
+        auto publishFunc = [writtenPaths]() {
+            AppEvent ev;
+            ev.type = AppEventType::MetadataUpdated;
+            ev.paths = writtenPaths;
+            CentralEventHub::instance().publishEvent(ev);
+        };
+
+        if (QThread::currentThread() == QCoreApplication::instance()->thread()) {
+            publishFunc();
+        } else {
+            QMetaObject::invokeMethod(QCoreApplication::instance(), publishFunc, Qt::QueuedConnection);
+        }
     }
 
     qDebug() << "[AutoColor] [MetadataManager] Batch write complete - Written:" << actualWritten << "SkippedSame:" << skippedSame;

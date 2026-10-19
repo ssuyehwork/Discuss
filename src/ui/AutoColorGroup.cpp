@@ -92,12 +92,12 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     accLayout->setContentsMargins(10, 4, 10, 4);
     accLayout->setSpacing(8);
 
-    QLabel* accLabel = new QLabel("准确度:", accRow);
+    QLabel* accLabel = new QLabel("相似度:", accRow);
     accLabel->setObjectName("FilterColorSliderLabel");
     QSlider* accSlider = new QSlider(Qt::Horizontal, accRow);
     accSlider->setObjectName("FilterColorSlider");
     accSlider->setRange(0, 100);
-    accSlider->setValue(currentState.colorTolerance > 0 ? currentState.colorTolerance : 10);
+    accSlider->setValue(currentState.colorTolerance);
 
     accLayout->addWidget(accLabel);
     accLayout->addWidget(accSlider, 1);
@@ -114,7 +114,7 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     QSlider* areaSlider = new QSlider(Qt::Horizontal, areaRow);
     areaSlider->setObjectName("FilterColorSlider");
     areaSlider->setRange(0, 100);
-    areaSlider->setValue(currentState.minColorArea > 0 ? currentState.minColorArea : 10);
+    areaSlider->setValue(currentState.minColorArea);
 
     QObject::connect(hueSlider, &InlineHueSlider::sliderReleased, container, [filterModel, hueSlider, requestRebuild, accSlider, areaSlider]() {
         int h = hueSlider->hue();
@@ -127,10 +127,15 @@ void AutoColorGroup::populate(QWidget* parentWidget,
         QString hex = col.name().toUpper();
         pushRecent(hex);
 
+        int tol = accSlider->value();
+        int area = areaSlider->value();
+        AppConfig::instance().setValue("Filter/ColorSimilarity", tol);
+        AppConfig::instance().setValue("Filter/MinColorArea", area);
+
         FilterState st = filterModel->state();
         st.colors = QStringList{ hex };
-        st.colorTolerance = accSlider->value();
-        st.minColorArea = areaSlider->value();
+        st.colorTolerance = tol;
+        st.minColorArea = area;
         filterModel->setState(st);
 
         if (requestRebuild) requestRebuild();
@@ -153,9 +158,14 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     QObject::connect(areaSlider, &QSlider::valueChanged, container, onSliderValueChanged);
 
     QObject::connect(debounceTimer, &QTimer::timeout, container, [filterModel, accSlider, areaSlider]() {
+        int tol = accSlider->value();
+        int area = areaSlider->value();
+        AppConfig::instance().setValue("Filter/ColorSimilarity", tol);
+        AppConfig::instance().setValue("Filter/MinColorArea", area);
+
         FilterState st = filterModel->state();
-        st.colorTolerance = accSlider->value();
-        st.minColorArea = areaSlider->value();
+        st.colorTolerance = tol;
+        st.minColorArea = area;
         filterModel->setState(st);
     });
 
