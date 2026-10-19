@@ -53,11 +53,13 @@ void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
     bool hasThumb = index.data(m_hasThumbnailRole).toBool();
     QVariant decoData = index.data(Qt::DecorationRole);
     QPixmap thumb;
-    if (decoData.canConvert<QPixmap>()) {
-        thumb = decoData.value<QPixmap>();
-    } else if (decoData.canConvert<QIcon>()) {
-        QIcon icon = decoData.value<QIcon>();
-        if (!icon.isNull()) thumb = icon.pixmap(l.coverRect.size());
+    if (hasThumb) {
+        if (decoData.canConvert<QPixmap>()) {
+            thumb = decoData.value<QPixmap>();
+        } else if (decoData.canConvert<QIcon>()) {
+            QIcon icon = decoData.value<QIcon>();
+            if (!icon.isNull()) thumb = icon.pixmap(l.coverRect.size());
+        }
     }
 
     bool isWaitingThumb = false;
