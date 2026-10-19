@@ -26,6 +26,7 @@ public:
 
     ColumnViewPane* activePane() const;
     ColumnViewPane* rightmostPane() const;
+    ColumnViewPane* findPaneForPath(const QString& targetPath) const;
     void focusPane(int paneIndex);
     void activatePaneFromBlankClick(int paneIndex);
     void setActivePaneIndex(int newIndex);

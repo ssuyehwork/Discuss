@@ -217,7 +217,6 @@ void ContentPanel::initUi() {
         if (m_statsWorker && !records.empty()) {
             m_statsWorker->processAsync(records, m_currentFilter.showHidden);
         }
-        restoreSelections();
     });
 
     m_proxyModel = new FilterProxyModel(this);
@@ -921,6 +920,9 @@ void ContentPanel::migrateModelCache(const QString& oldPath, const QString& newP
 void ContentPanel::clearFolderCache(const QString& folderPath) { if (m_model) m_model->clearCacheForFolder(folderPath); }
 
 void ContentPanel::onSelectionChanged() {
+    // 🚀 用户主动点击产生选区变化时，更新 selectionState
+    QStringList currentSel = getSelectedPaths();
+    m_selectionState.selectedPaths = QSet<QString>(currentSel.begin(), currentSel.end());
     emitSelectionChangedSignal();
 }
 
@@ -1159,7 +1161,9 @@ void ContentPanel::restoreSelections() {
         targetSet.insert(targetPath);
         m_viewCoordinator->restoreSelections(targetSet, isEdit);
     } else if (!m_selectionState.selectedPaths.isEmpty()) {
-        m_viewCoordinator->restoreSelections(m_selectionState.selectedPaths, false);
+        QSet<QString> pathsToRestore = m_selectionState.selectedPaths;
+        m_selectionState.selectedPaths.clear(); // 🚀 用完即清：防止被后续无关刷新误用
+        m_viewCoordinator->restoreSelections(pathsToRestore, false);
     }
 
     m_isRestoringSelections = false;

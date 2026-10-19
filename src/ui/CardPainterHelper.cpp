@@ -133,6 +133,12 @@ void CardPainterHelper::drawExtensionBadge(QPainter* painter, const QRect& cardR
     painter->restore();
 }
 
+bool CardPainterHelper::canModifyRatingOnPress(bool isCurrentlySelected, Qt::KeyboardModifiers modifiers) {
+    if (!isCurrentlySelected) return false;
+    if (modifiers & (Qt::ControlModifier | Qt::ShiftModifier)) return false;
+    return true;
+}
+
 void CardPainterHelper::drawRatingStars(QPainter* painter, const QRect& banRect, 
                                         const QRect& cardRect, int starSize, int starSpacing, int ratingY, int ratingH, int starsStartX,
                                         int rating, const QString& colorStr, bool isSelected) {

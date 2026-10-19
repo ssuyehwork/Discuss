@@ -71,6 +71,25 @@ ColumnViewPane* ColumnViewWidget::rightmostPane() const {
     return m_panes.isEmpty() ? nullptr : m_panes.last();
 }
 
+ColumnViewPane* ColumnViewWidget::findPaneForPath(const QString& targetPath) const {
+    if (m_panes.isEmpty() || targetPath.isEmpty()) return nullptr;
+
+    QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(targetPath));
+    QString targetParent = QDir::toNativeSeparators(QDir::cleanPath(QFileInfo(cleanTarget).absolutePath()));
+
+    // 优先匹配包含目标项所在父目录的 Pane
+    for (int i = m_panes.size() - 1; i >= 0; --i) {
+        ColumnViewPane* pane = m_panes[i];
+        if (!pane) continue;
+        QString panePath = QDir::toNativeSeparators(QDir::cleanPath(pane->currentPath()));
+        if (QString::compare(panePath, targetParent, Qt::CaseInsensitive) == 0 ||
+            QString::compare(panePath, cleanTarget, Qt::CaseInsensitive) == 0) {
+            return pane;
+        }
+    }
+    return rightmostPane();
+}
+
 void ColumnViewWidget::focusPane(int paneIndex) {
     if (paneIndex >= 0 && paneIndex < m_panes.size()) {
         setActivePaneIndex(paneIndex);

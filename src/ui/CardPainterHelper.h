@@ -36,6 +36,9 @@ public:
                                 const QRect& cardRect, int starSize, int starSpacing, int ratingY, int ratingH, int starsStartX,
                                 int rating, const QString& colorStr, bool isSelected);
 
+    // 🚀【SSOT 评分点击资格统一校验】：仅当项目已选中且未按住 Ctrl/Shift 键时方可点击修改评分
+    static bool canModifyRatingOnPress(bool isCurrentlySelected, Qt::KeyboardModifiers modifiers);
+
     // 6. 绘制空文件夹特异虚线边框
     static void drawEmptyFolderBorder(QPainter* painter, const QRect& cardRect);
 

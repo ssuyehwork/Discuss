@@ -271,10 +271,16 @@ void ColumnViewPane::applySort(int sortType, Qt::SortOrder sortOrder) {
 void ColumnViewPane::tryPendingSelection() {
     if (!m_sectionProxyModel || !m_listView) return;
 
-    if (!m_pendingSelectPaths.isEmpty()) {
+    // 🚀【单次有效保证】：保存待匹配数据，并确保退出该函数时单次清空，绝不留存至未来的 modelReset
+    QSet<QString> pendingPaths = m_pendingSelectPaths;
+    QString pendingPath = m_pendingSelectPath;
+    m_pendingSelectPaths.clear();
+    m_pendingSelectPath.clear();
+
+    if (!pendingPaths.isEmpty()) {
         QSet<QString> normalizedPending;
-        normalizedPending.reserve(m_pendingSelectPaths.size());
-        for (const QString& p : m_pendingSelectPaths) {
+        normalizedPending.reserve(pendingPaths.size());
+        for (const QString& p : pendingPaths) {
             normalizedPending.insert(QDir::toNativeSeparators(QDir::cleanPath(p)).toLower());
         }
 
@@ -295,34 +301,36 @@ void ColumnViewPane::tryPendingSelection() {
             m_listView->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
             if (lastIdx.isValid()) {
                 m_listView->selectionModel()->setCurrentIndex(lastIdx, QItemSelectionModel::NoUpdate);
-                m_listView->scrollTo(lastIdx, QAbstractItemView::PositionAtCenter);
+                // 🚀 仅不在可视区域时进行最小 EnsureVisible 滚动，杜绝 PositionAtCenter 剧烈跳动
+                QRect visualRect = m_listView->visualRect(lastIdx);
+                if (!m_listView->viewport()->rect().contains(visualRect)) {
+                    m_listView->scrollTo(lastIdx, QAbstractItemView::EnsureVisible);
+                }
             }
-            m_pendingSelectPaths.clear();
-            m_pendingSelectPath.clear();
             emit selectionChanged();
             return;
         }
     }
 
-    if (!m_pendingSelectPath.isEmpty()) {
-        QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(m_pendingSelectPath));
-        QString targetName = QFileInfo(cleanTarget).fileName();
+    if (!pendingPath.isEmpty()) {
+        QString cleanTarget = QDir::toNativeSeparators(QDir::cleanPath(pendingPath));
 
         int total = m_sectionProxyModel->rowCount();
         for (int r = 0; r < total; ++r) {
             QModelIndex idx = m_sectionProxyModel->index(r, 0);
             if (idx.data(SectionHeaderRole).toBool()) continue;
             QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
-            QString itemName = QFileInfo(itemPath).fileName();
 
-            if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0 ||
-                (!targetName.isEmpty() && QString::compare(itemName, targetName, Qt::CaseInsensitive) == 0)) {
+            // 🚀 彻底删除文件名兜底分支，仅按规范化后的完整绝对路径精确匹配
+            if (QString::compare(itemPath, cleanTarget, Qt::CaseInsensitive) == 0) {
                 if (m_listView->selectionModel()) {
                     m_listView->selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
                     m_listView->selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
                 }
-                m_listView->scrollTo(idx, QAbstractItemView::PositionAtCenter);
-                m_pendingSelectPath.clear();
+                QRect visualRect = m_listView->visualRect(idx);
+                if (!m_listView->viewport()->rect().contains(visualRect)) {
+                    m_listView->scrollTo(idx, QAbstractItemView::EnsureVisible);
+                }
                 emit selectionChanged();
                 return;
             }

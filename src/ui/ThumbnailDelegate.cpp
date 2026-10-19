@@ -168,35 +168,27 @@ bool ThumbnailDelegate::helpEvent(QHelpEvent* event, QAbstractItemView* view,
 
 bool ThumbnailDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, 
                                     const QStyleOptionViewItem& option, const QModelIndex& index) {
+    // 🚀 物理接管星级与清除按钮的按压响应：仅在已选中且无 Ctrl/Shift 时修改评分，否则放行给原生选中
     if (!event || !model || !index.isValid()) {
         return RenameCapableDelegate::editorEvent(event, model, option, index);
     }
 
-    // 监听鼠标在卡片上的左键点击事件
-    if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease) {
+    if (event->type() == QEvent::MouseButtonPress) {
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
         if (mouseEvent && mouseEvent->button() == Qt::LeftButton) {
             if (m_ratingRole != -1) {
                 CardLayout l = CardLayoutEngine::calculate(option.rect, option.decorationSize.width());
                 QPoint pos = mouseEvent->pos();
+                int hitVal = l.hitStar(pos);
 
-                // ① 命中 ⊘ 禁选按钮 -> 点击释放时清除星级 (设为 0)
-                if (l.banRect.contains(pos)) {
-                    if (event->type() == QEvent::MouseButtonRelease) {
-                        model->setData(index, 0, m_ratingRole);
+                if (hitVal != -1) {
+                    bool isSelected = (option.state & QStyle::State_Selected);
+                    if (CardPainterHelper::canModifyRatingOnPress(isSelected, mouseEvent->modifiers())) {
+                        model->setData(index, hitVal, m_ratingRole);
+                        return true; // 已选中且无组合键，修改评分并消费事件
                     }
-                    return true; // 拦截事件，避免触发卡片普通全选
-                }
-
-                // ② 命中第 1 ~ 5 颗五角星 -> 点击释放时设定对应 1~5 星
-                for (int i = 0; i < 5; ++i) {
-                    if (l.starRects[i].contains(pos)) {
-                        if (event->type() == QEvent::MouseButtonRelease) {
-                            int newRating = i + 1;
-                            model->setData(index, newRating, m_ratingRole);
-                        }
-                        return true; // 拦截事件
-                    }
+                    // 未选中或带有 Ctrl/Shift，不修改评分、不吞事件，放行给视图的默认选中逻辑
+                    return false;
                 }
             }
         }

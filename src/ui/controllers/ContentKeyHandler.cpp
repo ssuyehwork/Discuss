@@ -14,6 +14,7 @@
 #include "../../util/DiskIoService.h"
 #include "../../core/LastOperationManager.h"
 #include "ContextMenuFactory.h"
+#include "../CardPainterHelper.h"
 #include <QPointer>
 
 #include <QWheelEvent>
@@ -239,16 +240,13 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
 
         if (hitVal != -1) {
             bool isSelected = view->selectionModel() && view->selectionModel()->isSelected(index);
-            if (!isSelected) return false;
+            if (!CardPainterHelper::canModifyRatingOnPress(isSelected, mEvent->modifiers())) {
+                return false; // 未选中或有 Ctrl/Shift，不修改评分、不消费事件，放行给视图的默认选中处理
+            }
 
             QAbstractItemModel* model = view->model();
             if (model) {
-                auto selectedIndexes = view->selectionModel()->selectedIndexes();
-                for (const auto& selIdx : selectedIndexes) {
-                    if (selIdx.column() == 0 && !selIdx.data(SectionHeaderRole).toBool()) {
-                        model->setData(selIdx, hitVal, RatingRole);
-                    }
-                }
+                model->setData(index, hitVal, RatingRole);
             }
 
             QAbstractItemView::EditTriggers cur = view->editTriggers();
@@ -277,16 +275,15 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
 
         if (hitStar != -1) {
             bool isRowSelected = treeView->selectionModel() && treeView->selectionModel()->isRowSelected(index.row(), index.parent());
-            if (!isRowSelected) return false;
+            if (!CardPainterHelper::canModifyRatingOnPress(isRowSelected, mEvent->modifiers())) {
+                return false; // 未选中或有 Ctrl/Shift，不修改评分、不消费事件，放行给视图的默认选中处理
+            }
 
             QAbstractItemModel* model = treeView->model();
             if (model) {
-                auto selectedRows = treeView->selectionModel()->selectedRows();
-                for (const auto& selRow : selectedRows) {
-                    QModelIndex targetIdx = treeView->model()->index(selRow.row(), 0, selRow.parent());
-                    if (!targetIdx.data(SectionHeaderRole).toBool()) {
-                        model->setData(targetIdx, hitStar, RatingRole);
-                    }
+                QModelIndex targetIdx = treeView->model()->index(index.row(), 0, index.parent());
+                if (!targetIdx.data(SectionHeaderRole).toBool()) {
+                    model->setData(targetIdx, hitStar, RatingRole);
                 }
             }
 
