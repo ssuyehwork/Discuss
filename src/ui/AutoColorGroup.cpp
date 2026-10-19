@@ -92,7 +92,7 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     accLayout->setContentsMargins(10, 4, 10, 4);
     accLayout->setSpacing(8);
 
-    QLabel* accLabel = new QLabel("相似度:", accRow);
+    QLabel* accLabel = new QLabel("精准度:", accRow);
     accLabel->setObjectName("FilterColorSliderLabel");
     QSlider* accSlider = new QSlider(Qt::Horizontal, accRow);
     accSlider->setObjectName("FilterColorSlider");
