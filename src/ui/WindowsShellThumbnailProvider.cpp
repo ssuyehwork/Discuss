@@ -58,55 +58,38 @@ QSet<QString>& WindowsShellThumbnailProvider::loadingKeys() {
     return keys;
 }
 
+bool WindowsShellThumbnailProvider::isDriveRootPath(const QString& filePath) {
+    return filePath.endsWith(":\\") || filePath.endsWith(":/") || filePath.length() <= 3;
+}
+
+// 缓存键唯一计算入口
+QString WindowsShellThumbnailProvider::iconKey(const QString& filePath, bool isDir, const QString& suffix) {
+    QString key;
+    if (isDir) {
+        key = isDriveRootPath(filePath) ? filePath : QStringLiteral("folder");
+    } else {
+        key = suffix.toLower();
+    }
+    if (key.length() > 128) key = QStringLiteral("unknown");
+    return key;
+}
+
+// getFileIcon 只是 getFileIconFast 的薄封装，禁止再复制一份实现
 QIcon WindowsShellThumbnailProvider::getFileIcon(const QString& filePath, int size) {
     Q_UNUSED(size);
     QFileInfo info(filePath);
-    
-    QString key = info.isDir() ? (info.isRoot() ? filePath : "folder") : info.suffix().toLower();
-    if (key.length() > 128) key = "unknown";
-
-    {
-        QMutexLocker locker(&fileIconMutex());
-        if (fileIconCache().contains(key)) {
-            return fileIconCache()[key];
-        }
-    }
-
-    static QIcon s_defaultFileIcon;
-    static QIcon s_defaultFolderIcon;
-    if (s_defaultFileIcon.isNull() || s_defaultFolderIcon.isNull()) {
-        QFileIconProvider provider;
-        s_defaultFolderIcon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
-        s_defaultFileIcon = provider.icon(QFileIconProvider::File);
-    }
-    QIcon placeholderIcon = info.isDir() ? s_defaultFolderIcon : s_defaultFileIcon;
-
-    {
-        QMutexLocker lock(&loadingMutex());
-        if (loadingKeys().contains(key)) {
-            return placeholderIcon;
-        }
-        loadingKeys().insert(key);
-    }
-
-    emit instance().requestIconLoad(filePath, key, info.isDir(), info.isRoot());
-
-    return placeholderIcon;
+    return getFileIconFast(filePath, info.isDir(), info.suffix());
 }
 
 bool WindowsShellThumbnailProvider::isIconCached(const QString& filePath, bool isDir, const QString& suffix) {
-    bool isRoot = isDir && (filePath.endsWith(":\\") || filePath.endsWith(":/") || filePath.length() <= 3);
-    QString key = isDir ? (isRoot ? filePath : "folder") : suffix.toLower();
-    if (key.length() > 128) key = "unknown";
-
+    const QString key = iconKey(filePath, isDir, suffix);
     QMutexLocker locker(&fileIconMutex());
     return fileIconCache().contains(key);
 }
 
 QIcon WindowsShellThumbnailProvider::getFileIconFast(const QString& filePath, bool isDir, const QString& suffix) {
-    bool isRoot = isDir && (filePath.endsWith(":\\") || filePath.endsWith(":/") || filePath.length() <= 3);
-    QString key = isDir ? (isRoot ? filePath : "folder") : suffix.toLower();
-    if (key.length() > 128) key = "unknown";
+    const QString key = iconKey(filePath, isDir, suffix);
+    const bool isRoot = isDir && isDriveRootPath(filePath);
 
     {
         QMutexLocker locker(&fileIconMutex());
@@ -138,7 +121,11 @@ QIcon WindowsShellThumbnailProvider::getFileIconFast(const QString& filePath, bo
 }
 
 void WindowsShellThumbnailProvider::handleIconLoad(const QString& filePath, const QString& key, bool isDir, bool isRoot) {
-    (void)QtConcurrent::run([filePath, key, isDir, isRoot]() {
+    // 在主线程（本槽所在线程）取得通知器指针，保证通知器归属主线程，
+    // 避免首次在子线程创建导致 queued 调用永远不执行、通知发不出。
+    IconLoadNotifier* notifier = &IconLoadNotifier::instance();
+
+    (void)QtConcurrent::run([filePath, key, isDir, isRoot, notifier]() {
         // 在子线程中执行 COM 线程环境初始化
 #ifdef Q_OS_WIN
         HRESULT hres = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -176,9 +163,10 @@ void WindowsShellThumbnailProvider::handleIconLoad(const QString& filePath, cons
         }
 #endif
 
-        // 使用安全的信号槽在主线程中触发刷新
-        QMetaObject::invokeMethod(&IconLoadNotifier::instance(), []() {
-            emit IconLoadNotifier::instance().iconLoaded();
+        // 通知主线程：该 key 对应的系统图标已就绪，视图/模型据此重绘
+        QMetaObject::invokeMethod(notifier, [notifier, key]() {
+            emit notifier->iconLoadedForKey(key);
+            emit notifier->iconLoaded();
         }, Qt::QueuedConnection);
     });
 }
@@ -246,7 +234,7 @@ QImage WindowsShellThumbnailProvider::getShellThumbnail(const QString& path, int
 
                 QImage img(p, w, h, w * 4, QImage::Format_RGBA8888);
                 img = img.copy(); // 确保数据所有权
-                
+
                 DeleteObject(hBitmap);
                 pFactory->Release();
                 pItem->Release();
