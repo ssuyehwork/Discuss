@@ -252,14 +252,6 @@ set(SOURCES
     src/ui/PanelLayoutManager.h
     src/ui/AddressBar.cpp
     src/ui/AddressBar.h
-    src/ui/MetaPreviewWidget.h
-    src/ui/MetaPreviewWidget.cpp
-    src/ui/MetaRatingColorWidget.h
-    src/ui/MetaRatingColorWidget.cpp
-    src/ui/MetaTagSection.h
-    src/ui/MetaTagSection.cpp
-    src/ui/MetaInfoSection.h
-    src/ui/MetaInfoSection.cpp
     src/ui/MetaPanel.cpp
     src/ui/MetaPanel.h
     src/ui/TagSelectorOverlay.h
