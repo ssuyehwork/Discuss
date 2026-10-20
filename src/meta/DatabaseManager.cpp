@@ -106,8 +106,10 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         CREATE TABLE IF NOT EXISTS tag_group_items (
             group_id INTEGER,
             tag_name TEXT,
-            PRIMARY KEY (group_id, tag_name)
+            PRIMARY KEY (group_id, tag_name),
+            FOREIGN KEY (group_id) REFERENCES tag_groups(id) ON DELETE CASCADE
         );
+        CREATE INDEX IF NOT EXISTS idx_tag_group_items_tag ON tag_group_items(tag_name);
 
         CREATE TABLE IF NOT EXISTS disk_trash (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
