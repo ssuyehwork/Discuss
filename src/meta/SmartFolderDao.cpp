@@ -350,12 +350,12 @@ int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
             }
         }
         else if (rule.type == SmartRuleType::Tag) {
-            // 利用 file_tags 多对多关联表实现秒级查询
+            // 利用 file_tags 多对多关联表实现秒级查询 (以 file_id 解耦匹配)
             if (rule.op == SmartRuleOperator::NotContains) {
-                whereConditions << QString("id NOT IN (SELECT item_id FROM file_tags WHERE tag_name = '%1')")
+                whereConditions << QString("file_id NOT IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
                                    .arg(rule.value.trimmed());
             } else {
-                whereConditions << QString("id IN (SELECT item_id FROM file_tags WHERE tag_name = '%1')")
+                whereConditions << QString("file_id IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
                                    .arg(rule.value.trimmed());
             }
         }

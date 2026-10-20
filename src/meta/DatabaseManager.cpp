@@ -132,11 +132,11 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         CREATE INDEX IF NOT EXISTS idx_tag_group_items_tag ON tag_group_items(tag_name);
 
         -- ===================================================================
-        -- 3. 【核心补全】物理文件索引表（消灭全盘递归扫描的根基！）
+        -- 3. 全局文件索引表 (Sidecar File_ID 主键契约)
         -- ===================================================================
         CREATE TABLE IF NOT EXISTS library_items (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            file_path TEXT NOT NULL UNIQUE,         -- 绝对物理路径（主键级别排重）
+            file_id TEXT PRIMARY KEY,               -- 持久化唯一标识 (UUID/Base36)
+            file_path TEXT NOT NULL UNIQUE,         -- 绝对物理路径（独立唯一索引列）
             file_name TEXT NOT NULL,                -- 文件名（含后缀）
             base_name TEXT NOT NULL,                -- 纯文件名（不含后缀，搜索用）
             extension TEXT NOT NULL COLLATE NOCASE, -- 后缀（如 png、md）
@@ -148,20 +148,21 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
             created_at INTEGER DEFAULT 0,
             updated_at INTEGER DEFAULT 0
         );
-        -- 为智能文件夹的高频过滤字段建立 B-Tree 索引
+        -- 为物理路径及智能文件夹的高频过滤字段建立 B-Tree 索引
+        CREATE INDEX IF NOT EXISTS idx_items_path ON library_items(file_path);
         CREATE INDEX IF NOT EXISTS idx_items_rating ON library_items(rating);
         CREATE INDEX IF NOT EXISTS idx_items_ext ON library_items(extension);
         CREATE INDEX IF NOT EXISTS idx_items_color ON library_items(color_hex);
         CREATE INDEX IF NOT EXISTS idx_items_updated ON library_items(updated_at DESC);
 
         -- ===================================================================
-        -- 4. 【核心补全】文件与标签的「多对多关联表」
+        -- 4. 文件与标签的多对多解耦关联表
         -- ===================================================================
         CREATE TABLE IF NOT EXISTS file_tags (
-            item_id INTEGER NOT NULL,
+            file_id TEXT NOT NULL,
             tag_name TEXT NOT NULL COLLATE NOCASE,
-            PRIMARY KEY (item_id, tag_name),
-            FOREIGN KEY (item_id) REFERENCES library_items(id) ON DELETE CASCADE,
+            PRIMARY KEY (file_id, tag_name),
+            FOREIGN KEY (file_id) REFERENCES library_items(file_id) ON DELETE CASCADE ON UPDATE CASCADE,
             FOREIGN KEY (tag_name) REFERENCES tags(name) ON DELETE CASCADE ON UPDATE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_name);
