@@ -96,6 +96,15 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
     sqlite3_exec(conn.diskDb, "PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
     sqlite3_exec(conn.diskDb, "PRAGMA temp_store = MEMORY;", nullptr, nullptr, nullptr);
 
+    // 自动自愈：探测预存库中 library_items 是否具备 file_id 列，若为旧表则擦除以触发全新建表
+    sqlite3_stmt* checkStmt = nullptr;
+    if (sqlite3_prepare_v2(conn.diskDb, "SELECT file_id FROM library_items LIMIT 1;", -1, &checkStmt, nullptr) != SQLITE_OK) {
+        sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS file_tags;", nullptr, nullptr, nullptr);
+        sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS library_items;", nullptr, nullptr, nullptr);
+    } else {
+        sqlite3_finalize(checkStmt);
+    }
+
     const char* schema = R"(
         -- ===================================================================
         -- 1. 基础字典表：标签管理
