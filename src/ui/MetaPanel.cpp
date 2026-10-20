@@ -359,6 +359,7 @@ void MetaPanel::initUi() {
     m_btnCopyPath->setObjectName("BtnCopyPath");
     connect(m_btnCopyPath, &QPushButton::clicked, this, [this]() {
         QString p = m_pathEdit->toPlainText().trimmed();
+        p.remove(QChar(0x200B));
         if (!p.isEmpty() && !p.startsWith("已选中")) {
             QApplication::clipboard()->setText(QDir::toNativeSeparators(p));
             ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径", 1200, QColor("#2ecc71"));
@@ -372,6 +373,7 @@ void MetaPanel::initUi() {
     m_btnOpenLocation->setObjectName("BtnOpenLocation");
     connect(m_btnOpenLocation, &QPushButton::clicked, this, [this]() {
         QString p = m_pathEdit->toPlainText().trimmed();
+        p.remove(QChar(0x200B));
         if (!p.isEmpty() && !p.startsWith("已选中")) {
             ShellHelper::openInExplorer(p);
         }
@@ -612,7 +614,7 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
             m_linkEdit->setPlaceholderText("添加批量关联网址...");
         }
         if (m_pathEdit) {
-            m_pathEdit->setText(QString("已选中 %1 个项目").arg(m_selectedPaths.size()));
+            m_pathEdit->setPlainText(QString("已选中 %1 个项目").arg(m_selectedPaths.size()));
         }
         if (lblType) lblType->setText("混合项目");
         if (lblSize) lblSize->setText("-");
@@ -754,7 +756,9 @@ void MetaPanel::updateInfo(const QString& n, const QString& t, const QString& s,
         lblMtime->setText(mt);
         lblAtime->setText(at);
         
-        m_pathEdit->setPlainText(p);
+        QString prettyPath = p;
+        prettyPath.replace("\\", "\\\u200B").replace("/", "/\u200B");
+        m_pathEdit->setPlainText(prettyPath);
     }
 
     lblEncrypted->setText(e ? "已加密" : "未加密");
@@ -895,6 +899,7 @@ void MetaPanel::setPalettes(const QVector<QPair<QColor, float>>& palette) {
 
 void MetaPanel::setAsPrimaryColor(const QColor& color) {
     QString currentPath = m_pathEdit->toPlainText().trimmed();
+    currentPath.remove(QChar(0x200B));
     if (!currentPath.isEmpty() && !currentPath.startsWith("已选中")) {
         emit primaryColorChanged(currentPath, color);
     }

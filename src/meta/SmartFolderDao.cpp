@@ -320,92 +320,61 @@ static bool evaluateRuleForItemMeta(const SmartFolderRule& rule,
 int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
     if (rec.rules.isEmpty()) return 0;
 
-    QSet<QString> processedPaths;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return 0;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    // 1. 动态生成 WHERE 条件
+    QStringList whereConditions;
+    for (const auto& rule : rec.rules) {
+        if (rule.type == SmartRuleType::Rating) {
+            QString op = (rule.op == SmartRuleOperator::GreaterOrEqual) ? ">=" :
+                         (rule.op == SmartRuleOperator::LessOrEqual) ? "<=" : "=";
+            whereConditions << QString("rating %1 %2").arg(op).arg(rule.value.toInt());
+        } 
+        else if (rule.type == SmartRuleType::Extension) {
+            QString ext = rule.value.trimmed();
+            if (ext.startsWith('.')) ext.remove(0, 1);
+            if (rule.op == SmartRuleOperator::NotContains) {
+                whereConditions << QString("extension != '%1'").arg(ext);
+            } else {
+                whereConditions << QString("extension = '%1'").arg(ext);
+            }
+        } 
+        else if (rule.type == SmartRuleType::Color) {
+            if (rule.op == SmartRuleOperator::NotContains) {
+                whereConditions << QString("color_hex != '%1'").arg(rule.value.trimmed());
+            } else {
+                whereConditions << QString("color_hex = '%1'").arg(rule.value.trimmed());
+            }
+        }
+        else if (rule.type == SmartRuleType::Tag) {
+            // 利用 file_tags 多对多关联表实现秒级查询
+            if (rule.op == SmartRuleOperator::NotContains) {
+                whereConditions << QString("id NOT IN (SELECT item_id FROM file_tags WHERE tag_name = '%1')")
+                                   .arg(rule.value.trimmed());
+            } else {
+                whereConditions << QString("id IN (SELECT item_id FROM file_tags WHERE tag_name = '%1')")
+                                   .arg(rule.value.trimmed());
+            }
+        }
+    }
+
+    if (whereConditions.isEmpty()) return 0;
+
+    QString connector = (rec.matchMode.toUpper() == "ALL") ? " AND " : " OR ";
+    QString sql = QString("SELECT COUNT(*) FROM library_items WHERE %1;")
+                  .arg(whereConditions.join(connector));
+
+    sqlite3_stmt* stmt = nullptr;
     int count = 0;
-    bool isAllMode = (rec.matchMode == "ALL");
-
-    // 1. 获取库中配置的所有底层分类根路径与文件
-    QStringList libPaths = LibraryDao::getCategoryPaths(-1);
-
-    auto checkFileAndIncrement = [&](const QString& filePath) {
-        if (filePath.isEmpty()) return;
-        QFileInfo fi(filePath);
-        if (fi.isDir()) return;
-
-        QString canonical = fi.canonicalFilePath().toLower();
-        if (canonical.isEmpty()) canonical = QDir::cleanPath(filePath).toLower();
-        if (processedPaths.contains(canonical)) return;
-        processedPaths.insert(canonical);
-
-        QString fileName = fi.fileName();
-        QString suffix = fi.suffix();
-
-        if (fileName.endsWith(".QuarkMeta.json", Qt::CaseInsensitive) ||
-            fileName.endsWith(".tmp", Qt::CaseInsensitive)) {
-            return;
+    if (sqlite3_prepare_v2(db, sql.toUtf8().constData(), -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            count = sqlite3_column_int(stmt, 0);
         }
-
-        RuntimeMeta meta = MetadataManager::instance().getMeta(filePath.toStdWString());
-
-        bool itemMatches = isAllMode;
-        for (const auto& rule : rec.rules) {
-            bool rulePassed = evaluateRuleForRuntimeMeta(rule, filePath, fileName, suffix, meta);
-            if (isAllMode) {
-                if (!rulePassed) { itemMatches = false; break; }
-            } else {
-                if (rulePassed) { itemMatches = true; break; }
-            }
-        }
-        if (itemMatches) {
-            count++;
-        }
-    };
-
-    for (const QString& libPath : libPaths) {
-        if (libPath.isEmpty()) continue;
-        QFileInfo fi(libPath);
-        if (fi.isDir()) {
-            QDirIterator it(libPath, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
-            while (it.hasNext()) {
-                it.next();
-                checkFileAndIncrement(it.filePath());
-            }
-        } else if (fi.isFile()) {
-            checkFileAndIncrement(libPath);
-        }
+        sqlite3_finalize(stmt);
     }
-
-    // 2. 补漏：检查数据库已关联但可能不在上述磁盘扫描路径里的条目
-    auto indexedItems = LibraryDao::getCategoryIndexedItems(-1);
-    for (const auto& item : indexedItems) {
-        QString filePath = QDir::cleanPath(QString::fromStdWString(item.originalName));
-        if (filePath.isEmpty()) continue;
-
-        QFileInfo fi(filePath);
-        if (fi.isDir()) continue;
-
-        QString canonical = fi.canonicalFilePath().toLower();
-        if (canonical.isEmpty()) canonical = filePath.toLower();
-        if (processedPaths.contains(canonical)) continue;
-        processedPaths.insert(canonical);
-
-        QString fileName = fi.fileName();
-        QString suffix = fi.suffix();
-
-        bool itemMatches = isAllMode;
-        for (const auto& rule : rec.rules) {
-            bool rulePassed = evaluateRuleForItemMeta(rule, filePath, fileName, suffix, item);
-            if (isAllMode) {
-                if (!rulePassed) { itemMatches = false; break; }
-            } else {
-                if (rulePassed) { itemMatches = true; break; }
-            }
-        }
-        if (itemMatches) {
-            count++;
-        }
-    }
-
     return count;
 }
 
