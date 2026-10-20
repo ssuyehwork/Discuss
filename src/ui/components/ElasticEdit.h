@@ -15,6 +15,8 @@ signals:
 protected:
     void keyPressEvent(QKeyEvent* e) override;
     void resizeEvent(QResizeEvent* e) override;
+private:
+    bool m_isAdjusting{false};
 };
 
 } // namespace QuarkMeta

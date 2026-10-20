@@ -5,6 +5,7 @@
 #include <QScrollArea>
 #include <QtMath>
 #include <QLayout>
+#include <QTimer>
 
 namespace QuarkMeta {
 
@@ -20,19 +21,36 @@ ElasticEdit::ElasticEdit(QWidget* parent) : QTextEdit(parent) {
 }
 
 void ElasticEdit::adjustHeight() {
-    int horizontalPadding = 16;
-    int verticalPadding = 6;
-    int border = 2;
-    int w = width();
-    if (w > 50) {
-        int textW = w - horizontalPadding - border;
-        if (document()->textWidth() != textW) {
-            document()->setTextWidth(textW);
-        }
+    if (m_isAdjusting) return;
+
+    int vpWidth = viewport() ? viewport()->width() : 0;
+    qreal docMargin = document()->documentMargin();
+    int textW = 0;
+
+    if (vpWidth > 0) {
+        textW = qMax(10, vpWidth - static_cast<int>(docMargin * 2));
+    } else {
+        QMargins m = contentsMargins();
+        int fw = frameWidth();
+        textW = qMax(10, width() - m.left() - m.right() - 2 * fw - static_cast<int>(docMargin * 2));
     }
+
+    if (document()->textWidth() != textW) {
+        document()->setTextWidth(textW);
+    }
+
+    int verticalDiff = height() - (viewport() ? viewport()->height() : 0);
+    if (verticalDiff <= 0) {
+        QMargins m = contentsMargins();
+        int fw = frameWidth();
+        verticalDiff = m.top() + m.bottom() + 2 * fw;
+    }
+
     qreal docHeight = document()->size().height();
-    int newHeight = qMax(28, (int)qCeil(docHeight + verticalPadding + border)); 
+    int newHeight = qMax(28, static_cast<int>(qCeil(docHeight + verticalDiff)));
+
     if (this->height() != newHeight) {
+        m_isAdjusting = true;
         setFixedHeight(newHeight);
         updateGeometry(); 
         QWidget* p = parentWidget();
@@ -41,6 +59,9 @@ void ElasticEdit::adjustHeight() {
             if (qobject_cast<QScrollArea*>(p)) break;
             p = p->parentWidget();
         }
+        m_isAdjusting = false;
+
+        QTimer::singleShot(0, this, &ElasticEdit::adjustHeight);
     }
 }
 

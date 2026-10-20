@@ -76,9 +76,9 @@ void SmartFolderRuleRow::onTypeChanged(int index) {
         {
             int starSize = 14;
             int spacing = 2;
+            int maxW = 5 * starSize + 4 * spacing;
             for (int r = 1; r <= 5; ++r) {
-                int totalW = r * starSize + (r - 1) * spacing;
-                QPixmap pix(totalW, starSize);
+                QPixmap pix(maxW, starSize);
                 pix.fill(Qt::transparent);
                 QPainter painter(&pix);
                 QPixmap starPix = UiHelper::getIcon("star_filled", QColor("#CCCCCC"), starSize).pixmap(starSize, starSize);

@@ -582,10 +582,10 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
     if (!hasSelection) {
         m_isInternalUpdating = true;
         setImagePreview(QPixmap());
-        if (m_nameEdit) { m_nameEdit->clear(); m_nameEdit->setPlaceholderText("文件名..."); }
-        if (m_noteEdit) { m_noteEdit->clear(); m_noteEdit->setPlaceholderText("添加备注说明..."); }
+        if (m_nameEdit) { m_nameEdit->clear(); m_nameEdit->setPlaceholderText("文件名..."); m_nameEdit->adjustHeight(); }
+        if (m_noteEdit) { m_noteEdit->clear(); m_noteEdit->setPlaceholderText("添加备注说明..."); m_noteEdit->adjustHeight(); }
         if (m_linkEdit) { m_linkEdit->clear(); m_linkEdit->setPlaceholderText("添加关联网址..."); }
-        if (m_pathEdit) m_pathEdit->clear();
+        if (m_pathEdit) { m_pathEdit->clear(); m_pathEdit->adjustHeight(); }
         if (lblType) lblType->setText("-");
         if (lblSize) lblSize->setText("-");
         if (lblDimensions) lblDimensions->setText("-");
@@ -616,6 +616,7 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
         }
         if (m_pathEdit) {
             m_pathEdit->setText(QString("已选中 %1 个项目").arg(m_selectedPaths.size()));
+            m_pathEdit->adjustHeight();
         }
         if (lblType) lblType->setText("混合项目");
         if (lblSize) lblSize->setText("-");
@@ -696,7 +697,9 @@ void MetaPanel::onTagDeleted(const QString& text) {
 
 void MetaPanel::resizeEvent(QResizeEvent* event) {
     QFrame::resizeEvent(event);
-    // 🚀【彻底拔除滞后锁】：由 QScrollArea 原生自适应，0 延迟无阻碍平滑响应
+    if (m_nameEdit) m_nameEdit->adjustHeight();
+    if (m_noteEdit) m_noteEdit->adjustHeight();
+    if (m_pathEdit) m_pathEdit->adjustHeight();
     adjustFlowHeights();
 }
 

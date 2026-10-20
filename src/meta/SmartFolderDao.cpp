@@ -1,10 +1,13 @@
 #include "SmartFolderDao.h"
 #include "DatabaseManager.h"
 #include "LibraryDao.h"
+#include "MetadataManager.h"
 #include <sqlite3.h>
 #include <QJsonDocument>
 #include <QDateTime>
 #include <QFileInfo>
+#include <QDirIterator>
+#include <QSet>
 
 namespace QuarkMeta {
 
@@ -214,70 +217,195 @@ bool SmartFolderDao::updateSmartFolder(const SmartFolderRecord& rec) {
     return success;
 }
 
+static bool evaluateRuleForRuntimeMeta(const SmartFolderRule& rule,
+                                       const QString& filePath,
+                                       const QString& fileName,
+                                       const QString& suffix,
+                                       const RuntimeMeta& meta) {
+    if (rule.type == SmartRuleType::Rating) {
+        int rVal = rule.value.toInt();
+        if (rule.op == SmartRuleOperator::GreaterOrEqual) return (meta.rating >= rVal);
+        if (rule.op == SmartRuleOperator::Equals) return (meta.rating == rVal);
+        if (rule.op == SmartRuleOperator::LessOrEqual) return (meta.rating <= rVal);
+        if (rule.op == SmartRuleOperator::Contains) return (meta.rating == rVal);
+        if (rule.op == SmartRuleOperator::NotContains) return (meta.rating != rVal);
+    } else if (rule.type == SmartRuleType::Extension) {
+        QString targetExt = rule.value.trimmed();
+        if (targetExt.startsWith('.')) targetExt.remove(0, 1);
+        bool equals = (suffix.compare(targetExt, Qt::CaseInsensitive) == 0) ||
+                      (fileName.endsWith("." + targetExt, Qt::CaseInsensitive));
+        if (rule.op == SmartRuleOperator::NotContains) return !equals;
+        return equals;
+    } else if (rule.type == SmartRuleType::Color) {
+        QString itemColor = QString::fromStdWString(meta.manualColor);
+        if (itemColor.isEmpty()) itemColor = QString::fromStdWString(meta.autoColor);
+        bool matchColor = (itemColor.compare(rule.value.trimmed(), Qt::CaseInsensitive) == 0);
+        if (rule.op == SmartRuleOperator::NotContains) return !matchColor;
+        return matchColor;
+    } else if (rule.type == SmartRuleType::Tag) {
+        bool hasTag = false;
+        QString valTrimmed = rule.value.trimmed();
+        for (const QString& t : meta.tags) {
+            if (t.compare(valTrimmed, Qt::CaseInsensitive) == 0) {
+                hasTag = true;
+                break;
+            }
+        }
+        if (rule.op == SmartRuleOperator::NotContains) return !hasTag;
+        return hasTag;
+    } else if (rule.type == SmartRuleType::Keyword) {
+        QString note = QString::fromStdWString(meta.note);
+        QString url = QString::fromStdWString(meta.url);
+        QString kw = rule.value.trimmed();
+        bool matchKw = fileName.contains(kw, Qt::CaseInsensitive) ||
+                       filePath.contains(kw, Qt::CaseInsensitive) ||
+                       note.contains(kw, Qt::CaseInsensitive) ||
+                       url.contains(kw, Qt::CaseInsensitive);
+        if (rule.op == SmartRuleOperator::NotContains) return !matchKw;
+        return matchKw;
+    }
+    return false;
+}
+
+static bool evaluateRuleForItemMeta(const SmartFolderRule& rule,
+                                    const QString& filePath,
+                                    const QString& fileName,
+                                    const QString& suffix,
+                                    const ItemMeta& meta) {
+    if (rule.type == SmartRuleType::Rating) {
+        int rVal = rule.value.toInt();
+        if (rule.op == SmartRuleOperator::GreaterOrEqual) return (meta.rating >= rVal);
+        if (rule.op == SmartRuleOperator::Equals) return (meta.rating == rVal);
+        if (rule.op == SmartRuleOperator::LessOrEqual) return (meta.rating <= rVal);
+        if (rule.op == SmartRuleOperator::Contains) return (meta.rating == rVal);
+        if (rule.op == SmartRuleOperator::NotContains) return (meta.rating != rVal);
+    } else if (rule.type == SmartRuleType::Extension) {
+        QString targetExt = rule.value.trimmed();
+        if (targetExt.startsWith('.')) targetExt.remove(0, 1);
+        bool equals = (suffix.compare(targetExt, Qt::CaseInsensitive) == 0) ||
+                      (fileName.endsWith("." + targetExt, Qt::CaseInsensitive));
+        if (rule.op == SmartRuleOperator::NotContains) return !equals;
+        return equals;
+    } else if (rule.type == SmartRuleType::Color) {
+        QString itemColor = QString::fromStdWString(meta.color);
+        if (itemColor.isEmpty()) itemColor = QString::fromStdWString(meta.autoColor);
+        bool matchColor = (itemColor.compare(rule.value.trimmed(), Qt::CaseInsensitive) == 0);
+        if (rule.op == SmartRuleOperator::NotContains) return !matchColor;
+        return matchColor;
+    } else if (rule.type == SmartRuleType::Tag) {
+        bool hasTag = false;
+        QString valTrimmed = rule.value.trimmed();
+        for (const auto& t : meta.tags) {
+            if (QString::fromStdWString(t).compare(valTrimmed, Qt::CaseInsensitive) == 0) {
+                hasTag = true;
+                break;
+            }
+        }
+        if (rule.op == SmartRuleOperator::NotContains) return !hasTag;
+        return hasTag;
+    } else if (rule.type == SmartRuleType::Keyword) {
+        QString note = QString::fromStdWString(meta.note);
+        QString url = QString::fromStdWString(meta.url);
+        QString kw = rule.value.trimmed();
+        bool matchKw = fileName.contains(kw, Qt::CaseInsensitive) ||
+                       filePath.contains(kw, Qt::CaseInsensitive) ||
+                       note.contains(kw, Qt::CaseInsensitive) ||
+                       url.contains(kw, Qt::CaseInsensitive);
+        if (rule.op == SmartRuleOperator::NotContains) return !matchKw;
+        return matchKw;
+    }
+    return false;
+}
+
 int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
     if (rec.rules.isEmpty()) return 0;
 
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db) return 0;
-
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
-
+    QSet<QString> processedPaths;
+    int count = 0;
     bool isAllMode = (rec.matchMode == "ALL");
-    QStringList whereClauses;
-    std::vector<std::string> bindParams;
 
-    for (const auto& rule : rec.rules) {
-        if (rule.type == SmartRuleType::Rating) {
-            int rVal = rule.value.toInt();
-            if (rule.op == SmartRuleOperator::GreaterOrEqual) {
-                whereClauses.append("rating >= ?");
-            } else if (rule.op == SmartRuleOperator::Equals) {
-                whereClauses.append("rating = ?");
-            } else if (rule.op == SmartRuleOperator::LessOrEqual) {
-                whereClauses.append("rating <= ?");
+    // 1. 获取库中配置的所有底层分类根路径与文件
+    QStringList libPaths = LibraryDao::getCategoryPaths(-1);
+
+    auto checkFileAndIncrement = [&](const QString& filePath) {
+        if (filePath.isEmpty()) return;
+        QFileInfo fi(filePath);
+        if (fi.isDir()) return;
+
+        QString canonical = fi.canonicalFilePath().toLower();
+        if (canonical.isEmpty()) canonical = QDir::cleanPath(filePath).toLower();
+        if (processedPaths.contains(canonical)) return;
+        processedPaths.insert(canonical);
+
+        QString fileName = fi.fileName();
+        QString suffix = fi.suffix();
+
+        if (fileName.endsWith(".QuarkMeta.json", Qt::CaseInsensitive) ||
+            fileName.endsWith(".tmp", Qt::CaseInsensitive)) {
+            return;
+        }
+
+        RuntimeMeta meta = MetadataManager::instance().getMeta(filePath.toStdWString());
+
+        bool itemMatches = isAllMode;
+        for (const auto& rule : rec.rules) {
+            bool rulePassed = evaluateRuleForRuntimeMeta(rule, filePath, fileName, suffix, meta);
+            if (isAllMode) {
+                if (!rulePassed) { itemMatches = false; break; }
+            } else {
+                if (rulePassed) { itemMatches = true; break; }
             }
-            bindParams.push_back(std::to_string(rVal));
-        } else if (rule.type == SmartRuleType::Extension) {
-            QString targetExt = rule.value.trimmed();
-            if (targetExt.startsWith('.')) targetExt.remove(0, 1);
-            whereClauses.append("LOWER(type) = LOWER(?)");
-            bindParams.push_back(targetExt.toStdString());
-        } else if (rule.type == SmartRuleType::Color) {
-            whereClauses.append("LOWER(color) = LOWER(?)");
-            bindParams.push_back(rule.value.trimmed().toStdString());
-        } else if (rule.type == SmartRuleType::Tag) {
-            whereClauses.append("tags LIKE ?");
-            bindParams.push_back("%" + rule.value.trimmed().toStdString() + "%");
-        } else if (rule.type == SmartRuleType::Keyword) {
-            whereClauses.append("(name LIKE ? OR path LIKE ? OR note LIKE ? OR url LIKE ?)");
-            std::string kw = "%" + rule.value.trimmed().toStdString() + "%";
-            bindParams.push_back(kw);
-            bindParams.push_back(kw);
-            bindParams.push_back(kw);
-            bindParams.push_back(kw);
+        }
+        if (itemMatches) {
+            count++;
+        }
+    };
+
+    for (const QString& libPath : libPaths) {
+        if (libPath.isEmpty()) continue;
+        QFileInfo fi(libPath);
+        if (fi.isDir()) {
+            QDirIterator it(libPath, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+            while (it.hasNext()) {
+                it.next();
+                checkFileAndIncrement(it.filePath());
+            }
+        } else if (fi.isFile()) {
+            checkFileAndIncrement(libPath);
         }
     }
 
-    if (whereClauses.isEmpty()) return 0;
+    // 2. 补漏：检查数据库已关联但可能不在上述磁盘扫描路径里的条目
+    auto indexedItems = LibraryDao::getCategoryIndexedItems(-1);
+    for (const auto& item : indexedItems) {
+        QString filePath = QDir::cleanPath(QString::fromStdWString(item.originalName));
+        if (filePath.isEmpty()) continue;
 
-    QString combineOp = isAllMode ? " AND " : " OR ";
-    QString sql = "SELECT COUNT(*) FROM items_index WHERE " + whereClauses.join(combineOp) + ";";
+        QFileInfo fi(filePath);
+        if (fi.isDir()) continue;
 
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql.toUtf8().constData(), -1, &stmt, nullptr) != SQLITE_OK) {
-        return 0;
+        QString canonical = fi.canonicalFilePath().toLower();
+        if (canonical.isEmpty()) canonical = filePath.toLower();
+        if (processedPaths.contains(canonical)) continue;
+        processedPaths.insert(canonical);
+
+        QString fileName = fi.fileName();
+        QString suffix = fi.suffix();
+
+        bool itemMatches = isAllMode;
+        for (const auto& rule : rec.rules) {
+            bool rulePassed = evaluateRuleForItemMeta(rule, filePath, fileName, suffix, item);
+            if (isAllMode) {
+                if (!rulePassed) { itemMatches = false; break; }
+            } else {
+                if (rulePassed) { itemMatches = true; break; }
+            }
+        }
+        if (itemMatches) {
+            count++;
+        }
     }
 
-    int bindIdx = 1;
-    for (const auto& param : bindParams) {
-        sqlite3_bind_text(stmt, bindIdx++, param.c_str(), -1, SQLITE_TRANSIENT);
-    }
-
-    int count = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        count = sqlite3_column_int(stmt, 0);
-    }
-    sqlite3_finalize(stmt);
     return count;
 }
 

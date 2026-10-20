@@ -1924,14 +1924,25 @@ QComboBox::down-arrow {
     height: 10px;
     margin-right: 4px;
 }
-QComboBox QAbstractItemView {
-    background-color: #252526;
-    border: 1px solid #333333;
-    selection-background-color: #378ADD;
+QComboBox QAbstractItemView,
+QComboBox QAbstractItemView::viewport {
+    background-color: #2D2D2D;
+    border: 1px solid #444444;
+    selection-background-color: #45454A;
     selection-color: #FFFFFF;
     color: #EEEEEE;
     outline: 0;
     padding: 2px;
+}
+QComboBox QAbstractItemView::item {
+    padding: 4px 8px;
+    border-radius: 3px;
+    background-color: transparent;
+}
+QComboBox QAbstractItemView::item:hover,
+QComboBox QAbstractItemView::item:selected {
+    background-color: #45454A;
+    color: #FFFFFF;
 }
 
 /* 全局 QGroupBox 分组框暗色规整 */
