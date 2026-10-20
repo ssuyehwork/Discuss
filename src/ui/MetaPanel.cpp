@@ -564,6 +564,22 @@ void MetaPanel::setDefaultIconPreview(const QIcon& icon) {
 }
 
 void MetaPanel::setSelectedPaths(const QStringList& paths) {
+    // 1. 选区切换防漂移：若标签选择浮层处于打开状态，选区变更时强制关闭，消除上下文错位
+    if (m_tagSelectorOverlay) {
+        m_tagSelectorOverlay->close();
+    }
+
+    // 2. 离焦竞态保护：选区切换前驱使当前焦点编辑框收回焦点，确保旧文件的编辑在路径快照更新前落盘
+    if (m_nameEdit && m_nameEdit->hasFocus()) {
+        m_nameEdit->clearFocus();
+    }
+    if (m_noteEdit && m_noteEdit->hasFocus()) {
+        m_noteEdit->clearFocus();
+    }
+    if (m_linkEdit && m_linkEdit->hasFocus()) {
+        m_linkEdit->clearFocus();
+    }
+
     QElapsedTimer timer;
     timer.start();
     m_selectedPaths = paths;
@@ -601,7 +617,7 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
         m_isInternalUpdating = true;
         setImagePreview(QPixmap());
         if (m_nameEdit) {
-            m_nameEdit->setHtml(QString("已选中 <span style=\"color:#3498db;\">%1</span> 个项目").arg(m_selectedPaths.size()));
+            m_nameEdit->setPlainText(QString("已选中 %1 个项目").arg(m_selectedPaths.size()));
         }
         if (m_noteEdit) {
             m_noteEdit->clear();
