@@ -20,6 +20,10 @@ ElasticEdit::ElasticEdit(QWidget* parent) : QTextEdit(parent) {
     connect(this, &QTextEdit::textChanged, this, &QWidget::updateGeometry);
 }
 
+bool ElasticEdit::hasHeightForWidth() const {
+    return true;
+}
+
 int ElasticEdit::heightForWidth(int w) const {
     if (w <= 0) return 28;
 
@@ -30,14 +34,21 @@ int ElasticEdit::heightForWidth(int w) const {
     int availableTextW = w - m.left() - m.right() - 2 * fw - static_cast<int>(docMargin * 2);
     if (availableTextW <= 10) availableTextW = 10;
 
-    std::unique_ptr<QTextDocument> docClone(document()->clone());
-    docClone->setDefaultFont(font());
-    docClone->setDefaultTextOption(document()->defaultTextOption());
-    docClone->setDocumentMargin(docMargin);
-    docClone->setTextWidth(availableTextW);
+    QTextDocument doc;
+    doc.setDefaultFont(font());
+    doc.setDefaultTextOption(document()->defaultTextOption());
+    doc.setDocumentMargin(docMargin);
+
+    QString htmlText = toHtml();
+    if (!htmlText.isEmpty()) {
+        doc.setHtml(htmlText);
+    } else {
+        doc.setPlainText(toPlainText());
+    }
+    doc.setTextWidth(availableTextW);
 
     int vertMargin = m.top() + m.bottom() + 2 * fw;
-    int calculatedH = static_cast<int>(qCeil(docClone->size().height() + vertMargin));
+    int calculatedH = static_cast<int>(qCeil(doc.size().height() + vertMargin));
 
     return qMax(28, calculatedH);
 }

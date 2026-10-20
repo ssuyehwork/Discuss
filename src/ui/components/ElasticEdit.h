@@ -10,7 +10,7 @@ class ElasticEdit : public QTextEdit {
 public:
     explicit ElasticEdit(QWidget* parent = nullptr);
 
-    bool hasHeightForWidth() const override { return true; }
+    bool hasHeightForWidth() const override;
     int heightForWidth(int w) const override;
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
