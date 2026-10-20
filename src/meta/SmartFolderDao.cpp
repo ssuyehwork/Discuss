@@ -217,57 +217,67 @@ bool SmartFolderDao::updateSmartFolder(const SmartFolderRecord& rec) {
 int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
     if (rec.rules.isEmpty()) return 0;
 
-    auto allItems = LibraryDao::getCategoryIndexedItems(-1);
-    if (allItems.isEmpty()) return 0;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return 0;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    bool isAllMode = (rec.matchMode == "ALL");
+    QStringList whereClauses;
+    std::vector<std::string> bindParams;
+
+    for (const auto& rule : rec.rules) {
+        if (rule.type == SmartRuleType::Rating) {
+            int rVal = rule.value.toInt();
+            if (rule.op == SmartRuleOperator::GreaterOrEqual) {
+                whereClauses.append("rating >= ?");
+            } else if (rule.op == SmartRuleOperator::Equals) {
+                whereClauses.append("rating = ?");
+            } else if (rule.op == SmartRuleOperator::LessOrEqual) {
+                whereClauses.append("rating <= ?");
+            }
+            bindParams.push_back(std::to_string(rVal));
+        } else if (rule.type == SmartRuleType::Extension) {
+            QString targetExt = rule.value.trimmed();
+            if (targetExt.startsWith('.')) targetExt.remove(0, 1);
+            whereClauses.append("LOWER(type) = LOWER(?)");
+            bindParams.push_back(targetExt.toStdString());
+        } else if (rule.type == SmartRuleType::Color) {
+            whereClauses.append("LOWER(color) = LOWER(?)");
+            bindParams.push_back(rule.value.trimmed().toStdString());
+        } else if (rule.type == SmartRuleType::Tag) {
+            whereClauses.append("tags LIKE ?");
+            bindParams.push_back("%" + rule.value.trimmed().toStdString() + "%");
+        } else if (rule.type == SmartRuleType::Keyword) {
+            whereClauses.append("(name LIKE ? OR path LIKE ? OR note LIKE ? OR url LIKE ?)");
+            std::string kw = "%" + rule.value.trimmed().toStdString() + "%";
+            bindParams.push_back(kw);
+            bindParams.push_back(kw);
+            bindParams.push_back(kw);
+            bindParams.push_back(kw);
+        }
+    }
+
+    if (whereClauses.isEmpty()) return 0;
+
+    QString combineOp = isAllMode ? " AND " : " OR ";
+    QString sql = "SELECT COUNT(*) FROM items_index WHERE " + whereClauses.join(combineOp) + ";";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql.toUtf8().constData(), -1, &stmt, nullptr) != SQLITE_OK) {
+        return 0;
+    }
+
+    int bindIdx = 1;
+    for (const auto& param : bindParams) {
+        sqlite3_bind_text(stmt, bindIdx++, param.c_str(), -1, SQLITE_TRANSIENT);
+    }
 
     int count = 0;
-    bool isAllMode = (rec.matchMode == "ALL");
-
-    for (const auto& item : allItems) {
-        bool match = isAllMode;
-        QString pathStr = QString::fromStdWString(item.originalName);
-        QFileInfo fi(pathStr);
-        QString fileName = fi.fileName();
-        QString suffix = fi.suffix();
-
-        for (const auto& rule : rec.rules) {
-            bool rulePassed = false;
-            if (rule.type == SmartRuleType::Rating) {
-                int rVal = rule.value.toInt();
-                if (rule.op == SmartRuleOperator::GreaterOrEqual) rulePassed = (item.rating >= rVal);
-                else if (rule.op == SmartRuleOperator::Equals) rulePassed = (item.rating == rVal);
-                else if (rule.op == SmartRuleOperator::LessOrEqual) rulePassed = (item.rating <= rVal);
-            } else if (rule.type == SmartRuleType::Extension) {
-                QString targetExt = rule.value;
-                if (targetExt.startsWith('.')) targetExt.remove(0, 1);
-                rulePassed = (suffix.compare(targetExt, Qt::CaseInsensitive) == 0) ||
-                             (fileName.endsWith("." + targetExt, Qt::CaseInsensitive));
-            } else if (rule.type == SmartRuleType::Color) {
-                rulePassed = (QString::fromStdWString(item.color).compare(rule.value, Qt::CaseInsensitive) == 0);
-            } else if (rule.type == SmartRuleType::Tag) {
-                for (const auto& t : item.tags) {
-                    if (QString::fromStdWString(t).compare(rule.value, Qt::CaseInsensitive) == 0) {
-                        rulePassed = true;
-                        break;
-                    }
-                }
-            } else if (rule.type == SmartRuleType::Keyword) {
-                QString note = QString::fromStdWString(item.note);
-                QString url = QString::fromStdWString(item.url);
-                rulePassed = fileName.contains(rule.value, Qt::CaseInsensitive) ||
-                             pathStr.contains(rule.value, Qt::CaseInsensitive) ||
-                             note.contains(rule.value, Qt::CaseInsensitive) ||
-                             url.contains(rule.value, Qt::CaseInsensitive);
-            }
-
-            if (isAllMode) {
-                if (!rulePassed) { match = false; break; }
-            } else {
-                if (rulePassed) { match = true; break; }
-            }
-        }
-        if (match) count++;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        count = sqlite3_column_int(stmt, 0);
     }
+    sqlite3_finalize(stmt);
     return count;
 }
 

@@ -136,7 +136,10 @@ bool MetaIndexService::initSchema(sqlite3* db) {
         );
         CREATE INDEX IF NOT EXISTS idx_items_folder ON items_index(folder_path);
         CREATE INDEX IF NOT EXISTS idx_items_name ON items_index(name);
-        CREATE INDEX IF NOT EXISTS idx_items_filter ON items_index(rating, color, type, file_mtime);
+        CREATE INDEX IF NOT EXISTS idx_items_rating ON items_index(rating);
+        CREATE INDEX IF NOT EXISTS idx_items_color ON items_index(color);
+        CREATE INDEX IF NOT EXISTS idx_items_type ON items_index(type);
+        CREATE INDEX IF NOT EXISTS idx_items_mtime ON items_index(file_mtime DESC);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
             name,

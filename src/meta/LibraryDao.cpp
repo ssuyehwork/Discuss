@@ -48,11 +48,14 @@ bool LibraryDao::initTable() {
                            "updated_at INTEGER, "
                            "UNIQUE(category_id, file_path));";
 
+    const char* sqlItemPathIdx = "CREATE INDEX IF NOT EXISTS idx_library_item_file_path ON library_item_index(file_path);";
+
     char* errMsgs = nullptr;
     sqlite3_exec(db, sqlCat, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlPaths, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlPathsIdx, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlIndex, nullptr, nullptr, &errMsgs);
+    sqlite3_exec(db, sqlItemPathIdx, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN preset_tags TEXT DEFAULT '';", nullptr, nullptr, nullptr);
     sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN is_pinned INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
     return true;
