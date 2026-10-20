@@ -7,12 +7,14 @@
 namespace QuarkMeta {
 
 struct FilterState {
-    static constexpr double kMaxSimilarityDeltaE = 30.0;
+    static constexpr int kHueTolerance = 20;
 
     QList<int>   ratings;
     QStringList  colors;          // 自动提取色彩过滤色 (Hex 字符串，如 #E24B4A)
     QStringList  manualColors;    // 手动标注颜色过滤 (红、橙、黄、绿、青、蓝、紫、灰、无色标)
-    int          colorTolerance = 33; // 相似度滑条值 0~100，默认 33
+    int          colorTolerance = 10; // 已废弃，由 colorPrecision 取代
+    int          colorPrecision = 50; // 精准度 (0~100，默认 50)
+    int          colorHue = 0;        // 色相 (0~359，默认 0)
     int          minColorArea = 0;    // 占比 (0~100，默认 0%)
     QString      keyword;
     QStringList  types;

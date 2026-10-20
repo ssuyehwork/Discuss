@@ -1,20 +1,128 @@
 #include "AutoColorGroup.h"
-#include "components/InlineHueSlider.h"
+#include "components/ColorWheel.h"
 #include "components/ColorBlock.h"
 #include "components/FlowLayout.h"
 #include "ToolTipOverlay.h"
+#include "UiHelper.h"
 #include "AppConfig.h"
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
 #include <QSlider>
 #include <QTimer>
 #include <QEvent>
 #include <QMouseEvent>
+#include <QContextMenuEvent>
+#include <QMenu>
 #include <QCursor>
 
 namespace QuarkMeta {
 
 namespace {
+
+struct SavedColorItem {
+    QString hex;
+    int hue = 0;
+    int precision = 50;
+    int area = 0;
+
+    QString toString() const {
+        return QString("%1|%2|%3|%4").arg(hex.toUpper()).arg(hue).arg(precision).arg(area);
+    }
+
+    static SavedColorItem fromString(const QString& str) {
+        SavedColorItem item;
+        QStringList parts = str.split('|');
+        if (parts.size() >= 1) item.hex = parts[0].toUpper();
+        if (parts.size() >= 2) item.hue = parts[1].toInt();
+        if (parts.size() >= 3) item.precision = parts[2].toInt();
+        if (parts.size() >= 4) item.area = parts[3].toInt();
+        return item;
+    }
+
+    bool operator==(const SavedColorItem& other) const {
+        return hex.compare(other.hex, Qt::CaseInsensitive) == 0 &&
+               hue == other.hue &&
+               precision == other.precision &&
+               area == other.area;
+    }
+};
+
+QList<SavedColorItem> loadSavedColors() {
+    QList<SavedColorItem> list;
+    QStringList rawList = AppConfig::instance().getValue("Filter/SavedColors").toStringList();
+    for (const QString& str : rawList) {
+        if (!str.trimmed().isEmpty()) {
+            list.append(SavedColorItem::fromString(str));
+        }
+    }
+    return list;
+}
+
+void saveSavedColors(const QList<SavedColorItem>& list) {
+    QStringList rawList;
+    for (const auto& item : list) {
+        rawList.append(item.toString());
+    }
+    AppConfig::instance().setValue("Filter/SavedColors", rawList);
+}
+
+void addSavedColor(const SavedColorItem& item) {
+    QList<SavedColorItem> list = loadSavedColors();
+    for (const auto& existing : list) {
+        if (existing == item) return;
+    }
+    list.append(item);
+    saveSavedColors(list);
+}
+
+void removeSavedColor(int index) {
+    QList<SavedColorItem> list = loadSavedColors();
+    if (index >= 0 && index < list.size()) {
+        list.removeAt(index);
+        saveSavedColors(list);
+    }
+}
+
+class SavedColorFilter : public QObject {
+public:
+    SavedColorFilter(int index, const SavedColorItem& item, std::function<void(int)> onDelete, QObject* parent = nullptr)
+        : QObject(parent), m_index(index), m_item(item), m_onDelete(onDelete) {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        QWidget* widget = qobject_cast<QWidget*>(watched);
+        if (!widget) return false;
+
+        if (event->type() == QEvent::Enter || event->type() == QEvent::MouseMove) {
+            QString tip = QString("%1\n精准度: %2%\n占比: %3%")
+                              .arg(m_item.hex.toUpper())
+                              .arg(m_item.precision)
+                              .arg(m_item.area);
+            ToolTipOverlay::instance()->showText(QCursor::pos(), tip, 0);
+            return false;
+        } else if (event->type() == QEvent::Leave) {
+            ToolTipOverlay::hideTip();
+            return false;
+        } else if (event->type() == QEvent::ContextMenu) {
+            QContextMenuEvent* ce = static_cast<QContextMenuEvent*>(event);
+            QMenu menu(widget);
+            UiHelper::applyMenuStyle(&menu);
+            QAction* actDel = menu.addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 16), "删除");
+            if (menu.exec(ce->globalPos()) == actDel) {
+                ToolTipOverlay::hideTip();
+                if (m_onDelete) m_onDelete(m_index);
+            }
+            return true;
+        }
+        return false;
+    }
+
+private:
+    int m_index;
+    SavedColorItem m_item;
+    std::function<void(int)> m_onDelete;
+};
 
 class SliderToolTipFilter : public QObject {
 public:
@@ -76,34 +184,18 @@ void AutoColorGroup::populate(QWidget* parentWidget,
 
     const FilterState currentState = filterModel->state();
 
-    // 1. 色相条 InlineHueSlider
-    QWidget* hueContainer = new QWidget(container);
-    QHBoxLayout* hueLayout = new QHBoxLayout(hueContainer);
-    hueLayout->setContentsMargins(5, 0, 5, 0);
-    hueLayout->setSpacing(0);
+    // 1. 色轮 ColorWheel 居中布局
+    QWidget* wheelContainer = new QWidget(container);
+    QHBoxLayout* wheelLayout = new QHBoxLayout(wheelContainer);
+    wheelLayout->setContentsMargins(8, 4, 8, 4);
+    wheelLayout->setSpacing(0);
 
-    InlineHueSlider* hueSlider = new InlineHueSlider(hueContainer);
-    hueLayout->addWidget(hueSlider);
-    groupLayout->addWidget(hueContainer);
+    ColorWheel* colorWheel = new ColorWheel(wheelContainer);
+    colorWheel->setValues(currentState.colorHue, currentState.colorPrecision);
+    wheelLayout->addWidget(colorWheel, 0, Qt::AlignCenter);
+    groupLayout->addWidget(wheelContainer);
 
-    // 2. "准确度:" 行
-    QWidget* accRow = new QWidget(container);
-    QHBoxLayout* accLayout = new QHBoxLayout(accRow);
-    accLayout->setContentsMargins(10, 4, 10, 4);
-    accLayout->setSpacing(8);
-
-    QLabel* accLabel = new QLabel("精准度:", accRow);
-    accLabel->setObjectName("FilterColorSliderLabel");
-    QSlider* accSlider = new QSlider(Qt::Horizontal, accRow);
-    accSlider->setObjectName("FilterColorSlider");
-    accSlider->setRange(0, 100);
-    accSlider->setValue(currentState.colorTolerance);
-
-    accLayout->addWidget(accLabel);
-    accLayout->addWidget(accSlider, 1);
-    groupLayout->addWidget(accRow);
-
-    // 3. "占比:" 行
+    // 2. "占比:" 行
     QWidget* areaRow = new QWidget(container);
     QHBoxLayout* areaLayout = new QHBoxLayout(areaRow);
     areaLayout->setContentsMargins(10, 4, 10, 4);
@@ -116,63 +208,134 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     areaSlider->setRange(0, 100);
     areaSlider->setValue(currentState.minColorArea);
 
-    QObject::connect(hueSlider, &InlineHueSlider::sliderReleased, container, [filterModel, hueSlider, requestRebuild, accSlider, areaSlider]() {
-        int h = hueSlider->hue();
-        QColor col;
-        if (h == 1000) col = Qt::black;
-        else if (h == 1001) col = QColor("#808080");
-        else if (h == 1002) col = Qt::white;
-        else col = QColor::fromHsv(h, 220, 220);
+    areaLayout->addWidget(areaLabel);
+    areaLayout->addWidget(areaSlider, 1);
+    groupLayout->addWidget(areaRow);
 
+    // 色轮松手响应
+    QObject::connect(colorWheel, &ColorWheel::changed, container, [filterModel, colorWheel, areaSlider, requestRebuild](int hue, int precision) {
+        QColor col = QColor::fromHsv(hue, 255, 255);
         QString hex = col.name().toUpper();
         pushRecent(hex);
 
-        int tol = accSlider->value();
         int area = areaSlider->value();
-        AppConfig::instance().setValue("Filter/ColorSimilarity", tol);
+        AppConfig::instance().setValue("Filter/ColorHue", hue);
+        AppConfig::instance().setValue("Filter/ColorPrecision", precision);
         AppConfig::instance().setValue("Filter/MinColorArea", area);
 
         FilterState st = filterModel->state();
         st.colors = QStringList{ hex };
-        st.colorTolerance = tol;
+        st.colorHue = hue;
+        st.colorPrecision = precision;
         st.minColorArea = area;
         filterModel->setState(st);
 
         if (requestRebuild) requestRebuild();
     });
 
-    areaLayout->addWidget(areaLabel);
-    areaLayout->addWidget(areaSlider, 1);
-    groupLayout->addWidget(areaRow);
-
-    // 防抖 100ms 定时器
+    // 占比防抖 100ms 定时器
     QTimer* debounceTimer = new QTimer(container);
     debounceTimer->setSingleShot(true);
     debounceTimer->setInterval(100);
 
-    auto onSliderValueChanged = [debounceTimer]() {
+    QObject::connect(areaSlider, &QSlider::valueChanged, container, [debounceTimer]() {
         debounceTimer->start();
-    };
+    });
 
-    QObject::connect(accSlider, &QSlider::valueChanged, container, onSliderValueChanged);
-    QObject::connect(areaSlider, &QSlider::valueChanged, container, onSliderValueChanged);
-
-    QObject::connect(debounceTimer, &QTimer::timeout, container, [filterModel, accSlider, areaSlider]() {
-        int tol = accSlider->value();
+    QObject::connect(debounceTimer, &QTimer::timeout, container, [filterModel, areaSlider]() {
         int area = areaSlider->value();
-        AppConfig::instance().setValue("Filter/ColorSimilarity", tol);
         AppConfig::instance().setValue("Filter/MinColorArea", area);
 
         FilterState st = filterModel->state();
-        st.colorTolerance = tol;
         st.minColorArea = area;
         filterModel->setState(st);
     });
 
-    // 滑条事件过滤器：鼠标在上面移动、按下或拖动时显示 ToolTipOverlay 百分比，离开或释放隐去
+    // 占比滑条事件过滤器（ToolTip）
     SliderToolTipFilter* tipFilter = new SliderToolTipFilter(container);
-    accSlider->installEventFilter(tipFilter);
     areaSlider->installEventFilter(tipFilter);
+
+    // 3. 小标题 "已保存" + 保存小按钮 "+"
+    QWidget* savedHeaderRow = new QWidget(container);
+    QHBoxLayout* savedHdrLayout = new QHBoxLayout(savedHeaderRow);
+    savedHdrLayout->setContentsMargins(8, 4, 8, 0);
+    savedHdrLayout->setSpacing(6);
+
+    QLabel* lblSaved = new QLabel("已保存", savedHeaderRow);
+    lblSaved->setObjectName("FilterColorSubTitle");
+    lblSaved->setStyleSheet("QLabel#FilterColorSubTitle { margin-left: 0px; margin-top: 0px; }");
+
+    QPushButton* btnAddSaved = new QPushButton("+", savedHeaderRow);
+    btnAddSaved->setFixedSize(16, 16);
+    btnAddSaved->setCursor(Qt::PointingHandCursor);
+    btnAddSaved->setToolTip("保存当前颜色筛选设置");
+    btnAddSaved->setStyleSheet("QPushButton { font-weight: bold; font-size: 12px; padding: 0px; border: 1px solid #444; border-radius: 3px; background: transparent; color: #BBB; }"
+                               "QPushButton:hover { background: #3E3E42; color: #FFF; }"
+                               "QPushButton:disabled { color: #555; border-color: #333; }");
+
+    bool hasSelectedColor = !currentState.colors.isEmpty();
+    btnAddSaved->setEnabled(hasSelectedColor);
+
+    savedHdrLayout->addWidget(lblSaved);
+    savedHdrLayout->addWidget(btnAddSaved);
+    savedHdrLayout->addStretch(1);
+    groupLayout->addWidget(savedHeaderRow);
+
+    QObject::connect(btnAddSaved, &QPushButton::clicked, container, [filterModel, requestRebuild]() {
+        FilterState st = filterModel->state();
+        if (!st.colors.isEmpty()) {
+            SavedColorItem item;
+            item.hex = st.colors.first().toUpper();
+            item.hue = st.colorHue;
+            item.precision = st.colorPrecision;
+            item.area = st.minColorArea;
+            addSavedColor(item);
+            if (requestRebuild) requestRebuild();
+        }
+    });
+
+    QList<SavedColorItem> savedItems = loadSavedColors();
+    if (!savedItems.isEmpty()) {
+        QWidget* savedColorWidget = new QWidget(container);
+        FlowLayout* savedFlow = new FlowLayout(savedColorWidget, 0, 2, 2);
+        savedFlow->setContentsMargins(8, 0, 8, 0);
+
+        for (int i = 0; i < savedItems.size(); ++i) {
+            const auto& sItem = savedItems[i];
+            ColorBlock* cb = new ColorBlock(QColor(sItem.hex), savedColorWidget);
+            cb->setCount(-1);
+            cb->setChecked(currentState.colors.contains(sItem.hex.toUpper()));
+
+            SavedColorFilter* filter = new SavedColorFilter(i, sItem, [requestRebuild](int idx) {
+                removeSavedColor(idx);
+                if (requestRebuild) requestRebuild();
+            }, savedColorWidget);
+            cb->installEventFilter(filter);
+
+            QObject::connect(cb, &ColorBlock::clicked, savedColorWidget, [filterModel, colorWheel, areaSlider, requestRebuild, sItem](const QColor&) {
+                pushRecent(sItem.hex);
+
+                AppConfig::instance().setValue("Filter/ColorHue", sItem.hue);
+                AppConfig::instance().setValue("Filter/ColorPrecision", sItem.precision);
+                AppConfig::instance().setValue("Filter/MinColorArea", sItem.area);
+
+                FilterState st = filterModel->state();
+                st.colors = QStringList{ sItem.hex.toUpper() };
+                st.colorHue = sItem.hue;
+                st.colorPrecision = sItem.precision;
+                st.minColorArea = sItem.area;
+
+                colorWheel->setValues(st.colorHue, st.colorPrecision);
+                areaSlider->setValue(st.minColorArea);
+
+                filterModel->setState(st);
+                if (requestRebuild) requestRebuild();
+            });
+
+            savedFlow->addWidget(cb);
+        }
+        groupLayout->addWidget(savedColorWidget);
+    }
 
     // 4. 小标题 "标准色系" + 12 个色块
     QLabel* lblStandard = new QLabel("标准色系", container);
@@ -181,14 +344,16 @@ void AutoColorGroup::populate(QWidget* parentWidget,
 
     QWidget* stdColorWidget = new QWidget(container);
     FlowLayout* stdFlow = new FlowLayout(stdColorWidget, 0, 2, 2);
+    stdFlow->setContentsMargins(8, 0, 8, 0);
 
     static const QStringList standardHexes = {
         "#E24B4A", "#EF9F27", "#FECF0E", "#639922", "#1D9E75", "#378ADD",
         "#7F77DD", "#E91E63", "#000000", "#808080", "#FFFFFF", "#795548"
     };
 
-    auto handleColorBlockClick = [filterModel, requestRebuild](const QString& hex) {
+    auto handleColorBlockClick = [filterModel, colorWheel, requestRebuild](const QString& hex) {
         QString hexUpper = hex.toUpper();
+        QColor col(hexUpper);
         FilterState st = filterModel->state();
         if (st.colors.contains(hexUpper)) {
             st.colors.removeAll(hexUpper);
@@ -196,6 +361,15 @@ void AutoColorGroup::populate(QWidget* parentWidget,
             st.colors = QStringList{ hexUpper };
             pushRecent(hexUpper);
         }
+
+        if (col.isValid()) {
+            int h = col.hsvHue();
+            if (h >= 0) {
+                st.colorHue = h;
+            }
+        }
+
+        colorWheel->setValues(st.colorHue, st.colorPrecision);
         filterModel->setState(st);
         if (requestRebuild) requestRebuild();
     };
@@ -220,6 +394,7 @@ void AutoColorGroup::populate(QWidget* parentWidget,
 
         QWidget* recentColorWidget = new QWidget(container);
         FlowLayout* recentFlow = new FlowLayout(recentColorWidget, 0, 2, 2);
+        recentFlow->setContentsMargins(8, 0, 8, 0);
 
         for (const QString& hex : recentColors) {
             ColorBlock* cb = new ColorBlock(QColor(hex), recentColorWidget);

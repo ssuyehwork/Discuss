@@ -919,6 +919,11 @@ void FilterPanel::selectColor(const QColor& color) {
     st.colors.clear();
     st.colors.append(hex);
 
+    int hue = color.hsvHue();
+    if (hue != -1) {
+        st.colorHue = hue;
+    }
+
     m_filterModel->setState(st);
     rebuildGroups();
 }

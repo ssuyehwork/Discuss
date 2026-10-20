@@ -276,6 +276,8 @@ set(SOURCES
     src/ui/components/FlowLayout.cpp
     src/ui/components/ColorPill.h
     src/ui/components/ColorPill.cpp
+    src/ui/components/ColorWheel.h
+    src/ui/components/ColorWheel.cpp
     src/ui/components/InlineHueSlider.cpp
     src/ui/components/InlineHueSlider.h
     src/ui/components/ColorBlock.cpp
