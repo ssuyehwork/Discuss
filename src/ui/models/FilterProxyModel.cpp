@@ -97,15 +97,20 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
 
                 int d = std::abs(pcHue - targetHue);
                 if (d > 180) d = 360 - d;
-                if (d > FilterState::kHueTolerance) return false;
 
-                double minSat = 255.0 * (1.0 - static_cast<double>(currentFilter.colorPrecision) / 100.0);
+                double precisionFactor = static_cast<double>(currentFilter.colorPrecision) / 100.0;
+
+                // 1. 动态收紧色相差容差：精准度 0~100 对应色相差 15° ~ 6° (50时为 10°)
+                int maxHueDiff = qRound(15.0 - 9.0 * precisionFactor);
+                if (d > maxHueDiff) return false;
+
+                // 2. 纯度要求：必须符合精准度最低饱和度阈值
+                double minSat = 255.0 * (1.0 - precisionFactor);
                 if (static_cast<double>(pcSat) < minSat) return false;
 
-                // 明度约束：避免亮色误匹配极暗色（如 #FF0400 误匹配极暗红 #350D0D）
-                // 允许的最大明度差随精准度动态收敛：精准度 0~100 对应明度差容差 150~60
-                double precisionFactor = static_cast<double>(currentFilter.colorPrecision) / 100.0;
-                int maxValDiff = qRound(150.0 - 90.0 * precisionFactor);
+                // 3. 严格明度约束：精准度 0~100 对应最大明度差 40 ~ 15 (50时仅为 27)
+                // 彻底阻断大亮红（V=255）与深暗褐色（V=53）之间的混淆匹配
+                int maxValDiff = qRound(40.0 - 25.0 * precisionFactor);
                 return std::abs(pc.value() - targetCol.value()) <= maxValDiff;
             } else {
                 // 灰、黑、白：要求 pc 亦属于灰黑白(饱和度 < 38)，且 lightnessF 差值 <= 0.2

@@ -30,6 +30,7 @@
 #include <QPainter>
 #include <QComboBox>
 #include <QButtonGroup>
+#include <QScrollBar>
 
 using namespace QuarkMeta::Style;
 
@@ -448,6 +449,9 @@ void FilterPanel::rebuildDateCheckboxes(bool isCreateDate, bool descending) {
 }
 
 void FilterPanel::rebuildGroups() {
+    int savedScrollY = (m_scrollArea && m_scrollArea->verticalScrollBar()) 
+                           ? m_scrollArea->verticalScrollBar()->value() : 0;
+
     updateHeaderStatus();
     m_groupHeaders.clear();
 
@@ -641,6 +645,10 @@ void FilterPanel::rebuildGroups() {
             });
 
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+    if (m_scrollArea && m_scrollArea->verticalScrollBar()) {
+        m_scrollArea->verticalScrollBar()->setValue(savedScrollY);
     }
 }
 
