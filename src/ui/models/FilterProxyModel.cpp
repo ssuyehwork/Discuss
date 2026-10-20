@@ -100,7 +100,13 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
                 if (d > FilterState::kHueTolerance) return false;
 
                 double minSat = 255.0 * (1.0 - static_cast<double>(currentFilter.colorPrecision) / 100.0);
-                return static_cast<double>(pcSat) >= minSat;
+                if (static_cast<double>(pcSat) < minSat) return false;
+
+                // 明度约束：避免亮色误匹配极暗色（如 #FF0400 误匹配极暗红 #350D0D）
+                // 允许的最大明度差随精准度动态收敛：精准度 0~100 对应明度差容差 150~60
+                double precisionFactor = static_cast<double>(currentFilter.colorPrecision) / 100.0;
+                int maxValDiff = qRound(150.0 - 90.0 * precisionFactor);
+                return std::abs(pc.value() - targetCol.value()) <= maxValDiff;
             } else {
                 // 灰、黑、白：要求 pc 亦属于灰黑白(饱和度 < 38)，且 lightnessF 差值 <= 0.2
                 if (pcSat >= 38) return false;

@@ -469,33 +469,7 @@ void FilterPanel::rebuildGroups() {
 
     FilterState currentSt = m_filterModel->state();
 
-    // ── 1. 标签 ──────────────────────────────
-    {
-        QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("标签", gl);
-
-        TagStatusGroup::populate(g, gl, m_filterModel, m_currentStats, currentSt,
-            [this](QVBoxLayout* layout, const QString& label, int count, const QString& rowKey) {
-                return addFilterRow(layout, label, count, QColor(), rowKey);
-            });
-
-        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
-    }
-
-    // ── 2. 评级 ──────────────────────────────────────────────
-    {
-        QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("评级", gl);
-
-        RatingGroup::populate(g, gl, m_filterModel, m_ratingCounts, currentSt,
-            [this](QVBoxLayout* layout, const QString& label, int count) {
-                return addFilterRow(layout, label, count);
-            });
-
-        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
-    }
-
-    // ── 3. 颜色标记 ────────────
+    // ── 1. 颜色标记 (移至首位，在标签组上方) ────────────
     {
         QVBoxLayout* gl = nullptr;
         QHBoxLayout* hdrLayout = nullptr;
@@ -508,6 +482,32 @@ void FilterPanel::rebuildGroups() {
         ColorLabelGroup::populate(g, gl, m_filterModel, m_colorCounts, currentSt,
             [this](QVBoxLayout* layout, const QString& label, int count, const QColor& color, const QString& rowKey) {
                 return addFilterRow(layout, label, count, color, rowKey);
+            });
+
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+    // ── 2. 标签 ──────────────────────────────
+    {
+        QVBoxLayout* gl = nullptr;
+        QWidget* g = buildGroup("标签", gl);
+
+        TagStatusGroup::populate(g, gl, m_filterModel, m_currentStats, currentSt,
+            [this](QVBoxLayout* layout, const QString& label, int count, const QString& rowKey) {
+                return addFilterRow(layout, label, count, QColor(), rowKey);
+            });
+
+        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
+    }
+
+    // ── 3. 评级 ──────────────────────────────────────────────
+    {
+        QVBoxLayout* gl = nullptr;
+        QWidget* g = buildGroup("评级", gl);
+
+        RatingGroup::populate(g, gl, m_filterModel, m_ratingCounts, currentSt,
+            [this](QVBoxLayout* layout, const QString& label, int count) {
+                return addFilterRow(layout, label, count);
             });
 
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);

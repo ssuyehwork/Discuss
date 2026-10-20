@@ -85,20 +85,15 @@ void ColorWheel::paintEvent(QPaintEvent* event) {
     conicalGrad.setColorAt(300.0 / 360, QColor(255, 0, 255));
     conicalGrad.setColorAt(1.0,         QColor(255, 0, 0));
 
-    p.translate(center);
-    p.scale(1, -1);
-
-    QConicalGradient localConical(QPointF(0, 0), 0);
-    localConical.setStops(conicalGrad.stops());
     p.setPen(Qt::NoPen);
-    p.setBrush(localConical);
-    p.drawRect(QRectF(-radius, -radius, radius * 2, radius * 2));
+    p.setBrush(conicalGrad);
+    p.drawEllipse(center, radius, radius);
 
-    QRadialGradient radialGrad(QPointF(0, 0), radius);
+    QRadialGradient radialGrad(center, radius);
     radialGrad.setColorAt(0.0, QColor("#B0B0B0"));
     radialGrad.setColorAt(1.0, QColor(176, 176, 176, 0));
     p.setBrush(radialGrad);
-    p.drawRect(QRectF(-radius, -radius, radius * 2, radius * 2));
+    p.drawEllipse(center, radius, radius);
 
     p.restore();
 
@@ -112,7 +107,7 @@ void ColorWheel::paintEvent(QPaintEvent* event) {
     QPointF posA = getHandleAPosition();
     QPointF posC = getHandleCPosition();
 
-    // 2. 绘制连线：从 B 到 A 的白色连线 (宽 2px)
+    // 2. 绘制连线：从 C 到 A 的白色连线 (宽 2px)
     p.save();
     QPen linePen(Qt::white, 2.0);
     linePen.setCapStyle(Qt::RoundCap);
@@ -120,40 +115,36 @@ void ColorWheel::paintEvent(QPaintEvent* event) {
     p.drawLine(posB, posA);
     p.restore();
 
-    // 3. 绘制手柄 B (圆心，小空心圆，直径 8px，白色描边)
+    // 3. 绘制点 C (中心点，半径 1，纯白实心)
     p.save();
-    p.setPen(QPen(Qt::white, 1.5));
-    p.setBrush(Qt::NoBrush);
-    p.drawEllipse(posB, 4.0, 4.0);
+    p.setPen(QPen(Qt::white, 2));
+    p.setBrush(Qt::white);
+    p.drawEllipse(posB, 1.0, 1.0); // C点半径值
     p.restore();
 
-    // 辅助闭包：绘制手柄 A
+    // 辅助闭包：绘制点 A (外缘点，半径 2，实心彩色)
     auto drawHandleA = [&]() {
         p.save();
-        // 蓝框外环 (直径 22px，半径 11px，线宽 2.5px)
-        p.setPen(QPen(QColor("#378ADD"), 2.5));
-        p.setBrush(Qt::NoBrush);
-        p.drawEllipse(posA, 11.0, 11.0);
-
-        // 主体实心圆 (直径 18px，半径 9px，白色描边 1.5px，纯色色相填充)
         QColor pureHueColor = QColor::fromHsv(m_hue, 255, 255);
-        p.setPen(QPen(Qt::white, 1.5));
+        p.setPen(QPen(Qt::white, 2));
         p.setBrush(pureHueColor);
-        p.drawEllipse(posA, 9.0, 9.0);
-
-        // 中心小白点 (直径 3px，半径 1.5px)
-        p.setPen(Qt::NoPen);
-        p.setBrush(Qt::white);
-        p.drawEllipse(posA, 1.5, 1.5);
+        p.drawEllipse(posA, 6.0, 6.0); // A点半径值
         p.restore();
     };
 
-    // 辅助闭包：绘制手柄 C (空心白圈，直径 24px，半径 12px，白色描边，无填充)
+    // 辅助闭包：绘制点 B (滑杆点，半径 1.5，实心当前拾取色)
     auto drawHandleC = [&]() {
         p.save();
-        p.setPen(QPen(Qt::white, 2.0));
-        p.setBrush(Qt::NoBrush);
-        p.drawEllipse(posC, 12.0, 12.0);
+        double t = 1.0 - double(m_precision) / 100.0;
+        QColor pureHueColor = QColor::fromHsv(m_hue, 255, 255);
+        int r = qRound(176 + (pureHueColor.red() - 176) * t);
+        int g = qRound(176 + (pureHueColor.green() - 176) * t);
+        int b = qRound(176 + (pureHueColor.blue() - 176) * t);
+        QColor currentColor(r, g, b);
+
+        p.setPen(QPen(Qt::white, 2));
+        p.setBrush(currentColor);
+        p.drawEllipse(posC, 4, 4); // B点半径值
         p.restore();
     };
 
@@ -176,9 +167,9 @@ void ColorWheel::mousePressEvent(QMouseEvent* event) {
         double distToA = QLineF(pos, posA).length();
         double distToC = QLineF(pos, posC).length();
 
-        // 判定手柄点击命中 (命中容差半径为手柄半径 + 6px 缓冲区)
-        bool hitA = (distToA <= 11.0 + 6.0);
-        bool hitC = (distToC <= 12.0 + 6.0);
+        // 判定手柄点击命中 (保留 10px 交互容差热区)
+        bool hitA = (distToA <= 10.0);
+        bool hitC = (distToC <= 10.0);
 
         if (hitC && (!hitA || distToC < distToA)) {
             m_dragTarget = DragTarget::DragC;
@@ -260,7 +251,7 @@ void ColorWheel::updateCursorShape(const QPoint& pos) {
     double distA = QLineF(posF, posA).length();
     double distC = QLineF(posF, posC).length();
 
-    if (distA <= 11.0 + 4.0 || distC <= 12.0 + 4.0) {
+    if (distA <= 10.0 || distC <= 10.0) {
         setCursor(Qt::PointingHandCursor);
     } else {
         unsetCursor();

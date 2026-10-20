@@ -7,6 +7,7 @@
 #include "AppConfig.h"
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QSlider>
 #include <QTimer>
@@ -183,6 +184,68 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     groupLayout->setSpacing(4);
 
     const FilterState currentState = filterModel->state();
+
+    // 0. 色码输入框行 (位于色轮上方)
+    QWidget* editRow = new QWidget(container);
+    QHBoxLayout* editLayout = new QHBoxLayout(editRow);
+    editLayout->setContentsMargins(5, 6, 5, 4);
+    editLayout->setSpacing(0);
+
+    QLineEdit* editColorHex = new QLineEdit(editRow);
+    editColorHex->setObjectName("FilterSearchEdit");
+    editColorHex->setFixedHeight(22);
+    editColorHex->setClearButtonEnabled(true);
+    editColorHex->setPlaceholderText("例: #350D0D 或 350D0D");
+
+    if (!currentState.colors.isEmpty()) {
+        editColorHex->setText(currentState.colors.first());
+    }
+
+    auto applyHexFilter = [filterModel, editColorHex]() {
+        QString raw = editColorHex->text().trimmed();
+        if (raw.isEmpty()) {
+            FilterState st = filterModel->state();
+            if (!st.colors.isEmpty()) {
+                st.colors.clear();
+                filterModel->setState(st);
+            }
+            return;
+        }
+
+        QString hex = raw;
+        if (!hex.startsWith('#') && (hex.length() == 6 || hex.length() == 3)) {
+            hex.prepend('#');
+        }
+
+        QColor col(hex);
+        if (col.isValid()) {
+            QString formattedHex = col.name().toUpper();
+            pushRecent(formattedHex);
+
+            FilterState st = filterModel->state();
+            st.colors = QStringList{ formattedHex };
+            int h = col.hsvHue();
+            if (h >= 0) {
+                st.colorHue = h;
+                AppConfig::instance().setValue("Filter/ColorHue", h);
+            }
+            filterModel->setState(st);
+        }
+    };
+
+    QObject::connect(editColorHex, &QLineEdit::returnPressed, container, applyHexFilter);
+    QObject::connect(editColorHex, &QLineEdit::textChanged, container, [filterModel](const QString& text) {
+        if (text.trimmed().isEmpty()) {
+            FilterState st = filterModel->state();
+            if (!st.colors.isEmpty()) {
+                st.colors.clear();
+                filterModel->setState(st);
+            }
+        }
+    });
+
+    editLayout->addWidget(editColorHex);
+    groupLayout->addWidget(editRow);
 
     // 1. 色轮 ColorWheel 居中布局
     QWidget* wheelContainer = new QWidget(container);
