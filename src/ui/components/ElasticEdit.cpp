@@ -1,15 +1,15 @@
 #include "ElasticEdit.h"
 #include <QTextDocument>
 #include <QKeyEvent>
-#include <QResizeEvent>
-#include <QScrollArea>
 #include <QtMath>
-#include <QLayout>
-#include <QTimer>
+#include <QEvent>
 
 namespace QuarkMeta {
 
 ElasticEdit::ElasticEdit(QWidget* parent) : QTextEdit(parent) {
+    QSizePolicy sp(QSizePolicy::Expanding, QSizePolicy::Minimum);
+    sp.setHeightForWidth(true);
+    setSizePolicy(sp);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     setLineWrapMode(QTextEdit::WidgetWidth);
@@ -17,57 +17,46 @@ ElasticEdit::ElasticEdit(QWidget* parent) : QTextEdit(parent) {
     opt.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     document()->setDefaultTextOption(opt);
     document()->setDocumentMargin(2); // 留出 2px 文档内边距，保证字不贴顶且不切字
-    connect(this, &QTextEdit::textChanged, this, &ElasticEdit::adjustHeight);
+    connect(this, &QTextEdit::textChanged, this, &QWidget::updateGeometry);
 }
 
-void ElasticEdit::adjustHeight() {
-    if (m_isAdjusting) return;
+int ElasticEdit::heightForWidth(int w) const {
+    if (w <= 0) return 28;
 
-    int vpWidth = viewport() ? viewport()->width() : 0;
+    QMargins m = contentsMargins();
+    int fw = frameWidth();
     qreal docMargin = document()->documentMargin();
-    int textW = 0;
 
-    if (vpWidth > 0) {
-        textW = qMax(10, vpWidth - static_cast<int>(docMargin * 2));
-    } else {
-        QMargins m = contentsMargins();
-        int fw = frameWidth();
-        textW = qMax(10, width() - m.left() - m.right() - 2 * fw - static_cast<int>(docMargin * 2));
-    }
+    int availableTextW = w - m.left() - m.right() - 2 * fw - static_cast<int>(docMargin * 2);
+    if (availableTextW <= 10) availableTextW = 10;
 
-    if (document()->textWidth() != textW) {
-        document()->setTextWidth(textW);
-    }
+    std::unique_ptr<QTextDocument> docClone(document()->clone());
+    docClone->setDefaultFont(font());
+    docClone->setDefaultTextOption(document()->defaultTextOption());
+    docClone->setDocumentMargin(docMargin);
+    docClone->setTextWidth(availableTextW);
 
-    int verticalDiff = height() - (viewport() ? viewport()->height() : 0);
-    if (verticalDiff <= 0) {
-        QMargins m = contentsMargins();
-        int fw = frameWidth();
-        verticalDiff = m.top() + m.bottom() + 2 * fw;
-    }
+    int vertMargin = m.top() + m.bottom() + 2 * fw;
+    int calculatedH = static_cast<int>(qCeil(docClone->size().height() + vertMargin));
 
-    qreal docHeight = document()->size().height();
-    int newHeight = qMax(28, static_cast<int>(qCeil(docHeight + verticalDiff)));
-
-    if (this->height() != newHeight) {
-        m_isAdjusting = true;
-        setFixedHeight(newHeight);
-        updateGeometry(); 
-        QWidget* p = parentWidget();
-        while (p) {
-            if (p->layout()) p->layout()->activate();
-            if (qobject_cast<QScrollArea*>(p)) break;
-            p = p->parentWidget();
-        }
-        m_isAdjusting = false;
-
-        QTimer::singleShot(0, this, &ElasticEdit::adjustHeight);
-    }
+    return qMax(28, calculatedH);
 }
 
-void ElasticEdit::resizeEvent(QResizeEvent* e) {
-    QTextEdit::resizeEvent(e);
-    adjustHeight();
+QSize ElasticEdit::sizeHint() const {
+    int w = width() > 0 ? width() : 200;
+    return QSize(w, heightForWidth(w));
+}
+
+QSize ElasticEdit::minimumSizeHint() const {
+    int w = width() > 0 ? width() : 200;
+    return QSize(w, heightForWidth(w));
+}
+
+void ElasticEdit::changeEvent(QEvent* e) {
+    QTextEdit::changeEvent(e);
+    if (e && (e->type() == QEvent::StyleChange || e->type() == QEvent::FontChange)) {
+        updateGeometry();
+    }
 }
 
 void ElasticEdit::keyPressEvent(QKeyEvent* e) {

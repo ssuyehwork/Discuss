@@ -9,14 +9,18 @@ class ElasticEdit : public QTextEdit {
     Q_OBJECT
 public:
     explicit ElasticEdit(QWidget* parent = nullptr);
-    void adjustHeight();
+
+    bool hasHeightForWidth() const override { return true; }
+    int heightForWidth(int w) const override;
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
+
 signals:
     void returnPressed();
+
 protected:
     void keyPressEvent(QKeyEvent* e) override;
-    void resizeEvent(QResizeEvent* e) override;
-private:
-    bool m_isAdjusting{false};
+    void changeEvent(QEvent* e) override;
 };
 
 } // namespace QuarkMeta

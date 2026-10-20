@@ -343,7 +343,6 @@ void MetaPanel::initUi() {
     QVBoxLayout* pathL = new QVBoxLayout(pathBox);
     pathL->setContentsMargins(0, 0, 0, 0);
     pathL->setSpacing(5);
-    pathL->setSizeConstraint(QLayout::SetMinimumSize);
 
     m_pathEdit = new ElasticEdit(pathBox);
     m_pathEdit->setReadOnly(true);
@@ -582,10 +581,10 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
     if (!hasSelection) {
         m_isInternalUpdating = true;
         setImagePreview(QPixmap());
-        if (m_nameEdit) { m_nameEdit->clear(); m_nameEdit->setPlaceholderText("文件名..."); m_nameEdit->adjustHeight(); }
-        if (m_noteEdit) { m_noteEdit->clear(); m_noteEdit->setPlaceholderText("添加备注说明..."); m_noteEdit->adjustHeight(); }
+        if (m_nameEdit) { m_nameEdit->clear(); m_nameEdit->setPlaceholderText("文件名..."); }
+        if (m_noteEdit) { m_noteEdit->clear(); m_noteEdit->setPlaceholderText("添加备注说明..."); }
         if (m_linkEdit) { m_linkEdit->clear(); m_linkEdit->setPlaceholderText("添加关联网址..."); }
-        if (m_pathEdit) { m_pathEdit->clear(); m_pathEdit->adjustHeight(); }
+        if (m_pathEdit) { m_pathEdit->clear(); }
         if (lblType) lblType->setText("-");
         if (lblSize) lblSize->setText("-");
         if (lblDimensions) lblDimensions->setText("-");
@@ -603,12 +602,10 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
         setImagePreview(QPixmap());
         if (m_nameEdit) {
             m_nameEdit->setHtml(QString("已选中 <span style=\"color:#3498db;\">%1</span> 个项目").arg(m_selectedPaths.size()));
-            m_nameEdit->adjustHeight();
         }
         if (m_noteEdit) {
             m_noteEdit->clear();
             m_noteEdit->setPlaceholderText("添加批量备注...");
-            m_noteEdit->adjustHeight();
         }
         if (m_linkEdit) {
             m_linkEdit->clear();
@@ -616,7 +613,6 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
         }
         if (m_pathEdit) {
             m_pathEdit->setText(QString("已选中 %1 个项目").arg(m_selectedPaths.size()));
-            m_pathEdit->adjustHeight();
         }
         if (lblType) lblType->setText("混合项目");
         if (lblSize) lblSize->setText("-");
@@ -697,9 +693,6 @@ void MetaPanel::onTagDeleted(const QString& text) {
 
 void MetaPanel::resizeEvent(QResizeEvent* event) {
     QFrame::resizeEvent(event);
-    if (m_nameEdit) m_nameEdit->adjustHeight();
-    if (m_noteEdit) m_noteEdit->adjustHeight();
-    if (m_pathEdit) m_pathEdit->adjustHeight();
     adjustFlowHeights();
 }
 
@@ -752,7 +745,6 @@ void MetaPanel::updateInfo(const QString& n, const QString& t, const QString& s,
     QFileInfo info(n);
     if (m_selectedPaths.size() <= 1) {
         m_nameEdit->setPlainText(info.completeBaseName());
-        m_nameEdit->adjustHeight();
         m_nameEdit->setProperty("oldPath", p);
         m_nameEdit->setProperty("suffix", info.suffix());
         
@@ -763,7 +755,6 @@ void MetaPanel::updateInfo(const QString& n, const QString& t, const QString& s,
         lblAtime->setText(at);
         
         m_pathEdit->setPlainText(p);
-        m_pathEdit->adjustHeight();
     }
 
     lblEncrypted->setText(e ? "已加密" : "未加密");
@@ -776,7 +767,6 @@ void MetaPanel::updateInfo(const QString& n, const QString& t, const QString& s,
         if (lblDimensions->parentWidget()) lblDimensions->parentWidget()->hide();
     }
 
-    if (m_container) m_container->adjustSize();
     m_isInternalUpdating = false;
 }
 
@@ -853,8 +843,6 @@ void MetaPanel::setNote(const QString& note) {
     if (m_isUserEditing) return;
     m_isInternalUpdating = true;
     m_noteEdit->setPlainText(note);
-    m_noteEdit->adjustHeight();
-    if (m_container) m_container->adjustSize();
     m_isInternalUpdating = false;
 }
 
@@ -870,7 +858,6 @@ void MetaPanel::setURL(const QString& url) {
     if (m_actOpenLink) {
         m_actOpenLink->setVisible(!url.trimmed().isEmpty());
     }
-    if (m_container) m_container->adjustSize();
     m_isInternalUpdating = false;
 }
 
