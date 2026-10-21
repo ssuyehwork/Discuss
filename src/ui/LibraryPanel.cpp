@@ -15,6 +15,11 @@
 #include "../core/ModelContract.h"
 #include "../core/AppConfig.h"
 #include "controllers/ContextMenuFactory.h"
+#include "../meta/LibraryItemDao.h"
+#include "../meta/LibrarySyncService.h"
+#include "../meta/DuplicateDetectorService.h"
+#include "../core/FilterMatcher.h"
+#include <QtConcurrent/QtConcurrent>
 #include <QLabel>
 #include <QPushButton>
 #include <QMenu>
@@ -355,6 +360,9 @@ void LibraryPanel::initUi() {
             SmartFolderDialog dlg(this);
             if (dlg.exec() == QDialog::Accepted) {
                 SmartFolderRecord rec = dlg.getRecord();
+                if (m_filterProvider) {
+                    rec.filter = m_filterProvider();
+                }
                 int id = SmartFolderDao::addSmartFolder(rec);
                 if (id > 0) {
                     loadLibrary();
@@ -858,7 +866,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
     if (index.data(TypeRole).toString() == "smart_folder") {
         int smartFolderId = index.data(Qt::UserRole + 1).toInt();
         // 右键具体的智能文件夹节点
-        QAction* editRuleAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "编辑规则");
+        QAction* editRuleAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "编辑名称");
         connect(editRuleAct, &QAction::triggered, this, [this, smartFolderId]() {
             SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(smartFolderId);
             SmartFolderDialog dlg(rec, this);
@@ -867,6 +875,16 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
                 if (SmartFolderDao::updateSmartFolder(updatedRec)) {
                     loadLibrary();
                 }
+            }
+        });
+
+        QAction* actUpdateFilter = menu.addAction(UiHelper::getIcon("reset_filter", QColor("#EEEEEE")), "用当前筛选条件更新");
+        connect(actUpdateFilter, &QAction::triggered, this, [this, smartFolderId]() {
+            if (!m_filterProvider) return;
+            SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(smartFolderId);
+            rec.filter = m_filterProvider();
+            if (SmartFolderDao::updateSmartFolder(rec)) {
+                loadLibrary();
             }
         });
 
@@ -904,6 +922,9 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
             SmartFolderDialog dlg(this);
             if (dlg.exec() == QDialog::Accepted) {
                 SmartFolderRecord rec = dlg.getRecord();
+                if (m_filterProvider) {
+                    rec.filter = m_filterProvider();
+                }
                 int id = SmartFolderDao::addSmartFolder(rec);
                 if (id > 0) {
                     loadLibrary();
@@ -1147,7 +1168,6 @@ void LibraryPanel::loadLibrary() {
     m_model->appendRow(smartFolderHeader);
 
     for (const auto& sfRec : smartFolders) {
-        int countVal = SmartFolderDao::countMatchingItems(sfRec);
         QIcon sfIcon = UiHelper::getIcon(sfRec.iconKey, QColor(sfRec.colorHex), 18);
         QStandardItem* sfItem = new QStandardItem(sfIcon, sfRec.name);
         sfItem->setData("smart_folder", TypeRole);
@@ -1155,7 +1175,7 @@ void LibraryPanel::loadLibrary() {
         sfItem->setData(sfRec.id, Qt::UserRole + 1);
         sfItem->setData(sfRec.iconKey, Qt::UserRole + 2);
         sfItem->setData(sfRec.colorHex, Qt::UserRole + 3);
-        sfItem->setData(countVal, Qt::UserRole + 9);
+        sfItem->setData(0, Qt::UserRole + 9);
         sfItem->setEditable(false);
         smartFolderHeader->appendRow(sfItem);
     }
@@ -1250,6 +1270,58 @@ void LibraryPanel::loadLibrary() {
             }
         });
     }
+
+    if (!m_connectedSync) {
+        m_connectedSync = true;
+        connect(&LibraryService::instance(), &LibraryService::libraryChanged, this, [this]() {
+            updateSmartFolderCountsAsync();
+        });
+    }
+
+    updateSmartFolderCountsAsync();
+}
+
+void LibraryPanel::updateSmartFolderCountsAsync() {
+    (void)QtConcurrent::run([this]() {
+        QStringList allPaths = LibraryDao::getCategoryPaths(-1);
+        std::vector<ItemRecord> records = LibraryItemDao::getItemsByPaths(allPaths);
+        auto smartFolders = SmartFolderDao::getAllSmartFolders();
+
+        QMap<int, int> counts;
+        for (const auto& sf : smartFolders) {
+            QSet<QString> dupPaths;
+            if (sf.filter.duplicatePresence != FilterState::DupAll) {
+                dupPaths = DuplicateDetectorService::findDuplicatePaths(records);
+            }
+
+            int count = 0;
+            for (const auto& rec : records) {
+                if (FilterMatcher::matches(rec, sf.filter, dupPaths)) {
+                    count++;
+                }
+            }
+            counts[sf.id] = count;
+        }
+
+        QMetaObject::invokeMethod(this, [this, counts]() {
+            if (!m_model) return;
+            QStandardItem* root = m_model->invisibleRootItem();
+            for (int i = 0; i < root->rowCount(); ++i) {
+                QStandardItem* secItem = root->child(i);
+                if (secItem && secItem->data(Qt::UserRole + 1).toInt() == -20) { // 智能文件夹分组
+                    for (int j = 0; j < secItem->rowCount(); ++j) {
+                        QStandardItem* child = secItem->child(j);
+                        if (child) {
+                            int sfId = child->data(Qt::UserRole + 1).toInt();
+                            if (counts.contains(sfId)) {
+                                child->setData(counts[sfId], Qt::UserRole + 9);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
 }
 
 QStandardItem* LibraryPanel::findItemByNodeId(QStandardItem* parent, int nodeId) {
