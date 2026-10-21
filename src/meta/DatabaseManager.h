@@ -71,6 +71,8 @@ private:
     bool loadDb(const std::wstring& diskPath, DbConnection& conn);
     void closeDb(DbConnection& conn);
 
+    bool initLocked();
+
     DbConnection m_globalDb;
     std::mutex m_initMutex;
     std::mutex m_globalDbMutex;
