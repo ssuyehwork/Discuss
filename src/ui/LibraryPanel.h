@@ -88,6 +88,7 @@ private:
     void updateSmartFolderCountsAsync();
 
     std::function<FilterState()> m_filterProvider;
+    bool m_connectedSync = false;
     QVBoxLayout* m_mainLayout = nullptr;
     LibraryTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;

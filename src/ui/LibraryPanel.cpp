@@ -1271,10 +1271,9 @@ void LibraryPanel::loadLibrary() {
         });
     }
 
-    static bool s_connectedSync = false;
-    if (!s_connectedSync) {
-        s_connectedSync = true;
-        connect(&LibrarySyncService::instance(), &LibrarySyncService::libraryDataChanged, this, [this]() {
+    if (!m_connectedSync) {
+        m_connectedSync = true;
+        connect(&LibraryService::instance(), &LibraryService::libraryChanged, this, [this]() {
             updateSmartFolderCountsAsync();
         });
     }
