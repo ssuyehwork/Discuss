@@ -1,8 +1,11 @@
 #include "SmartFolderDialog.h"
 #include "../UiHelper.h"
+#include "../../core/AppConfig.h"
 #include <QScrollArea>
 #include <QPainter>
 #include <QPixmap>
+#include <QJsonDocument>
+#include <QJsonArray>
 
 namespace QuarkMeta {
 
@@ -245,7 +248,32 @@ void SmartFolderDialog::setupUi() {
     connect(m_btnCancel, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_btnSave, &QPushButton::clicked, this, &SmartFolderDialog::onSaveAndAccept);
 
-    // 加载已有规则，若无规则则默认添加一条
+    // 加载已有规则；若为新建且无指定规则，尝试从 AppConfig 恢复上一次保存的整套模板规则
+    if (m_record.rules.isEmpty()) {
+        QString lastMatchMode = AppConfig::instance().getValue("SmartFolder/LastMatchMode", "").toString();
+        if (!lastMatchMode.isEmpty()) {
+            m_record.matchMode = lastMatchMode;
+            if (lastMatchMode == "ANY") {
+                m_matchModeCombo->setCurrentIndex(1);
+            } else {
+                m_matchModeCombo->setCurrentIndex(0);
+            }
+        }
+
+        QString lastRulesJsonStr = AppConfig::instance().getValue("SmartFolder/LastTemplateRules", "").toString();
+        if (!lastRulesJsonStr.isEmpty()) {
+            QJsonDocument doc = QJsonDocument::fromJson(lastRulesJsonStr.toUtf8());
+            if (doc.isArray()) {
+                QJsonArray arr = doc.array();
+                for (const auto& val : arr) {
+                    if (val.isObject()) {
+                        m_record.rules.append(SmartFolderRule::fromJson(val.toObject()));
+                    }
+                }
+            }
+        }
+    }
+
     if (!m_record.rules.isEmpty()) {
         for (const auto& rule : m_record.rules) {
             SmartFolderRuleRow* row = new SmartFolderRuleRow(rule, scrollContent);
@@ -287,6 +315,15 @@ void SmartFolderDialog::onSaveAndAccept() {
             m_record.rules.append(row->getRule());
         }
     }
+
+    // 将整套规则模板序列化持久化至 AppConfig
+    AppConfig::instance().setValue("SmartFolder/LastMatchMode", m_record.matchMode);
+    QJsonArray rulesArr;
+    for (const auto& rule : m_record.rules) {
+        rulesArr.append(rule.toJson());
+    }
+    QJsonDocument doc(rulesArr);
+    AppConfig::instance().setValue("SmartFolder/LastTemplateRules", QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
 
     accept();
 }
