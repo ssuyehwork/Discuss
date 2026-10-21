@@ -47,7 +47,7 @@ public:
     void clearCacheForFolder(const QString& folderPath) override;
 
     // 增量更新接口
-    QStringList applyIncrementalChanges(const std::vector<QuarkMeta::ItemRecord>& records, const QStringList& removedPaths);
+    QStringList applyIncrementalChanges(const std::vector<QuarkMeta::ItemRecord>& records, const QStringList& removedPaths) override;
 
     // 异步全文件夹文件头极速尺寸提取流水线
     void preloadDimensionsAsync(const QStringList& targetPaths = QStringList());

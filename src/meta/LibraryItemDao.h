@@ -18,6 +18,7 @@ public:
 
 private:
     friend class LibrarySyncService;
+    friend class LibraryValidationService;
 
     // 写接口锁定仅供 LibrarySyncService 友元调用
     static bool upsertItem(const ItemRecord& record);
