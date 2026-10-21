@@ -314,6 +314,12 @@ void PanelMediator::setupConnections() {
     }
 
         if (libraryPanel) {
+            if (filterPanel) {
+                libraryPanel->setFilterStateProvider([filterPanel]() {
+                    return filterPanel->currentFilter();
+                });
+            }
+
             connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel, filterPanel](const QStringList& paths) {
                 if (filterPanel) {
                     filterPanel->clearAllFilters(false);

@@ -899,23 +899,8 @@ void FilterPanel::setMirrorSource(bool isMirror) {
 void FilterPanel::applySmartFolderRecord(const SmartFolderRecord& record) {
     if (!m_filterModel) return;
 
-    FilterState st;
-    for (const auto& rule : record.rules) {
-        if (rule.type == SmartRuleType::Rating) {
-            bool ok = false;
-            int r = rule.value.toInt(&ok);
-            if (ok) st.ratings.append(r);
-        } else if (rule.type == SmartRuleType::Color) {
-            if (!rule.value.isEmpty()) st.manualColors.append(rule.value);
-        } else if (rule.type == SmartRuleType::Extension) {
-            if (!rule.value.isEmpty()) st.types.append(rule.value);
-        } else if (rule.type == SmartRuleType::Keyword) {
-            st.typeFilterText = rule.value;
-        }
-    }
-
-    m_filterModel->setState(st);
-    syncUIFromFilterState();
+    m_filterModel->setState(record.filter);
+    rebuildGroups();
 }
 
 void FilterPanel::selectColor(const QColor& color) {

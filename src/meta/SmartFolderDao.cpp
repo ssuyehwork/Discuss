@@ -1,298 +1,133 @@
 #include "SmartFolderDao.h"
 #include "DatabaseManager.h"
-#include "LibraryDao.h"
-#include "MetadataManager.h"
-#include <sqlite3.h>
+#include "../core/FilterStateJson.h"
 #include <QJsonDocument>
-#include <QDateTime>
-#include <QFileInfo>
-#include <QDirIterator>
-#include <QSet>
+#include <QSqlQuery>
+#include <QSqlError>
 
 namespace QuarkMeta {
 
-QJsonObject SmartFolderRule::toJson() const {
-    QJsonObject obj;
-    obj["type"] = static_cast<int>(type);
-    obj["op"] = static_cast<int>(op);
-    obj["value"] = value;
-    return obj;
-}
-
-SmartFolderRule SmartFolderRule::fromJson(const QJsonObject& obj) {
-    SmartFolderRule rule;
-    rule.type = static_cast<SmartRuleType>(obj.value("type").toInt(0));
-    rule.op = static_cast<SmartRuleOperator>(obj.value("op").toInt(0));
-    rule.value = obj.value("value").toString();
-    return rule;
-}
-
 bool SmartFolderDao::initTable() {
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db) return false;
-
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
-
-    const char* sql = "CREATE TABLE IF NOT EXISTS smart_folders ("
-                      "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-                      "name TEXT NOT NULL, "
-                      "match_mode TEXT DEFAULT 'ALL', "
-                      "icon_key TEXT DEFAULT 'folder_filled', "
-                      "color_hex TEXT DEFAULT '#888888', "
-                      "sort_order INTEGER DEFAULT 0, "
-                      "rules_json TEXT DEFAULT '[]', "
-                      "created_at INTEGER);";
-
-    char* errMsgs = nullptr;
-    int rc = sqlite3_exec(db, sql, nullptr, nullptr, &errMsgs);
-    if (rc != SQLITE_OK) {
-        if (errMsgs) sqlite3_free(errMsgs);
-        return false;
+    auto db = DatabaseManager::instance().getDatabase();
+    QSqlQuery checkQuery(db);
+    checkQuery.exec("PRAGMA table_info(smart_folders);");
+    bool hasFilterJson = false;
+    while (checkQuery.next()) {
+        if (checkQuery.value("name").toString() == "filter_json") {
+            hasFilterJson = true;
+            break;
+        }
     }
-    return true;
+
+    if (!hasFilterJson) {
+        QSqlQuery dropQuery(db);
+        dropQuery.exec("DROP TABLE IF EXISTS smart_folders;");
+    }
+
+    QSqlQuery query(db);
+    QString sql = "CREATE TABLE IF NOT EXISTS smart_folders ("
+                  "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                  "name TEXT NOT NULL, "
+                  "icon_key TEXT, "
+                  "color_hex TEXT, "
+                  "sort_order INTEGER DEFAULT 0, "
+                  "filter_json TEXT);";
+    return query.exec(sql);
 }
 
 QList<SmartFolderRecord> SmartFolderDao::getAllSmartFolders() {
     QList<SmartFolderRecord> list;
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db) return list;
+    auto db = DatabaseManager::instance().getDatabase();
+    QSqlQuery query(db);
+    query.exec("SELECT id, name, icon_key, color_hex, sort_order, filter_json FROM smart_folders ORDER BY sort_order ASC, id ASC;");
 
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
-
-    const char* sql = "SELECT id, name, match_mode, icon_key, color_hex, sort_order, rules_json "
-                      "FROM smart_folders ORDER BY sort_order ASC, id ASC;";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return list;
-
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    while (query.next()) {
         SmartFolderRecord rec;
-        rec.id = sqlite3_column_int(stmt, 0);
+        rec.id = query.value("id").toInt();
+        rec.name = query.value("name").toString();
+        rec.iconKey = query.value("icon_key").toString();
+        rec.colorHex = query.value("color_hex").toString();
+        rec.sortOrder = query.value("sort_order").toInt();
 
-        const char* nameStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        const char* matchStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-        const char* iconStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
-        const char* colorStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
-        rec.sortOrder = sqlite3_column_int(stmt, 5);
-        const char* rulesJsonStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
-
-        if (nameStr) rec.name = QString::fromUtf8(nameStr);
-        if (matchStr) rec.matchMode = QString::fromUtf8(matchStr);
-        if (iconStr) rec.iconKey = QString::fromUtf8(iconStr);
-        if (colorStr) rec.colorHex = QString::fromUtf8(colorStr);
-
-        if (rulesJsonStr && strlen(rulesJsonStr) > 0) {
-            QJsonDocument doc = QJsonDocument::fromJson(QByteArray(rulesJsonStr));
-            if (doc.isArray()) {
-                QJsonArray arr = doc.array();
-                for (const QJsonValue& val : arr) {
-                    if (val.isObject()) {
-                        rec.rules.append(SmartFolderRule::fromJson(val.toObject()));
-                    }
-                }
+        QString filterStr = query.value("filter_json").toString();
+        if (!filterStr.isEmpty()) {
+            QJsonDocument doc = QJsonDocument::fromJson(filterStr.toUtf8());
+            if (doc.isObject()) {
+                rec.filter = FilterStateJson::fromJson(doc.object());
             }
         }
-
         list.append(rec);
     }
-    sqlite3_finalize(stmt);
     return list;
 }
 
 SmartFolderRecord SmartFolderDao::getSmartFolderById(int id) {
     SmartFolderRecord rec;
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db || id <= 0) return rec;
+    auto db = DatabaseManager::instance().getDatabase();
+    QSqlQuery query(db);
+    query.prepare("SELECT id, name, icon_key, color_hex, sort_order, filter_json FROM smart_folders WHERE id = ?;");
+    query.addBindValue(id);
 
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    if (query.exec() && query.next()) {
+        rec.id = query.value("id").toInt();
+        rec.name = query.value("name").toString();
+        rec.iconKey = query.value("icon_key").toString();
+        rec.colorHex = query.value("color_hex").toString();
+        rec.sortOrder = query.value("sort_order").toInt();
 
-    const char* sql = "SELECT id, name, match_mode, icon_key, color_hex, sort_order, rules_json "
-                      "FROM smart_folders WHERE id = ?;";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return rec;
-
-    sqlite3_bind_int(stmt, 1, id);
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        rec.id = sqlite3_column_int(stmt, 0);
-
-        const char* nameStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        const char* matchStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-        const char* iconStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
-        const char* colorStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
-        rec.sortOrder = sqlite3_column_int(stmt, 5);
-        const char* rulesJsonStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
-
-        if (nameStr) rec.name = QString::fromUtf8(nameStr);
-        if (matchStr) rec.matchMode = QString::fromUtf8(matchStr);
-        if (iconStr) rec.iconKey = QString::fromUtf8(iconStr);
-        if (colorStr) rec.colorHex = QString::fromUtf8(colorStr);
-
-        if (rulesJsonStr && strlen(rulesJsonStr) > 0) {
-            QJsonDocument doc = QJsonDocument::fromJson(QByteArray(rulesJsonStr));
-            if (doc.isArray()) {
-                QJsonArray arr = doc.array();
-                for (const QJsonValue& val : arr) {
-                    if (val.isObject()) {
-                        rec.rules.append(SmartFolderRule::fromJson(val.toObject()));
-                    }
-                }
+        QString filterStr = query.value("filter_json").toString();
+        if (!filterStr.isEmpty()) {
+            QJsonDocument doc = QJsonDocument::fromJson(filterStr.toUtf8());
+            if (doc.isObject()) {
+                rec.filter = FilterStateJson::fromJson(doc.object());
             }
         }
     }
-    sqlite3_finalize(stmt);
     return rec;
 }
 
 int SmartFolderDao::addSmartFolder(const SmartFolderRecord& rec) {
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db) return 0;
+    auto db = DatabaseManager::instance().getDatabase();
+    QSqlQuery query(db);
+    query.prepare("INSERT INTO smart_folders (name, icon_key, color_hex, sort_order, filter_json) VALUES (?, ?, ?, ?, ?);");
+    query.addBindValue(rec.name);
+    query.addBindValue(rec.iconKey);
+    query.addBindValue(rec.colorHex);
+    query.addBindValue(rec.sortOrder);
 
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    QJsonObject json = FilterStateJson::toJson(rec.filter);
+    QJsonDocument doc(json);
+    query.addBindValue(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
 
-    const char* sql = "INSERT INTO smart_folders (name, match_mode, icon_key, color_hex, sort_order, rules_json, created_at) "
-                      "VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM smart_folders), ?, ?);";
-
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return 0;
-
-    QJsonArray rulesArray;
-    for (const auto& rule : rec.rules) {
-        rulesArray.append(rule.toJson());
+    if (query.exec()) {
+        return query.lastInsertId().toInt();
     }
-    QJsonDocument doc(rulesArray);
-    std::string jsonStd = doc.toJson(QJsonDocument::Compact).toStdString();
-
-    std::string nameStd = rec.name.toStdString();
-    std::string matchStd = rec.matchMode.toStdString();
-    std::string iconStd = rec.iconKey.toStdString();
-    std::string colorStd = rec.colorHex.toStdString();
-
-    sqlite3_bind_text(stmt, 1, nameStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, matchStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 3, iconStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 4, colorStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 5, jsonStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 6, QDateTime::currentSecsSinceEpoch());
-
-    int newId = 0;
-    if (sqlite3_step(stmt) == SQLITE_DONE) {
-        newId = static_cast<int>(sqlite3_last_insert_rowid(db));
-    }
-    sqlite3_finalize(stmt);
-    sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
-    return newId;
+    return 0;
 }
 
 bool SmartFolderDao::updateSmartFolder(const SmartFolderRecord& rec) {
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db || rec.id <= 0) return false;
+    auto db = DatabaseManager::instance().getDatabase();
+    QSqlQuery query(db);
+    query.prepare("UPDATE smart_folders SET name = ?, icon_key = ?, color_hex = ?, sort_order = ?, filter_json = ? WHERE id = ?;");
+    query.addBindValue(rec.name);
+    query.addBindValue(rec.iconKey);
+    query.addBindValue(rec.colorHex);
+    query.addBindValue(rec.sortOrder);
 
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    QJsonObject json = FilterStateJson::toJson(rec.filter);
+    QJsonDocument doc(json);
+    query.addBindValue(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+    query.addBindValue(rec.id);
 
-    const char* sql = "UPDATE smart_folders SET name = ?, match_mode = ?, icon_key = ?, color_hex = ?, rules_json = ? WHERE id = ?;";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-
-    QJsonArray rulesArray;
-    for (const auto& rule : rec.rules) {
-        rulesArray.append(rule.toJson());
-    }
-    QJsonDocument doc(rulesArray);
-    std::string jsonStd = doc.toJson(QJsonDocument::Compact).toStdString();
-
-    std::string nameStd = rec.name.toStdString();
-    std::string matchStd = rec.matchMode.toStdString();
-    std::string iconStd = rec.iconKey.toStdString();
-    std::string colorStd = rec.colorHex.toStdString();
-
-    sqlite3_bind_text(stmt, 1, nameStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, matchStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 3, iconStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 4, colorStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 5, jsonStd.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 6, rec.id);
-
-    bool success = (sqlite3_step(stmt) == SQLITE_DONE);
-    sqlite3_finalize(stmt);
-    sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
-    return success;
-}
-
-int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
-    if (rec.rules.isEmpty()) return 0;
-
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db) return 0;
-
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
-
-    // 1. 动态生成 WHERE 条件
-    QStringList whereConditions;
-    for (const auto& rule : rec.rules) {
-        if (rule.type == SmartRuleType::Rating) {
-            QString op = (rule.op == SmartRuleOperator::GreaterOrEqual) ? ">=" :
-                         (rule.op == SmartRuleOperator::LessOrEqual) ? "<=" : "=";
-            whereConditions << QString("rating %1 %2").arg(op).arg(rule.value.toInt());
-        } 
-        else if (rule.type == SmartRuleType::Extension) {
-            QString ext = rule.value.trimmed();
-            if (ext.startsWith('.')) ext.remove(0, 1);
-            if (rule.op == SmartRuleOperator::NotContains) {
-                whereConditions << QString("extension != '%1'").arg(ext);
-            } else {
-                whereConditions << QString("extension = '%1'").arg(ext);
-            }
-        } 
-        else if (rule.type == SmartRuleType::Color) {
-            if (rule.op == SmartRuleOperator::NotContains) {
-                whereConditions << QString("color_hex != '%1'").arg(rule.value.trimmed());
-            } else {
-                whereConditions << QString("color_hex = '%1'").arg(rule.value.trimmed());
-            }
-        }
-        else if (rule.type == SmartRuleType::Tag) {
-            // 利用 file_tags 多对多关联表实现秒级查询 (以 file_id 解耦匹配)
-            if (rule.op == SmartRuleOperator::NotContains) {
-                whereConditions << QString("file_id NOT IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
-                                   .arg(rule.value.trimmed());
-            } else {
-                whereConditions << QString("file_id IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
-                                   .arg(rule.value.trimmed());
-            }
-        }
-    }
-
-    if (whereConditions.isEmpty()) return 0;
-
-    QString connector = (rec.matchMode.toUpper() == "ALL") ? " AND " : " OR ";
-    QString sql = QString("SELECT COUNT(*) FROM library_items WHERE %1;")
-                  .arg(whereConditions.join(connector));
-
-    sqlite3_stmt* stmt = nullptr;
-    int count = 0;
-    if (sqlite3_prepare_v2(db, sql.toUtf8().constData(), -1, &stmt, nullptr) == SQLITE_OK) {
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            count = sqlite3_column_int(stmt, 0);
-        }
-        sqlite3_finalize(stmt);
-    }
-    return count;
+    return query.exec();
 }
 
 bool SmartFolderDao::removeSmartFolderById(int id) {
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db || id <= 0) return false;
-
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
-
-    const char* sql = "DELETE FROM smart_folders WHERE id = ?;";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-
-    sqlite3_bind_int(stmt, 1, id);
-    bool success = (sqlite3_step(stmt) == SQLITE_DONE);
-    sqlite3_finalize(stmt);
-    sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
-    return success;
+    auto db = DatabaseManager::instance().getDatabase();
+    QSqlQuery query(db);
+    query.prepare("DELETE FROM smart_folders WHERE id = ?;");
+    query.addBindValue(id);
+    return query.exec();
 }
 
 } // namespace QuarkMeta
