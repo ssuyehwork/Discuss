@@ -44,7 +44,7 @@ namespace QuarkMeta {
 
         // 暴露通用接口合约，由 DiskItemModel 实现
         virtual const std::vector<QuarkMeta::ItemRecord>& allRecords() const = 0;
-        virtual void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) = 0;
+        virtual void setRecords(const std::vector<QuarkMeta::ItemRecord>& records, RecordSource source = RecordSource::Disk) = 0;
         virtual void appendRecord(const QuarkMeta::ItemRecord& record) = 0;
         virtual void clear() = 0;
         virtual void updateRecordMetadata(QString path) = 0;
