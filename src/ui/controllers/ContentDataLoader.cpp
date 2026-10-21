@@ -7,6 +7,7 @@
 #include "../../meta/MetadataManager.h"
 #include "../../meta/LibraryItemDao.h"
 #include "../../meta/LibrarySyncService.h"
+#include "../../meta/LibraryValidationService.h"
 #include "../../util/ThumbnailPipelineService.h"
 
 #include <QDir>
@@ -262,6 +263,9 @@ void ContentDataLoader::loadLibraryPaths(const QStringList& paths, int reqId) {
 
                 // 库模式媒体特征新鲜度检查（不读 JSON）
                 MetadataManager::instance().registerLibraryItemsAsync(validRecords);
+
+                // 启动后台可取消增量对账校验
+                LibraryValidationService::instance().validateRecordsAsync(validRecords, weakPanel.data(), reqId);
             }
         });
     });

@@ -131,6 +131,8 @@ set(SOURCES
     src/meta/LibraryService.cpp
     src/meta/LibrarySyncService.cpp
     src/meta/LibrarySyncService.h
+    src/meta/LibraryValidationService.cpp
+    src/meta/LibraryValidationService.h
     src/ui/LibraryPanel.h
     src/ui/LibraryPanel.cpp
     src/ui/SidebarContainerWidget.h
