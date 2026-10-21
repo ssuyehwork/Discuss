@@ -1,6 +1,5 @@
 #include "ContentStatsWorker.h"
 #include "../UiHelper.h"
-#include "../StyleLibrary.h"
 #include "../../meta/DuplicateDetectorService.h"
 
 #include <QDateTime>
@@ -25,7 +24,7 @@ ScanStats ContentStatsWorker::calculateStats(const std::vector<ItemRecord>& reco
         if (record.isHidden && !showHidden) continue;
 
         stats.ratingCounts[record.rating]++;
-        stats.colorCounts[Style::normalizeManualColor(record.manualColor)]++;
+        stats.colorCounts[UiHelper::normalizeColorHex(record.manualColor)]++;
 
         if (record.ctime > 0) {
             QString cDateStr = QDateTime::fromMSecsSinceEpoch(record.ctime).date().toString("dd-MM-yyyy");

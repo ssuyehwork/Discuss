@@ -50,6 +50,7 @@ public:
     static int addSmartFolder(const SmartFolderRecord& rec);
     static bool updateSmartFolder(const SmartFolderRecord& rec);
     static bool removeSmartFolderById(int id);
+    static int countMatchingItems(const SmartFolderRecord& rec);
 };
 
 } // namespace QuarkMeta

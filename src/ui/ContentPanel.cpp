@@ -721,10 +721,6 @@ void ContentPanel::loadLibraryPaths(const QStringList& paths, int reqId) {
     if (m_dataLoader) m_dataLoader->loadLibraryPaths(paths, reqId);
 }
 
-void ContentPanel::loadSmartFolder(const SmartFolderRecord& sfRec, int reqId) {
-    if (m_dataLoader) m_dataLoader->loadSmartFolder(sfRec, reqId);
-}
-
 void ContentPanel::appendPaths(const QStringList& paths, int reqId) {
     if (m_dataLoader) m_dataLoader->appendPaths(paths, reqId);
 }
@@ -904,13 +900,8 @@ void ContentPanel::refreshAll() {
         return;
     }
 
-    if (m_currentCategoryType == "library") {
+    if (m_currentCategoryType == "library" || m_currentCategoryType == "smart_folder") {
         loadLibraryPaths(m_lastLoadedLibraryPaths);
-        return;
-    }
-
-    if (m_currentCategoryType == "smart_folder") {
-        loadSmartFolder(m_currentSmartFolderRecord);
         return;
     }
 
