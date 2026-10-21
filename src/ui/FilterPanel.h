@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QCheckBox>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QPushButton>
 #include <QLineEdit>
 #include <QSlider>

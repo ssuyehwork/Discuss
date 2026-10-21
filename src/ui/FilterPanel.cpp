@@ -30,7 +30,6 @@
 #include <QPainter>
 #include <QComboBox>
 #include <QButtonGroup>
-#include <QScrollBar>
 
 using namespace QuarkMeta::Style;
 
