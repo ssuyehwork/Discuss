@@ -6,8 +6,13 @@
 #include "ShellIconManager.h"
 #include "ViewDragDropHelper.h"
 #include "../meta/LibraryDao.h"
+#include "../meta/LibraryItemDao.h"
 #include "../meta/SmartFolderDao.h"
+#include "../meta/SmartFolderMatcher.h"
 #include "dialogs/SmartFolderDialog.h"
+#include <QtConcurrent/QtConcurrent>
+#include <QCoreApplication>
+#include <QPointer>
 #include "../meta/LibraryService.h"
 #include "../meta/MetaIndexService.h"
 #include "../meta/QuarkMetaJsonStore.h"
@@ -1147,7 +1152,6 @@ void LibraryPanel::loadLibrary() {
     m_model->appendRow(smartFolderHeader);
 
     for (const auto& sfRec : smartFolders) {
-        int countVal = SmartFolderDao::countMatchingItems(sfRec);
         QIcon sfIcon = UiHelper::getIcon(sfRec.iconKey, QColor(sfRec.colorHex), 18);
         QStandardItem* sfItem = new QStandardItem(sfIcon, sfRec.name);
         sfItem->setData("smart_folder", TypeRole);
@@ -1155,10 +1159,12 @@ void LibraryPanel::loadLibrary() {
         sfItem->setData(sfRec.id, Qt::UserRole + 1);
         sfItem->setData(sfRec.iconKey, Qt::UserRole + 2);
         sfItem->setData(sfRec.colorHex, Qt::UserRole + 3);
-        sfItem->setData(countVal, Qt::UserRole + 9);
+        sfItem->setData(0, Qt::UserRole + 9);
         sfItem->setEditable(false);
         smartFolderHeader->appendRow(sfItem);
     }
+
+    updateSmartFolderCountsAsync();
 
     int customCount = list.size();
 
@@ -1294,6 +1300,45 @@ void LibraryPanel::createAndEditCategory(int parentId) {
         m_pendingEditNodeId = newId;
         loadLibrary();
     }
+}
+
+void LibraryPanel::updateSmartFolderCountsAsync() {
+    QPointer<LibraryPanel> weakThis(this);
+    (void)QtConcurrent::run([weakThis]() {
+        if (!weakThis) return;
+
+        std::vector<ItemRecord> allItems = LibraryItemDao::getAllLibraryItems();
+        QList<SmartFolderRecord> smartFolders = SmartFolderDao::getAllSmartFolders();
+
+        QMap<int, int> counts;
+        for (const auto& sfRec : smartFolders) {
+            int cnt = 0;
+            for (const auto& item : allItems) {
+                if (SmartFolderMatcher::matches(item, sfRec)) {
+                    cnt++;
+                }
+            }
+            counts.insert(sfRec.id, cnt);
+        }
+
+        if (!weakThis) return;
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, counts]() {
+            if (!weakThis || !weakThis->m_model) return;
+            QStandardItem* smartFolderHeader = weakThis->findItemByNodeId(weakThis->m_model->invisibleRootItem(), -20);
+            if (!smartFolderHeader) return;
+
+            for (int i = 0; i < smartFolderHeader->rowCount(); ++i) {
+                QStandardItem* child = smartFolderHeader->child(i);
+                if (child && child->data(TypeRole).toString() == "smart_folder") {
+                    int sfId = child->data(Qt::UserRole + 1).toInt();
+                    if (counts.contains(sfId)) {
+                        child->setData(counts.value(sfId), Qt::UserRole + 9);
+                    }
+                }
+            }
+        });
+    });
 }
 
 } // namespace QuarkMeta

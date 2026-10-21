@@ -107,6 +107,8 @@ public:
 
     // 1. 状态与配置查询
     QString currentPath() const { return m_currentPath; }
+    SmartFolderRecord currentSmartFolderRecord() const { return m_currentSmartFolderRecord; }
+    void setCurrentSmartFolderRecord(const SmartFolderRecord& rec) { m_currentSmartFolderRecord = rec; }
     QString activePath() const;
     bool isRecursive() const { return m_isRecursive; }
     int zoomLevel() const { return m_zoomLevel; }
@@ -232,6 +234,7 @@ public slots:
     void loadPaths(const QStringList& paths, int reqId = 0);
     void loadLibraryPaths(const QStringList& paths, int reqId = 0);
     void appendPaths(const QStringList& paths, int reqId = 0);
+    void loadSmartFolder(const SmartFolderRecord& sfRec, int reqId = 0);
     void loadCategory(const QString& categoryType);
     void refreshVisibleThumbnails();
     void recalculateAndEmitStats();
@@ -249,6 +252,7 @@ private:
 
     // 单一事实来源配置与状态 (FilterState)
     QStringList m_lastLoadedLibraryPaths;
+    SmartFolderRecord m_currentSmartFolderRecord;
     FilterState m_currentFilter;
     int m_zoomLevel = 96;
     QString m_currentPath;

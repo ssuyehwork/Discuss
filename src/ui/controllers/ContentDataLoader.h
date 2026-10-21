@@ -4,6 +4,7 @@
 #include <QStringList>
 #include <vector>
 #include "../../core/ItemRecord.h"
+#include "../../meta/SmartFolderMatcher.h"
 
 namespace QuarkMeta {
 
@@ -19,6 +20,7 @@ public:
     void loadCategory(const QString& categoryType);
     void loadPaths(const QStringList& paths, int reqId = 0);
     void loadLibraryPaths(const QStringList& paths, int reqId = 0);
+    void loadSmartFolder(const SmartFolderRecord& sfRec, int reqId = 0);
     void appendPaths(const QStringList& paths, int reqId = 0);
 
     int currentRequestId() const { return m_loadRequestId; }

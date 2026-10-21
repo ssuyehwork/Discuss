@@ -84,6 +84,7 @@ private:
     void filterTreeNodes(const QString& keyword);
     QStandardItem* findItemByNodeId(QStandardItem* parent, int nodeId);
     void toggleSectionByNodeId(int nodeId);
+    void updateSmartFolderCountsAsync();
 
     QVBoxLayout* m_mainLayout = nullptr;
     LibraryTreeView* m_treeView = nullptr;

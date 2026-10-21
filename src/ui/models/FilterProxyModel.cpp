@@ -1,6 +1,7 @@
 #include "FilterProxyModel.h"
 #include "ItemModelBase.h"
 #include "../UiHelper.h"
+#include "../StyleLibrary.h"
 #include <QDateTime>
 #include <QRegularExpression>
 #include <cmath>
@@ -53,25 +54,13 @@ bool FilterProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& source
     // 3. 🚨 物理隔离：手动标注颜色过滤 (只针对 record.manualColor)
     if (!currentFilter.manualColors.isEmpty()) {
         bool matchManual = false;
-        static const QMap<QString, QString> s_manualHexMap = {
-            {"红色", "#E24B4A"}, {"橙色", "#EF9F27"}, {"黄色", "#FECF0E"},
-            {"绿色", "#639922"}, {"青色", "#1D9E75"}, {"蓝色", "#378ADD"},
-            {"紫色", "#7F77DD"}, {"灰色", "#5F5E5A"}
-        };
+        QString normRecordColor = Style::normalizeManualColor(record.manualColor);
 
         for (const QString& mc : currentFilter.manualColors) {
-            if (mc == "无色标" || mc.isEmpty()) {
-                if (record.manualColor.isEmpty()) {
-                    matchManual = true;
-                    break;
-                }
-            } else {
-                QString targetHex = s_manualHexMap.value(mc, mc);
-                if (record.manualColor.compare(targetHex, Qt::CaseInsensitive) == 0 ||
-                    record.manualColor.contains(mc, Qt::CaseInsensitive)) {
-                    matchManual = true;
-                    break;
-                }
+            QString normFilterColor = Style::normalizeManualColor(mc);
+            if (normRecordColor == normFilterColor) {
+                matchManual = true;
+                break;
             }
         }
         if (!matchManual) return false;

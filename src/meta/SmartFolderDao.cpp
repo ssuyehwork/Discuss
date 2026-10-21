@@ -217,67 +217,6 @@ bool SmartFolderDao::updateSmartFolder(const SmartFolderRecord& rec) {
     return success;
 }
 
-int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
-    if (rec.rules.isEmpty()) return 0;
-
-    sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db) return 0;
-
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
-
-    // 1. 动态生成 WHERE 条件
-    QStringList whereConditions;
-    for (const auto& rule : rec.rules) {
-        if (rule.type == SmartRuleType::Rating) {
-            QString op = (rule.op == SmartRuleOperator::GreaterOrEqual) ? ">=" :
-                         (rule.op == SmartRuleOperator::LessOrEqual) ? "<=" : "=";
-            whereConditions << QString("rating %1 %2").arg(op).arg(rule.value.toInt());
-        } 
-        else if (rule.type == SmartRuleType::Extension) {
-            QString ext = rule.value.trimmed();
-            if (ext.startsWith('.')) ext.remove(0, 1);
-            if (rule.op == SmartRuleOperator::NotContains) {
-                whereConditions << QString("extension != '%1'").arg(ext);
-            } else {
-                whereConditions << QString("extension = '%1'").arg(ext);
-            }
-        } 
-        else if (rule.type == SmartRuleType::Color) {
-            if (rule.op == SmartRuleOperator::NotContains) {
-                whereConditions << QString("color_hex != '%1'").arg(rule.value.trimmed());
-            } else {
-                whereConditions << QString("color_hex = '%1'").arg(rule.value.trimmed());
-            }
-        }
-        else if (rule.type == SmartRuleType::Tag) {
-            // 利用 file_tags 多对多关联表实现秒级查询 (以 file_id 解耦匹配)
-            if (rule.op == SmartRuleOperator::NotContains) {
-                whereConditions << QString("file_id NOT IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
-                                   .arg(rule.value.trimmed());
-            } else {
-                whereConditions << QString("file_id IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
-                                   .arg(rule.value.trimmed());
-            }
-        }
-    }
-
-    if (whereConditions.isEmpty()) return 0;
-
-    QString connector = (rec.matchMode.toUpper() == "ALL") ? " AND " : " OR ";
-    QString sql = QString("SELECT COUNT(*) FROM library_items WHERE %1;")
-                  .arg(whereConditions.join(connector));
-
-    sqlite3_stmt* stmt = nullptr;
-    int count = 0;
-    if (sqlite3_prepare_v2(db, sql.toUtf8().constData(), -1, &stmt, nullptr) == SQLITE_OK) {
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            count = sqlite3_column_int(stmt, 0);
-        }
-        sqlite3_finalize(stmt);
-    }
-    return count;
-}
-
 bool SmartFolderDao::removeSmartFolderById(int id) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db || id <= 0) return false;

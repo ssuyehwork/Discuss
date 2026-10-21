@@ -327,15 +327,14 @@ void PanelMediator::setupConnections() {
             });
 
             connect(libraryPanel, &LibraryPanel::smartFolderSelected, this, [this, contentPanel, filterPanel](const SmartFolderRecord& record) {
-                QStringList allLibraryPaths = LibraryDao::getCategoryPaths(-1);
+                if (filterPanel) {
+                    filterPanel->clearAllFilters(false);
+                }
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
                     target->setCurrentCategoryType("smart_folder");
-                    target->setLastLoadedLibraryPaths(allLibraryPaths);
-                    target->loadLibraryPaths(allLibraryPaths);
-                }
-                if (filterPanel) {
-                    filterPanel->applySmartFolderRecord(record);
+                    target->setCurrentSmartFolderRecord(record);
+                    target->loadSmartFolder(record);
                 }
             });
         }

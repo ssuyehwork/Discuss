@@ -66,11 +66,26 @@ inline const QList<ColorTagItem>& getColorPalette() {
     return s_palette;
 }
 
-inline QString getColorHexByName(const QString& name) {
-    for (const auto& item : getColorPalette()) {
-        if (item.name == name) return item.hex;
+inline QString normalizeManualColor(const QString& nameOrHex) {
+    QString trimmed = nameOrHex.trimmed();
+    if (trimmed.isEmpty() || trimmed == "无色标") {
+        return "";
     }
-    return name; // Fallback if already hex
+    for (const auto& item : getColorPalette()) {
+        if (item.name == "无色标" || item.hex.isEmpty()) continue;
+        if (trimmed.compare(item.name, Qt::CaseInsensitive) == 0 ||
+            trimmed.compare(item.hex, Qt::CaseInsensitive) == 0) {
+            return item.hex.toUpper();
+        }
+    }
+    if (trimmed.startsWith('#')) {
+        return trimmed.toUpper();
+    }
+    return "";
+}
+
+inline QString getColorHexByName(const QString& name) {
+    return normalizeManualColor(name);
 }
 
 // QSS Helper

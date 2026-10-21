@@ -65,7 +65,6 @@ public:
 
     void syncUIFromFilterState();
     void selectColor(const QColor& color);
-    void applySmartFolderRecord(const SmartFolderRecord& record);
     void setMirrorSource(bool isMirror);
 
 protected:

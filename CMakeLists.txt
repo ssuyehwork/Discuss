@@ -127,6 +127,8 @@ set(SOURCES
     src/meta/LibraryItemDao.h
     src/meta/SmartFolderDao.h
     src/meta/SmartFolderDao.cpp
+    src/meta/SmartFolderMatcher.h
+    src/meta/SmartFolderMatcher.cpp
     src/meta/LibraryService.h
     src/meta/LibraryService.cpp
     src/meta/LibrarySyncService.cpp
