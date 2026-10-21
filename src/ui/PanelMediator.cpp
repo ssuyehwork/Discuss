@@ -31,6 +31,7 @@
 #include "../meta/MetadataManager.h"
 #include "../meta/FavoriteService.h"
 #include "../meta/LibraryDao.h"
+#include "../meta/SmartFolderDao.h"
 #include "UiHelper.h"
 #include <QDebug>
 #include <QFileInfo>
@@ -327,15 +328,15 @@ void PanelMediator::setupConnections() {
             });
 
             connect(libraryPanel, &LibraryPanel::smartFolderSelected, this, [this, contentPanel, filterPanel](const SmartFolderRecord& record) {
-                QStringList allLibraryPaths = LibraryDao::getCategoryPaths(-1);
+                QStringList matchingPaths = SmartFolderDao::getMatchingPaths(record);
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
                     target->setCurrentCategoryType("smart_folder");
-                    target->setLastLoadedLibraryPaths(allLibraryPaths);
-                    target->loadLibraryPaths(allLibraryPaths);
+                    target->setLastLoadedLibraryPaths(matchingPaths);
+                    target->loadLibraryPaths(matchingPaths);
                 }
                 if (filterPanel) {
-                    filterPanel->applySmartFolderRecord(record);
+                    filterPanel->clearAllFilters(false);
                 }
             });
         }

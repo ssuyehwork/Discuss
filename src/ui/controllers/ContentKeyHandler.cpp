@@ -13,6 +13,7 @@
 #include "../../core/ModelContract.h"
 #include "../../util/DiskIoService.h"
 #include "../../core/LastOperationManager.h"
+#include "../../core/CoreEngine.h"
 #include "ContextMenuFactory.h"
 #include "../CardPainterHelper.h"
 #include <QPointer>
@@ -54,20 +55,57 @@ bool ContentKeyHandler::executeRepeatLastOp(ContentPanel* panel, QAbstractItemVi
 
     auto indexes = view->selectionModel()->selectedIndexes();
     int count = 0;
-    for (const auto& idx : indexes) {
-        if (idx.column() == static_cast<int>(FileListColumn::Name) && !idx.data(SectionHeaderRole).toBool()) {
-            if (type == LastOperationType::SetRating) {
-                model->setData(idx, LastOperationManager::instance().rating(), RatingRole);
-            } else if (type == LastOperationType::SetColor) {
-                QString colorVal = LastOperationManager::instance().color();
-                model->setData(idx, colorVal, ColorRole);
-                QString itemPath = idx.data(PathRole).toString();
-                QIcon coloredIcon = ShellIconManager::getFileIcon(itemPath, 128);
-                model->setData(idx, coloredIcon, Qt::DecorationRole);
-            } else if (type == LastOperationType::PasteTags) {
-                model->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+
+    if (type == LastOperationType::SetRating) {
+        QStringList selectedPaths;
+        for (const auto& selIdx : indexes) {
+            if (selIdx.column() == 0 && !selIdx.data(SectionHeaderRole).toBool()) {
+                QString p = selIdx.data(PathRole).toString();
+                if (!p.isEmpty()) selectedPaths.append(p);
             }
-            count++;
+        }
+        if (!selectedPaths.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetRating;
+            cmd.targetPaths = selectedPaths;
+            cmd.params["rating"] = LastOperationManager::instance().rating();
+            CoreEngine::instance().executeCommand(cmd);
+                    if (panel) {
+                        for (const QString& p : selectedPaths) {
+                            panel->updateItemMetadata(p);
+                        }
+                        panel->recalculateAndEmitStats();
+            }
+            count = selectedPaths.size();
+        }
+    } else if (type == LastOperationType::SetColor) {
+        QStringList selectedPaths;
+        for (const auto& selIdx : indexes) {
+            if (selIdx.column() == 0 && !selIdx.data(SectionHeaderRole).toBool()) {
+                QString p = selIdx.data(PathRole).toString();
+                if (!p.isEmpty()) selectedPaths.append(p);
+            }
+        }
+        if (!selectedPaths.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetColor;
+            cmd.targetPaths = selectedPaths;
+            cmd.params["color"] = LastOperationManager::instance().color();
+            CoreEngine::instance().executeCommand(cmd);
+                    if (panel) {
+                        for (const QString& p : selectedPaths) {
+                            panel->updateItemMetadata(p);
+                        }
+                        panel->recalculateAndEmitStats();
+            }
+            count = selectedPaths.size();
+        }
+    } else if (type == LastOperationType::PasteTags) {
+        for (const auto& idx : indexes) {
+            if (idx.column() == static_cast<int>(FileListColumn::Name) && !idx.data(SectionHeaderRole).toBool()) {
+                model->setData(idx, LastOperationManager::instance().tags(), TagsRole);
+                count++;
+            }
         }
     }
 
@@ -246,7 +284,43 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
 
             QAbstractItemModel* model = view->model();
             if (model) {
-                model->setData(index, hitVal, RatingRole);
+                // 1. 获取选中的路径集合（多选/单选统一处理）
+                QStringList targetPaths;
+                if (isSelected && view->selectionModel()) {
+                    QModelIndexList selectedIndexes = view->selectionModel()->selectedIndexes();
+                    QList<int> selectedRows;
+                    for (const QModelIndex& selIdx : selectedIndexes) {
+                        if (!selectedRows.contains(selIdx.row())) {
+                            selectedRows.append(selIdx.row());
+                        }
+                    }
+                    for (int r : selectedRows) {
+                        QModelIndex rowIdx = model->index(r, 0, index.parent());
+                        QString p = rowIdx.data(PathRole).toString();
+                        if (!p.isEmpty() && !rowIdx.data(SectionHeaderRole).toBool()) {
+                            targetPaths.append(p);
+                        }
+                    }
+                }
+                if (targetPaths.isEmpty()) {
+                    QString p = index.data(PathRole).toString();
+                    if (!p.isEmpty()) targetPaths.append(p);
+                }
+
+                // 2. 统一分发归一化命令给 CoreEngine
+                if (!targetPaths.isEmpty()) {
+                    AppCommand cmd;
+                    cmd.type = AppCommandType::SetRating;
+                    cmd.targetPaths = targetPaths;
+                    cmd.params["rating"] = hitVal;
+                    CoreEngine::instance().executeCommand(cmd);
+
+                    // 刷新视图上受影响行的 UI 展现
+                    for (const QString& p : targetPaths) {
+                        m_panel->updateItemMetadata(p);
+                    }
+                    m_panel->recalculateAndEmitStats();
+                }
             }
 
             QAbstractItemView::EditTriggers cur = view->editTriggers();
@@ -281,9 +355,45 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
 
             QAbstractItemModel* model = treeView->model();
             if (model) {
-                QModelIndex targetIdx = treeView->model()->index(index.row(), 0, index.parent());
-                if (!targetIdx.data(SectionHeaderRole).toBool()) {
-                    model->setData(targetIdx, hitStar, RatingRole);
+                // 1. 获取选中的路径集合（多选/单选统一处理）
+                QStringList targetPaths;
+                if (isRowSelected && treeView->selectionModel()) {
+                    QModelIndexList selectedIndexes = treeView->selectionModel()->selectedIndexes();
+                    QList<int> selectedRows;
+                    for (const QModelIndex& selIdx : selectedIndexes) {
+                        if (!selectedRows.contains(selIdx.row())) {
+                            selectedRows.append(selIdx.row());
+                        }
+                    }
+                    for (int r : selectedRows) {
+                        QModelIndex rowIdx = model->index(r, 0, index.parent());
+                        QString p = rowIdx.data(PathRole).toString();
+                        if (!p.isEmpty() && !rowIdx.data(SectionHeaderRole).toBool()) {
+                            targetPaths.append(p);
+                        }
+                    }
+                }
+                if (targetPaths.isEmpty()) {
+                    QModelIndex targetIdx = model->index(index.row(), 0, index.parent());
+                    QString p = targetIdx.data(PathRole).toString();
+                    if (!p.isEmpty() && !targetIdx.data(SectionHeaderRole).toBool()) {
+                        targetPaths.append(p);
+                    }
+                }
+
+                // 2. 统一分发归一化命令给 CoreEngine
+                if (!targetPaths.isEmpty()) {
+                    AppCommand cmd;
+                    cmd.type = AppCommandType::SetRating;
+                    cmd.targetPaths = targetPaths;
+                    cmd.params["rating"] = hitStar;
+                    CoreEngine::instance().executeCommand(cmd);
+
+                    // 刷新视图上受影响行的 UI 展现
+                    for (const QString& p : targetPaths) {
+                        m_panel->updateItemMetadata(p);
+                    }
+                    m_panel->recalculateAndEmitStats();
                 }
             }
 
@@ -352,7 +462,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
 
-    // 3. Alt + 1~9: 色标快速赋予
+    // 3. Alt + 1~9: 色标快速赋予（归一化提交至 CoreEngine）
     if ((keyEvent->modifiers() & Qt::AltModifier) && (keyEvent->key() >= Qt::Key_1 && keyEvent->key() <= Qt::Key_9)) {
         static const QString colors[] = {
             "#E24B4A", "#EF9F27", "#FECF0E", "#639922",
@@ -361,15 +471,30 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         QString colorValue = colors[keyEvent->key() - Qt::Key_1];
 
         QAbstractItemModel* model = view->model();
-        if (!model) return true;
+        if (!model || !view->selectionModel()) return true;
+
         auto indexes = view->selectionModel()->selectedIndexes();
+        QStringList selectedPaths;
         for (const auto& idx : indexes) {
             if (idx.column() == 0 && !idx.data(SectionHeaderRole).toBool()) {
-                model->setData(idx, colorValue, ColorRole);
-                QString path = idx.data(PathRole).toString();
-                QIcon coloredIcon = ShellIconManager::getFileIcon(path, 128);
-                model->setData(idx, coloredIcon, Qt::DecorationRole);
+                QString p = idx.data(PathRole).toString();
+                if (!p.isEmpty()) {
+                    selectedPaths.append(p);
+                }
             }
+        }
+
+        if (!selectedPaths.isEmpty()) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetColor;
+            cmd.targetPaths = selectedPaths;
+            cmd.params["color"] = colorValue;
+            CoreEngine::instance().executeCommand(cmd);
+
+            for (const QString& p : selectedPaths) {
+                m_panel->updateItemMetadata(p);
+            }
+            m_panel->recalculateAndEmitStats();
         }
         return true;
     }

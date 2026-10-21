@@ -51,6 +51,7 @@ public:
     static bool updateSmartFolder(const SmartFolderRecord& rec);
     static bool removeSmartFolderById(int id);
     static int countMatchingItems(const SmartFolderRecord& rec);
+    static QStringList getMatchingPaths(const SmartFolderRecord& rec);
 };
 
 } // namespace QuarkMeta
