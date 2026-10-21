@@ -74,11 +74,6 @@ set(SOURCES
     src/core/FileCreationService.h
     src/core/FileFilterService.cpp
     src/core/FileFilterService.h
-    src/core/FilterState.h
-    src/core/FilterMatcher.h
-    src/core/FilterMatcher.cpp
-    src/core/FilterStateJson.h
-    src/core/FilterStateJson.cpp
     src/core/VolumeOnlineManager.cpp
     src/core/VolumeOnlineManager.h
     src/core/DiskTrashService.cpp

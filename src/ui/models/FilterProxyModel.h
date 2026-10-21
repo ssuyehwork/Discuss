@@ -5,7 +5,6 @@
 #include <QString>
 #include "../FilterPanel.h"
 #include "../../core/ItemRecord.h"
-#include "../../core/FilterMatcher.h"
 
 namespace QuarkMeta {
 
