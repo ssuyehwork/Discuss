@@ -18,6 +18,7 @@ public:
     void loadDirectory(const QString& path, bool recursive);
     void loadCategory(const QString& categoryType);
     void loadPaths(const QStringList& paths, int reqId = 0);
+    void loadLibraryPaths(const QStringList& paths, int reqId = 0);
     void appendPaths(const QStringList& paths, int reqId = 0);
 
     int currentRequestId() const { return m_loadRequestId; }

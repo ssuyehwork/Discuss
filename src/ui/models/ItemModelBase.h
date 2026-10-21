@@ -11,6 +11,11 @@
 #include "WindowsShellThumbnailProvider.h"
 
 namespace QuarkMeta {
+    enum class RecordSource {
+        Disk,      // 磁盘模式（需要 MetaCacheDecorator::decorate 装饰 JSON 元数据）
+        Prepared   // 预装配/库模式（元数据已在数据库中装配完成，跳过 decorate）
+    };
+
     struct QStringHash {
         size_t operator()(const QString& key) const {
             return qHash(key);

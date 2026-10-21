@@ -37,7 +37,8 @@ public:
     uint64_t currentGeneration() const { return m_currentGen.load(std::memory_order_relaxed); }
 
     const std::vector<QuarkMeta::ItemRecord>& allRecords() const override { return m_allRecords; }
-    void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) override;
+    void setRecords(const std::vector<QuarkMeta::ItemRecord>& records, RecordSource source = RecordSource::Disk);
+    void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) override { setRecords(records, RecordSource::Disk); }
     void addItemRecord(const QuarkMeta::ItemRecord& record);
     void appendRecord(const QuarkMeta::ItemRecord& record);
     void clear() override;
