@@ -2,6 +2,7 @@
 #include "QuarkMetaJsonStore.h" 
 #include "DriveMetaDao.h"
 #include "MetadataManager.h"
+#include "ItemMetaMapper.h"
 #include <QFileInfo> 
 #include <QDir>
 #include <unordered_map> 
@@ -46,24 +47,7 @@ void MetaCacheDecorator::decorate(std::vector<ItemRecord>& records) {
          
         auto it = cachedItems.find(fileName); 
         if (it != cachedItems.end()) { 
-            itemRec.rating = it->second.rating; 
-            itemRec.manualColor = QString::fromStdWString(it->second.color); 
-            itemRec.pinned = it->second.pinned; 
-            itemRec.note = QString::fromStdWString(it->second.note); 
-            itemRec.url = QString::fromStdWString(it->second.url); 
-            itemRec.tags.clear(); 
-            for (const auto& t : it->second.tags) { 
-                itemRec.tags.append(QString::fromStdWString(t)); 
-            } 
-            itemRec.width = it->second.width; 
-            itemRec.height = it->second.height; 
-            itemRec.autoColor = QString::fromStdWString(it->second.autoColor); 
-            itemRec.added_at = it->second.addedAt; 
- 
-            itemRec.palettes.clear(); 
-            for (const auto& pe : it->second.palettes) { 
-                itemRec.palettes.push_back({pe.color, pe.ratio}); 
-            } 
+            ItemMetaMapper::apply(it->second, itemRec);
         } 
     } 
 } 

@@ -44,10 +44,6 @@ public:
     static QStringList getCategoryPaths(int id);
     static bool updatePresetTags(int id, const QStringList& tags);
 
-    static bool initItemIndexTable();
-    static bool indexItemMetadata(int categoryId, const QString& filePath, const ItemMeta& meta);
-    static bool removeIndexedItem(int categoryId, const QString& filePath);
-    static QList<ItemMeta> getCategoryIndexedItems(int categoryId);
 };
 
 } // namespace QuarkMeta
