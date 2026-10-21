@@ -1,6 +1,6 @@
 #include "SmartFolderDialog.h"
 #include "../UiHelper.h"
-#include "../../core/AppConfig.h"
+#include "AppConfig.h"
 #include <QScrollArea>
 #include <QPainter>
 #include <QPixmap>
