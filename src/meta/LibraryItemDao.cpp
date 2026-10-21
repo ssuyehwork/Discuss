@@ -252,12 +252,16 @@ bool LibraryItemDao::removeItemsByPaths(const QStringList& paths) {
 }
 
 bool LibraryItemDao::renameItemPath(const QString& oldPath, const QString& newPath) {
+    return updatePath(oldPath, newPath);
+}
+
+bool LibraryItemDao::updatePath(const QString& oldPath, const QString& newPath) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db) return false;
+    if (!db || oldPath.isEmpty() || newPath.isEmpty()) return false;
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
     QFileInfo info(newPath);
-    const char* sql = "UPDATE library_items SET file_path = ?, file_name = ?, base_name = ?, extension = ? WHERE file_path = ? COLLATE NOCASE;";
+    const char* sql = "UPDATE library_items SET file_path = ?, file_name = ?, base_name = ?, extension = ?, sync_state = 0 WHERE file_path = ? COLLATE NOCASE;";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
         sqlite3_bind_text(stmt, 1, newPath.toUtf8().constData(), -1, SQLITE_TRANSIENT);
@@ -265,6 +269,44 @@ bool LibraryItemDao::renameItemPath(const QString& oldPath, const QString& newPa
         sqlite3_bind_text(stmt, 3, info.completeBaseName().toUtf8().constData(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 4, info.suffix().toUtf8().constData(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 5, oldPath.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+        sqlite3_finalize(stmt);
+        return ok;
+    }
+    return false;
+}
+
+bool LibraryItemDao::updatePathPrefix(const QString& oldPrefix, const QString& newPrefix) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || oldPrefix.isEmpty() || newPrefix.isEmpty()) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    QString cleanOld = QDir::toNativeSeparators(oldPrefix);
+    QString cleanNew = QDir::toNativeSeparators(newPrefix);
+
+    const char* sql = "UPDATE library_items SET file_path = ? || SUBSTR(file_path, ?) WHERE file_path LIKE ? || '%' COLLATE NOCASE;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, cleanNew.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, cleanOld.length() + 1);
+        sqlite3_bind_text(stmt, 3, cleanOld.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+        sqlite3_finalize(stmt);
+        return ok;
+    }
+    return false;
+}
+
+bool LibraryItemDao::markSyncStateByPath(const QString& path, int syncState) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || path.isEmpty()) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    const char* sql = "UPDATE library_items SET sync_state = ? WHERE file_path = ? COLLATE NOCASE;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, syncState);
+        sqlite3_bind_text(stmt, 2, path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
         bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
         sqlite3_finalize(stmt);
         return ok;

@@ -43,6 +43,7 @@ public:
     static bool removePathsFromCategory(int id, const QStringList& paths);
     static QStringList getCategoryPaths(int id);
     static bool updatePresetTags(int id, const QStringList& tags);
+    static bool updatePathPrefix(const QString& oldPrefix, const QString& newPrefix);
 
 };
 

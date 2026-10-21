@@ -220,30 +220,11 @@ void MetaIndexService::workerThreadLoop() {
             categoryBatch.swap(m_pendingCategoryTasks);
         }
 
-        // 1. 处理分类路径后台批量索引任务
+        // 1. 处理分类路径后台批量索引任务 (现统一由 LibrarySyncService 自动同步)
         for (const auto& task : categoryBatch) {
             if (m_stopping.load()) break;
-            for (const QString& path : task.paths) {
-                if (m_stopping.load()) break;
-                QFileInfo fi(path);
-                if (fi.isDir()) {
-                    QDir dir(path);
-                    QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-                    for (const auto& entry : entries) {
-                        if (m_stopping.load()) break;
-                        ItemMeta meta;
-                        std::wstring wPath = entry.absoluteFilePath().toStdWString();
-                        if (QuarkMetaJsonStore::instance().readItemMeta(wPath, meta)) {
-                            LibraryService::instance().indexItem(task.categoryId, entry.absoluteFilePath(), meta);
-                        }
-                    }
-                } else if (fi.isFile()) {
-                    ItemMeta meta;
-                    std::wstring wPath = path.toStdWString();
-                    if (QuarkMetaJsonStore::instance().readItemMeta(wPath, meta)) {
-                        LibraryService::instance().indexItem(task.categoryId, path, meta);
-                    }
-                }
+            if (!task.paths.isEmpty()) {
+                LibraryService::instance().addPathsToCategory(task.categoryId, task.paths);
             }
         }
 

@@ -1,8 +1,11 @@
 #pragma once
 
+#include "QuarkMetaJsonStore.h"
 #include <QObject>
 #include <QStringList>
 #include <QThreadPool>
+#include <QTimer>
+#include <mutex>
 #include <shared_mutex>
 #include <unordered_set>
 
@@ -28,9 +31,17 @@ private:
     void processSyncBatch(const QStringList& batch);
     static QString normalizePath(const QString& path);
 
+    void handleJsonChangeEvent(const QuarkMetaJsonStore::ChangeEvent& event);
+    void scheduleDebouncedSync(const QString& path);
+    void flushDebouncedQueue();
+
     QThreadPool m_workPool;
     std::unordered_set<std::wstring> m_libraryPathsSet;
     mutable std::shared_mutex m_pathMutex;
+
+    QTimer* m_debounceTimer = nullptr;
+    std::unordered_set<std::wstring> m_pendingSyncPaths;
+    std::mutex m_debounceMutex;
 };
 
 } // namespace QuarkMeta

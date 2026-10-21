@@ -62,6 +62,24 @@ void QuarkMetaJsonStore::prefetchFolderJson(const std::wstring& folderPath) {
     }
 }
 
+void QuarkMetaJsonStore::addChangeListener(ChangeListener listener) {
+    if (listener) {
+        std::lock_guard<std::mutex> lock(m_listenerMutex);
+        m_listeners.push_back(listener);
+    }
+}
+
+void QuarkMetaJsonStore::notifyListeners(const ChangeEvent& event) {
+    std::vector<ChangeListener> listenersCopy;
+    {
+        std::lock_guard<std::mutex> lock(m_listenerMutex);
+        listenersCopy = m_listeners;
+    }
+    for (const auto& listener : listenersCopy) {
+        try { listener(event); } catch (...) {}
+    }
+}
+
 std::shared_ptr<QuarkMetaJson> QuarkMetaJsonStore::getOrLoadFolderLocked(const std::wstring& normFolder, const std::wstring& folderPath) {
     auto it = m_folderCacheMap.find(normFolder);
     if (it != m_folderCacheMap.end() && it->second) {
@@ -135,6 +153,7 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
     }
 
     scheduleFlush();
+    notifyListeners({ChangeType::ItemChanged, QDir::toNativeSeparators(QString::fromStdWString(filePath)), ""});
 }
 
 QuarkMetaJson::ItemMap QuarkMetaJsonStore::readFolderMeta(const std::wstring& folderPath) {
@@ -259,6 +278,11 @@ bool QuarkMetaJsonStore::renameItem(const QString& folderPath, const QString& ol
         }
     }
     scheduleFlush();
+    if (ok) {
+        QString oldPath = QDir::toNativeSeparators(QDir(folderPath).filePath(oldName));
+        QString newPath = QDir::toNativeSeparators(QDir(folderPath).filePath(newName));
+        notifyListeners({ChangeType::ItemRenamed, oldPath, newPath});
+    }
     return ok;
 }
 
@@ -267,6 +291,9 @@ bool QuarkMetaJsonStore::migrateFolderCache(const QString& oldFolderPath, const 
     bool ok = QuarkMetaJson::migrateFolderCache(oldFolderPath, newFolderPath);
     invalidateFolderCache(oldFolderPath.toStdWString());
     invalidateFolderCache(newFolderPath.toStdWString());
+    if (ok) {
+        notifyListeners({ChangeType::FolderMigrated, QDir::toNativeSeparators(oldFolderPath), QDir::toNativeSeparators(newFolderPath)});
+    }
     return ok;
 }
 
@@ -288,6 +315,9 @@ bool QuarkMetaJsonStore::removeItem(const QString& filePath) {
         }
     }
     scheduleFlush();
+    if (ok) {
+        notifyListeners({ChangeType::ItemRemoved, QDir::toNativeSeparators(filePath), ""});
+    }
     return ok;
 }
 
@@ -359,6 +389,16 @@ bool QuarkMetaJsonStore::transferItems(const QList<QPair<QString, QString>>& pai
         }
     }
     scheduleFlush();
+
+    if (allOk) {
+        for (const auto& pair : pairs) {
+            if (isMove) {
+                notifyListeners({ChangeType::ItemRenamed, QDir::toNativeSeparators(pair.first), QDir::toNativeSeparators(pair.second)});
+            } else {
+                notifyListeners({ChangeType::ItemChanged, QDir::toNativeSeparators(pair.second), ""});
+            }
+        }
+    }
     return allOk;
 }
 

@@ -20,9 +20,73 @@ LibrarySyncService::LibrarySyncService(QObject* parent) : QObject(parent) {
     m_workPool.setMaxThreadCount(1);
     loadLibraryPathSet();
 
+    m_debounceTimer = new QTimer(this);
+    m_debounceTimer->setSingleShot(true);
+    m_debounceTimer->setInterval(200); // 200ms 防抖
+    connect(m_debounceTimer, &QTimer::timeout, this, &LibrarySyncService::flushDebouncedQueue);
+
+    QuarkMetaJsonStore::instance().addChangeListener([this](const QuarkMetaJsonStore::ChangeEvent& ev) {
+        handleJsonChangeEvent(ev);
+    });
+
     QTimer::singleShot(1500, this, [this]() {
         triggerStartupReconciliation();
     });
+}
+
+void LibrarySyncService::handleJsonChangeEvent(const QuarkMetaJsonStore::ChangeEvent& event) {
+    if (event.type == QuarkMetaJsonStore::ChangeType::ItemChanged) {
+        if (!isLibraryPath(event.path)) return; // 拦截阻断非库成员！
+        scheduleDebouncedSync(event.path);
+    } else if (event.type == QuarkMetaJsonStore::ChangeType::ItemRenamed) {
+        if (!isLibraryPath(event.path)) return;
+        (void)QtConcurrent::run(&m_workPool, [this, oldP = event.path, newP = event.newPath]() {
+            LibraryDao::updatePathPrefix(oldP, newP);
+            LibraryItemDao::updatePath(oldP, newP);
+            {
+                std::unique_lock<std::shared_mutex> lock(m_pathMutex);
+                m_libraryPathsSet.erase(normalizePath(oldP).toStdWString());
+                m_libraryPathsSet.insert(normalizePath(newP).toStdWString());
+            }
+        });
+    } else if (event.type == QuarkMetaJsonStore::ChangeType::FolderMigrated) {
+        (void)QtConcurrent::run(&m_workPool, [this, oldF = event.path, newF = event.newPath]() {
+            LibraryDao::updatePathPrefix(oldF, newF);
+            LibraryItemDao::updatePathPrefix(oldF, newF);
+            loadLibraryPathSet(); // 彻底重新从数据库刷新内存成员集合
+        });
+    } else if (event.type == QuarkMetaJsonStore::ChangeType::ItemRemoved) {
+        if (!isLibraryPath(event.path)) return;
+        (void)QtConcurrent::run(&m_workPool, [eventP = event.path]() {
+            LibraryItemDao::markSyncStateByPath(eventP, 2); // 标记 sync_state = 2 (缺失)
+        });
+    }
+}
+
+void LibrarySyncService::scheduleDebouncedSync(const QString& path) {
+    {
+        std::lock_guard<std::mutex> lock(m_debounceMutex);
+        m_pendingSyncPaths.insert(normalizePath(path).toStdWString());
+    }
+    QMetaObject::invokeMethod(this, [this]() {
+        if (m_debounceTimer && !m_debounceTimer->isActive()) {
+            m_debounceTimer->start();
+        }
+    }, Qt::QueuedConnection);
+}
+
+void LibrarySyncService::flushDebouncedQueue() {
+    QStringList pathsToSync;
+    {
+        std::lock_guard<std::mutex> lock(m_debounceMutex);
+        for (const auto& w : m_pendingSyncPaths) {
+            pathsToSync.append(QString::fromStdWString(w));
+        }
+        m_pendingSyncPaths.clear();
+    }
+    if (!pathsToSync.isEmpty()) {
+        syncPaths(pathsToSync);
+    }
 }
 
 LibrarySyncService::~LibrarySyncService() {

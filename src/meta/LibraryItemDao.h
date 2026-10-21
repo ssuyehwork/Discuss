@@ -23,6 +23,9 @@ private:
     static bool upsertItem(const ItemRecord& record);
     static bool removeItemsByPaths(const QStringList& paths);
     static bool renameItemPath(const QString& oldPath, const QString& newPath);
+    static bool updatePath(const QString& oldPath, const QString& newPath);
+    static bool updatePathPrefix(const QString& oldPrefix, const QString& newPrefix);
+    static bool markSyncStateByPath(const QString& path, int syncState);
 };
 
 } // namespace QuarkMeta

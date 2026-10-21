@@ -132,6 +132,27 @@ bool LibraryDao::setCategoryPinned(int id, bool pinned) {
     return success;
 }
 
+bool LibraryDao::updatePathPrefix(const QString& oldPrefix, const QString& newPrefix) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || oldPrefix.isEmpty() || newPrefix.isEmpty()) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    QString cleanOld = QDir::toNativeSeparators(oldPrefix);
+    QString cleanNew = QDir::toNativeSeparators(newPrefix);
+
+    const char* sql = "UPDATE library_category_paths SET path = ? || SUBSTR(path, ?) WHERE path LIKE ? || '%' COLLATE NOCASE;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, cleanNew.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, cleanOld.length() + 1);
+        sqlite3_bind_text(stmt, 3, cleanOld.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+        sqlite3_finalize(stmt);
+        return ok;
+    }
+    return false;
+}
+
 bool LibraryDao::updateCategoryNode(int id, const QString& name, const QString& iconKey, const QString& colorHex) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db || id <= 0) return false;
