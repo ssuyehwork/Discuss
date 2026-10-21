@@ -259,12 +259,22 @@ int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
                                    .arg(rule.value.trimmed());
             }
         }
+        else if (rule.type == SmartRuleType::Keyword) {
+            QString kw = rule.value.trimmed();
+            if (!kw.isEmpty()) {
+                if (rule.op == SmartRuleOperator::NotContains) {
+                    whereConditions << QString("file_name NOT LIKE '%%%1%%'").arg(kw);
+                } else {
+                    whereConditions << QString("file_name LIKE '%%%1%%'").arg(kw);
+                }
+            }
+        }
     }
 
     if (whereConditions.isEmpty()) return 0;
 
     QString connector = (rec.matchMode.toUpper() == "ALL") ? " AND " : " OR ";
-    QString sql = QString("SELECT COUNT(*) FROM library_items WHERE %1;")
+    QString sql = QString("SELECT COUNT(*) FROM library_items WHERE (%1) AND sync_state != 2;")
                   .arg(whereConditions.join(connector));
 
     sqlite3_stmt* stmt = nullptr;
@@ -276,6 +286,78 @@ int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
         sqlite3_finalize(stmt);
     }
     return count;
+}
+
+QStringList SmartFolderDao::getMatchingPaths(const SmartFolderRecord& rec) {
+    if (rec.rules.isEmpty()) return {};
+
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return {};
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    QStringList whereConditions;
+    for (const auto& rule : rec.rules) {
+        if (rule.type == SmartRuleType::Rating) {
+            QString op = (rule.op == SmartRuleOperator::GreaterOrEqual) ? ">=" :
+                         (rule.op == SmartRuleOperator::LessOrEqual) ? "<=" : "=";
+            whereConditions << QString("rating %1 %2").arg(op).arg(rule.value.toInt());
+        }
+        else if (rule.type == SmartRuleType::Extension) {
+            QString ext = rule.value.trimmed();
+            if (ext.startsWith('.')) ext.remove(0, 1);
+            if (rule.op == SmartRuleOperator::NotContains) {
+                whereConditions << QString("extension != '%1'").arg(ext);
+            } else {
+                whereConditions << QString("extension = '%1'").arg(ext);
+            }
+        }
+        else if (rule.type == SmartRuleType::Color) {
+            if (rule.op == SmartRuleOperator::NotContains) {
+                whereConditions << QString("color_hex != '%1'").arg(rule.value.trimmed());
+            } else {
+                whereConditions << QString("color_hex = '%1'").arg(rule.value.trimmed());
+            }
+        }
+        else if (rule.type == SmartRuleType::Tag) {
+            if (rule.op == SmartRuleOperator::NotContains) {
+                whereConditions << QString("file_id NOT IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
+                                   .arg(rule.value.trimmed());
+            } else {
+                whereConditions << QString("file_id IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
+                                   .arg(rule.value.trimmed());
+            }
+        }
+        else if (rule.type == SmartRuleType::Keyword) {
+            QString kw = rule.value.trimmed();
+            if (!kw.isEmpty()) {
+                if (rule.op == SmartRuleOperator::NotContains) {
+                    whereConditions << QString("file_name NOT LIKE '%%%1%%'").arg(kw);
+                } else {
+                    whereConditions << QString("file_name LIKE '%%%1%%'").arg(kw);
+                }
+            }
+        }
+    }
+
+    if (whereConditions.isEmpty()) return {};
+
+    QString connector = (rec.matchMode.toUpper() == "ALL") ? " AND " : " OR ";
+    QString sql = QString("SELECT file_path FROM library_items WHERE (%1) AND sync_state != 2;")
+                  .arg(whereConditions.join(connector));
+
+    sqlite3_stmt* stmt = nullptr;
+    QStringList paths;
+    if (sqlite3_prepare_v2(db, sql.toUtf8().constData(), -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const unsigned char* p = sqlite3_column_text(stmt, 0);
+            if (p) {
+                paths.append(QString::fromUtf8(reinterpret_cast<const char*>(p)));
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+    return paths;
 }
 
 bool SmartFolderDao::removeSmartFolderById(int id) {

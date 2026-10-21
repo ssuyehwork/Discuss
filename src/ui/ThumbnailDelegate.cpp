@@ -6,6 +6,9 @@
 #include "ElidedTextUtility.h"
 #include "UiHelper.h"
 #include "../core/ModelContract.h"
+#include "../core/CoreEngine.h"
+#include <QAbstractItemView>
+#include <QItemSelectionModel>
 
 #include <QPainter>
 #include <QStyleOptionViewItem>
@@ -186,6 +189,51 @@ bool ThumbnailDelegate::editorEvent(QEvent* event, QAbstractItemModel* model,
                 if (hitVal != -1) {
                     bool isSelected = (option.state & QStyle::State_Selected);
                     if (CardPainterHelper::canModifyRatingOnPress(isSelected, mouseEvent->modifiers())) {
+                        // 1. 提取多选集合或当前被点击项目路径
+                        QStringList targetPaths;
+                        const QAbstractItemView* view = qobject_cast<const QAbstractItemView*>(option.widget);
+                        if (isSelected && view && view->selectionModel()) {
+                            QModelIndexList selectedIndexes = view->selectionModel()->selectedIndexes();
+                            QList<int> selectedRows;
+                            for (const QModelIndex& selIdx : selectedIndexes) {
+                                if (!selectedRows.contains(selIdx.row())) {
+                                    selectedRows.append(selIdx.row());
+                                }
+                            }
+                            for (int r : selectedRows) {
+                                QModelIndex rowIdx = model->index(r, 0);
+                                QString p = rowIdx.data(m_pathRole).toString();
+                                if (!p.isEmpty()) {
+                                    targetPaths.append(p);
+                                }
+                            }
+                        }
+                        if (targetPaths.isEmpty()) {
+                            QString p = index.data(m_pathRole).toString();
+                            if (!p.isEmpty()) targetPaths.append(p);
+                        }
+
+                        // 2. 统一发送归一化命令给 CoreEngine
+                        if (!targetPaths.isEmpty()) {
+                            AppCommand cmd;
+                            cmd.type = AppCommandType::SetRating;
+                            cmd.targetPaths = targetPaths;
+                            cmd.params["rating"] = hitVal;
+                            CoreEngine::instance().executeCommand(cmd);
+
+                            for (const QString& p : targetPaths) {
+                                for (int r = 0; r < model->rowCount(); ++r) {
+                                    QModelIndex rowIdx = model->index(r, 0);
+                                    if (rowIdx.data(m_pathRole).toString() == p) {
+                                        model->setData(rowIdx, hitVal, m_ratingRole);
+                                        break;
+                                    }
+                                }
+                            }
+                            return true;
+                        }
+
+                        // 回退场景：直接设置 model
                         model->setData(index, hitVal, m_ratingRole);
                         return true; // 已选中且无组合键，修改评分并消费事件
                     }

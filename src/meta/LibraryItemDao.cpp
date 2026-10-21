@@ -18,72 +18,125 @@ std::vector<ItemRecord> LibraryItemDao::getItemsByPaths(const QStringList& paths
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-    for (const QString& path : paths) {
-        QString normPath = QDir::toNativeSeparators(path);
-        const char* sql = "SELECT file_id, file_path, file_name, base_name, extension, file_size, is_dir, is_empty, "
-                          "is_hidden, is_managed, encrypted, pinned, rating, color_hex, auto_color, width, height, "
-                          "thumb_status, note, url, sha256, created_at, updated_at, added_at "
-                          "FROM library_items WHERE file_path = ? COLLATE NOCASE;";
-        
+    constexpr int kBatchSize = 500;
+    for (int i = 0; i < paths.size(); i += kBatchSize) {
+        int count = qMin(kBatchSize, paths.size() - i);
+        QStringList chunkPaths;
+        chunkPaths.reserve(count);
+        for (int j = 0; j < count; ++j) {
+            chunkPaths.append(QDir::toNativeSeparators(paths[i + j]));
+        }
+
+        // 1. 构建主表 IN (?, ?, ...) 查询
+        QStringList placeholders;
+        placeholders.reserve(count);
+        for (int j = 0; j < count; ++j) {
+            placeholders.append("?");
+        }
+
+        QString sql = QString("SELECT file_id, file_path, file_name, base_name, extension, file_size, is_dir, is_empty, "
+                              "is_hidden, is_managed, encrypted, pinned, rating, color_hex, auto_color, width, height, "
+                              "thumb_status, note, url, sha256, created_at, updated_at, added_at "
+                              "FROM library_items WHERE file_path IN (%1) COLLATE NOCASE;")
+                      .arg(placeholders.join(','));
+
         sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, normPath.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            if (sqlite3_step(stmt) == SQLITE_ROW) {
-                ItemRecord rec;
-                rec.fileId = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
-                rec.path = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
-                rec.filename = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
-                rec.suffix = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)));
-                rec.size = sqlite3_column_int64(stmt, 5);
-                rec.isDir = (sqlite3_column_int(stmt, 6) != 0);
-                rec.isEmpty = (sqlite3_column_int(stmt, 7) != 0);
-                rec.isHidden = (sqlite3_column_int(stmt, 8) != 0);
-                rec.isManaged = (sqlite3_column_int(stmt, 9) != 0);
-                rec.encrypted = (sqlite3_column_int(stmt, 10) != 0);
-                rec.pinned = (sqlite3_column_int(stmt, 11) != 0);
-                rec.rating = sqlite3_column_int(stmt, 12);
-                rec.manualColor = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 13)));
-                rec.autoColor = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 14)));
-                rec.width = sqlite3_column_int(stmt, 15);
-                rec.height = sqlite3_column_int(stmt, 16);
-                rec.thumbStatus = sqlite3_column_int(stmt, 17);
-                rec.note = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 18)));
-                rec.url = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 19)));
-                rec.sha256 = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 20)));
-                rec.ctime = sqlite3_column_int64(stmt, 21);
-                rec.mtime = sqlite3_column_int64(stmt, 22);
-                rec.added_at = sqlite3_column_int64(stmt, 23);
+        if (sqlite3_prepare_v2(db, sql.toUtf8().constData(), -1, &stmt, nullptr) != SQLITE_OK) {
+            continue;
+        }
 
-                sqlite3_finalize(stmt);
+        for (int j = 0; j < count; ++j) {
+            sqlite3_bind_text(stmt, j + 1, chunkPaths[j].toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        }
 
-                // 装配 file_tags
-                const char* tagSql = "SELECT tag_name FROM file_tags WHERE file_id = ?;";
-                if (sqlite3_prepare_v2(db, tagSql, -1, &stmt, nullptr) == SQLITE_OK) {
-                    sqlite3_bind_text(stmt, 1, rec.fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-                    while (sqlite3_step(stmt) == SQLITE_ROW) {
-                        rec.tags.append(QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0))));
-                    }
-                    sqlite3_finalize(stmt);
-                }
+        QMap<QString, ItemRecord> chunkItemMap;
+        QStringList chunkFileIds;
 
-                // 装配 item_palettes
-                const char* palSql = "SELECT color_hex, ratio FROM item_palettes WHERE file_id = ? ORDER BY idx ASC;";
-                if (sqlite3_prepare_v2(db, palSql, -1, &stmt, nullptr) == SQLITE_OK) {
-                    sqlite3_bind_text(stmt, 1, rec.fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-                    while (sqlite3_step(stmt) == SQLITE_ROW) {
-                        QString colorHex = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
-                        float ratio = static_cast<float>(sqlite3_column_double(stmt, 1));
-                        rec.palettes.push_back({QColor(colorHex), ratio});
-                    }
-                    sqlite3_finalize(stmt);
-                }
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            ItemRecord rec;
+            rec.fileId = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+            rec.path = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
+            rec.filename = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
+            rec.suffix = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)));
+            rec.size = sqlite3_column_int64(stmt, 5);
+            rec.isDir = (sqlite3_column_int(stmt, 6) != 0);
+            rec.isEmpty = (sqlite3_column_int(stmt, 7) != 0);
+            rec.isHidden = (sqlite3_column_int(stmt, 8) != 0);
+            rec.isManaged = (sqlite3_column_int(stmt, 9) != 0);
+            rec.encrypted = (sqlite3_column_int(stmt, 10) != 0);
+            rec.pinned = (sqlite3_column_int(stmt, 11) != 0);
+            rec.rating = sqlite3_column_int(stmt, 12);
+            rec.manualColor = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 13)));
+            rec.autoColor = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 14)));
+            rec.width = sqlite3_column_int(stmt, 15);
+            rec.height = sqlite3_column_int(stmt, 16);
+            rec.thumbStatus = sqlite3_column_int(stmt, 17);
+            rec.note = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 18)));
+            rec.url = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 19)));
+            rec.sha256 = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 20)));
+            rec.ctime = sqlite3_column_int64(stmt, 21);
+            rec.mtime = sqlite3_column_int64(stmt, 22);
+            rec.added_at = sqlite3_column_int64(stmt, 23);
 
-                result.push_back(rec);
-            } else {
-                sqlite3_finalize(stmt);
+            if (!rec.fileId.isEmpty()) {
+                chunkItemMap.insert(rec.fileId, rec);
+                chunkFileIds.append(rec.fileId);
             }
         }
+        sqlite3_finalize(stmt);
+
+        if (chunkFileIds.isEmpty()) {
+            continue;
+        }
+
+        // 2. 构建 file_tags 动态 IN 查询
+        QStringList idPlaceholders;
+        idPlaceholders.reserve(chunkFileIds.size());
+        for (int j = 0; j < chunkFileIds.size(); ++j) {
+            idPlaceholders.append("?");
+        }
+
+        QString tagSql = QString("SELECT file_id, tag_name FROM file_tags WHERE file_id IN (%1);")
+                         .arg(idPlaceholders.join(','));
+
+        if (sqlite3_prepare_v2(db, tagSql.toUtf8().constData(), -1, &stmt, nullptr) == SQLITE_OK) {
+            for (int j = 0; j < chunkFileIds.size(); ++j) {
+                sqlite3_bind_text(stmt, j + 1, chunkFileIds[j].toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            }
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                QString fileId = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+                QString tagName = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
+                if (chunkItemMap.contains(fileId)) {
+                    chunkItemMap[fileId].tags.append(tagName);
+                }
+            }
+            sqlite3_finalize(stmt);
+        }
+
+        // 3. 构建 item_palettes 动态 IN 查询
+        QString palSql = QString("SELECT file_id, color_hex, ratio FROM item_palettes WHERE file_id IN (%1) ORDER BY idx ASC;")
+                         .arg(idPlaceholders.join(','));
+
+        if (sqlite3_prepare_v2(db, palSql.toUtf8().constData(), -1, &stmt, nullptr) == SQLITE_OK) {
+            for (int j = 0; j < chunkFileIds.size(); ++j) {
+                sqlite3_bind_text(stmt, j + 1, chunkFileIds[j].toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            }
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                QString fileId = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+                QString colorHex = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
+                float ratio = static_cast<float>(sqlite3_column_double(stmt, 2));
+                if (chunkItemMap.contains(fileId)) {
+                    chunkItemMap[fileId].palettes.push_back({QColor(colorHex), ratio});
+                }
+            }
+            sqlite3_finalize(stmt);
+        }
+
+        for (const auto& item : chunkItemMap) {
+            result.push_back(item);
+        }
     }
+
     return result;
 }
 
