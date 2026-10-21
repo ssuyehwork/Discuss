@@ -5,6 +5,9 @@
 #include "../../meta/MetaCacheDecorator.h"
 #include "../../meta/MediaExtractorPipeline.h"
 #include "../../meta/MetadataManager.h"
+#include "../../meta/LibraryItemDao.h"
+#include "../../meta/LibrarySyncService.h"
+#include "../../meta/LibraryValidationService.h"
 #include "../../util/ThumbnailPipelineService.h"
 
 #include <QDir>
@@ -181,6 +184,88 @@ void ContentDataLoader::loadPaths(const QStringList& paths, int reqId) {
                 weakPanel->recalculateAndEmitStats();
                 weakPanel->applyFilters();
                 weakPanel->restoreSelections();
+            }
+        });
+    });
+}
+
+void ContentDataLoader::loadLibraryPaths(const QStringList& paths, int reqId) {
+    if (!m_panel) return;
+
+    if (m_panel->currentViewMode() == ContentPanel::ColumnView) {
+        m_panel->setViewMode(ContentPanel::GridView);
+    }
+
+    m_panel->restoreActiveView();
+    m_panel->ensureSourceModelIsDiskModel();
+
+    if (paths.isEmpty()) {
+        if (m_panel->model()) {
+            m_panel->model()->clear();
+        }
+        m_panel->setLoading(false);
+        m_panel->recalculateAndEmitStats();
+        return;
+    }
+
+    m_panel->setLoading(true);
+    if (reqId == 0) {
+        reqId = m_panel->incrementLoadRequestId();
+        m_loadRequestId = reqId;
+    }
+    m_panel->setLastLoadedLibraryPaths(paths);
+    m_panel->updateLayersButtonState();
+
+    QPointer<ContentPanel> weakPanel(m_panel);
+    (void)QtConcurrent::run([weakPanel, paths, reqId]() {
+        if (!weakPanel) return;
+
+        // 纯数据库装配 ItemRecord，彻底不读任何 .QuarkMeta.json
+        std::vector<ItemRecord> dbItems = LibraryItemDao::getItemsByPaths(paths);
+
+        // 收集数据库中已被同步的路径
+        std::unordered_set<std::wstring> fetchedPaths;
+        std::vector<ItemRecord> validRecords;
+        validRecords.reserve(dbItems.size());
+
+        for (auto& item : dbItems) {
+            fetchedPaths.insert(QDir::toNativeSeparators(item.path).toLower().toStdWString());
+            validRecords.push_back(std::move(item));
+        }
+
+        // 检查是否有缺失项，用 ItemRecord::create 仅取物理属性，并通知 LibrarySyncService 异步补齐
+        QStringList missingPaths;
+        for (const QString& p : paths) {
+            std::wstring normP = QDir::toNativeSeparators(p).toLower().toStdWString();
+            if (fetchedPaths.count(normP) == 0) {
+                ItemRecord tempRec = ItemRecord::create(p);
+                validRecords.push_back(tempRec);
+                missingPaths.append(p);
+            }
+        }
+
+        if (!missingPaths.isEmpty()) {
+            LibrarySyncService::instance().syncPaths(missingPaths);
+        }
+
+        if (!weakPanel) return;
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, validRecords, reqId]() {
+            if (weakPanel && weakPanel->loadRequestId() == reqId) {
+                if (weakPanel->model()) {
+                    weakPanel->model()->setRecords(validRecords, RecordSource::Prepared);
+                }
+                weakPanel->applySort();
+                weakPanel->setLoading(false);
+                weakPanel->recalculateAndEmitStats();
+                weakPanel->applyFilters();
+                weakPanel->restoreSelections();
+
+                // 库模式媒体特征新鲜度检查（不读 JSON）
+                MetadataManager::instance().registerLibraryItemsAsync(validRecords);
+
+                // 启动后台可取消增量对账校验
+                LibraryValidationService::instance().validateRecordsAsync(validRecords, weakPanel.data(), reqId);
             }
         });
     });

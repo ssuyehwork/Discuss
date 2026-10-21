@@ -322,7 +322,7 @@ void PanelMediator::setupConnections() {
                 if (target) {
                     target->setCurrentCategoryType("library");
                     target->setLastLoadedLibraryPaths(paths);
-                    target->loadPaths(paths);
+                    target->loadLibraryPaths(paths);
                 }
             });
 
@@ -332,7 +332,7 @@ void PanelMediator::setupConnections() {
                 if (target) {
                     target->setCurrentCategoryType("smart_folder");
                     target->setLastLoadedLibraryPaths(allLibraryPaths);
-                    target->loadPaths(allLibraryPaths);
+                    target->loadLibraryPaths(allLibraryPaths);
                 }
                 if (filterPanel) {
                     filterPanel->applySmartFolderRecord(record);

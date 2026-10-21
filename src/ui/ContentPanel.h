@@ -230,6 +230,7 @@ public slots:
     void applyFilters();
     void createNewItem(const QString& type);
     void loadPaths(const QStringList& paths, int reqId = 0);
+    void loadLibraryPaths(const QStringList& paths, int reqId = 0);
     void appendPaths(const QStringList& paths, int reqId = 0);
     void loadCategory(const QString& categoryType);
     void refreshVisibleThumbnails();

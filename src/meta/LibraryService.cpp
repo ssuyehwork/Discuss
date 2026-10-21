@@ -1,4 +1,5 @@
 #include "LibraryService.h"
+#include "LibrarySyncService.h"
 #include "../ui/UiHelper.h"
 #include "../ui/ToolTipOverlay.h"
 #include <QCursor>
@@ -29,8 +30,10 @@ int LibraryService::createCategory(const QString& name, int parentId) {
 }
 
 bool LibraryService::removeCategory(int id) {
+    QStringList paths = LibraryDao::getCategoryPaths(id);
     bool ok = LibraryDao::removeCategoryById(id);
     if (ok) {
+        LibrarySyncService::instance().removePaths(paths);
         emit libraryChanged();
     }
     return ok;
@@ -39,6 +42,7 @@ bool LibraryService::removeCategory(int id) {
 bool LibraryService::addPathsToCategory(int id, const QStringList& paths) {
     bool ok = LibraryDao::addPathsToCategory(id, paths);
     if (ok) {
+        LibrarySyncService::instance().syncPaths(paths);
         emit libraryChanged();
     }
     return ok;
@@ -47,6 +51,7 @@ bool LibraryService::addPathsToCategory(int id, const QStringList& paths) {
 bool LibraryService::removePathsFromCategory(int id, const QStringList& paths) {
     bool ok = LibraryDao::removePathsFromCategory(id, paths);
     if (ok) {
+        LibrarySyncService::instance().removePaths(paths);
         emit libraryChanged();
     }
     return ok;
@@ -56,6 +61,7 @@ bool LibraryService::removePathsFromLibrary(const QStringList& paths) {
     if (paths.isEmpty()) return false;
     bool ok = LibraryDao::addPathsToCategory(0, paths); // category_id = 0 清除归属与索引
     if (ok) {
+        LibrarySyncService::instance().removePaths(paths);
         emit libraryChanged();
     }
     return ok;
@@ -63,22 +69,6 @@ bool LibraryService::removePathsFromLibrary(const QStringList& paths) {
 
 QStringList LibraryService::getCategoryPaths(int id) const {
     return LibraryDao::getCategoryPaths(id);
-}
-
-bool LibraryService::indexItem(int categoryId, const QString& filePath, const ItemMeta& meta) {
-    bool ok = LibraryDao::indexItemMetadata(categoryId, filePath, meta);
-    if (ok) emit libraryChanged();
-    return ok;
-}
-
-bool LibraryService::unindexItem(int categoryId, const QString& filePath) {
-    bool ok = LibraryDao::removeIndexedItem(categoryId, filePath);
-    if (ok) emit libraryChanged();
-    return ok;
-}
-
-QList<ItemMeta> LibraryService::getIndexedItems(int categoryId) const {
-    return LibraryDao::getCategoryIndexedItems(categoryId);
 }
 
 QAction* LibraryService::buildLibraryAction(QMenu* parentMenu, const QStringList& targetPaths, QObject* receiver) {

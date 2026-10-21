@@ -22,7 +22,24 @@ class QuarkMetaJsonStore : public QObject {
     Q_OBJECT
 
 public:
+    enum class ChangeType {
+        ItemChanged,      // 文件属性/元数据变化 (path)
+        ItemRenamed,      // 文件重命名/移动 (path=oldPath, newPath=newPath)
+        ItemRemoved,      // 文件删除 (path)
+        FolderMigrated    // 文件夹迁移/重命名 (path=oldFolder, newPath=newFolder)
+    };
+
+    struct ChangeEvent {
+        ChangeType type;
+        QString path;
+        QString newPath;
+    };
+
+    using ChangeListener = std::function<void(const ChangeEvent&)>;
+
     static QuarkMetaJsonStore& instance();
+
+    void addChangeListener(ChangeListener listener);
 
     /**
      * @brief 原子修改指定路径对应文件的 ItemMeta 记录 (自动缓冲合并落盘)
@@ -96,6 +113,10 @@ private:
     std::unordered_map<std::wstring, uint64_t> m_savedRevision;   // 受 m_saveMutex 保护
     std::mutex m_saveMutex;
     QThreadPool m_flushPool;
+
+    std::mutex m_listenerMutex;
+    std::vector<ChangeListener> m_listeners;
+    void notifyListeners(const ChangeEvent& event);
 
     QTimer* m_flushTimer = nullptr;
     static constexpr int kFlushDebounceMs = 50; // 50ms 防抖

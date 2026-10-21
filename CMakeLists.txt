@@ -119,12 +119,20 @@ set(SOURCES
     src/meta/FavoriteDao.cpp
     src/meta/FavoriteService.h
     src/meta/FavoriteService.cpp
+    src/meta/ItemMetaMapper.cpp
+    src/meta/ItemMetaMapper.h
     src/meta/LibraryDao.h
     src/meta/LibraryDao.cpp
+    src/meta/LibraryItemDao.cpp
+    src/meta/LibraryItemDao.h
     src/meta/SmartFolderDao.h
     src/meta/SmartFolderDao.cpp
     src/meta/LibraryService.h
     src/meta/LibraryService.cpp
+    src/meta/LibrarySyncService.cpp
+    src/meta/LibrarySyncService.h
+    src/meta/LibraryValidationService.cpp
+    src/meta/LibraryValidationService.h
     src/ui/LibraryPanel.h
     src/ui/LibraryPanel.cpp
     src/ui/SidebarContainerWidget.h

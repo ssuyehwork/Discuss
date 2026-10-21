@@ -11,6 +11,11 @@
 #include "WindowsShellThumbnailProvider.h"
 
 namespace QuarkMeta {
+    enum class RecordSource {
+        Disk,      // 磁盘模式（需要 MetaCacheDecorator::decorate 装饰 JSON 元数据）
+        Prepared   // 预装配/库模式（元数据已在数据库中装配完成，跳过 decorate）
+    };
+
     struct QStringHash {
         size_t operator()(const QString& key) const {
             return qHash(key);
@@ -39,13 +44,14 @@ namespace QuarkMeta {
 
         // 暴露通用接口合约，由 DiskItemModel 实现
         virtual const std::vector<QuarkMeta::ItemRecord>& allRecords() const = 0;
-        virtual void setRecords(const std::vector<QuarkMeta::ItemRecord>& records) = 0;
+        virtual void setRecords(const std::vector<QuarkMeta::ItemRecord>& records, RecordSource source = RecordSource::Disk) = 0;
         virtual void appendRecord(const QuarkMeta::ItemRecord& record) = 0;
         virtual void clear() = 0;
         virtual void updateRecordMetadata(QString path) = 0;
         virtual void loadThumbnailsForRows(const QList<int>& rows) = 0;
         virtual void migrateCache(const QString& oldPath, const QString& newPath) = 0;
         virtual void clearCacheForFolder(const QString& folderPath) = 0;
+        virtual QStringList applyIncrementalChanges(const std::vector<QuarkMeta::ItemRecord>& records, const QStringList& removedPaths) = 0;
 
     protected:
         QString m_currentPath;

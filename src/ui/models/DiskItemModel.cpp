@@ -115,14 +115,16 @@ void DiskItemModel::appendRecord(const ItemRecord& record) {
     endInsertRows();
 }
 
-void DiskItemModel::setRecords(const std::vector<ItemRecord>& records) {
+void DiskItemModel::setRecords(const std::vector<ItemRecord>& records, RecordSource source) {
     if (m_thumbBatchTimer) m_thumbBatchTimer->stop();
     m_pendingThumbRows.clear();
     incrementGeneration();
     beginResetModel();
     m_allRecords = records;
 
-    MetaCacheDecorator::decorate(m_allRecords);
+    if (source == RecordSource::Disk) {
+        MetaCacheDecorator::decorate(m_allRecords);
+    }
 
     m_pathToIndex.clear();
     m_requestedPaths.clear();

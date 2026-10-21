@@ -165,6 +165,34 @@ bool MetadataManager::shouldExtractMediaFeatures(const std::wstring& path, long 
     return true;
 }
 
+bool MetadataManager::shouldExtractMediaFeatures(const ItemRecord& record) {
+    if (record.isDir || !ColorPaletteEngine::isGraphicsFile(QFileInfo(record.path).suffix().toLower())) {
+        return false;
+    }
+    if (!record.autoColor.isEmpty() && !record.palettes.empty() && record.width > 0 && record.height > 0) {
+        return false; // 已具备离线特征数据，不读 JSON，跳过
+    }
+    return true;
+}
+
+void MetadataManager::registerLibraryItemsAsync(const std::vector<ItemRecord>& records) {
+    if (records.empty()) return;
+
+    (void)QtConcurrent::run([this, records]() {
+        std::vector<std::wstring> enqueuedPaths;
+        for (const auto& rec : records) {
+            std::wstring nPath = normalizePath(rec.path.toStdWString());
+            ensureActivated(nPath);
+            if (shouldExtractMediaFeatures(rec)) {
+                enqueuedPaths.push_back(nPath);
+            }
+        }
+        if (!enqueuedPaths.empty()) {
+            MediaExtractorPipeline::instance().enqueueBatch(enqueuedPaths);
+        }
+    });
+}
+
 void MetadataManager::registerItem(const std::wstring& path) {
     std::wstring nPath = normalizePath(path);
     ensureActivated(nPath);

@@ -74,7 +74,9 @@ public:
     void notifyFullUIRebuild();
 
     void registerItem(const std::wstring& path);
+    bool shouldExtractMediaFeatures(const ItemRecord& record);
     void registerItemsAsync(const QStringList& paths);
+    void registerLibraryItemsAsync(const std::vector<ItemRecord>& records);
 
     void ensureActivated(const std::wstring& nPath);
 
