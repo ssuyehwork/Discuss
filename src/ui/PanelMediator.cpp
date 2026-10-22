@@ -37,6 +37,7 @@
 #include <QFileInfo>
 #include <QFile>
 #include <QDesktopServices>
+#include <QStandardPaths>
 #include <QCursor>
 
 namespace QuarkMeta {
@@ -386,7 +387,8 @@ void PanelMediator::setupConnections() {
         if (!isOnline) {
             QString current = NavigationService::instance().currentUrl();
             if (current.contains(driveLetter + ":", Qt::CaseInsensitive)) {
-                NavigationService::instance().navigateTo("computer://");
+                QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+                NavigationService::instance().navigateTo(desktopPath);
             }
         }
     });
