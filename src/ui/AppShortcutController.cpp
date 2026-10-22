@@ -144,9 +144,8 @@ void AppShortcutController::initShortcuts() {
 
     // 5. Ctrl+F: 局内聚焦搜索栏
     registerShortcut(QKeySequence::Find, [this]() {
-        if (m_searchController && m_searchController->searchEdit()) {
-            m_searchController->searchEdit()->setFocus(Qt::ShortcutFocusReason);
-            m_searchController->searchEdit()->selectAll();
+        if (m_searchController) {
+            m_searchController->focusSearch();
         }
     });
 
