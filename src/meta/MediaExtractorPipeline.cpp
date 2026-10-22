@@ -139,25 +139,17 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             m_activeCount.fetch_add(static_cast<int>(batch.size())); 
         } 
  
-        auto startTime = std::chrono::steady_clock::now();
-        int batchSuccessCount = 0;
-        int batchFailureCount = 0;
-
         std::vector<MetadataManager::ExtractedFeatureItem> results; 
         results.reserve(batch.size()); 
 
         for (const auto& path : batch) { 
             if (token->isCanceled() || CoreController::isShuttingDown()) {
-                qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: Canceled for:" << QString::fromStdWString(path);
-                batchFailureCount++;
                 break;
             }
 
             QString qPath = QString::fromStdWString(path); 
             QFileInfo info(qPath); 
             if (!info.exists()) {
-                qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: File not exists:" << qPath;
-                batchFailureCount++;
                 continue;
             }
 
@@ -172,8 +164,6 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             if (info.isFile() && ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) { 
                 DiskMediaExtractor::ExtractResult res = DiskMediaExtractor::getCapsuleExtractResult(qPath, DiskMediaExtractor::kThumbSize, token); 
                 if (!res.isValid || res.thumbnail512.isNull()) {
-                    qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: Thumbnail extraction failed for:" << qPath;
-                    batchFailureCount++;
                     continue;
                 }
 
@@ -193,8 +183,6 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                 }
 
                 if (pal.isEmpty()) {
-                    qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: Palette extraction empty for:" << qPath;
-                    batchFailureCount++;
                     continue;
                 }
 
@@ -204,10 +192,6 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                 item.palettes.assign(pal.begin(), pal.end());
 
                 results.push_back(item);
-                batchSuccessCount++;
-            } else {
-                qDebug() << "[AutoColor] [MediaExtractorPipeline] Item skipped - Cause: Not a graphics file:" << qPath;
-                batchFailureCount++;
             }
         } 
 
@@ -215,10 +199,6 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
         if (!results.empty()) { 
             MetadataManager::instance().updateExtractedMediaFeaturesBatch(results); 
         } 
-
-        auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startTime).count();
-        qDebug() << "[AutoColor] [MediaExtractorPipeline] Batch process finished - Success:" << batchSuccessCount 
-                 << "Failure:" << batchFailureCount << "ElapsedMs:" << elapsedMs;
  
         { 
             std::lock_guard<std::mutex> lock(m_queueMutex); 

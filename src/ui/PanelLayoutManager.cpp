@@ -48,9 +48,6 @@ void PanelLayoutManager::initLayout() {
     // 【顺序修正】：先恢复分栏尺寸比例，再按配置做面板显隐——
     // 避免"先显隐搅乱比例、restoreState 再纠正"这个中间态被画出来（黑块/单列内容区闪烁的根因）
     QByteArray state = AppConfig::instance().getValue("MainWindow/SplitterState").toByteArray();
-    qDebug() << "[LAYOUT] step1 restoreState before visibility, isImmersive=" << isImmersive
-             << "hasSavedState=" << !state.isEmpty()
-             << "sizesBefore=" << m_mainSplitter->sizes();
     if (!state.isEmpty() && !isImmersive) {
         m_mainSplitter->restoreState(state);
     } else if (!isImmersive) {
@@ -59,7 +56,6 @@ void PanelLayoutManager::initLayout() {
         m_mainSplitter->setSizes(sizes);
     }
     m_mainSplitter->setHandleWidth(kSplitterHandleWidth);
-    qDebug() << "[LAYOUT] step1 done, sizesAfter=" << m_mainSplitter->sizes();
 
     if (isImmersive) {
         if (m_navPanel) m_navPanel->setVisible(false);
@@ -76,15 +72,10 @@ void PanelLayoutManager::initLayout() {
         bool metaVis = AppConfig::instance().getValue("MainWindow/MetaVisible", true).toBool();
         bool filterVis = AppConfig::instance().getValue("MainWindow/FilterVisible", true).toBool();
 
-        qDebug() << "[LAYOUT] step2 applying visibility nav=" << navVis << "fav=" << favVis
-                 << "meta=" << metaVis << "filter=" << filterVis;
-
         if (m_navPanel) m_navPanel->setVisible(navVis);
         if (m_sidebarContainer) m_sidebarContainer->setVisible(favVis);
         if (m_metaPanel) m_metaPanel->setVisible(metaVis);
         if (m_filterPanel) m_filterPanel->setVisible(filterVis);
-
-        qDebug() << "[LAYOUT] step2 done, sizesAfterVisibility=" << m_mainSplitter->sizes();
 
         emit panelVisibilityChanged("nav", navVis);
         emit panelVisibilityChanged("favorite", favVis);

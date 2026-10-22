@@ -107,7 +107,7 @@ bool DriveMetaDao::saveDriveMeta(const DriveMetaRecord& record) {
     sqlite3_finalize(stmt);
 
     if (rc == SQLITE_DONE) {
-        // 🚨 核心保障：写完立即触发 PASSIVE 检查点，确保持久化写入 global.db 主文件！
+        // 🚨 核心保障：写完立即触发 PASSIVE 检查点，确保持久化写入 QuarkMeta.store 主文件！
         sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
         return true;
     }

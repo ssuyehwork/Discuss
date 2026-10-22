@@ -83,7 +83,7 @@ bool ExtensionColorDao::saveExtensionColor(const QString& ext, const QColor& bg,
     bool success = (sqlite3_step(stmt) == SQLITE_DONE);
     sqlite3_finalize(stmt);
 
-    // 固化 PASSIVE 检查点到 global.db 主文件
+    // 固化 PASSIVE 检查点到 QuarkMeta.store 主文件
     sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
     return success;
 }

@@ -798,10 +798,6 @@ void ContentPanel::setViewMode(ViewMode mode) {
     } else {
         m_selectionState.focusedPath.clear();
     }
-    qDebug() << "[ContentPanel::setViewMode] Mode:" << static_cast<int>(mode)
-             << "m_currentPath:" << m_currentPath
-             << "selectedCount:" << m_selectionState.selectedPaths.size()
-             << "focusedPath:" << m_selectionState.focusedPath;
 
     ViewMode oldMode = m_currentViewMode;
     m_currentViewMode = mode;

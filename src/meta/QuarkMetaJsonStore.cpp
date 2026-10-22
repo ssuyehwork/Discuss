@@ -202,7 +202,6 @@ void QuarkMetaJsonStore::scheduleFlush() {
 
 void QuarkMetaJsonStore::saveTicket(const FlushTicket& ticket) {
     if (ticket.snapshot.isLoadFailed()) {
-        qDebug() << "[QuarkMetaJsonStore] Skipped flushing for folder due to load failure";
         return;
     }
     std::lock_guard<std::mutex> saveLock(m_saveMutex);
@@ -210,8 +209,6 @@ void QuarkMetaJsonStore::saveTicket(const FlushTicket& ticket) {
     if (saved >= ticket.revision) return;   // 更新的快照已落盘，丢弃过期快照
     bool ok = ticket.snapshot.save();
     if (ok) saved = ticket.revision;
-    qDebug() << "[QuarkMetaJsonStore] Flushed dirty buffer for folder, items count:"
-             << ticket.snapshot.items().size() << "status:" << ok;
 }
 
 void QuarkMetaJsonStore::onFlushTimeout() {

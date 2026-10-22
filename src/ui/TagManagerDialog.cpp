@@ -286,7 +286,7 @@ void TagManagerDialog::createTag(const QString& tagName) {
     QString cleanTag = tagName.trimmed();
     if (cleanTag.isEmpty()) return;
 
-    // 1. 写入 global.db 词库
+    // 1. 写入 QuarkMeta.store 词库
     TagLexiconService::instance().addTag(cleanTag, m_activeGroupId > 0 ? m_activeGroupId : -1);
 
     refreshSidebar();

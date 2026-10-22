@@ -102,11 +102,7 @@ bool DiskMediaExtractor::isMarkedFailed(const QString& folderPath, const QString
     { 
         QMutexLocker locker(&s_failureMutex); 
         if (s_failureLoadedFolders.contains(folderPath)) { 
-            bool failed = s_failedNames.value(folderPath).contains(fileName); 
-            if (failed) {
-                qDebug() << "[AutoColor] [DiskMediaExtractor] Intercepted by failure mark:" << fileName;
-            }
-            return failed;
+            return s_failedNames.value(folderPath).contains(fileName); 
         } 
     } 
  
@@ -122,11 +118,7 @@ bool DiskMediaExtractor::isMarkedFailed(const QString& folderPath, const QString
     QMutexLocker locker(&s_failureMutex); 
     s_failedNames[folderPath].unite(persisted); 
     s_failureLoadedFolders.insert(folderPath); 
-    bool failed = s_failedNames.value(folderPath).contains(fileName); 
-    if (failed) {
-        qDebug() << "[AutoColor] [DiskMediaExtractor] Intercepted by failure mark:" << fileName;
-    }
-    return failed; 
+    return s_failedNames.value(folderPath).contains(fileName); 
 } 
  
 void DiskMediaExtractor::scheduleFailureMark(const QString& folderPath, const QString& fileName) { 
@@ -341,7 +333,6 @@ DiskMediaExtractor::ExtractResult DiskMediaExtractor::getCapsuleExtractResult(co
  
     // 5. 解码失败：非取消情况下入队合并落盘 thumb_status = 1 
     if (!isTaskCanceled(token)) { 
-        qDebug() << "[AutoColor] [DiskMediaExtractor] Decode failed for:" << fileName;
         scheduleFailureMark(parentDir, fileName); 
     } 
     return res; 

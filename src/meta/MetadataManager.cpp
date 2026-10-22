@@ -200,19 +200,9 @@ void MetadataManager::registerItem(const std::wstring& path) {
     long long pSize = 0, pMtime = 0;
     fetchWinApiMetadataDirect(nPath, &pSize, nullptr, nullptr, &pMtime, nullptr);
 
-    int pendingCount = 1;
-    int skippedFreshCount = 0;
-    int enqueuedCount = 0;
-
-    if (!shouldExtractMediaFeatures(nPath, pSize, pMtime)) {
-        skippedFreshCount = 1;
-    } else {
-        enqueuedCount = 1;
+    if (shouldExtractMediaFeatures(nPath, pSize, pMtime)) {
         MediaExtractorPipeline::instance().enqueue(nPath);
     }
-
-    qDebug() << "[AutoColor] [MetadataManager] Enqueue check - Pending:" << pendingCount 
-             << "SkippedFresh:" << skippedFreshCount << "Enqueued:" << enqueuedCount;
 }
 
 void MetadataManager::registerItemsAsync(const QStringList& paths) {
@@ -220,8 +210,6 @@ void MetadataManager::registerItemsAsync(const QStringList& paths) {
 
     (void)QtConcurrent::run([this, paths]() {
         std::vector<std::wstring> enqueuedPaths;
-        int pendingCount = paths.size();
-        int skippedFreshCount = 0;
 
         for (const auto& qp : paths) {
             std::wstring nPath = normalizePath(qp.toStdWString());
@@ -232,14 +220,8 @@ void MetadataManager::registerItemsAsync(const QStringList& paths) {
 
             if (shouldExtractMediaFeatures(nPath, pSize, pMtime)) {
                 enqueuedPaths.push_back(nPath);
-            } else {
-                skippedFreshCount++;
             }
         }
-
-        int enqueuedCount = static_cast<int>(enqueuedPaths.size());
-        qDebug() << "[AutoColor] [MetadataManager] Enqueue check - Pending:" << pendingCount 
-                 << "SkippedFresh:" << skippedFreshCount << "Enqueued:" << enqueuedCount;
 
         if (!enqueuedPaths.empty()) {
             MediaExtractorPipeline::instance().enqueueBatch(enqueuedPaths);
@@ -426,7 +408,6 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
         }
     }
 
-    qDebug() << "[AutoColor] [MetadataManager] Batch write complete - Written:" << actualWritten << "SkippedSame:" << skippedSame;
 }
 
 void MetadataManager::updateExtractedMediaFeatures( 

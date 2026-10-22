@@ -19,7 +19,7 @@ namespace QuarkMeta {
 /**
  * @brief 专职后台增量派生索引服务 (index.db)
  * 1. 唯一职责：单向消费 JSON 落盘事件，派生全局跨文件夹搜索索引。
- * 2. 独立连接、WAL 模式、绝对不依赖 global.db 和任何全局互斥锁。
+ * 2. 独立连接、WAL 模式、绝对不依赖 QuarkMeta.store 和任何全局互斥锁。
  * 3. 索引损坏或版本不一致时，自动无损删库重建。
  */
 class MetaIndexService : public QObject {

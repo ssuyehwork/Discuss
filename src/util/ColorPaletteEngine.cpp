@@ -95,7 +95,7 @@ QPair<QColor, QColor> ColorPaletteEngine::getExtensionBadgeColors(const QString&
         return s_colorCache.value(e);
     }
 
-    // 3. 动态生成新配色并物理落盘写入 global.db
+    // 3. 动态生成新配色并物理落盘写入 QuarkMeta.store
     uint hashVal = static_cast<uint>(qHash(e));
     int hue = static_cast<int>(hashVal % 360);
     int saturation = 130 + static_cast<int>((hashVal >> 8) % 80);

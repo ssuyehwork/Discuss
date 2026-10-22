@@ -19,7 +19,7 @@ struct DriveMetaRecord {
 class DriveMetaDao {
 public:
     /**
-     * @brief 初始化 global.db 中的 drive_metadata 数据表
+     * @brief 初始化 QuarkMeta.store 中的 drive_metadata 数据表
      */
     static bool initTable();
 

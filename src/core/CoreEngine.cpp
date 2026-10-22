@@ -49,7 +49,7 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         QString tag = cmd.params.value("tag").toString().trimmed();
         if (tag.isEmpty()) break;
 
-        // 🚨 铁律第一步：先将新标签登记到 global.db 主词典（默认归入未分类/全局）
+        // 🚨 铁律第一步：先将新标签登记到 QuarkMeta.store 主词典（默认归入未分类/全局）
         TagLexiconService::instance().addTag(tag);
 
         // 🚨 铁律第二步：再绑定到各个选中项目的 .QuarkMeta.json 与内存
@@ -86,7 +86,7 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         QString newTag = cmd.params.value("newTag").toString().trimmed();
         if (oldTag.isEmpty() || newTag.isEmpty() || oldTag == newTag) break;
 
-        // 🚀 仅作用于 global.db 标签词库，解耦全盘扫描
+        // 🚀 仅作用于 QuarkMeta.store 标签词库，解耦全盘扫描
         TagLexiconService::instance().renameTag(oldTag, newTag);
 
         AppEvent ev;
@@ -98,7 +98,7 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         QString tag = cmd.params.value("tag").toString().trimmed();
         if (tag.isEmpty()) break;
 
-        // 🚀 仅作用于 global.db 标签词库，解耦全盘扫描
+        // 🚀 仅作用于 QuarkMeta.store 标签词库，解耦全盘扫描
         TagLexiconService::instance().deleteTag(tag);
 
         AppEvent ev;
@@ -183,7 +183,7 @@ void CoreEngine::handleSetColor(const QStringList& paths, const QString& color) 
 
 void CoreEngine::handleSetTags(const QStringList& paths, const QStringList& tags) {
     LastOperationManager::instance().recordPasteTags(tags);
-    // 🚨 铁律第一步：确保这一批标签全部已在 global.db 主词典中登记
+    // 🚨 铁律第一步：确保这一批标签全部已在 QuarkMeta.store 主词典中登记
     for (const QString& t : tags) {
         QString cleanTag = t.trimmed();
         if (!cleanTag.isEmpty()) {
