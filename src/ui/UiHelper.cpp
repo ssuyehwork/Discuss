@@ -131,7 +131,7 @@ QMenu* UiHelper::createMenu(QWidget* parent) {
 
 QAction* UiHelper::setupLineEditClearButton(QLineEdit* edit) {
     if (!edit) return nullptr;
-    QAction* clearAction = edit->addAction(getIcon("clear-2", QColor("#888888")), QLineEdit::TrailingPosition);
+    QAction* clearAction = edit->addAction(getIcon("clear-2", QColor("#888888"), 15), QLineEdit::TrailingPosition);
     clearAction->setVisible(!edit->text().isEmpty());
     QObject::connect(clearAction, &QAction::triggered, edit, &QLineEdit::clear);
     QObject::connect(edit, &QLineEdit::textChanged, edit, [clearAction](const QString& text) {
