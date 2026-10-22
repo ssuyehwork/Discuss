@@ -1,5 +1,6 @@
 #include "SidebarContainerWidget.h"
 #include "UiHelper.h"
+#include "../core/AppConfig.h"
 
 namespace QuarkMeta {
 
@@ -49,8 +50,15 @@ void SidebarContainerWidget::initUi() {
         if (index == 1 && m_libraryPanel) {
             m_libraryPanel->loadLibrary();
         }
+        AppConfig::instance().setValue("Sidebar/CurrentTabIndex", index);
+        AppConfig::instance().sync();
         emit sidebarTabChanged(index);
     });
+
+    int savedIndex = AppConfig::instance().getValue("Sidebar/CurrentTabIndex", 0).toInt();
+    if (savedIndex >= 0 && savedIndex < m_tabBar->count()) {
+        m_tabBar->setCurrentIndex(savedIndex);
+    }
 }
 
 } // namespace QuarkMeta

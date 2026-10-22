@@ -28,7 +28,7 @@ public:
     QPushButton* searchButton() const { return m_btnSearch; }
 
     // 搜索框 SSOT 统一控制接口
-    void clearSearch(bool blockSignals = false);
+    void clearSearch(bool silent = false);
     void focusSearch();
     SearchHistoryPanel* historyPanel() const { return m_searchHistoryPanel; }
     SearchScope searchScope() const { return m_searchScope; }
@@ -51,6 +51,8 @@ private:
     QWidget* m_searchContainer = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QPushButton* m_btnSearch = nullptr;
+    QAction* m_clearAction = nullptr;
+    bool m_isInternalClearing = false;
     QTimer* m_searchTimer = nullptr;
     SearchHistoryPanel* m_searchHistoryPanel = nullptr;
     ContentPanel* m_contentPanel = nullptr;
