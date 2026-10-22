@@ -24,6 +24,7 @@ public:
 
 signals:
     void selectionChanged(const QStringList& selectedTags);
+    void tagsCommitted(const QStringList& finalTags);
     void overlayClosed();
 
 protected:
@@ -47,6 +48,7 @@ private:
     void closeOverlay();
 
     QStringList m_selectedTags;
+    QStringList m_initialTags;
     QStringList m_recentTags;
     QStringList m_recommendedTags;
 
@@ -66,6 +68,7 @@ private:
     bool m_recentExpanded = true;
 
     bool m_isClosing = false;
+    bool m_hasCommitted = false;
     bool m_isDragging = false;
     QPoint m_dragPos;
 

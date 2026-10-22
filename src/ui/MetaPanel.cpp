@@ -435,30 +435,27 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     // 2. 浮层局部的已提交标签集合，打开时用 m_currentTagsSet 初始化
     auto appliedTagsSet = std::make_shared<QSet<QString>>(m_currentTagsSet);
 
-    connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this, targetPathsSnapshot, appliedTagsSet](const QStringList& newSelectedTags) {
+    connect(m_tagSelectorOverlay, &TagSelectorOverlay::tagsCommitted, this, [this, targetPathsSnapshot, appliedTagsSet](const QStringList& finalSelectedTags) {
         if (targetPathsSnapshot.isEmpty()) return;
 
-        QSet<QString> newSet(newSelectedTags.begin(), newSelectedTags.end());
+        QSet<QString> finalSet(finalSelectedTags.begin(), finalSelectedTags.end());
 
-        // 新增的标签：与浮层局部的已提交集合比对
-        for (const QString& t : newSet) {
+        // 新增的标签：与浮层打开时的初始集合比对
+        for (const QString& t : finalSet) {
             if (!appliedTagsSet->contains(t)) {
                 emit tagAddRequested(targetPathsSnapshot, t);
             }
         }
-        // 移除的标签：与浮层局部的已提交集合比对
+        // 移除的标签：与浮层打开时的初始集合比对
         for (const QString& t : *appliedTagsSet) {
-            if (!newSet.contains(t)) {
+            if (!finalSet.contains(t)) {
                 emit tagRemoveRequested(targetPathsSnapshot, t);
             }
         }
 
-        // 更新浮层局部的已提交状态
-        *appliedTagsSet = newSet;
-
-        // 仅在当前主选区依然与浮层固定目标一致时，才更新 MetaPanel 面板上的标签呈现
+        // 仅在当前主选区依然与浮层固定目标一致时，更新 MetaPanel 面板上的标签呈现
         if (m_selectedPaths == targetPathsSnapshot) {
-            setTags(newSelectedTags);
+            setTags(finalSelectedTags);
         }
     });
 }

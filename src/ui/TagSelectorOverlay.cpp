@@ -12,7 +12,6 @@
 
 namespace QuarkMeta {
 
-
 TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent)
     : TagSelectorOverlay(initialSelected, QStringList{}, parent)
 {
@@ -20,7 +19,8 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidg
 
 TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths, QWidget* parent)
     : QFrame(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint), 
-      m_selectedTags(initialSelected) 
+      m_selectedTags(initialSelected),
+      m_initialTags(initialSelected)
 {
     setObjectName("TagSelectorOverlay");
     setFrameShape(QFrame::StyledPanel);
@@ -59,6 +59,19 @@ TagSelectorOverlay::~TagSelectorOverlay() {
 void TagSelectorOverlay::closeOverlay() {
     if (m_isClosing) return;
     m_isClosing = true;
+    if (!m_hasCommitted) {
+        m_hasCommitted = true;
+
+        // 离场前：仅对本次最终确认新增的有效标签，批量更新“最近使用”记录
+        for (const QString& tag : m_selectedTags) {
+            if (!m_initialTags.contains(tag)) {
+                recordRecentTag(tag);
+            }
+        }
+
+        // 统一向外发射最终选定的标签全集，执行单次原子落地
+        emit tagsCommitted(m_selectedTags);
+    }
     emit overlayClosed();
     close();
     deleteLater();
@@ -261,17 +274,14 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
     QString cleanTag = tag.trimmed();
     if (cleanTag.isEmpty()) return;
 
+    // 纯内存状态切换：勾选/取消勾选仅在局部列表维护，严禁在交互过程中向外部任何存储介质写盘
     if (m_selectedTags.contains(cleanTag)) {
         m_selectedTags.removeAll(cleanTag);
     } else {
-        // 🔒【点选绑定契约】：只有点选时才写入 SQLite 标签词库，并记录至 RecentTags (上限 50 个)
-        TagLexiconService::instance().addTag(cleanTag);
-        recordRecentTag(cleanTag);
         m_selectedTags.append(cleanTag);
     }
 
     filterAndPopulate();
-    emit selectionChanged(m_selectedTags);
 }
 
 void TagSelectorOverlay::recordRecentTag(const QString& tag) {
