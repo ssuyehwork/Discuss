@@ -261,18 +261,22 @@ bool DatabaseManager::initLocked() {
     return true;
 }
 
-bool DatabaseManager::init() {
-    bool ok = false;
+bool DatabaseManager::init() { 
+    bool needTableInit = false;
     {
         std::lock_guard<std::mutex> lock(m_initMutex);
-        ok = initLocked();
-    }
-    if (ok) {
-        std::call_once(m_driveMetaOnce, []() {
-            DriveMetaDao::initTable();
-        });
-    }
-    return ok;
+        if (!m_isInitialized || !m_globalDb.diskDb) {
+            if (initLocked()) {
+                needTableInit = true;
+            } else {
+                return false;
+            }
+        }
+    } 
+    if (needTableInit) { 
+        DriveMetaDao::initTable(); 
+    } 
+    return true; 
 }
 
 void DatabaseManager::shutdown() {
@@ -282,22 +286,22 @@ void DatabaseManager::shutdown() {
     m_isInitialized = false;
 }
 
-sqlite3* DatabaseManager::getGlobalDb() {
-    bool ok = false;
+sqlite3* DatabaseManager::getGlobalDb() { 
+    bool needTableInit = false;
+    sqlite3* db = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_initMutex);
-        if (!m_isInitialized || !m_globalDb.diskDb) {
-            ok = initLocked();
-        } else {
-            ok = true;
-        }
+        if (!m_isInitialized || !m_globalDb.diskDb) { 
+            if (initLocked()) {
+                needTableInit = true;
+            }
+        } 
+        db = m_globalDb.diskDb;
     }
-    if (ok) {
-        std::call_once(m_driveMetaOnce, []() {
-            DriveMetaDao::initTable();
-        });
-    }
-    return m_globalDb.diskDb;
+    if (needTableInit) { 
+        DriveMetaDao::initTable(); 
+    } 
+    return db; 
 }
 
 } // namespace QuarkMeta
