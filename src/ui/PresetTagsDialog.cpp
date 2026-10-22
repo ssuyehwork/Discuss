@@ -150,7 +150,8 @@ void PresetTagsDialog::onTagContainerClicked() {
         return;
     }
 
-    m_selectorOverlay = new TagSelectorOverlay(m_presetTags, window());
+    // 显式声明来源为 PresetTagsDialog：浮层关闭时绝对不执行任何写盘动作
+    m_selectorOverlay = new TagSelectorOverlay(m_presetTags, window(), TagTriggerSource::PresetTagsDialog);
     
     QPoint globalPos = m_tagContainer->mapToGlobal(QPoint(0, m_tagContainer->height() + 4));
     m_selectorOverlay->move(globalPos);
@@ -158,6 +159,7 @@ void PresetTagsDialog::onTagContainerClicked() {
     m_selectorOverlay->raise();
     m_selectorOverlay->activateWindow();
 
+    // 核心联通：点选标签时实时在 PresetTagsDialog 刷新胶囊 UI，纯内存零写盘
     connect(m_selectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& selected) {
         m_presetTags = selected;
         populateTagPills();
@@ -188,6 +190,7 @@ void PresetTagsDialog::onSaveClicked() {
         }
     }
 
+    // 独占落盘：所有物理写盘与数据库更新，仅在点击“保存设置”时一次性提交
     if (m_isLibrary) {
         LibraryDao::updatePresetTags(m_categoryId, m_presetTags);
         if (!newlyAddedTags.isEmpty()) {
@@ -210,6 +213,7 @@ void PresetTagsDialog::onSaveClicked() {
 }
 
 void PresetTagsDialog::onCancelClicked() {
+    // 点击取消：纯内存放弃本次全部改动，绝不触碰任何数据库和文件
     reject();
 }
 
@@ -217,7 +221,6 @@ bool PresetTagsDialog::eventFilter(QObject* obj, QEvent* event) {
     if ((obj == m_tagContainer || (m_tagContainer && m_tagContainer->isAncestorOf(qobject_cast<QWidget*>(obj)))) &&
         (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease)) {
         
-        // 如果点击发生在 TagPill（胶囊项）及其子控件上，不响应调起弹窗
         QWidget* targetWidget = qobject_cast<QWidget*>(obj);
         while (targetWidget && targetWidget != m_tagContainer) {
             if (qobject_cast<TagPill*>(targetWidget)) {

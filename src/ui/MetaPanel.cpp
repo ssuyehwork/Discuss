@@ -86,7 +86,6 @@ MetaPanel::MetaPanel(QWidget* parent) : QFrame(parent) {
     setObjectName("MetadataContainer");
     setAttribute(Qt::WA_StyledBackground, true);
     setMinimumWidth(230);
-    // Style handled in style.qss
 
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -137,7 +136,6 @@ void MetaPanel::initUi() {
     QWidget* header = new QWidget(this);
     header->setObjectName("ContainerHeader");
     header->setFixedHeight(32);
-    // ContainerHeader style in style.qss
     QHBoxLayout* headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(12, 0, 8, 0);
     headerLayout->setSpacing(6);
@@ -168,7 +166,6 @@ void MetaPanel::initUi() {
     m_topPreviewBox = new QWidget(m_container);
     m_topPreviewBox->setObjectName("TopPreviewBox");
     m_topPreviewBox->setFixedSize(200, 200);
-    // TopPreviewBox style in style.qss
     QVBoxLayout* previewLayout = new QVBoxLayout(m_topPreviewBox);
     previewLayout->setContentsMargins(0, 0, 0, 0);
     previewLayout->setSpacing(0);
@@ -177,15 +174,14 @@ void MetaPanel::initUi() {
     m_lblImagePreview->setAlignment(Qt::AlignCenter);
     m_lblImagePreview->setMaximumSize(200, 200);
     m_lblImagePreview->setObjectName("MetaImagePreview");
-    // MetaImagePreview style in style.qss
     m_lblImagePreview->hide();
     previewLayout->addWidget(m_lblImagePreview, 0, Qt::AlignCenter);
 
     m_paletteContainer = new QWidget(m_container);
     m_paletteContainer->setObjectName("MetaPaletteContainer");
-    m_paletteContainer->setFixedWidth(200); // 刚性锁定宽度 200
+    m_paletteContainer->setFixedWidth(200);
     m_paletteFlowLayout = new FlowLayout(m_paletteContainer, 0, 4, 4);
-    m_paletteFlowLayout->setContentsMargins(0, 2, 0, 0); // 8px container layout spacing + 2px top margin = 10px total gap
+    m_paletteFlowLayout->setContentsMargins(0, 2, 0, 0);
     m_paletteFlowLayout->setFlowAlignment(Qt::AlignHCenter);
     m_paletteContainer->hide();
 
@@ -398,24 +394,20 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
 
     QWidget* topWidget = this->topLevelWidget();
     const QStringList targetPathsSnapshot = m_selectedPaths;
-    m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), targetPathsSnapshot, topWidget);
+
+    // 显式声明来自 MetaPanel 触发源
+    m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), targetPathsSnapshot, topWidget, TagTriggerSource::MetaPanel);
 
     if (topWidget) {
-        // 1. 忠实尊重窗口自己的真实尺寸，绝对不改动大小！
         const int overlayW = m_tagSelectorOverlay->width();
         const int overlayH = m_tagSelectorOverlay->height();
 
-        // 2. 全部换算为主窗口所在屏幕的【全局绝对坐标】
         QRect topGeom = topWidget->frameGeometry(); 
         QPoint metaPanelGlobal = this->mapToGlobal(QPoint(0, 0)); 
 
-        // 3. 目标 X：紧贴 MetaPanel 屏幕左侧，留 8px 间距
         int targetX = metaPanelGlobal.x() - overlayW - 8;
-
-        // 4. 目标 Y：在主窗口物理高度上严格【绝对垂直居中】
         int targetY = topGeom.top() + (topGeom.height() - overlayH) / 2;
 
-        // 5. 【边界死锁】：严格限制在主窗口物理四壁之内，绝不溢出主界面
         int minX = topGeom.left();
         int maxX = qMax(minX, topGeom.right() - overlayW);
         int minY = topGeom.top();
@@ -424,7 +416,6 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
         targetX = qBound(minX, targetX, maxX);
         targetY = qBound(minY, targetY, maxY);
 
-        // 6. 移动到算好的绝对坐标
         m_tagSelectorOverlay->move(targetX, targetY);
     } else if (targetAnchor) {
         m_tagSelectorOverlay->move(targetAnchor->mapToGlobal(QPoint(0, targetAnchor->height() + 4)));
@@ -432,7 +423,14 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
 
     m_tagSelectorOverlay->show();
 
-    // 2. 浮层局部的已提交标签集合，打开时用 m_currentTagsSet 初始化
+    // 1. 前端 UI 实时内存响应：点选过程即时在面板渲染胶囊，零 I/O 零写盘
+    connect(m_tagSelectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this, targetPathsSnapshot](const QStringList& currentSelected) {
+        if (m_selectedPaths == targetPathsSnapshot) {
+            setTags(currentSelected);
+        }
+    });
+
+    // 2. 离场原子提交响应：失焦/关闭时单次计算差集并执行落盘
     auto appliedTagsSet = std::make_shared<QSet<QString>>(m_currentTagsSet);
 
     connect(m_tagSelectorOverlay, &TagSelectorOverlay::tagsCommitted, this, [this, targetPathsSnapshot, appliedTagsSet](const QStringList& finalSelectedTags) {
@@ -440,20 +438,19 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
 
         QSet<QString> finalSet(finalSelectedTags.begin(), finalSelectedTags.end());
 
-        // 新增的标签：与浮层打开时的初始集合比对
+        // 新增标签批次
         for (const QString& t : finalSet) {
             if (!appliedTagsSet->contains(t)) {
                 emit tagAddRequested(targetPathsSnapshot, t);
             }
         }
-        // 移除的标签：与浮层打开时的初始集合比对
+        // 移除标签批次
         for (const QString& t : *appliedTagsSet) {
             if (!finalSet.contains(t)) {
                 emit tagRemoveRequested(targetPathsSnapshot, t);
             }
         }
 
-        // 仅在当前主选区依然与浮层固定目标一致时，更新 MetaPanel 面板上的标签呈现
         if (m_selectedPaths == targetPathsSnapshot) {
             setTags(finalSelectedTags);
         }
@@ -516,12 +513,11 @@ void MetaPanel::setMultiSelectionPreview(const QList<MetaPreviewItem>& items) {
     for (int k = validLayers.size() - 1; k >= 0; --k) {
         const QPixmap& layer = validLayers[k];
 
-        // 🎯 核心修复：多选时所有卡片（包含最顶层 k=0 卡片）全部参与交替倾斜，确保顶层卡片本身倾斜，一眼直观辨识多选状态
         double stepMultiplier = std::ceil((k + 1) / 2.0);
         double baseAngle = kMultiPreviewAngleStep * stepMultiplier;
         double angle = (k % 2 == 0) ? -baseAngle : baseAngle;
-        double scale = 0.8;       // 所有卡片统一微缩 4% (0.8)，不再逐层递减
-        double offsetY = 0.0 * k;  // 逐层向上微平移 0px
+        double scale = 0.8;
+        double offsetY = 0.0 * k;
 
         painter.save();
         painter.translate(100.0, 100.0 + offsetY);

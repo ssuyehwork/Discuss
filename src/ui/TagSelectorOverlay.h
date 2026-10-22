@@ -15,16 +15,33 @@
 
 namespace QuarkMeta {
 
+/**
+ * @brief 触发来源契约枚举
+ * 明确区分浮层的业务发起方，决定落盘生命周期策略
+ */
+enum class TagTriggerSource {
+    MetaPanel,         // 来自元数据属性面板：失焦/关闭时自动执行单次原子落盘
+    PresetTagsDialog   // 来自预设标签弹窗：仅响应内存UI，落盘由外部对话框的“保存”按钮接管
+};
+
 class TagSelectorOverlay : public QFrame {
     Q_OBJECT
 public:
-    TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent = nullptr);
-    TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths, QWidget* parent = nullptr);
+    TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent = nullptr, TagTriggerSource source = TagTriggerSource::MetaPanel);
+    TagSelectorOverlay(const QStringList& initialSelected, const QStringList& candidatePaths, QWidget* parent = nullptr, TagTriggerSource source = TagTriggerSource::MetaPanel);
     ~TagSelectorOverlay() override;
 
 signals:
+    /**
+     * @brief 前端内存实时响应信号（仅更新UI胶囊展示，绝对不碰数据库和磁盘）
+     */
     void selectionChanged(const QStringList& selectedTags);
+
+    /**
+     * @brief 离场持久化提交信号（仅在 MetaPanel 模式下失焦关闭时发射一次）
+     */
     void tagsCommitted(const QStringList& finalTags);
+
     void overlayClosed();
 
 protected:
@@ -47,6 +64,7 @@ private:
     void recordRecentTag(const QString& tag);
     void closeOverlay();
 
+    TagTriggerSource m_triggerSource = TagTriggerSource::MetaPanel;
     QStringList m_selectedTags;
     QStringList m_initialTags;
     QStringList m_recentTags;
