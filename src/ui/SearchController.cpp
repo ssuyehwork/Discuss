@@ -128,6 +128,23 @@ void SearchController::showSearchMenu() {
     menu.exec(globalPos);
 }
 
+void SearchController::clearSearch(bool blockSignals) {
+    if (!m_searchEdit) return;
+    if (blockSignals) {
+        m_searchEdit->blockSignals(true);
+        m_searchEdit->clear();
+        m_searchEdit->blockSignals(false);
+    } else {
+        m_searchEdit->clear();
+    }
+}
+
+void SearchController::focusSearch() {
+    if (!m_searchEdit) return;
+    m_searchEdit->setFocus(Qt::ShortcutFocusReason);
+    m_searchEdit->selectAll();
+}
+
 void SearchController::doSearch(const QString& keyword) {
     if (!m_contentPanel) return;
 

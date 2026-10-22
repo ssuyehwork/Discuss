@@ -26,6 +26,10 @@ public:
     QWidget* toolbarWidget() const { return m_searchContainer; }
     QLineEdit* searchEdit() const { return m_searchEdit; }
     QPushButton* searchButton() const { return m_btnSearch; }
+
+    // 搜索框 SSOT 统一控制接口
+    void clearSearch(bool blockSignals = false);
+    void focusSearch();
     SearchHistoryPanel* historyPanel() const { return m_searchHistoryPanel; }
     SearchScope searchScope() const { return m_searchScope; }
 
