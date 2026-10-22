@@ -2,6 +2,8 @@
 #include <QString>
 #include <QStringList>
 #include <QSet>
+#include <QIcon>
+#include <QWidget>
 
 namespace QuarkMeta {
 
@@ -32,6 +34,22 @@ public:
      * @brief 在资源管理器中定位
      */
     static void openInExplorer(const QString& path);
+
+    struct AssocAppInfo {
+        QString name;
+        QString execPath;
+        QIcon icon;
+    };
+
+    /**
+     * @brief 获取指定文件扩展名的系统关联应用程序列表
+     */
+    static QList<AssocAppInfo> getAssociatedApps(const QString& filePath);
+
+    /**
+     * @brief 唤起 Windows 原生“打开方式”对话框
+     */
+    static void showOpenWithDialog(const QString& filePath, QWidget* parent = nullptr);
 
     /**
      * @brief 重命名条目

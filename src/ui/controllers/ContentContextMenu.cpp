@@ -280,6 +280,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 }
             } else {
                 menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
+                ContextMenuFactory::buildOpenWithMenu(&menu, path, m_panel);
             }
             ContextMenuFactory::buildShowInExplorerAction(&menu, path, m_panel);
 

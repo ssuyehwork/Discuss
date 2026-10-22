@@ -1,4 +1,5 @@
 #include "ClipboardService.h"
+#include "CoreEngine.h"
 #include "TrashService.h"
 #include "../util/DiskIoService.h"
 #include "../ui/ToolTipOverlay.h"
@@ -54,18 +55,27 @@ bool ClipboardService::executePasteTags(QAbstractItemView* view) {
     if (!model) return false;
 
     auto indexes = view->selectionModel()->selectedIndexes();
-    int count = 0;
+    QStringList targetPaths;
     for (const auto& targetIdx : indexes) {
         if (targetIdx.column() == static_cast<int>(FileListColumn::Name) && !targetIdx.data(SectionHeaderRole).toBool()) {
-            model->setData(targetIdx, m_copiedTags, TagsRole);
-            count++;
+            QString p = targetIdx.data(PathRole).toString();
+            if (!p.isEmpty()) {
+                targetPaths.append(p);
+            }
         }
     }
 
-    if (count > 0) {
-        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将标签粘贴至 %1 个项目").arg(count), 1500, QColor("#2ecc71"));
+    if (!targetPaths.isEmpty()) {
+        AppCommand cmd;
+        cmd.type = AppCommandType::SetTags;
+        cmd.targetPaths = targetPaths;
+        cmd.params["tags"] = m_copiedTags;
+        CoreEngine::instance().executeCommand(cmd);
+
+        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将标签粘贴至 %1 个项目").arg(targetPaths.size()), 1500, QColor("#2ecc71"));
+        return true;
     }
-    return count > 0;
+    return false;
 }
 
 void ClipboardService::copyItems(const QStringList& paths) {

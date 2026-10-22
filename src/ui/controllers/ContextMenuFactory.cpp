@@ -12,6 +12,9 @@
 #include <QWidgetAction>
 #include <QGridLayout>
 #include <QPushButton>
+#include <QProcess>
+#include <QDesktopServices>
+#include <QUrl>
 
 namespace QuarkMeta {
 
@@ -187,7 +190,10 @@ bool ContextMenuFactory::copyNamesToClipboard(const QStringList& paths, NameDeli
     QStringList names;
     for (const auto& p : paths) {
         if (!p.isEmpty()) {
-            names << QFileInfo(p).fileName();
+            QString name = QFileInfo(p).fileName();
+            if (!name.isEmpty() && !names.contains(name)) {
+                names << name;
+            }
         }
     }
     if (names.isEmpty()) return false;
@@ -224,6 +230,38 @@ QAction* ContextMenuFactory::buildCopyPathAction(QMenu* menu, const QStringList&
         copyPathsToClipboard(paths, true);
     });
     return action;
+}
+
+QMenu* ContextMenuFactory::buildOpenWithMenu(QMenu* parentMenu, const QString& filePath, QWidget* parentWidget) {
+    if (!parentMenu || filePath.isEmpty() || QFileInfo(filePath).isDir()) return nullptr;
+
+    QMenu* openWithMenu = parentMenu->addMenu(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "打开方式");
+    UiHelper::applyMenuStyle(openWithMenu);
+
+    QList<ShellHelper::AssocAppInfo> apps = ShellHelper::getAssociatedApps(filePath);
+    for (const auto& app : apps) {
+        QIcon icon = app.icon.isNull() ? UiHelper::getIcon("launch", QColor("#EEEEEE"), 16) : app.icon;
+        QAction* act = openWithMenu->addAction(icon, app.name);
+        QString exec = app.execPath;
+        QObject::connect(act, &QAction::triggered, [filePath, exec]() {
+            if (!exec.isEmpty()) {
+                QProcess::startDetached(exec, QStringList() << filePath);
+            } else {
+                QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
+            }
+        });
+    }
+
+    if (!apps.isEmpty()) {
+        openWithMenu->addSeparator();
+    }
+
+    QAction* actChooseOther = openWithMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "选择其他应用...");
+    QObject::connect(actChooseOther, &QAction::triggered, [filePath, parentWidget]() {
+        ShellHelper::showOpenWithDialog(filePath, parentWidget);
+    });
+
+    return openWithMenu;
 }
 
 QAction* ContextMenuFactory::buildCopyNameAction(QMenu* menu, const QStringList& paths, QObject* receiver) {

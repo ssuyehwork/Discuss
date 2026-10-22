@@ -96,13 +96,11 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
     sqlite3_exec(conn.diskDb, "PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
     sqlite3_exec(conn.diskDb, "PRAGMA temp_store = MEMORY;", nullptr, nullptr, nullptr);
 
-    // 自动自愈：探测预存库中 library_items 是否具备新字段（sync_state, auto_color），若为旧表则擦除以触发全新建表
+    // 自动自愈：探测预存库中 library_items 是否具备 file_id 列，若为旧表则擦除以触发全新建表
     sqlite3_stmt* checkStmt = nullptr;
-    if (sqlite3_prepare_v2(conn.diskDb, "SELECT sync_state, auto_color FROM library_items LIMIT 1;", -1, &checkStmt, nullptr) != SQLITE_OK) {
-        sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS item_palettes;", nullptr, nullptr, nullptr);
+    if (sqlite3_prepare_v2(conn.diskDb, "SELECT file_id FROM library_items LIMIT 1;", -1, &checkStmt, nullptr) != SQLITE_OK) {
         sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS file_tags;", nullptr, nullptr, nullptr);
         sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS library_items;", nullptr, nullptr, nullptr);
-        sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS library_item_index;", nullptr, nullptr, nullptr);
     } else {
         sqlite3_finalize(checkStmt);
     }
@@ -118,6 +116,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
             use_count INTEGER DEFAULT 0,            -- 使用频次
             last_used INTEGER DEFAULT 0             -- 最后使用时间
         );
+        -- 索引：覆盖按热门使用量排序、按最后使用时间排序
         CREATE INDEX IF NOT EXISTS idx_tags_use_count ON tags(use_count DESC);
         CREATE INDEX IF NOT EXISTS idx_tags_last_used ON tags(last_used DESC);
 
@@ -142,36 +141,23 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         CREATE INDEX IF NOT EXISTS idx_tag_group_items_tag ON tag_group_items(tag_name);
 
         -- ===================================================================
-        -- 3. 全局文件索引表 (Sidecar File_ID 主键契约，补全 25 列)
+        -- 3. 全局文件索引表 (Sidecar File_ID 主键契约)
         -- ===================================================================
         CREATE TABLE IF NOT EXISTS library_items (
-            file_id TEXT PRIMARY KEY,                       -- 1. 持久化唯一标识 (UUID)
-            file_path TEXT NOT NULL UNIQUE COLLATE NOCASE,  -- 2. 绝对物理路径
-            file_name TEXT NOT NULL,                        -- 3. 文件名（含后缀）
-            base_name TEXT NOT NULL,                        -- 4. 纯文件名
-            extension TEXT NOT NULL COLLATE NOCASE,         -- 5. 后缀
-            file_size INTEGER DEFAULT 0,                    -- 6. 字节大小
-            is_dir INTEGER DEFAULT 0,                       -- 7. 是否文件夹
-            is_empty INTEGER DEFAULT 0,                     -- 8. 是否空文件夹
-            is_hidden INTEGER DEFAULT 0,                    -- 9. 是否隐藏文件
-            is_managed INTEGER DEFAULT 0,                   -- 10.受控状态
-            encrypted INTEGER DEFAULT 0,                    -- 11.是否加密
-            pinned INTEGER DEFAULT 0,                       -- 12.置顶
-            rating INTEGER DEFAULT 0,                       -- 13.评级 0~5
-            color_hex TEXT DEFAULT '',                      -- 14.手动色标
-            auto_color TEXT DEFAULT '',                     -- 15.自动主色
-            width INTEGER DEFAULT 0,                        -- 16.图像宽
-            height INTEGER DEFAULT 0,                       -- 17.图像高
-            thumb_status INTEGER DEFAULT 0,                 -- 18.缩略图状态
-            note TEXT DEFAULT '',                           -- 19.备注
-            url TEXT DEFAULT '',                            -- 20.关联 URL
-            sha256 TEXT DEFAULT '',                         -- 21.SHA256 哈希
-            created_at INTEGER DEFAULT 0,                   -- 22.创建时间 ctime
-            updated_at INTEGER DEFAULT 0,                   -- 23.修改时间 mtime
-            added_at INTEGER DEFAULT 0,                     -- 24.收录/添加时间
-            sync_state INTEGER DEFAULT 0,                   -- 25.同步状态 (0正常/1待刷新/2缺失)
-            synced_at INTEGER DEFAULT 0                     -- 26.上次同步时间戳
+            file_id TEXT PRIMARY KEY,               -- 持久化唯一标识 (UUID/Base36)
+            file_path TEXT NOT NULL UNIQUE,         -- 绝对物理路径（独立唯一索引列）
+            file_name TEXT NOT NULL,                -- 文件名（含后缀）
+            base_name TEXT NOT NULL,                -- 纯文件名（不含后缀，搜索用）
+            extension TEXT NOT NULL COLLATE NOCASE, -- 后缀（如 png、md）
+            file_size INTEGER DEFAULT 0,
+            rating INTEGER DEFAULT 0,               -- 评级 0~5
+            color_hex TEXT DEFAULT '',              -- 标记颜色
+            note TEXT DEFAULT '',                   -- 备注
+            url TEXT DEFAULT '',                    -- 关联网址
+            created_at INTEGER DEFAULT 0,
+            updated_at INTEGER DEFAULT 0
         );
+        -- 为物理路径及智能文件夹的高频过滤字段建立 B-Tree 索引
         CREATE INDEX IF NOT EXISTS idx_items_path ON library_items(file_path);
         CREATE INDEX IF NOT EXISTS idx_items_rating ON library_items(rating);
         CREATE INDEX IF NOT EXISTS idx_items_ext ON library_items(extension);
@@ -179,19 +165,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         CREATE INDEX IF NOT EXISTS idx_items_updated ON library_items(updated_at DESC);
 
         -- ===================================================================
-        -- 4. 色板关联表 item_palettes
-        -- ===================================================================
-        CREATE TABLE IF NOT EXISTS item_palettes (
-            file_id TEXT NOT NULL,
-            idx INTEGER NOT NULL,
-            color_hex TEXT NOT NULL,
-            ratio REAL NOT NULL DEFAULT 0.0,
-            PRIMARY KEY (file_id, idx),
-            FOREIGN KEY (file_id) REFERENCES library_items(file_id) ON DELETE CASCADE ON UPDATE CASCADE
-        );
-
-        -- ===================================================================
-        -- 5. 文件与标签的多对多解耦关联表
+        -- 4. 文件与标签的多对多解耦关联表
         -- ===================================================================
         CREATE TABLE IF NOT EXISTS file_tags (
             file_id TEXT NOT NULL,
@@ -271,7 +245,8 @@ void DatabaseManager::closeDb(DbConnection& conn) {
     }
 }
 
-bool DatabaseManager::initLocked() {
+bool DatabaseManager::init() {
+    std::lock_guard<std::mutex> lock(m_initMutex);
     if (m_isInitialized && m_globalDb.diskDb) {
         return true;
     }
@@ -283,20 +258,9 @@ bool DatabaseManager::initLocked() {
         return false;
     }
 
+    DriveMetaDao::initTable();
     m_isInitialized = true;
     return true;
-}
-
-bool DatabaseManager::init() {
-    bool ok = false;
-    {
-        std::lock_guard<std::mutex> lock(m_initMutex);
-        ok = initLocked();
-    }
-    if (ok) {
-        DriveMetaDao::initTable();
-    }
-    return ok;
 }
 
 void DatabaseManager::shutdown() {
@@ -307,21 +271,11 @@ void DatabaseManager::shutdown() {
 }
 
 sqlite3* DatabaseManager::getGlobalDb() {
-    bool needTableInit = false;
-    sqlite3* dbPtr = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(m_initMutex);
-        if (!m_isInitialized || !m_globalDb.diskDb) {
-            if (initLocked()) {
-                needTableInit = true;
-            }
-        }
-        dbPtr = m_globalDb.diskDb;
+    std::lock_guard<std::mutex> lock(m_initMutex);
+    if (!m_isInitialized || !m_globalDb.diskDb) {
+        init();
     }
-    if (needTableInit) {
-        DriveMetaDao::initTable();
-    }
-    return dbPtr;
+    return m_globalDb.diskDb;
 }
 
 } // namespace QuarkMeta

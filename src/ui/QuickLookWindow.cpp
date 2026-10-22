@@ -498,7 +498,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     actOrig->setChecked(!isFit);
     menu.addSeparator();
 
-    QAction* actOpenDefault = menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开");
+    QAction* actOpenDefault = menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "打开方式");
     ContextMenuFactory::buildShowInExplorerAction(&menu, m_currentPath, this);
     menu.addSeparator();
 

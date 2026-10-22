@@ -7,10 +7,14 @@
 #include <QProcess>
 #include <QCoreApplication>
 #include <QDebug>
+#include <QImage>
+#include <QPixmap>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <shellapi.h>
+#include <shlobj.h>
+#include <shobjidl.h>
 #endif
 
 #include "../meta/MetadataManager.h"
@@ -115,6 +119,72 @@ void ShellHelper::showProperties(const QString& path) {
     ShellExecuteExW(&sei);
 #else
     Q_UNUSED(path);
+#endif
+}
+
+QList<ShellHelper::AssocAppInfo> ShellHelper::getAssociatedApps(const QString& filePath) {
+    QList<AssocAppInfo> result;
+#ifdef Q_OS_WIN
+    QFileInfo info(filePath);
+    QString ext = "." + info.suffix().toLower();
+    if (ext == ".") return result;
+
+    IEnumAssocHandlers* pEnum = nullptr;
+    HRESULT hr = SHAssocEnumHandlers(ext.toStdWString().c_str(), ASSOC_FILTER_RECOMMENDED, &pEnum);
+    if (SUCCEEDED(hr) && pEnum) {
+        IAssocHandler* pHandler = nullptr;
+        ULONG fetched = 0;
+        while (pEnum->Next(1, &pHandler, &fetched) == S_OK && fetched == 1) {
+            LPWSTR pName = nullptr;
+            LPWSTR pIconPath = nullptr;
+            int iconIndex = 0;
+
+            if (SUCCEEDED(pHandler->GetUIName(&pName)) && pName) {
+                QString appName = QString::fromWCharArray(pName);
+                CoTaskMemFree(pName);
+
+                AssocAppInfo appInfo;
+                appInfo.name = appName;
+
+                LPWSTR pExec = nullptr;
+                if (SUCCEEDED(pHandler->GetName(&pExec)) && pExec) {
+                    appInfo.execPath = QString::fromWCharArray(pExec);
+                    CoTaskMemFree(pExec);
+                }
+
+                if (SUCCEEDED(pHandler->GetIconLocation(&pIconPath, &iconIndex)) && pIconPath) {
+                    QString iconFile = QString::fromWCharArray(pIconPath);
+                    CoTaskMemFree(pIconPath);
+                    HICON hIcon = ::ExtractIconW(GetModuleHandle(NULL), iconFile.toStdWString().c_str(), iconIndex);
+                    if (hIcon && hIcon != (HICON)1) {
+                        appInfo.icon = QIcon(QPixmap::fromImage(QImage::fromHICON(hIcon)));
+                        DestroyIcon(hIcon);
+                    }
+                }
+                result.append(appInfo);
+            }
+            pHandler->Release();
+            if (result.size() >= 10) break;
+        }
+        pEnum->Release();
+    }
+#else
+    Q_UNUSED(filePath);
+#endif
+    return result;
+}
+
+void ShellHelper::showOpenWithDialog(const QString& filePath, QWidget* parent) {
+#ifdef Q_OS_WIN
+    OPENASINFO oaInfo = {0};
+    std::wstring wpath = QDir::toNativeSeparators(filePath).toStdWString();
+    oaInfo.pcszFile = wpath.c_str();
+    oaInfo.pcszClass = NULL;
+    oaInfo.oaifInFlags = OAIF_EXEC | OAIF_REGISTER_EXT;
+    SHOpenWithDialog(parent ? (HWND)parent->winId() : NULL, &oaInfo);
+#else
+    Q_UNUSED(parent);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
 #endif
 }
 
