@@ -77,6 +77,7 @@ private:
     std::mutex m_initMutex;
     std::mutex m_globalDbMutex;
     QRecursiveMutex m_dbMutex;
+    std::once_flag m_driveMetaOnce;
     bool m_isInitialized = false;
 };
 

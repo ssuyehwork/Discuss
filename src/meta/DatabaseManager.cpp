@@ -245,8 +245,7 @@ void DatabaseManager::closeDb(DbConnection& conn) {
     }
 }
 
-bool DatabaseManager::init() {
-    std::lock_guard<std::mutex> lock(m_initMutex);
+bool DatabaseManager::initLocked() {
     if (m_isInitialized && m_globalDb.diskDb) {
         return true;
     }
@@ -258,9 +257,22 @@ bool DatabaseManager::init() {
         return false;
     }
 
-    DriveMetaDao::initTable();
     m_isInitialized = true;
     return true;
+}
+
+bool DatabaseManager::init() {
+    bool ok = false;
+    {
+        std::lock_guard<std::mutex> lock(m_initMutex);
+        ok = initLocked();
+    }
+    if (ok) {
+        std::call_once(m_driveMetaOnce, []() {
+            DriveMetaDao::initTable();
+        });
+    }
+    return ok;
 }
 
 void DatabaseManager::shutdown() {
@@ -271,9 +283,19 @@ void DatabaseManager::shutdown() {
 }
 
 sqlite3* DatabaseManager::getGlobalDb() {
-    std::lock_guard<std::mutex> lock(m_initMutex);
-    if (!m_isInitialized || !m_globalDb.diskDb) {
-        init();
+    bool ok = false;
+    {
+        std::lock_guard<std::mutex> lock(m_initMutex);
+        if (!m_isInitialized || !m_globalDb.diskDb) {
+            ok = initLocked();
+        } else {
+            ok = true;
+        }
+    }
+    if (ok) {
+        std::call_once(m_driveMetaOnce, []() {
+            DriveMetaDao::initTable();
+        });
     }
     return m_globalDb.diskDb;
 }
