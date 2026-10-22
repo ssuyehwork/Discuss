@@ -2001,7 +2001,6 @@ QSpinBox:focus {
 QTreeView {
     background-color: #1E1E1E;
     alternate-background-color: #252526;
-    qproperty-alternateBase: #252526;
     color: #EEEEEE;
     border: none;
     outline: 0;

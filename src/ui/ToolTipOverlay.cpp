@@ -59,7 +59,6 @@ void ToolTipOverlay::silentWarmup() {
 
     // 4. 驱动 DWM 在显存中分配透明混合图层并完成首次 GPU 渲染指令预编译
     show();
-    render(this);
     hide();
 
     // 5. 静默复位，随时就绪
