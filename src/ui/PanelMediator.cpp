@@ -37,6 +37,7 @@
 #include <QFileInfo>
 #include <QFile>
 #include <QDesktopServices>
+#include <QStandardPaths>
 #include <QCursor>
 
 namespace QuarkMeta {
@@ -236,10 +237,8 @@ void PanelMediator::setupConnections() {
     // 1. 路径变更与导航驱动
     connect(&NavigationService::instance(), &NavigationService::currentUrlChanged, this,
             [this, contentPanel, addressBar, navPanel, filterPanel, searchController, titleBar](const QString& url, const QString& displayPath) {
-        if (searchController && searchController->searchEdit()) {
-            searchController->searchEdit()->blockSignals(true);
-            searchController->searchEdit()->clear();
-            searchController->searchEdit()->blockSignals(false);
+        if (searchController) {
+            searchController->clearSearch(true);
         }
         ContentPanel* targetPanel = (m_activeContentPanel && m_activeContentPanel->isVisible()) ? m_activeContentPanel.data() : contentPanel;
         if (targetPanel) {
@@ -386,7 +385,8 @@ void PanelMediator::setupConnections() {
         if (!isOnline) {
             QString current = NavigationService::instance().currentUrl();
             if (current.contains(driveLetter + ":", Qt::CaseInsensitive)) {
-                NavigationService::instance().navigateTo("computer://");
+                QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+                NavigationService::instance().navigateTo(desktopPath);
             }
         }
     });

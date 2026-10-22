@@ -28,7 +28,7 @@ SearchController::SearchController(QWidget* parent)
     m_searchEdit->setObjectName("SearchEdit");
     updatePlaceholderText();
     m_searchEdit->setFixedHeight(30);
-    m_searchEdit->setClearButtonEnabled(true);
+    m_clearAction = UiHelper::setupLineEditClearButton(m_searchEdit);
     m_searchEdit->installEventFilter(this);
 
     UiHelper::setupLineEditContextMenu(m_searchEdit);
@@ -66,6 +66,7 @@ void SearchController::bindContentPanel(ContentPanel* contentPanel) {
     });
 
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
+        if (m_isInternalClearing) return;
         if (text.isEmpty()) {
             m_searchTimer->stop();
             doSearch("");
@@ -126,6 +127,22 @@ void SearchController::showSearchMenu() {
 
     QPoint globalPos = m_btnSearch->mapToGlobal(QPoint(0, m_btnSearch->height()));
     menu.exec(globalPos);
+}
+
+void SearchController::clearSearch(bool silent) {
+    if (!m_searchEdit) return;
+    m_isInternalClearing = silent;
+    m_searchEdit->clear();
+    if (m_clearAction) {
+        m_clearAction->setVisible(false);
+    }
+    m_isInternalClearing = false;
+}
+
+void SearchController::focusSearch() {
+    if (!m_searchEdit) return;
+    m_searchEdit->setFocus(Qt::ShortcutFocusReason);
+    m_searchEdit->selectAll();
 }
 
 void SearchController::doSearch(const QString& keyword) {

@@ -1,4 +1,5 @@
 #include "VolumeOnlineManager.h"
+#include "DeviceWatcher.h"
 #include <QDebug>
 
 namespace QuarkMeta {
@@ -22,10 +23,42 @@ VolumeOnlineManager::VolumeOnlineManager(QObject* parent)
         }
     }
 
-    // 启动定时器轮询盘符状态 (2000ms)，感知热拔插
-    m_timer = new QTimer(this);
-    connect(m_timer, &QTimer::timeout, this, &VolumeOnlineManager::checkVolumeState);
-    m_timer->start(2000);
+    // 绑定 DeviceWatcher 的原生 WM_DEVICECHANGE 操作系统硬件事件，消除定时器轮询
+    connect(&DeviceWatcher::instance(), &DeviceWatcher::driveMounted, this, [this](const QString& driveLetter) {
+        QString letter = extractDriveLetter(driveLetter);
+        if (!letter.isEmpty()) {
+            bool newlyAdded = false;
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                if (!m_onlineDrives.contains(letter)) {
+                    m_onlineDrives.insert(letter);
+                    newlyAdded = true;
+                }
+            }
+            if (newlyAdded) {
+                emit volumeStateChanged(letter, true);
+            }
+        }
+    });
+
+    connect(&DeviceWatcher::instance(), &DeviceWatcher::driveUnmounted, this, [this](const QString& driveLetter) {
+        QString letter = extractDriveLetter(driveLetter);
+        if (!letter.isEmpty()) {
+            bool newlyRemoved = false;
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                if (m_onlineDrives.contains(letter)) {
+                    m_onlineDrives.remove(letter);
+                    newlyRemoved = true;
+                }
+            }
+            if (newlyRemoved) {
+                emit volumeStateChanged(letter, false);
+            }
+        }
+    });
+
+    DeviceWatcher::instance().startListening();
 }
 
 QSet<QString> VolumeOnlineManager::getOnlineDrives() const {
