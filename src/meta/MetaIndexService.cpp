@@ -3,6 +3,7 @@
 #include "QuarkMetaJson.h"
 #include "QuarkMetaJsonStore.h"
 #include "LibraryService.h"
+#include "../core/TaskProgressService.h"
 #include <QDir>
 #include <QFileInfo>
 #include <QCoreApplication>
@@ -221,11 +222,23 @@ void MetaIndexService::workerThreadLoop() {
         }
 
         // 1. 处理分类路径后台批量索引任务 (现统一由 LibrarySyncService 自动同步)
-        for (const auto& task : categoryBatch) {
-            if (m_stopping.load()) break;
-            if (!task.paths.isEmpty()) {
-                LibraryService::instance().addPathsToCategory(task.categoryId, task.paths);
+        if (!categoryBatch.empty()) {
+            int totalPaths = 0;
+            for (const auto& task : categoryBatch) {
+                totalPaths += task.paths.size();
             }
+            int jobId = TaskProgressService::instance().createJob("正在归入库分类...", totalPaths);
+            int processedPaths = 0;
+
+            for (const auto& task : categoryBatch) {
+                if (m_stopping.load()) break;
+                if (!task.paths.isEmpty()) {
+                    LibraryService::instance().addPathsToCategory(task.categoryId, task.paths);
+                    processedPaths += task.paths.size();
+                    TaskProgressService::instance().updateProgress(jobId, processedPaths, totalPaths, QString("已归入 %1 / %2 项").arg(processedPaths).arg(totalPaths));
+                }
+            }
+            TaskProgressService::instance().finishJob(jobId);
         }
 
         if (currentBatch.empty() || !m_writeDb) {

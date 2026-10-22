@@ -19,11 +19,11 @@
 ## Chapter 2: Overview（概述与深度根因剖析）
 
 ### 核心 Bug 根因剖析
-在 `SearchControllerNormalization.md` 实施后，切换文件夹时输入框文本虽被清空，但**清除按钮依然残挂显示**。深度根因如下：
+在切换文件夹时，输入框文本虽被清空，但**清除按钮依然残挂显示**。深度根因如下：
 
 1. **`blockSignals(true)` 切断了清除按钮的显隐更新信号**：
    无论是 Qt 原生 `setClearButtonEnabled(true)` 还是 `UiHelper::setupLineEditClearButton`，其清除按钮的显隐逻辑 (`setVisible(false)`) **完全依赖于 `QLineEdit::textChanged` 信号的通知**。
-   之前在 `clearSearch(true)` 中使用了 `blockSignals(true)`，虽然成功阻止了触发二次搜索，但也**切断了 `textChanged` 信号向清除按钮的发送**！导致清除按钮无法感知文本已被清空，显隐状态卡死在 `visible = true`，从而残留在界面上。
+   之前在 `PanelMediator.cpp` 中使用了 `blockSignals(true)`，虽然成功阻止了触发二次搜索，但也**切断了 `textChanged` 信号向清除按钮的发送**！导致清除按钮无法感知文本已被清空，显隐状态卡死在 `visible = true`，从而残留在界面上。
 
 2. **违背 SVG 图标规范**：
    `SearchController.cpp` 之前使用了原生 `setClearButtonEnabled(true)`（灰色圆底硬边原生按钮），违背了 `Memories.md` “全应用统一使用矢量 SVG 图标与 `UiHelper::setupLineEditClearButton`” 的工程红线。
@@ -32,12 +32,12 @@
 1. **统一使用 `UiHelper::setupLineEditClearButton`**：
    在 `SearchController` 初始化时调用 `UiHelper::setupLineEditClearButton(m_searchEdit)`，替换原生的 `setClearButtonEnabled(true)`，保存返回的 `m_clearAction` 指针。
 2. **重构 `clearSearch` 实现（消除 `blockSignals` 副作用）**：
-   引入内部状态标志 `m_isInternalClearing = true` 阻止触发搜索事件，同时显式调用 `m_clearAction->setVisible(false)` 或保持 `textChanged` 对 UI 状态的正常更新，彻底消除清除按钮残留悬挂 Bug！
+   引入内部状态标志 `m_isInternalClearing = true` 阻止触发搜索事件，同时保持 `textChanged` 对 UI 清除按钮显隐状态的正常广播通知，彻底消除清除按钮残留悬挂 Bug！
 
 ---
 
 ## Chapter 3: Modified Files List（影响文件清单）
-1. `src/ui/SearchController.h`（新增 `clearSearch` / `focusSearch` 声明与 `QAction* m_clearAction` 成员）
+1. `src/ui/SearchController.h`（新增 `clearSearch` / `focusSearch` 声明与 `QAction* m_clearAction`、`bool m_isInternalClearing` 成员）
 2. `src/ui/SearchController.cpp`（改用 `UiHelper::setupLineEditClearButton`，并精准修复 `clearSearch` 显隐同步逻辑）
 3. `src/ui/PanelMediator.cpp`（直调 `searchController->clearSearch(true)`）
 4. `src/ui/AppShortcutController.cpp`（直调 `m_searchController->focusSearch()`）
