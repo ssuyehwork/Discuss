@@ -3,9 +3,7 @@
 #include <QIcon>
 #include <QDebug>
 #include <QCursor>
-#include <QProgressDialog>
 #include "../meta/DatabaseManager.h"
-#include "BatchProgressDialog.h"
 #include "UiHelper.h"
 
 #ifdef Q_OS_WIN

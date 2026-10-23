@@ -470,15 +470,6 @@ QLabel#ProgressStatusLabel {
     color: #EEEEEE;
     font-size: 13px;
 }
-QProgressBar#ProgressDialogBar {
-    background: #2D2D2D;
-    border: none;
-    border-radius: 4px;
-}
-QProgressBar#ProgressDialogBar::chunk {
-    background: #378ADD;
-    border-radius: 4px;
-}
 
 QLabel#ConflictImgLabel {
     background-color: #2D2D30;
@@ -755,7 +746,7 @@ QProgressBar#TaskProgressBar {
     color: transparent;
 }
 QProgressBar#TaskProgressBar::chunk {
-    background-color: #378ADD;
+    background-color: #ff551c;
     border-radius: 2px;
 }
 QLabel#TaskProgressDetailLabel {
@@ -764,7 +755,7 @@ QLabel#TaskProgressDetailLabel {
     background: transparent;
 }
 QLabel#TaskProgressCountLabel {
-    color: #378ADD;
+    color: #ff551c;
     font-size: 11px;
     font-weight: bold;
     background: transparent;
