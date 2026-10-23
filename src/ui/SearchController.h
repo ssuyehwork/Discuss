@@ -6,11 +6,12 @@
 #include <QTimer>
 #include <QWidget>
 #include <QEvent>
+#include <QPointer>
+#include "ContentPanel.h"
 
 namespace QuarkMeta {
 
 class SearchHistoryPanel;
-class ContentPanel;
 
 enum class SearchScope {
     CurrentFolder,
@@ -35,7 +36,7 @@ public:
 
     void bindContentPanel(ContentPanel* contentPanel);
     // 仅切换当前搜索目标窗格，不重复接线 UI 信号；供多窗格激活切换时调用
-    void setActiveContentPanel(ContentPanel* panel) { m_contentPanel = panel; }
+    void setActiveContentPanel(ContentPanel* panel);
 
 signals:
     void searchExecuted();
@@ -55,7 +56,7 @@ private:
     bool m_isInternalClearing = false;
     QTimer* m_searchTimer = nullptr;
     SearchHistoryPanel* m_searchHistoryPanel = nullptr;
-    ContentPanel* m_contentPanel = nullptr;
+    QPointer<ContentPanel> m_contentPanel;
     SearchScope m_searchScope = SearchScope::CurrentFolder;
 };
 

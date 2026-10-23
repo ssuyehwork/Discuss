@@ -57,6 +57,10 @@ SearchController::SearchController(QWidget* parent)
     m_searchTimer->setInterval(300);
 }
 
+void SearchController::setActiveContentPanel(ContentPanel* panel) {
+    m_contentPanel = panel;
+}
+
 void SearchController::bindContentPanel(ContentPanel* contentPanel) {
     setActiveContentPanel(contentPanel);
     if (!m_contentPanel) return;
@@ -81,9 +85,14 @@ void SearchController::bindContentPanel(ContentPanel* contentPanel) {
 
     m_searchEdit->installEventFilter(this);
 
-    connect(m_searchHistoryPanel, &SearchHistoryPanel::historyItemClicked, this, [this](const QString& keyword) {
+    connect(m_searchHistoryPanel, &SearchHistoryPanel::historyItemClicked, this, [this](QString keyword) {
+        if (m_searchHistoryPanel) {
+            m_searchHistoryPanel->hide();
+        }
         m_searchEdit->setText(keyword);
-        doSearch(keyword);
+        QMetaObject::invokeMethod(this, [this, keyword]() {
+            doSearch(keyword);
+        }, Qt::QueuedConnection);
     });
 }
 
