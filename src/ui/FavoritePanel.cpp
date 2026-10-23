@@ -109,9 +109,19 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
     QString text = index.data(Qt::DisplayRole).toString();
     painter->setPen((opt.state & QStyle::State_Selected) ? QColor("#FFFFFF") : QColor("#EEEEEE"));
     painter->setFont(opt.font);
+
+    bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
+    int rightIconWidth = isAutoRec ? 22 : 0;
     
-    QString elidedText = opt.fontMetrics.elidedText(text, Qt::ElideRight, textRect.width() - 6);
+    QString elidedText = opt.fontMetrics.elidedText(text, Qt::ElideRight, textRect.width() - 6 - rightIconWidth);
     painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
+
+    // 绘制开启自动递归右侧 layers 图标
+    if (isAutoRec) {
+        QRect layersRect(opt.rect.right() - 22, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
+        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#2ecc71"), 16);
+        layersIcon.paint(painter, layersRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+    }
 
     painter->restore();
 }
@@ -455,6 +465,8 @@ void FavoritePanel::onFavoriteClicked(const QModelIndex& index) {
     }
 
     if (fi.isDir()) {
+        bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
+        emit directorySelectedWithRecursive(path, isAutoRec);
         emit directorySelected(path);
     } else {
         emit requestLocateFile(path);
@@ -537,6 +549,23 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
 
             // 在“资源管理器”中显示
             ContextMenuFactory::buildShowInExplorerAction(&menu, path, this);
+
+            bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
+            QAction* actAutoRec = menu.addAction(UiHelper::getIcon("layers", isAutoRec ? QColor("#2ecc71") : QColor("#EEEEEE"), 18),
+                                                 isAutoRec ? "关闭自动递归" : "开启自动递归");
+            connect(actAutoRec, &QAction::triggered, this, [this, nodeId, isAutoRec, index]() {
+                bool nextState = !isAutoRec;
+                FavoriteDao::updateAutoRecursive(nodeId, nextState);
+                if (m_favoriteModel) {
+                    QStandardItem* item = m_favoriteModel->itemFromIndex(index);
+                    if (item) {
+                        item->setData(nextState, Qt::UserRole + 9);
+                    }
+                }
+                if (m_favoriteView && m_favoriteView->viewport()) {
+                    m_favoriteView->viewport()->update();
+                }
+            });
 
             menu.addSeparator();
         }
@@ -809,6 +838,7 @@ void FavoritePanel::loadFavorites() {
         item->setData(rec.id, Qt::UserRole + 6);
         item->setData(isVirtual, Qt::UserRole + 7);
         item->setData(rec.parentId, Qt::UserRole + 8);
+        item->setData(rec.isAutoRecursive, Qt::UserRole + 9);
 
         itemMap.insert(rec.id, item);
     }
