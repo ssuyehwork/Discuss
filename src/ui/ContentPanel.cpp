@@ -947,9 +947,12 @@ void ContentPanel::updateStatusBarStats(int cachedSelectedCount) {
     int hiddenCount = fullCount - visibleCount;
     int selectedCount = (cachedSelectedCount >= 0) ? cachedSelectedCount : getSelectedIndexes().size();
 
+    QString numStyle = "color:#ff551c; font-weight:bold;";
     QString statusText = (hiddenCount > 0)
-        ? QString("%1 个项目，%2 个已隐藏，选中了 %3 个").arg(visibleCount).arg(hiddenCount).arg(selectedCount)
-        : QString("%1 个项目，选中了 %2 个").arg(visibleCount).arg(selectedCount);
+        ? QString("<span style=\"%1\">%2</span> 个项目，<span style=\"%1\">%3</span> 个已隐藏，选中了 <span style=\"%1\">%4</span> 个")
+              .arg(numStyle).arg(visibleCount).arg(hiddenCount).arg(selectedCount)
+        : QString("<span style=\"%1\">%2</span> 个项目，选中了 <span style=\"%1\">%3</span> 个")
+              .arg(numStyle).arg(visibleCount).arg(selectedCount);
 
     emit statusBarMessageReady(statusText);
 }
