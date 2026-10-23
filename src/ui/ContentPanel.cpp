@@ -948,8 +948,8 @@ void ContentPanel::updateStatusBarStats(int cachedSelectedCount) {
     int selectedCount = (cachedSelectedCount >= 0) ? cachedSelectedCount : getSelectedIndexes().size();
 
     QString statusText = (hiddenCount > 0)
-        ? QString("%1个项目，%2个已隐藏，选中了%3个").arg(visibleCount).arg(hiddenCount).arg(selectedCount)
-        : QString("%1个项目，选中了%2个").arg(visibleCount).arg(selectedCount);
+        ? QString("%1 个项目，%2 个已隐藏，选中了 %3 个").arg(visibleCount).arg(hiddenCount).arg(selectedCount)
+        : QString("%1 个项目，选中了 %2 个").arg(visibleCount).arg(selectedCount);
 
     emit statusBarMessageReady(statusText);
 }
