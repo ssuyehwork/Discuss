@@ -168,7 +168,7 @@ QImage FormatDecoders::extractPsdHeaderThumbnail(const QString& filePath) {
     return QImage();
 }
 
-QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+QImage FormatDecoders::extractAiEmbeddedFallback(const QString& filePath, int targetSize) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return QImage();
 
@@ -177,6 +177,7 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
 
     if (rawData.isEmpty() || CoreController::isShuttingDown()) return QImage();
 
+    // 2. 内嵌缩略图块（%AI7/8/9/10_Thumbnail）
     int thumbHeaderIdx = rawData.indexOf("%AI7_Thumbnail:");
     if (thumbHeaderIdx == -1) thumbHeaderIdx = rawData.indexOf("%AI8_Thumbnail:");
     if (thumbHeaderIdx == -1) thumbHeaderIdx = rawData.indexOf("%AI9_Thumbnail:");
@@ -238,6 +239,7 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
         }
     }
 
+    // 3. 内嵌 XMP 图（xmpGImg:image）
     int xmpStart = rawData.indexOf("<xmpGImg:image>");
     if (xmpStart != -1) {
         xmpStart += 15;
@@ -253,16 +255,13 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
         }
     }
 
-    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token);
-    if (!gsImg.isNull()) {
-        return gsImg;
-    }
-
+    // 4. Windows 系统缩略图（renderPdfAiFirstPage）
     QImage pdfRenderImg = renderPdfAiFirstPage(filePath, targetSize);
     if (!pdfRenderImg.isNull()) {
         return pdfRenderImg;
     }
 
+    // 5. 内嵌 PNG
     int pngStart = rawData.indexOf("\x89PNG\r\n\x1a\n");
     if (pngStart != -1) {
         int pngEnd = rawData.indexOf("IEND", pngStart);
@@ -275,6 +274,7 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
         }
     }
 
+    // 6. 内嵌 JPG
     int jpgStart = rawData.indexOf("\xFF\xD8\xFF");
     if (jpgStart != -1) {
         int jpgEnd = rawData.indexOf("\xFF\xD9", jpgStart);
@@ -287,15 +287,28 @@ QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize,
         }
     }
 
+    // 7. Windows 系统缩略图（WindowsShellThumbnailProvider，原有兜底）
     return WindowsShellThumbnailProvider::getShellThumbnail(filePath, targetSize);
 }
 
+QImage FormatDecoders::extractAiPreview(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    // 1. Ghostscript (100 DPI) 优先
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 100);
+    if (!gsImg.isNull()) {
+        return gsImg;
+    }
+    // 2~7. 内嵌后备链
+    return extractAiEmbeddedFallback(filePath, targetSize);
+}
+
 QImage FormatDecoders::extractAiQuickLook(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
+    // 1. Ghostscript (144 DPI) 优先
     QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 144);
     if (!gsImg.isNull()) {
         return gsImg;
     }
-    return extractAiPreview(filePath, targetSize, customTimeoutMs, token);
+    // 2~7. 内嵌后备链（避免重复触发 Ghostscript）
+    return extractAiEmbeddedFallback(filePath, targetSize);
 }
 
 QImage FormatDecoders::extractEpsEmbeddedPreview(const QString& filePath) {
@@ -367,11 +380,13 @@ QImage FormatDecoders::extractEpsEmbeddedPreview(const QString& filePath) {
 }
 
 QImage FormatDecoders::extractEpsThumbnail(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token) {
-    QImage img = extractEpsEmbeddedPreview(filePath);
-    if (!img.isNull()) {
-        return img;
+    // 1. Ghostscript (100 DPI) 优先
+    QImage gsImg = renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 100);
+    if (!gsImg.isNull()) {
+        return gsImg;
     }
-    return renderGhostscriptSafely(filePath, targetSize, customTimeoutMs, token, 72);
+    // 2. 内嵌预览（TIFF / %%BeginPreview）
+    return extractEpsEmbeddedPreview(filePath);
 }
 
 QImage FormatDecoders::extractEpsQuickLook(const QString& filePath, int targetSize, int customTimeoutMs, std::shared_ptr<CancellationToken> token, bool* fromGhostscript) {
