@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDebug>
 #include <windows.h>
 #include "../util/AppDirectoryInitializer.h"
@@ -69,6 +70,64 @@ QString DatabaseManager::getAppDir() {
 QString DatabaseManager::getGlobalDbPath() {
     QString dir = QDir::toNativeSeparators(getAppDir() + "/.QuarkMeta");
     return QDir::toNativeSeparators(dir + "/QuarkMeta.store");
+}
+
+QString DatabaseManager::getBackupDir() {
+    QString dir = QDir::toNativeSeparators(getAppDir() + "/.QuarkMeta/backups");
+    QDir().mkpath(dir);
+    return dir;
+}
+
+void DatabaseManager::performDailyBackup() {
+    QString dbPath = getGlobalDbPath();
+    if (!QFile::exists(dbPath)) return;
+
+    QString backupDir = getBackupDir();
+    QString todayStr = QDate::currentDate().toString("yyyyMMdd");
+    QString todayBackupPath = QDir::toNativeSeparators(backupDir + QString("/QuarkMeta_%1.store.bak").arg(todayStr));
+
+    // 当天已存在备份副本，直接跳过，零磁盘写入磨损
+    if (QFile::exists(todayBackupPath)) {
+        return;
+    }
+
+    // 执行按天快照复制
+    QFile::copy(dbPath, todayBackupPath);
+    qInfo() << "[DatabaseManager] 已成功创建每日数据库快照备份:" << todayBackupPath;
+
+    // 清理超过 7 天的历史快照文件
+    QDir bDir(backupDir);
+    QStringList filters;
+    filters << "QuarkMeta_*.store.bak";
+    QFileInfoList backupFiles = bDir.entryInfoList(filters, QDir::Files, QDir::Time); // 按修改时间降序排序
+
+    if (backupFiles.size() > 7) {
+        for (int i = 7; i < backupFiles.size(); ++i) {
+            QFile::remove(backupFiles[i].absoluteFilePath());
+            qInfo() << "[DatabaseManager] 已自动清理过期历史快照:" << backupFiles[i].fileName();
+        }
+    }
+}
+
+bool DatabaseManager::tryRecoverFromBackup() {
+    QString backupDir = getBackupDir();
+    QDir bDir(backupDir);
+    QStringList filters;
+    filters << "QuarkMeta_*.store.bak";
+    QFileInfoList backupFiles = bDir.entryInfoList(filters, QDir::Files, QDir::Time);
+
+    if (backupFiles.isEmpty()) return false;
+
+    QString dbPath = getGlobalDbPath();
+    QFile::remove(dbPath); // 清理可能损坏的残存孤儿主文件
+
+    for (const auto& bFile : backupFiles) {
+        if (QFile::copy(bFile.absoluteFilePath(), dbPath)) {
+            qWarning() << "[DatabaseManager] 已成功从备份文件自动恢复数据库:" << bFile.fileName();
+            return true;
+        }
+    }
+    return false;
 }
 
 bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
@@ -254,10 +313,18 @@ bool DatabaseManager::initLocked() {
 
     std::wstring globalPath = getGlobalDbPath().toStdWString();
     if (!loadDb(globalPath, m_globalDb)) {
-        return false;
+        qWarning() << "[DatabaseManager] 主数据库装载失败，尝试从 7 天自动快照自愈恢复...";
+        if (tryRecoverFromBackup()) {
+            if (!loadDb(globalPath, m_globalDb)) {
+                return false;
+            }
+        } else {
+            return false;
+        }
     }
 
     m_isInitialized = true;
+    performDailyBackup();
     return true;
 }
 

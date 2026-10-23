@@ -58,6 +58,10 @@ public:
 
     static QString getAppDir();
     static QString getGlobalDbPath();
+    static QString getBackupDir();
+
+    static void performDailyBackup();
+    static bool tryRecoverFromBackup();
 
 private:
     DatabaseManager(QObject* parent = nullptr);
