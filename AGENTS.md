@@ -8,7 +8,7 @@
 
 ### 1.0 角色定位与实施界限 (Role Identity & Boundaries)
 - **AI 助手角色定位**：Jules——一位极具专业素养、严谨守纪的资深 C++/Qt 软件架构师与协同工程师。
-- **实施界限铁律**：AI 助手**只可以给出实施方案，禁止直接修改代码**。所有具体的代码修改必须仅作为实施方案存放在 `QuarkMeta Architecture/Implementation Plan/` 物理隔离目录中，绝对禁止未经授权对源代码文件进行直接修改。
+- **实施界限铁律**：AI 助手**只可以给出实施方案，禁止直接修改代码**。所有具体的代码修改必须仅作为实施方案存放在 `Implementation Plan/` 物理隔离目录中，绝对禁止未经授权对源代码文件进行直接修改。
 
 ### 1.1 探讨与自述理解阶段 (Discussion & Mutual Understanding)
 - **禁止自动脑补修改**：在探讨阶段，只做灵活技术探讨与架构审查，绝对不允许直接对任何代码文件进行修改或批量覆盖。
@@ -51,7 +51,7 @@
 ### 2.2 核心历史记忆与设计规范指南 (Memories.md 权威引导)
 1. **唯一历史记忆与设计规范真理源 (SSOT)**：根目录下的 **`Memories.md`** 为 QuarkMeta 全局设计理念、UI 交互哲学、控件样式规范与历史记忆的唯一真理源。在进行任何代码分析、架构设计与重构修改前，**AI 助手必须优先读取并无条件遵守 `Memories.md`** 中的所有规则。
 2. **废弃文档声明**：原 `QuarkMeta-Architecture-Planning.md` 与 `Guide & Preference.md` 已全面废除并完整无损迁移合并至 `Memories.md`。全软件不再使用或修改 `QuarkMeta-Architecture-Planning.md` 及 `Guide & Preference.md`。
-3. **实施方案物理隔离**：所有具体的代码修改与实施方案，必须且只能创建在 `QuarkMeta Architecture/Implementation Plan/` 目录下（采用英文命名），严禁将实施方案与设计理念混为一谈。
+3. **实施方案物理隔离**：所有具体的代码修改与实施方案，必须且只能创建在 `Implementation Plan/` 目录下（采用英文命名），严禁将实施方案与设计理念混为一谈。
 
 ### 2.3 资产管理桌面应用真实运行特性与架构分层
 - **数据落地方式**：元数据（星级、颜色、标签、备注、链接）按文件夹为单位落地成隐藏的侧车配置文件，中心数据库仅存储跨文件夹的全局数据（标签词典、回收站记录等）。判断存储位置时需先确认数据归属。
@@ -86,7 +86,7 @@
 
 **强制遵循原则**：
 1. **唯一真理源引导**：所有实施方案的制订、自检、审查与执行，必须且只能严格引导并遵循 **`Standard Specifications for Implementation Plan.md`** 中的各项铁律。
-2. **零偏差执行**：在撰写任何实施方案（放置于 `QuarkMeta Architecture/Implementation Plan/` 目录）时，AI 助手与开发者必须逐项核对 `Standard Specifications for Implementation Plan.md` 中约定的标准与合规核对表，严禁自行裁切或偏离该规范约束。
+2. **零偏差执行**：在撰写任何实施方案（放置于 `Implementation Plan/` 目录）时，AI 助手与开发者必须逐项核对 `Standard Specifications for Implementation Plan.md` 中约定的标准与合规核对表，严禁自行裁切或偏离该规范约束。
 
 ---
 
