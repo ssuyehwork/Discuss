@@ -2,7 +2,7 @@
 
 - **Base Commit Hash**: `a55d3d63d38a44b4f4a112d0797b1c00e88ad571`
 - **Prerequisite Plans**: 无
-- **Supersedes**: `superseded/SearchController-8.md`
+- **Supersedes**: `QuarkMeta Architecture/Implementation Plan/superseded/SearchController-8.md`
 
 ---
 
