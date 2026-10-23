@@ -41,6 +41,7 @@ public:
 
 signals:
     void directorySelected(const QString& path);
+    void directorySelectedWithRecursive(const QString& path, bool recursive);
     void requestLocateFile(const QString& path);
     void favoriteStateChanged(const QString& path, bool isFavorite);
 

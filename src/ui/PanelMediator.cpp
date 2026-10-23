@@ -300,6 +300,13 @@ void PanelMediator::setupConnections() {
     }
 
     if (favoritePanel) {
+        connect(favoritePanel, &FavoritePanel::directorySelectedWithRecursive, this, [this, contentPanel](const QString& path, bool recursive) {
+            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
+            if (target) {
+                target->loadDirectory(path, recursive);
+            }
+        });
+
         connect(favoritePanel, &FavoritePanel::directorySelected, &NavigationService::instance(), [](const QString& path) {
             NavigationService::instance().navigateTo(path);
         });

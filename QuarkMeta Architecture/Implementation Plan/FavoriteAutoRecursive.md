@@ -1,6 +1,6 @@
 # FavoriteAutoRecursive.md - 收藏夹文件夹自动递归功能实施方案
 
-- **Base Commit Hash**: `d471d875fc0d40635fbbef5afbc0c4feb40b9a66`
+- **Base Commit Hash**: `fea3877403076754476d110247feb42e36035c01`
 - **Prerequisite Plans**: 无
 - **Supersedes**: 无
 

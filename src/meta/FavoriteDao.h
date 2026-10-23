@@ -30,6 +30,7 @@ struct FavoriteRecord {
     QString colorHex = "#888888";
     int sortOrder = 0;
     QStringList presetTags;
+    bool isAutoRecursive = false;
 };
 
 class FavoriteDao {
@@ -45,6 +46,7 @@ public:
     static bool updateNodeParentAndOrder(int id, int newParentId, int sortOrder);
     static bool updateNodesParentAndOrder(const QList<NodeOrderEntry>& entries);
     static bool updatePresetTags(int id, const QStringList& tags);
+    static bool updateAutoRecursive(int id, bool autoRecursive);
     static bool containsPath(const QString& path);
     static bool updateSortOrders(const QList<QPair<int, int>>& orders);
 };

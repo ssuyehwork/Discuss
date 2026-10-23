@@ -36,6 +36,7 @@ bool FavoriteDao::initTable() {
     sqlite3_exec(db, "ALTER TABLE favorites ADD COLUMN parent_id INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
     sqlite3_exec(db, "ALTER TABLE favorites ADD COLUMN node_type INTEGER DEFAULT 1;", nullptr, nullptr, nullptr);
     sqlite3_exec(db, "ALTER TABLE favorites ADD COLUMN preset_tags TEXT DEFAULT '';", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "ALTER TABLE favorites ADD COLUMN is_auto_recursive INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
 
     return true;
 }
@@ -47,7 +48,7 @@ QList<FavoriteRecord> FavoriteDao::getAllFavorites() {
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-    const char* sql = "SELECT id, parent_id, node_type, path, name, icon_key, color_hex, sort_order, preset_tags FROM favorites ORDER BY sort_order ASC, id ASC;";
+    const char* sql = "SELECT id, parent_id, node_type, path, name, icon_key, color_hex, sort_order, preset_tags, is_auto_recursive FROM favorites ORDER BY sort_order ASC, id ASC;";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return list;
 
@@ -62,6 +63,7 @@ QList<FavoriteRecord> FavoriteDao::getAllFavorites() {
         const char* colorStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
         rec.sortOrder = sqlite3_column_int(stmt, 7);
         const char* tagsStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
+        rec.isAutoRecursive = (sqlite3_column_int(stmt, 9) != 0);
 
         if (pathStr) rec.path = QString::fromUtf8(pathStr);
         if (nameStr) rec.name = QString::fromUtf8(nameStr);
@@ -140,6 +142,25 @@ bool FavoriteDao::addFavorite(const QString& path, int parentId, const QString& 
     sqlite3_bind_text(stmt, 4, iconStd.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 5, colorStd.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int64(stmt, 6, QDateTime::currentSecsSinceEpoch());
+
+    bool success = (sqlite3_step(stmt) == SQLITE_DONE);
+    sqlite3_finalize(stmt);
+    sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+    return success;
+}
+
+bool FavoriteDao::updateAutoRecursive(int id, bool autoRecursive) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || id <= 0) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "UPDATE favorites SET is_auto_recursive = ? WHERE id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+
+    sqlite3_bind_int(stmt, 1, autoRecursive ? 1 : 0);
+    sqlite3_bind_int(stmt, 2, id);
 
     bool success = (sqlite3_step(stmt) == SQLITE_DONE);
     sqlite3_finalize(stmt);
