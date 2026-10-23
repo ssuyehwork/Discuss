@@ -150,6 +150,72 @@ bool TagLexiconService::addTag(const QString& tagName, int groupId, const QStrin
     return success;
 }
 
+bool TagLexiconService::addTags(const QStringList& tags, int groupId, const QString& colorHex) {
+    QStringList cleanTags;
+    for (const QString& tag : tags) {
+        QString clean = tag.trimmed();
+        if (!clean.isEmpty()) {
+            cleanTags.append(clean);
+        }
+    }
+    if (cleanTags.isEmpty()) return false;
+
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    SqlTransaction trans(db);
+
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    const char* sql =
+        "INSERT INTO tags (name, color, last_used, use_count) VALUES (?, ?, ?, 1) "
+        "ON CONFLICT(name) DO UPDATE SET last_used = excluded.last_used, use_count = use_count + 1;";
+
+    sqlite3_stmt* stmt = nullptr;
+    bool success = false;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        for (const QString& cleanName : cleanTags) {
+            sqlite3_reset(stmt);
+            sqlite3_clear_bindings(stmt);
+
+            sqlite3_bind_text16(stmt, 1, cleanName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text16(stmt, 2, colorHex.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int64(stmt, 3, now);
+            sqlite3_step(stmt);
+        }
+        sqlite3_finalize(stmt);
+        success = true;
+    }
+
+    if (success && groupId > 0) {
+        const char* groupSql = "INSERT INTO tag_group_items (group_id, tag_name) VALUES (?, ?) ON CONFLICT(group_id, tag_name) DO NOTHING;";
+        if (sqlite3_prepare_v2(db, groupSql, -1, &stmt, nullptr) == SQLITE_OK) {
+            for (const QString& cleanName : cleanTags) {
+                sqlite3_reset(stmt);
+                sqlite3_clear_bindings(stmt);
+
+                sqlite3_bind_int(stmt, 1, groupId);
+                sqlite3_bind_text16(stmt, 2, cleanName.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(stmt);
+            }
+            sqlite3_finalize(stmt);
+        }
+    }
+
+    if (success) {
+        bool res = trans.commit();
+        if (res) {
+            sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+            emit lexiconChanged();
+        }
+        return res;
+    }
+
+    return false;
+}
+
 bool TagLexiconService::renameTag(const QString& oldName, const QString& newName) {
     QString cleanOld = oldName.trimmed();
     QString cleanNew = newName.trimmed();

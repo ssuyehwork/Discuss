@@ -86,6 +86,8 @@ public:
     void setColor(const std::wstring& path, const std::wstring& color, bool notify = true);
     void setPinned(const std::wstring& path, bool pinned, bool notify = true);
     void setTags(const std::wstring& path, const QStringList& tags, bool notify = true);
+    QMap<QString, QStringList> addTagsBatch(const QStringList& paths, const QStringList& tags);
+    QMap<QString, QStringList> removeTagsBatch(const QStringList& paths, const QStringList& tags);
     void setNote(const std::wstring& path, const std::wstring& note, bool notify = true);
     void setURL(const std::wstring& path, const std::wstring& url, bool notify = true);
     void setEncrypted(const std::wstring& path, bool encrypted, bool notify = true);

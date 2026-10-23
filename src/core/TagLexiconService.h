@@ -39,6 +39,7 @@ public:
 
     // 2. Lexicon dictionary CRUD
     bool addTag(const QString& tagName, int groupId = -1, const QString& colorHex = "");
+    bool addTags(const QStringList& tags, int groupId = -1, const QString& colorHex = "");
     bool renameTag(const QString& oldName, const QString& newName);
     bool deleteTag(const QString& tagName);
     bool setTagColor(const QString& tagName, const QString& colorHex);

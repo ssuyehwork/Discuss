@@ -4,6 +4,8 @@
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
 #include "TagLexiconService.h"
+#include "TaskProgressService.h"
+#include <QCoreApplication>
 
 namespace QuarkMeta {
 
@@ -14,6 +16,7 @@ CoreEngine& CoreEngine::instance() {
 
 CoreEngine::CoreEngine(QObject* parent)
     : QObject(parent) {
+    m_asyncTagPool.setMaxThreadCount(1);
     qRegisterMetaType<QuarkMeta::AppCommand>("QuarkMeta::AppCommand");
 }
 
@@ -46,21 +49,22 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         break;
     }
     case AppCommandType::AddTag: {
-        QString tag = cmd.params.value("tag").toString().trimmed();
-        if (tag.isEmpty()) break;
-
-        // 🚨 铁律第一步：先将新标签登记到 QuarkMeta.store 主词典（默认归入未分类/全局）
-        TagLexiconService::instance().addTag(tag);
-
-        // 🚨 铁律第二步：再绑定到各个选中项目的 .QuarkMeta.json 与内存
-        for (const QString& path : cmd.targetPaths) {
-            auto meta = MetadataManager::instance().getMeta(path.toStdWString());
-            QStringList curTags = meta.tags;
-            if (!curTags.contains(tag)) {
-                curTags.append(tag);
-                MetadataManager::instance().setTags(path.toStdWString(), curTags, false);
+        QStringList tagsToApply;
+        if (cmd.params.contains("tags")) {
+            tagsToApply = cmd.params.value("tags").toStringList();
+        }
+        if (cmd.params.contains("tag")) {
+            QString singleTag = cmd.params.value("tag").toString().trimmed();
+            if (!singleTag.isEmpty()) {
+                tagsToApply.append(singleTag);
             }
         }
+        tagsToApply.removeDuplicates();
+        if (tagsToApply.isEmpty()) break;
+
+        TagLexiconService::instance().addTags(tagsToApply);
+        MetadataManager::instance().addTagsBatch(cmd.targetPaths, tagsToApply);
+
         AppEvent ev;
         ev.type = AppEventType::MetadataUpdated;
         ev.paths = cmd.targetPaths;
@@ -68,13 +72,21 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
         break;
     }
     case AppCommandType::RemoveTag: {
-        QString tag = cmd.params.value("tag").toString().trimmed();
-        for (const QString& path : cmd.targetPaths) {
-            auto meta = MetadataManager::instance().getMeta(path.toStdWString());
-            QStringList curTags = meta.tags;
-            curTags.removeAll(tag);
-            MetadataManager::instance().setTags(path.toStdWString(), curTags, false);
+        QStringList tagsToRemove;
+        if (cmd.params.contains("tags")) {
+            tagsToRemove = cmd.params.value("tags").toStringList();
         }
+        if (cmd.params.contains("tag")) {
+            QString singleTag = cmd.params.value("tag").toString().trimmed();
+            if (!singleTag.isEmpty()) {
+                tagsToRemove.append(singleTag);
+            }
+        }
+        tagsToRemove.removeDuplicates();
+        if (tagsToRemove.isEmpty()) break;
+
+        MetadataManager::instance().removeTagsBatch(cmd.targetPaths, tagsToRemove);
+
         AppEvent ev;
         ev.type = AppEventType::MetadataUpdated;
         ev.paths = cmd.targetPaths;
@@ -183,25 +195,53 @@ void CoreEngine::handleSetColor(const QStringList& paths, const QString& color) 
 
 void CoreEngine::handleSetTags(const QStringList& paths, const QStringList& tags) {
     LastOperationManager::instance().recordPasteTags(tags);
-    // 🚨 铁律第一步：确保这一批标签全部已在 QuarkMeta.store 主词典中登记
-    for (const QString& t : tags) {
-        QString cleanTag = t.trimmed();
-        if (!cleanTag.isEmpty()) {
-            TagLexiconService::instance().addTag(cleanTag);
+    TagLexiconService::instance().addTags(tags);
+    MetadataManager::instance().addTagsBatch(paths, tags);
+
+    AppEvent ev;
+    ev.type = AppEventType::MetadataUpdated;
+    ev.paths = paths;
+    CentralEventHub::instance().publishEvent(ev);
+}
+
+void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList& tags, std::function<void(int pathCount)> onFinished) {
+    if (paths.isEmpty() || tags.isEmpty()) {
+        if (onFinished) {
+            QMetaObject::invokeMethod(qApp, [onFinished, pathCount = paths.size()]() {
+                onFinished(pathCount);
+            }, Qt::QueuedConnection);
         }
+        return;
     }
 
-    // 🚨 铁律第二步：物理落盘到各文件 .QuarkMeta.json
-    for (const QString& path : paths) {
-        MetadataManager::instance().setTags(path.toStdWString(), tags, false);
-        
-        AppEvent ev;
-        ev.type = AppEventType::MetadataUpdated;
-        ev.targetPath = path;
-        ev.payload["field"] = "tags";
-        ev.payload["value"] = tags;
-        CentralEventHub::instance().publishEvent(ev);
-    }
+    m_asyncTagPool.start([paths, tags, onFinished]() {
+        int totalPaths = paths.size();
+        int jobId = TaskProgressService::instance().createJob("正在应用预设标签...", totalPaths);
+
+        TagLexiconService::instance().addTags(tags);
+
+        constexpr int kBatchSize = 100;
+        int processed = 0;
+        for (int i = 0; i < totalPaths; i += kBatchSize) {
+            QStringList batch = paths.mid(i, kBatchSize);
+            MetadataManager::instance().addTagsBatch(batch, tags);
+            processed += batch.size();
+            TaskProgressService::instance().updateProgress(jobId, processed, totalPaths);
+        }
+
+        TaskProgressService::instance().finishJob(jobId);
+
+        QMetaObject::invokeMethod(qApp, [paths, onFinished]() {
+            AppEvent ev;
+            ev.type = AppEventType::MetadataUpdated;
+            ev.paths = paths;
+            CentralEventHub::instance().publishEvent(ev);
+
+            if (onFinished) {
+                onFinished(paths.size());
+            }
+        }, Qt::QueuedConnection);
+    });
 }
 
 void CoreEngine::handleSetNote(const QStringList& paths, const QString& note) {

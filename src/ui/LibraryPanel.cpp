@@ -12,6 +12,7 @@
 #include "../meta/MetaIndexService.h"
 #include "../meta/QuarkMetaJsonStore.h"
 #include "../core/CoreEngine.h"
+#include "../core/PresetTagService.h"
 #include "../core/ModelContract.h"
 #include "../core/AppConfig.h"
 #include "controllers/ContextMenuFactory.h"
@@ -1056,36 +1057,10 @@ void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QMod
             return;
         }
 
-        // 目标为自定义分类 (nodeId > 0)：将文件索引异步投递至 MetaIndexService 后台线程处理，UI 0ms 卡顿
-        MetaIndexService::instance().enqueueCategoryIndexing(nodeId, paths);
+        int appliedTagCount = PresetTagService::instance().applyPresetTagsForDroppedItems(nodeId, paths);
 
-        auto categories = LibraryDao::getAllCategories();
-        QMap<int, LibraryCategoryRecord> catMap;
-        for (const auto& cat : categories) {
-            catMap.insert(cat.id, cat);
-        }
-
-        QStringList presetTags;
-        int currentId = nodeId;
-        while (currentId > 0 && catMap.contains(currentId)) {
-            const auto& curCat = catMap.value(currentId);
-            for (const QString& tag : curCat.presetTags) {
-                if (!presetTags.contains(tag)) {
-                    presetTags.append(tag);
-                }
-            }
-            currentId = curCat.parentId;
-        }
-
-        if (!presetTags.isEmpty()) {
-            for (const QString& tag : presetTags) {
-                AppCommand cmd;
-                cmd.type = AppCommandType::AddTag;
-                cmd.targetPaths = paths;
-                cmd.params["tag"] = tag;
-                CoreEngine::instance().executeCommand(cmd);
-            }
-            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将 %1 个项目关联至当前分类，并自动应用了 %2 个预设标签").arg(paths.size()).arg(presetTags.size()), 2000, QColor("#2ecc71"));
+        if (appliedTagCount > 0) {
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将 %1 个项目关联至当前分类，并自动应用了 %2 个预设标签").arg(paths.size()).arg(appliedTagCount), 2000, QColor("#2ecc71"));
         } else {
             ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已关联 %1 个路径到当前分类").arg(paths.size()), 1500, QColor("#2ecc71"));
         }

@@ -5,8 +5,10 @@
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
+#include <QThreadPool>
 #include <atomic>
 #include <memory>
+#include <functional>
 #include "CentralEventHub.h"
 
 namespace QuarkMeta {
@@ -73,6 +75,9 @@ public:
     // 命令统一执行入口
     bool executeCommand(const AppCommand& cmd);
 
+    // 异步批量给多个路径添加预设/通用标签
+    void addTagsToPathsAsync(const QStringList& paths, const QStringList& tags, std::function<void(int pathCount)> onFinished = nullptr);
+
     // 取消令牌助手入口
     std::shared_ptr<CancellationToken> createCancellationToken();
 
@@ -89,6 +94,8 @@ private:
     void handleSetURL(const QStringList& paths, const QString& url);
     void handleRecordAccess(const QStringList& paths);
     void handleToggleFavorite(const QStringList& paths);
+
+    QThreadPool m_asyncTagPool;
 };
 
 } // namespace QuarkMeta

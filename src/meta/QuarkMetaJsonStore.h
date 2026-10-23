@@ -47,6 +47,18 @@ public:
     void updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater);
 
     /**
+     * @brief 批量向多个路径追加标签（按文件夹分组、合并现有 JSON 标签、预取加载、单批次标脏与刷盘）
+     * @return 每个路径对应的最终合并标签列表
+     */
+    QMap<QString, QStringList> addTagsBatch(const QStringList& paths, const QStringList& tags);
+
+    /**
+     * @brief 批量从多个路径移除标签
+     * @return 每个路径对应的最终合并标签列表
+     */
+    QMap<QString, QStringList> removeTagsBatch(const QStringList& paths, const QStringList& tags);
+
+    /**
      * @brief 一致性读取指定物理文件夹的所有条目 ItemMeta (大小写不敏感匹配)
      */
     QuarkMetaJson::ItemMap readFolderMeta(const std::wstring& folderPath);

@@ -154,24 +154,27 @@ void LibrarySyncService::removePaths(const QStringList& paths) {
 }
 
 void LibrarySyncService::processSyncBatch(const QStringList& batch) {
+    std::vector<ItemRecord> records;
+    records.reserve(batch.size());
     for (const QString& path : batch) {
         ItemRecord rec = ItemRecord::create(path);
         ItemMeta meta;
         if (QuarkMetaJsonStore::instance().readItemMeta(path.toStdWString(), meta)) {
             ItemMetaMapper::apply(meta, rec);
         }
-        LibraryItemDao::upsertItem(rec);
+        records.push_back(rec);
     }
+    LibraryItemDao::upsertItems(records);
 }
 
 void LibrarySyncService::triggerStartupReconciliation() {
     (void)QtConcurrent::run(&m_workPool, [this]() {
         // 对账 1: 分类中有而库表中缺少的，增量补齐
         QStringList categoryPaths = LibraryDao::getCategoryPaths(-1);
-        std::vector<ItemRecord> existingItems = LibraryItemDao::getAllLibraryItems();
+        QStringList existingPaths = LibraryItemDao::getAllLibraryPaths();
         std::unordered_set<std::wstring> existingSet;
-        for (const auto& item : existingItems) {
-            existingSet.insert(normalizePath(item.path).toStdWString());
+        for (const auto& p : existingPaths) {
+            existingSet.insert(normalizePath(p).toStdWString());
         }
 
         QStringList missingPaths;
@@ -191,9 +194,9 @@ void LibrarySyncService::triggerStartupReconciliation() {
         }
 
         QStringList orphanPaths;
-        for (const auto& item : existingItems) {
-            if (catSet.count(normalizePath(item.path).toStdWString()) == 0) {
-                orphanPaths.append(item.path);
+        for (const auto& p : existingPaths) {
+            if (catSet.count(normalizePath(p).toStdWString()) == 0) {
+                orphanPaths.append(p);
             }
         }
         if (!orphanPaths.isEmpty()) {

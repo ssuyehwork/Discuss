@@ -75,11 +75,81 @@ QList<LibraryCategoryRecord> LibraryDao::getAllCategories() {
         sqlite3_finalize(stmt);
     }
 
-    for (auto& rec : list) {
-        rec.associatedPaths = getCategoryPaths(rec.id);
+    return list;
+}
+
+LibraryCategoryRecord LibraryDao::getCategoryById(int id) {
+    LibraryCategoryRecord rec;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || id <= 0) return rec;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    const char* sql = "SELECT id, parent_id, name, icon_key, color_hex, sort_order, preset_tags, is_pinned FROM library_categories WHERE id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, id);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            rec.id = sqlite3_column_int(stmt, 0);
+            rec.parentId = sqlite3_column_int(stmt, 1);
+            const char* nameStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+            const char* iconStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+            const char* colorStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+            rec.sortOrder = sqlite3_column_int(stmt, 5);
+            const char* tagsStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+            rec.isPinned = (sqlite3_column_int(stmt, 7) != 0);
+
+            if (nameStr) rec.name = QString::fromUtf8(nameStr);
+            if (iconStr) rec.iconKey = QString::fromUtf8(iconStr);
+            if (colorStr) rec.colorHex = QString::fromUtf8(colorStr);
+            if (tagsStr && strlen(tagsStr) > 0) {
+                rec.presetTags = QString::fromUtf8(tagsStr).split(',', Qt::SkipEmptyParts);
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+    return rec;
+}
+
+QStringList LibraryDao::getPresetTagsWithAncestors(int id) {
+    QStringList resultTags;
+    if (id <= 0) return resultTags;
+
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return resultTags;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "WITH RECURSIVE cat_ancestors(id, parent_id, preset_tags) AS ("
+                      "  SELECT id, parent_id, preset_tags FROM library_categories WHERE id = ?"
+                      "  UNION ALL "
+                      "  SELECT c.id, c.parent_id, c.preset_tags FROM library_categories c "
+                      "  JOIN cat_ancestors a ON c.id = a.parent_id"
+                      ") SELECT preset_tags FROM cat_ancestors;";
+
+    sqlite3_stmt* stmt = nullptr;
+    QSet<QString> seenLower;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, id);
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char* tagsStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            if (tagsStr && strlen(tagsStr) > 0) {
+                QStringList rawList = QString::fromUtf8(tagsStr).split(',', Qt::SkipEmptyParts);
+                for (const QString& tag : rawList) {
+                    QString clean = tag.trimmed();
+                    if (clean.isEmpty()) continue;
+                    QString lower = clean.toLower();
+                    if (!seenLower.contains(lower)) {
+                        seenLower.insert(lower);
+                        resultTags.append(clean);
+                    }
+                }
+            }
+        }
+        sqlite3_finalize(stmt);
     }
 
-    return list;
+    return resultTags;
 }
 
 int LibraryDao::addCategory(const QString& name, int parentId, const QString& iconKey, const QString& colorHex) {
@@ -265,6 +335,7 @@ bool LibraryDao::addPathsToCategory(int id, const QStringList& paths) {
     if (!db || id == 0 || paths.isEmpty()) return false;
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    SqlTransaction trans(db);
 
     // 1. 先清除被操作路径已有的所有旧分类关联
     const char* delPathsSql = "DELETE FROM library_category_paths WHERE path = ?;";
@@ -295,8 +366,11 @@ bool LibraryDao::addPathsToCategory(int id, const QStringList& paths) {
         }
     }
 
-    sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
-    return true;
+    bool ok = trans.commit();
+    if (ok) {
+        sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+    }
+    return ok;
 }
 
 bool LibraryDao::removePathsFromCategory(int id, const QStringList& paths) {
@@ -343,95 +417,85 @@ bool LibraryDao::updatePresetTags(int id, const QStringList& tags) {
     return success;
 }
 
-QStringList LibraryDao::getCategoryPaths(int id) {
-    QStringList paths;
+QStringList LibraryDao::getCategoryPaths(int id, bool verifyExistence) {
+    QStringList rawPaths;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db || id == 0) return paths;
+    if (!db || id == 0) return rawPaths;
 
-    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    {
+        std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-    if (id == -1) {
-        // 全部数据：获取库中所有关联路径 (去重)
-        const char* sql = "SELECT DISTINCT path FROM library_category_paths;";
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                if (pStr) paths.append(QString::fromUtf8(pStr));
-            }
-            sqlite3_finalize(stmt);
-        }
-    } else if (id == -2) {
-        // 未分类：只返回 library_category_paths 中 category_id <= 0 的路径（去重），过滤掉磁盘不存在的无效路径并擦除记录
-        const char* sql = "SELECT DISTINCT path FROM library_category_paths WHERE category_id <= 0;";
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            QStringList invalidPaths;
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                if (pStr) {
-                    QString path = QString::fromUtf8(pStr);
-                    if (QFileInfo::exists(path)) {
-                        paths.append(path);
-                    } else {
-                        invalidPaths.append(path);
-                    }
+        if (id == -1) {
+            const char* sql = "SELECT DISTINCT path FROM library_category_paths;";
+            sqlite3_stmt* stmt = nullptr;
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+                while (sqlite3_step(stmt) == SQLITE_ROW) {
+                    const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                    if (pStr) rawPaths.append(QString::fromUtf8(pStr));
                 }
+                sqlite3_finalize(stmt);
             }
-            sqlite3_finalize(stmt);
-
-            // 擦除磁盘上已不存在的无效路径
-            if (!invalidPaths.isEmpty()) {
-                const char* delSql = "DELETE FROM library_category_paths WHERE path = ?;";
-                if (sqlite3_prepare_v2(db, delSql, -1, &stmt, nullptr) == SQLITE_OK) {
-                    for (const QString& invP : invalidPaths) {
-                        std::string pStd = invP.toStdString();
-                        sqlite3_bind_text(stmt, 1, pStd.c_str(), -1, SQLITE_TRANSIENT);
-                        sqlite3_step(stmt);
-                        sqlite3_reset(stmt);
-                    }
-                    sqlite3_finalize(stmt);
+        } else if (id == -2) {
+            const char* sql = "SELECT DISTINCT path FROM library_category_paths WHERE category_id <= 0;";
+            sqlite3_stmt* stmt = nullptr;
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+                while (sqlite3_step(stmt) == SQLITE_ROW) {
+                    const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                    if (pStr) rawPaths.append(QString::fromUtf8(pStr));
                 }
+                sqlite3_finalize(stmt);
             }
-        }
-    } else {
-        // 常规用户分类 ID > 0：递归获取当前分类及其所有下级子分类绑定关联的所有路径
-        const char* sql = "WITH RECURSIVE cat_tree(x) AS ("
-                          "  SELECT ? UNION ALL SELECT id FROM library_categories, cat_tree WHERE library_categories.parent_id = cat_tree.x"
-                          ") SELECT DISTINCT path FROM library_category_paths WHERE category_id IN (SELECT x FROM cat_tree);";
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return paths;
-
-        sqlite3_bind_int(stmt, 1, id);
-        QStringList invalidPaths;
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            if (pStr) {
-                QString path = QString::fromUtf8(pStr);
-                if (QFileInfo::exists(path)) {
-                    paths.append(path);
-                } else {
-                    invalidPaths.append(path);
-                }
-            }
-        }
-        sqlite3_finalize(stmt);
-
-        // 自动自愈：擦除磁盘上已不存在的无效路径
-        if (!invalidPaths.isEmpty()) {
-            const char* delSql = "DELETE FROM library_category_paths WHERE path = ?;";
-            if (sqlite3_prepare_v2(db, delSql, -1, &stmt, nullptr) == SQLITE_OK) {
-                for (const QString& invP : invalidPaths) {
-                    std::string pStd = invP.toStdString();
-                    sqlite3_bind_text(stmt, 1, pStd.c_str(), -1, SQLITE_TRANSIENT);
-                    sqlite3_step(stmt);
-                    sqlite3_reset(stmt);
+        } else {
+            const char* sql = "WITH RECURSIVE cat_tree(x) AS ("
+                              "  SELECT ? UNION ALL SELECT id FROM library_categories, cat_tree WHERE library_categories.parent_id = cat_tree.x"
+                              ") SELECT DISTINCT path FROM library_category_paths WHERE category_id IN (SELECT x FROM cat_tree);";
+            sqlite3_stmt* stmt = nullptr;
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+                sqlite3_bind_int(stmt, 1, id);
+                while (sqlite3_step(stmt) == SQLITE_ROW) {
+                    const char* pStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                    if (pStr) rawPaths.append(QString::fromUtf8(pStr));
                 }
                 sqlite3_finalize(stmt);
             }
         }
     }
-    return paths;
+
+    if (!verifyExistence) {
+        return rawPaths;
+    }
+
+    QStringList validPaths;
+    QStringList invalidPaths;
+    for (const QString& path : rawPaths) {
+        if (QFileInfo::exists(path)) {
+            validPaths.append(path);
+        } else {
+            invalidPaths.append(path);
+        }
+    }
+
+    if (!invalidPaths.isEmpty()) {
+        std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+        SqlTransaction trans(db);
+
+        const char* delSql = "DELETE FROM library_category_paths WHERE path = ?;";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, delSql, -1, &stmt, nullptr) == SQLITE_OK) {
+            for (const QString& invP : invalidPaths) {
+                std::string pStd = invP.toStdString();
+                sqlite3_bind_text(stmt, 1, pStd.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(stmt);
+                sqlite3_reset(stmt);
+            }
+            sqlite3_finalize(stmt);
+        }
+        if (trans.commit()) {
+            sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+        }
+    }
+
+    return validPaths;
 }
 
 } // namespace QuarkMeta

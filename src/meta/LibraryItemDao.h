@@ -20,8 +20,12 @@ private:
     friend class LibrarySyncService;
     friend class LibraryValidationService;
 
+    // 查询当前库表中存储的所有成员路径列表
+    static QStringList getAllLibraryPaths();
+
     // 写接口锁定仅供 LibrarySyncService 友元调用
     static bool upsertItem(const ItemRecord& record);
+    static bool upsertItems(const std::vector<ItemRecord>& records);
     static bool removeItemsByPaths(const QStringList& paths);
     static bool renameItemPath(const QString& oldPath, const QString& newPath);
     static bool updatePath(const QString& oldPath, const QString& newPath);

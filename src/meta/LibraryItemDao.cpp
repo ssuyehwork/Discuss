@@ -140,52 +140,42 @@ std::vector<ItemRecord> LibraryItemDao::getItemsByPaths(const QStringList& paths
     return result;
 }
 
-std::vector<ItemRecord> LibraryItemDao::getAllLibraryItems() {
-    std::vector<ItemRecord> result;
+QStringList LibraryItemDao::getAllLibraryPaths() {
+    QStringList paths;
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db) return result;
+    if (!db) return paths;
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
     const char* sql = "SELECT file_path FROM library_items;";
     sqlite3_stmt* stmt = nullptr;
-    QStringList paths;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             paths.append(QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0))));
         }
         sqlite3_finalize(stmt);
     }
+    return paths;
+}
+
+std::vector<ItemRecord> LibraryItemDao::getAllLibraryItems() {
+    QStringList paths = getAllLibraryPaths();
     return getItemsByPaths(paths);
 }
 
 bool LibraryItemDao::upsertItem(const ItemRecord& record) {
+    return upsertItems({record});
+}
+
+bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
+    if (records.empty()) return true;
+
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
     SqlTransaction tx(db);
 
-    QString fileId = record.fileId;
-    if (fileId.isEmpty()) {
-        const char* queryIdSql = "SELECT file_id FROM library_items WHERE file_path = ? COLLATE NOCASE;";
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, queryIdSql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, record.path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            if (sqlite3_step(stmt) == SQLITE_ROW) {
-                fileId = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
-            }
-            sqlite3_finalize(stmt);
-        }
-    }
-    if (fileId.isEmpty()) {
-        fileId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    }
-
-    QFileInfo info(record.path);
-    QString baseName = info.completeBaseName();
-    QString ext = info.suffix();
-    long long now = QDateTime::currentSecsSinceEpoch();
-
+    const char* queryIdSql = "SELECT file_id FROM library_items WHERE file_path = ? COLLATE NOCASE;";
     const char* upsertSql = "INSERT INTO library_items ("
                             "file_id, file_path, file_name, base_name, extension, file_size, is_dir, is_empty, "
                             "is_hidden, is_managed, encrypted, pinned, rating, color_hex, auto_color, width, height, "
@@ -201,86 +191,135 @@ bool LibraryItemDao::upsertItem(const ItemRecord& record) {
                             "url=excluded.url, sha256=excluded.sha256, created_at=excluded.created_at, "
                             "updated_at=excluded.updated_at, added_at=excluded.added_at, sync_state=0, synced_at=excluded.synced_at;";
 
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, upsertSql, -1, &stmt, nullptr) != SQLITE_OK) return false;
-
-    sqlite3_bind_text(stmt, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 2, record.path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 3, record.filename.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 4, baseName.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 5, ext.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 6, record.size);
-    sqlite3_bind_int(stmt, 7, record.isDir ? 1 : 0);
-    sqlite3_bind_int(stmt, 8, record.isEmpty ? 1 : 0);
-    sqlite3_bind_int(stmt, 9, record.isHidden ? 1 : 0);
-    sqlite3_bind_int(stmt, 10, record.isManaged ? 1 : 0);
-    sqlite3_bind_int(stmt, 11, record.encrypted ? 1 : 0);
-    sqlite3_bind_int(stmt, 12, record.pinned ? 1 : 0);
-    sqlite3_bind_int(stmt, 13, record.rating);
-    sqlite3_bind_text(stmt, 14, record.manualColor.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 15, record.autoColor.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 16, record.width);
-    sqlite3_bind_int(stmt, 17, record.height);
-    sqlite3_bind_int(stmt, 18, record.thumbStatus);
-    sqlite3_bind_text(stmt, 19, record.note.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 20, record.url.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 21, record.sha256.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int64(stmt, 22, record.ctime);
-    sqlite3_bind_int64(stmt, 23, record.mtime);
-    sqlite3_bind_int64(stmt, 24, record.added_at > 0 ? record.added_at : now);
-    sqlite3_bind_int64(stmt, 25, now);
-
-    if (sqlite3_step(stmt) != SQLITE_DONE) {
-        sqlite3_finalize(stmt);
-        return false;
-    }
-    sqlite3_finalize(stmt);
-
-    // 重建 file_tags
     const char* delTagsSql = "DELETE FROM file_tags WHERE file_id = ?;";
-    if (sqlite3_prepare_v2(db, delTagsSql, -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text(stmt, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_step(stmt);
-        sqlite3_finalize(stmt);
-    }
-
     const char* tagDictSql = "INSERT OR IGNORE INTO tags(name) VALUES(?);";
     const char* insTagSql = "INSERT OR REPLACE INTO file_tags(file_id, tag_name) VALUES(?, ?);";
-    for (const QString& tag : record.tags) {
-        if (tag.trimmed().isEmpty()) continue;
-        if (sqlite3_prepare_v2(db, tagDictSql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, tag.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_step(stmt);
-            sqlite3_finalize(stmt);
-        }
-        if (sqlite3_prepare_v2(db, insTagSql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(stmt, 2, tag.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_step(stmt);
-            sqlite3_finalize(stmt);
-        }
-    }
 
-    // 重建 item_palettes
     const char* delPalSql = "DELETE FROM item_palettes WHERE file_id = ?;";
-    if (sqlite3_prepare_v2(db, delPalSql, -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text(stmt, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_step(stmt);
-        sqlite3_finalize(stmt);
+    const char* insPalSql = "INSERT INTO item_palettes(file_id, idx, color_hex, ratio) VALUES(?, ?, ?, ?);";
+
+    sqlite3_stmt* stmtQueryId = nullptr;
+    sqlite3_stmt* stmtUpsert = nullptr;
+    sqlite3_stmt* stmtDelTags = nullptr;
+    sqlite3_stmt* stmtTagDict = nullptr;
+    sqlite3_stmt* stmtInsTag = nullptr;
+    sqlite3_stmt* stmtDelPal = nullptr;
+    sqlite3_stmt* stmtInsPal = nullptr;
+
+    auto cleanupStmts = [&]() {
+        if (stmtQueryId) sqlite3_finalize(stmtQueryId);
+        if (stmtUpsert) sqlite3_finalize(stmtUpsert);
+        if (stmtDelTags) sqlite3_finalize(stmtDelTags);
+        if (stmtTagDict) sqlite3_finalize(stmtTagDict);
+        if (stmtInsTag) sqlite3_finalize(stmtInsTag);
+        if (stmtDelPal) sqlite3_finalize(stmtDelPal);
+        if (stmtInsPal) sqlite3_finalize(stmtInsPal);
+    };
+
+    if (sqlite3_prepare_v2(db, queryIdSql, -1, &stmtQueryId, nullptr) != SQLITE_OK ||
+        sqlite3_prepare_v2(db, upsertSql, -1, &stmtUpsert, nullptr) != SQLITE_OK ||
+        sqlite3_prepare_v2(db, delTagsSql, -1, &stmtDelTags, nullptr) != SQLITE_OK ||
+        sqlite3_prepare_v2(db, tagDictSql, -1, &stmtTagDict, nullptr) != SQLITE_OK ||
+        sqlite3_prepare_v2(db, insTagSql, -1, &stmtInsTag, nullptr) != SQLITE_OK ||
+        sqlite3_prepare_v2(db, delPalSql, -1, &stmtDelPal, nullptr) != SQLITE_OK ||
+        sqlite3_prepare_v2(db, insPalSql, -1, &stmtInsPal, nullptr) != SQLITE_OK) {
+        cleanupStmts();
+        return false;
     }
 
-    const char* insPalSql = "INSERT INTO item_palettes(file_id, idx, color_hex, ratio) VALUES(?, ?, ?, ?);";
-    for (size_t i = 0; i < record.palettes.size(); ++i) {
-        if (sqlite3_prepare_v2(db, insPalSql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_int(stmt, 2, static_cast<int>(i));
-            sqlite3_bind_text(stmt, 3, record.palettes[i].first.name().toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_double(stmt, 4, record.palettes[i].second);
-            sqlite3_step(stmt);
-            sqlite3_finalize(stmt);
+    long long now = QDateTime::currentSecsSinceEpoch();
+
+    for (const auto& record : records) {
+        QString fileId = record.fileId;
+        if (fileId.isEmpty()) {
+            sqlite3_reset(stmtQueryId);
+            sqlite3_clear_bindings(stmtQueryId);
+            sqlite3_bind_text(stmtQueryId, 1, record.path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(stmtQueryId) == SQLITE_ROW) {
+                fileId = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmtQueryId, 0)));
+            }
+        }
+        if (fileId.isEmpty()) {
+            fileId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        }
+
+        QFileInfo info(record.path);
+        QString baseName = info.completeBaseName();
+        QString ext = info.suffix();
+
+        sqlite3_reset(stmtUpsert);
+        sqlite3_clear_bindings(stmtUpsert);
+
+        sqlite3_bind_text(stmtUpsert, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 2, record.path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 3, record.filename.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 4, baseName.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 5, ext.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmtUpsert, 6, record.size);
+        sqlite3_bind_int(stmtUpsert, 7, record.isDir ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 8, record.isEmpty ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 9, record.isHidden ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 10, record.isManaged ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 11, record.encrypted ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 12, record.pinned ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 13, record.rating);
+        sqlite3_bind_text(stmtUpsert, 14, record.manualColor.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 15, record.autoColor.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmtUpsert, 16, record.width);
+        sqlite3_bind_int(stmtUpsert, 17, record.height);
+        sqlite3_bind_int(stmtUpsert, 18, record.thumbStatus);
+        sqlite3_bind_text(stmtUpsert, 19, record.note.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 20, record.url.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 21, record.sha256.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmtUpsert, 22, record.ctime);
+        sqlite3_bind_int64(stmtUpsert, 23, record.mtime);
+        sqlite3_bind_int64(stmtUpsert, 24, record.added_at > 0 ? record.added_at : now);
+        sqlite3_bind_int64(stmtUpsert, 25, now);
+
+        if (sqlite3_step(stmtUpsert) != SQLITE_DONE) {
+            cleanupStmts();
+            return false;
+        }
+
+        // 重建 file_tags
+        sqlite3_reset(stmtDelTags);
+        sqlite3_clear_bindings(stmtDelTags);
+        sqlite3_bind_text(stmtDelTags, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmtDelTags);
+
+        for (const QString& tag : record.tags) {
+            if (tag.trimmed().isEmpty()) continue;
+
+            sqlite3_reset(stmtTagDict);
+            sqlite3_clear_bindings(stmtTagDict);
+            sqlite3_bind_text(stmtTagDict, 1, tag.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_step(stmtTagDict);
+
+            sqlite3_reset(stmtInsTag);
+            sqlite3_clear_bindings(stmtInsTag);
+            sqlite3_bind_text(stmtInsTag, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmtInsTag, 2, tag.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_step(stmtInsTag);
+        }
+
+        // 重建 item_palettes
+        sqlite3_reset(stmtDelPal);
+        sqlite3_clear_bindings(stmtDelPal);
+        sqlite3_bind_text(stmtDelPal, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmtDelPal);
+
+        for (size_t i = 0; i < record.palettes.size(); ++i) {
+            sqlite3_reset(stmtInsPal);
+            sqlite3_clear_bindings(stmtInsPal);
+            sqlite3_bind_text(stmtInsPal, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int(stmtInsPal, 2, static_cast<int>(i));
+            sqlite3_bind_text(stmtInsPal, 3, record.palettes[i].first.name().toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_double(stmtInsPal, 4, record.palettes[i].second);
+            sqlite3_step(stmtInsPal);
         }
     }
 
+    cleanupStmts();
     return tx.commit();
 }
 

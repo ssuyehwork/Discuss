@@ -103,6 +103,8 @@ set(SOURCES
     src/core/BatchRenameService.cpp
     src/core/TagLexiconService.h
     src/core/TagLexiconService.cpp
+    src/core/PresetTagService.h
+    src/core/PresetTagService.cpp
     src/crypto/EncryptionManager.cpp
     src/crypto/EncryptionManager.h
     src/meta/DiskTrashRepo.cpp
