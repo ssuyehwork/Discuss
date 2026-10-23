@@ -1,8 +1,8 @@
-# SearchController-9.md - 搜索控制器指针安全与重入崩溃根治实施方案
+# SearchController-8.md - 搜索控制器指针安全与重入崩溃根治实施方案
 
-- **Base Commit Hash**: `a55d3d63d38a44b4f4a112d0797b1c00e88ad571`
+- **Base Commit Hash**: `d471d875fc0d40635fbbef5afbc0c4feb40b9a66`
 - **Prerequisite Plans**: 无
-- **Supersedes**: `QuarkMeta Architecture/Implementation Plan/superseded/SearchController-8.md`
+- **Supersedes**: `QuarkMeta Architecture/Implementation Plan/superseded/SearchController-7.md`
 
 ---
 
@@ -142,7 +142,7 @@ cmake --build build --config Debug
 
 | 序号 | 检查项 | 结论 | 关联位置/说明 |
 | :--- | :--- | :--- | :--- |
-| 1 | 方案位于物理隔离目录 `QuarkMeta Architecture/Implementation Plan/` | 满足 | `SearchController-9.md` |
+| 1 | 方案位于物理隔离目录 `QuarkMeta Architecture/Implementation Plan/` | 满足 | `SearchController-8.md` |
 | 2 | SEARCH 块原文存在且唯一 | 满足 | 精准校验 `SearchController.h` 和 `SearchController.cpp` |
 | 3 | 10 大章节完整 | 满足 | Chapter 1 ~ Chapter 10 全齐 |
 | 4 | 无 Win32 / Qt::Popup 等平台级 Hack | 满足 | 无任何非法 Hack 补丁 |
