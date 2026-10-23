@@ -236,7 +236,7 @@ void PanelMediator::setupConnections() {
 
     // 1. 路径变更与导航驱动
     connect(&NavigationService::instance(), &NavigationService::currentUrlChanged, this,
-            [this, contentPanel, addressBar, navPanel, filterPanel, searchController, titleBar](const QString& url, const QString& displayPath) {
+            [this, contentPanel, addressBar, navPanel, filterPanel, searchController, titleBar](const QString& url, const QString& displayPath, bool recursive) {
         if (searchController) {
             searchController->clearSearch(true);
         }
@@ -267,7 +267,7 @@ void PanelMediator::setupConnections() {
             } else if (url == "trash://") {
                 targetPanel->loadCategory("trash");
             } else {
-                targetPanel->loadDirectory(url);
+                targetPanel->loadDirectory(url, recursive);
             }
         }
     });
@@ -300,15 +300,8 @@ void PanelMediator::setupConnections() {
     }
 
     if (favoritePanel) {
-        connect(favoritePanel, &FavoritePanel::directorySelectedWithRecursive, this, [this, contentPanel](const QString& path, bool recursive) {
-            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
-            if (target) {
-                target->loadDirectory(path, recursive);
-            }
-        });
-
-        connect(favoritePanel, &FavoritePanel::directorySelected, &NavigationService::instance(), [](const QString& path) {
-            NavigationService::instance().navigateTo(path);
+        connect(favoritePanel, &FavoritePanel::directorySelected, &NavigationService::instance(), [](const QString& path, bool recursive) {
+            NavigationService::instance().navigateTo(path, true, recursive);
         });
 
         connect(favoritePanel, &FavoritePanel::requestLocateFile, this, [this, contentPanel](const QString& path) {

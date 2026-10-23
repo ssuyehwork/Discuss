@@ -40,8 +40,7 @@ public:
     void saveFavorites();
 
 signals:
-    void directorySelected(const QString& path);
-    void directorySelectedWithRecursive(const QString& path, bool recursive);
+    void directorySelected(const QString& path, bool recursive = false);
     void requestLocateFile(const QString& path);
     void favoriteStateChanged(const QString& path, bool isFavorite);
 

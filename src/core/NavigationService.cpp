@@ -66,7 +66,7 @@ void NavigationService::openInNewTab(const QString& rawPath) {
     emit requestOpenInNewTab(normUrl);
 }
 
-void NavigationService::navigateTo(const QString& rawUrl, bool recordHistory) {
+void NavigationService::navigateTo(const QString& rawUrl, bool recordHistory, bool recursive) {
     if (rawUrl.isEmpty()) return;
 
     QString normalized = normalizeUrl(rawUrl);
@@ -92,7 +92,7 @@ void NavigationService::navigateTo(const QString& rawUrl, bool recordHistory) {
         NavigationHistoryService::recordRecentVisitedFolder(QDir::toNativeSeparators(m_currentUrl).toStdWString());
     }
 
-    emit currentUrlChanged(m_currentUrl, currentDisplayPath());
+    emit currentUrlChanged(m_currentUrl, currentDisplayPath(), recursive);
     emitNavState();
 }
 
@@ -100,7 +100,7 @@ void NavigationService::goBack() {
     if (canGoBack()) {
         m_currentIndex--;
         m_currentUrl = m_history[m_currentIndex];
-        emit currentUrlChanged(m_currentUrl, currentDisplayPath());
+        emit currentUrlChanged(m_currentUrl, currentDisplayPath(), false);
         emitNavState();
     }
 }
@@ -109,7 +109,7 @@ void NavigationService::goForward() {
     if (canGoForward()) {
         m_currentIndex++;
         m_currentUrl = m_history[m_currentIndex];
-        emit currentUrlChanged(m_currentUrl, currentDisplayPath());
+        emit currentUrlChanged(m_currentUrl, currentDisplayPath(), false);
         emitNavState();
     }
 }
@@ -142,7 +142,7 @@ void NavigationService::goUp() {
 
 void NavigationService::refresh() {
     if (!m_currentUrl.isEmpty()) {
-        emit currentUrlChanged(m_currentUrl, currentDisplayPath());
+        emit currentUrlChanged(m_currentUrl, currentDisplayPath(), false);
     }
 }
 
