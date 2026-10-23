@@ -80,7 +80,6 @@ private:
     QPointer<AppShortcutController> m_shortcutController;
     PaneActivationTracker* m_activationTracker = nullptr;
 
-    QString m_currentQuickLookPath;
 };
 
 } // namespace QuarkMeta

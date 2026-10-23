@@ -43,6 +43,7 @@ public:
     void goUpColumnFromIndex(int paneIndex);
     void clearAllSelections();
     void toggleFolderSectionCollapse();
+    void expandFolder(const QString& folderPath, int paneIdx);
 
     QStringList columnPaths() const {
         QStringList paths;

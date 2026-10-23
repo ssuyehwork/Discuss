@@ -593,7 +593,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
     switch (action) {
         case ContentPanel::ActionOpen:
-            m_panel->onDoubleClicked(currentIndex);
+            m_panel->activateIndex(currentIndex);
             break;
         case ContentPanel::ActionOpenInNewTab: {
             QString targetPath = path;
@@ -608,14 +608,21 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         }
         case ContentPanel::ActionOpenDefault: {
             auto indexes = view->selectionModel()->selectedIndexes();
+            QStringList targetPaths;
             for (const auto& idx : indexes) {
                 if (idx.column() == 0) {
                     QString filePath = idx.data(PathRole).toString();
                     if (!filePath.isEmpty() && QFileInfo::exists(filePath)) {
-                        MetadataManager::instance().recordAccess(filePath.toStdWString());
+                        targetPaths << filePath;
                         QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
                     }
                 }
+            }
+            if (!targetPaths.isEmpty()) {
+                AppCommand cmd;
+                cmd.type = AppCommandType::RecordAccess;
+                cmd.targetPaths = targetPaths;
+                CoreEngine::instance().executeCommand(cmd);
             }
             break;
         }

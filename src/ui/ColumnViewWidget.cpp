@@ -493,4 +493,22 @@ void ColumnViewWidget::goUpColumnFromIndex(int paneIndex) {
     }
 }
 
+void ColumnViewWidget::expandFolder(const QString& folderPath, int paneIdx) {
+    if (paneIdx + 1 < m_panes.size() &&
+        QDir::cleanPath(m_panes[paneIdx + 1]->currentPath()) == QDir::cleanPath(folderPath)) {
+        setActivePaneIndex(paneIdx + 1);
+        focusPane(paneIdx + 1);
+        emit selectionChanged();
+        return;
+    }
+
+    dismissSubColumns(paneIdx);
+    clearOtherSelections(paneIdx);
+    appendColumn(folderPath);
+    emit pathNavigated(folderPath);
+    if (m_contentPanel) {
+        m_contentPanel->recalculateAndEmitStats();
+    }
+}
+
 } // namespace QuarkMeta

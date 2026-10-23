@@ -631,24 +631,17 @@ void PanelMediator::setupConnections() {
     *wireContentPanel = [this, addressBar, favoritePanel, metaPanel, updateMetaPanelFromPanel, wireContentPanel](ContentPanel* panel) {
         if (!panel) return;
 
-        // 1. QuickLook & 文件双击/空格打开与快速预览 (🚀 彻底修复副窗格不能预览的问题)
-        connect(panel, &ContentPanel::requestQuickLook, this, [this](const QString& path) {
-            m_currentQuickLookPath = path;
-            QuickLookWindow::instance().previewFile(path);
-        });
-
+        // 1. 文件双击/空格/回车/右键菜单统一文件激活动作
         connect(panel, &ContentPanel::fileActivated, this, [this](const QString& path) {
+            if (!UiHelper::canPreviewFile(path)) {
+                return;
+            }
             AppCommand cmd;
             cmd.type = AppCommandType::RecordAccess;
             cmd.targetPaths << path;
             CoreEngine::instance().executeCommand(cmd);
 
-            if (UiHelper::canPreviewFile(path)) {
-                m_currentQuickLookPath = path;
-                QuickLookWindow::instance().previewFile(path);
-            } else {
-                QDesktopServices::openUrl(QUrl::fromLocalFile(path));
-            }
+            QuickLookWindow::instance().preview(path);
         });
 
         // 2. 收藏夹请求
@@ -776,53 +769,67 @@ void PanelMediator::setupConnections() {
     connect(&QuickLookWindow::instance(), &QuickLookWindow::prevRequested, this, [this, contentPanel]() {
         ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
         if (!target) return;
-        QString prev = target->getAdjacentFilePath(m_currentQuickLookPath, -1);
-        if (!prev.isEmpty()) {
-            m_currentQuickLookPath = prev;
-            QuickLookWindow::instance().previewFile(prev);
-            target->selectAndScrollToPath(prev);
+        QString curPath = QuickLookWindow::instance().currentPath();
+        int delta = -1;
+        while (true) {
+            QString prev = target->getAdjacentFilePath(curPath, delta);
+            if (prev.isEmpty()) break;
+            if (!QFileInfo(prev).isDir() && UiHelper::canPreviewFile(prev)) {
+                QuickLookWindow::instance().preview(prev);
+                target->selectAndScrollToPath(prev);
+                break;
+            }
+            delta--;
         }
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::nextRequested, this, [this, contentPanel]() {
         ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
         if (!target) return;
-        QString next = target->getAdjacentFilePath(m_currentQuickLookPath, 1);
-        if (!next.isEmpty()) {
-            m_currentQuickLookPath = next;
-            QuickLookWindow::instance().previewFile(next);
-            target->selectAndScrollToPath(next);
+        QString curPath = QuickLookWindow::instance().currentPath();
+        int delta = 1;
+        while (true) {
+            QString next = target->getAdjacentFilePath(curPath, delta);
+            if (next.isEmpty()) break;
+            if (!QFileInfo(next).isDir() && UiHelper::canPreviewFile(next)) {
+                QuickLookWindow::instance().preview(next);
+                target->selectAndScrollToPath(next);
+                break;
+            }
+            delta++;
         }
     });
 
     // QuickLook 改星级 -> 同步更新内容面板卡片
     connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this, metaPanel, contentPanel](int rating) {
-        if (m_currentQuickLookPath.isEmpty()) return;
+        QString curPath = QuickLookWindow::instance().currentPath();
+        if (curPath.isEmpty()) return;
 
         AppCommand cmd;
         cmd.type = AppCommandType::SetRating;
-        cmd.targetPaths << m_currentQuickLookPath;
+        cmd.targetPaths << curPath;
         cmd.params["rating"] = rating;
         CoreEngine::instance().executeCommand(cmd);
 
         ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
         if (metaPanel) metaPanel->setRating(rating, false);
-        if (target) target->updateItemMetadata(m_currentQuickLookPath);
+        if (target) target->updateItemMetadata(curPath);
     });
 
     // QuickLook 改颜色 -> 同步更新内容面板卡片
     connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this, metaPanel, contentPanel](const QString& color) {
-        if (m_currentQuickLookPath.isEmpty()) return;
+        QString curPath = QuickLookWindow::instance().currentPath();
+        if (curPath.isEmpty()) return;
 
         AppCommand cmd;
         cmd.type = AppCommandType::SetColor;
-        cmd.targetPaths << m_currentQuickLookPath;
+        cmd.targetPaths << curPath;
         cmd.params["color"] = color;
         CoreEngine::instance().executeCommand(cmd);
 
         ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
         if (metaPanel) metaPanel->setColor(color, false);
-        if (target) target->updateItemMetadata(m_currentQuickLookPath);
+        if (target) target->updateItemMetadata(curPath);
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::deleteRequested, this, [this, contentPanel](const QString& path) {
@@ -831,15 +838,34 @@ void PanelMediator::setupConnections() {
 
         if (TrashService::instance().moveToTrash({path}, target)) {
             if (target) {
-                QString next = target->getAdjacentFilePath(path, 1);
-                if (!next.isEmpty()) {
-                    m_currentQuickLookPath = next;
-                    QuickLookWindow::instance().previewFile(next);
+                int delta = 1;
+                QString nextValid;
+                while (true) {
+                    QString candidate = target->getAdjacentFilePath(path, delta);
+                    if (candidate.isEmpty()) break;
+                    if (!QFileInfo(candidate).isDir() && UiHelper::canPreviewFile(candidate)) {
+                        nextValid = candidate;
+                        break;
+                    }
+                    delta++;
+                }
+
+                if (!nextValid.isEmpty()) {
+                    QuickLookWindow::instance().preview(nextValid);
                 } else {
-                    QString prev = target->getAdjacentFilePath(path, -1);
-                    if (!prev.isEmpty()) {
-                        m_currentQuickLookPath = prev;
-                        QuickLookWindow::instance().previewFile(prev);
+                    delta = -1;
+                    QString prevValid;
+                    while (true) {
+                        QString candidate = target->getAdjacentFilePath(path, delta);
+                        if (candidate.isEmpty()) break;
+                        if (!QFileInfo(candidate).isDir() && UiHelper::canPreviewFile(candidate)) {
+                            prevValid = candidate;
+                            break;
+                        }
+                        delta--;
+                    }
+                    if (!prevValid.isEmpty()) {
+                        QuickLookWindow::instance().preview(prevValid);
                     } else {
                         QuickLookWindow::instance().closePreview();
                     }

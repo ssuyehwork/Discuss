@@ -41,11 +41,6 @@
 
 namespace QuarkMeta {
 
-// 静态文件分类后缀定义 (音视频格式并入黑名单进行系统大图标降级预览，不直接播放)
-static const QSet<QString> UNPREVIEWABLE_EXTS = {
-    "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "exe", "dll", "msi", "sys", "iso", "dmg", "pkg", "bin", "lnk",
-    "mp4", "m4v", "mov", "avi", "mkv", "wmv", "flv", "webm", "3gp", "mp3", "wav", "wma", "flac", "aac", "ogg", "m4a", "ape"
-};
 
 // ==========================================
 // QuickLookWindow 实现
@@ -111,10 +106,6 @@ void QuickLookWindow::setupUi() {
     rootLayout->addWidget(m_container);
 }
 
-void QuickLookWindow::previewFile(const QString& path) {
-    preview(path);
-}
-
 void QuickLookWindow::preview(const QString& filePath) {
     m_currentPath = filePath;
     QFileInfo fi(filePath);
@@ -125,21 +116,6 @@ void QuickLookWindow::preview(const QString& filePath) {
     
     if (UiHelper::isGraphicsFile(ext)) {
         renderImage(filePath);
-    } else if (UNPREVIEWABLE_EXTS.contains(ext)) {
-        // 直接提示不支持，显示其系统图标
-        m_graphicsView->hide();
-        m_textEdit->hide();
-        
-        m_graphicsView->clear();
-        m_textEdit->clear();
-        
-        QIcon fileIcon = ShellIconManager::getFileIcon(filePath, 256);
-        QPixmap pix = fileIcon.pixmap(256, 256);
-        m_graphicsView->setPixmap(pix);
-        m_graphicsView->show();
-        
-        m_infoLabel->setText("该文件类型暂不支持预览");
-        m_infoLabel->setObjectName("QLInfoLabelWarn");
     } else {
         renderText(filePath);
     }
@@ -282,7 +258,7 @@ QImage QuickLookWindow::loadOrExtractQuickLookImage(const QString& filePath, int
     QString dirL1 = hashStr.left(2);
     QString dirL2 = hashStr.mid(2, 2);
 
-    QString baseCacheDir = AppConfig::instance().getGlobalCacheDir() + "/quicklook_previews_v2";
+    QString baseCacheDir = AppConfig::instance().getGlobalCacheDir() + "/quicklook_previews";
     QString cacheDir = QDir(baseCacheDir).filePath(QString("%1/%2").arg(dirL1, dirL2));
     QDir().mkpath(cacheDir);
 

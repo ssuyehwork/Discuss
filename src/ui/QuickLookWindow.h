@@ -22,8 +22,8 @@ class QuickLookWindow : public QWidget {
 public:
     static QuickLookWindow& instance();
 
-    void previewFile(const QString& path);
     void preview(const QString& filePath);
+    QString currentPath() const { return m_currentPath; }
     void closePreview();
 
 signals:

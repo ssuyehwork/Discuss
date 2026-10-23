@@ -199,7 +199,6 @@ signals:
     void closePaneRequested();
     void zoomLevelChanged(int level);
     void viewModeChanged(ViewMode mode);
-    void requestQuickLook(const QString& path);
     void fileActivated(const QString& path);
     void selectionChanged(const QStringList& paths);
     void directorySelected(const QString& path);
@@ -216,7 +215,7 @@ public slots:
     void onSelectionChanged();
     void onCustomContextMenuRequested(const QPoint& pos);
     void onCustomContextMenuRequested(QAbstractItemView* view, const QPoint& pos);
-    void onDoubleClicked(const QModelIndex& index);
+    void activateIndex(const QModelIndex& index);
     void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), Qt::DropAction action = Qt::CopyAction);
     void loadDirectory(const QString& path, bool recursive = false);
     void setPendingSelectPath(const QString& fullPath, bool edit = false);

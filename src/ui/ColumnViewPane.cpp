@@ -131,14 +131,8 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
     });
 
     connect(m_listView, &QListView::doubleClicked, this, [this](const QModelIndex& index) {
-        if (!index.isValid() || index.data(SectionHeaderRole).toBool()) return;
-        QString itemPath = index.data(PathRole).toString();
-        bool isDir = (index.data(TypeRole).toString() == "folder") || index.data(Qt::UserRole + 2).toBool() || QFileInfo(itemPath).isDir();
-        int paneIdx = property("paneIndex").toInt();
-        if (isDir) {
-            emit folderExpandRequested(itemPath, paneIdx);
-        } else if (m_contentPanel) {
-            m_contentPanel->onDoubleClicked(index);
+        if (m_contentPanel) {
+            m_contentPanel->activateIndex(index);
         }
     });
 }

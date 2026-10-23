@@ -269,7 +269,7 @@ void ContentPanel::initGridView() {
     jv->installEventFilter(this);
     jv->viewport()->installEventFilter(this);
 
-    connect(jv, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
+    connect(jv, &QAbstractItemView::doubleClicked, this, &ContentPanel::activateIndex);
     connect(jv->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(jv, &QAbstractItemView::customContextMenuRequested, this, [this](const QPoint& pos) {
         onCustomContextMenuRequested(m_gridView, pos);
@@ -313,7 +313,7 @@ void ContentPanel::initListView() {
     tree->installEventFilter(this);
     tree->viewport()->installEventFilter(this);
 
-    connect(tree, &QAbstractItemView::doubleClicked, this, &ContentPanel::onDoubleClicked);
+    connect(tree, &QAbstractItemView::doubleClicked, this, &ContentPanel::activateIndex);
     connect(tree->selectionModel(), &QItemSelectionModel::selectionChanged, this, &ContentPanel::onSelectionChanged);
     connect(tree, &QAbstractItemView::customContextMenuRequested, this, [this](const QPoint& pos) {
         onCustomContextMenuRequested(m_treeView, pos);
@@ -754,12 +754,20 @@ void ContentPanel::onPathsDropped(const QStringList& paths, const QModelIndex& t
     if (m_fileOpsHandler) m_fileOpsHandler->onPathsDropped(paths, targetIndex, targetDirOverride, action);
 }
 
-void ContentPanel::onDoubleClicked(const QModelIndex& index) {
+void ContentPanel::activateIndex(const QModelIndex& index) {
     if (!index.isValid()) return;
+    if (index.data(SectionHeaderRole).toBool()) return;
     QString path = index.data(PathRole).toString();
     if (path.isEmpty()) return;
+
     if (QFileInfo(path).isDir()) {
-        emit directorySelected(path);
+        if (m_currentViewMode == ColumnView && m_columnView) {
+            ColumnViewPane* pane = m_columnView->activePane();
+            int paneIdx = pane ? pane->property("paneIndex").toInt() : 0;
+            m_columnView->expandFolder(path, paneIdx);
+        } else {
+            emit directorySelected(path);
+        }
     } else {
         emit fileActivated(path);
     }

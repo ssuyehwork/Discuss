@@ -589,28 +589,17 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
     }
 
-    // 7. 空格键: QuickLook 预览
-    if (keyEvent->key() == Qt::Key_Space) {
+    // 7. 空格键与回车键: 统一激活当前项（QuickLook 预览或打开文件夹）
+    if (keyEvent->key() == Qt::Key_Space || keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
         QModelIndex idx = view->currentIndex();
         if (!idx.isValid() && view->selectionModel()) {
             auto selected = view->selectionModel()->selectedIndexes();
             if (!selected.isEmpty()) idx = selected.first();
         }
-
         if (idx.isValid()) {
-            // 🚀 确保即使焦点处于列表视图非 Name 列，也能正确从 FileListColumn::Name sibling 获取完整 PathRole 属性
             QModelIndex nameIdx = idx.sibling(idx.row(), static_cast<int>(FileListColumn::Name));
-            QString path = nameIdx.data(PathRole).toString();
-            if (!path.isEmpty() && UiHelper::canPreviewFile(path)) {
-                emit m_panel->requestQuickLook(path);
-            }
+            m_panel->activateIndex(nameIdx);
         }
-        return true;
-    }
-
-    // 8. 导航键
-    if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
-        m_panel->onDoubleClicked(view->currentIndex());
         return true;
     }
     if ((keyEvent->modifiers() & Qt::ControlModifier) && keyEvent->key() == Qt::Key_Backslash) {
