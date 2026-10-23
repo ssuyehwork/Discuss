@@ -341,12 +341,18 @@ QLabel#StatusBarLeft {
     font-size: 11px;
     color: #888888;
     background: transparent;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    min-height: 20px;
 }
 QLabel#StatusBarLeft[indexing='true'] {
     font-size: 11px;
     color: #378ADD;
     background: transparent;
     font-weight: bold;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    min-height: 20px;
 }
 
 /* 批次二重构样式：对话框与弹窗类外联 QSS 选择器 */
