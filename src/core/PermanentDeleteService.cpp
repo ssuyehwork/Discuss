@@ -3,7 +3,7 @@
 #endif
 #include "PermanentDeleteService.h"
 #include "../ui/dialogs/FramelessMessageBox.h"
-#include "../ui/BatchProgressDialog.h"
+#include "../core/TaskProgressService.h"
 #include "../ui/ToolTipOverlay.h"
 #include "../util/SecureFileEraser.h"
 #include "../core/UndoManager.h"
@@ -38,15 +38,13 @@ bool PermanentDeleteService::execute(const QStringList& paths, QWidget* parentWi
         return false;
     }
 
-    BatchProgressDialog* progress = new BatchProgressDialog("正在执行永久删除（深层抹除）...", parentWidget);
-    progress->show();
+    int jobId = TaskProgressService::instance().createJob("正在执行永久删除（深层抹除）...", paths.size());
 
-    QPointer<BatchProgressDialog> weakProgress(progress);
     QPointer<PermanentDeleteService> weakThis(this);
 
     MetadataManager::instance().beginInternalOperation();
 
-    (void)QtConcurrent::run([paths, isSecureShred, weakProgress, weakThis]() {
+    (void)QtConcurrent::run([paths, isSecureShred, jobId, weakThis]() {
         int total = paths.size();
         int count = 0;
 
@@ -88,19 +86,12 @@ bool PermanentDeleteService::execute(const QStringList& paths, QWidget* parentWi
             }
 
             count++;
-            if (weakProgress) {
-                int percent = (int)((float)count / total * 100);
-                QMetaObject::invokeMethod(QCoreApplication::instance(), [weakProgress, percent]() {
-                    if (weakProgress) weakProgress->setValue(percent);
-                });
-            }
+            TaskProgressService::instance().updateProgress(jobId, count, total, QString("已擦除 %1 / %2 项").arg(count).arg(total));
         }
 
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakProgress, weakThis]() {
-            if (weakProgress) {
-                weakProgress->accept();
-                weakProgress->deleteLater();
-            }
+        TaskProgressService::instance().finishJob(jobId);
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis]() {
             MetadataManager::instance().endInternalOperation();
             if (weakThis) {
                 emit weakThis->permanentDeleteCompleted();
@@ -119,15 +110,13 @@ bool PermanentDeleteService::executeTrashItems(const std::vector<std::pair<int, 
         return false;
     }
 
-    BatchProgressDialog* progress = new BatchProgressDialog("正在销毁回收站项目...", parentWidget);
-    progress->show();
+    int jobId = TaskProgressService::instance().createJob("正在销毁回收站项目...", static_cast<int>(trashItems.size()));
 
-    QPointer<BatchProgressDialog> weakProgress(progress);
     QPointer<PermanentDeleteService> weakThis(this);
 
     MetadataManager::instance().beginInternalOperation();
 
-    (void)QtConcurrent::run([trashItems, weakProgress, weakThis]() {
+    (void)QtConcurrent::run([trashItems, jobId, weakThis]() {
         int total = static_cast<int>(trashItems.size());
         int count = 0;
 
@@ -136,19 +125,12 @@ bool PermanentDeleteService::executeTrashItems(const std::vector<std::pair<int, 
             DiskTrashService::permanentlyDeleteDiskTrash(item.first, item.second);
             UndoManager::instance().removeCommandsForPath(item.second);
             count++;
-            if (weakProgress) {
-                int percent = (int)((float)count / total * 100);
-                QMetaObject::invokeMethod(QCoreApplication::instance(), [weakProgress, percent]() {
-                    if (weakProgress) weakProgress->setValue(percent);
-                });
-            }
+            TaskProgressService::instance().updateProgress(jobId, count, total, QString("已销毁 %1 / %2 项").arg(count).arg(total));
         }
 
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakProgress, weakThis]() {
-            if (weakProgress) {
-                weakProgress->accept();
-                weakProgress->deleteLater();
-            }
+        TaskProgressService::instance().finishJob(jobId);
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis]() {
             MetadataManager::instance().endInternalOperation();
             if (weakThis) {
                 emit weakThis->permanentDeleteCompleted();
@@ -171,15 +153,13 @@ bool PermanentDeleteService::executeEmptyTrash(QWidget* parentWidget, bool isSec
         return false;
     }
 
-    BatchProgressDialog* progress = new BatchProgressDialog("正在清空回收站（深层物理抹除）...", parentWidget);
-    progress->show();
+    int jobId = TaskProgressService::instance().createJob("正在清空回收站（深层物理抹除）...", static_cast<int>(allTrash.size()));
 
-    QPointer<BatchProgressDialog> weakProgress(progress);
     QPointer<PermanentDeleteService> weakThis(this);
 
     MetadataManager::instance().beginInternalOperation();
 
-    (void)QtConcurrent::run([allTrash, isSecureShred, weakProgress, weakThis]() {
+    (void)QtConcurrent::run([allTrash, isSecureShred, jobId, weakThis]() {
         int total = static_cast<int>(allTrash.size());
         int count = 0;
 
@@ -192,19 +172,12 @@ bool PermanentDeleteService::executeEmptyTrash(QWidget* parentWidget, bool isSec
             UndoManager::instance().removeCommandsForPath(QString::fromStdWString(item.originalPath));
 
             count++;
-            if (weakProgress) {
-                int percent = (int)((float)count / total * 100);
-                QMetaObject::invokeMethod(QCoreApplication::instance(), [weakProgress, percent]() {
-                    if (weakProgress) weakProgress->setValue(percent);
-                });
-            }
+            TaskProgressService::instance().updateProgress(jobId, count, total, QString("已清空 %1 / %2 项").arg(count).arg(total));
         }
 
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakProgress, weakThis]() {
-            if (weakProgress) {
-                weakProgress->accept();
-                weakProgress->deleteLater();
-            }
+        TaskProgressService::instance().finishJob(jobId);
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis]() {
             MetadataManager::instance().endInternalOperation();
             MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
             if (weakThis) {
