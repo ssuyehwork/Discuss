@@ -13,7 +13,7 @@ public:
     static NavigationService& instance();
 
     // 核心导航调度接口
-    void navigateTo(const QString& rawUrl, bool recordHistory = true);
+    void navigateTo(const QString& rawUrl, bool recordHistory = true, bool recursive = false);
     void openInNewTab(const QString& rawPath);
     void goBack();
     void goForward();
@@ -41,7 +41,7 @@ signals:
      * @param url 标准协议 URL (如 file://C:/Users 或 computer://)
      * @param displayPath 适合 UI 面包屑展示的文本 (如 C:\Users 或 此电脑)
      */
-    void currentUrlChanged(const QString& url, const QString& displayPath);
+    void currentUrlChanged(const QString& url, const QString& displayPath, bool recursive);
 
     /**
      * @brief 导航可用性状态变动信号 (驱动前进/后退/上级按钮状态)
