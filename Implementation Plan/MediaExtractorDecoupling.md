@@ -8,6 +8,23 @@ Supersedes: 无
 
 ## Chapter 1: Overview（概述与根因分析）
 
+### 1.0 Gate 1 已读物理证据清单 (Pre-Draft Physical Evidence)
+
+#### 1. 物理读取文件列表
+- `src/ui/controllers/ContentDataLoader.cpp`（只读核查：`loadDirectory` 回调函数中第 110~120 行无差别全量构建 `filePaths` 并调用 `MetadataManager::registerItemsAsync`）
+- `src/meta/MetadataManager.h` / `src/meta/MetadataManager.cpp`（只读核查：`registerItemsAsync` 逻辑及 `shouldExtractMediaFeatures` 判定链）
+- `src/meta/MediaExtractorPipeline.cpp`（只读核查：`addWork` 中触发 `TaskProgressService` 创建进度任务并设置 `finishTextTemplate = "提取完成  数量：{total}  |  实际耗时：{elapsed}"`）
+
+#### 2. 头文件原样签名
+- `void MetadataManager::registerItemsAsync(const QStringList& paths);` (`src/meta/MetadataManager.h:78`)
+- `void MediaExtractorPipeline::cancelAll();` (`src/meta/MediaExtractorPipeline.h:43`)
+
+#### 3. 既有 API 检索日志
+- `grep -rn "registerItemsAsync" src/`
+  - `src/meta/MetadataManager.cpp:219: void MetadataManager::registerItemsAsync(const QStringList& paths)`
+  - `src/ui/controllers/ContentDataLoader.cpp:113: MetadataManager::instance().registerItemsAsync(filePaths);`
+  - `src/ui/controllers/ContentChangeWatcher.cpp:252: MetadataManager::instance().registerItemsAsync(addedFiles);`
+
 ### 1.1 问题根因分析
 在 QuarkMeta 当前实现中，当用户通过导航浏览普通磁盘目录（如包含 2000+ 张图片的文件夹）时，`ContentDataLoader::loadDirectory` 会在扫描并加载完毕目录项后，无差别地将该目录下**所有文件路径**构建为列表，并直接调用 `MetadataManager::instance().registerItemsAsync(filePaths)`。
 
