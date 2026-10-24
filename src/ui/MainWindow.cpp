@@ -25,7 +25,7 @@
 #include "PanelLayoutManager.h"
 #include "AddressBar.h"
 #include "ToolTipOverlay.h"
-#include "TaskProgressToolBar.h"
+#include "TaskProgressStrip.h"
 #include "../core/AppConfig.h"
 #include "../core/NavigationService.h"
 #include "../core/CoreController.h"
@@ -107,16 +107,21 @@ void MainWindow::initUi() {
     // 3. 底部状态栏组装
     setupStatusBar(centralC);
 
-    // 4. 控制器与中介者组装（组件依赖图绑定）
+    // 4. 悬浮线条进度条组装（作为 centralC 子控件悬浮，不进入布局）
+    m_taskProgressStrip = new TaskProgressStrip(centralC);
+
+    // 5. 控制器与中介者组装（组件依赖图绑定）
     setupControllersAndMediators();
 
-    // 5. 组装至顶层主布局
+    // 6. 组装至顶层主布局
     mainL->addWidget(m_titleBarWidget);
     mainL->addWidget(m_driveBarWidget);
     mainL->addWidget(m_navBarWidget);
     mainL->addWidget(bodyWrapper, 1);
     mainL->addWidget(m_statusBarWidget);
-    mainL->addWidget(m_taskProgressToolBar);
+
+    // 7. 设置悬浮进度条对齐锚点
+    m_taskProgressStrip->setAnchors(bodyWrapper, m_statusBarWidget);
 
     setCentralWidget(centralC);
 }
@@ -247,9 +252,6 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     connect(&CoreController::instance(), &CoreController::statusTextChanged, this, updateStatus);
     connect(&CoreController::instance(), &CoreController::isIndexingChanged, this, updateStatus);
     updateStatus();
-
-    m_taskProgressToolBar = new TaskProgressToolBar(parentWidget);
-    m_taskProgressToolBar->hide();
 
     auto createStatusBtn = [this](const QString& iconKey, const QString& tip) -> QPushButton* {
         QPushButton* btn = new QPushButton(m_statusBarWidget);
