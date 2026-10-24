@@ -1,5 +1,4 @@
 #include "BatchCreateDialog.h"
-#include "ToolTipOverlay.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "../core/AppConfig.h"
@@ -308,7 +307,6 @@ void BatchCreateDialog::onExecute() {
     }
 
     if (rules.empty()) {
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "规则不能为空！", 1500, QColor("#E81123"));
         return;
     }
 
@@ -365,7 +363,6 @@ void BatchCreateDialog::onExecute() {
     }
 
     QString msg = QString("成功创建 %1 个项目").arg(itemsCreated);
-    ToolTipOverlay::instance()->showText(QCursor::pos(), msg, 2000, Style::SuccessGreen);
 
     // 按照用户最新要求：成功创建后，自动递增累加序列数字的起始值，并落盘保存
     for (auto* row : m_ruleRows) {

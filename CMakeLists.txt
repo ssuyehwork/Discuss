@@ -171,8 +171,6 @@ set(SOURCES
     src/ui/ColorPicker.h
     src/ui/ContentPanel.cpp
     src/ui/ContentPanel.h
-    src/ui/DriveButton.cpp
-    src/ui/DriveButton.h
     src/ui/ViewDragDropHelper.cpp
     src/ui/ViewDragDropHelper.h
     src/ui/DropTreeView.cpp

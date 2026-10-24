@@ -6,7 +6,6 @@
 #include "MetaPanel.h"
 #include "FilterPanel.h"
 #include "UiHelper.h"
-#include "ToolTipOverlay.h"
 #include "../core/AppConfig.h"
 #include <QAction>
 #include <QCursor>
@@ -110,7 +109,6 @@ void PanelLayoutManager::resetSplitterLayout() {
     AppConfig::instance().remove("MainWindow/PanelVisibility");
     AppConfig::instance().sync();
 
-    ToolTipOverlay::instance()->showText(QCursor::pos(), "分栏布局已重置为默认值", 1500, QColor("#2ecc71"));
     updateDynamicMinimumSize();
     emit layoutResetCompleted();
 }

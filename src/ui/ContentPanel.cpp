@@ -613,7 +613,6 @@ void ContentPanel::dropEvent(QDropEvent* event) {
                     event->acceptProposedAction();
                     return;
                 } else {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "空间不足，无法放置到此处", 2000, QColor("#e81123"));
                 }
             }
             return;

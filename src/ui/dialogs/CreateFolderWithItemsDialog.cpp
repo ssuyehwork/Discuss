@@ -1,6 +1,5 @@
 #include "dialogs/CreateFolderWithItemsDialog.h"
 #include "UiHelper.h"
-#include "../ToolTipOverlay.h"
 #include "../SvgIconRenderer.h"
 #include "../../util/DiskIoService.h"
 #include "../../core/LastOperationManager.h"
@@ -112,7 +111,6 @@ void CreateFolderWithItemsDialog::setupUi() {
 void CreateFolderWithItemsDialog::onCreateAndMigrate() {
     QString folderName = m_nameEdit->text().trimmed();
     if (folderName.isEmpty()) {
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "文件夹名称不能为空", 1500, QColor("#e74c3c"));
         return;
     }
 
@@ -126,7 +124,6 @@ void CreateFolderWithItemsDialog::onCreateAndMigrate() {
     }
 
     if (!baseDir.mkpath(targetFolderPath)) {
-        ToolTipOverlay::instance()->showText(QCursor::pos(), "创建文件夹失败", 1500, QColor("#e74c3c"));
         return;
     }
 
@@ -143,9 +140,6 @@ void CreateFolderWithItemsDialog::onCreateAndMigrate() {
         DiskIoService::instance().executeAsync(ioCtx, [pWidget, count = m_selectedPaths.size()](bool success) {
             QMetaObject::invokeMethod(QCoreApplication::instance(), [success, count]() {
                 if (success) {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已创建文件夹并将 %1 个项目移动至新文件夹").arg(count), 2000, QColor("#2ecc71"));
-                } else {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "移动文件时出错，请重试", 2000, QColor("#e81123"));
                 }
             });
         });

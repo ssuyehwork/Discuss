@@ -102,16 +102,6 @@ void ContentDataLoader::loadDirectory(const QString& path, bool recursive) {
                 panelPtr->restoreSelections();
                 panelPtr->startVisibleTimer();
 
-                // Enqueue scanned files for background media feature & auto-color extraction
-                QStringList filePaths;
-                for (const auto& item : allItems) {
-                    if (!item.isDir && !item.path.isEmpty()) {
-                        filePaths.append(item.path);
-                    }
-                }
-                if (!filePaths.isEmpty()) {
-                    MetadataManager::instance().registerItemsAsync(filePaths);
-                }
             }
         }, Qt::QueuedConnection);
     });
