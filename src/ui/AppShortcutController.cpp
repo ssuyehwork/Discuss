@@ -4,6 +4,7 @@
 #include "TabBarWidget.h"
 #include "LocalShortcutInterceptor.h"
 #include "../core/NavigationService.h"
+#include "../core/TaskProgressService.h"
 #include "../core/UndoManager.h"
 #include <QApplication>
 #include <QLineEdit>
@@ -76,6 +77,13 @@ bool AppShortcutController::isEditingFocus() {
 bool AppShortcutController::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::KeyPress) {
         QKeyEvent* keyEv = static_cast<QKeyEvent*>(event);
+
+        // 0. Esc 键熔断机制（仅在有后台运行任务时触发 tripAll，不吞掉 Esc，透传原有逻辑）
+        if (keyEv->key() == Qt::Key_Escape && keyEv->modifiers() == Qt::NoModifier && !keyEv->isAutoRepeat()) {
+            if (TaskProgressService::instance().hasActiveJobs()) {
+                TaskProgressService::instance().tripAll();
+            }
+        }
 
         // 1. 全局 Ctrl + W 关闭激活窗口契约
         if (keyEv->key() == Qt::Key_W && (keyEv->modifiers() & Qt::ControlModifier)) {

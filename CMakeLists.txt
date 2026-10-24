@@ -267,8 +267,10 @@ set(SOURCES
     src/ui/TagSelectorOverlay.cpp
     src/ui/PresetTagsDialog.h
     src/ui/PresetTagsDialog.cpp
-    src/ui/TaskProgressToolBar.h
-    src/ui/TaskProgressToolBar.cpp
+    src/ui/TaskProgressStrip.h
+    src/ui/TaskProgressStrip.cpp
+    src/ui/StatusTextCoordinator.h
+    src/ui/StatusTextCoordinator.cpp
     src/ui/components/ElasticEdit.h
     src/ui/components/ElasticEdit.cpp
     src/ui/components/TagPill.h

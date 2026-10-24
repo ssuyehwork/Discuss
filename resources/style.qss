@@ -345,15 +345,6 @@ QLabel#StatusBarLeft {
     padding-bottom: 1px;
     min-height: 20px;
 }
-QLabel#StatusBarLeft[indexing='true'] {
-    font-size: 11px;
-    color: #378ADD;
-    background: transparent;
-    font-weight: bold;
-    padding-top: 1px;
-    padding-bottom: 1px;
-    min-height: 20px;
-}
 
 /* 批次二重构样式：对话框与弹窗类外联 QSS 选择器 */
 QWidget#DialogContainer {
@@ -732,33 +723,16 @@ QPushButton#UndoToastBtnClose:hover {
     background-color: #3E3E42;
 }
 
-QLabel#TaskProgressTitleLabel {
-    color: #EEEEEE;
-    font-size: 11px;
-    font-weight: bold;
-    background: transparent;
-}
-QProgressBar#TaskProgressBar {
+QProgressBar#ProgressDialogBar {
     border: 1px solid #3c3c3c;
     border-radius: 3px;
     background-color: #1E1E1E;
     text-align: center;
     color: transparent;
 }
-QProgressBar#TaskProgressBar::chunk {
+QProgressBar#ProgressDialogBar::chunk {
     background-color: #ff551c;
     border-radius: 2px;
-}
-QLabel#TaskProgressDetailLabel {
-    color: #888888;
-    font-size: 11px;
-    background: transparent;
-}
-QLabel#TaskProgressCountLabel {
-    color: #ff551c;
-    font-size: 11px;
-    font-weight: bold;
-    background: transparent;
 }
 
 QWidget#QLContainer {
@@ -2252,3 +2226,17 @@ QFrame#SmartFolderSeparatorLine {
 QScrollArea#SmartFolderScrollArea, QScrollArea#SmartFolderScrollArea QWidget { 
     background: transparent; 
 } 
+
+/* =================================================================== 
+   TaskProgressStrip Styles 
+   =================================================================== */ 
+QProgressBar#TaskProgressStrip {
+    background-color: transparent;
+    border: none;
+    max-height: 5px;
+}
+
+QProgressBar#TaskProgressStrip::chunk {
+    background-color: #ff551c;
+    border-radius: 1px;
+}

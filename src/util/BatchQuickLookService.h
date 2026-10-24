@@ -13,7 +13,7 @@ namespace QuarkMeta {
  * 特性：
  * 1. 原生批量处理管线 (extractBatchAsync)；
  * 2. 预检过滤 (Pre-Scan)，只对真正缺失/过期的文件做增量生成，拒绝算力与 IO 浪费；
- * 3. 驱动 TaskProgressToolBar 全局进度条展示；
+ * 3. 驱动 BatchProgressDialog 进度对话框展示；
  * 4. 0ms 顺畅抢占：空格预览触发时 10~50ms 即时强行熔断并让出 GS 锁。
  */
 class BatchQuickLookService : public QObject {

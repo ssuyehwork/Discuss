@@ -14,7 +14,6 @@ namespace QuarkMeta {
  */
 class CoreController : public QObject {
     Q_OBJECT
-    Q_PROPERTY(bool isIndexing READ isIndexing NOTIFY isIndexingChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
 
 public:
@@ -34,7 +33,6 @@ public:
      */
     void startSystem();
 
-    bool isIndexing() const { return m_isIndexing; }
     QString statusText() const { return m_statusText; }
 
     /**
@@ -65,7 +63,6 @@ signals:
     void searchStarted();
     void searchFinished(int totalFound);
 
-    void isIndexingChanged(bool indexing);
     void statusTextChanged(const QString& text);
     void initializationFinished();
 
@@ -73,9 +70,8 @@ private:
     CoreController(QObject* parent = nullptr);
     ~CoreController() override;
 
-    void setStatus(const QString& text, bool indexing);
+    void setStatus(const QString& text);
 
-    bool m_isIndexing = false;
     QString m_statusText = "就绪";
     
     // 2026-07-xx 按照 Plan-57：搜索状态管理
