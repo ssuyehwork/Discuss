@@ -110,7 +110,6 @@ void PanelLayoutManager::resetSplitterLayout() {
     AppConfig::instance().remove("MainWindow/PanelVisibility");
     AppConfig::instance().sync();
 
-    ToolTipOverlay::instance()->showText(QCursor::pos(), "分栏布局已重置为默认值", 1500, QColor("#2ecc71"));
     updateDynamicMinimumSize();
     emit layoutResetCompleted();
 }

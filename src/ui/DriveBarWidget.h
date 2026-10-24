@@ -7,7 +7,7 @@
 namespace QuarkMeta {
 
 /**
- * @brief 盘符与标签管理栏独立组件
+ * @brief 扩展与组件管理工具栏组件
  */
 class DriveBarWidget : public QWidget {
     Q_OBJECT
