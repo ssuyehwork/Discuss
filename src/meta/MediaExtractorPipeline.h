@@ -12,7 +12,6 @@
 #include <atomic> 
 #include <memory> 
 #include "../util/DiskMediaExtractor.h" 
-#include "../core/TaskProgressService.h"
  
 namespace QuarkMeta { 
  
@@ -21,12 +20,10 @@ class MediaExtractorPipeline : public QObject {
 public: 
     static MediaExtractorPipeline& instance(); 
  
-    void enqueue(const std::wstring& path, bool countedByCaller = false); 
-    void enqueueBatch(const std::vector<std::wstring>& paths, bool countedByCaller = false); 
+    void enqueue(const std::wstring& path); 
+    void enqueueBatch(const std::vector<std::wstring>& paths); 
  
-    void addWork(int n);
-    void reportDone(int n = 1);
-
+    // 2026-07-27 按照 Plan-107：安全、平滑取消与中止接口 
     void cancelAll(); 
     void cancelBatch(const std::vector<std::wstring>& paths); 
  
@@ -43,9 +40,7 @@ private:
     std::vector<std::wstring> m_queue; 
     QTimer* m_timer; 
     std::mutex m_queueMutex; 
-    std::mutex m_jobMutex;
-    TaskProgressJob m_job;
-
+    std::atomic<int> m_activeCount{0}; // 正在处理解析中 of 任务数量 
     std::atomic<int> m_activeWorkers{0}; // 活跃工作线程数 
     std::shared_ptr<CancellationToken> m_token = std::make_shared<CancellationToken>(); // 当前代取消令牌，受 m_queueMutex 保护 
     QThreadPool m_workerPool; // 后台提取专用线程池，不占全局线程池 

@@ -3,6 +3,7 @@
 #include "StyleLibrary.h"
 #include "ColorPicker.h"
 #include "HoverEventFilter.h"
+#include "ToolTipOverlay.h"
 #include "../meta/MetadataManager.h"
 #include "../core/CoreEngine.h"
 #include "../meta/FavoriteDao.h"

@@ -26,9 +26,6 @@ public:
     QString currentPath() const { return m_currentPath; }
     void closePreview();
 
-    static QImage loadOrExtractQuickLookImage(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
-    static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
-
 signals:
     void ratingRequested(int rating);
     void colorRequested(const QString& color);
@@ -53,6 +50,8 @@ private:
     
     QString detectEncoding(const QByteArray& data);
     bool isBinary(const QByteArray& data);
+    static QImage loadOrExtractQuickLookImage(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
+    static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
 
     QuickLookGraphicsView* m_graphicsView = nullptr;
     QPlainTextEdit* m_textEdit = nullptr;

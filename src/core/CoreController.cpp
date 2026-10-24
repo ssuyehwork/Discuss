@@ -1,7 +1,6 @@
 #include "CoreController.h"
 #include "AppConfig.h"
 #include "DeviceWatcher.h"
-#include "TaskProgressService.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/DatabaseManager.h"
 #include "../meta/MediaExtractorPipeline.h"
@@ -29,9 +28,6 @@ CoreController& CoreController::instance() {
 void CoreController::initializeCoreComponents() {
     // 0. 全局设备监听器启动
     DeviceWatcher::instance().startListening();
-
-    // 0.1 保证 TaskProgressService 单例在主线程创建
-    QuarkMeta::TaskProgressService::instance();
 
     // 1. 底层持久化 SQLite 连接启动与定时机制保障
     QuarkMeta::DatabaseManager::instance();
@@ -70,7 +66,7 @@ void CoreController::startSystem() {
         try {
             
             QMetaObject::invokeMethod(this, [this]() {
-                setStatus("正在载入元数据缓存...");
+                setStatus("正在载入元数据缓存...", true);
             }, Qt::QueuedConnection);
             
             // 纯磁盘直连模式注销全盘 metadata 数据表预训练扫描
@@ -84,13 +80,13 @@ void CoreController::startSystem() {
 
 
             QMetaObject::invokeMethod(this, [this]() {
-                setStatus("系统就绪");
+                setStatus("系统就绪", false);
                 emit initializationFinished();
             }, Qt::QueuedConnection);
 
         } catch (...) {
             QMetaObject::invokeMethod(this, [this]() {
-                setStatus("初始化失败");
+                setStatus("初始化失败", false);
                 emit initializationFinished();
             }, Qt::QueuedConnection);
         }
@@ -153,10 +149,14 @@ void CoreController::abortSearch() {
 }
 
 
-void CoreController::setStatus(const QString& text) {
+void CoreController::setStatus(const QString& text, bool indexing) {
     if (m_statusText != text) {
         m_statusText = text;
         emit statusTextChanged(m_statusText);
+    }
+    if (m_isIndexing != indexing) {
+        m_isIndexing = indexing;
+        emit isIndexingChanged(m_isIndexing);
     }
 }
 

@@ -178,28 +178,17 @@ bool MetadataManager::shouldExtractMediaFeatures(const ItemRecord& record) {
 void MetadataManager::registerLibraryItemsAsync(const std::vector<ItemRecord>& records) {
     if (records.empty()) return;
 
-    MediaExtractorPipeline::instance().addWork(static_cast<int>(records.size()));
-
     (void)QtConcurrent::run([this, records]() {
         std::vector<std::wstring> enqueuedPaths;
-        int skippedCount = 0;
-
         for (const auto& rec : records) {
             std::wstring nPath = normalizePath(rec.path.toStdWString());
             ensureActivated(nPath);
             if (shouldExtractMediaFeatures(rec)) {
                 enqueuedPaths.push_back(nPath);
-            } else {
-                skippedCount++;
             }
         }
-
-        if (skippedCount > 0) {
-            MediaExtractorPipeline::instance().reportDone(skippedCount);
-        }
-
         if (!enqueuedPaths.empty()) {
-            MediaExtractorPipeline::instance().enqueueBatch(enqueuedPaths, true);
+            MediaExtractorPipeline::instance().enqueueBatch(enqueuedPaths);
         }
     });
 }
@@ -219,11 +208,8 @@ void MetadataManager::registerItem(const std::wstring& path) {
 void MetadataManager::registerItemsAsync(const QStringList& paths) {
     if (paths.isEmpty()) return;
 
-    MediaExtractorPipeline::instance().addWork(paths.size());
-
     (void)QtConcurrent::run([this, paths]() {
         std::vector<std::wstring> enqueuedPaths;
-        int skippedCount = 0;
 
         for (const auto& qp : paths) {
             std::wstring nPath = normalizePath(qp.toStdWString());
@@ -234,17 +220,11 @@ void MetadataManager::registerItemsAsync(const QStringList& paths) {
 
             if (shouldExtractMediaFeatures(nPath, pSize, pMtime)) {
                 enqueuedPaths.push_back(nPath);
-            } else {
-                skippedCount++;
             }
         }
 
-        if (skippedCount > 0) {
-            MediaExtractorPipeline::instance().reportDone(skippedCount);
-        }
-
         if (!enqueuedPaths.empty()) {
-            MediaExtractorPipeline::instance().enqueueBatch(enqueuedPaths, true);
+            MediaExtractorPipeline::instance().enqueueBatch(enqueuedPaths);
         }
     });
 }

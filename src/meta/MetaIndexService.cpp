@@ -4,7 +4,6 @@
 #include "QuarkMetaJsonStore.h"
 #include "LibraryService.h"
 #include "../core/TaskProgressService.h"
-#include <QPointer>
 #include <QDir>
 #include <QFileInfo>
 #include <QCoreApplication>
@@ -228,25 +227,18 @@ void MetaIndexService::workerThreadLoop() {
             for (const auto& task : categoryBatch) {
                 totalPaths += task.paths.size();
             }
-            TaskJobOptions opts;
-            opts.title = "正在归入库分类";
-            opts.total = totalPaths;
-            opts.showCount = true;
-            opts.showEta = true;
-            opts.finishTextTemplate = "归入库分类完成  数量：{total}  |  实际耗时：{elapsed}";
-
-            TaskProgressJob job = TaskProgressService::instance().createJobHandle(opts);
-            std::shared_ptr<CancellationToken> token = job.cancellationToken();
+            int jobId = TaskProgressService::instance().createJob("正在归入库分类...", totalPaths);
+            int processedPaths = 0;
 
             for (const auto& task : categoryBatch) {
-                if (m_stopping.load() || token->isCanceled()) break;
+                if (m_stopping.load()) break;
                 if (!task.paths.isEmpty()) {
                     LibraryService::instance().addPathsToCategory(task.categoryId, task.paths);
-                    job.advance(task.paths.size());
+                    processedPaths += task.paths.size();
+                    TaskProgressService::instance().updateProgress(jobId, processedPaths, totalPaths, QString("已归入 %1 / %2 项").arg(processedPaths).arg(totalPaths));
                 }
             }
-
-            job.finish();
+            TaskProgressService::instance().finishJob(jobId);
         }
 
         if (currentBatch.empty() || !m_writeDb) {

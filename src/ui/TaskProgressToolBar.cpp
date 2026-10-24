@@ -12,11 +12,12 @@ TaskProgressToolBar::TaskProgressToolBar(QWidget* parent)
 }
 
 void TaskProgressToolBar::initUi() {
+    setFixedHeight(36);
 // TaskProgressToolBar style in style.qss
 
     QHBoxLayout* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(10, 0, 10, 0);
-    layout->setSpacing(8);
+    layout->setContentsMargins(15, 0, 15, 0);
+    layout->setSpacing(10);
 
     m_lblTitle = new QLabel("正在处理任务...", this);
     m_lblTitle->setObjectName("TaskProgressTitleLabel");

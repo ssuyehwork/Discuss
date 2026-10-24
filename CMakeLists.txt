@@ -171,6 +171,8 @@ set(SOURCES
     src/ui/ColorPicker.h
     src/ui/ContentPanel.cpp
     src/ui/ContentPanel.h
+    src/ui/DriveButton.cpp
+    src/ui/DriveButton.h
     src/ui/ViewDragDropHelper.cpp
     src/ui/ViewDragDropHelper.h
     src/ui/DropTreeView.cpp
@@ -265,10 +267,8 @@ set(SOURCES
     src/ui/TagSelectorOverlay.cpp
     src/ui/PresetTagsDialog.h
     src/ui/PresetTagsDialog.cpp
-    src/ui/TaskProgressStrip.h
-    src/ui/TaskProgressStrip.cpp
-    src/ui/StatusTextCoordinator.h
-    src/ui/StatusTextCoordinator.cpp
+    src/ui/TaskProgressToolBar.h
+    src/ui/TaskProgressToolBar.cpp
     src/ui/components/ElasticEdit.h
     src/ui/components/ElasticEdit.cpp
     src/ui/components/TagPill.h
@@ -411,8 +411,6 @@ set(SOURCES
     src/util/DiskMediaExtractor.cpp
     src/util/DeepThumbnailExtractor.h
     src/util/DeepThumbnailExtractor.cpp
-    src/util/BatchQuickLookService.h
-    src/util/BatchQuickLookService.cpp
     src/util/ShellHelper.cpp
     src/util/ShellHelper.h
     QuarkMeta.rc

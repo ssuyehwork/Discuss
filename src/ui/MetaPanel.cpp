@@ -559,9 +559,6 @@ void MetaPanel::setDefaultIconPreview(const QIcon& icon) {
 }
 
 void MetaPanel::setSelectedPaths(const QStringList& paths) {
-    if (m_selectedPaths == paths && !paths.isEmpty()) {
-        return;
-    }
     QElapsedTimer timer;
     timer.start();
     m_selectedPaths = paths;

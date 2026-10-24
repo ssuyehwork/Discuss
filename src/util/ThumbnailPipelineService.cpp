@@ -40,13 +40,10 @@ void ThumbnailPipelineService::clearMemoryCache() {
 
 void ThumbnailPipelineService::incrementGeneration() {
     m_currentGeneration.fetch_add(1, std::memory_order_relaxed);
-    std::shared_ptr<CancellationToken> oldToken;
-    {
-        QMutexLocker locker(&m_cacheMutex);
-        oldToken = std::move(m_currentToken);
-    }
-    if (oldToken) {
-        oldToken->cancel();
+    QMutexLocker locker(&m_cacheMutex);
+    if (m_currentToken) {
+        m_currentToken->cancel();
+        m_currentToken.reset();
     }
 }
 

@@ -25,8 +25,7 @@
 #include "PanelLayoutManager.h"
 #include "AddressBar.h"
 #include "ToolTipOverlay.h"
-#include "TaskProgressStrip.h"
-#include "StatusTextCoordinator.h"
+#include "TaskProgressToolBar.h"
 #include "../core/AppConfig.h"
 #include "../core/NavigationService.h"
 #include "../core/CoreController.h"
@@ -108,21 +107,16 @@ void MainWindow::initUi() {
     // 3. 底部状态栏组装
     setupStatusBar(centralC);
 
-    // 4. 底部悬浮进度条组装 (父对象 centralC，不进布局)
-    m_taskProgressStrip = new TaskProgressStrip(centralC);
-
-    // 5. 控制器与中介者组装（组件依赖图绑定）
+    // 4. 控制器与中介者组装（组件依赖图绑定）
     setupControllersAndMediators();
 
-    // 6. 组装至顶层主布局
+    // 5. 组装至顶层主布局
     mainL->addWidget(m_titleBarWidget);
     mainL->addWidget(m_driveBarWidget);
     mainL->addWidget(m_navBarWidget);
     mainL->addWidget(bodyWrapper, 1);
     mainL->addWidget(m_statusBarWidget);
-
-    // 7. 设置悬浮进度条对齐锚点
-    m_taskProgressStrip->setAnchors(bodyWrapper, m_statusBarWidget);
+    mainL->addWidget(m_taskProgressToolBar);
 
     setCentralWidget(centralC);
 }
@@ -215,7 +209,7 @@ void MainWindow::setupControllersAndMediators() {
     m_panelMediator->setupConnections();
 
     connect(m_panelMediator, &PanelMediator::statusMessageRequested, this, [this](const QString& msg) {
-        if (m_statusTextCoordinator) m_statusTextCoordinator->setNormalText(msg);
+        if (m_statusLeft) m_statusLeft->setText(msg);
     });
 
     connect(m_panelLayoutManager, &PanelLayoutManager::panelVisibilityChanged, this, [this](const QString&, bool) {
@@ -235,26 +229,27 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     statusL->setContentsMargins(kStatusBarHorizontalMargin, 0, kStatusBarHorizontalMargin, 0);
     statusL->setSpacing(0);
 
-    m_statusTextCoordinator = new StatusTextCoordinator(this);
-    connect(m_statusTextCoordinator, &StatusTextCoordinator::finalTextChanged, this, [this](const QString& text, bool isRichText) {
-        if (m_statusLeft) {
-            m_statusLeft->setTextFormat(isRichText ? Qt::RichText : Qt::PlainText);
-            m_statusLeft->setText(text);
-        }
-    });
-
     m_statusLeft = new QLabel("就绪中...", m_statusBarWidget);
     m_statusLeft->setObjectName("StatusBarLeft");
     statusL->addWidget(m_statusLeft);
     statusL->addStretch(1);
 
+    connect(m_contentPanel, &ContentPanel::statusBarMessageReady, this, [this](const QString& msg) {
+        if (m_statusLeft) m_statusLeft->setText(msg);
+    });
+
     auto updateStatus = [this]() {
-        if (m_statusTextCoordinator) {
-            m_statusTextCoordinator->setNormalText(CoreController::instance().statusText());
-        }
+        m_statusLeft->setText(CoreController::instance().statusText());
+        m_statusLeft->setProperty("indexing", CoreController::instance().isIndexing());
+        m_statusLeft->style()->unpolish(m_statusLeft);
+        m_statusLeft->style()->polish(m_statusLeft);
     };
     connect(&CoreController::instance(), &CoreController::statusTextChanged, this, updateStatus);
+    connect(&CoreController::instance(), &CoreController::isIndexingChanged, this, updateStatus);
     updateStatus();
+
+    m_taskProgressToolBar = new TaskProgressToolBar(parentWidget);
+    m_taskProgressToolBar->hide();
 
     auto createStatusBtn = [this](const QString& iconKey, const QString& tip) -> QPushButton* {
         QPushButton* btn = new QPushButton(m_statusBarWidget);

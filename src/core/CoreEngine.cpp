@@ -5,8 +5,6 @@
 #include "../meta/FavoriteService.h"
 #include "TagLexiconService.h"
 #include "TaskProgressService.h"
-#include <QPointer>
-#include <QFileInfo>
 #include <QCoreApplication>
 
 namespace QuarkMeta {
@@ -218,28 +216,20 @@ void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList
 
     m_asyncTagPool.start([paths, tags, onFinished]() {
         int totalPaths = paths.size();
-
-        TaskJobOptions opts;
-        opts.title = "正在应用预设标签";
-        opts.total = totalPaths;
-        opts.showCount = true;
-        opts.showEta = true;
-        opts.finishTextTemplate = "应用预设标签完成  数量：{total}  |  实际耗时：{elapsed}";
-
-        TaskProgressJob job = TaskProgressService::instance().createJobHandle(opts);
-        std::shared_ptr<CancellationToken> token = job.cancellationToken();
+        int jobId = TaskProgressService::instance().createJob("正在应用预设标签...", totalPaths);
 
         TagLexiconService::instance().addTags(tags);
 
         constexpr int kBatchSize = 100;
+        int processed = 0;
         for (int i = 0; i < totalPaths; i += kBatchSize) {
-            if (token->isCanceled()) break;
             QStringList batch = paths.mid(i, kBatchSize);
             MetadataManager::instance().addTagsBatch(batch, tags);
-            job.advance(batch.size());
+            processed += batch.size();
+            TaskProgressService::instance().updateProgress(jobId, processed, totalPaths);
         }
 
-        job.finish();
+        TaskProgressService::instance().finishJob(jobId);
 
         QMetaObject::invokeMethod(qApp, [paths, onFinished]() {
             AppEvent ev;

@@ -17,7 +17,6 @@
 #include "controllers/ContextMenuFactory.h"
 #include "dialogs/TextExtensionDialog.h"
 #include "FormatDecoders.h"
-#include "../util/BatchQuickLookService.h"
 #include <QCryptographicHash>
 #include <QStandardPaths>
 #include <QFileInfo>
@@ -108,9 +107,6 @@ void QuickLookWindow::setupUi() {
 }
 
 void QuickLookWindow::preview(const QString& filePath) {
-    // 🚀【即时强行熔断】：按空格键触发预览时，第一时间熔断正在跑的后台批量大图生成任务
-    BatchQuickLookService::instance().cancelCurrentBatch();
-
     m_currentPath = filePath;
     QFileInfo fi(filePath);
     m_titleLabel->setText(fi.fileName());

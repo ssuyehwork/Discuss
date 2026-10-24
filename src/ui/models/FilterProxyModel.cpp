@@ -21,7 +21,8 @@ void FilterProxyModel::setSortCriteria(int type, Qt::SortOrder order) {
 }
 
 void FilterProxyModel::updateFilter() {
-    invalidate();
+    beginFilterChange();
+    endFilterChange();
 }
 
 void FilterProxyModel::setCachedDuplicatePaths(const QSet<QString>& paths) {

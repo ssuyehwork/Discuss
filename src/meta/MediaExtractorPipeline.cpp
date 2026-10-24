@@ -42,57 +42,23 @@ MediaExtractorPipeline::MediaExtractorPipeline(QObject* parent) : QObject(parent
 MediaExtractorPipeline::~MediaExtractorPipeline() { 
     m_timer->stop(); 
 } 
-
-void MediaExtractorPipeline::addWork(int n) {
-    if (n <= 0) return;
-    std::lock_guard<std::mutex> lock(m_jobMutex);
-    if (!m_job.isValid()) {
-        TaskJobOptions opts;
-        opts.title = "正在提取缩略图与色值";
-        opts.total = 0;
-        opts.showCount = true;
-        opts.showEta = true;
-        opts.finishTextTemplate = "提取完成  数量：{total}  |  实际耗时：{elapsed}";
-        opts.onTrip = [this]() {
-            cancelAll();
-        };
-        m_job = TaskProgressService::instance().createJobHandle(opts);
-    }
-    m_job.addTotal(n);
-}
-
-void MediaExtractorPipeline::reportDone(int n) {
-    if (n <= 0) return;
-    std::lock_guard<std::mutex> lock(m_jobMutex);
-    if (m_job.isValid()) {
-        m_job.advance(n);
-        if (m_job.isComplete()) {
-            m_job.finish();
-        }
-    }
-}
  
 void MediaExtractorPipeline::cancelAll() { 
-    std::shared_ptr<CancellationToken> oldToken;
     { 
         std::lock_guard<std::mutex> queueLock(m_queueMutex); 
         m_queue.clear(); 
-        oldToken = m_token;
+        // 取消当前代令牌（正在解码的任务会被中断），并换上新一代令牌供后续任务使用 
+        m_token->cancel(); 
         m_token = std::make_shared<CancellationToken>(); 
     } 
-    if (oldToken) {
-        oldToken->cancel();
-    }
-    std::lock_guard<std::mutex> jobLock(m_jobMutex);
-    if (m_job.isValid()) {
-        m_job.finish();
-    }
+    m_activeCount.store(0); 
 } 
  
 void MediaExtractorPipeline::cancelBatch(const std::vector<std::wstring>& paths) { 
     if (paths.empty()) return; 
     std::lock_guard<std::mutex> queueLock(m_queueMutex); 
      
+    // 收集标准化的前缀用于批量匹配过滤 
     std::vector<std::wstring> normPrefixes; 
     normPrefixes.reserve(paths.size()); 
     for (const auto& p : paths) { 
@@ -111,22 +77,14 @@ void MediaExtractorPipeline::cancelBatch(const std::vector<std::wstring>& paths)
     int originalQueueSize = static_cast<int>(m_queue.size()); 
     m_queue.erase(std::remove_if(m_queue.begin(), m_queue.end(), isPrefixMatched), m_queue.end()); 
     int removedFromQueue = originalQueueSize - static_cast<int>(m_queue.size()); 
-    if (removedFromQueue > 0) {
-        reportDone(removedFromQueue);
-    }
+    Q_UNUSED(removedFromQueue); 
 } 
  
-void MediaExtractorPipeline::enqueue(const std::wstring& path, bool countedByCaller) { 
-    enqueueBatch({path}, countedByCaller); 
+void MediaExtractorPipeline::enqueue(const std::wstring& path) { 
+    enqueueBatch({path}); 
 } 
  
-void MediaExtractorPipeline::enqueueBatch(const std::vector<std::wstring>& paths, bool countedByCaller) { 
-    if (paths.empty()) return;
-
-    if (!countedByCaller) {
-        addWork(static_cast<int>(paths.size()));
-    }
-
+void MediaExtractorPipeline::enqueueBatch(const std::vector<std::wstring>& paths) { 
     { 
         std::lock_guard<std::mutex> lock(m_queueMutex); 
         m_queue.insert(m_queue.end(), paths.begin(), paths.end()); 
@@ -158,6 +116,7 @@ void MediaExtractorPipeline::dispatchWorkersIfNeeded() {
 } 
  
 void MediaExtractorPipeline::processNextBatch() { 
+    // 1500ms 定时器作为心跳兜底调度，防止在边缘并发场景下工作线程挂起导致队列未消费完 
     dispatchWorkersIfNeeded(); 
 } 
  
@@ -175,13 +134,13 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             size_t batchSize = std::min(m_queue.size(), static_cast<size_t>(32)); 
             batch.assign(m_queue.begin(), m_queue.begin() + batchSize); 
             m_queue.erase(m_queue.begin(), m_queue.begin() + batchSize); 
-            token = m_token; 
+            token = m_token; // 本批任务绑定取到任务时的当代令牌 
+ 
+            m_activeCount.fetch_add(static_cast<int>(batch.size())); 
         } 
  
         std::vector<MetadataManager::ExtractedFeatureItem> results; 
         results.reserve(batch.size()); 
-
-        int processedInBatch = 0;
 
         for (const auto& path : batch) { 
             if (token->isCanceled() || CoreController::isShuttingDown()) {
@@ -191,8 +150,6 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             QString qPath = QString::fromStdWString(path); 
             QFileInfo info(qPath); 
             if (!info.exists()) {
-                processedInBatch++;
-                reportDone(1);
                 continue;
             }
 
@@ -207,8 +164,6 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             if (info.isFile() && ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) { 
                 DiskMediaExtractor::ExtractResult res = DiskMediaExtractor::getCapsuleExtractResult(qPath, DiskMediaExtractor::kThumbSize, token); 
                 if (!res.isValid || res.thumbnail512.isNull()) {
-                    processedInBatch++;
-                    reportDone(1);
                     continue;
                 }
 
@@ -218,6 +173,7 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                     item.height = sz.height(); 
                 } 
 
+                // 使用 Section I 的权威算法 extractWeightedPalette 提取调色板（最多 10 项）
                 auto pal = ColorPaletteEngine::extractWeightedPalette(res.thumbnail512); 
                 if (pal.isEmpty()) {
                     QImage fullImg(qPath);
@@ -227,29 +183,26 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                 }
 
                 if (pal.isEmpty()) {
-                    processedInBatch++;
-                    reportDone(1);
                     continue;
                 }
 
+                // autoColor = 调色板第一项颜色，直接转大写 #RRGGBB，不做任何标准色量化
                 QColor domColor = pal.first().first;
                 item.autoColor = domColor.name().toUpper().toStdWString();
                 item.palettes.assign(pal.begin(), pal.end());
 
                 results.push_back(item);
             }
-
-            processedInBatch++;
-            reportDone(1);
         } 
 
-        int remainingInBatch = static_cast<int>(batch.size()) - processedInBatch;
-        if (remainingInBatch > 0) {
-            reportDone(remainingInBatch);
-        }
-
+        // 即使 token 被取消，本批已经完成的单个文件结果仍要写入！
         if (!results.empty()) { 
             MetadataManager::instance().updateExtractedMediaFeaturesBatch(results); 
+        } 
+ 
+        { 
+            std::lock_guard<std::mutex> lock(m_queueMutex); 
+            m_activeCount.fetch_sub(static_cast<int>(batch.size())); 
         } 
     } 
  

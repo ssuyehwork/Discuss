@@ -3,7 +3,7 @@
 #endif
 #include "PermanentDeleteService.h"
 #include "../ui/dialogs/FramelessMessageBox.h"
-#include "TaskProgressService.h"
+#include "../core/TaskProgressService.h"
 #include "../ui/ToolTipOverlay.h"
 #include "../util/SecureFileEraser.h"
 #include "../core/UndoManager.h"
@@ -38,24 +38,17 @@ bool PermanentDeleteService::execute(const QStringList& paths, QWidget* parentWi
         return false;
     }
 
-    TaskJobOptions opts;
-    opts.title = "正在执行永久删除（深层抹除）";
-    opts.total = paths.size();
-    opts.showCount = true;
-    opts.showEta = true;
-    opts.finishTextTemplate = "永久删除完成  数量：{total}  |  实际耗时：{elapsed}";
-
-    TaskProgressJob job = TaskProgressService::instance().createJobHandle(opts);
-    std::shared_ptr<CancellationToken> token = job.cancellationToken();
+    int jobId = TaskProgressService::instance().createJob("正在执行永久删除（深层抹除）...", paths.size());
 
     QPointer<PermanentDeleteService> weakThis(this);
 
     MetadataManager::instance().beginInternalOperation();
 
-    (void)QtConcurrent::run([paths, isSecureShred, token, weakThis, job = std::move(job)]() mutable {
-        for (const QString& p : paths) {
-            if (token->isCanceled()) break;
+    (void)QtConcurrent::run([paths, isSecureShred, jobId, weakThis]() {
+        int total = paths.size();
+        int count = 0;
 
+        for (const QString& p : paths) {
             std::wstring wp = QDir::toNativeSeparators(p).toStdWString();
             
             int trashId = -1;
@@ -92,10 +85,11 @@ bool PermanentDeleteService::execute(const QStringList& paths, QWidget* parentWi
                 }
             }
 
-            job.advance(1);
+            count++;
+            TaskProgressService::instance().updateProgress(jobId, count, total, QString("已擦除 %1 / %2 项").arg(count).arg(total));
         }
 
-        job.finish();
+        TaskProgressService::instance().finishJob(jobId);
 
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis]() {
             MetadataManager::instance().endInternalOperation();
@@ -116,31 +110,25 @@ bool PermanentDeleteService::executeTrashItems(const std::vector<std::pair<int, 
         return false;
     }
 
-    TaskJobOptions opts;
-    opts.title = "正在销毁回收站项目";
-    opts.total = static_cast<int>(trashItems.size());
-    opts.showCount = true;
-    opts.showEta = true;
-    opts.finishTextTemplate = "销毁回收站项目完成  数量：{total}  |  实际耗时：{elapsed}";
-
-    TaskProgressJob job = TaskProgressService::instance().createJobHandle(opts);
-    std::shared_ptr<CancellationToken> token = job.cancellationToken();
+    int jobId = TaskProgressService::instance().createJob("正在销毁回收站项目...", static_cast<int>(trashItems.size()));
 
     QPointer<PermanentDeleteService> weakThis(this);
 
     MetadataManager::instance().beginInternalOperation();
 
-    (void)QtConcurrent::run([trashItems, token, weakThis, job = std::move(job)]() mutable {
-        for (const auto& item : trashItems) {
-            if (token->isCanceled()) break;
+    (void)QtConcurrent::run([trashItems, jobId, weakThis]() {
+        int total = static_cast<int>(trashItems.size());
+        int count = 0;
 
+        for (const auto& item : trashItems) {
             SecureFileEraser::shredFile(item.second);
             DiskTrashService::permanentlyDeleteDiskTrash(item.first, item.second);
             UndoManager::instance().removeCommandsForPath(item.second);
-            job.advance(1);
+            count++;
+            TaskProgressService::instance().updateProgress(jobId, count, total, QString("已销毁 %1 / %2 项").arg(count).arg(total));
         }
 
-        job.finish();
+        TaskProgressService::instance().finishJob(jobId);
 
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis]() {
             MetadataManager::instance().endInternalOperation();
@@ -165,24 +153,17 @@ bool PermanentDeleteService::executeEmptyTrash(QWidget* parentWidget, bool isSec
         return false;
     }
 
-    TaskJobOptions opts;
-    opts.title = "正在清空回收站（深层物理抹除）";
-    opts.total = static_cast<int>(allTrash.size());
-    opts.showCount = true;
-    opts.showEta = true;
-    opts.finishTextTemplate = "清空回收站完成  数量：{total}  |  实际耗时：{elapsed}";
-
-    TaskProgressJob job = TaskProgressService::instance().createJobHandle(opts);
-    std::shared_ptr<CancellationToken> token = job.cancellationToken();
+    int jobId = TaskProgressService::instance().createJob("正在清空回收站（深层物理抹除）...", static_cast<int>(allTrash.size()));
 
     QPointer<PermanentDeleteService> weakThis(this);
 
     MetadataManager::instance().beginInternalOperation();
 
-    (void)QtConcurrent::run([allTrash, isSecureShred, token, weakThis, job = std::move(job)]() mutable {
-        for (const auto& item : allTrash) {
-            if (token->isCanceled()) break;
+    (void)QtConcurrent::run([allTrash, isSecureShred, jobId, weakThis]() {
+        int total = static_cast<int>(allTrash.size());
+        int count = 0;
 
+        for (const auto& item : allTrash) {
             QString path = QString::fromStdWString(item.trashPath);
             if (isSecureShred) {
                 SecureFileEraser::shredFile(path);
@@ -190,10 +171,11 @@ bool PermanentDeleteService::executeEmptyTrash(QWidget* parentWidget, bool isSec
             DiskTrashService::permanentlyDeleteDiskTrash(item.id, path);
             UndoManager::instance().removeCommandsForPath(QString::fromStdWString(item.originalPath));
 
-            job.advance(1);
+            count++;
+            TaskProgressService::instance().updateProgress(jobId, count, total, QString("已清空 %1 / %2 项").arg(count).arg(total));
         }
 
-        job.finish();
+        TaskProgressService::instance().finishJob(jobId);
 
         QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis]() {
             MetadataManager::instance().endInternalOperation();
