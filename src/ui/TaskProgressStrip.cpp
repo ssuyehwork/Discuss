@@ -14,10 +14,12 @@ TaskProgressStrip::TaskProgressStrip(QWidget* parent)
     setTextVisible(false);
     hide();
 
-    connect(&TaskProgressService::instance(), &TaskProgressService::snapshotChanged,
-            this, [this](const TaskProgressSnapshot& snapshot) {
-        if (snapshot.active) {
-            setValue(snapshot.percent);
+    connect(&TaskProgressService::instance(), &TaskProgressService::progressUpdated,
+            this, [this](int percent, const QString& title, const QString& detail, int activeCount) {
+        Q_UNUSED(title);
+        Q_UNUSED(detail);
+        if (activeCount > 0) {
+            setValue(percent);
             if (!isVisible()) {
                 show();
                 updateGeometryPos();
@@ -25,6 +27,11 @@ TaskProgressStrip::TaskProgressStrip(QWidget* parent)
         } else {
             hide();
         }
+    });
+
+    connect(&TaskProgressService::instance(), &TaskProgressService::allJobsFinished,
+            this, [this]() {
+        hide();
     });
 }
 

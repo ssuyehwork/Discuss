@@ -1,6 +1,6 @@
 # TaskProgressStripNormalization.md - QuarkMeta 进度条归一化与 TaskProgressStrip 唯一化重构方案
 
-Base Commit Hash: `0348f4197d5c7579c77262fcade3edca6bb5ed16`
+Base Commit Hash: `601627e4dab252d6111e4ad3673d8c5737b1dfc1`
 Prerequisite Plans: 无
 Supersedes: 无
 
