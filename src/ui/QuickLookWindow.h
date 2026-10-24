@@ -50,7 +50,9 @@ private:
     
     QString detectEncoding(const QByteArray& data);
     bool isBinary(const QByteArray& data);
+public:
     static QImage loadOrExtractQuickLookImage(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
+private:
     static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
 
     QuickLookGraphicsView* m_graphicsView = nullptr;

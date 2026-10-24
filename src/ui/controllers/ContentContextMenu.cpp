@@ -17,6 +17,7 @@
 #include "../dialogs/CreateFolderWithItemsDialog.h"
 #include "../../util/ShellHelper.h"
 #include "../../util/DeepThumbnailExtractor.h"
+#include "../../util/BatchQuickLookService.h"
 #include "../../core/TrashService.h"
 #include "../../core/DiskTrashService.h"
 #include "../../core/PermanentDeleteService.h"
@@ -445,10 +446,13 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             ContextMenuFactory::buildExtractContentAction(moreMenu, path, m_panel);
 
+            moreMenu->addSeparator();
             if (!isFolder) {
-                moreMenu->addSeparator();
                 moreMenu->addAction(UiHelper::getIcon("repeat", QColor("#EEEEEE"), 18), "重新提取缩略图")->setData(ContentPanel::ActionReextractThumbnail);
+            }
+            moreMenu->addAction(UiHelper::getIcon("image_picture", QColor("#EEEEEE"), 18), "批量生成大图预览")->setData(ContentPanel::ActionBatchQuickLook);
 
+            if (!isFolder) {
                 QMenu* cryptoMenu = moreMenu->addMenu(UiHelper::getIcon("shield", QColor("#EEEEEE"), 18), "外壳保护");
                 UiHelper::applyMenuStyle(cryptoMenu);
                 cryptoMenu->addAction(UiHelper::getIcon("lock", QColor("#EEEEEE"), 18), "执行外壳保护")->setData(ContentPanel::ActionEncrypt);
@@ -917,6 +921,16 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         case ContentPanel::ActionRefresh:
             m_panel->refreshAll();
             break;
+        case ContentPanel::ActionBatchQuickLook: {
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            if (selectedPaths.isEmpty() && !path.isEmpty()) {
+                selectedPaths << path;
+            }
+            if (!selectedPaths.isEmpty()) {
+                BatchQuickLookService::instance().extractBatchAsync(selectedPaths);
+            }
+            break;
+        }
         case ContentPanel::ActionReextractThumbnail: {
             auto indexes = view->selectionModel()->selectedIndexes();
             QStringList targetPaths;

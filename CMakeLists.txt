@@ -411,6 +411,8 @@ set(SOURCES
     src/util/DiskMediaExtractor.cpp
     src/util/DeepThumbnailExtractor.h
     src/util/DeepThumbnailExtractor.cpp
+    src/util/BatchQuickLookService.h
+    src/util/BatchQuickLookService.cpp
     src/util/ShellHelper.cpp
     src/util/ShellHelper.h
     QuarkMeta.rc
