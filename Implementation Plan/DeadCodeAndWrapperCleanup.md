@@ -1,6 +1,6 @@
 # DeadCodeAndWrapperCleanup.md - 死接口与冗余转接方法物理清理实施方案
 
-Base Commit Hash: `601627e4dab252d6111e4ad3673d8c5737b1dfc1`
+Base Commit Hash: `3e304b14270588e6d40fe9c9cbf79a617f73a932`
 Prerequisite Plans: 无
 Supersedes: 无
 

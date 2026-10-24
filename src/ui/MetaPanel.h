@@ -56,12 +56,9 @@ public:
     void setPalettes(const QVector<QPair<QColor, float>>& palette);
     void setTags(const QStringList& tags);
     void setNote(const QString& note);
-    void setNote(const std::wstring& note);
     void setURL(const QString& url);
-    void setURL(const std::wstring& url);
     void setRating(int rating, bool fromUser = false);
     void setColor(const QString& hexColor, bool fromUser = false);
-    void setColor(const std::wstring& color, bool fromUser = false);
     void setPinned(bool pinned) { Q_UNUSED(pinned); }
 
 signals:

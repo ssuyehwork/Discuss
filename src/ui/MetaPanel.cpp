@@ -832,9 +832,6 @@ void MetaPanel::setColor(const QString& hexColor, bool fromUser) {
     }
 }
 
-void MetaPanel::setColor(const std::wstring& color, bool fromUser) {
-    setColor(QString::fromStdWString(color), fromUser);
-}
 
 void MetaPanel::setNote(const QString& note) {
     if (m_isUserEditing) return;
@@ -843,9 +840,6 @@ void MetaPanel::setNote(const QString& note) {
     m_isInternalUpdating = false;
 }
 
-void MetaPanel::setNote(const std::wstring& note) {
-    setNote(QString::fromStdWString(note));
-}
 
 void MetaPanel::setURL(const QString& url) {
     if (m_isUserEditing) return;
@@ -858,9 +852,6 @@ void MetaPanel::setURL(const QString& url) {
     m_isInternalUpdating = false;
 }
 
-void MetaPanel::setURL(const std::wstring& url) {
-    setURL(QString::fromStdWString(url));
-}
 
 void MetaPanel::setPalettes(const QVector<QPair<QColor, float>>& palette) {
     if (!m_paletteFlowLayout) return;

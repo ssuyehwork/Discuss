@@ -1,6 +1,6 @@
 # TaskProgressStripNormalization.md - QuarkMeta 进度条归一化与 TaskProgressStrip 唯一化重构方案
 
-Base Commit Hash: `601627e4dab252d6111e4ad3673d8c5737b1dfc1`
+Base Commit Hash: `3e304b14270588e6d40fe9c9cbf79a617f73a932`
 Prerequisite Plans: 无
 Supersedes: 无
 
@@ -360,7 +360,7 @@ cmake --build build --config Debug
 
 ## Chapter 7: Interface & Visibility Consistency Check（接口签名与访问级别一致性核查）
 
-| 类与接口 | 访问级别 | 声明位置 | 定义位置 | 调用点 |
+| 类与接口 | 访问级别 | 声明位置 | Definition Location | 调用点 |
 | :--- | :--- | :--- | :--- | :--- |
 | `TaskProgressStrip::TaskProgressStrip(QWidget* parent)` | `public` | `src/ui/TaskProgressStrip.h` | `src/ui/TaskProgressStrip.cpp` | `src/ui/MainWindow.cpp` |
 | `TaskProgressStrip::setAnchors(QWidget* bodyWrapper, QWidget* statusBar)` | `public` | `src/ui/TaskProgressStrip.h` | `src/ui/TaskProgressStrip.cpp` | `src/ui/MainWindow.cpp` |

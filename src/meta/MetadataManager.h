@@ -132,9 +132,6 @@ public:
 
     void removeMetadataSync(const std::wstring& path);
     void syncAfterMove(const std::wstring& oldPath, const std::wstring& newPath);
-    void syncPhysicalMetadata(const std::wstring& path, bool notify = true);
-
-    static void activateItem(const std::wstring& path);
     static std::wstring getVolumeSerialNumber(const std::wstring& path);
 
     void beginInternalOperation() {

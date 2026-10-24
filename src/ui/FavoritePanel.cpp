@@ -818,7 +818,7 @@ void FavoritePanel::loadFavorites() {
         } else {
             icon = ShellIconManager::getFileIcon(nativePath);
             QString ext = QFileInfo(nativePath).suffix().toLower();
-            if (UiHelper::isGraphicsFile(ext) || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf" || ext == "svg") {
+            if (ColorPaletteEngine::isGraphicsFile(ext) || ext == "psd" || ext == "ai" || ext == "eps" || ext == "pdf" || ext == "svg") {
                 pathsToExtract << nativePath;
             }
         }

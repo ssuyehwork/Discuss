@@ -256,7 +256,7 @@ void DiskItemModel::preloadDimensionsAsync(const QStringList& targetPaths) {
     targets.reserve(m_allRecords.size());
     for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
         const auto& rec = m_allRecords[i];
-        if (!rec.isDir && rec.width == 0 && UiHelper::isGraphicsFile(rec.suffix)) {
+        if (!rec.isDir && rec.width == 0 && ColorPaletteEngine::isGraphicsFile(rec.suffix.toLower())) {
             if (!filterSet.isEmpty() && !filterSet.contains(QDir::cleanPath(rec.path).toLower())) {
                 continue;
             }
@@ -612,7 +612,7 @@ void DiskItemModel::loadThumbnailsForRows(const QList<int>& rows) {
         const auto& rec = m_allRecords[r];
 
         QString ext = rec.suffix.toLower();
-        bool isGraphic = UiHelper::isGraphicsFile(ext);
+        bool isGraphic = ColorPaletteEngine::isGraphicsFile(ext);
         if (rec.isDir || !isGraphic) {
             continue;
         }
@@ -805,7 +805,7 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         if (cached) return *cached;
 
         QString ext = record.suffix.toLower();
-        bool isGraphic = UiHelper::isGraphicsFile(ext);
+        bool isGraphic = ColorPaletteEngine::isGraphicsFile(ext);
         
         if (isGraphic) return QIcon();
         QIcon icon = ShellIconManager::getFileIconFast(path, record.isDir, ext);

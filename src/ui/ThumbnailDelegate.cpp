@@ -69,7 +69,7 @@ void ThumbnailDelegate::paint(QPainter* painter, const QStyleOptionViewItem& opt
     if (m_pathRole != -1 && thumb.isNull()) {
         QString path = index.data(m_pathRole).toString();
         QString ext = QFileInfo(path).suffix().toLower();
-        if (UiHelper::isGraphicsFile(ext) || ext == "svg") isWaitingThumb = true;
+        if (ColorPaletteEngine::isGraphicsFile(ext) || ext == "svg") isWaitingThumb = true;
     }
 
     bool isGrid = option.widget ? option.widget->property("gridMode").toBool() : false;
