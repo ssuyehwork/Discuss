@@ -732,33 +732,18 @@ QPushButton#UndoToastBtnClose:hover {
     background-color: #3E3E42;
 }
 
-QLabel#TaskProgressTitleLabel {
-    color: #EEEEEE;
-    font-size: 11px;
-    font-weight: bold;
-    background: transparent;
+/* ===================================================================
+   TaskProgressStrip Styles
+   =================================================================== */
+QProgressBar#TaskProgressStrip {
+    background-color: transparent;
+    border: none;
+    max-height: 5px;
 }
-QProgressBar#TaskProgressBar {
-    border: 1px solid #3c3c3c;
-    border-radius: 3px;
-    background-color: #1E1E1E;
-    text-align: center;
-    color: transparent;
-}
-QProgressBar#TaskProgressBar::chunk {
+
+QProgressBar#TaskProgressStrip::chunk {
     background-color: #ff551c;
-    border-radius: 2px;
-}
-QLabel#TaskProgressDetailLabel {
-    color: #888888;
-    font-size: 11px;
-    background: transparent;
-}
-QLabel#TaskProgressCountLabel {
-    color: #ff551c;
-    font-size: 11px;
-    font-weight: bold;
-    background: transparent;
+    border-radius: 1px;
 }
 
 QWidget#QLContainer {
