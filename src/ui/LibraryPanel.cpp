@@ -1047,22 +1047,22 @@ void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QMod
     if (nodeId > 0 || nodeId == -2) {
         bool ok = LibraryService::instance().addPathsToCategory(nodeId, paths);
         if (!ok) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "归入失败", 1500, QColor("#e81123"));
+            ToolTipOverlay::instance()->showToast("归入失败", 1500, QColor("#e81123"));
             return;
         }
 
         if (nodeId == -2) {
             // 目标为 -2 时：不执行子项索引，直接显示成功提示
-            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将 %1 个项目归入未分类").arg(paths.size()), 1500, QColor("#2ecc71"));
+            ToolTipOverlay::instance()->showToast(QString("已将 %1 个项目归入未分类").arg(paths.size()), 1500, QColor("#2ecc71"));
             return;
         }
 
         int appliedTagCount = PresetTagService::instance().applyPresetTagsForDroppedItems(nodeId, paths);
 
         if (appliedTagCount > 0) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已将 %1 个项目关联至当前分类，并自动应用了 %2 个预设标签").arg(paths.size()).arg(appliedTagCount), 2000, QColor("#2ecc71"));
+            ToolTipOverlay::instance()->showToast(QString("已将 %1 个项目关联至当前分类，并自动应用了 %2 个预设标签").arg(paths.size()).arg(appliedTagCount), 2000, QColor("#2ecc71"));
         } else {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已关联 %1 个路径到当前分类").arg(paths.size()), 1500, QColor("#2ecc71"));
+            ToolTipOverlay::instance()->showToast(QString("已关联 %1 个路径到当前分类").arg(paths.size()), 1500, QColor("#2ecc71"));
         }
     }
 }

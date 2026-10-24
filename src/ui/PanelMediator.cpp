@@ -116,7 +116,7 @@ void PanelMediator::setupConnections() {
                     int tgtCount = (tgtState.isSplit && !tgtState.panePaths.isEmpty()) ? tgtState.panePaths.size() : 1;
 
                     if (srcCount + tgtCount > ContentPanel::kMaxPanes) {
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("窗格数量超出上限%1窗格，不支持合并").arg(ContentPanel::kMaxPanes), 2000, QColor("#e81123"));
+                        ToolTipOverlay::instance()->showToast(QString("窗格数量超出上限%1窗格，不支持合并").arg(ContentPanel::kMaxPanes), 2000, QColor("#e81123"));
                         return;
                     }
 
@@ -139,7 +139,7 @@ void PanelMediator::setupConnections() {
                 ContentPanel* root = contentPanel ? contentPanel->rootPane() : nullptr;
                 if (root) {
                     if (root->paneCount() >= ContentPanel::kMaxPanes) {
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("窗格数量超出上限%1窗格，不支持继续分屏").arg(ContentPanel::kMaxPanes), 2000, QColor("#e81123"));
+                        ToolTipOverlay::instance()->showToast(QString("窗格数量超出上限%1窗格，不支持继续分屏").arg(ContentPanel::kMaxPanes), 2000, QColor("#e81123"));
                         return;
                     }
                     root->splitPane(Qt::Horizontal, folderPath);
@@ -209,7 +209,7 @@ void PanelMediator::setupConnections() {
                 if (!selectedPaths.isEmpty()) {
                     ContextMenuFactory::extractContentToClipboard(selectedPaths.first());
                 } else {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "未选择任何可提取内容的文件", 1200, QColor("#e81123"));
+                    ToolTipOverlay::instance()->showToast("未选择任何可提取内容的文件", 1200, QColor("#e81123"));
                 }
             }
         });
@@ -222,6 +222,12 @@ void PanelMediator::setupConnections() {
                 target->loadDirectory(target->currentPath(), nextState);
             }
         });
+
+        if (filterPanel) {
+            connect(shortcutController, &AppShortcutController::resetFilterRequested, filterPanel, [filterPanel]() {
+                filterPanel->clearAllFilters(true);
+            });
+        }
     }
 
     // 搜索控制器与 ContentPanel 绑定及状态更新
@@ -284,17 +290,17 @@ void PanelMediator::setupConnections() {
         if (favoritePanel) {
             connect(navPanel, &NavPanel::requestAddFavorite, favoritePanel, [favoritePanel](const QString& path) {
                 if (FavoriteService::instance().isFavorite(path)) {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "该文件夹已在收藏夹中，请勿重复添加", 2000, QColor("#e81123"));
+                    ToolTipOverlay::instance()->showToast("该文件夹已在收藏夹中，请勿重复添加", 2000, QColor("#e81123"));
                 } else {
                     favoritePanel->addFavoriteItem(path);
                     favoritePanel->saveFavorites();
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+                    ToolTipOverlay::instance()->showToast("已成功添加至收藏夹", 1500, QColor("#2ecc71"));
                 }
             });
             connect(navPanel, &NavPanel::requestRemoveFavorite, favoritePanel, [favoritePanel](const QString& path) {
                 favoritePanel->removeFavoriteItem(path);
                 favoritePanel->saveFavorites();
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
+                ToolTipOverlay::instance()->showToast("已从收藏夹移除", 1500, QColor("#e74c3c"));
             });
         }
     }
@@ -660,12 +666,12 @@ void PanelMediator::setupConnections() {
                 if (addedCount > 0) {
                     favoritePanel->saveFavorites();
                     if (duplicateCount == 0) {
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+                        ToolTipOverlay::instance()->showToast("已成功添加至收藏夹", 1500, QColor("#2ecc71"));
                     } else {
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已添加 %1 个项目 (其余 %2 个已在收藏夹中)").arg(addedCount).arg(duplicateCount), 2000, QColor("#3498db"));
+                        ToolTipOverlay::instance()->showToast(QString("已添加 %1 个项目 (其余 %2 个已在收藏夹中)").arg(addedCount).arg(duplicateCount), 2000, QColor("#3498db"));
                     }
                 } else if (duplicateCount > 0) {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "该文件夹已在收藏夹中，请勿重复添加", 2000, QColor("#e81123"));
+                    ToolTipOverlay::instance()->showToast("该文件夹已在收藏夹中，请勿重复添加", 2000, QColor("#e81123"));
                 }
             });
             connect(panel, &ContentPanel::requestRemoveFavorite, favoritePanel, [favoritePanel](const QStringList& paths) {
@@ -673,7 +679,7 @@ void PanelMediator::setupConnections() {
                     favoritePanel->removeFavoriteItem(p);
                 }
                 favoritePanel->saveFavorites();
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
+                ToolTipOverlay::instance()->showToast("已从收藏夹移除", 1500, QColor("#e74c3c"));
             });
         }
 
@@ -939,17 +945,17 @@ void PanelMediator::setupConnections() {
                 if (favoritePanel->containsPath(path)) {
                     favoritePanel->removeFavoriteItem(path);
                     favoritePanel->saveFavorites();
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
+                    ToolTipOverlay::instance()->showToast("已从收藏夹移除", 1500, QColor("#e74c3c"));
                 } else {
                     favoritePanel->addFavoriteItem(path);
                     favoritePanel->saveFavorites();
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "已成功添加至收藏夹", 1500, QColor("#2ecc71"));
+                    ToolTipOverlay::instance()->showToast("已成功添加至收藏夹", 1500, QColor("#2ecc71"));
                 }
             });
             connect(addressBar, &AddressBar::requestRemoveFavorite, favoritePanel, [favoritePanel](const QString& path) {
                 favoritePanel->removeFavoriteItem(path);
                 favoritePanel->saveFavorites();
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "已从收藏夹移除", 1500, QColor("#e74c3c"));
+                ToolTipOverlay::instance()->showToast("已从收藏夹移除", 1500, QColor("#e74c3c"));
             });
         }
     }

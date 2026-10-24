@@ -72,6 +72,56 @@ void ToolTipOverlay::hideOverlay() {
     hide();
 }
 
+void ToolTipOverlay::showToast(const QString& text, int timeout, const QColor& borderColor, QWidget* targetWidget) {
+    if (thread() != QThread::currentThread()) {
+        QMetaObject::invokeMethod(this, [this, text, timeout, borderColor, targetWidget]() {
+            showToast(text, timeout, borderColor, targetWidget);
+        });
+        return;
+    }
+
+    QWidget* anchor = targetWidget;
+    if (!anchor) {
+        QWidget* activeWin = QApplication::activeWindow();
+        if (activeWin) {
+            anchor = activeWin->findChild<QWidget*>("ContentPanel");
+            if (!anchor) {
+                QList<QWidget*> panels = activeWin->findChildren<QWidget*>();
+                for (QWidget* w : panels) {
+                    if (w->inherits("QuarkMeta::ContentPanel")) {
+                        anchor = w;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    QPoint targetPos;
+    if (anchor && anchor->isVisible()) {
+        QPoint globalTopLeft = anchor->mapToGlobal(QPoint(0, 0));
+        int panelWidth = anchor->width();
+        
+        m_pendingText = text;
+        triggerPendingShow();
+        int tipWidth = width();
+        
+        int centerX = globalTopLeft.x() + (panelWidth - tipWidth) / 2;
+        int topY = globalTopLeft.y() + 10;
+
+        QWidget* header = anchor->findChild<QWidget*>("ContentHeaderWidget");
+        if (header && header->isVisible()) {
+            topY = header->mapToGlobal(QPoint(0, header->height())).y() + 10;
+        }
+
+        targetPos = QPoint(centerX, topY);
+    } else {
+        targetPos = QCursor::pos();
+    }
+
+    showText(targetPos, text, timeout, borderColor, true);
+}
+
 void ToolTipOverlay::showText(const QPoint& globalPos, const QString& text, int timeout, const QColor& borderColor, bool exactPosition, const QColor& backgroundColor) {
     if (thread() != QThread::currentThread()) {
         QMetaObject::invokeMethod(this, [this, globalPos, text, timeout, borderColor, exactPosition, backgroundColor]() { 

@@ -865,8 +865,9 @@ void FilterPanel::updateHeaderStatus() {
     
     bool active = m_filterModel ? !m_filterModel->state().isEmpty() : !m_filter.isEmpty();
     
+    QColor defaultGray = QColor("#888888");
     QColor brandYellow = QColor("#f1c40f");
-    m_iconLabel->setPixmap(UiHelper::getIcon("filter_funnel_outline", brandYellow, 18).pixmap(18, 18));
+    m_iconLabel->setPixmap(UiHelper::getIcon("filter_funnel_outline", defaultGray, 18).pixmap(18, 18));
     m_titleLabel->style()->unpolish(m_titleLabel);
     m_titleLabel->style()->polish(m_titleLabel);
     m_titleLabel->update();

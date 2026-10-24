@@ -127,7 +127,7 @@ void NavPanel::initUi() {
     headerLayout->setSpacing(5);
 
     QLabel* iconLabel = new QLabel(header);
-    iconLabel->setPixmap(UiHelper::getIcon("list_ul", QColor("#2ecc71"), 18).pixmap(18, 18));
+    iconLabel->setPixmap(UiHelper::getIcon("list_ul", QColor("#888888"), 18).pixmap(18, 18));
     headerLayout->addWidget(iconLabel);
 
     QLabel* titleLabel = new QLabel("目录导航", header);

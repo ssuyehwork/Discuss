@@ -238,15 +238,35 @@ void JustifiedView::mousePressEvent(QMouseEvent* event) {
     QModelIndex pressIdx = indexAt(event->pos());
     if (pressIdx.isValid() && pressIdx.data(SectionHeaderRole).toBool()) {
         if (event->button() == Qt::LeftButton) {
+            bool inInteractiveBounds = true;
             if (pressIdx.data(SectionKindRole).toInt() == 1) {
-                SectionProxyModel* secModel = m_sectionModel ? m_sectionModel : qobject_cast<SectionProxyModel*>(model());
-                if (secModel) {
-                    secModel->setFolderCollapsed(!secModel->isFolderCollapsed());
+                int visualIdx = pressIdx.row();
+                if (visualIdx >= 0 && visualIdx < static_cast<int>(m_geometries.size())) {
+                    const auto& geo = m_geometries[visualIdx];
+                    QFont font("Microsoft YaHei", 10, QFont::Bold);
+                    QFontMetrics fm(font);
+                    int leftX = geo.rect.left() + 10;
+                    int textW = fm.horizontalAdvance(geo.headerText);
+                    int interactiveMaxX = leftX + textW + 30; // 文本宽度 + 箭头图标 + 容差 Padding
+                    if (event->pos().x() < leftX || event->pos().x() > interactiveMaxX) {
+                        inInteractiveBounds = false;
+                    }
                 }
             }
+
+            if (inInteractiveBounds) {
+                if (pressIdx.data(SectionKindRole).toInt() == 1) {
+                    SectionProxyModel* secModel = m_sectionModel ? m_sectionModel : qobject_cast<SectionProxyModel*>(model());
+                    if (secModel) {
+                        secModel->setFolderCollapsed(!secModel->isFolderCollapsed());
+                    }
+                }
+                event->accept();
+                return;
+            } else {
+                pressIdx = QModelIndex(); // 超出折叠组件热区，视为点击同行空白区域，放行给后续框选/取消选中逻辑
+            }
         }
-        event->accept();
-        return;
     }
 
     if (event->button() == Qt::LeftButton && event->modifiers() == Qt::NoModifier) {

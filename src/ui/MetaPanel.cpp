@@ -141,7 +141,7 @@ void MetaPanel::initUi() {
     headerLayout->setSpacing(6);
     
     QLabel* iconLabel = new QLabel(header);
-    iconLabel->setPixmap(UiHelper::getIcon("all_data", QColor("#4a90e2"), 16).pixmap(16, 16));
+    iconLabel->setPixmap(UiHelper::getIcon("all_data", QColor("#888888"), 16).pixmap(16, 16));
     headerLayout->addWidget(iconLabel);
     
     QLabel* titleLabel = new QLabel("元数据属性", header);
@@ -225,7 +225,7 @@ void MetaPanel::initUi() {
             if (url.isValid() && (url.scheme().toLower() == "http" || url.scheme().toLower() == "https")) {
                 QDesktopServices::openUrl(url);
             } else {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "无效的 Web 网址格式", 1500, QColor("#e81123"));
+                ToolTipOverlay::instance()->showToast("无效的 Web 网址格式", 1500, QColor("#e81123"));
             }
         }
     });
@@ -358,7 +358,7 @@ void MetaPanel::initUi() {
         p.remove(QChar(0x200B));
         if (!p.isEmpty() && !p.startsWith("已选中")) {
             QApplication::clipboard()->setText(QDir::toNativeSeparators(p));
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "已复制路径", 1200, QColor("#2ecc71"));
+            ToolTipOverlay::instance()->showToast("已复制路径", 1200, QColor("#2ecc71"));
         }
     });
     pathBtnL->addWidget(m_btnCopyPath);

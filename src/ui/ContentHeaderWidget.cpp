@@ -28,7 +28,7 @@ void ContentHeaderWidget::initUi() {
 
     m_iconLabel = new QLabel(this);
     m_iconLabel->setFixedSize(18, 18);
-    m_iconLabel->setPixmap(UiHelper::getIcon("image_picture", QColor("#41F2F2"), 18).pixmap(18, 18));
+    m_iconLabel->setPixmap(UiHelper::getIcon("image_picture", QColor("#888888"), 18).pixmap(18, 18));
 
     m_titleLabel = new QLabel("内容", this);
     m_titleLabel->setObjectName("ContentHeaderTitle");
@@ -116,6 +116,11 @@ void ContentHeaderWidget::setLayersEnabled(bool enabled, const QString& tooltip)
 
 void ContentHeaderWidget::setActive(bool active) {
     setProperty("activePane", active ? "true" : "false");
+    if (m_titleLabel) {
+        m_titleLabel->setProperty("activePane", active ? "true" : "false");
+        m_titleLabel->style()->unpolish(m_titleLabel);
+        m_titleLabel->style()->polish(m_titleLabel);
+    }
     style()->unpolish(this);
     style()->polish(this);
 }

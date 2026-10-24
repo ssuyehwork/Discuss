@@ -45,6 +45,11 @@ public:
      */
     void showText(const QPoint& globalPos, const QString& text, int timeout = 700, const QColor& borderColor = QColor("#B0B0B0"), bool exactPosition = false, const QColor& backgroundColor = QColor("#2B2B2B"));
 
+    /**
+     * @brief 显示固定在目标 Widget (默认为 ContentPanel) 顶部下方 10px 且水平居中的 Toast 气泡
+     */
+    void showToast(const QString& text, int timeout = 1500, const QColor& borderColor = QColor("#2ecc71"), QWidget* targetWidget = nullptr);
+
     // 兼容旧接口
     void showTip(const QString& text, const QPoint& pos, int timeout = 700) {
         showText(pos, text, timeout);

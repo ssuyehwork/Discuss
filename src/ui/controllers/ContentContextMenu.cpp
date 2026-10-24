@@ -380,9 +380,9 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                             if (weakPanel) {
                                 if (success) {
                                     weakPanel->refreshAll();
-                                    ToolTipOverlay::instance()->showText(QCursor::pos(), "文件移动成功", 1500, QColor("#2ecc71"));
+                                    ToolTipOverlay::instance()->showToast("文件移动成功", 1500, QColor("#2ecc71"));
                                 } else {
-                                    ToolTipOverlay::instance()->showText(QCursor::pos(), "移动失败：物理写入未能完成", 2000, QColor("#e81123"));
+                                    ToolTipOverlay::instance()->showToast("移动失败：物理写入未能完成", 2000, QColor("#e81123"));
                                 }
                             }
                         });
@@ -702,12 +702,12 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 QStringList targets;
                 for (const auto& idx : indexes) if (idx.column() == 0) targets << idx.data(PathRole).toString();
 
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "加密任务已在后台启动...", 2000);
+                ToolTipOverlay::instance()->showToast("加密任务已在后台启动...", 2000);
 
                 QPointer<ContentPanel> self(m_panel);
                 EncryptionManager::instance().encryptBatchAsync(targets, pwd.toStdString(), [self](bool success) {
                     if (self) self->refreshAll();
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), success ? "加密任务处理完成" : "部分项目加密失败", 1500, success ? QColor("#2ecc71") : QColor("#e81123"));
+                    ToolTipOverlay::instance()->showToast(success ? "加密任务处理完成" : "部分项目加密失败", 1500, success ? QColor("#2ecc71") : QColor("#e81123"));
                 });
             }
             break;
@@ -722,15 +722,15 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 QStringList targets;
                 for (const auto& idx : indexes) if (idx.column() == 0) targets << idx.data(PathRole).toString();
 
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "解密还原任务已在后台启动...", 2000);
+                ToolTipOverlay::instance()->showToast("解密还原任务已在后台启动...", 2000);
 
                 QPointer<ContentPanel> self(m_panel);
                 EncryptionManager::instance().decryptBatchAsync(targets, pwd.toStdString(), [self](bool anySuccess) {
                     if (self) self->refreshAll();
                     if (anySuccess) {
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), "解除保护成功，文件已还原", 1500, QColor("#2ecc71"));
+                        ToolTipOverlay::instance()->showToast("解除保护成功，文件已还原", 1500, QColor("#2ecc71"));
                     } else {
-                        ToolTipOverlay::instance()->showText(QCursor::pos(), "解密失败，请检查密码是否正确", 2000, QColor("#e74c3c"));
+                        ToolTipOverlay::instance()->showToast("解密失败，请检查密码是否正确", 2000, QColor("#e74c3c"));
                     }
                 });
             }
@@ -751,15 +751,15 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             QStringList targets;
             for (const auto& idx : indexes) if (idx.column() == 0) targets << idx.data(PathRole).toString();
 
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "密码修改中...", 2000);
+            ToolTipOverlay::instance()->showToast("密码修改中...", 2000);
 
             QPointer<ContentPanel> self(m_panel);
             EncryptionManager::instance().changePasswordBatchAsync(targets, oldPwd.toStdString(), newPwd.toStdString(), [self](bool anySuccess) {
                 if (self) self->refreshAll();
                 if (anySuccess) {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "保护密码修改成功", 1500, QColor("#2ecc71"));
+                    ToolTipOverlay::instance()->showToast("保护密码修改成功", 1500, QColor("#2ecc71"));
                 } else {
-                    ToolTipOverlay::instance()->showText(QCursor::pos(), "原密码错误，修改失败", 2000, QColor("#e74c3c"));
+                    ToolTipOverlay::instance()->showToast("原密码错误，修改失败", 2000, QColor("#e74c3c"));
                 }
             });
             break;
@@ -803,9 +803,9 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                         if (weakPanel) {
                             if (success) {
                                 weakPanel->refreshAll();
-                                ToolTipOverlay::instance()->showText(QCursor::pos(), "副本创建成功", 1500, QColor("#2ecc71"));
+                                ToolTipOverlay::instance()->showToast("副本创建成功", 1500, QColor("#2ecc71"));
                             } else {
-                                ToolTipOverlay::instance()->showText(QCursor::pos(), "创建副本失败：物理写入未能完成", 2000, QColor("#e81123"));
+                                ToolTipOverlay::instance()->showToast("创建副本失败：物理写入未能完成", 2000, QColor("#e81123"));
                             }
                         }
                     });
@@ -832,9 +832,9 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             }
             if (!cleanTags.isEmpty()) {
                 ClipboardService::instance().setCopiedTags(cleanTags);
-                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制 %1 个标签").arg(cleanTags.size()), 1500, QColor("#2ecc71"));
+                ToolTipOverlay::instance()->showToast(QString("已复制 %1 个标签").arg(cleanTags.size()), 1500, QColor("#2ecc71"));
             } else {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), "当前项目未绑定任何标签", 1500, QColor("#e81123"));
+                ToolTipOverlay::instance()->showToast("当前项目未绑定任何标签", 1500, QColor("#e81123"));
             }
             break;
         }
@@ -930,7 +930,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             }
 
             if (!targetPaths.isEmpty()) {
-                ToolTipOverlay::instance()->showText(QCursor::pos(), QString("正在深度重新提取 %1 个项目的缩略图...").arg(targetPaths.size()), 2000, QColor("#3498db"));
+                ToolTipOverlay::instance()->showToast(QString("正在深度重新提取 %1 个项目的缩略图...").arg(targetPaths.size()), 2000, QColor("#3498db"));
 
                 QPointer<ContentPanel> weakThis(m_panel);
                 DeepThumbnailExtractor::instance().extractBatchAsync(

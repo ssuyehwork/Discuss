@@ -50,6 +50,11 @@ signals:
      */
     void toggleRecursiveRequested();
 
+    /**
+     * @brief Ctrl+Space 触发重置所有筛选条件
+     */
+    void resetFilterRequested();
+
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
