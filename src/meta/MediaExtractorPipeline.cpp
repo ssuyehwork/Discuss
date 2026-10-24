@@ -73,12 +73,16 @@ void MediaExtractorPipeline::reportDone(int n) {
 }
  
 void MediaExtractorPipeline::cancelAll() { 
+    std::shared_ptr<CancellationToken> oldToken;
     { 
         std::lock_guard<std::mutex> queueLock(m_queueMutex); 
         m_queue.clear(); 
-        m_token->cancel(); 
+        oldToken = m_token;
         m_token = std::make_shared<CancellationToken>(); 
     } 
+    if (oldToken) {
+        oldToken->cancel();
+    }
     std::lock_guard<std::mutex> jobLock(m_jobMutex);
     if (m_job.isValid()) {
         m_job.finish();
