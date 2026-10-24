@@ -114,7 +114,7 @@ void QuickLookWindow::preview(const QString& filePath) {
     
     QString ext = fi.suffix().toLower();
     
-    if (UiHelper::isGraphicsFile(ext)) {
+    if (ColorPaletteEngine::isGraphicsFile(ext)) {
         renderImage(filePath);
     } else {
         renderText(filePath);

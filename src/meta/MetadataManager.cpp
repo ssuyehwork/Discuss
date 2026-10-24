@@ -857,11 +857,6 @@ bool MetadataManager::fetchWinApiMetadataDirect(const std::wstring& path, long l
     return false;
 }
 
-void MetadataManager::syncPhysicalMetadata(const std::wstring& path, bool notify) { persistAsync(path, notify); }
-
-void MetadataManager::activateItem(const std::wstring& path) {
-    instance().registerItem(path);
-}
 
 void MetadataManager::persistBatchAsync(const std::vector<std::wstring>& paths) {
     if (paths.empty()) return;

@@ -56,11 +56,6 @@ public:
         return SvgIconRenderer::getSvgTempFilePath(key, color);
     }
 
-    static inline bool isGraphicsFile(const QString& ext) {
-        return ColorPaletteEngine::isGraphicsFile(ext);
-    }
-
-
     static inline bool isStandardImage(const QString& ext) {
         return ColorPaletteEngine::isStandardImage(ext);
     }
@@ -173,7 +168,7 @@ public:
         if (fi.isDir()) return false;
 
         QString ext = fi.suffix().toLower();
-        if (isGraphicsFile(ext) || isTextFile(ext) || ext == "pdf") {
+        if (ColorPaletteEngine::isGraphicsFile(ext) || isTextFile(ext) || ext == "pdf") {
             return true;
         }
 
