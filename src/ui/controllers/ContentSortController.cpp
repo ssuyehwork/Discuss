@@ -1,6 +1,7 @@
 #include "ContentSortController.h"
 #include "../models/FilterProxyModel.h"
 #include "../../core/AppConfig.h"
+#include "../../meta/MetadataManager.h"
 
 namespace QuarkMeta {
 
@@ -49,6 +50,47 @@ void ContentSortController::saveToConfig() {
     AppConfig::instance().setValue("ContentPanel/RightClickSortType", static_cast<int>(m_sortType));
     AppConfig::instance().setValue("ContentPanel/RightClickSortOrder", static_cast<int>(m_sortOrder));
     AppConfig::instance().sync();
+
+    if (!m_currentFolderPath.isEmpty()) {
+        FolderMeta meta = MetadataManager::instance().getFolderMeta(m_currentFolderPath);
+        
+        switch (m_sortType) {
+            case SortType::SortByName: meta.sortBy = L"name"; break;
+            case SortType::SortByCreateDate: meta.sortBy = L"cdate"; break;
+            case SortType::SortByModifyDate: meta.sortBy = L"mtime"; break;
+            case SortType::SortByExtension: meta.sortBy = L"type"; break;
+            case SortType::SortBySize: meta.sortBy = L"size"; break;
+            case SortType::SortByDimension: meta.sortBy = L"dim"; break;
+            case SortType::SortByRating: meta.sortBy = L"rating"; break;
+            default: meta.sortBy = L"name"; break;
+        }
+        meta.sortOrder = (m_sortOrder == Qt::AscendingOrder) ? L"asc" : L"desc";
+
+        MetadataManager::instance().setFolderMeta(m_currentFolderPath, meta);
+    }
+}
+
+void ContentSortController::setCurrentFolderPath(const QString& folderPath) {
+    m_currentFolderPath = folderPath;
+    if (folderPath.isEmpty()) {
+        loadFromConfig();
+        return;
+    }
+
+    FolderMeta meta = MetadataManager::instance().getFolderMeta(folderPath);
+    if (!meta.sortBy.empty()) {
+        if (meta.sortBy == L"name") m_sortType = SortType::SortByName;
+        else if (meta.sortBy == L"cdate") m_sortType = SortType::SortByCreateDate;
+        else if (meta.sortBy == L"mtime") m_sortType = SortType::SortByModifyDate;
+        else if (meta.sortBy == L"type") m_sortType = SortType::SortByExtension;
+        else if (meta.sortBy == L"size") m_sortType = SortType::SortBySize;
+        else if (meta.sortBy == L"dim") m_sortType = SortType::SortByDimension;
+        else if (meta.sortBy == L"rating") m_sortType = SortType::SortByRating;
+        
+        m_sortOrder = (meta.sortOrder == L"desc") ? Qt::DescendingOrder : Qt::AscendingOrder;
+    } else {
+        loadFromConfig();
+    }
 }
 
 void ContentSortController::setSortType(SortType type) {

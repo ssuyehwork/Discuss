@@ -30,6 +30,7 @@ public:
     void setSortType(SortType type);
     void setSortOrder(Qt::SortOrder order);
     void setSortCriteria(SortType type, Qt::SortOrder order);
+    void setCurrentFolderPath(const QString& folderPath);
 
     static FileListColumn columnForSortType(SortType type);
     static SortType sortTypeForColumn(FileListColumn col);
@@ -44,6 +45,7 @@ signals:
 private:
     SortType m_sortType = SortType::SortByName;
     Qt::SortOrder m_sortOrder = Qt::AscendingOrder;
+    QString m_currentFolderPath;
 };
 
 } // namespace QuarkMeta

@@ -363,14 +363,7 @@ void ColumnViewWidget::updateParentHighlights() {
         ColumnViewPane* childPane = (i + 1 < m_panes.size()) ? m_panes[i + 1] : nullptr;
         QString childPath = childPane ? QDir::toNativeSeparators(QDir::cleanPath(childPane->currentPath())) : "";
 
-        FilterProxyModel* model = parentPane->proxyModel();
-        if (!model) continue;
-        for (int r = 0; r < model->rowCount(); ++r) {
-            QModelIndex idx = model->index(r, 0);
-            QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(idx.data(PathRole).toString()));
-            bool isExpandedParent = !childPath.isEmpty() && (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
-            model->setData(idx, isExpandedParent, IsParentExpandedRole);
-        }
+        parentPane->setExpandedChildPath(childPath);
     }
 }
 

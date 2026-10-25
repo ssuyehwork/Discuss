@@ -170,6 +170,9 @@ public:
     std::vector<LightMeta> getLightweightCacheSnapshot() const;
     std::shared_mutex& getMutex() const { return m_mutex; }
 
+    FolderMeta getFolderMeta(const QString& folderPath);
+    void setFolderMeta(const QString& folderPath, const FolderMeta& meta);
+
     static bool fetchWinApiMetadataDirect(const std::wstring& path, long long* outSize = nullptr, std::wstring* outType = nullptr, long long* outCtime = nullptr, long long* outMtime = nullptr, long long* outAtime = nullptr);
     void persistAsync(const std::wstring& path, bool notify = true);
 

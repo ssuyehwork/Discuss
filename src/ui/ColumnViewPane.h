@@ -37,6 +37,8 @@ public:
     void setPendingSelectPaths(const QSet<QString>& paths, bool edit = false);
     void clearSelection();
     void setFilterState(const FilterState& state);
+    void setExpandedChildPath(const QString& path) { m_expandedChildPath = path; update(); }
+    QString expandedChildPath() const { return m_expandedChildPath; }
     void applySort(int sortType, Qt::SortOrder sortOrder);
 
     DropListView* listView() const { return m_listView; }
@@ -84,6 +86,7 @@ private:
     DropListView* m_folderListView = nullptr;
     DropListView* m_listView = nullptr;
     QTimer* m_visibleTimer = nullptr;
+    QString m_expandedChildPath;
 };
 
 } // namespace QuarkMeta
