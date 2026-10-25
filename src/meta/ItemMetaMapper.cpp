@@ -3,6 +3,9 @@
 namespace QuarkMeta {
 
 void ItemMetaMapper::apply(const ItemMeta& meta, ItemRecord& record) {
+    if (!meta.fileId.empty()) {
+        record.fileId = QString::fromStdString(meta.fileId);
+    }
     record.rating = meta.rating;
     record.manualColor = QString::fromStdWString(meta.color);
     record.pinned = meta.pinned;

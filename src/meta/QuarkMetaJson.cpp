@@ -259,6 +259,11 @@ FolderMeta QuarkMetaJson::entryToFolder(const QJsonObject& obj) {
 
 QJsonObject QuarkMetaJson::itemToEntry(const ItemMeta& meta) {
     QJsonObject obj;
+    QString fid = QString::fromStdString(meta.fileId).trimmed();
+    if (fid.isEmpty()) {
+        fid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    }
+    obj.insert("file_id", fid);
     obj.insert("type", toQString(meta.type));
     obj.insert("rating", meta.rating);
     obj.insert("color", toQString(meta.color));
