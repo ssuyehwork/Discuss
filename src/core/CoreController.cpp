@@ -4,6 +4,7 @@
 #include "../meta/MetadataManager.h"
 #include "../meta/DatabaseManager.h"
 #include "../meta/MediaExtractorPipeline.h"
+#include "../meta/LibrarySyncService.h"
 #include "../util/DiskMediaExtractor.h"
 #include "../ui/Logger.h"
 #include <QThreadPool>
@@ -37,6 +38,9 @@ void CoreController::initializeCoreComponents() {
     
     // 3. 后台提取特征管道、定时器及事件队列预热
     QuarkMeta::MediaExtractorPipeline::instance();
+
+    // 4. 库同步对账服务预热（触发启动 1.5 秒后自动对账补齐）
+    QuarkMeta::LibrarySyncService::instance();
     
     // 4. 定时合并刷新缩略图提取失败标记落盘
     QTimer* failureFlushTimer = new QTimer(QCoreApplication::instance());

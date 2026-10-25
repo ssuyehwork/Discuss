@@ -60,6 +60,8 @@ public:
     static QString getGlobalDbPath();
     static QString getBackupDir();
 
+    static void logSqlError(const char* location, sqlite3* db, const QString& sql = QString());
+
     static void performDailyBackup();
     static bool tryRecoverFromBackup();
 

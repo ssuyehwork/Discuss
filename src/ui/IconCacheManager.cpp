@@ -24,12 +24,16 @@ QIcon IconCacheManager::getCachedIcon(const QString& ext, bool isDir) {
 
     QFileIconProvider provider;
     QIcon icon;
-    if (isDir) {
-        icon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
-    } else {
-        if (key.length() > 12) key = "unknown";
-        icon = provider.icon(QFileInfo("dummy." + key));
-        if (icon.isNull()) icon = provider.icon(QFileIconProvider::File);
+    try {
+        if (isDir) {
+            icon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
+        } else {
+            if (key.length() > 12) key = "unknown";
+            icon = provider.icon(QFileInfo("dummy." + key));
+            if (icon.isNull()) icon = provider.icon(QFileIconProvider::File);
+        }
+    } catch (...) {
+        icon = SvgIconRenderer::getIcon(isDir ? "folder_filled" : "file", QColor("#888888"), 128);
     }
 
     {

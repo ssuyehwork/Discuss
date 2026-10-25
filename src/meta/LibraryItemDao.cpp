@@ -42,6 +42,7 @@ std::vector<ItemRecord> LibraryItemDao::getItemsByPaths(const QStringList& paths
 
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, sql.toUtf8().constData(), -1, &stmt, nullptr) != SQLITE_OK) {
+            DatabaseManager::logSqlError("LibraryItemDao::getItemsByPaths prepare main", db, sql);
             continue;
         }
 
@@ -112,6 +113,8 @@ std::vector<ItemRecord> LibraryItemDao::getItemsByPaths(const QStringList& paths
                 }
             }
             sqlite3_finalize(stmt);
+        } else {
+            DatabaseManager::logSqlError("LibraryItemDao::getItemsByPaths prepare tags", db, tagSql);
         }
 
         // 3. 构建 item_palettes 动态 IN 查询
@@ -131,6 +134,8 @@ std::vector<ItemRecord> LibraryItemDao::getItemsByPaths(const QStringList& paths
                 }
             }
             sqlite3_finalize(stmt);
+        } else {
+            DatabaseManager::logSqlError("LibraryItemDao::getItemsByPaths prepare palettes", db, palSql);
         }
 
         for (const auto& item : chunkItemMap) {
@@ -154,6 +159,8 @@ QStringList LibraryItemDao::getAllLibraryPaths() {
             paths.append(QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0))));
         }
         sqlite3_finalize(stmt);
+    } else {
+        DatabaseManager::logSqlError("LibraryItemDao::getAllLibraryPaths prepare", db, sql);
     }
     return paths;
 }
@@ -224,6 +231,7 @@ bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
         sqlite3_prepare_v2(db, insTagSql, -1, &stmtInsTag, nullptr) != SQLITE_OK ||
         sqlite3_prepare_v2(db, delPalSql, -1, &stmtDelPal, nullptr) != SQLITE_OK ||
         sqlite3_prepare_v2(db, insPalSql, -1, &stmtInsPal, nullptr) != SQLITE_OK) {
+        DatabaseManager::logSqlError("LibraryItemDao::upsertItems prepare", db, upsertSql);
         cleanupStmts();
         return false;
     }
@@ -279,6 +287,7 @@ bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
         sqlite3_bind_int64(stmtUpsert, 26, now);
 
         if (sqlite3_step(stmtUpsert) != SQLITE_DONE) {
+            DatabaseManager::logSqlError("LibraryItemDao::upsertItems step upsert", db, upsertSql);
             cleanupStmts();
             return false;
         }
@@ -340,6 +349,8 @@ bool LibraryItemDao::removeItemsByPaths(const QStringList& paths) {
             sqlite3_bind_text(stmt, 1, path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
             sqlite3_step(stmt);
             sqlite3_finalize(stmt);
+        } else {
+            DatabaseManager::logSqlError("LibraryItemDao::removeItemsByPaths prepare", db, sql);
         }
     }
     return tx.commit();
@@ -366,6 +377,8 @@ bool LibraryItemDao::updatePath(const QString& oldPath, const QString& newPath) 
         bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
         sqlite3_finalize(stmt);
         return ok;
+    } else {
+        DatabaseManager::logSqlError("LibraryItemDao::updatePath prepare", db, sql);
     }
     return false;
 }
@@ -387,6 +400,8 @@ bool LibraryItemDao::updatePathPrefix(const QString& oldPrefix, const QString& n
         bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
         sqlite3_finalize(stmt);
         return ok;
+    } else {
+        DatabaseManager::logSqlError("LibraryItemDao::updatePathPrefix prepare", db, sql);
     }
     return false;
 }
@@ -404,6 +419,8 @@ bool LibraryItemDao::markSyncStateByPath(const QString& path, int syncState) {
         bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
         sqlite3_finalize(stmt);
         return ok;
+    } else {
+        DatabaseManager::logSqlError("LibraryItemDao::markSyncStateByPath prepare", db, sql);
     }
     return false;
 }

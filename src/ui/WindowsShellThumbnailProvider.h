@@ -62,6 +62,10 @@ private:
     static QMap<QString, QIcon>& fileIconCache();
     static QMutex& loadingMutex();
     static QSet<QString>& loadingKeys();
+
+    static bool checkCircuitBreaker();
+    static void recordShellFailure();
+    static void recordShellSuccess();
 };
 
 } // namespace QuarkMeta

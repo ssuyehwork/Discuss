@@ -120,6 +120,32 @@ QIcon WindowsShellThumbnailProvider::getFileIconFast(const QString& filePath, bo
     return placeholderIcon;
 }
 
+namespace {
+    std::atomic<int> g_consecutiveFailures{0};
+    std::atomic<int64_t> g_cooldownUntilMs{0};
+}
+
+bool WindowsShellThumbnailProvider::checkCircuitBreaker() {
+    int64_t nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (nowMs < g_cooldownUntilMs.load()) {
+        return false; // 处于熔断冷却期，阻断 Shell 调用
+    }
+    return true;
+}
+
+void WindowsShellThumbnailProvider::recordShellFailure() {
+    int fails = ++g_consecutiveFailures;
+    if (fails >= 5) {
+        int64_t nowMs = QDateTime::currentMSecsSinceEpoch();
+        g_cooldownUntilMs.store(nowMs + 1000); // 触发 1000ms 熔断冷却，允许 Shell 缓存池 GC
+        g_consecutiveFailures.store(0);
+    }
+}
+
+void WindowsShellThumbnailProvider::recordShellSuccess() {
+    g_consecutiveFailures.store(0);
+}
+
 void WindowsShellThumbnailProvider::handleIconLoad(const QString& filePath, const QString& key, bool isDir, bool isRoot) {
     // 在主线程（本槽所在线程）取得通知器指针，保证通知器归属主线程，
     // 避免首次在子线程创建导致 queued 调用永远不执行、通知发不出。
@@ -134,17 +160,27 @@ void WindowsShellThumbnailProvider::handleIconLoad(const QString& filePath, cons
         QIcon icon;
         QFileInfo info(filePath);
 
-        if (isDir) {
-            if (isRoot) {
-                icon = provider.icon(info);
+        try {
+            if (isDir) {
+                if (isRoot) {
+                    icon = provider.icon(info);
+                } else {
+                    icon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
+                }
             } else {
-                icon = SvgIconRenderer::getIcon("folder_filled", QColor("#888888"), 128);
+                if (!checkCircuitBreaker()) {
+                    icon = provider.icon(QFileIconProvider::File);
+                } else {
+                    icon = provider.icon(QFileInfo("dummy." + key));
+                    if (icon.isNull()) {
+                        icon = provider.icon(QFileIconProvider::File);
+                    }
+                    recordShellSuccess();
+                }
             }
-        } else {
-            icon = provider.icon(QFileInfo("dummy." + key));
-            if (icon.isNull()) {
-                icon = provider.icon(QFileIconProvider::File);
-            }
+        } catch (...) {
+            recordShellFailure();
+            icon = SvgIconRenderer::getIcon(isDir ? "folder_filled" : "file", QColor("#888888"), 128);
         }
 
         {
@@ -191,58 +227,81 @@ struct ComInitializer {
 
 QImage WindowsShellThumbnailProvider::getShellThumbnail(const QString& path, int size) {
 #ifdef Q_OS_WIN
-    ComInitializer comInit;
-    PIDLIST_ABSOLUTE pidl = nullptr;
-    HRESULT hr = SHParseDisplayName(path.toStdWString().c_str(), nullptr, &pidl, 0, nullptr);
-    if (FAILED(hr)) return QImage();
-    IShellItem* pItem = nullptr;
-    hr = SHCreateItemFromIDList(pidl, IID_IShellItem, (void**)&pItem);
-    ILFree(pidl);
-    if (SUCCEEDED(hr)) {
-        IShellItemImageFactory* pFactory = nullptr;
-        hr = pItem->QueryInterface(IID_IShellItemImageFactory, (void**)&pFactory);
-        if (SUCCEEDED(hr)) {
-            SIZE nativeSize = { size, size };
-            HBITMAP hBitmap = nullptr;
-            // 🚨 关键标志位 SIIGBF_THUMBNAILONLY：强行过滤软件图标！拒绝图标冒充缩略图！
-            hr = pFactory->GetImage(nativeSize, SIIGBF_THUMBNAILONLY, &hBitmap);
-            if (SUCCEEDED(hr) && hBitmap) {
-                BITMAP bmpInfo;
-                GetObject(hBitmap, sizeof(bmpInfo), &bmpInfo);
-                int w = bmpInfo.bmWidth;
-                int h = std::abs(bmpInfo.bmHeight);
+    if (!checkCircuitBreaker()) {
+        return QImage();
+    }
 
-                BITMAPINFOHEADER bi = {};
-                bi.biSize        = sizeof(BITMAPINFOHEADER);
-                bi.biWidth       = w;
-                bi.biHeight      = -h;   // 负值 = top-down，方向永远正确
-                bi.biPlanes      = 1;
-                bi.biBitCount    = 32;
-                bi.biCompression = BI_RGB;
+    try {
+        ComInitializer comInit;
+        PIDLIST_ABSOLUTE pidl = nullptr;
+        HRESULT hr = SHParseDisplayName(path.toStdWString().c_str(), nullptr, &pidl, 0, nullptr);
+        if (FAILED(hr)) return QImage();
 
-                QByteArray pixels(w * h * 4, 0);
-                HDC hdc = GetDC(nullptr);
-                GetDIBits(hdc, hBitmap, 0, h, pixels.data(),
-                          reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS);
-                ReleaseDC(nullptr, hdc);
+        IShellItem* pItem = nullptr;
+        hr = SHCreateItemFromIDList(pidl, IID_IShellItem, (void**)&pItem);
+        ILFree(pidl);
 
-                // Windows 返回 BGRA，Qt 需要 RGBA，交换 R/B 通道
-                uint8_t* p = reinterpret_cast<uint8_t*>(pixels.data());
-                for (int i = 0; i < w * h; ++i) {
-                    std::swap(p[i * 4 + 0], p[i * 4 + 2]);
+        if (SUCCEEDED(hr) && pItem) {
+            IShellItemImageFactory* pFactory = nullptr;
+            hr = pItem->QueryInterface(IID_IShellItemImageFactory, (void**)&pFactory);
+            if (SUCCEEDED(hr) && pFactory) {
+                SIZE nativeSize = { size, size };
+                HBITMAP hBitmap = nullptr;
+
+                // 🚨 关键防线：包裹 try-catch (...) 拦截 Windows Shell 底层 CacheOverflowException 异常
+                try {
+                    hr = pFactory->GetImage(nativeSize, SIIGBF_THUMBNAILONLY, &hBitmap);
+                } catch (...) {
+                    hr = E_FAIL;
+                    recordShellFailure();
                 }
 
-                QImage img(p, w, h, w * 4, QImage::Format_RGBA8888);
-                img = img.copy(); // 确保数据所有权
+                if (SUCCEEDED(hr) && hBitmap) {
+                    BITMAP bmpInfo;
+                    GetObject(hBitmap, sizeof(bmpInfo), &bmpInfo);
+                    int w = bmpInfo.bmWidth;
+                    int h = std::abs(bmpInfo.bmHeight);
 
-                DeleteObject(hBitmap);
+                    if (w > 0 && h > 0) {
+                        BITMAPINFOHEADER bi = {};
+                        bi.biSize        = sizeof(BITMAPINFOHEADER);
+                        bi.biWidth       = w;
+                        bi.biHeight      = -h;   // 负值 = top-down，方向永远正确
+                        bi.biPlanes      = 1;
+                        bi.biBitCount    = 32;
+                        bi.biCompression = BI_RGB;
+
+                        QByteArray pixels(w * h * 4, 0);
+                        HDC hdc = GetDC(nullptr);
+                        if (hdc) {
+                            GetDIBits(hdc, hBitmap, 0, h, pixels.data(),
+                                      reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS);
+                            ReleaseDC(nullptr, hdc);
+                        }
+
+                        // Windows 返回 BGRA，Qt 需要 RGBA，交换 R/B 通道
+                        uint8_t* p = reinterpret_cast<uint8_t*>(pixels.data());
+                        for (int i = 0; i < w * h; ++i) {
+                            std::swap(p[i * 4 + 0], p[i * 4 + 2]);
+                        }
+
+                        QImage img(p, w, h, w * 4, QImage::Format_RGBA8888);
+                        img = img.copy(); // 确保数据所有权
+
+                        DeleteObject(hBitmap);
+                        pFactory->Release();
+                        pItem->Release();
+                        recordShellSuccess();
+                        return img;
+                    }
+                    DeleteObject(hBitmap);
+                }
                 pFactory->Release();
-                pItem->Release();
-                return img;
             }
-            pFactory->Release();
+            pItem->Release();
         }
-        pItem->Release();
+    } catch (...) {
+        recordShellFailure();
     }
 #else
     Q_UNUSED(path); Q_UNUSED(size);

@@ -155,14 +155,38 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
     sqlite3_exec(conn.diskDb, "PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
     sqlite3_exec(conn.diskDb, "PRAGMA temp_store = MEMORY;", nullptr, nullptr, nullptr);
 
-    // 自动自愈：探测预存库中 library_items 是否具备 meta_file_id 列，若为旧表则擦除以触发全新建表
-    sqlite3_stmt* checkStmt = nullptr;
-    if (sqlite3_prepare_v2(conn.diskDb, "SELECT meta_file_id FROM library_items LIMIT 1;", -1, &checkStmt, nullptr) != SQLITE_OK) {
-        sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS file_tags;", nullptr, nullptr, nullptr);
-        sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS item_palettes;", nullptr, nullptr, nullptr);
-        sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS library_items;", nullptr, nullptr, nullptr);
+    constexpr int kSchemaVersion = 1;
+    int currentVersion = 0;
+    sqlite3_stmt* verStmt = nullptr;
+    if (sqlite3_prepare_v2(conn.diskDb, "PRAGMA user_version;", -1, &verStmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(verStmt) == SQLITE_ROW) {
+            currentVersion = sqlite3_column_int(verStmt, 0);
+        }
+        sqlite3_finalize(verStmt);
     } else {
-        sqlite3_finalize(checkStmt);
+        logSqlError("PRAGMA user_version read", conn.diskDb);
+    }
+
+    if (currentVersion != kSchemaVersion) {
+        char* err = nullptr;
+        if (sqlite3_exec(conn.diskDb, "BEGIN TRANSACTION;", nullptr, nullptr, &err) == SQLITE_OK) {
+            sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS item_palettes;", nullptr, nullptr, nullptr);
+            sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS file_tags;", nullptr, nullptr, nullptr);
+            sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS library_items;", nullptr, nullptr, nullptr);
+            if (sqlite3_exec(conn.diskDb, "COMMIT;", nullptr, nullptr, &err) != SQLITE_OK) {
+                logSqlError("Version upgrade transaction commit", conn.diskDb, "COMMIT;");
+                if (err) sqlite3_free(err);
+                sqlite3_close_v2(conn.diskDb);
+                conn.diskDb = nullptr;
+                return false;
+            }
+        } else {
+            logSqlError("Version upgrade transaction begin", conn.diskDb, "BEGIN TRANSACTION;");
+            if (err) sqlite3_free(err);
+            sqlite3_close_v2(conn.diskDb);
+            conn.diskDb = nullptr;
+            return false;
+        }
     }
 
     const char* schema = R"(
@@ -206,20 +230,33 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         CREATE TABLE IF NOT EXISTS library_items (
             file_id TEXT PRIMARY KEY,               -- 持久化唯一标识 (UUID/Base36)
             meta_file_id TEXT DEFAULT '',           -- .QuarkMeta.json 自身 File_ID 凭据
-            file_path TEXT NOT NULL UNIQUE,         -- 绝对物理路径（独立唯一索引列）
+            file_path TEXT NOT NULL UNIQUE COLLATE NOCASE, -- 绝对物理路径
             file_name TEXT NOT NULL,                -- 文件名（含后缀）
             base_name TEXT NOT NULL,                -- 纯文件名（不含后缀，搜索用）
             extension TEXT NOT NULL COLLATE NOCASE, -- 后缀（如 png、md）
             file_size INTEGER DEFAULT 0,
+            is_dir INTEGER DEFAULT 0,
+            is_empty INTEGER DEFAULT 0,
+            is_hidden INTEGER DEFAULT 0,
+            is_managed INTEGER DEFAULT 0,
+            encrypted INTEGER DEFAULT 0,
+            pinned INTEGER DEFAULT 0,
             rating INTEGER DEFAULT 0,               -- 评级 0~5
             color_hex TEXT DEFAULT '',              -- 标记颜色
+            auto_color TEXT DEFAULT '',             -- 自动调色板特征 Hex
+            width INTEGER DEFAULT 0,
+            height INTEGER DEFAULT 0,
+            thumb_status INTEGER DEFAULT 0,
             note TEXT DEFAULT '',                   -- 备注
             url TEXT DEFAULT '',                    -- 关联网址
+            sha256 TEXT DEFAULT '',
             created_at INTEGER DEFAULT 0,
-            updated_at INTEGER DEFAULT 0
+            updated_at INTEGER DEFAULT 0,
+            added_at INTEGER DEFAULT 0,
+            sync_state INTEGER DEFAULT 0,
+            synced_at INTEGER DEFAULT 0
         );
         -- 为物理路径及智能文件夹的高频过滤字段建立 B-Tree 索引
-        CREATE INDEX IF NOT EXISTS idx_items_path ON library_items(file_path);
         CREATE INDEX IF NOT EXISTS idx_items_meta_file_id ON library_items(meta_file_id);
         CREATE INDEX IF NOT EXISTS idx_items_rating ON library_items(rating);
         CREATE INDEX IF NOT EXISTS idx_items_ext ON library_items(extension);
@@ -227,7 +264,19 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         CREATE INDEX IF NOT EXISTS idx_items_updated ON library_items(updated_at DESC);
 
         -- ===================================================================
-        -- 4. 文件与标签的多对多解耦关联表
+        -- 4. 主色调调色板拆分表
+        -- ===================================================================
+        CREATE TABLE IF NOT EXISTS item_palettes (
+            file_id TEXT NOT NULL,
+            idx INTEGER NOT NULL,
+            color_hex TEXT DEFAULT '',
+            ratio REAL DEFAULT 0,
+            PRIMARY KEY (file_id, idx),
+            FOREIGN KEY (file_id) REFERENCES library_items(file_id) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+
+        -- ===================================================================
+        -- 5. 文件与标签的多对多解耦关联表
         -- ===================================================================
         CREATE TABLE IF NOT EXISTS file_tags (
             file_id TEXT NOT NULL,
@@ -239,7 +288,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_name);
 
         -- ===================================================================
-        -- 5. 回收站表（补全高频检索与恢复索引）
+        -- 6. 回收站表（补全高频检索与恢复索引）
         -- ===================================================================
         CREATE TABLE IF NOT EXISTS disk_trash (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -258,7 +307,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         CREATE INDEX IF NOT EXISTS idx_disk_trash_deleted ON disk_trash(deleted_at DESC);
 
         -- ===================================================================
-        -- 6. 驱动器与智能文件夹元数据
+        -- 7. 驱动器与智能文件夹元数据
         -- ===================================================================
         CREATE TABLE IF NOT EXISTS drive_metadata (
             drive_path TEXT PRIMARY KEY,
@@ -285,18 +334,27 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
 
     char* errMsg = nullptr;
     if (sqlite3_exec(conn.diskDb, schema, nullptr, nullptr, &errMsg) != SQLITE_OK) {
-        qCritical() << "[DatabaseManager] 表结构创建失败:" << errMsg;
-        sqlite3_free(errMsg);
+        logSqlError("Schema creation", conn.diskDb, schema);
+        if (errMsg) sqlite3_free(errMsg);
         sqlite3_close_v2(conn.diskDb);
         conn.diskDb = nullptr;
         return false;
+    }
+
+    if (currentVersion != kSchemaVersion) {
+        char* verErr = nullptr;
+        QString setVerSql = QString("PRAGMA user_version = %1;").arg(kSchemaVersion);
+        if (sqlite3_exec(conn.diskDb, setVerSql.toUtf8().constData(), nullptr, nullptr, &verErr) != SQLITE_OK) {
+            logSqlError("PRAGMA user_version set", conn.diskDb, setVerSql);
+            if (verErr) sqlite3_free(verErr);
+        }
     }
 
     // 🚨 核心加固：立即执行 TRUNCATE 检查点，将表结构瞬间从 -wal 固化回 QuarkMeta.store 主文件！
     sqlite3_wal_checkpoint_v2(conn.diskDb, nullptr, SQLITE_CHECKPOINT_TRUNCATE, nullptr, nullptr);
 
     conn.diskPath = nativeWPath;
-    qInfo() << "[DatabaseManager] 4 张全局表已成功固化到物理数据库:" << qDiskPath;
+    qInfo() << "[DatabaseManager] 全局表结构已成功固化到物理数据库:" << qDiskPath;
     return true;
 }
 
@@ -372,6 +430,16 @@ sqlite3* DatabaseManager::getGlobalDb() {
         DriveMetaDao::initTable(); 
     } 
     return db; 
+}
+
+void DatabaseManager::logSqlError(const char* location, sqlite3* db, const QString& sql) {
+    const char* errmsg = db ? sqlite3_errmsg(db) : "Unknown error (null db)";
+    if (!sql.isEmpty()) {
+        QString truncatedSql = sql.left(120);
+        qWarning() << QString("[DatabaseError][%1] %2 | SQL: %3").arg(location, errmsg, truncatedSql);
+    } else {
+        qWarning() << QString("[DatabaseError][%1] %2").arg(location, errmsg);
+    }
 }
 
 } // namespace QuarkMeta
