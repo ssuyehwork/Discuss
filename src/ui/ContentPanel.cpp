@@ -517,7 +517,23 @@ void ContentPanel::setActivePane(bool active) {
 }
 
 QString ContentPanel::activePath() const {
+    if (m_currentViewMode == ColumnView && m_columnView) {
+        ColumnViewPane* pane = m_columnView->activePane();
+        if (pane && !pane->currentPath().isEmpty()) {
+            return pane->currentPath();
+        }
+    }
     return m_currentPath;
+}
+
+QString ContentPanel::pathForView(QAbstractItemView* view) const {
+    if (m_currentViewMode == ColumnView && m_columnView && view) {
+        ColumnViewPane* pane = m_columnView->findPaneForView(view);
+        if (pane && !pane->currentPath().isEmpty()) {
+            return pane->currentPath();
+        }
+    }
+    return activePath();
 }
 
 void ContentPanel::redistributePaneSizes() {

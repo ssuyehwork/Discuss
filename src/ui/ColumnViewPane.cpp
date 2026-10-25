@@ -100,10 +100,10 @@ ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, 
                 m_contentPanel->onCustomContextMenuRequested(m_listView, pos);
             }
         });
-        connect(m_listView, &DropListView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex) {
-            emit pathsDroppedSignal(paths, targetIndex, m_path);
+        connect(m_listView, &DropListView::pathsDropped, this, [this](const QStringList& paths, const QModelIndex& targetIndex, Qt::DropAction action) {
+            emit pathsDroppedSignal(paths, targetIndex, m_path, action);
             if (m_contentPanel) {
-                m_contentPanel->onPathsDropped(paths, targetIndex, m_path);
+                m_contentPanel->onPathsDropped(paths, targetIndex, m_path, action);
             }
         });
     }

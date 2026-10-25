@@ -71,6 +71,16 @@ ColumnViewPane* ColumnViewWidget::rightmostPane() const {
     return m_panes.isEmpty() ? nullptr : m_panes.last();
 }
 
+ColumnViewPane* ColumnViewWidget::findPaneForView(QAbstractItemView* view) const {
+    if (!view) return nullptr;
+    for (ColumnViewPane* pane : m_panes) {
+        if (pane && (pane->listView() == view || pane->folderListView() == view)) {
+            return pane;
+        }
+    }
+    return nullptr;
+}
+
 ColumnViewPane* ColumnViewWidget::findPaneForPath(const QString& targetPath) const {
     if (m_panes.isEmpty() || targetPath.isEmpty()) return nullptr;
 

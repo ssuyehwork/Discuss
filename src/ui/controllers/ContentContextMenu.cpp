@@ -71,20 +71,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     QString path = onItem ? col0Index.data(PathRole).toString() : "";
     QFileInfo itemInfo(path);
 
-    QString currentPath = m_panel->currentPath();
-
-    if (view && view->objectName() == "ColumnViewPaneListView") {
-        QWidget* parentWidget = view->parentWidget();
-        while (parentWidget && parentWidget->objectName() != "ColumnViewPane") {
-            parentWidget = parentWidget->parentWidget();
-        }
-        if (parentWidget) {
-            QuarkMeta::ColumnViewPane* pane = qobject_cast<QuarkMeta::ColumnViewPane*>(parentWidget);
-            if (pane && !pane->currentPath().isEmpty()) {
-                currentPath = pane->currentPath();
-            }
-        }
-    }
+    QString currentPath = m_panel->pathForView(view);
 
     QString currentCategoryType = m_panel->getCurrentCategoryType();
 

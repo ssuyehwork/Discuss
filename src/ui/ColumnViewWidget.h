@@ -27,6 +27,7 @@ public:
     ColumnViewPane* activePane() const;
     ColumnViewPane* rightmostPane() const;
     ColumnViewPane* findPaneForPath(const QString& targetPath) const;
+    ColumnViewPane* findPaneForView(QAbstractItemView* view) const;
     void focusPane(int paneIndex);
     void activatePaneFromBlankClick(int paneIndex);
     void setActivePaneIndex(int newIndex);
