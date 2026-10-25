@@ -28,8 +28,9 @@ void SidebarContainerWidget::initUi() {
     m_tabBar = new QTabBar(header);
     m_tabBar->setObjectName("SidebarTabBar");
     m_tabBar->setDrawBase(false);
-    m_tabBar->addTab("收藏夹");
-    m_tabBar->addTab("库");
+    m_tabBar->setIconSize(QSize(16, 16));
+    m_tabBar->addTab(UiHelper::getIcon("Favorites.svg", "#888888", 16), "收藏夹");
+    m_tabBar->addTab(UiHelper::getIcon("Search-in-library", "#888888", 16), "库");
     m_tabBar->setCursor(Qt::PointingHandCursor);
 
     headerLayout->addWidget(m_tabBar);
