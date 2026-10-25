@@ -114,9 +114,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         QAction* selectedAction = menu.exec(view->viewport()->mapToGlobal(pos));
         m_panel->setContextMenuActive(false);
 
-        if (!selectedAction || !selectedAction->data().isValid()) return;
+        if (!selectedAction || !selectedAction->data().isValid() || selectedAction->data().typeId() != QMetaType::Int) return;
 
         ContentPanel::ContextAction action = static_cast<ContentPanel::ContextAction>(selectedAction->data().toInt());
+        if (action == ContentPanel::ActionNone) return;
         switch (action) {
             case ContentPanel::ActionRestore:
                 TrashService::instance().restoreItems(m_panel->getSelectedTrashIds(), m_panel);
@@ -391,7 +392,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
                 connect(moveMenu, &QMenu::hovered, this, [](QAction* action) {
                     if (action) {
-                        QString path = action->data().toString();
+                        QString path = action->property("hoverPath").toString();
                         if (!path.isEmpty()) {
                             ToolTipOverlay::instance()->showText(QCursor::pos(), path, 0);
                         } else {
@@ -412,7 +413,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                         displayName = recentDir; // 盘符或根目录降级显示原路径
                     }
                     QAction* actMove = moveMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), displayName);
-                    actMove->setData(recentDir);
+                    actMove->setProperty("hoverPath", recentDir);
                     connect(actMove, &QAction::triggered, this, [performMoveTo, recentDir]() {
                         performMoveTo(recentDir);
                     });
@@ -587,9 +588,10 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     QAction* selectedAction = menu.exec(view->viewport()->mapToGlobal(pos));
     m_panel->setContextMenuActive(false);
 
-    if (!selectedAction || !selectedAction->data().isValid()) return;
+    if (!selectedAction || !selectedAction->data().isValid() || selectedAction->data().typeId() != QMetaType::Int) return;
 
     ContentPanel::ContextAction action = static_cast<ContentPanel::ContextAction>(selectedAction->data().toInt());
+    if (action == ContentPanel::ActionNone) return;
 
     switch (action) {
         case ContentPanel::ActionOpen:

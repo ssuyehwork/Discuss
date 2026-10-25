@@ -60,7 +60,7 @@ public:
     };
 
     enum ContextAction {
-        ActionOpen, ActionOpenInNewTab, ActionOpenDefault, ActionShowInExplorer, ActionShowInQuarkMeta, ActionNewFolder, ActionNewMd, ActionNewTxt, ActionCreateFolderWithSelectedItems,
+        ActionNone, ActionOpen, ActionOpenInNewTab, ActionOpenDefault, ActionShowInExplorer, ActionShowInQuarkMeta, ActionNewFolder, ActionNewMd, ActionNewTxt, ActionCreateFolderWithSelectedItems,
         ActionPin, ActionUnpin, ActionColorTag, ActionEncrypt, ActionDecrypt, ActionChangePwd,
         ActionBatchRename, ActionRename, ActionCopy, ActionCut, ActionDuplicate, ActionPaste, ActionCopyTags, ActionPasteTags, ActionRepeatLastOp, ActionDelete,
         ActionPermanentDelete, ActionSecureDelete, ActionRestore, ActionRestoreAll, ActionEmptyTrash,

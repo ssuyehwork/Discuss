@@ -639,7 +639,7 @@ void PanelMediator::setupConnections() {
 
         // 1. 文件双击/空格/回车/右键菜单统一文件激活动作
         connect(panel, &ContentPanel::fileActivated, this, [this](const QString& path) {
-            if (!UiHelper::canPreviewFile(path)) {
+            if (path.isEmpty() || !QFile::exists(path) || !UiHelper::canPreviewFile(path)) {
                 return;
             }
             AppCommand cmd;
