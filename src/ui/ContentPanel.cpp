@@ -824,8 +824,14 @@ void ContentPanel::setViewMode(ViewMode mode) {
 
     ViewMode oldMode = m_currentViewMode;
     m_currentViewMode = mode;
-    int minZoom = (mode == ListView) ? 30 : 93;
-    m_zoomLevel = qBound(minZoom, m_zoomLevel, 230);
+
+    if (mode == ListView) {
+        int savedListZoom = AppConfig::instance().getValue("UI/ListZoomLevel", 30).toInt();
+        m_zoomLevel = qBound(30, savedListZoom, 230);
+    } else {
+        int savedGridZoom = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
+        m_zoomLevel = qBound(93, savedGridZoom, 230);
+    }
 
     if (mode == ListView) {
         m_viewStack->setCurrentWidget(m_treeView);
@@ -878,7 +884,11 @@ void ContentPanel::updateGridSize() {
     if (m_viewCoordinator) {
         m_viewCoordinator->updateGridSize(m_zoomLevel);
     }
-    AppConfig::instance().setValue("UI/GridZoomLevel", m_zoomLevel);
+    if (m_currentViewMode == ListView) {
+        AppConfig::instance().setValue("UI/ListZoomLevel", m_zoomLevel);
+    } else {
+        AppConfig::instance().setValue("UI/GridZoomLevel", m_zoomLevel);
+    }
 }
 
 void ContentPanel::applyFilters(const FilterState& state) {

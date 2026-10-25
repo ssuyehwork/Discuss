@@ -160,14 +160,16 @@ public:
 
                 if (!thumb.isNull()) {
                     painter->save();
-                    QPainterPath clipPath;
-                    clipPath.addRoundedRect(squareRect, 4, 4);
-                    painter->setClipPath(clipPath);
-
                     QPixmap scaled = thumb.scaled(squareRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
                     int x = squareRect.center().x() - scaled.width() / 2;
                     int y = squareRect.center().y() - scaled.height() / 2;
-                    painter->drawPixmap(x, y, scaled);
+                    QRect targetRect(x, y, scaled.width(), scaled.height());
+
+                    QPainterPath clipPath;
+                    clipPath.addRoundedRect(targetRect, 4, 4);
+                    painter->setClipPath(clipPath);
+
+                    painter->drawPixmap(targetRect, scaled);
 
                     painter->restore();
                 } else {
