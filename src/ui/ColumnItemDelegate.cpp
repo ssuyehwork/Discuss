@@ -1,10 +1,10 @@
 #include "ColumnItemDelegate.h"
+#include "ColumnViewPane.h"
 #include "../core/ModelContract.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "CardPainterHelper.h"
 #include "ViewDragDropHelper.h"
-#include "../core/ModelContract.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -63,7 +63,14 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
 
     bool selected = (option.state & QStyle::State_Selected);
     bool hover = (option.state & QStyle::State_MouseOver);
-    bool isParentExpanded = index.data(IsParentExpandedRole).toBool();
+    bool isParentExpanded = false;
+    ColumnViewPane* pane = qobject_cast<ColumnViewPane*>(const_cast<QWidget*>(option.widget ? option.widget->parentWidget() : nullptr));
+    if (pane && !pane->expandedChildPath().isEmpty()) {
+        QString itemPath = QDir::toNativeSeparators(QDir::cleanPath(index.data(PathRole).toString()));
+        QString childPath = QDir::toNativeSeparators(QDir::cleanPath(pane->expandedChildPath()));
+        isParentExpanded = (QString::compare(itemPath, childPath, Qt::CaseInsensitive) == 0);
+    }
+
     bool isDropTarget = index.data(IsDropTargetRole).toBool() ||
                        ViewDragDropHelper::isDropTarget(qobject_cast<const QAbstractItemView*>(option.widget), index);
 

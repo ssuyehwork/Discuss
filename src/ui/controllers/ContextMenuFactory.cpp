@@ -59,7 +59,7 @@ QAction* ContextMenuFactory::buildExtractContentAction(QMenu* menu, const QStrin
     bool canExtract = !isFolder && UiHelper::isTextFile(fileExt);
 
     if (canExtract) {
-        QAction* actExtract = menu->addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "支持提取内容");
+        QAction* actExtract = menu->addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "支持提取内容（Ctrl + Shift + E）");
         QObject::connect(actExtract, &QAction::triggered, receiver ? receiver : menu, [path]() {
             extractContentToClipboard(path);
         });

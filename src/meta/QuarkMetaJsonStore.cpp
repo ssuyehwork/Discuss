@@ -379,6 +379,31 @@ QString QuarkMetaJsonStore::getMetaFileId(const std::wstring& folderPath) {
     return QString::fromStdString(jsonPtr->folder().metaFileId);
 }
 
+FolderMeta QuarkMetaJsonStore::getFolderMeta(const std::wstring& folderPath) {
+    if (folderPath.empty()) return FolderMeta();
+    prefetchFolderJson(folderPath);
+
+    std::wstring normFolder = normalizeFolderPath(folderPath);
+    std::lock_guard<std::mutex> lock(m_storeMutex);
+
+    auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+    return jsonPtr->folder();
+}
+
+void QuarkMetaJsonStore::setFolderMeta(const std::wstring& folderPath, const FolderMeta& meta) {
+    if (folderPath.empty()) return;
+    prefetchFolderJson(folderPath);
+
+    std::wstring normFolder = normalizeFolderPath(folderPath);
+    {
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+        jsonPtr->folder() = meta;
+        markDirtyLocked(normFolder);
+    }
+    scheduleFlush();
+}
+
 QuarkMetaJson::ItemMap QuarkMetaJsonStore::readFolderMeta(const std::wstring& folderPath) {
     if (folderPath.empty()) return {};
     prefetchFolderJson(folderPath);

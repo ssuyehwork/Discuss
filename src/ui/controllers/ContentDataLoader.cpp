@@ -47,6 +47,9 @@ static std::vector<ItemRecord> loadTrashItemsDirect() {
 void ContentDataLoader::loadDirectory(const QString& path, bool recursive) {
     if (!m_panel) return;
     m_panel->restoreActiveView();
+    if (m_panel->sortController()) {
+        m_panel->sortController()->setCurrentFolderPath(path);
+    }
     MediaExtractorPipeline::instance().cancelAll();
     m_panel->incrementModelGeneration();
     m_panel->ensureSourceModelIsDiskModel();

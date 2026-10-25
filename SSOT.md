@@ -55,7 +55,19 @@
 
 ---
 
-## 三、 归一化真伪汇总表
+## 三、 数据库与 DAO 批量操作 SSOT 契约
+
+#### ⑥ `LibraryItemDao::getItemsByPaths` —— 批量查询与装配
+- **SSOT 职责**：以 500 个条目为 Chunk 分批进行 SQL `IN (?, ?, ...)` 动态批量检索，装配 `library_items`、`file_tags` 和 `item_palettes`，杜绝 N+1 逐条查询。
+- **真伪判定**：**【真归一化】**
+
+#### ⑦ `SmartFolderDao::getMatchingPaths` —— 智能文件夹匹配检索
+- **SSOT 职责**：解析 Rating、Color、Tag、Extension、Keyword 等规则组合，从 SQLite 过滤返回未缺失 (`sync_state != 2`) 的匹配文件路径列表。
+- **真伪判定**：**【真归一化】**
+
+---
+
+## 四、 归一化真伪汇总表
 
 | 核心接口 | 归一化类型 | 真伪结论 | 排查说明 |
 |---|---|---|---|
@@ -64,3 +76,26 @@
 | `CoreEngine::executeCommand()` | 业务命令 | **真归一化** | 全通道收敛（`ThumbnailDelegate` 存 1 处冗余写瑕疵） |
 | `AppConfig::instance()` | 配置读写 | **真归一化** | 权威全局配置 |
 | `CentralEventHub::instance()` | 消息广播 | **真归一化** | 统一事件订阅分发 |
+| `LibraryItemDao::getItemsByPaths()` | 数据库批量查询 | **真归一化** | Chunk 分批高效检索 |
+| `SmartFolderDao::getMatchingPaths()` | 智能文件夹检索 | **真归一化** | 统一规则 SQL 查询 |
+
+---
+
+## 五、 合规性自检与签名核对 (Pre-Draft Checklist & Evidence)
+
+### 1. 物理头文件签名原文摘录
+- `ContentPanel.h`: `void refreshAll();`
+- `ContentPanel.h`: `void loadDirectory(const QString& path, bool recursive = false);`
+- `CoreEngine.h`: `bool executeCommand(const AppCommand& cmd);`
+- `AppConfig.h`: `static AppConfig& instance();`
+- `CentralEventHub.h`: `static CentralEventHub& instance();`
+- `LibraryItemDao.h`: `static QMap<QString, ItemRecord> getItemsByPaths(const QStringList& paths);`
+- `SmartFolderDao.h`: `static QStringList getMatchingPaths(const SmartFolderRecord& rec);`
+
+### 2. 合规自检表
+
+| 检查项 | 来源条款 | 结论 | 说明 |
+|---|---|---|---|
+| 统一文件名与定位 | SSOT 规范 | 满足 | 统一整理至 `SSOT.md` |
+| 外部成员签名全覆盖 | SSOT 规范 | 满足 | 包含已读签名与功能核查 |
+| 重复内容去重合并 | 用户指令 | 满足 | 已去重并完整融合 `SSOT-1.md` 的独有内容 |

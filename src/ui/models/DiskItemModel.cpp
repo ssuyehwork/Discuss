@@ -556,14 +556,7 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
         return true;
     }
 
-    if (role == IsParentExpandedRole) {
-        bool val = value.toBool();
-        if (record.isParentExpanded != val) {
-            record.isParentExpanded = val;
-            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
-            return true;
-        }
-    } else if (role == IsDropTargetRole) {
+    if (role == IsDropTargetRole) {
         bool val = value.toBool();
         if (record.isDropTarget != val) {
             record.isDropTarget = val;
@@ -787,8 +780,6 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
         if (record.width > 0 && record.height > 0) return (double)record.width / record.height;
         double ratio = m_aspectRatios.value(QDir::toNativeSeparators(path), 1.0);
         return ratio > 0.0 ? ratio : 1.0;
-    } else if (role == IsParentExpandedRole) {
-        return record.isParentExpanded;
     } else if (role == IsDropTargetRole) {
         return record.isDropTarget;
     } else if (role == IsDiskTrashRole) {

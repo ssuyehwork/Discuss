@@ -1025,4 +1025,12 @@ std::vector<LightMeta> MetadataManager::getLightweightCacheSnapshot() const {
     return result;
 }
 
+FolderMeta MetadataManager::getFolderMeta(const QString& folderPath) {
+    return QuarkMetaJsonStore::instance().getFolderMeta(folderPath.toStdWString());
+}
+
+void MetadataManager::setFolderMeta(const QString& folderPath, const FolderMeta& meta) {
+    QuarkMetaJsonStore::instance().setFolderMeta(folderPath.toStdWString(), meta);
+}
+
 } // namespace QuarkMeta
