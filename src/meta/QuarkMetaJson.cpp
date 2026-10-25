@@ -9,6 +9,7 @@
 #include <QJsonArray>
 #include <QDir>
 #include <QMap>
+#include <QUuid>
 #include <mutex>
 
 #ifndef NOMINMAX
@@ -33,6 +34,7 @@ bool QuarkMetaJson::load() {
     QFile file(toQString(m_filePath));
     if (!file.exists()) {
         m_folder = FolderMeta();
+        m_folder.metaFileId = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
         m_items.clear();
         return true;
     }
@@ -206,6 +208,9 @@ QJsonObject QuarkMetaJson::folderToEntry(const FolderMeta& meta) {
     obj.insert("note", toQString(meta.note));
     obj.insert("url", toQString(meta.url));
     obj.insert("encrypted", meta.encrypted);
+    if (!meta.metaFileId.empty()) {
+        obj.insert("meta_file_id", QString::fromStdString(meta.metaFileId));
+    }
     QJsonArray tagsArr; for (const auto& t : meta.tags) tagsArr.append(toQString(t));
     obj.insert("tags", tagsArr);
     if (!meta.palettes.empty()) {
@@ -233,6 +238,10 @@ FolderMeta QuarkMetaJson::entryToFolder(const QJsonObject& obj) {
     meta.note = toStdWString(obj.value("note").toString());
     meta.url = toStdWString(obj.value("url").toString());
     meta.encrypted = obj.value("encrypted").toBool();
+    meta.metaFileId = obj.value("meta_file_id").toString().toStdString();
+    if (meta.metaFileId.empty()) {
+        meta.metaFileId = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
+    }
     if (obj.contains("tags") && obj.value("tags").isArray()) {
         for (const auto& v : obj.value("tags").toArray()) meta.tags.push_back(toStdWString(v.toString()));
     }

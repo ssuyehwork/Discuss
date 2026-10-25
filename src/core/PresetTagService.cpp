@@ -1,6 +1,7 @@
 #include "PresetTagService.h"
 #include "../meta/LibraryDao.h"
 #include "CoreEngine.h"
+#include "TaskProgressService.h"
 #include <QSet>
 #include <QtConcurrent>
 #include <QApplication>
@@ -26,21 +27,26 @@ bool PresetTagService::saveLibraryPresetTags(int categoryId, const QStringList& 
         }
     }
 
-    // 2. 异步投递到后台工作线程池，主线程立即返回 0 毫秒无卡顿
-    (void)QtConcurrent::run([this, categoryId, newTags, newlyAddedTags, onTraceFinished]() {
-        processAsyncPresetTagsUpdate(categoryId, newTags, newlyAddedTags, onTraceFinished);
+    // 2. 🚀【0ms 即时唤起进度条】：主线程被调用瞬间立即创建进度条 Job，保证视觉反馈零延迟
+    int jobId = TaskProgressService::instance().createJob("正在应用预设标签...", 0);
+
+    // 3. 异步投递到后台工作线程池，主线程立即返回 0 毫秒无卡顿
+    (void)QtConcurrent::run([this, jobId, categoryId, newTags, newlyAddedTags, onTraceFinished]() {
+        processAsyncPresetTagsUpdate(jobId, categoryId, newTags, newlyAddedTags, onTraceFinished);
     });
 
     return true;
 }
 
-void PresetTagService::processAsyncPresetTagsUpdate(int categoryId, const QStringList& newTags, const QStringList& newlyAddedTags, std::function<void(int tagCount, int itemCount)> onTraceFinished) {
+void PresetTagService::processAsyncPresetTagsUpdate(int jobId, int categoryId, const QStringList& newTags, const QStringList& newlyAddedTags, std::function<void(int tagCount, int itemCount)> onTraceFinished) {
     // A. 后台写 SQLite 数据库
     if (!LibraryDao::updatePresetTags(categoryId, newTags)) {
+        TaskProgressService::instance().finishJob(jobId);
         return;
     }
 
     if (newlyAddedTags.isEmpty()) {
+        TaskProgressService::instance().finishJob(jobId);
         if (onTraceFinished) {
             QMetaObject::invokeMethod(qApp, [onTraceFinished]() {
                 onTraceFinished(0, 0);
@@ -53,6 +59,7 @@ void PresetTagService::processAsyncPresetTagsUpdate(int categoryId, const QStrin
     QStringList paths = LibraryDao::getCategoryPaths(categoryId, false);
     paths.removeDuplicates();
     if (paths.isEmpty()) {
+        TaskProgressService::instance().finishJob(jobId);
         if (onTraceFinished) {
             int newlyAddedCount = newlyAddedTags.size();
             QMetaObject::invokeMethod(qApp, [onTraceFinished, newlyAddedCount]() {
@@ -62,13 +69,13 @@ void PresetTagService::processAsyncPresetTagsUpdate(int categoryId, const QStrin
         return;
     }
 
-    // C. 定向批处理：在后台按物理父文件夹归类，分别直接读写各自的 .QuarkMeta.json
+    // C. 定向批处理：在后台按物理父文件夹归类，复用现有 jobId 推进 TaskProgressStrip
     int newlyAddedCount = newlyAddedTags.size();
     CoreEngine::instance().addTagsToPathsAsync(paths, newlyAddedTags, [onTraceFinished, newlyAddedCount](int pathCount) {
         if (onTraceFinished) {
             onTraceFinished(newlyAddedCount, pathCount);
         }
-    });
+    }, jobId);
 }
 
 int PresetTagService::applyPresetTagsForDroppedItems(int categoryId, const QStringList& paths) {

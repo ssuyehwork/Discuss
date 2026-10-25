@@ -162,6 +162,9 @@ void LibrarySyncService::processSyncBatch(const QStringList& batch) {
         if (QuarkMetaJsonStore::instance().readItemMeta(path.toStdWString(), meta)) {
             ItemMetaMapper::apply(meta, rec);
         }
+        QFileInfo info(path);
+        std::wstring folderPath = info.isDir() ? path.toStdWString() : info.absolutePath().toStdWString();
+        rec.metaFileId = QuarkMetaJsonStore::instance().getMetaFileId(folderPath);
         records.push_back(rec);
     }
     LibraryItemDao::upsertItems(records);

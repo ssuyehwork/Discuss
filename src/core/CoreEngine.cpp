@@ -204,8 +204,11 @@ void CoreEngine::handleSetTags(const QStringList& paths, const QStringList& tags
     CentralEventHub::instance().publishEvent(ev);
 }
 
-void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList& tags, std::function<void(int pathCount)> onFinished) {
+void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList& tags, std::function<void(int pathCount)> onFinished, int existingJobId) {
     if (paths.isEmpty() || tags.isEmpty()) {
+        if (existingJobId > 0) {
+            TaskProgressService::instance().finishJob(existingJobId);
+        }
         if (onFinished) {
             QMetaObject::invokeMethod(qApp, [onFinished, pathCount = paths.size()]() {
                 onFinished(pathCount);
@@ -214,9 +217,9 @@ void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList
         return;
     }
 
-    m_asyncTagPool.start([paths, tags, onFinished]() {
+    m_asyncTagPool.start([paths, tags, onFinished, existingJobId]() {
         int totalPaths = paths.size();
-        int jobId = TaskProgressService::instance().createJob("正在应用预设标签...", totalPaths);
+        int jobId = existingJobId > 0 ? existingJobId : TaskProgressService::instance().createJob("正在应用预设标签...", totalPaths);
 
         TagLexiconService::instance().addTags(tags);
 
@@ -226,7 +229,7 @@ void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList
             QStringList batch = paths.mid(i, kBatchSize);
             MetadataManager::instance().addTagsBatch(batch, tags);
             processed += batch.size();
-            TaskProgressService::instance().updateProgress(jobId, processed, totalPaths);
+            TaskProgressService::instance().updateProgress(jobId, processed, totalPaths, QString("已应用 %1 / %2 项").arg(processed).arg(totalPaths));
         }
 
         TaskProgressService::instance().finishJob(jobId);

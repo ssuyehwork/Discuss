@@ -25,6 +25,7 @@ struct ItemRecord {
     bool isDiskTrash = false;
     int diskTrashId = 0;
     QString fileId;
+    QString metaFileId; // .QuarkMeta.json 自身 File_ID 凭据
     QString originalPath;
 
     // 2026-06-xx 物理对标：注入核心元数据，杜绝 UI 渲染时的同步 I/O

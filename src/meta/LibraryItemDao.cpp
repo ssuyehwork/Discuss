@@ -34,7 +34,7 @@ std::vector<ItemRecord> LibraryItemDao::getItemsByPaths(const QStringList& paths
             placeholders.append("?");
         }
 
-        QString sql = QString("SELECT file_id, file_path, file_name, base_name, extension, file_size, is_dir, is_empty, "
+        QString sql = QString("SELECT file_id, meta_file_id, file_path, file_name, base_name, extension, file_size, is_dir, is_empty, "
                               "is_hidden, is_managed, encrypted, pinned, rating, color_hex, auto_color, width, height, "
                               "thumb_status, note, url, sha256, created_at, updated_at, added_at "
                               "FROM library_items WHERE file_path IN (%1) COLLATE NOCASE;")
@@ -55,28 +55,29 @@ std::vector<ItemRecord> LibraryItemDao::getItemsByPaths(const QStringList& paths
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             ItemRecord rec;
             rec.fileId = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
-            rec.path = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
-            rec.filename = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
-            rec.suffix = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)));
-            rec.size = sqlite3_column_int64(stmt, 5);
-            rec.isDir = (sqlite3_column_int(stmt, 6) != 0);
-            rec.isEmpty = (sqlite3_column_int(stmt, 7) != 0);
-            rec.isHidden = (sqlite3_column_int(stmt, 8) != 0);
-            rec.isManaged = (sqlite3_column_int(stmt, 9) != 0);
-            rec.encrypted = (sqlite3_column_int(stmt, 10) != 0);
-            rec.pinned = (sqlite3_column_int(stmt, 11) != 0);
-            rec.rating = sqlite3_column_int(stmt, 12);
-            rec.manualColor = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 13)));
-            rec.autoColor = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 14)));
-            rec.width = sqlite3_column_int(stmt, 15);
-            rec.height = sqlite3_column_int(stmt, 16);
-            rec.thumbStatus = sqlite3_column_int(stmt, 17);
-            rec.note = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 18)));
-            rec.url = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 19)));
-            rec.sha256 = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 20)));
-            rec.ctime = sqlite3_column_int64(stmt, 21);
-            rec.mtime = sqlite3_column_int64(stmt, 22);
-            rec.added_at = sqlite3_column_int64(stmt, 23);
+            rec.metaFileId = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)));
+            rec.path = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2)));
+            rec.filename = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3)));
+            rec.suffix = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
+            rec.size = sqlite3_column_int64(stmt, 6);
+            rec.isDir = (sqlite3_column_int(stmt, 7) != 0);
+            rec.isEmpty = (sqlite3_column_int(stmt, 8) != 0);
+            rec.isHidden = (sqlite3_column_int(stmt, 9) != 0);
+            rec.isManaged = (sqlite3_column_int(stmt, 10) != 0);
+            rec.encrypted = (sqlite3_column_int(stmt, 11) != 0);
+            rec.pinned = (sqlite3_column_int(stmt, 12) != 0);
+            rec.rating = sqlite3_column_int(stmt, 13);
+            rec.manualColor = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 14)));
+            rec.autoColor = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 15)));
+            rec.width = sqlite3_column_int(stmt, 16);
+            rec.height = sqlite3_column_int(stmt, 17);
+            rec.thumbStatus = sqlite3_column_int(stmt, 18);
+            rec.note = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 19)));
+            rec.url = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 20)));
+            rec.sha256 = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 21)));
+            rec.ctime = sqlite3_column_int64(stmt, 22);
+            rec.mtime = sqlite3_column_int64(stmt, 23);
+            rec.added_at = sqlite3_column_int64(stmt, 24);
 
             if (!rec.fileId.isEmpty()) {
                 chunkItemMap.insert(rec.fileId, rec);
@@ -177,18 +178,18 @@ bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
 
     const char* queryIdSql = "SELECT file_id FROM library_items WHERE file_path = ? COLLATE NOCASE;";
     const char* upsertSql = "INSERT INTO library_items ("
-                            "file_id, file_path, file_name, base_name, extension, file_size, is_dir, is_empty, "
+                            "file_id, meta_file_id, file_path, file_name, base_name, extension, file_size, is_dir, is_empty, "
                             "is_hidden, is_managed, encrypted, pinned, rating, color_hex, auto_color, width, height, "
                             "thumb_status, note, url, sha256, created_at, updated_at, added_at, sync_state, synced_at) "
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?) "
                             "ON CONFLICT(file_id) DO UPDATE SET "
-                            "file_path=excluded.file_path, file_name=excluded.file_name, base_name=excluded.base_name, "
-                            "extension=excluded.extension, file_size=excluded.file_size, is_dir=excluded.is_dir, "
-                            "is_empty=excluded.is_empty, is_hidden=excluded.is_hidden, is_managed=excluded.is_managed, "
-                            "encrypted=excluded.encrypted, pinned=excluded.pinned, rating=excluded.rating, "
-                            "color_hex=excluded.color_hex, auto_color=excluded.auto_color, width=excluded.width, "
-                            "height=excluded.height, thumb_status=excluded.thumb_status, note=excluded.note, "
-                            "url=excluded.url, sha256=excluded.sha256, created_at=excluded.created_at, "
+                            "meta_file_id=excluded.meta_file_id, file_path=excluded.file_path, file_name=excluded.file_name, "
+                            "base_name=excluded.base_name, extension=excluded.extension, file_size=excluded.file_size, "
+                            "is_dir=excluded.is_dir, is_empty=excluded.is_empty, is_hidden=excluded.is_hidden, "
+                            "is_managed=excluded.is_managed, encrypted=excluded.encrypted, pinned=excluded.pinned, "
+                            "rating=excluded.rating, color_hex=excluded.color_hex, auto_color=excluded.auto_color, "
+                            "width=excluded.width, height=excluded.height, thumb_status=excluded.thumb_status, "
+                            "note=excluded.note, url=excluded.url, sha256=excluded.sha256, created_at=excluded.created_at, "
                             "updated_at=excluded.updated_at, added_at=excluded.added_at, sync_state=0, synced_at=excluded.synced_at;";
 
     const char* delTagsSql = "DELETE FROM file_tags WHERE file_id = ?;";
@@ -251,30 +252,31 @@ bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
         sqlite3_clear_bindings(stmtUpsert);
 
         sqlite3_bind_text(stmtUpsert, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmtUpsert, 2, record.path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmtUpsert, 3, record.filename.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmtUpsert, 4, baseName.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmtUpsert, 5, ext.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int64(stmtUpsert, 6, record.size);
-        sqlite3_bind_int(stmtUpsert, 7, record.isDir ? 1 : 0);
-        sqlite3_bind_int(stmtUpsert, 8, record.isEmpty ? 1 : 0);
-        sqlite3_bind_int(stmtUpsert, 9, record.isHidden ? 1 : 0);
-        sqlite3_bind_int(stmtUpsert, 10, record.isManaged ? 1 : 0);
-        sqlite3_bind_int(stmtUpsert, 11, record.encrypted ? 1 : 0);
-        sqlite3_bind_int(stmtUpsert, 12, record.pinned ? 1 : 0);
-        sqlite3_bind_int(stmtUpsert, 13, record.rating);
-        sqlite3_bind_text(stmtUpsert, 14, record.manualColor.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmtUpsert, 15, record.autoColor.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmtUpsert, 16, record.width);
-        sqlite3_bind_int(stmtUpsert, 17, record.height);
-        sqlite3_bind_int(stmtUpsert, 18, record.thumbStatus);
-        sqlite3_bind_text(stmtUpsert, 19, record.note.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmtUpsert, 20, record.url.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmtUpsert, 21, record.sha256.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int64(stmtUpsert, 22, record.ctime);
-        sqlite3_bind_int64(stmtUpsert, 23, record.mtime);
-        sqlite3_bind_int64(stmtUpsert, 24, record.added_at > 0 ? record.added_at : now);
-        sqlite3_bind_int64(stmtUpsert, 25, now);
+        sqlite3_bind_text(stmtUpsert, 2, record.metaFileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 3, record.path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 4, record.filename.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 5, baseName.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 6, ext.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmtUpsert, 7, record.size);
+        sqlite3_bind_int(stmtUpsert, 8, record.isDir ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 9, record.isEmpty ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 10, record.isHidden ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 11, record.isManaged ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 12, record.encrypted ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 13, record.pinned ? 1 : 0);
+        sqlite3_bind_int(stmtUpsert, 14, record.rating);
+        sqlite3_bind_text(stmtUpsert, 15, record.manualColor.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 16, record.autoColor.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmtUpsert, 17, record.width);
+        sqlite3_bind_int(stmtUpsert, 18, record.height);
+        sqlite3_bind_int(stmtUpsert, 19, record.thumbStatus);
+        sqlite3_bind_text(stmtUpsert, 20, record.note.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 21, record.url.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 22, record.sha256.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmtUpsert, 23, record.ctime);
+        sqlite3_bind_int64(stmtUpsert, 24, record.mtime);
+        sqlite3_bind_int64(stmtUpsert, 25, record.added_at > 0 ? record.added_at : now);
+        sqlite3_bind_int64(stmtUpsert, 26, now);
 
         if (sqlite3_step(stmtUpsert) != SQLITE_DONE) {
             cleanupStmts();

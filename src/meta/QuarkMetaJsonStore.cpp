@@ -244,37 +244,36 @@ QMap<QString, QStringList> QuarkMetaJsonStore::addTagsBatch(const QStringList& p
         prefetchFolderJson(fPath);
     }
 
-    {
+    // 🚀【细粒度锁优化】：避免用一个大锁贯穿所有文件夹循环，改为按文件夹独立加锁，防止挂起 readFolderMeta
+    for (auto& pair : folderGroups) {
+        const std::wstring& normFolder = pair.first;
+        const auto& itemsInFolder = pair.second;
+        if (itemsInFolder.empty()) continue;
+
         std::lock_guard<std::mutex> lock(m_storeMutex);
 
-        for (auto& pair : folderGroups) {
-            const std::wstring& normFolder = pair.first;
-            const auto& itemsInFolder = pair.second;
-            if (itemsInFolder.empty()) continue;
+        auto jsonPtr = getOrLoadFolderLocked(normFolder, itemsInFolder.front().folderPath);
 
-            auto jsonPtr = getOrLoadFolderLocked(normFolder, itemsInFolder.front().folderPath);
-
-            for (const auto& item : itemsInFolder) {
-                ItemMeta& meta = jsonPtr->items()[item.fileNameKey];
-                if (meta.type.empty()) {
-                    meta.type = item.info.isDir() ? L"folder" : L"file";
-                }
-
-                QStringList finalTags = mergeAddTagsInternal(meta.tags, tags);
-                meta.tags = toStdWStringVector(finalTags);
-                resultMap[item.nativePath] = finalTags;
-
-                if (item.info.isDir()) {
-                    std::wstring selfDirPath = item.info.absoluteFilePath().toStdWString();
-                    std::wstring selfNorm = normalizeFolderPath(selfDirPath);
-                    auto selfJsonPtr = getOrLoadFolderLocked(selfNorm, selfDirPath);
-                    selfJsonPtr->folder().tags = meta.tags;
-                    markDirtyLocked(selfNorm);
-                }
+        for (const auto& item : itemsInFolder) {
+            ItemMeta& meta = jsonPtr->items()[item.fileNameKey];
+            if (meta.type.empty()) {
+                meta.type = item.info.isDir() ? L"folder" : L"file";
             }
 
-            markDirtyLocked(normFolder);
+            QStringList finalTags = mergeAddTagsInternal(meta.tags, tags);
+            meta.tags = toStdWStringVector(finalTags);
+            resultMap[item.nativePath] = finalTags;
+
+            if (item.info.isDir()) {
+                std::wstring selfDirPath = item.info.absoluteFilePath().toStdWString();
+                std::wstring selfNorm = normalizeFolderPath(selfDirPath);
+                auto selfJsonPtr = getOrLoadFolderLocked(selfNorm, selfDirPath);
+                selfJsonPtr->folder().tags = meta.tags;
+                markDirtyLocked(selfNorm);
+            }
         }
+
+        markDirtyLocked(normFolder);
     }
 
     scheduleFlush();
@@ -367,6 +366,17 @@ QMap<QString, QStringList> QuarkMetaJsonStore::removeTagsBatch(const QStringList
     }
 
     return resultMap;
+}
+
+QString QuarkMetaJsonStore::getMetaFileId(const std::wstring& folderPath) {
+    if (folderPath.empty()) return QString();
+    prefetchFolderJson(folderPath);
+
+    std::wstring normFolder = normalizeFolderPath(folderPath);
+    std::lock_guard<std::mutex> lock(m_storeMutex);
+
+    auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+    return QString::fromStdString(jsonPtr->folder().metaFileId);
 }
 
 QuarkMetaJson::ItemMap QuarkMetaJsonStore::readFolderMeta(const std::wstring& folderPath) {

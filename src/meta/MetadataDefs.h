@@ -33,6 +33,7 @@ struct FolderMeta {
     std::string encryptIv;
     std::string encryptVerifyHash;
     std::string folderId; // 128-bit Folder ID (Hex string)
+    std::string metaFileId; // 128-bit Sidecar .QuarkMeta.json File_ID
     std::vector<PaletteEntry> palettes;
 
     FolderMeta() 

@@ -155,10 +155,11 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
     sqlite3_exec(conn.diskDb, "PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
     sqlite3_exec(conn.diskDb, "PRAGMA temp_store = MEMORY;", nullptr, nullptr, nullptr);
 
-    // 自动自愈：探测预存库中 library_items 是否具备 file_id 列，若为旧表则擦除以触发全新建表
+    // 自动自愈：探测预存库中 library_items 是否具备 meta_file_id 列，若为旧表则擦除以触发全新建表
     sqlite3_stmt* checkStmt = nullptr;
-    if (sqlite3_prepare_v2(conn.diskDb, "SELECT file_id FROM library_items LIMIT 1;", -1, &checkStmt, nullptr) != SQLITE_OK) {
+    if (sqlite3_prepare_v2(conn.diskDb, "SELECT meta_file_id FROM library_items LIMIT 1;", -1, &checkStmt, nullptr) != SQLITE_OK) {
         sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS file_tags;", nullptr, nullptr, nullptr);
+        sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS item_palettes;", nullptr, nullptr, nullptr);
         sqlite3_exec(conn.diskDb, "DROP TABLE IF EXISTS library_items;", nullptr, nullptr, nullptr);
     } else {
         sqlite3_finalize(checkStmt);
@@ -204,6 +205,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         -- ===================================================================
         CREATE TABLE IF NOT EXISTS library_items (
             file_id TEXT PRIMARY KEY,               -- 持久化唯一标识 (UUID/Base36)
+            meta_file_id TEXT DEFAULT '',           -- .QuarkMeta.json 自身 File_ID 凭据
             file_path TEXT NOT NULL UNIQUE,         -- 绝对物理路径（独立唯一索引列）
             file_name TEXT NOT NULL,                -- 文件名（含后缀）
             base_name TEXT NOT NULL,                -- 纯文件名（不含后缀，搜索用）
@@ -218,6 +220,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         );
         -- 为物理路径及智能文件夹的高频过滤字段建立 B-Tree 索引
         CREATE INDEX IF NOT EXISTS idx_items_path ON library_items(file_path);
+        CREATE INDEX IF NOT EXISTS idx_items_meta_file_id ON library_items(meta_file_id);
         CREATE INDEX IF NOT EXISTS idx_items_rating ON library_items(rating);
         CREATE INDEX IF NOT EXISTS idx_items_ext ON library_items(extension);
         CREATE INDEX IF NOT EXISTS idx_items_color ON library_items(color_hex);

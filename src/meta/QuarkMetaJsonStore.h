@@ -59,6 +59,11 @@ public:
     QMap<QString, QStringList> removeTagsBatch(const QStringList& paths, const QStringList& tags);
 
     /**
+     * @brief 获取指定物理目录的 .QuarkMeta.json 侧车文件自身的 meta_file_id
+     */
+    QString getMetaFileId(const std::wstring& folderPath);
+
+    /**
      * @brief 一致性读取指定物理文件夹的所有条目 ItemMeta (大小写不敏感匹配)
      */
     QuarkMetaJson::ItemMap readFolderMeta(const std::wstring& folderPath);

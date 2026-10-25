@@ -76,7 +76,7 @@ public:
     bool executeCommand(const AppCommand& cmd);
 
     // 异步批量给多个路径添加预设/通用标签
-    void addTagsToPathsAsync(const QStringList& paths, const QStringList& tags, std::function<void(int pathCount)> onFinished = nullptr);
+    void addTagsToPathsAsync(const QStringList& paths, const QStringList& tags, std::function<void(int pathCount)> onFinished = nullptr, int existingJobId = 0);
 
     // 取消令牌助手入口
     std::shared_ptr<CancellationToken> createCancellationToken();
