@@ -232,7 +232,7 @@ int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
             QString op = (rule.op == SmartRuleOperator::GreaterOrEqual) ? ">=" :
                          (rule.op == SmartRuleOperator::LessOrEqual) ? "<=" : "=";
             whereConditions << QString("rating %1 %2").arg(op).arg(rule.value.toInt());
-        } 
+        }
         else if (rule.type == SmartRuleType::Extension) {
             QString ext = rule.value.trimmed();
             if (ext.startsWith('.')) ext.remove(0, 1);
@@ -241,7 +241,7 @@ int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
             } else {
                 whereConditions << QString("extension = '%1'").arg(ext);
             }
-        } 
+        }
         else if (rule.type == SmartRuleType::Color) {
             if (rule.op == SmartRuleOperator::NotContains) {
                 whereConditions << QString("color_hex != '%1'").arg(rule.value.trimmed());
