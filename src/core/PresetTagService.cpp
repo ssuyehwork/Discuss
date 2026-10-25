@@ -2,6 +2,8 @@
 #include "../meta/LibraryDao.h"
 #include "CoreEngine.h"
 #include <QSet>
+#include <QtConcurrent>
+#include <QApplication>
 
 namespace QuarkMeta {
 
@@ -24,26 +26,49 @@ bool PresetTagService::saveLibraryPresetTags(int categoryId, const QStringList& 
         }
     }
 
-    // 2. 同步调用 LibraryDao::updatePresetTags 写规则
-    if (!LibraryDao::updatePresetTags(categoryId, newTags)) {
-        return false;
-    }
-
-    // 3. 新增标签非空时追溯应用到分类和子分类项目
-    if (!newlyAddedTags.isEmpty()) {
-        QStringList paths = LibraryDao::getCategoryPaths(categoryId, false);
-        paths.removeDuplicates();
-        if (!paths.isEmpty()) {
-            int newlyAddedCount = newlyAddedTags.size();
-            CoreEngine::instance().addTagsToPathsAsync(paths, newlyAddedTags, [onTraceFinished, newlyAddedCount](int pathCount) {
-                if (onTraceFinished) {
-                    onTraceFinished(newlyAddedCount, pathCount);
-                }
-            });
-        }
-    }
+    // 2. 异步投递到后台工作线程池，主线程立即返回 0 毫秒无卡顿
+    (void)QtConcurrent::run([this, categoryId, newTags, newlyAddedTags, onTraceFinished]() {
+        processAsyncPresetTagsUpdate(categoryId, newTags, newlyAddedTags, onTraceFinished);
+    });
 
     return true;
+}
+
+void PresetTagService::processAsyncPresetTagsUpdate(int categoryId, const QStringList& newTags, const QStringList& newlyAddedTags, std::function<void(int tagCount, int itemCount)> onTraceFinished) {
+    // A. 后台写 SQLite 数据库
+    if (!LibraryDao::updatePresetTags(categoryId, newTags)) {
+        return;
+    }
+
+    if (newlyAddedTags.isEmpty()) {
+        if (onTraceFinished) {
+            QMetaObject::invokeMethod(qApp, [onTraceFinished]() {
+                onTraceFinished(0, 0);
+            }, Qt::QueuedConnection);
+        }
+        return;
+    }
+
+    // B. 后台线程高效检索分类下关联的所有文件路径
+    QStringList paths = LibraryDao::getCategoryPaths(categoryId, false);
+    paths.removeDuplicates();
+    if (paths.isEmpty()) {
+        if (onTraceFinished) {
+            int newlyAddedCount = newlyAddedTags.size();
+            QMetaObject::invokeMethod(qApp, [onTraceFinished, newlyAddedCount]() {
+                onTraceFinished(newlyAddedCount, 0);
+            }, Qt::QueuedConnection);
+        }
+        return;
+    }
+
+    // C. 定向批处理：在后台按物理父文件夹归类，分别直接读写各自的 .QuarkMeta.json
+    int newlyAddedCount = newlyAddedTags.size();
+    CoreEngine::instance().addTagsToPathsAsync(paths, newlyAddedTags, [onTraceFinished, newlyAddedCount](int pathCount) {
+        if (onTraceFinished) {
+            onTraceFinished(newlyAddedCount, pathCount);
+        }
+    });
 }
 
 int PresetTagService::applyPresetTagsForDroppedItems(int categoryId, const QStringList& paths) {

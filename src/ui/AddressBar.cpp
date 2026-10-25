@@ -1,5 +1,6 @@
 #include "AddressBar.h"
 #include "UiHelper.h"
+#include "FileCollisionDialog.h"
 #include "ToolTipOverlay.h"
 #include "StyleLibrary.h"
 #include "../core/NavigationHistoryService.h"
@@ -85,10 +86,64 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
 
     connect(m_breadcrumbBar, &BreadcrumbBar::pathsDroppedNode, this, [this](const QStringList& paths, const QString& targetPath) {
         if (paths.isEmpty() || targetPath.isEmpty() || targetPath == "computer://") return;
+
         DiskIoContext ioCtx;
-        ioCtx.sources = paths;
         ioCtx.destination = targetPath;
         ioCtx.isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
+
+        // 1. 扫描目标目录是否存在文件冲突
+        QStringList conflictingPaths;
+        for (const QString& srcPath : paths) {
+            QFileInfo srcInfo(srcPath);
+            QString destFilePath = QDir(targetPath).filePath(srcInfo.fileName());
+            if (QFile::exists(destFilePath)) {
+                conflictingPaths.append(srcPath);
+            }
+        }
+
+        if (!conflictingPaths.isEmpty()) {
+            int remainingConflicts = conflictingPaths.size();
+            bool applyToAll = false;
+            CollisionResolveAction globalAction = CollisionResolveAction::AutoResolve;
+
+            for (const QString& srcFile : paths) {
+                QFileInfo srcInfo(srcFile);
+                QString destFilePath = QDir(targetPath).filePath(srcInfo.fileName());
+
+                if (QFile::exists(destFilePath)) {
+                    CollisionResolveAction action = globalAction;
+
+                    if (!applyToAll) {
+                        FileCollisionDialog dialog(srcFile, targetPath, remainingConflicts--, this);
+                        if (dialog.exec() != QDialog::Accepted) {
+                            return; // 用户点击取消 -> 中止拖拽移动/复制
+                        }
+                        action = dialog.selectedAction();
+                        applyToAll = dialog.applyToAll();
+                        if (applyToAll) {
+                            globalAction = action;
+                        }
+                    }
+
+                    if (action == CollisionResolveAction::Skip) {
+                        continue; // 跳过此文件
+                    } else if (action == CollisionResolveAction::AutoResolve) {
+                        ioCtx.autoRenameFiles.insert(srcFile);
+                        ioCtx.sources.append(srcFile);
+                    } else if (action == CollisionResolveAction::Replace) {
+                        ioCtx.overwriteFiles.insert(srcFile);
+                        ioCtx.sources.append(srcFile);
+                    }
+                } else {
+                    ioCtx.sources.append(srcFile);
+                }
+            }
+        } else {
+            ioCtx.sources = paths;
+        }
+
+        if (ioCtx.sources.isEmpty()) return;
+
         DiskIoService::instance().executeAsync(ioCtx, nullptr);
     });
 

@@ -20,6 +20,46 @@ SmartFolderRuleRow::SmartFolderRuleRow(const SmartFolderRule& rule, QWidget* par
     setRule(rule);
 }
 
+void SmartFolderRuleRow::openTagSelector() {
+    if (m_tagOverlay) {
+        m_tagOverlay->close();
+        return;
+    }
+
+    QWidget* topWidget = window();
+    QString currentTag = m_valueEdit->text().trimmed();
+    QStringList initTags;
+    if (!currentTag.isEmpty()) {
+        initTags << currentTag;
+    }
+
+    m_tagOverlay = new TagSelectorOverlay(initTags, topWidget, TagTriggerSource::PresetTagsDialog);
+
+    // 计算并在 m_valueEdit 正下方定位 TagSelectorOverlay 弹出框
+    QPoint globalPos = m_valueEdit->mapToGlobal(QPoint(0, m_valueEdit->height() + 2));
+    m_tagOverlay->move(topWidget ? topWidget->mapFromGlobal(globalPos) : globalPos);
+
+    connect(m_tagOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& selectedTags) {
+        if (!selectedTags.isEmpty()) {
+            m_valueEdit->setText(selectedTags.last());
+        }
+    });
+
+    m_tagOverlay->show();
+}
+
+bool SmartFolderRuleRow::eventFilter(QObject* obj, QEvent* event) {
+    if (obj == m_valueEdit && static_cast<SmartRuleType>(m_typeCombo->currentData().toInt()) == SmartRuleType::Tag) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            if (!m_tagOverlay) {
+                openTagSelector();
+            }
+            return true;
+        }
+    }
+    return QWidget::eventFilter(obj, event);
+}
+
 void SmartFolderRuleRow::setupUi() {
     QHBoxLayout* layout = new QHBoxLayout(this);
     layout->setContentsMargins(0, 2, 0, 2);
@@ -37,6 +77,7 @@ void SmartFolderRuleRow::setupUi() {
     m_opCombo->setFixedWidth(110);
 
     m_valueEdit = new QLineEdit(this);
+    m_valueEdit->installEventFilter(this);
 
     m_valueCombo = new QComboBox(this);
     m_valueCombo->hide();
@@ -67,6 +108,11 @@ void SmartFolderRuleRow::onTypeChanged(int index) {
     m_opCombo->clear();
     m_valueEdit->show();
     m_valueCombo->hide();
+
+    if (type != SmartRuleType::Tag && m_tagAction) {
+        m_valueEdit->removeAction(m_tagAction);
+        m_tagAction = nullptr;
+    }
 
     switch (type) {
     case SmartRuleType::Rating:
@@ -104,7 +150,11 @@ void SmartFolderRuleRow::onTypeChanged(int index) {
     case SmartRuleType::Tag:
         m_opCombo->addItem("包含", static_cast<int>(SmartRuleOperator::Contains));
         m_opCombo->addItem("不包含", static_cast<int>(SmartRuleOperator::NotContains));
-        m_valueEdit->setPlaceholderText("输入标签名称");
+        m_valueEdit->setPlaceholderText("点击选择或输入标签名称");
+        if (!m_tagAction) {
+            m_tagAction = m_valueEdit->addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6"), 14), QLineEdit::TrailingPosition);
+            connect(m_tagAction, &QAction::triggered, this, &SmartFolderRuleRow::openTagSelector);
+        }
         break;
 
     case SmartRuleType::Extension:

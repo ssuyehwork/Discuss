@@ -432,9 +432,10 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
 
         if (newName == oldInfo.fileName() || newName == oldInfo.completeBaseName()) return true;
 
-        QString suffix = oldInfo.suffix();
-        if (!suffix.isEmpty() && !newName.endsWith("." + suffix, Qt::CaseInsensitive)) {
-            newName += "." + suffix;
+        QFileInfo newInfoCheck(newName);
+        QString oldSuffix = oldInfo.suffix();
+        if (newInfoCheck.suffix().isEmpty() && !oldSuffix.isEmpty()) {
+            newName += "." + oldSuffix;
         }
 
         bool success = false;

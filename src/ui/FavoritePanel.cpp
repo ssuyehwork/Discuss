@@ -126,6 +126,34 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
     painter->restore();
 }
 
+void FavoriteItemDelegate::updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const {
+    if (!editor) return;
+
+    int depth = 0;
+    QModelIndex parentIdx = index.parent();
+    while (parentIdx.isValid()) {
+        depth++;
+        parentIdx = parentIdx.parent();
+    }
+
+    int leftMargin = 10 + depth * 14;
+    int iconSize = 18;
+    int spacing = 8;
+
+    int textLeft = option.rect.left() + leftMargin + iconSize + spacing;
+    
+    bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
+    int rightMargin = isAutoRec ? 26 : 8;
+
+    QRect editorRect = option.rect;
+    editorRect.setLeft(textLeft - 2);
+    editorRect.setRight(option.rect.right() - rightMargin);
+    editorRect.setTop(option.rect.top() + 2);
+    editorRect.setHeight(option.rect.height() - 4);
+
+    editor->setGeometry(editorRect);
+}
+
 FavoritePanel::FavoritePanel(QWidget* parent)
     : QFrame(parent) {
     setObjectName("FavoriteContainer");

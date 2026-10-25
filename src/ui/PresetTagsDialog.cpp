@@ -181,26 +181,23 @@ void PresetTagsDialog::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void PresetTagsDialog::onSaveClicked() {
-    // 独占落盘：所有物理写盘与数据库更新，仅在点击“保存设置”时一次性提交
+    // 独占落盘：非阻塞异步提交，点击“保存设置”后对话框立刻关闭，所有数据库与 Sidecar 写入在后台执行
     if (m_isLibrary) {
-        bool ok = PresetTagService::instance().saveLibraryPresetTags(
+        PresetTagService::instance().saveLibraryPresetTags(
             m_categoryId,
             m_presetTags,
             m_initialPresetTags,
             [](int newlyAddedCount, int associatedPathsCount) {
-                ToolTipOverlay::instance()->showText(
-                    QCursor::pos(),
-                    QString("已自动追溯将 %1 个新预设标签绑定至既有 %2 个项目").arg(newlyAddedCount).arg(associatedPathsCount),
-                    2000,
-                    QColor("#2ecc71")
-                );
+                if (newlyAddedCount > 0 && associatedPathsCount > 0) {
+                    ToolTipOverlay::instance()->showText(
+                        QCursor::pos(),
+                        QString("已自动追溯将 %1 个新预设标签绑定至既有 %2 个项目").arg(newlyAddedCount).arg(associatedPathsCount),
+                        2000,
+                        QColor("#2ecc71")
+                    );
+                }
             }
         );
-
-        if (!ok) {
-            ToolTipOverlay::instance()->showText(QCursor::pos(), "保存设置失败", 1500, QColor("#e81123"));
-            return;
-        }
     } else {
         FavoriteDao::updatePresetTags(m_categoryId, m_presetTags);
     }

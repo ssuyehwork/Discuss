@@ -26,7 +26,6 @@ bool FileCollisionDialog::applyToAll() const {
 }
 
 void FileCollisionDialog::setupUi(const QString& firstFileName, const QString& targetDirName, int totalCount) {
-    Q_UNUSED(totalCount);
     QWidget* area = getContentArea();
     QVBoxLayout* mainLayout = new QVBoxLayout(area);
     mainLayout->setContentsMargins(20, 15, 20, 15);
@@ -61,6 +60,9 @@ void FileCollisionDialog::setupUi(const QString& firstFileName, const QString& t
 
     m_chkApplyToAll = new QCheckBox("是否应用于全部文件？", area);
     m_chkApplyToAll->setObjectName("CollisionApplyAllChk");
+    if (totalCount <= 1) {
+        m_chkApplyToAll->setVisible(false);
+    }
     btmLayout->addWidget(m_chkApplyToAll, 0, Qt::AlignVCenter);
 
     btmLayout->addStretch(1);
@@ -80,7 +82,13 @@ void FileCollisionDialog::setupUi(const QString& firstFileName, const QString& t
 
     btmLayout->addWidget(createCapsuleBtn("同存", CollisionResolveAction::AutoResolve));
     btmLayout->addWidget(createCapsuleBtn("替换", CollisionResolveAction::Replace));
-    btmLayout->addWidget(createCapsuleBtn("跳过", CollisionResolveAction::Skip));
+
+    QPushButton* btnSkip = createCapsuleBtn("跳过", CollisionResolveAction::Skip);
+    if (totalCount <= 1) {
+        btnSkip->setVisible(false);
+    }
+    btmLayout->addWidget(btnSkip);
+
     btmLayout->addWidget(createCapsuleBtn("取消", CollisionResolveAction::Cancel));
 
     mainLayout->addLayout(btmLayout);

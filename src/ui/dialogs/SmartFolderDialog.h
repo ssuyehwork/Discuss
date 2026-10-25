@@ -2,12 +2,15 @@
 
 #include "FramelessDialog.h"
 #include "../../meta/SmartFolderDao.h"
+#include "../TagSelectorOverlay.h"
 #include <QLineEdit>
 #include <QComboBox>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPointer>
+#include <QEvent>
 
 namespace QuarkMeta {
 
@@ -31,11 +34,19 @@ private:
     void setupUi();
     void updateOperatorAndValueControls();
 
+protected:
+    bool eventFilter(QObject* obj, QEvent* event) override;
+
+private:
     QComboBox* m_typeCombo{nullptr};
     QComboBox* m_opCombo{nullptr};
     QLineEdit* m_valueEdit{nullptr};
     QComboBox* m_valueCombo{nullptr};
     QPushButton* m_btnDelete{nullptr};
+    QAction* m_tagAction{nullptr};
+    QPointer<TagSelectorOverlay> m_tagOverlay;
+
+    void openTagSelector();
 };
 
 class SmartFolderDialog : public FramelessDialog {

@@ -303,14 +303,41 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 }
 
 void LibraryItemDelegate::updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const {
-    Q_UNUSED(index);
-    if (!editor) return;
+    if (!editor || !index.isValid()) return;
 
-    QRect textRect = option.rect;
-    textRect.setLeft(option.rect.left() + 33);
-    textRect.setRight(option.rect.right() - 3);
+    int nodeId = index.data(Qt::UserRole + 1).toInt();
+    if (nodeId <= 0) return;
 
-    editor->setGeometry(textRect);
+    int customDepth = 0;
+    QModelIndex parentIdx = index.parent();
+    while (parentIdx.isValid()) {
+        if (parentIdx.data(Qt::UserRole + 1).toInt() > 0) {
+            customDepth++;
+        }
+        parentIdx = parentIdx.parent();
+    }
+
+    int arrowSize = 14;
+    int arrowSpacing = 4;
+    int leftMargin = 10 + customDepth * 14;
+    int iconSize = 18;
+    int spacing = 8;
+    int rightMargin = 10;
+
+    int iconLeft = option.rect.left() + leftMargin + (nodeId > 0 ? (arrowSize + arrowSpacing) : 0);
+    int textLeft = iconLeft + iconSize + spacing;
+
+    int count = index.data(Qt::UserRole + 9).toInt();
+    QString countStr = (count >= 0) ? QString::number(count) : "";
+    int countWidth = countStr.isEmpty() ? 0 : (option.fontMetrics.horizontalAdvance(countStr) + 12);
+
+    QRect editorRect = option.rect;
+    editorRect.setLeft(textLeft - 2);
+    editorRect.setRight(option.rect.right() - rightMargin - countWidth);
+    editorRect.setTop(option.rect.top() + 2);
+    editorRect.setHeight(option.rect.height() - 4);
+
+    editor->setGeometry(editorRect);
 }
 
 LibraryPanel::LibraryPanel(QWidget* parent) : QFrame(parent) {
