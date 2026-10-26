@@ -101,6 +101,7 @@ public:
      * @brief 强制立即将所有未落盘的脏目录 JSON 刷入物理磁盘 (sync 为 true 时在当前线程同步写入)
      */
     void flushAllDirtyBuffers(bool sync = false);
+    void flushAllDirtyBuffersAsync(std::function<void(bool allOk)> onDone);
 
     /**
      * @brief 驱逐指定文件夹的内存缓存快照，使下次 readFolderMeta() 强制从磁盘重新加载
@@ -129,7 +130,7 @@ private:
         FlushTicket(const std::wstring& n, uint64_t r, const QuarkMetaJson& s) : normFolder(n), revision(r), snapshot(s) {}
     };
     void markDirtyLocked(const std::wstring& normFolder);   // 调用方必须已持有 m_storeMutex
-    void saveTicket(const FlushTicket& ticket);              // 内部加 m_saveMutex；锁顺序固定为 m_storeMutex → m_saveMutex，持有 m_saveMutex 时不得获取 m_storeMutex
+    bool saveTicket(const FlushTicket& ticket);              // 内部加 m_saveMutex；锁顺序固定为 m_storeMutex → m_saveMutex，持有 m_saveMutex 时不得获取 m_storeMutex
     void scheduleFlush();
 
     std::mutex m_storeMutex;

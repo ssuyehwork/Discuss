@@ -17,9 +17,6 @@ ScanStats ContentStatsWorker::calculateStats(const std::vector<ItemRecord>& reco
     ScanStats stats;
     if (records.empty()) return stats;
 
-    stats.duplicatePaths = DuplicateDetectorService::findDuplicatePaths(records);
-    stats.duplicateCount = static_cast<int>(stats.duplicatePaths.size());
-
     for (const auto& record : records) {
         if (record.isHidden && !showHidden) continue;
 
@@ -67,18 +64,69 @@ ScanStats ContentStatsWorker::calculateStats(const std::vector<ItemRecord>& reco
     return stats;
 }
 
-void ContentStatsWorker::processAsync(const std::vector<ItemRecord>& records, bool showHidden) {
+void ContentStatsWorker::processAsync(std::vector<ItemRecord> records, bool showHidden) {
+    uint64_t reqId = ++m_currentReqId;
+    m_pendingCount++;
+
     if (records.empty()) {
+        {
+            std::lock_guard<std::mutex> lock(m_cacheMutex);
+            m_lastSignature.clear();
+            m_cachedDuplicatePaths.clear();
+        }
         emit statsReady(ScanStats());
+        if (--m_pendingCount == 0) {
+            emit settled();
+        }
         return;
     }
 
+    // 生成当前非文件夹记录的集合签名 (path + size + mtime)
+    QString currentSignature;
+    currentSignature.reserve(records.size() * 32);
+    for (const auto& rec : records) {
+        if (!rec.isDir) {
+            currentSignature.append(rec.path).append('|')
+                            .append(QString::number(rec.size)).append('|')
+                            .append(QString::number(rec.mtime)).append(';');
+        }
+    }
+
+    bool signatureMatches = false;
+    QSet<QString> cachedDuplicates;
+    {
+        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        if (!currentSignature.isEmpty() && currentSignature == m_lastSignature) {
+            signatureMatches = true;
+            cachedDuplicates = m_cachedDuplicatePaths;
+        }
+    }
+
     QPointer<ContentStatsWorker> weakThis(this);
-    (void)QtConcurrent::run([weakThis, records, showHidden]() {
+    (void)QtConcurrent::run([weakThis, records = std::move(records), showHidden, reqId, signatureMatches, cachedDuplicates, currentSignature]() mutable {
         ScanStats stats = ContentStatsWorker::calculateStats(records, showHidden);
-        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, stats]() {
+
+        if (signatureMatches) {
+            stats.duplicatePaths = cachedDuplicates;
+            stats.duplicateCount = static_cast<int>(stats.duplicatePaths.size());
+        } else {
+            stats.duplicatePaths = DuplicateDetectorService::findDuplicatePaths(records);
+            stats.duplicateCount = static_cast<int>(stats.duplicatePaths.size());
+        }
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakThis, stats = std::move(stats), reqId, currentSignature, signatureMatches]() mutable {
             if (weakThis) {
-                emit weakThis->statsReady(stats);
+                if (weakThis->m_currentReqId == reqId) {
+                    if (!signatureMatches) {
+                        std::lock_guard<std::mutex> lock(weakThis->m_cacheMutex);
+                        weakThis->m_lastSignature = currentSignature;
+                        weakThis->m_cachedDuplicatePaths = stats.duplicatePaths;
+                    }
+                    emit weakThis->statsReady(stats);
+                }
+                if (--weakThis->m_pendingCount == 0) {
+                    emit weakThis->settled();
+                }
             }
         });
     });

@@ -45,7 +45,9 @@ class PanelMediator : public QObject {
 
 public:
     explicit PanelMediator(const PanelMediatorComponents& components, QObject* parent = nullptr);
-    ~PanelMediator() override = default;
+    ~PanelMediator() override;
+
+    static PanelMediator* instance();
 
     ContentPanel* activeContentPanel() const { return m_activeContentPanel.data(); }
 
@@ -80,6 +82,11 @@ private:
     QPointer<AppShortcutController> m_shortcutController;
     PaneActivationTracker* m_activationTracker = nullptr;
 
+    struct PanelMetaDebounceState {
+        QTimer* timer = nullptr;
+        QSet<QString> pendingCleanPaths;
+    };
+    QMap<ContentPanel*, PanelMetaDebounceState> m_panelMetaDebounceMap;
 };
 
 } // namespace QuarkMeta

@@ -42,6 +42,12 @@
 
 namespace QuarkMeta {
 
+static PanelMediator* s_panelMediatorInstance = nullptr;
+
+PanelMediator* PanelMediator::instance() {
+    return s_panelMediatorInstance;
+}
+
 PanelMediator::PanelMediator(const PanelMediatorComponents& components, QObject* parent)
     : QObject(parent),
       m_navPanel(components.navPanel),
@@ -55,6 +61,13 @@ PanelMediator::PanelMediator(const PanelMediatorComponents& components, QObject*
       m_titleBar(components.titleBar),
       m_layoutManager(components.layoutManager),
       m_shortcutController(components.shortcutController) {
+    s_panelMediatorInstance = this;
+}
+
+PanelMediator::~PanelMediator() {
+    if (s_panelMediatorInstance == this) {
+        s_panelMediatorInstance = nullptr;
+    }
 }
 
 void PanelMediator::setupConnections() {
@@ -714,26 +727,62 @@ void PanelMediator::setupConnections() {
 
             if (panel->model()) {
                 connect(panel->model(), &QAbstractItemModel::dataChanged, metaPanel,
-                        [this, panel, updateMetaPanelFromPanel](const QModelIndex& topLeft, const QModelIndex&, const QVector<int>& roles) {
-                    if (m_activeContentPanel != panel && (m_activeContentPanel || panel != m_contentPanel.data())) {
-                        return;
-                    }
+                        [this, panel, updateMetaPanelFromPanel](const QModelIndex& topLeft, const QModelIndex& bottomRight, const QVector<int>& roles) {
                     if (!roles.isEmpty() && !roles.contains(RatingRole) && !roles.contains(ColorRole) && !roles.contains(TagsRole) && !roles.contains(NoteRole) && !roles.contains(UrlRole)) {
                         return;
                     }
 
-                    QString changedPath = QDir::cleanPath(topLeft.data(PathRole).toString());
-                    QStringList selPaths = panel->getSelectedPaths();
-                    bool containsPath = false;
-                    for (const QString& sp : selPaths) {
-                        if (QString::compare(QDir::cleanPath(sp), changedPath, Qt::CaseInsensitive) == 0) {
-                            containsPath = true;
-                            break;
+                    auto& debounceState = m_panelMetaDebounceMap[panel];
+                    if (!debounceState.timer) {
+                        debounceState.timer = new QTimer(panel);
+                        debounceState.timer->setSingleShot(true);
+                        connect(panel, &QObject::destroyed, this, [this, panel]() {
+                            m_panelMetaDebounceMap.remove(panel);
+                        });
+                        connect(debounceState.timer, &QTimer::timeout, this, [this, panel, updateMetaPanelFromPanel]() {
+                            auto it = m_panelMetaDebounceMap.find(panel);
+                            if (it == m_panelMetaDebounceMap.end()) return;
+
+                            ContentPanel* activeP = m_activeContentPanel ? m_activeContentPanel.data() : m_contentPanel.data();
+                            if (activeP == panel) {
+                                QSet<QString> selSet;
+                                for (const QString& sp : panel->getSelectedPaths()) {
+                                    selSet.insert(QDir::cleanPath(sp).toLower());
+                                }
+
+                                bool hasOverlap = selSet.isEmpty();
+                                if (!hasOverlap) {
+                                    for (const QString& cp : it->pendingCleanPaths) {
+                                        if (selSet.contains(cp)) {
+                                            hasOverlap = true;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (hasOverlap) {
+                                    updateMetaPanelFromPanel(panel);
+                                }
+                            }
+                            it->pendingCleanPaths.clear();
+                        });
+                    }
+
+                    QAbstractItemModel* model = panel->model();
+                    int startRow = topLeft.row();
+                    int endRow = bottomRight.row();
+                    for (int r = startRow; r <= endRow; ++r) {
+                        QModelIndex idx = model->index(r, 0, topLeft.parent());
+                        if (idx.isValid()) {
+                            QString path = idx.data(PathRole).toString();
+                            if (!path.isEmpty()) {
+                                debounceState.pendingCleanPaths.insert(QDir::cleanPath(path).toLower());
+                            }
                         }
                     }
 
-                    if (containsPath || selPaths.isEmpty()) {
-                        updateMetaPanelFromPanel(panel);
+                    if (!debounceState.timer->isActive()) {
+                        debounceState.timer->start(30);
                     }
                 });
             }
@@ -807,7 +856,7 @@ void PanelMediator::setupConnections() {
     });
 
     // QuickLook 改星级 -> 同步更新内容面板卡片
-    connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this, metaPanel, contentPanel](int rating) {
+    connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this, metaPanel](int rating) {
         QString curPath = QuickLookWindow::instance().currentPath();
         if (curPath.isEmpty()) return;
 
@@ -817,13 +866,11 @@ void PanelMediator::setupConnections() {
         cmd.params["rating"] = rating;
         CoreEngine::instance().executeCommand(cmd);
 
-        ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
         if (metaPanel) metaPanel->setRating(rating, false);
-        if (target) target->updateItemMetadata(curPath);
     });
 
     // QuickLook 改颜色 -> 同步更新内容面板卡片
-    connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this, metaPanel, contentPanel](const QString& color) {
+    connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this, metaPanel](const QString& color) {
         QString curPath = QuickLookWindow::instance().currentPath();
         if (curPath.isEmpty()) return;
 
@@ -833,9 +880,7 @@ void PanelMediator::setupConnections() {
         cmd.params["color"] = color;
         CoreEngine::instance().executeCommand(cmd);
 
-        ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
         if (metaPanel) metaPanel->setColor(color, false);
-        if (target) target->updateItemMetadata(curPath);
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::deleteRequested, this, [this, contentPanel](const QString& path) {
@@ -966,84 +1011,54 @@ void PanelMediator::setupConnections() {
             return m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
         };
 
-        connect(metaPanel, &MetaPanel::ratingChanged, this, [activeOrRootPanel](const QStringList& paths, int rating) {
+        connect(metaPanel, &MetaPanel::ratingChanged, this, [](const QStringList& paths, int rating) {
             if (paths.isEmpty()) return;
-            QStringList safePaths = paths;
             AppCommand cmd;
             cmd.type = AppCommandType::SetRating;
-            cmd.targetPaths = safePaths;
+            cmd.targetPaths = paths;
             cmd.params["rating"] = rating;
             CoreEngine::instance().executeCommand(cmd);
-            ContentPanel* target = activeOrRootPanel();
-            if (target) {
-                target->updateItemsMetadata(safePaths);
-            }
         });
 
-        connect(metaPanel, &MetaPanel::colorChanged, this, [activeOrRootPanel](const QStringList& paths, const QString& hexColor) {
+        connect(metaPanel, &MetaPanel::colorChanged, this, [](const QStringList& paths, const QString& hexColor) {
             if (paths.isEmpty()) return;
-            QStringList safePaths = paths;
             AppCommand cmd;
             cmd.type = AppCommandType::SetColor;
-            cmd.targetPaths = safePaths;
+            cmd.targetPaths = paths;
             cmd.params["color"] = hexColor;
             CoreEngine::instance().executeCommand(cmd);
-            ContentPanel* target = activeOrRootPanel();
-            if (target) {
-                target->updateItemsMetadata(safePaths);
-            }
         });
 
-        connect(metaPanel, &MetaPanel::primaryColorChanged, this, [activeOrRootPanel](const QString& path, const QColor& color) {
+        connect(metaPanel, &MetaPanel::primaryColorChanged, this, [](const QString& path, const QColor& color) {
             if (path.isEmpty()) return;
-            QString safePath = path;
             AppCommand cmd;
             cmd.type = AppCommandType::SetColor;
-            cmd.targetPaths = {safePath};
+            cmd.targetPaths = {path};
             cmd.params["color"] = color.name(QColor::HexRgb);
             CoreEngine::instance().executeCommand(cmd);
-            ContentPanel* target = activeOrRootPanel();
-            if (target) {
-                target->updateItemMetadata(safePath);
-            }
         });
 
-        connect(metaPanel, &MetaPanel::tagsAddRequested, this, [activeOrRootPanel](const QStringList& paths, const QStringList& newTags) {
+        connect(metaPanel, &MetaPanel::tagsAddRequested, this, [](const QStringList& paths, const QStringList& newTags) {
             if (!paths.isEmpty() && !newTags.isEmpty()) {
-                QStringList safePaths = paths;
-                if (safePaths.size() > 50) {
-                    CoreEngine::instance().addTagsToPathsAsync(safePaths, newTags, [activeOrRootPanel, safePaths](int) {
-                        ContentPanel* target = activeOrRootPanel();
-                        if (target) {
-                            target->updateItemsMetadata(safePaths);
-                        }
-                    });
+                if (paths.size() > 50) {
+                    CoreEngine::instance().addTagsToPathsAsync(paths, newTags, nullptr);
                 } else {
                     AppCommand cmd;
                     cmd.type = AppCommandType::AddTag;
-                    cmd.targetPaths = safePaths;
+                    cmd.targetPaths = paths;
                     cmd.params["tags"] = newTags;
                     CoreEngine::instance().executeCommand(cmd);
-                    ContentPanel* target = activeOrRootPanel();
-                    if (target) {
-                        target->updateItemsMetadata(safePaths);
-                    }
                 }
             }
         });
 
-        connect(metaPanel, &MetaPanel::tagsRemoveRequested, this, [activeOrRootPanel](const QStringList& paths, const QStringList& removeTags) {
+        connect(metaPanel, &MetaPanel::tagsRemoveRequested, this, [](const QStringList& paths, const QStringList& removeTags) {
             if (!paths.isEmpty() && !removeTags.isEmpty()) {
-                QStringList safePaths = paths;
                 AppCommand cmd;
                 cmd.type = AppCommandType::RemoveTag;
-                cmd.targetPaths = safePaths;
+                cmd.targetPaths = paths;
                 cmd.params["tags"] = removeTags;
                 CoreEngine::instance().executeCommand(cmd);
-                ContentPanel* target = activeOrRootPanel();
-                if (target) {
-                    target->updateItemsMetadata(safePaths);
-                }
             }
         });
 
@@ -1067,35 +1082,23 @@ void PanelMediator::setupConnections() {
             }
         });
 
-        connect(metaPanel, &MetaPanel::noteEdited, this, [activeOrRootPanel](const QStringList& paths, const QString& newNote) {
+        connect(metaPanel, &MetaPanel::noteEdited, this, [](const QStringList& paths, const QString& newNote) {
             if (!paths.isEmpty()) {
                 AppCommand cmd;
                 cmd.type = AppCommandType::SetNote;
                 cmd.targetPaths = paths;
                 cmd.params["note"] = newNote;
                 CoreEngine::instance().executeCommand(cmd);
-                ContentPanel* target = activeOrRootPanel();
-                if (target) {
-                    for (const QString& p : paths) {
-                        target->updateItemMetadata(p);
-                    }
-                }
             }
         });
 
-        connect(metaPanel, &MetaPanel::linkEdited, this, [activeOrRootPanel](const QStringList& paths, const QString& newLink) {
+        connect(metaPanel, &MetaPanel::linkEdited, this, [](const QStringList& paths, const QString& newLink) {
             if (!paths.isEmpty()) {
                 AppCommand cmd;
                 cmd.type = AppCommandType::SetURL;
                 cmd.targetPaths = paths;
                 cmd.params["url"] = newLink;
                 CoreEngine::instance().executeCommand(cmd);
-                ContentPanel* target = activeOrRootPanel();
-                if (target) {
-                    for (const QString& p : paths) {
-                        target->updateItemMetadata(p);
-                    }
-                }
             }
         });
     }
@@ -1127,11 +1130,9 @@ void PanelMediator::setupConnections() {
                     }
                 }
             } else if (!event.paths.isEmpty()) {
-                for (const QString& p : event.paths) {
-                    activeOrRoot->updateItemMetadata(p);
-                    if (contentPanel && contentPanel != activeOrRoot) {
-                        contentPanel->updateItemMetadata(p);
-                    }
+                activeOrRoot->updateItemsMetadata(event.paths);
+                if (contentPanel && contentPanel != activeOrRoot) {
+                    contentPanel->updateItemsMetadata(event.paths);
                 }
             } else {
                 activeOrRoot->refreshAll();

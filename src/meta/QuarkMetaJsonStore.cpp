@@ -613,15 +613,16 @@ void QuarkMetaJsonStore::setPinnedBatch(const QStringList& paths, bool pinned) {
     }
 }
 
-void QuarkMetaJsonStore::saveTicket(const FlushTicket& ticket) {
+bool QuarkMetaJsonStore::saveTicket(const FlushTicket& ticket) {
     if (ticket.snapshot.isLoadFailed()) {
-        return;
+        return false;
     }
     std::lock_guard<std::mutex> saveLock(m_saveMutex);
     uint64_t& saved = m_savedRevision[ticket.normFolder];
-    if (saved >= ticket.revision) return;   // 更新的快照已落盘，丢弃过期快照
+    if (saved >= ticket.revision) return true;   // 更新的快照已落盘，丢弃过期快照视作成功
     bool ok = ticket.snapshot.save();
     if (ok) saved = ticket.revision;
+    return ok;
 }
 
 void QuarkMetaJsonStore::onFlushTimeout() {
@@ -649,6 +650,45 @@ void QuarkMetaJsonStore::flushAllDirtyBuffers(bool sync) {
             for (const auto& t : tickets) saveTicket(t);
         });
     }
+}
+
+void QuarkMetaJsonStore::flushAllDirtyBuffersAsync(std::function<void(bool allOk)> onDone) {
+    std::vector<FlushTicket> tickets;
+    {
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        if (!m_dirtyFolderPaths.empty()) {
+            for (const auto& normFolder : m_dirtyFolderPaths) {
+                auto it = m_folderCacheMap.find(normFolder);
+                if (it != m_folderCacheMap.end() && it->second) {
+                    tickets.emplace_back(normFolder, m_folderRevision[normFolder], *(it->second));
+                }
+            }
+            m_dirtyFolderPaths.clear();
+        }
+    }
+
+    if (tickets.empty()) {
+        if (onDone) {
+            QMetaObject::invokeMethod(qApp, [onDone]() {
+                onDone(true);
+            }, Qt::QueuedConnection);
+        }
+        return;
+    }
+
+    m_flushPool.start([this, tickets, onDone]() {
+        bool allOk = true;
+        for (const auto& t : tickets) {
+            if (!saveTicket(t)) {
+                allOk = false;
+            }
+        }
+        if (onDone) {
+            QMetaObject::invokeMethod(qApp, [onDone, allOk]() {
+                onDone(allOk);
+            }, Qt::QueuedConnection);
+        }
+    });
 }
 
 void QuarkMetaJsonStore::invalidateFolderCache(const std::wstring& folderPath) {

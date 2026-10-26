@@ -236,6 +236,7 @@ public slots:
     void loadCategory(const QString& categoryType);
     void refreshVisibleThumbnails();
     void recalculateAndEmitStats();
+    void runWhenStatsSettled(std::function<void()> fn);
 
 protected:
     void wheelEvent(QWheelEvent* event) override;

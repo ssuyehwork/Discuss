@@ -1,8 +1,12 @@
 #include "CoreEngine.h"
 #include "LastOperationManager.h"
 #include "../meta/MetadataManager.h"
+#include "../meta/QuarkMetaJsonStore.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
+#include "../ui/PanelMediator.h"
+#include "../ui/ContentPanel.h"
+#include "../ui/ToolTipOverlay.h"
 #include "TagLexiconService.h"
 #include "TaskProgressService.h"
 #include <QCoreApplication>
@@ -228,16 +232,36 @@ void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList
             TaskProgressService::instance().updateProgress(jobId, processed, totalPaths, QString("已应用 %1 / %2 项").arg(processed).arg(totalPaths));
         }
 
-        TaskProgressService::instance().finishJob(jobId);
+        QMetaObject::invokeMethod(qApp, [paths, jobId, onFinished]() {
+            TaskProgressService::instance().updateProgress(jobId, paths.size(), paths.size(), "正在刷新界面...");
 
-        QMetaObject::invokeMethod(qApp, [paths, onFinished]() {
             AppEvent ev;
             ev.type = AppEventType::MetadataUpdated;
             ev.paths = paths;
             CentralEventHub::instance().publishEvent(ev);
 
-            if (onFinished) {
-                onFinished(paths.size());
+            ContentPanel* activePanel = nullptr;
+            if (PanelMediator* mediator = PanelMediator::instance()) {
+                activePanel = mediator->activeContentPanel();
+            }
+
+            auto proceedToSave = [jobId, paths, onFinished]() {
+                TaskProgressService::instance().updateProgress(jobId, paths.size(), paths.size(), "正在保存...");
+                QuarkMetaJsonStore::instance().flushAllDirtyBuffersAsync([jobId, paths, onFinished](bool allOk) {
+                    TaskProgressService::instance().finishJob(jobId);
+                    if (!allOk) {
+                        ToolTipOverlay::instance()->showToast("部分元数据保存失败", 2000, QColor("#e81123"));
+                    }
+                    if (onFinished) {
+                        onFinished(paths.size());
+                    }
+                });
+            };
+
+            if (activePanel) {
+                activePanel->runWhenStatsSettled(proceedToSave);
+            } else {
+                proceedToSave();
             }
         }, Qt::QueuedConnection);
     });
