@@ -48,6 +48,9 @@ namespace QuarkMeta {
         virtual void appendRecord(const QuarkMeta::ItemRecord& record) = 0;
         virtual void clear() = 0;
         virtual void updateRecordMetadata(QString path) = 0;
+        virtual void updateRecordMetadataBatch(const QStringList& paths) {
+            for (const QString& p : paths) updateRecordMetadata(p);
+        }
         virtual void loadThumbnailsForRows(const QList<int>& rows) = 0;
         virtual void migrateCache(const QString& oldPath, const QString& newPath) = 0;
         virtual void clearCacheForFolder(const QString& folderPath) = 0;

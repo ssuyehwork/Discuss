@@ -528,6 +528,69 @@ QMap<QString, QStringList> MetadataManager::addTagsBatch(const QStringList& path
     return resultMap;
 }
 
+void MetadataManager::setRatingBatch(const QStringList& paths, int rating) {
+    QuarkMetaJsonStore::instance().setRatingBatch(paths, rating);
+    for (const QString& p : paths) {
+        std::wstring nPath = normalizePath(p.toStdWString());
+        if (MetaMemoryCache::instance().contains(nPath)) {
+            MetaMemoryCache::instance().update(nPath, [rating](RuntimeMeta& m) {
+                m.rating = rating;
+            });
+        }
+    }
+}
+
+void MetadataManager::setColorBatch(const QStringList& paths, const QString& color) {
+    QuarkMetaJsonStore::instance().setColorBatch(paths, color);
+    std::wstring stdColor = color.toStdWString();
+    for (const QString& p : paths) {
+        std::wstring nPath = normalizePath(p.toStdWString());
+        if (MetaMemoryCache::instance().contains(nPath)) {
+            MetaMemoryCache::instance().update(nPath, [&stdColor](RuntimeMeta& m) {
+                m.manualColor = stdColor;
+            });
+        }
+    }
+}
+
+void MetadataManager::setNoteBatch(const QStringList& paths, const QString& note) {
+    QuarkMetaJsonStore::instance().setNoteBatch(paths, note);
+    std::wstring stdNote = note.toStdWString();
+    for (const QString& p : paths) {
+        std::wstring nPath = normalizePath(p.toStdWString());
+        if (MetaMemoryCache::instance().contains(nPath)) {
+            MetaMemoryCache::instance().update(nPath, [&stdNote](RuntimeMeta& m) {
+                m.note = stdNote;
+            });
+        }
+    }
+}
+
+void MetadataManager::setURLBatch(const QStringList& paths, const QString& url) {
+    QuarkMetaJsonStore::instance().setURLBatch(paths, url);
+    std::wstring stdUrl = url.toStdWString();
+    for (const QString& p : paths) {
+        std::wstring nPath = normalizePath(p.toStdWString());
+        if (MetaMemoryCache::instance().contains(nPath)) {
+            MetaMemoryCache::instance().update(nPath, [&stdUrl](RuntimeMeta& m) {
+                m.url = stdUrl;
+            });
+        }
+    }
+}
+
+void MetadataManager::setPinnedBatch(const QStringList& paths, bool pinned) {
+    QuarkMetaJsonStore::instance().setPinnedBatch(paths, pinned);
+    for (const QString& p : paths) {
+        std::wstring nPath = normalizePath(p.toStdWString());
+        if (MetaMemoryCache::instance().contains(nPath)) {
+            MetaMemoryCache::instance().update(nPath, [pinned](RuntimeMeta& m) {
+                m.pinned = pinned;
+            });
+        }
+    }
+}
+
 QMap<QString, QStringList> MetadataManager::removeTagsBatch(const QStringList& paths, const QStringList& tags) {
     QMap<QString, QStringList> resultMap = QuarkMetaJsonStore::instance().removeTagsBatch(paths, tags);
 

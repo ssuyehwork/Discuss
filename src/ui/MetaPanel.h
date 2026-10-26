@@ -66,6 +66,8 @@ signals:
     void colorChanged(const QStringList& paths, const QString& hexColor);
     void tagAddRequested(const QStringList& paths, const QString& tag);
     void tagRemoveRequested(const QStringList& paths, const QString& tag);
+    void tagsAddRequested(const QStringList& paths, const QStringList& tags);
+    void tagsRemoveRequested(const QStringList& paths, const QStringList& tags);
     void noteEdited(const QStringList& paths, const QString& newNote);
     void linkEdited(const QStringList& paths, const QString& newLink);
     void primaryColorChanged(const QString& path, const QColor& color);
@@ -135,8 +137,13 @@ private:
     bool m_isUserEditing = false;
     bool m_isReadOnlyMode = false;
 
+    QSet<QString> m_pendingRemovedTags;
+    QStringList m_tagRemovalTargetSnapshot;
+    QTimer* m_tagRemoveDebounceTimer = nullptr;
+
 private slots:
     void onTagDeleted(const QString& text);
+    void flushPendingTagDeletions();
     void openTagSelectorOverlay(QWidget* targetAnchor);
     void setAsPrimaryColor(const QColor& color);
 };

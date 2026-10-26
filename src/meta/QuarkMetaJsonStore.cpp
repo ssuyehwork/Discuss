@@ -442,10 +442,175 @@ void QuarkMetaJsonStore::markDirtyLocked(const std::wstring& normFolder) {
 
 void QuarkMetaJsonStore::scheduleFlush() {
     QMetaObject::invokeMethod(this, [this]() {
-        if (m_flushTimer && !m_flushTimer->isActive()) {
-            m_flushTimer->start();
+        if (m_flushTimer) {
+            m_flushTimer->start(kFlushDebounceMs);
         }
     }, Qt::QueuedConnection);
+}
+
+void QuarkMetaJsonStore::setRatingBatch(const QStringList& paths, int rating) {
+    if (paths.isEmpty()) return;
+    QMap<std::wstring, QStringList> folderGroups;
+    for (const QString& path : paths) {
+        if (path.isEmpty()) continue;
+        QFileInfo fi(path);
+        std::wstring normFolder = normalizeFolderPath(fi.absolutePath().toStdWString());
+        folderGroups[normFolder].append(fi.fileName());
+    }
+
+    for (auto it = folderGroups.begin(); it != folderGroups.end(); ++it) {
+        std::wstring normFolder = it.key();
+        std::wstring folderPath = normFolder;
+        const QStringList& fileNames = it.value();
+
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+        if (!jsonPtr) continue;
+
+        auto& items = jsonPtr->items();
+        for (const QString& fileName : fileNames) {
+            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            items[key].rating = rating;
+        }
+        markDirtyLocked(normFolder);
+    }
+
+    scheduleFlush();
+    for (const QString& path : paths) {
+        notifyListeners({ChangeType::ItemChanged, QDir::toNativeSeparators(path), ""});
+    }
+}
+
+void QuarkMetaJsonStore::setColorBatch(const QStringList& paths, const QString& color) {
+    if (paths.isEmpty()) return;
+    QMap<std::wstring, QStringList> folderGroups;
+    for (const QString& path : paths) {
+        if (path.isEmpty()) continue;
+        QFileInfo fi(path);
+        std::wstring normFolder = normalizeFolderPath(fi.absolutePath().toStdWString());
+        folderGroups[normFolder].append(fi.fileName());
+    }
+
+    for (auto it = folderGroups.begin(); it != folderGroups.end(); ++it) {
+        std::wstring normFolder = it.key();
+        std::wstring folderPath = normFolder;
+        const QStringList& fileNames = it.value();
+
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+        if (!jsonPtr) continue;
+
+        auto& items = jsonPtr->items();
+        for (const QString& fileName : fileNames) {
+            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            items[key].color = color.toStdWString();
+        }
+        markDirtyLocked(normFolder);
+    }
+
+    scheduleFlush();
+    for (const QString& path : paths) {
+        notifyListeners({ChangeType::ItemChanged, QDir::toNativeSeparators(path), ""});
+    }
+}
+
+void QuarkMetaJsonStore::setNoteBatch(const QStringList& paths, const QString& note) {
+    if (paths.isEmpty()) return;
+    QMap<std::wstring, QStringList> folderGroups;
+    for (const QString& path : paths) {
+        if (path.isEmpty()) continue;
+        QFileInfo fi(path);
+        std::wstring normFolder = normalizeFolderPath(fi.absolutePath().toStdWString());
+        folderGroups[normFolder].append(fi.fileName());
+    }
+
+    for (auto it = folderGroups.begin(); it != folderGroups.end(); ++it) {
+        std::wstring normFolder = it.key();
+        std::wstring folderPath = normFolder;
+        const QStringList& fileNames = it.value();
+
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+        if (!jsonPtr) continue;
+
+        auto& items = jsonPtr->items();
+        for (const QString& fileName : fileNames) {
+            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            items[key].note = note.toStdWString();
+        }
+        markDirtyLocked(normFolder);
+    }
+
+    scheduleFlush();
+    for (const QString& path : paths) {
+        notifyListeners({ChangeType::ItemChanged, QDir::toNativeSeparators(path), ""});
+    }
+}
+
+void QuarkMetaJsonStore::setURLBatch(const QStringList& paths, const QString& url) {
+    if (paths.isEmpty()) return;
+    QMap<std::wstring, QStringList> folderGroups;
+    for (const QString& path : paths) {
+        if (path.isEmpty()) continue;
+        QFileInfo fi(path);
+        std::wstring normFolder = normalizeFolderPath(fi.absolutePath().toStdWString());
+        folderGroups[normFolder].append(fi.fileName());
+    }
+
+    for (auto it = folderGroups.begin(); it != folderGroups.end(); ++it) {
+        std::wstring normFolder = it.key();
+        std::wstring folderPath = normFolder;
+        const QStringList& fileNames = it.value();
+
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+        if (!jsonPtr) continue;
+
+        auto& items = jsonPtr->items();
+        for (const QString& fileName : fileNames) {
+            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            items[key].url = url.toStdWString();
+        }
+        markDirtyLocked(normFolder);
+    }
+
+    scheduleFlush();
+    for (const QString& path : paths) {
+        notifyListeners({ChangeType::ItemChanged, QDir::toNativeSeparators(path), ""});
+    }
+}
+
+void QuarkMetaJsonStore::setPinnedBatch(const QStringList& paths, bool pinned) {
+    if (paths.isEmpty()) return;
+    QMap<std::wstring, QStringList> folderGroups;
+    for (const QString& path : paths) {
+        if (path.isEmpty()) continue;
+        QFileInfo fi(path);
+        std::wstring normFolder = normalizeFolderPath(fi.absolutePath().toStdWString());
+        folderGroups[normFolder].append(fi.fileName());
+    }
+
+    for (auto it = folderGroups.begin(); it != folderGroups.end(); ++it) {
+        std::wstring normFolder = it.key();
+        std::wstring folderPath = normFolder;
+        const QStringList& fileNames = it.value();
+
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+        if (!jsonPtr) continue;
+
+        auto& items = jsonPtr->items();
+        for (const QString& fileName : fileNames) {
+            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            items[key].pinned = pinned;
+        }
+        markDirtyLocked(normFolder);
+    }
+
+    scheduleFlush();
+    for (const QString& path : paths) {
+        notifyListeners({ChangeType::ItemChanged, QDir::toNativeSeparators(path), ""});
+    }
 }
 
 void QuarkMetaJsonStore::saveTicket(const FlushTicket& ticket) {

@@ -88,6 +88,11 @@ public:
     void setTags(const std::wstring& path, const QStringList& tags, bool notify = true);
     QMap<QString, QStringList> addTagsBatch(const QStringList& paths, const QStringList& tags);
     QMap<QString, QStringList> removeTagsBatch(const QStringList& paths, const QStringList& tags);
+    void setRatingBatch(const QStringList& paths, int rating);
+    void setColorBatch(const QStringList& paths, const QString& color);
+    void setNoteBatch(const QStringList& paths, const QString& note);
+    void setURLBatch(const QStringList& paths, const QString& url);
+    void setPinnedBatch(const QStringList& paths, bool pinned);
     void setNote(const std::wstring& path, const std::wstring& note, bool notify = true);
     void setURL(const std::wstring& path, const std::wstring& url, bool notify = true);
     void setEncrypted(const std::wstring& path, bool encrypted, bool notify = true);

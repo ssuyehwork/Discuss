@@ -42,6 +42,7 @@ public:
     void appendRecord(const QuarkMeta::ItemRecord& record);
     void clear() override;
     void updateRecordMetadata(QString path) override;
+    void updateRecordMetadataBatch(const QStringList& paths) override;
     void loadThumbnailsForRows(const QList<int>& rows) override;
     void migrateCache(const QString& oldPath, const QString& newPath) override;
     void clearCacheForFolder(const QString& folderPath) override;

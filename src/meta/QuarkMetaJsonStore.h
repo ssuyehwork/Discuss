@@ -57,6 +57,11 @@ public:
      * @return 每个路径对应的最终合并标签列表
      */
     QMap<QString, QStringList> removeTagsBatch(const QStringList& paths, const QStringList& tags);
+    void setRatingBatch(const QStringList& paths, int rating);
+    void setColorBatch(const QStringList& paths, const QString& color);
+    void setNoteBatch(const QStringList& paths, const QString& note);
+    void setURLBatch(const QStringList& paths, const QString& url);
+    void setPinnedBatch(const QStringList& paths, bool pinned);
 
     /**
      * @brief 获取指定物理目录的 .QuarkMeta.json 侧车文件自身的 meta_file_id
@@ -142,7 +147,7 @@ private:
     void notifyListeners(const ChangeEvent& event);
 
     QTimer* m_flushTimer = nullptr;
-    static constexpr int kFlushDebounceMs = 50; // 50ms 防抖
+    static constexpr int kFlushDebounceMs = 500; // 500ms 滑动 Write-Behind 防抖
 };
 
 } // namespace QuarkMeta

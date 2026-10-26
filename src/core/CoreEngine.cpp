@@ -167,30 +167,26 @@ bool CoreEngine::executeCommand(const AppCommand& cmd) {
 
 void CoreEngine::handleSetRating(const QStringList& paths, int rating) {
     LastOperationManager::instance().recordSetRating(rating);
-    for (const QString& path : paths) {
-        MetadataManager::instance().setRating(path.toStdWString(), rating);
-        
-        AppEvent ev;
-        ev.type = AppEventType::MetadataUpdated;
-        ev.targetPath = path;
-        ev.payload["field"] = "rating";
-        ev.payload["value"] = rating;
-        CentralEventHub::instance().publishEvent(ev);
-    }
+    MetadataManager::instance().setRatingBatch(paths, rating);
+
+    AppEvent ev;
+    ev.type = AppEventType::MetadataUpdated;
+    ev.paths = paths;
+    ev.payload["field"] = "rating";
+    ev.payload["value"] = rating;
+    CentralEventHub::instance().publishEvent(ev);
 }
 
 void CoreEngine::handleSetColor(const QStringList& paths, const QString& color) {
     LastOperationManager::instance().recordSetColor(color);
-    for (const QString& path : paths) {
-        MetadataManager::instance().setColor(path.toStdWString(), color.toStdWString());
-        
-        AppEvent ev;
-        ev.type = AppEventType::MetadataUpdated;
-        ev.targetPath = path;
-        ev.payload["field"] = "color";
-        ev.payload["value"] = color;
-        CentralEventHub::instance().publishEvent(ev);
-    }
+    MetadataManager::instance().setColorBatch(paths, color);
+
+    AppEvent ev;
+    ev.type = AppEventType::MetadataUpdated;
+    ev.paths = paths;
+    ev.payload["field"] = "color";
+    ev.payload["value"] = color;
+    CentralEventHub::instance().publishEvent(ev);
 }
 
 void CoreEngine::handleSetTags(const QStringList& paths, const QStringList& tags) {
@@ -248,29 +244,25 @@ void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList
 }
 
 void CoreEngine::handleSetNote(const QStringList& paths, const QString& note) {
-    for (const QString& path : paths) {
-        MetadataManager::instance().setNote(path.toStdWString(), note.toStdWString());
-        
-        AppEvent ev;
-        ev.type = AppEventType::MetadataUpdated;
-        ev.targetPath = path;
-        ev.payload["field"] = "note";
-        ev.payload["value"] = note;
-        CentralEventHub::instance().publishEvent(ev);
-    }
+    MetadataManager::instance().setNoteBatch(paths, note);
+
+    AppEvent ev;
+    ev.type = AppEventType::MetadataUpdated;
+    ev.paths = paths;
+    ev.payload["field"] = "note";
+    ev.payload["value"] = note;
+    CentralEventHub::instance().publishEvent(ev);
 }
 
 void CoreEngine::handleSetURL(const QStringList& paths, const QString& url) {
-    for (const QString& path : paths) {
-        MetadataManager::instance().setURL(path.toStdWString(), url.toStdWString());
-        
-        AppEvent ev;
-        ev.type = AppEventType::MetadataUpdated;
-        ev.targetPath = path;
-        ev.payload["field"] = "url";
-        ev.payload["value"] = url;
-        CentralEventHub::instance().publishEvent(ev);
-    }
+    MetadataManager::instance().setURLBatch(paths, url);
+
+    AppEvent ev;
+    ev.type = AppEventType::MetadataUpdated;
+    ev.paths = paths;
+    ev.payload["field"] = "url";
+    ev.payload["value"] = url;
+    CentralEventHub::instance().publishEvent(ev);
 }
 
 void CoreEngine::handleRecordAccess(const QStringList& paths) {
