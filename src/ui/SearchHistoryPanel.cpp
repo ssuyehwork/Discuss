@@ -126,10 +126,28 @@ void SearchHistoryPanel::rebuild() {
 
 void SearchHistoryPanel::showBelow(QWidget* anchor) {
     if (!anchor) return;
-    QPoint pos = anchor->mapToGlobal(QPoint(0, anchor->height() + 3));
-    move(pos);
     setFixedWidth(anchor->width());
     rebuild();
+
+    QPoint globalAnchorTop = anchor->mapToGlobal(QPoint(0, 0));
+    int panelHeight = height();
+
+    QScreen* screen = QGuiApplication::screenAt(globalAnchorTop);
+    QRect screenGeo = screen ? screen->availableGeometry() : QRect(0, 0, 1920, 1080);
+
+    int spaceBelow = screenGeo.bottom() - (globalAnchorTop.y() + anchor->height());
+    int spaceAbove = globalAnchorTop.y() - screenGeo.top();
+
+    QPoint pos;
+    if (spaceBelow < panelHeight + 3 && spaceAbove > spaceBelow) {
+        // 下方空间不足时，自动向锚点上方弹出贴合
+        pos = QPoint(globalAnchorTop.x(), globalAnchorTop.y() - panelHeight - 3);
+    } else {
+        // 空间充足时，默认向锚点下方弹出
+        pos = QPoint(globalAnchorTop.x(), globalAnchorTop.y() + anchor->height() + 3);
+    }
+
+    move(pos);
     show();
     raise();
 }

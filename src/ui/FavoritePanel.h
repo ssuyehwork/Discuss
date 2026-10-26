@@ -13,9 +13,14 @@ class FavoriteItemDelegate : public QStyledItemDelegate {
 public:
     explicit FavoriteItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
 
+    void setFilterKeyword(const QString& kw) { m_filterKeyword = kw; }
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
     void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
+
+private:
+    void paintHighlightedText(QPainter* painter, const QRect& rect, const QString& text, const QString& keyword, const QFont& font, const QColor& normalColor, const QColor& matchColor) const;
+    QString m_filterKeyword;
 };
 
 /**
@@ -39,6 +44,7 @@ public:
     void addVirtualCategory(const QString& name, int parentId = 0);
     void loadFavorites();
     void saveFavorites();
+    void filterTreeNodes(const QString& keyword);
 
 signals:
     void directorySelected(const QString& path, bool recursive = false);
@@ -63,6 +69,7 @@ private:
     QVBoxLayout* m_mainLayout = nullptr;
     DropTreeView* m_favoriteView = nullptr;
     QStandardItemModel* m_favoriteModel = nullptr;
+    FavoriteItemDelegate* m_delegate = nullptr;
     bool m_isLoading = false;
     bool m_orderDirty = false;
     int m_pendingEditNodeId = 0;

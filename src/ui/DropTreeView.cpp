@@ -104,23 +104,38 @@ void DropTreeView::mousePressEvent(QMouseEvent* event) {
     QModelIndex idx = indexAt(event->pos());
     if (idx.isValid() && idx.data(SectionHeaderRole).toBool()) {
         if (event->button() == Qt::LeftButton) {
+            bool inInteractiveBounds = true;
             if (idx.data(SectionKindRole).toInt() == 1) {
-                SectionProxyModel* secModel = nullptr;
-                QAbstractItemModel* cur = model();
-                while (cur) {
-                    secModel = qobject_cast<SectionProxyModel*>(cur);
-                    if (secModel) break;
-                    auto* proxy = qobject_cast<QAbstractProxyModel*>(cur);
-                    if (proxy) cur = proxy->sourceModel();
-                    else break;
-                }
-                if (secModel) {
-                    secModel->setFolderCollapsed(!secModel->isFolderCollapsed());
+                QRect rect = visualRect(idx);
+                QFont font("Microsoft YaHei", 10, QFont::Bold);
+                QFontMetrics fm(font);
+                int leftX = rect.left() + 10;
+                int textW = fm.horizontalAdvance(idx.data(SectionHeaderTextRole).toString());
+                int interactiveMaxX = leftX + textW + 30; // 文本宽度 + 箭头图标 + 容差 Padding
+                if (event->pos().x() < leftX || event->pos().x() > interactiveMaxX) {
+                    inInteractiveBounds = false;
                 }
             }
+
+            if (inInteractiveBounds) {
+                if (idx.data(SectionKindRole).toInt() == 1) {
+                    SectionProxyModel* secModel = nullptr;
+                    QAbstractItemModel* cur = model();
+                    while (cur) {
+                        secModel = qobject_cast<SectionProxyModel*>(cur);
+                        if (secModel) break;
+                        auto* proxy = qobject_cast<QAbstractProxyModel*>(cur);
+                        if (proxy) cur = proxy->sourceModel();
+                        else break;
+                    }
+                    if (secModel) {
+                        secModel->setFolderCollapsed(!secModel->isFolderCollapsed());
+                    }
+                }
+                event->accept();
+                return;
+            }
         }
-        event->accept();
-        return;
     }
     QTreeView::mousePressEvent(event);
 }

@@ -62,6 +62,10 @@ public:
     void loadLibrary();
     void saveLibraryOrder();
     void sortCategoriesByName(bool ascending);
+    void filterTreeNodes(const QString& keyword);
+
+    LibraryItemDelegate* delegate() const { return m_delegate; }
+    LibraryTreeView* treeView() const { return m_treeView; }
 
 signals:
     void categoryPathsSelected(const QStringList& paths);
@@ -81,7 +85,6 @@ private slots:
 private:
     void initUi();
     void createAndEditCategory(int parentId = 0);
-    void filterTreeNodes(const QString& keyword);
     QStandardItem* findItemByNodeId(QStandardItem* parent, int nodeId);
     void toggleSectionByNodeId(int nodeId);
 
@@ -89,7 +92,6 @@ private:
     LibraryTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
     LibraryItemDelegate* m_delegate = nullptr;
-    QLineEdit* m_filterEdit = nullptr;
     bool m_isLoading = false;
     bool m_orderDirty = false;
     int m_pendingEditNodeId = 0;

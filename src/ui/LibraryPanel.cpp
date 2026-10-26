@@ -399,18 +399,14 @@ void LibraryPanel::initUi() {
     // 启用树内拖拽重排序底座
     m_treeView->setInternalReorderEnabled(true);
 
-    m_treeView->setInternalDragValidator([this](const QModelIndex& index) {
+    m_treeView->setInternalDragValidator([](const QModelIndex& index) {
         if (!index.isValid()) return false;
-        if (m_filterEdit && !m_filterEdit->text().trimmed().isEmpty()) {
-            return false;
-        }
         int nodeId = index.data(Qt::UserRole + 1).toInt();
         return nodeId > 0;
     });
 
     m_treeView->setInternalDropValidator([this](const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone) -> bool {
         if (sources.isEmpty()) return false;
-        if (m_filterEdit && !m_filterEdit->text().trimmed().isEmpty()) return false;
 
         // 校验 sources 节点：全为 nodeId > 0
         for (const QPersistentModelIndex& psrc : sources) {
@@ -498,34 +494,6 @@ void LibraryPanel::initUi() {
     });
 
     connect(m_treeView, &DropTreeView::internalMoveRequested, this, &LibraryPanel::onInternalMoveRequested);
-
-    // 底部搜索过滤框部件创建与配置
-    QWidget* filterContainer = new QWidget(this);
-    filterContainer->setObjectName("LibraryFilterContainer");
-    QVBoxLayout* filterLayout = new QVBoxLayout(filterContainer);
-    filterLayout->setContentsMargins(8, 8, 8, 8);
-    filterLayout->setSpacing(0);
-
-    m_filterEdit = new QLineEdit(filterContainer);
-    m_filterEdit->setObjectName("LibraryFilterEdit");
-    m_filterEdit->setPlaceholderText("筛选分类");
-    m_filterEdit->setClearButtonEnabled(true);
-    m_filterEdit->setFixedHeight(32);
-    m_filterEdit->addAction(UiHelper::getIcon("filter_funnel", QColor("#888888"), 14), QLineEdit::LeadingPosition);
-    filterLayout->addWidget(m_filterEdit);
-
-    m_mainLayout->addWidget(filterContainer, 0);
-
-    connect(m_filterEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
-        QString kw = text.trimmed();
-        if (m_delegate) {
-            m_delegate->setFilterKeyword(kw);
-        }
-        filterTreeNodes(kw);
-        if (m_treeView && m_treeView->viewport()) {
-            m_treeView->viewport()->update();
-        }
-    });
 
     connect(m_treeView, &QTreeView::clicked, this, &LibraryPanel::onCategoryClicked);
     connect(m_treeView, &QWidget::customContextMenuRequested, this, &LibraryPanel::onCategoryContextMenu);
@@ -768,9 +736,6 @@ void LibraryPanel::sortCategoriesByName(bool ascending) {
 
 void LibraryPanel::toggleSectionByNodeId(int nodeId) {
     if (!m_model || !m_treeView) return;
-    if (m_filterEdit && !m_filterEdit->text().trimmed().isEmpty()) {
-        return;
-    }
     QStandardItem* sectionItem = findItemByNodeId(m_model->invisibleRootItem(), nodeId);
     if (!sectionItem) return;
     QModelIndex idx = sectionItem->index();
@@ -1230,10 +1195,6 @@ void LibraryPanel::loadLibrary() {
 
     m_isLoading = false;
 
-    // 若底栏存在搜索关键字，重新应用过滤
-    if (m_filterEdit && !m_filterEdit->text().trimmed().isEmpty()) {
-        filterTreeNodes(m_filterEdit->text().trimmed());
-    }
 
     if (m_pendingEditNodeId > 0 && m_treeView) {
         int targetNodeId = m_pendingEditNodeId;
@@ -1275,10 +1236,6 @@ void LibraryPanel::onPinCategoryTriggered(int nodeId, bool pin) {
 }
 
 void LibraryPanel::createAndEditCategory(int parentId) {
-    if (m_filterEdit) {
-        m_filterEdit->clear();
-    }
-
     int targetHeaderId = (parentId == -20) ? -20 : 0;
     QString targetConfigKey = (parentId == -20) ? "Library/SmartFolderSectionCollapsed" : "Library/CustomSectionCollapsed";
 

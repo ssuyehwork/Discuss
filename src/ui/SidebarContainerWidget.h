@@ -6,11 +6,15 @@
 #include <QVBoxLayout>
 #include "FavoritePanel.h"
 #include "LibraryPanel.h"
+#include "SearchHistoryPanel.h"
+#include <QLineEdit>
 
 namespace QuarkMeta {
 
 class SidebarContainerWidget : public QFrame {
     Q_OBJECT
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 signals:
     void sidebarTabChanged(int index);
@@ -32,6 +36,8 @@ private:
     QStackedWidget* m_stackedWidget = nullptr;
     FavoritePanel* m_favoritePanel = nullptr;
     LibraryPanel* m_libraryPanel = nullptr;
+    QLineEdit* m_filterEdit = nullptr;
+    SearchHistoryPanel* m_historyPanel = nullptr;
 };
 
 } // namespace QuarkMeta

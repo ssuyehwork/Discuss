@@ -107,14 +107,14 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
 
     // 绘制文本
     QString text = index.data(Qt::DisplayRole).toString();
-    painter->setPen((opt.state & QStyle::State_Selected) ? QColor("#FFFFFF") : QColor("#EEEEEE"));
-    painter->setFont(opt.font);
+    QColor normalTextColor = (opt.state & QStyle::State_Selected) ? QColor("#FFFFFF") : QColor("#EEEEEE");
+    QColor matchTextColor("#3498db");
 
     bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
     int rightIconWidth = isAutoRec ? 22 : 0;
-    
-    QString elidedText = opt.fontMetrics.elidedText(text, Qt::ElideRight, textRect.width() - 6 - rightIconWidth);
-    painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
+    QRect adjustedTextRect = textRect.adjusted(0, 0, -rightIconWidth, 0);
+
+    paintHighlightedText(painter, adjustedTextRect, text, m_filterKeyword, opt.font, normalTextColor, matchTextColor);
 
     // 绘制开启自动递归右侧 layers 图标
     if (isAutoRec) {
@@ -124,6 +124,63 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
     }
 
     painter->restore();
+}
+
+void FavoriteItemDelegate::paintHighlightedText(QPainter* painter, const QRect& rect, const QString& text, const QString& keyword, const QFont& font, const QColor& normalColor, const QColor& matchColor) const {
+    if (text.isEmpty()) return;
+
+    QFontMetrics fm(font);
+    painter->setFont(font);
+
+    if (keyword.isEmpty()) {
+        painter->setPen(normalColor);
+        painter->drawText(rect, Qt::AlignLeft | Qt::AlignVCenter, fm.elidedText(text, Qt::ElideRight, rect.width()));
+        return;
+    }
+
+    int curX = rect.left();
+    int endX = rect.right();
+    int lastIdx = 0;
+    int kwLen = keyword.length();
+
+    while (lastIdx < text.length() && curX < endX) {
+        int foundIdx = text.indexOf(keyword, lastIdx, Qt::CaseInsensitive);
+        if (foundIdx == -1) {
+            QString remStr = text.mid(lastIdx);
+            QString elidedRem = fm.elidedText(remStr, Qt::ElideRight, endX - curX);
+            painter->setPen(normalColor);
+            painter->drawText(QRect(curX, rect.top(), endX - curX, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, elidedRem);
+            break;
+        }
+
+        if (foundIdx > lastIdx) {
+            QString normalSegment = text.mid(lastIdx, foundIdx - lastIdx);
+            int segWidth = fm.horizontalAdvance(normalSegment);
+            if (curX + segWidth > endX) {
+                QString elidedSeg = fm.elidedText(normalSegment, Qt::ElideRight, endX - curX);
+                painter->setPen(normalColor);
+                painter->drawText(QRect(curX, rect.top(), endX - curX, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, elidedSeg);
+                break;
+            }
+            painter->setPen(normalColor);
+            painter->drawText(QRect(curX, rect.top(), segWidth, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, normalSegment);
+            curX += segWidth;
+        }
+
+        QString matchSegment = text.mid(foundIdx, kwLen);
+        int matchWidth = fm.horizontalAdvance(matchSegment);
+        if (curX + matchWidth > endX) {
+            QString elidedMatch = fm.elidedText(matchSegment, Qt::ElideRight, endX - curX);
+            painter->setPen(matchColor);
+            painter->drawText(QRect(curX, rect.top(), endX - curX, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, elidedMatch);
+            break;
+        }
+        painter->setPen(matchColor);
+        painter->drawText(QRect(curX, rect.top(), matchWidth, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, matchSegment);
+        curX += matchWidth;
+
+        lastIdx = foundIdx + kwLen;
+    }
 }
 
 void FavoriteItemDelegate::updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const {
@@ -194,7 +251,8 @@ void FavoritePanel::initUi() {
 
     m_favoriteModel = new QStandardItemModel(this);
     m_favoriteView->setModel(m_favoriteModel);
-    m_favoriteView->setItemDelegate(new FavoriteItemDelegate(this));
+    m_delegate = new FavoriteItemDelegate(this);
+    m_favoriteView->setItemDelegate(m_delegate);
 
     m_mainLayout->addWidget(m_favoriteView, 1);
 
@@ -339,6 +397,51 @@ void FavoritePanel::flushOrder() {
     if (!m_orderDirty) return;
     saveFavorites();
     m_orderDirty = false;
+}
+
+void FavoritePanel::filterTreeNodes(const QString& keyword) {
+    if (!m_favoriteModel || !m_favoriteView) return;
+
+    if (m_delegate) {
+        m_delegate->setFilterKeyword(keyword.trimmed());
+    }
+
+    std::function<bool(QStandardItem*)> filterRecursive = [&](QStandardItem* item) -> bool {
+        if (!item) return false;
+
+        bool matchesSelf = keyword.trimmed().isEmpty() || item->text().contains(keyword.trimmed(), Qt::CaseInsensitive);
+        bool anyChildMatches = false;
+
+        for (int i = 0; i < item->rowCount(); ++i) {
+            QStandardItem* child = item->child(i);
+            if (filterRecursive(child)) {
+                anyChildMatches = true;
+                m_favoriteView->setRowHidden(i, item->index(), false);
+            } else {
+                m_favoriteView->setRowHidden(i, item->index(), true);
+            }
+        }
+
+        bool visible = matchesSelf || anyChildMatches;
+        if (!keyword.trimmed().isEmpty() && visible && item->hasChildren()) {
+            m_favoriteView->expand(item->index());
+        }
+        return visible;
+    };
+
+    for (int i = 0; i < m_favoriteModel->rowCount(); ++i) {
+        QStandardItem* topItem = m_favoriteModel->item(i);
+        if (!topItem) continue;
+        if (filterRecursive(topItem)) {
+            m_favoriteView->setRowHidden(i, QModelIndex(), false);
+        } else {
+            m_favoriteView->setRowHidden(i, QModelIndex(), true);
+        }
+    }
+
+    if (m_favoriteView->viewport()) {
+        m_favoriteView->viewport()->update();
+    }
 }
 
 void FavoritePanel::onInternalMoveRequested(const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone) {

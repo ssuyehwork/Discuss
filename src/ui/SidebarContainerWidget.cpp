@@ -1,6 +1,8 @@
 #include "SidebarContainerWidget.h"
 #include "UiHelper.h"
 #include "../core/AppConfig.h"
+#include "../core/SearchHistoryService.h"
+#include <QMouseEvent>
 
 namespace QuarkMeta {
 
@@ -46,10 +48,66 @@ void SidebarContainerWidget::initUi() {
 
     m_mainLayout->addWidget(m_stackedWidget, 1);
 
+    // 底部统一搜索过滤框部件创建与配置
+    QWidget* filterContainer = new QWidget(this);
+    filterContainer->setObjectName("SidebarFilterContainer");
+    QVBoxLayout* filterLayout = new QVBoxLayout(filterContainer);
+    filterLayout->setContentsMargins(8, 8, 8, 8);
+    filterLayout->setSpacing(0);
+
+    m_filterEdit = new QLineEdit(filterContainer);
+    m_filterEdit->setObjectName("SidebarFilterEdit");
+    m_filterEdit->setPlaceholderText("筛选分类");
+    m_filterEdit->setClearButtonEnabled(true);
+    m_filterEdit->setFixedHeight(32);
+    m_filterEdit->addAction(UiHelper::getIcon("filter_funnel", QColor("#888888"), 14), QLineEdit::LeadingPosition);
+    m_filterEdit->installEventFilter(this);
+    filterLayout->addWidget(m_filterEdit);
+
+    m_historyPanel = new SearchHistoryPanel(this);
+    m_historyPanel->setCategory("sidebar_filter");
+
+    connect(m_historyPanel, &SearchHistoryPanel::historyItemClicked, this, [this](const QString& keyword) {
+        if (m_filterEdit) {
+            m_filterEdit->setText(keyword);
+        }
+    });
+
+    connect(m_filterEdit, &QLineEdit::returnPressed, this, [this]() {
+        if (!m_filterEdit) return;
+        QString text = m_filterEdit->text().trimmed();
+        if (!text.isEmpty()) {
+            SearchHistoryService::instance().appendSearch("sidebar_filter", text);
+        }
+    });
+
+    connect(m_filterEdit, &QLineEdit::textChanged, this, [this](const QString& text) {
+        QString kw = text.trimmed();
+        if (m_favoritePanel) {
+            m_favoritePanel->filterTreeNodes(kw);
+        }
+        if (m_libraryPanel) {
+            if (m_libraryPanel->delegate()) {
+                m_libraryPanel->delegate()->setFilterKeyword(kw);
+            }
+            m_libraryPanel->filterTreeNodes(kw);
+            if (m_libraryPanel->treeView() && m_libraryPanel->treeView()->viewport()) {
+                m_libraryPanel->treeView()->viewport()->update();
+            }
+        }
+    });
+
+    m_mainLayout->addWidget(filterContainer, 0);
+
     connect(m_tabBar, &QTabBar::currentChanged, this, [this](int index) {
         m_stackedWidget->setCurrentIndex(index);
         if (index == 1 && m_libraryPanel) {
             m_libraryPanel->loadLibrary();
+        }
+        if (m_filterEdit && !m_filterEdit->text().trimmed().isEmpty()) {
+            QString kw = m_filterEdit->text().trimmed();
+            if (index == 0 && m_favoritePanel) m_favoritePanel->filterTreeNodes(kw);
+            if (index == 1 && m_libraryPanel) m_libraryPanel->filterTreeNodes(kw);
         }
         AppConfig::instance().setValue("Sidebar/CurrentTabIndex", index);
         AppConfig::instance().sync();
@@ -60,6 +118,20 @@ void SidebarContainerWidget::initUi() {
     if (savedIndex >= 0 && savedIndex < m_tabBar->count()) {
         m_tabBar->setCurrentIndex(savedIndex);
     }
+}
+
+bool SidebarContainerWidget::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == m_filterEdit && event->type() == QEvent::MouseButtonDblClick) {
+        if (m_historyPanel && m_filterEdit) {
+            QStringList history = SearchHistoryService::instance().getHistory("sidebar_filter");
+            if (!history.isEmpty()) {
+                m_historyPanel->setHistory(history, "最近筛选");
+                m_historyPanel->showBelow(m_filterEdit);
+            }
+        }
+        return true;
+    }
+    return QFrame::eventFilter(watched, event);
 }
 
 } // namespace QuarkMeta

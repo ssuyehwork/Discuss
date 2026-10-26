@@ -75,13 +75,8 @@ QColor ColorPaletteEngine::getExtensionColor(const QString& ext) {
 
 QPair<QColor, QColor> ColorPaletteEngine::getExtensionBadgeColors(const QString& ext) {
     QString e = ext.toLower().trimmed();
-    
-    // 1. 独占硬编码保护项
-    if (e == "psd" || e == "psb") return { QColor("#001D26"), QColor("#02B1DD") };
-    if (e == "eps")               return { QColor("#35483D"), QColor("#F88025") };
-    if (e == "ai")                return { QColor("#F88025"), QColor("#35483D") };
 
-    // 2. 内存缓存第一级查找
+    // 1. 内存缓存与数据库初始化
     static QMap<QString, QPair<QColor, QColor>> s_colorCache;
     static bool s_tableInited = false;
 
@@ -91,6 +86,21 @@ QPair<QColor, QColor> ColorPaletteEngine::getExtensionBadgeColors(const QString&
         s_tableInited = true;
     }
 
+    // 2. 独占硬编码保护项校验与旧持久化缓存擦除同步
+    auto resolveReserved = [&](const QPair<QColor, QColor>& reservedColors) -> QPair<QColor, QColor> {
+        if (!s_colorCache.contains(e) || s_colorCache.value(e) != reservedColors) {
+            ExtensionColorDao::saveExtensionColor(e, reservedColors.first, reservedColors.second, false);
+            s_colorCache.insert(e, reservedColors);
+        }
+        return reservedColors;
+    };
+
+    if (e == "dir" || e == "folder") return resolveReserved({ QColor("#1C2D37"), QColor("#38BDF8") });
+    if (e == "psd" || e == "psb")    return resolveReserved({ QColor("#001D26"), QColor("#02B1DD") });
+    if (e == "eps")                  return resolveReserved({ QColor("#35483D"), QColor("#F88025") });
+    if (e == "ai")                   return resolveReserved({ QColor("#F88025"), QColor("#35483D") });
+
+    // 3. 普通扩展名内存缓存查找
     if (s_colorCache.contains(e)) {
         return s_colorCache.value(e);
     }
