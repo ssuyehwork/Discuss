@@ -94,11 +94,11 @@
 
 ```
 <<<<<<< SEARCH
-    src/meta/FavoriteService.cpp
     src/meta/FavoriteService.h
+    src/meta/FavoriteService.cpp
 =======
-    src/meta/FavoriteService.cpp
     src/meta/FavoriteService.h
+    src/meta/FavoriteService.cpp
     src/meta/MarkedFolderDao.cpp
     src/meta/MarkedFolderDao.h
     src/meta/MarkedFolderService.cpp
@@ -130,6 +130,8 @@ QTabBar#SidebarTabBar::tab {
     font-weight: bold;
     border: none;
     border-bottom: none;
+    border-radius: 4px;
+    margin-right: 4px;
     margin-bottom: 0px;
 }
 =======
@@ -141,6 +143,8 @@ QTabBar#SidebarTabBar::tab {
     font-weight: bold;
     border: none;
     border-bottom: none;
+    border-radius: 4px;
+    margin-right: 4px;
     margin-bottom: 0px;
 }
 >>>>>>> REPLACE
