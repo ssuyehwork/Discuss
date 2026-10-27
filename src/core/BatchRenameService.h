@@ -15,7 +15,8 @@ enum class RenameComponentType {
     Sequence,       // 序列数字
     Date,           // 日期
     OriginalName,   // 原始文件名
-    Metadata        // 元数据标记
+    Metadata,       // 元数据标记
+    ParentFolderName // 父文件夹名称
 };
 
 enum class DiskOperationMode {

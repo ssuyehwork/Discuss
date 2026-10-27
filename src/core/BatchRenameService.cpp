@@ -47,6 +47,9 @@ QString BatchRenameService::processOne(const QString& path, int index, const std
             case RenameComponentType::Metadata:
                 newName += "[QuarkMeta]";
                 break;
+            case RenameComponentType::ParentFolderName:
+                newName += info.dir().dirName();
+                break;
         }
     }
 

@@ -23,6 +23,7 @@ void RuleRow::initUi() {
     m_typeCombo->addItem("序列数字", static_cast<int>(RenameComponentType::Sequence));
     m_typeCombo->addItem("原文件名", static_cast<int>(RenameComponentType::OriginalName));
     m_typeCombo->addItem("日期", static_cast<int>(RenameComponentType::Date));
+    m_typeCombo->addItem("文件夹名称", static_cast<int>(RenameComponentType::ParentFolderName));
     m_typeCombo->setFixedWidth(100);
     m_typeCombo->setFixedHeight(25); // 2026-04-11 按照用户要求：物理锁定最高高度为25像素
     
@@ -74,6 +75,10 @@ void RuleRow::initUi() {
     m_dateFormatCombo->setFixedHeight(25);
     m_dateFormatCombo->setObjectName("RuleCombo");
     m_paramStack->addWidget(m_dateFormatCombo);
+
+    // 5. ParentFolderName Param (Empty)
+    QWidget* emptyW2 = new QWidget(this);
+    m_paramStack->addWidget(emptyW2);
 
     auto createBtn = [this](const QString& text) {
         QPushButton* btn = new QPushButton(text, this);

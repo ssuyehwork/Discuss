@@ -11,10 +11,10 @@ namespace QuarkMeta {
  */
 class PresetManager {
 public:
-    static QString serializeRules(const std::vector<RenameRule>& rules);
-    static std::vector<RenameRule> deserializeRules(const QString& jsonStr);
+    static QString serializeRules(const std::vector<RenameRule>& rules, int* failedCount = nullptr);
+    static std::vector<RenameRule> deserializeRules(const QString& jsonStr, int* unrecognizedCount = nullptr);
     static bool exportToFile(const QString& filePath, const std::vector<RenameRule>& rules);
-    static std::vector<RenameRule> importFromFile(const QString& filePath);
+    static std::vector<RenameRule> importFromFile(const QString& filePath, int* unrecognizedCount = nullptr);
 };
 
 } // namespace QuarkMeta

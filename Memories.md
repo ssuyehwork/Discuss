@@ -421,3 +421,28 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 2. **全局多对多关联解耦通道**：
    - 数据库层若需要实现标签与物理文件、智能文件夹或分类等实体的多对多检索与过滤，**必须且只能通过独立的全局中间关联表**（如 `file_tags` / `tag_group_items` 等）进行物理解耦映射。
    - 确保词库表（`tags`）作为高内聚字典模块保持 100% 独立，关联关系交由独立的联结表（Junction Tables）承载，禁止混淆词条定义与关系绑定。
+
+---
+
+## 15. QuarkMeta 批量重命名与文件监视静默治理设计理念 (Batch Rename & Watch Suppression Architecture Philosophy)
+
+> 本章节整理自与用户的架构研讨，作为批量重命名预设持久化、枚举字符串映射与文件监视防抖静默机制的设计真理源 (SSOT)。
+
+### 15.1 重命名规则枚举与字符串映射单一真理源 (PresetManager SSOT Mapping Contract)
+1. **彻底消除双重映射写两份的结构缺陷**：
+   - 规则序列化（`serializeRules`）与反序列化（`deserializeRules`）绝对禁止分别手写独立的 `switch` 或 `if-else` 链条。
+   - 必须在 `PresetManager` 内部建立唯一静态双向/对照映射表（`kTypeMappings`），统一涵盖 `Text` ("Text")、`Sequence` ("Sequence")、`OriginalName` ("OriginalName")、`Date` ("Date")、`Metadata` ("Metadata")、`ParentFolderName` ("ParentFolderName") 等全部 `RenameComponentType` 枚举值，新增枚举项时仅需在此单一真理源处扩展。
+2. **错误处理与非静默丢弃契约**：
+   - 序列化遇到未登记的枚举类型时，调试版本通过 `Q_ASSERT` 报警；
+   - 反序列化遇到无法识别的类型字符串时，不得静默吞错丢弃规则，必须通过带 `unrecognizedCount` 输出参数的重载接口向调用方反馈累加计数，并在 UI 触发 `ToolTipOverlay` 友情 Toast 提示，保障用户预设数据的知情权与可靠性。
+
+### 15.2 批量重命名文件监视静默与收口刷新契约 (Batch Rename Watch Suppression & Final Single-Refresh Contract)
+1. **批量重命名期间全局监视静默 (Watch Suppression)**：
+   - 在触发批量重命名（`performBatchRename`）之前，系统必须通过 RAII 管理器（`SuppressGuard`）对发起窗格及其所有分屏副窗格（`rootPane()->panes()`）调用 `beginWatchSuppress()`，开启监视静默；
+   - 静默期间，`ContentChangeWatcher` 拦截所有文件系统改变回调（`onDirectoryChanged`），禁止刷新视图、启动防抖定时器或积累脏数据变动，消除批量重命名执行过程中列表的中途抖动与多次刷新。
+2. **防抖队列积压丢弃与代数阻断机制 (Discard Pending & Discard Generation)**：
+   - `DirectoryWatchService` 提供 `discardPending(dirPath, includeSubtree)` 接口，在清理 `m_debounceMap` 队列中积压事件的同时，引入线程安全“丢弃代数”计数器（`m_discardGenerations`）；
+   - 当异步线程投递的 `directoryChanged` 信号在主线程被回调时，校验其投递代数是否匹配，若不匹配则自动熔断丢弃，确保已投递未执行的改变事件彻底失效。
+3. **完成收口与尾部单次刷新**：
+   - 批量重命名对话框关闭（`exec()` 结束）后，RAII Guard 自动释放所有窗格的静默状态（`endWatchSuppress()`），并在 `endSuppress()` 归零时自动调用 `discardPending` 清理监视积压；
+   - 重命名成功后，对每个关联分屏窗格执行且仅执行一次 `refreshAll()` 刷平，消除任何尾部多余刷新，保证重命名完成后视图状态一致且文件监视无缝恢复。

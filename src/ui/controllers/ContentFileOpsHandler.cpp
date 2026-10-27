@@ -45,9 +45,42 @@ void ContentFileOpsHandler::performBatchRename() {
     }
     if (originalPaths.empty()) return;
 
+    // 收集根窗格与所有子窗格（去重）
+    QList<ContentPanel*> targetPanes;
+    ContentPanel* root = m_panel->rootPane();
+    if (root) {
+        targetPanes.append(root);
+        for (ContentPanel* pane : root->panes()) {
+            if (pane && !targetPanes.contains(pane)) {
+                targetPanes.append(pane);
+            }
+        }
+    } else if (m_panel) {
+        targetPanes.append(m_panel);
+    }
+
+    struct WatchSuppressor {
+        QList<ContentPanel*> panes;
+        explicit WatchSuppressor(const QList<ContentPanel*>& p) : panes(p) {
+            for (ContentPanel* cp : panes) {
+                if (cp) cp->beginWatchSuppress();
+            }
+        }
+        ~WatchSuppressor() {
+            for (ContentPanel* cp : panes) {
+                if (cp) cp->endWatchSuppress();
+            }
+        }
+    } suppressor(targetPanes);
+
     BatchRenameDialog dlg(originalPaths, m_panel);
     if (dlg.exec() == QDialog::Accepted) {
-        m_panel->refreshAll();
+        for (ContentPanel* cp : targetPanes) {
+            if (cp) cp->endWatchSuppress();
+        }
+        for (ContentPanel* cp : targetPanes) {
+            if (cp) cp->refreshAll();
+        }
     }
 }
 

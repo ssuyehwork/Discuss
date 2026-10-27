@@ -30,7 +30,9 @@ private slots:
     void onBrowseTarget(); 
     void onImportPreset(); 
     void onExportPreset(); 
+    void onSavePreset();
     void onDeleteCurrentPreset(); 
+    void onPresetComboChanged(int index);
     void scheduleAutoSave(); 
     void doAutoSave(); 
  
@@ -38,6 +40,8 @@ private:
     void initContent(); 
     void applyTheme(); 
     void initTableItems(); 
+    void loadPresetsFromConfig();
+    void applyRulesJson(const QString& jsonStr);
  
     std::vector<std::wstring> m_originalPaths; 
     QList<RuleRow*> m_ruleRows; 
@@ -45,6 +49,7 @@ private:
  
     QTableWidget* m_table = nullptr; 
     QComboBox* m_presetCombo = nullptr; 
+    QPushButton* m_btnSavePreset = nullptr;
     QPushButton* m_btnDeletePreset = nullptr; 
     QPushButton* m_btnImportPreset = nullptr; 
     QPushButton* m_btnExportPreset = nullptr; 

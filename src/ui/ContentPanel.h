@@ -301,6 +301,10 @@ private:
     ContentStatsWorker* m_statsWorker = nullptr;
     class ContentViewCoordinator* m_viewCoordinator = nullptr;
     ContentChangeWatcher* m_changeWatcher = nullptr;
+
+public:
+    void beginWatchSuppress();
+    void endWatchSuppress();
 };
 
 } // namespace QuarkMeta

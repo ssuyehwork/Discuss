@@ -39,6 +39,7 @@ public:
 
     void watch(const QString& dirPath, bool includeSubtree);
     void unwatch(const QString& dirPath, bool includeSubtree);
+    void discardPending(const QString& dirPath, bool includeSubtree);
     void stopAll();
 
     static QString normalizePathKey(const QString& rawPath);
@@ -110,6 +111,7 @@ private:
     QList<std::shared_ptr<WatchItem>> m_pendingStops;
 
     QHash<WatchKey, DebounceState> m_debounceMap;
+    QHash<WatchKey, uint64_t> m_discardGenerations;
     QTimer* m_debounceTimer = nullptr;
 
     WorkerThread* m_workerThread = nullptr;

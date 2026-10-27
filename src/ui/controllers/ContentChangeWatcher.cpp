@@ -132,8 +132,27 @@ void ContentChangeWatcher::onWatchedDirectoryLost(const QString&) {
     // 收到 watchedDirectoryLost 时，不做导航与弹窗，由现有逻辑负责
 }
 
+void ContentChangeWatcher::beginSuppress() {
+    m_suppressCount++;
+    m_pendingDirtyNames.clear();
+    if (m_delayedApplyTimer) {
+        m_delayedApplyTimer->stop();
+    }
+}
+
+void ContentChangeWatcher::endSuppress() {
+    if (m_suppressCount > 0) {
+        m_suppressCount--;
+    }
+    if (m_suppressCount == 0) {
+        for (const QString& wp : m_watchedPaths) {
+            DirectoryWatchService::instance().discardPending(wp, m_watchedIncludeSubtree);
+        }
+    }
+}
+
 void ContentChangeWatcher::onDirectoryChanged(const QString& dirPath, const QStringList& dirtyNames, bool overflow) {
-    if (!m_panel) return;
+    if (!m_panel || m_suppressCount > 0) return;
 
     QString normDirPath = DirectoryWatchService::normalizePathKey(dirPath);
     bool hit = false;

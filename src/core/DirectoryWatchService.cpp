@@ -96,6 +96,23 @@ void DirectoryWatchService::unwatch(const QString& dirPath, bool includeSubtree)
     }
 }
 
+void DirectoryWatchService::discardPending(const QString& dirPath, bool includeSubtree) {
+    if (dirPath.isEmpty() || m_isStoppingAll.load()) return;
+
+    QString normKey = normalizePathKey(dirPath);
+    if (normKey.isEmpty()) return;
+
+    WatchKey key{normKey, includeSubtree};
+
+    QMutexLocker locker(&m_mutex);
+    m_debounceMap.remove(key);
+    m_discardGenerations[key]++;
+
+    if (m_debounceMap.isEmpty() && m_debounceTimer) {
+        m_debounceTimer->stop();
+    }
+}
+
 void DirectoryWatchService::stopAll() {
     if (m_isStoppingAll.exchange(true)) return;
 
@@ -208,11 +225,17 @@ void DirectoryWatchService::checkDebounceTimers() {
         QString displayPath = st.displayPath;
         QStringList names = st.accumulatedDirtyNames.values();
         bool overflow = st.accumulatedOverflow;
+        uint64_t gen = m_discardGenerations.value(key, 0);
 
-        QMetaObject::invokeMethod(this, [this, displayPath, names, overflow]() {
-            if (!m_isStoppingAll.load()) {
-                emit directoryChanged(displayPath, names, overflow);
+        QMetaObject::invokeMethod(this, [this, key, gen, displayPath, names, overflow]() {
+            if (m_isStoppingAll.load()) return;
+            {
+                QMutexLocker locker(&m_mutex);
+                if (m_discardGenerations.value(key, 0) != gen) {
+                    return;
+                }
             }
+            emit directoryChanged(displayPath, names, overflow);
         }, Qt::QueuedConnection);
     }
 

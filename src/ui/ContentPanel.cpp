@@ -1025,6 +1025,18 @@ void ContentPanel::runWhenStatsSettled(std::function<void()> fn) {
     });
 }
 
+void ContentPanel::beginWatchSuppress() {
+    if (m_changeWatcher) {
+        m_changeWatcher->beginSuppress();
+    }
+}
+
+void ContentPanel::endWatchSuppress() {
+    if (m_changeWatcher) {
+        m_changeWatcher->endSuppress();
+    }
+}
+
 void ContentPanel::recalculateAndEmitStats() {
     std::vector<ItemRecord> records;
     if (m_currentViewMode == ColumnView && m_columnView) {

@@ -22,6 +22,9 @@ public:
     void updateTarget();
     void onLoadFinished();
 
+    void beginSuppress();
+    void endSuppress();
+
 private slots:
     void onDirectoryChanged(const QString& dirPath, const QStringList& dirtyNames, bool overflow);
     void onWatchedDirectoryLost(const QString& dirPath);
@@ -40,6 +43,7 @@ private:
     QString m_pendingDirPath;
     QTimer* m_delayedApplyTimer = nullptr;
     std::atomic<bool> m_isTaskRunning{false};
+    int m_suppressCount = 0;
 };
 
 } // namespace QuarkMeta
