@@ -245,8 +245,9 @@ void PanelMediator::setupConnections() {
         }
 
         connect(shortcutController, &AppShortcutController::toggleMarkedRequested, this, [this, contentPanel]() {
-            if (contentPanel) {
-                QStringList sel = contentPanel->getSelectedPaths();
+            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
+            if (target) {
+                QStringList sel = target->getSelectedPaths();
                 if (!sel.isEmpty()) {
                     QuarkMeta::MarkedFolderService::instance().toggleMarked(sel);
                 }
@@ -254,8 +255,9 @@ void PanelMediator::setupConnections() {
         });
 
         connect(shortcutController, &AppShortcutController::transferToMarkedRequested, this, [this, contentPanel]() {
-            if (contentPanel) {
-                QStringList sel = contentPanel->getSelectedPaths();
+            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
+            if (target) {
+                QStringList sel = target->getSelectedPaths();
                 if (!sel.isEmpty()) {
                     QuarkMeta::MarkedFolderService::instance().executeTransferToMarked(sel);
                 }
