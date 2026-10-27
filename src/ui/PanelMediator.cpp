@@ -2,6 +2,7 @@
 #include "NavPanel.h"
 #include "FavoritePanel.h"
 #include "LibraryPanel.h"
+#include "MarkedPanel.h"
 #include "../meta/HistoryService.h"
 #include "ContentPanel.h"
 #include "ColumnViewWidget.h"
@@ -55,6 +56,7 @@ PanelMediator::PanelMediator(const PanelMediatorComponents& components, QObject*
       m_navPanel(components.navPanel),
       m_favoritePanel(components.favoritePanel),
       m_libraryPanel(components.libraryPanel),
+      m_markedPanel(components.markedPanel),
       m_contentPanel(components.contentPanel),
       m_metaPanel(components.metaPanel),
       m_filterPanel(components.filterPanel),
@@ -83,6 +85,7 @@ void PanelMediator::setupConnections() {
     });
     FavoritePanel* favoritePanel = m_favoritePanel;
     LibraryPanel* libraryPanel = m_libraryPanel;
+    MarkedPanel* markedPanel = m_markedPanel;
     ContentPanel* contentPanel = m_contentPanel;
     MetaPanel* metaPanel = m_metaPanel;
     FilterPanel* filterPanel = m_filterPanel;
@@ -260,6 +263,8 @@ void PanelMediator::setupConnections() {
                 QStringList sel = target->getSelectedPaths();
                 if (!sel.isEmpty()) {
                     QuarkMeta::MarkedFolderService::instance().executeTransferToMarked(sel);
+                } else {
+                    ToolTipOverlay::instance()->showToast("未选择任何要迁移的文件或文件夹", 2000, QColor("#e81123"));
                 }
             }
         });
@@ -361,6 +366,12 @@ void PanelMediator::setupConnections() {
             NavigationService::instance().navigateTo(QFileInfo(path).absolutePath());
         });
     }
+
+        if (markedPanel) {
+            connect(markedPanel, &MarkedPanel::requestLocateFolder, this, [](const QString& path) {
+                NavigationService::instance().navigateTo(path);
+            });
+        }
 
         if (libraryPanel) {
             connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel, filterPanel](const QStringList& paths) {

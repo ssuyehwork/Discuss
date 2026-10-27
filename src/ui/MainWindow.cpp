@@ -201,6 +201,7 @@ void MainWindow::setupControllersAndMediators() {
     components.navPanel = m_navPanel;
     components.favoritePanel = m_favoritePanel;
     components.libraryPanel = m_sidebarContainer ? m_sidebarContainer->libraryPanel() : nullptr;
+    components.markedPanel = m_sidebarContainer ? m_sidebarContainer->markedPanel() : nullptr;
     components.contentPanel = m_contentPanel;
     components.metaPanel = m_metaPanel;
     components.filterPanel = m_filterPanel;

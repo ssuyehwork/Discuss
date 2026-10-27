@@ -9,6 +9,7 @@ namespace QuarkMeta {
 class NavPanel;
 class FavoritePanel;
 class LibraryPanel;
+class MarkedPanel;
 class ContentPanel;
 class MetaPanel;
 class FilterPanel;
@@ -26,6 +27,7 @@ struct PanelMediatorComponents {
     NavPanel* navPanel = nullptr;
     FavoritePanel* favoritePanel = nullptr;
     LibraryPanel* libraryPanel = nullptr;
+    MarkedPanel* markedPanel = nullptr;
     ContentPanel* contentPanel = nullptr;
     MetaPanel* metaPanel = nullptr;
     FilterPanel* filterPanel = nullptr;
@@ -71,6 +73,7 @@ private:
     QPointer<NavPanel> m_navPanel;
     QPointer<FavoritePanel> m_favoritePanel;
     QPointer<LibraryPanel> m_libraryPanel;
+    QPointer<MarkedPanel> m_markedPanel;
     QPointer<ContentPanel> m_contentPanel;
     QPointer<ContentPanel> m_activeContentPanel;
     QPointer<MetaPanel> m_metaPanel;

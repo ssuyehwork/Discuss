@@ -6,6 +6,8 @@
 #include <QDir>
 #include <QMenu>
 #include <QMouseEvent>
+#include <QMimeData>
+#include <QUrl>
 
 namespace QuarkMeta {
 
@@ -16,6 +18,8 @@ MarkedPanel::MarkedPanel(QWidget* parent) : QWidget(parent) {
 }
 
 void MarkedPanel::initUi() {
+    setAcceptDrops(true);
+
     m_mainLayout = new QVBoxLayout(this);
     m_mainLayout->setContentsMargins(0, 0, 0, 0);
     m_mainLayout->setSpacing(0);
@@ -27,11 +31,99 @@ void MarkedPanel::initUi() {
     m_treeWidget->setIconSize(QSize(16, 16));
     m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeWidget->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_treeWidget->setAcceptDrops(true);
+    if (m_treeWidget->viewport()) {
+        m_treeWidget->viewport()->setAcceptDrops(true);
+        m_treeWidget->viewport()->installEventFilter(this);
+    }
+    m_treeWidget->installEventFilter(this);
 
     m_mainLayout->addWidget(m_treeWidget);
 
     connect(m_treeWidget, &QTreeWidget::itemClicked, this, &MarkedPanel::onItemClicked);
     connect(m_treeWidget, &QTreeWidget::customContextMenuRequested, this, &MarkedPanel::onContextMenuRequested);
+}
+
+void MarkedPanel::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+        return;
+    }
+    QWidget::dragEnterEvent(event);
+}
+
+void MarkedPanel::dragMoveEvent(QDragMoveEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+        return;
+    }
+    QWidget::dragMoveEvent(event);
+}
+
+void MarkedPanel::dropEvent(QDropEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+        handleDropPaths(event->mimeData(), event->position().toPoint(), false);
+        return;
+    }
+    QWidget::dropEvent(event);
+}
+
+bool MarkedPanel::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == m_treeWidget || (m_treeWidget && watched == m_treeWidget->viewport())) {
+        if (event->type() == QEvent::DragEnter) {
+            auto* de = static_cast<QDragEnterEvent*>(event);
+            if (de->mimeData() && de->mimeData()->hasUrls()) {
+                de->acceptProposedAction();
+                return true;
+            }
+        } else if (event->type() == QEvent::DragMove) {
+            auto* dm = static_cast<QDragMoveEvent*>(event);
+            if (dm->mimeData() && dm->mimeData()->hasUrls()) {
+                dm->acceptProposedAction();
+                return true;
+            }
+        } else if (event->type() == QEvent::Drop) {
+            auto* de = static_cast<QDropEvent*>(event);
+            if (de->mimeData() && de->mimeData()->hasUrls()) {
+                de->acceptProposedAction();
+                bool isViewport = (m_treeWidget && watched == m_treeWidget->viewport());
+                handleDropPaths(de->mimeData(), de->position().toPoint(), isViewport);
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+void MarkedPanel::handleDropPaths(const QMimeData* mimeData, const QPoint& pos, bool isViewportPos) {
+    if (!mimeData) return;
+    QStringList sourcePaths;
+    const QList<QUrl> urls = mimeData->urls();
+    for (const QUrl& url : urls) {
+        QString localPath = url.toLocalFile();
+        if (!localPath.isEmpty()) {
+            sourcePaths.append(localPath);
+        }
+    }
+
+    if (!sourcePaths.isEmpty()) {
+        QTreeWidgetItem* item = nullptr;
+        if (m_treeWidget) {
+            QPoint viewportPos = isViewportPos ? pos : (m_treeWidget->viewport() ? m_treeWidget->viewport()->mapFrom(m_treeWidget, pos) : pos);
+            item = m_treeWidget->itemAt(viewportPos);
+        }
+
+        if (item) {
+            QString targetPath = item->data(0, Qt::UserRole).toString();
+            if (!targetPath.isEmpty()) {
+                MarkedFolderService::instance().executeTransferToMarked(sourcePaths, QStringList{targetPath});
+                return;
+            }
+        }
+
+        MarkedFolderService::instance().executeTransferToMarked(sourcePaths);
+    }
 }
 
 void MarkedPanel::loadMarkedFolders() {
