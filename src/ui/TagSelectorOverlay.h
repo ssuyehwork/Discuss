@@ -62,8 +62,11 @@ private:
     void filterAndPopulate();
     void toggleTagSelection(const QString& tag);
     void recordRecentTag(const QString& tag);
+
+public:
     void closeOverlay();
 
+private:
     TagTriggerSource m_triggerSource = TagTriggerSource::MetaPanel;
     QStringList m_selectedTags;
     QStringList m_initialTags;
@@ -85,9 +88,12 @@ private:
     QPushButton* m_recentHeaderBtn = nullptr;
     bool m_recentExpanded = true;
 
+    bool isInternalWidget(QObject* obj) const;
+
     bool m_isClosing = false;
     bool m_hasCommitted = false;
     bool m_isDragging = false;
+    bool m_swallowingClick = false;
     QPoint m_dragPos;
 
     FramelessWindowHelper* m_framelessHelper = nullptr;

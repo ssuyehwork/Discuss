@@ -53,7 +53,7 @@ public:
     /**
      * @brief 全局数据库并发读写互斥锁
      */
-    std::mutex& getGlobalMutex() { return m_globalDbMutex; }
+    static std::mutex& getGlobalMutex() { return instance().m_globalDbMutex; }
     QRecursiveMutex* dbMutex() { return &m_dbMutex; }
 
     static QString getAppDir();

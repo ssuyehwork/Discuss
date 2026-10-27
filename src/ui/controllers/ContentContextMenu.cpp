@@ -31,6 +31,7 @@
 #include "../../meta/MetadataManager.h"
 #include "../../meta/FavoriteDao.h"
 #include "../../meta/FavoriteService.h"
+#include "../../meta/MarkedFolderService.h"
 #include "../../meta/LibraryService.h"
 #include "ContextMenuFactory.h"
 #include "../../crypto/EncryptionManager.h"
@@ -185,6 +186,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 }
             }, m_panel);
 
+            MarkedFolderService::instance().buildMarkAction(&menu, path, m_panel);
             FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
             
             QStringList selPathsDrive = m_panel->getSelectedPaths();
@@ -324,6 +326,9 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 }
             }, m_panel);
 
+            if (QFileInfo(path).isDir()) {
+                MarkedFolderService::instance().buildMarkAction(&menu, path, m_panel);
+            }
             FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
 
             QStringList selPathsItem = m_panel->getSelectedPaths();

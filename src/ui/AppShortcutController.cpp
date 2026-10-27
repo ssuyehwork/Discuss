@@ -235,6 +235,20 @@ void AppShortcutController::initShortcuts() {
             emit resetFilterRequested();
         }
     });
+
+    // 13. Alt+C: 标记/取消标记当前选中的文件夹
+    registerShortcut(QKeySequence(Qt::ALT | Qt::Key_C), [this]() {
+        if (!isEditingFocus()) {
+            emit toggleMarkedRequested();
+        }
+    });
+
+    // 14. Alt+V: 迁移选中项目到已标记的目的地文件夹
+    registerShortcut(QKeySequence(Qt::ALT | Qt::Key_V), [this]() {
+        if (!isEditingFocus()) {
+            emit transferToMarkedRequested();
+        }
+    });
 }
 
 } // namespace QuarkMeta

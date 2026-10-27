@@ -11,6 +11,7 @@
 #include "../core/TrashService.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
+#include "../meta/MarkedFolderService.h"
 #include "../meta/LibraryService.h"
 #include "../core/ClipboardService.h"
 #include "../core/NavigationService.h"
@@ -355,6 +356,7 @@ void NavPanel::onTreeContextMenu(const QPoint& pos) {
     menu.addSeparator();
 
     // 4. 置顶 / 收藏夹 / 库
+    MarkedFolderService::instance().buildMarkAction(&menu, path, this);
     FavoriteService::instance().buildFavoriteAction(&menu, path, this);
     LibraryService::instance().buildLibraryAction(&menu, QStringList{path}, this);
 

@@ -392,7 +392,7 @@ void MetaPanel::initUi() {
 
 void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
     if (m_tagSelectorOverlay) {
-        m_tagSelectorOverlay->close();
+        m_tagSelectorOverlay->closeOverlay();
         return;
     }
 
@@ -401,6 +401,10 @@ void MetaPanel::openTagSelectorOverlay(QWidget* targetAnchor) {
 
     // 显式声明来自 MetaPanel 触发源
     m_tagSelectorOverlay = new TagSelectorOverlay(m_currentTagsSet.values(), targetPathsSnapshot, topWidget, TagTriggerSource::MetaPanel);
+
+    connect(m_tagSelectorOverlay, &TagSelectorOverlay::overlayClosed, this, [this]() {
+        m_tagSelectorOverlay = nullptr;
+    });
 
     if (topWidget) {
         const int overlayW = m_tagSelectorOverlay->width();

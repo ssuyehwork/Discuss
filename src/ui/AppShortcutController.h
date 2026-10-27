@@ -55,6 +55,16 @@ signals:
      */
     void resetFilterRequested();
 
+    /**
+     * @brief Alt+C 触发标记/取消标记当前选中的文件夹
+     */
+    void toggleMarkedRequested();
+
+    /**
+     * @brief Alt+V 触发迁移选中项目到已标记的目的地文件夹
+     */
+    void transferToMarkedRequested();
+
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 

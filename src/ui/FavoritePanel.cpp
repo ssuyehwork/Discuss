@@ -9,6 +9,7 @@
 #include "dialogs/FramelessConfirmDialog.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
+#include "../meta/MarkedFolderService.h"
 #include "../meta/LibraryService.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/DriveMetaDao.h"
@@ -116,11 +117,20 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
 
     paintHighlightedText(painter, adjustedTextRect, text, m_filterKeyword, opt.font, normalTextColor, matchTextColor);
 
-    // 绘制开启自动递归右侧 layers 图标
+    // 绘制开启自动递归右侧 layers 图标与标记 Destination 图标
+    bool isMarked = index.data(Qt::UserRole + 10).toBool();
+    int rightOffset = 22;
     if (isAutoRec) {
-        QRect layersRect(opt.rect.right() - 22, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
+        QRect layersRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
         QIcon layersIcon = UiHelper::getIcon("layers", QColor("#2ecc71"), 16);
         layersIcon.paint(painter, layersRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        rightOffset += 20;
+    }
+
+    if (isMarked) {
+        QRect markIconRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
+        QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16);
+        markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
     }
 
     painter->restore();
@@ -778,6 +788,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             FavoriteService::instance().removeFavoriteById(nodeId);
         });
     } else {
+        MarkedFolderService::instance().buildMarkAction(&menu, path, this);
         QAction* favAct = FavoriteService::instance().buildFavoriteAction(&menu, path, this);
         if (favAct) {
             connect(favAct, &QAction::triggered, this, [&isItemRemoved]() {

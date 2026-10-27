@@ -36,25 +36,33 @@ TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, const
     
     m_searchEdit->installEventFilter(this);
 
-    qApp->installEventFilter(this);
-    connect(qApp, &QApplication::focusChanged, this, [this](QWidget* old, QWidget* now) {
-        Q_UNUSED(old);
-        if (m_isClosing || !isVisible()) return;
-
-        if (now && (now == this || this->isAncestorOf(now))) {
-            return;
-        }
-
-        if (now && !this->isAncestorOf(now)) {
-            closeOverlay();
-        }
-    });
+    if (qApp) {
+        qApp->installEventFilter(this);
+    }
 }
 
 TagSelectorOverlay::~TagSelectorOverlay() {
     if (qApp) {
         qApp->removeEventFilter(this);
     }
+    m_swallowingClick = false;
+}
+
+bool TagSelectorOverlay::isInternalWidget(QObject* obj) const {
+    if (!obj) return false;
+    
+    QObject* current = obj;
+    while (current) {
+        if (current == this) {
+            return true;
+        }
+        if (QWidget* w = qobject_cast<QWidget*>(current)) {
+            current = w->parentWidget() ? w->parentWidget() : w->parent();
+        } else {
+            current = current->parent();
+        }
+    }
+    return false;
 }
 
 void TagSelectorOverlay::closeOverlay() {
@@ -355,11 +363,21 @@ void TagSelectorOverlay::changeEvent(QEvent* event) {
 }
 
 bool TagSelectorOverlay::eventFilter(QObject* obj, QEvent* event) {
-    if (event->type() == QEvent::MouseButtonPress) {
-        QMouseEvent* me = static_cast<QMouseEvent*>(event);
-        if (isVisible() && !geometry().contains(me->globalPosition().toPoint())) {
-            closeOverlay();
-            return false;
+    if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick) {
+        if (isVisible() && !m_isClosing) {
+            if (!isInternalWidget(obj)) {
+                m_swallowingClick = true;
+                closeOverlay();
+                return true;
+            }
+        }
+    } else if (event->type() == QEvent::MouseButtonRelease) {
+        if (m_swallowingClick) {
+            m_swallowingClick = false;
+            if (qApp) {
+                qApp->removeEventFilter(this);
+            }
+            return true;
         }
     }
 

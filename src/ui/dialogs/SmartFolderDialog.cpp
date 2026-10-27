@@ -35,6 +35,10 @@ void SmartFolderRuleRow::openTagSelector() {
 
     m_tagOverlay = new TagSelectorOverlay(initTags, topWidget, TagTriggerSource::PresetTagsDialog);
 
+    connect(m_tagOverlay, &TagSelectorOverlay::overlayClosed, this, [this]() {
+        m_tagOverlay = nullptr;
+    });
+
     // 计算并在 m_valueEdit 正下方定位 TagSelectorOverlay 弹出框
     QPoint globalPos = m_valueEdit->mapToGlobal(QPoint(0, m_valueEdit->height() + 2));
     m_tagOverlay->move(topWidget ? topWidget->mapFromGlobal(globalPos) : globalPos);

@@ -5,6 +5,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QMenu>
+#include <QMouseEvent>
 
 namespace QuarkMeta {
 
@@ -35,28 +36,23 @@ void MarkedPanel::initUi() {
 
 void MarkedPanel::loadMarkedFolders() {
     m_treeWidget->clear();
-    QStringList markedList = MarkedFolderService::instance().getAllMarked();
-    for (const QString& path : markedList) {
+    QStringList allList = MarkedFolderService::instance().getAllMarked();
+    for (const QString& path : allList) {
         if (QFile::exists(path)) {
-            QTreeWidgetItem* item = createMarkedItem(path);
+            bool active = MarkedFolderService::instance().isMarked(path);
+            QTreeWidgetItem* item = createMarkedItem(path, active);
             m_treeWidget->addTopLevelItem(item);
         }
     }
 }
 
-QTreeWidgetItem* MarkedPanel::createMarkedItem(const QString& path) {
+QTreeWidgetItem* MarkedPanel::createMarkedItem(const QString& path, bool active) {
     QFileInfo fi(path);
     QTreeWidgetItem* item = new QTreeWidgetItem();
-    item->setText(0, fi.fileName());
+    item->setText(0, fi.fileName().isEmpty() ? path : fi.fileName());
     item->setData(0, Qt::UserRole, path);
-
-    bool isMarkedActive = MarkedFolderService::instance().isMarked(path);
-    if (isMarkedActive) {
-        item->setIcon(0, UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16));
-    } else {
-        // 未处于标记状态：淡灰色图标
-        item->setIcon(0, UiHelper::getIcon("Destination.svg", QColor("#555555"), 16));
-    }
+    item->setData(0, Qt::UserRole + 1, active);
+    item->setIcon(0, UiHelper::getIcon("Destination.svg", active ? QColor("#ff551c") : QColor("#555555"), 16));
     return item;
 }
 
@@ -76,35 +72,34 @@ void MarkedPanel::onContextMenuRequested(const QPoint& pos) {
 
     if (item) {
         QString path = item->data(0, Qt::UserRole).toString();
-        bool isMarkedActive = MarkedFolderService::instance().isMarked(path);
+        bool active = item->data(0, Qt::UserRole + 1).toBool();
 
-        if (isMarkedActive) {
-            QAction* unmarkAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#888888"), 18), "取消标记");
+        if (active) {
+            QAction* unmarkAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#888888"), 16), "取消标记");
             connect(unmarkAct, &QAction::triggered, this, [path]() {
-                MarkedFolderService::instance().unmarkFolder(path);
+                MarkedFolderService::instance().removeMarked(path);
             });
         } else {
-            QAction* markAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 18), "激活标记");
+            QAction* markAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16), "标记为目的地");
             connect(markAct, &QAction::triggered, this, [path]() {
                 MarkedFolderService::instance().addMarked(path);
             });
         }
 
-        QAction* removeRecAct = menu.addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "从标记历史中移除");
-        connect(removeRecAct, &QAction::triggered, this, [path]() {
+        QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 16), "从标记历史中移除");
+        connect(removeAct, &QAction::triggered, this, [path]() {
             MarkedFolderService::instance().removeFolderRecord(path);
         });
-
         menu.addSeparator();
     }
 
-    QAction* unmarkAllAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#888888"), 18), "取消所有标记");
+    QAction* unmarkAllAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#888888"), 16), "取消所有标记");
     connect(unmarkAllAct, &QAction::triggered, this, []() {
-        MarkedFolderService::instance().unmarkAllFolders();
+        MarkedFolderService::instance().clearAll();
     });
 
-    QAction* clearAllAct = menu.addAction(UiHelper::getIcon("trash", QColor("#EEEEEE"), 18), "清空标记历史");
-    connect(clearAllAct, &QAction::triggered, this, []() {
+    QAction* clearHistoryAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 16), "清空标记历史");
+    connect(clearHistoryAct, &QAction::triggered, this, []() {
         MarkedFolderService::instance().clearAllFolderRecords();
     });
 

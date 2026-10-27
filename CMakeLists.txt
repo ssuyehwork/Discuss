@@ -125,6 +125,10 @@ set(SOURCES
     src/meta/HistoryService.cpp
     src/meta/FavoriteService.h
     src/meta/FavoriteService.cpp
+    src/meta/MarkedFolderDao.cpp
+    src/meta/MarkedFolderDao.h
+    src/meta/MarkedFolderService.cpp
+    src/meta/MarkedFolderService.h
     src/meta/ItemMetaMapper.cpp
     src/meta/ItemMetaMapper.h
     src/meta/LibraryDao.h
@@ -289,6 +293,8 @@ set(SOURCES
     src/ui/NavPanel.h
     src/ui/FavoritePanel.cpp
     src/ui/FavoritePanel.h
+    src/ui/MarkedPanel.cpp
+    src/ui/MarkedPanel.h
     src/ui/HistoryPanel.h
     src/ui/HistoryPanel.cpp
     src/ui/QuickLookWindow.cpp

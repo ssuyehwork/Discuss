@@ -30,9 +30,11 @@ void SidebarContainerWidget::initUi() {
     m_tabBar = new QTabBar(header);
     m_tabBar->setObjectName("SidebarTabBar");
     m_tabBar->setDrawBase(false);
+    m_tabBar->setUsesScrollButtons(false);
     m_tabBar->setIconSize(QSize(16, 16));
     m_tabBar->addTab(UiHelper::getIcon("Favorites.svg", "#888888", 16), "收藏夹");
     m_tabBar->addTab(UiHelper::getIcon("Search-in-library", "#888888", 16), "库");
+    m_tabBar->addTab(UiHelper::getIcon("Destination.svg", "#ff551c", 16), "标记");
     m_tabBar->setCursor(Qt::PointingHandCursor);
 
     headerLayout->addWidget(m_tabBar);
@@ -42,9 +44,11 @@ void SidebarContainerWidget::initUi() {
     m_stackedWidget = new QStackedWidget(this);
     m_favoritePanel = new FavoritePanel(this);
     m_libraryPanel = new LibraryPanel(this);
+    m_markedPanel = new MarkedPanel(this);
 
     m_stackedWidget->addWidget(m_favoritePanel);
     m_stackedWidget->addWidget(m_libraryPanel);
+    m_stackedWidget->addWidget(m_markedPanel);
 
     m_mainLayout->addWidget(m_stackedWidget, 1);
 

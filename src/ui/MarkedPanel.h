@@ -26,7 +26,7 @@ private slots:
 
 private:
     void initUi();
-    QTreeWidgetItem* createMarkedItem(const QString& path);
+    QTreeWidgetItem* createMarkedItem(const QString& path, bool active);
 
     QVBoxLayout* m_mainLayout = nullptr;
     QTreeWidget* m_treeWidget = nullptr;

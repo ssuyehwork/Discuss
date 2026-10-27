@@ -235,8 +235,16 @@ public:
             painter->setFont(option.font);
 
             bool isPinned = index.data(PinnedRole).toBool();
+            bool isMarked = index.data(Qt::UserRole + 10).toBool();
             int pinRightX = textRect.right() - CardPainterHelper::kPinRightPadding;
             int pinW = CardPainterHelper::drawInlinePinIcon(painter, pinRightX, textRect.top(), textRect.height(), isPinned);
+
+            if (isMarked) {
+                QRect markIconRect(pinRightX - (pinW > 0 ? (pinW + 4) : 0) - 16, textRect.top() + (textRect.height() - 16) / 2, 16, 16);
+                QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16);
+                markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+                pinW += 20;
+            }
 
             int reservedW = (pinW > 0) ? (pinW + CardPainterHelper::kPinToRatingGap) : 0;
             QRect actualTextRect = textRect.adjusted(0, 0, -reservedW, 0);
