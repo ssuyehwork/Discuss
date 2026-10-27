@@ -186,11 +186,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 }
             }, m_panel);
 
-            MarkedFolderService::instance().buildMarkAction(&menu, path, m_panel);
-            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
-            
             QStringList selPathsDrive = m_panel->getSelectedPaths();
             if (selPathsDrive.isEmpty() && !path.isEmpty()) selPathsDrive << path;
+
+            MarkedFolderService::instance().buildMarkAction(&menu, selPathsDrive, m_panel);
+            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
             LibraryService::instance().buildLibraryAction(&menu, selPathsDrive, m_panel);
 
             int driveItemCount = selPathsDrive.size() > 0 ? static_cast<int>(selPathsDrive.size()) : 1;
@@ -326,13 +326,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 }
             }, m_panel);
 
-            if (QFileInfo(path).isDir()) {
-                MarkedFolderService::instance().buildMarkAction(&menu, path, m_panel);
-            }
-            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
-
             QStringList selPathsItem = m_panel->getSelectedPaths();
             if (selPathsItem.isEmpty() && !path.isEmpty()) selPathsItem << path;
+
+            MarkedFolderService::instance().buildMarkAction(&menu, selPathsItem, m_panel);
+            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
             LibraryService::instance().buildLibraryAction(&menu, selPathsItem, m_panel);
 
             int selItemCount = selPathsItem.size() > 0 ? static_cast<int>(selPathsItem.size()) : 1;

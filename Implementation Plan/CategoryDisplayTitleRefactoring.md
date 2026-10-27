@@ -1,6 +1,6 @@
-# Implementation Plan - Library Category Display Title Refactoring
+# Implementation Plan - Category Display Title Refactoring
 
-**Base Commit Hash**: `db013fcb2828916174305ea402494ebfa6e01893`
+**Base Commit Hash**: `34c6cf852784f7ad4fa0f4bfb23679b6ed61f70e`
 **Prerequisite Plans**: 无
 **Supersedes**: 无
 
@@ -13,14 +13,14 @@
 先前 `ContentPanel::updateHeaderTitle()` 在多窗格模式下无脑使用 `QFileInfo(m_currentPath).fileName()` 截取物理磁盘最末级文件夹名，忽视了数据源来自于智能文件夹（Smart Folder）或数据库分类（Category）的场景，导致标题栏/地址栏与侧边栏选择节点语义割裂。
 
 ### 1.2 修复策略
-在 `ContentPanel` 中增加分类/节点标题属性 `m_categoryTitle`，在 `updateHeaderTitle()` 中做分支判定：若处于 `"library"` 或 `"smart_folder"` 视角且 `m_categoryTitle` 非空，优先使用 `m_categoryTitle` 进行标题栏与地址栏渲染。
+在 `ContentPanel` 的 `private` 声明区增加成员变量 `QString m_categoryTitle;` 与 `setCurrentCategoryTitle` 接口，并在 `updateHeaderTitle()` 中做分支判定：若处于 `"library"` 或 `"smart_folder"` 视角且 `m_categoryTitle` 非空，优先使用 `m_categoryTitle` 进行标题栏与地址栏渲染。同时更新 `LibraryPanel` 传递节点名称。
 
 ---
 
 ## Chapter 2: Modified Files List（影响文件清单）
 
-1. `src/ui/ContentPanel.h` / `src/ui/ContentPanel.cpp` (修改)：增加 `setCurrentCategoryTitle` 接口与 `updateHeaderTitle` 渲染重构。
-2. `src/ui/LibraryPanel.h` / `src/ui/LibraryPanel.cpp` (修改)：扩展 `categoryPathsSelected` 信号传递分类节点名称。
+1. `src/ui/ContentPanel.h` / `src/ui/ContentPanel.cpp` (修改)：增加 `m_categoryTitle` 私有变量、`setCurrentCategoryTitle` 接口与 `updateHeaderTitle` 渲染重构。
+2. `src/ui/LibraryPanel.h` / `src/ui/LibraryPanel.cpp` (修改)：扩展 `categoryPathsSelected` 信号及其发射点携带分类节点名称。
 3. `src/ui/PanelMediator.cpp` (修改)：在中介者中将分类/智能文件夹名称同步设置给 `ContentPanel` 与 `AddressBar`。
 4. `Memories.md` (修改)：记录第 17 章节设计理念。
 
@@ -28,18 +28,24 @@
 
 ## Chapter 3: Detailed Line-by-Line Changes（精准替换块）
 
-### 3.1 `src/ui/ContentPanel.h` 增加分类标题属性
+### 3.1 `src/ui/ContentPanel.h` 增加分类标题接口与成员变量
 
 ```cpp
 <<<<<<< SEARCH
-    QString currentCategoryType() const { return m_currentCategoryType; }
-    void setCurrentCategoryType(const QString& type) { m_currentCategoryType = type; }
+    QString getCurrentCategoryType() const { return m_currentCategoryType; }
 =======
-    QString currentCategoryType() const { return m_currentCategoryType; }
-    void setCurrentCategoryType(const QString& type) { m_currentCategoryType = type; }
-
+    QString getCurrentCategoryType() const { return m_currentCategoryType; }
     QString currentCategoryTitle() const { return m_categoryTitle; }
     void setCurrentCategoryTitle(const QString& title);
+>>>>>>> REPLACE
+```
+
+```cpp
+<<<<<<< SEARCH
+    QString m_currentCategoryType;
+=======
+    QString m_currentCategoryType;
+    QString m_categoryTitle;
 >>>>>>> REPLACE
 ```
 
@@ -116,7 +122,7 @@ void ContentPanel::updateHeaderTitle() {
 >>>>>>> REPLACE
 ```
 
-### 3.3 `src/ui/LibraryPanel.h` 扩展信号携带标题
+### 3.3 `src/ui/LibraryPanel.h` 扩展信号声明
 
 ```cpp
 <<<<<<< SEARCH
@@ -128,7 +134,20 @@ signals:
 >>>>>>> REPLACE
 ```
 
-### 3.4 `src/ui/PanelMediator.cpp` 传递分类标题
+### 3.4 `src/ui/LibraryPanel.cpp` 修改信号发射点
+
+```cpp
+<<<<<<< SEARCH
+    QStringList paths = LibraryService::instance().getCategoryPaths(nodeId);
+    emit categoryPathsSelected(paths);
+=======
+    QStringList paths = LibraryService::instance().getCategoryPaths(nodeId);
+    QString categoryTitle = index.data(Qt::DisplayRole).toString();
+    emit categoryPathsSelected(paths, categoryTitle);
+>>>>>>> REPLACE
+```
+
+### 3.5 `src/ui/PanelMediator.cpp` 中介者传递标题
 
 ```cpp
 <<<<<<< SEARCH
@@ -160,19 +179,19 @@ signals:
         }
 =======
         if (libraryPanel) {
-            connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel, filterPanel](const QStringList& paths, const QString& title) {
+            connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel, filterPanel](const QStringList& paths, const QString& categoryTitle) {
                 if (filterPanel) {
                     filterPanel->clearAllFilters(false);
                 }
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
                     target->setCurrentCategoryType("library");
-                    target->setCurrentCategoryTitle(title);
+                    target->setCurrentCategoryTitle(categoryTitle);
                     target->setLastLoadedLibraryPaths(paths);
                     target->loadLibraryPaths(paths);
                 }
                 if (m_addressBar) {
-                    m_addressBar->setPath("库 > " + title);
+                    m_addressBar->setPath("库 > " + categoryTitle);
                 }
             });
 
@@ -199,7 +218,7 @@ signals:
 ---
 
 ## Chapter 4: Build & Verification Steps（构建与运行时验收标准）
-1. 编译工程，确保无语法或编译错误。
+1. 编译工程，确保无 C2065 或未定义符号等 MSVC/GCC 编译错误。
 2. 在侧边栏“库”选项卡中选中某个智能文件夹（如 `"CPP"`）或分类（如 `"其他"`），确认多窗格下内容面板标题与顶部地址栏均正确显示 `"CPP"` / `"其他"`，而不是底层的物理磁盘文件夹名称。
 
 ---
@@ -217,6 +236,7 @@ signals:
 
 ## Chapter 7: Interface & Visibility Check（接口签名与访问控制核查）
 - `setCurrentCategoryTitle` 为 `public` 成员函数，声明与定义完全匹配。
+- `m_categoryTitle` 在 `ContentPanel.h` 的 `private` 作用域中显式声明。
 
 ---
 
@@ -229,9 +249,11 @@ signals:
 
 | 序号 | 检查项目 | 是否满足 |
 | :--- | :--- | :--- |
-| 1 | 是否未对 C++ 源码做未经授权的物理更改 | 满足 (仅输出 Plan 并更新 Memories.md) |
-| 2 | 是否完全符合 AGENTS.md 规范与三道关要求 | 满足 |
-| 3 | 是否保留原物理磁盘浏览行为不变 | 满足 |
+| 1 | SEARCH 块在 `src/ui/ContentPanel.h` 中 100% 真实匹配 | 满足 |
+| 2 | `m_categoryTitle` 已在 `src/ui/ContentPanel.h` 中显式声明 | 满足 |
+| 3 | `LibraryPanel.cpp` 中的信号发射点与 `LibraryPanel.h` 扩展声明匹配 | 满足 |
+| 4 | 绝对未直接修改 C++ 源码文件 | 满足 |
+| 5 | 所有设计理念记载于 `Memories.md` | 满足 |
 
 ---
 
