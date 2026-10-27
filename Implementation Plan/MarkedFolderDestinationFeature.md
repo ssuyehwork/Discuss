@@ -179,11 +179,16 @@ QTabBar#SidebarTabBar::tab {
     m_tabBar->addTab(UiHelper::getIcon("Favorites.svg", "#888888", 16), "收藏夹");
     m_tabBar->addTab(UiHelper::getIcon("Search-in-library", "#888888", 16), "库");
     m_tabBar->setCursor(Qt::PointingHandCursor);
+=======
+    m_tabBar->addTab(UiHelper::getIcon("Favorites.svg", "#888888", 16), "收藏夹");
+    m_tabBar->addTab(UiHelper::getIcon("Search-in-library", "#888888", 16), "库");
+    m_tabBar->addTab(UiHelper::getIcon("Destination.svg", "#ff551c", 16), "标记");
+    m_tabBar->setCursor(Qt::PointingHandCursor);
+>>>>>>> REPLACE
+```
 
-    headerLayout->addWidget(m_tabBar);
-    headerLayout->addStretch();
-    m_mainLayout->addWidget(header);
-
+```
+<<<<<<< SEARCH
     m_stackedWidget = new QStackedWidget(this);
     m_favoritePanel = new FavoritePanel(this);
     m_libraryPanel = new LibraryPanel(this);
@@ -191,15 +196,6 @@ QTabBar#SidebarTabBar::tab {
     m_stackedWidget->addWidget(m_favoritePanel);
     m_stackedWidget->addWidget(m_libraryPanel);
 =======
-    m_tabBar->addTab(UiHelper::getIcon("Favorites.svg", "#888888", 16), "收藏夹");
-    m_tabBar->addTab(UiHelper::getIcon("Search-in-library", "#888888", 16), "库");
-    m_tabBar->addTab(UiHelper::getIcon("Destination.svg", "#ff551c", 16), "标记");
-    m_tabBar->setCursor(Qt::PointingHandCursor);
-
-    headerLayout->addWidget(m_tabBar);
-    headerLayout->addStretch();
-    m_mainLayout->addWidget(header);
-
     m_stackedWidget = new QStackedWidget(this);
     m_favoritePanel = new FavoritePanel(this);
     m_libraryPanel = new LibraryPanel(this);
@@ -253,24 +249,24 @@ QTabBar#SidebarTabBar::tab {
 <<<<<<< SEARCH
     // 绘制开启自动递归右侧 layers 图标
     if (isAutoRec) {
-        QRect rightIconRect(opt.rect.right() - 20, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
-        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#378ADD"), 14);
-        layersIcon.paint(painter, rightIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        QRect layersRect(opt.rect.right() - 22, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
+        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#2ecc71"), 16);
+        layersIcon.paint(painter, layersRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
     }
 =======
     // 绘制开启自动递归右侧 layers 图标与标记 Destination 图标
     bool isMarked = index.data(Qt::UserRole + 10).toBool();
-    int rightOffset = 20;
+    int rightOffset = 22;
     if (isAutoRec) {
-        QRect rightIconRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
-        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#378ADD"), 14);
-        layersIcon.paint(painter, rightIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
-        rightOffset += 18;
+        QRect layersRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
+        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#2ecc71"), 16);
+        layersIcon.paint(painter, layersRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        rightOffset += 20;
     }
 
     if (isMarked) {
-        QRect markIconRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
-        QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 14);
+        QRect markIconRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
+        QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16);
         markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
     }
 >>>>>>> REPLACE
@@ -280,18 +276,31 @@ QTabBar#SidebarTabBar::tab {
 
 ```
 <<<<<<< SEARCH
-        if (hasColor) {
-            int capsuleH = 14;
-=======
-        bool isMarked = index.data(Qt::UserRole + 10).toBool();
-        if (isMarked) {
-            QRect markIconRect(opt.rect.right() - 20, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
-            QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 14);
-            markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
-        }
+            bool isPinned = index.data(PinnedRole).toBool();
+            int pinRightX = textRect.right() - CardPainterHelper::kPinRightPadding;
+            int pinW = CardPainterHelper::drawInlinePinIcon(painter, pinRightX, textRect.top(), textRect.height(), isPinned);
 
-        if (hasColor) {
-            int capsuleH = 14;
+            int reservedW = (pinW > 0) ? (pinW + CardPainterHelper::kPinToRatingGap) : 0;
+            QRect actualTextRect = textRect.adjusted(0, 0, -reservedW, 0);
+            QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideMiddle, actualTextRect.width() - 10);
+            painter->drawText(actualTextRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
+=======
+            bool isPinned = index.data(PinnedRole).toBool();
+            bool isMarked = index.data(Qt::UserRole + 10).toBool();
+            int pinRightX = textRect.right() - CardPainterHelper::kPinRightPadding;
+            int pinW = CardPainterHelper::drawInlinePinIcon(painter, pinRightX, textRect.top(), textRect.height(), isPinned);
+
+            if (isMarked) {
+                QRect markIconRect(pinRightX - (pinW > 0 ? (pinW + 4) : 0) - 16, textRect.top() + (textRect.height() - 16) / 2, 16, 16);
+                QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16);
+                markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+                pinW += 20;
+            }
+
+            int reservedW = (pinW > 0) ? (pinW + CardPainterHelper::kPinToRatingGap) : 0;
+            QRect actualTextRect = textRect.adjusted(0, 0, -reservedW, 0);
+            QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideMiddle, actualTextRect.width() - 10);
+            painter->drawText(actualTextRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
 >>>>>>> REPLACE
 ```
 
