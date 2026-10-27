@@ -1979,6 +1979,26 @@ QSpinBox:focus {
     border-color: #378ADD;
 }
 
+/* 历史记录面板 QTreeWidget 选中高亮与悬停样式 */
+QTreeWidget#HistoryTreeWidget {
+    background-color: #1E1E1E;
+    color: #EEEEEE;
+    border: none;
+    outline: 0;
+}
+QTreeWidget#HistoryTreeWidget::item {
+    height: 28px;
+    border: none;
+    padding-left: 4px;
+}
+QTreeWidget#HistoryTreeWidget::item:hover {
+    background-color: #2A2D2E;
+}
+QTreeWidget#HistoryTreeWidget::item:selected {
+    background-color: #094771;
+    color: #FFFFFF;
+}
+
 /* 统一 QTreeView 列表视图暗色斑马纹与高亮 */
 QTreeView {
     background-color: #1E1E1E;

@@ -1,5 +1,6 @@
 #include "HistoryPanel.h"
 #include "UiHelper.h"
+#include "ToolTipOverlay.h"
 #include "../meta/HistoryService.h"
 #include "../util/ThumbnailPipelineService.h"
 #include "../util/ColorPaletteEngine.h"
@@ -28,12 +29,14 @@ void HistoryPanel::initUi() {
     m_mainLayout->setSpacing(0);
 
     m_treeWidget = new QTreeWidget(this);
+    m_treeWidget->setObjectName("HistoryTreeWidget");
     m_treeWidget->setHeaderHidden(true);
     m_treeWidget->setIndentation(0);
     m_treeWidget->setIconSize(QSize(16, 16));
     m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeWidget->setSelectionMode(QAbstractItemView::SingleSelection);
     m_treeWidget->setDragEnabled(true);
+    m_treeWidget->setMouseTracking(true);
 
     m_mainLayout->addWidget(m_treeWidget);
 
@@ -64,7 +67,6 @@ QTreeWidgetItem* HistoryPanel::createHistoryItem(const QString& path) {
     QTreeWidgetItem* item = new QTreeWidgetItem();
     item->setText(0, fi.fileName());
     item->setData(0, Qt::UserRole, path);
-    item->setToolTip(0, QDir::toNativeSeparators(path));
 
     // 普通文件优先展示系统/通用图标
     QFileIconProvider provider;
@@ -176,21 +178,45 @@ void HistoryPanel::filterTreeNodes(const QString& keyword) {
 }
 
 bool HistoryPanel::eventFilter(QObject* watched, QEvent* event) {
-    if (watched == m_treeWidget->viewport() && event->type() == QEvent::MouseMove) {
-        QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
-        if (mouseEvent->buttons() & Qt::LeftButton) {
-            QTreeWidgetItem* item = m_treeWidget->itemAt(mouseEvent->pos());
-            if (item) {
-                QString path = item->data(0, Qt::UserRole).toString();
-                if (!path.isEmpty()) {
-                    QDrag* drag = new QDrag(m_treeWidget);
-                    QMimeData* mimeData = new QMimeData();
-                    mimeData->setUrls({QUrl::fromLocalFile(path)});
-                    drag->setMimeData(mimeData);
-                    drag->exec(Qt::CopyAction);
-                    return true;
+    if (watched == m_treeWidget->viewport()) {
+        if (event->type() == QEvent::MouseMove) {
+            QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+            if (mouseEvent->buttons() & Qt::LeftButton) {
+                QTreeWidgetItem* item = m_treeWidget->itemAt(mouseEvent->pos());
+                if (item) {
+                    QString path = item->data(0, Qt::UserRole).toString();
+                    if (!path.isEmpty()) {
+                        ToolTipOverlay::hideTip();
+                        QDrag* drag = new QDrag(m_treeWidget);
+                        QMimeData* mimeData = new QMimeData();
+                        mimeData->setUrls({QUrl::fromLocalFile(path)});
+                        drag->setMimeData(mimeData);
+                        drag->exec(Qt::CopyAction);
+                        return true;
+                    }
+                }
+            } else {
+                QTreeWidgetItem* item = m_treeWidget->itemAt(mouseEvent->pos());
+                if (item) {
+                    QString path = item->data(0, Qt::UserRole).toString();
+                    if (!path.isEmpty()) {
+                        QString nativePath = QDir::toNativeSeparators(path);
+                        if (m_lastHoveredPath != nativePath) {
+                            m_lastHoveredPath = nativePath;
+                            ToolTipOverlay::instance()->showText(QCursor::pos(), nativePath, 0);
+                        }
+                    } else {
+                        m_lastHoveredPath.clear();
+                        ToolTipOverlay::hideTip();
+                    }
+                } else {
+                    m_lastHoveredPath.clear();
+                    ToolTipOverlay::hideTip();
                 }
             }
+        } else if (event->type() == QEvent::Leave) {
+            m_lastHoveredPath.clear();
+            ToolTipOverlay::hideTip();
         }
     }
     return QWidget::eventFilter(watched, event);

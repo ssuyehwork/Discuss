@@ -40,6 +40,7 @@ private:
     QVBoxLayout* m_mainLayout = nullptr;
     QTreeWidget* m_treeWidget = nullptr;
     bool m_isLoaded = false;
+    QString m_lastHoveredPath;
 };
 
 } // namespace QuarkMeta
