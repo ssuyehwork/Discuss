@@ -441,3 +441,23 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 ### 15.3 交互扩展能力（拖拽与定位）
 - **支持拖拽至收藏夹**：历史列表中的文件项支持 Mouse Drag 操作，按标准 `text/uri-list` 格式封装 `QMimeData`，可直接拖拽投递至左侧“收藏夹”面板完成快捷收藏。
 - **支持文件定位**：历史列表项目支持双击/右键“定位文件”菜单，发送 `requestLocateFile(path)` 信号，由 `PanelMediator` 驱动 `ContentPanel` 跳转至目标文件夹并高亮选中该文件。
+
+---
+
+## 16. QuarkMeta 标记文件夹与目的地一键分发架构设计理念 (Marked Folders & Destination Tab Philosophy)
+
+> 本章节记录与用户关于“标记”选项卡、目的地文件夹一键迁移（`Alt+C` / `Alt+V`）的设计要求与架构契约。
+
+### 16.1 侧边栏“标记”选项卡与三页布局
+- 侧边栏容器（`SidebarContainerWidget`）采用三选项卡 (`QTabBar` + `QStackedWidget`) 结构，在“收藏夹”与“库”右侧增加第 3 个选项卡**“标记”**（图标 `Destination.svg`，颜色 `#ff551c`）。
+- 适当微调 QSS 中 Tab 页边距，使三个选项卡优雅陈列，且不得改动既有“收藏夹”与“库”的功能。
+
+### 16.2 快捷键与菜单交互（`Alt+C` / `Alt+V`）
+- **标记/取消标记（`Alt+C` 与右键菜单）**：快捷键 `Alt+C` 或文件夹右键菜单“标记目的地”触发，切换当前选中文件夹的标记状态（仅支持文件夹）。
+- **一键分发/迁移（`Alt+V`）**：选中项目后按下 `Alt+V`，触发确认弹窗，确认后将选中项目一键分发迁移到所有处于标记激活状态的目的地文件夹中。
+- **SSOT 与职责分层**：快捷键 `AppShortcutController` 仅发送意图信号；`PanelMediator` 接收信号并从 `ContentPanel` 获取路径交由 `MarkedFolderService` 处理；`MarkedFolderDao` 为唯一的 SQLite 表真理源。
+
+### 16.3 迁移编排、回收站与撤销规则
+- **单盘/跨盘与回收机制**：若存在任一目标与源文件同盘，在全部目标复制成功后，将源文件移入 QuarkMeta 专属私有回收站（`DiskTrashService::moveToDiskTrash`），严禁使用系统回收站。若全为异盘目标，仅执行复制并保留源文件。
+- **无门槛 TaskProgress 进度条**：打破 100 项触发门槛，`Alt+V` 搬迁任务主线程瞬间创建 TaskProgress，贯穿复制、回收、UI 刷新与侧车落盘全程。
+- **完整 Undo 支持**：集成 `UndoManager`，撤销时将复制出的文件放入专属私有回收站，并将原回收的文件精确还原。

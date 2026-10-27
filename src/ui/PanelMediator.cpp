@@ -23,6 +23,7 @@
 #include <QElapsedTimer>
 #include "../core/NavigationService.h"
 #include "../core/TrashService.h"
+#include "../meta/MarkedFolderService.h"
 #include "../core/CoreEngine.h"
 #include "../core/CentralEventHub.h"
 #include "../core/VolumeOnlineManager.h"
@@ -242,6 +243,24 @@ void PanelMediator::setupConnections() {
                 filterPanel->clearAllFilters(true);
             });
         }
+
+        connect(shortcutController, &AppShortcutController::toggleMarkedRequested, this, [this, contentPanel]() {
+            if (contentPanel) {
+                QStringList sel = contentPanel->getSelectedPaths();
+                if (!sel.isEmpty()) {
+                    QuarkMeta::MarkedFolderService::instance().toggleMarked(sel);
+                }
+            }
+        });
+
+        connect(shortcutController, &AppShortcutController::transferToMarkedRequested, this, [this, contentPanel]() {
+            if (contentPanel) {
+                QStringList sel = contentPanel->getSelectedPaths();
+                if (!sel.isEmpty()) {
+                    QuarkMeta::MarkedFolderService::instance().executeTransferToMarked(sel);
+                }
+            }
+        });
     }
 
     // 搜索控制器与 ContentPanel 绑定及状态更新
