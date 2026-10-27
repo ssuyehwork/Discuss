@@ -3043,6 +3043,48 @@ namespace SvgIcons {
 <path d="M552,242.5v0.3l-1.1-1.4C551.3,241.8,551.7,242.2,552,242.5z"/>
 <path d="M746.3,358.7c8.4,0,16.2,4.8,19.9,12.4l55.6,112.8l124.4,18.1c12.1,1.8,20.5,13,18.8,25.1c-0.7,4.8-3,9.3-6.5,12.7l-90,87.8 l21.3,123.9c2,12.1-6.1,23.5-18.2,25.6c-4.8,0.8-9.7,0-14-2.2l-111.3-58.5l-111.3,58.5c-10.8,5.7-24.2,1.5-29.9-9.3 c-2.3-4.3-3-9.2-2.2-14l21.3-124L534,539.7c-8.8-8.5-9-22.6-0.4-31.3c3.4-3.5,7.9-5.8,12.7-6.5l124.4-18.1l55.7-112.8 C730.1,363.5,737.8,358.7,746.3,358.7z"/>
 </svg>)svg"},
+        {"Destination.svg", R"svg(<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 23.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg fill="currentColor" version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 1000 1000" style="enable-background:new 0 0 1000 1000;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;}
+</style>
+<g>
+	<path class="st0" d="M264.6,59.4v800h-47.1v-800C217.5,59.4,264.6,59.4,264.6,59.4z M311.7,87.9c128.6-34,206.7,11,282.2,55.4
+		c84.8,50,172.3,101.7,347.4,57.9c8.4-2.1,17.4,0.6,23.2,7.2c5.8,6.5,7.5,15.8,4.5,24c-84.8,226-210.1,230.3-331.2,234.5
+		c-93,3.3-189.3,6.6-286,103.3l-40.1,40.1V87.9z"/>
+	<ellipse class="st0" cx="241.1" cy="910" rx="211.5" ry="30.6"/>
+</g>
+</svg>)svg"},
+        {"Destination", R"svg(<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 23.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg fill="currentColor" version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 1000 1000" style="enable-background:new 0 0 1000 1000;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;}
+</style>
+<g>
+	<path class="st0" d="M264.6,59.4v800h-47.1v-800C217.5,59.4,264.6,59.4,264.6,59.4z M311.7,87.9c128.6-34,206.7,11,282.2,55.4
+		c84.8,50,172.3,101.7,347.4,57.9c8.4-2.1,17.4,0.6,23.2,7.2c5.8,6.5,7.5,15.8,4.5,24c-84.8,226-210.1,230.3-331.2,234.5
+		c-93,3.3-189.3,6.6-286,103.3l-40.1,40.1V87.9z"/>
+	<ellipse class="st0" cx="241.1" cy="910" rx="211.5" ry="30.6"/>
+</g>
+</svg>)svg"},
+        {"destination", R"svg(<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 23.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg fill="currentColor" version="1.1" id="图层_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 1000 1000" style="enable-background:new 0 0 1000 1000;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill-rule:evenodd;clip-rule:evenodd;}
+</style>
+<g>
+	<path class="st0" d="M264.6,59.4v800h-47.1v-800C217.5,59.4,264.6,59.4,264.6,59.4z M311.7,87.9c128.6-34,206.7,11,282.2,55.4
+		c84.8,50,172.3,101.7,347.4,57.9c8.4-2.1,17.4,0.6,23.2,7.2c5.8,6.5,7.5,15.8,4.5,24c-84.8,226-210.1,230.3-331.2,234.5
+		c-93,3.3-189.3,6.6-286,103.3l-40.1,40.1V87.9z"/>
+	<ellipse class="st0" cx="241.1" cy="910" rx="211.5" ry="30.6"/>
+</g>
+</svg>)svg"},
     };
 }
 
