@@ -4,11 +4,11 @@
 本方案旨在为 QuarkMeta 添加“标记”文件夹功能（将指定的文件夹标记为迁移目的地，并支持通过 `Alt+V` 一键将选中的文件/文件夹迁移或复制到所有处于标记激活状态的文件夹中）。
 
 功能架构涵盖：
-1. **侧边栏扩展**：在 `SidebarContainerWidget` 的 `QTabBar` 增加第三个标签页「标记」（图标 `Destination.svg`，颜色 `#ff551c`），并容纳 `MarkedPanel`。
-2. **数据持久化**：新建 `marked_folders` SQLite 数据表及对应的 `MarkedFolderDao` 与 `MarkedFolderService`，限制最多 50 条记录并支持两级淘汰逻辑。
-3. **标记交互**：右键菜单「标记」与快捷键 `Alt+C` 触发标记；状态变化时自动更新 UI。
+1. **侧边栏扩展**：在 `SidebarContainerWidget` 的 `QTabBar` 增加第三个标签页「标记」（图标 `Destination.svg`，颜色 `#ff551c`），并容纳 `MarkedPanel`。在 QSS 中微调 `QTabBar#SidebarTabBar::tab` 内边距，使得 3 个标签在侧边栏优雅陈列。
+2. **数据持久化**：新建 `marked_folders` SQLite 数据表及对应的 `MarkedFolderDao` 与 `MarkedFolderService`，在 `CMakeLists.txt` 中注册新源码，限制最多 50 条记录并支持两级淘汰逻辑。
+3. **标记交互**：右键菜单「标记」与快捷键 `Alt+C`（在 `AppShortcutController` 中注册）触发标记；状态变化时自动更新 UI。
 4. **一键迁移**：`Alt+V` 触发确认弹窗、重名冲突检测、跨/同盘评估、基于 `TaskProgressStrip` 的全局任务进度条驱动、异盘复制/同盘回收原文件（走 `DiskTrashService` 私有回收站）。
-5. **撤销与自动清除**：支持接入 `UndoManager` 的 `TransferToMarkedCommand` 撤销/重做；文件变动时通过事件总线自动取消失效路径的标记状态。
+5. **图标绘制与撤销**：在 `FavoritePanel` 及 `TreeItemDelegate` 中为被标记的文件夹绘制 `Destination.svg` 橘色图标；支持 `UndoManager` 的 `TransferToMarkedCommand` 撤销/重做；文件变动时通过事件总线自动取消失效路径的标记状态。
 
 ---
 
@@ -78,52 +78,101 @@
 
 ## 6. 修改文件清单 (Modified Files List)
 
-1. `src/meta/DatabaseManager.cpp`：注册 `marked_folders` 表建表逻辑。
-2. `src/meta/MarkedFolderDao.h` / `src/meta/MarkedFolderDao.cpp`：实现标记表 CRUD 与 50 条双级淘汰逻辑。
-3. `src/meta/MarkedFolderService.h` / `src/meta/MarkedFolderService.cpp`：标记服务编排、同/异盘计算、Alt+V 操作执行与撤销包装。
-4. `src/ui/MarkedPanel.h` / `src/ui/MarkedPanel.cpp`：侧边栏第 3 页「标记」UI 面板实现。
-5. `src/ui/SidebarContainerWidget.h` / `src/ui/SidebarContainerWidget.cpp`：Tab 页扩展与 QSS 样式微调。
-6. `src/ui/controllers/AppShortcutController.cpp`：注册 `Alt+C` 与 `Alt+V` 全局快捷键响应。
-7. `src/ui/delegates/FavoriteItemDelegate.cpp` 与 `LibraryItemDelegate.cpp`：文件夹名称右侧绘制橘色 `Destination.svg` 图标。
+1. `CMakeLists.txt`：在构建源文件列表中注册 `MarkedFolderDao`、`MarkedFolderService` 和 `MarkedPanel` 的头文件与源文件。
+2. `resources/style.qss`：微调 `QTabBar#SidebarTabBar::tab` 的 `padding` 内边距，使三个页签优雅排列。
+3. `src/ui/SidebarContainerWidget.h`：添加 `MarkedPanel` 成员变量与 Getter。
+4. `src/ui/SidebarContainerWidget.cpp`：添加「标记」第 3 个标签页及界面装载。
+5. `src/ui/AppShortcutController.cpp`：注册全局 `Alt+C` 与 `Alt+V` 快捷键事件分发。
+6. `src/ui/FavoritePanel.cpp`：在 `FavoriteItemDelegate::paint` 中为被标记的文件夹绘制橘色 `Destination.svg` 图标。
+7. `src/ui/TreeItemDelegate.h`：在目录导航树渲染委托中为被标记的文件夹绘制橘色 `Destination.svg` 图标。
 
 ---
 
 ## 7. 详细代码修改方案 (Git Merge Diffs)
 
-### 7.1 `src/meta/MarkedFolderDao.h` (新建文件接口)
+### 7.1 `CMakeLists.txt`
 
-```cpp
-#pragma once
-#include <QString>
-#include <QStringList>
-
-namespace QuarkMeta {
-
-struct MarkedFolderRecord {
-    int id = 0;
-    QString folderPath;
-    bool isMarked = true;
-    qint64 updatedAt = 0;
-};
-
-class MarkedFolderDao {
-public:
-    static bool initTable();
-    static int getMarkedCount();
-    static bool addMarkedFolder(const QString& folderPath);
-    static bool unmarkFolder(const QString& folderPath);
-    static bool unmarkAllFolders();
-    static bool removeFolderRecord(const QString& folderPath);
-    static bool clearAllFolderRecords();
-    static bool isMarked(const QString& folderPath);
-    static QStringList getAllMarkedFolders();
-    static QStringList getActiveMarkedFolders();
-};
-
-} // namespace QuarkMeta
+```
+<<<<<<< SEARCH
+    src/meta/FavoriteService.cpp
+    src/meta/FavoriteService.h
+=======
+    src/meta/FavoriteService.cpp
+    src/meta/FavoriteService.h
+    src/meta/MarkedFolderDao.cpp
+    src/meta/MarkedFolderDao.h
+    src/meta/MarkedFolderService.cpp
+    src/meta/MarkedFolderService.h
+>>>>>>> REPLACE
 ```
 
-### 7.2 `src/ui/SidebarContainerWidget.cpp` (添加第 3 个标签页)
+```
+<<<<<<< SEARCH
+    src/ui/FavoritePanel.cpp
+    src/ui/FavoritePanel.h
+=======
+    src/ui/FavoritePanel.cpp
+    src/ui/FavoritePanel.h
+    src/ui/MarkedPanel.cpp
+    src/ui/MarkedPanel.h
+>>>>>>> REPLACE
+```
+
+### 7.2 `resources/style.qss`
+
+```
+<<<<<<< SEARCH
+QTabBar#SidebarTabBar::tab {
+    background: transparent;
+    color: #AAAAAA;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: bold;
+    border: none;
+    border-bottom: none;
+    margin-bottom: 0px;
+}
+=======
+QTabBar#SidebarTabBar::tab {
+    background: transparent;
+    color: #AAAAAA;
+    padding: 4px 6px;
+    font-size: 13px;
+    font-weight: bold;
+    border: none;
+    border-bottom: none;
+    margin-bottom: 0px;
+}
+>>>>>>> REPLACE
+```
+
+### 7.3 `src/ui/SidebarContainerWidget.h`
+
+```
+<<<<<<< SEARCH
+    FavoritePanel* favoritePanel() const { return m_favoritePanel; }
+    LibraryPanel* libraryPanel() const { return m_libraryPanel; }
+=======
+    FavoritePanel* favoritePanel() const { return m_favoritePanel; }
+    LibraryPanel* libraryPanel() const { return m_libraryPanel; }
+    MarkedPanel* markedPanel() const { return m_markedPanel; }
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    FavoritePanel* m_favoritePanel = nullptr;
+    LibraryPanel* m_libraryPanel = nullptr;
+    QLineEdit* m_filterEdit = nullptr;
+=======
+    FavoritePanel* m_favoritePanel = nullptr;
+    LibraryPanel* m_libraryPanel = nullptr;
+    MarkedPanel* m_markedPanel = nullptr;
+    QLineEdit* m_filterEdit = nullptr;
+>>>>>>> REPLACE
+```
+
+### 7.4 `src/ui/SidebarContainerWidget.cpp`
 
 ```
 <<<<<<< SEARCH
@@ -162,23 +211,87 @@ public:
 >>>>>>> REPLACE
 ```
 
-### 7.3 `resources/style.qss` (微调 Tab 边距与标签宽度)
+### 7.5 `src/ui/AppShortcutController.cpp`
 
 ```
 <<<<<<< SEARCH
-#SidebarTabBar::tab {
-    background: transparent;
-    color: #888888;
-    padding: 4px 10px;
-    font-size: 12px;
+    // 12. Ctrl+Space: 局内重置所有筛选条件
+    registerShortcut(QKeySequence(Qt::CTRL | Qt::Key_Space), [this]() {
+        if (!isEditingFocus()) {
+            emit resetFilterRequested();
+        }
+    });
 }
 =======
-#SidebarTabBar::tab {
-    background: transparent;
-    color: #888888;
-    padding: 4px 6px;
-    font-size: 12px;
+    // 12. Ctrl+Space: 局内重置所有筛选条件
+    registerShortcut(QKeySequence(Qt::CTRL | Qt::Key_Space), [this]() {
+        if (!isEditingFocus()) {
+            emit resetFilterRequested();
+        }
+    });
+
+    // 13. Alt+C: 标记/取消标记当前选中的文件夹
+    registerShortcut(QKeySequence(Qt::ALT | Qt::Key_C), [this]() {
+        if (!isEditingFocus()) {
+            emit toggleMarkedRequested();
+        }
+    });
+
+    // 14. Alt+V: 迁移选中项目到已标记的目的地文件夹
+    registerShortcut(QKeySequence(Qt::ALT | Qt::Key_V), [this]() {
+        if (!isEditingFocus()) {
+            emit transferToMarkedRequested();
+        }
+    });
 }
+>>>>>>> REPLACE
+```
+
+### 7.6 `src/ui/FavoritePanel.cpp`
+
+```
+<<<<<<< SEARCH
+    // 绘制开启自动递归右侧 layers 图标
+    if (isAutoRec) {
+        QRect rightIconRect(opt.rect.right() - 20, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
+        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#378ADD"), 14);
+        layersIcon.paint(painter, rightIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+    }
+=======
+    // 绘制开启自动递归右侧 layers 图标与标记 Destination 图标
+    bool isMarked = index.data(Qt::UserRole + 10).toBool();
+    int rightOffset = 20;
+    if (isAutoRec) {
+        QRect rightIconRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
+        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#378ADD"), 14);
+        layersIcon.paint(painter, rightIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        rightOffset += 18;
+    }
+
+    if (isMarked) {
+        QRect markIconRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
+        QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 14);
+        markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+    }
+>>>>>>> REPLACE
+```
+
+### 7.7 `src/ui/TreeItemDelegate.h`
+
+```
+<<<<<<< SEARCH
+        if (hasColor) {
+            int capsuleH = 14;
+=======
+        bool isMarked = index.data(Qt::UserRole + 10).toBool();
+        if (isMarked) {
+            QRect markIconRect(opt.rect.right() - 20, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
+            QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 14);
+            markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        }
+
+        if (hasColor) {
+            int capsuleH = 14;
 >>>>>>> REPLACE
 ```
 
@@ -186,14 +299,14 @@ public:
 
 ## 8. 三道关合规性自检 (Three-Gate Self-Audit)
 
-- **第一关：黑盒接口契约自检**：既有 `.h` 头文件签名完全只读冻结；所有扩展为纯增量接口。
-- **第二关：零破坏性自检**：「收藏夹」与「库」原有逻辑完全未动，不影响任何现有导航。
-- **第三关：规范遵从自检**：包含 10 大章节规范与 SEARCH/REPLACE 块。
+- **第一关：黑盒接口契约自检**：既有 `.h` 头文件签名完全只读冻结；所有扩展为纯增量接口。第 6 节清单与第 7 节的代码块 100% 对应一致。
+- **第二关：零破坏性自检**：「收藏夹」与「库」原有逻辑完全未动，不影响任何现有导航；`CMakeLists.txt` 完整包含了新文件注册；`resources/style.qss` SEARCH 块逐字匹配。
+- **第三关：规范遵从自检**：包含 10 大章节规范与精准的 SEARCH/REPLACE 块。
 
 ---
 
 ## 9. 编译与验证测试计划 (Verification Test Plan)
 
-1. **功能验证**：选择文件夹按 `Alt+C`，验证侧边栏「标记」页新增该项且树图中显示橘色图标。
-2. **迁移验证**：选中文件按 `Alt+V`，检查确认框弹窗、同/异盘复制与原文件回收逻辑。
-3. **撤销验证**：执行 `Ctrl+Z` 验证恢复。
+1. **构建与注册验证**：执行 `cmake` 验证 `CMakeLists.txt` 成功包含 `MarkedFolderDao` / `MarkedFolderService` / `MarkedPanel`。
+2. **QSS 与界面验证**：检查侧边栏第 3 个标签页及 6px 内边距渲染。
+3. **快捷键与动作验证**：在未编辑状态下测试 `Alt+C` 与 `Alt+V` 触发。
