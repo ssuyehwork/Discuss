@@ -1,5 +1,6 @@
 #include "QuickLookWindow.h"
 #include "UiHelper.h"
+#include "../meta/HistoryService.h"
 #include "ShellIconManager.h"
 #include "FramelessWindowHelper.h"
 #include "ImageDecoderFacade.h"
@@ -513,6 +514,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     } else if (selected == actFit) {
         m_graphicsView->fitImage();
     } else if (selected == actOpenDefault) {
+        HistoryService::instance().recordFileAccess(m_currentPath);
         QDesktopServices::openUrl(QUrl::fromLocalFile(m_currentPath));
     } else if (selected == actCopy) {
         QList<QUrl> urls;

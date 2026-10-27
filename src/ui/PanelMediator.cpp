@@ -2,6 +2,7 @@
 #include "NavPanel.h"
 #include "FavoritePanel.h"
 #include "LibraryPanel.h"
+#include "../meta/HistoryService.h"
 #include "ContentPanel.h"
 #include "ColumnViewWidget.h"
 #include "controllers/ContentPaneSplitManager.h"
@@ -294,6 +295,14 @@ void PanelMediator::setupConnections() {
     if (navPanel) {
         connect(navPanel, &NavPanel::directorySelected, &NavigationService::instance(), [](const QString& path) {
             NavigationService::instance().navigateTo(path);
+        });
+
+        connect(navPanel, &NavPanel::requestLocateFile, this, [this, contentPanel](const QString& path) {
+            ContentPanel* target = (m_activeContentPanel && m_activeContentPanel->isVisible()) ? m_activeContentPanel.data() : contentPanel;
+            if (target) {
+                target->setPendingSelectPath(path, false);
+            }
+            NavigationService::instance().navigateTo(QFileInfo(path).absolutePath());
         });
 
         connect(navPanel, &NavPanel::requestOpenTrash, &NavigationService::instance(), []() {
@@ -652,9 +661,16 @@ void PanelMediator::setupConnections() {
 
         // 1. 文件双击/空格/回车/右键菜单统一文件激活动作
         connect(panel, &ContentPanel::fileActivated, this, [this](const QString& path) {
-            if (path.isEmpty() || !QFile::exists(path) || !UiHelper::canPreviewFile(path)) {
+            if (path.isEmpty() || !QFile::exists(path)) {
                 return;
             }
+            // 无论能否在 QuickLook 中预览，凡是被双击/空格/回车尝试激活的文件全量记录历史
+            HistoryService::instance().recordFileAccess(path);
+
+            if (!UiHelper::canPreviewFile(path)) {
+                return;
+            }
+
             AppCommand cmd;
             cmd.type = AppCommandType::RecordAccess;
             cmd.targetPaths << path;

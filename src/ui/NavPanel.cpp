@@ -123,21 +123,30 @@ void NavPanel::initUi() {
     header->setFixedHeight(32);
 
     QHBoxLayout* headerLayout = new QHBoxLayout(header);
-    headerLayout->setContentsMargins(15, 0, 5, 0);
-    headerLayout->setSpacing(5);
+    headerLayout->setContentsMargins(5, 0, 5, 0);
+    headerLayout->setSpacing(0);
 
-    QLabel* iconLabel = new QLabel(header);
-    iconLabel->setPixmap(UiHelper::getIcon("list_ul", QColor("#888888"), 18).pixmap(18, 18));
-    headerLayout->addWidget(iconLabel);
+    m_tabBar = new QTabBar(header);
+    m_tabBar->setObjectName("SidebarTabBar");
+    m_tabBar->setDrawBase(false);
+    m_tabBar->setIconSize(QSize(16, 16));
+    m_tabBar->addTab(UiHelper::getIcon("list_ul", "#888888", 16), "目录导航");
+    m_tabBar->addTab(UiHelper::getIcon("clock", "#888888", 16), "历史");
+    m_tabBar->setCursor(Qt::PointingHandCursor);
 
-    QLabel* titleLabel = new QLabel("目录导航", header);
-    titleLabel->setObjectName("NavPanelTitleLabel");
-    headerLayout->addWidget(titleLabel);
+    headerLayout->addWidget(m_tabBar);
     headerLayout->addStretch();
-
     m_mainLayout->addWidget(header);
 
-    m_treeView = new DropTreeView(this);
+    m_stackedWidget = new QStackedWidget(this);
+
+    // Page 0: 目录导航
+    QWidget* navPage = new QWidget(m_stackedWidget);
+    QVBoxLayout* navPageLayout = new QVBoxLayout(navPage);
+    navPageLayout->setContentsMargins(0, 0, 0, 0);
+    navPageLayout->setSpacing(0);
+
+    m_treeView = new DropTreeView(navPage);
     m_treeView->setObjectName("NavTreeView");
     m_treeView->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_treeView->setHeaderHidden(true);
@@ -158,8 +167,24 @@ void NavPanel::initUi() {
 
     m_model = new QStandardItemModel(this);
     m_treeView->setModel(m_model);
+    navPageLayout->addWidget(m_treeView);
 
-    m_mainLayout->addWidget(m_treeView, 1);
+    // Page 1: 历史记录
+    m_historyPanel = new HistoryPanel(m_stackedWidget);
+
+    m_stackedWidget->addWidget(navPage);
+    m_stackedWidget->addWidget(m_historyPanel);
+
+    m_mainLayout->addWidget(m_stackedWidget, 1);
+
+    connect(m_tabBar, &QTabBar::currentChanged, this, [this](int index) {
+        m_stackedWidget->setCurrentIndex(index);
+        if (index == 1 && m_historyPanel) {
+            m_historyPanel->loadHistory();
+        }
+    });
+
+    connect(m_historyPanel, &HistoryPanel::requestLocateFile, this, &NavPanel::requestLocateFile);
 
     QString arrowRight = UiHelper::getSvgTempFilePath("chevron_right", QColor("#378ADD"));
     QString arrowDown = UiHelper::getSvgTempFilePath("chevron_down", QColor("#378ADD"));

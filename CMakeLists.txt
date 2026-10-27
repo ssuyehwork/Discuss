@@ -119,6 +119,10 @@ set(SOURCES
     src/meta/ExtensionColorDao.cpp
     src/meta/FavoriteDao.h
     src/meta/FavoriteDao.cpp
+    src/meta/HistoryDao.h
+    src/meta/HistoryDao.cpp
+    src/meta/HistoryService.h
+    src/meta/HistoryService.cpp
     src/meta/FavoriteService.h
     src/meta/FavoriteService.cpp
     src/meta/ItemMetaMapper.cpp
@@ -285,6 +289,8 @@ set(SOURCES
     src/ui/NavPanel.h
     src/ui/FavoritePanel.cpp
     src/ui/FavoritePanel.h
+    src/ui/HistoryPanel.h
+    src/ui/HistoryPanel.cpp
     src/ui/QuickLookWindow.cpp
     src/ui/QuickLookWindow.h
     src/ui/QuickLookMinimap.cpp

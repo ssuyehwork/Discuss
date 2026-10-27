@@ -7,6 +7,9 @@
 #include <QVBoxLayout>
 #include <QDir>
 #include <QFrame>
+#include <QTabBar>
+#include <QStackedWidget>
+#include "HistoryPanel.h"
 
 namespace QuarkMeta {
 
@@ -53,6 +56,10 @@ private:
     QStandardItemModel* m_model = nullptr;
     QVBoxLayout* m_mainLayout = nullptr;
     QStandardItem* m_recentRootItem = nullptr;
+
+    QTabBar* m_tabBar = nullptr;
+    QStackedWidget* m_stackedWidget = nullptr;
+    HistoryPanel* m_historyPanel = nullptr;
 };
 
 } // namespace QuarkMeta

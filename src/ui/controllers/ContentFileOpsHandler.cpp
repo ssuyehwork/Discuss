@@ -76,9 +76,6 @@ void ContentFileOpsHandler::performBatchRename() {
     BatchRenameDialog dlg(originalPaths, m_panel);
     if (dlg.exec() == QDialog::Accepted) {
         for (ContentPanel* cp : targetPanes) {
-            if (cp) cp->endWatchSuppress();
-        }
-        for (ContentPanel* cp : targetPanes) {
             if (cp) cp->refreshAll();
         }
     }
