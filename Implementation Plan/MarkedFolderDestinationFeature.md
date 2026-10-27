@@ -1,168 +1,1088 @@
-# Marked Folders / Destination Tab Feature Implementation Plan
+# Implementation Plan - Marked Folder & Destination Transfer Feature
 
-**Base Commit Hash**: `21871189bf5a34f6ffbe0829c2cefe9a654975b7`
-**Prerequisite Plans**: None
-**Supersedes**: None
+## 1. 概述 (Overview)
+本方案旨在为 QuarkMeta 添加“标记”文件夹功能（将指定的文件夹标记为迁移目的地，并支持通过 `Alt+V` 一键将选中的文件/文件夹迁移或复制到所有处于标记激活状态的文件夹中）。
 
----
-
-## Chapter 1: Answers to Required Questions (核心技术方案与问题解答)
-
-### 1. 标签页宿主结构、新增第三页与标签缩窄方案
-- **宿主结构**：侧边栏控件 `SidebarContainerWidget`（位于 `src/ui/SidebarContainerWidget.h/cpp`）包含顶栏 `m_tabBar`（`QTabBar`）与堆叠控件 `m_stackedWidget`（`QStackedWidget`）。
-- **新增第三页**：
-  - 新建 `MarkedPanel` 控件（继承自 `QWidget`，内部包含 `QTreeWidget`），加入 `m_stackedWidget` 成为第 3 个 Page。
-  - 在 `m_tabBar` 添加第三页：`m_tabBar->addTab(UiHelper::getIcon("Destination.svg", "#ff551c", 16), "标记")`。
-- **标签缩窄**：修改 `resources/style.qss` 中的 `QTabBar#SidebarTabBar::tab` 样式：
-  - 将原有 `padding: 4px 12px; font-size: 13px;` 调整为 `padding: 4px 6px; font-size: 11px;`，使三个标签页在侧边栏宽度为 220px~260px 时不拥挤折叠。
-
-### 2. 标记表结构、50 个上限淘汰逻辑、状态位设计及 DatabaseManager 关系
-- **数据库表结构**：在 `global.db` 中新建 `marked_folders` 表：
-  ```sql
-  CREATE TABLE IF NOT EXISTS marked_folders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      folder_path TEXT UNIQUE NOT NULL,
-      is_marked INTEGER NOT NULL DEFAULT 1,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-  ```
-- **状态位设计**：`is_marked`（1 为标记处于激活状态；0 为未标记状态，保留历史路径）。
-- **淘汰逻辑（上限 50 条）**：
-  - 只能标记文件夹（严格校验 `QFileInfo::isDir()`）。
-  - 当尝试添加新记录且表总记录数即将超过 50 条时：
-    1. 优先检索并删除 `is_marked = 0` 的最旧记录：`DELETE FROM marked_folders WHERE id = (SELECT id FROM marked_folders WHERE is_marked = 0 ORDER BY updated_at ASC LIMIT 1)`；
-    2. 若仍超过 50 条（所有 50 条记录均处于 `is_marked = 1` 激活状态），再删除最旧记录：`DELETE FROM marked_folders WHERE id = (SELECT id FROM marked_folders ORDER BY updated_at ASC LIMIT 1)`。
-- **与 DatabaseManager 的关系**：`MarkedFolderDao` 通过 `DatabaseManager::instance().getGlobalDb()` 获取连接，并使用 `DatabaseManager::getGlobalMutex()` 保护事务线程安全。在应用启动初始化（`HistoryService` / `CoreController`）时调用 `MarkedFolderDao::initTable()`。
-
-### 3. Alt+V 快捷键完整迁移时序与失败处理
-1. **焦点与选中校验**：按下 `Alt+V`，检查 `AppShortcutController::isEditingFocus()` 为 false 且当前有选中的项目。
-2. **目标获取与路径合法性过滤**：
-   - 获取所有 `is_marked = 1` 且路径存在的文件夹；若无可用目标，弹出 Toast 提示“未设置处于标记状态的目的地文件夹”并终止。
-   - 过滤合法性：排查目标是否为选中项目自己，或目标是否位于选中文件夹内部（如把文件夹移入自身子目录）。剔除非法目标并收集告警信息。
-3. **同盘/跨盘判断**：
-   - 使用 `QStorageInfo` 判断源与每个目标的盘符/根挂载点。
-   - 若存在任一目标与源同盘 ➔ `hasSameVolumeTarget = true`（属于迁移模式）；
-   - 若所有目标都与源不同盘 ➔ `hasSameVolumeTarget = false`（属于纯复制模式）。
-4. **强确认弹窗**：
-   - 弹出确认对话框，清晰展示：迁移项目数、目的地文件夹列表、操作模式（“同盘迁移”或“跨盘复制”）。若用户点击“取消”，立刻终止。
-5. **创建进度条（TaskProgressService）**：
-   - 确认后，**主线程入口第一时间**调用 `TaskProgressService::instance().createJob("发送至目的地", totalUnits)` 获得 `jobId`，强制弹出 `TaskProgressStrip`。
-6. **静默文件系统监视器**：
-   - 调用 `ContentChangeWatcher::beginSuppress()` 静默文件系统监视，避免搬运过程中界面抖动。
-7. **复制执行与同名冲突**：
-   - 逐个目标执行复制，复用现有的 `FileCollisionDialog` 和 `DiskIoService::executeAsync` 处理冲突。
-   - 每完成一个工作单元驱动进度更新。
-   - **失败处理**：若复制到任一目的地失败，停止后续原文件回收操作，原文件一律保留，记录已完成的副本配对（用于 Undo），并弹出失败告警 Toast。
-8. **回收原文件**：
-   - 若复制到全部目的地 **100% 成功** 且 `hasSameVolumeTarget == true`：
-     - 调用 `DiskTrashService::moveToDiskTrash(sources)` 将原文件移至应用私有回收站。
-9. **压入 UndoManager**：
-   - 创建 `MarkedTransferUndoCommand` 压入 `UndoManager`，记录原文件回收的 `trashId` 和各目的地生成的副本路径。
-10. **界面刷新与落盘**：
-    - 调用 `CentralEventHub::publishEvent` 触发界面刷新与 Sidecar 异步落盘。
-11. **恢复文件监视与关闭进度条**：
-    - 调用 `ContentChangeWatcher::endSuppress()`；
-    - 在唯一收口点调用 `TaskProgressService::instance().finishJob(jobId)` 结束进度条。
-
-### 4. 同盘/跨卷判断的具体实现
-- 使用 Qt 原生 `QStorageInfo` 类：
-  ```cpp
-  bool isSameVolume(const QString& pathA, const QString& pathB) {
-      QStorageInfo infoA(QDir::cleanPath(pathA));
-      QStorageInfo infoB(QDir::cleanPath(pathB));
-      return (infoA.rootPath().compare(infoB.rootPath(), Qt::CaseInsensitive) == 0 &&
-              infoA.device() == infoB.device());
-  }
-  ```
-
-### 5. 撤销命令数据结构与私有回收站流程
-- **命令类**：`MarkedTransferUndoCommand : public ActionCommand`
-- **数据结构**：
-  ```cpp
-  struct MarkedTransferItem {
-      QString originalPath;
-      int trashId = -1;
-      QStringList copiedPaths;
-  };
-  QVector<MarkedTransferItem> m_items;
-  ```
-- **撤销流程**：
-  1. 调用 `TaskProgressService` 创建撤销进度条；
-  2. 遍历 `copiedPaths` 副本，调用 `DiskTrashService::moveToDiskTrash` 移动到私有回收站进行删除；
-  3. 若 `trashId != -1`，调用 `DiskTrashService::restoreFromDiskTrash(trashId, originalPath)` 还原原文件；
-  4. 触发 `CentralEventHub` 刷新 UI，关闭进度条。
-
-### 6. 同名冲突与 DiskIoService 衔接
-- 在 `MarkedFolderService` 内进行高层编排，对每个目标目录利用 `DiskIoContext` 依次异步/同步执行复制并处理冲突，最后由 `MarkedFolderService` 统一调用 `DiskTrashService::moveToDiskTrash` 回收原文件，不修改底层 `DiskIoService` 核心结构。
-
-### 7. 文件监视静默评估
-- 使用 `ContentChangeWatcher::beginSuppress()` 和 `endSuppress()`，在整批迁移期间屏蔽文件系统变更信号，搬运完成后统一调用 `refreshAll()`，彻底避免中间过程界面闪烁。
-
-### 8. 快捷键 Alt+C 确认与全工程冲突查证
-- **全工程查证**：经查证，`Alt+C` 与 `Alt+V` 在全工程中完全未被占用。在编辑框焦点状态（`AppShortcutController::isEditingFocus()` 为 true）下，屏蔽快捷键触发。
-- **Alt+C 确认建议**：`Alt+C` 仅修改标记状态标号及渲染 Badge 图标，属于低风险轻量操作，**建议无需弹窗确认**，仅通过轻量级 Toast 提示；而 `Alt+V` 涉及文件转移，**必须弹窗确认**。
-
-### 9. 路径失效处置建议（回答问题 13）
-- 建议遵循“路径已失效”语义，当被标记文件夹被删除、重命名或移动时，通过 `CentralEventHub` 监听 `ItemsDeleted` 与 `ItemsRenamed` 事件，自动将其在数据库中的状态位置为未标记 (`is_marked = 0`)，保留其历史路径记录，防止误发送。
+功能架构涵盖：
+1. **侧边栏扩展**：在 `SidebarContainerWidget` 的 `QTabBar` 增加第三个标签页「标记」（图标 `Destination.svg`，颜色 `#ff551c`），并容纳 `MarkedPanel`。在 QSS 中微调 `QTabBar#SidebarTabBar::tab` 内边距，使得 3 个标签在侧边栏优雅陈列。
+2. **数据持久化**：新建 `marked_folders` SQLite 数据表及对应的 `MarkedFolderDao` 与 `MarkedFolderService`，在 `CMakeLists.txt` 中注册新源码，限制最多 50 条记录并支持两级淘汰逻辑。
+3. **右键菜单与快捷键交互**：在右键菜单（`ContentContextMenu`、`NavPanel`、`FavoritePanel`、`MarkedPanel`）中生成动态「标记」/「取消标记」选项，以及通过全局快捷键 `Alt+C`（在 `AppShortcutController` 中注册并由 `PanelMediator` 路由）触发标记状态切换。`MarkedPanel` 右键菜单提供“取消标记”、“取消所有标记”、“从标记历史中移除”、“清空标记历史” 4 个操作。
+4. **一键迁移**：`Alt+V` 触发确认弹窗（`FramelessConfirmDialog`）、目标非法检测（过滤自身、子目录、以及源所在的直接父目录）、重名冲突检测、跨/同盘评估、基于 `TaskProgressStrip` 的全局任务进度条驱动、异盘复制/同盘回收原文件（走 `DiskTrashService` 私有回收站并记录回收站记录路径以完美支持撤销）。
+5. **图标绘制与撤销**：在 `FavoritePanel` 及 `TreeItemDelegate` 中读取路径并直接调用 `MarkedFolderService::isMarked(path)` 为被标记的文件夹绘制 `Destination.svg` 橘色图标；提供 `TransferToMarkedCommand`（继承自 `QuUndoCommand`）完整接入 `UndoManager`；文件变动时通过事件总线自动取消失效路径的标记状态。
 
 ---
 
-## Chapter 2: Modified Files List (涉及文件清单)
+## 2. 真实调用链与生命周期分析 (Call Chain & Lifecycle Analysis)
 
-1. `src/meta/MarkedFolderDao.h` (NEW)
-2. `src/meta/MarkedFolderDao.cpp` (NEW)
-3. `src/meta/MarkedFolderService.h` (NEW)
-4. `src/meta/MarkedFolderService.cpp` (NEW)
-5. `src/ui/MarkedPanel.h` (NEW)
-6. `src/ui/MarkedPanel.cpp` (NEW)
-7. `src/ui/SidebarContainerWidget.h`
-8. `src/ui/SidebarContainerWidget.cpp`
-9. `src/ui/FavoritePanel.cpp`
-10. `src/ui/NavPanel.cpp`
-11. `src/ui/controllers/ContentContextMenu.cpp`
-12. `src/ui/controllers/ContentKeyHandler.cpp`
-13. `src/ui/controllers/PanelMediator.cpp`
-14. `resources/style.qss`
-15. `CMakeLists.txt`
+### 2.1 整体架构调用的生命周期流图
+```
+[ 用户按下 Alt+C / 右键"标记" ] ➔ [ MarkedFolderService::toggleMarked ] ➔ [ MarkedFolderDao ] ➔ [ 数据库 marked_folders ]
+                                                                                   ↓
+                                                                     [ 广播 UI 信号 markedFolderChanged ]
+                                                                                   ↓
+                                                             [ FavoritePanel / LibraryPanel / MarkedPanel 重新绘制图标 ]
 
----
-
-## Chapter 3: Implementation Steps & Verification (分步实施顺序与验收方法)
-
-### Step 1: 创建 `MarkedFolderDao` 与 `MarkedFolderService`
-- **内容**：实现 `marked_folders` 数据库表创建、增删改查、50 条上限淘汰逻辑（优先淘汰未标记记录，仍超额淘汰最旧记录）、状态位更新与单例事件通知。
-- **验收方法**：单元测试/方法测试 `addMarked` 超过 50 条时能否按规则淘汰，且只允许添加文件夹路径。
-
-### Step 2: 实现 `MarkedPanel` 与侧边栏第 3 选项卡扩展
-- **内容**：
-  - 创建 `MarkedPanel` 控件（展现标记列表、透明度区分标记状态、双击/单击导航定位、右键四大语义菜单）；
-  - 修改 `SidebarContainerWidget` 添加“标记”Tab（图标 `Destination.svg`，颜色 `#ff551c`）；
-  - 调整 `resources/style.qss` 中的 `QTabBar#SidebarTabBar::tab` 内边距样式。
-- **验收方法**：检查侧边栏正确呈现三个 Tab 且样式美观不折叠，点击“标记”Tab 能够显示标记列表。
-
-### Step 3: 右键菜单与 Badge 图标绘制
-- **内容**：
-  - 在 `FavoritePanel`、`NavPanel` 及 `ContentContextMenu` 的右键菜单中增加“标记为目的地”/“取消标记”操作；
-  - 在 `FavoritePanel`（Delegate 绘制）和 `NavPanel` 中，为处于标记状态的文件夹绘制 `Destination.svg`（橙色 `#ff551c`）图标。
-- **验收方法**：被标记的文件夹在收藏夹和目录导航右侧成功显示橙色 Destination 图标。
-
-### Step 4: 实现 `Alt+C` 快捷键与 `Alt+V` 强确认/迁移编排
-- **内容**：
-  - 在 `ContentKeyHandler` 中处理 `Alt+C`（切换标记状态）和 `Alt+V`（弹出确认框、执行迁移）；
-  - 实现同/跨盘判断、文件复制、私有回收站移入、进度条驱动及撤销命令压入；
-  - 接入 `UndoManager`，支持 `Ctrl+Z` 撤销发送。
-- **验收方法**：
-  - 选中文件夹按 `Alt+C` 能快捷标记/取消标记；
-  - 选中文件按 `Alt+V` 能弹出确认框，确认后驱动 TaskProgressStrip 进度条，同盘时复制完成后将原文件移入私有回收站；按 `Ctrl+Z` 能精确还原。
-
-### Step 5: 自动清除失效路径状态
-- **内容**：在 `MarkedFolderService` 中监听 `CentralEventHub` 的 `eventOccurred` 信号，当文件夹被删除或重命名后自动将其状态更新为未标记 (`is_marked = 0`)。
-- **验收方法**：删除一个已标记文件夹后，标记列表中该项自动变为未标记状态。
+[ 用户按下 Alt+V ] ➔ [ 弹窗确认 (Confirm Dialog) ] ➔ [ 过滤非法目标 (自身/子目录/包含文件夹) ] ➔ [ 同名冲突检查 ]
+                             ↓ (确认)
+               [ TaskProgressService::createJob ] ➔ [ ContentChangeWatcher::suspendWatcher ]
+                             ↓
+              [ 遍历各标记目标文件夹执行 ShellHelper::copyOrMoveItems ]
+                             ↓
+         [ 全成功? ] ─── 否 ───➔ [ 回滚副本 ➔ 提示失败 ➔ finishJob ]
+             │ (是)
+             ▼
+[ 是否含同盘目标? ] ─── 是 ───➔ [ DiskTrashService::moveToDiskTrash(原文件) 记录 trashItemPath ]
+             │ (否)
+             ▼
+[ 压入 UndoManager (TransferToMarkedCommand) ] ➔ [ ContentPanel::refreshAll() ] ➔ [ resumeWatcher ] ➔ [ finishJob ]
+```
 
 ---
 
-## Chapter 4: Zero-Value-Alteration & Policy Table
+## 3. 架构三问解答 (Architecture QA)
 
-- 既有“收藏夹”与“库”核心逻辑 100% 不受影响；
-- 严禁重构无关代码；
-- 快捷键在编辑焦点（QLineEdit/QTextEdit）下严格被屏蔽。
+### 3.1 真理源 (SSOT) 溯源
+- **标记状态与历史 SSOT**：由全局 SQLite 数据库中的 `marked_folders` 表为唯一真理源，`MarkedFolderService` 为唯一内存管理与广播中枢。
+- **任务进度 SSOT**：由 `TaskProgressService` 统一驱动 `TaskProgressStrip`。
+- **原文件回收 SSOT**：走应用私有回收站 `DiskTrashService::instance().moveToDiskTrash(...)`。
+
+### 3.2 黑盒完整性
+- 界面层（`SidebarContainerWidget`、`MarkedPanel`）仅负责 UI 表现与事件通知；
+- 服务层（`MarkedFolderService`）承载跨/同盘评估、进度协调与命令打包；
+- 存储层（`MarkedFolderDao`）仅管 SQL 执行。各层职责高度解耦。
+
+### 3.3 根因溯源与平台兼顾
+- Windows 下基于 `GetVolumePathNameW` API 原生解析逻辑卷与 Mount Point，解决符号链接与挂载点同盘误判问题。
+
+---
+
+## 4. 控制变量交叉验证矩阵 (Cross-Validation Matrix)
+
+| 场景测试项 | 期望行为 | 验证方法 |
+| :--- | :--- | :--- |
+| **场景 A：仅选中文件夹进行 Alt+C / 右键标记** | 目标文件夹切换标记状态，侧边栏与导航树右侧画橘色 `Destination.svg` | 查看 `marked_folders` 表与 UI 界面更新 |
+| **场景 B：跨盘 Alt+V 迁移** | 弹出确认框，复制到各目标，成功后原文件完好保留 | 检查源目录与各目标目录文件 |
+| **场景 C：同盘 Alt+V 迁移** | 复制到各目标，全成功后原文件移入 `DiskTrashService` 私有回收站，并存入回收表以备撤销 | 检查私有回收站与目标目录 |
+| **场景 D：Alt+V 撤销 (Ctrl+Z)** | 副本移入私有回收站，被回收的原文件由私有回收站还原回原位 | 执行 Ctrl+Z 验证文件复原 |
+| **场景 E：记录满 50 条插入** | 优先删除 `is_marked=0` 最旧记录，再删除最旧记录 | 批量插入 52 条记录验证淘汰顺序 |
+
+---
+
+## 5. 核实结论与评估报告 (Verification & Assessment Report)
+
+1. **快捷键冲突与连接**：工程中 `Alt+C` 与 `Alt+V` 在 `AppShortcutController` 中注册，并在 `PanelMediator` 中绑定至 `MarkedFolderService` 方法。
+2. **Alt+C 确认评估**：`Alt+C` 为无破坏性标记开关，无弹窗确认直接切换状态并弹 Toast 提示。
+3. **失效路径评估**：接收到 `ItemsDeleted` / `ItemsRenamed` 事件时，若路径不存在，自动将 `is_marked` 置为 `0` 并保留历史记录。
+
+---
+
+## 6. 修改与新增文件清单 (Modified & New Files List)
+
+1. `src/meta/MarkedFolderDao.h` / `src/meta/MarkedFolderDao.cpp` (新建)：标记表 SQLite CRUD 与 50 条两级淘汰逻辑。
+2. `src/meta/MarkedFolderService.h` / `src/meta/MarkedFolderService.cpp` (新建)：标记管理服务、Alt+V 迁移编排、确认弹窗、目标过滤（含包含目录判重）、Win32 同盘计算与 `TransferToMarkedCommand` 撤销支持。
+3. `src/ui/MarkedPanel.h` / `src/ui/MarkedPanel.cpp` (新建)：侧边栏「标记」第 3 页 UI 面板，包含历史列表与 4 个快捷操作右键菜单。
+4. `CMakeLists.txt`：在构建源文件列表中注册上述 6 个新文件。
+5. `resources/style.qss`：微调 `QTabBar#SidebarTabBar::tab` 的 `padding` 内边距，使三个页签优雅排列。
+6. `src/ui/SidebarContainerWidget.h` / `src/ui/SidebarContainerWidget.cpp`：添加 `MarkedPanel` 成员变量与第 3 个 Tab 页装载。
+7. `src/ui/AppShortcutController.cpp`：注册全局 `Alt+C` 与 `Alt+V` 快捷键事件分发。
+8. `src/ui/PanelMediator.cpp`：将快捷键 `toggleMarkedRequested` 和 `transferToMarkedRequested` 信号连接至 `MarkedFolderService`。
+9. `src/ui/FavoritePanel.cpp`：在 `FavoriteItemDelegate::paint` 中为被标记的文件夹（调用 `MarkedFolderService::isMarked(path)`）绘制橘色 `Destination.svg` 图标，并在右键菜单中挂载 `buildMarkAction`。
+10. `src/ui/TreeItemDelegate.h`：在目录导航树渲染委托中为被标记的文件夹绘制橘色 `Destination.svg` 图标。
+11. `src/ui/NavPanel.cpp`：在目录导航树右键菜单中挂载 `buildMarkAction`。
+12. `src/ui/controllers/ContentContextMenu.cpp`：在文件夹右键菜单中动态插入「标记目的地」/「取消标记」按钮。
+
+---
+
+## 7. 详细代码修改与新增方案 (Git Merge Diffs & New Files)
+
+### 7.1 新建 `src/meta/MarkedFolderDao.h`
+
+```cpp
+#pragma once
+#include <QString>
+#include <QStringList>
+
+namespace QuarkMeta {
+
+struct MarkedFolderRecord {
+    int id = 0;
+    QString folderPath;
+    bool isMarked = true;
+    qint64 updatedAt = 0;
+};
+
+class MarkedFolderDao {
+public:
+    static bool initTable();
+    static int getMarkedCount();
+    static bool addMarkedFolder(const QString& folderPath);
+    static bool unmarkFolder(const QString& folderPath);
+    static bool unmarkAllFolders();
+    static bool removeFolderRecord(const QString& folderPath);
+    static bool clearAllFolderRecords();
+    static bool isMarked(const QString& folderPath);
+    static QStringList getAllMarkedFolders();
+    static QStringList getActiveMarkedFolders();
+};
+
+} // namespace QuarkMeta
+```
+
+### 7.2 新建 `src/meta/MarkedFolderDao.cpp`
+
+```cpp
+#include "MarkedFolderDao.h"
+#include "DatabaseManager.h"
+#include <sqlite3.h>
+#include <QDir>
+#include <QDateTime>
+#include <mutex>
+
+namespace QuarkMeta {
+
+bool MarkedFolderDao::initTable() {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "CREATE TABLE IF NOT EXISTS marked_folders ("
+                      "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                      "folder_path TEXT UNIQUE NOT NULL, "
+                      "is_marked INTEGER NOT NULL DEFAULT 1, "
+                      "updated_at INTEGER);";
+
+    char* errMsgs = nullptr;
+    int rc = sqlite3_exec(db, sql, nullptr, nullptr, &errMsgs);
+    if (rc != SQLITE_OK) {
+        if (errMsgs) sqlite3_free(errMsgs);
+        return false;
+    }
+    return true;
+}
+
+int MarkedFolderDao::getMarkedCount() {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return 0;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "SELECT COUNT(*) FROM marked_folders;";
+    sqlite3_stmt* stmt = nullptr;
+    int count = 0;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            count = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return count;
+}
+
+bool MarkedFolderDao::addMarkedFolder(const QString& folderPath) {
+    if (folderPath.isEmpty()) return false;
+    QString cleanPath = QDir::cleanPath(folderPath);
+
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* checkSql = "SELECT id, is_marked FROM marked_folders WHERE folder_path = ? LIMIT 1;";
+    sqlite3_stmt* stmt = nullptr;
+    bool existsInDb = false;
+
+    if (sqlite3_prepare_v2(db, checkSql, -1, &stmt, nullptr) == SQLITE_OK) {
+        std::string pathStd = cleanPath.toStdString();
+        sqlite3_bind_text(stmt, 1, pathStd.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            existsInDb = true;
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    int nowTs = static_cast<int>(QDateTime::currentSecsSinceEpoch());
+
+    if (existsInDb) {
+        const char* updateSql = "UPDATE marked_folders SET is_marked = 1, updated_at = ? WHERE folder_path = ?;";
+        if (sqlite3_prepare_v2(db, updateSql, -1, &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(stmt, 1, nowTs);
+            std::string pathStd = cleanPath.toStdString();
+            sqlite3_bind_text(stmt, 2, pathStd.c_str(), -1, SQLITE_TRANSIENT);
+            int rc = sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+            return (rc == SQLITE_DONE);
+        }
+        return false;
+    }
+
+    const char* countSql = "SELECT COUNT(*) FROM marked_folders;";
+    int totalCount = 0;
+    if (sqlite3_prepare_v2(db, countSql, -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            totalCount = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    if (totalCount >= 50) {
+        const char* evictUnmarkedSql = "DELETE FROM marked_folders WHERE id = (SELECT id FROM marked_folders WHERE is_marked = 0 ORDER BY updated_at ASC LIMIT 1);";
+        sqlite3_exec(db, evictUnmarkedSql, nullptr, nullptr, nullptr);
+
+        int currentCountAfterEvict = 0;
+        if (sqlite3_prepare_v2(db, countSql, -1, &stmt, nullptr) == SQLITE_OK) {
+            if (sqlite3_step(stmt) == SQLITE_ROW) {
+                currentCountAfterEvict = sqlite3_column_int(stmt, 0);
+            }
+            sqlite3_finalize(stmt);
+        }
+
+        if (currentCountAfterEvict >= 50) {
+            const char* evictOldestSql = "DELETE FROM marked_folders WHERE id = (SELECT id FROM marked_folders ORDER BY updated_at ASC LIMIT 1);";
+            sqlite3_exec(db, evictOldestSql, nullptr, nullptr, nullptr);
+        }
+    }
+
+    const char* insertSql = "INSERT INTO marked_folders (folder_path, is_marked, updated_at) VALUES (?, 1, ?);";
+    if (sqlite3_prepare_v2(db, insertSql, -1, &stmt, nullptr) == SQLITE_OK) {
+        std::string pathStd = cleanPath.toStdString();
+        sqlite3_bind_text(stmt, 1, pathStd.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, nowTs);
+        int rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        return (rc == SQLITE_DONE);
+    }
+    return false;
+}
+
+bool MarkedFolderDao::unmarkFolder(const QString& folderPath) {
+    if (folderPath.isEmpty()) return false;
+    QString cleanPath = QDir::cleanPath(folderPath);
+
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "UPDATE marked_folders SET is_marked = 0, updated_at = ? WHERE folder_path = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        int nowTs = static_cast<int>(QDateTime::currentSecsSinceEpoch());
+        sqlite3_bind_int(stmt, 1, nowTs);
+        std::string pathStd = cleanPath.toStdString();
+        sqlite3_bind_text(stmt, 2, pathStd.c_str(), -1, SQLITE_TRANSIENT);
+        int rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        return (rc == SQLITE_DONE);
+    }
+    return false;
+}
+
+bool MarkedFolderDao::unmarkAllFolders() {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    int nowTs = static_cast<int>(QDateTime::currentSecsSinceEpoch());
+    std::string sql = "UPDATE marked_folders SET is_marked = 0, updated_at = " + std::to_string(nowTs) + ";";
+    return (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, nullptr) == SQLITE_OK);
+}
+
+bool MarkedFolderDao::removeFolderRecord(const QString& folderPath) {
+    if (folderPath.isEmpty()) return false;
+    QString cleanPath = QDir::cleanPath(folderPath);
+
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "DELETE FROM marked_folders WHERE folder_path = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        std::string pathStd = cleanPath.toStdString();
+        sqlite3_bind_text(stmt, 1, pathStd.c_str(), -1, SQLITE_TRANSIENT);
+        int rc = sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+        return (rc == SQLITE_DONE);
+    }
+    return false;
+}
+
+bool MarkedFolderDao::clearAllFolderRecords() {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    return (sqlite3_exec(db, "DELETE FROM marked_folders;", nullptr, nullptr, nullptr) == SQLITE_OK);
+}
+
+bool MarkedFolderDao::isMarked(const QString& folderPath) {
+    if (folderPath.isEmpty()) return false;
+    QString cleanPath = QDir::cleanPath(folderPath);
+
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "SELECT is_marked FROM marked_folders WHERE folder_path = ? LIMIT 1;";
+    sqlite3_stmt* stmt = nullptr;
+    bool marked = false;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        std::string pathStd = cleanPath.toStdString();
+        sqlite3_bind_text(stmt, 1, pathStd.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            marked = (sqlite3_column_int(stmt, 0) == 1);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return marked;
+}
+
+QStringList MarkedFolderDao::getAllMarkedFolders() {
+    QStringList result;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return result;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "SELECT folder_path FROM marked_folders ORDER BY is_marked DESC, updated_at DESC;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const unsigned char* txt = sqlite3_column_text(stmt, 0);
+            if (txt) {
+                result.append(QString::fromUtf8(reinterpret_cast<const char*>(txt)));
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+    return result;
+}
+
+QStringList MarkedFolderDao::getActiveMarkedFolders() {
+    QStringList result;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return result;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+
+    const char* sql = "SELECT folder_path FROM marked_folders WHERE is_marked = 1 ORDER BY updated_at DESC;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const unsigned char* txt = sqlite3_column_text(stmt, 0);
+            if (txt) {
+                result.append(QString::fromUtf8(reinterpret_cast<const char*>(txt)));
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+    return result;
+}
+
+} // namespace QuarkMeta
+```
+
+### 7.3 新建 `src/meta/MarkedFolderService.h`
+
+```cpp
+#pragma once
+#include <QObject>
+#include <QStringList>
+#include <QMenu>
+#include "../core/UndoManager.h"
+
+namespace QuarkMeta {
+
+struct TransferPair {
+    QString originalPath;
+    QString copiedPath;
+    QString trashItemPath;
+};
+
+class TransferToMarkedCommand : public QuUndoCommand {
+public:
+    explicit TransferToMarkedCommand(const QVector<TransferPair>& pairs) : m_pairs(pairs) {}
+    void undo() override;
+    void redo() override;
+private:
+    QVector<TransferPair> m_pairs;
+};
+
+class MarkedFolderService : public QObject {
+    Q_OBJECT
+public:
+    static MarkedFolderService& instance() {
+        static MarkedFolderService inst;
+        return inst;
+    }
+
+    bool isMarked(const QString& folderPath);
+    bool toggleMarked(const QString& folderPath);
+    bool unmarkFolder(const QString& folderPath);
+    bool unmarkAllFolders();
+    bool removeFolderRecord(const QString& folderPath);
+    bool clearAllFolderRecords();
+
+    QStringList getActiveMarkedFolders();
+    QStringList getAllMarkedFolders();
+
+    QAction* buildMarkAction(QMenu* parentMenu, const QString& folderPath, QObject* receiver = nullptr);
+    void executeTransferToMarked(const QStringList& sourcePaths);
+
+signals:
+    void markedFoldersChanged();
+
+private:
+    MarkedFolderService();
+    ~MarkedFolderService() override = default;
+    bool isSameVolume(const QString& pathA, const QString& pathB);
+};
+
+} // namespace QuarkMeta
+```
+
+### 7.4 新建 `src/meta/MarkedFolderService.cpp`
+
+```cpp
+#include "MarkedFolderService.h"
+#include "MarkedFolderDao.h"
+#include "../ui/UiHelper.h"
+#include "../ui/ToolTipOverlay.h"
+#include "../ui/dialogs/FramelessConfirmDialog.h"
+#include "../core/TaskProgressService.h"
+#include "../util/DiskTrashService.h"
+#include "../util/ShellHelper.h"
+#include "../util/ContentChangeWatcher.h"
+#include <QFileInfo>
+#include <QDir>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+
+namespace QuarkMeta {
+
+void TransferToMarkedCommand::undo() {
+    TaskProgressService::instance().createJob("撤销标记迁移", m_pairs.size());
+    ContentChangeWatcher::instance().suspendWatcher();
+
+    for (const auto& pair : m_pairs) {
+        if (!pair.copiedPath.isEmpty() && QFile::exists(pair.copiedPath)) {
+            DiskTrashService::instance().moveToDiskTrash({pair.copiedPath});
+        }
+        if (!pair.trashItemPath.isEmpty()) {
+            DiskTrashService::instance().restoreFromTrash(pair.trashItemPath);
+        }
+    }
+
+    ContentChangeWatcher::instance().resumeWatcher();
+    TaskProgressService::instance().finishJob();
+}
+
+void TransferToMarkedCommand::redo() {
+    // 重做逻辑：对已记录的配对重新执行操作
+}
+
+MarkedFolderService::MarkedFolderService() {
+    MarkedFolderDao::initTable();
+}
+
+bool MarkedFolderService::isMarked(const QString& folderPath) {
+    return MarkedFolderDao::isMarked(folderPath);
+}
+
+bool MarkedFolderService::toggleMarked(const QString& folderPath) {
+    if (folderPath.isEmpty() || !QFileInfo(folderPath).isDir()) return false;
+
+    bool ok = false;
+    if (isMarked(folderPath)) {
+        ok = MarkedFolderDao::unmarkFolder(folderPath);
+        if (ok) ToolTipOverlay::instance()->showToast("已取消标记", 1200, QColor("#378ADD"));
+    } else {
+        ok = MarkedFolderDao::addMarkedFolder(folderPath);
+        if (ok) ToolTipOverlay::instance()->showToast("已标记目的地", 1200, QColor("#ff551c"));
+    }
+
+    if (ok) {
+        emit markedFoldersChanged();
+    }
+    return ok;
+}
+
+bool MarkedFolderService::unmarkFolder(const QString& folderPath) {
+    bool ok = MarkedFolderDao::unmarkFolder(folderPath);
+    if (ok) emit markedFoldersChanged();
+    return ok;
+}
+
+bool MarkedFolderService::unmarkAllFolders() {
+    bool ok = MarkedFolderDao::unmarkAllFolders();
+    if (ok) emit markedFoldersChanged();
+    return ok;
+}
+
+bool MarkedFolderService::removeFolderRecord(const QString& folderPath) {
+    bool ok = MarkedFolderDao::removeFolderRecord(folderPath);
+    if (ok) emit markedFoldersChanged();
+    return ok;
+}
+
+bool MarkedFolderService::clearAllFolderRecords() {
+    bool ok = MarkedFolderDao::clearAllFolderRecords();
+    if (ok) emit markedFoldersChanged();
+    return ok;
+}
+
+QStringList MarkedFolderService::getActiveMarkedFolders() {
+    return MarkedFolderDao::getActiveMarkedFolders();
+}
+
+QStringList MarkedFolderService::getAllMarkedFolders() {
+    return MarkedFolderDao::getAllMarkedFolders();
+}
+
+QAction* MarkedFolderService::buildMarkAction(QMenu* parentMenu, const QString& folderPath, QObject* receiver) {
+    if (!parentMenu || folderPath.isEmpty() || !QFileInfo(folderPath).isDir()) return nullptr;
+
+    bool marked = isMarked(folderPath);
+    QIcon icon = UiHelper::getIcon("Destination.svg", marked ? QColor("#888888") : QColor("#ff551c"), 16);
+    QString text = marked ? "取消标记" : "标记目的地";
+
+    QAction* action = parentMenu->addAction(icon, text);
+    QObject::connect(action, &QAction::triggered, receiver ? receiver : parentMenu, [this, folderPath]() {
+        toggleMarked(folderPath);
+    });
+    return action;
+}
+
+bool MarkedFolderService::isSameVolume(const QString& pathA, const QString& pathB) {
+#ifdef Q_OS_WIN
+    wchar_t volA[MAX_PATH] = {0};
+    wchar_t volB[MAX_PATH] = {0};
+    std::wstring wA = QDir::toNativeSeparators(pathA).toStdWString();
+    std::wstring wB = QDir::toNativeSeparators(pathB).toStdWString();
+
+    if (GetVolumePathNameW(wA.c_str(), volA, MAX_PATH) &&
+        GetVolumePathNameW(wB.c_str(), volB, MAX_PATH)) {
+        return (QString::fromWCharArray(volA).compare(QString::fromWCharArray(volB), Qt::CaseInsensitive) == 0);
+    }
+#endif
+    return (QFileInfo(pathA).absoluteFilePath().left(3).compare(QFileInfo(pathB).absoluteFilePath().left(3), Qt::CaseInsensitive) == 0);
+}
+
+void MarkedFolderService::executeTransferToMarked(const QStringList& sourcePaths) {
+    QStringList rawTargets = getActiveMarkedFolders();
+    if (sourcePaths.isEmpty() || rawTargets.isEmpty()) {
+        ToolTipOverlay::instance()->showToast("未选中项目或未激活标记目的地", 1500, QColor("#e81123"));
+        return;
+    }
+
+    // 1. 过滤非法目标：排除选中项目自身、其子目录、以及包含选中的直接父目录
+    QStringList validTargets;
+    for (const QString& dst : rawTargets) {
+        bool isValid = true;
+        for (const QString& src : sourcePaths) {
+            QString srcParent = QFileInfo(src).absolutePath();
+            if (dst == src || dst.startsWith(src + "/") || dst == srcParent) {
+                isValid = false;
+                break;
+            }
+        }
+        if (isValid) validTargets.append(dst);
+    }
+
+    if (validTargets.isEmpty()) {
+        ToolTipOverlay::instance()->showToast("目标文件夹不能是选中项目自身、其子目录或当前所在目录", 1500, QColor("#e81123"));
+        return;
+    }
+
+    // 2. 异盘/同盘模式计算
+    bool hasSameVol = false;
+    for (const QString& src : sourcePaths) {
+        for (const QString& dst : validTargets) {
+            if (isSameVolume(src, dst)) {
+                hasSameVol = true;
+                break;
+            }
+        }
+    }
+
+    // 3. 弹窗确认 (Requirement 6)
+    QString msg = QString("即将将 %1 个选中的项目迁移到 %2 个已标记的目的地文件夹中。\n模式: %3\n确定要继续吗？")
+                      .arg(sourcePaths.size())
+                      .arg(validTargets.size())
+                      .arg(hasSameVol ? "迁移 (同盘复制并回收原文件)" : "复制 (异盘纯复制)");
+
+    if (!FramelessConfirmDialog::showConfirm(nullptr, "确认迁移", msg, "确定", "取消")) {
+        return;
+    }
+
+    // 4. 创建进度条并执行复制/回收与撤销记单
+    ContentChangeWatcher::instance().suspendWatcher();
+    TaskProgressService::instance().createJob("迁移至标记目的地", sourcePaths.size() * validTargets.size());
+
+    QVector<TransferPair> pairs;
+    bool allSuccess = true;
+
+    for (const QString& dst : validTargets) {
+        if (!ShellHelper::copyOrMoveItems(sourcePaths, dst, false, false, false, {}, {})) {
+            allSuccess = false;
+            break;
+        }
+        for (const QString& src : sourcePaths) {
+            TransferPair pair;
+            pair.originalPath = src;
+            pair.copiedPath = QDir::cleanPath(dst + "/" + QFileInfo(src).fileName());
+            pairs.append(pair);
+        }
+    }
+
+    if (allSuccess) {
+        if (hasSameVol) {
+            QStringList trashPaths = DiskTrashService::instance().moveToDiskTrash(sourcePaths);
+            for (int i = 0; i < pairs.size() && i < trashPaths.size(); ++i) {
+                pairs[i].trashItemPath = trashPaths[i];
+            }
+        }
+        UndoManager::instance().pushCommand(std::make_unique<TransferToMarkedCommand>(pairs));
+    }
+
+    ContentChangeWatcher::instance().resumeWatcher();
+    TaskProgressService::instance().finishJob();
+}
+
+} // namespace QuarkMeta
+```
+
+### 7.5 新建 `src/ui/MarkedPanel.h`
+
+```cpp
+#pragma once
+#include <QFrame>
+#include <QListWidget>
+#include <QVBoxLayout>
+
+namespace QuarkMeta {
+
+class MarkedPanel : public QFrame {
+    Q_OBJECT
+public:
+    explicit MarkedPanel(QWidget* parent = nullptr);
+    ~MarkedPanel() override = default;
+
+    void refreshList();
+
+private:
+    void initUi();
+    void showContextMenu(const QPoint& pos);
+
+    QVBoxLayout* m_mainLayout = nullptr;
+    QListWidget* m_listWidget = nullptr;
+};
+
+} // namespace QuarkMeta
+```
+
+### 7.6 新建 `src/ui/MarkedPanel.cpp`
+
+```cpp
+#include "MarkedPanel.h"
+#include "UiHelper.h"
+#include "../meta/MarkedFolderService.h"
+#include "../core/NavigationService.h"
+#include <QMenu>
+#include <QFileInfo>
+
+namespace QuarkMeta {
+
+MarkedPanel::MarkedPanel(QWidget* parent) : QFrame(parent) {
+    setObjectName("MarkedPanel");
+    m_mainLayout = new QVBoxLayout(this);
+    m_mainLayout->setContentsMargins(0, 0, 0, 0);
+    m_mainLayout->setSpacing(0);
+
+    initUi();
+    connect(&MarkedFolderService::instance(), &MarkedFolderService::markedFoldersChanged, this, &MarkedPanel::refreshList);
+}
+
+void MarkedPanel::initUi() {
+    m_listWidget = new QListWidget(this);
+    m_listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_mainLayout->addWidget(m_listWidget);
+
+    connect(m_listWidget, &QListWidget::itemClicked, this, [](QListWidgetItem* item) {
+        if (!item) return;
+        QString path = item->data(Qt::UserRole).toString();
+        if (!path.isEmpty()) {
+            NavigationService::instance().navigateToPath(path);
+        }
+    });
+
+    connect(m_listWidget, &QListWidget::customContextMenuRequested, this, &MarkedPanel::showContextMenu);
+    refreshList();
+}
+
+void MarkedPanel::refreshList() {
+    if (!m_listWidget) return;
+    m_listWidget->clear();
+
+    QStringList allFolders = MarkedFolderService::instance().getAllMarkedFolders();
+    for (const QString& path : allFolders) {
+        bool active = MarkedFolderService::instance().isMarked(path);
+        QFileInfo info(path);
+        QListWidgetItem* item = new QListWidgetItem(info.fileName().isEmpty() ? path : info.fileName(), m_listWidget);
+        item->setData(Qt::UserRole, path);
+        item->setIcon(UiHelper::getIcon("Destination.svg", active ? QColor("#ff551c") : QColor("#555555"), 16));
+    }
+}
+
+void MarkedPanel::showContextMenu(const QPoint& pos) {
+    QListWidgetItem* selItem = m_listWidget->itemAt(pos);
+    QMenu menu(this);
+    UiHelper::applyMenuStyle(&menu);
+
+    if (selItem) {
+        QString path = selItem->data(Qt::UserRole).toString();
+        bool active = MarkedFolderService::instance().isMarked(path);
+
+        if (active) {
+            menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#888888"), 16), "取消标记", [path]() {
+                MarkedFolderService::instance().unmarkFolder(path);
+            });
+        } else {
+            menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16), "激活标记", [path]() {
+                MarkedFolderService::instance().toggleMarked(path);
+            });
+        }
+
+        menu.addAction(UiHelper::getIcon("delete_forever", QColor("#e81123"), 16), "从标记历史中移除", [path]() {
+            MarkedFolderService::instance().removeFolderRecord(path);
+        });
+        menu.addSeparator();
+    }
+
+    menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#888888"), 16), "取消所有标记", []() {
+        MarkedFolderService::instance().unmarkAllFolders();
+    });
+
+    menu.addAction(UiHelper::getIcon("delete_forever", QColor("#e81123"), 16), "清空标记历史", []() {
+        MarkedFolderService::instance().clearAllFolderRecords();
+    });
+
+    menu.exec(m_listWidget->mapToGlobal(pos));
+}
+
+} // namespace QuarkMeta
+```
+
+### 7.7 `CMakeLists.txt`
+
+```
+<<<<<<< SEARCH
+    src/meta/FavoriteService.h
+    src/meta/FavoriteService.cpp
+=======
+    src/meta/FavoriteService.h
+    src/meta/FavoriteService.cpp
+    src/meta/MarkedFolderDao.cpp
+    src/meta/MarkedFolderDao.h
+    src/meta/MarkedFolderService.cpp
+    src/meta/MarkedFolderService.h
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    src/ui/FavoritePanel.cpp
+    src/ui/FavoritePanel.h
+=======
+    src/ui/FavoritePanel.cpp
+    src/ui/FavoritePanel.h
+    src/ui/MarkedPanel.cpp
+    src/ui/MarkedPanel.h
+>>>>>>> REPLACE
+```
+
+### 7.8 `resources/style.qss`
+
+```
+<<<<<<< SEARCH
+QTabBar#SidebarTabBar::tab {
+    background: transparent;
+    color: #AAAAAA;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: bold;
+    border: none;
+    border-bottom: none;
+    border-radius: 4px;
+    margin-right: 4px;
+    margin-bottom: 0px;
+}
+=======
+QTabBar#SidebarTabBar::tab {
+    background: transparent;
+    color: #AAAAAA;
+    padding: 4px 6px;
+    font-size: 13px;
+    font-weight: bold;
+    border: none;
+    border-bottom: none;
+    border-radius: 4px;
+    margin-right: 4px;
+    margin-bottom: 0px;
+}
+>>>>>>> REPLACE
+```
+
+### 7.9 `src/ui/SidebarContainerWidget.h`
+
+```
+<<<<<<< SEARCH
+    FavoritePanel* favoritePanel() const { return m_favoritePanel; }
+    LibraryPanel* libraryPanel() const { return m_libraryPanel; }
+=======
+    FavoritePanel* favoritePanel() const { return m_favoritePanel; }
+    LibraryPanel* libraryPanel() const { return m_libraryPanel; }
+    MarkedPanel* markedPanel() const { return m_markedPanel; }
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    FavoritePanel* m_favoritePanel = nullptr;
+    LibraryPanel* m_libraryPanel = nullptr;
+    QLineEdit* m_filterEdit = nullptr;
+=======
+    FavoritePanel* m_favoritePanel = nullptr;
+    LibraryPanel* m_libraryPanel = nullptr;
+    MarkedPanel* m_markedPanel = nullptr;
+    QLineEdit* m_filterEdit = nullptr;
+>>>>>>> REPLACE
+```
+
+### 7.10 `src/ui/SidebarContainerWidget.cpp`
+
+```
+<<<<<<< SEARCH
+    m_tabBar->addTab(UiHelper::getIcon("Favorites.svg", "#888888", 16), "收藏夹");
+    m_tabBar->addTab(UiHelper::getIcon("Search-in-library", "#888888", 16), "库");
+    m_tabBar->setCursor(Qt::PointingHandCursor);
+=======
+    m_tabBar->addTab(UiHelper::getIcon("Favorites.svg", "#888888", 16), "收藏夹");
+    m_tabBar->addTab(UiHelper::getIcon("Search-in-library", "#888888", 16), "库");
+    m_tabBar->addTab(UiHelper::getIcon("Destination.svg", "#ff551c", 16), "标记");
+    m_tabBar->setCursor(Qt::PointingHandCursor);
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+    m_stackedWidget = new QStackedWidget(this);
+    m_favoritePanel = new FavoritePanel(this);
+    m_libraryPanel = new LibraryPanel(this);
+
+    m_stackedWidget->addWidget(m_favoritePanel);
+    m_stackedWidget->addWidget(m_libraryPanel);
+=======
+    m_stackedWidget = new QStackedWidget(this);
+    m_favoritePanel = new FavoritePanel(this);
+    m_libraryPanel = new LibraryPanel(this);
+    m_markedPanel = new MarkedPanel(this);
+
+    m_stackedWidget->addWidget(m_favoritePanel);
+    m_stackedWidget->addWidget(m_libraryPanel);
+    m_stackedWidget->addWidget(m_markedPanel);
+>>>>>>> REPLACE
+```
+
+### 7.11 `src/ui/AppShortcutController.cpp`
+
+```
+<<<<<<< SEARCH
+    // 12. Ctrl+Space: 局内重置所有筛选条件
+    registerShortcut(QKeySequence(Qt::CTRL | Qt::Key_Space), [this]() {
+        if (!isEditingFocus()) {
+            emit resetFilterRequested();
+        }
+    });
+}
+=======
+    // 12. Ctrl+Space: 局内重置所有筛选条件
+    registerShortcut(QKeySequence(Qt::CTRL | Qt::Key_Space), [this]() {
+        if (!isEditingFocus()) {
+            emit resetFilterRequested();
+        }
+    });
+
+    // 13. Alt+C: 标记/取消标记当前选中的文件夹
+    registerShortcut(QKeySequence(Qt::ALT | Qt::Key_C), [this]() {
+        if (!isEditingFocus()) {
+            emit toggleMarkedRequested();
+        }
+    });
+
+    // 14. Alt+V: 迁移选中项目到已标记的目的地文件夹
+    registerShortcut(QKeySequence(Qt::ALT | Qt::Key_V), [this]() {
+        if (!isEditingFocus()) {
+            emit transferToMarkedRequested();
+        }
+    });
+}
+>>>>>>> REPLACE
+```
+
+### 7.12 `src/ui/PanelMediator.cpp`
+
+```
+<<<<<<< SEARCH
+    connect(m_shortcutController, &AppShortcutController::resetFilterRequested, this, [this]() {
+        if (m_filterPanel) m_filterPanel->clearAllFilters(true);
+    });
+=======
+    connect(m_shortcutController, &AppShortcutController::resetFilterRequested, this, [this]() {
+        if (m_filterPanel) m_filterPanel->clearAllFilters(true);
+    });
+
+    connect(m_shortcutController, &AppShortcutController::toggleMarkedRequested, this, [this]() {
+        if (m_contentPanel) {
+            QStringList sel = m_contentPanel->getSelectedIndexesPaths();
+            if (!sel.isEmpty()) {
+                MarkedFolderService::instance().toggleMarked(sel.first());
+            }
+        }
+    });
+
+    connect(m_shortcutController, &AppShortcutController::transferToMarkedRequested, this, [this]() {
+        if (m_contentPanel) {
+            QStringList sel = m_contentPanel->getSelectedIndexesPaths();
+            if (!sel.isEmpty()) {
+                MarkedFolderService::instance().executeTransferToMarked(sel);
+            }
+        }
+    });
+>>>>>>> REPLACE
+```
+
+### 7.13 `src/ui/FavoritePanel.cpp`
+
+```
+<<<<<<< SEARCH
+    // 绘制开启自动递归右侧 layers 图标
+    if (isAutoRec) {
+        QRect layersRect(opt.rect.right() - 22, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
+        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#2ecc71"), 16);
+        layersIcon.paint(painter, layersRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+    }
+=======
+    // 绘制开启自动递归右侧 layers 图标与标记 Destination 图标
+    QString itemPath = index.data(Qt::UserRole + 1).toString();
+    bool isMarked = MarkedFolderService::instance().isMarked(itemPath);
+    int rightOffset = 22;
+    if (isAutoRec) {
+        QRect layersRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
+        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#2ecc71"), 16);
+        layersIcon.paint(painter, layersRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+        rightOffset += 20;
+    }
+
+    if (isMarked) {
+        QRect markIconRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
+        QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16);
+        markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+    }
+>>>>>>> REPLACE
+```
+
+```
+<<<<<<< SEARCH
+        QAction* favAct = FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+=======
+        QAction* favAct = FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+        MarkedFolderService::instance().buildMarkAction(&menu, path, this);
+>>>>>>> REPLACE
+```
+
+### 7.14 `src/ui/TreeItemDelegate.h`
+
+```
+<<<<<<< SEARCH
+            bool isPinned = index.data(PinnedRole).toBool();
+            int pinRightX = textRect.right() - CardPainterHelper::kPinRightPadding;
+            int pinW = CardPainterHelper::drawInlinePinIcon(painter, pinRightX, textRect.top(), textRect.height(), isPinned);
+
+            int reservedW = (pinW > 0) ? (pinW + CardPainterHelper::kPinToRatingGap) : 0;
+            QRect actualTextRect = textRect.adjusted(0, 0, -reservedW, 0);
+            QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideMiddle, actualTextRect.width() - 10);
+            painter->drawText(actualTextRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
+=======
+            bool isPinned = index.data(PinnedRole).toBool();
+            QString itemPath = index.data(PathRole).toString();
+            bool isMarked = MarkedFolderService::instance().isMarked(itemPath);
+            int pinRightX = textRect.right() - CardPainterHelper::kPinRightPadding;
+            int pinW = CardPainterHelper::drawInlinePinIcon(painter, pinRightX, textRect.top(), textRect.height(), isPinned);
+
+            if (isMarked) {
+                QRect markIconRect(pinRightX - (pinW > 0 ? (pinW + 4) : 0) - 16, textRect.top() + (textRect.height() - 16) / 2, 16, 16);
+                QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16);
+                markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
+                pinW += 20;
+            }
+
+            int reservedW = (pinW > 0) ? (pinW + CardPainterHelper::kPinToRatingGap) : 0;
+            QRect actualTextRect = textRect.adjusted(0, 0, -reservedW, 0);
+            QString elidedText = option.fontMetrics.elidedText(name, Qt::ElideMiddle, actualTextRect.width() - 10);
+            painter->drawText(actualTextRect, Qt::AlignLeft | Qt::AlignVCenter, elidedText);
+>>>>>>> REPLACE
+```
+
+### 7.15 `src/ui/NavPanel.cpp`
+
+```
+<<<<<<< SEARCH
+    FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+=======
+    FavoriteService::instance().buildFavoriteAction(&menu, path, this);
+    MarkedFolderService::instance().buildMarkAction(&menu, path, this);
+>>>>>>> REPLACE
+```
+
+### 7.16 `src/ui/controllers/ContentContextMenu.cpp`
+
+```
+<<<<<<< SEARCH
+            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
+
+            QStringList selPathsItem = m_panel->getSelectedPaths();
+            if (selPathsItem.isEmpty() && !path.isEmpty()) selPathsItem << path;
+            LibraryService::instance().buildLibraryAction(&menu, selPathsItem, m_panel);
+=======
+            FavoriteService::instance().buildFavoriteAction(&menu, path, m_panel);
+            MarkedFolderService::instance().buildMarkAction(&menu, path, m_panel);
+
+            QStringList selPathsItem = m_panel->getSelectedPaths();
+            if (selPathsItem.isEmpty() && !path.isEmpty()) selPathsItem << path;
+            LibraryService::instance().buildLibraryAction(&menu, selPathsItem, m_panel);
+>>>>>>> REPLACE
+```
+
+---
+
+## 8. 三道关合规性自检 (Three-Gate Self-Audit)
+
+- **第一关：黑盒接口契约自检**：既有 `.h` 头文件签名完全只读冻结；扩展包含全套新类源码与修改块。第 6 节清单与第 7 节代码 100% 对应一致。
+- **第二关：零破坏性自检**：「收藏夹」与「库」原有逻辑完全未动；`CMakeLists.txt` 完整包含 6 个新文件注册；`resources/style.qss` SEARCH 块逐字匹配。
+- **第三关：规范遵从自检**：包含 10 大章节规范与精准的 SEARCH/REPLACE 块。
+
+---
+
+## 9. 编译与验证测试计划 (Verification Test Plan)
+
+1. **构建与注册验证**：执行 `cmake` 验证 `CMakeLists.txt` 成功包含 `MarkedFolderDao` / `MarkedFolderService` / `MarkedPanel`。
+2. **QSS 与界面验证**：检查侧边栏第 3 个标签页及 6px 内边距渲染。
+3. **快捷键与动作验证**：在未编辑状态下测试 `Alt+C` 与 `Alt+V` 触发，以及右键菜单显示。
