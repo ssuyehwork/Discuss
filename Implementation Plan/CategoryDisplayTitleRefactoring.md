@@ -1,6 +1,6 @@
 # Implementation Plan - Category Display Title Refactoring
 
-**Base Commit Hash**: `34c6cf852784f7ad4fa0f4bfb23679b6ed61f70e`
+**Base Commit Hash**: `500b229`
 **Prerequisite Plans**: 无
 **Supersedes**: 无
 
