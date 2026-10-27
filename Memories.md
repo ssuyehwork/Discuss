@@ -424,25 +424,20 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 
 ---
 
-## 15. QuarkMeta 批量重命名与文件监视静默治理设计理念 (Batch Rename & Watch Suppression Architecture Philosophy)
+## 15. QuarkMeta 目录导航双选项卡与历史文件记录架构设计理念 (Directory Navigation Dual-Tab & File History Philosophy)
 
-> 本章节整理自与用户的架构研讨，作为批量重命名预设持久化、枚举字符串映射与文件监视防抖静默机制的设计真理源 (SSOT)。
+> 本章节记录与用户关于“目录导航双选项卡与历史文件记录”的设计要求与架构契约。
 
-### 15.1 重命名规则枚举与字符串映射单一真理源 (PresetManager SSOT Mapping Contract)
-1. **彻底消除双重映射写两份的结构缺陷**：
-   - 规则序列化（`serializeRules`）与反序列化（`deserializeRules`）绝对禁止分别手写独立的 `switch` 或 `if-else` 链条。
-   - 必须在 `PresetManager` 内部建立唯一静态双向/对照映射表（`kTypeMappings`），统一涵盖 `Text` ("Text")、`Sequence` ("Sequence")、`OriginalName` ("OriginalName")、`Date` ("Date")、`Metadata` ("Metadata")、`ParentFolderName` ("ParentFolderName") 等全部 `RenameComponentType` 枚举值，新增枚举项时仅需在此单一真理源处扩展。
-2. **错误处理与非静默丢弃契约**：
-   - 序列化遇到未登记的枚举类型时，调试版本通过 `Q_ASSERT` 报警；
-   - 反序列化遇到无法识别的类型字符串时，不得静默吞错丢弃规则，必须通过带 `unrecognizedCount` 输出参数的重载接口向调用方反馈累加计数，并在 UI 触发 `ToolTipOverlay` 友情 Toast 提示，保障用户预设数据的知情权与可靠性。
+### 15.1 双选项卡布局结构 (`NavPanel`)
+- “目录导航”区域结构升级为像“收藏夹 / 库”一样的双选项卡 (`QTabBar` + `QStackedWidget`) 容器：
+  * **选项卡 1【目录导航】**：展示桌面、此电脑、磁盘驱动器列表、最近访问文件夹与回收站树状导航；
+  * **选项卡 2【历史】**：新增 `FileHistoryPanel` 历史文件记录面板，专门承载用户访问过的文件列表。
 
-### 15.2 批量重命名文件监视静默与收口刷新契约 (Batch Rename Watch Suppression & Final Single-Refresh Contract)
-1. **批量重命名期间全局监视静默 (Watch Suppression)**：
-   - 在触发批量重命名（`performBatchRename`）之前，系统必须通过 RAII 管理器（`SuppressGuard`）对发起窗格及其所有分屏副窗格（`rootPane()->panes()`）调用 `beginWatchSuppress()`，开启监视静默；
-   - 静默期间，`ContentChangeWatcher` 拦截所有文件系统改变回调（`onDirectoryChanged`），禁止刷新视图、启动防抖定时器或积累脏数据变动，消除批量重命名执行过程中列表的中途抖动与多次刷新。
-2. **防抖队列积压丢弃与代数阻断机制 (Discard Pending & Discard Generation)**：
-   - `DirectoryWatchService` 提供 `discardPending(dirPath, includeSubtree)` 接口，在清理 `m_debounceMap` 队列中积压事件的同时，引入线程安全“丢弃代数”计数器（`m_discardGenerations`）；
-   - 当异步线程投递的 `directoryChanged` 信号在主线程被回调时，校验其投递代数是否匹配，若不匹配则自动熔断丢弃，确保已投递未执行的改变事件彻底失效。
-3. **完成收口与尾部单次刷新**：
-   - 批量重命名对话框关闭（`exec()` 结束）后，RAII Guard 自动释放所有窗格的静默状态（`endWatchSuppress()`），并在 `endSuppress()` 归零时自动调用 `discardPending` 清理监视积压；
-   - 重命名成功后，对每个关联分屏窗格执行且仅执行一次 `refreshAll()` 刷平，消除任何尾部多余刷新，保证重命名完成后视图状态一致且文件监视无缝恢复。
+### 15.2 历史文件捕获与容量规则
+- **限定记录文件**：历史记录面板**只记录文件**，严格排除任何文件夹/目录实体。
+- **触发源一致性**：凡是用户通过**空格键预览**、**双击预览**或**打开/激活**（`fileActivated`）的文件，均由 `PanelMediator` 自动捕获并追加入历史列表。
+- **容量上限与持久化**：采用最新置顶、先进先出 (FIFO) 队列，数量上限严格锁定为 **100 个**，并通过 `AppConfig`（`UI/RecentFilesHistory`）进行持久化保存与恢复。
+
+### 15.3 交互扩展能力（拖拽与定位）
+- **支持拖拽至收藏夹**：历史列表中的文件项支持 Mouse Drag 操作，按标准 `text/uri-list` 格式封装 `QMimeData`，可直接拖拽投递至左侧“收藏夹”面板完成快捷收藏。
+- **支持文件定位**：历史列表项目支持双击/右键“定位文件”菜单，发送 `requestLocateFile(path)` 信号，由 `PanelMediator` 驱动 `ContentPanel` 跳转至目标文件夹并高亮选中该文件。
