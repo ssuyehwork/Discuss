@@ -160,6 +160,7 @@ QLabel#TitleLogoLabel {
 
 QLabel#ContentHeaderTitle[activePane="true"] {
     color: #ff551c;
+    font-weight: bold;
 }
 QLabel#AppNameLabel {
     color: #ff551c;
@@ -1778,6 +1779,7 @@ QMenu {
 QMenu#TitleBarViewModeMenu::item:checked,
 QMenu#TitleBarViewModeMenu::item:checked:selected {
     color: #ff551c;
+    font-weight: bold;
 }
 QMenu#TitleBarViewModeMenu::indicator:checked {
     width: 14px;

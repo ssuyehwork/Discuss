@@ -761,6 +761,7 @@ void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
         return;
     }
 
+    QString nodeName = index.data(Qt::DisplayRole).toString();
     if (index.data(TypeRole).toString() == "smart_folder") {
         SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(nodeId);
         emit smartFolderSelected(rec);
@@ -768,7 +769,7 @@ void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
     }
 
     QStringList paths = LibraryService::instance().getCategoryPaths(nodeId);
-    emit categoryPathsSelected(paths);
+    emit categoryPathsSelected(paths, nodeName);
 }
 
 void LibraryPanel::filterTreeNodes(const QString& keyword) {

@@ -68,7 +68,7 @@ public:
     LibraryTreeView* treeView() const { return m_treeView; }
 
 signals:
-    void categoryPathsSelected(const QStringList& paths);
+    void categoryPathsSelected(const QStringList& paths, const QString& name = QString());
     void smartFolderSelected(const SmartFolderRecord& record);
     void requestLocateFile(const QString& path);
 
