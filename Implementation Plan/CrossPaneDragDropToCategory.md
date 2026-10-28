@@ -17,11 +17,13 @@
 - `Implementation Plan/CrossPaneDragDropToCategory.md`（本实施方案文件）
 
 ### 2.2 待重构的 C++ 源码文件（仅在实施方案中规划，物理代码保持零修改）
-1. `src/ui/ContentPanel.h` / `src/ui/ContentPanel.cpp`
+1. `src/ui/LibraryPanel.h` / `src/ui/LibraryPanel.cpp`
+   - **信号与发射扩展**：将 `categoryPathsSelected` 信号拓宽形参，带上当前分类的 `int categoryId`（`void categoryPathsSelected(const QStringList& paths, const QString& name = QString(), int categoryId = 0)`），并在 `onCategoryClicked` 触发时发射 `nodeId`。
+2. `src/ui/ContentPanel.h` / `src/ui/ContentPanel.cpp`
    - **状态维护**：新增 `int currentCategoryId() const` 与 `void setCurrentCategoryId(int id)` 方法，用于记录当前窗格展示的库分类 Node ID。
-2. `src/ui/PanelMediator.cpp`
-   - **状态注入**：在 `categoryPathsSelected` 与 `smartFolderSelected` 回调中，向目标 `ContentPanel` 注入分类 `categoryId`（普通分类为 `nodeId`，智能文件夹为 `-20`）。
-3. `src/ui/controllers/ContentFileOpsHandler.cpp`
+3. `src/ui/PanelMediator.cpp`
+   - **状态注入**：在 `categoryPathsSelected` 信号槽回调中接纳 `categoryId` 并注入到目标 `ContentPanel`；在 `smartFolderSelected` 回调中向目标 `ContentPanel` 注入分类 `categoryId`（智能文件夹为 `-20`）。
+4. `src/ui/controllers/ContentFileOpsHandler.cpp`
    - **拖放逻辑分流**：在 `onPathsDropped` 顶部增加对 `m_panel->getCurrentCategoryType()` 和 `m_panel->currentCategoryId()` 的条件判定：
      - 若为普通分类（`categoryType == "library"` 且 `categoryId > 0` 或 `categoryId == -2`）：调用 `LibraryService::instance().addPathsToCategory(categoryId, paths)`，弹出 Toast `已成功归入该分类`，并刷新视图；
      - 若为智能文件夹或全量视图（`categoryType == "smart_folder"` 或 `categoryId == -1` 或 `categoryId == -20`）：自动归属于“未分类”（`addPathsToCategory(-2, paths)`），通过 `ToolTipOverlay` 弹出 Toast `项目已入库到“未分类”`，并刷新视图；
@@ -33,7 +35,31 @@
 
 以下为后续授权实施时针对各受影响 C++ 源码文件的精确修改方案：
 
-### 3.1 `src/ui/ContentPanel.h`
+### 3.1 `src/ui/LibraryPanel.h`
+
+```cpp
+<<<<<<< SEARCH
+signals:
+    void categoryPathsSelected(const QStringList& paths, const QString& name = QString());
+=======
+signals:
+    void categoryPathsSelected(const QStringList& paths, const QString& name = QString(), int categoryId = 0);
+>>>>>>> REPLACE
+```
+
+### 3.2 `src/ui/LibraryPanel.cpp`
+
+```cpp
+<<<<<<< SEARCH
+    QStringList paths = LibraryService::instance().getCategoryPaths(nodeId);
+    emit categoryPathsSelected(paths, nodeName);
+=======
+    QStringList paths = LibraryService::instance().getCategoryPaths(nodeId);
+    emit categoryPathsSelected(paths, nodeName, nodeId);
+>>>>>>> REPLACE
+```
+
+### 3.3 `src/ui/ContentPanel.h`
 
 ```cpp
 <<<<<<< SEARCH
@@ -54,7 +80,7 @@
 >>>>>>> REPLACE
 ```
 
-### 3.2 `src/ui/ContentPanel.cpp`
+### 3.4 `src/ui/ContentPanel.cpp`
 
 ```cpp
 <<<<<<< SEARCH
@@ -69,10 +95,15 @@ void ContentPanel::setCurrentPath(const QString& path) {
 >>>>>>> REPLACE
 ```
 
-### 3.3 `src/ui/PanelMediator.cpp`
+### 3.5 `src/ui/PanelMediator.cpp`
 
 ```cpp
 <<<<<<< SEARCH
+        if (libraryPanel) {
+            connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel, filterPanel, addressBar](const QStringList& paths, const QString& name) {
+                if (filterPanel) {
+                    filterPanel->clearAllFilters(false);
+                }
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
                     target->setCurrentCategoryType("library");
@@ -81,11 +112,16 @@ void ContentPanel::setCurrentPath(const QString& path) {
                     target->loadLibraryPaths(paths);
                 }
 =======
+        if (libraryPanel) {
+            connect(libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this, contentPanel, filterPanel, addressBar](const QStringList& paths, const QString& name, int categoryId) {
+                if (filterPanel) {
+                    filterPanel->clearAllFilters(false);
+                }
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
                     target->setCurrentCategoryType("library");
                     target->setCurrentCategoryTitle(name);
-                    target->setCurrentCategoryId(libraryPanel ? libraryPanel->selectedCategoryId() : 0);
+                    target->setCurrentCategoryId(categoryId);
                     target->setLastLoadedLibraryPaths(paths);
                     target->loadLibraryPaths(paths);
                 }
@@ -113,7 +149,7 @@ void ContentPanel::setCurrentPath(const QString& path) {
 >>>>>>> REPLACE
 ```
 
-### 3.4 `src/ui/controllers/ContentFileOpsHandler.cpp`
+### 3.6 `src/ui/controllers/ContentFileOpsHandler.cpp`
 
 ```cpp
 <<<<<<< SEARCH
@@ -197,4 +233,4 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
 
 ## 10. 实施步骤与预估工时
 1. 撰写并提交 `Implementation Plan/CrossPaneDragDropToCategory.md` 实施方案（已完成，预估工时 0.2h）。
-2. 待用户给予明确代码实施授权后，依方案编辑 `ContentPanel`、`PanelMediator` 与 `ContentFileOpsHandler` 并进行编译与测试验证（预估工时 0.4h）。
+2. 待用户给予明确代码实施授权后，依方案编辑 `LibraryPanel`、`ContentPanel`、`PanelMediator` 与 `ContentFileOpsHandler` 并进行编译与测试验证（预估工时 0.4h）。
