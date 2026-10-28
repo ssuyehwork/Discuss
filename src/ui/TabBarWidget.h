@@ -8,6 +8,8 @@
 #include <QString>
 #include <QEvent>
 #include <QResizeEvent>
+#include <QScrollArea>
+#include <QWheelEvent>
 
 namespace QuarkMeta {
 
@@ -131,17 +133,25 @@ signals:
     void mergeRequested(int sourceIndex, int targetIndex);
     void splitRequested(int tabIndex);
     void folderDroppedOnTab(int tabIndex, const QString& folderPath);
+    void tabColorChanged(int index, const QString& url, const QString& hexColor);
+    void tabIconChanged(int index, const QString& url, const QString& iconKey);
 
-private:
+protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
+private:
     void showTabContextMenu(int index, const QPoint& globalPos);
     void updateTabsUiState();
-    void rebuildTabsUi();
+    void applyDiffUpdate();
 
     QHBoxLayout* m_mainLayout = nullptr;
+    QScrollArea* m_scrollArea = nullptr;
+    QWidget* m_tabsContainer = nullptr;
+    QHBoxLayout* m_tabsContainerLayout = nullptr;
     QHBoxLayout* m_tabsLayout = nullptr;
     QPushButton* m_btnNewTab = nullptr;
     HoverEventFilter* m_hoverFilter = nullptr;

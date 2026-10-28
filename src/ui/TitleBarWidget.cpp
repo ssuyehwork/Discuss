@@ -107,8 +107,15 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
     m_layout->addWidget(m_logoLabel);
 
     m_tabBar = new TabBarWidget(this, hoverFilter);
-    m_layout->addWidget(m_tabBar);
-    m_layout->addStretch();
+    m_tabBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    m_layout->addWidget(m_tabBar, 1);
+
+    m_rightToolContainer = new QWidget(this);
+    m_rightToolContainer->setObjectName("TitleRightToolContainer");
+    m_rightToolContainer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    QHBoxLayout* rightLayout = new QHBoxLayout(m_rightToolContainer);
+    rightLayout->setContentsMargins(0, 0, 0, 0);
+    rightLayout->setSpacing(8);
 
     auto createTitleBtn = [this, hoverFilter](const QString& iconKey, const QString& tip) -> QPushButton* {
         QPushButton* btn = new QPushButton(this);
@@ -200,15 +207,17 @@ void TitleBarWidget::initUi(HoverEventFilter* hoverFilter) {
         if (window()) window()->close();
     });
 
-    m_layout->addWidget(m_sizeSlider, 0, Qt::AlignVCenter);
-    m_layout->addWidget(m_btnViewMenu, 0, Qt::AlignVCenter);
-    m_layout->addWidget(m_btnToggleDriveBar, 0, Qt::AlignVCenter);
-    m_layout->addWidget(m_btnLayout, 0, Qt::AlignVCenter);
-    m_layout->addWidget(m_btnCreate, 0, Qt::AlignVCenter);
-    m_layout->addWidget(m_btnPinTop, 0, Qt::AlignVCenter);
-    m_layout->addWidget(m_btnMin, 0, Qt::AlignVCenter);
-    m_layout->addWidget(m_btnMax, 0, Qt::AlignVCenter);
-    m_layout->addWidget(m_btnClose, 0, Qt::AlignVCenter);
+    rightLayout->addWidget(m_sizeSlider, 0, Qt::AlignVCenter);
+    rightLayout->addWidget(m_btnViewMenu, 0, Qt::AlignVCenter);
+    rightLayout->addWidget(m_btnToggleDriveBar, 0, Qt::AlignVCenter);
+    rightLayout->addWidget(m_btnLayout, 0, Qt::AlignVCenter);
+    rightLayout->addWidget(m_btnCreate, 0, Qt::AlignVCenter);
+    rightLayout->addWidget(m_btnPinTop, 0, Qt::AlignVCenter);
+    rightLayout->addWidget(m_btnMin, 0, Qt::AlignVCenter);
+    rightLayout->addWidget(m_btnMax, 0, Qt::AlignVCenter);
+    rightLayout->addWidget(m_btnClose, 0, Qt::AlignVCenter);
+
+    m_layout->addWidget(m_rightToolContainer, 0, Qt::AlignRight | Qt::AlignVCenter);
 }
 
 void TitleBarWidget::setupViewMenu() {

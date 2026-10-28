@@ -56,6 +56,7 @@ private:
     QHBoxLayout* m_layout = nullptr;
     QLabel* m_logoLabel = nullptr;
     TabBarWidget* m_tabBar = nullptr;
+    QWidget* m_rightToolContainer = nullptr;
 
     QPushButton* m_btnViewMenu = nullptr;
     QSlider* m_sizeSlider = nullptr;

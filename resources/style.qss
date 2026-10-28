@@ -8,8 +8,22 @@ QWidget#CentralWidget { background-color: #1E1E1E; }
     border-bottom: 1px solid #333333;
 }
 
-/* 浏览器多标签页 TabBarWidget 专属精细样式 (严格消除 QWidget 级联边框) */
+/* 右侧工具栏固定容器 */
+QWidget#TitleRightToolContainer {
+    background: transparent;
+    border: none;
+}
+
+/* 浏览器多标签页 TabBarWidget 专属精细样式 (严格消除 QWidget 级联边框与 QScrollArea 框架线) */
 QWidget#TabBarWidget {
+    background: transparent;
+    border: none;
+}
+QScrollArea#TabBarScrollArea {
+    background: transparent;
+    border: none;
+}
+QWidget#TabBarContainer {
     background: transparent;
     border: none;
 }
@@ -107,7 +121,7 @@ QSplitter::handle:horizontal:hover {
 /* 核心容器样式 - 彻底消除 margin，由 QSplitter 5px 句柄原生提供栏间 5px 物理间距，确保面板精确呈现 230px 物理满额宽度 */
 #SidebarContainer, #SidebarContainerWidget, #ListContainer, #EditorContainer, #MetadataContainer, #FilterContainer {
     background-color: #1E1E1E;
-    border: 1px solid #333333;
+    border: none;
     border-radius: 0px;
     color: #EEEEEE;
     margin: 0px;

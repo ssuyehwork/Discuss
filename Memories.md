@@ -532,3 +532,45 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 2. **就地属性更新与轻量渲染**：
    - 点击标签按钮时，直接在当前 `QPushButton` 上就地切换状态（`setChecked`、`setProperty("selected", ...)` 与图标更新），保持控件树稳定，确保焦点与事件序列平稳无损。
 
+---
+
+## 19. 标题栏标签页组件 (TabBarWidget) 规范化架构与防溢出设计理念 (TitleBar TabBar Architecture & Layout Protection Philosophy)
+
+> 本章节整理自与用户的架构治理探讨与共识确认（路径 B：彻底规范化架构重构），作为标题栏多标签页系统架构设计与重构实施的唯一真理源 (SSOT)。
+
+### 19.1 标题栏安全边界与空间硬锁铁律 (TitleBar Space Protection & Anti-Overflow Contract)
+1. **右侧系统工具区绝对安全边界**：
+   - 标题栏右侧区域（包括视图模式切换、缩放滑块、盘符折叠按钮、窗口置顶/最小化/最大化/关闭按钮）为全软件核心系统控制区，具有最高优先级空间保护权；
+   - 必须在 `TitleBarWidget` 布局中为右侧工具区设立硬性固定尺寸与物理安全边界，严禁被左侧标签栏挤压、压缩或移出可视区域。
+2. **标签栏绝对紧凑左靠拢与右侧拖拽留白铁律 (Compact Left-Aligned & Drag Area Protection Contract)**：
+   - **绝对紧凑左排布**：标签与标签之间的间距严格锁定为 `2px`，严禁在标签之间产生任何多余弹性间隙或均分空白（严禁散弹枪式分裂间隙）；
+   - **新建按钮紧贴尾部**：`+`（新建标签页按钮）必须紧贴在最后一个标签项的右侧尾部（Follower 模式），禁止脱离孤立；
+   - **右侧大面积窗口拖拽留白区**：在新建按钮右侧与右侧工具区之间，必须保留强力伸缩弹簧（`addStretch(1)`），将剩余的所有空白统一留给标题栏右侧，既作为视觉留白，也作为无边框窗口鼠标按住拖拽移动窗口的物理把手；
+   - **超限方压缩（阶梯压缩）**：少标签时每个标签维持自然的紧凑最大宽度（如 `180px` ~ `200px`），绝不允许在少标签时被均分拉宽撑满全屏；仅当 `标签总数 × 默认宽度 + 新建按钮` 超过标题栏可用最大容量时，才触发等比动态阶梯压缩（平滑压缩至最小 `80px`），压缩至极限仍超出时启动横向水平滚动。
+3. **标签页文字按需自然展开铁律 (Content-Driven Zero-Truncation Contract)**：
+   - 当标题栏右侧空间充足、留白充裕时，标签项的宽度必须根据标题文本内容自然伸展（`QFontMetrics::horizontalAdvance(title) + 56px` 物理内边距）；
+   - **空间充裕时必须 100% 完整展示标题名称，绝对严禁人为固定低宽度上限而触发 `...` 省略号截断**！
+   - 唯有在所有标签自然宽度总和突破标题栏安全容量阈值时，方可自适应启动阶梯平滑压缩并在压缩触及极限下限（`80px`）后触发省略与横向水平滚动。
+4. **虚拟分类与全景视图感知铁律 (Virtual Category & View State Tab Sync Contract)**：
+   - 标签页作为全软件视角核心指示器，绝不仅限于展示物理磁盘路径；
+   - 必须全面支持并毫秒级同步展示“库”虚拟分类（如“全部数据”、“其他”、“未分类”等）以及“智能文件夹”等非磁盘目录的真实语义名称与专属矢量图标；
+   - 由 `PanelMediator` 在 `categoryPathsSelected` 等虚拟分类选择信号中统一闭环调度 `titleBar->tabBar()->updateCurrentTabTitle(name, virtualUrl)`，彻底终结标签页与内容面板状态脱节。
+
+
+### 19.2 纯 View 层职责边界与依赖隔离铁律 (Strict View Layer & Dependency Isolation)
+1. **彻底斩断底层私通**：
+   - `TabBarWidget` 必须坚守纯 View 层定位，仅负责绘制、Tab 状态呈现与用户交互事件派发；
+   - **绝对禁止**在 `TabBarWidget` 中直接包含或调用 Domain/Data 层单例与持久化服务（严禁 `#include "FavoriteDao.h"`、`"MetadataManager.h"`、`"AppConfig.h"`、`"CoreEngine.h"`）；
+   - 所有右键菜单指令、元数据变更、收藏状态更新及分屏逻辑，必须由 View 抛出标准化信号（或 DTO），统一移交控制协调层（`PanelMediator`）调度处理。
+2. **彻底消灭 `findChild<TabBarWidget*>()` 偷指针反模式**：
+   - 严禁任何外部业务面板（如 `AddressBar`、`NavPanel`、`FavoritePanel` 等）通过 `window()->findChild<TabBarWidget*>()` 跨层下钻获取标签栏指针；
+   - 外部对标签页的联动请求（如“新标签页打开”、“切换标签页”、“定位路径”）必须统一通过 `CentralEventHub` 或 `PanelMediator` 的标准化信号槽契约进行分发，维护严格的黑盒隔离。
+
+### 19.3 生命周期差量更新契约 (Incremental Diff & Zero Full Rebuild Contract)
+1. **彻底废除全量推倒重建**：
+   - 严禁在标签数量或状态变动时使用清空布局、暴力 `deleteLater` 全部控件并重新循环创建的落后做法（严禁全量清空重建）；
+   - 该反模式会导致频繁的堆内存碎片、高频对象抖动、瞬时焦点丢失与右键上下文断裂。
+2. **基于 Tab ID 的差量增量维护**：
+   - 标签栏必须建立基于唯一 Tab ID 的差量更新机制：新开标签仅执行局部 `new` 与插入，关闭标签仅针对性移除目标控件，状态变更仅就地刷新属性（`setActive`、标题与图标），确保控件树长周期稳定。
+
+

@@ -3,9 +3,6 @@
 #include "StyleLibrary.h"
 #include "ColorPicker.h"
 #include "HoverEventFilter.h"
-#include "../meta/MetadataManager.h"
-#include "../core/CoreEngine.h"
-#include "../meta/FavoriteDao.h"
 #include "../core/AppConfig.h"
 
 #include <QJsonDocument>
@@ -29,6 +26,7 @@
 #include <QMimeData>
 #include <QUrl>
 #include <QApplication>
+#include <QScrollBar>
 
 namespace QuarkMeta {
 
@@ -37,7 +35,7 @@ TabItemButton::TabItemButton(int index, QWidget* parent)
     setObjectName("TabItem");
     setFocusPolicy(Qt::NoFocus);
     setFixedHeight(28);
-    setMaximumWidth(240);
+    setMaximumWidth(600);
     setMinimumWidth(80);
     setCursor(Qt::PointingHandCursor);
 
@@ -129,10 +127,14 @@ void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
             QMimeData* mimeData = new QMimeData();
             mimeData->setData("application/x-quarkmeta-tabindex", QByteArray::number(m_index));
 
-            TabBarWidget* tabBar = qobject_cast<TabBarWidget*>(parentWidget());
-            if (!tabBar && parentWidget()) {
-                tabBar = qobject_cast<TabBarWidget*>(parentWidget()->parentWidget());
+            TabBarWidget* tabBar = nullptr;
+            QWidget* current = parentWidget();
+            while (current) {
+                tabBar = qobject_cast<TabBarWidget*>(current);
+                if (tabBar) break;
+                current = current->parentWidget();
             }
+
             if (tabBar) {
                 QString url = tabBar->tabUrl(m_index);
                 if (!url.isEmpty()) {
@@ -183,14 +185,29 @@ TabBarWidget::TabBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
     setFixedHeight(30);
 
     m_mainLayout = new QHBoxLayout(this);
-    m_mainLayout->setContentsMargins(0, 2, 0, 0);
-    m_mainLayout->setSpacing(4);
+    m_mainLayout->setContentsMargins(0, 0, 0, 0);
+    m_mainLayout->setSpacing(0);
+
+    m_scrollArea = new QScrollArea(this);
+    m_scrollArea->setObjectName("TabBarScrollArea");
+    m_scrollArea->setWidgetResizable(true);
+    m_scrollArea->setFrameShape(QFrame::NoFrame);
+    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scrollArea->setFocusPolicy(Qt::NoFocus);
+
+    m_tabsContainer = new QWidget(m_scrollArea);
+    m_tabsContainer->setObjectName("TabBarContainer");
+
+    m_tabsContainerLayout = new QHBoxLayout(m_tabsContainer);
+    m_tabsContainerLayout->setContentsMargins(0, 0, 0, 0);
+    m_tabsContainerLayout->setSpacing(4);
 
     m_tabsLayout = new QHBoxLayout();
-    m_tabsLayout->setContentsMargins(0, 0, 0, 0);
+    m_tabsLayout->setContentsMargins(0, 2, 0, 0);
     m_tabsLayout->setSpacing(2);
 
-    m_btnNewTab = new QPushButton(this);
+    m_btnNewTab = new QPushButton(m_tabsContainer);
     m_btnNewTab->setFocusPolicy(Qt::NoFocus);
     m_btnNewTab->setAttribute(Qt::WA_Hover, true);
     m_btnNewTab->setFixedSize(22, 22);
@@ -207,12 +224,34 @@ TabBarWidget::TabBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
         emit newTabRequested();
     });
 
-    m_mainLayout->addLayout(m_tabsLayout);
-    m_mainLayout->addWidget(m_btnNewTab, 0, Qt::AlignVCenter);
-    m_mainLayout->addStretch();
+    m_tabsContainerLayout->addLayout(m_tabsLayout);
+    m_tabsContainerLayout->addWidget(m_btnNewTab, 0, Qt::AlignVCenter);
+    m_tabsContainerLayout->addStretch(1);
+
+    m_scrollArea->setWidget(m_tabsContainer);
+    m_mainLayout->addWidget(m_scrollArea, 1);
 
     // 默认添加首个“此电脑”标签页
     addTab("此电脑", "computer://", true);
+}
+
+void TabBarWidget::wheelEvent(QWheelEvent* event) {
+    if (m_scrollArea && m_scrollArea->horizontalScrollBar()) {
+        int delta = event->angleDelta().y();
+        if (delta == 0) delta = event->angleDelta().x();
+        if (delta != 0) {
+            m_scrollArea->horizontalScrollBar()->setValue(
+                m_scrollArea->horizontalScrollBar()->value() - delta);
+            event->accept();
+            return;
+        }
+    }
+    QWidget::wheelEvent(event);
+}
+
+void TabBarWidget::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    applyDiffUpdate();
 }
 
 void TabBarWidget::addTab(const QString& title, const QString& url, bool switchToNew) {
@@ -226,7 +265,7 @@ void TabBarWidget::addTab(const QString& title, const QString& url, bool switchT
     if (switchToNew || m_currentIndex == -1) {
         setCurrentIndex(m_tabs.size() - 1, true);
     } else {
-        rebuildTabsUi();
+        applyDiffUpdate();
     }
     saveStateToConfig();
 }
@@ -350,7 +389,7 @@ void TabBarWidget::mergeTab(int sourceIndex, int targetIndex) {
         newTargetIdx--;
     }
 
-    rebuildTabsUi();
+    applyDiffUpdate();
     setCurrentIndex(newTargetIdx, true);
     saveStateToConfig();
 }
@@ -391,7 +430,7 @@ void TabBarWidget::splitTab(int tabIndex) {
         m_tabs[i].active = (i == m_currentIndex);
     }
 
-    rebuildTabsUi();
+    applyDiffUpdate();
     emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
     saveStateToConfig();
 }
@@ -582,7 +621,7 @@ bool TabBarWidget::restoreStateFromConfig() {
         m_tabs[i].active = (i == m_currentIndex);
     }
 
-    rebuildTabsUi();
+    applyDiffUpdate();
     m_isInitializing = false;
 
     if (m_currentIndex >= 0 && m_currentIndex < m_tabs.size()) {
@@ -663,7 +702,7 @@ void TabBarWidget::dropEvent(QDropEvent* event) {
                         m_tabs[i].active = (i == m_currentIndex);
                     }
 
-                    rebuildTabsUi();
+                    applyDiffUpdate();
                     saveStateToConfig();
                 }
             }
@@ -698,13 +737,14 @@ void TabBarWidget::dropEvent(QDropEvent* event) {
     QWidget::dropEvent(event);
 }
 
-
 void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& url) {
     if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
 
     QString folderName = title;
     if (url == "computer://" || url.isEmpty()) {
         folderName = "此电脑";
+    } else if (url.startsWith("library://") || url.startsWith("smartfolder://")) {
+        folderName = title;
     } else if (title.contains("/") || title.contains("\\")) {
         QString cleanPath = QDir::cleanPath(url);
         QFileInfo fi(cleanPath);
@@ -714,25 +754,10 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
         }
     }
 
-    QString colorHex = m_tabs[m_currentIndex].color;
-    if (colorHex.isEmpty() && !url.startsWith("computer://") && !url.isEmpty()) {
-        auto meta = MetadataManager::instance().getMeta(url.toStdWString());
-        colorHex = QString::fromStdWString(meta.manualColor);
-    }
-
     m_tabs[m_currentIndex].title = folderName.isEmpty() ? "此电脑" : folderName;
     m_tabs[m_currentIndex].url = url;
-    if (!colorHex.isEmpty()) {
-        m_tabs[m_currentIndex].color = colorHex;
-    }
 
-    if (m_currentIndex < m_tabWidgets.size()) {
-        auto tabBtn = m_tabWidgets[m_currentIndex];
-        tabBtn->setTabTitle(m_tabs[m_currentIndex].title);
-        QColor iconColor = !colorHex.isEmpty() ? QColor(colorHex) : QColor("#EEEEEE");
-        QString iconKey = !m_tabs[m_currentIndex].iconKey.isEmpty() ? m_tabs[m_currentIndex].iconKey : (url.startsWith("computer://") ? "computer" : "folder_filled");
-        tabBtn->setTabIcon(UiHelper::getIcon(iconKey, iconColor));
-    }
+    applyDiffUpdate();
     saveStateToConfig();
 }
 
@@ -745,99 +770,91 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
     menu.setObjectName("TabContextMenu");
     UiHelper::applyMenuStyle(&menu);
 
-    // 1. 颜色条组件（所有标签页无条件展示）
+    // 1. 颜色条组件
     QString curColorHex = tab.color.isEmpty() ? "#888888" : tab.color;
-        QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
-        ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
-        colorPickerAction->setDefaultWidget(colorPickerWidget);
-        menu.addAction(colorPickerAction);
+    QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
+    ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
+    colorPickerAction->setDefaultWidget(colorPickerWidget);
+    menu.addAction(colorPickerAction);
 
-        // 2. 图标九宫格子菜单
-        QMenu* iconMenu = menu.addMenu(UiHelper::getIcon(tab.iconKey.isEmpty() ? "folder_filled" : tab.iconKey, QColor("#EEEEEE")), "切换图标");
-        UiHelper::applyMenuStyle(iconMenu);
+    // 2. 图标九宫格子菜单
+    QMenu* iconMenu = menu.addMenu(UiHelper::getIcon(tab.iconKey.isEmpty() ? "folder_filled" : tab.iconKey, QColor("#EEEEEE")), "切换图标");
+    UiHelper::applyMenuStyle(iconMenu);
 
-        QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
-        QWidget* pickerWidget = new QWidget(iconMenu);
-        QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
-        pickerLayout->setContentsMargins(6, 6, 6, 6);
-        pickerLayout->setSpacing(6);
+    QWidgetAction* pickerAction = new QWidgetAction(iconMenu);
+    QWidget* pickerWidget = new QWidget(iconMenu);
+    QGridLayout* pickerLayout = new QGridLayout(pickerWidget);
+    pickerLayout->setContentsMargins(6, 6, 6, 6);
+    pickerLayout->setSpacing(6);
 
-        static const QList<QPair<QString, QString>> builtInIcons = {
-            {"默认文件夹", "folder_filled"}, {"照片媒体", "image_filled"}, {"相册图片", "image_picture"},
-            {"时钟历史", "clock_filled"}, {"星标收藏", "star_filled"}, {"实心星标", "star_001"},
-            {"空心星标", "star_002"}, {"爱心常用", "heart_filled"}, {"加密安全", "lock_filled"},
-            {"图书文档", "book"}, {"附加文档", "document_attach"}, {"配置管理", "settings_filled"},
-            {"网络球体", "globe_filled"}, {"主页主路径", "home_filled"}, {"标签标记", "tag_filled"},
-            {"书签指示", "bookmark_filled"}, {"音频音乐", "music_filled"}, {"视频影视", "video_filled"},
-            {"摄影相机", "camera_filled"}, {"盾牌防护", "shield_filled"}, {"物理硬盘", "hard_drive"},
-            {"云端同步", "cloud_filled"}, {"闪电极速", "zap_filled"}, {"魔法火花", "sparkles_filled"},
-            {"旗帜标记", "flag_filled"}, {"旗帜标示", "flag"}, {"礼物珍藏", "gift_filled"},
-            {"奖星勋章", "award_filled"}, {"回收废弃", "trash_filled"}, {"邮件通信", "mail_filled"},
-            {"消息通知", "message_filled"}, {"电话联系", "phone_filled"}, {"地理定位", "map_pin_filled"},
-            {"日光白天", "sun_filled"}, {"夜间月亮", "moon_filled"}, {"日历日程", "calendar_filled"},
-            {"今日任务", "today_filled"}, {"九宫网格", "grid_filled"}, {"布局排版", "layout_filled"},
-            {"数据表格", "table_filled"}, {"磁盘保存", "save_filled"}, {"魔棒工具", "wand_filled"},
-            {"附件剪辑", "paperclip"}, {"归档文件", "archive"},
-            {"OneNote笔记", "onenote"}, {"下载中心", "download"}
-        };
+    static const QList<QPair<QString, QString>> builtInIcons = {
+        {"默认文件夹", "folder_filled"}, {"照片媒体", "image_filled"}, {"相册图片", "image_picture"},
+        {"时钟历史", "clock_filled"}, {"星标收藏", "star_filled"}, {"实心星标", "star_001"},
+        {"空心星标", "star_002"}, {"爱心常用", "heart_filled"}, {"加密安全", "lock_filled"},
+        {"图书文档", "book"}, {"附加文档", "document_attach"}, {"配置管理", "settings_filled"},
+        {"网络球体", "globe_filled"}, {"主页主路径", "home_filled"}, {"标签标记", "tag_filled"},
+        {"书签指示", "bookmark_filled"}, {"音频音乐", "music_filled"}, {"视频影视", "video_filled"},
+        {"摄影相机", "camera_filled"}, {"盾牌防护", "shield_filled"}, {"物理硬盘", "hard_drive"},
+        {"云端同步", "cloud_filled"}, {"闪电极速", "zap_filled"}, {"魔法火花", "sparkles_filled"},
+        {"旗帜标记", "flag_filled"}, {"旗帜标示", "flag"}, {"礼物珍藏", "gift_filled"},
+        {"奖星勋章", "award_filled"}, {"回收废弃", "trash_filled"}, {"邮件通信", "mail_filled"},
+        {"消息通知", "message_filled"}, {"电话联系", "phone_filled"}, {"地理定位", "map_pin_filled"},
+        {"日光白天", "sun_filled"}, {"夜间月亮", "moon_filled"}, {"日历日程", "calendar_filled"},
+        {"今日任务", "today_filled"}, {"九宫网格", "grid_filled"}, {"布局排版", "layout_filled"},
+        {"数据表格", "table_filled"}, {"磁盘保存", "save_filled"}, {"魔棒工具", "wand_filled"},
+        {"附件剪辑", "paperclip"}, {"归档文件", "archive"},
+        {"OneNote笔记", "onenote"}, {"下载中心", "download"}
+    };
 
-        QColor catColor = QColor(curColorHex);
-        QList<QPair<QPushButton*, QString>> iconButtons;
-        int row = 0, col = 0;
-        for (const auto& pair : builtInIcons) {
-            QString iconKey = pair.second;
-            QPushButton* btn = new QPushButton(pickerWidget);
-            btn->setFixedSize(28, 28);
-            btn->setCursor(Qt::PointingHandCursor);
-            btn->setObjectName("FavPickerIconBtn");
-            btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
-            btn->setIconSize(QSize(18, 18));
-            pickerLayout->addWidget(btn, row, col);
+    QColor catColor = QColor(curColorHex);
+    QList<QPair<QPushButton*, QString>> iconButtons;
+    int row = 0, col = 0;
+    for (const auto& pair : builtInIcons) {
+        QString iconKey = pair.second;
+        QPushButton* btn = new QPushButton(pickerWidget);
+        btn->setFixedSize(28, 28);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setObjectName("FavPickerIconBtn");
+        btn->setIcon(UiHelper::getIcon(iconKey, catColor, 18));
+        btn->setIconSize(QSize(18, 18));
+        pickerLayout->addWidget(btn, row, col);
 
-            iconButtons.append({btn, iconKey});
+        iconButtons.append({btn, iconKey});
 
-            connect(btn, &QPushButton::clicked, this, [this, index, iconKey]() {
-                if (index >= 0 && index < m_tabs.size()) {
-                    m_tabs[index].iconKey = iconKey;
-                    updateTabsUiState();
-                    FavoriteDao::updateFavorite(m_tabs[index].url, iconKey, m_tabs[index].color);
-                }
-            });
-
-            col++;
-            if (col >= 5) { col = 0; row++; }
-        }
-
-        pickerWidget->setLayout(pickerLayout);
-        pickerAction->setDefaultWidget(pickerWidget);
-        iconMenu->addAction(pickerAction);
-
-        connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [this, index, iconMenu, iconButtons](const QString& hexColor) {
-            if (index < 0 || index >= m_tabs.size()) return;
-
-            QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
-            m_tabs[index].color = finalColor;
-
-            QString iconKey = m_tabs[index].iconKey.isEmpty() ? "folder_filled" : m_tabs[index].iconKey;
-            QString targetPath = m_tabs[index].url;
-
-            iconMenu->setIcon(UiHelper::getIcon(iconKey, QColor(finalColor)));
-            for (const auto& btnPair : iconButtons) {
-                btnPair.first->setIcon(UiHelper::getIcon(btnPair.second, QColor(finalColor), 18));
+        connect(btn, &QPushButton::clicked, this, [this, index, iconKey]() {
+            if (index >= 0 && index < m_tabs.size()) {
+                m_tabs[index].iconKey = iconKey;
+                updateTabsUiState();
+                emit tabIconChanged(index, m_tabs[index].url, iconKey);
             }
-
-            if (!targetPath.isEmpty() && !targetPath.startsWith("computer://")) {
-                AppCommand cmd;
-                cmd.type = AppCommandType::SetColor;
-                cmd.targetPaths = {targetPath};
-                cmd.params["color"] = finalColor;
-                CoreEngine::instance().executeCommand(cmd);
-            }
-
-            updateTabsUiState();
         });
 
-        menu.addSeparator();
+        col++;
+        if (col >= 5) { col = 0; row++; }
+    }
+
+    pickerWidget->setLayout(pickerLayout);
+    pickerAction->setDefaultWidget(pickerWidget);
+    iconMenu->addAction(pickerAction);
+
+    connect(colorPickerWidget, &ColorStripPicker::colorSelected, this, [this, index, iconMenu, iconButtons](const QString& hexColor) {
+        if (index < 0 || index >= m_tabs.size()) return;
+
+        QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
+        m_tabs[index].color = finalColor;
+
+        QString iconKey = m_tabs[index].iconKey.isEmpty() ? "folder_filled" : m_tabs[index].iconKey;
+
+        iconMenu->setIcon(UiHelper::getIcon(iconKey, QColor(finalColor)));
+        for (const auto& btnPair : iconButtons) {
+            btnPair.first->setIcon(UiHelper::getIcon(btnPair.second, QColor(finalColor), 18));
+        }
+
+        updateTabsUiState();
+        emit tabColorChanged(index, m_tabs[index].url, finalColor);
+    });
+
+    menu.addSeparator();
 
     QAction* actRefresh = menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 16), "重新加载 (F5)");
     QAction* actDuplicate = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 16), "复制标签页");
@@ -896,17 +913,12 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
 
 void TabBarWidget::updateTabsUiState() {
     if (m_tabWidgets.size() != m_tabs.size()) {
-        rebuildTabsUi();
+        applyDiffUpdate();
         return;
     }
 
     for (int i = 0; i < m_tabs.size(); ++i) {
         auto& tab = m_tabs[i];
-        if (tab.color.isEmpty() && !tab.url.startsWith("computer://") && !tab.url.isEmpty()) {
-            auto meta = MetadataManager::instance().getMeta(tab.url.toStdWString());
-            tab.color = QString::fromStdWString(meta.manualColor);
-        }
-
         auto tabBtn = m_tabWidgets[i];
         tabBtn->setIndex(i);
         tabBtn->setTabTitle(tab.title);
@@ -918,29 +930,19 @@ void TabBarWidget::updateTabsUiState() {
     }
 }
 
-void TabBarWidget::rebuildTabsUi() {
-    m_tabWidgets.clear();
-    QLayoutItem* child;
-    while ((child = m_tabsLayout->takeAt(0)) != nullptr) {
-        if (child->widget()) {
-            child->widget()->deleteLater();
-        }
-        delete child;
+void TabBarWidget::applyDiffUpdate() {
+    int targetCount = m_tabs.size();
+
+    // 1. 删除多余的 TabItemButton
+    while (m_tabWidgets.size() > targetCount) {
+        TabItemButton* lastBtn = m_tabWidgets.takeLast();
+        m_tabsLayout->removeWidget(lastBtn);
+        lastBtn->deleteLater();
     }
 
-    for (int i = 0; i < m_tabs.size(); ++i) {
-        auto& tab = m_tabs[i];
-        if (tab.color.isEmpty() && !tab.url.startsWith("computer://") && !tab.url.isEmpty()) {
-            auto meta = MetadataManager::instance().getMeta(tab.url.toStdWString());
-            tab.color = QString::fromStdWString(meta.manualColor);
-        }
-
-        TabItemButton* tabItem = new TabItemButton(i, this);
-        tabItem->setTabTitle(tab.title);
-        QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
-        QString iconKey = !tab.iconKey.isEmpty() ? tab.iconKey : (tab.url.startsWith("computer://") ? "computer" : "folder_filled");
-        tabItem->setTabIcon(UiHelper::getIcon(iconKey, iconColor));
-        tabItem->setActive(tab.active);
+    // 2. 新增缺失的 TabItemButton
+    for (int i = m_tabWidgets.size(); i < targetCount; ++i) {
+        TabItemButton* tabItem = new TabItemButton(i, m_tabsContainer);
 
         connect(tabItem, &TabItemButton::closeClicked, this, [this](int idx) {
             closeTab(idx);
@@ -960,6 +962,52 @@ void TabBarWidget::rebuildTabsUi() {
 
         m_tabWidgets.append(tabItem);
         m_tabsLayout->addWidget(tabItem);
+    }
+
+    // 3. 内容驱动自适应宽度计算：空间充裕时完整展示名称，超限时才等比平滑阶梯压缩
+    int availableWidth = m_scrollArea->viewport()->width() - 36;
+    if (availableWidth <= 0) availableWidth = width() - 36;
+
+    QVector<int> naturalWidths(targetCount);
+    int totalNaturalWidth = 0;
+    for (int i = 0; i < targetCount; ++i) {
+        QFontMetrics fm(m_tabWidgets[i]->font());
+        int textW = fm.horizontalAdvance(m_tabs[i].title);
+        int needed = qBound(80, textW + 48, 600);
+        naturalWidths[i] = needed;
+        totalNaturalWidth += needed;
+    }
+    if (targetCount > 1) {
+        totalNaturalWidth += (targetCount - 1) * 2;
+    }
+
+    // 4. 空间充裕直接按自然宽度 100% 完整显示；空间超限启动等比压缩
+    double scale = (totalNaturalWidth > availableWidth && totalNaturalWidth > 0)
+        ? static_cast<double>(availableWidth - (targetCount - 1) * 2) / (totalNaturalWidth - (targetCount - 1) * 2)
+        : 1.0;
+
+    for (int i = 0; i < targetCount; ++i) {
+        auto& tab = m_tabs[i];
+        TabItemButton* tabBtn = m_tabWidgets[i];
+
+        int finalWidth = (scale < 1.0)
+            ? qBound(80, static_cast<int>(naturalWidths[i] * scale), naturalWidths[i])
+            : naturalWidths[i];
+
+        tabBtn->setIndex(i);
+        tabBtn->setTabTitle(tab.title);
+        tabBtn->setFixedWidth(finalWidth);
+
+        QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
+        QString iconKey = !tab.iconKey.isEmpty() ? tab.iconKey : (tab.url.startsWith("computer://") ? "computer" : (tab.url.startsWith("library://") ? "folder_filled" : "folder_filled"));
+        tabBtn->setTabIcon(UiHelper::getIcon(iconKey, iconColor));
+        tabBtn->setActive(tab.active);
+    }
+
+    // 5. Ensure target active tab is visible within scroll area
+    if (m_currentIndex >= 0 && m_currentIndex < m_tabWidgets.size()) {
+        TabItemButton* activeBtn = m_tabWidgets[m_currentIndex];
+        m_scrollArea->ensureWidgetVisible(activeBtn, 10, 0);
     }
 }
 
