@@ -53,6 +53,16 @@ bool MarkedFolderService::addMarked(const QString& path) {
     return false;
 }
 
+bool MarkedFolderService::keepOnlyMarked(const QString& targetPath) {
+    if (targetPath.isEmpty()) return false;
+    if (MarkedFolderDao::unmarkAllFolders()) {
+        bool ok = addMarked(targetPath);
+        emit markedFoldersChanged();
+        return ok;
+    }
+    return false;
+}
+
 bool MarkedFolderService::executeTransferToMarked(const QStringList& sourcePaths, const QStringList& targetDirs) {
     if (sourcePaths.isEmpty()) {
         ToolTipOverlay::instance()->showToast("未选择任何要迁移的项目", 2000, QColor("#e81123"));

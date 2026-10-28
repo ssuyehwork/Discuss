@@ -8,6 +8,11 @@
 #include <QMouseEvent>
 #include <QMimeData>
 #include <QUrl>
+#include <QClipboard>
+#include <QGuiApplication>
+#include "../util/ShellHelper.h"
+#include "../core/NavigationService.h"
+#include "controllers/ContextMenuFactory.h"
 
 namespace QuarkMeta {
 
@@ -158,7 +163,7 @@ void MarkedPanel::onItemClicked(QTreeWidgetItem* item, int column) {
 }
 
 void MarkedPanel::onContextMenuRequested(const QPoint& pos) {
-    QTreeWidgetItem* item = m_treeWidget->itemAt(pos);
+    QTreeWidgetItem* item = m_treeWidget ? m_treeWidget->itemAt(pos) : nullptr;
     QMenu menu(this);
     UiHelper::applyMenuStyle(&menu);
 
@@ -166,26 +171,59 @@ void MarkedPanel::onContextMenuRequested(const QPoint& pos) {
         QString path = item->data(0, Qt::UserRole).toString();
         bool active = item->data(0, Qt::UserRole + 1).toBool();
 
+        // 1. 打开与定位组
+        QAction* openAct = menu.addAction(UiHelper::getIcon("folder", QColor("#EEEEEE"), 16), "打开文件夹");
+        connect(openAct, &QAction::triggered, this, [this, path]() {
+            emit requestLocateFolder(path);
+        });
+
+        QAction* newTabAct = menu.addAction(UiHelper::getIcon("Folder-add", QColor("#EEEEEE"), 16), "在新标签页中打开");
+        connect(newTabAct, &QAction::triggered, this, [path]() {
+            NavigationService::instance().openInNewTab(path);
+        });
+
+        ContextMenuFactory::buildShowInExplorerAction(&menu, path, this);
+
+        menu.addSeparator();
+
+        // 2. 标记状态控制组
         if (active) {
-            QAction* unmarkAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#888888"), 16), "取消标记");
+            QAction* unmarkAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#EEEEEE"), 16), "取消标记");
             connect(unmarkAct, &QAction::triggered, this, [path]() {
                 MarkedFolderService::instance().removeMarked(path);
             });
         } else {
-            QAction* markAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16), "标记为目标文件夹");
+            QAction* markAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#EEEEEE"), 16), "标记为目标文件夹");
             connect(markAct, &QAction::triggered, this, [path]() {
                 MarkedFolderService::instance().addMarked(path);
             });
         }
 
+        QAction* keepOnlyAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#EEEEEE"), 16), "取消其他标记");
+        connect(keepOnlyAct, &QAction::triggered, this, [path]() {
+            MarkedFolderService::instance().keepOnlyMarked(path);
+        });
+
         QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE"), 16), "从标记历史中移除");
         connect(removeAct, &QAction::triggered, this, [path]() {
             MarkedFolderService::instance().removeFolderRecord(path);
         });
+
+        menu.addSeparator();
+
+        // 3. 辅助工具组
+        ContextMenuFactory::buildCopyPathAction(&menu, QStringList{path}, this);
+
+        QAction* refreshAct = menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 16), "刷新");
+        connect(refreshAct, &QAction::triggered, this, [this]() {
+            loadMarkedFolders();
+        });
+
         menu.addSeparator();
     }
 
-    QAction* unmarkAllAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#888888"), 16), "取消所有标记");
+    // 4. 全局清理组
+    QAction* unmarkAllAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#EEEEEE"), 16), "取消所有标记");
     connect(unmarkAllAct, &QAction::triggered, this, []() {
         MarkedFolderService::instance().clearAll();
     });

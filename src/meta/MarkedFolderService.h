@@ -24,6 +24,7 @@ public:
     bool removeFolderRecord(const QString& path);
     bool clearAllFolderRecords();
     bool clearAll();
+    bool keepOnlyMarked(const QString& targetPath);
 
     /**
      * @brief 触发 Alt+V 一键同时分发/迁移选中项目到目的地文件夹
