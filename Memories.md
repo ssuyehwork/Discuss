@@ -332,8 +332,9 @@
 
 为确保 QuarkMeta 在多标签页浏览与双窗格分栏操作中具备现代浏览器级的极致体验与工业级高内聚架构，全软件必须遵循以下规范：
 
-1. **标题栏内嵌多标签页组件 (`TabBarWidget`) 架构**：
+1. **标题栏内嵌多标签页组件 (`TabBarWidget`) 架构与满宽拉伸规范**：
    - **标题栏植入与软硬件边距**：多标签页控件 (`TabBarWidget`) 直接内嵌于标题栏 (`TitleBarWidget`) 中间区域，替换原静态应用标题，物理高度锁定为 28px，保持与操作系统控制按钮精致对齐；
+   - **满宽充盈拉伸契约 (Full-Width Elastic Stretch Contract)**：`TabBarWidget` 在标题栏布局 `QHBoxLayout` 中必须赋予弹性拉伸权重 `1` (`m_layout->addWidget(m_tabBar, 1)`），直接填充自 Logo 右侧至图标/卡片缩放滑杆 (`m_sizeSlider`) 左侧的全部物理剩余空间。严禁在 `m_tabBar` 与 `m_sizeSlider` 之间放置多余的自由弹簧 (`addStretch`)，确保标签栏实现类似现代浏览器（如 Chrome / Edge）极致充盈的大气视觉范式；
    - **标签生命周期与持久化**：全面支持新建标签（`Ctrl+T`）、关闭当前/其他/左侧/右侧标签、复制标签、恢复刚关闭标签（`Ctrl+Shift+T`）及持久化存储（`AppConfig`）；支持全局快捷键切换（`Ctrl+1~9`、`Ctrl+Tab`、`Ctrl+Shift+Tab`）；
    - **交互形态定制**：支持每个标签页单独配置专属色彩标签与矢量图标（选色器/图标网格子菜单），物理存储与状态无缝联动。
 
