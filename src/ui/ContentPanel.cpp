@@ -670,13 +670,17 @@ void ContentPanel::setCurrentCategoryTitle(const QString& title) {
 
 void ContentPanel::updateHeaderTitle() {
     if (!m_headerWidget) return;
-    if (!isSplitMode()) {
-        m_headerWidget->setTitle("内容");
-        return;
-    }
 
     if (!m_categoryTitle.isEmpty() && (m_currentCategoryType == "library" || m_currentCategoryType == "smart_folder")) {
         m_headerWidget->setTitle(m_categoryTitle);
+        m_headerWidget->setHeaderIcon("all_data");
+        return;
+    }
+
+    m_headerWidget->setHeaderIcon("folder_filled");
+
+    if (!isSplitMode()) {
+        m_headerWidget->setTitle("");
         return;
     }
 

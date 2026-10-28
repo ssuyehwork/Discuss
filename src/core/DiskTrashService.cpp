@@ -296,6 +296,29 @@ bool DiskTrashService::restoreAllDiskTrash() {
     return allOk;
 }
 
+bool DiskTrashService::getLatestTrashItemByOriginalPath(const QString& originalPath, int& outId, QString& outTrashPath) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || originalPath.isEmpty()) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    sqlite3_stmt* stmt = nullptr;
+    const char* sql = "SELECT id, trash_path FROM disk_trash WHERE original_path = ? ORDER BY deleted_at DESC LIMIT 1";
+    bool found = false;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text16(stmt, 1, originalPath.toStdWString().c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            outId = sqlite3_column_int(stmt, 0);
+            const wchar_t* wTrash = reinterpret_cast<const wchar_t*>(sqlite3_column_text16(stmt, 1));
+            if (wTrash) {
+                outTrashPath = QString::fromWCharArray(wTrash);
+            }
+            found = true;
+        }
+        sqlite3_finalize(stmt);
+    }
+    return found;
+}
+
 bool DiskTrashService::emptyDiskTrash() {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db) return false;

@@ -92,6 +92,12 @@ void ContentHeaderWidget::setTitle(const QString& title) {
     }
 }
 
+void ContentHeaderWidget::setHeaderIcon(const QString& iconKey) {
+    if (m_iconLabel) {
+        m_iconLabel->setPixmap(UiHelper::getIcon(iconKey.isEmpty() ? "folder_filled" : iconKey, QColor("#888888"), 18).pixmap(18, 18));
+    }
+}
+
 void ContentHeaderWidget::setFilterState(const FilterState& state) {
     m_filterState = state;
     if (m_btnToggleHidden) {

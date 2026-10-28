@@ -6,31 +6,15 @@
 #include <QDir>
 #include <QFile>
 #include <QAction>
+#include "../util/ShellHelper.h"
+#include "../util/DiskIoService.h"
+#include "../util/VolumePathResolver.h"
+#include "../core/TaskProgressService.h"
+#include "../core/DiskTrashService.h"
+#include "../core/UndoManager.h"
+#include "../core/TransferToMarkedCommand.h"
 
 namespace QuarkMeta {
-
-static bool copyRecursively(const QString& srcFilePath, const QString& tgtFilePath) {
-    QFileInfo srcFileInfo(srcFilePath);
-    if (srcFileInfo.isDir()) {
-        QDir targetDir(tgtFilePath);
-        if (!targetDir.exists() && !targetDir.mkpath(".")) {
-            return false;
-        }
-        QDir sourceDir(srcFilePath);
-        QStringList fileNames = sourceDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
-        for (const QString& fileName : fileNames) {
-            QString newSrcFilePath = sourceDir.filePath(fileName);
-            QString newTgtFilePath = targetDir.filePath(fileName);
-            if (!copyRecursively(newSrcFilePath, newTgtFilePath)) {
-                return false;
-            }
-        }
-    } else {
-        QFile::remove(tgtFilePath);
-        return QFile::copy(srcFilePath, tgtFilePath);
-    }
-    return true;
-}
 
 MarkedFolderService& MarkedFolderService::instance() {
     static MarkedFolderService s_instance;
@@ -81,44 +65,110 @@ bool MarkedFolderService::executeTransferToMarked(const QStringList& sourcePaths
         return false;
     }
 
-    int successCount = 0;
-    int failCount = 0;
-
-    for (const QString& srcPath : sourcePaths) {
-        QFileInfo srcInfo(srcPath);
-        if (!srcInfo.exists()) {
-            continue;
+    // 预检测有效源路径与目的地列表
+    QStringList validSources;
+    for (const QString& sp : sourcePaths) {
+        if (QFile::exists(sp)) {
+            validSources << QDir::cleanPath(sp);
         }
+    }
+    if (validSources.isEmpty()) return false;
 
+    QStringList validTargets;
+    for (const QString& td : activeTargets) {
+        QFileInfo tfi(td);
+        if (tfi.exists() && tfi.isDir()) {
+            validTargets << QDir::cleanPath(td);
+        }
+    }
+    if (validTargets.isEmpty()) {
+        ToolTipOverlay::instance()->showToast("所有标记目的地路径均不存在或无效", 2500, QColor("#e81123"));
+        return false;
+    }
+
+    int totalWorkUnits = validSources.size() * validTargets.size();
+    int jobId = TaskProgressService::instance().createJob("分发迁移至标记目的地", totalWorkUnits);
+
+    int completedUnits = 0;
+    QMap<QString, QVector<TransferToMarkedCommand::TargetResult>> copyResults;
+    bool anyFailure = false;
+
+    for (const QString& srcPath : validSources) {
+        QFileInfo srcInfo(srcPath);
         QString itemName = srcInfo.fileName();
+        std::wstring srcVol = VolumePathResolver::getVolumeSerialNumber(srcPath.toStdWString());
 
-        for (const QString& targetDir : activeTargets) {
-            QFileInfo targetInfo(targetDir);
-            if (!targetInfo.exists() || !targetInfo.isDir()) {
+        for (const QString& targetDir : validTargets) {
+            QString cleanSrc = QDir::cleanPath(srcPath).toLower();
+            QString cleanTarget = QDir::cleanPath(targetDir).toLower();
+
+            // 防自身/循环嵌套保护：同路径或目标为源的子目录
+            if (cleanSrc == cleanTarget || cleanTarget.startsWith(cleanSrc + "/")) {
+                completedUnits++;
+                TaskProgressService::instance().updateProgress(jobId, completedUnits, totalWorkUnits);
                 continue;
             }
 
-            // 防自身/循环嵌套保护
-            if (QDir(srcPath) == QDir(targetDir) || targetDir.startsWith(srcPath + "/")) {
-                continue;
-            }
+            DiskIoContext ioCtx;
+            ioCtx.sources = QStringList{srcPath};
+            ioCtx.destination = targetDir;
+            ioCtx.isMove = false; // 复制模式，保证源文件不提前消失
 
             QString destPath = QDir(targetDir).filePath(itemName);
 
-            if (copyRecursively(srcPath, destPath)) {
-                successCount++;
+            bool targetSuccess = ShellHelper::copyOrMoveItems(
+                ioCtx.sources, ioCtx.destination, ioCtx.isMove,
+                ioCtx.overwriteAll, ioCtx.autoRenameAll,
+                ioCtx.overwriteFiles, ioCtx.autoRenameFiles
+            );
+
+            completedUnits++;
+            TaskProgressService::instance().updateProgress(jobId, completedUnits, totalWorkUnits);
+
+            if (targetSuccess) {
+                copyResults[srcPath].append({targetDir, destPath});
             } else {
-                failCount++;
+                anyFailure = true;
             }
         }
     }
 
-    if (successCount > 0) {
-        QString msg = QString("已成功迁移分发到 %1 个目的地").arg(activeTargets.size());
+    // 判定同盘回收
+    QStringList recycledSources;
+    if (!anyFailure) {
+        for (const QString& srcPath : validSources) {
+            std::wstring srcVol = VolumePathResolver::getVolumeSerialNumber(srcPath.toStdWString());
+            bool sameVol = false;
+            for (const QString& targetDir : validTargets) {
+                std::wstring tgtVol = VolumePathResolver::getVolumeSerialNumber(targetDir.toStdWString());
+                if (srcVol == tgtVol && srcVol != L"UNKNOWN") {
+                    sameVol = true;
+                    break;
+                }
+            }
+            if (sameVol) {
+                if (DiskTrashService::moveToDiskTrash(QStringList{srcPath})) {
+                    recycledSources << srcPath;
+                }
+            }
+        }
+    }
+
+    // 压入撤销命令
+    if (!copyResults.isEmpty()) {
+        UndoManager::instance().pushCommand(std::make_unique<TransferToMarkedCommand>(
+            validSources, copyResults, recycledSources
+        ));
+    }
+
+    TaskProgressService::instance().finishJob(jobId);
+
+    if (!anyFailure) {
+        QString msg = QString("已成功分发迁移至 %1 个目的地").arg(validTargets.size());
         ToolTipOverlay::instance()->showToast(msg, 2000, QColor("#0078d4"));
         return true;
     } else {
-        ToolTipOverlay::instance()->showToast("分发迁移失败，请检查文件权限或目标路径", 2500, QColor("#e81123"));
+        ToolTipOverlay::instance()->showToast("分发迁移完成，部分项目未能成功处理", 2500, QColor("#e81123"));
         return false;
     }
 }

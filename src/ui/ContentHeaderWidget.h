@@ -21,6 +21,7 @@ public:
     ~ContentHeaderWidget() override = default;
 
     void setTitle(const QString& title);
+    void setHeaderIcon(const QString& iconKey);
     void setFilterState(const FilterState& state);
     void setRecursive(bool recursive);
     void setLayersEnabled(bool enabled, const QString& tooltip);

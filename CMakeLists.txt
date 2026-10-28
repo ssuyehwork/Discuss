@@ -78,6 +78,8 @@ set(SOURCES
     src/core/VolumeOnlineManager.h
     src/core/DiskTrashService.cpp
     src/core/DiskTrashService.h
+    src/core/TransferToMarkedCommand.cpp
+    src/core/TransferToMarkedCommand.h
     src/core/OperationSnapshotEngine.h
     src/core/OperationSnapshotEngine.cpp
     src/core/TrashService.h

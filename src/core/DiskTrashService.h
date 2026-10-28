@@ -42,6 +42,11 @@ public:
      * @brief 彻底清空所有磁盘回收站中的物理文件
      */
     static bool emptyDiskTrash();
+
+    /**
+     * @brief 根据原物理路径获取回收站中最新一条记录的 ID 与垃圾桶路径
+     */
+    static bool getLatestTrashItemByOriginalPath(const QString& originalPath, int& outId, QString& outTrashPath);
 };
 
 } // namespace QuarkMeta

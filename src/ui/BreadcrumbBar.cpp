@@ -54,6 +54,11 @@ void BreadcrumbBar::setPath(const QString& path) {
 
     if (path == "computer://") {
         m_nodes.append(PathNode("此电脑", "computer://"));
+    } else if (path.contains(" → ")) {
+        QStringList parts = path.split(" → ", Qt::SkipEmptyParts);
+        for (const QString& part : parts) {
+            m_nodes.append(PathNode(part, path));
+        }
     } else {
         QString normPath = QDir::toNativeSeparators(path);
         QStringList parts = normPath.split(QDir::separator(), Qt::SkipEmptyParts);

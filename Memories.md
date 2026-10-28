@@ -446,3 +446,27 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 3. **完成收口与尾部单次刷新**：
    - 批量重命名对话框关闭（`exec()` 结束）后，RAII Guard 自动释放所有窗格的静默状态（`endWatchSuppress()`），并在 `endSuppress()` 归零时自动调用 `discardPending` 清理监视积压；
    - 重命名成功后，对每个关联分屏窗格执行且仅执行一次 `refreshAll()` 刷平，消除任何尾部多余刷新，保证重命名完成后视图状态一致且文件监视无缝恢复。
+
+---
+
+## 16. QuarkMeta 标记目的地与搬运分发架构设计理念 (Marked Folders & Destination Transfer Architecture Philosophy)
+
+> 本章节整理自与用户的架构研讨与共识确认，作为全软件标记目的地管理、文件分发搬运与复合撤销的设计真理源 (SSOT)。
+
+### 16.1 物理搬运归一化与另起炉灶绝对禁令 (Unified Transfer & Zero-Redundancy Contract)
+1. **统一物理搬运通道**：
+   - 标记目的地的分发搬运（`MarkedFolderService::executeTransferToMarked`）绝对禁止自写 `copyRecursively` 等私有递归复制/删除逻辑；
+   - 必须统一路由至磁盘 I/O 服务层 `DiskIoService::executeAsync`，底层调用 `ShellHelper::copyOrMoveItems`，确保侧车 `.QuarkMeta.json` 元数据与 `disk_thumbs` 缩略图缓存随物理文件漫游，与剪切、拖放、右键“移动到...”的行为 100% 物理一致。
+2. **同盘/跨盘与回收机制**：
+   - 分发时所有目标统一采用“复制”模式（`isMove = false`），确保源文件在所有目标完成前不提前消失；
+   - 比较源文件路径与目标路径的物理卷序列号（`VolumePathResolver::getVolumeSerialNumber`）。若存在同盘目标且所有目标均成功复制，则调用 `DiskTrashService::moveToDiskTrash` 将源文件移入应用私有回收站；若存在任意一个失败目标或所有目标均跨盘，源文件严格保留。
+3. **同源/循环嵌套跳过**：
+   - 目标路径为源文件夹本身或源文件夹的子目录时（规范化路径与不区分大小写前缀判定），必须自动跳过该目标并给予明确友情提示。
+
+### 16.2 复合分发撤销与进度条契约 (Compound Undo & Progress Contract)
+1. **复合分发撤销命令 (`TransferToMarkedCommand`)**：
+   - 整个标记分发搬运操作仅产生并压入一条 `TransferToMarkedCommand` 命令至 `UndoManager`；
+   - 撤销时先把各目标实际生成的副本移入应用私有回收站，若源文件曾被回收，则根据 `original_path` 查询最新记录 ID 调用 `DiskTrashService::restoreFromDiskTrash` 还原原文件；若原位置已被占用，自动重命名还原并通过 `ToolTipOverlay` 友情 Toast 提示。
+2. **全量进度条与监视静默**：
+   - 操作前由 `TaskProgressService` 在主线程立即创建 0ms 视觉响应进度条；
+   - 对涉及的内容窗格调用 `beginWatchSuppress()` / `endWatchSuppress()` 开启文件监视静默，待全部工作（复制、回收、元数据漫游、数据库刷新）彻底闭环收口后统一结束进度条与静默。
