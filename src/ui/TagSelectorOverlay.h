@@ -61,6 +61,7 @@ private:
     void loadRecentAndRecommendedTags(const QStringList& candidatePaths);
     void filterAndPopulate();
     void toggleTagSelection(const QString& tag);
+    void updateTagButtonsSelection();
     void recordRecentTag(const QString& tag);
 
 public:

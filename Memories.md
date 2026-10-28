@@ -489,3 +489,35 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 1. **按需补齐，平黄渐进**：
    - 严禁进行破坏既有编译契约的大爆炸式整体重写；
    - 在后续承接具体业务需求与 Bug 修复时，随手审计并补齐相关模块缺失的 Query / Read 接口，通过多轮迭代平滑提升全软件 API 的完整性与对称度。
+
+---
+
+## 18. QuarkMeta 悬浮工具浮层事件路由与生命周期治理设计理念 (Overlay Window Event Routing & Dismissal Architecture Philosophy)
+
+> 本章节整理自与用户的架构研讨与共识确认，作为全软件悬浮选择面板（如 `TagSelectorOverlay`、下拉悬浮窗等）的事件拦截、内外判定、失活离场与就地渲染设计的真理源 (SSOT)。
+
+### 18.1 Qt 6 QPA 原生事件流水线与内外判定铁律 (QPA Native Event & Dual-Layer Hierarchy Contract)
+1. **QPA 底层原生窗口事件分发事实**：
+   - 在 Qt 6 / QPA 架构下，所有来自操作系统的原生鼠标输入（`WM_LBUTTONDOWN` / `WM_LBUTTONDBLCLK` 等）首先投递给顶层窗口的 `QWindow` 实例（即内部实现的 `QWidgetWindow`），随后再由 Qt 窗口系统分发给具体的子 `QWidget`。
+   - 当在 `qApp`（`QApplication`）上挂载全局事件过滤器时，过滤器捕获到的第一道事件接收者必定是 `QWidgetWindow`，而绝不是具体的子控件。
+2. **双层内外判定铁律（严禁单层回溯）**：
+   - 悬浮面板在判定鼠标事件属于“内部”还是“外部”时，**必须且只能同时处理 `QWindow` 原生层与 `QWidget` 控件树两层**，严禁仅依靠 `QWidget::parentWidget()` 进行单层回溯：
+     - **第一层（原生窗口层）**：当目标对象为 `QWindow`（`qobject_cast<QWindow*>`）时，校验其是否等于悬浮浮层自身的 `windowHandle()` 或其子窗口/瞬态附属窗口（`transientParent()`）；若匹配则 100% 判定为内部事件并直接放行，绝不可将其误判为外部点击而吞噬自毁；
+     - **第二层（控件树层）**：当目标对象为 `QWidget` 时，沿 `parentWidget()` / `parent()` 链向上递归回溯，直至匹配浮层本体；
+   - 唯有在两层均未匹配的情况下，方可认定为真正的“外部点击”并执行消费关闭。
+
+### 18.2 Qt::Tool 窗口附属特性与失活判定规范 (Tool Window State & Safe Deactivation Contract)
+1. **`Qt::Tool` 附属窗口失活特性**：
+   - 带有 `Qt::Tool` 窗口标志且依附于主窗口的悬浮浮窗，其系统级窗口状态在 Qt/Win32 下 `isActiveWindow()` 常态为 `false`（权威激活焦点由宿主窗口维持）。
+   - 严禁在 `changeEvent` 中使用简单的 `!isActiveWindow()` 或 `!isAncestorOf(focusWidget)` 作为关闭浮层的条件，否则内部焦点切换、按钮销毁或操作系统窗口刷新将瞬间误杀浮层。
+2. **安全离场真理源**：
+   - 浮层的失活关闭必须且只能通过以下两类安全通道触发：
+     - **真正的全局外部点击**：由 `eventFilter` 捕获到确凿来自浮层外部的鼠标按下；
+     - **应用程序级真正失活**：监听 `QGuiApplication::applicationStateChange`，仅在应用整体进入后台（`Qt::ApplicationInactive`）或主窗口真正失去系统焦点时关闭，杜绝内部微观焦点扰动引发的误关。
+
+### 18.3 标签交互就地状态切换契约 (In-Place Tag State Mutation Contract)
+1. **彻底废除全量销毁重建模式**：
+   - 标签选择浮层在点选标签时，严禁粗暴调用清空布局、全量 `deleteLater` 所有按钮并重新创建的落后做法。
+   - 该做法不仅带来内存频繁分配与界面闪烁，更会导致当前获得焦点与点击的控件瞬间物理蒸发，触发系统焦点归零与失活误杀。
+2. **就地属性更新与轻量渲染**：
+   - 点击标签按钮时，直接在当前 `QPushButton` 上就地切换状态（`setChecked`、`setProperty("selected", ...)` 与图标更新），保持控件树稳定，确保焦点与事件序列平稳无损。

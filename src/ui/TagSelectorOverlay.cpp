@@ -9,6 +9,8 @@
 #include <QApplication>
 #include <QScreen>
 #include <QScrollBar>
+#include <QWindow>
+#include <QStyle>
 
 namespace QuarkMeta {
 
@@ -50,7 +52,23 @@ TagSelectorOverlay::~TagSelectorOverlay() {
 
 bool TagSelectorOverlay::isInternalWidget(QObject* obj) const {
     if (!obj) return false;
-    
+
+    // 1. 原生窗口层 (Qt 6 QPA QWidgetWindow / QWindow 派发阶段)
+    if (QWindow* win = qobject_cast<QWindow*>(obj)) {
+        QWindow* overlayWin = const_cast<TagSelectorOverlay*>(this)->windowHandle();
+        if (!overlayWin) return false;
+
+        QWindow* currWin = win;
+        while (currWin) {
+            if (currWin == overlayWin) {
+                return true;
+            }
+            currWin = currWin->parent() ? currWin->parent() : currWin->transientParent();
+        }
+        return false;
+    }
+
+    // 2. 控件树层 (QWidget 控件链向上回溯)
     QObject* current = obj;
     while (current) {
         if (current == this) {
@@ -291,10 +309,41 @@ void TagSelectorOverlay::toggleTagSelection(const QString& tag) {
         m_selectedTags.append(cleanTag);
     }
 
-    filterAndPopulate();
+    // 就地刷新按钮选中状态，杜绝粗暴销毁重建导致焦点瞬间丢失与窗口失活误杀
+    updateTagButtonsSelection();
 
     // 实时通知前端界面同步刷新标签胶囊 (零 I/O 纯内存)
     emit selectionChanged(m_selectedTags);
+}
+
+void TagSelectorOverlay::updateTagButtonsSelection() {
+    auto updateLayout = [this](FlowLayout* layout, bool isRec) {
+        if (!layout) return;
+        for (int i = 0; i < layout->count(); ++i) {
+            QLayoutItem* item = layout->itemAt(i);
+            if (!item || !item->widget()) continue;
+            QPushButton* btn = qobject_cast<QPushButton*>(item->widget());
+            if (!btn) continue;
+
+            const QString tag = btn->text();
+            const bool isSelected = m_selectedTags.contains(tag);
+            if (btn->isChecked() != isSelected) {
+                btn->setChecked(isSelected);
+            }
+            btn->setProperty("selected", isSelected ? "true" : "false");
+            btn->style()->unpolish(btn);
+            btn->style()->polish(btn);
+
+            if (isRec) {
+                btn->setIcon(UiHelper::getIcon(isSelected ? "check" : "star_filled", isSelected ? QColor("#FFFFFF") : QColor("#378ADD"), 12));
+            } else {
+                btn->setIcon(UiHelper::getIcon(isSelected ? "check" : "clock", isSelected ? QColor("#FFFFFF") : QColor("#888888"), 12));
+            }
+        }
+    };
+
+    updateLayout(m_recFlowLayout, true);
+    updateLayout(m_recentFlowLayout, false);
 }
 
 void TagSelectorOverlay::recordRecentTag(const QString& tag) {
@@ -354,8 +403,10 @@ void TagSelectorOverlay::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void TagSelectorOverlay::changeEvent(QEvent* event) {
-    if (event->type() == QEvent::ActivationChange || event->type() == QEvent::WindowDeactivate) {
-        if (!isActiveWindow() && !this->isAncestorOf(QApplication::focusWidget())) {
+    if (event->type() == QEvent::ActivationChange) {
+        QWidget* parentWin = parentWidget() ? parentWidget()->window() : nullptr;
+        bool isAnyWindowActive = isActiveWindow() || (parentWin && parentWin->isActiveWindow());
+        if (!isAnyWindowActive && QGuiApplication::applicationState() == Qt::ApplicationInactive) {
             closeOverlay();
         }
     }
