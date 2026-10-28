@@ -177,7 +177,7 @@ void MarkedPanel::onContextMenuRequested(const QPoint& pos) {
             emit requestLocateFolder(path);
         });
 
-        QAction* newTabAct = menu.addAction(UiHelper::getIcon("Folder-add", QColor("#EEEEEE"), 16), "在新标签页中打开");
+        QAction* newTabAct = menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "在新标签页中打开");
         connect(newTabAct, &QAction::triggered, this, [path]() {
             NavigationService::instance().openInNewTab(path);
         });

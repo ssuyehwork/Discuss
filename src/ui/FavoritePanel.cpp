@@ -691,7 +691,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             ContextMenuFactory::buildShowInExplorerAction(&menu, path, this);
 
             bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
-            QAction* actAutoRec = menu.addAction(UiHelper::getIcon("layers", isAutoRec ? QColor("#2ecc71") : QColor("#EEEEEE"), 18),
+            QAction* actAutoRec = menu.addAction(UiHelper::getIcon("layers", QColor("#EEEEEE"), 18),
                                                  isAutoRec ? "关闭自动递归" : "开启自动递归");
             connect(actAutoRec, &QAction::triggered, this, [this, nodeId, isAutoRec, index]() {
                 bool nextState = !isAutoRec;

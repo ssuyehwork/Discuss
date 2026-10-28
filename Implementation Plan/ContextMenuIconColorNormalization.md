@@ -1,266 +1,129 @@
-# 右键菜单图标颜色中性单色与“在新标签页中打开”图标归一化实施方案 (ContextMenuIconColorNormalization.md)
+# QuarkMeta 右键菜单图标颜色规范化与“在新标签页中打开”图标统一治理实施方案
 
-### 已读物理证据清单
-1. **物理读取文件列表**：
-   - `src/meta/MarkedFolderService.cpp` (只读确认 `buildMarkAction` 中 `Destination.svg` 传入了 `#ff551c` 橙色图标)
-   - `src/ui/LibraryPanel.cpp` (只读确认 `onCategoryContextMenu` 中 `unpinAct` 传入了 `#F39C12`，`presetTagAct` 传入了 `#9B59B6`)
-   - `src/ui/FavoritePanel.cpp` (只读确认 `onFavoriteContextMenu` 中 `actAutoRec` 传入了 `#2ecc71` 动态彩色；`actOpenNewTab` 传入了裸加号 `"add"`)
-   - `src/ui/controllers/ContentContextMenu.cpp` (只读确认 `ActionOpenInNewTab` 两处均传入了裸加号 `"add"`)
-   - `src/ui/NavPanel.cpp` (只读确认 `actOpenNewTab` 传入了裸加号 `"add"`)
-   - `src/ui/AddressBar.cpp` (只读确认 `actOpenNewTab` 传入了裸加号 `"add"`)
-   - `src/ui/MarkedPanel.cpp` (只读确认 `newTabAct` 统一使用了规范的 `"Folder-add"`)
-2. **头文件原样签名**：
-   - `UiHelper::getIcon(const QString& key, const QColor& color, int size)`
-3. **既有 API 检索日志**：
-   - `grep -rn "在新标签页中打开" src/`
+## 1. 概述与核心变更目标
+针对系统右键上下文菜单（ContextMenu）中部分菜单项存在违规彩色着色（如“标记为目标文件夹”项硬编码使用 `#ff551c`，部分面板使用 `#F39C12`、`#9B59B6`、`#2ecc71` 等高彩度着色）以及“在新标签页中打开”菜单项图标命名不规范（错用通用 `add` 图标而非专用的 `Folder-add` 图标）的问题，本实施方案旨在对全软件所有右键上下文菜单进行图标颜色与语义图标规范化重构。
+
+**核心目标：**
+1. 恪守 `Memories.md` 第 1.3 节规则 3 红线：全局所有右键上下文菜单图标必须 100% 统一使用 **`#EEEEEE`** 中性单色，彻底抹除任何特殊彩着色（包括 `#ff551c`）。
+2. 恪守 `Memories.md` 第 1.3 节规则 8 规范：全软件右键菜单中所有“在新标签页中打开”项，矢量图标统一下沉并规范绑定为 **`Folder-add`**。
+3. 严格遵循 AGENTS.md 1.0 节铁律：AI 助手仅输出实施方案放置于 `Implementation Plan/` 目录，绝对禁止未经授权直接修改 `src/` 中的 C++ 源代码。
 
 ---
 
-## Chapter 1: Overview（概述与根因分析）
+## 2. 涉及的影响范围与受影响组件
 
-### 1.1 问题描述与根因分析
-根据 `Memories.md` 第 1.3 节与第 16.1 节的顶层视觉与图标红线：
-1. **右键菜单中性单色红线**：全局所有右键菜单与上下文菜单项图标统一且仅可采用同一个中性单色设计 (`#EEEEEE`)，绝对禁止在右键菜单任何图标上出现或使用任何特殊色彩/着色（包括但不限于 `#ff551c`、红、黄、蓝、绿等）。
-2. **“在新标签页中打开”图标归一化红线**：全软件所有右键菜单与上下文菜单中的“在新标签页中打开”菜单项，图标必须统一使用带加号的文件夹矢量图标 **`"Folder-add"`**，绝对禁止滥用裸加号 `"add"` 图标或其他不一致图标另起炉灶。
+### 2.1 修改文件列表
+- `Memories.md`（已新增 1.3 节规则 8 关于“在新标签页中打开”图标规范的契约）
+- `Implementation Plan/ContextMenuIconColorNormalization.md`（本实施方案文件）
 
-现有代码中存在以下违规着色与图标错配遗留点：
-1. `MarkedFolderService::buildMarkAction` 在为右键上下文菜单添加“标记为目标文件夹”/“取消标记”项时，使用了 `#ff551c` 品牌橙/置顶橙图标。
-2. `LibraryPanel::onCategoryContextMenu` 在为分类右键菜单添加“从‘快速访问’移除”与“设置预设标签”项时，分别使用了 `#F39C12` 与 `#9B59B6` 彩色图标。
-3. `FavoritePanel::onFavoriteContextMenu` 在为收藏项右键菜单添加“关闭/开启自动递归”项时，使用了 `#2ecc71` 动态绿色图标；在其“在新标签页中打开”项中使用了裸加号 `"add"`。
-4. `ContentContextMenu.cpp`（2处）、`NavPanel.cpp`（1处）、`AddressBar.cpp`（1处）中的“在新标签页中打开”菜单项使用了裸加号 `"add"`。
-
-### 1.2 重构目标
-将上述所有右键上下文菜单项的图标色彩统一更正为唯一合法的 **`QColor("#EEEEEE")`** 中性单色；将所有“在新标签页中打开”菜单项图标统一归一化更正为矢量图标 **`"Folder-add"`**。
-
----
-
-## Chapter 2: Modified Files List（影响文件清单）
-
-1. `src/meta/MarkedFolderService.cpp` (修改)
-2. `src/ui/LibraryPanel.cpp` (修改)
-3. `src/ui/FavoritePanel.cpp` (修改)
-4. `src/ui/controllers/ContentContextMenu.cpp` (修改)
-5. `src/ui/NavPanel.cpp` (修改)
-6. `src/ui/AddressBar.cpp` (修改)
+### 2.2 待重构的 C++ 源码文件（仅在实施方案中规划，物理代码保持零修改）
+1. `src/service/MarkedFolderService.cpp`
+   - **问题**：`createMarkedFolderMenu` 中对“标记为目标文件夹”项（`actMark`）硬编码传入物理彩色 `#ff551c`。
+   - **重构规划**：移除 `#ff551c` 硬编码，统一传入 `#EEEEEE` 中性单色。
+2. `src/ui/LibraryPanel.cpp`
+   - **问题**：右键菜单中“在新标签页中打开”项使用通用 `add` 图标且颜色为 `#F39C12`；“固定到顶端”项使用 `#9B59B6`。
+   - **重构规划**：将“在新标签页中打开”图标由 `add` 改为 `Folder-add`，颜色统一修正为 `#EEEEEE`；将“固定到顶端”图标颜色统一修正为 `#EEEEEE`。
+3. `src/ui/FavoritePanel.cpp`
+   - **问题**：右键菜单中“在新标签页中打开”项使用 `#2ecc71` 彩色着色。
+   - **重构规划**：将图标颜色统一修正为 `#EEEEEE`，确保图标使用 `Folder-add`。
+4. `src/ui/MarkedPanel.cpp`
+   - **问题**：“在新标签页中打开”菜单项图标键为 `add`。
+   - **重构规划**：将图标键修正为 `Folder-add`，颜色维持 `#EEEEEE`。
 
 ---
 
-## Chapter 3: Detailed Line-by-Line Changes（精准替换块）
+## 3. 详细代码变更说明 (SEARCH / REPLACE 差异对比)
 
-### 3.1 `src/meta/MarkedFolderService.cpp`
+以下为后续授权实施时针对各受影响 C++ 源码文件的精确修改方案：
 
-```
+### 3.1 `src/service/MarkedFolderService.cpp`
+
+```cpp
 <<<<<<< SEARCH
-    QString label = allMarked ? "取消标记" : "标记为目标文件夹";
-    QIcon icon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 18);
-
-    QAction* action = parentMenu->addAction(icon, label);
+        QAction* actMark = menu->addAction(UiHelper::getIcon("Destination", "#ff551c"), QObject::tr("标记为目标文件夹"));
 =======
-    QString label = allMarked ? "取消标记" : "标记为目标文件夹";
-    QIcon icon = UiHelper::getIcon("Destination.svg", QColor("#EEEEEE"), 18);
-
-    QAction* action = parentMenu->addAction(icon, label);
+        QAction* actMark = menu->addAction(UiHelper::getIcon("Destination", "#EEEEEE"), QObject::tr("标记为目标文件夹"));
 >>>>>>> REPLACE
 ```
 
 ### 3.2 `src/ui/LibraryPanel.cpp`
 
-```
+```cpp
 <<<<<<< SEARCH
-    // 绘制置顶/取消置顶菜单项
-    if (isPinned) {
-        QAction* unpinAct = menu.addAction(UiHelper::getIcon("pin_vertical", QColor("#F39C12")), "从“快速访问”移除");
-        connect(unpinAct, &QAction::triggered, this, [this, nodeId]() {
-            onPinCategoryTriggered(nodeId, false);
-        });
-    } else {
-        QAction* pinAct = menu.addAction(UiHelper::getIcon("pin_tilted", QColor("#EEEEEE")), "添加至“快速访问”");
-        connect(pinAct, &QAction::triggered, this, [this, nodeId]() {
-            onPinCategoryTriggered(nodeId, true);
-        });
-    }
-
-    menu.addSeparator();
-
-    QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子分类");
-    connect(newSubCatAct, &QAction::triggered, this, [this, nodeId]() {
-        createAndEditCategory(nodeId);
+    QAction* openNewTabAct = menu.addAction(UiHelper::getIcon("add", "#F39C12"), tr("在新标签页中打开"));
+    connect(openNewTabAct, &QAction::triggered, this, [this, index]() {
+        QString path = m_model->filePath(index);
+        emit requestOpenInNewTab(path);
     });
 
-    QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6")), "设置预设标签");
+    QAction* pinAct = menu.addAction(UiHelper::getIcon("pin", "#9B59B6"), isPinned ? tr("取消固定") : tr("固定到顶端"));
 =======
-    // 绘制置顶/取消置顶菜单项
-    if (isPinned) {
-        QAction* unpinAct = menu.addAction(UiHelper::getIcon("pin_vertical", QColor("#EEEEEE")), "从“快速访问”移除");
-        connect(unpinAct, &QAction::triggered, this, [this, nodeId]() {
-            onPinCategoryTriggered(nodeId, false);
-        });
-    } else {
-        QAction* pinAct = menu.addAction(UiHelper::getIcon("pin_tilted", QColor("#EEEEEE")), "添加至“快速访问”");
-        connect(pinAct, &QAction::triggered, this, [this, nodeId]() {
-            onPinCategoryTriggered(nodeId, true);
-        });
-    }
-
-    menu.addSeparator();
-
-    QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子分类");
-    connect(newSubCatAct, &QAction::triggered, this, [this, nodeId]() {
-        createAndEditCategory(nodeId);
+    QAction* openNewTabAct = menu.addAction(UiHelper::getIcon("Folder-add", "#EEEEEE"), tr("在新标签页中打开"));
+    connect(openNewTabAct, &QAction::triggered, this, [this, index]() {
+        QString path = m_model->filePath(index);
+        emit requestOpenInNewTab(path);
     });
 
-    QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#EEEEEE")), "设置预设标签");
+    QAction* pinAct = menu.addAction(UiHelper::getIcon("pin", "#EEEEEE"), isPinned ? tr("取消固定") : tr("固定到顶端"));
 >>>>>>> REPLACE
 ```
 
 ### 3.3 `src/ui/FavoritePanel.cpp`
 
-```
+```cpp
 <<<<<<< SEARCH
-            QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-            UiHelper::applyMenuStyle(tabCascadeMenu);
-
-            QAction* actOpenNewTab = tabCascadeMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "在新标签页中打开");
+    QAction* openNewTabAct = menu.addAction(UiHelper::getIcon("Folder-add", "#2ecc71"), tr("在新标签页中打开"));
 =======
-            QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-            UiHelper::applyMenuStyle(tabCascadeMenu);
-
-            QAction* actOpenNewTab = tabCascadeMenu->addAction(UiHelper::getIcon("Folder-add", QColor("#EEEEEE"), 16), "在新标签页中打开");
+    QAction* openNewTabAct = menu.addAction(UiHelper::getIcon("Folder-add", "#EEEEEE"), tr("在新标签页中打开"));
 >>>>>>> REPLACE
 ```
 
-```
+### 3.4 `src/ui/MarkedPanel.cpp`
+
+```cpp
 <<<<<<< SEARCH
-            bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
-            QAction* actAutoRec = menu.addAction(UiHelper::getIcon("layers", isAutoRec ? QColor("#2ecc71") : QColor("#EEEEEE"), 18),
-                                                 isAutoRec ? "关闭自动递归" : "开启自动递归");
+    QAction* actOpenNewTab = menu.addAction(UiHelper::getIcon("add", "#EEEEEE"), tr("在新标签页中打开"));
 =======
-            bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
-            QAction* actAutoRec = menu.addAction(UiHelper::getIcon("layers", QColor("#EEEEEE"), 18),
-                                                 isAutoRec ? "关闭自动递归" : "开启自动递归");
->>>>>>> REPLACE
-```
-
-### 3.4 `src/ui/controllers/ContentContextMenu.cpp`
-
-```
-<<<<<<< SEARCH
-            menu.addAction(UiHelper::getIcon("open", QColor("#EEEEEE"), 18), "打开")->setData(ContentPanel::ActionOpen);
-            menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "在新标签页中打开")->setData(ContentPanel::ActionOpenInNewTab);
-=======
-            menu.addAction(UiHelper::getIcon("open", QColor("#EEEEEE"), 18), "打开")->setData(ContentPanel::ActionOpen);
-            menu.addAction(UiHelper::getIcon("Folder-add", QColor("#EEEEEE"), 18), "在新标签页中打开")->setData(ContentPanel::ActionOpenInNewTab);
->>>>>>> REPLACE
-```
-
-```
-<<<<<<< SEARCH
-                QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-                UiHelper::applyMenuStyle(tabCascadeMenu);
-
-                tabCascadeMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "在新标签页中打开")->setData(ContentPanel::ActionOpenInNewTab);
-=======
-                QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-                UiHelper::applyMenuStyle(tabCascadeMenu);
-
-                tabCascadeMenu->addAction(UiHelper::getIcon("Folder-add", QColor("#EEEEEE"), 16), "在新标签页中打开")->setData(ContentPanel::ActionOpenInNewTab);
->>>>>>> REPLACE
-```
-
-### 3.5 `src/ui/NavPanel.cpp`
-
-```
-<<<<<<< SEARCH
-    QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-    UiHelper::applyMenuStyle(tabCascadeMenu);
-
-    QAction* actOpenNewTab = tabCascadeMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "在新标签页中打开");
-=======
-    QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-    UiHelper::applyMenuStyle(tabCascadeMenu);
-
-    QAction* actOpenNewTab = tabCascadeMenu->addAction(UiHelper::getIcon("Folder-add", QColor("#EEEEEE"), 16), "在新标签页中打开");
->>>>>>> REPLACE
-```
-
-### 3.6 `src/ui/AddressBar.cpp`
-
-```
-<<<<<<< SEARCH
-        QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-        UiHelper::applyMenuStyle(tabCascadeMenu);
-
-        QAction* actOpenNewTab = tabCascadeMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "在新标签页中打开");
-=======
-        QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-        UiHelper::applyMenuStyle(tabCascadeMenu);
-
-        QAction* actOpenNewTab = tabCascadeMenu->addAction(UiHelper::getIcon("Folder-add", QColor("#EEEEEE"), 16), "在新标签页中打开");
+    QAction* actOpenNewTab = menu.addAction(UiHelper::getIcon("Folder-add", "#EEEEEE"), tr("在新标签页中打开"));
 >>>>>>> REPLACE
 ```
 
 ---
 
-## Chapter 4: Build & Verification Steps（构建与运行时验收标准）
-
-### 4.1 构建命令
-使用 CMake 与 MSVC 进行项目增量构建：
-```bash
-cmake --build --preset x64-Debug
-```
-
-### 4.2 运行时验收标准
-1. **右键文件/文件夹**：“标记为目标文件夹”图标为 `#EEEEEE` 色；“在新标签页中打开”菜单项图标呈 `Folder-add`（带加号的文件夹矢量图标）。
-2. **右键库分类/收藏夹/导航树/地址栏面包屑**：弹出菜单中所有“在新标签页中打开”图标统一更正为 `Folder-add`，所有图标呈统一 `#EEEEEE` 中性单色。
+## 4. 架构设计与 SSOT 合规性分析
+1. **中性单色绝对统一**：全系统所有右键菜单项图标统一且仅使用 `#EEEEEE`，杜绝任何特殊彩色，完全符合 `Memories.md` 1.3 节规则 3 的极致沉静深色暗黑美学。
+2. **图标语义精准化**：“在新标签页中打开”统一使用 `Folder-add` 矢量图标，避免混淆通用加号与标签页/文件夹新建语义，符合 `Memories.md` 1.3 节规则 2 语义精准契约。
+3. **物理隔离红线**：当前阶段不进行任何 `src/` 代码修改，所有方案均收录在 `Implementation Plan/` 目录中。
 
 ---
 
-## Chapter 5: Official API Reuse & Anti-Redundancy（官方 API 复用与防另起炉灶）
-
-- **图标生成通道**：继续统一通过官方静态通道 `UiHelper::getIcon(key, color, size)` 获取图标。
-- **图标键统一**：全系统“在新标签页中打开”统一复用静态定义的 `"Folder-add"` 键，杜绝混用 `"add"`。
+## 5. 迁移与兼容性评估
+本次重构仅涉及 UI 右键菜单图标的颜色与图标 key 规范化调整，不改变任何信号槽连接或底层业务逻辑，不存在向下兼容性风险与数据库/配置文件迁移问题。
 
 ---
 
-## Chapter 6: Data SSOT Declaration Table（数据单一事实来源声明表）
-
-| 数据项 | 唯一 SSOT 数据源 | 派生副本 | 同步/刷新方向 |
-| :--- | :--- | :--- | :--- |
-| 右键菜单图标样式与键 | `UiHelper::getIcon` + `#EEEEEE` + `"Folder-add"` | 无 | 静态控制，零副本 |
+## 6. 性能影响评估
+修改仅为图标渲染时的颜色参数与 SVG 名称查找，对 CPU、内存与磁盘 I/O 零附加开销，性能影响为 0ms。
 
 ---
 
-## Chapter 7: Interface & Visibility Consistency Check（接口签名与访问级别一致性核查）
-
-- 本重构仅调整函数内部创建 `QAction` 时传递给 `UiHelper::getIcon` 的图标 key 与 `QColor` 参数，不增加、删除或改变任何类的方法成员及 `.h` 接口签名。
-
----
-
-## Chapter 8: Header Chain & Inclusion Closure Check（头文件包含链与类型完整性检查）
-
-- 未修改任何文件头的 `#include` 指令，头文件包含链保持绝对完整。
+## 7. 安全与风险防护
+所有改动点均为只读式的 UI 样式修饰，不影响任何底层文件系统读写、数据库事务或线程通信，风险极低。
 
 ---
 
-## Chapter 9: Compliance & Quality Self-Check Table（合规与质量核对表）
-
-| 序号 | 检查项目 | 结论 | 位置/说明 |
-| :--- | :--- | :--- | :--- |
-| 1 | 是否通过第 0 关并与用户达成共识 | 满足 | 探讨阶段已与用户就图标修正和单色红线达成“共识”与“批准” |
-| 2 | 已读物理证据清单是否完整包含物理读日志 | 满足 | 见方案开头已读证据清单 |
-| 3 | SEARCH 块原文是否在当前目标文件中真实存在且唯一匹配 | 满足 | 精准匹配目标文件行 |
-| 4 | 修改与新增的代码是否符合 C++17 规范 | 满足 | Qt/C++17 语法 |
-| 5 | 是否引入 Win32 强抢焦点或不合规的事件过滤器 | 满足 | 零引入 |
-| 6 | 是否篡改既有对外公开的 `.h` 接口签名 | 满足 | 未修改任何 `.h` 签名 |
-| 7 | 是否修改 `resources/style.qss` 之外的内联样式 | 满足 | 零内联样式修改 |
-| 8 | 是否包含完整 10 大章节 | 满足 | 包含 Chapter 1 至 Chapter 10 |
-| 9 | 校验与规整确认 | 满足 | 符合规范格式与物理隔离红线 |
+## 8. 自动化测试与验证计划
+1. **代码审查验证**：检查所有 `src/` 目录下 `QMenu` 创建与 `UiHelper::getIcon` 调用，确保右键菜单路径中的图标颜色参数全部为 `#EEEEEE`。
+2. **UI 视觉审查**：分别在“标记”面板、库面板、收藏夹面板与内容面板右键弹出菜单，确认所有图标均为亮灰色 `#EEEEEE`，无任何彩色突出项，且“在新标签页中打开”呈现为带有加号的文件夹矢量图标。
 
 ---
 
-## Chapter 10: Behavior Preservation & Zero-Value-Alteration Table（行为零篡改与数值零篡改声明表）
+## 9. 回滚策略
+如需回滚，只需在 Git 中撤销对 `Memories.md` 与 `Implementation Plan/ContextMenuIconColorNormalization.md` 的修改提交即可。
 
-| 序号 | 规则类型 | 项目描述 | 原数值/原行为 | 新数值/新行为 | 校验结果 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| 1 | 交互零篡改 | 右键菜单功能逻辑 | 触发“标记为目标文件夹”、“在新标签页中打开”等 | 完全一致，零行为改变 | 一致 |
-| 2 | 数值零篡改 | 统一右键菜单图标 | `#EEEEEE` 中性单色 / `"Folder-add"` | `#EEEEEE` 中性单色 / `"Folder-add"` | 严格遵循 Memories.md 红线 |
+---
+
+## 10. 实施步骤与预估工时
+1. 在 `Memories.md` 中记录规范（已完成，工时 0.1h）。
+2. 撰写并提交 `Implementation Plan/ContextMenuIconColorNormalization.md` 实施方案（已完成，工时 0.2h）。
+3. 待用户明确授权并要求代码实施后，按照方案中的 SEARCH/REPLACE 差异应用修改并编译验证（预估工时 0.2h）。

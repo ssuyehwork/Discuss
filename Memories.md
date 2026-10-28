@@ -72,8 +72,8 @@
    - 规则下拉框与输入框高度锁定为 25px，具备 1px 实线边框 (`#444`) 与 4px 圆角，下拉弹出列表统一使用 QuarkMeta 深色背景 (`#2D2D2D`) 与 `#3E3E42` 项选中高亮。
 7. **Tooltip 提示控件限制**:
    全应用**严禁使用 QWidget 原生 `setToolTip(...)` 硬编码悬浮提示**，悬浮提示只可使用统一的 `ToolTipOverlay` 控件（结合 `m_hoverFilter` 事件过滤器）实现感知与展示，以确保主题视觉一致性与平滑交互体验。
-8. **“在新标签页中打开”图标统一与防另起炉灶契约 (Open in New Tab Icon Specification)**:
-   全软件所有右键菜单与上下文菜单中的“在新标签页中打开”菜单项，图标统一且必须使用带加号的文件夹矢量图标 **`"Folder-add"`**（如 `UiHelper::getIcon("Folder-add", QColor("#EEEEEE"), ...)`），绝对禁止使用普通加号 `"add"` 图标或其他不一致图标另起炉灶！
+8. **“在新标签页中打开”图标矢量键规范契约 (“Open in New Tab” Vector Icon Specification Contract)**：
+   全软件所有右键上下文菜单（包括“标记”面板 `MarkedPanel`、库面板 `LibraryPanel`、收藏夹 `FavoritePanel` 等），针对“在新标签页中打开”菜单项，其矢量图标必须统一绑定且仅可使用 **`Folder-add`**（严禁使用裸 `add` 或 `plus` 等泛化图标），确保图标语义精准对齐新建 Tab/文件夹卡片，且图标颜色无条件严格遵循 `#EEEEEE` 中性单色红线。
 
 ---
 

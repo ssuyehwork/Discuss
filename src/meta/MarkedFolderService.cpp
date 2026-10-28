@@ -281,7 +281,7 @@ QAction* MarkedFolderService::buildMarkAction(QMenu* parentMenu, const QStringLi
     }
 
     QString label = allMarked ? "取消标记" : "标记为目标文件夹";
-    QIcon icon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 18);
+    QIcon icon = UiHelper::getIcon("Destination.svg", QColor("#EEEEEE"), 18);
 
     QAction* action = parentMenu->addAction(icon, label);
     if (receiver) {

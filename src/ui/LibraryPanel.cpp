@@ -937,7 +937,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     // 绘制置顶/取消置顶菜单项
     if (isPinned) {
-        QAction* unpinAct = menu.addAction(UiHelper::getIcon("pin_vertical", QColor("#F39C12")), "从“快速访问”移除");
+        QAction* unpinAct = menu.addAction(UiHelper::getIcon("pin_vertical", QColor("#EEEEEE")), "从“快速访问”移除");
         connect(unpinAct, &QAction::triggered, this, [this, nodeId]() {
             onPinCategoryTriggered(nodeId, false);
         });
@@ -955,7 +955,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
         createAndEditCategory(nodeId);
     });
 
-    QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6")), "设置预设标签");
+    QAction* presetTagAct = menu.addAction(UiHelper::getIcon("tag_filled", QColor("#EEEEEE")), "设置预设标签");
     connect(presetTagAct, &QAction::triggered, this, [this, nodeId]() {
         PresetTagsDialog dlg(nodeId, this, true);
         dlg.exec();
