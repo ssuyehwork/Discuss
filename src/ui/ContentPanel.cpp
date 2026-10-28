@@ -22,6 +22,7 @@
 #include "CardLayoutEngine.h"
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
+#include "../meta/LibraryService.h"
 
 #include "../core/AppConfig.h"
 #include "../core/CoreEngine.h"
@@ -953,7 +954,15 @@ void ContentPanel::refreshAll() {
         return;
     }
 
-    if (m_currentCategoryType == "library" || m_currentCategoryType == "smart_folder") {
+    if (m_currentCategoryType == "library") {
+        if (m_categoryId != 0) {
+            m_lastLoadedLibraryPaths = LibraryService::instance().getCategoryPaths(m_categoryId);
+        }
+        loadLibraryPaths(m_lastLoadedLibraryPaths);
+        return;
+    }
+
+    if (m_currentCategoryType == "smart_folder") {
         loadLibraryPaths(m_lastLoadedLibraryPaths);
         return;
     }
