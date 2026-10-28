@@ -532,3 +532,10 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 2. **就地属性更新与轻量渲染**：
    - 点击标签按钮时，直接在当前 `QPushButton` 上就地切换状态（`setChecked`、`setProperty("selected", ...)` 与图标更新），保持控件树稳定，确保焦点与事件序列平稳无损。
 
+---
+
+## 19. QuarkMeta 库虚拟分类与内容面板实时路径同步架构规范 (Virtual Category Path Refresh & Content Panel Sync Philosophy)
+
+1. **库分类内容响应式重新加载契约 (Library Category Responsive Reload Contract)**：
+   - 当向“库”（`LibraryPanel`）中的特定分类（`categoryType == "library"`）添加、移除或调整关联项目时，内容面板（`ContentPanel`）在触发 `refreshAll()` 或响应 `LibraryService::libraryChanged` 信号时，必须根据当前绑定的 `m_categoryId` 实时向 `LibraryService::instance().getCategoryPaths(m_categoryId)` 重新查询数据库最新关联路径，并更新 `m_lastLoadedLibraryPaths`；
+   - 严禁在分类变动后继续加载旧的静态缓存路径列表，确保侧边栏分类节点数字计数与内容面板视图卡片数据毫秒级 100% 绝对一致。

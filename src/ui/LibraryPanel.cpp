@@ -769,7 +769,7 @@ void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
     }
 
     QStringList paths = LibraryService::instance().getCategoryPaths(nodeId);
-    emit categoryPathsSelected(paths, nodeName);
+    emit categoryPathsSelected(paths, nodeName, nodeId);
 }
 
 void LibraryPanel::filterTreeNodes(const QString& keyword) {

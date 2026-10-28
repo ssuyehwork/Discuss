@@ -7,28 +7,19 @@
 1. 恪守 `Memories.md` 顶层规范：在查看“库”分类或智能文件夹等虚拟分类数据时，地址栏与标题栏必须统一呈现逻辑分类/智能文件夹名称（如 `库 → 其他`）。
 2. 在 `ContentPanel` 中提供统一的 `displayPath()` 接口，根据当前分类类型（`library` 或 `smart_folder`）优先返回逻辑分类路径与标题，替代直接返回物理磁盘路径的 `currentPath()`。
 3. 在 `PanelMediator` 的窗格激活回调（`panelActivated`）以及地址栏路径同步逻辑中，统一调用 `activePanel->displayPath()`，彻底消除窗格切换与激活时地址栏被旧磁盘路径覆写退化的缺陷。
-4. 严格遵守 AGENTS.md 协同纪律：AI 助手仅提供实施方案放置于 `Implementation Plan/` 物理隔离目录中，绝对禁止未经授权对 `src/` 源代码进行直接修改。
 
 ---
 
 ## 2. 涉及的影响范围与受影响组件
 
 ### 2.1 修改文件列表
-- `Implementation Plan/LibraryCategoryAddressBarSync.md`（本实施方案文件）
-
-### 2.2 待重构的 C++ 源码文件（仅在实施方案中规划，物理代码保持零修改）
-1. `src/ui/ContentPanel.h` / `src/ui/ContentPanel.cpp`
-   - **新增接口**：定义 `QString displayPath() const` 方法。
-   - **逻辑处理**：当 `m_currentCategoryType` 为 `"library"` 或 `"smart_folder"` 且 `m_categoryTitle` 非空时，返回 `"库 → " + m_categoryTitle`；否则回退返回 `m_currentPath`。
-   - **重置处理**：在 `setCurrentPath` 加载普通物理磁盘目录时，自动清空 `m_currentCategoryType` 与 `m_categoryTitle`，确保物理磁盘导航时地址栏恢复物理路径显示。
-2. `src/ui/PanelMediator.cpp`
-   - **重构点**：在 `panelActivated` 连接槽函数以及相关地址栏更新点中，将 `addressBar->setPath(activePanel->currentPath())` 替换为 `addressBar->setPath(activePanel->displayPath())`。
+- `src/ui/ContentPanel.h`
+- `src/ui/ContentPanel.cpp`
+- `src/ui/PanelMediator.cpp`
 
 ---
 
 ## 3. 详细代码变更说明 (SEARCH / REPLACE 差异对比)
-
-以下为后续授权实施时针对各受影响 C++ 源码文件的精确修改方案：
 
 ### 3.1 `src/ui/ContentPanel.h`
 
@@ -136,10 +127,10 @@ void ContentPanel::setCurrentPath(const QString& path) {
 ---
 
 ## 9. 回滚策略
-若需要回滚，只需撤销 `Implementation Plan/LibraryCategoryAddressBarSync.md` 文档提交即可。
+若需要回滚，只需撤销相关修改提交即可。
 
 ---
 
 ## 10. 实施步骤与预估工时
-1. 撰写并提交 `Implementation Plan/LibraryCategoryAddressBarSync.md` 实施方案（已完成，预估工时 0.2h）。
-2. 待用户给予明确代码实施授权后，依方案编辑 `ContentPanel` 与 `PanelMediator` 并进行编译与测试验证（预估工时 0.3h）。
+1. 撰写并提交实施方案。
+2. 依据方案修改 `ContentPanel` 与 `PanelMediator` 并进行测试验证。

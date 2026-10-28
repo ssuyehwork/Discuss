@@ -7,33 +7,22 @@
 1. **目标窗格为“普通分类”（如“库”中的自定义分类或“未分类”）**：拖拽判定为**“入库/归类”**，不改变物理磁盘存储路径，仅将拖入文件/文件夹与目标普通分类建立数据库与侧车关联。
 2. **目标窗格为“智能文件夹”或“全部数据”等只读/规则锁定分类**：由于智能文件夹基于规则动态匹配、严禁强行手动绑定，当用户不慎将项目拖拽到智能文件夹视图区域时，系统默认执行入库归属于**“未分类”**（`categoryId = -2`），并通过 `ToolTipOverlay` 弹出友情提示：`项目已入库到“未分类”`。
 3. **目标窗格为“普通磁盘文件夹”**：拖拽判定为**“迁移”**，维持原有磁盘 I/O 物理复制/移动逻辑。
-4. **严格遵守 AGENTS.md 协同纪律**：AI 助手仅提供实施方案放置于 `Implementation Plan/` 物理隔离目录中，绝对禁止未经授权对 `src/` 源代码进行直接修改。
 
 ---
 
 ## 2. 涉及的影响范围与受影响组件
 
 ### 2.1 修改文件列表
-- `Implementation Plan/CrossPaneDragDropToCategory.md`（本实施方案文件）
-
-### 2.2 待重构的 C++ 源码文件（仅在实施方案中规划，物理代码保持零修改）
-1. `src/ui/LibraryPanel.h` / `src/ui/LibraryPanel.cpp`
-   - **信号与发射扩展**：将 `categoryPathsSelected` 信号拓宽形参，带上当前分类的 `int categoryId`（`void categoryPathsSelected(const QStringList& paths, const QString& name = QString(), int categoryId = 0)`），并在 `onCategoryClicked` 触发时发射 `nodeId`。
-2. `src/ui/ContentPanel.h` / `src/ui/ContentPanel.cpp`
-   - **状态维护**：新增 `int currentCategoryId() const` 与 `void setCurrentCategoryId(int id)` 方法，用于记录当前窗格展示的库分类 Node ID。
-3. `src/ui/PanelMediator.cpp`
-   - **状态注入**：在 `categoryPathsSelected` 信号槽回调中接纳 `categoryId` 并注入到目标 `ContentPanel`；在 `smartFolderSelected` 回调中向目标 `ContentPanel` 注入分类 `categoryId`（智能文件夹为 `-20`）。
-4. `src/ui/controllers/ContentFileOpsHandler.cpp`
-   - **拖放逻辑分流**：在 `onPathsDropped` 顶部增加对 `m_panel->getCurrentCategoryType()` 和 `m_panel->currentCategoryId()` 的条件判定：
-     - 若为普通分类（`categoryType == "library"` 且 `categoryId > 0` 或 `categoryId == -2`）：调用 `LibraryService::instance().addPathsToCategory(categoryId, paths)`，弹出 Toast `已成功归入该分类`，并刷新视图；
-     - 若为智能文件夹或全量视图（`categoryType == "smart_folder"` 或 `categoryId == -1` 或 `categoryId == -20`）：自动归属于“未分类”（`addPathsToCategory(-2, paths)`），通过 `ToolTipOverlay` 弹出 Toast `项目已入库到“未分类”`，并刷新视图；
-     - 若为普通磁盘目录：继续执行下方的磁盘物理迁移逻辑。
+- `src/ui/LibraryPanel.h`
+- `src/ui/LibraryPanel.cpp`
+- `src/ui/ContentPanel.h`
+- `src/ui/ContentPanel.cpp`
+- `src/ui/PanelMediator.cpp`
+- `src/ui/controllers/ContentFileOpsHandler.cpp`
 
 ---
 
 ## 3. 详细代码变更说明 (SEARCH / REPLACE 差异对比)
-
-以下为后续授权实施时针对各受影响 C++ 源码文件的精确修改方案：
 
 ### 3.1 `src/ui/LibraryPanel.h`
 
@@ -227,10 +216,10 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
 ---
 
 ## 9. 回滚策略
-若需回滚，只需撤销 `Implementation Plan/CrossPaneDragDropToCategory.md` 文档提交即可。
+若需回滚，只需撤销相关修改提交即可。
 
 ---
 
 ## 10. 实施步骤与预估工时
-1. 撰写并提交 `Implementation Plan/CrossPaneDragDropToCategory.md` 实施方案（已完成，预估工时 0.2h）。
-2. 待用户给予明确代码实施授权后，依方案编辑 `LibraryPanel`、`ContentPanel`、`PanelMediator` 与 `ContentFileOpsHandler` 并进行编译与测试验证（预估工时 0.4h）。
+1. 撰写并提交 `Implementation Plan/CrossPaneDragDropToCategory.md` 实施方案。
+2. 编辑 `LibraryPanel`、`ContentPanel`、`PanelMediator` 与 `ContentFileOpsHandler` 并进行测试验证。
