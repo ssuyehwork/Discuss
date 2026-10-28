@@ -20,7 +20,7 @@
 1. `src/ui/ContentPanel.h` / `src/ui/ContentPanel.cpp`
    - **新增接口**：定义 `QString displayPath() const` 方法。
    - **逻辑处理**：当 `m_currentCategoryType` 为 `"library"` 或 `"smart_folder"` 且 `m_categoryTitle` 非空时，返回 `"库 → " + m_categoryTitle`；否则回退返回 `m_currentPath`。
-   - **重置处理**：在 `loadDirectory` 加载普通物理磁盘目录时，自动清空 `m_currentCategoryType` 与 `m_categoryTitle`，确保物理磁盘导航时地址栏恢复物理路径显示。
+   - **重置处理**：在 `setCurrentPath` 加载普通物理磁盘目录时，自动清空 `m_currentCategoryType` 与 `m_categoryTitle`，确保物理磁盘导航时地址栏恢复物理路径显示。
 2. `src/ui/PanelMediator.cpp`
    - **重构点**：在 `panelActivated` 连接槽函数以及相关地址栏更新点中，将 `addressBar->setPath(activePanel->currentPath())` 替换为 `addressBar->setPath(activePanel->displayPath())`。
 
@@ -66,10 +66,10 @@ QString ContentPanel::displayPath() const {
 
 ```cpp
 <<<<<<< SEARCH
-void ContentPanel::loadDirectory(const QString& path, bool recursive) {
+void ContentPanel::setCurrentPath(const QString& path) {
     m_currentPath = path;
 =======
-void ContentPanel::loadDirectory(const QString& path, bool recursive) {
+void ContentPanel::setCurrentPath(const QString& path) {
     m_currentPath = path;
     m_currentCategoryType.clear();
     m_categoryTitle.clear();
