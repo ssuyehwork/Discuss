@@ -424,40 +424,49 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 
 ---
 
-## 15. QuarkMeta 目录导航双选项卡与历史文件记录架构设计理念 (Directory Navigation Dual-Tab & File History Philosophy)
+## 15. QuarkMeta 批量重命名与文件监视静默治理设计理念 (Batch Rename & Watch Suppression Architecture Philosophy)
 
-> 本章节记录与用户关于“目录导航双选项卡与历史文件记录”的设计要求与架构契约。
+> 本章节整理自与用户的架构研讨，作为批量重命名预设持久化、枚举字符串映射与文件监视防抖静默机制的设计真理源 (SSOT)。
 
-### 15.1 双选项卡布局结构 (`NavPanel`)
-- “目录导航”区域结构升级为像“收藏夹 / 库”一样的双选项卡 (`QTabBar` + `QStackedWidget`) 容器：
-  * **选项卡 1【目录导航】**：展示桌面、此电脑、磁盘驱动器列表、最近访问文件夹与回收站树状导航；
-  * **选项卡 2【历史】**：新增 `FileHistoryPanel` 历史文件记录面板，专门承载用户访问过的文件列表。
+### 15.1 重命名规则枚举与字符串映射单一真理源 (PresetManager SSOT Mapping Contract)
+1. **彻底消除双重映射写两份的结构缺陷**：
+   - 规则序列化（`serializeRules`）与反序列化（`deserializeRules`）绝对禁止分别手写独立的 `switch` 或 `if-else` 链条。
+   - 必须在 `PresetManager` 内部建立唯一静态双向/对照映射表（`kTypeMappings`），统一涵盖 `Text` ("Text")、`Sequence` ("Sequence")、`OriginalName` ("OriginalName")、`Date` ("Date")、`Metadata` ("Metadata")、`ParentFolderName` ("ParentFolderName") 等全部 `RenameComponentType` 枚举值，新增枚举项时仅需在此单一真理源处扩展。
+2. **错误处理与非静默丢弃契约**：
+   - 序列化遇到未登记的枚举类型时，调试版本通过 `Q_ASSERT` 报警；
+   - 反序列化遇到无法识别的类型字符串时，不得静默吞错丢弃规则，必须通过带 `unrecognizedCount` 输出参数的重载接口向调用方反馈累加计数，并在 UI 触发 `ToolTipOverlay` 友情 Toast 提示，保障用户预设数据的知情权与可靠性。
 
-### 15.2 历史文件捕获与容量规则
-- **限定记录文件**：历史记录面板**只记录文件**，严格排除任何文件夹/目录实体。
-- **触发源一致性**：凡是用户通过**空格键预览**、**双击预览**或**打开/激活**（`fileActivated`）的文件，均由 `PanelMediator` 自动捕获并追加入历史列表。
-- **容量上限与持久化**：采用最新置顶、先进先出 (FIFO) 队列，数量上限严格锁定为 **100 个**，并通过 `AppConfig`（`UI/RecentFilesHistory`）进行持久化保存与恢复。
-
-### 15.3 交互扩展能力（拖拽与定位）
-- **支持拖拽至收藏夹**：历史列表中的文件项支持 Mouse Drag 操作，按标准 `text/uri-list` 格式封装 `QMimeData`，可直接拖拽投递至左侧“收藏夹”面板完成快捷收藏。
-- **支持文件定位**：历史列表项目支持双击/右键“定位文件”菜单，发送 `requestLocateFile(path)` 信号，由 `PanelMediator` 驱动 `ContentPanel` 跳转至目标文件夹并高亮选中该文件。
+### 15.2 批量重命名文件监视静默与收口刷新契约 (Batch Rename Watch Suppression & Final Single-Refresh Contract)
+1. **批量重命名期间全局监视静默 (Watch Suppression)**：
+   - 在触发批量重命名（`performBatchRename`）之前，系统必须通过 RAII 管理器（`SuppressGuard`）对发起窗格及其所有分屏副窗格（`rootPane()->panes()`）调用 `beginWatchSuppress()`，开启监视静默；
+   - 静默期间，`ContentChangeWatcher` 拦截所有文件系统改变回调（`onDirectoryChanged`），禁止刷新视图、启动防抖定时器或积累脏数据变动，消除批量重命名执行过程中列表的中途抖动与多次刷新。
+2. **防抖队列积压丢弃与代数阻断机制 (Discard Pending & Discard Generation)**：
+   - `DirectoryWatchService` 提供 `discardPending(dirPath, includeSubtree)` 接口，在清理 `m_debounceMap` 队列中积压事件的同时，引入线程安全“丢弃代数”计数器（`m_discardGenerations`）；
+   - 当异步线程投递的 `directoryChanged` 信号在主线程被回调时，校验其投递代数是否匹配，若不匹配则自动熔断丢弃，确保已投递未执行的改变事件彻底失效。
+3. **完成收口与尾部单次刷新**：
+   - 批量重命名对话框关闭（`exec()` 结束）后，RAII Guard 自动释放所有窗格的静默状态（`endWatchSuppress()`），并在 `endSuppress()` 归零时自动调用 `discardPending` 清理监视积压；
+   - 重命名成功后，对每个关联分屏窗格执行且仅执行一次 `refreshAll()` 刷平，消除任何尾部多余刷新，保证重命名完成后视图状态一致且文件监视无缝恢复。
 
 ---
 
-## 16. QuarkMeta 标记文件夹与目的地一键分发架构设计理念 (Marked Folders & Destination Tab Philosophy)
+## 16. QuarkMeta 标记目的地与搬运分发架构设计理念 (Marked Folders & Destination Transfer Architecture Philosophy)
 
-> 本章节记录与用户关于“标记”选项卡、目的地文件夹一键迁移（`Alt+C` / `Alt+V`）的设计要求与架构契约。
+> 本章节整理自与用户的架构研讨与共识确认，作为全软件标记目的地管理、文件分发搬运与复合撤销的设计真理源 (SSOT)。
 
-### 16.1 侧边栏“标记”选项卡与三页布局
-- 侧边栏容器（`SidebarContainerWidget`）采用三选项卡 (`QTabBar` + `QStackedWidget`) 结构，在“收藏夹”与“库”右侧增加第 3 个选项卡**“标记”**（图标 `Destination.svg`，颜色 `#ff551c`）。
-- 适当微调 QSS 中 Tab 页边距，使三个选项卡优雅陈列，且不得改动既有“收藏夹”与“库”的功能。
+### 16.1 物理搬运归一化与另起炉灶绝对禁令 (Unified Transfer & Zero-Redundancy Contract)
+1. **统一物理搬运通道**：
+   - 标记目的地的分发搬运（`MarkedFolderService::executeTransferToMarked`）绝对禁止自写 `copyRecursively` 等私有递归复制/删除逻辑；
+   - 必须统一路由至磁盘 I/O 服务层 `DiskIoService::executeAsync`，底层调用 `ShellHelper::copyOrMoveItems`，确保侧车 `.QuarkMeta.json` 元数据与 `disk_thumbs` 缩略图缓存随物理文件漫游，与剪切、拖放、右键“移动到...”的行为 100% 物理一致。
+2. **同盘/跨盘与回收机制**：
+   - 分发时所有目标统一采用“复制”模式（`isMove = false`），确保源文件在所有目标完成前不提前消失；
+   - 比较源文件路径与目标路径的物理卷序列号（`VolumePathResolver::getVolumeSerialNumber`）。若存在同盘目标且所有目标均成功复制，则调用 `DiskTrashService::moveToDiskTrash` 将源文件移入应用私有回收站；若存在任意一个失败目标或所有目标均跨盘，源文件严格保留。
+3. **同源/循环嵌套跳过**：
+   - 目标路径为源文件夹本身或源文件夹的子目录时（规范化路径与不区分大小写前缀判定），必须自动跳过该目标并给予明确友情提示。
 
-### 16.2 快捷键与菜单交互（`Alt+C` / `Alt+V`）
-- **标记/取消标记（`Alt+C` 与右键菜单）**：快捷键 `Alt+C` 或文件夹右键菜单“标记目的地”触发，切换当前选中文件夹的标记状态（仅支持文件夹）。
-- **一键分发/迁移（`Alt+V`）**：选中项目后按下 `Alt+V`，触发确认弹窗，确认后将选中项目一键分发迁移到所有处于标记激活状态的目的地文件夹中。
-- **SSOT 与职责分层**：快捷键 `AppShortcutController` 仅发送意图信号；`PanelMediator` 接收信号并从 `ContentPanel` 获取路径交由 `MarkedFolderService` 处理；`MarkedFolderDao` 为唯一的 SQLite 表真理源。
-
-### 16.3 迁移编排、回收站与撤销规则
-- **单盘/跨盘与回收机制**：若存在任一目标与源文件同盘，在全部目标复制成功后，将源文件移入 QuarkMeta 专属私有回收站（`DiskTrashService::moveToDiskTrash`），严禁使用系统回收站。若全为异盘目标，仅执行复制并保留源文件。
-- **无门槛 TaskProgress 进度条**：打破 100 项触发门槛，`Alt+V` 搬迁任务主线程瞬间创建 TaskProgress，贯穿复制、回收、UI 刷新与侧车落盘全程。
-- **完整 Undo 支持**：集成 `UndoManager`，撤销时将复制出的文件放入专属私有回收站，并将原回收的文件精确还原。
+### 16.2 复合分发撤销与进度条契约 (Compound Undo & Progress Contract)
+1. **复合分发撤销命令 (`TransferToMarkedCommand`)**：
+   - 整个标记分发搬运操作仅产生并压入一条 `TransferToMarkedCommand` 命令至 `UndoManager`；
+   - 撤销时先把各目标实际生成的副本移入应用私有回收站，若源文件曾被回收，则根据 `original_path` 查询最新记录 ID 调用 `DiskTrashService::restoreFromDiskTrash` 还原原文件；若原位置已被占用，自动重命名还原并通过 `ToolTipOverlay` 友情 Toast 提示。
+2. **全量进度条与监视静默**：
+   - 操作前由 `TaskProgressService` 在主线程立即创建 0ms 视觉响应进度条；
+   - 对涉及的内容窗格调用 `beginWatchSuppress()` / `endWatchSuppress()` 开启文件监视静默，待全部工作（复制、回收、元数据漫游、数据库刷新）彻底闭环收口后统一结束进度条与静默。

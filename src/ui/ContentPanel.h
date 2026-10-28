@@ -116,6 +116,8 @@ public:
     DataSourceType dataSourceType() const;
     bool isContextMenuActive() const { return m_isContextMenuActive; }
     QString getCurrentCategoryType() const { return m_currentCategoryType; }
+    QString currentCategoryTitle() const { return m_categoryTitle; }
+    void setCurrentCategoryTitle(const QString& title);
     int currentLoadRequestId() const { return m_loadRequestId.load(); }
     int loadRequestId() const { return m_loadRequestId.load(); }
     int incrementLoadRequestId() { return ++m_loadRequestId; }
@@ -265,6 +267,7 @@ private:
     QString m_pendingSelectPath;
     bool m_pendingIsEdit = false;
     QString m_currentCategoryType;
+    QString m_categoryTitle;
     bool m_isRecursive = false;
     ViewMode m_currentViewMode = static_cast<ViewMode>(-1);
     std::atomic<bool> m_isLoading{false};
