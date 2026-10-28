@@ -127,6 +127,9 @@ FramelessDialog::FramelessDialog(const QString& title, QWidget* parent)
     m_contentArea = new QWidget();
     m_contentArea->setObjectName("DialogContentArea");
     m_mainLayout->addWidget(m_contentArea, 1);
+
+    // 默认仅显示关闭按钮，全局自动隐匿所有无边框对话框的置顶功能
+    setVisibleButtons(Close);
 }
 
 void FramelessDialog::setVisibleButtons(int flags) {
