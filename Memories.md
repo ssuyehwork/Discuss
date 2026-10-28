@@ -470,3 +470,22 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 2. **全量进度条与监视静默**：
    - 操作前由 `TaskProgressService` 在主线程立即创建 0ms 视觉响应进度条；
    - 对涉及的内容窗格调用 `beginWatchSuppress()` / `endWatchSuppress()` 开启文件监视静默，待全部工作（复制、回收、元数据漫游、数据库刷新）彻底闭环收口后统一结束进度条与静默。
+
+---
+
+## 17. QuarkMeta 仓储查询模式与 Service 读写对称性架构设计理念 (Repository Pattern & Symmetric Service API Architecture Philosophy)
+
+> 本章节整理自与用户的架构治理探讨与共识确认，作为全软件服务层（Service Layer）与数据访问层（DAO/Repository Layer）设计的真理源 (SSOT)。
+
+### 17.1 Service/DAO 读写对称性铁律 (Symmetric Service API Contract)
+1. **彻底消除“重写入/轻查询”不对称现象**：
+   - 凡是具备写能力/动作能力（Write / Action）的服务与数据访问模块（如 `DiskTrashService`、`MarkedFolderService`、`PresetTagService`、`LibraryItemDao` 等），必须同步配套完整对称的读/查询能力（Read / Query）；
+   - 严禁出现“只能把数据写入/移入，却无法根据 ID、路径或条件查出记录”的单向死胡同设计。
+2. **标配查询接口契约**：
+   - 每个持久化仓储/服务模块必须标配提供：`getById(...)`、`getByPath(...)`、`getLatestItemByOriginalPath(...)`、`exists(...)` 等标准化查询 API；
+   - 确保撤销（Undo）、重做（Redo）、防抖重试、视图反查与依赖溯源等高阶交互能直接复用底层 Read 接口，严禁在 UI / Mediator 控制层手写裸 SQL 拼凑。
+
+### 17.2 渐进式按需治理原则 (Incremental Architecture Refactoring)
+1. **按需补齐，平黄渐进**：
+   - 严禁进行破坏既有编译契约的大爆炸式整体重写；
+   - 在后续承接具体业务需求与 Bug 修复时，随手审计并补齐相关模块缺失的 Query / Read 接口，通过多轮迭代平滑提升全软件 API 的完整性与对称度。
