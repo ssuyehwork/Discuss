@@ -172,7 +172,7 @@ void MarkedPanel::onContextMenuRequested(const QPoint& pos) {
                 MarkedFolderService::instance().removeMarked(path);
             });
         } else {
-            QAction* markAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16), "标记为目的地");
+            QAction* markAct = menu.addAction(UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16), "标记为目标文件夹");
             connect(markAct, &QAction::triggered, this, [path]() {
                 MarkedFolderService::instance().addMarked(path);
             });
