@@ -117,6 +117,8 @@ public:
     bool isContextMenuActive() const { return m_isContextMenuActive; }
     QString getCurrentCategoryType() const { return m_currentCategoryType; }
     QString currentCategoryTitle() const { return m_categoryTitle; }
+    int currentCategoryId() const { return m_categoryId; }
+    void setCurrentCategoryId(int id) { m_categoryId = id; }
     QString displayPath() const;
     void setCurrentCategoryTitle(const QString& title);
     int currentLoadRequestId() const { return m_loadRequestId.load(); }
@@ -269,6 +271,7 @@ private:
     bool m_pendingIsEdit = false;
     QString m_currentCategoryType;
     QString m_categoryTitle;
+    int m_categoryId = 0;
     bool m_isRecursive = false;
     ViewMode m_currentViewMode = static_cast<ViewMode>(-1);
     std::atomic<bool> m_isLoading{false};

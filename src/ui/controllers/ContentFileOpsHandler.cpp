@@ -12,6 +12,7 @@
 #include "../../core/NavigationHistoryService.h"
 #include "../../core/LastOperationManager.h"
 #include "../../util/DiskIoService.h"
+#include "../../meta/LibraryService.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -97,7 +98,33 @@ bool ContentFileOpsHandler::resolvePasteDestination() {
 
 void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride, Qt::DropAction action) {
     if (!m_panel || paths.isEmpty()) return;
-    
+
+    // 1. 目标窗格分类视图拖放重定向逻辑
+    QString catType = m_panel->getCurrentCategoryType();
+    int catId = m_panel->currentCategoryId();
+
+    if (catType == "library" && (catId > 0 || catId == -2)) {
+        // 目标为普通分类：执行入库/归类到该分类
+        bool ok = LibraryService::instance().addPathsToCategory(catId, paths);
+        if (ok) {
+            ToolTipOverlay::instance()->showToast(QString("已成功归入“%1”分类").arg(m_panel->currentCategoryTitle()), 2000, QColor("#2ecc71"));
+            m_panel->refreshAll();
+        } else {
+            ToolTipOverlay::instance()->showToast("归入分类失败", 2000, QColor("#e81123"));
+        }
+        return;
+    } else if (catType == "smart_folder" || catType == "library") {
+        // 目标为智能文件夹或全量/系统分类：兜底入库归属于“未分类”
+        bool ok = LibraryService::instance().addPathsToCategory(-2, paths);
+        if (ok) {
+            ToolTipOverlay::instance()->showToast("项目已入库到“未分类”", 2500, QColor("#3498db"));
+            m_panel->refreshAll();
+        } else {
+            ToolTipOverlay::instance()->showToast("入库“未分类”失败", 2000, QColor("#e81123"));
+        }
+        return;
+    }
+
     QString baseDir = !targetDirOverride.isEmpty() ? targetDirOverride : m_panel->currentPath();
     if (baseDir.isEmpty() || baseDir == "computer://") return;
 

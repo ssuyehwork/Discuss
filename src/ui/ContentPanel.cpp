@@ -715,6 +715,7 @@ void ContentPanel::setCurrentPath(const QString& path) {
     m_currentPath = path;
     m_currentCategoryType.clear();
     m_categoryTitle.clear();
+    m_categoryId = 0;
     if (m_model) {
         m_model->setCurrentPath(path);
     }
