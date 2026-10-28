@@ -774,7 +774,7 @@ void PanelMediator::setupConnections() {
                 emit activeContentPanelChanged(activePanel);
             }
             if (addressBar) {
-                addressBar->setPath(activePanel->currentPath());
+                addressBar->setPath(activePanel->displayPath());
             }
         });
 

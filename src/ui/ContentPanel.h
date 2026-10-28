@@ -117,6 +117,7 @@ public:
     bool isContextMenuActive() const { return m_isContextMenuActive; }
     QString getCurrentCategoryType() const { return m_currentCategoryType; }
     QString currentCategoryTitle() const { return m_categoryTitle; }
+    QString displayPath() const;
     void setCurrentCategoryTitle(const QString& title);
     int currentLoadRequestId() const { return m_loadRequestId.load(); }
     int loadRequestId() const { return m_loadRequestId.load(); }

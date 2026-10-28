@@ -668,6 +668,13 @@ void ContentPanel::setCurrentCategoryTitle(const QString& title) {
     updateHeaderTitle();
 }
 
+QString ContentPanel::displayPath() const {
+    if (!m_categoryTitle.isEmpty() && (m_currentCategoryType == "library" || m_currentCategoryType == "smart_folder")) {
+        return "库 → " + m_categoryTitle;
+    }
+    return m_currentPath;
+}
+
 void ContentPanel::updateHeaderTitle() {
     if (!m_headerWidget) return;
 
@@ -706,6 +713,8 @@ void ContentPanel::updateHeaderTitle() {
 
 void ContentPanel::setCurrentPath(const QString& path) {
     m_currentPath = path;
+    m_currentCategoryType.clear();
+    m_categoryTitle.clear();
     if (m_model) {
         m_model->setCurrentPath(path);
     }
