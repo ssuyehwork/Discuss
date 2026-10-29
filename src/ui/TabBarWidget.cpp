@@ -76,7 +76,7 @@ void TabItemButton::setTabTitle(const QString& title) {
 
 void TabItemButton::updateElidedTitle() {
     if (!m_titleLabel || m_rawTitle.isEmpty()) return;
-    int availWidth = width() - 56;
+    int availWidth = width() - 44;
     if (availWidth < 10) availWidth = 10;
     QFontMetrics fm(m_titleLabel->font());
     QString elided = fm.elidedText(m_rawTitle, Qt::ElideRight, availWidth);
@@ -965,15 +965,16 @@ void TabBarWidget::applyDiffUpdate() {
     }
 
     // 3. 内容驱动自适应宽度计算：空间充裕时完整展示名称，超限时才等比平滑阶梯压缩
-    int availableWidth = m_scrollArea->viewport()->width() - 36;
-    if (availableWidth <= 0) availableWidth = width() - 36;
+    int viewportWidth = m_scrollArea->viewport()->width();
+    int availableWidth = (viewportWidth > 200) ? (viewportWidth - 36) : (width() - 36);
+    if (availableWidth < 100) availableWidth = 800; // 防防御性兜底
 
     QVector<int> naturalWidths(targetCount);
     int totalNaturalWidth = 0;
     for (int i = 0; i < targetCount; ++i) {
         QFontMetrics fm(m_tabWidgets[i]->font());
         int textW = fm.horizontalAdvance(m_tabs[i].title);
-        int needed = qBound(80, textW + 48, 600);
+        int needed = qBound(120, textW + 64, 300);
         naturalWidths[i] = needed;
         totalNaturalWidth += needed;
     }
