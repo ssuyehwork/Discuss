@@ -466,10 +466,14 @@ void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
     if (state.isSplit && !state.panePaths.isEmpty()) {
         QStringList nameList;
         for (const QString& p : state.panePaths) {
-            nameList.append(cleanNameForTab(p));
+            if (!p.isEmpty()) {
+                nameList.append(cleanNameForTab(p));
+            }
         }
-        QString mergedTitle = nameList.join(" | ");
-        m_tabs[m_currentIndex].title = mergedTitle;
+        if (!nameList.isEmpty()) {
+            QString mergedTitle = nameList.join(" | ");
+            m_tabs[m_currentIndex].title = mergedTitle;
+        }
         int primIdx = qBound(0, state.primaryIndex, state.panePaths.size() - 1);
         m_tabs[m_currentIndex].url = state.panePaths[primIdx];
     } else if (!state.panePaths.isEmpty()) {
@@ -754,8 +758,29 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
         }
     }
 
-    m_tabs[m_currentIndex].title = folderName.isEmpty() ? "此电脑" : folderName;
-    m_tabs[m_currentIndex].url = url;
+    if (folderName.isEmpty()) folderName = "此电脑";
+
+    auto& currentTab = m_tabs[m_currentIndex];
+    if (currentTab.splitState.isSplit && !currentTab.splitState.panePaths.isEmpty()) {
+        int activeIdx = qBound(0, currentTab.splitState.activePaneIndex, currentTab.splitState.panePaths.size() - 1);
+        currentTab.splitState.panePaths[activeIdx] = url;
+
+        QStringList nameList;
+        for (const QString& p : currentTab.splitState.panePaths) {
+            if (!p.isEmpty()) {
+                nameList.append(cleanNameForTab(p));
+            }
+        }
+        if (!nameList.isEmpty()) {
+            currentTab.title = nameList.join(" | ");
+        } else {
+            currentTab.title = folderName;
+        }
+        currentTab.url = url;
+    } else {
+        currentTab.title = folderName;
+        currentTab.url = url;
+    }
 
     applyDiffUpdate();
     saveStateToConfig();
