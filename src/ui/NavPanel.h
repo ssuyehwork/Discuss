@@ -51,11 +51,13 @@ private slots:
 private:
     void initUi();
     void fetchChildDirs(QStandardItem* parent);
+    QStandardItem* findItemByData(QStandardItem* parent, const QString& targetData);
 
     QTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
     QVBoxLayout* m_mainLayout = nullptr;
     QStandardItem* m_recentRootItem = nullptr;
+    QString m_currentPath;
 
     QTabBar* m_tabBar = nullptr;
     QStackedWidget* m_stackedWidget = nullptr;

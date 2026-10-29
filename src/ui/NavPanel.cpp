@@ -260,6 +260,10 @@ void NavPanel::updateRecentVisitedList() {
                 child->setData(QDir::toNativeSeparators(item.path), Qt::UserRole + 2);
                 weakThis->m_recentRootItem->appendRow(child);
             }
+
+            if (!weakThis->m_currentPath.isEmpty()) {
+                weakThis->selectPath(weakThis->m_currentPath);
+            }
         }, Qt::QueuedConnection);
     });
 }
@@ -268,15 +272,29 @@ void NavPanel::setRootPath(const QString& path) {
     Q_UNUSED(path);
 }
 
-void NavPanel::selectPath(const QString& path) {
-    QString targetData = (path == "trash://" || path == "trash") ? "trash_root" : path;
-    for (int i = 0; i < m_model->rowCount(); ++i) {
-        QStandardItem* item = m_model->item(i);
-        if (item->data(Qt::UserRole + 1).toString() == targetData) {
-            m_treeView->setCurrentIndex(item->index());
-            m_treeView->setFocus();
-            break;
+QStandardItem* NavPanel::findItemByData(QStandardItem* parent, const QString& targetData) {
+    if (!parent) return nullptr;
+    for (int i = 0; i < parent->rowCount(); ++i) {
+        QStandardItem* child = parent->child(i);
+        if (!child) continue;
+        if (child->data(Qt::UserRole + 1).toString() == targetData) {
+            return child;
         }
+        QStandardItem* subMatch = findItemByData(child, targetData);
+        if (subMatch) {
+            return subMatch;
+        }
+    }
+    return nullptr;
+}
+
+void NavPanel::selectPath(const QString& path) {
+    m_currentPath = path;
+    QString targetData = (path == "trash://" || path == "trash") ? "trash_root" : path;
+    QStandardItem* foundItem = findItemByData(m_model->invisibleRootItem(), targetData);
+    if (foundItem) {
+        m_treeView->setCurrentIndex(foundItem->index());
+        m_treeView->setFocus();
     }
 }
 
