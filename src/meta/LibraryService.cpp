@@ -96,7 +96,7 @@ QAction* LibraryService::buildLibraryAction(QMenu* parentMenu, const QStringList
 
         return action;
     } else {
-        QIcon addIcon = UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18);
+        QIcon addIcon = UiHelper::getIcon("Database-1.svg", QColor("#EEEEEE"), 18);
         QAction* action = parentMenu->addAction(addIcon, "添加至“库”");
 
         connect(action, &QAction::triggered, receiver ? receiver : parentMenu, [this, targetPaths]() {
