@@ -36,7 +36,7 @@ struct SmartFolderRecord {
     int id = 0;
     QString name = "新智能文件夹";
     QString matchMode = "ALL"; // "ALL" (AND) 或 "ANY" (OR)
-    QString iconKey = "folder_filled";
+    QString iconKey = "smart-folder-1.svg";
     QString colorHex = "#888888";
     int sortOrder = 0;
     QList<SmartFolderRule> rules;

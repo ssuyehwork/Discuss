@@ -833,7 +833,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
     UiHelper::applyMenuStyle(&menu);
 
     if (!index.isValid()) {
-        QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建库分类");
+        QAction* newCatAct = menu.addAction(UiHelper::getIcon("Data-Classification.svg", QColor("#EEEEEE")), "新建库分类");
         connect(newCatAct, &QAction::triggered, this, [this]() {
             createAndEditCategory(0);
         });
@@ -853,6 +853,12 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     if (index.data(TypeRole).toString() == "smart_folder") {
         int smartFolderId = index.data(Qt::UserRole + 1).toInt();
+        QString curIconKey = index.data(Qt::UserRole + 2).toString();
+        QString curColorHex = index.data(Qt::UserRole + 3).toString();
+
+        if (curIconKey.isEmpty() || curIconKey == "folder_filled" || curIconKey == "folder") curIconKey = "smart-folder-1.svg";
+        if (curColorHex.isEmpty()) curColorHex = "#888888";
+
         // 右键具体的智能文件夹节点
         QAction* editRuleAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "编辑规则");
         connect(editRuleAct, &QAction::triggered, this, [this, smartFolderId]() {
@@ -865,6 +871,31 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
                 }
             }
         });
+
+        menu.addSeparator();
+
+        ContextMenuFactory::buildIconPickerMenu(&menu, curIconKey, curColorHex,
+            [this, smartFolderId](const QString& iconKey) {
+                SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(smartFolderId);
+                if (rec.id > 0) {
+                    rec.iconKey = iconKey;
+                    if (SmartFolderDao::updateSmartFolder(rec)) {
+                        loadLibrary();
+                    }
+                }
+            },
+            [this, smartFolderId](const QString& hexColor) {
+                SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(smartFolderId);
+                if (rec.id > 0) {
+                    rec.colorHex = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
+                    if (SmartFolderDao::updateSmartFolder(rec)) {
+                        loadLibrary();
+                    }
+                }
+            }
+        );
+
+        menu.addSeparator();
 
         QAction* deleteSmartAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除智能文件夹");
         connect(deleteSmartAct, &QAction::triggered, this, [this, smartFolderId]() {
@@ -895,7 +926,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     if (nodeId == -20) {
         // 智能文件夹分组右键菜单
-        QAction* newSmartAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建智能文件夹");
+        QAction* newSmartAct = menu.addAction(UiHelper::getIcon("smart-folder-1.svg", QColor("#EEEEEE")), "新建智能文件夹");
         connect(newSmartAct, &QAction::triggered, this, [this]() {
             SmartFolderDialog dlg(this);
             if (dlg.exec() == QDialog::Accepted) {
@@ -912,7 +943,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     if (nodeId == 0) {
         // 右键标题行弹出与空白处相同的“新建库分类”与排列菜单
-        QAction* newCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建库分类");
+        QAction* newCatAct = menu.addAction(UiHelper::getIcon("Data-Classification.svg", QColor("#EEEEEE")), "新建库分类");
         connect(newCatAct, &QAction::triggered, this, [this]() {
             createAndEditCategory(0);
         });
@@ -934,7 +965,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
     QString curColorHex = index.data(Qt::UserRole + 3).toString();
     bool isPinned = index.data(Qt::UserRole + 4).toBool();
 
-    if (curIconKey.isEmpty()) curIconKey = "folder_filled";
+    if (curIconKey.isEmpty() || curIconKey == "folder_filled" || curIconKey == "folder") curIconKey = "Data-Classification.svg";
     if (curColorHex.isEmpty()) curColorHex = "#888888";
 
     // 绘制置顶/取消置顶菜单项
@@ -952,7 +983,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     menu.addSeparator();
 
-    QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "新建子分类");
+    QAction* newSubCatAct = menu.addAction(UiHelper::getIcon("Data-Classification.svg", QColor("#EEEEEE")), "新建子分类");
     connect(newSubCatAct, &QAction::triggered, this, [this, nodeId]() {
         createAndEditCategory(nodeId);
     });
@@ -1118,12 +1149,16 @@ void LibraryPanel::loadLibrary() {
 
     for (const auto& sfRec : smartFolders) {
         int countVal = SmartFolderDao::countMatchingItems(sfRec);
-        QIcon sfIcon = UiHelper::getIcon(sfRec.iconKey, QColor(sfRec.colorHex), 18);
+        QString sfIconKey = sfRec.iconKey;
+        if (sfIconKey.isEmpty() || sfIconKey == "folder_filled" || sfIconKey == "folder") {
+            sfIconKey = "smart-folder-1.svg";
+        }
+        QIcon sfIcon = UiHelper::getIcon(sfIconKey, QColor(sfRec.colorHex), 18);
         QStandardItem* sfItem = new QStandardItem(sfIcon, sfRec.name);
         sfItem->setData("smart_folder", TypeRole);
         sfItem->setData(sfRec.id, IdRole);
         sfItem->setData(sfRec.id, Qt::UserRole + 1);
-        sfItem->setData(sfRec.iconKey, Qt::UserRole + 2);
+        sfItem->setData(sfIconKey, Qt::UserRole + 2);
         sfItem->setData(sfRec.colorHex, Qt::UserRole + 3);
         sfItem->setData(countVal, Qt::UserRole + 9);
         sfItem->setEditable(false);
@@ -1144,12 +1179,16 @@ void LibraryPanel::loadLibrary() {
     QMap<int, QStandardItem*> itemMap;
     for (const auto& rec : list) {
         int count = LibraryDao::getCategoryPaths(rec.id).size();
-        QIcon icon = UiHelper::getIcon(rec.iconKey, QColor(rec.colorHex), 18);
+        QString catIconKey = rec.iconKey;
+        if (catIconKey.isEmpty() || catIconKey == "folder_filled" || catIconKey == "folder") {
+            catIconKey = "Data-Classification.svg";
+        }
+        QIcon icon = UiHelper::getIcon(catIconKey, QColor(rec.colorHex), 18);
         QStandardItem* item = new QStandardItem(icon, rec.name);
         item->setData("category", TypeRole);
         item->setData(rec.id, IdRole);
         item->setData(rec.id, Qt::UserRole + 1);
-        item->setData(rec.iconKey, Qt::UserRole + 2);
+        item->setData(catIconKey, Qt::UserRole + 2);
         item->setData(rec.colorHex, Qt::UserRole + 3);
         item->setData(rec.isPinned, Qt::UserRole + 4);
         item->setData(count, Qt::UserRole + 9);
@@ -1162,7 +1201,7 @@ void LibraryPanel::loadLibrary() {
             pinnedMirrorItem->setData("category", TypeRole);
             pinnedMirrorItem->setData(rec.id, IdRole);
             pinnedMirrorItem->setData(rec.id, Qt::UserRole + 1);
-            pinnedMirrorItem->setData(rec.iconKey, Qt::UserRole + 2);
+            pinnedMirrorItem->setData(catIconKey, Qt::UserRole + 2);
             pinnedMirrorItem->setData(rec.colorHex, Qt::UserRole + 3);
             pinnedMirrorItem->setData(true, Qt::UserRole + 4);
             pinnedMirrorItem->setData(count, Qt::UserRole + 9);

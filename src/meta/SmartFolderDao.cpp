@@ -38,7 +38,7 @@ bool SmartFolderDao::initTable() {
                       "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                       "name TEXT NOT NULL, "
                       "match_mode TEXT DEFAULT 'ALL', "
-                      "icon_key TEXT DEFAULT 'folder_filled', "
+                      "icon_key TEXT DEFAULT 'smart-folder-1.svg', "
                       "color_hex TEXT DEFAULT '#888888', "
                       "sort_order INTEGER DEFAULT 0, "
                       "rules_json TEXT DEFAULT '[]', "

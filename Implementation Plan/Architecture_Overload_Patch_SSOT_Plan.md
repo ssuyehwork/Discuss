@@ -20,16 +20,23 @@
 
 ### 1.1 背景与排查动机
 根据 QuarkMeta 顶层架构规范与 `SYSTEM_PROMPT.md` / `AGENTS.md` 铁律，经过对系统全量的深度代码分析，发现代码库中存在三类影响可扩展性与系统稳定性的架构隐患：
-1. **职责过载的“上帝类”**：UI Panel 与 Mediator 承担了超出 View 层界限的过多职责（既管 UI 绘制，又直接做文件存在性判断、操控 Sidecar/SQLite 以及数据格式化清洗）。
-2. **“打补丁”式的时序与事件拦截防御**：部分交互逻辑依赖 `QTimer::singleShot` 防抖/推迟以规避事件竞态（如 `MetaPanel` 的焦点丢失提交与路径切换竞态），且存在消费端防御性校验（如 `activateIndex` 中过滤已不存在的物理文件，而非从源头清空选择）。
-3. **UI 控件私存在状态与直接业务决断**：部分 UI 组件（如 `MetaPanel`、`LibraryPanel`）私自维持 `m_selectedPaths` 等状态快照，且直接调用数据持久化层，打破了 UI 作为 SSOT“纯投影（Dumb View）”的契约。
+1. **职责过载的“上帝类”**：
+   - `ContentPanel.cpp` (1318 行) 兼任多视角（Grid/Justified/List/Column）管理者、拆分视角分栏调度器、拖拽与键盘事件分发器，并直接调用 `QFile::exists` 校验文件物理状态。
+   - `PanelMediator.cpp` (1248 行) 充当了巨大业务集中地，私自处理选中路径清洗、直接触发 QuickLook 校验以及加载流程管理。
+   - `MetaPanel.cpp` (1026 行) 既管理 UI 绘制，又私存 `m_selectedPaths` 与 `m_editingPathsSnapshot` 快照，并直接调用 Sidecar/持久化写回。
+   - `LibraryPanel.cpp` (1261 行) & `FavoritePanel.cpp` (1119 行) 直接访问 `QuarkMetaJsonStore` 与 SQLite 数据库。
+2. **“打补丁”式的时序与防御性代码**：
+   - `MetaPanel` 在 `FocusOut` 焦点丢失事件中使用 `QTimer::singleShot(0, ...)` 延迟触发 `submitPendingEdits()`，用战术定时器规避焦点与路径切换时的竞态。
+   - `ContentPanel::activateIndex` / `PanelMediator` 在文件预览激活时使用 `if (!QFile::exists(path)) return;` 拦截，属于在消费端压制症状的防御补丁。
+3. **UI 控件私存状态与私自决断**：
+   - UI Panel 私存独立的选择快照或路径状态，打破了 UI 仅作为 SSOT“纯投影（Dumb View）”的契约。
 
 ### 1.2 治理原则与重构目标
-1. **彻底解耦 UI 职责**：将文件系统 IO、 Sidecar 侧车更新、数据库操作从 UI Panel 与 MOC Model 中彻底剥离，交由专门的 Domain Service 执行。
+1. **彻底解耦 UI 职责**：剥离文件 system IO、Sidecar 侧车更新、数据库操作，由 `SelectionService`、`MetadataManager`、`DiskIoService` 承担。
 2. **清除打补丁代码**：消除基于 `QTimer::singleShot` 的延迟战术补丁，建立确定性的 SSOT 变更事件驱动链。
 3. **重构 SSOT + 强契约 Command Dispatcher**：
-   - UI 控件一律纯化为“Dumb View”，只负责响应 SSOT 状态信号并渲染，不私存业务状态；
-   - 所有 UI 用户操作抽象为强契约不可变 `Command` / `Action`，由 `CommandDispatcher` 统一调度执行。
+   - UI 控件纯化为“Dumb View”，只负责响应 SSOT 状态信号并渲染；
+   - 所有 UI 用户操作抽象为强契约不可变 `ActionCommand`，由 `CommandDispatcher` 统一调度执行。
 
 ---
 

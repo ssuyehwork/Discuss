@@ -18,7 +18,7 @@ bool LibraryDao::initTable() {
                          "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                          "parent_id INTEGER DEFAULT 0, "
                          "name TEXT NOT NULL, "
-                         "icon_key TEXT DEFAULT 'folder_filled', "
+                         "icon_key TEXT DEFAULT 'Data-Classification.svg', "
                          "color_hex TEXT DEFAULT '#888888', "
                          "sort_order INTEGER DEFAULT 0, "
                          "preset_tags TEXT DEFAULT '', "
