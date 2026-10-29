@@ -9,7 +9,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
-
 #include <QStyle>
 #include <QDateTime>
 #include <QMouseEvent>
@@ -31,13 +30,15 @@
 
 namespace QuarkMeta {
 
+static const int kTabFixedDecorationsWidth = 56; // 8+14+6+6+16+6
+
 TabItemButton::TabItemButton(int index, QWidget* parent)
     : QPushButton(parent), m_index(index) {
     setObjectName("TabItem");
     setFocusPolicy(Qt::NoFocus);
     setFixedHeight(28);
-    setMaximumWidth(600);
-    setMinimumWidth(80);
+    setMaximumWidth(QWIDGETSIZE_MAX); // 彻底放开上限，归一化交给内容驱动
+    setMinimumWidth(50);
     setCursor(Qt::PointingHandCursor);
 
     QHBoxLayout* itemLayout = new QHBoxLayout(this);
@@ -80,8 +81,7 @@ void TabItemButton::updateElidedTitle() {
     int availWidth = width() - 44;
     if (availWidth < 10) availWidth = 10;
     QFontMetrics fm(m_titleLabel->font());
-    QString elided = fm.elidedText(m_rawTitle, Qt::ElideRight, availWidth);
-    m_titleLabel->setText(elided);
+    m_titleLabel->setText(fm.elidedText(m_rawTitle, Qt::ElideRight, availWidth));
 }
 
 void TabItemButton::resizeEvent(QResizeEvent* event) {
@@ -144,9 +144,7 @@ void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
                 }
             }
             drag->setMimeData(mimeData);
-
-            QPixmap pixmap = grab();
-            drag->setPixmap(pixmap);
+            drag->setPixmap(grab());
 
             QPoint clampedHotSpot = m_dragStartPos;
             clampedHotSpot.setX(qBound(0, clampedHotSpot.x(), width() - 1));
@@ -232,7 +230,6 @@ TabBarWidget::TabBarWidget(QWidget* parent, HoverEventFilter* hoverFilter)
     m_scrollArea->setWidget(m_tabsContainer);
     m_mainLayout->addWidget(m_scrollArea, 1);
 
-    // 默认添加首个“此电脑”标签页
     addTab("此电脑", "computer://", true);
 }
 
@@ -255,6 +252,24 @@ void TabBarWidget::resizeEvent(QResizeEvent* event) {
     applyDiffUpdate();
 }
 
+static QString cleanNameForTab(const QString& path) {
+    if (path.isEmpty() || path == "computer://") return "此电脑";
+    if (path == "trash://") return "回收站";
+    QString cleanP = QDir::cleanPath(path);
+    QFileInfo fi(cleanP);
+    if (fi.isRoot() || cleanP.endsWith(":\\") || cleanP.endsWith(":/") || (cleanP.length() == 2 && cleanP.endsWith(':'))) {
+        return cleanP;
+    }
+    QString fn = fi.fileName();
+    return fn.isEmpty() ? cleanP : fn;
+}
+
+static int paneCountForTab(const TabInfo& tab) {
+    return (tab.splitState.isSplit && !tab.splitState.panePaths.isEmpty())
+        ? tab.splitState.panePaths.size()
+        : 1;
+}
+
 void TabBarWidget::addTab(const QString& title, const QString& url, bool switchToNew) {
     TabInfo info;
     info.id = QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" + QString::number(m_tabs.size());
@@ -274,10 +289,10 @@ void TabBarWidget::addTab(const QString& title, const QString& url, bool switchT
 void TabBarWidget::closeTab(int index) {
     if (index < 0 || index >= m_tabs.size()) return;
     if (m_tabs.size() <= 1) {
-        // 仅剩一个标签页时，重置为默认“此电脑”
         m_tabs[0].title = "此电脑";
         m_tabs[0].url = "computer://";
-        updateTabsUiState();
+        m_tabs[0].splitState = TabSplitState();
+        applyDiffUpdate();
         emit currentTabChanged(0, "computer://");
         saveStateToConfig();
         return;
@@ -299,13 +314,10 @@ void TabBarWidget::closeOtherTabs(int index) {
     if (index < 0 || index >= m_tabs.size()) return;
     TabInfo target = m_tabs[index];
     for (int i = 0; i < m_tabs.size(); ++i) {
-        if (i != index) {
-            m_closedTabsHistory.append(m_tabs[i]);
-        }
+        if (i != index) m_closedTabsHistory.append(m_tabs[i]);
     }
     m_tabs.clear();
     m_tabs.append(target);
-    m_currentIndex = 0;
     setCurrentIndex(0, true);
 }
 
@@ -324,29 +336,6 @@ void TabBarWidget::duplicateTab(int index) {
     if (index < 0 || index >= m_tabs.size()) return;
     const auto& src = m_tabs[index];
     addTab(src.title, src.url, true);
-    saveStateToConfig();
-}
-
-static QString cleanNameForTab(const QString& path) {
-    if (path.isEmpty() || path == "computer://") {
-        return "此电脑";
-    }
-    if (path == "trash://") {
-        return "回收站";
-    }
-    QString cleanP = QDir::cleanPath(path);
-    QFileInfo fi(cleanP);
-    if (fi.isRoot() || cleanP.endsWith(":\\") || cleanP.endsWith(":/") || (cleanP.length() == 2 && cleanP.endsWith(':'))) {
-        return cleanP;
-    }
-    QString fn = fi.fileName();
-    return fn.isEmpty() ? cleanP : fn;
-}
-
-static int paneCountForTab(const TabInfo& tab) {
-    return (tab.splitState.isSplit && !tab.splitState.panePaths.isEmpty())
-        ? tab.splitState.panePaths.size()
-        : 1;
 }
 
 void TabBarWidget::mergeTab(int sourceIndex, int targetIndex) {
@@ -371,7 +360,7 @@ void TabBarWidget::mergeTab(int sourceIndex, int targetIndex) {
     mergedState.orientation = targetTab.splitState.isSplit ? targetTab.splitState.orientation : Qt::Horizontal;
     mergedState.panePaths = mergedPaths;
     mergedState.primaryIndex = 0;
-    mergedState.activePaneIndex = targetTab.splitState.activePaneIndex;
+    mergedState.activePaneIndex = 0;
 
     m_tabs[targetIndex].splitState = mergedState;
     m_tabs[targetIndex].url = mergedPaths.first();
@@ -382,15 +371,11 @@ void TabBarWidget::mergeTab(int sourceIndex, int targetIndex) {
     }
     m_tabs[targetIndex].title = formattedNames.join(" | ");
 
-    // 移除源标签页（不计入最近关闭历史）
     m_tabs.removeAt(sourceIndex);
 
     int newTargetIdx = targetIndex;
-    if (sourceIndex < targetIndex) {
-        newTargetIdx--;
-    }
+    if (sourceIndex < targetIndex) newTargetIdx--;
 
-    applyDiffUpdate();
     setCurrentIndex(newTargetIdx, true);
     saveStateToConfig();
 }
@@ -405,15 +390,12 @@ void TabBarWidget::splitTab(int tabIndex) {
 
     if (paths.size() <= 1) return;
 
-    int newCount = paths.size();
-    int addedCount = newCount - 1;
+    int addedCount = paths.size() - 1;
 
-    // 将原标签页退化为单窗格标签页（对应首个路径）
     m_tabs[tabIndex].url = paths.first();
     m_tabs[tabIndex].title = cleanNameForTab(paths.first());
     m_tabs[tabIndex].splitState = TabSplitState();
 
-    // 依次将剩余路径拆分为紧随其后的独立单窗格标签页
     for (int i = 1; i < paths.size(); ++i) {
         TabInfo newTab;
         newTab.id = QString::number(QDateTime::currentMSecsSinceEpoch()) + "_" + QString::number(m_tabs.size()) + "_" + QString::number(i);
@@ -427,12 +409,7 @@ void TabBarWidget::splitTab(int tabIndex) {
         m_currentIndex += addedCount;
     }
 
-    for (int i = 0; i < m_tabs.size(); ++i) {
-        m_tabs[i].active = (i == m_currentIndex);
-    }
-
-    applyDiffUpdate();
-    emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
+    setCurrentIndex(m_currentIndex, true);
     saveStateToConfig();
 }
 
@@ -452,7 +429,10 @@ void TabBarWidget::setCurrentIndex(int index, bool forceNotify) {
     for (int i = 0; i < m_tabs.size(); ++i) {
         m_tabs[i].active = (i == m_currentIndex);
     }
-    updateTabsUiState();
+    
+    // 🚀【归一化收口】：所有状态变更一律通过 applyDiffUpdate 重新按内容测量并重排！
+    applyDiffUpdate();
+
     if (indexChanged || forceNotify) {
         emit currentTabChanged(m_currentIndex, m_tabs[m_currentIndex].url);
     }
@@ -464,10 +444,7 @@ void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
 
     auto& currentTab = m_tabs[m_currentIndex];
 
-    // 🛡️ 核心防呆拦截：
-    // 如果当前标签原本已经是包含多个窗格的合并标签，
-    // 而下游传过来的 state 窗格数量反而变少了或变成 false（通常是切换标签页时中间过渡态的脏数据），
-    // 坚决拒绝接受本次降级篡改！
+    // 🛡️ 门禁：严禁单窗格状态反噬多窗格合并状态
     if (currentTab.splitState.isSplit && currentTab.splitState.panePaths.size() > 1 && !state.isSplit) {
         return;
     }
@@ -477,9 +454,7 @@ void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
     if (state.isSplit && !state.panePaths.isEmpty()) {
         QStringList nameList;
         for (const QString& p : state.panePaths) {
-            if (!p.isEmpty()) {
-                nameList.append(cleanNameForTab(p));
-            }
+            if (!p.isEmpty()) nameList.append(cleanNameForTab(p));
         }
         if (!nameList.isEmpty()) {
             currentTab.title = nameList.join(" | ");
@@ -497,14 +472,12 @@ void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
 
 void TabBarWidget::selectNextTab() {
     if (m_tabs.isEmpty()) return;
-    int nextIdx = (m_currentIndex + 1) % m_tabs.size();
-    setCurrentIndex(nextIdx, true);
+    setCurrentIndex((m_currentIndex + 1) % m_tabs.size(), true);
 }
 
 void TabBarWidget::selectPreviousTab() {
     if (m_tabs.isEmpty()) return;
-    int prevIdx = (m_currentIndex - 1 + m_tabs.size()) % m_tabs.size();
-    setCurrentIndex(prevIdx, true);
+    setCurrentIndex((m_currentIndex - 1 + m_tabs.size()) % m_tabs.size(), true);
 }
 
 void TabBarWidget::saveStateToConfig() {
@@ -537,9 +510,7 @@ void TabBarWidget::saveStateToConfig() {
         QJsonObject splitObj;
         splitObj["orientation"] = static_cast<int>(tab.splitState.orientation);
         QJsonArray pathsArray;
-        for (const QString& p : tab.splitState.panePaths) {
-            pathsArray.append(p);
-        }
+        for (const QString& p : tab.splitState.panePaths) pathsArray.append(p);
         splitObj["panePaths"] = pathsArray;
         splitObj["primaryIndex"] = tab.splitState.primaryIndex;
         splitObj["activePaneIndex"] = tab.splitState.activePaneIndex;
@@ -612,9 +583,7 @@ bool TabBarWidget::restoreStateFromConfig() {
             info.splitState.activePaneIndex = splitObj["activePaneIndex"].toInt(0);
             info.splitState.isSplit = splitObj["isSplit"].toBool(false);
             QJsonArray pathsArray = splitObj["panePaths"].toArray();
-            for (const auto& pVal : pathsArray) {
-                info.splitState.panePaths.append(pVal.toString());
-            }
+            for (const auto& pVal : pathsArray) info.splitState.panePaths.append(pVal.toString());
             if (splitObj.contains("treeNode") && splitObj["treeNode"].isObject()) {
                 info.splitState.rootNode = deserializeTreeNode(splitObj["treeNode"].toObject());
             }
@@ -624,9 +593,7 @@ bool TabBarWidget::restoreStateFromConfig() {
     }
 
     int savedIndex = stateObj["currentIndex"].toInt(0);
-    if (savedIndex < 0 || savedIndex >= m_tabs.size()) {
-        savedIndex = 0;
-    }
+    if (savedIndex < 0 || savedIndex >= m_tabs.size()) savedIndex = 0;
 
     m_currentIndex = savedIndex;
     for (int i = 0; i < m_tabs.size(); ++i) {
@@ -645,15 +612,13 @@ bool TabBarWidget::restoreStateFromConfig() {
 void TabBarWidget::openInNewTab(const QString& rawPath) {
     if (rawPath.isEmpty()) return;
     QString cleanTarget = (rawPath == "computer://" || rawPath == "trash://") ? rawPath : QDir::cleanPath(rawPath);
-    QString title = cleanNameForTab(cleanTarget);
-    addTab(title, cleanTarget, true);
+    addTab(cleanNameForTab(cleanTarget), cleanTarget, true);
 }
 
 void TabBarWidget::openInExistingTab(int tabIndex, const QString& path) {
     if (tabIndex < 0 || tabIndex >= m_tabs.size() || path.trimmed().isEmpty()) return;
 
     setCurrentIndex(tabIndex, true);
-
     QWidget* windowWidget = window();
     ContentPanel* contentPanel = windowWidget ? windowWidget->findChild<ContentPanel*>() : nullptr;
     if (contentPanel) {
@@ -672,11 +637,7 @@ void TabBarWidget::openOrFocusTab(const QString& rawPath) {
         }
     }
 
-    QFileInfo fi(cleanTarget);
-    QString title = fi.fileName();
-    if (title.isEmpty()) title = cleanTarget;
-    addTab(title, cleanTarget, true);
-    saveStateToConfig();
+    addTab(cleanNameForTab(cleanTarget), cleanTarget, true);
 }
 
 void TabBarWidget::dragEnterEvent(QDragEnterEvent* event) {
@@ -703,8 +664,7 @@ void TabBarWidget::dropEvent(QDropEvent* event) {
                 QPoint dropPos = event->position().toPoint();
                 int toIdx = m_tabs.size() - 1;
                 for (int i = 0; i < m_tabWidgets.size(); ++i) {
-                    QRect rect = m_tabWidgets[i]->geometry();
-                    if (dropPos.x() < rect.center().x()) {
+                    if (dropPos.x() < m_tabWidgets[i]->geometry().center().x()) {
                         toIdx = i;
                         break;
                     }
@@ -747,13 +707,11 @@ void TabBarWidget::dropEvent(QDropEvent* event) {
 
                     if (hitTabIdx != -1) {
                         emit folderDroppedOnTab(hitTabIdx, path);
-                        event->acceptProposedAction();
-                        return;
                     } else {
                         openOrFocusTab(path);
-                        event->acceptProposedAction();
-                        return;
                     }
+                    event->acceptProposedAction();
+                    return;
                 }
             }
         }
@@ -766,28 +724,23 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
 
     auto& currentTab = m_tabs[m_currentIndex];
 
-    // 🛡️ 门禁：如果是合并/多分屏标签页，严禁将其降级覆盖为单文件夹标题！
+    // 🛡️ 门禁：多分屏合并标签绝不降级，且路径安全更新
     if (currentTab.splitState.isSplit && currentTab.splitState.panePaths.size() > 1) {
         int activeIdx = qBound(0, currentTab.splitState.activePaneIndex, currentTab.splitState.panePaths.size() - 1);
         currentTab.splitState.panePaths[activeIdx] = url;
 
         QStringList nameList;
         for (const QString& p : currentTab.splitState.panePaths) {
-            if (!p.isEmpty()) {
-                nameList.append(cleanNameForTab(p));
-            }
+            if (!p.isEmpty()) nameList.append(cleanNameForTab(p));
         }
         if (!nameList.isEmpty()) {
             currentTab.title = nameList.join(" | ");
         }
         currentTab.url = url;
     } else {
-        // 普通单标签页正常更新
         QString folderName = title;
         if (url == "computer://" || url.isEmpty()) {
             folderName = "此电脑";
-        } else if (url.startsWith("library://") || url.startsWith("smartfolder://")) {
-            folderName = title;
         } else if (title.contains("/") || title.contains("\\")) {
             folderName = cleanNameForTab(url);
         }
@@ -808,14 +761,12 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
     menu.setObjectName("TabContextMenu");
     UiHelper::applyMenuStyle(&menu);
 
-    // 1. 颜色条组件
     QString curColorHex = tab.color.isEmpty() ? "#888888" : tab.color;
     QWidgetAction* colorPickerAction = new QWidgetAction(&menu);
     ColorStripPicker* colorPickerWidget = new ColorStripPicker(curColorHex, &menu);
     colorPickerAction->setDefaultWidget(colorPickerWidget);
     menu.addAction(colorPickerAction);
 
-    // 2. 图标九宫格子菜单
     QMenu* iconMenu = menu.addMenu(UiHelper::getIcon(tab.iconKey.isEmpty() ? "folder_filled" : tab.iconKey, QColor("#EEEEEE")), "切换图标");
     UiHelper::applyMenuStyle(iconMenu);
 
@@ -862,7 +813,7 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
         connect(btn, &QPushButton::clicked, this, [this, index, iconKey]() {
             if (index >= 0 && index < m_tabs.size()) {
                 m_tabs[index].iconKey = iconKey;
-                updateTabsUiState();
+                applyDiffUpdate();
                 emit tabIconChanged(index, m_tabs[index].url, iconKey);
             }
         });
@@ -880,7 +831,6 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
 
         QString finalColor = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
         m_tabs[index].color = finalColor;
-
         QString iconKey = m_tabs[index].iconKey.isEmpty() ? "folder_filled" : m_tabs[index].iconKey;
 
         iconMenu->setIcon(UiHelper::getIcon(iconKey, QColor(finalColor)));
@@ -888,7 +838,7 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
             btnPair.first->setIcon(UiHelper::getIcon(btnPair.second, QColor(finalColor), 18));
         }
 
-        updateTabsUiState();
+        applyDiffUpdate();
         emit tabColorChanged(index, m_tabs[index].url, finalColor);
     });
 
@@ -927,73 +877,31 @@ void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {
     actCloseRight->setEnabled(index < m_tabs.size() - 1);
     actCloseOthers->setEnabled(m_tabs.size() > 1);
 
-    connect(actRefresh, &QAction::triggered, this, [this]() {
-        emit refreshRequested();
-    });
-    connect(actDuplicate, &QAction::triggered, this, [this, index]() {
-        duplicateTab(index);
-    });
-    connect(actClose, &QAction::triggered, this, [this, index]() {
-        closeTab(index);
-    });
-    connect(actCloseOthers, &QAction::triggered, this, [this, index]() {
-        closeOtherTabs(index);
-    });
-    connect(actCloseRight, &QAction::triggered, this, [this, index]() {
-        closeRightTabs(index);
-    });
-    connect(actRestore, &QAction::triggered, this, [this]() {
-        restoreLastClosedTab();
-    });
+    connect(actRefresh, &QAction::triggered, this, [this]() { emit refreshRequested(); });
+    connect(actDuplicate, &QAction::triggered, this, [this, index]() { duplicateTab(index); });
+    connect(actClose, &QAction::triggered, this, [this, index]() { closeTab(index); });
+    connect(actCloseOthers, &QAction::triggered, this, [this, index]() { closeOtherTabs(index); });
+    connect(actCloseRight, &QAction::triggered, this, [this, index]() { closeRightTabs(index); });
+    connect(actRestore, &QAction::triggered, this, [this]() { restoreLastClosedTab(); });
 
     menu.exec(globalPos);
-}
-
-void TabBarWidget::updateTabsUiState() {
-    if (m_tabWidgets.size() != m_tabs.size()) {
-        applyDiffUpdate();
-        return;
-    }
-
-    for (int i = 0; i < m_tabs.size(); ++i) {
-        auto& tab = m_tabs[i];
-        auto tabBtn = m_tabWidgets[i];
-        tabBtn->setIndex(i);
-        tabBtn->setTabTitle(tab.title);
-
-        QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
-        QString iconKey = !tab.iconKey.isEmpty() ? tab.iconKey : (tab.url.startsWith("computer://") ? "computer" : "folder_filled");
-        tabBtn->setTabIcon(UiHelper::getIcon(iconKey, iconColor));
-        tabBtn->setActive(tab.active);
-    }
 }
 
 void TabBarWidget::applyDiffUpdate() {
     int targetCount = m_tabs.size();
 
-    // 1. 删除多余的 TabItemButton
+    // 1. 同步组件实例数量
     while (m_tabWidgets.size() > targetCount) {
         TabItemButton* lastBtn = m_tabWidgets.takeLast();
         m_tabsLayout->removeWidget(lastBtn);
         lastBtn->deleteLater();
     }
-
-    // 2. 新增缺失的 TabItemButton
     for (int i = m_tabWidgets.size(); i < targetCount; ++i) {
         TabItemButton* tabItem = new TabItemButton(i, m_tabsContainer);
 
-        connect(tabItem, &TabItemButton::closeClicked, this, [this](int idx) {
-            closeTab(idx);
-        });
-
-        connect(tabItem, &TabItemButton::middleClicked, this, [this](int idx) {
-            closeTab(idx);
-        });
-
-        connect(tabItem, &TabItemButton::tabClicked, this, [this](int idx) {
-            setCurrentIndex(idx, false);
-        });
-
+        connect(tabItem, &TabItemButton::closeClicked, this, [this](int idx) { closeTab(idx); });
+        connect(tabItem, &TabItemButton::middleClicked, this, [this](int idx) { closeTab(idx); });
+        connect(tabItem, &TabItemButton::tabClicked, this, [this](int idx) { setCurrentIndex(idx, false); });
         connect(tabItem, &TabItemButton::customContextMenuRequested, this, [this](int idx, const QPoint& globalPos) {
             showTabContextMenu(idx, globalPos);
         });
@@ -1002,35 +910,39 @@ void TabBarWidget::applyDiffUpdate() {
         m_tabsLayout->addWidget(tabItem);
     }
 
-    // 3. 内容驱动自适应宽度计算：空间充裕时完整展示名称，超限时才等比平滑阶梯压缩
-    int viewportWidth = m_scrollArea->viewport()->width();
-    int availableWidth = (viewportWidth > 200) ? (viewportWidth - 36) : (width() - 36);
-    if (availableWidth < 100) availableWidth = 800; // 防防御性兜底
-
+    // 2. 纯内容驱动自适应测量（彻底解除 300/600 限制，内容有多长就占多长）
     QVector<int> naturalWidths(targetCount);
     int totalNaturalWidth = 0;
+
     for (int i = 0; i < targetCount; ++i) {
         QFontMetrics fm(m_tabWidgets[i]->font());
         int textW = fm.horizontalAdvance(m_tabs[i].title);
-        int needed = qBound(120, textW + 64, 600);
+        int needed = textW + kTabFixedDecorationsWidth;
+        if (needed < 60) needed = 60; // 仅设最低兜底，上不封顶
+
         naturalWidths[i] = needed;
         totalNaturalWidth += needed;
     }
+
     if (targetCount > 1) {
-        totalNaturalWidth += (targetCount - 1) * 2;
+        totalNaturalWidth += (targetCount - 1) * m_tabsLayout->spacing();
     }
 
-    // 4. 空间充裕直接按自然宽度 100% 完整显示；空间超限启动等比压缩
+    // 3. 视口空间与压缩计算
+    int viewportWidth = m_scrollArea->viewport()->width();
+    int availableWidth = (viewportWidth > 200) ? (viewportWidth - 36) : (width() - 36);
+
     double scale = (totalNaturalWidth > availableWidth && totalNaturalWidth > 0)
-        ? static_cast<double>(availableWidth - (targetCount - 1) * 2) / (totalNaturalWidth - (targetCount - 1) * 2)
+        ? static_cast<double>(availableWidth) / totalNaturalWidth
         : 1.0;
 
+    // 4. 统一渲染状态与几何尺寸
     for (int i = 0; i < targetCount; ++i) {
         auto& tab = m_tabs[i];
         TabItemButton* tabBtn = m_tabWidgets[i];
 
         int finalWidth = (scale < 1.0)
-            ? qBound(80, static_cast<int>(naturalWidths[i] * scale), naturalWidths[i])
+            ? qMax(50, static_cast<int>(naturalWidths[i] * scale))
             : naturalWidths[i];
 
         tabBtn->setIndex(i);
@@ -1038,15 +950,13 @@ void TabBarWidget::applyDiffUpdate() {
         tabBtn->setFixedWidth(finalWidth);
 
         QColor iconColor = !tab.color.isEmpty() ? QColor(tab.color) : (tab.active ? QColor("#EEEEEE") : QColor("#888888"));
-        QString iconKey = !tab.iconKey.isEmpty() ? tab.iconKey : (tab.url.startsWith("computer://") ? "computer" : (tab.url.startsWith("library://") ? "folder_filled" : "folder_filled"));
+        QString iconKey = !tab.iconKey.isEmpty() ? tab.iconKey : (tab.url.startsWith("computer://") ? "computer" : "folder_filled");
         tabBtn->setTabIcon(UiHelper::getIcon(iconKey, iconColor));
         tabBtn->setActive(tab.active);
     }
 
-    // 5. Ensure target active tab is visible within scroll area
     if (m_currentIndex >= 0 && m_currentIndex < m_tabWidgets.size()) {
-        TabItemButton* activeBtn = m_tabWidgets[m_currentIndex];
-        m_scrollArea->ensureWidgetVisible(activeBtn, 10, 0);
+        m_scrollArea->ensureWidgetVisible(m_tabWidgets[m_currentIndex], 10, 0);
     }
 }
 
