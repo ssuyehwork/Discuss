@@ -853,6 +853,12 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     if (index.data(TypeRole).toString() == "smart_folder") {
         int smartFolderId = index.data(Qt::UserRole + 1).toInt();
+        QString curIconKey = index.data(Qt::UserRole + 2).toString();
+        QString curColorHex = index.data(Qt::UserRole + 3).toString();
+
+        if (curIconKey.isEmpty() || curIconKey == "folder_filled" || curIconKey == "folder") curIconKey = "smart-folder-1.svg";
+        if (curColorHex.isEmpty()) curColorHex = "#888888";
+
         // 右键具体的智能文件夹节点
         QAction* editRuleAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "编辑规则");
         connect(editRuleAct, &QAction::triggered, this, [this, smartFolderId]() {
@@ -865,6 +871,31 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
                 }
             }
         });
+
+        menu.addSeparator();
+
+        ContextMenuFactory::buildIconPickerMenu(&menu, curIconKey, curColorHex,
+            [this, smartFolderId](const QString& iconKey) {
+                SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(smartFolderId);
+                if (rec.id > 0) {
+                    rec.iconKey = iconKey;
+                    if (SmartFolderDao::updateSmartFolder(rec)) {
+                        loadLibrary();
+                    }
+                }
+            },
+            [this, smartFolderId](const QString& hexColor) {
+                SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(smartFolderId);
+                if (rec.id > 0) {
+                    rec.colorHex = hexColor.isEmpty() ? "#888888" : hexColor.toUpper();
+                    if (SmartFolderDao::updateSmartFolder(rec)) {
+                        loadLibrary();
+                    }
+                }
+            }
+        );
+
+        menu.addSeparator();
 
         QAction* deleteSmartAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除智能文件夹");
         connect(deleteSmartAct, &QAction::triggered, this, [this, smartFolderId]() {

@@ -1981,22 +1981,22 @@ QSpinBox:focus {
     border-color: #378ADD;
 }
 
-/* 历史记录面板 QTreeWidget 选中高亮与悬停样式 */
-QTreeWidget#HistoryTreeWidget {
+/* 历史记录面板与标记面板 QTreeWidget 选中高亮与悬停样式 */
+QTreeWidget#HistoryTreeWidget, QTreeWidget#MarkedTreeWidget {
     background-color: #1E1E1E;
     color: #EEEEEE;
     border: none;
     outline: 0;
 }
-QTreeWidget#HistoryTreeWidget::item {
+QTreeWidget#HistoryTreeWidget::item, QTreeWidget#MarkedTreeWidget::item {
     height: 28px;
     border: none;
     padding-left: 4px;
 }
-QTreeWidget#HistoryTreeWidget::item:hover {
+QTreeWidget#HistoryTreeWidget::item:hover, QTreeWidget#MarkedTreeWidget::item:hover {
     background-color: #2A2D2E;
 }
-QTreeWidget#HistoryTreeWidget::item:selected {
+QTreeWidget#HistoryTreeWidget::item:selected, QTreeWidget#MarkedTreeWidget::item:selected {
     background-color: #094771;
     color: #FFFFFF;
 }
