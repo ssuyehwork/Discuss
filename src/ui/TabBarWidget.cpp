@@ -462,7 +462,17 @@ void TabBarWidget::setCurrentIndex(int index, bool forceNotify) {
 void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
     if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
 
-    m_tabs[m_currentIndex].splitState = state;
+    auto& currentTab = m_tabs[m_currentIndex];
+
+    // 🛡️ 核心防呆拦截：
+    // 如果当前标签原本已经是包含多个窗格的合并标签，
+    // 而下游传过来的 state 窗格数量反而变少了或变成 false（通常是切换标签页时中间过渡态的脏数据），
+    // 坚决拒绝接受本次降级篡改！
+    if (currentTab.splitState.isSplit && currentTab.splitState.panePaths.size() > 1 && !state.isSplit) {
+        return;
+    }
+
+    currentTab.splitState = state;
 
     if (state.isSplit && !state.panePaths.isEmpty()) {
         QStringList nameList;
@@ -472,19 +482,16 @@ void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
             }
         }
         if (!nameList.isEmpty()) {
-            QString mergedTitle = nameList.join(" | ");
-            m_tabs[m_currentIndex].title = mergedTitle;
+            currentTab.title = nameList.join(" | ");
         }
         int primIdx = qBound(0, state.primaryIndex, state.panePaths.size() - 1);
-        m_tabs[m_currentIndex].url = state.panePaths[primIdx];
+        currentTab.url = state.panePaths[primIdx];
     } else if (!state.panePaths.isEmpty()) {
-        m_tabs[m_currentIndex].title = cleanNameForTab(state.panePaths.first());
-        m_tabs[m_currentIndex].url = state.panePaths.first();
+        currentTab.title = cleanNameForTab(state.panePaths.first());
+        currentTab.url = state.panePaths.first();
     }
 
-    if (m_currentIndex < m_tabWidgets.size()) {
-        m_tabWidgets[m_currentIndex]->setTabTitle(m_tabs[m_currentIndex].title);
-    }
+    applyDiffUpdate();
     saveStateToConfig();
 }
 
@@ -757,24 +764,10 @@ void TabBarWidget::dropEvent(QDropEvent* event) {
 void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& url) {
     if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
 
-    QString folderName = title;
-    if (url == "computer://" || url.isEmpty()) {
-        folderName = "此电脑";
-    } else if (url.startsWith("library://") || url.startsWith("smartfolder://")) {
-        folderName = title;
-    } else if (title.contains("/") || title.contains("\\")) {
-        QString cleanPath = QDir::cleanPath(url);
-        QFileInfo fi(cleanPath);
-        folderName = fi.fileName();
-        if (folderName.isEmpty()) {
-            folderName = cleanPath;
-        }
-    }
-
-    if (folderName.isEmpty()) folderName = "此电脑";
-
     auto& currentTab = m_tabs[m_currentIndex];
-    if (currentTab.splitState.isSplit && !currentTab.splitState.panePaths.isEmpty()) {
+
+    // 🛡️ 门禁：如果是合并/多分屏标签页，严禁将其降级覆盖为单文件夹标题！
+    if (currentTab.splitState.isSplit && currentTab.splitState.panePaths.size() > 1) {
         int activeIdx = qBound(0, currentTab.splitState.activePaneIndex, currentTab.splitState.panePaths.size() - 1);
         currentTab.splitState.panePaths[activeIdx] = url;
 
@@ -786,12 +779,19 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
         }
         if (!nameList.isEmpty()) {
             currentTab.title = nameList.join(" | ");
-        } else {
-            currentTab.title = folderName;
         }
         currentTab.url = url;
     } else {
-        currentTab.title = folderName;
+        // 普通单标签页正常更新
+        QString folderName = title;
+        if (url == "computer://" || url.isEmpty()) {
+            folderName = "此电脑";
+        } else if (url.startsWith("library://") || url.startsWith("smartfolder://")) {
+            folderName = title;
+        } else if (title.contains("/") || title.contains("\\")) {
+            folderName = cleanNameForTab(url);
+        }
+        currentTab.title = folderName.isEmpty() ? "此电脑" : folderName;
         currentTab.url = url;
     }
 
