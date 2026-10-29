@@ -1,5 +1,6 @@
 #include "MarkedFolderService.h"
 #include "MarkedFolderDao.h"
+#include <QAtomicInt>
 #include "../ui/UiHelper.h"
 #include "../ui/ToolTipOverlay.h"
 #include <QFileInfo>
@@ -99,88 +100,84 @@ bool MarkedFolderService::executeTransferToMarked(const QStringList& sourcePaths
     int totalWorkUnits = validSources.size() * validTargets.size();
     int jobId = TaskProgressService::instance().createJob("分发迁移至标记目的地", totalWorkUnits);
 
-    int completedUnits = 0;
-    QMap<QString, QVector<TransferToMarkedCommand::TargetResult>> copyResults;
-    bool anyFailure = false;
+    // 一次性创建共享原子计数器与结果图谱
+    auto completedCounter = std::make_shared<QAtomicInt>(0);
+    auto sharedCopyResults = std::make_shared<QMap<QString, QVector<TransferToMarkedCommand::TargetResult>>>();
+    auto sharedFailure = std::make_shared<QAtomicInt>(0);
 
-    for (const QString& srcPath : validSources) {
+    // 使用 std::function 递归链式调度 (Sequential Async Waterfall)，确保前 N-1 个复制目的地全部成功完成后，才触发最后一个目的地的物理移动
+    auto dispatchNextTarget = std::make_shared<std::function<void(int, int)>>();
+    *dispatchNextTarget = [jobId, completedCounter, totalWorkUnits, sharedCopyResults, sharedFailure, validTargets, validSources, dispatchNextTarget](int srcIdx, int targetIdx) {
+        if (srcIdx >= validSources.size()) {
+            // 所有源文件与所有目的地处理完毕，在主线程统一结算 UndoManager 与 TaskProgress
+            QMetaObject::invokeMethod(QCoreApplication::instance(), [jobId, sharedCopyResults, sharedFailure, validSources]() {
+                if (!sharedCopyResults->isEmpty()) {
+                    UndoManager::instance().pushCommand(std::make_unique<TransferToMarkedCommand>(
+                        validSources, *sharedCopyResults, QStringList{}
+                    ));
+                }
+                TaskProgressService::instance().finishJob(jobId);
+
+                if (sharedFailure->loadAcquire() == 0) {
+                    ToolTipOverlay::instance()->showToast("已成功分发迁移至目的地", 2000, QColor("#0078d4"));
+                } else {
+                    ToolTipOverlay::instance()->showToast("分发迁移完成，部分项目未能成功处理", 2500, QColor("#e81123"));
+                }
+            });
+            return;
+        }
+
+        const QString& srcPath = validSources[srcIdx];
+        const QString& targetDir = validTargets[targetIdx];
         QFileInfo srcInfo(srcPath);
         QString itemName = srcInfo.fileName();
-        std::wstring srcVol = VolumePathResolver::getVolumeSerialNumber(srcPath.toStdWString());
 
-        for (const QString& targetDir : validTargets) {
-            QString cleanSrc = QDir::cleanPath(srcPath).toLower();
-            QString cleanTarget = QDir::cleanPath(targetDir).toLower();
+        QString cleanSrc = QDir::cleanPath(srcPath).toLower();
+        QString cleanTarget = QDir::cleanPath(targetDir).toLower();
 
-            // 防自身/循环嵌套保护：同路径或目标为源的子目录
-            if (cleanSrc == cleanTarget || cleanTarget.startsWith(cleanSrc + "/")) {
-                completedUnits++;
-                TaskProgressService::instance().updateProgress(jobId, completedUnits, totalWorkUnits);
-                continue;
-            }
+        // 计算下一个目标索引
+        int nextSrcIdx = srcIdx;
+        int nextTargetIdx = targetIdx + 1;
+        if (nextTargetIdx >= validTargets.size()) {
+            nextTargetIdx = 0;
+            nextSrcIdx++;
+        }
 
-            DiskIoContext ioCtx;
-            ioCtx.sources = QStringList{srcPath};
-            ioCtx.destination = targetDir;
-            ioCtx.isMove = false; // 复制模式，保证源文件不提前消失
+        if (cleanSrc == cleanTarget || cleanTarget.startsWith(cleanSrc + "/")) {
+            int current = completedCounter->fetchAndAddOrdered(1) + 1;
+            TaskProgressService::instance().updateProgress(jobId, current, totalWorkUnits);
+            (*dispatchNextTarget)(nextSrcIdx, nextTargetIdx);
+            return;
+        }
 
-            QString destPath = QDir(targetDir).filePath(itemName);
+        DiskIoContext ioCtx;
+        ioCtx.sources = QStringList{srcPath};
+        ioCtx.destination = targetDir;
+        // 只有当目标是该源文件的最后一个目的地时，才执行物理剪切/移动；前面的目的地严格执行复制
+        ioCtx.isMove = (targetIdx == validTargets.size() - 1);
 
-            bool targetSuccess = ShellHelper::copyOrMoveItems(
-                ioCtx.sources, ioCtx.destination, ioCtx.isMove,
-                ioCtx.overwriteAll, ioCtx.autoRenameAll,
-                ioCtx.overwriteFiles, ioCtx.autoRenameFiles
-            );
+        QString destPath = QDir(targetDir).filePath(itemName);
 
-            completedUnits++;
-            TaskProgressService::instance().updateProgress(jobId, completedUnits, totalWorkUnits);
-
-            if (targetSuccess) {
-                copyResults[srcPath].append({targetDir, destPath});
+        DiskIoService::instance().executeAsync(ioCtx, [jobId, completedCounter, totalWorkUnits, sharedCopyResults, sharedFailure, srcPath, targetDir, destPath, nextSrcIdx, nextTargetIdx, dispatchNextTarget](bool targetSuccess) {
+            int current = completedCounter->fetchAndAddOrdered(1) + 1;
+            if (!targetSuccess) {
+                sharedFailure->storeRelease(1);
             } else {
-                anyFailure = true;
+                (*sharedCopyResults)[srcPath].append({targetDir, destPath});
             }
-        }
-    }
 
-    // 判定同盘回收
-    QStringList recycledSources;
-    if (!anyFailure) {
-        for (const QString& srcPath : validSources) {
-            std::wstring srcVol = VolumePathResolver::getVolumeSerialNumber(srcPath.toStdWString());
-            bool sameVol = false;
-            for (const QString& targetDir : validTargets) {
-                std::wstring tgtVol = VolumePathResolver::getVolumeSerialNumber(targetDir.toStdWString());
-                if (srcVol == tgtVol && srcVol != L"UNKNOWN") {
-                    sameVol = true;
-                    break;
-                }
-            }
-            if (sameVol) {
-                if (DiskTrashService::moveToDiskTrash(QStringList{srcPath})) {
-                    recycledSources << srcPath;
-                }
-            }
-        }
-    }
+            QMetaObject::invokeMethod(QCoreApplication::instance(), [jobId, current, totalWorkUnits]() {
+                TaskProgressService::instance().updateProgress(jobId, current, totalWorkUnits);
+            });
 
-    // 压入撤销命令
-    if (!copyResults.isEmpty()) {
-        UndoManager::instance().pushCommand(std::make_unique<TransferToMarkedCommand>(
-            validSources, copyResults, recycledSources
-        ));
-    }
+            // 链式触发下一个目的地的异步任务，保证绝对的时序安全！
+            (*dispatchNextTarget)(nextSrcIdx, nextTargetIdx);
+        });
+    };
 
-    TaskProgressService::instance().finishJob(jobId);
-
-    if (!anyFailure) {
-        QString msg = QString("已成功分发迁移至 %1 个目的地").arg(validTargets.size());
-        ToolTipOverlay::instance()->showToast(msg, 2000, QColor("#0078d4"));
-        return true;
-    } else {
-        ToolTipOverlay::instance()->showToast("分发迁移完成，部分项目未能成功处理", 2500, QColor("#e81123"));
-        return false;
-    }
+    // 启动第一个链式任务
+    (*dispatchNextTarget)(0, 0);
+    return true;
 }
 
 bool MarkedFolderService::removeMarked(const QString& path) {
