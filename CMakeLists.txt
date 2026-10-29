@@ -345,7 +345,6 @@ set(SOURCES
     src/core/commands/RenameCommand.h
     src/core/commands/MoveCommand.h
     src/core/commands/MetadataCommand.h
-    src/core/commands/ActionCommand.h
     src/core/commands/SecureDeleteCommand.h
     src/core/commands/ShellProtectionCommand.h
     src/core/commands/BatchRenameCommand.h
