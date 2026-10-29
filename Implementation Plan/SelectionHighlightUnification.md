@@ -1,22 +1,25 @@
-# Implementation Plan - Selection Highlight Unification (全软件选中高亮颜色归一化与统一)
+# Implementation Plan - Selection Highlight Unification (全软件选中高亮颜色与覆盖关系归一化)
 
 ## Chapter 1: Overview（概述与根因分析）
 
 ### 1. 现象与问题分析
-用户反馈侧边栏与内容区域选中高亮颜色不一致：内容区与导航树视图呈现亮蓝色/淡蓝灰色高亮，而侧边栏（“收藏夹” `FavoritePanel` 与“库” `LibraryPanel`）选中时呈现暗灰色 (`#37373D`) 高亮，破坏了 UI 整体一致性。
+用户反馈侧边栏与内容区域选中高亮颜色及覆盖关系不一致：
+1. 目录导航 (`NavPanel`) 与右侧内容树视图 (`TreeItemDelegate`) 选中时呈柔和的低饱和 15% 半透明蓝色背景，且图标与文本位于高亮背景之上面板层次分明。
+2. 收藏夹 (`FavoritePanel`) 与库 (`LibraryPanel`) 之前使用了强烈的纯色不透明色块填充整行，导致视觉上产生色块遮挡或浮于顶层的不协调感。
 
 ### 2. 根因剖析 (Root Cause)
-经过对全软件绘图代理（Delegate）源码与 QSS 样式的全局查重比对：
-- **内容区与导航树**：`TreeItemDelegate.h` 与 `ColumnItemDelegate.cpp` 中选中的背景色均使用了统一的主题蓝色 `#378ADD`（或 `#378ADD` 叠加透明度）。
-- **侧边栏 (收藏夹与库)**：`FavoritePanel.cpp` (`FavoriteItemDelegate::paint`) 和 `LibraryPanel.cpp` (`LibraryItemDelegate::paint`) 在判断 `opt.state & QStyle::State_Selected` 时，硬编码写死了背景绘制为暗灰色 `QColor("#37373D")`：
+经过对绘图代理（Delegate）源码分析：
+- **`TreeItemDelegate.h` (目录导航与内容区)**：选中时在底层绘制 `#378ADD` 叠加 15% 透明度的画刷，图标和文本随后在其上方绘制：
   ```cpp
-  if (opt.state & QStyle::State_Selected) {
-      painter->fillRect(opt.rect, QColor("#37373D")); // 👈 导致侧边栏选中高亮呈灰色的根源
+  if (selected) {
+      bg = QColor("#378ADD");
+      bg.setAlphaF(0.15f);
   }
   ```
+- **`FavoritePanel.cpp` & `LibraryPanel.cpp` (收藏夹与库)**：之前直接使用不透明纯色 `QColor("#37373D")` / `QColor("#378ADD")` 充填整行，缺少 15% 半透明平滑处理。
 
 ### 3. 重构与统一目标
-将 `FavoriteItemDelegate` 和 `LibraryItemDelegate` 里的 `QColor("#37373D")` 修改统一为主题蓝色 **`QColor("#378ADD")`**，使全软件所有侧边栏（导航树、收藏夹、库）与右侧内容区域的选中高亮色彩 100% 绝对统一。
+将 `FavoriteItemDelegate` 和 `LibraryItemDelegate` 的选中背景绘制统一修改为 `#378ADD` 15% 半透明蓝色（`QColor bg("#378ADD"); bg.setAlphaF(0.15f);`），并在绘制文本和图标前最底层填充矩形，确保全软件所有侧边栏与内容视图高亮风格与图层覆盖关系 100% 绝对一致。
 
 ---
 
@@ -45,7 +48,9 @@
 =======
     // 背景高亮
     if (opt.state & QStyle::State_Selected) {
-        painter->fillRect(opt.rect, QColor("#378ADD"));
+        QColor selBg("#378ADD");
+        selBg.setAlphaF(0.15f);
+        painter->fillRect(opt.rect, selBg);
     } else if (opt.state & QStyle::State_MouseOver) {
         painter->fillRect(opt.rect, QColor("#2A2D2E"));
     } else {
@@ -75,7 +80,9 @@
         dropBg.setAlphaF(0.35f);
         painter->fillRect(opt.rect, dropBg);
     } else if (opt.state & QStyle::State_Selected) {
-        painter->fillRect(opt.rect, QColor("#378ADD"));
+        QColor selBg("#378ADD");
+        selBg.setAlphaF(0.15f);
+        painter->fillRect(opt.rect, selBg);
     } else if (opt.state & QStyle::State_MouseOver) {
         painter->fillRect(opt.rect, QColor("#2A2D2E"));
     } else {
@@ -89,7 +96,6 @@
 ## Chapter 4: Build & Verification Steps（构建与运行时验收标准）
 
 ### 1. 编译命令
-在 Sandbox 环境运行标准构建命令：
 ```bash
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j$(nproc)
@@ -97,15 +103,14 @@ cmake --build build -j$(nproc)
 
 ### 2. 运行时验收标准
 1. 启动 QuarkMeta。
-2. 依次点击左侧“收藏夹”中的任意项目、“库”中的分类项目以及“目录导航”中的文件夹项。
-3. 观察选中高亮底色，确认全软件所有侧边栏与内容项选中高亮统一呈现 **`#378ADD`** 主题蓝色，彻底无暗灰色 `#37373D` 不一致现象。
+2. 在“目录导航”、“收藏夹”和“库”之间切换点击节点。
+3. 检查高亮背景，确认全软件所有侧边栏项选中高亮背景统一呈现 `#378ADD` 15% 半透明蓝色，且图标与文字位于背景之上，层级分明且无覆盖遮挡感。
 
 ---
 
 ## Chapter 5: Official API Reuse & Anti-Redundancy（官方 API 复用与防另起炉灶）
 
-- 复用 Qt 原生 `QStyle::State_Selected` 状态校验与 `QPainter::fillRect` 绘制通道。
-- 零新增私有控件或另起炉灶类，仅修正底层数值与色彩定义。
+- 复用 Qt 原生 `QStyle::State_Selected` 校验与 `QColor::setAlphaF(0.15f)` 半透明通道。
 
 ---
 
@@ -113,19 +118,19 @@ cmake --build build -j$(nproc)
 
 | 数据项 | 唯一 SSOT 数据源 | 派生/视图副本 | 同步/刷新方向 |
 | :--- | :--- | :--- | :--- |
-| 选中高亮色值 | `StyleLibrary.h` / 全局 QSS `#378ADD` | `FavoriteItemDelegate` / `LibraryItemDelegate` | SSOT 静态定义 ➔ Delegate 绘制渲染 |
+| 选中高亮色值 | `TreeItemDelegate.h` (`#378ADD` 0.15 alpha) | `FavoriteItemDelegate` / `LibraryItemDelegate` | Delegate 底层自绘对齐 |
 
 ---
 
 ## Chapter 7: Interface & Visibility Consistency Check（接口签名与访问级别一致性核查）
 
-- 无接口签名修改，仅为内部 `paint` 方法重绘逻辑中的色值更正。
+- 无接口签名修改，仅为 Delegate 重绘逻辑数值对齐。
 
 ---
 
 ## Chapter 8: Header Chain & Inclusion Closure Check（头文件包含链与类型完整性检查）
 
-- 未修改任何 `#include` 头文件包含，头文件包含链闭合且完全保持原样。
+- 未修改任何头文件包含。
 
 ---
 
@@ -133,17 +138,17 @@ cmake --build build -j$(nproc)
 
 | 序号 | 检查项目 | 是否满足 | 位置 / 说明 |
 | :--- | :--- | :--- | :--- |
-| 1 | 是否物理阅读了涉及的 `.h`/`.cpp` 文件？ | 是 | `FavoritePanel.cpp`, `LibraryPanel.cpp` |
-| 2 | SEARCH 块是否在目标文件中真实且唯一存在？ | 是 | 已通过 `grep` 验证 |
-| 3 | 调用的外部成员函数是否在 `.h` 中真实存在？ | 是 | `QPainter::fillRect`, `QStyle::State_Selected` |
+| 1 | 是否物理阅读了涉及的 `.h`/`.cpp` 文件？ | 是 | `FavoritePanel.cpp`, `LibraryPanel.cpp`, `TreeItemDelegate.h` |
+| 2 | SEARCH 块是否在目标文件中真实且唯一存在？ | 是 | 已验证匹配 |
+| 3 | 调用的外部成员函数是否在 `.h` 中真实存在？ | 是 | `QColor::setAlphaF` |
 | 4 | 新增/重构接口的声明定义调用点是否一致？ | 是 | 不涉及新接口 |
 | 5 | 头文件包含链改动后 `.cpp` 类型是否闭合？ | 是 | 未改动头文件包含 |
 | 6 | 新建/删除文件是否在 `CMakeLists.txt` 中注册？ | 是 | 未新建或删除文件 |
-| 7 | 跨类调用的成员访问级别是否允许？ | 是 | 均为类内部私有/受保护绘图方法 |
-| 8 | 是否未触及方案范围外的文件？ | 是 | 严格限定在 2 个修改文件内 |
-| 9 | 方案中是否有未解答的假设或模糊需求？ | 否 | 需求已与用户明确并达成共识 |
-| 10 | 是否无内联 QSS 样式硬编码违规？ | 是 | C++ 代理绘图使用 `QColor` 标准画刷 |
-| 11 | 是否完整包含 10 大必备章节？ | 是 | 本方案包含全部 10 大章节 |
+| 7 | 跨类调用的成员访问级别是否允许？ | 是 | 内部绘制方法 |
+| 8 | 是否未触及方案范围外的文件？ | 是 | 仅针对 2 个 Panel 文件与 Memories |
+| 9 | 方案中是否有未解答的假设或模糊需求？ | 否 | 需求与逻辑已获用户明确认可 |
+| 10 | 是否无内联 QSS 样式硬编码违规？ | 是 | 绘制透明度与色值对齐统一 |
+| 11 | 是否完整包含 10 大必备章节？ | 是 | 完整包含 10 大章节 |
 
 ---
 
@@ -151,5 +156,5 @@ cmake --build build -j$(nproc)
 
 | 修改点 | 既有行为/数值 | 新行为/数值 | 是否零篡改/符合用户共识 |
 | :--- | :--- | :--- | :--- |
-| 收藏夹选中背景色 | `#37373D` (暗灰色) | `#378ADD` (全局统一高亮蓝) | 符合用户统一高亮蓝共识 |
-| 库分类选中背景色 | `#37373D` (暗灰色) | `#378ADD` (全局统一高亮蓝) | 符合用户统一高亮蓝共识 |
+| 收藏夹选中高亮 | 硬编码 `#37373D` / 不透明 | `#378ADD` (15% 透明度) | 100% 对齐 TreeItemDelegate 视觉，用户认可 |
+| 库分类选中高亮 | 硬编码 `#37373D` / 不透明 | `#378ADD` (15% 透明度) | 100% 对齐 TreeItemDelegate 视觉，用户认可 |
