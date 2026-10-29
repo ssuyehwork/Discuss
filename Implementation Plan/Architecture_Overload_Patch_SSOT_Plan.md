@@ -21,7 +21,7 @@
 ### 1.1 背景与排查动机
 根据 QuarkMeta 顶层架构规范与 `SYSTEM_PROMPT.md` / `AGENTS.md` 铁律，经过对系统全量的深度代码分析，发现代码库中存在三类影响可扩展性与系统稳定性的架构隐患：
 1. **职责过载的“上帝类”**：
-   - `ContentPanel.cpp` (1318 行) 兼任多视角（Grid/Justified/List/Column）管理者、拆分视角分栏调度器、拖拽与键盘事件分发器，并直接调用 `QFile::exists` 校验文件物理状态。
+   - `ContentPanel.cpp` (1318 行) 兼任多视角（Grid/Justified/List/Column）管理者、拆分视角分栏调度器、拖拽与键盘事件分派器，并直接调用 `QFile::exists` 校验文件物理状态。
    - `PanelMediator.cpp` (1248 行) 充当了巨大业务集中地，私自处理选中路径清洗、直接触发 QuickLook 校验以及加载流程管理。
    - `MetaPanel.cpp` (1026 行) 既管理 UI 绘制，又私存 `m_selectedPaths` 与 `m_editingPathsSnapshot` 快照，并直接调用 Sidecar/持久化写回。
    - `LibraryPanel.cpp` (1261 行) & `FavoritePanel.cpp` (1119 行) 直接访问 `QuarkMetaJsonStore` 与 SQLite 数据库。

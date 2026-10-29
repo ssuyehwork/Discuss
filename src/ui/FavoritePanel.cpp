@@ -750,7 +750,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
     }
 
     // 3. 重命名 (直接唤起行内编辑框)
-    QAction* renameAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "重命名");
+    QAction* renameAct = menu.addAction(UiHelper::getIcon("rename-1.svg", QColor("#EEEEEE")), "重命名");
     connect(renameAct, &QAction::triggered, this, [this, index]() {
         if (m_favoriteView && index.isValid()) {
             m_favoriteView->edit(index);

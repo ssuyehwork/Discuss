@@ -331,7 +331,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 QStringList recentFolders = NavigationHistoryService::getRecentVisitedFolders(volSerial);
                 recentFolders.removeAll(currentPath);
 
-                QMenu* moveMenu = menu.addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18), "移动到");
+                QMenu* moveMenu = menu.addMenu(UiHelper::getIcon("Export-1.svg", QColor("#EEEEEE"), 18), "移动到");
                 UiHelper::applyMenuStyle(moveMenu);
 
                 auto performMoveTo = [this](const QString& targetDir) {
@@ -452,7 +452,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             actRepeat->setData(ContentPanel::ActionRepeatLastOp);
             actRepeat->setEnabled(LastOperationManager::instance().hasOperation());
 
-            menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE"), 18), "重命名")->setData(ContentPanel::ActionRename);
+            menu.addAction(UiHelper::getIcon("rename-1.svg", QColor("#EEEEEE"), 18), "重命名")->setData(ContentPanel::ActionRename);
 
             menu.addSeparator();
             menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
