@@ -838,19 +838,22 @@ TabSplitState ContentPaneSplitManager::exportSplitState() const {
         state.rootNode = leaf;
     }
 
-    state.isSplit = (allPanes.size() > 1);
     state.orientation = splitOrientation();
 
     for (int i = 0; i < allPanes.size(); ++i) {
         ContentPanel* p = allPanes[i];
-        state.panePaths.append(p ? p->currentPath() : "");
+        QString path = p ? p->currentPath().trimmed() : "";
+        if (!path.isEmpty()) {
+            state.panePaths.append(path);
+        }
         if (p == m_panel) {
-            state.primaryIndex = i;
+            state.primaryIndex = state.panePaths.isEmpty() ? 0 : state.panePaths.size() - 1;
         }
         if (m_activePaneForSplit == p || (m_activePaneForSplit == nullptr && p == m_panel)) {
-            state.activePaneIndex = i;
+            state.activePaneIndex = state.panePaths.isEmpty() ? 0 : state.panePaths.size() - 1;
         }
     }
+    state.isSplit = (state.panePaths.size() > 1);
 
     return state;
 }

@@ -1,4 +1,5 @@
 #include "TabBarWidget.h"
+#include "ContentPanel.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "ColorPicker.h"
@@ -466,10 +467,14 @@ void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
     if (state.isSplit && !state.panePaths.isEmpty()) {
         QStringList nameList;
         for (const QString& p : state.panePaths) {
-            nameList.append(cleanNameForTab(p));
+            if (!p.isEmpty()) {
+                nameList.append(cleanNameForTab(p));
+            }
         }
-        QString mergedTitle = nameList.join(" | ");
-        m_tabs[m_currentIndex].title = mergedTitle;
+        if (!nameList.isEmpty()) {
+            QString mergedTitle = nameList.join(" | ");
+            m_tabs[m_currentIndex].title = mergedTitle;
+        }
         int primIdx = qBound(0, state.primaryIndex, state.panePaths.size() - 1);
         m_tabs[m_currentIndex].url = state.panePaths[primIdx];
     } else if (!state.panePaths.isEmpty()) {
@@ -637,6 +642,18 @@ void TabBarWidget::openInNewTab(const QString& rawPath) {
     addTab(title, cleanTarget, true);
 }
 
+void TabBarWidget::openInExistingTab(int tabIndex, const QString& path) {
+    if (tabIndex < 0 || tabIndex >= m_tabs.size() || path.trimmed().isEmpty()) return;
+
+    setCurrentIndex(tabIndex, true);
+
+    QWidget* windowWidget = window();
+    ContentPanel* contentPanel = windowWidget ? windowWidget->findChild<ContentPanel*>() : nullptr;
+    if (contentPanel) {
+        contentPanel->splitPane(Qt::Horizontal, path, false);
+    }
+}
+
 void TabBarWidget::openOrFocusTab(const QString& rawPath) {
     if (rawPath.isEmpty()) return;
     QString cleanTarget = QDir::cleanPath(rawPath);
@@ -754,8 +771,29 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
         }
     }
 
-    m_tabs[m_currentIndex].title = folderName.isEmpty() ? "此电脑" : folderName;
-    m_tabs[m_currentIndex].url = url;
+    if (folderName.isEmpty()) folderName = "此电脑";
+
+    auto& currentTab = m_tabs[m_currentIndex];
+    if (currentTab.splitState.isSplit && !currentTab.splitState.panePaths.isEmpty()) {
+        int activeIdx = qBound(0, currentTab.splitState.activePaneIndex, currentTab.splitState.panePaths.size() - 1);
+        currentTab.splitState.panePaths[activeIdx] = url;
+
+        QStringList nameList;
+        for (const QString& p : currentTab.splitState.panePaths) {
+            if (!p.isEmpty()) {
+                nameList.append(cleanNameForTab(p));
+            }
+        }
+        if (!nameList.isEmpty()) {
+            currentTab.title = nameList.join(" | ");
+        } else {
+            currentTab.title = folderName;
+        }
+        currentTab.url = url;
+    } else {
+        currentTab.title = folderName;
+        currentTab.url = url;
+    }
 
     applyDiffUpdate();
     saveStateToConfig();
@@ -974,7 +1012,7 @@ void TabBarWidget::applyDiffUpdate() {
     for (int i = 0; i < targetCount; ++i) {
         QFontMetrics fm(m_tabWidgets[i]->font());
         int textW = fm.horizontalAdvance(m_tabs[i].title);
-        int needed = qBound(120, textW + 64, 300);
+        int needed = qBound(120, textW + 64, 600);
         naturalWidths[i] = needed;
         totalNaturalWidth += needed;
     }

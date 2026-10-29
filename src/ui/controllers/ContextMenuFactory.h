@@ -71,6 +71,10 @@ public:
                                       const QString& curColorHex,
                                       std::function<void(const QString& iconKey)> onIconSelected,
                                       std::function<void(const QString& colorHex)> onColorSelected);
+
+    static QMenu* buildTabCascadeMenu(QMenu* parentMenu,
+                                      const QString& path,
+                                      QWidget* contextWidget);
 };
 
 } // namespace QuarkMeta

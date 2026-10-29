@@ -11,12 +11,13 @@
 1. **级联菜单构建散落与重复实现**：四处 UI 模块（`ContentContextMenu`, `FavoritePanel`, `AddressBar`, `NavPanel`）各自独立书写遍历 `TabBarWidget::tabCount()` 并动态为每个现有标签页添加 `QAction` 的逻辑。无统一工厂构建方法，违背了 `AGENTS.md` 2.4 节关于“组件设计必须保持 API 对称与归一化服务”的原则。
 2. **缺乏统一的 `TabBarWidget::openInExistingTab` 服务层接口**：当前在四处 Lambda 中各自查找 `window()->findChild<TabBarWidget*>()` 和 `ContentPanel` 并先后执行 `setCurrentIndex` 与 `splitPane`。由于缺乏统一入口，分栏触发的时序与 `PanelMediator` 的 `splitStateChanged` 信号通知存在微小竞态，导致 `TabSplitState` 在不同视图触发时状态不一致。
 3. **`updateCurrentTabTitle` 缺少分栏阻断保护**：当选中的分栏窗格发生目录切换或焦点变化时，`PanelMediator` 触发了单窗格标题更新 `updateCurrentTabTitle`。在原本实现中，该函数没有判定当前标签页是否已处于分栏模式 (`splitState.isSplit == true`)，直接使用单窗格名称覆盖了 `m_tabs[m_currentIndex].title`，将 `updateSplitTabTitle` 生成的多分栏格式化标题（`PaneA | PaneB`）强行改回了单一名称。
-4. **导出分屏状态混入空路径与 300px 宽度限制**：`ContentPaneSplitManager::exportSplitState` 未清洗空路径，且 `TabBarWidget::applyDiffUpdate` 硬编码了 `300px` 宽度上限，引发悬空 `|` 拼接与多余 `...` 截断。
+4. **本末倒置的硬编码 300px 宽度限制**：在 `TabBarWidget::applyDiffUpdate` 中，过去硬编码了 `300px` 宽度上限。计算标签宽度时未采用“内容驱动”的测量规则，导致长路径与多分栏名称在标题栏空间极其充裕的情况下仍被强行阉割截断成了 `...`。
 
 ### 3. 重构设计与解决目标
 1. **统一级联菜单构建（`ContextMenuFactory::buildTabCascadeMenu`）**：在 `ContextMenuFactory` 中提供静态归一化构建方法，统一创建包含“在新标签页中打开”与“在标签页中打开”二级菜单的“标签页”菜单。`ContentContextMenu`、`FavoritePanel`、`AddressBar`、`NavPanel` 全部重构为调用此单一方法。
 2. **统一服务层接口（`TabBarWidget::openInExistingTab`）**：在 `TabBarWidget` 中提供 `openInExistingTab(int tabIndex, const QString& path)`，统一处理切换至指定索引标签页并在该标签页中唤醒 `ContentPanel` 追加分栏（`splitPane`）。
-3. **分栏状态标题防覆写与格式化清洗**：在 `TabBarWidget::updateCurrentTabTitle` 中检测当前标签页分栏状态。若处于分栏模式（`splitState.isSplit == true`），则将当前激活窗格的路径增量更新至 `splitState.panePaths`，并使用 `cleanNameForTab` 重写组合标题 `PaneA | PaneB`，严禁单窗格名称覆写分栏标题；同时将宽度上限对齐解锁至 `600px`。
+3. **分栏状态标题防覆写与格式化清洗**：在 `TabBarWidget::updateCurrentTabTitle` 中检测当前标签页分栏状态。若处于分栏模式（`splitState.isSplit == true`），则将当前激活窗格的路径增量更新至 `splitState.panePaths`，并使用 `cleanNameForTab` 重写组合标题 `PaneA | PaneB`，严禁单窗格名称覆写分栏标题。
+4. **内容驱动纯自适应宽度计算**：彻底移除 `300px` 紧箍咒限制。在 `TabBarWidget::applyDiffUpdate` 中完全根据 `QFontMetrics::horizontalAdvance(m_tabs[i].title) + 56px` 的真实文本像素长度决定标签自然宽度，只要标题栏有空闲空间，标签页多长就 100% 撑开多宽，绝不加省略号截断。
 
 ---
 
@@ -290,26 +291,27 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
 >>>>>>> REPLACE
 ```
 
+```
+<<<<<<< SEARCH
     QVector<int> naturalWidths(targetCount);
     int totalNaturalWidth = 0;
     for (int i = 0; i < targetCount; ++i) {
         QFontMetrics fm(m_tabWidgets[i]->font());
         int textW = fm.horizontalAdvance(m_tabs[i].title);
-        int maxTabW = m_tabs[i].splitState.isSplit ? 1200 : 400;
-        int needed = qBound(120, textW + 64, maxTabW);
+        int needed = qBound(120, textW + 64, 300);
         naturalWidths[i] = needed;
         totalNaturalWidth += needed;
     }
 =======
+    const int fixedDecorationsWidth = 56;
     QVector<int> naturalWidths(targetCount);
     int totalNaturalWidth = 0;
     for (int i = 0; i < targetCount; ++i) {
         QFontMetrics fm(m_tabWidgets[i]->font());
         int textW = fm.horizontalAdvance(m_tabs[i].title);
-        int maxTabW = m_tabs[i].splitState.isSplit ? 1200 : 400;
-        int needed = qBound(120, textW + 64, maxTabW);
-        naturalWidths[i] = needed;
-        totalNaturalWidth += needed;
+        int contentWidth = qMax(60, textW + fixedDecorationsWidth);
+        naturalWidths[i] = contentWidth;
+        totalNaturalWidth += contentWidth;
     }
 >>>>>>> REPLACE
 ```
@@ -565,4 +567,4 @@ cmake --build build -j$(nproc)
 | :--- | :--- | :--- | :--- |
 | 标签页右键菜单生成方式 | 4 处重复手写遍历与 Lambda 绑定 | 统一调调用 `ContextMenuFactory::buildTabCascadeMenu` | 100% 架构归一化，行为完全一致 |
 | 分栏标签页标题防覆写 | 单窗格加载事件强行覆盖分栏标题 | 判定 `isSplit` 模式下保留多分栏组合标题格式 | 彻底解决分栏标题被误覆盖错乱问题 |
-| 标签页计算宽度上限 | 硬编码 300px 锁死 | 解锁至 600px | 遵从零截断规范 |
+| 标签页计算宽度上限 | 硬编码 300px 锁死 | 解锁至纯内容驱动模式（文本宽 + 56px） | 遵从零截断规范 |

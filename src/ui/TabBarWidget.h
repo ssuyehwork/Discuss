@@ -117,6 +117,7 @@ public:
     void updateCurrentTabTitle(const QString& title, const QString& url);
     void openOrFocusTab(const QString& path);
     void openInNewTab(const QString& path);
+    void openInExistingTab(int tabIndex, const QString& path);
 
     void saveStateToConfig();
     bool restoreStateFromConfig();

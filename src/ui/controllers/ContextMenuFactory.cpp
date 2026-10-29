@@ -2,6 +2,8 @@
 #include "../UiHelper.h"
 #include "../../util/ShellHelper.h"
 #include "../ToolTipOverlay.h"
+#include "../TabBarWidget.h"
+#include "../../core/NavigationService.h"
 #include "../StyleLibrary.h"
 #include "../ColorPicker.h"
 #include "../../core/CoreEngine.h"
@@ -230,6 +232,36 @@ QAction* ContextMenuFactory::buildCopyPathAction(QMenu* menu, const QStringList&
         copyPathsToClipboard(paths, true);
     });
     return action;
+}
+
+QMenu* ContextMenuFactory::buildTabCascadeMenu(QMenu* parentMenu, const QString& path, QWidget* contextWidget) {
+    if (!parentMenu || path.isEmpty()) return nullptr;
+
+    QMenu* tabCascadeMenu = parentMenu->addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
+    UiHelper::applyMenuStyle(tabCascadeMenu);
+
+    QAction* actOpenNewTab = tabCascadeMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "在新标签页中打开");
+    QObject::connect(actOpenNewTab, &QAction::triggered, contextWidget ? contextWidget : parentMenu, [path]() {
+        NavigationService::instance().openInNewTab(path);
+    });
+
+    QMenu* openInExistingTabMenu = tabCascadeMenu->addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), "在标签页中打开");
+    UiHelper::applyMenuStyle(openInExistingTabMenu);
+
+    QWidget* windowWidget = contextWidget ? contextWidget->window() : nullptr;
+    TabBarWidget* tabBar = windowWidget ? windowWidget->findChild<TabBarWidget*>() : nullptr;
+    if (tabBar) {
+        int count = tabBar->tabCount();
+        for (int i = 0; i < count; ++i) {
+            QString tabTitle = tabBar->tabTitle(i);
+            QAction* actMergeTab = openInExistingTabMenu->addAction(UiHelper::getIcon("tab", QColor("#EEEEEE"), 16), tabTitle);
+            QObject::connect(actMergeTab, &QAction::triggered, contextWidget ? contextWidget : parentMenu, [tabBar, i, path]() {
+                tabBar->openInExistingTab(i, path);
+            });
+        }
+    }
+
+    return tabCascadeMenu;
 }
 
 QMenu* ContextMenuFactory::buildOpenWithMenu(QMenu* parentMenu, const QString& filePath, QWidget* parentWidget) {
