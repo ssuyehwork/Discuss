@@ -290,14 +290,13 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
 >>>>>>> REPLACE
 ```
 
-```
-<<<<<<< SEARCH
     QVector<int> naturalWidths(targetCount);
     int totalNaturalWidth = 0;
     for (int i = 0; i < targetCount; ++i) {
         QFontMetrics fm(m_tabWidgets[i]->font());
         int textW = fm.horizontalAdvance(m_tabs[i].title);
-        int needed = qBound(120, textW + 64, 300);
+        int maxTabW = m_tabs[i].splitState.isSplit ? 1200 : 400;
+        int needed = qBound(120, textW + 64, maxTabW);
         naturalWidths[i] = needed;
         totalNaturalWidth += needed;
     }
