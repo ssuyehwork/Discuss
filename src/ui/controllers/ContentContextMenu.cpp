@@ -247,28 +247,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         } else {
             menu.addAction(UiHelper::getIcon(isFolder ? "folder" : "open", QColor("#EEEEEE"), 18), isFolder ? "打开文件夹" : "打开")->setData(ContentPanel::ActionOpen);
             if (isFolder) {
-                QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-                UiHelper::applyMenuStyle(tabCascadeMenu);
-
-                tabCascadeMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "在新标签页中打开")->setData(ContentPanel::ActionOpenInNewTab);
-
-                QMenu* openInExistingTabMenu = tabCascadeMenu->addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), "在标签页中打开");
-                UiHelper::applyMenuStyle(openInExistingTabMenu);
-
-                TabBarWidget* tabBar = (m_panel && m_panel->window()) ? m_panel->window()->findChild<TabBarWidget*>() : nullptr;
-                if (tabBar) {
-                    int count = tabBar->tabCount();
-                    for (int i = 0; i < count; ++i) {
-                        QString tabTitle = tabBar->tabTitle(i);
-                        QAction* actMergeTab = openInExistingTabMenu->addAction(UiHelper::getIcon("tab", QColor("#EEEEEE"), 16), tabTitle);
-                        connect(actMergeTab, &QAction::triggered, this, [this, i, path]() {
-                            if (!m_panel) return;
-                            TabBarWidget* tabBar = m_panel->window() ? m_panel->window()->findChild<TabBarWidget*>() : nullptr;
-                            if (tabBar) tabBar->setCurrentIndex(i, true);
-                            m_panel->splitPane(Qt::Horizontal, path, false);
-                        });
-                    }
-                }
+                ContextMenuFactory::buildTabCascadeMenu(&menu, path, m_panel);
             } else {
                 menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
                 ContextMenuFactory::buildOpenWithMenu(&menu, path, m_panel);

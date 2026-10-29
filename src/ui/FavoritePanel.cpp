@@ -662,32 +662,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
 
         // 2. 标签页级联子菜单
         if (!path.isEmpty() && !isVirtual) {
-            QMenu* tabCascadeMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "标签页");
-            UiHelper::applyMenuStyle(tabCascadeMenu);
-
-            QAction* actOpenNewTab = tabCascadeMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "在新标签页中打开");
-            connect(actOpenNewTab, &QAction::triggered, this, [path]() {
-                NavigationService::instance().openInNewTab(path);
-            });
-
-            QMenu* openInExistingTabMenu = tabCascadeMenu->addMenu(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 16), "在标签页中打开");
-            UiHelper::applyMenuStyle(openInExistingTabMenu);
-
-            TabBarWidget* tabBar = window() ? window()->findChild<TabBarWidget*>() : nullptr;
-            if (tabBar) {
-                int count = tabBar->tabCount();
-                for (int i = 0; i < count; ++i) {
-                    QString tabTitle = tabBar->tabTitle(i);
-                    QAction* actMergeTab = openInExistingTabMenu->addAction(UiHelper::getIcon("tab", QColor("#EEEEEE"), 16), tabTitle);
-                    connect(actMergeTab, &QAction::triggered, this, [this, tabBar, i, path]() {
-                        tabBar->setCurrentIndex(i, true);
-                        ContentPanel* contentPanel = window() ? window()->findChild<ContentPanel*>() : nullptr;
-                        if (contentPanel) {
-                            contentPanel->splitPane(Qt::Horizontal, path, false);
-                        }
-                    });
-                }
-            }
+            ContextMenuFactory::buildTabCascadeMenu(&menu, path, this);
 
             // 在“资源管理器”中显示
             ContextMenuFactory::buildShowInExplorerAction(&menu, path, this);

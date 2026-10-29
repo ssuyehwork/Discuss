@@ -1,4 +1,5 @@
 #include "TabBarWidget.h"
+#include "ContentPanel.h"
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 #include "ColorPicker.h"
@@ -641,6 +642,18 @@ void TabBarWidget::openInNewTab(const QString& rawPath) {
     addTab(title, cleanTarget, true);
 }
 
+void TabBarWidget::openInExistingTab(int tabIndex, const QString& path) {
+    if (tabIndex < 0 || tabIndex >= m_tabs.size() || path.trimmed().isEmpty()) return;
+
+    setCurrentIndex(tabIndex, true);
+
+    QWidget* windowWidget = window();
+    ContentPanel* contentPanel = windowWidget ? windowWidget->findChild<ContentPanel*>() : nullptr;
+    if (contentPanel) {
+        contentPanel->splitPane(Qt::Horizontal, path, false);
+    }
+}
+
 void TabBarWidget::openOrFocusTab(const QString& rawPath) {
     if (rawPath.isEmpty()) return;
     QString cleanTarget = QDir::cleanPath(rawPath);
@@ -999,7 +1012,7 @@ void TabBarWidget::applyDiffUpdate() {
     for (int i = 0; i < targetCount; ++i) {
         QFontMetrics fm(m_tabWidgets[i]->font());
         int textW = fm.horizontalAdvance(m_tabs[i].title);
-        int needed = qBound(120, textW + 64, 300);
+        int needed = qBound(120, textW + 64, 600);
         naturalWidths[i] = needed;
         totalNaturalWidth += needed;
     }
