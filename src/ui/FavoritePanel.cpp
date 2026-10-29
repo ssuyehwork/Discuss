@@ -54,7 +54,9 @@ void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& 
     
     // 背景高亮
     if (opt.state & QStyle::State_Selected) {
-        painter->fillRect(opt.rect, QColor("#37373D"));
+        QColor selBg("#378ADD");
+        selBg.setAlphaF(0.15f);
+        painter->fillRect(opt.rect, selBg);
     } else if (opt.state & QStyle::State_MouseOver) {
         painter->fillRect(opt.rect, QColor("#2A2D2E"));
     } else {

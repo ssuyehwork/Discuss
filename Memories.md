@@ -113,7 +113,7 @@
 
 ### 2.5 全局 QMenu 菜单规范 (ThemeManager)
 - **菜单背景**: `#252526` (边界 `#333333`，圆角 6px)；
-- **选中/高亮背景色 (Item Hover/Selected)**: 物理色值统一为 **`#3E3E42`**；
+- **选中/高亮背景色 (Item Hover/Selected)**: 全局项目与菜单 hover 背景色统一为 **`#3E3E42`**（或 `#2A2D2E`），选中高亮主题蓝色统一为 **`#378ADD`**（15% 透明度，即 `QColor("#378ADD"); bg.setAlphaF(0.15f);`）；侧边栏 (`FavoritePanel`、`LibraryPanel`、`NavPanel`) 与右侧内容区域 (`TreeItemDelegate`、`ThumbnailDelegate`、`ColumnItemDelegate`) 项目选中时背景色必须严格统一在底层绘制 **`#378ADD` 15% 半透明蓝色**，确保图标与文本清晰位于高亮层之上，绝对禁止出现强行覆盖图标的不透明硬色块或硬编码暗灰色 (`#37373D`)；
 - **图标与文本间距 (Icon-Text Spacing)**: 图标与文本之间的物理间距统一并精确锁定为 **`10px`**（通过 `QMenu::icon { margin-right: 10px; }` 控制）。
 
 ### 2.6 分栏布局初始化与尺寸计算规范 (PanelLayoutManager)
