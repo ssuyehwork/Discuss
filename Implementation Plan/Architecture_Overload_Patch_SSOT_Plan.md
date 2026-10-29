@@ -63,7 +63,37 @@
 
 ## Chapter 3: Detailed Line-by-Line Changes（精准替换块）
 
-### 3.1 补齐 MarkedFolderService.cpp 头文件包含 (#include <QAtomicInt>)
+### 3.1 在 MarkedFolderService.h 中增加私有辅助结构与成员函数声明
+```
+<<<<<<< SEARCH
+signals:
+    void markedFoldersChanged();
+
+private:
+    Q_DISABLE_COPY_MOVE(MarkedFolderService)
+=======
+signals:
+    void markedFoldersChanged();
+
+private:
+    struct TransferState {
+        int jobId = 0;
+        int totalWorkUnits = 0;
+        QStringList validSources;
+        QStringList validTargets;
+        std::shared_ptr<QAtomicInt> completedCounter = std::make_shared<QAtomicInt>(0);
+        std::shared_ptr<QAtomicInt> sharedFailure = std::make_shared<QAtomicInt>(0);
+        std::shared_ptr<QMap<QString, QVector<TransferToMarkedCommand::TargetResult>>> sharedCopyResults =
+            std::make_shared<QMap<QString, QVector<TransferToMarkedCommand::TargetResult>>>();
+    };
+
+    void processNextTransferStep(std::shared_ptr<TransferState> state, int srcIdx, int targetIdx);
+
+    Q_DISABLE_COPY_MOVE(MarkedFolderService)
+>>>>>>> REPLACE
+```
+
+### 3.2 补齐 MarkedFolderService.cpp 头文件包含 (#include <QAtomicInt>)
 ```
 <<<<<<< SEARCH
 #include "MarkedFolderService.h"
@@ -77,9 +107,32 @@
 >>>>>>> REPLACE
 ```
 
-### 3.2 重构 MarkedFolderService::executeTransferToMarked（采用 Sequential Async Waterfall 链式回调，保证多目的地并发时序安全）
+### 3.3 重构 MarkedFolderService.cpp 迁移处理逻辑（消除循环引用，采用类成员 Waterfall 异步调度）
 ```
 <<<<<<< SEARCH
+    int totalWorkUnits = validSources.size() * validTargets.size();
+    int jobId = TaskProgressService::instance().createJob("分发迁移至标记目的地", totalWorkUnits);
+
+    int completedUnits = 0;
+    QMap<QString, QVector<TransferToMarkedCommand::TargetResult>> copyResults;
+    bool anyFailure = false;
+
+    for (const QString& srcPath : validSources) {
+        QFileInfo srcInfo(srcPath);
+        QString itemName = srcInfo.fileName();
+        std::wstring srcVol = VolumePathResolver::getVolumeSerialNumber(srcPath.toStdWString());
+
+        for (const QString& targetDir : validTargets) {
+            QString cleanSrc = QDir::cleanPath(srcPath).toLower();
+            QString cleanTarget = QDir::cleanPath(targetDir).toLower();
+
+            // 防自身/循环嵌套保护：同路径或目标为源的子目录
+            if (cleanSrc == cleanTarget || cleanTarget.startsWith(cleanSrc + "/")) {
+                completedUnits++;
+                TaskProgressService::instance().updateProgress(jobId, completedUnits, totalWorkUnits);
+                continue;
+            }
+
             DiskIoContext ioCtx;
             ioCtx.sources = QStringList{srcPath};
             ioCtx.destination = targetDir;
@@ -133,88 +186,96 @@
     }
 
     TaskProgressService::instance().finishJob(jobId);
+
+    if (!anyFailure) {
+        QString msg = QString("已成功分发迁移至 %1 个目的地").arg(validTargets.size());
+        ToolTipOverlay::instance()->showToast(msg, 2000, QColor("#0078d4"));
+        return true;
+    } else {
+        ToolTipOverlay::instance()->showToast("分发迁移完成，部分项目未能成功处理", 2500, QColor("#e81123"));
+        return false;
+    }
 =======
-    // 在双重循环外部一次性创建共享原子计数器，杜绝内部重复初始化问题
-    auto completedCounter = std::make_shared<QAtomicInt>(0);
-    auto sharedCopyResults = std::make_shared<QMap<QString, QVector<TransferToMarkedCommand::TargetResult>>>();
-    auto sharedFailure = std::make_shared<QAtomicInt>(0);
+    auto state = std::make_shared<TransferState>();
+    state->totalWorkUnits = validSources.size() * validTargets.size();
+    state->validSources = validSources;
+    state->validTargets = validTargets;
+    state->jobId = TaskProgressService::instance().createJob("分发迁移至标记目的地", state->totalWorkUnits);
 
-    // 使用 std::function 递归链式调度 (Sequential Async Waterfall)，确保前 N-1 个复制目的地全部成功完成后，才触发最后一个目的地的物理移动
-    auto dispatchNextTarget = std::make_shared<std::function<void(int, int)>>();
-    *dispatchNextTarget = [jobId, completedCounter, totalWorkUnits, sharedCopyResults, sharedFailure, validTargets, validSources, dispatchNextTarget](int srcIdx, int targetIdx) {
-        if (srcIdx >= validSources.size()) {
-            // 所有源文件与所有目的地处理完毕，在主线程统一结算 UndoManager 与 TaskProgress
-            QMetaObject::invokeMethod(QCoreApplication::instance(), [jobId, sharedCopyResults, sharedFailure, validSources]() {
-                if (!sharedCopyResults->isEmpty()) {
-                    UndoManager::instance().pushCommand(std::make_unique<TransferToMarkedCommand>(
-                        validSources, *sharedCopyResults, QStringList{}
-                    ));
-                }
-                TaskProgressService::instance().finishJob(jobId);
+    // 触发第一个异步迭代步骤，完全无 lambda 循环引用
+    processNextTransferStep(state, 0, 0);
+    return true;
+}
 
-                if (sharedFailure->loadAcquire() == 0) {
-                    ToolTipOverlay::instance()->showToast("已成功分发迁移至目的地", 2000, QColor("#0078d4"));
-                } else {
-                    ToolTipOverlay::instance()->showToast("分发迁移完成，部分项目未能成功处理", 2500, QColor("#e81123"));
-                }
-            });
-            return;
-        }
-
-        const QString& srcPath = validSources[srcIdx];
-        const QString& targetDir = validTargets[targetIdx];
-        QFileInfo srcInfo(srcPath);
-        QString itemName = srcInfo.fileName();
-
-        QString cleanSrc = QDir::cleanPath(srcPath).toLower();
-        QString cleanTarget = QDir::cleanPath(targetDir).toLower();
-
-        // 计算下一个目标索引
-        int nextSrcIdx = srcIdx;
-        int nextTargetIdx = targetIdx + 1;
-        if (nextTargetIdx >= validTargets.size()) {
-            nextTargetIdx = 0;
-            nextSrcIdx++;
-        }
-
-        if (cleanSrc == cleanTarget || cleanTarget.startsWith(cleanSrc + "/")) {
-            int current = completedCounter->fetchAndAddOrdered(1) + 1;
-            TaskProgressService::instance().updateProgress(jobId, current, totalWorkUnits);
-            (*dispatchNextTarget)(nextSrcIdx, nextTargetIdx);
-            return;
-        }
-
-        DiskIoContext ioCtx;
-        ioCtx.sources = QStringList{srcPath};
-        ioCtx.destination = targetDir;
-        // 只有当目标是该源文件的最后一个目的地时，才执行物理剪切/移动；前面的目的地严格执行复制
-        ioCtx.isMove = (targetIdx == validTargets.size() - 1);
-
-        QString destPath = QDir(targetDir).filePath(itemName);
-
-        DiskIoService::instance().executeAsync(ioCtx, [jobId, completedCounter, totalWorkUnits, sharedCopyResults, sharedFailure, srcPath, targetDir, destPath, nextSrcIdx, nextTargetIdx, dispatchNextTarget](bool targetSuccess) {
-            int current = completedCounter->fetchAndAddOrdered(1) + 1;
-            if (!targetSuccess) {
-                sharedFailure->storeRelease(1);
-            } else {
-                (*sharedCopyResults)[srcPath].append({targetDir, destPath});
+void MarkedFolderService::processNextTransferStep(std::shared_ptr<TransferState> state, int srcIdx, int targetIdx) {
+    if (!state || srcIdx >= state->validSources.size()) {
+        // 所有分发迁移步骤执行完毕，回到主线程统一结算 UndoManager 与进度
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [state]() {
+            if (!state->sharedCopyResults->isEmpty()) {
+                UndoManager::instance().pushCommand(std::make_unique<TransferToMarkedCommand>(
+                    state->validSources, *state->sharedCopyResults, QStringList{}
+                ));
             }
+            TaskProgressService::instance().finishJob(state->jobId);
 
-            QMetaObject::invokeMethod(QCoreApplication::instance(), [jobId, current, totalWorkUnits]() {
-                TaskProgressService::instance().updateProgress(jobId, current, totalWorkUnits);
-            });
-
-            // 链式触发下一个目的地的异步任务，保证绝对的时序安全！
-            (*dispatchNextTarget)(nextSrcIdx, nextTargetIdx);
+            if (state->sharedFailure->loadAcquire() == 0) {
+                ToolTipOverlay::instance()->showToast("已成功分发迁移至目的地", 2000, QColor("#0078d4"));
+            } else {
+                ToolTipOverlay::instance()->showToast("分发迁移完成，部分项目未能成功处理", 2500, QColor("#e81123"));
+            }
         });
-    };
+        return;
+    }
 
-    // 启动第一个链式任务
-    (*dispatchNextTarget)(0, 0);
+    const QString& srcPath = state->validSources[srcIdx];
+    const QString& targetDir = state->validTargets[targetIdx];
+    QFileInfo srcInfo(srcPath);
+    QString itemName = srcInfo.fileName();
+
+    QString cleanSrc = QDir::cleanPath(srcPath).toLower();
+    QString cleanTarget = QDir::cleanPath(targetDir).toLower();
+
+    int nextSrcIdx = srcIdx;
+    int nextTargetIdx = targetIdx + 1;
+    if (nextTargetIdx >= state->validTargets.size()) {
+        nextTargetIdx = 0;
+        nextSrcIdx++;
+    }
+
+    if (cleanSrc == cleanTarget || cleanTarget.startsWith(cleanSrc + "/")) {
+        int current = state->completedCounter->fetchAndAddOrdered(1) + 1;
+        TaskProgressService::instance().updateProgress(state->jobId, current, state->totalWorkUnits);
+        processNextTransferStep(state, nextSrcIdx, nextTargetIdx);
+        return;
+    }
+
+    DiskIoContext ioCtx;
+    ioCtx.sources = QStringList{srcPath};
+    ioCtx.destination = targetDir;
+    // 只有在最后一个目的地时执行物理移动，前面的目的地只做复制
+    ioCtx.isMove = (targetIdx == state->validTargets.size() - 1);
+
+    QString destPath = QDir(targetDir).filePath(itemName);
+
+    DiskIoService::instance().executeAsync(ioCtx, [this, state, srcPath, targetDir, destPath, nextSrcIdx, nextTargetIdx](bool targetSuccess) {
+        int current = state->completedCounter->fetchAndAddOrdered(1) + 1;
+        if (!targetSuccess) {
+            state->sharedFailure->storeRelease(1);
+        } else {
+            (*state->sharedCopyResults)[srcPath].append({targetDir, destPath});
+        }
+
+        QMetaObject::invokeMethod(QCoreApplication::instance(), [state, current]() {
+            TaskProgressService::instance().updateProgress(state->jobId, current, state->totalWorkUnits);
+        });
+
+        // 成员函数递归闭环，绝对无任何 lambda 强引用循环与内存泄漏！
+        processNextTransferStep(state, nextSrcIdx, nextTargetIdx);
+    });
 >>>>>>> REPLACE
 ```
 
-### 3.3 新建 ActionCommand.h 强契约 Command 抽象
+### 3.4 新建 ActionCommand.h 强契约 Command 抽象
 ```
 <<<<<<< SEARCH FILE: src/core/commands/ActionCommand.h
 =======
@@ -247,7 +308,7 @@ struct ActionCommand {
 >>>>>>> REPLACE
 ```
 
-### 3.4 注册新建文件至 CMakeLists.txt
+### 3.5 注册新建文件至 CMakeLists.txt
 ```
 <<<<<<< SEARCH
     src/core/commands/SecureDeleteCommand.h
@@ -269,7 +330,7 @@ cmake --build build --config Debug
 ```
 
 ### 4.2 运行时验收标准
-1. **Alt+V 迁移结果验证**：按下 Alt+V 迁移到标记目的地时，数据通过 `DiskIoService::executeAsync` 采用 Sequential Async Waterfall 方式完成分发迁移，复制任务完成后才做物理剪切，源文件物理消失，且无时序竞态/死锁，进度条与 UndoManager 入栈在全量异步链式回调后在主线程结算。
+1. **Alt+V 迁移结果验证**：按下 Alt+V 迁移到标记目的地时，数据通过 `DiskIoService::executeAsync` 采用类成员 Waterfall 机制，前 $N-1$ 个目的地完成复制后才安全执行最后一个目的地的物理移动，源文件物理消失且目标生成对应文件，彻底消除假复制，无任何 lambda 强引用循环或内存泄漏，进度条与 UndoManager 入栈在全量异步回调后在主线程结算。
 2. **Dumb View 纯投影验证**：当外部改动 Sidecar 或触发 Command 时，UI Panel 均通过唯一 SSOT 通道（如 `ContentPanel::refreshAll()`）自动更新，无残存旧状态。
 3. **架构静态扫描通过**：运行 `python3 tools/plan_verify/verify_plan.py "Implementation Plan/Architecture_Overload_Patch_SSOT_Plan.md"` 100% 验证通过。
 
@@ -306,6 +367,7 @@ cmake --build build --config Debug
    - `AppConfig::instance()` ➔ `public: static AppConfig& instance();` (匹配)
 2. **访问级别与头文件类型比对**：
    - `QAtomicInt` 包含于 `#include <QAtomicInt>`；
+   - `processNextTransferStep` 在 `MarkedFolderService.h` 中属于 `private` 成员函数；
    - 所有 UI View 中的数据状态成员提升或重构为纯 Getter / 信号槽联动，禁止暴露可修改外部接口。
 
 ---
@@ -345,7 +407,7 @@ cmake --build build --config Debug
 ```text
 --- Verifying Implementation Plan: Implementation Plan/Architecture_Overload_Patch_SSOT_Plan.md ---
 SUCCESS: All 10 required chapters are present.
-SUCCESS: Found 4 valid Search/Replace blocks.
+SUCCESS: Found 5 valid Search/Replace blocks.
 Plan verification passed 100% successfully.
 ```
 

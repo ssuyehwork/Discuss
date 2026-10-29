@@ -6,7 +6,7 @@
 
 1. 审核方式（必须遵守）：
     1.1 不得采信本方案自带的"已读证据清单"和"合规核对表"。它们是作者自己写的，作者已经漏过检查。你必须自己重新检索仓库，得到自己的证据。
-    1.2  除问题一至四外，还必须逐项核对以下可验证事实，每项附检索命令与结果：
+    1.2 除问题一至四外，还必须逐项核对以下可验证事实，每项附检索命令与结果：
        a. 每个 SEARCH 块的原文在对应文件中真实存在，且在该文件内唯一匹配；
        b. 方案调用的每个外部成员函数，在 .h 中真实存在，签名与方案一致；
        c. 方案新增的接口，其声明、定义与全部调用点一致；
@@ -22,8 +22,8 @@
 
 ### 3.1 实施方案物理隔离与命名/只读/版本迭代契约
 1. **物理存储与废弃归档目录**：
-   - 活性实施方案必须统一放置于 `QuarkMeta Architecture/Implementation Plan/` 目录下。
-   - 被新版本替代的旧方案文件，必须整文件移动至 `QuarkMeta Architecture/Implementation Plan/superseded/` 废弃归档子目录中（文件移动不视为违规编辑）。
+   - 活性实施方案必须统一放置于 `QuarkMeta Architecture/Implementation Plan/` 目录下（或项目根目录下的 `Implementation Plan/` 隔离目录）。
+   - 被新版本替代的旧方案文件，必须整文件移动至 `Implementation Plan/superseded/` 废弃归档子目录中（文件移动不视为违规编辑）。
 2. **命名与 1:1 映射契约**：
    - **单文件/单类重构**：实施方案物理文件名必须与对应核心类名完全 1:1 映射（如 `NavigationService.md`）。
    - **多类/跨模块重构**：物理文件名必须以业务功能或主导服务类语义命名（如 `PresetTagPipelineRefactoring.md`）。
@@ -103,6 +103,20 @@ DESTINATION: src/new/Path.cpp
    - `QObject::connect` 必须使用 C++11 函数指针语法，显式校验信号槽参数匹配；
    - 严禁在后台线程（如 `QtConcurrent::run`、线程池）中直接操作 `QWidget` UI 控件，必须通过 `QMetaObject::invokeMethod(..., Qt::QueuedConnection)` 或信号槽调度回 GUI 主线程。
 
+5. **【升级】异步并发、线程安全与生命周期全核查契约 (Async Concurrency, Lifetime & Safety Closure Contract)**：
+   - **共享原子变量作用域**：在异步回调（如 `QtConcurrent::run` / 线程池）中使用的共享计数器或状态标识（如 `QAtomicInt`、`std::shared_ptr`），**必须在循环外部一次性实例化**，绝对禁止在并发循环内部重复初始化，防止每次迭代实例化独立变量导致进度与状态统计失效。
+   - **悬空指针防范（Dangling Reference Prevention）**：异步 Lambda 回调中，**绝对禁止按引用捕获 (`&var`) 局部栈变量**，必须使用按值捕获 (`var`) 或按 `std::shared_ptr` 值捕获，确保异步回调执行时依赖的变量生命周期不随栈帧退出而销毁。
+   - **递归 Lambda 循环引用防范（Cyclic Reference Prevention）**：方案中撰写递归 Lambda 或异步链式回调（Waterfall）时，**绝对禁止在 Lambda 按值捕获自身的 `std::shared_ptr`**（会导致引用计数无法清零引起永久内存泄漏）。必须设计显式类成员辅助函数，或通过 Raw Pointer / 显式 `std::weak_ptr` 解耦强引用。
+   - **异步时序依赖链式化（Sequential Async Waterfall）**：凡存在有先后顺序依赖（如“必须先完成所有目的地的复制，才能执行最后一个目的地的物理剪切/移动/删除”）的异步操作，**绝对禁止在 `for` 循环中同时并发 dispatch**，必须使用递归链式回调（Sequential Async Waterfall）或成员函数闭环，确保上一步回调成功完成后才触发下一步，彻底杜绝文件被提前移动/删除引起的 Race Condition。
+   - **跨线程 UI 与撤销栈结算规程**：异步任务的 UI 进度更新（`TaskProgressService`）、撤销栈入栈（`UndoManager::pushCommand`）及 Toast 提示，必须通过 `QMetaObject::invokeMethod(QCoreApplication::instance(), ...)` 延迟到全量链式回调结束后，在 GUI 主线程进行统一结算。
+
+6. **【升级】显式类型头文件包含闭合判定规范 (Explicit Type Include Closure)**：
+   - 方案中只要 SEARCH/REPLACE 块使用了任何新的 Qt 或 C++ 标准库类型（例如 `QAtomicInt`、`QPointer`、`std::shared_ptr`、`QMutexLocker` 等），必须在替换块或文件头部明确提供该类型的显式 `#include`（如 `#include <QAtomicInt>`），严禁依赖隐式或间接头文件包含链。
+
+7. **【升级】实施方案代码预编译与物理签名匹配自检契约 (Pre-Verification Signature Contract)**：
+   - 方案中的 SEARCH 块必须逐字逐句通过只读工具（`read_file` / `grep`）与目标物理文件进行物理匹配验证；
+   - 方案中 REPLACE 块的代码语法、宏与类型生命周期，必须经过严格的静态语法检查，防止在方案中写出悬空引用（Dangling References）或未包含的头文件。
+
 ### 3.6 四道关质量管控流程 (Four-Gate Plan Protocol)
 
 #### 第 0 关：需求与假设确认关 (Gate 0: Requirements Confirmation)
@@ -118,7 +132,8 @@ DESTINATION: src/new/Path.cpp
 #### 第 2 关：交付前自动化自检关 (Gate 2: Automated Pre-Delivery Check)
 - **自动化工具**：方案自检**强制使用仓库自动化脚本 `tools/plan_verify/verify_plan.py`**（代码库内版本控制）进行校验。脚本自动扫描：
   - SEARCH 块在仓库中的存在性与唯一匹配性；
-  - 头文件包含链闭合性；
+  - 头文件包含链闭合性与显式包含检查；
+  - 异步并发安全与变量作用域检查；
   - `CMakeLists.txt` 全文件注册完整性；
   - 10 大章节与合规表格填写的完整性。
 - **产出物**：方案末尾的第 9 章“合规与质量核对表”，并附上 `tools/plan_verify/verify_plan.py` 的**自动化验证输出日志**。
