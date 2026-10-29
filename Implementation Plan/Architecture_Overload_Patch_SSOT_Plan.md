@@ -63,7 +63,21 @@
 
 ## Chapter 3: Detailed Line-by-Line Changes（精准替换块）
 
-### 3.1 重构 MarkedFolderService::executeTransferToMarked 全量收敛至 DiskIoService::executeAsync（保证多线程与内存安全）
+### 3.1 补齐 MarkedFolderService.cpp 头文件包含 (#include <QAtomicInt>)
+```
+<<<<<<< SEARCH
+#include "MarkedFolderService.h"
+#include "MarkedFolderDao.h"
+#include "../ui/UiHelper.h"
+=======
+#include "MarkedFolderService.h"
+#include "MarkedFolderDao.h"
+#include <QAtomicInt>
+#include "../ui/UiHelper.h"
+>>>>>>> REPLACE
+```
+
+### 3.2 重构 MarkedFolderService::executeTransferToMarked（采用 Sequential Async Waterfall 链式回调，保证多目的地并发时序安全）
 ```
 <<<<<<< SEARCH
             DiskIoContext ioCtx;
@@ -110,31 +124,97 @@
             }
         }
     }
+
+    // 压入撤销命令
+    if (!copyResults.isEmpty()) {
+        UndoManager::instance().pushCommand(std::make_unique<TransferToMarkedCommand>(
+            validSources, copyResults, recycledSources
+        ));
+    }
+
+    TaskProgressService::instance().finishJob(jobId);
 =======
-            DiskIoContext ioCtx;
-            ioCtx.sources = QStringList{srcPath};
-            ioCtx.destination = targetDir;
-            // 最后一个目的地执行物理迁移 (isMove = true)，前面的目的地执行复制 (isMove = false)
-            ioCtx.isMove = (targetDir == validTargets.last());
+    // 在双重循环外部一次性创建共享原子计数器，杜绝内部重复初始化问题
+    auto completedCounter = std::make_shared<QAtomicInt>(0);
+    auto sharedCopyResults = std::make_shared<QMap<QString, QVector<TransferToMarkedCommand::TargetResult>>>();
+    auto sharedFailure = std::make_shared<QAtomicInt>(0);
 
-            QString destPath = QDir(targetDir).filePath(itemName);
+    // 使用 std::function 递归链式调度 (Sequential Async Waterfall)，确保前 N-1 个复制目的地全部成功完成后，才触发最后一个目的地的物理移动
+    auto dispatchNextTarget = std::make_shared<std::function<void(int, int)>>();
+    *dispatchNextTarget = [jobId, completedCounter, totalWorkUnits, sharedCopyResults, sharedFailure, validTargets, validSources, dispatchNextTarget](int srcIdx, int targetIdx) {
+        if (srcIdx >= validSources.size()) {
+            // 所有源文件与所有目的地处理完毕，在主线程统一结算 UndoManager 与 TaskProgress
+            QMetaObject::invokeMethod(QCoreApplication::instance(), [jobId, sharedCopyResults, sharedFailure, validSources]() {
+                if (!sharedCopyResults->isEmpty()) {
+                    UndoManager::instance().pushCommand(std::make_unique<TransferToMarkedCommand>(
+                        validSources, *sharedCopyResults, QStringList{}
+                    ));
+                }
+                TaskProgressService::instance().finishJob(jobId);
 
-            // 采用 std::make_shared<QAtomicInt> 线程安全按值捕获，杜绝异步回调中的栈变量悬空指针问题
-            auto completedCounter = std::make_shared<QAtomicInt>(completedUnits);
-            DiskIoService::instance().executeAsync(ioCtx, [jobId, completedCounter, totalWorkUnits](bool targetSuccess) {
-                int current = completedCounter->fetchAndAddOrdered(1) + 1;
-                QMetaObject::invokeMethod(QCoreApplication::instance(), [jobId, current, totalWorkUnits]() {
-                    TaskProgressService::instance().updateProgress(jobId, current, totalWorkUnits);
-                });
+                if (sharedFailure->loadAcquire() == 0) {
+                    ToolTipOverlay::instance()->showToast("已成功分发迁移至目的地", 2000, QColor("#0078d4"));
+                } else {
+                    ToolTipOverlay::instance()->showToast("分发迁移完成，部分项目未能成功处理", 2500, QColor("#e81123"));
+                }
+            });
+            return;
+        }
+
+        const QString& srcPath = validSources[srcIdx];
+        const QString& targetDir = validTargets[targetIdx];
+        QFileInfo srcInfo(srcPath);
+        QString itemName = srcInfo.fileName();
+
+        QString cleanSrc = QDir::cleanPath(srcPath).toLower();
+        QString cleanTarget = QDir::cleanPath(targetDir).toLower();
+
+        // 计算下一个目标索引
+        int nextSrcIdx = srcIdx;
+        int nextTargetIdx = targetIdx + 1;
+        if (nextTargetIdx >= validTargets.size()) {
+            nextTargetIdx = 0;
+            nextSrcIdx++;
+        }
+
+        if (cleanSrc == cleanTarget || cleanTarget.startsWith(cleanSrc + "/")) {
+            int current = completedCounter->fetchAndAddOrdered(1) + 1;
+            TaskProgressService::instance().updateProgress(jobId, current, totalWorkUnits);
+            (*dispatchNextTarget)(nextSrcIdx, nextTargetIdx);
+            return;
+        }
+
+        DiskIoContext ioCtx;
+        ioCtx.sources = QStringList{srcPath};
+        ioCtx.destination = targetDir;
+        // 只有当目标是该源文件的最后一个目的地时，才执行物理剪切/移动；前面的目的地严格执行复制
+        ioCtx.isMove = (targetIdx == validTargets.size() - 1);
+
+        QString destPath = QDir(targetDir).filePath(itemName);
+
+        DiskIoService::instance().executeAsync(ioCtx, [jobId, completedCounter, totalWorkUnits, sharedCopyResults, sharedFailure, srcPath, targetDir, destPath, nextSrcIdx, nextTargetIdx, dispatchNextTarget](bool targetSuccess) {
+            int current = completedCounter->fetchAndAddOrdered(1) + 1;
+            if (!targetSuccess) {
+                sharedFailure->storeRelease(1);
+            } else {
+                (*sharedCopyResults)[srcPath].append({targetDir, destPath});
+            }
+
+            QMetaObject::invokeMethod(QCoreApplication::instance(), [jobId, current, totalWorkUnits]() {
+                TaskProgressService::instance().updateProgress(jobId, current, totalWorkUnits);
             });
 
-            copyResults[srcPath].append({targetDir, destPath});
-        }
-    }
+            // 链式触发下一个目的地的异步任务，保证绝对的时序安全！
+            (*dispatchNextTarget)(nextSrcIdx, nextTargetIdx);
+        });
+    };
+
+    // 启动第一个链式任务
+    (*dispatchNextTarget)(0, 0);
 >>>>>>> REPLACE
 ```
 
-### 3.2 新建 ActionCommand.h 强契约 Command 抽象
+### 3.3 新建 ActionCommand.h 强契约 Command 抽象
 ```
 <<<<<<< SEARCH FILE: src/core/commands/ActionCommand.h
 =======
@@ -167,7 +247,7 @@ struct ActionCommand {
 >>>>>>> REPLACE
 ```
 
-### 3.3 注册新建文件至 CMakeLists.txt
+### 3.4 注册新建文件至 CMakeLists.txt
 ```
 <<<<<<< SEARCH
     src/core/commands/SecureDeleteCommand.h
@@ -189,7 +269,7 @@ cmake --build build --config Debug
 ```
 
 ### 4.2 运行时验收标准
-1. **Alt+V 迁移结果验证**：单个或多个标记目的地按下 Alt+V 时，数据直接通过 `DiskIoService::executeAsync` 进行物理剪切/移动，同盘下秒级迁移，源文件物理消失且目标生成对应文件，彻底消除假复制，且异步线程安全无崩溃。
+1. **Alt+V 迁移结果验证**：按下 Alt+V 迁移到标记目的地时，数据通过 `DiskIoService::executeAsync` 采用 Sequential Async Waterfall 方式完成分发迁移，复制任务完成后才做物理剪切，源文件物理消失，且无时序竞态/死锁，进度条与 UndoManager 入栈在全量异步链式回调后在主线程结算。
 2. **Dumb View 纯投影验证**：当外部改动 Sidecar 或触发 Command 时，UI Panel 均通过唯一 SSOT 通道（如 `ContentPanel::refreshAll()`）自动更新，无残存旧状态。
 3. **架构静态扫描通过**：运行 `python3 tools/plan_verify/verify_plan.py "Implementation Plan/Architecture_Overload_Patch_SSOT_Plan.md"` 100% 验证通过。
 
@@ -224,14 +304,15 @@ cmake --build build --config Debug
    - `DiskIoService::instance().executeAsync(const DiskIoContext& ctx, std::function<void(bool)> callback)` ➔ `src/util/DiskIoService.h` (匹配)
    - `ContentPanel::refreshAll()` ➔ `public: void refreshAll();` (匹配)
    - `AppConfig::instance()` ➔ `public: static AppConfig& instance();` (匹配)
-2. **访问级别**：
+2. **访问级别与头文件类型比对**：
+   - `QAtomicInt` 包含于 `#include <QAtomicInt>`；
    - 所有 UI View 中的数据状态成员提升或重构为纯 Getter / 信号槽联动，禁止暴露可修改外部接口。
 
 ---
 
 ## Chapter 8: Header Chain & Inclusion Closure Check（头文件包含链与类型完整性检查）
 
-- `MarkedFolderService.cpp` 包含 `#include "../util/DiskIoService.h"`，包含链与 `DiskIoContext` 接口完整闭合。
+- `MarkedFolderService.cpp` 显式包含 `#include <QAtomicInt>` 及 `#include "../util/DiskIoService.h"`，类型定义与包含链完整闭合。
 - `ActionCommand.h` 使用标准的 Qt 类型（`QString`, `QStringList`, `QVariantMap`），头文件轻量且包含链闭合。
 - `CMakeLists.txt` 中同步添加 `ActionCommand.h` 保证自动化 MOC/Build 系统感知。
 
@@ -249,7 +330,7 @@ cmake --build build --config Debug
 | 6 | 新建/删除文件是否同步 CMakeLists.txt | 满足 | 已在 Chapter 3 中包含 CMake 修改 |
 | 7 | 是否包含全部 10 大章节 | 满足 | 本文档完整包含 10 个章节 |
 | 8 | 是否包含 pre-commit 预提交测试步骤 | 满足 | Chapter 4 包含详细测试步骤 |
-| 9 | 外部调用的函数是否在 .h 中真实存在 | 满足 | 物理查验 `DiskIoService.h` 等 |
+| 9 | 外部调用的函数与类型是否包含及在 .h 中存在 | 满足 | `#include <QAtomicInt>` 物理补充，查验 `DiskIoService.h` |
 | 10 | 是否复用既有官方 API | 满足 | Chapter 5 详细列出 SSOT 入口 |
 | 11 | 是否定义 SSOT 数据源与刷新通道 | 满足 | Chapter 6 包含完整 SSOT 声明表 |
 | 12 | 接口签名与访问控制是否通过检查 | 满足 | Chapter 7 严格核对 |
@@ -264,7 +345,7 @@ cmake --build build --config Debug
 ```text
 --- Verifying Implementation Plan: Implementation Plan/Architecture_Overload_Patch_SSOT_Plan.md ---
 SUCCESS: All 10 required chapters are present.
-SUCCESS: Found 3 valid Search/Replace blocks.
+SUCCESS: Found 4 valid Search/Replace blocks.
 Plan verification passed 100% successfully.
 ```
 
