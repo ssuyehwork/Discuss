@@ -158,7 +158,15 @@ void TabBarWidget::openInExistingTab(int tabIndex, const QString& path) {
 void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
     if (m_currentIndex < 0 || m_currentIndex >= m_tabs.size()) return;
 
-    m_tabs[m_currentIndex].splitState = state;
+    auto& currentTab = m_tabs[m_currentIndex];
+
+    // 🛡️ 核心防呆拦截：如果当前标签原本已经是包含多个窗格的合并标签，
+    // 而下游传过来的 state 窗格数量反而变少了或变为 false（通常是切换标签页时中间过渡态的脏数据），坚决拒绝接受本次降级篡改！
+    if (currentTab.splitState.isSplit && currentTab.splitState.panePaths.size() > 1 && !state.isSplit) {
+        return;
+    }
+
+    currentTab.splitState = state;
 
     if (state.isSplit && !state.panePaths.isEmpty()) {
         QStringList nameList;
@@ -197,18 +205,16 @@ void TabBarWidget::updateSplitTabTitle(const TabSplitState& state) {
             }
         }
         if (!nameList.isEmpty()) {
-            m_tabs[m_currentIndex].title = nameList.join(" | ");
+            currentTab.title = nameList.join(" | ");
         }
         int primIdx = qBound(0, state.primaryIndex, state.panePaths.size() - 1);
-        m_tabs[m_currentIndex].url = state.panePaths[primIdx];
+        currentTab.url = state.panePaths[primIdx];
     } else if (!state.panePaths.isEmpty()) {
-        m_tabs[m_currentIndex].title = cleanNameForTab(state.panePaths.first());
-        m_tabs[m_currentIndex].url = state.panePaths.first();
+        currentTab.title = cleanNameForTab(state.panePaths.first());
+        currentTab.url = state.panePaths.first();
     }
 
-    if (m_currentIndex < m_tabWidgets.size()) {
-        m_tabWidgets[m_currentIndex]->setTabTitle(m_tabs[m_currentIndex].title);
-    }
+    applyDiffUpdate();
     saveStateToConfig();
 }
 >>>>>>> REPLACE
