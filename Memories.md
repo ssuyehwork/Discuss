@@ -573,4 +573,18 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 2. **基于 Tab ID 的差量增量维护**：
    - 标签栏必须建立基于唯一 Tab ID 的差量更新机制：新开标签仅执行局部 `new` 与插入，关闭标签仅针对性移除目标控件，状态变更仅就地刷新属性（`setActive`、标题与图标），确保控件树长周期稳定。
 
+### 19.4 分屏标签页标题全量保持与增量更新契约 (Split Tab Title Preservation & Incremental Sync Contract)
+1. **分屏状态标题防覆盖铁律**：
+   - 当标签页处于分屏模式（`splitState.isSplit == true`）时，`updateCurrentTabTitle` 严禁使用单一活动窗格的目录名直接覆盖整个标签页标题；
+   - 必须优先更新 `splitState.panePaths` 中当前激活窗格的路径，并重新根据所有非空窗格路径重新拼装合并标题（格式如：`窗格1 | 窗格2`），确保未激活的副窗格名称在标签页被激活/切换/导航时 100% 绝对完好保留，严禁误删或抹除副窗格名称。
+2. **分屏路径拼接容错**：
+   - 在 `updateSplitTabTitle` 与 `updateCurrentTabTitle` 中，必须对初始化阶段或恢复过程中可能存在的空路径做过滤拦截，确保分屏标题始终格式化为干净且完整的 `窗格1 | 窗格2`，杜绝出现多余末尾 `|` 或未初始化占位缺陷。
+
+### 19.5 标签页级联菜单与“在标签页中打开”归一化架构契约 (Open in Tab Cascade Menu Normalization Contract)
+1. **右键“标签页”级联菜单统一构建工厂契约**：
+   - 全软件所有右键上下文菜单（包括 `ContentContextMenu`、`FavoritePanel`、`AddressBar`、`NavPanel` 等），针对文件夹项目的“标签页”级联子菜单构建（包含“在新标签页中打开”与“在标签页中打开”），**绝对禁止在各 UI 模块中手写重复的遍历与 Lambda 绑定**（严禁重复造轮子）；
+   - 必须统一通过工厂类 `ContextMenuFactory::buildTabCascadeMenu(QMenu* parentMenu, const QString& path, QWidget* contextWidget)` 进行归一化构造，确保全系统菜单结构、图标与响应逻辑 100% 对称一致。
+2. **`TabBarWidget::openInExistingTab` 标准服务接口契约**：
+   - 标签页组件必须提供统一的对外服务接口 `openInExistingTab(int tabIndex, const QString& path)`；
+   - 统一由该接口承载“切换至目标索引标签页 + 唤醒 `ContentPanel` 分栏追加（`splitPane`）”的完整生命周期，消除外部直接交叉调用的耦合。
 
