@@ -118,40 +118,26 @@
 
 ### 2.6 分栏布局初始化与尺寸计算规范 (PanelLayoutManager)
 - **`initLayout()` 单一调用收敛**: `PanelLayoutManager::initLayout()` 中，`updateDynamicMinimumSize()` **必须且只能**在 `QTimer::singleShot(0, ...)` 延迟回调函数内部调用唯一一次。
-- **严禁同步二次调用**: 严禁在 `initLayout()` 函数末尾同步调用 `updateDynamicMinimumSize()`。由于 `setMinimumWidth()` 会在被调用且当前窗口宽度小于新设最小值时立即撑大窗口，两次调用时机不同计算值不一致会导致应用每次启动时主窗口被莫名撑大。
+- **严禁同步二次调用**: 严禁在 `initLayout()` 函数末尾同步调用 `updateDynamicMinimumSize()`。由于 `setMinimumWidth()` 会在被调用且当前窗口宽度小于新设最小值时汽撑大窗口，两次调用时机不同计算值不一致会导致应用每次启动时主窗口被莫名撑大。
 - **独立场景不连带**: `resetSplitterLayout()`、`setPanelVisible()`、`toggleImmersiveMode()` 等各自独立场景中调用一次 `updateDynamicMinimumSize()` 为正常行为，保持独立性。
 
 ---
 
-## 3. UI 交互体验与渲染防抖规范
+## 16. QuarkMeta 标记目的地与搬运分发架构设计理念 (Marked Folders & Destination Transfer Architecture Philosophy)
 
-### 3.1 UI 异步加载与防闪烁规范
-- **原则**: 在内容面板（`ContentPanel`）进行异步数据扫描（如物理目录扫描、数据库分类查询）前，**禁止**先行调用 `m_model->clear()`。
-- **目的**: 避免在数据就绪前的空窗期内出现“白屏/黑屏”视觉抖动，保留旧数据直至新数据通过 `setRecords` 实现毫秒级原子替换。
-- **例外**: 当目标路径列表确定为空（如路径不存在或搜索重置）时，必须执行同步 `clear()` 以反馈真实状态。
-- **竞态保护**: 加载流程必须绑定 `m_loadRequestId`。在异步回调中，必须校验回调携带的 ID 是否与当前面板 ID 一致，否则丢弃结果以防止快速切换导致的数据串扰。
-
-### 3.2 缩略图平滑加载规范 (Plan-108)
-- **原则**: 针对图形文件（图像、SVG等），在异步加载缩略图期间，`data()` 接口必须返回空图标 (`QIcon()`)。
-- **目的**: 拦截 Delegate 的默认图标绘制逻辑，防止出现“系统图标 -> 缩略图”的二段式闪烁抖动。
-- **视觉反馈**: `ThumbnailDelegate` 必须通过检测空图标状态，在单元格区域绘制轻量的灰色圆角矩形 (`#3A3A3A`) 作为占位背景，确保从占位态到内容态的过渡平滑且不突兀。
-
-### 3.3 快速预览 (QuickLook) 规范 (Plan-109)
-- **拦截机制**: 必须采用“黑名单拦截+白名单准入”的双重防御机制。严禁预览文件夹、安装包 (.msi, .exe), 系统库 (.dll, .sys) 及各类压缩包 (.zip, .7z 等)。
-- **画质**: 预览标准图像 (jpg, png, webp 等) 时必须加载全分辨率原图，并全程开启 `SmoothPixmapTransform` 以消除锯齿。
-- **性能红线**: `renderImage` 在加载原图前必须检查文件物理大小。若超过 50MB，必须自动降级调用高清缩略图引擎以确保 UI 响应性能。
-- **样式**: 预览窗口内的滚动条样式必须严格遵循全局规范：宽度 10px、圆角 3px、背景透明、Handle 颜色对齐 `BorderColor` (#333333)。
-
-### 3.4 列视图（ColumnView）双击空白处交互与逻辑规范
-- **以“最后一列/当前视角”为锚点**: 在列视图（`ColumnView`）中，无论展开了多少列分栏，在任何列分栏的空白处或视图最右侧的背景留白区域双击左键，始终以最后一列（最右侧列）当前展示的文件夹数据为锚点执行回退上一级。
-- **父列高亮持续保留**: 退回上一级（即移除最右侧分栏列）后，上一级列中原先选中的文件夹节点必须**持续保持高亮选中状态**，方便用户无须重新查找即可再次点击进入。
-- **逐级精准回退与单列降级**: 每次双击空白处/背景留白处均以当前最后一列数据为基准向上一级逐级退回；当列视图仅剩一列（根列）时，继续双击空白处则自动降级触发全局 `NavigationService::instance().goUp()`。
+### 16.1 物理搬运归一化与右键【一键分发】选项契约
+1. **统一物理搬运通道**：
+   - 标记目的地的分发搬运（`MarkedFolderService::executeTransferToMarked`）绝对禁止自写 `copyRecursively` 等私有递归复制/删除逻辑；
+   - 必须统一路由至磁盘 I/O 服务层 `DiskIoService::executeAsync`，底层调用 `ShellHelper::copyOrMoveItems`，确保侧车 `.QuarkMeta.json` 元数据与 `disk_thumbs` 缩略图缓存随物理文件漫游，与剪切、拖放、右键“移动到...”的行为 100% 物理一致。
+2. **右键【移动到】新增【一键分发】契约**：
+   - 在右键上下文菜单 (`ContentContextMenu`) 的“移动到...”级联子菜单的最顶部，必须固定新增“一键分发 (Alt+V)”菜单项（使用 `Destination.svg` 矢量图标与 `#EEEEEE` 单色）；
+   - 点击后触发的接口必须严格与快捷键 `Alt+V` 一致：`MarkedFolderService::instance().executeTransferToMarked(sourcePaths)`。
+3. **拖拽遮罩目标名称明细展示契约**：
+   - 当拖拽项目至 `MetaPanel` 或 `FilterPanel` 触发遮罩显示时，除了顶部呈现“迁移到 N 个标记文件夹”主标题外，下方必须逐行列出所有当前已激活标记文件夹的具体名称（一个名称一行），提升视觉确凿性。
 
 ---
 
 ## 20. 智能文件夹规则拆分与颜色属性隔离规范 (Smart Folder Rule & Color Attribute Isolation Architecture)
-
-> 本章节整理自用户明确指示与架构研讨，作为智能文件夹规则类型扩展、颜色属性隔离及相关界面渲染的唯一真理源 (SSOT)。
 
 ### 20.1 规则类型名称与顺序规范
 智能文件夹（`SmartFolderDialog` / `SmartFolderRuleRow`）类型下拉框的显示名称与排列顺序必须严格保持如下 16 项统一规范：
@@ -176,7 +162,7 @@
 - **设计理念绝对隔离**: “颜色标记”（`Color`）与“图像颜色”（`AutoColor`）代表截然不同的设计理念：
   - **颜色标记**：指用户手动贴上的 9 种标记色标（存储与匹配 `color_hex` 数据列，使用 `Style::getColorPalette()` 真理源）；
   - **图像颜色**：指算法从图像自动提取的主色（存储与匹配 `auto_color` 数据列，包含色值与 `tolerance` 容差 slider）；
-- **全链路严禁混淆/兜底**: 在界面显示、JSON 存储、DAO SQL 查询构建 (`buildColorCondition` vs `buildAutoColorCondition`)、`FilterPanel` 筛选过滤映射 (`applySmartFolderRecord`) 的任何环节，**绝对禁止**相互混用、互相兜底或合并为同一个过滤项！
+- **全链路严禁混淆/兜底**: 在界面显示、JSON 序列化、SQL 条件拼接及 `FilterPanel` 筛选过滤映射的任何环节，**绝对禁止**相互混用、互相兜底或合并为同一个过滤项！
 
 ---
 
