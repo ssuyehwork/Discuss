@@ -15,13 +15,20 @@ QLayoutItem *FlowLayout::takeAt(int index) { return (index >= 0 && index < itemL
 Qt::Orientations FlowLayout::expandingDirections() const { return Qt::Orientations(); }
 bool FlowLayout::hasHeightForWidth() const { return true; }
 int FlowLayout::heightForWidth(int width) const { return doLayout(QRect(0, 0, width, 0), true); }
+int FlowLayout::minimumHeightForWidth(int width) const { return heightForWidth(width); }
 void FlowLayout::setGeometry(const QRect &rect) { QLayout::setGeometry(rect); doLayout(rect, false); }
 QSize FlowLayout::sizeHint() const { return minimumSize(); }
 QSize FlowLayout::minimumSize() const {
-    QSize size;
-    for (QLayoutItem *item : itemList) size = size.expandedTo(item->minimumSize());
-    size += QSize(contentsMargins().left() + contentsMargins().right(), contentsMargins().top() + contentsMargins().bottom());
-    return size;
+    int left, top, right, bottom;
+    getContentsMargins(&left, &top, &right, &bottom);
+    int width = 0;
+    if (QWidget* w = parentWidget()) {
+        width = w->width();
+    }
+    if (width <= 0) width = 388;
+
+    int h = heightForWidth(width);
+    return QSize(width, h);
 }
 int FlowLayout::doLayout(const QRect &rect, bool testOnly) const {
     int left, top, right, bottom;

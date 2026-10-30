@@ -27,11 +27,7 @@ PresetTagsDialog::PresetTagsDialog(int categoryId, QWidget* parent, bool isLibra
 
     initUi();
     loadTags();
-    populateTagPills();
-    installEventFilter(this);
 }
-
-PresetTagsDialog::~PresetTagsDialog() {}
 
 void PresetTagsDialog::initUi() {
     QVBoxLayout* mainL = new QVBoxLayout(m_contentArea);
@@ -52,17 +48,16 @@ void PresetTagsDialog::initUi() {
     tagLabel->setObjectName("PresetTagLabel");
     mainL->addWidget(tagLabel);
 
-    m_tagContainer = new QFrame(this);
-    m_tagContainer->setObjectName("PresetTagContainer");
-    m_tagContainer->setFrameShape(QFrame::StyledPanel);
-    m_tagContainer->setCursor(Qt::PointingHandCursor);
-    m_tagContainer->setMinimumHeight(42);
+    m_tagContainer = new TagPillContainer(this, TagTriggerSource::PresetTagsDialog);
+    connect(m_tagContainer, &TagPillContainer::tagsChanged, this, [this](const QStringList& tags) {
+        m_presetTags = tags;
+        adjustSize();
+    });
+    connect(m_tagContainer, &TagPillContainer::containerHeightChanged, this, [this]() {
+        adjustSize();
+    });
 
-    m_flowLayout = new FlowLayout(m_tagContainer, 8, 8, 8);
-    m_tagContainer->setLayout(m_flowLayout);
-    m_tagContainer->installEventFilter(this);
-
-    mainL->addWidget(m_tagContainer, 1);
+    mainL->addWidget(m_tagContainer);
 
     QHBoxLayout* bottomL = new QHBoxLayout();
     bottomL->setSpacing(10);
@@ -105,79 +100,8 @@ void PresetTagsDialog::loadTags() {
         }
     }
     m_folderNameEdit->setText(m_categoryName);
-}
-
-void PresetTagsDialog::populateTagPills() {
-    QLayoutItem* item;
-    while ((item = m_flowLayout->takeAt(0)) != nullptr) {
-        delete item->widget();
-        delete item;
-    }
-
-    for (const QString& tag : m_presetTags) {
-        TagPill* pill = new TagPill(tag, m_tagContainer);
-        connect(pill, &TagPill::deleteRequested, this, &PresetTagsDialog::onTagDeleted);
-        m_flowLayout->addWidget(pill);
-    }
-
-    recalculateAdaptiveHeight();
-}
-
-void PresetTagsDialog::onTagDeleted(const QString& tag) {
-    m_presetTags.removeAll(tag);
-    populateTagPills();
-}
-
-void PresetTagsDialog::recalculateAdaptiveHeight() {
-    m_flowLayout->activate();
-    int flowContentHeight = m_flowLayout->heightForWidth(m_tagContainer->width());
-    
-    int tagContainerHeight = qMax(42, flowContentHeight + 10);
-    m_tagContainer->setFixedHeight(tagContainerHeight);
-
-    layout()->activate();
-    int requiredTotalHeight = sizeHint().height();
-
-    setFixedHeight(requiredTotalHeight);
-}
-
-void PresetTagsDialog::onTagContainerClicked() {
-    if (m_selectorOverlay) {
-        m_selectorOverlay->raise();
-        m_selectorOverlay->activateWindow();
-        return;
-    }
-
-    // 显式声明来源为 PresetTagsDialog：浮层关闭时绝对不执行任何写盘动作
-    m_selectorOverlay = new TagSelectorOverlay(m_presetTags, window(), TagTriggerSource::PresetTagsDialog);
-    
-    QPoint globalPos = m_tagContainer->mapToGlobal(QPoint(0, m_tagContainer->height() + 4));
-    m_selectorOverlay->move(globalPos);
-    m_selectorOverlay->show();
-    m_selectorOverlay->raise();
-    m_selectorOverlay->activateWindow();
-
-    // 核心联通：点选标签时实时在 PresetTagsDialog 刷新胶囊 UI，纯内存零写盘
-    connect(m_selectorOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& selected) {
-        m_presetTags = selected;
-        populateTagPills();
-    });
-
-    connect(m_selectorOverlay, &TagSelectorOverlay::overlayClosed, this, [this]() {
-        m_selectorOverlay = nullptr;
-    });
-}
-
-void PresetTagsDialog::mousePressEvent(QMouseEvent* event) {
-    QDialog::mousePressEvent(event);
-}
-
-void PresetTagsDialog::mouseMoveEvent(QMouseEvent* event) {
-    QDialog::mouseMoveEvent(event);
-}
-
-void PresetTagsDialog::mouseReleaseEvent(QMouseEvent* event) {
-    QDialog::mouseReleaseEvent(event);
+    m_tagContainer->setTags(m_presetTags);
+    adjustSize();
 }
 
 void PresetTagsDialog::onSaveClicked() {
@@ -207,29 +131,6 @@ void PresetTagsDialog::onSaveClicked() {
 void PresetTagsDialog::onCancelClicked() {
     // 点击取消：纯内存放弃本次全部改动，绝不触碰任何数据库和文件
     reject();
-}
-
-bool PresetTagsDialog::eventFilter(QObject* obj, QEvent* event) {
-    if ((obj == m_tagContainer || (m_tagContainer && m_tagContainer->isAncestorOf(qobject_cast<QWidget*>(obj)))) &&
-        (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease)) {
-        
-        QWidget* targetWidget = qobject_cast<QWidget*>(obj);
-        while (targetWidget && targetWidget != m_tagContainer) {
-            if (qobject_cast<TagPill*>(targetWidget)) {
-                return FramelessDialog::eventFilter(obj, event);
-            }
-            targetWidget = targetWidget->parentWidget();
-        }
-
-        QMouseEvent* me = static_cast<QMouseEvent*>(event);
-        if (me->button() == Qt::LeftButton) {
-            if (event->type() == QEvent::MouseButtonRelease) {
-                onTagContainerClicked();
-            }
-            return true;
-        }
-    }
-    return FramelessDialog::eventFilter(obj, event);
 }
 
 } // namespace QuarkMeta

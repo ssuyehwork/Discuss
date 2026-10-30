@@ -21,7 +21,8 @@ namespace QuarkMeta {
  */
 enum class TagTriggerSource {
     MetaPanel,         // 来自元数据属性面板：失焦/关闭时自动执行单次原子落盘
-    PresetTagsDialog   // 来自预设标签弹窗：仅响应内存UI，落盘由外部对话框的“保存”按钮接管
+    PresetTagsDialog,  // 来自预设标签弹窗：仅响应内存UI，落盘由外部对话框的“保存”按钮接管
+    SmartFolderDialog  // 来自智能文件夹规则配置：仅响应内存UI，关闭时不写盘
 };
 
 class TagSelectorOverlay : public QFrame {

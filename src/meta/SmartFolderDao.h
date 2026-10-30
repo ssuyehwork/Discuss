@@ -27,6 +27,7 @@ struct SmartFolderRule {
     SmartRuleType type = SmartRuleType::Rating;
     SmartRuleOperator op = SmartRuleOperator::GreaterOrEqual;
     QString value;
+    QStringList tags;
 
     QJsonObject toJson() const;
     static SmartFolderRule fromJson(const QJsonObject& obj);

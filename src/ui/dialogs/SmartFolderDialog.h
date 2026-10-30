@@ -2,7 +2,7 @@
 
 #include "FramelessDialog.h"
 #include "../../meta/SmartFolderDao.h"
-#include "../TagSelectorOverlay.h"
+#include "SmartFolderRuleRow.h"
 #include <QLineEdit>
 #include <QComboBox>
 #include <QPushButton>
@@ -11,43 +11,9 @@
 #include <QLabel>
 #include <QPointer>
 #include <QEvent>
+#include <QScrollArea>
 
 namespace QuarkMeta {
-
-class SmartFolderRuleRow : public QWidget {
-    Q_OBJECT
-public:
-    explicit SmartFolderRuleRow(QWidget* parent = nullptr);
-    explicit SmartFolderRuleRow(const SmartFolderRule& rule, QWidget* parent = nullptr);
-    ~SmartFolderRuleRow() override = default;
-
-    SmartFolderRule getRule() const;
-    void setRule(const SmartFolderRule& rule);
-
-signals:
-    void removeRequested(SmartFolderRuleRow* row);
-
-private slots:
-    void onTypeChanged(int index);
-
-private:
-    void setupUi();
-    void updateOperatorAndValueControls();
-
-protected:
-    bool eventFilter(QObject* obj, QEvent* event) override;
-
-private:
-    QComboBox* m_typeCombo{nullptr};
-    QComboBox* m_opCombo{nullptr};
-    QLineEdit* m_valueEdit{nullptr};
-    QComboBox* m_valueCombo{nullptr};
-    QPushButton* m_btnDelete{nullptr};
-    QAction* m_tagAction{nullptr};
-    QPointer<TagSelectorOverlay> m_tagOverlay;
-
-    void openTagSelector();
-};
 
 class SmartFolderDialog : public FramelessDialog {
     Q_OBJECT
@@ -72,10 +38,13 @@ private:
     QComboBox* m_matchModeCombo{nullptr};
     QVBoxLayout* m_rulesLayout{nullptr};
     QList<SmartFolderRuleRow*> m_ruleRows;
+    QScrollArea* m_scrollArea{nullptr};
 
     QPushButton* m_btnAddRule{nullptr};
     QPushButton* m_btnCancel{nullptr};
     QPushButton* m_btnSave{nullptr};
+
+    void adjustAdaptiveSize();
 };
 
 } // namespace QuarkMeta

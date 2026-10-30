@@ -16,7 +16,15 @@ QJsonObject SmartFolderRule::toJson() const {
     QJsonObject obj;
     obj["type"] = static_cast<int>(type);
     obj["op"] = static_cast<int>(op);
-    obj["value"] = value;
+    if (type == SmartRuleType::Tag) {
+        QJsonArray tagArr;
+        for (const QString& t : tags) {
+            tagArr.append(t);
+        }
+        obj["tags"] = tagArr;
+    } else {
+        obj["value"] = value;
+    }
     return obj;
 }
 
@@ -24,7 +32,23 @@ SmartFolderRule SmartFolderRule::fromJson(const QJsonObject& obj) {
     SmartFolderRule rule;
     rule.type = static_cast<SmartRuleType>(obj.value("type").toInt(0));
     rule.op = static_cast<SmartRuleOperator>(obj.value("op").toInt(0));
-    rule.value = obj.value("value").toString();
+    if (obj.contains("tags") && obj.value("tags").isArray()) {
+        QJsonArray tagArr = obj.value("tags").toArray();
+        for (const auto& val : tagArr) {
+            QString t = val.toString().trimmed();
+            if (!t.isEmpty() && !rule.tags.contains(t)) {
+                rule.tags.append(t);
+            }
+        }
+    } else {
+        rule.value = obj.value("value").toString();
+        if (rule.type == SmartRuleType::Tag) {
+            QString trimmed = rule.value.trimmed();
+            if (!trimmed.isEmpty()) {
+                rule.tags.append(trimmed);
+            }
+        }
+    }
     return rule;
 }
 
@@ -289,15 +313,34 @@ QString SmartFolderDao::buildWhereClause(const SmartFolderRecord& rec) {
             }
         }
         else if (rule.type == SmartRuleType::Tag) {
-            // 利用 file_tags 多对多关联表实现秒级查询 (以 file_id 解耦匹配)
-            QString tagVal = rule.value.trimmed().replace("'", "''");
-            if (!tagVal.isEmpty()) {
+            QStringList cleanTags;
+            for (const QString& t : rule.tags) {
+                QString trimmed = t.trimmed().replace("'", "''");
+                if (!trimmed.isEmpty() && !cleanTags.contains(trimmed)) {
+                    cleanTags << trimmed;
+                }
+            }
+            if (cleanTags.isEmpty()) {
+                QString legacyVal = rule.value.trimmed().replace("'", "''");
+                if (!legacyVal.isEmpty()) {
+                    cleanTags << legacyVal;
+                }
+            }
+
+            if (!cleanTags.isEmpty()) {
+                QStringList quotedTags;
+                for (const QString& ct : cleanTags) {
+                    quotedTags << QString("'%1'").arg(ct);
+                }
+                QString tagListStr = quotedTags.join(", ");
+
                 if (rule.op == SmartRuleOperator::NotContains) {
-                    whereConditions << QString("file_id NOT IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
-                                       .arg(tagVal);
+                    whereConditions << QString("file_id NOT IN (SELECT file_id FROM file_tags WHERE tag_name IN (%1))")
+                                       .arg(tagListStr);
                 } else {
-                    whereConditions << QString("file_id IN (SELECT file_id FROM file_tags WHERE tag_name = '%1')")
-                                       .arg(tagVal);
+                    whereConditions << QString("file_id IN (SELECT file_id FROM file_tags WHERE tag_name IN (%1) GROUP BY file_id HAVING COUNT(DISTINCT tag_name) = %2)")
+                                       .arg(tagListStr)
+                                       .arg(cleanTags.size());
                 }
             }
         }

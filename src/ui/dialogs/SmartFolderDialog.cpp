@@ -2,209 +2,12 @@
 #include "../UiHelper.h"
 #include "AppConfig.h"
 #include <QScrollArea>
-#include <QPainter>
-#include <QPixmap>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <QGuiApplication>
+#include <QScreen>
 
 namespace QuarkMeta {
-
-// --- SmartFolderRuleRow Implementation ---
-
-SmartFolderRuleRow::SmartFolderRuleRow(QWidget* parent) : QWidget(parent) {
-    setupUi();
-}
-
-SmartFolderRuleRow::SmartFolderRuleRow(const SmartFolderRule& rule, QWidget* parent) : QWidget(parent) {
-    setupUi();
-    setRule(rule);
-}
-
-void SmartFolderRuleRow::openTagSelector() {
-    if (m_tagOverlay) {
-        m_tagOverlay->close();
-        return;
-    }
-
-    QWidget* topWidget = window();
-    QString currentTag = m_valueEdit->text().trimmed();
-    QStringList initTags;
-    if (!currentTag.isEmpty()) {
-        initTags << currentTag;
-    }
-
-    m_tagOverlay = new TagSelectorOverlay(initTags, topWidget, TagTriggerSource::PresetTagsDialog);
-
-    connect(m_tagOverlay, &TagSelectorOverlay::overlayClosed, this, [this]() {
-        m_tagOverlay = nullptr;
-    });
-
-    // 计算并在 m_valueEdit 正下方定位 TagSelectorOverlay 弹出框
-    QPoint globalPos = m_valueEdit->mapToGlobal(QPoint(0, m_valueEdit->height() + 2));
-    m_tagOverlay->move(topWidget ? topWidget->mapFromGlobal(globalPos) : globalPos);
-
-    connect(m_tagOverlay, &TagSelectorOverlay::selectionChanged, this, [this](const QStringList& selectedTags) {
-        if (!selectedTags.isEmpty()) {
-            m_valueEdit->setText(selectedTags.last());
-        }
-    });
-
-    m_tagOverlay->show();
-}
-
-bool SmartFolderRuleRow::eventFilter(QObject* obj, QEvent* event) {
-    if (obj == m_valueEdit && static_cast<SmartRuleType>(m_typeCombo->currentData().toInt()) == SmartRuleType::Tag) {
-        if (event->type() == QEvent::MouseButtonPress) {
-            if (!m_tagOverlay) {
-                openTagSelector();
-            }
-            return true;
-        }
-    }
-    return QWidget::eventFilter(obj, event);
-}
-
-void SmartFolderRuleRow::setupUi() {
-    QHBoxLayout* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(0, 2, 0, 2);
-    layout->setSpacing(8);
-
-    m_typeCombo = new QComboBox(this);
-    m_typeCombo->addItem("星级", static_cast<int>(SmartRuleType::Rating));
-    m_typeCombo->addItem("颜色", static_cast<int>(SmartRuleType::Color));
-    m_typeCombo->addItem("标签", static_cast<int>(SmartRuleType::Tag));
-    m_typeCombo->addItem("扩展名/类型", static_cast<int>(SmartRuleType::Extension));
-    m_typeCombo->addItem("关键字", static_cast<int>(SmartRuleType::Keyword));
-    m_typeCombo->setFixedWidth(110);
-
-    m_opCombo = new QComboBox(this);
-    m_opCombo->setFixedWidth(110);
-
-    m_valueEdit = new QLineEdit(this);
-    m_valueEdit->installEventFilter(this);
-
-    m_valueCombo = new QComboBox(this);
-    m_valueCombo->hide();
-
-    m_btnDelete = new QPushButton(this);
-    m_btnDelete->setFixedSize(28, 28);
-    m_btnDelete->setCursor(Qt::PointingHandCursor);
-    m_btnDelete->setIcon(UiHelper::getIcon("close", QColor("#888888"), 14));
-
-    layout->addWidget(m_typeCombo);
-    layout->addWidget(m_opCombo);
-    layout->addWidget(m_valueEdit, 1);
-    layout->addWidget(m_valueCombo, 1);
-    layout->addWidget(m_btnDelete);
-
-    connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SmartFolderRuleRow::onTypeChanged);
-    connect(m_btnDelete, &QPushButton::clicked, this, [this]() {
-        emit removeRequested(this);
-    });
-
-    onTypeChanged(0);
-}
-
-void SmartFolderRuleRow::onTypeChanged(int index) {
-    Q_UNUSED(index);
-    SmartRuleType type = static_cast<SmartRuleType>(m_typeCombo->currentData().toInt());
-
-    m_opCombo->clear();
-    m_valueEdit->show();
-    m_valueCombo->hide();
-
-    if (type != SmartRuleType::Tag && m_tagAction) {
-        m_valueEdit->removeAction(m_tagAction);
-        m_tagAction = nullptr;
-    }
-
-    switch (type) {
-    case SmartRuleType::Rating:
-        m_opCombo->addItem("大于等于", static_cast<int>(SmartRuleOperator::GreaterOrEqual));
-        m_opCombo->addItem("等于", static_cast<int>(SmartRuleOperator::Equals));
-        m_opCombo->addItem("小于等于", static_cast<int>(SmartRuleOperator::LessOrEqual));
-
-        m_valueEdit->hide();
-        m_valueCombo->clear();
-        {
-            int starSize = 14;
-            int spacing = 2;
-            int maxW = 5 * starSize + 4 * spacing;
-            for (int r = 1; r <= 5; ++r) {
-                QPixmap pix(maxW, starSize);
-                pix.fill(Qt::transparent);
-                QPainter painter(&pix);
-                QPixmap starPix = UiHelper::getIcon("star_filled", QColor("#CCCCCC"), starSize).pixmap(starSize, starSize);
-                for (int i = 0; i < r; ++i) {
-                    painter.drawPixmap(i * (starSize + spacing), 0, starPix);
-                }
-                painter.end();
-                m_valueCombo->addItem(QIcon(pix), "", QString::number(r));
-            }
-        }
-        m_valueCombo->setIconSize(QSize(14 * 5 + 2 * 4, 14));
-        m_valueCombo->show();
-        break;
-
-    case SmartRuleType::Color:
-        m_opCombo->addItem("等于", static_cast<int>(SmartRuleOperator::Equals));
-        m_valueEdit->setPlaceholderText("选择或输入颜色 hex (如 #FF0000)");
-        break;
-
-    case SmartRuleType::Tag:
-        m_opCombo->addItem("包含", static_cast<int>(SmartRuleOperator::Contains));
-        m_opCombo->addItem("不包含", static_cast<int>(SmartRuleOperator::NotContains));
-        m_valueEdit->setPlaceholderText("点击选择或输入标签名称");
-        if (!m_tagAction) {
-            m_tagAction = m_valueEdit->addAction(UiHelper::getIcon("tag_filled", QColor("#9B59B6"), 14), QLineEdit::TrailingPosition);
-            connect(m_tagAction, &QAction::triggered, this, &SmartFolderRuleRow::openTagSelector);
-        }
-        break;
-
-    case SmartRuleType::Extension:
-        m_opCombo->addItem("等于", static_cast<int>(SmartRuleOperator::Equals));
-        m_valueEdit->setPlaceholderText("输入文件扩展名 (如 png, psd)");
-        break;
-
-    case SmartRuleType::Keyword:
-        m_opCombo->addItem("包含", static_cast<int>(SmartRuleOperator::Contains));
-        m_opCombo->addItem("不包含", static_cast<int>(SmartRuleOperator::NotContains));
-        m_valueEdit->setPlaceholderText("输入关键字");
-        break;
-    }
-}
-
-SmartFolderRule SmartFolderRuleRow::getRule() const {
-    SmartFolderRule rule;
-    rule.type = static_cast<SmartRuleType>(m_typeCombo->currentData().toInt());
-    rule.op = static_cast<SmartRuleOperator>(m_opCombo->currentData().toInt());
-
-    if (m_valueCombo->isVisible()) {
-        rule.value = m_valueCombo->currentData().toString();
-    } else {
-        rule.value = m_valueEdit->text().trimmed();
-    }
-    return rule;
-}
-
-void SmartFolderRuleRow::setRule(const SmartFolderRule& rule) {
-    int typeIdx = m_typeCombo->findData(static_cast<int>(rule.type));
-    if (typeIdx >= 0) {
-        m_typeCombo->setCurrentIndex(typeIdx);
-    }
-
-    int opIdx = m_opCombo->findData(static_cast<int>(rule.op));
-    if (opIdx >= 0) {
-        m_opCombo->setCurrentIndex(opIdx);
-    }
-
-    if (m_valueCombo->isVisible()) {
-        int valIdx = m_valueCombo->findData(rule.value);
-        if (valIdx >= 0) m_valueCombo->setCurrentIndex(valIdx);
-    } else {
-        m_valueEdit->setText(rule.value);
-    }
-}
 
 // --- SmartFolderDialog Implementation ---
 
@@ -262,19 +65,19 @@ void SmartFolderDialog::setupUi() {
     bodyLayout->addWidget(line);
 
     // 规则列表区域
-    QScrollArea* scrollArea = new QScrollArea(bodyWidget);
-    scrollArea->setObjectName("SmartFolderScrollArea");
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame);
+    m_scrollArea = new QScrollArea(bodyWidget);
+    m_scrollArea->setObjectName("SmartFolderScrollArea");
+    m_scrollArea->setWidgetResizable(true);
+    m_scrollArea->setFrameShape(QFrame::NoFrame);
 
-    QWidget* scrollContent = new QWidget(scrollArea);
+    QWidget* scrollContent = new QWidget(m_scrollArea);
     m_rulesLayout = new QVBoxLayout(scrollContent);
     m_rulesLayout->setContentsMargins(0, 0, 0, 0);
     m_rulesLayout->setSpacing(6);
     m_rulesLayout->addStretch(1);
 
-    scrollArea->setWidget(scrollContent);
-    bodyLayout->addWidget(scrollArea, 1);
+    m_scrollArea->setWidget(scrollContent);
+    bodyLayout->addWidget(m_scrollArea, 1);
 
     // 添加规则按钮
     m_btnAddRule = new QPushButton("+ 添加新规则", bodyWidget);
@@ -332,20 +135,48 @@ void SmartFolderDialog::setupUi() {
         for (const auto& rule : m_record.rules) {
             SmartFolderRuleRow* row = new SmartFolderRuleRow(rule, scrollContent);
             connect(row, &SmartFolderRuleRow::removeRequested, this, &SmartFolderDialog::onRemoveRule);
+            connect(row, &SmartFolderRuleRow::rowHeightChanged, this, &SmartFolderDialog::adjustAdaptiveSize);
             m_rulesLayout->insertWidget(m_rulesLayout->count() - 1, row);
             m_ruleRows.append(row);
         }
     } else {
         onAddRule();
     }
+
+    adjustAdaptiveSize();
+}
+
+void SmartFolderDialog::adjustAdaptiveSize() {
+    layout()->activate();
+
+    int baseNonRulesH = 420 - 150; // 标题栏、顶部名称/模式、分割线、添加规则按钮、底部按钮与边距
+    int rulesContentH = 0;
+    for (SmartFolderRuleRow* row : m_ruleRows) {
+        if (row) {
+            rulesContentH += row->sizeHint().height() + m_rulesLayout->spacing();
+        }
+    }
+
+    int totalDesiredH = baseNonRulesH + qMax(100, rulesContentH);
+
+    QScreen* screen = QGuiApplication::screenAt(QCursor::pos());
+    if (!screen) screen = QGuiApplication::primaryScreen();
+    int maxScreenH = screen ? static_cast<int>(screen->availableGeometry().height() * 0.8) : 800;
+
+    int finalH = qMin(totalDesiredH, maxScreenH);
+    finalH = qMax(420, finalH);
+
+    resize(520, finalH);
 }
 
 void SmartFolderDialog::onAddRule() {
     QWidget* scrollContent = m_rulesLayout->parentWidget();
     SmartFolderRuleRow* row = new SmartFolderRuleRow(scrollContent);
     connect(row, &SmartFolderRuleRow::removeRequested, this, &SmartFolderDialog::onRemoveRule);
+    connect(row, &SmartFolderRuleRow::rowHeightChanged, this, &SmartFolderDialog::adjustAdaptiveSize);
     m_rulesLayout->insertWidget(m_rulesLayout->count() - 1, row);
     m_ruleRows.append(row);
+    adjustAdaptiveSize();
 }
 
 void SmartFolderDialog::onRemoveRule(SmartFolderRuleRow* row) {
@@ -353,6 +184,7 @@ void SmartFolderDialog::onRemoveRule(SmartFolderRuleRow* row) {
     m_ruleRows.removeOne(row);
     m_rulesLayout->removeWidget(row);
     row->deleteLater();
+    adjustAdaptiveSize();
 }
 
 void SmartFolderDialog::onSaveAndAccept() {

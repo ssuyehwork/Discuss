@@ -366,6 +366,10 @@ set(SOURCES
     src/ui/dialogs/CacheLocationDialog.cpp
     src/ui/dialogs/CreateFolderWithItemsDialog.h
     src/ui/dialogs/CreateFolderWithItemsDialog.cpp
+    src/ui/TagPillContainer.h
+    src/ui/TagPillContainer.cpp
+    src/ui/dialogs/SmartFolderRuleRow.h
+    src/ui/dialogs/SmartFolderRuleRow.cpp
     src/ui/dialogs/SmartFolderDialog.h
     src/ui/dialogs/SmartFolderDialog.cpp
     src/ui/dialogs/FramelessColorPicker.h
