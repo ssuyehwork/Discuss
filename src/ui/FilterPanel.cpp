@@ -891,21 +891,31 @@ void FilterPanel::updateHeaderStatus() {
 }
 
 void FilterPanel::showDragOverlay(int activeCount) {
+    Q_UNUSED(activeCount);
     if (!m_dragOverlayWidget) {
         m_dragOverlayWidget = new QWidget(this);
         m_dragOverlayWidget->setObjectName("DragOverlayWidget");
         m_dragOverlayWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
 
         QVBoxLayout* layout = new QVBoxLayout(m_dragOverlayWidget);
-        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setContentsMargins(10, 10, 10, 10);
         m_dragOverlayLabel = new QLabel(m_dragOverlayWidget);
         m_dragOverlayLabel->setAlignment(Qt::AlignCenter);
-        m_dragOverlayLabel->setStyleSheet("color: #FFFFFF; font-size: 14px; font-weight: bold;");
+        m_dragOverlayLabel->setStyleSheet("color: #FFFFFF; font-size: 13px; font-weight: bold; line-height: 1.4;");
         layout->addWidget(m_dragOverlayLabel);
     }
 
-    if (activeCount > 0) {
-        m_dragOverlayLabel->setText(QString("迁移到 %1 个标记文件夹").arg(activeCount));
+    auto activeFolders = MarkedFolderService::instance().getActiveMarked();
+    if (!activeFolders.isEmpty()) {
+        QStringList lines;
+        lines << QString("迁移到 %1 个标记文件夹").arg(activeFolders.size());
+        lines << ""; // 空行打散间距
+        for (const auto& folderPath : activeFolders) {
+            QString name = QFileInfo(folderPath).fileName();
+            if (name.isEmpty()) name = folderPath;
+            lines << name;
+        }
+        m_dragOverlayLabel->setText(lines.join("\n"));
     } else {
         m_dragOverlayLabel->setText("尚未标记目的地");
     }
@@ -1023,6 +1033,8 @@ void FilterPanel::applySmartFolderRecord(const SmartFolderRecord& record) {
             if (ok) st.ratings.append(r);
         } else if (rule.type == SmartRuleType::Color) {
             if (!rule.value.isEmpty()) st.manualColors.append(rule.value);
+        } else if (rule.type == SmartRuleType::AutoColor) {
+            if (!rule.value.isEmpty()) st.colors.append(rule.value);
         } else if (rule.type == SmartRuleType::Extension) {
             if (!rule.value.isEmpty()) st.types.append(rule.value);
         } else if (rule.type == SmartRuleType::Name) {

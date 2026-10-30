@@ -334,6 +334,13 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 QMenu* moveMenu = menu.addMenu(UiHelper::getIcon("Export-1.svg", QColor("#EEEEEE"), 18), "移动到");
                 UiHelper::applyMenuStyle(moveMenu);
 
+                QAction* actDistribute = moveMenu->addAction(UiHelper::getIcon("Destination.svg", QColor("#EEEEEE"), 16), "一键分发 (Alt+V)");
+                connect(actDistribute, &QAction::triggered, this, [this]() {
+                    QStringList selectedPaths = m_panel->getSelectedPaths();
+                    MarkedFolderService::instance().executeTransferToMarked(selectedPaths);
+                });
+                moveMenu->addSeparator();
+
                 auto performMoveTo = [this](const QString& targetDir) {
                     QStringList selectedPaths = m_panel->getSelectedPaths();
                     if (selectedPaths.isEmpty()) return;
