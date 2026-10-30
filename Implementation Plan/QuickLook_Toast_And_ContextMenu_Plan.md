@@ -3,7 +3,7 @@
 ## 1. 方案概述 (Overview)
 本方案旨在为快速预览窗口（`QuickLookWindow`）补充星级与颜色标记变更时的 `ToolTipOverlay` Toast 气泡提示，并对齐主界面补全 QuickLook 右键上下文菜单缺失的三大核心功能项：
 1. **Toast 提示集成与坐标对齐**：当用户在 QuickLook 界面设置星级（`1~5`）或颜色（`Alt+1~9` / 颜色选择栏）时，通过 `ToolTipOverlay::showToast` 弹出 Toast 提示，且坐标严格锁定在 `QuickLookWindow` 水平居中、顶部下方 10px 处；
-2. **右键菜单功能补齐**：在 `QuickLookWindow` 右键菜单中植入 `ColorStripPicker` 颜色标记选择栏、“置顶/取消置顶”动作（`buildPinToggleAction`）、以及“添加至‘库’/从‘库’中移除”动作（`buildLibraryAction`），并同步将“打开方式”归一化为 `buildOpenWithMenu`。
+2. **右键菜单功能补齐**：在 `QuickLookWindow` 右键菜单中植入 `ColorStripPicker` 颜色标记选择栏、“置顶/取消置顶”动作（`buildPinToggleAction`）、以及“添加至‘库’/从‘库’中移除”动作（`buildLibraryAction`）。
 
 ---
 
@@ -51,10 +51,9 @@ ToolTipOverlay::instance()->showToast(
 
 ### 5.2 右键菜单项扩展
 在 `QuickLookWindow::showContextMenu` 中：
-1. **打开方式归一化**：通过 `ContextMenuFactory::buildOpenWithMenu` 生成完整级联菜单；
-2. **颜色选择栏**：读取当前文件 `manualColor` 元数据，实例化 `ColorStripPicker` 并通过 `QWidgetAction` 添加至菜单；
-3. **窗口置顶**：通过 `ContextMenuFactory::buildPinToggleAction` 结合 `FramelessWindowHelper::isAlwaysOnTop` 与 `FramelessWindowHelper::setAlwaysOnTop` 切换；
-4. **添加至“库”**：通过 `LibraryService::instance().buildLibraryAction` 动态构建。
+1. **颜色选择栏**：读取当前文件 `manualColor` 元数据，实例化 `ColorStripPicker` 并通过 `QWidgetAction` 添加至菜单；
+2. **窗口置顶**：通过 `ContextMenuFactory::buildPinToggleAction` 结合 `FramelessWindowHelper::isAlwaysOnTop` 与 `FramelessWindowHelper::setAlwaysOnTop` 切换；
+3. **添加至“库”**：通过 `LibraryService::instance().buildLibraryAction` 动态构建。
 
 ---
 
@@ -151,7 +150,7 @@ ToolTipOverlay::instance()->showToast(
 
 ### Block 3: `src/ui/QuickLookWindow.cpp` (右键菜单构造)
 <<<<<<< SEARCH
-    QAction* actOpenDefault = menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "打开方式");
+    ContextMenuFactory::buildOpenWithMenu(&menu, m_currentPath, this);
     ContextMenuFactory::buildShowInExplorerAction(&menu, m_currentPath, this);
     menu.addSeparator();
 
@@ -186,22 +185,6 @@ ToolTipOverlay::instance()->showToast(
     menu.addSeparator();
 
     QAction* actCopy = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "复制");
->>>>>>> REPLACE
-
----
-
-### Block 4: `src/ui/QuickLookWindow.cpp` (清理 actOpenDefault 触发响应)
-<<<<<<< SEARCH
-    } else if (selected == actFit) {
-        m_graphicsView->fitImage();
-    } else if (selected == actOpenDefault) {
-        HistoryService::instance().recordFileAccess(m_currentPath);
-        QDesktopServices::openUrl(QUrl::fromLocalFile(m_currentPath));
-    } else if (selected == actCopy) {
-=======
-    } else if (selected == actFit) {
-        m_graphicsView->fitImage();
-    } else if (selected == actCopy) {
 >>>>>>> REPLACE
 
 ---
