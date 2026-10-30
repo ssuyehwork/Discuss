@@ -74,6 +74,8 @@
    全应用**严禁使用 QWidget 原生 `setToolTip(...)` 硬编码悬浮提示**，悬浮提示只可使用统一的 `ToolTipOverlay` 控件（结合 `m_hoverFilter` 事件过滤器）实现感知与展示，以确保主题视觉一致性与平滑交互体验。
 8. **“在新标签页中打开”图标矢量键规范契约 (“Open in New Tab” Vector Icon Specification Contract)**：
    全软件所有右键上下文菜单（包括“标记”面板 `MarkedPanel`、库面板 `LibraryPanel`、收藏夹 `FavoritePanel` 等），针对“在新标签页中打开”菜单项，其矢量图标必须统一绑定且仅可使用 **`Folder-add`**（严禁使用裸 `add` 或 `plus` 等泛化图标），确保图标语义精准对齐新建 Tab/文件夹卡片，且图标颜色无条件严格遵循 `#EEEEEE` 中性单色红线。
+9. **星级表达与真理源契约 (Rating Display SSOT Contract)**：
+   全软件所有涉及星级评级的 UI 展示、下拉选择框、筛选菜单与规则编辑器（包括但不限于 FilterPanel、SmartFolderDialog 智能文件夹规则配置、属性面板 MetaPanel 等），绝对禁止使用“1星”、“2星”等阿拉伯数字与文字组合，同时也严格遵守“严禁使用 Unicode 符号（如 ★）替代图标”的红线！必须统一使用 SVG 矢量图标（`star_filled`）动态绘制 1~5 颗星的 Pixmap/QIcon 进行渲染展示，保持全软件矢量化与图形 SSOT 通道 100% 物理一致。
 
 ---
 
