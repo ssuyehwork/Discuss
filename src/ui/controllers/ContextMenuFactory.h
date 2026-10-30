@@ -48,7 +48,7 @@ public:
      */
     static QAction* buildExtractContentAction(QMenu* menu, const QString& path, QObject* receiver = nullptr);
 
-    static QAction* buildShowInExplorerAction(QMenu* menu, const QString& path, QObject* receiver = nullptr);
+    static QAction* buildShowInExplorerAction(QMenu* menu, const QString& path, bool isBlankSpace = false, QObject* receiver = nullptr);
     static QAction* buildCopyPathAction(QMenu* menu, const QStringList& paths, QObject* receiver = nullptr);
     static QAction* buildCopyNameAction(QMenu* menu, const QStringList& paths, QObject* receiver = nullptr);
 

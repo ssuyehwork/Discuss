@@ -122,6 +122,16 @@ void ShellHelper::showProperties(const QString& path) {
 #endif
 }
 
+void ShellHelper::openDirectoryInExplorer(const QString& dirPath) {
+#ifdef Q_OS_WIN
+    QStringList args;
+    args << QDir::toNativeSeparators(dirPath);
+    QProcess::startDetached("explorer", args);
+#else
+    Q_UNUSED(dirPath);
+#endif
+}
+
 QList<ShellHelper::AssocAppInfo> ShellHelper::getAssociatedApps(const QString& filePath) {
     QList<AssocAppInfo> result;
 #ifdef Q_OS_WIN

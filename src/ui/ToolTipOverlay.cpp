@@ -1,4 +1,5 @@
 #include "ToolTipOverlay.h"
+#include "UiHelper.h"
 
 #include <QTimer>
 
@@ -70,6 +71,71 @@ void ToolTipOverlay::hideOverlay() {
     m_showDelayTimer.stop();
     m_hideTimer.stop();
     hide();
+}
+
+void ToolTipOverlay::showColorToast(const QString& colorHex, QWidget* targetWidget) {
+    if (thread() != QThread::currentThread()) {
+        QMetaObject::invokeMethod(this, [this, colorHex, targetWidget]() {
+            showColorToast(colorHex, targetWidget);
+        });
+        return;
+    }
+
+    QPixmap colorPix(16, 16);
+    colorPix.fill(Qt::transparent);
+
+    if (colorHex.isEmpty() || colorHex == "transparent" || colorHex == "none") {
+        colorPix = UiHelper::getPixmap("no_color", QSize(16, 16), QColor("#AAAAAA"));
+    } else {
+        QPainter painter(&colorPix);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(Qt::NoPen);
+        QColor drawColor(colorHex);
+        if (!drawColor.isValid()) {
+            drawColor = QColor("#2ecc71");
+        }
+        painter.setBrush(drawColor);
+        painter.drawEllipse(0, 0, 16, 16);
+    }
+
+    m_doc.addResource(QTextDocument::ImageResource, QUrl("color_dot.png"), colorPix);
+
+    QString html = "<div style='line-height:16px; text-align:center;'>"
+                   "<img src='color_dot.png' style='vertical-align:middle;' />"
+                   "</div>";
+
+    showToast(html, 1500, QColor("#444444"), targetWidget);
+}
+
+void ToolTipOverlay::showRatingToast(int rating, QWidget* targetWidget) {
+    if (thread() != QThread::currentThread()) {
+        QMetaObject::invokeMethod(this, [this, rating, targetWidget]() {
+            showRatingToast(rating, targetWidget);
+        });
+        return;
+    }
+
+    QPixmap starOn = UiHelper::getPixmap("star_filled", QSize(14, 14), QColor("#AAAAAA"));
+    QPixmap starOff = UiHelper::getPixmap("star_filled", QSize(14, 14), QColor("#444444"));
+
+    m_doc.addResource(QTextDocument::ImageResource, QUrl("star_on.png"), starOn);
+    m_doc.addResource(QTextDocument::ImageResource, QUrl("star_off.png"), starOff);
+
+    QString html = "<div style='line-height:14px;'>";
+    if (rating <= 0) {
+        html += "<span style='color:#AAAAAA; font-size:12px;'>已清除星级</span>";
+    } else {
+        for (int i = 1; i <= 5; ++i) {
+            if (i <= rating) {
+                html += "<img src='star_on.png' style='vertical-align:middle; margin-right:2px;' />";
+            } else {
+                html += "<img src='star_off.png' style='vertical-align:middle; margin-right:2px;' />";
+            }
+        }
+    }
+    html += "</div>";
+
+    showToast(html, 1500, QColor("#444444"), targetWidget);
 }
 
 void ToolTipOverlay::showToast(const QString& text, int timeout, const QColor& borderColor, QWidget* targetWidget) {

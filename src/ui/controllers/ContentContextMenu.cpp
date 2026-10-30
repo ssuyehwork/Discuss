@@ -489,7 +489,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
             menu.addSeparator();
             bool isPhysicalPath = !currentPath.isEmpty() && !currentPath.contains("://") && QDir(currentPath).exists();
-            QAction* actShowInExp = ContextMenuFactory::buildShowInExplorerAction(&menu, currentPath, m_panel);
+            QAction* actShowInExp = ContextMenuFactory::buildShowInExplorerAction(&menu, currentPath, true, m_panel);
             if (actShowInExp) {
                 actShowInExp->setEnabled(isPhysicalPath);
             }

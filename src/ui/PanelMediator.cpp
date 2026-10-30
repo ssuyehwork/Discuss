@@ -946,9 +946,8 @@ void PanelMediator::setupConnections() {
 
         if (metaPanel) metaPanel->setRating(rating, false);
 
-        ToolTipOverlay::instance()->showToast(
-            QString("已设为 %1 星").arg(rating),
-            1500, QColor("#3498db"), &QuickLookWindow::instance()
+        ToolTipOverlay::instance()->showRatingToast(
+            rating, &QuickLookWindow::instance()
         );
     });
 
@@ -965,9 +964,8 @@ void PanelMediator::setupConnections() {
 
         if (metaPanel) metaPanel->setColor(color, false);
 
-        QString toastMsg = color.isEmpty() ? "已清除颜色标记" : "已应用颜色标记";
-        ToolTipOverlay::instance()->showToast(
-            toastMsg, 1500, QColor("#2ecc71"), &QuickLookWindow::instance()
+        ToolTipOverlay::instance()->showColorToast(
+            color, &QuickLookWindow::instance()
         );
     });
 

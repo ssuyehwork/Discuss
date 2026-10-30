@@ -74,6 +74,16 @@
    全应用**严禁使用 QWidget 原生 `setToolTip(...)` 硬编码悬浮提示**，悬浮提示只可使用统一的 `ToolTipOverlay` 控件（结合 `m_hoverFilter` 事件过滤器）实现感知与展示，以确保主题视觉一致性与平滑交互体验。
 8. **“在新标签页中打开”图标矢量键规范契约 (“Open in New Tab” Vector Icon Specification Contract)**：
    全软件所有右键上下文菜单（包括“标记”面板 `MarkedPanel`、库面板 `LibraryPanel`、收藏夹 `FavoritePanel` 等），针对“在新标签页中打开”菜单项，其矢量图标必须统一绑定且仅可使用 **`Folder-add`**（严禁使用裸 `add` 或 `plus` 等泛化图标），确保图标语义精准对齐新建 Tab/文件夹卡片，且图标颜色无条件严格遵循 `#EEEEEE` 中性单色红线。
+9. **星级表达与真理源契约 (Rating Display SSOT Contract)**：
+   全软件所有涉及星级评级的 UI 展示、下拉选择框、筛选菜单与规则编辑器（包括但不限于 FilterPanel、SmartFolderDialog 智能文件夹规则配置、属性面板 MetaPanel 等），绝对禁止使用“1星”、“2星”等阿拉伯数字与文字组合，同时也严格遵守“严禁使用 Unicode 符号（如 ★）替代图标”的红线！必须统一使用 SVG 矢量图标（`star_filled`）动态绘制 1~5 颗星的 Pixmap/QIcon 进行渲染展示，保持全软件矢量化与图形 SSOT 通道 100% 物理一致。
+   - **配色与背景样式规范**：所有星级评级控件（及 QuickLook 星级 Toast 提示等）的底色/胶囊背景必须统一采用深灰色（如 `#2B2B2B` / `#333333`），星级图标本体则统一填充中性灰色（如 `#AAAAAA` / `#EEEEEE`），确保全软件暗色视觉沉静统一。
+11. **颜色标记表达与真理源契约 (Color Display SSOT Contract)**：
+   在 `QuickLookWindow` 及全软件进行颜色标记变更时， Toast 反馈绝对禁止使用 `"已应用颜色标记"` 等抽象纯文本！必须采用图形化渲染方式：在深灰色（`#2B2B2B`）Toast 胶囊气泡中，直接绘制并展示对应颜色的实心圆点/色块（如红 `#e74c3c`、橙 `#e67e22`、黄 `#f1c40f`、绿 `#2ecc71`、青 `#1abc9c`、蓝 `#3498db`、紫 `#9b59b6`、灰 `#95a5a6`），与星级 Toast 的图形化胶囊样式保持 100% 视觉与物理一致。
+10. **“在资源管理器中显示/打开”场景语义契约 (Show/Open in Explorer Semantics Contract)**：
+   全软件右键菜单中调用 Windows 资源管理器的菜单项必须严格按交互场景区分文案与行为：
+   - **选中文件或文件夹项**：菜单文案统一为 **`在“资源管理器”中显示`**，调用 `ShellHelper::openInExplorer(path)` 执行 `explorer /select, <path>`（在资源管理器中定位并高亮选中该项）；
+   - **在空白处右键**：菜单文案统一为 **`在“资源管理器”中打开`**，调用 `ShellHelper::openDirectoryInExplorer(currentPath)` 执行 `explorer <currentPath>`（直接进入当前目录）；
+   - 统一由 `ContextMenuFactory::buildShowInExplorerAction(menu, path, isBlankSpace, receiver)` 工厂方法闭环构建，保证全软件行为与 Windows 原生习惯 100% 物理一致。
 
 ---
 

@@ -35,6 +35,11 @@ public:
      */
     static void openInExplorer(const QString& path);
 
+    /**
+     * @brief 在资源管理器中打开当前目录
+     */
+    static void openDirectoryInExplorer(const QString& dirPath);
+
     struct AssocAppInfo {
         QString name;
         QString execPath;
