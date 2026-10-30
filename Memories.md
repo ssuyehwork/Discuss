@@ -77,6 +77,11 @@
 9. **星级表达与真理源契约 (Rating Display SSOT Contract)**：
    全软件所有涉及星级评级的 UI 展示、下拉选择框、筛选菜单与规则编辑器（包括但不限于 FilterPanel、SmartFolderDialog 智能文件夹规则配置、属性面板 MetaPanel 等），绝对禁止使用“1星”、“2星”等阿拉伯数字与文字组合，同时也严格遵守“严禁使用 Unicode 符号（如 ★）替代图标”的红线！必须统一使用 SVG 矢量图标（`star_filled`）动态绘制 1~5 颗星的 Pixmap/QIcon 进行渲染展示，保持全软件矢量化与图形 SSOT 通道 100% 物理一致。
    - **配色与背景样式规范**：所有星级评级控件（及 QuickLook 星级 Toast 提示等）的底色/胶囊背景必须统一采用深灰色（如 `#2B2B2B` / `#333333`），星级图标本体则统一填充中性灰色（如 `#AAAAAA` / `#EEEEEE`），确保全软件暗色视觉沉静统一。
+10. **“在资源管理器中显示/打开”场景语义契约 (Show/Open in Explorer Semantics Contract)**：
+   全软件右键菜单中调用 Windows 资源管理器的菜单项必须严格按交互场景区分文案与行为：
+   - **选中文件或文件夹项**：菜单文案统一为 **`在“资源管理器”中显示`**，调用 `ShellHelper::openInExplorer(path)` 执行 `explorer /select, <path>`（在资源管理器中定位并高亮选中该项）；
+   - **在空白处右键**：菜单文案统一为 **`在“资源管理器”中打开`**，调用 `ShellHelper::openDirectoryInExplorer(currentPath)` 执行 `explorer <currentPath>`（直接进入当前目录）；
+   - 统一由 `ContextMenuFactory::buildShowInExplorerAction(menu, path, isBlankSpace, receiver)` 工厂方法闭环构建，保证全软件行为与 Windows 原生习惯 100% 物理一致。
 
 ---
 
