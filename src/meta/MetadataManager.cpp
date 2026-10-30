@@ -63,33 +63,6 @@ MetadataManager& MetadataManager::instance() {
 }
 
 MetadataManager::MetadataManager(QObject* parent) : QObject(parent) {
-    m_uiSignalTimer = new QTimer(this);
-    m_uiSignalTimer->setInterval(200);
-    m_uiSignalTimer->setSingleShot(true);
-
-    connect(m_uiSignalTimer, &QTimer::timeout, [this]() {
-        std::vector<QString> paths;
-        bool hasReloadAll = false;
-        {
-            std::unique_lock<std::shared_mutex> lock(m_mutex);
-            for (const auto& p : m_pendingUiPaths) {
-                if (p == "__RELOAD_ALL__") {
-                    hasReloadAll = true;
-                }
-                paths.push_back(p);
-            }
-            m_pendingUiPaths.clear();
-        }
-
-        if (hasReloadAll || paths.size() > 50) {
-            Q_UNUSED(hasReloadAll);
-        } else {
-            for (const auto& p : paths) {
-                Q_UNUSED(p);
-            }
-        }
-    });
-
     connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, [this]() {
         DatabaseManager::instance().shutdown();
         AppConfig::instance().setValue("System/LastCleanShutdown", true);
@@ -114,22 +87,15 @@ void MetadataManager::initFromDatabase() {
 }
 
 void MetadataManager::notifyUI(RefreshLevel level, const QString& path) {
+    if (m_isInternalOperating) return;
     switch (level) {
         case RefreshLevel::CountsOnly:
-            if (m_isInternalOperating) return;
-            {
-                std::unique_lock<std::shared_mutex> lock(m_mutex);
-                m_pendingUiPaths.insert("__RELOAD_COUNT__");
-            }
-            QMetaObject::invokeMethod(this, "triggerUiSignalTimer", Qt::QueuedConnection);
-            break;
         case RefreshLevel::PathUpdate:
             if (!path.isEmpty()) {
-                {
-                    std::unique_lock<std::shared_mutex> lock(m_mutex);
-                    m_pendingUiPaths.insert(path);
-                }
-                QMetaObject::invokeMethod(this, "triggerUiSignalTimer", Qt::QueuedConnection);
+                AppEvent ev;
+                ev.type = AppEventType::MetadataUpdated;
+                ev.targetPath = path;
+                CentralEventHub::instance().publishEvent(ev);
             }
             break;
         case RefreshLevel::FullRebuild:
@@ -140,11 +106,9 @@ void MetadataManager::notifyUI(RefreshLevel level, const QString& path) {
 
 void MetadataManager::notifyFullUIRebuild() {
     if (m_isInternalOperating) return;
-    {
-        std::unique_lock<std::shared_mutex> lock(m_mutex);
-        m_pendingUiPaths.insert("__RELOAD_ALL__");
-    }
-    QMetaObject::invokeMethod(this, "triggerUiSignalTimer", Qt::QueuedConnection);
+    AppEvent ev;
+    ev.type = AppEventType::MetadataUpdated;
+    CentralEventHub::instance().publishEvent(ev);
 }
 
 bool MetadataManager::shouldExtractMediaFeatures(const std::wstring& path, long long pSize, long long pMtime) {
@@ -296,31 +260,36 @@ void MetadataManager::setSha256(const std::wstring& path, const std::string& sha
 
 void MetadataManager::seedMemoryCacheBatch(const std::vector<ItemRecord>& records) {
     for (const auto& rec : records) {
-        std::wstring nPath = normalizePath(rec.path.toStdWString());
-        QFileInfo info(rec.path);
-        if (info.isRoot() || rec.path.endsWith(":\\") || rec.path.endsWith(":/")) {
+        if (rec.path.isEmpty() || rec.path.endsWith(":\\") || rec.path.endsWith(":/") || (rec.path.length() == 2 && rec.path.endsWith(':'))) {
             continue; // 盘符根目录不参与
         }
 
-        ensureActivated(nPath);
+        std::wstring nPath = normalizePath(rec.path.toStdWString());
 
-        MetaMemoryCache::instance().update(nPath, [&rec](RuntimeMeta& m) {
-            m.rating = rec.rating;
-            m.manualColor = rec.manualColor.toStdWString();
-            m.pinned = rec.pinned;
-            m.tags = rec.tags;
-            m.note = rec.note.toStdWString();
-            m.url = rec.url.toStdWString();
-            m.width = rec.width;
-            m.height = rec.height;
-            m.autoColor = rec.autoColor.toStdWString();
-            m.thumbStatus = (rec.thumbnailState == ItemRecord::ThumbnailState::Failed) ? 1 : 0;
-            m.added_at = rec.added_at;
-            m.palettes.clear();
-            for (const auto& pe : rec.palettes) {
-                m.palettes.push_back(PaletteEntry(pe.first, pe.second));
-            }
-        });
+        // 🚀【物理性能飞跃】：直接复用目录遍历现有的属性，坚规不在主线程调用 ensureActivated 触发 CreateFileW
+        RuntimeMeta m;
+        m.fileSize = rec.size;
+        m.isFolder = rec.isDir;
+        m.ctime = rec.ctime;
+        m.mtime = rec.mtime;
+        m.atime = rec.ctime;
+        m.rating = rec.rating;
+        m.manualColor = rec.manualColor.toStdWString();
+        m.pinned = rec.pinned;
+        m.tags = rec.tags;
+        m.note = rec.note.toStdWString();
+        m.url = rec.url.toStdWString();
+        m.width = rec.width;
+        m.height = rec.height;
+        m.autoColor = rec.autoColor.toStdWString();
+        m.thumbStatus = (rec.thumbnailState == ItemRecord::ThumbnailState::Failed) ? 1 : 0;
+        m.added_at = rec.added_at;
+        m.palettes.clear();
+        for (const auto& pe : rec.palettes) {
+            m.palettes.push_back(PaletteEntry(pe.first, pe.second));
+        }
+
+        MetaMemoryCache::instance().put(nPath, m);
     }
 }
 
@@ -334,8 +303,11 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
     for (const auto& item : items) {
         std::wstring nPath = normalizePath(item.path);
         
-        QFileInfo info(QString::fromStdWString(nPath));
-        if (!info.isFile() || !ColorPaletteEngine::isGraphicsFile(info.suffix().toLower())) continue;
+        QString qPath = QString::fromStdWString(nPath);
+        int lastDot = qPath.lastIndexOf('.');
+        if (lastDot == -1) continue;
+        QString ext = qPath.mid(lastDot + 1).toLower();
+        if (!ColorPaletteEngine::isGraphicsFile(ext)) continue;
         if (item.width <= 0 || item.height <= 0 || item.autoColor.empty() || item.palettes.empty()) continue;
 
         RuntimeMeta meta = MetaMemoryCache::instance().getMeta(nPath);
@@ -876,15 +848,33 @@ void MetadataManager::syncAfterMove(const std::wstring& oldPath, const std::wstr
 void MetadataManager::removeMetadataSync(const std::wstring& path) {
     std::wstring nPath = MetadataManager::normalizePath(path);
     
+    // 🚀【O(1) 快速路径】：单文件根据哈希只锁单一 Shard，坚决杜绝锁死 256 个分片全局扫描
+    bool isFolder = false;
+    bool found = false;
     {
-        std::unique_lock<std::shared_mutex> lock(m_mutex);
+        size_t shardIdx = MetaMemoryCache::instance().getShardIndex(nPath);
+        auto& shard = MetaMemoryCache::instance().shards()[shardIdx];
+        std::unique_lock<std::shared_mutex> shardLock(shard.mutex);
+        auto it = shard.items.find(nPath);
+        if (it != shard.items.end()) {
+            isFolder = it->second.isFolder;
+            StatisticsService::instance().purgeAsset(!it->second.tags.isEmpty(), false);
+            shard.items.erase(it);
+            found = true;
+        }
+    }
 
+    // 仅当目标确认是文件夹或属于子树级联删除时，才按前缀清理子孙
+    if (isFolder || !found) {
+        std::wstring prefix1 = nPath + L"\\";
+        std::wstring prefix2 = nPath + L"/";
         for (size_t i = 0; i < MetaMemoryCache::NUM_SHARDS; ++i) {
-            std::unique_lock<std::shared_mutex> shardLock(MetaMemoryCache::instance().shards()[i].mutex);
-            for (auto it = MetaMemoryCache::instance().shards()[i].items.begin(); it != MetaMemoryCache::instance().shards()[i].items.end(); ) {
-                if (it->first == nPath || it->first.find(nPath + L"\\") == 0 || it->first.find(nPath + L"/") == 0) {
-                    StatisticsService::instance().purgeAsset(!it->second.tags.isEmpty(), false); 
-                    it = MetaMemoryCache::instance().shards()[i].items.erase(it);
+            auto& shard = MetaMemoryCache::instance().shards()[i];
+            std::unique_lock<std::shared_mutex> shardLock(shard.mutex);
+            for (auto it = shard.items.begin(); it != shard.items.end(); ) {
+                if (it->first == nPath || it->first.rfind(prefix1, 0) == 0 || it->first.rfind(prefix2, 0) == 0) {
+                    StatisticsService::instance().purgeAsset(!it->second.tags.isEmpty(), false);
+                    it = shard.items.erase(it);
                 } else {
                     ++it;
                 }
