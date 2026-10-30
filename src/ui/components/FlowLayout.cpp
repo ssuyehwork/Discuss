@@ -19,16 +19,14 @@ int FlowLayout::minimumHeightForWidth(int width) const { return heightForWidth(w
 void FlowLayout::setGeometry(const QRect &rect) { QLayout::setGeometry(rect); doLayout(rect, false); }
 QSize FlowLayout::sizeHint() const { return minimumSize(); }
 QSize FlowLayout::minimumSize() const {
+    QSize size;
+    for (const QLayoutItem *item : itemList) {
+        size = size.expandedTo(item->minimumSize());
+    }
     int left, top, right, bottom;
     getContentsMargins(&left, &top, &right, &bottom);
-    int width = 0;
-    if (QWidget* w = parentWidget()) {
-        width = w->width();
-    }
-    if (width <= 0) width = 388;
-
-    int h = heightForWidth(width);
-    return QSize(width, h);
+    size += QSize(left + right, top + bottom);
+    return size;
 }
 int FlowLayout::doLayout(const QRect &rect, bool testOnly) const {
     int left, top, right, bottom;

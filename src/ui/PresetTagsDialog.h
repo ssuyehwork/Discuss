@@ -15,6 +15,9 @@ public:
     explicit PresetTagsDialog(int categoryId, QWidget* parent = nullptr, bool isLibrary = false);
     ~PresetTagsDialog() override = default;
 
+protected:
+    bool event(QEvent* event) override;
+
 private slots:
     void onSaveClicked();
     void onCancelClicked();

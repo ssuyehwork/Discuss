@@ -2,6 +2,7 @@
 #include "../UiHelper.h"
 #include "AppConfig.h"
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QGuiApplication>
@@ -147,26 +148,59 @@ void SmartFolderDialog::setupUi() {
 }
 
 void SmartFolderDialog::adjustAdaptiveSize() {
+    if (!layout()) return;
     layout()->activate();
 
-    int baseNonRulesH = 420 - 150; // 标题栏、顶部名称/模式、分割线、添加规则按钮、底部按钮与边距
-    int rulesContentH = 0;
-    for (SmartFolderRuleRow* row : m_ruleRows) {
-        if (row) {
-            rulesContentH += row->sizeHint().height() + m_rulesLayout->spacing();
-        }
+    QScreen* targetScreen = window()->screen();
+    if (!targetScreen && parentWidget()) {
+        targetScreen = parentWidget()->window()->screen();
+    }
+    if (!targetScreen) {
+        targetScreen = QGuiApplication::primaryScreen();
     }
 
-    int totalDesiredH = baseNonRulesH + qMax(100, rulesContentH);
+    int maxScreenH = targetScreen ? static_cast<int>(targetScreen->availableGeometry().height() * 0.8) : 800;
 
-    QScreen* screen = QGuiApplication::screenAt(QCursor::pos());
-    if (!screen) screen = QGuiApplication::primaryScreen();
-    int maxScreenH = screen ? static_cast<int>(screen->availableGeometry().height() * 0.8) : 800;
+    // 测量除了滚动区以外的固定控件高度（顶层布局在 520 宽度下的高度 - 滚动区当前高度）
+    int layoutH = layout()->heightForWidth(520);
+    int fixedH = layoutH - m_scrollArea->height();
+
+    // 1. 假设无需滚动条，计算可用规则列表宽度
+    // 520 (对话框宽度) - 20*2 (getContentArea 边距)
+    int availRulesWidthNoScroll = 520 - 40;
+
+    QWidget* scrollContent = m_scrollArea->widget();
+    int scrollContentH = 0;
+    if (scrollContent && scrollContent->layout()) {
+        scrollContentH = scrollContent->layout()->heightForWidth(availRulesWidthNoScroll);
+    }
+
+    int totalDesiredH = fixedH + scrollContentH;
+
+    // 2. 如果总高度超过屏幕 80%，必将产生垂直滚动条，此时扣除滚动条宽度重新计算折行高度
+    if (totalDesiredH > maxScreenH) {
+        int scrollBarW = m_scrollArea->verticalScrollBar()->sizeHint().width();
+        if (scrollBarW <= 0) scrollBarW = 12;
+        int availRulesWidthWithScroll = availRulesWidthNoScroll - scrollBarW;
+
+        if (scrollContent && scrollContent->layout()) {
+            scrollContentH = scrollContent->layout()->heightForWidth(availRulesWidthWithScroll);
+        }
+        totalDesiredH = fixedH + scrollContentH;
+    }
 
     int finalH = qMin(totalDesiredH, maxScreenH);
     finalH = qMax(420, finalH);
 
     resize(520, finalH);
+}
+
+bool SmartFolderDialog::event(QEvent* event) {
+    bool result = FramelessDialog::event(event);
+    if (event->type() == QEvent::LayoutRequest) {
+        adjustAdaptiveSize();
+    }
+    return result;
 }
 
 void SmartFolderDialog::onAddRule() {

@@ -16,8 +16,6 @@ public:
     void setTags(const QStringList& tags);
     QStringList tags() const;
 
-    QSize sizeHint() const override;
-    QSize minimumSize() const override;
 
 signals:
     void tagsChanged(const QStringList& tags);

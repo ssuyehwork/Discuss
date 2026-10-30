@@ -133,7 +133,7 @@ SmartFolderRule SmartFolderRuleRow::getRule() const {
 
     if (rule.type == SmartRuleType::Tag) {
         rule.tags = m_tagContainer->tags();
-    } else if (m_valueCombo->isVisible()) {
+    } else if (rule.type == SmartRuleType::Rating) {
         rule.value = m_valueCombo->currentData().toString();
     } else {
         rule.value = m_valueEdit->text().trimmed();
@@ -154,7 +154,7 @@ void SmartFolderRuleRow::setRule(const SmartFolderRule& rule) {
 
     if (rule.type == SmartRuleType::Tag) {
         m_tagContainer->setTags(rule.tags);
-    } else if (m_valueCombo->isVisible()) {
+    } else if (rule.type == SmartRuleType::Rating) {
         int valIdx = m_valueCombo->findData(rule.value);
         if (valIdx >= 0) m_valueCombo->setCurrentIndex(valIdx);
     } else {

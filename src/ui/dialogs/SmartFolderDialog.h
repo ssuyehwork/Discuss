@@ -45,6 +45,9 @@ private:
     QPushButton* m_btnSave{nullptr};
 
     void adjustAdaptiveSize();
+
+protected:
+    bool event(QEvent* event) override;
 };
 
 } // namespace QuarkMeta

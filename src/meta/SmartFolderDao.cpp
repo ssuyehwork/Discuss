@@ -320,12 +320,6 @@ QString SmartFolderDao::buildWhereClause(const SmartFolderRecord& rec) {
                     cleanTags << trimmed;
                 }
             }
-            if (cleanTags.isEmpty()) {
-                QString legacyVal = rule.value.trimmed().replace("'", "''");
-                if (!legacyVal.isEmpty()) {
-                    cleanTags << legacyVal;
-                }
-            }
 
             if (!cleanTags.isEmpty()) {
                 QStringList quotedTags;
