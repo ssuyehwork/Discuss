@@ -933,7 +933,7 @@ void PanelMediator::setupConnections() {
         }
     });
 
-    // QuickLook 改星级 -> 同步更新内容面板卡片
+    // QuickLook 改星级 -> 同步更新内容面板卡片并弹出 Toast 提示
     connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this, metaPanel](int rating) {
         QString curPath = QuickLookWindow::instance().currentPath();
         if (curPath.isEmpty()) return;
@@ -945,9 +945,14 @@ void PanelMediator::setupConnections() {
         CoreEngine::instance().executeCommand(cmd);
 
         if (metaPanel) metaPanel->setRating(rating, false);
+
+        ToolTipOverlay::instance()->showToast(
+            QString("已设为 %1 星").arg(rating),
+            1500, QColor("#3498db"), &QuickLookWindow::instance()
+        );
     });
 
-    // QuickLook 改颜色 -> 同步更新内容面板卡片
+    // QuickLook 改颜色 -> 同步更新内容面板卡片并弹出 Toast 提示
     connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this, metaPanel](const QString& color) {
         QString curPath = QuickLookWindow::instance().currentPath();
         if (curPath.isEmpty()) return;
@@ -959,6 +964,11 @@ void PanelMediator::setupConnections() {
         CoreEngine::instance().executeCommand(cmd);
 
         if (metaPanel) metaPanel->setColor(color, false);
+
+        QString toastMsg = color.isEmpty() ? "已清除颜色标记" : "已应用颜色标记";
+        ToolTipOverlay::instance()->showToast(
+            toastMsg, 1500, QColor("#2ecc71"), &QuickLookWindow::instance()
+        );
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::deleteRequested, this, [this, contentPanel](const QString& path) {

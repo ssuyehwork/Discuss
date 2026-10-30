@@ -17,7 +17,12 @@
 #include "../core/AppConfig.h"
 #include "controllers/ContextMenuFactory.h"
 #include "dialogs/TextExtensionDialog.h"
+#include "ColorPicker.h"
+#include "FramelessWindowHelper.h"
+#include "../meta/MetadataManager.h"
+#include "../meta/LibraryService.h"
 #include "FormatDecoders.h"
+#include <QWidgetAction>
 #include <QCryptographicHash>
 #include <QStandardPaths>
 #include <QFileInfo>
@@ -477,6 +482,30 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
 
     ContextMenuFactory::buildOpenWithMenu(&menu, m_currentPath, this);
     ContextMenuFactory::buildShowInExplorerAction(&menu, m_currentPath, this);
+    menu.addSeparator();
+
+    // 1. 颜色标记选择栏
+    QString currentColorStr;
+    auto meta = MetadataManager::instance().getMeta(m_currentPath.toStdWString());
+    currentColorStr = QString::fromStdWString(meta.manualColor);
+
+    QWidgetAction* pickerAction = new QWidgetAction(&menu);
+    ColorStripPicker* pickerWidget = new ColorStripPicker(currentColorStr, &menu);
+    pickerAction->setDefaultWidget(pickerWidget);
+    menu.addAction(pickerAction);
+
+    connect(pickerWidget, &ColorStripPicker::colorSelected, this, [this, &menu](const QString& hexColor) {
+        emit colorRequested(hexColor);
+        menu.close();
+    });
+
+    // 2. 置顶功能项
+    ContextMenuFactory::buildPinToggleAction(&menu, FramelessWindowHelper::isAlwaysOnTop(this), [this](bool pin) {
+        FramelessWindowHelper::setAlwaysOnTop(this, pin);
+    }, this);
+
+    // 3. 添加至“库”功能项
+    LibraryService::instance().buildLibraryAction(&menu, QStringList{m_currentPath}, this);
     menu.addSeparator();
 
     QAction* actCopy = menu.addAction(UiHelper::getIcon("copy", QColor("#EEEEEE"), 18), "复制");
