@@ -5,6 +5,7 @@
 #include <QComboBox>
 #include <QSpinBox>
 #include <QDateEdit>
+#include <QSlider>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QDate>
@@ -131,15 +132,27 @@ private:
     QComboBox* m_unitCombo = nullptr;
 };
 
-class ColorValueWidget : public ISmartFolderValueWidget {
+class ManualColorValueWidget : public ISmartFolderValueWidget {
     Q_OBJECT
 public:
-    explicit ColorValueWidget(QWidget* parent = nullptr);
+    explicit ManualColorValueWidget(QWidget* parent = nullptr);
     void getRuleValues(SmartFolderRule& rule) const override;
     void setRuleValues(const SmartFolderRule& rule) override;
 
 private:
     QComboBox* m_combo = nullptr;
+};
+
+class AutoColorValueWidget : public ISmartFolderValueWidget {
+    Q_OBJECT
+public:
+    explicit AutoColorValueWidget(QWidget* parent = nullptr);
+    void getRuleValues(SmartFolderRule& rule) const override;
+    void setRuleValues(const SmartFolderRule& rule) override;
+
+private:
+    QComboBox* m_combo = nullptr;
+    QSpinBox* m_toleranceSpin = nullptr;
 };
 
 class TagPillValueWidget : public ISmartFolderValueWidget {

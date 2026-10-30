@@ -40,6 +40,7 @@ QJsonObject SmartFolderRule::toJson() const {
     if (num1 != 0) obj["num1"] = num1;
     if (num2 != 0) obj["num2"] = num2;
     if (!unit.isEmpty()) obj["unit"] = unit;
+    if (type == SmartRuleType::AutoColor && tolerance != 50) obj["tolerance"] = tolerance;
     return obj;
 }
 
@@ -53,6 +54,7 @@ SmartFolderRule SmartFolderRule::fromJson(const QJsonObject& obj) {
     rule.num1 = obj.value("num1").toVariant().toLongLong();
     rule.num2 = obj.value("num2").toVariant().toLongLong();
     rule.unit = obj.value("unit").toString();
+    rule.tolerance = obj.value("tolerance").toInt(50);
 
     if (obj.contains("tags") && obj.value("tags").isArray()) {
         QJsonArray tagArr = obj.value("tags").toArray();
@@ -335,21 +337,10 @@ QString SmartFolderDao::buildFolderNameCondition(const SmartFolderRule& rule) {
 }
 
 QString SmartFolderDao::buildFolderCondition(const SmartFolderRule& rule) {
-    if (rule.op == SmartRuleOperator::IsFolder) {
-        return "is_dir = 1";
-    }
     if (rule.op == SmartRuleOperator::IsNotFolder) {
         return "is_dir = 0";
     }
-
-    QString esc = escapeLike(rule.value.trimmed());
-    if (esc.isEmpty()) return QString();
-
-    if (rule.op == SmartRuleOperator::NotContains) {
-        return QString("file_path NOT LIKE '%%%1%%' ESCAPE '\\'").arg(esc);
-    } else {
-        return QString("file_path LIKE '%%%1%%' ESCAPE '\\'").arg(esc);
-    }
+    return "is_dir = 1";
 }
 
 QString SmartFolderDao::buildDateCondition(const QString& colName, const SmartFolderRule& rule) {
@@ -472,6 +463,17 @@ QString SmartFolderDao::buildColorCondition(const SmartFolderRule& rule) {
     }
 }
 
+QString SmartFolderDao::buildAutoColorCondition(const SmartFolderRule& rule) {
+    QString colorVal = rule.value.trimmed().replace("'", "''");
+    if (colorVal.isEmpty()) return QString();
+
+    if (rule.op == SmartRuleOperator::NotContains) {
+        return QString("auto_color != '%1'").arg(colorVal);
+    } else {
+        return QString("auto_color = '%1'").arg(colorVal);
+    }
+}
+
 QString SmartFolderDao::buildExtensionCondition(const SmartFolderRule& rule) {
     QString rawValue = rule.value.trimmed();
     if (rawValue.isEmpty()) return QString();
@@ -583,6 +585,9 @@ QString SmartFolderDao::buildWhereClause(const SmartFolderRecord& rec) {
             break;
         case SmartRuleType::Color:
             cond = buildColorCondition(rule);
+            break;
+        case SmartRuleType::AutoColor:
+            cond = buildAutoColorCondition(rule);
             break;
         case SmartRuleType::Extension:
             cond = buildExtensionCondition(rule);

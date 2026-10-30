@@ -22,7 +22,8 @@ enum class SmartRuleType {
     Note = 11,
     Width = 12,
     Height = 13,
-    FileSize = 14
+    FileSize = 14,
+    AutoColor = 15    // 图像颜色 (自动算法提取)
 };
 
 enum class SmartRuleOperator {
@@ -56,6 +57,7 @@ struct SmartFolderRule {
     qint64 num1 = 0;
     qint64 num2 = 0;
     QString unit;   // "KB", "MB", "GB"
+    int tolerance = 50; // 图像颜色色差容差
 
     QJsonObject toJson() const;
     static SmartFolderRule fromJson(const QJsonObject& obj);
@@ -93,6 +95,7 @@ public:
     static QString buildFileSizeCondition(const SmartFolderRule& rule);
     static QString buildTextPropertyCondition(const QString& colName, const SmartFolderRule& rule);
     static QString buildColorCondition(const SmartFolderRule& rule);
+    static QString buildAutoColorCondition(const SmartFolderRule& rule);
     static QString buildExtensionCondition(const SmartFolderRule& rule);
     static QString buildTagCondition(const SmartFolderRule& rule);
 
