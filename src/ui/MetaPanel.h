@@ -78,6 +78,10 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     void initUi();
@@ -140,6 +144,12 @@ private:
     QSet<QString> m_pendingRemovedTags;
     QStringList m_tagRemovalTargetSnapshot;
     QTimer* m_tagRemoveDebounceTimer = nullptr;
+
+    QWidget* m_dragOverlayWidget = nullptr;
+    QLabel* m_dragOverlayLabel = nullptr;
+    void showDragOverlay(int activeCount);
+    void hideDragOverlay();
+    void installRecursiveDragEventFilter(QWidget* widget);
 
 private slots:
     void onTagDeleted(const QString& text);

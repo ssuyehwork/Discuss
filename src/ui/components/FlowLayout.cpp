@@ -87,6 +87,9 @@ int FlowLayout::doLayout(const QRect &rect, bool testOnly) const {
     if (y > effectiveRect.y()) {
         totalH -= verticalSpacing();
     }
+    if (itemList.isEmpty()) {
+        totalH = top + bottom;
+    }
     return totalH;
 }
 

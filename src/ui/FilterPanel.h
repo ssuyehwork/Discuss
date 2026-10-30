@@ -70,6 +70,11 @@ public:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 signals:
     void filterChanged(const FilterState& state);
@@ -130,6 +135,12 @@ private:
     bool          m_isFilterPinned = false;
 
     SearchHistoryPanel* m_historyPanel = nullptr;
+
+    QWidget* m_dragOverlayWidget = nullptr;
+    QLabel* m_dragOverlayLabel = nullptr;
+    void showDragOverlay(int activeCount);
+    void hideDragOverlay();
+    void installRecursiveDragEventFilter(QWidget* widget);
     
     void saveFilterHistory(const QString& key, const QString& text);
     QStringList getFilterHistory(const QString& key) const;

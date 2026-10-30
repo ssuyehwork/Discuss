@@ -57,12 +57,13 @@ void PresetTagsDialog::initUi() {
     m_tagContainer->setFrameShape(QFrame::StyledPanel);
     m_tagContainer->setCursor(Qt::PointingHandCursor);
     m_tagContainer->setMinimumHeight(42);
+    m_tagContainer->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 
     m_flowLayout = new FlowLayout(m_tagContainer, 8, 8, 8);
     m_tagContainer->setLayout(m_flowLayout);
     m_tagContainer->installEventFilter(this);
 
-    mainL->addWidget(m_tagContainer, 1);
+    mainL->addWidget(m_tagContainer, 0);
 
     QHBoxLayout* bottomL = new QHBoxLayout();
     bottomL->setSpacing(10);
@@ -129,15 +130,17 @@ void PresetTagsDialog::onTagDeleted(const QString& tag) {
 }
 
 void PresetTagsDialog::recalculateAdaptiveHeight() {
-    m_flowLayout->activate();
-    int flowContentHeight = m_flowLayout->heightForWidth(m_tagContainer->width());
-    
-    int tagContainerHeight = qMax(42, flowContentHeight + 10);
+    // 固定的对话框总宽 420 扣除两边 15px Margins 和容器 2px 边框后的可用内容宽度为 388px
+    int availableContainerWidth = 420 - 30 - 2;
+    int flowContentHeight = m_flowLayout->heightForWidth(availableContainerWidth);
+
+    int tagContainerHeight = qMax(42, flowContentHeight);
     m_tagContainer->setFixedHeight(tagContainerHeight);
 
+    m_tagContainer->updateGeometry();
     layout()->activate();
-    int requiredTotalHeight = sizeHint().height();
 
+    int requiredTotalHeight = sizeHint().height();
     setFixedHeight(requiredTotalHeight);
 }
 

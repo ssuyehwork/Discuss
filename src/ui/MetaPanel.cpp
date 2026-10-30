@@ -1,5 +1,12 @@
 #include "MetaPanel.h"
 #include "ColorPicker.h"
+#include "../meta/MarkedFolderService.h"
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDragLeaveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 #include "CardPainterHelper.h"
 #include "UiHelper.h"
 #include "../meta/HistoryService.h"
@@ -134,6 +141,7 @@ QWidget* MetaPanel::createCollapsibleSection(const QString& title, QWidget* cont
 }
 
 void MetaPanel::initUi() {
+    setAcceptDrops(true);
     QWidget* header = new QWidget(this);
     header->setObjectName("ContainerHeader");
     header->setFixedHeight(32);
@@ -747,8 +755,110 @@ void MetaPanel::flushPendingTagDeletions() {
     emit tagsRemoveRequested(targetPaths, tagsToRemove);
 }
 
+void MetaPanel::showDragOverlay(int activeCount) {
+    if (!m_dragOverlayWidget) {
+        m_dragOverlayWidget = new QWidget(this);
+        m_dragOverlayWidget->setObjectName("DragOverlayWidget");
+        m_dragOverlayWidget->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+        QVBoxLayout* layout = new QVBoxLayout(m_dragOverlayWidget);
+        layout->setContentsMargins(0, 0, 0, 0);
+        m_dragOverlayLabel = new QLabel(m_dragOverlayWidget);
+        m_dragOverlayLabel->setAlignment(Qt::AlignCenter);
+        m_dragOverlayLabel->setStyleSheet("color: #FFFFFF; font-size: 14px; font-weight: bold;");
+        layout->addWidget(m_dragOverlayLabel);
+    }
+
+    if (activeCount > 0) {
+        m_dragOverlayLabel->setText(QString("迁移到 %1 个标记文件夹").arg(activeCount));
+    } else {
+        m_dragOverlayLabel->setText("尚未标记目的地");
+    }
+
+    m_dragOverlayWidget->setGeometry(rect());
+    m_dragOverlayWidget->show();
+    m_dragOverlayWidget->raise();
+}
+
+void MetaPanel::hideDragOverlay() {
+    if (m_dragOverlayWidget) {
+        m_dragOverlayWidget->hide();
+    }
+}
+
+void MetaPanel::installRecursiveDragEventFilter(QWidget* widget) {
+    if (!widget) return;
+    widget->setAcceptDrops(true);
+    widget->installEventFilter(this);
+    for (QObject* child : widget->children()) {
+        if (QWidget* childWidget = qobject_cast<QWidget*>(child)) {
+            installRecursiveDragEventFilter(childWidget);
+        }
+    }
+}
+
+void MetaPanel::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        int activeCount = MarkedFolderService::instance().getActiveMarked().size();
+        showDragOverlay(activeCount);
+        if (activeCount > 0) {
+            event->acceptProposedAction();
+        } else {
+            event->ignore();
+        }
+        return;
+    }
+    QFrame::dragEnterEvent(event);
+}
+
+void MetaPanel::dragMoveEvent(QDragMoveEvent* event) {
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        int activeCount = MarkedFolderService::instance().getActiveMarked().size();
+        showDragOverlay(activeCount);
+        if (activeCount > 0) {
+            event->acceptProposedAction();
+        } else {
+            event->ignore();
+        }
+        return;
+    }
+    QFrame::dragMoveEvent(event);
+}
+
+void MetaPanel::dragLeaveEvent(QDragLeaveEvent* event) {
+    hideDragOverlay();
+    QFrame::dragLeaveEvent(event);
+}
+
+void MetaPanel::dropEvent(QDropEvent* event) {
+    hideDragOverlay();
+    if (event->mimeData() && event->mimeData()->hasUrls()) {
+        QStringList paths;
+        for (const QUrl& url : event->mimeData()->urls()) {
+            QString localPath = url.toLocalFile();
+            if (!localPath.isEmpty()) {
+                paths.append(localPath);
+            }
+        }
+
+        int activeCount = MarkedFolderService::instance().getActiveMarked().size();
+        if (activeCount > 0) {
+            MarkedFolderService::instance().executeTransferToMarked(paths);
+            event->acceptProposedAction();
+        } else {
+            ToolTipOverlay::instance()->showToast("尚未标记目的地，请先标记文件夹", 2500, QColor("#e81123"));
+            event->ignore();
+        }
+        return;
+    }
+    QFrame::dropEvent(event);
+}
+
 void MetaPanel::resizeEvent(QResizeEvent* event) {
     QFrame::resizeEvent(event);
+    if (m_dragOverlayWidget && m_dragOverlayWidget->isVisible()) {
+        m_dragOverlayWidget->setGeometry(rect());
+    }
     adjustFlowHeights();
 }
 
@@ -945,6 +1055,28 @@ void MetaPanel::setAsPrimaryColor(const QColor& color) {
 }
 
 bool MetaPanel::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::DragEnter) {
+        auto* de = static_cast<QDragEnterEvent*>(event);
+        if (de->mimeData() && de->mimeData()->hasUrls()) {
+            dragEnterEvent(de);
+            return true;
+        }
+    } else if (event->type() == QEvent::DragMove) {
+        auto* dm = static_cast<QDragMoveEvent*>(event);
+        if (dm->mimeData() && dm->mimeData()->hasUrls()) {
+            dragMoveEvent(dm);
+            return true;
+        }
+    } else if (event->type() == QEvent::DragLeave) {
+        dragLeaveEvent(static_cast<QDragLeaveEvent*>(event));
+        return true;
+    } else if (event->type() == QEvent::Drop) {
+        auto* dropEv = static_cast<QDropEvent*>(event);
+        if (dropEv->mimeData() && dropEv->mimeData()->hasUrls()) {
+            dropEvent(dropEv);
+            return true;
+        }
+    }
     if (event->type() == QEvent::ToolTip) {
         QString text = watched->property("tooltipText").toString();
         if (!text.isEmpty()) {
