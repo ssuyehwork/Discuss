@@ -7,7 +7,9 @@
 #include "ViewDragDropHelper.h"
 #include "../meta/LibraryDao.h"
 #include "../meta/SmartFolderDao.h"
+#include "../meta/DatabaseManager.h"
 #include "dialogs/SmartFolderDialog.h"
+#include <QtConcurrent/QtConcurrent>
 #include "../meta/LibraryService.h"
 #include "../meta/MetaIndexService.h"
 #include "../meta/QuarkMetaJsonStore.h"
@@ -387,6 +389,7 @@ void LibraryPanel::initUi() {
                 SmartFolderRecord rec = dlg.getRecord();
                 int id = SmartFolderDao::addSmartFolder(rec);
                 if (id > 0) {
+                    m_smartFolderCacheValid = false;
                     loadLibrary();
                 }
             }
@@ -506,6 +509,7 @@ void LibraryPanel::initUi() {
     connect(m_model, &QStandardItemModel::rowsRemoved, this, &LibraryPanel::markOrderDirty, Qt::DirectConnection);
 
     connect(&LibraryService::instance(), &LibraryService::libraryChanged, this, [this]() {
+        m_smartFolderCacheValid = false;
         QTimer::singleShot(0, this, [this]() {
             loadLibrary();
         });
@@ -865,6 +869,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
             if (dlg.exec() == QDialog::Accepted) {
                 SmartFolderRecord updatedRec = dlg.getRecord();
                 if (SmartFolderDao::updateSmartFolder(updatedRec)) {
+                    m_smartFolderCacheValid = false;
                     loadLibrary();
                 }
             }
@@ -898,6 +903,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
         QAction* deleteSmartAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除智能文件夹");
         connect(deleteSmartAct, &QAction::triggered, this, [this, smartFolderId]() {
             if (SmartFolderDao::removeSmartFolderById(smartFolderId)) {
+                m_smartFolderCacheValid = false;
                 loadLibrary();
             }
         });
@@ -931,6 +937,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
                 SmartFolderRecord rec = dlg.getRecord();
                 int id = SmartFolderDao::addSmartFolder(rec);
                 if (id > 0) {
+                    m_smartFolderCacheValid = false;
                     loadLibrary();
                 }
             }
@@ -1143,7 +1150,10 @@ void LibraryPanel::loadLibrary() {
     m_model->appendRow(smartFolderHeader);
 
     for (const auto& sfRec : smartFolders) {
-        int countVal = SmartFolderDao::countMatchingItems(sfRec);
+        int countVal = -1;
+        if (m_smartFolderCacheValid && m_smartFolderCountCache.contains(sfRec.id)) {
+            countVal = m_smartFolderCountCache.value(sfRec.id);
+        }
         QString sfIconKey = sfRec.iconKey;
         if (sfIconKey.isEmpty() || sfIconKey == "folder_filled" || sfIconKey == "folder") {
             sfIconKey = "smart-folder-1.svg";
@@ -1232,6 +1242,9 @@ void LibraryPanel::loadLibrary() {
 
     m_isLoading = false;
 
+    if (!m_smartFolderCacheValid) {
+        scheduleSmartFolderStats();
+    }
 
     if (m_pendingEditNodeId > 0 && m_treeView) {
         int targetNodeId = m_pendingEditNodeId;
@@ -1270,6 +1283,65 @@ void LibraryPanel::onPinCategoryTriggered(int nodeId, bool pin) {
     if (nodeId <= 0) return;
     LibraryDao::setCategoryPinned(nodeId, pin);
     loadLibrary();
+}
+
+void LibraryPanel::scheduleSmartFolderStats() {
+    int currentTaskId = ++m_smartFolderStatsTaskId;
+    auto sfList = SmartFolderDao::getAllSmartFolders();
+    if (sfList.isEmpty()) {
+        m_smartFolderCacheValid = true;
+        return;
+    }
+
+    QString dbPath = DatabaseManager::getGlobalDbPath();
+
+    (void)QtConcurrent::run([this, currentTaskId, sfList, dbPath]() {
+        sqlite3* readOnlyDb = nullptr;
+        int rc = sqlite3_open_v2(dbPath.toUtf8().constData(), &readOnlyDb,
+                                 SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX, nullptr);
+        if (rc != SQLITE_OK || !readOnlyDb) {
+            if (readOnlyDb) sqlite3_close(readOnlyDb);
+            return;
+        }
+
+        QMap<int, int> results;
+        for (const auto& rec : sfList) {
+            if (m_smartFolderStatsTaskId != currentTaskId) {
+                sqlite3_close(readOnlyDb);
+                return;
+            }
+            int cnt = SmartFolderDao::countMatchingItemsReadOnly(readOnlyDb, rec);
+            results.insert(rec.id, cnt);
+        }
+        sqlite3_close(readOnlyDb);
+
+        QMetaObject::invokeMethod(this, [this, currentTaskId, results]() {
+            if (m_smartFolderStatsTaskId != currentTaskId) {
+                return;
+            }
+            m_smartFolderCountCache = results;
+            m_smartFolderCacheValid = true;
+            updateSmartFolderCountsInTree(results);
+        }, Qt::QueuedConnection);
+    });
+}
+
+void LibraryPanel::updateSmartFolderCountsInTree(const QMap<int, int>& results) {
+    if (!m_model) return;
+    QStandardItem* smartFolderHeader = findItemByNodeId(m_model->invisibleRootItem(), -20);
+    if (!smartFolderHeader) return;
+
+    for (int i = 0; i < smartFolderHeader->rowCount(); ++i) {
+        QStandardItem* child = smartFolderHeader->child(i);
+        if (!child) continue;
+        int id = child->data(Qt::UserRole + 1).toInt();
+        if (results.contains(id)) {
+            child->setData(results.value(id), Qt::UserRole + 9);
+        }
+    }
+    if (m_treeView && m_treeView->viewport()) {
+        m_treeView->viewport()->update();
+    }
 }
 
 void LibraryPanel::createAndEditCategory(int parentId) {

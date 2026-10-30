@@ -2,12 +2,10 @@
 
 #include <QWidget>
 #include <QComboBox>
-#include <QLineEdit>
 #include <QPushButton>
 #include <QHBoxLayout>
-#include <QAction>
 #include "../../meta/SmartFolderDao.h"
-#include "../TagPillContainer.h"
+#include "SmartFolderValueWidgets.h"
 
 namespace QuarkMeta {
 
@@ -27,15 +25,18 @@ signals:
 
 private slots:
     void onTypeChanged(int index);
+    void onOpChanged(int index);
+    void onValueWidgetChanged();
 
 private:
     void initUi();
+    void rebuildOperators(const SmartFolderRule& presetRule = SmartFolderRule());
+    void rebuildValueWidget();
 
+    QHBoxLayout* m_layout = nullptr;
     QComboBox* m_typeCombo = nullptr;
     QComboBox* m_opCombo = nullptr;
-    QLineEdit* m_valueEdit = nullptr;
-    QComboBox* m_valueCombo = nullptr;
-    TagPillContainer* m_tagContainer = nullptr;
+    ISmartFolderValueWidget* m_valueWidget = nullptr;
     QPushButton* m_btnDelete = nullptr;
 };
 

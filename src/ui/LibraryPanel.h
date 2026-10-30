@@ -63,6 +63,7 @@ public:
     void saveLibraryOrder();
     void sortCategoriesByName(bool ascending);
     void filterTreeNodes(const QString& keyword);
+    void invalidateSmartFolderCache() { m_smartFolderCacheValid = false; }
 
     LibraryItemDelegate* delegate() const { return m_delegate; }
     LibraryTreeView* treeView() const { return m_treeView; }
@@ -87,8 +88,13 @@ private:
     void createAndEditCategory(int parentId = 0);
     QStandardItem* findItemByNodeId(QStandardItem* parent, int nodeId);
     void toggleSectionByNodeId(int nodeId);
+    void scheduleSmartFolderStats();
+    void updateSmartFolderCountsInTree(const QMap<int, int>& results);
 
     QVBoxLayout* m_mainLayout = nullptr;
+    int m_smartFolderStatsTaskId = 0;
+    bool m_smartFolderCacheValid = false;
+    QMap<int, int> m_smartFolderCountCache;
     LibraryTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
     LibraryItemDelegate* m_delegate = nullptr;
