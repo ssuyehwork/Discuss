@@ -77,6 +77,8 @@
 9. **星级表达与真理源契约 (Rating Display SSOT Contract)**：
    全软件所有涉及星级评级的 UI 展示、下拉选择框、筛选菜单与规则编辑器（包括但不限于 FilterPanel、SmartFolderDialog 智能文件夹规则配置、属性面板 MetaPanel 等），绝对禁止使用“1星”、“2星”等阿拉伯数字与文字组合，同时也严格遵守“严禁使用 Unicode 符号（如 ★）替代图标”的红线！必须统一使用 SVG 矢量图标（`star_filled`）动态绘制 1~5 颗星的 Pixmap/QIcon 进行渲染展示，保持全软件矢量化与图形 SSOT 通道 100% 物理一致。
    - **配色与背景样式规范**：所有星级评级控件（及 QuickLook 星级 Toast 提示等）的底色/胶囊背景必须统一采用深灰色（如 `#2B2B2B` / `#333333`），星级图标本体则统一填充中性灰色（如 `#AAAAAA` / `#EEEEEE`），确保全软件暗色视觉沉静统一。
+11. **颜色标记表达与真理源契约 (Color Display SSOT Contract)**：
+   在 `QuickLookWindow` 及全软件进行颜色标记变更时， Toast 反馈绝对禁止使用 `"已应用颜色标记"` 等抽象纯文本！必须采用图形化渲染方式：在深灰色（`#2B2B2B`）Toast 胶囊气泡中，直接绘制并展示对应颜色的实心圆点/色块（如红 `#e74c3c`、橙 `#e67e22`、黄 `#f1c40f`、绿 `#2ecc71`、青 `#1abc9c`、蓝 `#3498db`、紫 `#9b59b6`、灰 `#95a5a6`），与星级 Toast 的图形化胶囊样式保持 100% 视觉与物理一致。
 10. **“在资源管理器中显示/打开”场景语义契约 (Show/Open in Explorer Semantics Contract)**：
    全软件右键菜单中调用 Windows 资源管理器的菜单项必须严格按交互场景区分文案与行为：
    - **选中文件或文件夹项**：菜单文案统一为 **`在“资源管理器”中显示`**，调用 `ShellHelper::openInExplorer(path)` 执行 `explorer /select, <path>`（在资源管理器中定位并高亮选中该项）；
