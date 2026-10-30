@@ -1025,7 +1025,7 @@ void FilterPanel::applySmartFolderRecord(const SmartFolderRecord& record) {
             if (!rule.value.isEmpty()) st.manualColors.append(rule.value);
         } else if (rule.type == SmartRuleType::Extension) {
             if (!rule.value.isEmpty()) st.types.append(rule.value);
-        } else if (rule.type == SmartRuleType::Keyword) {
+        } else if (rule.type == SmartRuleType::Name) {
             st.typeFilterText = rule.value;
         }
     }

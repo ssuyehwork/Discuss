@@ -1,7 +1,5 @@
 #include "SmartFolderRuleRow.h"
 #include "../UiHelper.h"
-#include <QPainter>
-#include <QPixmap>
 
 namespace QuarkMeta {
 
@@ -15,153 +13,219 @@ SmartFolderRuleRow::SmartFolderRuleRow(const SmartFolderRule& rule, QWidget* par
 }
 
 void SmartFolderRuleRow::initUi() {
-    QHBoxLayout* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(0, 2, 0, 2);
-    layout->setSpacing(8);
+    m_layout = new QHBoxLayout(this);
+    m_layout->setContentsMargins(0, 2, 0, 2);
+    m_layout->setSpacing(8);
 
     m_typeCombo = new QComboBox(this);
     m_typeCombo->addItem("评分", static_cast<int>(SmartRuleType::Rating));
-    m_typeCombo->addItem("颜色", static_cast<int>(SmartRuleType::Color));
-    m_typeCombo->addItem("标签", static_cast<int>(SmartRuleType::Tag));
+    m_typeCombo->addItem("名称", static_cast<int>(SmartRuleType::Name));
     m_typeCombo->addItem("扩展名", static_cast<int>(SmartRuleType::Extension));
-    m_typeCombo->addItem("关键字", static_cast<int>(SmartRuleType::Keyword));
+    m_typeCombo->addItem("标签", static_cast<int>(SmartRuleType::Tag));
+    m_typeCombo->addItem("文件夹路径", static_cast<int>(SmartRuleType::Folder));
+    m_typeCombo->addItem("文件夹名称", static_cast<int>(SmartRuleType::FolderName));
+    m_typeCombo->addItem("颜色", static_cast<int>(SmartRuleType::Color));
+    m_typeCombo->addItem("添加日期", static_cast<int>(SmartRuleType::AddedDate));
+    m_typeCombo->addItem("修改日期", static_cast<int>(SmartRuleType::ModifiedDate));
+    m_typeCombo->addItem("创建日期", static_cast<int>(SmartRuleType::CreatedDate));
+    m_typeCombo->addItem("链接", static_cast<int>(SmartRuleType::Link));
+    m_typeCombo->addItem("注释", static_cast<int>(SmartRuleType::Note));
+    m_typeCombo->addItem("宽度", static_cast<int>(SmartRuleType::Width));
+    m_typeCombo->addItem("高度", static_cast<int>(SmartRuleType::Height));
+    m_typeCombo->addItem("文件大小", static_cast<int>(SmartRuleType::FileSize));
 
     m_opCombo = new QComboBox(this);
-
-    m_valueEdit = new QLineEdit(this);
-    m_valueCombo = new QComboBox(this);
-    m_valueCombo->hide();
-
-    m_tagContainer = new TagPillContainer(this, TagTriggerSource::SmartFolderDialog);
-    m_tagContainer->hide();
-
-    connect(m_tagContainer, &TagPillContainer::containerHeightChanged, this, [this]() {
-        updateGeometry();
-        emit rowHeightChanged();
-    });
 
     m_btnDelete = new QPushButton(this);
     m_btnDelete->setFixedSize(24, 24);
     m_btnDelete->setIcon(UiHelper::getIcon("close", QColor("#CCCCCC"), 14));
     m_btnDelete->setObjectName("SmartFolderRowDeleteBtn");
 
-    layout->addWidget(m_typeCombo);
-    layout->addWidget(m_opCombo);
-    layout->addWidget(m_valueEdit, 1);
-    layout->addWidget(m_valueCombo, 1);
-    layout->addWidget(m_tagContainer, 1);
-    layout->addWidget(m_btnDelete);
+    m_layout->addWidget(m_typeCombo);
+    m_layout->addWidget(m_opCombo);
+
+    m_layout->addWidget(m_btnDelete);
 
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SmartFolderRuleRow::onTypeChanged);
+    connect(m_opCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SmartFolderRuleRow::onOpChanged);
     connect(m_btnDelete, &QPushButton::clicked, this, [this]() {
         emit removeRequested(this);
     });
 
-    onTypeChanged(0);
+    onTypeChanged();
 }
 
-void SmartFolderRuleRow::onTypeChanged(int index) {
-    Q_UNUSED(index);
+void SmartFolderRuleRow::onTypeChanged() {
     SmartRuleType type = static_cast<SmartRuleType>(m_typeCombo->currentData().toInt());
 
+    m_opCombo->blockSignals(true);
     m_opCombo->clear();
-    m_valueEdit->hide();
-    m_valueCombo->hide();
-    m_tagContainer->hide();
 
     switch (type) {
     case SmartRuleType::Rating:
         m_opCombo->addItem("大于等于", static_cast<int>(SmartRuleOperator::GreaterOrEqual));
         m_opCombo->addItem("等于", static_cast<int>(SmartRuleOperator::Equals));
         m_opCombo->addItem("小于等于", static_cast<int>(SmartRuleOperator::LessOrEqual));
-
-        m_valueCombo->clear();
-        {
-            int starSize = 14;
-            int spacing = 2;
-            int maxW = 5 * starSize + 4 * spacing;
-            for (int r = 1; r <= 5; ++r) {
-                QPixmap pix(maxW, starSize);
-                pix.fill(Qt::transparent);
-                QPainter painter(&pix);
-                QPixmap starPix = UiHelper::getIcon("star_filled", QColor("#CCCCCC"), starSize).pixmap(starSize, starSize);
-                for (int i = 0; i < r; ++i) {
-                    painter.drawPixmap(i * (starSize + spacing), 0, starPix);
-                }
-                painter.end();
-                m_valueCombo->addItem(QIcon(pix), "", QString::number(r));
-            }
-        }
-        m_valueCombo->setIconSize(QSize(14 * 5 + 2 * 4, 14));
-        m_valueCombo->show();
         break;
 
     case SmartRuleType::Color:
         m_opCombo->addItem("等于", static_cast<int>(SmartRuleOperator::Equals));
-        m_valueEdit->setPlaceholderText("选择或输入颜色 hex (如 #FF0000)");
-        m_valueEdit->show();
         break;
 
     case SmartRuleType::Tag:
         m_opCombo->addItem("包含", static_cast<int>(SmartRuleOperator::Contains));
         m_opCombo->addItem("不包含", static_cast<int>(SmartRuleOperator::NotContains));
-        m_tagContainer->show();
         break;
 
     case SmartRuleType::Extension:
         m_opCombo->addItem("等于", static_cast<int>(SmartRuleOperator::Equals));
-        m_valueEdit->setPlaceholderText("输入文件扩展名 (如 png, psd)");
-        m_valueEdit->show();
-        break;
-
-    case SmartRuleType::Keyword:
         m_opCombo->addItem("包含", static_cast<int>(SmartRuleOperator::Contains));
         m_opCombo->addItem("不包含", static_cast<int>(SmartRuleOperator::NotContains));
-        m_valueEdit->setPlaceholderText("输入关键字");
-        m_valueEdit->show();
+        break;
+
+    case SmartRuleType::Name:
+    case SmartRuleType::Folder:
+    case SmartRuleType::FolderName:
+    case SmartRuleType::Link:
+    case SmartRuleType::Note:
+        m_opCombo->addItem("包含", static_cast<int>(SmartRuleOperator::Contains));
+        m_opCombo->addItem("不包含", static_cast<int>(SmartRuleOperator::NotContains));
+        m_opCombo->addItem("等于", static_cast<int>(SmartRuleOperator::Equals));
+        m_opCombo->addItem("开头是", static_cast<int>(SmartRuleOperator::StartsWith));
+        m_opCombo->addItem("结尾是", static_cast<int>(SmartRuleOperator::EndsWith));
+        m_opCombo->addItem("为空", static_cast<int>(SmartRuleOperator::IsEmpty));
+        m_opCombo->addItem("不为空", static_cast<int>(SmartRuleOperator::IsNotEmpty));
+        if (type == SmartRuleType::Folder) {
+            m_opCombo->addItem("是文件夹", static_cast<int>(SmartRuleOperator::IsFolder));
+            m_opCombo->addItem("不是文件夹", static_cast<int>(SmartRuleOperator::IsNotFolder));
+        }
+        break;
+
+    case SmartRuleType::AddedDate:
+    case SmartRuleType::ModifiedDate:
+    case SmartRuleType::CreatedDate:
+        m_opCombo->addItem("等于", static_cast<int>(SmartRuleOperator::Equals));
+        m_opCombo->addItem("早于", static_cast<int>(SmartRuleOperator::Before));
+        m_opCombo->addItem("晚于", static_cast<int>(SmartRuleOperator::After));
+        m_opCombo->addItem("介于", static_cast<int>(SmartRuleOperator::Between));
+        m_opCombo->addItem("最近 N 天", static_cast<int>(SmartRuleOperator::RecentDays));
+        break;
+
+    case SmartRuleType::Width:
+    case SmartRuleType::Height:
+    case SmartRuleType::FileSize:
+        m_opCombo->addItem("等于", static_cast<int>(SmartRuleOperator::Equals));
+        m_opCombo->addItem("大于等于", static_cast<int>(SmartRuleOperator::GreaterOrEqual));
+        m_opCombo->addItem("小于等于", static_cast<int>(SmartRuleOperator::LessOrEqual));
+        m_opCombo->addItem("介于", static_cast<int>(SmartRuleOperator::Between));
         break;
     }
+
+    m_opCombo->blockSignals(false);
+    updateValueWidget();
+}
+
+void SmartFolderRuleRow::onOpChanged() {
+    updateValueWidget();
+}
+
+void SmartFolderRuleRow::updateValueWidget() {
+    SmartRuleType type = static_cast<SmartRuleType>(m_typeCombo->currentData().toInt());
+    SmartRuleOperator op = static_cast<SmartRuleOperator>(m_opCombo->currentData().toInt());
+
+    // Save current values if m_valueWidget is valid
+    if (m_valueWidget) {
+        m_valueWidget->getRuleValues(m_currentRule);
+        m_layout->removeWidget(m_valueWidget);
+        m_valueWidget->hide();
+        m_valueWidget->setParent(nullptr);
+        m_valueWidget->deleteLater();
+        m_valueWidget = nullptr;
+    }
+
+    ISmartFolderValueWidget* newWidget = nullptr;
+
+    if (op == SmartRuleOperator::IsEmpty || op == SmartRuleOperator::IsNotEmpty ||
+        op == SmartRuleOperator::IsFolder || op == SmartRuleOperator::IsNotFolder) {
+        newWidget = new DummyValueWidget(this);
+    } else if (type == SmartRuleType::Rating) {
+        newWidget = new StarRatingValueWidget(this);
+    } else if (type == SmartRuleType::Color) {
+        newWidget = new ColorValueWidget(this);
+    } else if (type == SmartRuleType::Tag) {
+        newWidget = new TagPillValueWidget(this);
+    } else if (type == SmartRuleType::AddedDate || type == SmartRuleType::ModifiedDate || type == SmartRuleType::CreatedDate) {
+        if (op == SmartRuleOperator::Between) {
+            newWidget = new DateRangeValueWidget(this);
+        } else if (op == SmartRuleOperator::RecentDays) {
+            newWidget = new RecentDaysValueWidget(this);
+        } else {
+            newWidget = new SingleDateValueWidget(this);
+        }
+    } else if (type == SmartRuleType::Width || type == SmartRuleType::Height) {
+        QString suffix = "px";
+        if (op == SmartRuleOperator::Between) {
+            newWidget = new NumericRangeValueWidget(suffix, this);
+        } else {
+            newWidget = new NumericValueWidget(suffix, this);
+        }
+    } else if (type == SmartRuleType::FileSize) {
+        if (op == SmartRuleOperator::Between) {
+            newWidget = new FileSizeRangeValueWidget(this);
+        } else {
+            newWidget = new FileSizeValueWidget(this);
+        }
+    } else {
+        newWidget = new TextValueWidget(this);
+    }
+
+    m_valueWidget = newWidget;
+    m_valueWidget->setRuleValues(m_currentRule);
+    m_layout->insertWidget(2, m_valueWidget, 1);
+
+    connect(m_valueWidget, &ISmartFolderValueWidget::valueChanged, this, [this]() {
+        updateGeometry();
+        emit rowHeightChanged();
+    });
 
     updateGeometry();
     emit rowHeightChanged();
 }
 
 SmartFolderRule SmartFolderRuleRow::getRule() const {
-    SmartFolderRule rule;
+    SmartFolderRule rule = m_currentRule;
     rule.type = static_cast<SmartRuleType>(m_typeCombo->currentData().toInt());
     rule.op = static_cast<SmartRuleOperator>(m_opCombo->currentData().toInt());
 
-    if (rule.type == SmartRuleType::Tag) {
-        rule.tags = m_tagContainer->tags();
-    } else if (rule.type == SmartRuleType::Rating) {
-        rule.value = m_valueCombo->currentData().toString();
-    } else {
-        rule.value = m_valueEdit->text().trimmed();
+    if (m_valueWidget) {
+        m_valueWidget->getRuleValues(rule);
     }
     return rule;
 }
 
 void SmartFolderRuleRow::setRule(const SmartFolderRule& rule) {
+    m_currentRule = rule;
+
+    m_typeCombo->blockSignals(true);
     int typeIdx = m_typeCombo->findData(static_cast<int>(rule.type));
     if (typeIdx >= 0) {
         m_typeCombo->setCurrentIndex(typeIdx);
     }
+    m_typeCombo->blockSignals(false);
 
+    onTypeChanged(); // Re-populates m_opCombo
+
+    m_opCombo->blockSignals(true);
     int opIdx = m_opCombo->findData(static_cast<int>(rule.op));
     if (opIdx >= 0) {
         m_opCombo->setCurrentIndex(opIdx);
     }
+    m_opCombo->blockSignals(false);
 
-    if (rule.type == SmartRuleType::Tag) {
-        m_tagContainer->setTags(rule.tags);
-    } else if (rule.type == SmartRuleType::Rating) {
-        int valIdx = m_valueCombo->findData(rule.value);
-        if (valIdx >= 0) m_valueCombo->setCurrentIndex(valIdx);
-    } else {
-        m_valueEdit->setText(rule.value);
+    updateValueWidget();
+    if (m_valueWidget) {
+        m_valueWidget->setRuleValues(rule);
     }
-    updateGeometry();
-    emit rowHeightChanged();
 }
 
 } // namespace QuarkMeta

@@ -1,0 +1,345 @@
+#include "SmartFolderValueWidgets.h"
+#include "../TagPillContainer.h"
+#include "../../ui/SvgIcons.h"
+#include "../../ui/UiHelper.h"
+#include <QPainter>
+#include <QPixmap>
+
+namespace QuarkMeta {
+
+// --- TextValueWidget ---
+TextValueWidget::TextValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_edit = new QLineEdit(this);
+    m_edit->setPlaceholderText("请输入内容...");
+    layout->addWidget(m_edit);
+    connect(m_edit, &QLineEdit::textChanged, this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void TextValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.value = m_edit->text().trimmed();
+}
+
+void TextValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    m_edit->setText(rule.value);
+}
+
+// --- StarRatingValueWidget ---
+StarRatingValueWidget::StarRatingValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_combo = new QComboBox(this);
+
+    // 0 Stars / Unrated
+    m_combo->addItem("无 (0星)", 0);
+
+    const int starSize = 14;
+    const int spacing = 2;
+    for (int stars = 1; stars <= 5; ++stars) {
+        int maxW = 5 * starSize + 4 * spacing;
+        QPixmap pixmap(maxW, starSize);
+        pixmap.fill(Qt::transparent);
+
+        QPainter painter(&pixmap);
+        int x = 0;
+        for (int i = 0; i < stars; ++i) {
+            QIcon icon = UiHelper::getIcon("star_filled", QColor("#FFB800"));
+            icon.paint(&painter, x, 0, starSize, starSize);
+            x += starSize + spacing;
+        }
+        for (int i = stars; i < 5; ++i) {
+            QIcon icon = UiHelper::getIcon("star_filled", QColor("#444444"));
+            icon.paint(&painter, x, 0, starSize, starSize);
+            x += starSize + spacing;
+        }
+
+        m_combo->addItem(QIcon(pixmap), QString("%1 星").arg(stars), stars);
+    }
+
+    layout->addWidget(m_combo);
+    connect(m_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void StarRatingValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.value = QString::number(m_combo->currentData().toInt());
+    rule.num1 = m_combo->currentData().toInt();
+}
+
+void StarRatingValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    int r = rule.value.toInt();
+    if (r == 0 && rule.num1 > 0) r = static_cast<int>(rule.num1);
+    int idx = m_combo->findData(r);
+    if (idx >= 0) m_combo->setCurrentIndex(idx);
+}
+
+// --- SingleDateValueWidget ---
+SingleDateValueWidget::SingleDateValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_dateEdit = new QDateEdit(QDate::currentDate(), this);
+    m_dateEdit->setCalendarPopup(true);
+    m_dateEdit->setDisplayFormat("yyyy-MM-dd");
+    layout->addWidget(m_dateEdit);
+    connect(m_dateEdit, &QDateEdit::dateChanged, this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void SingleDateValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.date1 = m_dateEdit->date().toString("yyyy-MM-dd");
+    rule.value = rule.date1;
+}
+
+void SingleDateValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    QString dStr = !rule.date1.isEmpty() ? rule.date1 : rule.value;
+    QDate d = QDate::fromString(dStr, "yyyy-MM-dd");
+    if (d.isValid()) {
+        m_dateEdit->setDate(d);
+    } else {
+        m_dateEdit->setDate(QDate::currentDate());
+    }
+}
+
+// --- DateRangeValueWidget ---
+DateRangeValueWidget::DateRangeValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_date1Edit = new QDateEdit(QDate::currentDate(), this);
+    m_date1Edit->setCalendarPopup(true);
+    m_date1Edit->setDisplayFormat("yyyy-MM-dd");
+
+    m_date2Edit = new QDateEdit(QDate::currentDate(), this);
+    m_date2Edit->setCalendarPopup(true);
+    m_date2Edit->setDisplayFormat("yyyy-MM-dd");
+
+    layout->addWidget(m_date1Edit);
+    layout->addWidget(new QLabel("至", this));
+    layout->addWidget(m_date2Edit);
+
+    connect(m_date1Edit, &QDateEdit::dateChanged, this, &ISmartFolderValueWidget::valueChanged);
+    connect(m_date2Edit, &QDateEdit::dateChanged, this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void DateRangeValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.date1 = m_date1Edit->date().toString("yyyy-MM-dd");
+    rule.date2 = m_date2Edit->date().toString("yyyy-MM-dd");
+}
+
+void DateRangeValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    QDate d1 = QDate::fromString(rule.date1, "yyyy-MM-dd");
+    QDate d2 = QDate::fromString(rule.date2, "yyyy-MM-dd");
+    m_date1Edit->setDate(d1.isValid() ? d1 : QDate::currentDate());
+    m_date2Edit->setDate(d2.isValid() ? d2 : QDate::currentDate());
+}
+
+// --- RecentDaysValueWidget ---
+RecentDaysValueWidget::RecentDaysValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_spinBox = new QSpinBox(this);
+    m_spinBox->setRange(1, 3650);
+    m_spinBox->setValue(7);
+    m_spinBox->setSuffix(" 天");
+    layout->addWidget(m_spinBox);
+    connect(m_spinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void RecentDaysValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.days = m_spinBox->value();
+    rule.value = QString::number(rule.days);
+}
+
+void RecentDaysValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    int d = rule.days > 0 ? rule.days : rule.value.toInt();
+    m_spinBox->setValue(d > 0 ? d : 7);
+}
+
+// --- NumericValueWidget ---
+NumericValueWidget::NumericValueWidget(const QString& suffix, QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_spinBox = new QSpinBox(this);
+    m_spinBox->setRange(0, 100000);
+    m_spinBox->setValue(100);
+    if (!suffix.isEmpty()) m_spinBox->setSuffix(" " + suffix);
+    layout->addWidget(m_spinBox);
+    connect(m_spinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void NumericValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.num1 = m_spinBox->value();
+    rule.value = QString::number(rule.num1);
+}
+
+void NumericValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    qint64 v = rule.num1 > 0 ? rule.num1 : rule.value.toLongLong();
+    m_spinBox->setValue(static_cast<int>(v));
+}
+
+// --- NumericRangeValueWidget ---
+NumericRangeValueWidget::NumericRangeValueWidget(const QString& suffix, QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_spin1 = new QSpinBox(this);
+    m_spin1->setRange(0, 100000);
+    m_spin1->setValue(100);
+    if (!suffix.isEmpty()) m_spin1->setSuffix(" " + suffix);
+
+    m_spin2 = new QSpinBox(this);
+    m_spin2->setRange(0, 100000);
+    m_spin2->setValue(1000);
+    if (!suffix.isEmpty()) m_spin2->setSuffix(" " + suffix);
+
+    layout->addWidget(m_spin1);
+    layout->addWidget(new QLabel("至", this));
+    layout->addWidget(m_spin2);
+
+    connect(m_spin1, QOverload<int>::of(&QSpinBox::valueChanged), this, &ISmartFolderValueWidget::valueChanged);
+    connect(m_spin2, QOverload<int>::of(&QSpinBox::valueChanged), this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void NumericRangeValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.num1 = m_spin1->value();
+    rule.num2 = m_spin2->value();
+}
+
+void NumericRangeValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    m_spin1->setValue(static_cast<int>(rule.num1));
+    m_spin2->setValue(static_cast<int>(rule.num2));
+}
+
+// --- FileSizeValueWidget ---
+FileSizeValueWidget::FileSizeValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_spin = new QSpinBox(this);
+    m_spin->setRange(1, 10240);
+    m_spin->setValue(10);
+
+    m_unitCombo = new QComboBox(this);
+    m_unitCombo->addItem("MB", "MB");
+    m_unitCombo->addItem("KB", "KB");
+    m_unitCombo->addItem("GB", "GB");
+
+    layout->addWidget(m_spin);
+    layout->addWidget(m_unitCombo);
+
+    connect(m_spin, QOverload<int>::of(&QSpinBox::valueChanged), this, &ISmartFolderValueWidget::valueChanged);
+    connect(m_unitCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void FileSizeValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.num1 = m_spin->value();
+    rule.unit = m_unitCombo->currentData().toString();
+}
+
+void FileSizeValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    m_spin->setValue(rule.num1 > 0 ? static_cast<int>(rule.num1) : 10);
+    int idx = m_unitCombo->findData(rule.unit.isEmpty() ? "MB" : rule.unit);
+    if (idx >= 0) m_unitCombo->setCurrentIndex(idx);
+}
+
+// --- FileSizeRangeValueWidget ---
+FileSizeRangeValueWidget::FileSizeRangeValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_spin1 = new QSpinBox(this);
+    m_spin1->setRange(1, 10240);
+    m_spin1->setValue(1);
+
+    m_spin2 = new QSpinBox(this);
+    m_spin2->setRange(1, 10240);
+    m_spin2->setValue(100);
+
+    m_unitCombo = new QComboBox(this);
+    m_unitCombo->addItem("MB", "MB");
+    m_unitCombo->addItem("KB", "KB");
+    m_unitCombo->addItem("GB", "GB");
+
+    layout->addWidget(m_spin1);
+    layout->addWidget(new QLabel("至", this));
+    layout->addWidget(m_spin2);
+    layout->addWidget(m_unitCombo);
+
+    connect(m_spin1, QOverload<int>::of(&QSpinBox::valueChanged), this, &ISmartFolderValueWidget::valueChanged);
+    connect(m_spin2, QOverload<int>::of(&QSpinBox::valueChanged), this, &ISmartFolderValueWidget::valueChanged);
+    connect(m_unitCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void FileSizeRangeValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.num1 = m_spin1->value();
+    rule.num2 = m_spin2->value();
+    rule.unit = m_unitCombo->currentData().toString();
+}
+
+void FileSizeRangeValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    m_spin1->setValue(rule.num1 > 0 ? static_cast<int>(rule.num1) : 1);
+    m_spin2->setValue(rule.num2 > 0 ? static_cast<int>(rule.num2) : 100);
+    int idx = m_unitCombo->findData(rule.unit.isEmpty() ? "MB" : rule.unit);
+    if (idx >= 0) m_unitCombo->setCurrentIndex(idx);
+}
+
+// --- ColorValueWidget ---
+ColorValueWidget::ColorValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_combo = new QComboBox(this);
+
+    struct ColorItem {
+        QString name;
+        QString hex;
+    };
+    QList<ColorItem> colors = {
+        {"红", "#FF4D4F"}, {"橙", "#FFA940"}, {"黄", "#FFEC3D"},
+        {"绿", "#73D13D"}, {"青", "#36CFC9"}, {"蓝", "#40A9FF"},
+        {"紫", "#9254DE"}, {"粉", "#F759AB"}
+    };
+
+    for (const auto& item : colors) {
+        QPixmap pm(14, 14);
+        pm.fill(QColor(item.hex));
+        m_combo->addItem(QIcon(pm), item.name, item.hex);
+    }
+
+    layout->addWidget(m_combo);
+    connect(m_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void ColorValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.value = m_combo->currentData().toString();
+}
+
+void ColorValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    int idx = m_combo->findData(rule.value);
+    if (idx >= 0) m_combo->setCurrentIndex(idx);
+}
+
+// --- TagPillValueWidget ---
+TagPillValueWidget::TagPillValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    m_tagPillContainer = new TagPillContainer(this, TagTriggerSource::SmartFolderDialog);
+    layout->addWidget(m_tagPillContainer);
+
+    connect(m_tagPillContainer, &TagPillContainer::tagsChanged, this, &ISmartFolderValueWidget::valueChanged);
+}
+
+void TagPillValueWidget::getRuleValues(SmartFolderRule& rule) const {
+    rule.tags = m_tagPillContainer->tags();
+    rule.value = rule.tags.join(",");
+}
+
+void TagPillValueWidget::setRuleValues(const SmartFolderRule& rule) {
+    m_tagPillContainer->setTags(rule.tags);
+}
+
+// --- DummyValueWidget ---
+DummyValueWidget::DummyValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
+    auto* layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    // 留空，不显示任何遮挡提示控件，由布局自动留空占位
+}
+
+void DummyValueWidget::getRuleValues(SmartFolderRule& /*rule*/) const {}
+void DummyValueWidget::setRuleValues(const SmartFolderRule& /*rule*/) {}
+
+} // namespace QuarkMeta

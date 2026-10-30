@@ -368,6 +368,8 @@ set(SOURCES
     src/ui/dialogs/CreateFolderWithItemsDialog.cpp
     src/ui/TagPillContainer.h
     src/ui/TagPillContainer.cpp
+    src/ui/dialogs/SmartFolderValueWidgets.h
+    src/ui/dialogs/SmartFolderValueWidgets.cpp
     src/ui/dialogs/SmartFolderRuleRow.h
     src/ui/dialogs/SmartFolderRuleRow.cpp
     src/ui/dialogs/SmartFolderDialog.h

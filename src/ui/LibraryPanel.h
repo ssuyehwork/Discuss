@@ -67,6 +67,8 @@ public:
     LibraryItemDelegate* delegate() const { return m_delegate; }
     LibraryTreeView* treeView() const { return m_treeView; }
 
+    void invalidateSmartFolderCache(int smartFolderId = 0);
+
 signals:
     void categoryPathsSelected(const QStringList& paths, const QString& name = QString(), int categoryId = 0);
     void smartFolderSelected(const SmartFolderRecord& record);
@@ -88,6 +90,8 @@ private:
     QStandardItem* findItemByNodeId(QStandardItem* parent, int nodeId);
     void toggleSectionByNodeId(int nodeId);
 
+    void updateSmartFolderCountsAsync(uint64_t reqId, const QList<SmartFolderRecord>& smartFolders);
+
     QVBoxLayout* m_mainLayout = nullptr;
     LibraryTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
@@ -95,6 +99,10 @@ private:
     bool m_isLoading = false;
     bool m_orderDirty = false;
     int m_pendingEditNodeId = 0;
+
+    // 智能文件夹异步匹配数量内存缓存
+    QMap<int, int> m_smartFolderCountCache;
+    uint64_t m_currentCountReqId = 0;
 };
 
 } // namespace QuarkMeta

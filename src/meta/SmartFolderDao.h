@@ -8,19 +8,39 @@
 namespace QuarkMeta {
 
 enum class SmartRuleType {
-    Rating,
-    Color,
-    Tag,
-    Extension,
-    Keyword
+    Rating = 0,
+    Color = 1,
+    Tag = 2,
+    Extension = 3,
+    Name = 4,        // 原 Keyword，保持枚举整数值 4 不变
+    Folder = 5,
+    FolderName = 6,
+    AddedDate = 7,
+    ModifiedDate = 8,
+    CreatedDate = 9,
+    Link = 10,
+    Note = 11,
+    Width = 12,
+    Height = 13,
+    FileSize = 14
 };
 
 enum class SmartRuleOperator {
-    Equals,
-    GreaterOrEqual,
-    LessOrEqual,
-    Contains,
-    NotContains
+    Equals = 0,
+    GreaterOrEqual = 1,
+    LessOrEqual = 2,
+    Contains = 3,
+    NotContains = 4,
+    StartsWith = 5,
+    EndsWith = 6,
+    IsFolder = 7,
+    IsNotFolder = 8,
+    Before = 9,
+    After = 10,
+    Between = 11,
+    RecentDays = 12,
+    IsEmpty = 13,
+    IsNotEmpty = 14
 };
 
 struct SmartFolderRule {
@@ -28,6 +48,14 @@ struct SmartFolderRule {
     SmartRuleOperator op = SmartRuleOperator::GreaterOrEqual;
     QString value;
     QStringList tags;
+
+    // 存取属性字段
+    QString date1;  // yyyy-MM-dd
+    QString date2;  // yyyy-MM-dd
+    int days = 0;   // 最近 N 天
+    qint64 num1 = 0;
+    qint64 num2 = 0;
+    QString unit;   // "KB", "MB", "GB"
 
     QJsonObject toJson() const;
     static SmartFolderRule fromJson(const QJsonObject& obj);
@@ -52,7 +80,21 @@ public:
     static bool updateSmartFolder(const SmartFolderRecord& rec);
     static bool removeSmartFolderById(int id);
     static int countMatchingItems(const SmartFolderRecord& rec);
+    static int countMatchingItemsReadOnly(const QString& dbPath, const SmartFolderRecord& rec);
     static QStringList getMatchingPaths(const SmartFolderRecord& rec);
+
+    // SQL 条件独立构建单元
+    static QString buildRatingCondition(const SmartFolderRule& rule);
+    static QString buildNameCondition(const SmartFolderRule& rule);
+    static QString buildFolderNameCondition(const SmartFolderRule& rule);
+    static QString buildFolderCondition(const SmartFolderRule& rule);
+    static QString buildDateCondition(const QString& colName, const SmartFolderRule& rule);
+    static QString buildNumericCondition(const QString& colName, const SmartFolderRule& rule);
+    static QString buildFileSizeCondition(const SmartFolderRule& rule);
+    static QString buildTextPropertyCondition(const QString& colName, const SmartFolderRule& rule);
+    static QString buildColorCondition(const SmartFolderRule& rule);
+    static QString buildExtensionCondition(const SmartFolderRule& rule);
+    static QString buildTagCondition(const SmartFolderRule& rule);
 
 private:
     static QString buildWhereClause(const SmartFolderRecord& rec);

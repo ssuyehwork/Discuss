@@ -12,6 +12,15 @@
 
 namespace QuarkMeta {
 
+static QString escapeLike(const QString& str) {
+    QString res = str;
+    res.replace("\\", "\\\\");
+    res.replace("%", "\\%");
+    res.replace("_", "\\_");
+    res.replace("'", "''");
+    return res;
+}
+
 QJsonObject SmartFolderRule::toJson() const {
     QJsonObject obj;
     obj["type"] = static_cast<int>(type);
@@ -25,6 +34,12 @@ QJsonObject SmartFolderRule::toJson() const {
     } else {
         obj["value"] = value;
     }
+    if (!date1.isEmpty()) obj["date1"] = date1;
+    if (!date2.isEmpty()) obj["date2"] = date2;
+    if (days > 0) obj["days"] = days;
+    if (num1 != 0) obj["num1"] = num1;
+    if (num2 != 0) obj["num2"] = num2;
+    if (!unit.isEmpty()) obj["unit"] = unit;
     return obj;
 }
 
@@ -32,6 +47,13 @@ SmartFolderRule SmartFolderRule::fromJson(const QJsonObject& obj) {
     SmartFolderRule rule;
     rule.type = static_cast<SmartRuleType>(obj.value("type").toInt(0));
     rule.op = static_cast<SmartRuleOperator>(obj.value("op").toInt(0));
+    rule.date1 = obj.value("date1").toString();
+    rule.date2 = obj.value("date2").toString();
+    rule.days = obj.value("days").toInt(0);
+    rule.num1 = obj.value("num1").toVariant().toLongLong();
+    rule.num2 = obj.value("num2").toVariant().toLongLong();
+    rule.unit = obj.value("unit").toString();
+
     if (obj.contains("tags") && obj.value("tags").isArray()) {
         QJsonArray tagArr = obj.value("tags").toArray();
         for (const auto& val : tagArr) {
@@ -254,99 +276,324 @@ bool SmartFolderDao::updateSmartFolder(const SmartFolderRecord& rec) {
     return success;
 }
 
+QString SmartFolderDao::buildRatingCondition(const SmartFolderRule& rule) {
+    int r = rule.num1 > 0 ? static_cast<int>(rule.num1) : rule.value.toInt();
+    if (r == 0) {
+        return "rating = 0";
+    }
+    QString op = (rule.op == SmartRuleOperator::GreaterOrEqual) ? ">=" :
+                 (rule.op == SmartRuleOperator::LessOrEqual) ? "<=" : "=";
+    return QString("rating %1 %2").arg(op).arg(r);
+}
+
+QString SmartFolderDao::buildNameCondition(const SmartFolderRule& rule) {
+    if (rule.op == SmartRuleOperator::IsEmpty) {
+        return "(file_name IS NULL OR file_name = '')";
+    }
+    if (rule.op == SmartRuleOperator::IsNotEmpty) {
+        return "(file_name IS NOT NULL AND file_name != '')";
+    }
+
+    QString esc = escapeLike(rule.value.trimmed());
+    if (esc.isEmpty()) return QString();
+
+    if (rule.op == SmartRuleOperator::Equals) {
+        return QString("file_name = '%1'").arg(rule.value.trimmed().replace("'", "''"));
+    } else if (rule.op == SmartRuleOperator::StartsWith) {
+        return QString("file_name LIKE '%1%%' ESCAPE '\\'").arg(esc);
+    } else if (rule.op == SmartRuleOperator::EndsWith) {
+        return QString("file_name LIKE '%%%1' ESCAPE '\\'").arg(esc);
+    } else if (rule.op == SmartRuleOperator::NotContains) {
+        return QString("file_name NOT LIKE '%%%1%%' ESCAPE '\\'").arg(esc);
+    } else { // Contains
+        return QString("file_name LIKE '%%%1%%' ESCAPE '\\'").arg(esc);
+    }
+}
+
+QString SmartFolderDao::buildFolderNameCondition(const SmartFolderRule& rule) {
+    if (rule.op == SmartRuleOperator::IsEmpty) {
+        return "(is_dir = 1 AND (file_name IS NULL OR file_name = ''))";
+    }
+    if (rule.op == SmartRuleOperator::IsNotEmpty) {
+        return "(is_dir = 1 AND file_name IS NOT NULL AND file_name != '')";
+    }
+
+    QString esc = escapeLike(rule.value.trimmed());
+    if (esc.isEmpty()) return QString();
+
+    if (rule.op == SmartRuleOperator::NotContains) {
+        return QString("(is_dir = 1 AND file_name NOT LIKE '%%%1%%' ESCAPE '\\')").arg(esc);
+    } else if (rule.op == SmartRuleOperator::Equals) {
+        return QString("(is_dir = 1 AND file_name = '%1')").arg(rule.value.trimmed().replace("'", "''"));
+    } else if (rule.op == SmartRuleOperator::StartsWith) {
+        return QString("(is_dir = 1 AND file_name LIKE '%1%%' ESCAPE '\\')").arg(esc);
+    } else if (rule.op == SmartRuleOperator::EndsWith) {
+        return QString("(is_dir = 1 AND file_name LIKE '%%%1' ESCAPE '\\')").arg(esc);
+    } else { // Contains
+        return QString("(is_dir = 1 AND file_name LIKE '%%%1%%' ESCAPE '\\')").arg(esc);
+    }
+}
+
+QString SmartFolderDao::buildFolderCondition(const SmartFolderRule& rule) {
+    if (rule.op == SmartRuleOperator::IsFolder) {
+        return "is_dir = 1";
+    }
+    if (rule.op == SmartRuleOperator::IsNotFolder) {
+        return "is_dir = 0";
+    }
+
+    QString esc = escapeLike(rule.value.trimmed());
+    if (esc.isEmpty()) return QString();
+
+    if (rule.op == SmartRuleOperator::NotContains) {
+        return QString("file_path NOT LIKE '%%%1%%' ESCAPE '\\'").arg(esc);
+    } else {
+        return QString("file_path LIKE '%%%1%%' ESCAPE '\\'").arg(esc);
+    }
+}
+
+QString SmartFolderDao::buildDateCondition(const QString& colName, const SmartFolderRule& rule) {
+    // Exclude rows with 0 timestamp
+    QString baseFilter = QString("%1 > 0").arg(colName);
+
+    if (rule.op == SmartRuleOperator::RecentDays) {
+        int days = rule.days > 0 ? rule.days : rule.value.toInt();
+        if (days <= 0) days = 7;
+        QDate today = QDate::currentDate();
+        QDate startDate = today.addDays(-days + 1);
+        qint64 startMs = QDateTime(startDate.startOfDay()).toMSecsSinceEpoch();
+        return QString("(%1 AND %2 >= %3)").arg(baseFilter).arg(colName).arg(startMs);
+    }
+
+    QDate d1 = QDate::fromString(!rule.date1.isEmpty() ? rule.date1 : rule.value, "yyyy-MM-dd");
+    QDate d2 = QDate::fromString(rule.date2, "yyyy-MM-dd");
+
+    if (rule.op == SmartRuleOperator::Between) {
+        if (!d1.isValid()) d1 = QDate::currentDate();
+        if (!d2.isValid()) d2 = QDate::currentDate();
+
+        // 如果用户颠倒大小顺序，自动交换，不报错
+        if (d1 > d2) {
+            std::swap(d1, d2);
+        }
+
+        qint64 startMs = QDateTime(d1.startOfDay()).toMSecsSinceEpoch();
+        qint64 endMs = QDateTime(d2.addDays(1).startOfDay()).toMSecsSinceEpoch();
+        return QString("(%1 AND %2 >= %3 AND %2 < %4)").arg(baseFilter).arg(colName).arg(startMs).arg(endMs);
+    }
+
+    if (!d1.isValid()) return QString();
+
+    qint64 start1Ms = QDateTime(d1.startOfDay()).toMSecsSinceEpoch();
+    qint64 next1Ms = QDateTime(d1.addDays(1).startOfDay()).toMSecsSinceEpoch();
+
+    if (rule.op == SmartRuleOperator::Before) {
+        return QString("(%1 AND %2 < %3)").arg(baseFilter).arg(colName).arg(start1Ms);
+    } else if (rule.op == SmartRuleOperator::After) {
+        return QString("(%1 AND %2 >= %3)").arg(baseFilter).arg(colName).arg(next1Ms);
+    } else { // Equals
+        return QString("(%1 AND %2 >= %3 AND %2 < %4)").arg(baseFilter).arg(colName).arg(start1Ms).arg(next1Ms);
+    }
+}
+
+QString SmartFolderDao::buildNumericCondition(const QString& colName, const SmartFolderRule& rule) {
+    QString baseFilter = QString("%1 > 0").arg(colName);
+
+    if (rule.op == SmartRuleOperator::Between) {
+        qint64 n1 = rule.num1;
+        qint64 n2 = rule.num2;
+        if (n1 > n2) std::swap(n1, n2);
+        return QString("(%1 AND %2 >= %3 AND %2 <= %4)").arg(baseFilter).arg(colName).arg(n1).arg(n2);
+    }
+
+    qint64 val = rule.num1 > 0 ? rule.num1 : rule.value.toLongLong();
+    QString op = (rule.op == SmartRuleOperator::GreaterOrEqual) ? ">=" :
+                 (rule.op == SmartRuleOperator::LessOrEqual) ? "<=" : "=";
+
+    return QString("(%1 AND %2 %3 %4)").arg(baseFilter).arg(colName).arg(op).arg(val);
+}
+
+QString SmartFolderDao::buildFileSizeCondition(const SmartFolderRule& rule) {
+    qint64 mult = 1024 * 1024; // Default MB
+    QString u = rule.unit.toUpper();
+    if (u == "KB") mult = 1024;
+    else if (u == "GB") mult = 1024LL * 1024LL * 1024LL;
+
+    QString baseFilter = "is_dir = 0";
+
+    if (rule.op == SmartRuleOperator::Between) {
+        qint64 n1 = rule.num1;
+        qint64 n2 = rule.num2;
+        if (n1 > n2) std::swap(n1, n2);
+        qint64 bytes1 = n1 * mult;
+        qint64 bytes2 = n2 * mult;
+        return QString("(%1 AND file_size >= %2 AND file_size <= %3)").arg(baseFilter).arg(bytes1).arg(bytes2);
+    }
+
+    qint64 bytes = rule.num1 * mult;
+    QString op = (rule.op == SmartRuleOperator::GreaterOrEqual) ? ">=" :
+                 (rule.op == SmartRuleOperator::LessOrEqual) ? "<=" : "=";
+
+    return QString("(%1 AND file_size %2 %3)").arg(baseFilter).arg(op).arg(bytes);
+}
+
+QString SmartFolderDao::buildTextPropertyCondition(const QString& colName, const SmartFolderRule& rule) {
+    if (rule.op == SmartRuleOperator::IsEmpty) {
+        return QString("(%1 IS NULL OR %1 = '')").arg(colName);
+    }
+    if (rule.op == SmartRuleOperator::IsNotEmpty) {
+        return QString("(%1 IS NOT NULL AND %1 != '')").arg(colName);
+    }
+
+    QString esc = escapeLike(rule.value.trimmed());
+    if (esc.isEmpty()) return QString();
+
+    if (rule.op == SmartRuleOperator::Equals) {
+        return QString("%1 = '%2'").arg(colName).arg(rule.value.trimmed().replace("'", "''"));
+    } else if (rule.op == SmartRuleOperator::StartsWith) {
+        return QString("%1 LIKE '%2%%' ESCAPE '\\'").arg(colName).arg(esc);
+    } else if (rule.op == SmartRuleOperator::EndsWith) {
+        return QString("%1 LIKE '%%%2' ESCAPE '\\'").arg(colName).arg(esc);
+    } else if (rule.op == SmartRuleOperator::NotContains) {
+        return QString("%1 NOT LIKE '%%%2%%' ESCAPE '\\'").arg(colName).arg(esc);
+    } else { // Contains
+        return QString("%1 LIKE '%%%2%%' ESCAPE '\\'").arg(colName).arg(esc);
+    }
+}
+
+QString SmartFolderDao::buildColorCondition(const SmartFolderRule& rule) {
+    QString colorVal = rule.value.trimmed().replace("'", "''");
+    if (colorVal.isEmpty()) return QString();
+
+    if (rule.op == SmartRuleOperator::NotContains) {
+        return QString("color_hex != '%1'").arg(colorVal);
+    } else {
+        return QString("color_hex = '%1'").arg(colorVal);
+    }
+}
+
+QString SmartFolderDao::buildExtensionCondition(const SmartFolderRule& rule) {
+    QString rawValue = rule.value.trimmed();
+    if (rawValue.isEmpty()) return QString();
+
+    static const QRegularExpression splitRegex("[,;\\s|]+");
+    QStringList rawTokens = rawValue.split(splitRegex, Qt::SkipEmptyParts);
+    QStringList cleanExts;
+    for (QString token : rawTokens) {
+        token = token.trimmed();
+        if (token.startsWith('.')) {
+            token.remove(0, 1);
+        }
+        token = token.trimmed();
+        if (!token.isEmpty()) {
+            cleanExts << token.replace("'", "''");
+        }
+    }
+
+    if (cleanExts.isEmpty()) return QString();
+
+    if (cleanExts.size() == 1) {
+        if (rule.op == SmartRuleOperator::NotContains) {
+            return QString("LOWER(extension) != LOWER('%1')").arg(cleanExts.first());
+        } else {
+            return QString("LOWER(extension) = LOWER('%1')").arg(cleanExts.first());
+        }
+    } else {
+        QStringList quotedList;
+        for (const QString& ext : cleanExts) {
+            quotedList << QString("LOWER('%1')").arg(ext);
+        }
+        if (rule.op == SmartRuleOperator::NotContains) {
+            return QString("LOWER(extension) NOT IN (%1)").arg(quotedList.join(", "));
+        } else {
+            return QString("LOWER(extension) IN (%1)").arg(quotedList.join(", "));
+        }
+    }
+}
+
+QString SmartFolderDao::buildTagCondition(const SmartFolderRule& rule) {
+    QStringList cleanTags;
+    for (const QString& t : rule.tags) {
+        QString trimmed = t.trimmed().replace("'", "''");
+        if (!trimmed.isEmpty() && !cleanTags.contains(trimmed)) {
+            cleanTags << trimmed;
+        }
+    }
+
+    if (cleanTags.isEmpty()) return QString();
+
+    QStringList quotedTags;
+    for (const QString& ct : cleanTags) {
+        quotedTags << QString("'%1'").arg(ct);
+    }
+    QString tagListStr = quotedTags.join(", ");
+
+    if (rule.op == SmartRuleOperator::NotContains) {
+        return QString("file_id NOT IN (SELECT file_id FROM file_tags WHERE tag_name IN (%1))")
+               .arg(tagListStr);
+    } else {
+        return QString("file_id IN (SELECT file_id FROM file_tags WHERE tag_name IN (%1) GROUP BY file_id HAVING COUNT(DISTINCT tag_name) = %2)")
+               .arg(tagListStr)
+               .arg(cleanTags.size());
+    }
+}
+
 QString SmartFolderDao::buildWhereClause(const SmartFolderRecord& rec) {
     if (rec.rules.isEmpty()) return QString();
 
     QStringList whereConditions;
     for (const auto& rule : rec.rules) {
-        if (rule.type == SmartRuleType::Rating) {
-            QString op = (rule.op == SmartRuleOperator::GreaterOrEqual) ? ">=" :
-                         (rule.op == SmartRuleOperator::LessOrEqual) ? "<=" : "=";
-            whereConditions << QString("rating %1 %2").arg(op).arg(rule.value.toInt());
-        } 
-        else if (rule.type == SmartRuleType::Extension) {
-            QString rawValue = rule.value.trimmed();
-            if (!rawValue.isEmpty()) {
-                static const QRegularExpression splitRegex("[,;\\s|]+");
-                QStringList rawTokens = rawValue.split(splitRegex, Qt::SkipEmptyParts);
-                QStringList cleanExts;
-                for (QString token : rawTokens) {
-                    token = token.trimmed();
-                    if (token.startsWith('.')) {
-                        token.remove(0, 1);
-                    }
-                    token = token.trimmed();
-                    if (!token.isEmpty()) {
-                        cleanExts << token.replace("'", "''");
-                    }
-                }
-
-                if (!cleanExts.isEmpty()) {
-                    if (cleanExts.size() == 1) {
-                        if (rule.op == SmartRuleOperator::NotContains) {
-                            whereConditions << QString("LOWER(extension) != LOWER('%1')").arg(cleanExts.first());
-                        } else {
-                            whereConditions << QString("LOWER(extension) = LOWER('%1')").arg(cleanExts.first());
-                        }
-                    } else {
-                        QStringList quotedList;
-                        for (const QString& ext : cleanExts) {
-                            quotedList << QString("LOWER('%1')").arg(ext);
-                        }
-                        if (rule.op == SmartRuleOperator::NotContains) {
-                            whereConditions << QString("LOWER(extension) NOT IN (%1)").arg(quotedList.join(", "));
-                        } else {
-                            whereConditions << QString("LOWER(extension) IN (%1)").arg(quotedList.join(", "));
-                        }
-                    }
-                }
-            }
-        } 
-        else if (rule.type == SmartRuleType::Color) {
-            QString colorVal = rule.value.trimmed().replace("'", "''");
-            if (!colorVal.isEmpty()) {
-                if (rule.op == SmartRuleOperator::NotContains) {
-                    whereConditions << QString("color_hex != '%1'").arg(colorVal);
-                } else {
-                    whereConditions << QString("color_hex = '%1'").arg(colorVal);
-                }
-            }
+        QString cond;
+        switch (rule.type) {
+        case SmartRuleType::Rating:
+            cond = buildRatingCondition(rule);
+            break;
+        case SmartRuleType::Name:
+            cond = buildNameCondition(rule);
+            break;
+        case SmartRuleType::FolderName:
+            cond = buildFolderNameCondition(rule);
+            break;
+        case SmartRuleType::Folder:
+            cond = buildFolderCondition(rule);
+            break;
+        case SmartRuleType::AddedDate:
+            cond = buildDateCondition("added_at", rule);
+            break;
+        case SmartRuleType::ModifiedDate:
+            cond = buildDateCondition("updated_at", rule);
+            break;
+        case SmartRuleType::CreatedDate:
+            cond = buildDateCondition("created_at", rule);
+            break;
+        case SmartRuleType::Width:
+            cond = buildNumericCondition("width", rule);
+            break;
+        case SmartRuleType::Height:
+            cond = buildNumericCondition("height", rule);
+            break;
+        case SmartRuleType::FileSize:
+            cond = buildFileSizeCondition(rule);
+            break;
+        case SmartRuleType::Link:
+            cond = buildTextPropertyCondition("url", rule);
+            break;
+        case SmartRuleType::Note:
+            cond = buildTextPropertyCondition("note", rule);
+            break;
+        case SmartRuleType::Color:
+            cond = buildColorCondition(rule);
+            break;
+        case SmartRuleType::Extension:
+            cond = buildExtensionCondition(rule);
+            break;
+        case SmartRuleType::Tag:
+            cond = buildTagCondition(rule);
+            break;
         }
-        else if (rule.type == SmartRuleType::Tag) {
-            QStringList cleanTags;
-            for (const QString& t : rule.tags) {
-                QString trimmed = t.trimmed().replace("'", "''");
-                if (!trimmed.isEmpty() && !cleanTags.contains(trimmed)) {
-                    cleanTags << trimmed;
-                }
-            }
 
-            if (!cleanTags.isEmpty()) {
-                QStringList quotedTags;
-                for (const QString& ct : cleanTags) {
-                    quotedTags << QString("'%1'").arg(ct);
-                }
-                QString tagListStr = quotedTags.join(", ");
-
-                if (rule.op == SmartRuleOperator::NotContains) {
-                    whereConditions << QString("file_id NOT IN (SELECT file_id FROM file_tags WHERE tag_name IN (%1))")
-                                       .arg(tagListStr);
-                } else {
-                    whereConditions << QString("file_id IN (SELECT file_id FROM file_tags WHERE tag_name IN (%1) GROUP BY file_id HAVING COUNT(DISTINCT tag_name) = %2)")
-                                       .arg(tagListStr)
-                                       .arg(cleanTags.size());
-                }
-            }
-        }
-        else if (rule.type == SmartRuleType::Keyword) {
-            QString kw = rule.value.trimmed().replace("'", "''");
-            if (!kw.isEmpty()) {
-                if (rule.op == SmartRuleOperator::NotContains) {
-                    whereConditions << QString("file_name NOT LIKE '%%%1%%'").arg(kw);
-                } else {
-                    whereConditions << QString("file_name LIKE '%%%1%%'").arg(kw);
-                }
-            }
+        if (!cond.isEmpty()) {
+            whereConditions << cond;
         }
     }
 
@@ -380,6 +627,34 @@ int SmartFolderDao::countMatchingItems(const SmartFolderRecord& rec) {
     } else {
         DatabaseManager::logSqlError("SmartFolderDao::countMatchingItems prepare", db, sql);
     }
+    return count;
+}
+
+int SmartFolderDao::countMatchingItemsReadOnly(const QString& dbPath, const SmartFolderRecord& rec) {
+    if (rec.rules.isEmpty() || dbPath.isEmpty()) return 0;
+
+    QString whereClause = buildWhereClause(rec);
+    if (whereClause.isEmpty()) return 0;
+
+    sqlite3* dbReadOnly = nullptr;
+    int rc = sqlite3_open_v2(dbPath.toUtf8().constData(), &dbReadOnly, SQLITE_OPEN_READONLY, nullptr);
+    if (rc != SQLITE_OK || !dbReadOnly) {
+        if (dbReadOnly) sqlite3_close(dbReadOnly);
+        return 0;
+    }
+
+    QString sql = QString("SELECT COUNT(*) FROM library_items WHERE %1 AND sync_state != 2;")
+                  .arg(whereClause);
+
+    sqlite3_stmt* stmt = nullptr;
+    int count = 0;
+    if (sqlite3_prepare_v2(dbReadOnly, sql.toUtf8().constData(), -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            count = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(dbReadOnly);
     return count;
 }
 
