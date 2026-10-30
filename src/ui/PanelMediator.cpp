@@ -279,16 +279,8 @@ void PanelMediator::setupConnections() {
             }
         });
 
-        connect(shortcutController, &AppShortcutController::transferToMarkedRequested, this, [this, contentPanel]() {
-            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
-            if (target) {
-                QStringList sel = target->getSelectedPaths();
-                if (!sel.isEmpty()) {
-                    QuarkMeta::MarkedFolderService::instance().executeTransferToMarked(sel);
-                } else {
-                    ToolTipOverlay::instance()->showToast("未选择任何要迁移的文件或文件夹", 2000, QColor("#e81123"));
-                }
-            }
+        connect(shortcutController, &AppShortcutController::transferToMarkedRequested, this, []() {
+            QuarkMeta::MarkedFolderService::instance().executeTransferToMarked({});
         });
     }
 
@@ -1233,7 +1225,7 @@ void PanelMediator::setupConnections() {
                     contentPanel->refreshAll();
                 }
             }
-            activeOrRoot->recalculateAndEmitStats();
+            // 🚀 拔除直调：统计重算统一由模型的 dataChanged Roles 门禁经 50ms 定时器防抖触发
         } else if (event.type == QuarkMeta::AppEventType::ItemsDeleted ||
                    event.type == QuarkMeta::AppEventType::ItemsRenamed ||
                    event.type == QuarkMeta::AppEventType::UndoRedoPerformed) {

@@ -152,22 +152,27 @@ void DiskMediaExtractor::flushPendingUpdates() {
     for (auto it = sizes.constBegin(); it != sizes.constEnd(); ++it) folders.insert(it.key()); 
  
     for (const QString& folder : folders) { 
+        std::vector<std::pair<std::wstring, std::function<void(ItemMeta&)>>> batchUpdaters;
+
         for (const QString& fileName : failures.value(folder)) { 
-            QString fullPath = QDir(folder).filePath(fileName); 
-            QuarkMetaJsonStore::instance().updateItemMeta(fullPath.toStdWString(), [](ItemMeta& meta) { 
+            batchUpdaters.emplace_back(fileName.toStdWString(), [](ItemMeta& meta) {
                 meta.thumbStatus = 1; 
             }); 
         } 
  
         const QHash<QString, QSize> folderSizes = sizes.value(folder); 
         for (auto it = folderSizes.constBegin(); it != folderSizes.constEnd(); ++it) { 
-            QString fullPath = QDir(folder).filePath(it.key()); 
             QSize sz = it.value(); 
-            QuarkMetaJsonStore::instance().updateItemMeta(fullPath.toStdWString(), [sz](ItemMeta& meta) { 
+            batchUpdaters.emplace_back(it.key().toStdWString(), [sz](ItemMeta& meta) {
                 meta.width = sz.width(); 
                 meta.height = sz.height(); 
             }); 
         } 
+
+        // 🚀【复用 Step 1 批量接口】：按目录单次加锁单次标脏，消除逐文件锁竞争
+        if (!batchUpdaters.empty()) {
+            QuarkMetaJsonStore::instance().updateFolderItemsBatch(folder.toStdWString(), batchUpdaters);
+        }
     } 
 } 
  

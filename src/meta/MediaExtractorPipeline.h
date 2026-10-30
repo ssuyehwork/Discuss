@@ -1,11 +1,11 @@
 #pragma once 
  
 #include <QObject> 
-#include <QTimer> 
 #include <QColor> 
 #include <QPair> 
 #include <QVector> 
 #include <QThreadPool> 
+#include <deque>
 #include <vector> 
 #include <string> 
 #include <mutex> 
@@ -27,9 +27,6 @@ public:
     void cancelAll(); 
     void cancelBatch(const std::vector<std::wstring>& paths); 
  
-private slots: 
-    void processNextBatch(); 
- 
 private: 
     MediaExtractorPipeline(QObject* parent = nullptr); 
     ~MediaExtractorPipeline() override; 
@@ -37,8 +34,7 @@ private:
     void dispatchWorkersIfNeeded(); 
     void dispatchWorkerLoop(); 
  
-    std::vector<std::wstring> m_queue; 
-    QTimer* m_timer; 
+    std::deque<std::wstring> m_queue;
     std::mutex m_queueMutex; 
     std::atomic<int> m_activeCount{0}; // 正在处理解析中 of 任务数量 
     std::atomic<int> m_activeWorkers{0}; // 活跃工作线程数 

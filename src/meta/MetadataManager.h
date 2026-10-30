@@ -184,13 +184,6 @@ public:
 signals:
     void pendingSyncChanged(bool hasPending);
 
-private slots:
-    void triggerUiSignalTimer() {
-        if (m_uiSignalTimer && !m_uiSignalTimer->isActive()) {
-            m_uiSignalTimer->start();
-        }
-    }
-
 private:
     MetadataManager(QObject* parent = nullptr);
     ~MetadataManager() override = default;
@@ -204,9 +197,6 @@ private:
     std::atomic<bool> m_isInternalOperating{false};
     std::atomic<int> m_internalOpsCount{0};
     
-    QTimer* m_uiSignalTimer = nullptr;
-    std::unordered_set<QString> m_pendingUiPaths;
-
     void persistBatchAsync(const std::vector<std::wstring>& paths);
 };
 

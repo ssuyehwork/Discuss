@@ -3,6 +3,8 @@
 #include <QAtomicInt>
 #include "../ui/UiHelper.h"
 #include "../ui/ToolTipOverlay.h"
+#include "../ui/PanelMediator.h"
+#include "../ui/ContentPanel.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QFile>
@@ -65,8 +67,17 @@ bool MarkedFolderService::keepOnlyMarked(const QString& targetPath) {
 }
 
 bool MarkedFolderService::executeTransferToMarked(const QStringList& sourcePaths, const QStringList& targetDirs) {
-    if (sourcePaths.isEmpty()) {
-        ToolTipOverlay::instance()->showToast("未选择任何要迁移的项目", 2000, QColor("#e81123"));
+    QStringList resolvedSources = sourcePaths;
+    if (resolvedSources.isEmpty()) {
+        if (auto* mediator = PanelMediator::instance()) {
+            if (auto* panel = mediator->activeContentPanel()) {
+                resolvedSources = panel->getSelectedPaths();
+            }
+        }
+    }
+
+    if (resolvedSources.isEmpty()) {
+        ToolTipOverlay::instance()->showToast("未选择任何要迁移的文件或文件夹", 2000, QColor("#e81123"));
         return false;
     }
 
@@ -78,7 +89,7 @@ bool MarkedFolderService::executeTransferToMarked(const QStringList& sourcePaths
 
     // 预检测有效源路径与目的地列表
     QStringList validSources;
-    for (const QString& sp : sourcePaths) {
+    for (const QString& sp : resolvedSources) {
         if (QFile::exists(sp)) {
             validSources << QDir::cleanPath(sp);
         }

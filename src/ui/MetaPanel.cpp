@@ -584,6 +584,17 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
         m_tagRemoveDebounceTimer->stop();
         flushPendingTagDeletions();
     }
+
+    // 🚀【根除时序竞态】：若用户正在输入且尚未失焦，必须在快照切换前先向旧文件提交修改，杜绝串扰污染新选中的文件！
+    if (m_isUserEditing && !m_editingPathsSnapshot.isEmpty()) {
+        if (m_noteEdit && m_noteEdit->hasFocus()) {
+            emit noteEdited(m_editingPathsSnapshot, m_noteEdit->toPlainText());
+        } else if (m_linkEdit && m_linkEdit->hasFocus()) {
+            emit linkEdited(m_editingPathsSnapshot, m_linkEdit->text().trimmed());
+        }
+        m_isUserEditing = false;
+    }
+
     QElapsedTimer timer;
     timer.start();
     m_selectedPaths = paths;
@@ -861,10 +872,7 @@ void MetaPanel::setRating(int rating, bool fromUser) {
     }
 
     if (fromUser && !m_selectedPaths.isEmpty() && !m_isReadOnlyMode) {
-        QStringList pathsCopy = m_selectedPaths;
-        QTimer::singleShot(0, this, [this, pathsCopy, rating]() {
-            emit ratingChanged(pathsCopy, rating);
-        });
+        emit ratingChanged(m_selectedPaths, rating);
     }
 }
 
@@ -875,10 +883,7 @@ void MetaPanel::setColor(const QString& hexColor, bool fromUser) {
     }
 
     if (fromUser && !m_selectedPaths.isEmpty() && !m_isReadOnlyMode) {
-        QStringList pathsCopy = m_selectedPaths;
-        QTimer::singleShot(0, this, [this, pathsCopy, hexColor]() {
-            emit colorChanged(pathsCopy, hexColor);
-        });
+        emit colorChanged(m_selectedPaths, hexColor);
     }
 }
 
@@ -980,19 +985,11 @@ bool MetaPanel::eventFilter(QObject* watched, QEvent* event) {
 
     if (watched == m_noteEdit && event->type() == QEvent::FocusOut) {
         if (!m_editingPathsSnapshot.isEmpty()) {
-            QStringList pathsCopy = m_editingPathsSnapshot;
-            QString textCopy = m_noteEdit->toPlainText();
-            QTimer::singleShot(0, this, [this, pathsCopy, textCopy]() {
-                emit noteEdited(pathsCopy, textCopy);
-            });
+            emit noteEdited(m_editingPathsSnapshot, m_noteEdit->toPlainText());
         }
     } else if (watched == m_linkEdit && event->type() == QEvent::FocusOut) {
         if (!m_editingPathsSnapshot.isEmpty()) {
-            QStringList pathsCopy = m_editingPathsSnapshot;
-            QString linkCopy = m_linkEdit->text().trimmed();
-            QTimer::singleShot(0, this, [this, pathsCopy, linkCopy]() {
-                emit linkEdited(pathsCopy, linkCopy);
-            });
+            emit linkEdited(m_editingPathsSnapshot, m_linkEdit->text().trimmed());
         }
     } else if (watched == m_nameEdit && event->type() == QEvent::FocusOut) {
         if (m_editingPathsSnapshot.size() > 1) return true;

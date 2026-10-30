@@ -401,8 +401,8 @@ void FavoritePanel::initUi() {
 
 void FavoritePanel::markOrderDirty() {
     if (m_isLoading) return;
-    m_orderDirty = true;
-    QTimer::singleShot(0, this, &FavoritePanel::flushOrder);
+    saveFavorites();
+    m_orderDirty = false;
 }
 
 void FavoritePanel::flushOrder() {
@@ -907,7 +907,6 @@ void FavoritePanel::loadFavorites() {
     m_isLoading = true;
     m_favoriteModel->clear();
 
-    FavoriteDao::initTable();
     auto list = FavoriteDao::getAllFavorites();
 
     QStringList pathsToExtract;
@@ -917,11 +916,6 @@ void FavoritePanel::loadFavorites() {
     for (const auto& rec : list) {
         bool isVirtual = (rec.nodeType == FavoriteNodeType::VirtualCategory);
         QString nativePath = isVirtual ? rec.path : QDir::toNativeSeparators(QDir::cleanPath(rec.path));
-
-        if (!isVirtual) {
-            QFileInfo fi(nativePath);
-            if (!fi.exists()) continue;
-        }
 
         QColor itemColor = QColor(rec.colorHex);
         if (!itemColor.isValid()) itemColor = QColor("#888888");

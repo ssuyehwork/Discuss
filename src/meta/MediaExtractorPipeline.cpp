@@ -28,10 +28,6 @@ MediaExtractorPipeline& MediaExtractorPipeline::instance() {
 } 
  
 MediaExtractorPipeline::MediaExtractorPipeline(QObject* parent) : QObject(parent) { 
-    m_timer = new QTimer(this); 
-    m_timer->setInterval(1500); 
-    connect(m_timer, &QTimer::timeout, this, &MediaExtractorPipeline::processNextBatch); 
- 
     m_workerPool.setMaxThreadCount(qMax(2, QThread::idealThreadCount() / 2)); 
  
     if (QCoreApplication::instance()) { 
@@ -40,7 +36,8 @@ MediaExtractorPipeline::MediaExtractorPipeline(QObject* parent) : QObject(parent
 } 
  
 MediaExtractorPipeline::~MediaExtractorPipeline() { 
-    m_timer->stop(); 
+    cancelAll();
+    m_workerPool.waitForDone();
 } 
  
 void MediaExtractorPipeline::cancelAll() { 
@@ -85,13 +82,13 @@ void MediaExtractorPipeline::enqueue(const std::wstring& path) {
 } 
  
 void MediaExtractorPipeline::enqueueBatch(const std::vector<std::wstring>& paths) { 
+    if (paths.empty()) return;
     { 
         std::lock_guard<std::mutex> lock(m_queueMutex); 
         m_queue.insert(m_queue.end(), paths.begin(), paths.end()); 
     } 
  
     dispatchWorkersIfNeeded(); 
-    QMetaObject::invokeMethod(m_timer, "start", Qt::QueuedConnection); 
 } 
  
 void MediaExtractorPipeline::dispatchWorkersIfNeeded() { 
@@ -115,11 +112,6 @@ void MediaExtractorPipeline::dispatchWorkersIfNeeded() {
     } 
 } 
  
-void MediaExtractorPipeline::processNextBatch() { 
-    // 1500ms 定时器作为心跳兜底调度，防止在边缘并发场景下工作线程挂起导致队列未消费完 
-    dispatchWorkersIfNeeded(); 
-} 
- 
 void MediaExtractorPipeline::dispatchWorkerLoop() { 
 #ifdef Q_OS_WIN 
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED); 
@@ -132,9 +124,12 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
             std::lock_guard<std::mutex> lock(m_queueMutex); 
             if (m_queue.empty()) break; 
             size_t batchSize = std::min(m_queue.size(), static_cast<size_t>(32)); 
-            batch.assign(m_queue.begin(), m_queue.begin() + batchSize); 
-            m_queue.erase(m_queue.begin(), m_queue.begin() + batchSize); 
-            token = m_token; // 本批任务绑定取到任务时的当代令牌 
+            batch.reserve(batchSize);
+            for (size_t i = 0; i < batchSize; ++i) {
+                batch.push_back(std::move(m_queue.front()));
+                m_queue.pop_front();
+            }
+            token = m_token;
  
             m_activeCount.fetch_add(static_cast<int>(batch.size())); 
         } 
@@ -173,15 +168,8 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
                     item.height = sz.height(); 
                 } 
 
-                // 使用 Section I 的权威算法 extractWeightedPalette 提取调色板（最多 10 项）
+                // 权威算法 extractWeightedPalette 提取调色板（最多 10 项，严禁盲目进行全像素原图解码以防 OOM）
                 auto pal = ColorPaletteEngine::extractWeightedPalette(res.thumbnail512); 
-                if (pal.isEmpty()) {
-                    QImage fullImg(qPath);
-                    if (!fullImg.isNull()) {
-                        pal = ColorPaletteEngine::extractWeightedPalette(fullImg);
-                    }
-                }
-
                 if (pal.isEmpty()) {
                     continue;
                 }
@@ -207,6 +195,9 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
     } 
  
     m_activeWorkers.fetch_sub(1); 
+
+    // 🚀【根治丢唤醒竞态】：工人体退出前原子自检队列，若有残留任务立即唤醒新工人，杜绝依赖 1500ms 心跳补丁
+    dispatchWorkersIfNeeded();
  
 #ifdef Q_OS_WIN 
     CoUninitialize(); 

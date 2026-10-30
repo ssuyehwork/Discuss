@@ -542,41 +542,49 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
         return false;
     }
 
-    std::wstring wpath = path.toStdWString();
-    bool metaUpdated = false;
+    // 🚀【纯化模型职责】：元数据修改统一通过 CoreEngine 命令分发，严禁在 Model 内越权直写存储层
+    AppCommand cmd;
+    cmd.targetPaths = {path};
 
     if (role == RatingRole) {
         int newRating = value.toInt();
         if (record.rating != newRating) {
             record.rating = newRating;
-            MetadataManager::instance().setRating(wpath, newRating, true);
-            metaUpdated = true;
+            cmd.type = AppCommandType::SetRating;
+            cmd.params["rating"] = newRating;
+            CoreEngine::instance().executeCommand(cmd);
             LastOperationManager::instance().recordSetRating(newRating);
+            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
+            return true;
         }
     } else if (role == ColorRole) {
         QString newColor = value.toString();
         if (record.manualColor != newColor) {
             record.manualColor = newColor;
-            MetadataManager::instance().setColor(wpath, newColor.toStdWString(), true);
-            metaUpdated = true;
+            cmd.type = AppCommandType::SetColor;
+            cmd.params["color"] = newColor;
+            CoreEngine::instance().executeCommand(cmd);
             LastOperationManager::instance().recordSetColor(newColor);
+            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
+            return true;
         }
     } else if (role == IsLockedRole || role == PinnedRole) {
         bool pinned = value.toBool();
         if (record.pinned != pinned) {
             record.pinned = pinned;
-            MetadataManager::instance().setPinned(wpath, pinned, true);
-            metaUpdated = true;
+            cmd.type = AppCommandType::SetPinned;
+            cmd.params["pinned"] = pinned;
+            CoreEngine::instance().executeCommand(cmd);
+            emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
+            return true;
         }
     } else if (role == TagsRole) {
         QStringList newTags = value.toStringList();
         record.tags = newTags;
-        MetadataManager::instance().setTags(wpath, newTags, true);
-        metaUpdated = true;
+        cmd.type = AppCommandType::SetTags;
+        cmd.params["tags"] = newTags;
+        CoreEngine::instance().executeCommand(cmd);
         LastOperationManager::instance().recordPasteTags(newTags);
-    }
-
-    if (metaUpdated) {
         emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {role});
         return true;
     }
@@ -762,40 +770,16 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
     } else if (role == TypeRole) {
         return record.isDir ? "folder" : "file";
     } else if (role == RatingRole) {
-        if (record.rating == 0) {
-            std::wstring wpath = path.toStdWString();
-            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
-            if (meta.rating > 0) return meta.rating;
-        }
         return record.rating;
     } else if (role == ColorRole) {
-        if (record.manualColor.isEmpty()) {
-            std::wstring wpath = path.toStdWString();
-            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
-            QString colorStr = QString::fromStdWString(meta.manualColor);
-            if (!colorStr.isEmpty()) return colorStr;
-        }
         return record.manualColor;
     } else if (role == IsLockedRole || role == PinnedRole) {
         return record.pinned;
     } else if (role == EncryptedRole) {
         return record.encrypted;
     } else if (role == TagsRole) {
-        if (record.tags.isEmpty()) {
-            std::wstring wpath = path.toStdWString();
-            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
-            if (!meta.tags.isEmpty()) {
-                return meta.tags;
-            }
-        }
         return record.tags;
     } else if (role == NoteRole) {
-        if (record.note.isEmpty()) {
-            std::wstring wpath = path.toStdWString();
-            RuntimeMeta meta = MetadataManager::instance().getMeta(wpath);
-            QString noteStr = QString::fromStdWString(meta.note);
-            if (!noteStr.isEmpty()) return noteStr;
-        }
         return record.note;
     } else if (role == UrlRole) {
         return record.url;
