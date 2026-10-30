@@ -279,16 +279,8 @@ void PanelMediator::setupConnections() {
             }
         });
 
-        connect(shortcutController, &AppShortcutController::transferToMarkedRequested, this, [this, contentPanel]() {
-            ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
-            if (target) {
-                QStringList sel = target->getSelectedPaths();
-                if (!sel.isEmpty()) {
-                    QuarkMeta::MarkedFolderService::instance().executeTransferToMarked(sel);
-                } else {
-                    ToolTipOverlay::instance()->showToast("未选择任何要迁移的文件或文件夹", 2000, QColor("#e81123"));
-                }
-            }
+        connect(shortcutController, &AppShortcutController::transferToMarkedRequested, this, []() {
+            QuarkMeta::MarkedFolderService::instance().executeTransferToMarked({});
         });
     }
 
