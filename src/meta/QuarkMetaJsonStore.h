@@ -47,6 +47,12 @@ public:
     void updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater);
 
     /**
+     * @brief 批量原子修改同一个物理目录下的多个条目 ItemMeta (极大降低锁竞争)
+     */
+    void updateFolderItemsBatch(const std::wstring& folderPath,
+                                const std::vector<std::pair<std::wstring, std::function<void(ItemMeta&)>>>& updaters);
+
+    /**
      * @brief 批量向多个路径追加标签（按文件夹分组、合并现有 JSON 标签、预取加载、单批次标脏与刷盘）
      * @return 每个路径对应的最终合并标签列表
      */
@@ -85,7 +91,7 @@ public:
     bool readItemMeta(const std::wstring& filePath, ItemMeta& outMeta);
 
     /**
-     * @brief 物理迁移文件夹缓存文件 (.QuarkMeta.json)
+     * @brief 物理迁移文件夹缓存文件 (.QuarkMeta.json) 并同步重键内存缓存
      */
     bool migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath);
 
@@ -148,7 +154,9 @@ private:
     void notifyListeners(const ChangeEvent& event);
 
     QTimer* m_flushTimer = nullptr;
-    static constexpr int kFlushDebounceMs = 500; // 500ms 滑动 Write-Behind 防抖
+    QTimer* m_maxFlushTimer = nullptr;
+    static constexpr int kFlushDebounceMs = 300;  // 300ms 滑动防抖
+    static constexpr int kMaxFlushDelayMs = 3000; // 3000ms 最长强制刷盘延迟
 };
 
 } // namespace QuarkMeta

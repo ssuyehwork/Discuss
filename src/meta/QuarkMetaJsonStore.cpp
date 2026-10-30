@@ -63,10 +63,16 @@ QuarkMetaJsonStore& QuarkMetaJsonStore::instance() {
 QuarkMetaJsonStore::QuarkMetaJsonStore(QObject* parent)
     : QObject(parent) {
     m_flushPool.setMaxThreadCount(1);
+
     m_flushTimer = new QTimer(this);
     m_flushTimer->setSingleShot(true);
     m_flushTimer->setInterval(kFlushDebounceMs);
     connect(m_flushTimer, &QTimer::timeout, this, &QuarkMetaJsonStore::onFlushTimeout);
+
+    m_maxFlushTimer = new QTimer(this);
+    m_maxFlushTimer->setSingleShot(true);
+    m_maxFlushTimer->setInterval(kMaxFlushDelayMs);
+    connect(m_maxFlushTimer, &QTimer::timeout, this, &QuarkMetaJsonStore::onFlushTimeout);
 
     if (auto* app = QCoreApplication::instance()) {
         this->moveToThread(app->thread());
@@ -179,6 +185,9 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
             dummyItem.note = fMeta.note;
             dummyItem.url = fMeta.url;
             dummyItem.encrypted = fMeta.encrypted;
+            dummyItem.encryptSalt = fMeta.encryptSalt;
+            dummyItem.encryptIv = fMeta.encryptIv;
+            dummyItem.encryptVerifyHash = fMeta.encryptVerifyHash;
             dummyItem.folderId = fMeta.folderId;
             dummyItem.tags = fMeta.tags;
             dummyItem.palettes = fMeta.palettes;
@@ -191,6 +200,9 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
             fMeta.note = dummyItem.note;
             fMeta.url = dummyItem.url;
             fMeta.encrypted = dummyItem.encrypted;
+            fMeta.encryptSalt = dummyItem.encryptSalt;
+            fMeta.encryptIv = dummyItem.encryptIv;
+            fMeta.encryptVerifyHash = dummyItem.encryptVerifyHash;
             fMeta.folderId = dummyItem.folderId;
             fMeta.tags = dummyItem.tags;
             fMeta.palettes = dummyItem.palettes;
@@ -201,6 +213,40 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
 
     scheduleFlush();
     notifyListeners({ChangeType::ItemChanged, QDir::toNativeSeparators(QString::fromStdWString(filePath)), ""});
+}
+
+void QuarkMetaJsonStore::updateFolderItemsBatch(const std::wstring& folderPath,
+                                            const std::vector<std::pair<std::wstring, std::function<void(ItemMeta&)>>>& updaters) {
+    if (folderPath.empty() || updaters.empty()) return;
+
+    prefetchFolderJson(folderPath);
+    std::wstring normFolder = normalizeFolderPath(folderPath);
+
+    std::vector<QString> changedPaths;
+    changedPaths.reserve(updaters.size());
+
+    {
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        auto jsonPtr = getOrLoadFolderLocked(normFolder, folderPath);
+
+        for (const auto& [fileName, updater] : updaters) {
+            if (!updater || fileName.empty()) continue;
+            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName);
+            ItemMeta& meta = jsonPtr->items()[key];
+            updater(meta);
+
+            QString fullPath = QDir::toNativeSeparators(QDir(QString::fromStdWString(folderPath)).filePath(QString::fromStdWString(fileName)));
+            changedPaths.push_back(fullPath);
+        }
+
+        markDirtyLocked(normFolder);
+    }
+
+    scheduleFlush();
+
+    for (const auto& p : changedPaths) {
+        notifyListeners({ChangeType::ItemChanged, p, ""});
+    }
 }
 
 QMap<QString, QStringList> QuarkMetaJsonStore::addTagsBatch(const QStringList& paths, const QStringList& tags) {
@@ -244,7 +290,6 @@ QMap<QString, QStringList> QuarkMetaJsonStore::addTagsBatch(const QStringList& p
         prefetchFolderJson(fPath);
     }
 
-    // 🚀【细粒度锁优化】：避免用一个大锁贯穿所有文件夹循环，改为按文件夹独立加锁，防止挂起 readFolderMeta
     for (auto& pair : folderGroups) {
         const std::wstring& normFolder = pair.first;
         const auto& itemsInFolder = pair.second;
@@ -445,6 +490,9 @@ void QuarkMetaJsonStore::scheduleFlush() {
         if (m_flushTimer) {
             m_flushTimer->start(kFlushDebounceMs);
         }
+        if (m_maxFlushTimer && !m_maxFlushTimer->isActive()) {
+            m_maxFlushTimer->start(kMaxFlushDelayMs);
+        }
     }, Qt::QueuedConnection);
 }
 
@@ -621,11 +669,20 @@ bool QuarkMetaJsonStore::saveTicket(const FlushTicket& ticket) {
     uint64_t& saved = m_savedRevision[ticket.normFolder];
     if (saved >= ticket.revision) return true;   // 更新的快照已落盘，丢弃过期快照视作成功
     bool ok = ticket.snapshot.save();
-    if (ok) saved = ticket.revision;
+    if (ok) {
+        saved = ticket.revision;
+    } else {
+        // 写盘失败容错保护：重新将该目录标记为脏缓冲区，防止丢数据
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        m_dirtyFolderPaths.insert(ticket.normFolder);
+        scheduleFlush();
+    }
     return ok;
 }
 
 void QuarkMetaJsonStore::onFlushTimeout() {
+    if (m_flushTimer) m_flushTimer->stop();
+    if (m_maxFlushTimer) m_maxFlushTimer->stop();
     flushAllDirtyBuffers();
 }
 
@@ -739,6 +796,33 @@ bool QuarkMetaJsonStore::renameItem(const QString& folderPath, const QString& ol
 bool QuarkMetaJsonStore::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
     flushAllDirtyBuffers(true);
     bool ok = QuarkMetaJson::migrateFolderCache(oldFolderPath, newFolderPath);
+    
+    std::wstring oldNorm = normalizeFolderPath(oldFolderPath.toStdWString());
+    std::wstring newNorm = normalizeFolderPath(newFolderPath.toStdWString());
+
+    {
+        std::lock_guard<std::mutex> lock(m_storeMutex);
+        std::vector<std::wstring> keysToMove;
+        for (const auto& [key, ptr] : m_folderCacheMap) {
+            if (key == oldNorm || (key.length() > oldNorm.length() && key.compare(0, oldNorm.length(), oldNorm) == 0)) {
+                keysToMove.push_back(key);
+            }
+        }
+        for (const auto& oldKey : keysToMove) {
+            auto ptr = m_folderCacheMap[oldKey];
+            m_folderCacheMap.erase(oldKey);
+            
+            std::wstring subPath = oldKey.substr(oldNorm.length());
+            std::wstring newKey = newNorm + subPath;
+            m_folderCacheMap[newKey] = ptr;
+
+            if (m_dirtyFolderPaths.count(oldKey) > 0) {
+                m_dirtyFolderPaths.erase(oldKey);
+                m_dirtyFolderPaths.insert(newKey);
+            }
+        }
+    }
+
     invalidateFolderCache(oldFolderPath.toStdWString());
     invalidateFolderCache(newFolderPath.toStdWString());
     if (ok) {

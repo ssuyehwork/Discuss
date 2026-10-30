@@ -1,6 +1,4 @@
 #include "QuarkMetaJson.h"
-#include "MetaMemoryCache.h"
-#include "MetadataManager.h"
 #include "QuarkMetaJsonStore.h"
 #include <QFile>
 #include <QFileInfo>
@@ -91,7 +89,7 @@ bool QuarkMetaJson::save() const {
     root.insert("folder", folderToEntry(m_folder));
     root.insert("items", itemsObj);
 
-    QByteArray jsonData = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    QByteArray jsonData = QJsonDocument(root).toJson(QJsonDocument::Compact);
     QString tmpPath = toQString(m_filePath) + ".tmp";
     
     QFile tmpFile(tmpPath);
@@ -109,10 +107,7 @@ bool QuarkMetaJson::save() const {
 }
 
 bool QuarkMetaJson::renameItem(const QString& folderPath, const QString& oldName, const QString& newName) {
-    QuarkMetaJsonStore& store = QuarkMetaJsonStore::instance();
-    bool ok = store.renameItem(folderPath, oldName, newName);
-    store.flushAllDirtyBuffers(true);
-    return ok;
+    return QuarkMetaJsonStore::instance().renameItem(folderPath, oldName, newName);
 }
 
 std::unordered_map<std::wstring, ItemMeta> QuarkMetaJson::readFolderMeta(const std::wstring& folderPath) {
@@ -125,9 +120,7 @@ std::unordered_map<std::wstring, ItemMeta> QuarkMetaJson::readFolderMeta(const s
 }
 
 void QuarkMetaJson::updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater) {
-    QuarkMetaJsonStore& store = QuarkMetaJsonStore::instance();
-    store.updateItemMeta(filePath, updater);
-    store.flushAllDirtyBuffers(true);
+    QuarkMetaJsonStore::instance().updateItemMeta(filePath, updater);
 }
 
 bool QuarkMetaJson::migrateItemMetadata(const QString& oldFilePath, const QString& newFilePath) { 
@@ -136,39 +129,19 @@ bool QuarkMetaJson::migrateItemMetadata(const QString& oldFilePath, const QStrin
 
 bool QuarkMetaJson::roamBatchMetadata(const QList<QPair<QString, QString>>& pairs, bool isMove) {
     if (pairs.isEmpty()) return false;
-    QuarkMetaJsonStore& store = QuarkMetaJsonStore::instance();
-    bool ok = store.transferItems(pairs, isMove, false);
-    store.flushAllDirtyBuffers(true);
-    if (isMove) {
-        for (const auto& pair : pairs) {
-            MetadataManager::instance().renameItem(pair.first.toStdWString(), pair.second.toStdWString());
-        }
-    }
-    return ok;
+    return QuarkMetaJsonStore::instance().transferItems(pairs, isMove, false);
 }
 
 bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove) {
     if (oldFilePath == newFilePath) return true;
-    QuarkMetaJsonStore& store = QuarkMetaJsonStore::instance();
     QList<QPair<QString, QString>> pairs;
     pairs.append(qMakePair(oldFilePath, newFilePath));
-    bool ok = store.transferItems(pairs, isMove, true);
-    if (ok) {
-        store.flushAllDirtyBuffers(true);
-        MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, newFilePath);
-    }
-    return ok;
+    return QuarkMetaJsonStore::instance().transferItems(pairs, isMove, true);
 }
 
 bool QuarkMetaJson::removeItemMetadata(const QString& filePath) {
     if (filePath.isEmpty()) return true;
-    QuarkMetaJsonStore& store = QuarkMetaJsonStore::instance();
-    if (!store.removeItem(filePath)) return false;
-    store.flushAllDirtyBuffers(true);
-    std::wstring wPath = MetadataManager::normalizePath(filePath.toStdWString());
-    MetaMemoryCache::instance().remove(wPath);
-    MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, filePath);
-    return true;
+    return QuarkMetaJsonStore::instance().removeItem(filePath);
 }
 
 bool QuarkMetaJson::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
@@ -208,6 +181,18 @@ QJsonObject QuarkMetaJson::folderToEntry(const FolderMeta& meta) {
     obj.insert("note", toQString(meta.note));
     obj.insert("url", toQString(meta.url));
     obj.insert("encrypted", meta.encrypted);
+    if (!meta.encryptSalt.empty()) {
+        obj.insert("encrypt_salt", QString::fromStdString(meta.encryptSalt));
+    }
+    if (!meta.encryptIv.empty()) {
+        obj.insert("encrypt_iv", QString::fromStdString(meta.encryptIv));
+    }
+    if (!meta.encryptVerifyHash.empty()) {
+        obj.insert("encrypt_verify_hash", QString::fromStdString(meta.encryptVerifyHash));
+    }
+    if (!meta.folderId.empty()) {
+        obj.insert("folder_id", QString::fromStdString(meta.folderId));
+    }
     if (!meta.metaFileId.empty()) {
         obj.insert("meta_file_id", QString::fromStdString(meta.metaFileId));
     }
@@ -238,6 +223,10 @@ FolderMeta QuarkMetaJson::entryToFolder(const QJsonObject& obj) {
     meta.note = toStdWString(obj.value("note").toString());
     meta.url = toStdWString(obj.value("url").toString());
     meta.encrypted = obj.value("encrypted").toBool();
+    meta.encryptSalt = obj.value("encrypt_salt").toString().toStdString();
+    meta.encryptIv = obj.value("encrypt_iv").toString().toStdString();
+    meta.encryptVerifyHash = obj.value("encrypt_verify_hash").toString().toStdString();
+    meta.folderId = obj.value("folder_id").toString().toStdString();
     meta.metaFileId = obj.value("meta_file_id").toString().toStdString();
     if (meta.metaFileId.empty()) {
         meta.metaFileId = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
@@ -271,6 +260,18 @@ QJsonObject QuarkMetaJson::itemToEntry(const ItemMeta& meta) {
     obj.insert("note", toQString(meta.note));
     obj.insert("url", toQString(meta.url));
     obj.insert("encrypted", meta.encrypted);
+    if (!meta.encryptSalt.empty()) {
+        obj.insert("encrypt_salt", QString::fromStdString(meta.encryptSalt));
+    }
+    if (!meta.encryptIv.empty()) {
+        obj.insert("encrypt_iv", QString::fromStdString(meta.encryptIv));
+    }
+    if (!meta.encryptVerifyHash.empty()) {
+        obj.insert("encrypt_verify_hash", QString::fromStdString(meta.encryptVerifyHash));
+    }
+    if (!meta.folderId.empty()) {
+        obj.insert("folder_id", QString::fromStdString(meta.folderId));
+    }
     obj.insert("original_name", toQString(meta.originalName));
     obj.insert("volume", toQString(meta.volume));
     obj.insert("frn", toQString(meta.frn));
@@ -303,6 +304,10 @@ QJsonObject QuarkMetaJson::itemToEntry(const ItemMeta& meta) {
 
 ItemMeta QuarkMetaJson::entryToItem(const QJsonObject& obj) {
     ItemMeta meta;
+    meta.fileId = obj.value("file_id").toString().toStdString();
+    if (meta.fileId.empty()) {
+        meta.fileId = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
+    }
     meta.type = toStdWString(obj.value("type").toString("file"));
     meta.rating = obj.value("rating").toInt();
     meta.color = toStdWString(obj.value("color").toString());
@@ -310,6 +315,10 @@ ItemMeta QuarkMetaJson::entryToItem(const QJsonObject& obj) {
     meta.note = toStdWString(obj.value("note").toString());
     meta.url = toStdWString(obj.value("url").toString());
     meta.encrypted = obj.value("encrypted").toBool();
+    meta.encryptSalt = obj.value("encrypt_salt").toString().toStdString();
+    meta.encryptIv = obj.value("encrypt_iv").toString().toStdString();
+    meta.encryptVerifyHash = obj.value("encrypt_verify_hash").toString().toStdString();
+    meta.folderId = obj.value("folder_id").toString().toStdString();
     meta.originalName = toStdWString(obj.value("original_name").toString());
     meta.volume = toStdWString(obj.value("volume").toString());
     meta.frn = toStdWString(obj.value("frn").toString());
