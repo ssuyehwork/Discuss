@@ -9,16 +9,17 @@
 
 ## 2. 问题分析与根因溯源 (Analysis & Root Cause)
 1. **遮罩信息盲区**：目前拖拽遮罩仅显示抽象的数量统计（如“迁移到 1 个标记文件夹”），用户无法直观确认究竟会分发搬运到哪几个具体的目标文件夹，存在操作误解风险。
-2. **分发入口单一**：目前一键分发主要依赖键盘快捷键 `Alt+V` 或拖拽到“标记”面板空白处，缺乏在右键“移动到...”主功能菜单中的显式入口。
+2. **接口类型对齐**：`MarkedFolderService::instance().getActiveMarked()` 返回类型为 `QStringList`（已激活标记文件夹的物理路径列表 `QList<QString>`）。在遍历时须直接将元素当作 `folderPath` 处理，通过 `QFileInfo(folderPath).fileName()` 提取文件夹名称显示，杜绝类型成员访问错误。
+3. **分发入口单一**：目前一键分发主要依赖键盘快捷键 `Alt+V` 或拖拽到“标记”面板空白处，缺乏在右键“移动到...”主功能菜单中的显式入口。
 
 ---
 
 ## 3. 修改文件范围 (Scope of Changes)
 
 ### 核心代码文件
-- `src/ui/MetaPanel.cpp`：升级 `showDragOverlay`，读取 `MarkedFolderService::instance().getActiveMarked()`，提取文件夹名称拼接为多行 HTML/Text 文本展示在遮罩 Label 上。
+- `src/ui/MetaPanel.cpp`：升级 `showDragOverlay`，读取 `MarkedFolderService::instance().getActiveMarked()`，遍历 `folderPath` 提取 `QFileInfo(folderPath).fileName()` 拼接为多行文本展示在遮罩 Label 上。
 - `src/ui/FilterPanel.cpp`：升级 `showDragOverlay`，同步支持多行已激活标记文件夹名称展示。
-- `src/ui/controllers/ContentContextMenu.cpp`：在 `moveMenu` 最顶部添加“一键分发”菜单项（绑定 `Folder-add.svg` 或 `Destination.svg` 图标与 `#EEEEEE` 中性色），触发时执行 `executeTransferToMarked`。
+- `src/ui/controllers/ContentContextMenu.cpp`：在 `moveMenu` 最顶部添加“一键分发 (Alt+V)”菜单项（绑定 `Destination.svg` 图标与 `#EEEEEE` 中性色），触发时执行 `executeTransferToMarked`。
 
 ---
 
@@ -33,16 +34,14 @@
 
 ### 5.1 遮罩文本动态拼接逻辑 (MetaPanel & FilterPanel)
 ```cpp
-auto activeFolders = MarkedFolderService::instance().getActiveMarked();
+auto activeFolders = MarkedFolderService::instance().getActiveMarked(); // 返回 QStringList
 if (!activeFolders.isEmpty()) {
     QStringList lines;
     lines << QString("迁移到 %1 个标记文件夹").arg(activeFolders.size());
-    lines << "----------------";
-    for (const auto& folder : activeFolders) {
-        QString name = folder.name;
-        if (name.isEmpty()) {
-            name = QFileInfo(folder.path).fileName();
-        }
+    lines << ""; // 空行打散间距
+    for (const auto& folderPath : activeFolders) {
+        QString name = QFileInfo(folderPath).fileName();
+        if (name.isEmpty()) name = folderPath;
         lines << name;
     }
     m_dragOverlayLabel->setText(lines.join("\n"));
@@ -101,12 +100,9 @@ void MetaPanel::showDragOverlay(int activeCount) {
         QStringList lines;
         lines << QString("迁移到 %1 个标记文件夹").arg(activeFolders.size());
         lines << ""; // 空行打散间距
-        for (const auto& folder : activeFolders) {
-            QString name = folder.name;
-            if (name.isEmpty()) {
-                name = QFileInfo(folder.path).fileName();
-            }
-            if (name.isEmpty()) name = folder.path;
+        for (const auto& folderPath : activeFolders) {
+            QString name = QFileInfo(folderPath).fileName();
+            if (name.isEmpty()) name = folderPath;
             lines << name;
         }
         m_dragOverlayLabel->setText(lines.join("\n"));
@@ -168,12 +164,9 @@ void FilterPanel::showDragOverlay(int activeCount) {
         QStringList lines;
         lines << QString("迁移到 %1 个标记文件夹").arg(activeFolders.size());
         lines << ""; // 空行打散间距
-        for (const auto& folder : activeFolders) {
-            QString name = folder.name;
-            if (name.isEmpty()) {
-                name = QFileInfo(folder.path).fileName();
-            }
-            if (name.isEmpty()) name = folder.path;
+        for (const auto& folderPath : activeFolders) {
+            QString name = QFileInfo(folderPath).fileName();
+            if (name.isEmpty()) name = folderPath;
             lines << name;
         }
         m_dragOverlayLabel->setText(lines.join("\n"));
@@ -214,7 +207,7 @@ void FilterPanel::showDragOverlay(int activeCount) {
 ## 7. 三道关自检与验证步骤 (Verification)
 
 ### 1. 第一道关：静态编译核查
-确保修改后无编译语法错误与 Warning。
+确保修改后在 C++ 静态编译中 `folderPath` 类型对齐为 `QString`，100% 消除编译错误。
 
 ### 2. 第二道关：自检脚本验证
 使用方案自检脚本 `tools/plan_verify/verify_plan.py` 验证本文件的完整性：
@@ -225,4 +218,4 @@ python3 tools/plan_verify/verify_plan.py "Implementation Plan/MarkedFolder_DragO
 ---
 
 ## 8. 总结 (Summary)
-本实施方案完整涵盖了拖拽遮罩多行文件夹名称展示与右键菜单【一键分发】选项添加的全部实现，符合全软件一致的架构原则与中性色契约，为后续上架合并提供精确标准。
+本修正方案完美修正了 `getActiveMarked()` 的 `QStringList` 返回类型，消除了类型属性访问错误，确保实施方案精准可执行。
