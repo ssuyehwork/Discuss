@@ -24,20 +24,19 @@ signals:
     void rowHeightChanged();
 
 private slots:
-    void onTypeChanged(int index);
-    void onOpChanged(int index);
-    void onValueWidgetChanged();
+    void onTypeChanged();
+    void onOpChanged();
 
 private:
     void initUi();
-    void rebuildOperators(const SmartFolderRule& presetRule = SmartFolderRule());
-    void rebuildValueWidget();
+    void updateValueWidget();
 
-    QHBoxLayout* m_layout = nullptr;
     QComboBox* m_typeCombo = nullptr;
     QComboBox* m_opCombo = nullptr;
     ISmartFolderValueWidget* m_valueWidget = nullptr;
     QPushButton* m_btnDelete = nullptr;
+    QHBoxLayout* m_layout = nullptr;
+    SmartFolderRule m_currentRule;
 };
 
 } // namespace QuarkMeta

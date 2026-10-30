@@ -49,13 +49,13 @@ struct SmartFolderRule {
     QString value;
     QStringList tags;
 
-    // 各种规则形态的明确存取键
-    QString date1;  // ISO 日期字符串 yyyy-MM-dd
-    QString date2;  // ISO 日期字符串 yyyy-MM-dd
+    // 存取属性字段
+    QString date1;  // yyyy-MM-dd
+    QString date2;  // yyyy-MM-dd
     int days = 0;   // 最近 N 天
     qint64 num1 = 0;
     qint64 num2 = 0;
-    QString unit;   // "KB", "MB", "GB" (仅文件大小)
+    QString unit;   // "KB", "MB", "GB"
 
     QJsonObject toJson() const;
     static SmartFolderRule fromJson(const QJsonObject& obj);
@@ -80,7 +80,7 @@ public:
     static bool updateSmartFolder(const SmartFolderRecord& rec);
     static bool removeSmartFolderById(int id);
     static int countMatchingItems(const SmartFolderRecord& rec);
-    static int countMatchingItemsReadOnly(sqlite3* readOnlyDb, const SmartFolderRecord& rec);
+    static int countMatchingItemsReadOnly(const QString& dbPath, const SmartFolderRecord& rec);
     static QStringList getMatchingPaths(const SmartFolderRecord& rec);
 
     // SQL 条件独立构建单元

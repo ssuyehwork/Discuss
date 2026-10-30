@@ -63,10 +63,11 @@ public:
     void saveLibraryOrder();
     void sortCategoriesByName(bool ascending);
     void filterTreeNodes(const QString& keyword);
-    void invalidateSmartFolderCache() { m_smartFolderCacheValid = false; }
 
     LibraryItemDelegate* delegate() const { return m_delegate; }
     LibraryTreeView* treeView() const { return m_treeView; }
+
+    void invalidateSmartFolderCache(int smartFolderId = 0);
 
 signals:
     void categoryPathsSelected(const QStringList& paths, const QString& name = QString(), int categoryId = 0);
@@ -88,19 +89,20 @@ private:
     void createAndEditCategory(int parentId = 0);
     QStandardItem* findItemByNodeId(QStandardItem* parent, int nodeId);
     void toggleSectionByNodeId(int nodeId);
-    void scheduleSmartFolderStats();
-    void updateSmartFolderCountsInTree(const QMap<int, int>& results);
+
+    void updateSmartFolderCountsAsync(uint64_t reqId, const QList<SmartFolderRecord>& smartFolders);
 
     QVBoxLayout* m_mainLayout = nullptr;
-    int m_smartFolderStatsTaskId = 0;
-    bool m_smartFolderCacheValid = false;
-    QMap<int, int> m_smartFolderCountCache;
     LibraryTreeView* m_treeView = nullptr;
     QStandardItemModel* m_model = nullptr;
     LibraryItemDelegate* m_delegate = nullptr;
     bool m_isLoading = false;
     bool m_orderDirty = false;
     int m_pendingEditNodeId = 0;
+
+    // 智能文件夹异步匹配数量内存缓存
+    QMap<int, int> m_smartFolderCountCache;
+    uint64_t m_currentCountReqId = 0;
 };
 
 } // namespace QuarkMeta
