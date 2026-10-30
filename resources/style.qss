@@ -936,8 +936,14 @@ QWidget#ColorPickerPreviewBlock {
 }
 
 /* 分屏拖拽与方向预览遮罩层静态样式 */
-QWidget#OrientationPreviewWidget, QWidget#DragOverlayWidget {
+QWidget#OrientationPreviewWidget {
     background-color: rgba(0, 122, 255, 0.25);
+    border: 2px solid #007AFF;
+}
+
+/* 元数据面板与筛选器面板拖拽迁移遮罩层静态样式 (90% 不透明度 / 10% 半透明) */
+QWidget#DragOverlayWidget {
+    background-color: rgba(0, 122, 255, 0.90);
     border: 2px solid #007AFF;
 }
 QLineEdit#ColorPickerHexEdit {
