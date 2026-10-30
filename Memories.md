@@ -71,4 +71,10 @@
 ### 3.3 快速预览 (QuickLook) 规范 (Plan-109)
 - **拦截机制**: 必须采用“黑名单拦截+白名单准入”的双重防御机制。严禁预览文件夹、安装包 (.msi, .exe), 系统库 (.sys) 及各类压缩包 (.zip, .7z 等)。
 - **画质**: 预览标准图像 (jpg, png, webp 等) 时必须加载全分辨率原图，并全程开启 `SmoothPixmapTransform` 以消除锯齿。
-- **右键菜单规范**: 快速预览窗口右键菜单中的“打开方式”必须严格委托 `ContextMenuFactory::buildOpenWithMenu` 构建级联子菜单，保持全软件一致。
+- **右键菜单规范与功能完备性**:
+  - “打开方式”必须严格委托 `ContextMenuFactory::buildOpenWithMenu` 构建级联子菜单，保持全软件一致；
+  - 必须完整集成三大辅助功能项：
+    1. **`ColorStripPicker` 颜色选择栏**（包含禁用/取消颜色及 8 种标注颜色）；
+    2. **`ContextMenuFactory::buildPinToggleAction` 置顶功能**（感知窗口 `isPinned` 状态，动态切换置顶 / 取消置顶）；
+    3. **`LibraryService::instance().buildLibraryAction` 库管理动作**（根据在库状态呈现“添加至‘库’”或“从‘库’中移除”）。
+- **Toast 提示定位**: 在 QuickLook 界面设定星级/颜色时，通过 `ToolTipOverlay` 弹出 Toast 提示。`ToolTipOverlay` 坐标以 `QuickLookWindow` 为基准居中定位：水平 X 居中 (`globalTopLeft.x() + (windowWidth - tipWidth) / 2`)，垂直 Y 固定于窗口顶部下方 10px (`globalTopLeft.y() + 10`)。
