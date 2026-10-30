@@ -475,7 +475,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     actOrig->setChecked(!isFit);
     menu.addSeparator();
 
-    QAction* actOpenDefault = menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "打开方式");
+    ContextMenuFactory::buildOpenWithMenu(&menu, m_currentPath, this);
     ContextMenuFactory::buildShowInExplorerAction(&menu, m_currentPath, this);
     menu.addSeparator();
 
@@ -513,9 +513,6 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
         m_graphicsView->setZoomOriginal();
     } else if (selected == actFit) {
         m_graphicsView->fitImage();
-    } else if (selected == actOpenDefault) {
-        HistoryService::instance().recordFileAccess(m_currentPath);
-        QDesktopServices::openUrl(QUrl::fromLocalFile(m_currentPath));
     } else if (selected == actCopy) {
         QList<QUrl> urls;
         urls << QUrl::fromLocalFile(m_currentPath);
