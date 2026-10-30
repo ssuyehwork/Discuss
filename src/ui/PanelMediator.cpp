@@ -1233,7 +1233,7 @@ void PanelMediator::setupConnections() {
                     contentPanel->refreshAll();
                 }
             }
-            activeOrRoot->recalculateAndEmitStats();
+            // 🚀 拔除直调：统计重算统一由模型的 dataChanged Roles 门禁经 50ms 定时器防抖触发
         } else if (event.type == QuarkMeta::AppEventType::ItemsDeleted ||
                    event.type == QuarkMeta::AppEventType::ItemsRenamed ||
                    event.type == QuarkMeta::AppEventType::UndoRedoPerformed) {

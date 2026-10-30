@@ -519,9 +519,7 @@ void LibraryPanel::initUi() {
             QString iconKey = item->data(Qt::UserRole + 2).toString();
             QString colorHex = item->data(Qt::UserRole + 3).toString();
             LibraryDao::updateCategoryNode(nodeId, name, iconKey, colorHex);
-            QTimer::singleShot(0, this, [this]() {
-                loadLibrary();
-            });
+            // 🚀【消除整树暴力重建】：节点重命名直接在本地 Item 生效，严禁粗暴 clear() 重建整棵树
         }
     });
 }
@@ -1098,8 +1096,6 @@ void LibraryPanel::loadLibrary() {
     m_isLoading = true;
     m_model->clear();
 
-    LibraryDao::initTable();
-
     // 1. 注入 2 个固定系统分类 (全部数据, 未分类)
     auto addSystemItem = [this](const QString& name, const QString& iconKey, const QString& colorHex, int sysId) {
         int count = LibraryDao::getCategoryPaths(sysId).size();
@@ -1127,7 +1123,6 @@ void LibraryPanel::loadLibrary() {
     }
 
     // 加载所有智能文件夹
-    SmartFolderDao::initTable();
     auto smartFolders = SmartFolderDao::getAllSmartFolders();
 
     // 2. 构建三大折叠分组 Header 节点 (-10 快速访问, -20 智能文件夹, 0 文件夹)

@@ -980,7 +980,6 @@ void ContentPanel::updateItemMetadata(QString path) {
     if (m_gridView && m_gridView->viewport()) m_gridView->viewport()->update();
     if (m_treeView && m_treeView->viewport()) m_treeView->viewport()->update();
     if (m_currentViewMode == ColumnView && m_columnView) m_columnView->updateMetadataForPath(path);
-    if (m_statsDebounceTimer) m_statsDebounceTimer->start();
 }
 
 void ContentPanel::updateItemsMetadata(const QStringList& paths) {
@@ -991,7 +990,6 @@ void ContentPanel::updateItemsMetadata(const QStringList& paths) {
     if (m_currentViewMode == ColumnView && m_columnView) {
         for (const QString& p : paths) m_columnView->updateMetadataForPath(p);
     }
-    if (m_statsDebounceTimer) m_statsDebounceTimer->start();
 }
 void ContentPanel::migrateModelCache(const QString& oldPath, const QString& newPath) { if (m_model) m_model->migrateCache(oldPath, newPath); }
 void ContentPanel::clearFolderCache(const QString& folderPath) { if (m_model) m_model->clearCacheForFolder(folderPath); }
@@ -1071,21 +1069,23 @@ void ContentPanel::endWatchSuppress() {
 }
 
 void ContentPanel::recalculateAndEmitStats() {
-    std::vector<ItemRecord> records;
+    // 🚀【杜绝主线程全量深拷贝】：提取指针并在非空时仅进行一次轻量级移动处理
     if (m_currentViewMode == ColumnView && m_columnView) {
         ColumnViewPane* pane = m_columnView->rightmostPane();
         if (!pane) pane = m_columnView->activePane();
-        if (pane && pane->model()) {
-            records = pane->model()->allRecords();
+        if (pane && pane->model() && m_statsWorker) {
+            const auto& allRecs = pane->model()->allRecords();
+            if (!allRecs.empty()) {
+                std::vector<ItemRecord> snapshot = allRecs;
+                m_statsWorker->processAsync(std::move(snapshot), m_currentFilter.showHidden);
+            }
         }
-    } else if (m_model) {
-        records = m_model->allRecords();
-    }
-
-    if (records.empty()) return;
-
-    if (m_statsWorker) {
-        m_statsWorker->processAsync(std::move(records), m_currentFilter.showHidden);
+    } else if (m_model && m_statsWorker) {
+        const auto& allRecs = m_model->allRecords();
+        if (!allRecs.empty()) {
+            std::vector<ItemRecord> snapshot = allRecs;
+            m_statsWorker->processAsync(std::move(snapshot), m_currentFilter.showHidden);
+        }
     }
 }
 
