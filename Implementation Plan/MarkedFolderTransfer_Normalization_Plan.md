@@ -17,6 +17,26 @@ By encapsulating selection resolution, empty checks, toast notifications, and se
 ## 3. Detailed Changes & Search/Replace Blocks
 
 ### 3.1 `src/meta/MarkedFolderService.cpp`
+Include mandatory headers `#include "../ui/PanelMediator.h"` and `#include "../ui/ContentPanel.h"` for `PanelMediator::instance()->activeContentPanel()` cross-module access.
+
+```
+<<<<<<< SEARCH
+#include "MarkedFolderService.h"
+#include "MarkedFolderDao.h"
+#include <QAtomicInt>
+#include "../ui/UiHelper.h"
+#include "../ui/ToolTipOverlay.h"
+=======
+#include "MarkedFolderService.h"
+#include "MarkedFolderDao.h"
+#include <QAtomicInt>
+#include "../ui/UiHelper.h"
+#include "../ui/ToolTipOverlay.h"
+#include "../ui/PanelMediator.h"
+#include "../ui/ContentPanel.h"
+>>>>>>> REPLACE
+```
+
 Enhance `executeTransferToMarked` so that when `sourcePaths` is empty, it automatically queries `PanelMediator::instance()->activeContentPanel()` for selected item paths, issuing unified toast feedback if no selection is present.
 
 ```
@@ -44,7 +64,25 @@ bool MarkedFolderService::executeTransferToMarked(const QStringList& sourcePaths
 >>>>>>> REPLACE
 ```
 
-In `MarkedFolderService.cpp`, ensure `#include "../ui/PanelMediator.h"` and `#include "../ui/ContentPanel.h"` are included.
+```
+<<<<<<< SEARCH
+    // 预检测有效源路径与目的地列表
+    QStringList validSources;
+    for (const QString& sp : sourcePaths) {
+        if (QFile::exists(sp)) {
+            validSources << QDir::cleanPath(sp);
+        }
+    }
+=======
+    // 预检测有效源路径与目的地列表
+    QStringList validSources;
+    for (const QString& sp : resolvedSources) {
+        if (QFile::exists(sp)) {
+            validSources << QDir::cleanPath(sp);
+        }
+    }
+>>>>>>> REPLACE
+```
 
 ### 3.2 `src/ui/PanelMediator.cpp`
 Simplify shortcut handler for `transferToMarkedRequested` to a single call to `MarkedFolderService::instance().executeTransferToMarked({})`.
