@@ -152,6 +152,7 @@ public:
     void setSortCriteria(SortType type, Qt::SortOrder order) { if (m_sortController) m_sortController->setSortCriteria(type, order); }
     void setContextMenuActive(bool active) { m_isContextMenuActive = active; }
     void setCurrentCategoryType(const QString& type);
+    void enterCategoryView(const QString& categoryType, const QString& virtualPath);
 
     // 4. 视图与控制器引用
     QAbstractItemView* activeItemView() const;

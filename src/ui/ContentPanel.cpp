@@ -712,6 +712,24 @@ void ContentPanel::updateHeaderTitle() {
     m_headerWidget->setTitle(folderName.isEmpty() ? cleanP : folderName);
 }
 
+void ContentPanel::enterCategoryView(const QString& categoryType, const QString& virtualPath) {
+    m_currentPath = virtualPath;
+    m_currentCategoryType = categoryType;
+    m_categoryTitle.clear();
+    m_categoryId = 0;
+    if (m_model) {
+        m_model->setCurrentPath(virtualPath);
+    }
+    updateHeaderTitle();
+    ContentPanel* root = rootPane();
+    if (root && root->splitManager()) {
+        emit root->splitManager()->layoutChanged();
+    }
+    if (m_changeWatcher) {
+        m_changeWatcher->updateTarget();
+    }
+}
+
 void ContentPanel::setCurrentPath(const QString& path) {
     m_currentPath = path;
     m_currentCategoryType.clear();

@@ -38,6 +38,7 @@ static std::vector<ItemRecord> loadTrashItemsDirect() {
         rec.size = raw.fileSize;
         rec.ctime = raw.createdAt > 0 ? raw.createdAt : raw.deletedAt;
         rec.mtime = raw.deletedAt;
+        rec.isHidden = false;
         records.push_back(rec);
     }
     MetaCacheDecorator::decorate(records);
@@ -122,9 +123,11 @@ void ContentDataLoader::loadDirectory(const QString& path, bool recursive) {
 
 void ContentDataLoader::loadCategory(const QString& categoryType) {
     if (!m_panel) return;
-    m_panel->setCurrentCategoryType(categoryType);
     if (categoryType == "trash") {
-        m_panel->setCurrentPath("trash://");
+        m_panel->enterCategoryView("trash", "trash://");
+        loadPaths({});
+    } else {
+        m_panel->enterCategoryView(categoryType, categoryType + "://");
         loadPaths({});
     }
 }
