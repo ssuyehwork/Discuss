@@ -250,7 +250,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 ContextMenuFactory::buildTabCascadeMenu(&menu, path, m_panel);
             } else {
                 menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
-                ContextMenuFactory::buildOpenWithMenu(&menu, path, m_panel);
+                QStringList selPathsForOpen = m_panel ? m_panel->getSelectedPaths() : QStringList();
+                if (selPathsForOpen.isEmpty() && !path.isEmpty()) {
+                    selPathsForOpen << path;
+                }
+                ContextMenuFactory::buildOpenWithMenu(&menu, selPathsForOpen, m_panel);
             }
             ContextMenuFactory::buildShowInExplorerAction(&menu, path, m_panel);
 

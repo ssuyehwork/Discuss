@@ -2121,19 +2121,18 @@ QTabBar#SidebarTabBar {
     background: transparent;
     border: none;
     qproperty-drawBase: false;
-    qproperty-iconSpacing: 5;
 }
 
 QTabBar#SidebarTabBar::tab {
     background: transparent;
     color: #AAAAAA;
-    padding: 4px 4px;
+    padding: 4px 6px;
     font-size: 12px;
     font-weight: bold;
     border: none;
     border-bottom: none;
     border-radius: 4px;
-    margin-right: 5px;
+    margin-right: 4px;
     margin-bottom: 0px;
 }
 

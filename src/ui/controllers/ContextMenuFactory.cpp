@@ -17,6 +17,7 @@
 #include <QProcess>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QFileDialog>
 
 namespace QuarkMeta {
 
@@ -270,21 +271,39 @@ QMenu* ContextMenuFactory::buildTabCascadeMenu(QMenu* parentMenu, const QString&
 }
 
 QMenu* ContextMenuFactory::buildOpenWithMenu(QMenu* parentMenu, const QString& filePath, QWidget* parentWidget) {
-    if (!parentMenu || filePath.isEmpty() || QFileInfo(filePath).isDir()) return nullptr;
+    if (filePath.isEmpty()) return nullptr;
+    return buildOpenWithMenu(parentMenu, QStringList() << filePath, parentWidget);
+}
+
+QMenu* ContextMenuFactory::buildOpenWithMenu(QMenu* parentMenu, const QStringList& filePaths, QWidget* parentWidget) {
+    if (!parentMenu || filePaths.isEmpty()) return nullptr;
+
+    // 过滤出文件路径，排除文件夹
+    QStringList validFiles;
+    for (const QString& p : filePaths) {
+        if (!p.isEmpty() && !QFileInfo(p).isDir()) {
+            validFiles << p;
+        }
+    }
+    if (validFiles.isEmpty()) return nullptr;
 
     QMenu* openWithMenu = parentMenu->addMenu(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "打开方式");
     UiHelper::applyMenuStyle(openWithMenu);
 
-    QList<ShellHelper::AssocAppInfo> apps = ShellHelper::getAssociatedApps(filePath);
+    // 以首个文件的扩展名作为推荐程序探测基准
+    QString primaryFile = validFiles.first();
+    QList<ShellHelper::AssocAppInfo> apps = ShellHelper::getAssociatedApps(primaryFile);
     for (const auto& app : apps) {
         QIcon icon = app.icon.isNull() ? UiHelper::getIcon("launch", QColor("#EEEEEE"), 16) : app.icon;
         QAction* act = openWithMenu->addAction(icon, app.name);
         QString exec = app.execPath;
-        QObject::connect(act, &QAction::triggered, [filePath, exec]() {
+        QObject::connect(act, &QAction::triggered, [validFiles, exec]() {
             if (!exec.isEmpty()) {
-                QProcess::startDetached(exec, QStringList() << filePath);
+                QProcess::startDetached(exec, validFiles);
             } else {
-                QDesktopServices::openUrl(QUrl::fromLocalFile(filePath));
+                for (const QString& f : validFiles) {
+                    QDesktopServices::openUrl(QUrl::fromLocalFile(f));
+                }
             }
         });
     }
@@ -294,8 +313,16 @@ QMenu* ContextMenuFactory::buildOpenWithMenu(QMenu* parentMenu, const QString& f
     }
 
     QAction* actChooseOther = openWithMenu->addAction(UiHelper::getIcon("add", QColor("#EEEEEE"), 16), "选择其他应用...");
-    QObject::connect(actChooseOther, &QAction::triggered, [filePath, parentWidget]() {
-        ShellHelper::showOpenWithDialog(filePath, parentWidget);
+    QObject::connect(actChooseOther, &QAction::triggered, [validFiles, parentWidget]() {
+        if (validFiles.size() == 1) {
+            ShellHelper::showOpenWithDialog(validFiles.first(), parentWidget);
+        } else {
+            // 多选批量场景：通过选择可执行文件对所有选中项批量打开
+            QString exec = QFileDialog::getOpenFileName(parentWidget, "选择打开程序", QString(), "可执行程序 (*.exe);;所有文件 (*.*)");
+            if (!exec.isEmpty()) {
+                QProcess::startDetached(exec, validFiles);
+            }
+        }
     });
 
     return openWithMenu;
