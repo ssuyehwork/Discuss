@@ -236,8 +236,8 @@ void AppShortcutController::initShortcuts() {
         }
     });
 
-    // 13. Alt+C: 标记/取消标记当前选中的文件夹
-    registerShortcut(QKeySequence(Qt::ALT | Qt::Key_C), [this]() {
+    // 13. Alt+B: 标记/取消标记当前选中的文件夹
+    registerShortcut(QKeySequence(Qt::ALT | Qt::Key_B), [this]() {
         if (!isEditingFocus()) {
             emit toggleMarkedRequested();
         }

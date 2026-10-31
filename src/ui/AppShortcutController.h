@@ -56,7 +56,7 @@ signals:
     void resetFilterRequested();
 
     /**
-     * @brief Alt+C 触发标记/取消标记当前选中的文件夹
+     * @brief Alt+B 触发标记/取消标记当前选中的文件夹
      */
     void toggleMarkedRequested();
 

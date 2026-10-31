@@ -83,7 +83,7 @@ bool MarkedFolderService::executeTransferToMarked(const QStringList& sourcePaths
 
     QStringList activeTargets = targetDirs.isEmpty() ? getActiveMarked() : targetDirs;
     if (activeTargets.isEmpty()) {
-        ToolTipOverlay::instance()->showToast("未激活任何标记目的地文件夹 (请先用 Alt+C 标记)", 2500, QColor("#e81123"));
+        ToolTipOverlay::instance()->showToast("未激活任何标记目的地文件夹 (请先用 Alt+B 标记)", 2500, QColor("#e81123"));
         return false;
     }
 
