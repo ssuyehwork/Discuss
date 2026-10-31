@@ -250,7 +250,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                 ContextMenuFactory::buildTabCascadeMenu(&menu, path, m_panel);
             } else {
                 menu.addAction(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "用系统默认程序打开")->setData(ContentPanel::ActionOpenDefault);
-                ContextMenuFactory::buildOpenWithMenu(&menu, path, m_panel);
+                QStringList selPathsForOpen = m_panel ? m_panel->getSelectedPaths() : QStringList();
+                if (selPathsForOpen.isEmpty() && !path.isEmpty()) {
+                    selPathsForOpen << path;
+                }
+                ContextMenuFactory::buildOpenWithMenu(&menu, selPathsForOpen, m_panel);
             }
             ContextMenuFactory::buildShowInExplorerAction(&menu, path, m_panel);
 
@@ -333,6 +337,13 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
 
                 QMenu* moveMenu = menu.addMenu(UiHelper::getIcon("Export-1.svg", QColor("#EEEEEE"), 18), "移动到");
                 UiHelper::applyMenuStyle(moveMenu);
+
+                QAction* actDistribute = moveMenu->addAction(UiHelper::getIcon("Destination.svg", QColor("#EEEEEE"), 16), "一键分发 (Alt+V)");
+                connect(actDistribute, &QAction::triggered, this, [this]() {
+                    QStringList selectedPaths = m_panel->getSelectedPaths();
+                    MarkedFolderService::instance().executeTransferToMarked(selectedPaths);
+                });
+                moveMenu->addSeparator();
 
                 auto performMoveTo = [this](const QString& targetDir) {
                     QStringList selectedPaths = m_panel->getSelectedPaths();
@@ -466,23 +477,26 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             ContextMenuFactory::buildShowInExplorerAction(&menu, "computer://", m_panel);
             menu.addAction(UiHelper::getIcon("refresh", QColor("#EEEEEE"), 18), "刷新")->setData(ContentPanel::ActionRefresh);
         } else {
-            QMenu* newMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "新建...");
-            UiHelper::applyMenuStyle(newMenu);
-            newMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹")->setData(ContentPanel::ActionNewFolder);
-            newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown")->setData(ContentPanel::ActionNewMd);
-            newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建纯文本文件 (txt)")->setData(ContentPanel::ActionNewTxt);
+            bool isWritablePhysical = m_panel && m_panel->isWritablePhysicalDirectoryView();
+            if (isWritablePhysical) {
+                QMenu* newMenu = menu.addMenu(UiHelper::getIcon("add", QColor("#EEEEEE"), 18), "新建...");
+                UiHelper::applyMenuStyle(newMenu);
+                newMenu->addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE")), "创建文件夹")->setData(ContentPanel::ActionNewFolder);
+                newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建 Markdown")->setData(ContentPanel::ActionNewMd);
+                newMenu->addAction(UiHelper::getIcon("text", QColor("#EEEEEE")), "创建纯文本文件 (txt)")->setData(ContentPanel::ActionNewTxt);
 
-            menu.addSeparator();
-            menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE")), "批量创建项目...")->setData(ContentPanel::ActionBatchCreate);
+                menu.addSeparator();
+                menu.addAction(UiHelper::getIcon("add", QColor("#EEEEEE")), "批量创建项目...")->setData(ContentPanel::ActionBatchCreate);
+                menu.addSeparator();
+            }
 
-            menu.addSeparator();
             QAction* actPaste = menu.addAction(UiHelper::getIcon("paste", QColor("#EEEEEE"), 18), "粘贴");
             actPaste->setData(ContentPanel::ActionPaste);
             actPaste->setEnabled(m_panel->canPaste(currentPath));
 
             menu.addSeparator();
             bool isPhysicalPath = !currentPath.isEmpty() && !currentPath.contains("://") && QDir(currentPath).exists();
-            QAction* actShowInExp = ContextMenuFactory::buildShowInExplorerAction(&menu, currentPath, m_panel);
+            QAction* actShowInExp = ContextMenuFactory::buildShowInExplorerAction(&menu, currentPath, true, m_panel);
             if (actShowInExp) {
                 actShowInExp->setEnabled(isPhysicalPath);
             }

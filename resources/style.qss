@@ -936,8 +936,14 @@ QWidget#ColorPickerPreviewBlock {
 }
 
 /* 分屏拖拽与方向预览遮罩层静态样式 */
-QWidget#OrientationPreviewWidget, QWidget#DragOverlayWidget {
+QWidget#OrientationPreviewWidget {
     background-color: rgba(0, 122, 255, 0.25);
+    border: 2px solid #007AFF;
+}
+
+/* 元数据面板与筛选器面板拖拽迁移遮罩层静态样式 (90% 不透明度 / 10% 半透明) */
+QWidget#DragOverlayWidget {
+    background-color: rgba(0, 122, 255, 0.90);
     border: 2px solid #007AFF;
 }
 QLineEdit#ColorPickerHexEdit {
@@ -2115,19 +2121,18 @@ QTabBar#SidebarTabBar {
     background: transparent;
     border: none;
     qproperty-drawBase: false;
-    qproperty-iconSpacing: 5;
 }
 
 QTabBar#SidebarTabBar::tab {
     background: transparent;
     color: #AAAAAA;
-    padding: 4px 4px;
+    padding: 4px 6px;
     font-size: 12px;
     font-weight: bold;
     border: none;
     border-bottom: none;
     border-radius: 4px;
-    margin-right: 5px;
+    margin-right: 4px;
     margin-bottom: 0px;
 }
 
@@ -2260,3 +2265,61 @@ QFrame#SmartFolderSeparatorLine {
 QScrollArea#SmartFolderScrollArea, QScrollArea#SmartFolderScrollArea QWidget { 
     background: transparent; 
 } 
+
+QComboBox#SmartFolderComboBox {
+    background-color: #252526;
+    color: #EEEEEE;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 2px 8px;
+    min-height: 24px;
+}
+
+QComboBox#SmartFolderComboBox:hover {
+    border-color: #444444;
+}
+
+QComboBox#SmartFolderComboBox:focus {
+    border-color: #378ADD;
+}
+
+QLineEdit#SmartFolderLineEdit {
+    background-color: #252526;
+    color: #EEEEEE;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 2px 8px;
+    min-height: 24px;
+}
+
+QLineEdit#SmartFolderLineEdit:focus {
+    border-color: #378ADD;
+}
+
+QSpinBox#SmartFolderSpinBox {
+    background-color: #252526;
+    color: #EEEEEE;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 2px 6px;
+    min-height: 24px;
+}
+
+QDateEdit#SmartFolderDateEdit {
+    background-color: #252526;
+    color: #EEEEEE;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 2px 6px;
+    min-height: 24px;
+}
+
+QPushButton#SmartFolderRowDeleteBtn {
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+}
+
+QPushButton#SmartFolderRowDeleteBtn:hover {
+    background-color: rgba(255, 59, 48, 0.2);
+}

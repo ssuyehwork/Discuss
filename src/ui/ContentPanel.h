@@ -113,6 +113,7 @@ public:
     int zoomLevel() const { return m_zoomLevel; }
     ViewMode currentViewMode() const { return m_currentViewMode; }
     bool canPaste(const QString& targetOverride = QString()) const;
+    bool isWritablePhysicalDirectoryView() const;
     DataSourceType dataSourceType() const;
     bool isContextMenuActive() const { return m_isContextMenuActive; }
     QString getCurrentCategoryType() const { return m_currentCategoryType; }
@@ -129,6 +130,7 @@ public:
 
     // 2. 状态与配置高阶方法
     void updateHeaderTitle();
+    void applyViewTarget(const QString& path, const QString& categoryType, const QString& categoryTitle = QString(), int categoryId = 0, bool recursive = false);
     void setCurrentPath(const QString& path);
     void setIsRecursive(bool recursive);
     void setLoading(bool loading);

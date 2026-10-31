@@ -608,3 +608,18 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 3. **API 对称性与批量接口优先铁律 (Batch-First API Symmetry)**：
    - 控制器与工厂接口（如 `ContextMenuFactory`）必须优先提供接收集合类型（如 `QStringList`、`QList<QUrl>`）的批量接口；
    - 单项接口仅作为边界兼容或委托重载，其内部实现统一收敛转发至批量接口处理，杜绝单项与多项逻辑分裂与重复造轮子。
+
+
+## 21. 侧边栏选项卡图标与文本间距设计规范 (Sidebar TabBar Icon-Text Spacing Specification)
+
+> 本章节整理自与用户的参数确认与共识，作为全软件侧边栏与导航选项卡 UI 渲染的唯一真理源 (SSOT)。
+
+### 21.1 7 像素间距硬锁铁律 (Strict 7px Spacing Contract)
+1. **统一锁定 7 像素物理间距**：
+   - 目录导航（`NavPanel`）与收藏栏容器（`SidebarContainerWidget`）标题栏选项卡（`QTabBar#SidebarTabBar`）中的所有选项卡（如 `目录导航`、`历史`、`收藏夹`、`库`、`标记`），其**矢量图标 (Icon) 与标题文本 (Text) 之间的实际物理间距只可以是严格的 7 像素（7px）**；
+   - 彻底打破原生操作系统/Qt 样式引擎默认的 10~13px 宽松间隙，严禁产生大于或小于 7px 的松散空隙；
+2. **样式代理实现架构 (SidebarTabStyle Implementation Contract)**：
+   - 由于 Qt 的 QSS 样式表不解析且不支持 `icon-spacing` 或 `qproperty-iconSpacing` 语法，必须通过继承 `QProxyStyle` 实现专用的 `SidebarTabStyle`；
+   - 在 `SidebarTabStyle::pixelMetric` 中针对 `PM_TabBarIconSpacing` 明确返回固定值 `7`；
+   - 在 `SidebarTabStyle::drawControl` 处理 `CE_TabBarTabLabel` 时，对图标矩形与文本矩形进行垂直居中对齐，并确保二者水平间距严格保持为 `7px`；
+   - `NavPanel` 与 `SidebarContainerWidget` 在创建 `m_tabBar` 时，必须统一挂载 `SidebarTabStyle` 代理样式（`m_tabBar->setStyle(new SidebarTabStyle(m_tabBar->style()))`）。

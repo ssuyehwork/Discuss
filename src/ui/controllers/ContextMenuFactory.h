@@ -53,9 +53,14 @@ public:
     static QAction* buildCopyNameAction(QMenu* menu, const QStringList& paths, QObject* receiver = nullptr);
 
     /**
-     * @brief 构建“打开方式”级联子菜单
+     * @brief 构建“打开方式”级联子菜单 (单文件兼容重载)
      */
     static QMenu* buildOpenWithMenu(QMenu* parentMenu, const QString& filePath, QWidget* parentWidget = nullptr);
+
+    /**
+     * @brief 构建“打开方式”级联子菜单 (多选批量重载，SSOT)
+     */
+    static QMenu* buildOpenWithMenu(QMenu* parentMenu, const QStringList& filePaths, QWidget* parentWidget = nullptr);
     static QAction* buildPinToggleAction(QMenu* menu, bool isPinned, std::function<void(bool)> onToggle, QObject* receiver = nullptr);
 
     /**

@@ -712,27 +712,43 @@ void ContentPanel::updateHeaderTitle() {
     m_headerWidget->setTitle(folderName.isEmpty() ? cleanP : folderName);
 }
 
-void ContentPanel::setCurrentPath(const QString& path) {
+void ContentPanel::applyViewTarget(const QString& path, const QString& categoryType, const QString& categoryTitle, int categoryId, bool recursive) {
     m_currentPath = path;
-    m_currentCategoryType.clear();
-    m_categoryTitle.clear();
-    m_categoryId = 0;
+    m_currentCategoryType = categoryType;
+    m_categoryTitle = categoryTitle;
+    m_categoryId = categoryId;
+    m_isRecursive = recursive;
+
     if (m_model) {
         m_model->setCurrentPath(path);
     }
+
+    if (m_headerWidget) {
+        m_headerWidget->setRecursive(recursive);
+    }
+
     updateHeaderTitle();
+
     ContentPanel* root = rootPane();
     if (root && root->splitManager()) {
         emit root->splitManager()->layoutChanged();
     }
+
     if (m_changeWatcher) {
         m_changeWatcher->updateTarget();
     }
 }
 
+void ContentPanel::setCurrentPath(const QString& path) {
+    applyViewTarget(path, "", "", 0, m_isRecursive);
+}
+
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     updateHeaderTitle();
     if (m_currentViewMode == ColumnView) {
+        if (path.contains("://") && path != "computer://") {
+            return;
+        }
         setCurrentPath(path);
         m_isRecursive = recursive;
         if (m_columnView) {
@@ -765,8 +781,20 @@ void ContentPanel::appendPaths(const QStringList& paths, int reqId) {
     if (m_dataLoader) m_dataLoader->appendPaths(paths, reqId);
 }
 
+bool ContentPanel::isWritablePhysicalDirectoryView() const {
+    if (!m_currentCategoryType.isEmpty()) return false;
+    QString p = activePath();
+    if (p.isEmpty() || p.contains("://")) return false;
+    return QDir(p).exists();
+}
+
 bool ContentPanel::canPaste(const QString& targetOverride) const {
-    return ClipboardService::instance().canPaste(targetOverride.isEmpty() ? m_currentPath : targetOverride);
+    if (targetOverride.isEmpty()) {
+        if (!isWritablePhysicalDirectoryView()) return false;
+        return ClipboardService::instance().canPaste(activePath());
+    }
+    if (targetOverride.contains("://") || !QDir(targetOverride).exists()) return false;
+    return ClipboardService::instance().canPaste(targetOverride);
 }
 
 void ContentPanel::performCopy(bool cutMode) {
@@ -863,6 +891,9 @@ void ContentPanel::setViewMode(ViewMode mode) {
     } else if (mode == ColumnView) {
         if (m_columnView) {
             QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
+            if (targetPath.contains("://") && targetPath != "computer://") {
+                targetPath = "computer://";
+            }
             m_columnView->setRootPath(targetPath);
             m_viewStack->setCurrentWidget(m_columnView);
         }
@@ -874,7 +905,11 @@ void ContentPanel::setViewMode(ViewMode mode) {
 
     if (oldMode == ColumnView && mode != ColumnView) {
         if (!m_currentPath.isEmpty()) {
-            loadDirectory(m_currentPath, m_isRecursive);
+            if (!m_currentCategoryType.isEmpty()) {
+                refreshAll();
+            } else {
+                loadDirectory(m_currentPath, m_isRecursive);
+            }
         }
     }
 
@@ -949,12 +984,12 @@ void ContentPanel::refreshAll() {
         return;
     }
 
-    if (m_currentCategoryType == "trash") {
+    if (m_currentCategoryType == "trash" || m_currentPath == "trash://") {
         loadCategory("trash");
         return;
     }
 
-    if (m_currentCategoryType == "library") {
+    if (m_currentCategoryType == "library" || m_currentPath.startsWith("library://")) {
         if (m_categoryId != 0) {
             m_lastLoadedLibraryPaths = LibraryService::instance().getCategoryPaths(m_categoryId);
         }
@@ -962,12 +997,12 @@ void ContentPanel::refreshAll() {
         return;
     }
 
-    if (m_currentCategoryType == "smart_folder") {
+    if (m_currentCategoryType == "smart_folder" || m_currentPath.startsWith("smartfolder://")) {
         loadLibraryPaths(m_lastLoadedLibraryPaths);
         return;
     }
 
-    if (!m_currentPath.isEmpty() && m_currentPath != "computer://" && !m_currentPath.startsWith("library://")) {
+    if (!m_currentPath.isEmpty() && m_currentPath != "computer://" && !m_currentPath.contains("://")) {
         loadDirectory(m_currentPath, m_isRecursive);
     } else if (m_currentPath == "computer://") {
         loadDirectory("computer://");

@@ -18,8 +18,8 @@ FileCreationService::FileCreationService(QObject* parent) : QObject(parent) {}
 
 bool FileCreationService::createNewItem(ContentPanel* panel, const QString& type) {
     if (!panel) return false;
+    if (!panel->isWritablePhysicalDirectoryView()) return false;
     QString currentPath = panel->activePath();
-    if (currentPath.isEmpty() || currentPath == "computer://") return false;
 
     QString baseName = (type == "folder") ? "新建文件夹" : "未命名";
     QString ext = (type == "md") ? ".md" : ((type == "txt") ? ".txt" : "");
