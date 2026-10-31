@@ -394,9 +394,7 @@ void PanelMediator::setupConnections() {
                 }
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
-                    target->setCurrentCategoryType("library");
-                    target->setCurrentCategoryTitle(name);
-                    target->setCurrentCategoryId(categoryId);
+                    target->applyViewTarget(QString("library://%1").arg(categoryId), "library", name, categoryId, false);
                     target->setLastLoadedLibraryPaths(paths);
                     target->loadLibraryPaths(paths);
                 }
@@ -412,9 +410,7 @@ void PanelMediator::setupConnections() {
                 QStringList matchingPaths = SmartFolderDao::getMatchingPaths(record);
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
-                    target->setCurrentCategoryType("smart_folder");
-                    target->setCurrentCategoryTitle(record.name);
-                    target->setCurrentCategoryId(-20);
+                    target->applyViewTarget(QString("smartfolder://%1").arg(record.id), "smart_folder", record.name, -20, false);
                     target->setLastLoadedLibraryPaths(matchingPaths);
                     target->loadLibraryPaths(matchingPaths);
                 }

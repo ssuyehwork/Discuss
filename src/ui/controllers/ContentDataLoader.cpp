@@ -8,6 +8,9 @@
 #include "../../meta/LibraryItemDao.h"
 #include "../../meta/LibrarySyncService.h"
 #include "../../meta/LibraryValidationService.h"
+#include "../../meta/LibraryDao.h"
+#include "../../meta/LibraryService.h"
+#include "../../meta/SmartFolderDao.h"
 #include "../../util/ThumbnailPipelineService.h"
 
 #include <QDir>
@@ -56,16 +59,36 @@ void ContentDataLoader::loadDirectory(const QString& path, bool recursive) {
     m_panel->ensureSourceModelIsDiskModel();
     ThumbnailPipelineService::instance().cancelAll();
 
+    if (path == "trash://") {
+        loadCategory("trash");
+        return;
+    }
+
+    if (path.startsWith("library://")) {
+        int catId = path.mid(10).toInt();
+        LibraryCategoryRecord rec = LibraryDao::getCategoryById(catId);
+        QStringList pList = LibraryService::instance().getCategoryPaths(catId);
+        m_panel->applyViewTarget(path, "library", rec.name, catId, false);
+        m_panel->loadLibraryPaths(pList);
+        return;
+    }
+
+    if (path.startsWith("smartfolder://")) {
+        int sfId = path.mid(14).toInt();
+        SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(sfId);
+        QStringList matching = SmartFolderDao::getMatchingPaths(rec);
+        m_panel->applyViewTarget(path, "smart_folder", rec.name, -20, false);
+        m_panel->loadLibraryPaths(matching);
+        return;
+    }
+
     m_panel->setLoading(true);
     int reqId = m_panel->incrementLoadRequestId();
     m_loadRequestId = reqId;
-    m_panel->setCurrentCategoryType("");
     emit m_panel->dataSourceChanged("nav");
 
-    m_panel->setIsRecursive(recursive);
-
     if (path.isEmpty() || path == "computer://") {
-        m_panel->setCurrentPath("computer://");
+        m_panel->applyViewTarget("computer://", "", "", 0, false);
         m_panel->updateLayersButtonState();
         std::vector<ItemRecord> driveRecords;
         for (const QFileInfo& drive : QDir::drives()) {
@@ -81,7 +104,7 @@ void ContentDataLoader::loadDirectory(const QString& path, bool recursive) {
         return;
     }
 
-    m_panel->setCurrentPath(path);
+    m_panel->applyViewTarget(path, "", "", 0, recursive);
     m_panel->updateLayersButtonState();
 
     QPointer<ContentPanel> panelPtr(m_panel);
@@ -124,10 +147,10 @@ void ContentDataLoader::loadDirectory(const QString& path, bool recursive) {
 void ContentDataLoader::loadCategory(const QString& categoryType) {
     if (!m_panel) return;
     if (categoryType == "trash") {
-        m_panel->enterCategoryView("trash", "trash://");
+        m_panel->applyViewTarget("trash://", "trash", "", 0, false);
         loadPaths({});
     } else {
-        m_panel->enterCategoryView(categoryType, categoryType + "://");
+        m_panel->applyViewTarget(categoryType + "://", categoryType, "", 0, false);
         loadPaths({});
     }
 }

@@ -47,7 +47,7 @@ void ContentChangeWatcher::unwatchAll() {
 
 bool ContentChangeWatcher::shouldWatchPath(const QString& path) const {
     if (path.isEmpty()) return false;
-    if (path == "computer://" || path == "trash://" || path == "library://") return false;
+    if (path.contains("://")) return false;
     QFileInfo fi(path);
     return fi.exists() && fi.isDir();
 }
