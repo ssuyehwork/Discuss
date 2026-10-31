@@ -26,7 +26,7 @@ struct DuplicateConflictGroup {
 class DuplicateDetectorService {
 public:
     static QString computeFastHash(const QString& filePath, qint64 fileSize = -1);
-    static QString computeFullSha256(const QString& filePath);
+    static QString computeFullSha256(const QString& filePath, const std::atomic<bool>* cancelToken = nullptr);
 
     // 严谨三阶内容哈希验重（必须在后台线程调用）
     static QSet<QString> findDuplicatePaths(const std::vector<ItemRecord>& records);

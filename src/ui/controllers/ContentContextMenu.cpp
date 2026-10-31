@@ -16,6 +16,7 @@
 #include "../FramelessDialog.h"
 #include "../dialogs/FramelessInputDialog.h"
 #include "../dialogs/CreateFolderWithItemsDialog.h"
+#include "../dialogs/FileCompareDialog.h"
 #include "../../util/ShellHelper.h"
 #include "../../util/DeepThumbnailExtractor.h"
 #include "../../core/TrashService.h"
@@ -422,6 +423,19 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             ContextMenuFactory::buildCopyNameAction(&menu, selPaths, m_panel);
             ContextMenuFactory::buildCopyPathAction(&menu, selPaths, m_panel);
 
+            // 文件对比：仅当选中项里"文件"（排除文件夹、驱动器根目录、重复路径）数量 >= 2 时才出现
+            QStringList compareFiles;
+            for (const QString& p : selPathsItem) {
+                if (!p.isEmpty() && !QFileInfo(p).isDir()) {
+                    if (!compareFiles.contains(p)) {
+                        compareFiles << p;
+                    }
+                }
+            }
+            if (compareFiles.size() >= 2) {
+                menu.addAction(UiHelper::getIcon("files_multiple", QColor("#EEEEEE"), 18), "文件对比")->setData(ContentPanel::ActionFileCompare);
+            }
+
             QMenu* moreMenu = menu.addMenu(UiHelper::getIcon("more_horizontal", QColor("#EEEEEE"), 18), "更多");
             UiHelper::applyMenuStyle(moreMenu);
 
@@ -657,6 +671,22 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
         case ContentPanel::ActionNewMd:
             m_panel->createNewItem("md");
             break;
+        case ContentPanel::ActionFileCompare: {
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            QStringList compareFiles;
+            for (const QString& p : selectedPaths) {
+                if (!p.isEmpty() && !QFileInfo(p).isDir()) {
+                    if (!compareFiles.contains(p)) {
+                        compareFiles << p;
+                    }
+                }
+            }
+            if (compareFiles.size() >= 2) {
+                FileCompareDialog dlg(compareFiles, m_panel);
+                dlg.exec();
+            }
+            break;
+        }
         case ContentPanel::ActionNewTxt:
             m_panel->createNewItem("txt");
             break;

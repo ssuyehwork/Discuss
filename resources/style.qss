@@ -2323,3 +2323,68 @@ QPushButton#SmartFolderRowDeleteBtn {
 QPushButton#SmartFolderRowDeleteBtn:hover {
     background-color: rgba(255, 59, 48, 0.2);
 }
+
+/* ── FileCompareDialog Styles ──────────── */
+QTableView#FileCompareTableView {
+    background-color: #1E1E1E;
+    alternate-background-color: #252526;
+    color: #EEEEEE;
+    gridline-color: transparent;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    outline: 0;
+}
+
+QTableView#FileCompareTableView::item {
+    padding: 4px 8px;
+    border: none;
+}
+
+QTableView#FileCompareTableView::item:selected {
+    background-color: #094771;
+    color: #FFFFFF;
+}
+
+QHeaderView#FileCompareHeaderView {
+    background-color: #252526;
+    border: none;
+}
+
+QHeaderView#FileCompareHeaderView::section {
+    background-color: #252526;
+    color: #888888;
+    padding: 6px 8px;
+    border: none;
+    border-right: 1px solid #333333;
+    border-bottom: 1px solid #333333;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+QHeaderView#FileCompareHeaderView::section:last {
+    border-right: none;
+}
+
+QLabel#FileCompareProgressLabel {
+    color: #AAAAAA;
+    font-size: 12px;
+}
+
+QPushButton#FileCompareCloseBtn {
+    background-color: #2D2D30;
+    color: #EEEEEE;
+    border: 1px solid #3E3E42;
+    border-radius: 4px;
+    padding: 4px 16px;
+    min-height: 24px;
+    min-width: 60px;
+}
+
+QPushButton#FileCompareCloseBtn:hover {
+    background-color: #3E3E42;
+    border-color: #555555;
+}
+
+QPushButton#FileCompareCloseBtn:pressed {
+    background-color: #1E1E1E;
+}

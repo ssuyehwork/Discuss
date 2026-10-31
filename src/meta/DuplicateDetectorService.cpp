@@ -41,12 +41,29 @@ QString DuplicateDetectorService::computeFastHash(const QString& filePath, qint6
     return QString(hash.result().toHex()).toLower();
 }
 
-QString DuplicateDetectorService::computeFullSha256(const QString& filePath) {
+QString DuplicateDetectorService::computeFullSha256(const QString& filePath, const std::atomic<bool>* cancelToken) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) return QString();
+
     QCryptographicHash hash(QCryptographicHash::Sha256);
-    if (!hash.addData(&file)) return QString();
+    constexpr qint64 kBufferSize = 256 * 1024; // 256KB 缓冲区
+    QByteArray buffer;
+    buffer.resize(kBufferSize);
+
+    while (!file.atEnd()) {
+        if (cancelToken && cancelToken->load()) {
+            file.close();
+            return QString();
+        }
+        qint64 bytesRead = file.read(buffer.data(), kBufferSize);
+        if (bytesRead <= 0) break;
+        hash.addData(buffer.constData(), bytesRead);
+    }
     file.close();
+
+    if (cancelToken && cancelToken->load()) {
+        return QString();
+    }
     return QString(hash.result().toHex()).toLower();
 }
 

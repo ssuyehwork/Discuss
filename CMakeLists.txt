@@ -374,6 +374,8 @@ set(SOURCES
     src/ui/dialogs/SmartFolderRuleRow.cpp
     src/ui/dialogs/SmartFolderDialog.h
     src/ui/dialogs/SmartFolderDialog.cpp
+    src/ui/dialogs/FileCompareDialog.h
+    src/ui/dialogs/FileCompareDialog.cpp
     src/ui/dialogs/FramelessColorPicker.h
     src/ui/dialogs/FramelessColorPicker.cpp
     src/ui/dialogs/FramelessConfirmDialog.h
