@@ -17,6 +17,8 @@
 #include "../core/NavigationService.h"
 #include "TabBarWidget.h"
 #include "controllers/ContextMenuFactory.h"
+#include <QStyleOptionTab>
+#include <QPainter>
 #include <QHeaderView>
 #include <QScrollBar>
 #include <QLabel>
@@ -127,7 +129,55 @@ void NavPanel::initUi() {
     headerLayout->setContentsMargins(5, 0, 5, 0);
     headerLayout->setSpacing(0);
 
-    m_tabBar = new QTabBar(header);
+    // 侧边栏专用选项卡：直接掌控绘制，彻底杜绝 QSS 下样式代理被拦截失效问题，硬锁 7 像素间距
+    class SidebarTabBar : public QTabBar {
+    public:
+        using QTabBar::QTabBar;
+    protected:
+        QSize tabSizeHint(int index) const override {
+            QSize s = QTabBar::tabSizeHint(index);
+            if (!tabIcon(index).isNull() && !tabText(index).isEmpty()) {
+                s.setWidth(s.width() - 5);
+            }
+            return s;
+        }
+
+        void paintEvent(QPaintEvent* event) override {
+            Q_UNUSED(event);
+            QPainter painter(this);
+            QStyleOptionTab opt;
+            for (int i = 0; i < count(); ++i) {
+                initStyleOption(&opt, i);
+                // 1. 保留 QSS 样式表对背景色、边框、选态与悬停底色的完全渲染
+                style()->drawControl(QStyle::CE_TabBarTabShape, &opt, &painter, this);
+
+                // 2. 自定义精确绘制图标与文字，硬锁间隙为 7px
+                QRect tr = opt.rect;
+                QSize iconSize = opt.iconSize.isValid() ? opt.iconSize : QSize(16, 16);
+                int iconWidth = opt.icon.isNull() ? 0 : iconSize.width();
+                int textWidth = opt.fontMetrics.horizontalAdvance(opt.text);
+                int spacing = (iconWidth > 0 && !opt.text.isEmpty()) ? 7 : 0;
+                int totalContentWidth = iconWidth + spacing + textWidth;
+                int startX = tr.left() + (tr.width() - totalContentWidth) / 2;
+
+                if (iconWidth > 0) {
+                    int iconY = tr.top() + (tr.height() - iconSize.height()) / 2;
+                    QRect iconRect(startX, iconY, iconSize.width(), iconSize.height());
+                    opt.icon.paint(&painter, iconRect, Qt::AlignCenter);
+                }
+
+                QRect textRect(startX + iconWidth + spacing, tr.top(), textWidth + 2, tr.height());
+                painter.save();
+                painter.setFont(font());
+                QColor textColor = (opt.state & QStyle::State_Selected) ? QColor("#FFFFFF") : ((opt.state & QStyle::State_MouseOver) ? QColor("#CCCCCC") : QColor("#AAAAAA"));
+                painter.setPen(textColor);
+                painter.drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, opt.text);
+                painter.restore();
+            }
+        }
+    };
+
+    m_tabBar = new SidebarTabBar(header);
     m_tabBar->setObjectName("SidebarTabBar");
     m_tabBar->setDrawBase(false);
     m_tabBar->setIconSize(QSize(16, 16));
