@@ -936,14 +936,8 @@ QWidget#ColorPickerPreviewBlock {
 }
 
 /* 分屏拖拽与方向预览遮罩层静态样式 */
-QWidget#OrientationPreviewWidget {
+QWidget#OrientationPreviewWidget, QWidget#DragOverlayWidget {
     background-color: rgba(0, 122, 255, 0.25);
-    border: 2px solid #007AFF;
-}
-
-/* 元数据面板与筛选器面板拖拽迁移遮罩层静态样式 (90% 不透明度 / 10% 半透明) */
-QWidget#DragOverlayWidget {
-    background-color: rgba(0, 122, 255, 0.90);
     border: 2px solid #007AFF;
 }
 QLineEdit#ColorPickerHexEdit {
@@ -2266,61 +2260,3 @@ QFrame#SmartFolderSeparatorLine {
 QScrollArea#SmartFolderScrollArea, QScrollArea#SmartFolderScrollArea QWidget { 
     background: transparent; 
 } 
-
-QComboBox#SmartFolderComboBox {
-    background-color: #252526;
-    color: #EEEEEE;
-    border: 1px solid #333333;
-    border-radius: 4px;
-    padding: 2px 8px;
-    min-height: 24px;
-}
-
-QComboBox#SmartFolderComboBox:hover {
-    border-color: #444444;
-}
-
-QComboBox#SmartFolderComboBox:focus {
-    border-color: #378ADD;
-}
-
-QLineEdit#SmartFolderLineEdit {
-    background-color: #252526;
-    color: #EEEEEE;
-    border: 1px solid #333333;
-    border-radius: 4px;
-    padding: 2px 8px;
-    min-height: 24px;
-}
-
-QLineEdit#SmartFolderLineEdit:focus {
-    border-color: #378ADD;
-}
-
-QSpinBox#SmartFolderSpinBox {
-    background-color: #252526;
-    color: #EEEEEE;
-    border: 1px solid #333333;
-    border-radius: 4px;
-    padding: 2px 6px;
-    min-height: 24px;
-}
-
-QDateEdit#SmartFolderDateEdit {
-    background-color: #252526;
-    color: #EEEEEE;
-    border: 1px solid #333333;
-    border-radius: 4px;
-    padding: 2px 6px;
-    min-height: 24px;
-}
-
-QPushButton#SmartFolderRowDeleteBtn {
-    background-color: transparent;
-    border: none;
-    border-radius: 4px;
-}
-
-QPushButton#SmartFolderRowDeleteBtn:hover {
-    background-color: rgba(255, 59, 48, 0.2);
-}
