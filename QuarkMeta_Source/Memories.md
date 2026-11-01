@@ -665,3 +665,12 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 2. **系统保护节点阻断铁律**：
    - 在库面板 (`LibraryPanel`) 中，“全部数据”（ID: -1）、“未分类”（ID: -2）等内置固定系统分类项以及系统保留节点，禁止响应 F2 进入编辑；
    - 普通用户自定义分类节点与收藏夹节点均畅通进入行内编辑并即时落库。
+
+## 24. 全局选中高亮归一化契约与禁止另起炉灶铁律 (Global Selection Highlight Normalization Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 全局视图控件选中高亮色彩表现的唯一真理源 (SSOT)。
+
+### 24.1 核心铁律：禁止任何面板搞特殊或另起炉灶
+1. **全局统一半透明主题蓝高亮**：
+   - 全软件内所有面板，包括但不限于侧边栏（收藏夹 `FavoritePanel`、库面板 `LibraryPanel`、目录导航 `NavPanel`、标记面板 `MarkedPanel`、历史记录 `HistoryPanel`）以及右侧主内容视图（`DropTreeView`、`ThumbnailDelegate`、`ColumnItemDelegate`），其选中项的高亮背景色必须统一严格使用 **`#378ADD` 15% 半透明蓝色**（`rgba(55, 138, 221, 0.15)`）；
+   - **彻底废除不透明硬色块**：严禁在个别面板（如 `MarkedTreeWidget`、`HistoryTreeWidget`）中私自引入 `#094771`、`#37373D` 等高饱和度或不透明暗色块，坚决消除视觉分裂，保障全应用设计语言的纯粹性与一致性。
