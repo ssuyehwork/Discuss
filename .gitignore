@@ -178,6 +178,7 @@ Skip upload-*/
 *.qm
 
 *.store-wal
+*.store-shm
 
 *.ai
 
