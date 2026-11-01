@@ -628,4 +628,27 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
      - 若内容面板无标题栏或标题栏不可见：
        $$\text{Y} = \text{PanelGlobalTopLeft.y}() + 10\text{px}$$
 
+## 22. 视图首末项导航快捷键 (Ctrl+Home / Ctrl+End) 与单行输入方向键增强规范
 
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 视图首尾定位、选区切换及单行文本编辑方向键交互的唯一真理源 (SSOT)。
+
+### 22.1 全局视图 Ctrl+Home / Ctrl+End 契约 (选中并滚动 - Windows Explorer 范式)
+1. **全视图统一覆盖原则**：
+   - **主内容面板 (ContentPanel)**：网格视图 (GridView)、自适应瀑布流视图 (JustifiedView)、列表视图 (ListView / DropTreeView) 以及分栏视图 (ColumnView / ColumnViewPane)；
+   - **左侧导航与侧边栏**：左侧目录树 (NavPanel)、收藏夹面板 (FavoritePanel) 与库面板 (LibraryPanel)。
+2. **交互行为定义 (选项 B - 选中并滚动)**：
+   - **`Ctrl + Home`**：清除当前其他选区，将焦点与选中状态切换至视图中**第一个真正的有效文件/文件夹项**，并驱动视图调用 `scrollTo` 滚动至视野顶部可见；
+   - **`Ctrl + End`**：清除当前其他选区，将焦点与选中状态切换至视图中**最后一个真正的有效文件/文件夹项**，并驱动视图调用 `scrollTo` 滚动至视野底部可见；
+   - **Section Header 与虚拟分隔行严格避让**：在查找首项或末项时，必须精准跳过 `SectionHeaderRole` 为 `true` 的分组头（如文件夹分组栏、分类分隔行等）以及非真实物理/数据项，确保选中目标永远是用户可见的真实有效项。
+
+### 22.2 输入框焦点感知阻断铁律 (Editing Focus Protection)
+- 当用户在单行输入框、多行文本框（如主搜索栏、重命名编辑框 `FileNameLineEdit`、元数据面板中的备注输入框等）处于编辑打字状态时：
+  - `Ctrl + Home` / `Ctrl + End` 必须严格放行给文本编辑控件自身原生事件，触发光标跳转至文本首部/尾部；
+  - 绝对禁止穿透或越权触发背景文件列表的选区切换与视图滚动。
+
+### 22.3 单行重命名与文本输入方向键增强规范 (Single-Line LineEdit Arrow Key Enhancement)
+- 在单行重命名编辑框（`FileNameLineEdit`）及相关单行输入交互场景中：
+  - **按下方向键【上 (Up)】**：立即将光标定位至文本首部（索引 0）并清除文本选区，同时吞噬事件以彻底阻断底层 QAbstractItemView 的行间焦点漂移；
+  - **按下方向键【下 (Down)】**：立即将光标定位至文本尾部（`text().length()`）并清除文本选区，同时吞噬事件以阻断底层 View 行切换；
+  - **左右方向键**：保持对文件扩展名的智能选区与跳转支持；
+  - 从而为桌面用户在单行重命名与输入时提供极致平滑、符合高阶文件管理效率的方向键光标流转体验。
