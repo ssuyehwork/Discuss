@@ -177,7 +177,7 @@ Skip upload-*/
 
 *.qm
 
-
+*.store-wal
 
 *.ai
 
