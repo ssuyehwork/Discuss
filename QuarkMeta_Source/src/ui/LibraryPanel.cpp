@@ -1,4 +1,6 @@
 #include "LibraryPanel.h"
+#include "controllers/ContentKeyHandler.h"
+#include <QKeyEvent>
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
 #include "PresetTagsDialog.h"
@@ -385,6 +387,10 @@ void LibraryPanel::initUi() {
     m_treeView->setDragDropMode(QAbstractItemView::DragDrop);
     m_treeView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_treeView->installEventFilter(this);
+    if (m_treeView->viewport()) {
+        m_treeView->viewport()->installEventFilter(this);
+    }
 
     m_model = new QStandardItemModel(this);
     m_treeView->setModel(m_model);
@@ -761,6 +767,33 @@ void LibraryPanel::toggleSectionByNodeId(int nodeId) {
     else configKey = "Library/CustomSectionCollapsed";
 
     AppConfig::instance().setValue(configKey, isExpanded);
+}
+
+bool LibraryPanel::eventFilter(QObject* watched, QEvent* event) {
+    if ((watched == m_treeView || (m_treeView && watched == m_treeView->viewport())) 
+        && event->type() == QEvent::KeyPress) {
+        QKeyEvent* keyEv = static_cast<QKeyEvent*>(event);
+        if (keyEv->key() == Qt::Key_F2 && keyEv->modifiers() == Qt::NoModifier) {
+            QModelIndex curIdx = m_treeView->currentIndex();
+            if (curIdx.isValid()) {
+                int nodeId = curIdx.data(Qt::UserRole + 1).toInt();
+                // 仅允许用户自定义分类（nodeId > 0）或智能文件夹进入行内编辑，屏蔽系统固定项和分组标头
+                if (nodeId > 0) {
+                    m_treeView->edit(curIdx);
+                    keyEv->accept();
+                    return true;
+                }
+            }
+        }
+        if (keyEv->modifiers() & Qt::ControlModifier) {
+            if (keyEv->key() == Qt::Key_Home) {
+                if (ContentKeyHandler::navigateViewFirstItem(m_treeView)) return true;
+            } else if (keyEv->key() == Qt::Key_End) {
+                if (ContentKeyHandler::navigateViewLastItem(m_treeView)) return true;
+            }
+        }
+    }
+    return QFrame::eventFilter(watched, event);
 }
 
 void LibraryPanel::toggleSection() {

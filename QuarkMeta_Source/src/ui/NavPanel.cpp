@@ -1,4 +1,6 @@
 #include "NavPanel.h"
+#include "controllers/ContentKeyHandler.h"
+#include <QKeyEvent>
 #include "UiHelper.h"
 #include "ShellIconManager.h"
 #include "Logger.h"
@@ -246,6 +248,10 @@ void NavPanel::initUi() {
     m_treeView->setStyleSheet(treeStyle);
 
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_treeView->installEventFilter(this);
+    if (m_treeView->viewport()) {
+        m_treeView->viewport()->installEventFilter(this);
+    }
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &NavPanel::onTreeContextMenu);
 
     connect(m_treeView, &QTreeView::expanded, this, &NavPanel::onItemExpanded);
@@ -443,6 +449,17 @@ void NavPanel::updateTreeHeight() {
 }
 
 bool NavPanel::eventFilter(QObject* watched, QEvent* event) {
+    if ((watched == m_treeView || (m_treeView && watched == m_treeView->viewport())) 
+        && event->type() == QEvent::KeyPress) {
+        QKeyEvent* keyEv = static_cast<QKeyEvent*>(event);
+        if (keyEv->modifiers() & Qt::ControlModifier) {
+            if (keyEv->key() == Qt::Key_Home) {
+                if (ContentKeyHandler::navigateViewFirstItem(m_treeView)) return true;
+            } else if (keyEv->key() == Qt::Key_End) {
+                if (ContentKeyHandler::navigateViewLastItem(m_treeView)) return true;
+            }
+        }
+    }
     if (event->type() == QEvent::ToolTip) {
         QString text = watched->property("tooltipText").toString();
         if (!text.isEmpty()) {
