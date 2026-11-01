@@ -246,6 +246,7 @@ bool FavoritePanel::eventFilter(QObject* watched, QEvent* event) {
         if (keyEv->key() == Qt::Key_F2 && keyEv->modifiers() == Qt::NoModifier) {
             QModelIndex curIdx = m_favoriteView->currentIndex();
             if (curIdx.isValid()) {
+                m_favoriteView->setFocus();
                 m_favoriteView->edit(curIdx);
                 keyEv->accept();
                 return true;
@@ -269,6 +270,7 @@ void FavoritePanel::setFocusHighlight(bool visible) {
 void FavoritePanel::initUi() {
     m_favoriteView = new DropTreeView(this);
     m_favoriteView->setObjectName("FavoriteTreeView");
+    m_favoriteView->setFocusPolicy(Qt::StrongFocus);
     m_favoriteView->setHeaderHidden(true);
     if (m_favoriteView->header()) {
         m_favoriteView->header()->setStretchLastSection(true);
@@ -605,6 +607,16 @@ void FavoritePanel::onInternalMoveRequested(const QList<QPersistentModelIndex>& 
 }
 
 void FavoritePanel::onFavoriteClicked(const QModelIndex& index) {
+    if (!index.isValid()) return;
+
+    // 🚀【防抢焦机制】：联动导航后，延迟夺回键盘焦点给收藏栏
+    QTimer::singleShot(0, this, [this, index]() {
+        if (m_favoriteView) {
+            m_favoriteView->setFocus(Qt::MouseFocusReason);
+            m_favoriteView->setCurrentIndex(index);
+        }
+    });
+
     bool isVirtual = index.data(Qt::UserRole + 7).toBool();
     if (isVirtual) {
         if (m_favoriteView) {

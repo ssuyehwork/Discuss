@@ -1,6 +1,8 @@
 #include "LibraryPanel.h"
 #include "controllers/ContentKeyHandler.h"
+#include "Logger.h"
 #include <QKeyEvent>
+#include <QDebug>
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
 #include "PresetTagsDialog.h"
@@ -372,6 +374,7 @@ LibraryPanel::LibraryPanel(QWidget* parent) : QFrame(parent) {
 void LibraryPanel::initUi() {
     m_treeView = new LibraryTreeView(this);
     m_treeView->setObjectName("LibraryTreeView");
+    m_treeView->setFocusPolicy(Qt::StrongFocus);
     m_treeView->setHeaderHidden(true);
     if (m_treeView->header()) {
         m_treeView->header()->setStretchLastSection(true);
@@ -533,7 +536,14 @@ void LibraryPanel::initUi() {
     connect(m_model, &QStandardItemModel::itemChanged, this, [this](QStandardItem* item) {
         if (!item || m_isLoading) return;
         int nodeId = item->data(Qt::UserRole + 1).toInt();
-        if (nodeId > 0) {
+        QString type = item->data(TypeRole).toString();
+        if (type == "smart_folder" && nodeId > 0) {
+            SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(nodeId);
+            if (rec.id > 0 && rec.name != item->text()) {
+                rec.name = item->text();
+                SmartFolderDao::updateSmartFolder(rec);
+            }
+        } else if (nodeId > 0) {
             QString name = item->text();
             QString iconKey = item->data(Qt::UserRole + 2).toString();
             QString colorHex = item->data(Qt::UserRole + 3).toString();
@@ -777,8 +787,9 @@ bool LibraryPanel::eventFilter(QObject* watched, QEvent* event) {
             QModelIndex curIdx = m_treeView->currentIndex();
             if (curIdx.isValid()) {
                 int nodeId = curIdx.data(Qt::UserRole + 1).toInt();
-                // 仅允许用户自定义分类（nodeId > 0）或智能文件夹进入行内编辑，屏蔽系统固定项和分组标头
+                // 仅允许用户自定义分类（nodeId > 0）或智能文件夹进入行内编辑，屏蔽系统固定项(-1, -2)和分组标头(-10, -20, 0)
                 if (nodeId > 0) {
+                    m_treeView->setFocus();
                     m_treeView->edit(curIdx);
                     keyEv->accept();
                     return true;
@@ -802,6 +813,15 @@ void LibraryPanel::toggleSection() {
 
 void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
     if (!index.isValid()) return;
+
+    // 🚀【防抢焦机制】：在信号分发导致的后台联动（NavPanel/ContentPanel）完成后，将焦点稳稳锁定在自己身上
+    QTimer::singleShot(0, this, [this, index]() {
+        if (m_treeView) {
+            m_treeView->setFocus(Qt::MouseFocusReason);
+            m_treeView->setCurrentIndex(index);
+        }
+    });
+
     int nodeId = index.data(Qt::UserRole + 1).toInt();
     if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
         return;
@@ -1078,7 +1098,10 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     QAction* renameAct = menu.addAction(UiHelper::getIcon("rename-1.svg", QColor("#EEEEEE")), "重命名");
     connect(renameAct, &QAction::triggered, this, [this, index]() {
-        if (m_treeView) m_treeView->edit(index);
+        if (m_treeView) {
+            m_treeView->setFocus();
+            m_treeView->edit(index);
+        }
     });
 
     QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除分类");
@@ -1203,7 +1226,7 @@ void LibraryPanel::loadLibrary() {
         sfItem->setData(sfIconKey, Qt::UserRole + 2);
         sfItem->setData(sfRec.colorHex, Qt::UserRole + 3);
         sfItem->setData(countVal, Qt::UserRole + 9);
-        sfItem->setEditable(false);
+        sfItem->setEditable(true);
         smartFolderHeader->appendRow(sfItem);
     }
 
@@ -1287,16 +1310,15 @@ void LibraryPanel::loadLibrary() {
 
     if (m_pendingEditNodeId > 0 && m_treeView) {
         int targetNodeId = m_pendingEditNodeId;
-        QTimer::singleShot(0, this, [this, targetNodeId]() {
-            if (m_pendingEditNodeId != targetNodeId) return;
-            m_pendingEditNodeId = 0;
-
+        m_pendingEditNodeId = 0;
+        QTimer::singleShot(50, this, [this, targetNodeId]() {
             QStandardItem* targetItem = findItemByNodeId(m_model->invisibleRootItem(), targetNodeId);
             if (targetItem && m_treeView) {
                 QModelIndex parentIdx = targetItem->parent() ? targetItem->parent()->index() : QModelIndex();
                 if (parentIdx.isValid()) {
                     m_treeView->expand(parentIdx);
                 }
+                m_treeView->setFocus();
                 m_treeView->setCurrentIndex(targetItem->index());
                 m_treeView->edit(targetItem->index());
             }
@@ -1382,7 +1404,6 @@ void LibraryPanel::createAndEditCategory(int parentId) {
     int newId = LibraryService::instance().createCategory(defaultName, parentId);
     if (newId > 0) {
         m_pendingEditNodeId = newId;
-        loadLibrary();
     }
 }
 
