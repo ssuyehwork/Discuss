@@ -177,6 +177,7 @@ Skip upload-*/
 
 *.qm
 
+*.store
 *.store-wal
 *.store-shm
 
