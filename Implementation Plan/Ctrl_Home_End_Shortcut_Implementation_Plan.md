@@ -1,11 +1,10 @@
-# Implementation Plan: 全局视图 Ctrl+Home/End 导航、侧边栏 F2 重命名与单行输入增强
+# Implementation Plan: 全局视图 Ctrl+Home/End 首末项导航与单行输入方向键增强
 
-本实施方案旨在严格遵循顶层架构规范与 `Memories.md`（章节 22 与 23），在 `QuarkMeta_Source` 桌面应用中完整实现：
+本实施方案旨在严格遵循顶层架构规范与 `Memories.md`（章节 22），在 `QuarkMeta_Source` 桌面应用中完整实现：
 1. **视图首末项导航快捷键 (`Ctrl + Home` / `Ctrl + End`)**：全视图覆盖（网格 GridView、自适应瀑布流 JustifiedView、列表 ListView/DropTreeView、分栏 ColumnView，以及侧边栏 NavPanel、FavoritePanel、LibraryPanel）；
 2. **精准有效项过滤**：跳过 `SectionHeaderRole == true` 分区头与无效项，执行 `ClearAndSelect` 单选聚焦与 `scrollTo` 滚动可视；
 3. **输入焦点安全隔离**：在用户于搜索栏、输入框打字时不越权截断，原生放行；
-4. **侧边栏树视图 F2 行内重命名补全**：修复 `FavoritePanel` 与 `LibraryPanel` 中因配置 `NoEditTriggers` 导致键盘按 `F2` 无法进入行内重命名的问题，与右键菜单“重命名”保持行为 100% 对称；
-5. **单行重命名编辑框 (`FileNameLineEdit`) 方向键增强**：按下方向键【上】光标跳到文本首部、按下方向键【下】光标跳到文本尾部，并吞噬事件阻断底层 View 行焦点漂移。
+4. **单行重命名编辑框 (`FileNameLineEdit`) 方向键增强**：按下方向键【上】光标跳到文本首部、按下方向键【下】光标跳到文本尾部，并吞噬事件阻断底层 View 行焦点漂移。
 
 ---
 
@@ -28,11 +27,7 @@ if (view->selectionModel()) {
 view->scrollTo(targetIdx);
 ```
 
-### 1.2 侧边栏 F2 快捷键行内重命名
-- `FavoritePanel`：在 `eventFilter` 捕获 `Qt::Key_F2`。若当前有选中的有效节点（`m_favoriteView->currentIndex().isValid()`），调用 `m_favoriteView->edit(idx)` 激活行内重命名文本框并返回 `true`。
-- `LibraryPanel`：在 `eventFilter` 捕获 `Qt::Key_F2`。获取 `m_treeView->currentIndex()`，检查其 `nodeId`（避让系统固定项如 `-1` 全部数据、`-2` 未分类等系统保留不可编辑项），调用 `m_treeView->edit(idx)` 激活行内重命名文本框并返回 `true`。
-
-### 1.3 挂载点与调用分发流
+### 1.2 挂载点与调用分发流
 1. **主内容面板视图 (`ContentPanel`)**：
    - 包含网格视图 (`m_gridView`)、自适应瀑布流视图、列表视图 (`m_treeView`)。
    - 所有按键事件均已统一汇总至 `ContentKeyHandler::handleKeyPress`，在此统一拦截 `Qt::Key_Home` 与 `Qt::Key_End` 配合 `Qt::ControlModifier`。
@@ -40,8 +35,8 @@ view->scrollTo(targetIdx);
    - 分栏视图中各列列表为 `DropListView`（`m_listView`），其按键事件在 `ColumnViewPane::eventFilter` 中被拦截。在此拦截 `Ctrl + Home / End` 并对当前列视图应用 `navigateViewFirstItem / navigateViewLastItem`。
 3. **侧边栏视图 (`NavPanel`, `FavoritePanel`, `LibraryPanel`)**：
    - `NavPanel`：在 `eventFilter` 中监听 `m_treeView` 的键盘事件；
-   - `FavoritePanel`：重写 `eventFilter` 监听 `m_favoriteView` 的键盘事件（涵盖 `Ctrl+Home/End` 与 `F2`）；
-   - `LibraryPanel`：重写 `eventFilter` 监听 `m_treeView` 的键盘事件（涵盖 `Ctrl+Home/End` 与 `F2`）。
+   - `FavoritePanel`：重写 `eventFilter` 监听 `m_favoriteView` 的键盘事件；
+   - `LibraryPanel`：重写 `eventFilter` 监听 `m_treeView` 的键盘事件。
 4. **单行编辑框 (`FileNameLineEdit`)**：
    - 重构 `FileNameLineEdit::keyPressEvent`：
      - `Qt::Key_Up`：执行 `setCursorPosition(0); deselect(); event->accept(); return;`；
@@ -293,12 +288,6 @@ bool FavoritePanel::eventFilter(QObject* watched, QEvent* event) {
             } else if (keyEv->key() == Qt::Key_End) {
                 if (ContentKeyHandler::navigateViewLastItem(m_favoriteView)) return true;
             }
-        } else if (keyEv->key() == Qt::Key_F2) {
-            QModelIndex curIdx = m_favoriteView->currentIndex();
-            if (curIdx.isValid()) {
-                m_favoriteView->edit(curIdx);
-                return true;
-            }
         }
     }
     return QFrame::eventFilter(watched, event);
@@ -357,16 +346,6 @@ bool LibraryPanel::eventFilter(QObject* watched, QEvent* event) {
                 if (ContentKeyHandler::navigateViewFirstItem(m_treeView)) return true;
             } else if (keyEv->key() == Qt::Key_End) {
                 if (ContentKeyHandler::navigateViewLastItem(m_treeView)) return true;
-            }
-        } else if (keyEv->key() == Qt::Key_F2) {
-            QModelIndex curIdx = m_treeView->currentIndex();
-            if (curIdx.isValid()) {
-                int nodeId = curIdx.data(Qt::UserRole + 1).toInt();
-                // 阻断内置保护项（ID: -1 全部数据, -2 未分类, -10 分组等）
-                if (nodeId > 0 && curIdx.data(TypeRole).toString() != "smart_folder") {
-                    m_treeView->edit(curIdx);
-                    return true;
-                }
             }
         }
     }
