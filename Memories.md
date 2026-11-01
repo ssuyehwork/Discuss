@@ -738,3 +738,20 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 1. **防止表头挤压截断**：
    - 针对单日期输入框 (`SingleDateValueWidget`) 与双日期范围输入框 (`DateRangeValueWidget`) 中的 `QDateEdit`，其弹出的内部 `QCalendarWidget` 必须保证充足的宽度（`setMinimumWidth(260)`）；
    - 彻底解决由于宿主输入框较窄导致弹出日历控件被强制压缩、顶部星期表头（一至日）被挤截断为 `...` 的视觉残缺缺陷，保障周一到周日及日期单元格完整舒展展示。
+
+## 28. 智能文件夹图像颜色拾色器与内容面板实时联动规范 (Smart Folder Color Picker & Live Content Preview SSOT)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹图像颜色选择及规则编辑实时反馈的唯一真理源 (SSOT)。
+
+### 28.1 图像颜色通用色轮/拾色器规范 (Universal Color Wheel & Tolerance Picker)
+1. **废弃死板固定色块下拉框**：
+   - 彻底废除原智能文件夹中仅有 8 种固定色彩的下拉列表框（`QComboBox`）；
+   - 采用通用的拾色机制，以独立的颜色色块按钮（`m_colorBtn`）展示当前颜色 Hex 与悬停提示，点击弹出系统标准 `ColorPicker`（支持 HSV 色盘、预设色板、自定义 Hex 填写以及准确度/容差滑条联动调节）；
+   - 规则值依然遵循 `SmartFolderRule::value` (Hex) 与 `tolerance` 的统一接口规范，确保底层数据库检索（`SmartFolderDao`）的无缝兼容。
+
+### 28.2 智能文件夹规则配置即时联动闭环 (Live Reactive Content Panel Preview)
+1. **所见即所得的交互响应**：
+   - 在智能文件夹新建或编辑对话框（`SmartFolderDialog`）中，用户对任何规则条件的修改（增减规则、修改类型、切换逻辑运算符、修改值或容差）均会触发 150ms 防抖定时器；
+   - 对话框对外发射 `rulesPreviewRequested(const SmartFolderRecord& record)` 信号，通过 `LibraryPanel` 中继至 `PanelMediator`；
+   - `PanelMediator` 接收到实时预览请求后，即时调用 `SmartFolderDao::getMatchingPaths(record)` 检索匹配的文件路径，并调度主界面活跃内容面板 `ContentPanel::loadLibraryPaths` 加载展示，让用户在未点击“保存”前就能实时预览规则过滤结果；
+   - 对话框若被“取消”关闭，内容面板自动还原至打开对话框前的历史展示状态，形成完整的交互保护闭环。
