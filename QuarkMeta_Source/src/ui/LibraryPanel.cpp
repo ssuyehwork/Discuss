@@ -374,6 +374,7 @@ LibraryPanel::LibraryPanel(QWidget* parent) : QFrame(parent) {
 void LibraryPanel::initUi() {
     m_treeView = new LibraryTreeView(this);
     m_treeView->setObjectName("LibraryTreeView");
+    m_treeView->setFocusPolicy(Qt::StrongFocus);
     m_treeView->setHeaderHidden(true);
     if (m_treeView->header()) {
         m_treeView->header()->setStretchLastSection(true);
@@ -535,7 +536,14 @@ void LibraryPanel::initUi() {
     connect(m_model, &QStandardItemModel::itemChanged, this, [this](QStandardItem* item) {
         if (!item || m_isLoading) return;
         int nodeId = item->data(Qt::UserRole + 1).toInt();
-        if (nodeId > 0) {
+        QString type = item->data(TypeRole).toString();
+        if (type == "smart_folder" && nodeId > 0) {
+            SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(nodeId);
+            if (rec.id > 0 && rec.name != item->text()) {
+                rec.name = item->text();
+                SmartFolderDao::updateSmartFolder(rec);
+            }
+        } else if (nodeId > 0) {
             QString name = item->text();
             QString iconKey = item->data(Qt::UserRole + 2).toString();
             QString colorHex = item->data(Qt::UserRole + 3).toString();
@@ -775,32 +783,16 @@ bool LibraryPanel::eventFilter(QObject* watched, QEvent* event) {
     if ((watched == m_treeView || (m_treeView && watched == m_treeView->viewport())) 
         && event->type() == QEvent::KeyPress) {
         QKeyEvent* keyEv = static_cast<QKeyEvent*>(event);
-        if (keyEv->key() == Qt::Key_F2) {
+        if (keyEv->key() == Qt::Key_F2 && keyEv->modifiers() == Qt::NoModifier) {
             QModelIndex curIdx = m_treeView->currentIndex();
-            int nodeId = curIdx.isValid() ? curIdx.data(Qt::UserRole + 1).toInt() : -999;
-            QString debugMsg = QString("[F2_DEBUG] LibraryPanel::eventFilter caught F2! watched=%1, curIdx.valid=%2, nodeId=%3, modifiers=%4")
-                               .arg(watched == m_treeView ? "treeView" : "viewport")
-                               .arg(curIdx.isValid())
-                               .arg(nodeId)
-                               .arg(static_cast<int>(keyEv->modifiers()));
-            Logger::log(debugMsg);
-            qDebug() << debugMsg;
-
-            if (curIdx.isValid() && keyEv->modifiers() == Qt::NoModifier) {
-                // 仅允许用户自定义分类（nodeId > 0）或智能文件夹进入行内编辑，屏蔽系统固定项和分组标头
+            if (curIdx.isValid()) {
+                int nodeId = curIdx.data(Qt::UserRole + 1).toInt();
+                // 仅允许用户自定义分类（nodeId > 0）或智能文件夹进入行内编辑，屏蔽系统固定项(-1, -2)和分组标头(-10, -20, 0)
                 if (nodeId > 0) {
-                    QString logEdit = QString("[F2_DEBUG] Triggering m_treeView->edit(row=%1, col=%2) for nodeId=%3")
-                                      .arg(curIdx.row()).arg(curIdx.column()).arg(nodeId);
-                    Logger::log(logEdit);
-                    qDebug() << logEdit;
-
+                    m_treeView->setFocus();
                     m_treeView->edit(curIdx);
                     keyEv->accept();
                     return true;
-                } else {
-                    QString logSkip = QString("[F2_DEBUG] Skipped edit: nodeId <= 0 (%1)").arg(nodeId);
-                    Logger::log(logSkip);
-                    qDebug() << logSkip;
                 }
             }
         }
@@ -820,17 +812,17 @@ void LibraryPanel::toggleSection() {
 }
 
 void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
-    if (m_treeView) {
-        m_treeView->setFocus();
-    }
     if (!index.isValid()) return;
+
+    // 🚀【防抢焦机制】：在信号分发导致的后台联动（NavPanel/ContentPanel）完成后，将焦点稳稳锁定在自己身上
+    QTimer::singleShot(0, this, [this, index]() {
+        if (m_treeView) {
+            m_treeView->setFocus(Qt::MouseFocusReason);
+            m_treeView->setCurrentIndex(index);
+        }
+    });
+
     int nodeId = index.data(Qt::UserRole + 1).toInt();
-    QString clickLog = QString("[F2_DEBUG] onCategoryClicked: nodeId=%1, name=%2, hasFocus=%3")
-                       .arg(nodeId)
-                       .arg(index.data(Qt::DisplayRole).toString())
-                       .arg(m_treeView ? m_treeView->hasFocus() : false);
-    Logger::log(clickLog);
-    qDebug() << clickLog;
     if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
         return;
     }
@@ -1234,7 +1226,7 @@ void LibraryPanel::loadLibrary() {
         sfItem->setData(sfIconKey, Qt::UserRole + 2);
         sfItem->setData(sfRec.colorHex, Qt::UserRole + 3);
         sfItem->setData(countVal, Qt::UserRole + 9);
-        sfItem->setEditable(false);
+        sfItem->setEditable(true);
         smartFolderHeader->appendRow(sfItem);
     }
 
