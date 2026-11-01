@@ -1,6 +1,8 @@
 #include "LibraryPanel.h"
 #include "controllers/ContentKeyHandler.h"
+#include "Logger.h"
 #include <QKeyEvent>
+#include <QDebug>
 #include "UiHelper.h"
 #include "ToolTipOverlay.h"
 #include "PresetTagsDialog.h"
@@ -773,15 +775,32 @@ bool LibraryPanel::eventFilter(QObject* watched, QEvent* event) {
     if ((watched == m_treeView || (m_treeView && watched == m_treeView->viewport())) 
         && event->type() == QEvent::KeyPress) {
         QKeyEvent* keyEv = static_cast<QKeyEvent*>(event);
-        if (keyEv->key() == Qt::Key_F2 && keyEv->modifiers() == Qt::NoModifier) {
+        if (keyEv->key() == Qt::Key_F2) {
             QModelIndex curIdx = m_treeView->currentIndex();
-            if (curIdx.isValid()) {
-                int nodeId = curIdx.data(Qt::UserRole + 1).toInt();
+            int nodeId = curIdx.isValid() ? curIdx.data(Qt::UserRole + 1).toInt() : -999;
+            QString debugMsg = QString("[F2_DEBUG] LibraryPanel::eventFilter caught F2! watched=%1, curIdx.valid=%2, nodeId=%3, modifiers=%4")
+                               .arg(watched == m_treeView ? "treeView" : "viewport")
+                               .arg(curIdx.isValid())
+                               .arg(nodeId)
+                               .arg(static_cast<int>(keyEv->modifiers()));
+            Logger::log(debugMsg);
+            qDebug() << debugMsg;
+
+            if (curIdx.isValid() && keyEv->modifiers() == Qt::NoModifier) {
                 // 仅允许用户自定义分类（nodeId > 0）或智能文件夹进入行内编辑，屏蔽系统固定项和分组标头
                 if (nodeId > 0) {
+                    QString logEdit = QString("[F2_DEBUG] Triggering m_treeView->edit(row=%1, col=%2) for nodeId=%3")
+                                      .arg(curIdx.row()).arg(curIdx.column()).arg(nodeId);
+                    Logger::log(logEdit);
+                    qDebug() << logEdit;
+
                     m_treeView->edit(curIdx);
                     keyEv->accept();
                     return true;
+                } else {
+                    QString logSkip = QString("[F2_DEBUG] Skipped edit: nodeId <= 0 (%1)").arg(nodeId);
+                    Logger::log(logSkip);
+                    qDebug() << logSkip;
                 }
             }
         }
@@ -801,8 +820,17 @@ void LibraryPanel::toggleSection() {
 }
 
 void LibraryPanel::onCategoryClicked(const QModelIndex& index) {
+    if (m_treeView) {
+        m_treeView->setFocus();
+    }
     if (!index.isValid()) return;
     int nodeId = index.data(Qt::UserRole + 1).toInt();
+    QString clickLog = QString("[F2_DEBUG] onCategoryClicked: nodeId=%1, name=%2, hasFocus=%3")
+                       .arg(nodeId)
+                       .arg(index.data(Qt::DisplayRole).toString())
+                       .arg(m_treeView ? m_treeView->hasFocus() : false);
+    Logger::log(clickLog);
+    qDebug() << clickLog;
     if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
         return;
     }
@@ -1078,7 +1106,10 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
     QAction* renameAct = menu.addAction(UiHelper::getIcon("rename-1.svg", QColor("#EEEEEE")), "重命名");
     connect(renameAct, &QAction::triggered, this, [this, index]() {
-        if (m_treeView) m_treeView->edit(index);
+        if (m_treeView) {
+            m_treeView->setFocus();
+            m_treeView->edit(index);
+        }
     });
 
     QAction* removeAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除分类");
@@ -1287,16 +1318,15 @@ void LibraryPanel::loadLibrary() {
 
     if (m_pendingEditNodeId > 0 && m_treeView) {
         int targetNodeId = m_pendingEditNodeId;
-        QTimer::singleShot(0, this, [this, targetNodeId]() {
-            if (m_pendingEditNodeId != targetNodeId) return;
-            m_pendingEditNodeId = 0;
-
+        m_pendingEditNodeId = 0;
+        QTimer::singleShot(50, this, [this, targetNodeId]() {
             QStandardItem* targetItem = findItemByNodeId(m_model->invisibleRootItem(), targetNodeId);
             if (targetItem && m_treeView) {
                 QModelIndex parentIdx = targetItem->parent() ? targetItem->parent()->index() : QModelIndex();
                 if (parentIdx.isValid()) {
                     m_treeView->expand(parentIdx);
                 }
+                m_treeView->setFocus();
                 m_treeView->setCurrentIndex(targetItem->index());
                 m_treeView->edit(targetItem->index());
             }
@@ -1382,7 +1412,6 @@ void LibraryPanel::createAndEditCategory(int parentId) {
     int newId = LibraryService::instance().createCategory(defaultName, parentId);
     if (newId > 0) {
         m_pendingEditNodeId = newId;
-        loadLibrary();
     }
 }
 
