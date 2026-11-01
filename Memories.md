@@ -692,3 +692,66 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 当用户将移动硬盘（物理序列号为 `NA5360WJ`）接入到任何外部未授权计算机时，系统通过识别“程序运行路径所在物理硬盘 SN”命中 `NA5360WJ`，依然可以畅通运行主程序，实现真正的“一盘走天下”；
    - 当在授权主机上运行时，即使外接其他未知硬盘，也能通过 CPU、主板、BIOS 或系统盘特征顺利准入；
    - 只有在未经授权的电脑上运行未授权的硬盘拷贝时，才会触发安全拦截并退出。
+
+## 26. 侧边栏历史选项卡交互规范 (Sidebar History Tab Interaction & Context Menu Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 侧边栏历史记录选项卡交互与右键上下文菜单的唯一真理源 (SSOT)。
+
+### 26.1 单击行为规范 (Click Highlight Only, Zero Unwanted Relocation Overhead)
+1. **取消单击自动定位**：
+   - 用户在侧边栏“历史”面板（`HistoryPanel` / `HistoryTreeWidget`）中用鼠标左键单击列表项时，**严禁触发文件定位**（不发射 `requestLocateFile`，不驱动主内容区 `ContentPanel` 重新载入与定位）；
+   - **仅保留选中高亮**：单击操作仅用于在视觉上呈现当前项的选中高亮（遵守全局 `#378ADD` 15% 半透明蓝色 `rgba(55, 138, 221, 0.15)`），避免不必要的磁盘 I/O、缩略图加载与主视图切换开销。
+
+### 26.2 右键上下文菜单完备性契约 (History Context Menu Completeness Contract)
+1. **全局统一样式与中性色图标**：
+   - 菜单整体采用全局统一暗色菜单样式 `UiHelper::applyMenuStyle(&menu)`；
+   - 菜单内所有图标严格遵循系统规范使用统一中性色 `#EEEEEE`。
+2. **上下文菜单功能结构规范**：
+   右键点击历史文件项时，弹出具备以下完整能力的上下文菜单：
+   - **用系统默认程序打开**：调用系统关联程序唤起打开该文件，并记录访问记录；
+   - **在“资源管理器”中显示**：严格复用 `ContextMenuFactory::buildShowInExplorerAction(&menu, path, false, this)`（包含中文双引号）；
+   - **在 QuarkMeta 中显示**：显式触发主视图定位（`emit requestLocateFile(path)`），让用户在需要时主动按需定位；
+   - **打开方式**：严格委托 `ContextMenuFactory::buildOpenWithMenu(&menu, QStringList{path}, this)` 呈现级联子菜单；
+   - 分隔符 (`addSeparator`)
+   - **添加至收藏夹**：严格复用 `FavoriteService::instance().buildFavoriteAction(&menu, path, this)`；
+   - **添加至“库”**：严格复用 `LibraryService::instance().buildLibraryAction(&menu, QStringList{path}, this)`；
+   - 分隔符 (`addSeparator`)
+   - **复制（Ctrl+C）**：将文件路径写入剪贴板（`ClipboardService::instance().copyItems({path})`）；
+   - **剪切（Ctrl+X）**：将文件路径置入剪贴板剪切态（`ClipboardService::instance().cutItems({path})`）；
+   - **复制名称**：严格复用 `ContextMenuFactory::buildCopyNameAction(&menu, {path}, this)`；
+   - **复制完整路径**：严格复用 `ContextMenuFactory::buildCopyPathAction(&menu, {path}, this)`；
+   - 分隔符 (`addSeparator`)
+   - **从历史中移除**：调用 `HistoryService::instance().removeHistory(path)`；
+   - **清空历史**：调用 `HistoryService::instance().clearAllHistory()`（右键空白处时亦提供此操作）。
+
+## 27. 智能文件夹规则配置视觉规范 (Smart Folder Rule Configuration Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹规则配置对话框 (`SmartFolderDialog` / `SmartFolderRuleRow` / `SmartFolderValueWidgets`) 的唯一真理源 (SSOT)。
+
+### 27.1 评分星级纯矢量呈现铁律 (Strict Star Rating Graphic SSOT)
+1. **彻底杜绝文字与符号拼凑**：
+   - 规则编辑器中的评分下拉列表框（`StarRatingValueWidget`），**绝对禁止**出现“1星”、“2星”等阿拉伯数字拼凑文字；**绝对禁止**使用 Unicode 字符（如“★”）替代；
+   - 0 星标准选项统一固定为 **“无评级”**；
+   - 1~5 星选项文本一律**清空为空字符串 `""`**，仅显示由 SVG `star_filled` 动态绘制的矢量星级 QIcon/Pixmap，保证与系统星级规范 100% 物理对齐。
+
+### 27.2 日历弹出表头舒展尺寸契约 (Calendar Popup Dimension Contract)
+1. **防止表头挤压截断**：
+   - 针对单日期输入框 (`SingleDateValueWidget`) 与双日期范围输入框 (`DateRangeValueWidget`) 中的 `QDateEdit`，其弹出的内部 `QCalendarWidget` 必须保证充足的宽度（`setMinimumWidth(260)`）；
+   - 彻底解决由于宿主输入框较窄导致弹出日历控件被强制压缩、顶部星期表头（一至日）被挤截断为 `...` 的视觉残缺缺陷，保障周一到周日及日期单元格完整舒展展示。
+
+## 28. 智能文件夹图像颜色拾色器与内容面板实时联动规范 (Smart Folder Color Picker & Live Content Preview SSOT)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹图像颜色选择及规则编辑实时反馈的唯一真理源 (SSOT)。
+
+### 28.1 图像颜色通用色轮/拾色器规范 (Universal Color Wheel & Tolerance Picker)
+1. **废弃死板固定色块下拉框**：
+   - 彻底废除原智能文件夹中仅有 8 种固定色彩的下拉列表框（`QComboBox`）；
+   - 采用通用的拾色机制，以独立的颜色色块按钮（`m_colorBtn`）展示当前颜色 Hex 与悬停提示，点击弹出系统标准 `ColorPicker`（支持 HSV 色盘、预设色板、自定义 Hex 填写以及准确度/容差滑条联动调节）；
+   - 规则值依然遵循 `SmartFolderRule::value` (Hex) 与 `tolerance` 的统一接口规范，确保底层数据库检索（`SmartFolderDao`）的无缝兼容。
+
+### 28.2 智能文件夹规则配置即时联动闭环 (Live Reactive Content Panel Preview)
+1. **所见即所得的交互响应**：
+   - 在智能文件夹新建或编辑对话框（`SmartFolderDialog`）中，用户对任何规则条件的修改（增减规则、修改类型、切换逻辑运算符、修改值或容差）均会触发 150ms 防抖定时器；
+   - 对话框对外发射 `rulesPreviewRequested(const SmartFolderRecord& record)` 信号，通过 `LibraryPanel` 中继至 `PanelMediator`；
+   - `PanelMediator` 接收到实时预览请求后，即时调用 `SmartFolderDao::getMatchingPaths(record)` 检索匹配的文件路径，并调度主界面活跃内容面板 `ContentPanel::loadLibraryPaths` 加载展示，让用户在未点击“保存”前就能实时预览规则过滤结果；
+   - 对话框若被“取消”关闭，内容面板自动还原至打开对话框前的历史展示状态，形成完整的交互保护闭环。

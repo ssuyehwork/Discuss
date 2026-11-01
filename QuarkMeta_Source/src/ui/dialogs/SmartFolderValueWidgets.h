@@ -6,6 +6,7 @@
 #include <QSpinBox>
 #include <QDateEdit>
 #include <QSlider>
+#include <QPushButton>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QDate>
@@ -151,8 +152,12 @@ public:
     void setRuleValues(const SmartFolderRule& rule) override;
 
 private:
-    QComboBox* m_combo = nullptr;
+    void updateBtnStyle();
+    void openColorPicker();
+
+    QPushButton* m_colorBtn = nullptr;
     QSpinBox* m_toleranceSpin = nullptr;
+    QString m_colorHex = "#FF0000";
 };
 
 class TagPillValueWidget : public ISmartFolderValueWidget {

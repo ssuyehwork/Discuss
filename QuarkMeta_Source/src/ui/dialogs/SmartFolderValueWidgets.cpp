@@ -5,6 +5,9 @@
 #include "../../ui/UiHelper.h"
 #include <QPainter>
 #include <QPixmap>
+#include <QCalendarWidget>
+#include <QPoint>
+#include "../ColorPicker.h"
 
 namespace QuarkMeta {
 
@@ -34,30 +37,24 @@ StarRatingValueWidget::StarRatingValueWidget(QWidget* parent) : ISmartFolderValu
     m_combo = new QComboBox(this);
     m_combo->setObjectName("SmartFolderComboBox");
 
-    // 0 Stars / Unrated
-    m_combo->addItem("无 (0星)", 0);
+    m_combo->setIconSize(QSize(100, 18));
 
     const int starSize = 14;
-    const int spacing = 2;
+    const int spacing = 4;
     for (int stars = 1; stars <= 5; ++stars) {
-        int maxW = 5 * starSize + 4 * spacing;
+        int maxW = stars * starSize + (stars - 1) * spacing;
         QPixmap pixmap(maxW, starSize);
         pixmap.fill(Qt::transparent);
 
         QPainter painter(&pixmap);
         int x = 0;
         for (int i = 0; i < stars; ++i) {
-            QIcon icon = UiHelper::getIcon("star_filled", QColor("#FFB800"));
-            icon.paint(&painter, x, 0, starSize, starSize);
-            x += starSize + spacing;
-        }
-        for (int i = stars; i < 5; ++i) {
-            QIcon icon = UiHelper::getIcon("star_filled", QColor("#444444"));
+            QIcon icon = UiHelper::getIcon("star_filled", QColor("#C5D1DE"));
             icon.paint(&painter, x, 0, starSize, starSize);
             x += starSize + spacing;
         }
 
-        m_combo->addItem(QIcon(pixmap), QString("%1 星").arg(stars), stars);
+        m_combo->addItem(QIcon(pixmap), "", stars);
     }
 
     layout->addWidget(m_combo);
@@ -84,6 +81,9 @@ SingleDateValueWidget::SingleDateValueWidget(QWidget* parent) : ISmartFolderValu
     m_dateEdit->setObjectName("SmartFolderDateEdit");
     m_dateEdit->setCalendarPopup(true);
     m_dateEdit->setDisplayFormat("yyyy-MM-dd");
+    if (m_dateEdit->calendarWidget()) {
+        m_dateEdit->calendarWidget()->setMinimumWidth(260);
+    }
     layout->addWidget(m_dateEdit);
     connect(m_dateEdit, &QDateEdit::dateChanged, this, &ISmartFolderValueWidget::valueChanged);
 }
@@ -111,11 +111,17 @@ DateRangeValueWidget::DateRangeValueWidget(QWidget* parent) : ISmartFolderValueW
     m_date1Edit->setObjectName("SmartFolderDateEdit");
     m_date1Edit->setCalendarPopup(true);
     m_date1Edit->setDisplayFormat("yyyy-MM-dd");
+    if (m_date1Edit->calendarWidget()) {
+        m_date1Edit->calendarWidget()->setMinimumWidth(260);
+    }
 
     m_date2Edit = new QDateEdit(QDate::currentDate(), this);
     m_date2Edit->setObjectName("SmartFolderDateEdit");
     m_date2Edit->setCalendarPopup(true);
     m_date2Edit->setDisplayFormat("yyyy-MM-dd");
+    if (m_date2Edit->calendarWidget()) {
+        m_date2Edit->calendarWidget()->setMinimumWidth(260);
+    }
 
     layout->addWidget(m_date1Edit);
     QLabel* label = new QLabel("至", this);
@@ -340,15 +346,13 @@ AutoColorValueWidget::AutoColorValueWidget(QWidget* parent) : ISmartFolderValueW
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(8);
 
-    m_combo = new QComboBox(this);
-    m_combo->setObjectName("SmartFolderComboBox");
-
-    auto palette = Style::getColorPalette();
-    for (const auto& item : palette) {
-        QPixmap pm(14, 14);
-        pm.fill(item.color);
-        m_combo->addItem(QIcon(pm), item.name, item.hex);
-    }
+    m_colorBtn = new QPushButton(this);
+    m_colorBtn->setObjectName("SmartFolderAutoColorBtn");
+    m_colorBtn->setFixedSize(28, 24);
+    m_colorBtn->setCursor(Qt::PointingHandCursor);
+    updateBtnStyle();
+    connect(m_colorBtn, &QPushButton::clicked, this, &AutoColorValueWidget::openColorPicker);
+    layout->addWidget(m_colorBtn);
 
     m_toleranceSpin = new QSpinBox(this);
     m_toleranceSpin->setObjectName("SmartFolderSpinBox");
@@ -356,29 +360,54 @@ AutoColorValueWidget::AutoColorValueWidget(QWidget* parent) : ISmartFolderValueW
     m_toleranceSpin->setValue(50);
     m_toleranceSpin->setPrefix("容差: ");
 
-    layout->addWidget(m_combo, 1);
-    layout->addWidget(m_toleranceSpin);
+    layout->addWidget(m_toleranceSpin, 1);
 
-    connect(m_combo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &ISmartFolderValueWidget::valueChanged);
     connect(m_toleranceSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &ISmartFolderValueWidget::valueChanged);
 }
 
+void AutoColorValueWidget::updateBtnStyle() {
+    m_colorBtn->setStyleSheet(QString(
+        "QPushButton#SmartFolderAutoColorBtn { "
+        "  background-color: %1; "
+        "  border: 1px solid #444444; "
+        "  border-radius: 4px; "
+        "} "
+        "QPushButton#SmartFolderAutoColorBtn:hover { "
+        "  border: 1px solid #378ADD; "
+        "}"
+    ).arg(m_colorHex));
+    m_colorBtn->setToolTip(m_colorHex);
+}
+
+void AutoColorValueWidget::openColorPicker() {
+    auto* picker = new ColorPicker(this);
+    picker->setCurrentColor(QColor(m_colorHex));
+    picker->setTolerance(m_toleranceSpin->value());
+
+    QPoint globalPos = m_colorBtn->mapToGlobal(QPoint(0, m_colorBtn->height() + 2));
+    picker->move(globalPos);
+
+    connect(picker, &ColorPicker::colorSelected, this, [this](const QColor& c, int tol) {
+        m_colorHex = c.name(QColor::HexRgb).toUpper();
+        m_toleranceSpin->setValue(tol);
+        updateBtnStyle();
+        emit valueChanged();
+    });
+
+    picker->show();
+}
+
 void AutoColorValueWidget::getRuleValues(SmartFolderRule& rule) const {
-    rule.value = m_combo->currentData().toString();
+    rule.value = m_colorHex;
     rule.tolerance = m_toleranceSpin->value();
 }
 
 void AutoColorValueWidget::setRuleValues(const SmartFolderRule& rule) {
-    int idx = m_combo->findData(rule.value);
-    if (idx >= 0) {
-        m_combo->setCurrentIndex(idx);
-    } else if (!rule.value.isEmpty()) {
-        QPixmap pm(14, 14);
-        pm.fill(QColor(rule.value));
-        m_combo->addItem(QIcon(pm), rule.value, rule.value);
-        m_combo->setCurrentIndex(m_combo->count() - 1);
+    if (!rule.value.isEmpty()) {
+        m_colorHex = rule.value.toUpper();
     }
     m_toleranceSpin->setValue(rule.tolerance > 0 ? rule.tolerance : 50);
+    updateBtnStyle();
 }
 
 // --- TagPillValueWidget ---

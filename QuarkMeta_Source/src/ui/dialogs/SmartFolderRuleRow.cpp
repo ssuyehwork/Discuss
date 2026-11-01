@@ -19,7 +19,7 @@ void SmartFolderRuleRow::initUi() {
 
     m_typeCombo = new QComboBox(this);
     m_typeCombo->setObjectName("SmartFolderComboBox");
-    m_typeCombo->addItem("评分", static_cast<int>(SmartRuleType::Rating));
+    m_typeCombo->addItem("星级", static_cast<int>(SmartRuleType::Rating));
     m_typeCombo->addItem("名称", static_cast<int>(SmartRuleType::Name));
     m_typeCombo->addItem("扩展名", static_cast<int>(SmartRuleType::Extension));
     m_typeCombo->addItem("标签", static_cast<int>(SmartRuleType::Tag));
@@ -49,8 +49,14 @@ void SmartFolderRuleRow::initUi() {
 
     m_layout->addWidget(m_btnDelete);
 
-    connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SmartFolderRuleRow::onTypeChanged);
-    connect(m_opCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SmartFolderRuleRow::onOpChanged);
+    connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+        onTypeChanged();
+        emit ruleChanged();
+    });
+    connect(m_opCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this]() {
+        onOpChanged();
+        emit ruleChanged();
+    });
     connect(m_btnDelete, &QPushButton::clicked, this, [this]() {
         emit removeRequested(this);
     });
@@ -206,6 +212,7 @@ void SmartFolderRuleRow::updateValueWidget() {
         }
         updateGeometry();
         emit rowHeightChanged();
+        emit ruleChanged();
     });
 
     updateGeometry();
