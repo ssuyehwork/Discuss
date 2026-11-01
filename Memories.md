@@ -723,3 +723,18 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 分隔符 (`addSeparator`)
    - **从历史中移除**：调用 `HistoryService::instance().removeHistory(path)`；
    - **清空历史**：调用 `HistoryService::instance().clearAllHistory()`（右键空白处时亦提供此操作）。
+
+## 27. 智能文件夹规则配置视觉规范 (Smart Folder Rule Configuration Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹规则配置对话框 (`SmartFolderDialog` / `SmartFolderRuleRow` / `SmartFolderValueWidgets`) 的唯一真理源 (SSOT)。
+
+### 27.1 评分星级纯矢量呈现铁律 (Strict Star Rating Graphic SSOT)
+1. **彻底杜绝文字与符号拼凑**：
+   - 规则编辑器中的评分下拉列表框（`StarRatingValueWidget`），**绝对禁止**出现“1星”、“2星”等阿拉伯数字拼凑文字；**绝对禁止**使用 Unicode 字符（如“★”）替代；
+   - 0 星标准选项统一固定为 **“无评级”**；
+   - 1~5 星选项文本一律**清空为空字符串 `""`**，仅显示由 SVG `star_filled` 动态绘制的矢量星级 QIcon/Pixmap，保证与系统星级规范 100% 物理对齐。
+
+### 27.2 日历弹出表头舒展尺寸契约 (Calendar Popup Dimension Contract)
+1. **防止表头挤压截断**：
+   - 针对单日期输入框 (`SingleDateValueWidget`) 与双日期范围输入框 (`DateRangeValueWidget`) 中的 `QDateEdit`，其弹出的内部 `QCalendarWidget` 必须保证充足的宽度（`setMinimumWidth(260)`）；
+   - 彻底解决由于宿主输入框较窄导致弹出日历控件被强制压缩、顶部星期表头（一至日）被挤截断为 `...` 的视觉残缺缺陷，保障周一到周日及日期单元格完整舒展展示。
