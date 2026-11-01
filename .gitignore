@@ -124,6 +124,10 @@ backups-*/
 .vs/
 .vs-*/
 
+.store-shm/
+.store-shm-*/
+.qm/
+
 .qtcreator/
 
 OCR/
@@ -170,6 +174,10 @@ Skip upload-*/
 *.BridgeSort
 *.BridgeLabelsAndRatings
 *.QuarkMeta.json
+
+*.qm
+
+
 
 *.ai
 
