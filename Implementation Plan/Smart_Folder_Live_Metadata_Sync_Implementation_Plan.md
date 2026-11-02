@@ -16,7 +16,8 @@
 2. **批量只读统计通道**：在 `SmartFolderDao` 中新增 `countMatchingItemsBatchReadOnly`，单次打开只读数据库连接，设置 `sqlite3_busy_timeout(db, 3000)`，循环计算全部智能文件夹计数；完全替换并物理删除旧单条只读函数 `countMatchingItemsReadOnly`。
 3. **侧边栏防抖与安全刷新**：在 `LibraryPanel` 中新增 `refreshSmartFolderCounts()`，内置 150ms 单次定时器合并连续请求；异步后台批量计算，回到主线程时通过递增序号 `m_currentCountReqId` 与 `QPointer` 守卫验证防过期；写入期间屏蔽 `itemChanged` 改名落库逻辑；未返回的智能文件夹保留原数值。
 4. **内容面板统一加载入口与无感比对刷新**：
-   - 在 `ContentPanel` / `ContentDataLoader` 中新增唯一加载入口 `loadSmartFolder(record, displayName)`，并在 `ContentPanel` 维护 `m_activeSmartFolder` 规则快照，规则检索在后台线程执行；
+   - 在 `ContentPanel` / `ContentDataLoader` 中新增唯一加载入口 `loadSmartFolder(record, displayName)`，并在 `ContentPanel` 维护 `m_activeSmartFolder` 规则快照，通过封装的 `public` Getter/Setter（`activeSmartFolder()`、`setActiveSmartFolder()`、`smartFolderRequestId()`、`incrementSmartFolderRequestId()`）暴露合法访问；
+   - 数据库规则匹配与检索在后台线程执行；
    - 彻底重构 `PanelMediator` 的两处槽函数与 `ContentDataLoader` 的 `smartfolder://` 分支，统一委托至 `loadSmartFolder`；
    - 在 `applyViewTarget` 中，当 `categoryType != "smart_folder"` 时自动清空 `m_activeSmartFolder`；
    - 新增 `refreshSmartFolderIfShowing()`：仅在当前处于智能文件夹时执行后台规则比对；路径集合完全等价时不重载不闪烁；发生变动时暂存选区，通过 `loadLibraryPaths` 加载并由 `restoreSelections` 自动恢复选区；
@@ -430,6 +431,28 @@ namespace QuarkMeta {
 >>>>>>> REPLACE
 
 <<<<<<< SEARCH
+    int currentLoadRequestId() const { return m_loadRequestId.load(); }
+    int loadRequestId() const { return m_loadRequestId.load(); }
+    int incrementLoadRequestId() { return ++m_loadRequestId; }
+    const FilterState& currentFilter() const { return m_currentFilter; }
+    bool isLoading() const { return m_isLoading.load(); }
+
+    // 2. 状态与配置高阶方法
+=======
+    int currentLoadRequestId() const { return m_loadRequestId.load(); }
+    int loadRequestId() const { return m_loadRequestId.load(); }
+    int incrementLoadRequestId() { return ++m_loadRequestId; }
+    const FilterState& currentFilter() const { return m_currentFilter; }
+    bool isLoading() const { return m_isLoading.load(); }
+    SmartFolderRecord activeSmartFolder() const { return m_activeSmartFolder; }
+    void setActiveSmartFolder(const SmartFolderRecord& record) { m_activeSmartFolder = record; }
+    uint64_t smartFolderRequestId() const { return m_smartFolderReqId; }
+    uint64_t incrementSmartFolderRequestId() { return ++m_smartFolderReqId; }
+
+    // 2. 状态与配置高阶方法
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
     void setPendingSelectPath(const QString& fullPath, bool edit = false);
     void setPendingSelectName(const QString& name, bool edit = false);
     void refreshAll();
@@ -582,9 +605,9 @@ void ContentDataLoader::loadSmartFolder(const SmartFolderRecord& record, const Q
 
     QString targetName = displayName.isEmpty() ? record.name : displayName;
     m_panel->applyViewTarget(QString("smartfolder://%1").arg(record.id), "smart_folder", targetName, -20, false);
-    m_panel->m_activeSmartFolder = record;
+    m_panel->setActiveSmartFolder(record);
 
-    uint64_t sfReqId = ++m_panel->m_smartFolderReqId;
+    uint64_t sfReqId = m_panel->incrementSmartFolderRequestId();
     int reqId = m_panel->incrementLoadRequestId();
     m_loadRequestId = reqId;
 
@@ -594,8 +617,8 @@ void ContentDataLoader::loadSmartFolder(const SmartFolderRecord& record, const Q
 
         QMetaObject::invokeMethod(qApp, [weakPanel, record, sfReqId, reqId, matchingPaths]() {
             if (!weakPanel) return;
-            if (weakPanel->loadRequestId() != reqId || weakPanel->m_smartFolderReqId != sfReqId) return;
-            if (weakPanel->getCurrentCategoryType() != "smart_folder" || weakPanel->m_activeSmartFolder.id != record.id) return;
+            if (weakPanel->loadRequestId() != reqId || weakPanel->smartFolderRequestId() != sfReqId) return;
+            if (weakPanel->getCurrentCategoryType() != "smart_folder" || weakPanel->activeSmartFolder().id != record.id) return;
 
             weakPanel->setLastLoadedLibraryPaths(matchingPaths);
             weakPanel->loadLibraryPaths(matchingPaths, reqId);
@@ -717,7 +740,7 @@ void ContentDataLoader::loadLibraryPaths(const QStringList& paths, int reqId) {
    cmake -B build -G Ninja
    ninja -C build
    ```
-2. 零编译警告：头文件显式包含闭合，无 `QPointer`、`SmartFolderRecord`、`QMap` 未识别符号。
+2. 零编译警告：头文件显式包含闭合，无 `QPointer`、`SmartFolderRecord`、`QMap` 未识别符号，且所有跨类调用均使用 `public` 接口，无私有成员直接访问。
 
 ### 4.2 运行时功能验收标准
 1. **评分移除即时更新**：在智能文件夹“一星级”中，将某文件评分由 1 改为 0，约 0.5 秒内侧边栏一星级计数减 1，右侧列表中该项消失，其余项选中状态完好。
@@ -755,9 +778,18 @@ void ContentDataLoader::loadLibraryPaths(const QStringList& paths, int reqId) {
    - `void LibraryPanel::refreshSmartFolderCounts();`：`public` 成员方法；
    - `void ContentPanel::loadSmartFolder(const SmartFolderRecord& record, const QString& displayName = QString());`：`public slots:` 域；
    - `void ContentPanel::refreshSmartFolderIfShowing();`：`public slots:` 域；
-   - `void ContentDataLoader::loadSmartFolder(const SmartFolderRecord& record, const QString& displayName);`：`public` 成员方法。
-2. **访问级别核查**：
-   - `ContentDataLoader` 是 `ContentPanel` 的友元类或协同控制器，直接维护 `m_panel->m_activeSmartFolder` 与 `m_panel->m_smartFolderReqId`，访问权限合法。
+   - `SmartFolderRecord ContentPanel::activeSmartFolder() const;`：`public` 成员方法；
+   - `void ContentPanel::setActiveSmartFolder(const SmartFolderRecord& record);`：`public` 成员方法；
+   - `uint64_t ContentPanel::smartFolderRequestId() const;`：`public` 成员方法；
+   - `uint64_t ContentPanel::incrementSmartFolderRequestId();`：`public` 成员方法；
+   - `void ContentDataLoader::loadSmartFolder(const struct SmartFolderRecord& record, const QString& displayName);`：`public` 成员方法。
+2. **跨类访问权限与封装核查（严格消除访问级别违规）**：
+   - `ContentDataLoader` 对 `ContentPanel` 的操作全部通过合法 `public` 成员接口调用：
+     - `m_panel->setActiveSmartFolder(record)`（替代私有变量直接赋值）；
+     - `m_panel->incrementSmartFolderRequestId()`（替代私有变量自增）；
+     - `weakPanel->smartFolderRequestId()`（替代私有变量读取）；
+     - `weakPanel->activeSmartFolder()`（替代私有变量读取）；
+   - 所有跨类调用均在 `public` 保护契约之内，杜绝任何 `is private within this context` 编译错误。
 
 ---
 
@@ -765,7 +797,7 @@ void ContentDataLoader::loadLibraryPaths(const QStringList& paths, int reqId) {
 
 1. `QuarkMeta_Source/src/ui/ContentPanel.h`：显式包含 `../meta/SmartFolderDao.h`，确保 `SmartFolderRecord` 具备完整类型定义。
 2. `QuarkMeta_Source/src/ui/LibraryPanel.cpp`：显式包含 `<QPointer>`，保障多线程 Lambda 安全。
-3. `QuarkMeta_Source/src/ui/controllers/ContentDataLoader.h`：包含 `struct SmartFolderRecord` 前置声明或头文件。
+3. `QuarkMeta_Source/src/ui/controllers/ContentDataLoader.h`：包含 `struct SmartFolderRecord` 前置声明，并在 `.cpp` 中包含完整头文件。
 
 ---
 
@@ -774,11 +806,12 @@ void ContentDataLoader::loadLibraryPaths(const QStringList& paths, int reqId) {
 | 检查项 | 检查结果 | 规范要求与说明 |
 | :--- | :--- | :--- |
 | **1. 架构红线检查** | 满足 | 严禁跨层篡改；严格遵守只读/冻结接口与单向依赖 |
-| **2. SEARCH 块唯一匹配** | 满足 | 11 个文件的 SEARCH 块经只读验证均真实存在且唯一匹配 |
-| **3. 死代码彻底清除** | 满足 | 彻底删除单条旧接口 `countMatchingItemsReadOnly`，无孤儿代码 |
-| **4. 主线程零阻塞** | 满足 | 数据库匹配查询与批量统计 100% 移入后台线程执行 |
-| **5. 选区与状态保持** | 满足 | 刷新前暂存选区，无变动静默不闪烁，有变动恢复选区 |
-| **6. 模式严格隔离** | 满足 | 非智能文件夹视图自动清空快照，不产生任何副作用 |
+| **2. SEARCH 块唯一匹配** | 满足 | 11 个文件的 SEARCH 块经只读验证均真实存在且匹配次数唯一 |
+| **3. 跨类调用成员访问级别 (2.f)** | 满足 | 所有跨类访问严格走 public Getter/Setter，无越权直接读写私有成员 |
+| **4. 死代码彻底清除** | 满足 | 彻底删除单条旧接口 `countMatchingItemsReadOnly`，无孤儿代码 |
+| **5. 主线程零阻塞** | 满足 | 数据库匹配查询与批量统计 100% 移入后台线程执行 |
+| **6. 选区与状态保持** | 满足 | 刷新前暂存选区，无变动静默不闪烁，有变动恢复选区 |
+| **7. 模式严格隔离** | 满足 | 非智能文件夹视图自动清空快照，不产生任何副作用 |
 
 ---
 
