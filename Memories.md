@@ -871,3 +871,31 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
      - 驱动 `LibrarySyncService::instance().removePaths(paths)` 从 `library_items` 表彻底清除项目元数据记录；
      - 发射 `libraryChanged()` 广播全局视图变动与计数刷新；
      - 通过 `ToolTipOverlay::showText` 给予用户绿色成功提示。
+
+## 34. 库与分类视图内容面板内部自拖拽拦截与源窗格门禁规范 (Library View Internal Self-Drop Guard & Drag Source Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 库/分类/智能文件夹视图下拖放行为治理的唯一真理源 (SSOT)。
+
+### 34.1 缺陷根因与架构修复原则
+1. **分类视图缺乏内部自拖拽门禁缺陷**：
+   - 在普通物理文件夹视图中，`ContentFileOpsHandler::onPathsDropped` 具有严格的同目录自拖放保护（检测源路径所在目录与目标目录相同且未达到 Ctrl+Drag 50px 副本门禁时直接静默拦截）；
+   - 在库模式（`catType == "library"` 或 `catType == "smart_folder"`）下，原有代码直接进入入库归类分支（`addPathsToCategory`），无条件将拖放路径判定为“外部拖入新文件到当前分类”，甚至在“全部数据”或系统分类下无脑回退为“入库到未分类”；
+   - 当用户在列表视图（`DropTreeView`）或网格视图中选中条目发生微小的鼠标拖曳并释放时，拖放目标未落在具体文件夹上，却错误地触发了二次入库，弹出“已将 X 个项目归入未分类”或“已成功归入某分类”的误导性提示。
+2. **拖拽源视图感知机制（Drag Source Tracking SSOT）**：
+   - `ViewDragDropHelper` 在 `executeStartDrag` 发起拖拽时，统一记录发起拖拽的源视图 `s_lastDragSourceView = view`；并在拖拽结束后重置为 `nullptr`；
+   - 暴露 `ViewDragDropHelper::lastDragSourceView()` 查询接口；
+   - 并在拖拽 MIME 数据中注入来源窗格指针标记（`application/x-quarkmeta-source-panel`），双重确保拖拽生命周期内来源窗格与源视图的可追溯性。
+3. **内容面板内部自拖拽拦截规则（Self-Drop Interception Rule）**：
+   - 当 `ContentFileOpsHandler::onPathsDropped` 接收到拖放信号时，先评估当前面板的视图上下文；
+   - 若当前处于分类视图（`catType == "library"` 或 `catType == "smart_folder"`）：
+     - 检查目标位置：如果拖放目标不是有效且接受投放的子文件夹（`!targetIndex.isValid() || !isDirTarget`）；
+     - 检查拖拽源：如果拖拽发起源正是当前内容面板内部的视图（`ViewDragDropHelper::lastDragSourceView()` 属于当前面板的 `m_treeView`、`m_gridView` 等），则确认为**同面板内部无效自拖放**；
+     - **行为表现**：立即静默返回（Silent No-Op），严禁触发 `addPathsToCategory`，严禁触发数据刷新，严禁弹出任何 Toast 提示；
+   - **正当跨区域拖放保护**：
+     - 从其他分屏窗格拖入、从侧边栏拖入、从操作系统外部拖入、或拖放到内容面板内明确的子文件夹目标项上时，依然正常执行入库或分发逻辑。
+
+4. **拖拽至收藏栏时智能感知库状态契约（Favorite Drop Library Awareness Contract）**：
+   - 当用户将项目拖拽到侧边栏“收藏夹”时，核心语义是书签/快捷访问收藏，绝不能不加判断、盲目盲从地将项目执行入库写入；
+   - 若业务交互需要与库产生关联或用户操作涉及库同步，必须前置调用 `LibraryService::instance().isInLibrary(path)` 进行严格检测：
+     - 若项目已在库中，绝不可重复执行入库或弹出多余的入库提示；
+     - 做到“先查验、再决策、后执行”，杜绝不假思索的盲目入库行为。
