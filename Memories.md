@@ -760,3 +760,47 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 对话框对外发射 `rulesPreviewRequested(const SmartFolderRecord& record)` 信号，通过 `LibraryPanel` 中继至 `PanelMediator`；
    - `PanelMediator` 接收到实时预览请求后，即时调用 `SmartFolderDao::getMatchingPaths(record)` 检索匹配的文件路径，并调度主界面活跃内容面板 `ContentPanel::loadLibraryPaths` 加载展示，让用户在未点击“保存”前就能实时预览规则过滤结果；
    - 对话框若被“取消”关闭，内容面板自动还原至打开对话框前的历史展示状态，形成完整的交互保护闭环。
+
+## 29. 智能文件夹元数据变化入库实时自动更新规范 (Smart Folder Metadata Live Reactive Refresh Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹元数据（评分、颜色、标签等）变动后自动刷新左侧计数与右侧内容列表的唯一真理源 (SSOT)。
+
+### 29.1 库表变更通知机制与源头收敛 (Library Sync Notification SSOT)
+1. **单一通知出口**：
+   - `LibrarySyncService` 是元数据写入 SQLite 库表 `library_items` 的唯一同步服务；
+   - 新增 `void libraryItemsSynced();` 无参信号，作为元数据入库完成的唯一权威广播出口；
+   - 发送时机：后台工作线程完成 `LibraryItemDao` 数据库写入后，通过 `QMetaObject::invokeMethod(this, ..., Qt::QueuedConnection)` 投递至主线程发射；
+   - 覆盖写入场景：`syncPaths`（一次任务无论分多少批仅在全部完成且至少一批成功后发射一次）、`removePaths`、`ItemRenamed`、`FolderMigrated`、`ItemRemoved`；
+   - 容错保护：若某一批 `upsertItems` 写入失败返回 `false`，则不为该批次发送信号，并输出 `qWarning`（包含该批首个路径与批大小）；
+   - 写入路径零污染：严禁在评分/颜色/标签的触发源头（`CoreEngine`、`MetaPanel`、`MetadataManager` 等）中随意添加刷新调用。
+
+### 29.2 智能文件夹批量只读计算 (Batch Read-Only Smart Folder Calculation)
+1. **连接复用与忙等待保障**：
+   - `SmartFolderDao::countMatchingItemsBatchReadOnly(const QString& dbPath, const QList<SmartFolderRecord>& records)` 建立唯一的批量只读统计通道；
+   - 仅建立一个只读数据库连接 (`SQLITE_OPEN_READONLY`)，配置 `sqlite3_busy_timeout(db, 3000)` 防止锁争用超时；
+   - 循环统计各智能文件夹，规则为空时正常返回计数 `0`，执行失败或数据库打开失败的条目不混入返回结果；
+   - 物理清除单条旧接口 `countMatchingItemsReadOnly`，绝不保留死代码与重复轮子。
+
+### 29.3 侧边栏计数防抖与状态隔离 (Sidebar Count Debounce & Model Guard)
+1. **防抖与异步代数校验**：
+   - `LibraryPanel::refreshSmartFolderCounts()` 作为公共刷新接口，内部通过 150ms 单次定时器合并高频触发；
+   - 定时到期后，读取智能文件夹列表与批量计算均在后台线程（`QtConcurrent::run`）执行，跨线程回到主线程时严格通过代数序号（`m_currentCountReqId`）与 `QPointer` 守卫进行过期丢弃；
+   - 仅在计数值发生物理变化时更新项的 `Qt::UserRole + 9`；返回结果中未包含的智能文件夹严格保持原计数值，禁止重置为 0；
+   - 禁止调用 `loadLibrary()`，禁止重建树，禁止重置选中项与展开节点；
+   - 计数更新写入 Model 期间，显式屏蔽 `m_model->itemChanged` 中的智能文件夹改名落库逻辑，消除无谓的数据库读写风暴。
+
+### 29.4 内容面板规则快照、唯一加载入口与无感差异刷新 (Smart Folder Snapshot & Live Content Refresh)
+1. **唯一加载入口与规则快照**：
+   - 统一收敛为 `ContentPanel::loadSmartFolder(const SmartFolderRecord& record, const QString& displayName)`；
+   - 调用 `applyViewTarget("smartfolder://<id>", "smart_folder", displayName, -20, false)`，并在 `m_activeSmartFolder` 成员中保存当前规则快照（实时预览未保存规则亦走此入口，确保后续刷新完全基于快照而非读库）；
+   - 在 `applyViewTarget` 中，当 `categoryType != "smart_folder"` 时自动清空 `m_activeSmartFolder`；
+   - 数据库规则匹配（`getMatchingPaths`）全部放入后台线程执行，彻底消除主线程卡顿；
+   - 彻底废除 `PanelMediator`（选中与预览）及 `ContentDataLoader`（路径导航）中在主线程同步调用 `getMatchingPaths` 的三处分散实现。
+2. **差异检测与无感恢复**：
+   - `ContentPanel::refreshSmartFolderIfShowing()` 仅在当前处于智能文件夹视图且 `m_activeSmartFolder` 有效时运行；
+   - 后台线程执行规则匹配，代数计数丢弃过期任务；
+   - 回到主线程后进行路径集合等价性比对（忽略大小写、统一路径分隔符、不关心顺序）：路径完全一致时不重载、不闪烁；路径发生变动时暂存选区，通过 `loadLibraryPaths` 加载并由 `restoreSelections` 自动恢复选区；
+   - `refreshAll()` 智能文件夹分支改为使用 `m_activeSmartFolder` 重新计算并整体重载。
+3. **中枢单向桥接与视角隔离**：
+   - `PanelMediator::setupConnections` 中将 `LibrarySyncService::libraryItemsSynced` 信号连接至 `LibraryPanel::refreshSmartFolderCounts()` 以及主窗格及所有副窗格（`rootPane()->panes()`）的 `refreshSmartFolderIfShowing()`；
+   - 严格物理隔离：刷新逻辑仅在面板当前处于智能文件夹时生效，绝对不干扰磁盘目录视图、库分类视图与回收站视图。
