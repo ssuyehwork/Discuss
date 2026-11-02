@@ -674,3 +674,218 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 1. **全局统一半透明主题蓝高亮**：
    - 全软件内所有面板，包括但不限于侧边栏（收藏夹 `FavoritePanel`、库面板 `LibraryPanel`、目录导航 `NavPanel`、标记面板 `MarkedPanel`、历史记录 `HistoryPanel`）以及右侧主内容视图（`DropTreeView`、`ThumbnailDelegate`、`ColumnItemDelegate`），其选中项的高亮背景色必须统一严格使用 **`#378ADD` 15% 半透明蓝色**（`rgba(55, 138, 221, 0.15)`）；
    - **彻底废除不透明硬色块**：严禁在个别面板（如 `MarkedTreeWidget`、`HistoryTreeWidget`）中私自引入 `#094771`、`#37373D` 等高饱和度或不透明暗色块，坚决消除视觉分裂，保障全应用设计语言的纯粹性与一致性。
+
+## 25. 硬件指纹多条件 OR 授权通行证与移动硬盘跨设备启动规范
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 桌面应用正版授权校验与便携式移动硬盘跨设备运行的唯一真理源 (SSOT)。
+
+### 25.1 5 选 1 硬件特征宽松准入契约 (Multi-Factor OR Validation)
+1. **多条件准入原则**：
+   - 为兼顾正版保护安全性与移动办公便携性，系统启动阶段对当前运行环境的 5 项核心硬件特征进行检测：
+     1. **CPU ID**：`BFEBFBFF000306C3`
+     2. **主板序列号**：`SGH412RF00`
+     3. **BIOS 序列号**：`SGH412RF00`
+     4. **程序所在硬盘物理序列号**：`NA5360WJ`
+     5. **系统盘（C盘）物理序列号**：`PHYS825203NX480BGN`
+   - **逻辑关系严格为 OR（或）**：只要当前环境命中上述 5 项中的**任意一项**，系统即判定当前硬件授权合法，立即放行启动主界面。
+2. **移动硬盘跨设备便携运行机制**：
+   - 当用户将移动硬盘（物理序列号为 `NA5360WJ`）接入到任何外部未授权计算机时，系统通过识别“程序运行路径所在物理硬盘 SN”命中 `NA5360WJ`，依然可以畅通运行主程序，实现真正的“一盘走天下”；
+   - 当在授权主机上运行时，即使外接其他未知硬盘，也能通过 CPU、主板、BIOS 或系统盘特征顺利准入；
+   - 只有在未经授权的电脑上运行未授权的硬盘拷贝时，才会触发安全拦截并退出。
+
+## 26. 侧边栏历史选项卡交互规范 (Sidebar History Tab Interaction & Context Menu Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 侧边栏历史记录选项卡交互与右键上下文菜单的唯一真理源 (SSOT)。
+
+### 26.1 单击行为规范 (Click Highlight Only, Zero Unwanted Relocation Overhead)
+1. **取消单击自动定位**：
+   - 用户在侧边栏“历史”面板（`HistoryPanel` / `HistoryTreeWidget`）中用鼠标左键单击列表项时，**严禁触发文件定位**（不发射 `requestLocateFile`，不驱动主内容区 `ContentPanel` 重新载入与定位）；
+   - **仅保留选中高亮**：单击操作仅用于在视觉上呈现当前项的选中高亮（遵守全局 `#378ADD` 15% 半透明蓝色 `rgba(55, 138, 221, 0.15)`），避免不必要的磁盘 I/O、缩略图加载与主视图切换开销。
+
+### 26.2 右键上下文菜单完备性契约 (History Context Menu Completeness Contract)
+1. **全局统一样式与中性色图标**：
+   - 菜单整体采用全局统一暗色菜单样式 `UiHelper::applyMenuStyle(&menu)`；
+   - 菜单内所有图标严格遵循系统规范使用统一中性色 `#EEEEEE`。
+2. **上下文菜单功能结构规范**：
+   右键点击历史文件项时，弹出具备以下完整能力的上下文菜单：
+   - **用系统默认程序打开**：调用系统关联程序唤起打开该文件，并记录访问记录；
+   - **在“资源管理器”中显示**：严格复用 `ContextMenuFactory::buildShowInExplorerAction(&menu, path, false, this)`（包含中文双引号）；
+   - **在 QuarkMeta 中显示**：显式触发主视图定位（`emit requestLocateFile(path)`），让用户在需要时主动按需定位；
+   - **打开方式**：严格委托 `ContextMenuFactory::buildOpenWithMenu(&menu, QStringList{path}, this)` 呈现级联子菜单；
+   - 分隔符 (`addSeparator`)
+   - **添加至收藏夹**：严格复用 `FavoriteService::instance().buildFavoriteAction(&menu, path, this)`；
+   - **添加至“库”**：严格复用 `LibraryService::instance().buildLibraryAction(&menu, QStringList{path}, this)`；
+   - 分隔符 (`addSeparator`)
+   - **复制（Ctrl+C）**：将文件路径写入剪贴板（`ClipboardService::instance().copyItems({path})`）；
+   - **剪切（Ctrl+X）**：将文件路径置入剪贴板剪切态（`ClipboardService::instance().cutItems({path})`）；
+   - **复制名称**：严格复用 `ContextMenuFactory::buildCopyNameAction(&menu, {path}, this)`；
+   - **复制完整路径**：严格复用 `ContextMenuFactory::buildCopyPathAction(&menu, {path}, this)`；
+   - 分隔符 (`addSeparator`)
+   - **从历史中移除**：调用 `HistoryService::instance().removeHistory(path)`；
+   - **清空历史**：调用 `HistoryService::instance().clearAllHistory()`（右键空白处时亦提供此操作）。
+
+## 27. 智能文件夹规则配置视觉规范 (Smart Folder Rule Configuration Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹规则配置对话框 (SmartFolderDialog / SmartFolderRuleRow / SmartFolderValueWidgets) 的唯一真理源 (SSOT)。
+
+### 27.1 星级规则类型命名与纯矢量呈现铁律 (Strict Star Rating Graphic SSOT)
+1. **规则类型命名**：
+   - 规则类型下拉框（SmartFolderRuleRow 中的 m_typeCombo）第一项名称统一规范命名为 **“星级”**（彻底废除原“评分”旧称）。
+2. **彻底杜绝文字拼凑与多余背景**：
+   - 规则编辑器中的星级下拉列表框（StarRatingValueWidget），**绝对禁止**出现“1星”、“2星”等阿拉伯数字拼凑文字；**绝对禁止**使用 Unicode 字符（如“★”）替代；
+   - **完全不设“无评级”或“0星”项**，下拉选项直接从 1 星依次递增至 5 星；
+   - 每一行仅绘制对应数量的浅白/亮色矢量星（1颗星、2颗星、3颗星、4颗星、5颗星，颜色使用 #C5D1DE 或 #EEEEEE），**绝对不绘制未激活的灰色背景星**；
+   - 下拉选项的文本一律**清空为空字符串 ""**。
+3. **消除图标压缩变形**：
+   - StarRatingValueWidget 中的 m_combo 必须显式设置足够的图标尺寸 m_combo->setIconSize(QSize(100, 18))，防止 Qt 原生将整张矢量星排版图等比缩小为不可辨识的微小黑点，确保星星大而清晰、间距均匀舒展。
+
+### 27.2 日历弹出表头舒展尺寸契约 (Calendar Popup Dimension Contract)
+1. **防止表头挤压截断**：
+   - 针对单日期输入框 (SingleDateValueWidget) 与双日期范围输入框 (DateRangeValueWidget) 中的 QDateEdit，其弹出的内部 QCalendarWidget 必须保证充足的宽度 (setMinimumWidth(260))；
+   - 彻底解决由于宿主输入框较窄导致弹出日历控件被强制压缩、顶部星期表头（一至日）被挤截断为 ... 的视觉残缺缺陷，保障周一到周日及日期单元格完整舒展展示。
+
+## 28. 智能文件夹图像颜色拾色器与内容面板实时联动规范 (Smart Folder Color Picker & Live Content Preview SSOT)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹图像颜色选择及规则编辑实时反馈的唯一真理源 (SSOT)。
+
+### 28.1 图像颜色通用色轮/拾色器规范 (Universal Color Wheel & Tolerance Picker)
+1. **废弃死板固定色块下拉框**：
+   - 彻底废除原智能文件夹中仅有 8 种固定色彩的下拉列表框（`QComboBox`）；
+   - 采用通用的拾色机制，以独立的颜色色块按钮（`m_colorBtn`）展示当前颜色 Hex 与悬停提示，点击弹出系统标准 `ColorPicker`（支持 HSV 色盘、预设色板、自定义 Hex 填写以及准确度/容差滑条联动调节）；
+   - 规则值依然遵循 `SmartFolderRule::value` (Hex) 与 `tolerance` 的统一接口规范，确保底层数据库检索（`SmartFolderDao`）的无缝兼容。
+
+### 28.2 智能文件夹规则配置即时联动闭环 (Live Reactive Content Panel Preview)
+1. **所见即所得的交互响应**：
+   - 在智能文件夹新建或编辑对话框（`SmartFolderDialog`）中，用户对任何规则条件的修改（增减规则、修改类型、切换逻辑运算符、修改值或容差）均会触发 150ms 防抖定时器；
+   - 对话框对外发射 `rulesPreviewRequested(const SmartFolderRecord& record)` 信号，通过 `LibraryPanel` 中继至 `PanelMediator`；
+   - `PanelMediator` 接收到实时预览请求后，即时调用 `SmartFolderDao::getMatchingPaths(record)` 检索匹配的文件路径，并调度主界面活跃内容面板 `ContentPanel::loadLibraryPaths` 加载展示，让用户在未点击“保存”前就能实时预览规则过滤结果；
+   - 对话框若被“取消”关闭，内容面板自动还原至打开对话框前的历史展示状态，形成完整的交互保护闭环。
+
+## 29. 智能文件夹元数据变化入库实时自动更新规范 (Smart Folder Metadata Live Reactive Refresh Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹元数据（评分、颜色、标签等）变动后自动刷新左侧计数与右侧内容列表的唯一真理源 (SSOT)。
+
+### 29.1 库表变更通知机制与源头收敛 (Library Sync Notification SSOT)
+1. **单一通知出口**：
+   - `LibrarySyncService` 是元数据写入 SQLite 库表 `library_items` 的唯一同步服务；
+   - 新增 `void libraryItemsSynced();` 无参信号，作为元数据入库完成的唯一权威广播出口；
+   - 发送时机：后台工作线程完成 `LibraryItemDao` 数据库写入后，通过 `QMetaObject::invokeMethod(this, ..., Qt::QueuedConnection)` 投递至主线程发射；
+   - 覆盖写入场景：`syncPaths`（一次任务无论分多少批仅在全部完成且至少一批成功后发射一次）、`removePaths`、`ItemRenamed`、`FolderMigrated`、`ItemRemoved`；
+   - 容错保护：若某一批 `upsertItems` 写入失败返回 `false`，则不为该批次发送信号，并输出 `qWarning`（包含该批首个路径与批大小）；
+   - 写入路径零污染：严禁在评分/颜色/标签的触发源头（`CoreEngine`、`MetaPanel`、`MetadataManager` 等）中随意添加刷新调用。
+
+### 29.2 智能文件夹批量只读计算 (Batch Read-Only Smart Folder Calculation)
+1. **连接复用与忙等待保障**：
+   - `SmartFolderDao::countMatchingItemsBatchReadOnly(const QString& dbPath, const QList<SmartFolderRecord>& records)` 建立唯一的批量只读统计通道；
+   - 仅建立一个只读数据库连接 (`SQLITE_OPEN_READONLY`)，配置 `sqlite3_busy_timeout(db, 3000)` 防止锁争用超时；
+   - 循环统计各智能文件夹，规则为空时正常返回计数 `0`，执行失败或数据库打开失败的条目不混入返回结果；
+   - 物理清除单条旧接口 `countMatchingItemsReadOnly`，绝不保留死代码与重复轮子。
+
+### 29.3 侧边栏计数防抖与状态隔离 (Sidebar Count Debounce & Model Guard)
+1. **防抖与异步代数校验**：
+   - `LibraryPanel::refreshSmartFolderCounts()` 作为公共刷新接口，内部通过 150ms 单次定时器合并高频触发；
+   - 定时到期后，读取智能文件夹列表与批量计算均在后台线程（`QtConcurrent::run`）执行，跨线程回到主线程时严格通过代数序号（`m_currentCountReqId`）与 `QPointer` 守卫进行过期丢弃；
+   - 仅在计数值发生物理变化时更新项的 `Qt::UserRole + 9`；返回结果中未包含的智能文件夹严格保持原计数值，禁止重置为 0；
+   - 禁止调用 `loadLibrary()`，禁止重建树，禁止重置选中项与展开节点；
+   - 计数更新写入 Model 期间，显式屏蔽 `m_model->itemChanged` 中的智能文件夹改名落库逻辑，消除无谓的数据库读写风暴。
+
+### 29.4 内容面板规则快照、唯一加载入口与无感差异刷新 (Smart Folder Snapshot & Live Content Refresh)
+1. **唯一加载入口与规则快照**：
+   - 统一收敛为 `ContentPanel::loadSmartFolder(const SmartFolderRecord& record, const QString& displayName)`；
+   - 调用 `applyViewTarget("smartfolder://<id>", "smart_folder", displayName, -20, false)`，并在 `m_activeSmartFolder` 成员中保存当前规则快照（实时预览未保存规则亦走此入口，确保后续刷新完全基于快照而非读库）；
+   - 在 `applyViewTarget` 中，当 `categoryType != "smart_folder"` 时自动清空 `m_activeSmartFolder`；
+   - 数据库规则匹配（`getMatchingPaths`）全部放入后台线程执行，彻底消除主线程卡顿；
+   - 彻底废除 `PanelMediator`（选中与预览）及 `ContentDataLoader`（路径导航）中在主线程同步调用 `getMatchingPaths` 的三处分散实现。
+2. **差异检测与无感恢复**：
+   - `ContentPanel::refreshSmartFolderIfShowing()` 仅在当前处于智能文件夹视图且 `m_activeSmartFolder` 有效时运行；
+   - 后台线程执行规则匹配，代数计数丢弃过期任务；
+   - 回到主线程后进行路径集合等价性比对（忽略大小写、统一路径分隔符、不关心顺序）：路径完全一致时不重载、不闪烁；路径发生变动时暂存选区，通过 `loadLibraryPaths` 加载并由 `restoreSelections` 自动恢复选区；
+   - `refreshAll()` 智能文件夹分支改为使用 `m_activeSmartFolder` 重新计算并整体重载。
+3. **中枢单向桥接与视角隔离**：
+   - `PanelMediator::setupConnections` 中将 `LibrarySyncService::libraryItemsSynced` 信号连接至 `LibraryPanel::refreshSmartFolderCounts()` 以及主窗格及所有副窗格（`rootPane()->panes()`）的 `refreshSmartFolderIfShowing()`；
+   - 严格物理隔离：刷新逻辑仅在面板当前处于智能文件夹时生效，绝对不干扰磁盘目录视图、库分类视图与回收站视图。
+
+## 30. 历史面板多选与批量操作规范 (History Panel Multi-Selection & Batch Operations Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 侧边栏历史选项卡多选与批量操作的唯一真理源 (SSOT)。
+
+### 30.1 历史面板 (HistoryPanel) 多选与批量操作一致性规范
+1. **多选模式 (ExtendedSelection)**：
+   - `HistoryPanel` 中的树控件 `m_treeWidget` 配置为 `QAbstractItemView::ExtendedSelection`，全面支持 Ctrl/Shift 点击多选与鼠标框选；
+   - 鼠标悬停事件、拖拽事件与右键上下文菜单均支持多选条目提取（通过 `selectedItems()` 提取所有选中项的物理路径列表，去重去空）；
+   - 在多选状态下进行鼠标拖拽时，提取全部选中项目的 `QUrl` 构建拖拽数据，支持批量拖出。
+2. **右键上下文菜单全量批量操作映射**：
+   - **用系统默认程序打开**：批量打开所有选中的有效文件，并记录访问记录；
+   - **在“资源管理器”中显示**：按目录分组批量打开资源管理器窗口并高亮对应项（多于 5 个目录时弹出确认弹窗）；
+   - **在 QuarkMeta 中显示**：单选时定位跳转；多选时仅当选中项为 1 个时可用或在多选时置灰，严禁产生多个无序定位冲突；
+   - **打开方式**：传递多选文件路径集合调用公共级联菜单 `ContextMenuFactory::buildOpenWithMenu(parentMenu, selectedPaths, this)`；
+   - **添加至收藏夹**：复用 `FavoriteService` 批量添加选中的所有路径；
+   - **添加至“库”**：复用 `LibraryService::instance().buildLibraryAction(&menu, selectedPaths, this)`；
+   - **复制 / 剪切**：调用 `ClipboardService::instance().copyItems(selectedPaths)` 与 `cutItems(selectedPaths)`；
+   - **复制名称 / 复制完整路径**：调用 `ContextMenuFactory::buildCopyNameAction(&menu, selectedPaths, this)` 与 `buildCopyPathAction(&menu, selectedPaths, this)`；
+   - **从历史中移除**：批量遍历选中的路径，调用 `HistoryService::instance().removeHistory(p)`，并从树控件中批量移除条目。
+
+
+## 31. Ctrl+N 快捷键全局绑定新建 Markdown 文件规范 (Ctrl+N Create Markdown Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 新建 Markdown 文件快捷键的唯一真理源 (SSOT)。
+
+### 31.1 快捷键触发与焦点隔离
+1. **全局快捷键注册**：
+   - 在 `AppShortcutController` 中注册 `Ctrl+N`（`QKeySequence(Qt::CTRL | Qt::Key_N)`）；
+   - 严格进行输入焦点隔离校验：只有在非文本编辑焦点（`!isEditingFocus()`）时才响应并发出 `createNewMdRequested()` 信号；
+2. **中枢单向调度 (SSOT)**：
+   - `PanelMediator` 监听 `createNewMdRequested`，并获取当前主窗格活跃的内容面板 `target`；
+   - 调用标准既有接口 `target->createNewItem("md")`，无缝创建 Markdown 文件并在视图中进入行内重命名模式。
+
+## 32. QuickLookWindow 无条件双击关闭与删除后回环跳转规范 (QuickLook Double Click & Cyclic Navigation Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 快速预览窗口交互修复的唯一真理源 (SSOT)。
+
+### 32.1 无条件双击关闭机制
+1. **不受内容状态干预**：
+   - 双击关闭 `QuickLookWindow` 是顶层交互哲学，严禁受到文件是否存在内容、是否为空白文件或当前处于何种视图（图片、文本、空文件提示标签 `m_lblEmptyPrompt`）的干预；
+   - 为 `m_lblEmptyPrompt`、`m_container` 以及窗口自身安装事件过滤器（`installEventFilter(this)`）；
+   - 在 `QuickLookWindow::eventFilter` 中统一捕获左键双击事件（`QEvent::MouseButtonDblClick`），只要双击落在预览窗口内容区域，无条件触发 `closePreview()` 并消费事件。
+
+### 32.2 删除项目后回环跳转机制
+1. **优先跳转下一个项目**：
+   - 当在 `QuickLookWindow` 中触发删除当前项目（`deleteRequested`）时，`PanelMediator` 驱动将其移入回收站后，首先向下寻找下一个相邻有效文件并进行预览；
+2. **末项回环至首项并 Toast 提示**：
+   - 若被删除的项目已经是当前目录视图中的最后一个有效可预览项目，则必须回环跳转到视图中的**第一个可预览项目**；
+   - 回环跳转至第一个项目时，必须通过 `ToolTipOverlay::instance()->showToast("当前处于第一个项目", 2000, QColor("#3498db"))` 给予用户明确且友好的视觉反馈；
+   - 仅当整个目录下所有项目均已被删除或不存在任何可预览文件时，才关闭 QuickLook 窗口。
+
+## 33. 从“库”中彻底移除项目 DAO 事务与元数据同步闭环规范 (Remove from Library SSOT Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 将项目彻底从“库”中注销移除的唯一真理源 (SSOT)。
+
+### 33.1 缺陷根因与架构修复原则
+1. **废弃企图使用 `addPathsToCategory(0, paths)` 的错误实现**：
+   - `LibraryDao::addPathsToCategory` 内部校验为 `if (!db || id == 0 || paths.isEmpty()) return false;`，传入 `id = 0` 会直接被守卫拦截返回 `false`，导致操作直接失败；
+2. **构建独立的 `removePathsFromLibrary` SSOT 通道**：
+   - 在 `LibraryDao` 中显式提供 `removePathsFromLibrary(const QStringList& paths)` 接口；
+   - 内部在全局互斥锁保护下开启 SQLite 事务，执行 `DELETE FROM library_category_paths WHERE path = ?;`，彻底清除所有分类关联；
+3. **两级数据与缓存同步闭环**：
+   - `LibraryService::removePathsFromLibrary` 调用 `LibraryDao::removePathsFromLibrary` 成功后：
+     - 驱动 `LibrarySyncService::instance().removePaths(paths)` 从 `library_items` 表彻底清除项目元数据记录；
+     - 发射 `libraryChanged()` 广播全局视图变动与计数刷新；
+     - 通过 `ToolTipOverlay::showText` 给予用户绿色成功提示。
+
+## 35. 库面板刷新状态保持与 ToolTipOverlay 绝对禁跟光标铁律规范 (Library Panel State Preservation & Non-Cursor ToolTip Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 库分类选中状态持久化及 ToolTipOverlay 居中锚定的唯一真理源 (SSOT)。
+
+### 35.1 库分类刷新后持续保持高亮选中机制 (Library Selection Preservation)
+1. **缺陷根因**：
+   - 当从库中移除或添加项目导致 `libraryChanged` 触发 `LibraryPanel::loadLibrary()` 时，`m_model->clear()` 粗暴清空了整棵树模型；
+   - 重建树之前未记录原选中的 `nodeId`（及所属类型），重建后未进行选择回填，导致左侧树视图的选中高亮丢失，与右侧正在展示的内容发生状态断层脱节。
+2. **状态记录与无缝回填规范**：
+   - 在 `loadLibrary()` 清空模型前，必须先提取当前活跃选中项的节点 ID（`selectedNodeId`）与类型（`selectedType`）；
+   - 在树结构重建完成后，自动通过 `findItemByNodeId` 递归检索对应的 `QStandardItem`；
+   - 检索成功后，调用 `m_treeView->setCurrentIndex(targetItem->index())` 恢复焦点与高亮选中，确保分类树在数据刷新后**持续显示高亮选中**，与右侧内容面板保持 100% 状态统一。
+
+### 35.2 ToolTipOverlay 绝对禁止跟随鼠标光标 (Strict Non-Cursor ToolTip Contract)
+1. **严格遵循第 21 章规范**：
+   - 全软件严禁向 `ToolTipOverlay` 传入 `QCursor::pos()`；
+   - `LibraryService` 中“从‘库’中移除”与“添加至‘库’”的浮层反馈，必须彻底清除 `QCursor::pos()` 调用，统一迁移为 `ToolTipOverlay::instance()->showToast(...)`（由组件内部自动锚定活跃内容面板正中居中，距离顶部下方 10px），杜绝提示框在屏幕边缘或跟随鼠标乱窜遮挡焦点。
