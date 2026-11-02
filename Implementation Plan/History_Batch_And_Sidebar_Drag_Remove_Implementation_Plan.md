@@ -2,7 +2,7 @@
 
 本实施方案旨在严格遵循工业级 C++/Qt 架构规范与 `Memories.md`（第 20、26、30 章），在 `QuarkMeta_Source` 桌面应用中完整实现：
 1. **侧边栏“历史”选项卡 (`HistoryPanel`) 全面支持多选与右键批量操作**：将树视图选择模式提升为多选（`ExtendedSelection`），右键上下文菜单的所有功能项全面升级为批量处理（默认程序批量打开、资源管理器分组定位、在QuarkMeta中显示、打开方式级联、批量添加收藏/库、批量复制/剪切、批量复制名称/路径、批量从历史移除）；
-2. **侧边栏（收藏夹、库分类、标记）拖拽项目至主内容面板或目录导航面板的“移出/脱管”交互语义**：通过在拖拽源头注入语义标识（Mime Type `application/x-quarkmeta-source-*`），并在全局 `ViewDragDropHelper` 中记录拖拽源类型；在接收面板 (`ContentFileOpsHandler` 与 `NavPanel`) 中识别“脱管”意图，从源栏目中解绑/移出/取消标记，绝不触碰底层物理文件。
+2. **侧边栏（收藏夹、库分类、标记）拖拽项目至主内容面板或目录导航面板的“移出/脱管”交互语义**：通过在全局 `ViewDragDropHelper` 中记录拖拽源面板类型与源分类 ID；在接收面板 (`ContentFileOpsHandler` 与 `NavPanel`) 中识别“脱管”意图，从源栏目中解绑/移出/取消标记，绝不触碰底层物理文件。
 
 ---
 
@@ -36,12 +36,12 @@
 - **现状分析**：
   目前从侧边栏（收藏夹 `FavoritePanel`、库 `LibraryPanel`、标记 `MarkedPanel`）拖拽项目时，仅注入了系统的 `text/uri-list` 或树内重排的私有数据。主内容面板 (`ContentPanel`) 或目录导航面板 (`NavPanel`) 收到带有 `urls` 的拖放时，若在普通磁盘目录中，会误将其当作物理文件的“复制/移动”，甚至可能造成误操作。
 - **设计目标**：
-  1. **拖拽源注入脱管元数据与全局状态跟踪 (SSOT)**：
+  1. **拖拽源状态跟踪 (SSOT)**：
      - 在 `ViewDragDropHelper` 中新增源类型枚举 `enum class DragSourcePanel { None, Favorite, Library, Marked }`，并在其内部维护 `s_lastDragSourcePanel` 与 `s_lastDragSourceCategoryId`，提供 Setter/Getter；
-     - 收藏夹 (`FavoritePanel` / `DropTreeView`) 拖拽外发时，设置 `ViewDragDropHelper::setLastDragSource(DragSourcePanel::Favorite)`；
-     - 库面板 (`LibraryPanel` / `LibraryTreeView`) 拖拽外发时，设置 `ViewDragDropHelper::setLastDragSource(DragSourcePanel::Library, srcCatId)`；
-     - 标记面板 (`MarkedPanel`) 拖拽外发时，设置 `ViewDragDropHelper::setLastDragSource(DragSourcePanel::Marked)`；
-     - 拖拽结束或放下完成后自动复位 `ViewDragDropHelper::clearLastDragSource()`；
+     - 收藏夹 (`DropTreeView::startDrag`) 拖拽外发时，设置 `ViewDragDropHelper::setLastDragSource(ViewDragDropHelper::DragSourcePanel::Favorite)`；
+     - 库面板 (`DropTreeView::startDrag`) 拖拽外发时，设置 `ViewDragDropHelper::setLastDragSource(ViewDragDropHelper::DragSourcePanel::Library, srcCatId)`；
+     - 标记面板 (`MarkedPanel::eventFilter`) 拖拽外发时，设置 `ViewDragDropHelper::setLastDragSource(ViewDragDropHelper::DragSourcePanel::Marked)`；
+     - 拖拽结束时自动复位 `ViewDragDropHelper::clearLastDragSource()`；
   2. **接收端识别与脱管拦截 (Drop Handling)**：
      - 在主内容面板 (`ContentFileOpsHandler::onPathsDropped`) 与目录导航面板 (`NavPanel`) 接收到拖放时，优先判断 `ViewDragDropHelper::lastDragSourcePanel()`：
        - 若源自收藏夹 (`DragSourcePanel::Favorite`)：拦截常规文件移动，遍历路径调用 `FavoriteService::instance().removeFavorite(path)` 移出收藏，并显示 Toast 提示 `已将 X 个项目从收藏夹中移出`；
@@ -55,12 +55,11 @@
 
 1. `QuarkMeta_Source/src/ui/ViewDragDropHelper.h`
 2. `QuarkMeta_Source/src/ui/ViewDragDropHelper.cpp`
-3. `QuarkMeta_Source/src/ui/HistoryPanel.cpp`
-4. `QuarkMeta_Source/src/ui/FavoritePanel.cpp`
-5. `QuarkMeta_Source/src/ui/LibraryPanel.cpp`
-6. `QuarkMeta_Source/src/ui/MarkedPanel.cpp`
-7. `QuarkMeta_Source/src/ui/controllers/ContentFileOpsHandler.cpp`
-8. `QuarkMeta_Source/src/ui/NavPanel.cpp`
+3. `QuarkMeta_Source/src/ui/DropTreeView.cpp`
+4. `QuarkMeta_Source/src/ui/HistoryPanel.cpp`
+5. `QuarkMeta_Source/src/ui/MarkedPanel.cpp`
+6. `QuarkMeta_Source/src/ui/controllers/ContentFileOpsHandler.cpp`
+7. `QuarkMeta_Source/src/ui/NavPanel.cpp`
 
 ---
 
@@ -119,7 +118,7 @@ private:
 
 ### 3.2 `QuarkMeta_Source/src/ui/ViewDragDropHelper.cpp`
 
-静态成员初始化与管理方法：
+静态成员初始化与管理方法定义：
 <<<<<<< SEARCH
 QAbstractItemView* ViewDragDropHelper::s_hoverView = nullptr;
 QPersistentModelIndex ViewDragDropHelper::s_hoverIndex;
@@ -142,7 +141,11 @@ void ViewDragDropHelper::clearLastDragSource() {
 }
 >>>>>>> REPLACE
 
-在 `DropTreeView::startDrag` 处更新源状态（`DropTreeView.cpp`）：
+---
+
+### 3.3 `QuarkMeta_Source/src/ui/DropTreeView.cpp`
+
+在 `DropTreeView::startDrag` 中识别收藏夹与库面板，跟踪拖拽源：
 <<<<<<< SEARCH
     QMimeData* mimeData = new QMimeData();
     mimeData->setData("application/x-quarkmeta-tree-nodes", QByteArray("1"));
@@ -197,7 +200,20 @@ void ViewDragDropHelper::clearLastDragSource() {
 
 ---
 
-### 3.3 `QuarkMeta_Source/src/ui/HistoryPanel.cpp`
+### 3.4 `QuarkMeta_Source/src/ui/HistoryPanel.cpp`
+
+添加必要的头文件包含：
+<<<<<<< SEARCH
+#include "../util/ThumbnailPipelineService.h"
+#include "../util/ColorPaletteEngine.h"
+#include <QDesktopServices>
+=======
+#include "../util/ThumbnailPipelineService.h"
+#include "../util/ColorPaletteEngine.h"
+#include "../util/ShellHelper.h"
+#include "dialogs/FramelessConfirmDialog.h"
+#include <QDesktopServices>
+>>>>>>> REPLACE
 
 将树视图选择模式修改为 `ExtendedSelection`：
 <<<<<<< SEARCH
@@ -489,76 +505,28 @@ void HistoryPanel::onContextMenuRequested(const QPoint& pos) {
 
 ---
 
-### 3.4 `QuarkMeta_Source/src/ui/FavoritePanel.cpp` & `LibraryPanel.cpp` ObjectName 设置
-
-在 `QuarkMeta_Source/src/ui/FavoritePanel.cpp` 中配置 ObjectName：
-<<<<<<< SEARCH
-    m_favoriteView = new DropTreeView(this);
-    m_favoriteView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-=======
-    m_favoriteView = new DropTreeView(this);
-    m_favoriteView->setObjectName("FavoriteTreeView");
-    m_favoriteView->setEditTriggers(QAbstractItemView::NoEditTriggers);
->>>>>>> REPLACE
-
-在 `QuarkMeta_Source/src/ui/LibraryPanel.cpp` 中配置 ObjectName：
-<<<<<<< SEARCH
-    m_treeView = new LibraryTreeView(this);
-    m_treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
-=======
-    m_treeView = new LibraryTreeView(this);
-    m_treeView->setObjectName("LibraryTreeView");
-    m_treeView->setSelectionBehavior(QAbstractItemView::SelectRows);
->>>>>>> REPLACE
-
----
-
 ### 3.5 `QuarkMeta_Source/src/ui/MarkedPanel.cpp` 标记拖出语义注入
 
-在 `MarkedPanel` 鼠标拖出事件中配置拖拽源状态：
+添加必要的头文件包含：
 <<<<<<< SEARCH
-void MarkedPanel::initUi() {
-    setAcceptDrops(true);
+#include "../util/ShellHelper.h"
+#include "../core/NavigationService.h"
+#include "controllers/ContextMenuFactory.h"
+=======
+#include "../util/ShellHelper.h"
+#include "../core/NavigationService.h"
+#include "controllers/ContextMenuFactory.h"
+#include "ViewDragDropHelper.h"
+>>>>>>> REPLACE
 
-    m_mainLayout = new QVBoxLayout(this);
-    m_mainLayout->setContentsMargins(0, 0, 0, 0);
-    m_mainLayout->setSpacing(0);
-
-    m_treeWidget = new QTreeWidget(this);
-    m_treeWidget->setObjectName("MarkedTreeWidget");
-    m_treeWidget->setHeaderHidden(true);
-    m_treeWidget->setIndentation(0);
-    m_treeWidget->setIconSize(QSize(16, 16));
-    m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+在 `MarkedPanel::initUi` 中开启拖拽支持：
+<<<<<<< SEARCH
     m_treeWidget->setSelectionMode(QAbstractItemView::SingleSelection);
     m_treeWidget->setAcceptDrops(true);
-    if (m_treeWidget->viewport()) {
-        m_treeWidget->viewport()->setAcceptDrops(true);
-        m_treeWidget->viewport()->installEventFilter(this);
-    }
-    m_treeWidget->installEventFilter(this);
 =======
-void MarkedPanel::initUi() {
-    setAcceptDrops(true);
-
-    m_mainLayout = new QVBoxLayout(this);
-    m_mainLayout->setContentsMargins(0, 0, 0, 0);
-    m_mainLayout->setSpacing(0);
-
-    m_treeWidget = new QTreeWidget(this);
-    m_treeWidget->setObjectName("MarkedTreeWidget");
-    m_treeWidget->setHeaderHidden(true);
-    m_treeWidget->setIndentation(0);
-    m_treeWidget->setIconSize(QSize(16, 16));
-    m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeWidget->setSelectionMode(QAbstractItemView::SingleSelection);
     m_treeWidget->setDragEnabled(true);
     m_treeWidget->setAcceptDrops(true);
-    if (m_treeWidget->viewport()) {
-        m_treeWidget->viewport()->setAcceptDrops(true);
-        m_treeWidget->viewport()->installEventFilter(this);
-    }
-    m_treeWidget->installEventFilter(this);
 >>>>>>> REPLACE
 
 在 `MarkedPanel::eventFilter` 中拦截鼠标移动触发 Drag 并设置脱管源：
@@ -594,6 +562,21 @@ bool MarkedPanel::eventFilter(QObject* watched, QEvent* event) {
 ---
 
 ### 3.6 `QuarkMeta_Source/src/ui/controllers/ContentFileOpsHandler.cpp` 拖拽移出/脱管响应处理
+
+添加必要的头文件包含：
+<<<<<<< SEARCH
+#include "../../util/DiskIoService.h"
+#include "../../meta/LibraryService.h"
+
+#include <QDir>
+=======
+#include "../../util/DiskIoService.h"
+#include "../../meta/LibraryService.h"
+#include "../../meta/FavoriteService.h"
+#include "../../meta/MarkedFolderService.h"
+
+#include <QDir>
+>>>>>>> REPLACE
 
 在主内容面板的 `ContentFileOpsHandler::onPathsDropped` 顶端拦截脱管意图：
 <<<<<<< SEARCH
@@ -652,6 +635,16 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
 ---
 
 ### 3.7 `QuarkMeta_Source/src/ui/NavPanel.cpp` 目录导航面板支持接收侧边栏脱管拖放
+
+添加必要的头文件包含：
+<<<<<<< SEARCH
+#include "DropTreeView.h"
+#include "ContentPanel.h"
+=======
+#include "DropTreeView.h"
+#include "ViewDragDropHelper.h"
+#include "ContentPanel.h"
+>>>>>>> REPLACE
 
 在 `NavPanel` 中开启对树视图的拖放接收，并在拖放释放时处理脱管逻辑：
 <<<<<<< SEARCH
@@ -771,11 +764,13 @@ cmake --build ArcMeta_Source/ArcMeta_Build/x64-release --config Release
 ## 八、头文件包含链与类型完整性检查 (Header Chain Check)
 
 1. `QuarkMeta_Source/src/ui/HistoryPanel.cpp`：
-   - 包含 `<QDesktopServices>`、`<QUrl>`、`<QFileInfo>`、`"controllers/ContextMenuFactory.h"`、`"meta/HistoryService.h"`、`"meta/FavoriteService.h"`、`"meta/LibraryService.h"`、`"dialogs/FramelessConfirmDialog.h"`，类型全部完整闭合。
+   - 显式 `#include "../util/ShellHelper.h"` 与 `#include "dialogs/FramelessConfirmDialog.h"`，类型全部完整闭合。
 2. `QuarkMeta_Source/src/ui/controllers/ContentFileOpsHandler.cpp`：
-   - 包含 `"meta/FavoriteService.h"`、`"meta/LibraryService.h"`、`"meta/MarkedFolderService.h"`、`"ViewDragDropHelper.h"`，全部包含显式头文件。
+   - 显式 `#include "../../meta/FavoriteService.h"` 与 `#include "../../meta/MarkedFolderService.h"`，类型全部完整闭合。
 3. `QuarkMeta_Source/src/ui/NavPanel.cpp`：
-   - 包含 `"ViewDragDropHelper.h"`、`"meta/FavoriteService.h"`、`"meta/LibraryService.h"`、`"meta/MarkedFolderService.h"`，头文件包含链闭合。
+   - 显式 `#include "ViewDragDropHelper.h"`，类型全部完整闭合。
+4. `QuarkMeta_Source/src/ui/MarkedPanel.cpp`：
+   - 显式 `#include "ViewDragDropHelper.h"`，类型全部完整闭合。
 
 ---
 
