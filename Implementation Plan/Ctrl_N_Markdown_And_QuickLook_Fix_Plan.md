@@ -164,6 +164,16 @@
 
 ### 3.4 `QuarkMeta_Source/src/ui/PanelMediator.cpp`
 
+显式包含 `ModelContract.h` 确保数据角色符号闭合：
+<<<<<<< SEARCH
+#include "AppShortcutController.h"
+#include "QuickLookWindow.h"
+=======
+#include "AppShortcutController.h"
+#include "QuickLookWindow.h"
+#include "../core/ModelContract.h"
+>>>>>>> REPLACE
+
 连接 `createNewMdRequested`：
 <<<<<<< SEARCH
         connect(shortcutController, &AppShortcutController::createNewFolderRequested, this, [this, contentPanel]() {
@@ -286,8 +296,9 @@ cmake --build ArcMeta_Source/ArcMeta_Build/x64-release --config Release
 
 1. `AppShortcutController::createNewMdRequested()`：`public` 信号；
 2. `ContentPanel::createNewItem(const QString& type)`：`public` 成员函数，签名一致；
-3. `QuickLookWindow::closePreview()`：`public` 槽函数，签名一致；
-4. `ToolTipOverlay::showToast(const QString& text, int durationMs, const QColor& bgColor)`：`public` 接口，签名一致。
+3. `ContentPanel::activeItemView()`：`public` 成员函数，签名一致；
+4. `QuickLookWindow::closePreview()`：`public` 槽函数，签名一致；
+5. `ToolTipOverlay::showToast(const QString& text, int durationMs, const QColor& bgColor)`：`public` 接口，签名一致。
 
 ---
 
@@ -295,7 +306,7 @@ cmake --build ArcMeta_Source/ArcMeta_Build/x64-release --config Release
 
 1. `QuarkMeta_Source/src/ui/AppShortcutController.cpp`：已包含 `AppShortcutController.h`，类型闭合；
 2. `QuarkMeta_Source/src/ui/QuickLookWindow.cpp`：已包含 `QuickLookWindow.h`、`QLabel`、`QPlainTextEdit`、`QuickLookGraphicsView.h`，类型闭合；
-3. `QuarkMeta_Source/src/ui/PanelMediator.cpp`：已包含 `ToolTipOverlay.h`、`QuickLookWindow.h`、`UiHelper.h`，类型全部闭合。
+3. `QuarkMeta_Source/src/ui/PanelMediator.cpp`：显式包含 `../core/ModelContract.h`（包含 `SectionHeaderRole` 与 `PathRole` 定义）、`ToolTipOverlay.h`、`QuickLookWindow.h`、`UiHelper.h`，类型全部闭合。
 
 ---
 

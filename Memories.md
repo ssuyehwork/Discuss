@@ -868,3 +868,19 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 若被删除的项目已经是当前目录视图中的最后一个有效可预览项目，则必须回环跳转到视图中的**第一个可预览项目**；
    - 回环跳转至第一个项目时，必须通过 `ToolTipOverlay::instance()->showToast("当前处于第一个项目", 2000, QColor("#3498db"))` 给予用户明确且友好的视觉反馈；
    - 仅当整个目录下所有项目均已被删除或不存在任何可预览文件时，才关闭 QuickLook 窗口。
+
+## 33. 从“库”中彻底移除项目 DAO 事务与元数据同步闭环规范 (Remove from Library SSOT Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 将项目彻底从“库”中注销移除的唯一真理源 (SSOT)。
+
+### 33.1 缺陷根因与架构修复原则
+1. **废弃企图使用 `addPathsToCategory(0, paths)` 的错误实现**：
+   - `LibraryDao::addPathsToCategory` 内部校验为 `if (!db || id == 0 || paths.isEmpty()) return false;`，传入 `id = 0` 会直接被守卫拦截返回 `false`，导致操作直接失败；
+2. **构建独立的 `removePathsFromLibrary` SSOT 通道**：
+   - 在 `LibraryDao` 中显式提供 `removePathsFromLibrary(const QStringList& paths)` 接口；
+   - 内部在全局互斥锁保护下开启 SQLite 事务，执行 `DELETE FROM library_category_paths WHERE path = ?;`，彻底清除所有分类关联；
+3. **两级数据与缓存同步闭环**：
+   - `LibraryService::removePathsFromLibrary` 调用 `LibraryDao::removePathsFromLibrary` 成功后：
+     - 驱动 `LibrarySyncService::instance().removePaths(paths)` 从 `library_items` 表彻底清除项目元数据记录；
+     - 发射 `libraryChanged()` 广播全局视图变动与计数刷新；
+     - 通过 `ToolTipOverlay::showText` 给予用户绿色成功提示。
