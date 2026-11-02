@@ -872,17 +872,20 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
      - 发射 `libraryChanged()` 广播全局视图变动与计数刷新；
      - 通过 `ToolTipOverlay::showText` 给予用户绿色成功提示。
 
-## 34. 智能文件夹规则星级下拉靠左对齐与“无”评分选项规范 (SmartFolder Rating Left Align & None Option Contract)
+## 35. 库面板刷新状态保持与 ToolTipOverlay 绝对禁跟光标铁律规范 (Library Panel State Preservation & Non-Cursor ToolTip Contract)
 
-> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹规则配置窗口星级选项的唯一真理源 (SSOT)。
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 库分类选中状态持久化及 ToolTipOverlay 居中锚定的唯一真理源 (SSOT)。
 
-### 34.1 靠左对齐与视觉一致性
-1. **下拉框项靠左对齐**：
-   - 在 `StarRatingValueWidget` 中，`QComboBox` 内部图标绘制与下拉列表项必须统一采用紧凑、自然的靠左对齐方式，杜绝松散或偏离左边缘的排版；
-   - 保持 1~5 星的纯星级矢量图标排列，起始坐标贴齐左侧边距。
-2. **新增“无”星级选项 (Rating = 0)**：
-   - 下拉选项首项新增“无”选项，数据值为 `0`，专门用于筛选没有被赋予任何星级（`rating = 0`）的项目；
-   - 选项排列顺序规范为：`无`、`1星`、`2星`、`3星`、`4星`、`5星`。
-3. **操作符联动与查询语义**：
-   - 当星级选择为“无”（`0`）时，操作符语义自动联动或固定为“等于”，在 DAO 条件构建（`SmartFolderDao::buildRatingCondition`）中精准匹配 `rating = 0`；
-   - 选中 1~5 星时保持支持“大于等于”、“等于”、“小于等于”。
+### 35.1 库分类刷新后持续保持高亮选中机制 (Library Selection Preservation)
+1. **缺陷根因**：
+   - 当从库中移除或添加项目导致 `libraryChanged` 触发 `LibraryPanel::loadLibrary()` 时，`m_model->clear()` 粗暴清空了整棵树模型；
+   - 重建树之前未记录原选中的 `nodeId`（及所属类型），重建后未进行选择回填，导致左侧树视图的选中高亮丢失，与右侧正在展示的内容发生状态断层脱节。
+2. **状态记录与无缝回填规范**：
+   - 在 `loadLibrary()` 清空模型前，必须先提取当前活跃选中项的节点 ID（`selectedNodeId`）与类型（`selectedType`）；
+   - 在树结构重建完成后，自动通过 `findItemByNodeId` 递归检索对应的 `QStandardItem`；
+   - 检索成功后，调用 `m_treeView->setCurrentIndex(targetItem->index())` 恢复焦点与高亮选中，确保分类树在数据刷新后**持续显示高亮选中**，与右侧内容面板保持 100% 状态统一。
+
+### 35.2 ToolTipOverlay 绝对禁止跟随鼠标光标 (Strict Non-Cursor ToolTip Contract)
+1. **严格遵循第 21 章规范**：
+   - 全软件严禁向 `ToolTipOverlay` 传入 `QCursor::pos()`；
+   - `LibraryService` 中“从‘库’中移除”与“添加至‘库’”的浮层反馈，必须彻底清除 `QCursor::pos()` 调用，统一迁移为 `ToolTipOverlay::instance()->showToast(...)`（由组件内部自动锚定活跃内容面板正中居中，距离顶部下方 10px），杜绝提示框在屏幕边缘或跟随鼠标乱窜遮挡焦点。

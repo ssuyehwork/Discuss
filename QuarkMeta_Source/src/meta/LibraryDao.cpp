@@ -26,15 +26,16 @@ bool LibraryDao::initTable() {
 
     const char* sqlPaths = "CREATE TABLE IF NOT EXISTS library_category_paths ("
                            "category_id INTEGER, "
-                           "path TEXT NOT NULL, "
+                           "path TEXT NOT NULL COLLATE NOCASE, "
                            "PRIMARY KEY(category_id, path));";
 
-    const char* sqlPathsIdx = "CREATE INDEX IF NOT EXISTS idx_category_paths_path ON library_category_paths(path);";
+    const char* sqlPathsIdx = "CREATE INDEX IF NOT EXISTS idx_category_paths_path ON library_category_paths(path COLLATE NOCASE);";
 
     char* errMsgs = nullptr;
     sqlite3_exec(db, sqlCat, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlPaths, nullptr, nullptr, &errMsgs);
     sqlite3_exec(db, sqlPathsIdx, nullptr, nullptr, &errMsgs);
+    sqlite3_exec(db, "CREATE INDEX IF NOT EXISTS idx_cat_paths_nocase ON library_category_paths(path COLLATE NOCASE);", nullptr, nullptr, nullptr);
     sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN preset_tags TEXT DEFAULT '';", nullptr, nullptr, nullptr);
     sqlite3_exec(db, "ALTER TABLE library_categories ADD COLUMN is_pinned INTEGER DEFAULT 0;", nullptr, nullptr, nullptr);
     return true;
@@ -298,6 +299,44 @@ bool LibraryDao::updateNodesParentAndOrder(const QList<NodeOrderEntry>& entries)
     return true;
 }
 
+bool LibraryDao::removePathsFromLibrary(const QStringList& paths) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || paths.isEmpty()) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    SqlTransaction trans(db);
+
+    // 1. 从分类关系表中移除 (带 COLLATE NOCASE 确保大小写不敏感匹配)
+    const char* sql = "DELETE FROM library_category_paths WHERE path = ? COLLATE NOCASE;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
+
+    for (const QString& p : paths) {
+        std::string pStd = QDir::toNativeSeparators(QDir::cleanPath(p)).toStdString();
+        sqlite3_bind_text(stmt, 1, pStd.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt);
+        sqlite3_reset(stmt);
+    }
+    sqlite3_finalize(stmt);
+
+    // 2. 在同个事务中级联清理实体索引表 library_items，杜绝异步断层和幽灵复活
+    const char* sqlItems = "DELETE FROM library_items WHERE file_path = ? COLLATE NOCASE;";
+    sqlite3_stmt* stmtItems = nullptr;
+    if (sqlite3_prepare_v2(db, sqlItems, -1, &stmtItems, nullptr) == SQLITE_OK) {
+        for (const QString& p : paths) {
+            std::string pStd = QDir::toNativeSeparators(QDir::cleanPath(p)).toStdString();
+            sqlite3_bind_text(stmtItems, 1, pStd.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_step(stmtItems);
+            sqlite3_reset(stmtItems);
+        }
+        sqlite3_finalize(stmtItems);
+    }
+
+    bool ok = trans.commit();
+    sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+    return ok;
+}
+
 bool LibraryDao::removeCategoryById(int id) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db || id <= 0) return false;
@@ -379,7 +418,7 @@ bool LibraryDao::removePathsFromCategory(int id, const QStringList& paths) {
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
 
-    const char* sql = "DELETE FROM library_category_paths WHERE category_id = ? AND path = ?;";
+    const char* sql = "DELETE FROM library_category_paths WHERE category_id = ? AND path = ? COLLATE NOCASE;";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) return false;
 
