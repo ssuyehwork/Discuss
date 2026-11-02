@@ -906,3 +906,26 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
      - 若 `currentVersion == 0`（新创建数据库），执行标准 `CREATE TABLE IF NOT EXISTS` 初始化全量表结构与索引，随后将 `PRAGMA user_version` 提升至目标 `kSchemaVersion`；
      - 若 `currentVersion < kSchemaVersion`（旧版本升级），严格采用标准的向前兼容迁移方案（如 `ALTER TABLE ADD COLUMN` 或结构迁移），并在事务保护下执行，迁移成功后更新 `PRAGMA user_version`；
      - 若检测到未知更高版本（`currentVersion > kSchemaVersion`），进行警告保护并按既有表结构只读/兼容运行，绝不允许回退清空。
+
+
+## 35. 智能文件夹规则容差与各类型参数持久化时序防污染规范 (Smart Folder Rule Parameters & Tolerance Persistence Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹规则配置组件参数反序列化、时序解耦与精准持久化的唯一真理源 (SSOT)。
+
+### 35.1 缺陷根因与时序污染机理
+1. **旧控件反向覆盖污染**：
+   - 在 `SmartFolderRuleRow(const SmartFolderRule& rule)` 构造过程中，`initUi()` 内部默认执行 `onTypeChanged()`，预先挂载了第 0 项默认类型（“星级”）的控件 `StarRatingValueWidget`；
+   - 随后进入 `setRule(rule)` 调用 `updateValueWidget()`，旧逻辑在销毁旧控件前执行了 `m_valueWidget->getRuleValues(m_currentRule);`；
+   - 此时旧的星级控件将其自身字段（无 `tolerance`、默认评分等）反向写回 `m_currentRule`，导致外部从数据库读取的完整真实规则（如图像颜色容差 `rule.tolerance`、日期范围等）被瞬间冲刷抹除或置 0；
+   - 最终新建的 `AutoColorValueWidget` 只能接收到被冲刷后的无效数据，不得不降级回退到默认的 50。
+2. **条件序列化导致的隐蔽丢失**：
+   - 在 `SmartFolderDao.cpp` 的 `SmartFolderRule::toJson` 中，存在 `if (type == SmartRuleType::AutoColor && tolerance != 50)` 等特判，当数值等于 50 或反序列化存在边缘情况时引发数据状态不透明。
+
+### 35.2 核心治理契约与实施铁律
+1. **构造与加载参数绝对单向流动**：
+   - 在 `SmartFolderRuleRow::setRule` 以及规则重构过程中，**绝对禁止**调用前一个不匹配类型的旧控件进行 `getRuleValues(m_currentRule)` 反向回写；
+   - 显式分离“用户主动切换类型（需保留基础公用字段/重置类型私有字段）”与“从持久化数据加载规则（单向精准灌入）”两个行为分支；
+2. **容差值有效区间（0~100）全量保留**：
+   - 在 `AutoColorValueWidget::setRuleValues(const SmartFolderRule& rule)` 中，容差判断改为 `rule.tolerance >= 0 && rule.tolerance <= 100 ? rule.tolerance : 50`，允许保存 0~100 的任意整型容差；
+3. **显式无条件全量序列化落库**：
+   - 在 `SmartFolderRule::toJson()` 中，凡是 `type == SmartRuleType::AutoColor`，无条件将 `tolerance` 写入 JSON 对象：`obj["tolerance"] = tolerance;`，杜绝任何条件判断引起的字段遗漏。
