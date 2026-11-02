@@ -871,3 +871,18 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
      - 驱动 `LibrarySyncService::instance().removePaths(paths)` 从 `library_items` 表彻底清除项目元数据记录；
      - 发射 `libraryChanged()` 广播全局视图变动与计数刷新；
      - 通过 `ToolTipOverlay::showText` 给予用户绿色成功提示。
+
+## 34. 智能文件夹规则星级下拉靠左对齐与“无”评分选项规范 (SmartFolder Rating Left Align & None Option Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹规则配置窗口星级选项的唯一真理源 (SSOT)。
+
+### 34.1 靠左对齐与视觉一致性
+1. **下拉框项靠左对齐**：
+   - 在 `StarRatingValueWidget` 中，`QComboBox` 内部图标绘制与下拉列表项必须统一采用紧凑、自然的靠左对齐方式，杜绝松散或偏离左边缘的排版；
+   - 保持 1~5 星的纯星级矢量图标排列，起始坐标贴齐左侧边距。
+2. **新增“无”星级选项 (Rating = 0)**：
+   - 下拉选项首项新增“无”选项，数据值为 `0`，专门用于筛选没有被赋予任何星级（`rating = 0`）的项目；
+   - 选项排列顺序规范为：`无`、`1星`、`2星`、`3星`、`4星`、`5星`。
+3. **操作符联动与查询语义**：
+   - 当星级选择为“无”（`0`）时，操作符语义自动联动或固定为“等于”，在 DAO 条件构建（`SmartFolderDao::buildRatingCondition`）中精准匹配 `rating = 0`；
+   - 选中 1~5 星时保持支持“大于等于”、“等于”、“小于等于”。
