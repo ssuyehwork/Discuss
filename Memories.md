@@ -871,3 +871,43 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
      - 驱动 `LibrarySyncService::instance().removePaths(paths)` 从 `library_items` 表彻底清除项目元数据记录；
      - 发射 `libraryChanged()` 广播全局视图变动与计数刷新；
      - 通过 `ToolTipOverlay::showText` 给予用户绿色成功提示。
+
+
+## 36. 折叠分组精准命中判定与防误触规范 (Sidebar Section Fold Precise Hit-Test Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 侧边栏及树视图折叠/展开行为的唯一真理源 (SSOT)。
+
+### 36.1 缺陷根因与架构修复原则
+1. **整行点击误触折叠缺陷根因**：
+   - 在 `LibraryPanel` 中，折叠分组（包括“快速访问 -10”、“智能文件夹 -20”、“文件夹 0”）在 `LibraryItemDelegate::editorEvent` 中接收到 `MouseButtonRelease` 时，未校验鼠标点击位置，将整行矩形区域（`option.rect`）乃至空白处均当作折叠/展开触发区域，导致用户在附近操作或选中时频繁误触折叠。
+2. **精准收窄 Hit-test 判定边界 (Strict Arrow-Only Hit-Test)**：
+   - 严格收窄展开/折叠的触发边界：只有当鼠标释放坐标精准落在紧随分组标题文字右侧的折叠箭头（`chevron_down` / `chevron_right`）绘制区域（包含 2~4px 易点击容差范围）时，才触发 `requestToggleSection(nodeId)`；
+   - 点击分组文字区域或整行其余任意空白区域，坚决不触发展开/折叠，彻底根除误触问题；
+   - 右侧“加号 (+)”按钮判定保持独立且互不干扰。
+
+## 37. 智能文件夹拖拽重排序与顺序持久化规范 (Smart Folder Drag Reorder & Sort Order Persistence Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹手动自由排布次序与持久化的唯一真理源 (SSOT)。
+
+### 37.1 缺陷根因与排序架构
+1. **树内拖拽验证与分组隔离缺陷**：
+   - 原 `DropTreeView` 内部拖拽校验器 `internalDragValidator` / `internalDropValidator` 仅支持 `nodeId > 0` 的普通文件夹分类，智能文件夹节点（Type 为 `"smart_folder"`）无法被拖拽；
+   - 底层 `smart_folders` 数据库表虽然具有 `sort_order` 字段，且 `getAllSmartFolders()` 已按 `sort_order ASC, id ASC` 读取，但缺少智能文件夹拖拽后的排序重写与落库机制。
+2. **自由排布与分组边界安全契约**：
+   - **放开智能文件夹拖拽**：在 `internalDragValidator` 与 `internalDropValidator` 中支持 `"smart_folder"` 类型节点；
+   - **同组隔离安全守卫**：智能文件夹节点仅允许在“智能文件夹 (-20)”分组内进行平级拖拽重排序（Above / Below 或放置于智能文件夹分组内）；严禁将智能文件夹拖出至普通文件夹分类中，也严禁将普通分类拖入智能文件夹分组；
+   - **排序持久化闭环**：智能文件夹重排发生时，遍历“智能文件夹”分组下的所有子节点，生成最新的排序列表，通过 `SmartFolderDao::updateSmartFolderOrder` 批量持久化更新 `smart_folders` 表的 `sort_order`，确保自由排序在应用重启与数据刷新后完全保持。
+
+## 38. 智能文件夹色轮组件统一复用规范 (Smart Folder Color Wheel Universal Reuse SSOT)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 颜色规则配置组件的唯一真理源 (SSOT)。
+
+### 38.1 彻底清除另起炉灶与独立色板 (Purge Redundant HSB Square Picker)
+1. **架构缺陷根因**：
+   - 智能文件夹规则配置弹窗中原先使用了方块 HSB 拾色弹窗（`ColorPicker`），而在右侧筛选面板（`AutoColorGroup`）中已有成熟且视觉统一的高品质组件 `ColorWheel`。
+   - 在智能文件夹弹窗中单独弹方块 HSB 拾色板严重违背全软件 UI 复用与视觉统一红线。
+2. **色轮组件彻底复用与统一 (Universal ColorWheel Reuse)**：
+   - 彻底剔除智能文件夹中针对方块色板的冗余调用；
+   - 复用 `ColorWheel` 组件：点击规则行中的颜色选择按钮时，弹出集成 `ColorWheel` 色轮的轻量浮层对话框；
+   - 色轮支持色相环、精度/容差调节及 Hex 文本联动，用户拖拽色轮手柄即时发射值变更信号；
+   - 选色后无缝映射为标准 Hex 与容差值写入 `SmartFolderRule`，并触发即时预览（`rulesPreviewRequested`），实现全软件在颜色视觉交互与检索规则上的 100% SSOT 对齐。
