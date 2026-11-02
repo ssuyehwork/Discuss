@@ -120,6 +120,8 @@ Z 暂时保留-*/
 
 backups/
 backups-*/
+build-static/
+build-static-*/
 
 .vs/
 .vs-*/
@@ -129,6 +131,8 @@ backups-*/
 .qm/
 
 .qtcreator/
+.build-static/
+.build-static-*/
 
 OCR/
 
