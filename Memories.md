@@ -891,10 +891,10 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
 
 ### 37.1 缺陷根因与排序架构
 1. **树内拖拽验证与分组隔离缺陷**：
-   - 原 `DropTreeView` 内部拖拽校验器 `internalDragValidator` / `internalDropValidator` 仅支持 `nodeId > 0` 的普通文件夹分类，智能文件夹节点（Type 为 `"smart_folder"`）无法被拖拽；
+   - 原 `DropTreeView` 内部拖拽校验器 `internalDragValidator` / `internalDropValidator` 仅支持 `nodeId > 0` 的普通文件夹分类，智能文件夹节点（Type 为 `smart_folder`）无法被拖拽；
    - 底层 `smart_folders` 数据库表虽然具有 `sort_order` 字段，且 `getAllSmartFolders()` 已按 `sort_order ASC, id ASC` 读取，但缺少智能文件夹拖拽后的排序重写与落库机制。
 2. **自由排布与分组边界安全契约**：
-   - **放开智能文件夹拖拽**：在 `internalDragValidator` 与 `internalDropValidator` 中支持 `"smart_folder"` 类型节点；
+   - **放开智能文件夹拖拽**：在 `internalDragValidator` 与 `internalDropValidator` 中支持 `smart_folder` 类型节点；
    - **同组隔离安全守卫**：智能文件夹节点仅允许在“智能文件夹 (-20)”分组内进行平级拖拽重排序（Above / Below 或放置于智能文件夹分组内）；严禁将智能文件夹拖出至普通文件夹分类中，也严禁将普通分类拖入智能文件夹分组；
    - **排序持久化闭环**：智能文件夹重排发生时，遍历“智能文件夹”分组下的所有子节点，生成最新的排序列表，通过 `SmartFolderDao::updateSmartFolderOrder` 批量持久化更新 `smart_folders` 表的 `sort_order`，确保自由排序在应用重启与数据刷新后完全保持。
 
@@ -911,3 +911,25 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 复用 `ColorWheel` 组件：点击规则行中的颜色选择按钮时，弹出集成 `ColorWheel` 色轮的轻量浮层对话框；
    - 色轮支持色相环、精度/容差调节及 Hex 文本联动，用户拖拽色轮手柄即时发射值变更信号；
    - 选色后无缝映射为标准 Hex 与容差值写入 `SmartFolderRule`，并触发即时预览（`rulesPreviewRequested`），实现全软件在颜色视觉交互与检索规则上的 100% SSOT 对齐。
+
+## 39. 目录导航与路径跳转幂等性守卫规范 (Navigation Idempotence & State Preservation Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 目录导航、视图切换及筛选面板状态持久保持的唯一真理源 (SSOT)。
+
+### 39.1 缺陷根因与架构审查
+1. **反模式盲目广播 (Redundant Navigation Broadcast)**：
+   - 用户无论是从左侧“目录导航树 (NavPanel)”、“收藏夹 (FavoritePanel)”，还是“标记面板 (MarkedPanel)”点击文件夹，底层均调用中枢服务 `NavigationService::instance().navigateTo(path, ...)`；
+   - 原 `NavigationService::navigateTo` 在对路径进行标准化后，**缺少对当前路径的目标对比守卫 (`normalized == m_currentUrl`)**；
+   - 导致即使点击的是当前已在浏览的同一个文件夹，依然会强行更新内部状态并无脑对外发射 `currentUrlChanged` 广播。
+2. **中枢层过度清空与性能雪崩 (Excessive Filter Clearing & Recalculation)**：
+   - `PanelMediator` 在监听到 `currentUrlChanged` 广播后，未加区分地强制调用 `filterPanel->clearAllFilters()`、`filterPanel->clearStats()`，并驱动 `targetPanel->loadDirectory(url)`；
+   - 随之而来的严重后果：
+     - **计算资源与磁盘 IO 严重浪费**：触发当前目录成千上万个文件重新扫描、元数据重新计算分布，引发界面卡顿与掉帧；
+     - **粗暴打断用户上下文**：用户此前在该目录下精心配置的颜色、星级、标签、文件大小等筛选条件瞬间全被归零抹去。
+
+### 39.2 状态幂等性与同一目标守卫契约 (Idempotence Guard Contract)
+1. **SSOT 唯一真理源守卫 (`NavigationService::navigateTo`)**：
+   - 在 `NavigationService::navigateTo` 开头，必须且强制执行路径幂等性守卫：
+     当目标路径与当前路径相同（按本地路径大小写不敏感规范统一对比）且非递归状态改变时，判定为 No-op，直接返回，阻断无意义的事件风暴；
+   - 严格区分“主动原位刷新 (Refresh)”与“视角导航 (Navigate)”：只有用户显式按 F5 或调用 `refreshAll()` 时才执行原位数据重载并保持筛选状态不变；
+   - 点击侧边栏当前所在文件夹时，不触发视图重载，不销毁/重算 `FilterPanel`，不重置用户的筛选条件，保持界面极其平稳丝滑。
