@@ -838,3 +838,33 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
      - 源自库分类：调用 `LibraryService::instance().removePathsFromCategory(srcCatId, paths)` 解除归类，弹出 Toast 提示；
      - 源自标记：调用 `MarkedFolderService::instance().removeMarked(path)` 取消标记，弹出 Toast 提示；
    - 绝不执行磁盘底层物理文件的复制、移动或删除操作，确保数据安全与逻辑纯粹。
+
+## 31. Ctrl+N 快捷键全局绑定新建 Markdown 文件规范 (Ctrl+N Create Markdown Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 新建 Markdown 文件快捷键的唯一真理源 (SSOT)。
+
+### 31.1 快捷键触发与焦点隔离
+1. **全局快捷键注册**：
+   - 在 `AppShortcutController` 中注册 `Ctrl+N`（`QKeySequence(Qt::CTRL | Qt::Key_N)`）；
+   - 严格进行输入焦点隔离校验：只有在非文本编辑焦点（`!isEditingFocus()`）时才响应并发出 `createNewMdRequested()` 信号；
+2. **中枢单向调度 (SSOT)**：
+   - `PanelMediator` 监听 `createNewMdRequested`，并获取当前主窗格活跃的内容面板 `target`；
+   - 调用标准既有接口 `target->createNewItem("md")`，无缝创建 Markdown 文件并在视图中进入行内重命名模式。
+
+## 32. QuickLookWindow 无条件双击关闭与删除后回环跳转规范 (QuickLook Double Click & Cyclic Navigation Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 快速预览窗口交互修复的唯一真理源 (SSOT)。
+
+### 32.1 无条件双击关闭机制
+1. **不受内容状态干预**：
+   - 双击关闭 `QuickLookWindow` 是顶层交互哲学，严禁受到文件是否存在内容、是否为空白文件或当前处于何种视图（图片、文本、空文件提示标签 `m_lblEmptyPrompt`）的干预；
+   - 为 `m_lblEmptyPrompt`、`m_container` 以及窗口自身安装事件过滤器（`installEventFilter(this)`）；
+   - 在 `QuickLookWindow::eventFilter` 中统一捕获左键双击事件（`QEvent::MouseButtonDblClick`），只要双击落在预览窗口内容区域，无条件触发 `closePreview()` 并消费事件。
+
+### 32.2 删除项目后回环跳转机制
+1. **优先跳转下一个项目**：
+   - 当在 `QuickLookWindow` 中触发删除当前项目（`deleteRequested`）时，`PanelMediator` 驱动将其移入回收站后，首先向下寻找下一个相邻有效文件并进行预览；
+2. **末项回环至首项并 Toast 提示**：
+   - 若被删除的项目已经是当前目录视图中的最后一个有效可预览项目，则必须回环跳转到视图中的**第一个可预览项目**；
+   - 回环跳转至第一个项目时，必须通过 `ToolTipOverlay::instance()->showToast("当前处于第一个项目", 2000, QColor("#3498db"))` 给予用户明确且友好的视觉反馈；
+   - 仅当整个目录下所有项目均已被删除或不存在任何可预览文件时，才关闭 QuickLook 窗口。
