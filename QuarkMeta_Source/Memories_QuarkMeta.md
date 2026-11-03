@@ -871,3 +871,89 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
      - 驱动 `LibrarySyncService::instance().removePaths(paths)` 从 `library_items` 表彻底清除项目元数据记录；
      - 发射 `libraryChanged()` 广播全局视图变动与计数刷新；
      - 通过 `ToolTipOverlay::showText` 给予用户绿色成功提示。
+
+
+## 34. QuarkMeta 数据库防灾抗毁与数据资产防误删治理规范 (Database Disaster Recovery & Anti-Loss SSOT Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 数据库防灾抗毁、对账安全与平滑迁移的唯一真理源 (SSOT)。
+
+### 34.1 异常中断与自愈恢复保护（杜绝强杀误删与旧备份暴力覆盖）
+1. **背景根因**：
+   - 既有实现在进程被 IDE 强杀、调试中断或锁未释放时，新进程启动调用 `loadDb()` 遇到短暂失败，立刻在 `tryRecoverFromBackup()` 中执行 `QFile::remove` 抹除当前主库 `.store`、`-wal`、`-shm`，并直接把旧快照复制覆盖回来，造成新增数据毁灭性丢失。
+2. **核心防御治理原则**：
+   - **禁止静默物理删除**：严禁在尝试自愈恢复时直接无条件删除当前的主数据库、WAL 预写日志及共享内存文件；
+   - **损坏文件安全归档隔离**：在确需从快照恢复的极端损坏场景下，必须先对当前的 `.store`、`-wal`、`-shm` 进行带时间戳的安全重命名归档（如 `.store.corrupted.<timestamp>`），保留现场证据供后续排查，绝不可物理直接 unlink 清空；
+   - **连接冲突退避重试**：当数据库因强杀残留锁导致打开受阻时，配置标准 `sqlite3_busy_timeout`（如 3000ms），给予 WAL 日志回放与锁释放缓冲时间；
+   - **真实损坏判定**：只有在主库物理文件无法打开或 `PRAGMA quick_check` / `PRAGMA integrity_check` 明确判定损坏且无修复可能时，方可按上述安全归档隔离流程执行备份恢复。
+
+### 34.2 启动对账防误删规范（杜绝孤儿条目后台静默物理清除）
+1. **背景根因**：
+   - `LibrarySyncService` 在构造完成仅 1.5 秒后（`QTimer::singleShot(1500, ...)`）自动触发 `triggerStartupReconciliation()`；
+   - 对账逻辑将存在于 `library_items` 库表但未存在于 `categoryPaths` 分类引用中的所有条目判定为“孤儿条目”，直接调用 `LibraryItemDao::removeItemsByPaths(orphanPaths)` 执行 SQL DELETE 物理清除；
+   - 在新项目入库、分类关联延迟、或者路径大小写及格式标准化存在微小差异时，此逻辑在启动 1.5 秒内将用户数据资产静默抹杀。
+2. **核心防误删契约**：
+   - **数据资产“宽进严出”与后台零删除原则**：后台启动对账属于系统自检服务，**绝对禁止静默执行物理删除操作**。除非用户在 UI 界面上有意、明确地执行“从库中移除”操作，否则后台服务绝无权删除 `library_items` 表中的任何记录；
+   - **对账仅保留单向增量同步**：`triggerStartupReconciliation()` 仅保留对账 1（分类中有而库表中缺少的条目增量补齐 `syncPaths`），彻底删除对账 2 的物理清除孤儿逻辑；
+   - **安全日志审计替代物理删除**：若确实发现分类引用孤立条目，仅作 Debug 日志审计记录，保留数据资产的完整性。
+
+### 34.3 数据库版本平滑升级规范（彻底废除暴力 DROP TABLE）
+1. **背景根因**：
+   - 在 `DatabaseManager::loadDb` 中，检查 `PRAGMA user_version` 与 `kSchemaVersion` 不一致时，直接执行 `DROP TABLE IF EXISTS item_palettes;`、`DROP TABLE IF EXISTS file_tags;`、`DROP TABLE IF EXISTS library_items;`；
+   - 粗暴的清空重建导致任意版本升级或未初始化情形直接抹除所有业务数据。
+2. **平滑向前兼容迁移原则**：
+   - **严禁无差别清表**：彻底废除任何形式的 `DROP TABLE` 自毁代码；
+   - **增量式平滑 Schema 迁移**：
+     - 若 `currentVersion == 0`（新创建数据库），执行标准 `CREATE TABLE IF NOT EXISTS` 初始化全量表结构与索引，随后将 `PRAGMA user_version` 提升至目标 `kSchemaVersion`；
+     - 若 `currentVersion < kSchemaVersion`（旧版本升级），严格采用标准的向前兼容迁移方案（如 `ALTER TABLE ADD COLUMN` 或结构迁移），并在事务保护下执行，迁移成功后更新 `PRAGMA user_version`；
+     - 若检测到未知更高版本（`currentVersion > kSchemaVersion`），进行警告保护并按既有表结构只读/兼容运行，绝不允许回退清空。
+
+
+## 35. 智能文件夹规则容差与各类型参数持久化时序防污染规范 (Smart Folder Rule Parameters & Tolerance Persistence Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹规则配置组件参数反序列化、时序解耦与精准持久化的唯一真理源 (SSOT)。
+
+### 35.1 缺陷根因与时序污染机理
+1. **旧控件反向覆盖污染**：
+   - 在 `SmartFolderRuleRow(const SmartFolderRule& rule)` 构造过程中，`initUi()` 内部默认执行 `onTypeChanged()`，预先挂载了第 0 项默认类型（“星级”）的控件 `StarRatingValueWidget`；
+   - 随后进入 `setRule(rule)` 调用 `updateValueWidget()`，旧逻辑在销毁旧控件前执行了 `m_valueWidget->getRuleValues(m_currentRule);`；
+   - 此时旧的星级控件将其自身字段（无 `tolerance`、默认评分等）反向写回 `m_currentRule`，导致外部从数据库读取的完整真实规则（如图像颜色容差 `rule.tolerance`、日期范围等）被瞬间冲刷抹除或置 0；
+   - 最终新建的 `AutoColorValueWidget` 只能接收到被冲刷后的无效数据，不得不降级回退到默认的 50。
+2. **条件序列化导致的隐蔽丢失**：
+   - 在 `SmartFolderDao.cpp` 的 `SmartFolderRule::toJson` 中，存在 `if (type == SmartRuleType::AutoColor && tolerance != 50)` 等特判，当数值等于 50 或反序列化存在边缘情况时引发数据状态不透明。
+
+### 35.2 核心治理契约与实施铁律
+1. **构造与加载参数绝对单向流动**：
+   - 在 `SmartFolderRuleRow::setRule` 以及规则重构过程中，**绝对禁止**调用前一个不匹配类型的旧控件进行 `getRuleValues(m_currentRule)` 反向回写；
+   - 显式分离“用户主动切换类型（需保留基础公用字段/重置类型私有字段）”与“从持久化数据加载规则（单向精准灌入）”两个行为分支；
+2. **容差值有效区间（0~100）全量保留**：
+   - 在 `AutoColorValueWidget::setRuleValues(const SmartFolderRule& rule)` 中，容差判断改为 `rule.tolerance >= 0 && rule.tolerance <= 100 ? rule.tolerance : 50`，允许保存 0~100 的任意整型容差；
+3. **显式无条件全量序列化落库**：
+   - 在 `SmartFolderRule::toJson()` 中，凡是 `type == SmartRuleType::AutoColor`，无条件将 `tolerance` 写入 JSON 对象：`obj["tolerance"] = tolerance;`，杜绝任何条件判断引起的字段遗漏。
+
+
+## 36. 图像颜色与调色板 RGB 复合索引范围检索架构规范 (Image Color Palette RGB Range Search Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹图像颜色筛选、多阶调色板穿透与毫秒级索引范围检索的唯一真理源 (SSOT)。
+
+### 36.1 缺陷根因排查与性能架构重构
+1. **单一字符串相等判断荒谬失效**：
+   - 原 SQL 筛选器执行 `auto_color = '#D03185'`，在十六进制字符串上做 100% 精确匹配；
+   - 用户设定的“容差”（`rule.tolerance`）未参与任何运算，且由于图像提取的物理主色与拾色器选取的颜色必然存在微小色差，导致现实命中率为 0。
+2. **忽视 10 色调色板从表 `item_palettes`**：
+   - 图像的主体色彩保存在 `item_palettes` 调色板拆分表中，原代码只查单值 `auto_color`，忽略了大量非第一背景色的关键主体色。
+
+### 36.2 终极解决方案：数值分量 (r, g, b) + 冗余 color_hex + 复合索引
+1. **数据库表结构与平滑兼容**：
+   - 在 `item_palettes` 表中新增 `r INTEGER DEFAULT 0, g INTEGER DEFAULT 0, b INTEGER DEFAULT 0` 三个纯数值分量列；
+   - 建立复合索引 `idx_palettes_rgb ON item_palettes(r, g, b)`，实现百万级纯数值毫秒级 B-Tree 范围扫描；
+   - 在 `DatabaseManager::loadDb` 中执行兼容老数据库的自动加列与建索引（`ALTER TABLE item_palettes ADD COLUMN ...`）。
+2. **入库与更新双向同步写入 RGB**：
+   - 在 `LibraryItemDao::upsertItems` 中，将插入调色板的 SQL 扩展为：
+     `INSERT INTO item_palettes(file_id, idx, r, g, b, color_hex, ratio) VALUES(?, ?, ?, ?, ?, ?, ?);`
+   - 将 `QColor` 的 `red()`, `green()`, `blue()` 分量以纯整数绑定入库，同时保留 `color_hex` 供 UI 直接渲染。
+3. **智能文件夹检索 SQL 穿透重构**：
+   - `SmartFolderDao::buildAutoColorCondition` 将 Hex 目标颜色解析为 RGB，结合容差 `tolerance` 计算允许的浮动区间：
+     `rMin = qMax(0, r - tol), rMax = qMin(255, r + tol)`（g、b 同理）；
+   - 在 `item_palettes` 上执行纯整数区间判断：
+     `file_id IN (SELECT DISTINCT file_id FROM item_palettes WHERE (r BETWEEN rMin AND rMax) AND (g BETWEEN gMin AND gMax) AND (b BETWEEN bMin AND bMax))`；
+   - 彻底废除低效/失效的字符串等于匹配，兼顾 10 阶调色板全面覆盖与 10ms 以内极速响应。
