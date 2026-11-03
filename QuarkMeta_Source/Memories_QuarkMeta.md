@@ -957,3 +957,31 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 在 `item_palettes` 上执行纯整数区间判断：
      `file_id IN (SELECT DISTINCT file_id FROM item_palettes WHERE (r BETWEEN rMin AND rMax) AND (g BETWEEN gMin AND gMax) AND (b BETWEEN bMin AND bMax))`；
    - 彻底废除低效/失效的字符串等于匹配，兼顾 10 阶调色板全面覆盖与 10ms 以内极速响应。
+
+
+## 37. 右键“移动到”子菜单 ToolTipOverlay 实时跟随与精准路径悬浮架构规范 (Move Submenu ToolTipOverlay Real-Time Tracking Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 右键菜单“移动到”子菜单及同类动态级联菜单路径提示、事件过滤与 ToolTipOverlay 渲染的唯一真理源 (SSOT)。
+
+### 37.1 缺陷根因排查与机制反思
+1. **`QMenu::hovered` 信号的固有滞后与事件合并**：
+   - 原实现依赖 Qt 信号 `connect(moveMenu, &QMenu::hovered, ...)`，此信号在鼠标快速划过菜单项时由 Qt 内部高亮机制驱动，存在显著的事件节流与合并，无法感知鼠标在相邻菜单项间的微观移动；
+   - `ToolTipOverlay::showText` 内部具备 150ms 的延迟定时器（`m_showDelayTimer`），当快速划过多个选项时，旧 action 的延迟展示可能覆盖新 action，造成提示路径与当前鼠标悬停的高亮项严重脱节或滞后（如悬停在 `src` 项却仍然显示上一个 `g:\c++` 路径）。
+2. **边缘脱离与非路径项的清理盲区**：
+   - 鼠标划出菜单可视区（Leave）或者滑向非路径菜单项（如“一键分发”、“浏览选择文件夹...”及分割线）时，`QMenu::hovered` 不会触发针对无属性项的重置，导致旧的 Tooltip 残留在屏幕上。
+3. **视觉与分隔符不规范**：
+   - 调用 `showText` 时显式指定了暗灰色 `#333333` 与未归一化的原始路径字符串，破坏了与“历史”选项卡 (`HistoryPanel`) 及全局默认外观（统一纯黑背景、原生斜杠 `QDir::toNativeSeparators`）的视觉一致性。
+
+### 37.2 核心治理方案与实施铁律
+1. **精确事件过滤器 (EventFilter) 架构**：
+   - 为级联子菜单 `moveMenu` 安装专属 `QObject` 事件过滤器（`installEventFilter`）；
+   - 捕获 `QEvent::MouseMove`：利用 `moveMenu->actionAt(mouseEvent->pos())` 进行绝对精准的几何碰撞检测，实时探测当前光标下的物理 `QAction*`；
+   - 捕获 `QEvent::Leave` 与 `aboutToHide`：立即调用 `ToolTipOverlay::hideTip()` 彻底清理悬浮，杜绝残留。
+2. **动作感知与即时显示契约**：
+   - 维护局部状态 `lastHoveredAction` 或 `lastHoveredPath`；
+   - 当 `actionAt(pos)` 返回带有有效 `hoverPath` 属性且非空的 Action 时：
+     - 若该路径与上一次悬停路径不同，将其转换为原生分隔符格式：`QString nativePath = QDir::toNativeSeparators(path);`；
+     - 立即调用 `ToolTipOverlay::instance()->showText(QCursor::pos(), nativePath, 0);`（使用默认主题边框与背景色）；
+   - 当 `actionAt(pos)` 为空或其 `hoverPath` 为空（如分隔线、普通命令按钮）时，立即清除记录并调用 `ToolTipOverlay::hideTip()`。
+3. **生命周期与无害隔离**：
+   - 事件过滤器的生命周期绑定到 `moveMenu`（作为子对象或随菜单销毁），菜单关闭后自动解除并销毁，绝不产生内存泄漏或跨菜单干扰。
