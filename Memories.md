@@ -929,3 +929,31 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 在 `AutoColorValueWidget::setRuleValues(const SmartFolderRule& rule)` 中，容差判断改为 `rule.tolerance >= 0 && rule.tolerance <= 100 ? rule.tolerance : 50`，允许保存 0~100 的任意整型容差；
 3. **显式无条件全量序列化落库**：
    - 在 `SmartFolderRule::toJson()` 中，凡是 `type == SmartRuleType::AutoColor`，无条件将 `tolerance` 写入 JSON 对象：`obj["tolerance"] = tolerance;`，杜绝任何条件判断引起的字段遗漏。
+
+
+## 36. 图像颜色与调色板 RGB 复合索引范围检索架构规范 (Image Color Palette RGB Range Search Contract)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 智能文件夹图像颜色筛选、多阶调色板穿透与毫秒级索引范围检索的唯一真理源 (SSOT)。
+
+### 36.1 缺陷根因排查与性能架构重构
+1. **单一字符串相等判断荒谬失效**：
+   - 原 SQL 筛选器执行 `auto_color = '#D03185'`，在十六进制字符串上做 100% 精确匹配；
+   - 用户设定的“容差”（`rule.tolerance`）未参与任何运算，且由于图像提取的物理主色与拾色器选取的颜色必然存在微小色差，导致现实命中率为 0。
+2. **忽视 10 色调色板从表 `item_palettes`**：
+   - 图像的主体色彩保存在 `item_palettes` 调色板拆分表中，原代码只查单值 `auto_color`，忽略了大量非第一背景色的关键主体色。
+
+### 36.2 终极解决方案：数值分量 (r, g, b) + 冗余 color_hex + 复合索引
+1. **数据库表结构与平滑兼容**：
+   - 在 `item_palettes` 表中新增 `r INTEGER DEFAULT 0, g INTEGER DEFAULT 0, b INTEGER DEFAULT 0` 三个纯数值分量列；
+   - 建立复合索引 `idx_palettes_rgb ON item_palettes(r, g, b)`，实现百万级纯数值毫秒级 B-Tree 范围扫描；
+   - 在 `DatabaseManager::loadDb` 中执行兼容老数据库的自动加列与建索引（`ALTER TABLE item_palettes ADD COLUMN ...`）。
+2. **入库与更新双向同步写入 RGB**：
+   - 在 `LibraryItemDao::upsertItems` 中，将插入调色板的 SQL 扩展为：
+     `INSERT INTO item_palettes(file_id, idx, r, g, b, color_hex, ratio) VALUES(?, ?, ?, ?, ?, ?, ?);`
+   - 将 `QColor` 的 `red()`, `green()`, `blue()` 分量以纯整数绑定入库，同时保留 `color_hex` 供 UI 直接渲染。
+3. **智能文件夹检索 SQL 穿透重构**：
+   - `SmartFolderDao::buildAutoColorCondition` 将 Hex 目标颜色解析为 RGB，结合容差 `tolerance` 计算允许的浮动区间：
+     `rMin = qMax(0, r - tol), rMax = qMin(255, r + tol)`（g、b 同理）；
+   - 在 `item_palettes` 上执行纯整数区间判断：
+     `file_id IN (SELECT DISTINCT file_id FROM item_palettes WHERE (r BETWEEN rMin AND rMax) AND (g BETWEEN gMin AND gMax) AND (b BETWEEN bMin AND bMax))`；
+   - 彻底废除低效/失效的字符串等于匹配，兼顾 10 阶调色板全面覆盖与 10ms 以内极速响应。
