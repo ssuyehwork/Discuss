@@ -1,11 +1,11 @@
 ﻿{
     "configurations": [
         {
-            "name": "x64-Release",
+            "name": "x64-release",
             "generator": "Ninja",
             "configurationType": "RelWithDebInfo",
-            "buildRoot": "${projectDir}\\out\\build\\${name}",
-            "installRoot": "${projectDir}\\out\\install\\${name}",
+            "buildRoot": "${projectDir}/../../Timetool_Build/${name}",
+            "installRoot": "${projectDir}/../../Timetool_Build/install/${name}",
             "cmakeCommandArgs": "",
             "buildCommandArgs": "",
             "ctestCommandArgs": "",

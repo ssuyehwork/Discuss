@@ -132,10 +132,6 @@ build-static-*/
 .vs/
 .vs-*/
 
-.store-shm/
-.store-shm-*/
-.qm/
-
 .qtcreator/
 .build-static/
 .build-static-*/
@@ -158,7 +154,7 @@ Skip upload-*/
 *.creator
 *.user
 *.SCCH
-.store
+*.store
 
 # ==================================================
 # 临时文件

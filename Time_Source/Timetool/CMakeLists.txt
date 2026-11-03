@@ -1,19 +1,24 @@
 cmake_minimum_required(VERSION 3.16)
 project(Time_tool)
 
+# 启用现代 MSVC 运行时库策略 (彻底解决 /MT 与 /MD 混用冲突)
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-set(CMAKE_PREFIX_PATH "G:/Qt/6.10.2/msvc2022_64_static")
+# 全局设置 MSVC 为静态运行时库 (/MT Release, /MTd Debug)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+set(CMAKE_PREFIX_PATH "G:/Qt/6.10.2/msvc2022_64_static")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${PROJECT_SOURCE_DIR})
 
 if(MSVC)
     add_compile_options(
-        $<$<CONFIG:Release>:/MT>
-        $<$<CONFIG:Debug>:/MTd>
         $<$<CONFIG:Release>:/O2>
         $<$<CONFIG:Release>:/GL>
     )
@@ -33,6 +38,12 @@ add_executable(Time_tool WIN32
     resources/app.rc
     resources/resources.qrc
 )
+
+# 保证头文件搜索路径包含 src
+target_include_directories(Time_tool PRIVATE src)
+
+# 显式指定 Target 级别的静态运行时
+set_property(TARGET Time_tool PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 target_link_libraries(Time_tool PRIVATE
     Qt6::Widgets

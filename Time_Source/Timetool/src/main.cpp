@@ -23,12 +23,39 @@
 #include <QSvgRenderer>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSystemTrayIcon>
+#include <QMenu>
+#include <QAction>
+
+#include "SvgIcons.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <windowsx.h>
 #include <winioctl.h>
 #endif
+
+// ============================================================================
+// Icon Helper (严格遵循 SSOT: 唯一来源 SvgIcons.h)
+// ============================================================================
+static QIcon iconFromSvg(const QString& name, const QString& color = "", const QSize& size = QSize(32, 32)) {
+    QString svg = SvgIcons::getSvg(name);
+    if (svg.isEmpty()) return QIcon();
+
+    if (!color.isEmpty() && svg.contains("currentColor")) {
+        svg.replace("currentColor", color);
+    }
+
+    QPixmap pixmap(size);
+    pixmap.fill(Qt::transparent);
+
+    QSvgRenderer renderer(svg.toUtf8());
+    if (renderer.isValid()) {
+        QPainter painter(&pixmap);
+        renderer.render(&painter);
+    }
+    return QIcon(pixmap);
+}
 
 // ============================================================================
 // KeyboardHook: 全局按键拦截 (支持组合键)
@@ -106,7 +133,6 @@ private:
             KBDLLHOOKSTRUCT* pKey = (KBDLLHOOKSTRUCT*)lParam;
             bool isKeyDown = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
 
-            // 实时跟踪修饰键状态 (解决录制时吞噬按键导致 GetAsyncKeyState 状态不更新的问题)
             if (pKey->vkCode == VK_LCONTROL || pKey->vkCode == VK_RCONTROL || pKey->vkCode == VK_CONTROL) {
                 KeyboardHook::instance().m_ctrlPressed = isKeyDown;
             } else if (pKey->vkCode == VK_LMENU || pKey->vkCode == VK_RMENU || pKey->vkCode == VK_MENU) {
@@ -120,10 +146,8 @@ private:
             bool shift = KeyboardHook::instance().m_shiftPressed;
 
             if (!(pKey->flags & LLKHF_INJECTED)) {
-                // 1. 录制模式补丁：强制吞噬并转发，防止泄露给其他后台应用
                 if (KeyboardHook::instance().m_isRecording) {
                     if (isKeyDown) {
-                        // 过滤掉单纯的修饰键按下
                         if (pKey->vkCode != VK_CONTROL && pKey->vkCode != VK_LCONTROL && pKey->vkCode != VK_RCONTROL &&
                             pKey->vkCode != VK_MENU && pKey->vkCode != VK_LMENU && pKey->vkCode != VK_RMENU &&
                             pKey->vkCode != VK_SHIFT && pKey->vkCode != VK_LSHIFT && pKey->vkCode != VK_RSHIFT) 
@@ -139,7 +163,6 @@ private:
                             if (cfg.alt) parts << "Alt";
                             if (cfg.shift) parts << "Shift";
                             
-                            // 简单映射常见按键名
                             QString name;
                             if (cfg.vk >= 'A' && cfg.vk <= 'Z') name = QString(QChar(cfg.vk));
                             else if (cfg.vk >= '0' && cfg.vk <= '9') name = QString(QChar(cfg.vk));
@@ -162,13 +185,11 @@ private:
                     return 1; 
                 }
 
-                // 2. Ctrl + W 全局退出
                 if (ctrl && pKey->vkCode == 'W' && isKeyDown) {
                     emit KeyboardHook::instance().exitRequested();
                     return 1;
                 }
 
-                // 3. 匹配热键
                 const auto& target = KeyboardHook::instance().m_hotkey;
                 if (pKey->vkCode == target.vk && ctrl == target.ctrl && alt == target.alt && shift == target.shift) {
                     if (isKeyDown) {
@@ -177,7 +198,6 @@ private:
                     return 1;
                 }
 
-                // 4. 数字拦截
                 if (KeyboardHook::instance().m_digitInterceptEnabled && !KeyboardHook::instance().m_isPaused) {
                     if (pKey->vkCode >= 0x30 && pKey->vkCode <= 0x39 && !ctrl && !alt) {
                         if (isKeyDown) {
@@ -236,7 +256,7 @@ protected:
         int x = (width() - side) / 2;
         int y = (height() - side) / 2;
 
-        painter.setBrush(QColor("#FF8C00"));
+        painter.setBrush(QColor("#00BFA5"));
         if (m_isPaused) {
             QPainterPath path;
             path.moveTo(x, y);
@@ -255,7 +275,7 @@ private:
 };
 
 // ============================================================================
-// HotkeyEdit: 专业热键编辑器 (修复焦点与按键泄露)
+// HotkeyEdit: 专业热键编辑器 (仅可读取，高度32px，平时无边框，点击时显示2px白边)
 // ============================================================================
 class HotkeyEdit : public QLineEdit {
     Q_OBJECT
@@ -263,15 +283,21 @@ public:
     explicit HotkeyEdit(QWidget* parent = nullptr) : QLineEdit(parent) {
         setReadOnly(true);
         setAlignment(Qt::AlignCenter);
+        setFixedHeight(32); // 固定高度 32 像素
+        setCursor(Qt::PointingHandCursor);
         setStyleSheet(
             "QLineEdit {"
-            "  color: #FF8C00;"
-            "  background-color: transparent;"
-            "  border: none;"
-            "  font-size: 12px;"
+            "  color: #00BFA5;"
+            "  background-color: transparent;" // 平时无背景底色
+            "  border: none;"                  // 平时完全不显示边框
+            "  font-size: 13px;"
             "  font-weight: bold;"
             "}"
-            "QLineEdit:focus { background-color: rgba(255, 140, 0, 0.1); }"
+            "QLineEdit:focus {"
+            "  border: 2px solid #FFFFFF;"     // 点击处于编辑态时，显示 2 像素白色边框
+            "  border-radius: 4px;"
+            "  background-color: #242424;"
+            "}"
         );
         connect(&KeyboardHook::instance(), &KeyboardHook::hotkeyRecorded, this, &HotkeyEdit::onGlobalKeyRecorded);
     }
@@ -282,9 +308,9 @@ signals:
 private slots:
     void onGlobalKeyRecorded(HotkeyConfig cfg) {
         if (!hasFocus()) return;
-        setText(cfg.name);
+        setText(cfg.name); // 按下快捷键之后，显示框里显示相应的快捷键
         emit hotkeyChanged(cfg);
-        clearFocus();
+        clearFocus(); // 设定完毕自动失焦，边框恢复隐藏
     }
 
 protected:
@@ -294,13 +320,13 @@ protected:
     }
 
     void keyPressEvent(QKeyEvent* event) override {
-        // 全局钩子已接管录制，此处仅屏蔽默认行为
         if (event->key() == Qt::Key_Escape) clearFocus();
     }
 
     void focusInEvent(QFocusEvent* event) override {
         QLineEdit::focusInEvent(event);
-        setText("请按下组合键...");
+        // 显示“自定义快捷键”，字体为青色
+        setText("自定义快捷键");
 #ifdef Q_OS_WIN
         HWND hwnd = (HWND)window()->winId();
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, GetWindowLongPtr(hwnd, GWL_EXSTYLE) & ~WS_EX_NOACTIVATE);
@@ -323,7 +349,7 @@ protected:
 };
 
 // ============================================================================
-// FramelessDialog: 基础无边框窗口 (修复按钮点击拦截)
+// FramelessDialog: 基础无边框窗口 (SSOT: 图标统一来自 SvgIcons.h)
 // ============================================================================
 class FramelessDialog : public QDialog {
     Q_OBJECT
@@ -368,38 +394,9 @@ public:
         logoLabel->setFixedSize(18, 18);
         logoLabel->setAlignment(Qt::AlignCenter);
         logoLabel->setStyleSheet("border: none; background: transparent;");
-
-        // [痛点重击] 在静态编译环境下，即便资源路径正确，插件加载也可能存在盲区。
-        // 方案：资源路径优先 -> 内联备份兜底（确保 100% 显示）
-        QPixmap logoPixmap(32, 32);
-        logoPixmap.fill(Qt::transparent);
-        bool loaded = false;
-
-        // 1. 尝试从资源路径加载
-        QSvgRenderer renderer(QString(":/icons/app_logo.svg"));
-        if (!renderer.isValid()) {
-            // 2. [内联兜底] 如果资源路径加载失败，直接使用硬编码的 SVG 字符串渲染
-            static const QByteArray inlineSvg = 
-                "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#00BFA5\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-                "<circle cx=\"12\" cy=\"12\" r=\"10\"></circle>"
-                "<polyline points=\"12 6 12 12 16 14\"></polyline>"
-                "</svg>";
-            renderer.load(inlineSvg);
-        }
-
-        if (renderer.isValid()) {
-            QPainter painter(&logoPixmap);
-            renderer.render(&painter);
-            loaded = true;
-        }
-
-        if (loaded) {
-            logoLabel->setPixmap(logoPixmap.scaled(18, 18, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-        } else {
-            // 最后的挣扎：ICO 加载
-            logoLabel->setPixmap(QIcon(":/app_icon.ico").pixmap(18, 18));
-        }
         
+        // 遵循 SSOT 原则：从 SvgIcons.h 引用定制应用图标 app_logo
+        logoLabel->setPixmap(iconFromSvg("app_logo", "", QSize(18, 18)).pixmap(18, 18));
         titleLayout->addWidget(logoLabel, 0, Qt::AlignVCenter);
 
         auto* titleLabel = new QLabel(title);
@@ -418,7 +415,8 @@ public:
             "QPushButton { background-color: #E81123; color: white; border: none; border-radius: 4px; font-size: 16px; } "
             "QPushButton:hover { background-color: #D71520; border-radius: 4px; }"
         );
-        connect(closeBtn, &QPushButton::clicked, this, &QApplication::quit);
+        // 职责分明：窗口右上角关闭按钮隐藏窗口到托盘
+        connect(closeBtn, &QPushButton::clicked, this, &QWidget::hide);
         titleLayout->addWidget(closeBtn);
 
         m_mainLayout->addWidget(titleBar);
@@ -470,20 +468,21 @@ protected:
 };
 
 // ============================================================================
-// TimePasteWindow: 主窗口 (极简布局 + 绝对底部热键栏)
+// TimePasteWindow: 主窗口 (集成系统托盘管理)
 // ============================================================================
 class TimePasteWindow : public FramelessDialog {
     Q_OBJECT
 public:
-    explicit TimePasteWindow(QWidget* parent = nullptr) : FramelessDialog("时间输出工具", parent) {
+    explicit TimePasteWindow(QWidget* parent = nullptr) 
+        : FramelessDialog("时间输出工具", parent), m_trayIcon(nullptr) 
+    {
         setFixedSize(380, 380);
-        // [修复] 设置窗口图标，确保任务栏及窗口系统菜单显示一致
-        QIcon appIcon(":/icons/app_logo.svg");
-        if (appIcon.isNull()) {
-            appIcon = QIcon(":/app_icon.ico");
-        }
-        setWindowIcon(appIcon);
+
+        // SSOT：窗口图标统一来自 SvgIcons.h 的 app_logo
+        setWindowIcon(iconFromSvg("app_logo", "", QSize(32, 32)));
+
         initUI();
+        initTrayIcon();
 
         m_timer = new QTimer(this);
         connect(m_timer, &QTimer::timeout, this, &TimePasteWindow::updateDateTime);
@@ -495,6 +494,12 @@ public:
         connect(this, &FramelessDialog::stateToggleRequested, this, &TimePasteWindow::togglePause);
         
         loadSettings();
+    }
+
+    ~TimePasteWindow() override {
+        if (m_trayIcon) {
+            m_trayIcon->hide();
+        }
     }
 
 protected:
@@ -524,7 +529,7 @@ private slots:
         bool newState = !KeyboardHook::instance().isPaused();
         KeyboardHook::instance().setPaused(newState);
         m_stateBtn->setPaused(newState);
-        m_timeLabel->setStyleSheet(newState ? "color: #666; font-size: 32px; font-weight: bold; font-family: 'Consolas';" : "color: #FF8C00; font-size: 32px; font-weight: bold; font-family: 'Consolas';");
+        m_timeLabel->setStyleSheet(newState ? "color: #666; font-size: 32px; font-weight: bold; font-family: 'Consolas';" : "color: #00BFA5; font-size: 32px; font-weight: bold; font-family: 'Consolas';");
     }
 
     void updateDateTime() {
@@ -554,6 +559,68 @@ private slots:
     }
 
 private:
+    void initTrayIcon() {
+        m_trayIcon = new QSystemTrayIcon(this);
+        // SSOT：系统托盘图标统一使用 app_logo
+        m_trayIcon->setIcon(iconFromSvg("app_logo", "", QSize(32, 32)));
+        m_trayIcon->setToolTip("时间输出工具");
+
+        auto* trayMenu = new QMenu(this);
+        trayMenu->setStyleSheet(
+            "QMenu {"
+            "  background-color: #252526;"
+            "  color: #CCCCCC;"
+            "  border: 1px solid #3E3E42;"
+            "  padding: 4px;"
+            "  border-radius: 6px;"
+            "}"
+            "QMenu::item {"
+            "  padding: 6px 22px 6px 12px;"
+            "  border-radius: 4px;"
+            "}"
+            "QMenu::item:selected {"
+            "  background-color: #3E3E42;"
+            "  color: #FFFFFF;"
+            "}"
+            "QMenu::separator {"
+            "  height: 1px;"
+            "  background: #3E3E42;"
+            "  margin: 4px 6px;"
+            "}"
+        );
+
+        // 仅从 SvgIcons.h 引用图标："显示界面"引用 window，"退出程序"引用 power
+        auto* showAction = new QAction(iconFromSvg("window", "#00BFA5", QSize(16, 16)), "显示界面", trayMenu);
+        connect(showAction, &QAction::triggered, this, [this]() {
+            showNormal();
+            raise();
+            activateWindow();
+        });
+
+        auto* quitAction = new QAction(iconFromSvg("power", "#E81123", QSize(16, 16)), "退出程序", trayMenu);
+        connect(quitAction, &QAction::triggered, qApp, &QApplication::quit);
+
+        trayMenu->addAction(showAction);
+        trayMenu->addSeparator();
+        trayMenu->addAction(quitAction);
+
+        m_trayIcon->setContextMenu(trayMenu);
+
+        connect(m_trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+            if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) {
+                if (isVisible()) {
+                    hide();
+                } else {
+                    showNormal();
+                    raise();
+                    activateWindow();
+                }
+            }
+        });
+
+        m_trayIcon->show();
+    }
+
     void initUI() {
         auto* contentLayout = new QVBoxLayout(m_contentArea);
         contentLayout->setContentsMargins(25, 15, 25, 10);
@@ -564,16 +631,15 @@ private:
         contentLayout->addWidget(m_dateLabel);
 
         m_timeLabel = new QLabel(); m_timeLabel->setAlignment(Qt::AlignCenter);
-        m_timeLabel->setStyleSheet("color: #FF8C00; font-size: 32px; font-weight: bold; font-family: 'Consolas';");
+        m_timeLabel->setStyleSheet("color: #00BFA5; font-size: 32px; font-weight: bold; font-family: 'Consolas';");
         contentLayout->addWidget(m_timeLabel);
 
         auto* sep = new QLabel(); sep->setFixedHeight(1); sep->setStyleSheet("background-color: #333;");
         contentLayout->addWidget(sep);
 
-        // 复选框/单选框样式 (16x16, 4px 圆角)
         auto radioStyle = "QRadioButton, QCheckBox { color: #BBB; font-size: 14px; spacing: 10px; } "
                           "QRadioButton::indicator, QCheckBox::indicator { width: 16px; height: 16px; border-radius: 4px; border: 2px solid #444; background: #252525; } "
-                          "QRadioButton::indicator:checked, QCheckBox::indicator:checked { background-color: #FF8C00; border: 2px solid #FF8C00; }";
+                          "QRadioButton::indicator:checked, QCheckBox::indicator:checked { background-color: #00BFA5; border: 2px solid #00BFA5; }";
 
         m_radioPrev = new QRadioButton("退 (往前 N 分钟)"); m_radioPrev->setChecked(true);
         m_radioPrev->setStyleSheet(radioStyle);
@@ -591,21 +657,17 @@ private:
         tip->setStyleSheet("color: #555; font-size: 11px;");
         contentLayout->addWidget(tip);
 
-        // 绝对底部热键栏 (HotkeyEdit)
+        // 底部自定义快捷键区域：上下间距精确为 5px，总高 42px (5 + 32 + 5)
         auto* hotkeyBar = new QWidget();
         hotkeyBar->setFixedHeight(42);
         hotkeyBar->setStyleSheet("background-color: #222; border-top: 1px solid #333; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;");
         auto* hbLayout = new QHBoxLayout(hotkeyBar);
-        hbLayout->setContentsMargins(20, 0, 20, 0);
-        hbLayout->setSpacing(10);
-
-        auto* label = new QLabel("自定义热键:");
-        label->setStyleSheet("color: #888; font-size: 12px;");
-        hbLayout->addWidget(label);
+        hbLayout->setContentsMargins(16, 5, 16, 5); // 左右16px，上下固定5px间距
+        hbLayout->setSpacing(0);
 
         m_hotkeyEdit = new HotkeyEdit();
         connect(m_hotkeyEdit, &HotkeyEdit::hotkeyChanged, this, &TimePasteWindow::onHotkeyChanged);
-        hbLayout->addWidget(m_hotkeyEdit, 1);
+        hbLayout->addWidget(m_hotkeyEdit);
 
         m_mainLayout->addWidget(hotkeyBar);
     }
@@ -629,8 +691,10 @@ private:
         s.setValue("pos", pos());
         s.setValue("mode", m_buttonGroup->checkedId());
         const auto& cfg = KeyboardHook::instance().hotkey();
-        s.setValue("hotkeyVK", cfg.vk); s.setValue("hotkeyCtrl", cfg.ctrl);
-        s.setValue("hotkeyAlt", cfg.alt); s.setValue("hotkeyShift", cfg.shift);
+        s.setValue("hotkeyVK", cfg.vk);
+        s.setValue("hotkeyCtrl", cfg.ctrl);
+        s.setValue("hotkeyAlt", cfg.alt);
+        s.setValue("hotkeyShift", cfg.shift);
         s.setValue("hotkeyName", cfg.name);
     }
 
@@ -639,6 +703,7 @@ private:
     QButtonGroup* m_buttonGroup;
     QTimer* m_timer;
     HotkeyEdit* m_hotkeyEdit;
+    QSystemTrayIcon* m_trayIcon;
 };
 
 #pragma pack(push, 1)
@@ -662,7 +727,6 @@ QString getDiskSerial(const QString& drivePath) {
     HANDLE hD = CreateFileW((LPCWSTR)phys.utf16(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
     if (hD == INVALID_HANDLE_VALUE) return "";
     QString res;
-    // 1. NVMe
     struct { STORAGE_PROPERTY_QUERY Q; STORAGE_PROTOCOL_SPECIFIC_DATA P; BYTE B[4096]; } nReq = {};
     nReq.Q.PropertyId = (STORAGE_PROPERTY_ID)51; nReq.Q.QueryType = PropertyStandardQuery;
     nReq.P.ProtocolType = (STORAGE_PROTOCOL_TYPE)17; nReq.P.DataType = 0; nReq.P.ProtocolDataRequestValue = 1;
@@ -670,7 +734,6 @@ QString getDiskSerial(const QString& drivePath) {
     if (DeviceIoControl(hD, IOCTL_STORAGE_QUERY_PROPERTY, &nReq, sizeof(nReq), &nReq, sizeof(nReq), &br, NULL)) {
         res = QString::fromLatin1((const char*)nReq.B + 4, 20).trimmed();
     }
-    // 2. SATA
     if (res.isEmpty()) {
         SENDCMDINPARAMS sci = {0}; sci.irDriveRegs.bCommandReg = 0xEC;
         struct { SENDCMDOUTPARAMS out; BYTE b[512]; } sOut = {0};
@@ -684,12 +747,9 @@ QString getDiskSerial(const QString& drivePath) {
 }
 
 int main(int argc, char *argv[]) {
-    // [强制] 显式初始化 Qt 资源表
-    Q_INIT_RESOURCE(resources);
-
     QApplication a(argc, argv);
 
-    // [硬件序列号校验] 废除试用期，改用硬绑定
+    // 硬件序列号硬绑定校验
     QStringList whitelist = {
         "BFEBFBFF000306C3", "SGH412RF00", "494000PA0D9L", 
         "PHYS825203NX480BGN", "NA5360WJ", "NA7G89GQ", "03000210052122072519"
@@ -718,11 +778,14 @@ int main(int argc, char *argv[]) {
         if (!id.isEmpty() && whitelist.contains(id, Qt::CaseInsensitive)) { pass = true; break; }
     }
 
-    if (!pass) return 0; // 校验未通过，静默退出
+    if (!pass) return 0;
 
     qRegisterMetaType<HotkeyConfig>("HotkeyConfig");
     KeyboardHook::instance().start();
-    TimePasteWindow w; w.show();
+
+    TimePasteWindow w; 
+    w.show();
+
     int r = a.exec();
     KeyboardHook::instance().stop();
     return r;
