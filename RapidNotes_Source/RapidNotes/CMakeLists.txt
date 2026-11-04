@@ -1,9 +1,17 @@
 cmake_minimum_required(VERSION 3.16)
 
+# 启用现代 MSVC 运行时库策略 (彻底解决 /MT 与 /MD 混用冲突)
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+
 project(RapidNotes VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# 全局设置 MSVC 为静态运行时库 (/MT Release, /MTd Debug)，匹配静态 Qt6 (msvc2022_64_static)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 # 2026-03-xx 按照用户要求：彻底废除 MinGW 支持，锁定 MSVC (Visual Studio 2022) 环境
 if(NOT MSVC)
@@ -38,9 +46,16 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network Concurrent Svg
 # add_definitions(-DQT_NO_WARNING_OUTPUT)
 
 # 遵循“三权分立”规范：将生成的 exe 输出到固化运行层 RapidNotes_Build/RapidNotes
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/../../RapidNotes_Build/RapidNotes")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/../../RapidNotes_Build/RapidNotes")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/../../RapidNotes_Build/RapidNotes")
+set(TARGET_APP_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/../../RapidNotes_Build/RapidNotes")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${TARGET_APP_OUTPUT_DIR}")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${TARGET_APP_OUTPUT_DIR}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${TARGET_APP_OUTPUT_DIR}")
+
+# 强制重写各构建类型变量，防止 VS 多配置生成器自动追加 Release/Debug 子目录
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TARGET_APP_OUTPUT_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TARGET_APP_OUTPUT_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TARGET_APP_OUTPUT_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TARGET_APP_OUTPUT_DIR}")
 
 include_directories(src)
 
@@ -162,6 +177,18 @@ endif()
 
 add_executable(RapidNotes ${SOURCES})
 
+# 显式指定 Target 级别的静态运行时
+set_property(TARGET RapidNotes PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+# 强力锁定目标二进制输出路径，确保无论何种生成器与配置均绝对输出至 RapidNotes_Build/RapidNotes
+set_target_properties(RapidNotes PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TARGET_APP_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TARGET_APP_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TARGET_APP_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TARGET_APP_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TARGET_APP_OUTPUT_DIR}"
+)
+
 target_link_libraries(RapidNotes PRIVATE
     Qt6::Core
     Qt6::Gui
@@ -173,11 +200,15 @@ target_link_libraries(RapidNotes PRIVATE
 )
 
 if(WIN32)
-    # Added windowsapp for WinRT OCR API support
-    target_link_libraries(RapidNotes PRIVATE user32 shell32 psapi dwmapi windowsapp dbghelp)
+    # 静态 Qt6 依赖的原生 Windows 系统库及 WinRT OCR API 支持
+    target_link_libraries(RapidNotes PRIVATE
+        user32 gdi32 shell32 ole32
+        comdlg32 winspool winmm imm32
+        dwmapi uxtheme ws2_32 psapi
+        setupapi netapi32 userenv
+        version crypt32 windowsapp dbghelp
+    )
     set_target_properties(RapidNotes PROPERTIES
         WIN32_EXECUTABLE TRUE
     )
-
 endif()
-
