@@ -103,6 +103,18 @@
 
 ---
 
+5. **TagCodec 全工程标签编解码唯一真理源与防孤儿死代码契约**：
+   - 全工程所有涉及标签的拆分（`split`）与拼接（`join`），必须统一收敛至 `TagCodec`。严禁在任何业务层、数据层或 UI 层直接调用 `.split(",")`、`.split(QRegularExpression("[,，]"))` 或 `.join(",")`；
+   - `TagCodec::split` 统一支持半角逗号 `,` 与全角逗号 `，`，并自动去空与去重；
+   - `TagCodec::join` 严格使用纯半角逗号 `,` 连接；`TagCodec::joinDisplay` 专供界面显示，使用半角逗号加空格 `, ` 连接；
+   - 任何实施方案中设计的新模块，必须在方案内提供全量既有调用点的精准替换 Diff，彻底清除孤儿死代码与平行实现。
+
+6. **ItemType 与 ItemClassifier 剪贴板与全工程收敛契约**：
+   - 剪贴板监控与入库流程（`main.cpp`）中的类型判定（颜色 HEX/RGB、网址 Link、本地绝对路径文件/文件夹检测等）必须统一收敛至 `ItemClassifier` 与 `ItemType`；
+   - 界面 ToolTip 与复制展示统一由 `ItemType::isFileOrFolder` 与 `PathSummary` 驱动，杜绝零散的类型字符串比对。
+
+---
+
 ## 7. 底层逻辑重构步骤 2：模块拆分与单一职责架构规范 (Step 2: Module Decomposition & SSOT Architecture)
 
 根据《RapidNotes_Prompts.md》步骤 2 要求，彻底拆解并物理删除职责过载的上帝类 `DatabaseManager`，严格在保证“不改动表结构、不改动 SQL 语义”的前提下，将所有能力解耦归入独立专职的模块中：
