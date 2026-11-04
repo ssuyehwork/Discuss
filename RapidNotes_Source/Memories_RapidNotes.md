@@ -73,3 +73,72 @@
    - 规则匹配与统计计算必须走后台工作线程（`QtConcurrent::run`）与只读数据库句柄 (`SQLITE_OPEN_READONLY`)，主线程零卡顿。
 2. **复合索引构建**：
    - 强制建立覆盖 `is_deleted`、`updated_at`、`category_id`、`rating`、`color` 的高性能复合索引，杜绝全表扫描。
+
+---
+
+## 6. 底层逻辑重构步骤 1：词表与纯函数真理源规范 (Step 1: Vocabularies & Pure Functions SSOT)
+
+根据《RapidNotes_Prompts.md》第一部分与第二部分要求，底层重构第一步必须把散落在各处的判定与数据加工规则归一化为唯一纯函数模块，表结构和 SQL 在此步骤保持不变：
+
+1. **条目类型词表唯一真理源 (`ItemType`)**：
+   - `ItemType` 为全工程唯一允许出现 `item_type` 字符串字面量的地方；
+   - 包含枚举 `Type`（`Text`, `Image`, `Code`, `Link`, `Color`, `Palette`, `OcrText`, `CapturedMessage`, `PixelRuler`, `DeletedCategory`, 以及旧文件类型中间态 `File`, `Files`, `Folder`, `Folders`, `LocalFile`, `LocalFolder`, `LocalBatch`，后续在步骤 3 合并为 `Path`）；
+   - 提供双向无损转换：`QString toString(Type)` 与 `Type fromString(const QString&)`，以及类型分类断言（`isFileOrFolder(Type)`、`isPureText(Type)` 等）。
+
+2. **类型与特征判定唯一真理源 (`ItemClassifier`)**：
+   - 消除 `main.cpp`、`NoteModel::data`、`StringUtils::detectItemType` 和 `DatabaseManager` 中分散手写的判定规则；
+   - 统一提供高内聚纯谓词：`isUrl(text)`、`isHexColor(text)`、`isRgbTriplet(text)`、`isCodeLike(text)`、`isAbsolutePathText(text)`；
+   - 提供两个明确的入口：
+     - 入库类型判定：`detectIngestType(text)`；
+     - 视图显示图标类别（不得访问磁盘）：`detectDisplayCategory(type, content)`。
+
+3. **路径归并种类唯一真理源 (`PathSummary`)**：
+   - 输入路径列表，根据路径类型与数量得出归一化种类：`SingleFile`（单文件）、`SingleFolder`（单文件夹）、`MultipleFilesOrMixed`（多文件或混合）、`MultipleFolders`（多文件夹）；
+   - `NoteModel` 界面图标判定全部委托给 `PathSummary`，彻底杜绝分散的路径分割与判断。
+
+4. **辅助纯函数归一化 (`WordBucket` / `TagCodec` / `ThumbnailMaker`)**：
+   - `WordBucket::calculate(content, itemType)`：字数阶梯计算唯一来源（0, 10..100, 200..1000, 1001），原样承接清洗与阶梯逻辑；
+   - `TagCodec`：全工程唯一的标签编码/解码器；拆分统一支持半角逗号 `,` 与全角逗号 `，`（`split(tagsStr)`），拼接严格只用半角逗号加空格 `, ` 或 `,`（`join(tagList)`）；
+   - `ThumbnailMaker::makeThumbnail(img, size = QSize(64, 64))`：原样封装 `NoteModel` 现有的 64×64 平滑保持纵横比缩略图生成算法。
+
+---
+
+## 7. 底层逻辑重构步骤 2：模块拆分与单一职责架构规范 (Step 2: Module Decomposition & SSOT Architecture)
+
+根据《RapidNotes_Prompts.md》步骤 2 要求，彻底拆解并物理删除职责过载的上帝类 `DatabaseManager`，严格在保证“不改动表结构、不改动 SQL 语义”的前提下，将所有能力解耦归入独立专职的模块中：
+
+### 7.1 核心模块与职责矩阵（唯一归属）
+1. **`ConnectionManager`**：
+   - 唯一职责：打开与关闭数据库连接、配置连接 PRAGMA、管理数据库物理文件；
+   - 事务作用域 `TransactionScope`：支持 RAII 事务管理与任意层级安全嵌套，只在最外层执行真实的 `commit` 或 `rollback`。对外写接口遵循“一个写操作恰好一个事务”原则，彻底消灭循环刷盘与无事务裸写。
+2. **`NoteRepository`**：
+   - 笔记及其关联实体的底层原子读写：增、删、改、状态更新（收藏/置顶/评分/颜色）、排序写入、`recordAccess`、`getNoteById`、`getLastCreatedNoteId`、回收站还原/物理删除；
+   - **纯粹数据仓储**：`NoteRepository` 绝对不包含任何业务规则判定，仅执行纯粹 SQL 操作。
+3. **`NoteIngestService`**：
+   - 所有创建与采集笔记的业务指挥中心：按内容哈希（`content_hash`）去重合并、已有分类优先保留、标签集合并集计算、原标题为通用标题时才替换、`link` 类型自动归入 "Link" 分类、分类预设标签自动追加；
+   - 由它调用 `NoteRepository` 的原子写接口完成落库。
+4. **`TagRepository`**：
+   - 标签增删改查、note_tags 关联维护、全局重命名与批量删除、标签使用频次统计。
+5. **`CategoryRepository`**：
+   - 分类树的增删改、树形节点迁移、排序更新、预设标签管理。
+6. **`CategoryLockService`**：
+   - 分类密码设置、密码验证、解锁状态维护，以及锁定分类集合（`lockedCategoryIds`）的内存缓存，分类加锁状态变化时自动失效与重新计算，查询时不再高频读表。
+7. **`TodoRepository`**：
+   - 待办事项（`todos` 表）的 CRUD 与状态流转。
+8. **`NoteQueryService`**：
+   - 笔记检索与统计服务：`searchNotes`、`getNotesCount`、`getFilterStats`、`getCounts`、`applyCommonFilters`、`applySecurityFilter`；
+   - 封装分页常量（`DEFAULT_PAGE_SIZE = 500`），本步骤保持既有 SQL 语义 100% 相同。
+9. **`AppSettings`**：
+   - 业务配置唯一真理源：自动归档开关、自动归档目标分类、隐藏加锁分类等，沿用现有 QSettings 的组织名、应用名与键名。
+10. **`TagClipboard`**：
+    - 标签剪贴板（原 DatabaseManager 中 `s_tagClipboard`）独立管理，互斥锁安全保护。
+11. **`DataEvents`**：
+    - 全局领域数据变更总线，沿用现有信号名与参数（如 `noteCreated`、`noteUpdated`、`notesDeleted`、`categoryChanged` 等）；
+    - 铁律：必须在事务提交（Commit）成功后发射，一个业务操作最多发射一次。
+12. **`LicenseService` 与 `LegacyDatabaseRescue`**：
+    - 原样搬迁旧版授权判定与旧数据库抢救逻辑，不改动任何核心逻辑与数值。
+
+### 7.2 依赖单向流动与反向依赖解耦铁律
+- **拔除核心层对 UI 的逆向依赖**：`src/core` 下任何文件绝对禁止包含 `src/ui` 的头文件（如 `StringUtils.h`、`FramelessDialog.h` 等）；
+- **删除操作与剪贴板解耦**：`NoteRepository` 执行删除后发射 `DataEvents::notesDeleted` 信号，`ClipboardMonitor` 通过应用装配层订阅该信号清理内部最后哈希，严禁仓储层反向调用 UI 或剪贴板单例；
+- **哈希互斥保护**：`ClipboardMonitor::m_lastHash` 的所有读写与重置操作必须受 `m_hashMutex` 互斥锁保护。
