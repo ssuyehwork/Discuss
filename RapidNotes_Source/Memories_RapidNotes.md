@@ -142,3 +142,50 @@
 - **拔除核心层对 UI 的逆向依赖**：`src/core` 下任何文件绝对禁止包含 `src/ui` 的头文件（如 `StringUtils.h`、`FramelessDialog.h` 等）；
 - **删除操作与剪贴板解耦**：`NoteRepository` 执行删除后发射 `DataEvents::notesDeleted` 信号，`ClipboardMonitor` 通过应用装配层订阅该信号清理内部最后哈希，严禁仓储层反向调用 UI 或剪贴板单例；
 - **哈希互斥保护**：`ClipboardMonitor::m_lastHash` 的所有读写与重置操作必须受 `m_hashMutex` 互斥锁保护。
+
+---
+
+## 8. 底层逻辑重构步骤 3：表结构终态与热迁移真理源规范 (Step 3: Database Schema & Migration SSOT)
+
+根据《RapidNotes_Prompts.md》步骤 3 要求，彻底落地数据实体终态，废除临时字符串列，实现标签唯一真理源、路径条目归一化与高效索引体系：
+
+### 8.1 终态数据表结构与字段语义契约
+1. **`notes` 表（轻量元数据中心）**：
+   - 包含列：`id`, `title`, `content`, `item_type`, `content_hash`, `category_id`, `color`, `rating`, `is_pinned`, `is_favorite`, `is_deleted`, `source_app`, `source_title`, `remark`, `sort_order`, `word_count`, `created_at`, `updated_at`, `last_accessed_at`, `data_blob`, `thumb_blob`；
+   - **彻底物理移除列**：`tags`（收敛至 `note_tags` 表）、`file_extensions`（收敛至 `note_paths` 表）、以及未被工程实际读取的 `is_locked`；
+   - **路径条目 content 置空规范**：`item_type == 'path'` 的条目，`notes.content` 物理存储为空；读取向界面暴露时，由 `note_paths` 路径记录按 `;` 拼接返回，保持既有上层读取契约 100% 稳定。
+2. **`note_paths` 表（路径条目真理源）**：
+   - 包含列：`note_id INTEGER`, `ord INTEGER`, `path TEXT`, `is_dir INTEGER`, `ext TEXT`；复合主键 `(note_id, ord)`；
+   - `ext` 为纯小写后缀（不带点），文件夹或无扩展名为空。
+3. **`tags` 与 `note_tags` 表（标签实体与多对多关联真理源）**：
+   - `tags` 表：`id INTEGER PRIMARY KEY AUTOINCREMENT`, `name TEXT UNIQUE`；
+   - `note_tags` 表：`note_id INTEGER`, `tag_id INTEGER`, `ord INTEGER`；复合主键 `(note_id, tag_id)`。
+4. **终态高性能索引矩阵**：
+   - `idx_notes_main_filter ON notes(is_deleted, category_id, is_pinned, updated_at)`；
+   - `idx_notes_rating ON notes(rating) WHERE rating > 0`；
+   - `idx_notes_content_hash ON notes(content_hash)`；
+   - `idx_notes_created_date ON notes(date(created_at))`；
+   - `idx_notes_updated_date ON notes(date(updated_at))`；
+   - `idx_notes_accessed ON notes(last_accessed_at)`；
+   - `idx_note_tags_lookup ON note_tags(tag_id, note_id)`；
+   - `idx_note_paths_ext ON note_paths(ext)`。
+
+### 8.2 安全迁移与自动化版本控制 (`SchemaMigrator`)
+1. **`PRAGMA user_version` 架构版本治理**：
+   - 彻底废止 `system_config` 散乱标志位；
+   - 启动时若 `user_version == 0` 且检测到 `notes.tags` 列存在，则判定触发全量数据架构热迁移；迁移成功后提升 `user_version = 1`。
+2. **灾难容灾镜像备份（一票否决防线）**：
+   - 迁移执行前，必须首先调用 SQLite 原生 `VACUUM INTO` 命令在 `backups/` 目录导出镜像：`pre_migration_<yyyyMMdd_HHmmss>.db`；若备份失败则立即中断。
+3. **单事务迁移与完整性自检**：
+   - 全量数据热迁移必须且只能在**单一原子事务**内完成；
+   - 迁移数据处理：旧标签按 `TagCodec::split` 导入 `tags` 与 `note_tags`；旧文件类型（`file`, `files`, `folder`, `folders`, `local_*`）统一归并并转储至 `note_paths`；
+   - **严格数据一致性校验**：迁移后校验笔记总行数与标签集合数量是否 100% 对齐；若不一致则必须回滚并保留原库，通过现有机制报错退出，严禁静默吞食异常。
+
+### 8.3 批量集合式 API 与缩略图后台异步流水线
+1. **彻底杜绝循环逐条读写与循环 prepare**：
+   - 批量状态更新采用 `UPDATE notes SET ... WHERE id IN (...)`；
+   - 分类移动与预设标签追加采用 `INSERT OR IGNORE ... SELECT` 集合式 SQL；
+   - 手动排序采用单次 prepare 循环参数绑定。
+2. **缩略图后台异步流水线**：
+   - 存量图片在迁移完毕后由后台工作线程（独立 SQLite 连接）分批加载原图并通过 `ThumbnailMaker` 生成 64×64 缩略图写入 `thumb_blob`；
+   - 每批次一个事务，全部生成完成后单次发射 `DataEvents::noteUpdated` 信号；生成完成前默认显示图片占位图标。

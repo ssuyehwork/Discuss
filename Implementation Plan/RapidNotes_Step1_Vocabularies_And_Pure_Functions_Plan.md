@@ -757,7 +757,6 @@ QIcon ThumbnailMaker::makeThumbnailIcon(const QImage& sourceImage, const QSize& 
         return "text";
     }
 =======
-    static void locateInExplorer(const QString& path, bool select = true) {
 >>>>>>> REPLACE
 
 ---
