@@ -134,11 +134,6 @@ private:
 
     SearchHistoryPanel* m_historyPanel = nullptr;
 
-    QWidget* m_dragOverlayWidget = nullptr;
-    QLabel* m_dragOverlayLabel = nullptr;
-    void showDragOverlay(int activeCount);
-    void hideDragOverlay();
-    void installRecursiveDragEventFilter(QWidget* widget);
     
     void saveFilterHistory(const QString& key, const QString& text);
     QStringList getFilterHistory(const QString& key) const;

@@ -331,6 +331,8 @@ set(SOURCES
     src/ui/ViewDragDropHelper.h
     src/ui/WritingAnimation.cpp
     src/ui/WritingAnimation.h
+    src/ui/controllers/ContentKeyHandler.cpp
+    src/ui/controllers/ContentKeyHandler.h
     src/ui/controllers/ContentPaneSplitManager.cpp
     src/ui/controllers/ContentPaneSplitManager.h
     src/ui/controllers/ContentSortController.cpp
