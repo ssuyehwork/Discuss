@@ -1,8 +1,6 @@
 #include "NavigationService.h"
 #include "NavigationHistoryService.h"
-#include "DeviceWatcher.h"
-#include "../meta/LibraryDao.h"
-#include "../meta/SmartFolderDao.h"
+#include "DatabaseManager.h"
 #include <QDir>
 #include <QFileInfo>
 
@@ -14,11 +12,6 @@ NavigationService& NavigationService::instance() {
 }
 
 NavigationService::NavigationService(QObject* parent) : QObject(parent) {
-    connect(&DeviceWatcher::instance(), &DeviceWatcher::driveUnmounted, this, [this](const QString& driveLetter) {
-        if (m_currentUrl.contains(driveLetter, Qt::CaseInsensitive)) {
-            navigateTo("computer://");
-        }
-    });
 }
 
 QString NavigationService::normalizeUrl(const QString& rawUrl) const {
@@ -48,14 +41,12 @@ QString NavigationService::currentDisplayPath() const {
         int catId = m_currentUrl.mid(10).toInt();
         if (catId == -1) return "库 → 全部数据";
         if (catId == -2) return "库 → 未分类";
-        LibraryCategoryRecord rec = LibraryDao::getCategoryById(catId);
-        return rec.name.isEmpty() ? "库" : ("库 → " + rec.name);
+        QString catName = DatabaseManager::instance().getCategoryNameById(catId);
+        return catName.isEmpty() ? "库" : ("库 → " + catName);
     }
 
     if (m_currentUrl.startsWith("smartfolder://")) {
-        int sfId = m_currentUrl.mid(14).toInt();
-        SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(sfId);
-        return rec.name.isEmpty() ? "库" : ("库 → " + rec.name);
+        return "库";
     }
 
     if (m_currentUrl.contains("://")) return m_currentUrl;

@@ -57,7 +57,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TARGET_APP_OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TARGET_APP_OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TARGET_APP_OUTPUT_DIR}")
 
-include_directories(src)
+include_directories(
+    src
+    src/ui
+    src/ui/models
+    src/ui/components
+    src/core
+    src/util
+)
 
 # 源代码列表
 set(SOURCES
