@@ -491,6 +491,50 @@ QPlainTextEdit#QLPlainTextEdit {
     font-family: 'Consolas', 'Monaco', 'PingFang SC', 'Microsoft YaHei';
     font-size: 13px;
 }
+
+/* QuickLook 文本搜索浮层样式 */
+QWidget#QLSearchBar {
+    background-color: rgba(30, 30, 30, 0.92);
+    border: 1px solid #444444;
+    border-radius: 6px;
+}
+
+QLineEdit#QLSearchEdit {
+    background-color: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    color: #E0E0E0;
+    padding: 3px 6px;
+    font-size: 12px;
+}
+
+QLineEdit#QLSearchEdit:focus {
+    border: 1px solid #0078D4;
+}
+
+QPushButton#QLSearchBtn {
+    background-color: #333333;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    color: #E0E0E0;
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+QPushButton#QLSearchBtn:hover {
+    background-color: #404040;
+    border-color: #555555;
+}
+
+QPushButton#QLSearchBtn:pressed {
+    background-color: #252525;
+}
+
+QLabel#QLSearchStatus {
+    color: #AAAAAA;
+    font-size: 11px;
+    padding: 0 4px;
+}
 QPlainTextEdit#QLPlainTextEdit QScrollBar:vertical {
     width: 10px;
     background: transparent;
