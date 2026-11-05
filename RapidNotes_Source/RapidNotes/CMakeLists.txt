@@ -73,8 +73,10 @@ set(SOURCES
     src/core/AES.cpp
     src/core/AES.h
     src/core/AppConfig.h
+    src/core/ActionCommand.h
     src/core/ActionRecorder.cpp
     src/core/ActionRecorder.h
+    src/core/UndoManager.h
     src/core/CentralEventHub.cpp
     src/core/CentralEventHub.h
     src/core/ClipboardMonitor.cpp
@@ -83,6 +85,8 @@ set(SOURCES
     src/core/CoreEngine.h
     src/meta/FavoriteDao.cpp
     src/meta/FavoriteDao.h
+    src/meta/FavoriteService.cpp
+    src/meta/FavoriteService.h
     src/meta/SmartFolderDao.cpp
     src/meta/SmartFolderDao.h
     src/core/DatabaseManager.cpp
@@ -271,6 +275,8 @@ set(SOURCES
     src/ui/RenameCapableDelegate.h
     src/ui/ResizeHandle.cpp
     src/ui/ResizeHandle.h
+    src/ui/RowLayoutEngine.cpp
+    src/ui/RowLayoutEngine.h
     src/ui/ScanStats.h
     src/ui/ScanStatsEngine.cpp
     src/ui/ScanStatsEngine.h
