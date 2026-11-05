@@ -7,9 +7,9 @@
 #include <QLineEdit>
 #include <QStyledItemDelegate>
 #include "DropTreeView.h"
-#include "../meta/SmartFolderDao.h"
 
 namespace QuarkMeta {
+struct SmartFolderRecord { int id = 0; QString name; };
 
 class LibraryTreeView : public DropTreeView {
     Q_OBJECT

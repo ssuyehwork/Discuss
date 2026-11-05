@@ -35,7 +35,6 @@
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
 #include "../meta/LibraryDao.h"
-#include "../meta/SmartFolderDao.h"
 #include "UiHelper.h"
 #include <QDebug>
 #include <QFileInfo>

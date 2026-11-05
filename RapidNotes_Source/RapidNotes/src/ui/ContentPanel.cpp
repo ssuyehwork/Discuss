@@ -1043,7 +1043,7 @@ void ContentPanel::refreshSmartFolderIfShowing() {
     QPointer<ContentPanel> weakThis(this);
 
     (void)QtConcurrent::run([weakThis, recordSnapshot, reqId]() {
-        QStringList newPaths = SmartFolderDao::getMatchingPaths(recordSnapshot);
+        QStringList newPaths;
 
         QMetaObject::invokeMethod(qApp, [weakThis, recordSnapshot, reqId, newPaths]() {
             if (!weakThis || reqId != weakThis->m_smartFolderReqId) return;

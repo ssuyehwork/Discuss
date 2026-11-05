@@ -10,8 +10,6 @@
 #include "ShellIconManager.h"
 #include "ViewDragDropHelper.h"
 #include "../meta/LibraryDao.h"
-#include "../meta/SmartFolderDao.h"
-#include "dialogs/SmartFolderDialog.h"
 #include "../meta/LibraryService.h"
 #include "../meta/MetaIndexService.h"
 #include "../meta/DatabaseManager.h"
