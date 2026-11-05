@@ -83,6 +83,8 @@ set(SOURCES
     src/core/CoreEngine.h
     src/meta/FavoriteDao.cpp
     src/meta/FavoriteDao.h
+    src/meta/SmartFolderDao.cpp
+    src/meta/SmartFolderDao.h
     src/core/DatabaseManager.cpp
     src/core/DatabaseManager.h
     src/core/FileCryptoHelper.cpp
