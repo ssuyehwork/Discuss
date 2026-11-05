@@ -76,6 +76,8 @@ set(SOURCES
     src/core/ActionCommand.h
     src/core/ActionRecorder.cpp
     src/core/ActionRecorder.h
+    src/core/TagLexiconService.cpp
+    src/core/TagLexiconService.h
     src/core/UndoManager.h
     src/core/CentralEventHub.cpp
     src/core/CentralEventHub.h
@@ -87,6 +89,10 @@ set(SOURCES
     src/meta/FavoriteDao.h
     src/meta/FavoriteService.cpp
     src/meta/FavoriteService.h
+    src/meta/LibraryDao.cpp
+    src/meta/LibraryDao.h
+    src/meta/LibraryService.cpp
+    src/meta/LibraryService.h
     src/meta/SmartFolderDao.cpp
     src/meta/SmartFolderDao.h
     src/core/DatabaseManager.cpp
@@ -309,6 +315,8 @@ set(SOURCES
     src/ui/TagEditorWidget.h
     src/ui/TagManagerWindow.cpp
     src/ui/TagManagerWindow.h
+    src/ui/TagSelectorOverlay.cpp
+    src/ui/TagSelectorOverlay.h
     src/ui/TaskProgressStrip.cpp
     src/ui/TaskProgressStrip.h
     src/ui/ThumbnailDelegate.cpp
