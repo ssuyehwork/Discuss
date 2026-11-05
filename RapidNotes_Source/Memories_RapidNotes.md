@@ -256,3 +256,34 @@
    - 不增加写盘次数和计算量；
    - 严禁任何特判、兜底分支与兼容壳，凡出现此类倾向必须停下从根上重新设计。
 
+---
+
+## 11. 步骤 1 返工规范：词表与纯函数彻底收敛契约 (Step 1 Remediation & Pure SSOT Contract)
+
+根据《RapidNotes 步骤 1 返工清单》，在词表与纯函数阶段必须彻底落实无死角的收敛与零冗余：
+
+1. **`ItemType` 全工程类型词表唯一 SSOT 铁律**：
+   - `DatabaseManager.cpp` 必须显式包含 `ItemType.h`，彻底消灭所有手写的类型字符串字面量（如 `"link"`、`"file"`、`"local_file"`、`"local_batch"`、`"folder"`、`"local_folder"`、`"image"`、`"code"`、`"text"` 等）。
+   - `extractFileExtensions` 内部使用 `ItemType::fromString` 或 `ItemType::toString` 进行比较；
+   - `addNote` 中对 Link 类型的自动分类判断改用 `ItemType::Type::Link`；
+   - 类型统计分支（`image`、`code`、`text`、`link`、`file`、`local_file`、`local_folder`、`folder`、`local_batch`）全部改用 `ItemType`；
+   - 过滤函数 `applyCommonFilters` 中 SQL 字符串里的类型值（`'image'` 等）必须由 `ItemType::toString(...)` 统一拼入，不得手写；
+   - 列名 `"item_type"` 允许保留作为数据库物理字段名，不受类型值限制；
+   - `NoteModel.cpp`（`ToolTipRole`、`DisplayRole`、`mimeData`）与 `StringUtils.h`（`copyNotesToClipboard`、`generateNotePreviewHtml`）中所有类型字面量全面改用 `ItemType`，判定范围严格保持逐处一致。
+
+2. **标签规范化与编解码单一真理源 (`TagCodec`)**：
+   - 全工程唯一允许对标签执行 `split`、`join`、`joinDisplay` 和去重的地方只有 `TagCodec`；
+   - `TagCodec` 新增 `normalize(const QStringList& tags)` 统一实现 trim、去空与保序去重；
+   - `DatabaseManager::updateNote` 与 `addTagsToNote` 移除手写 trim + 去重循环，分别经由 `TagCodec::normalize` 并调用 `TagCodec::joinDisplay`（保留现有的逗号+空格格式）和 `TagCodec::join`（保留现有的纯逗号格式）；
+   - 全工程严禁出现任何非 `TagCodec` 的标签逗号分割与拼接。
+
+3. **彻底物理拔除 `calculateWordBucket` 转发壳**：
+   - 物理删除 `DatabaseManager.cpp` 匿名命名空间中无实质意义的包装壳函数 `calculateWordBucket`；
+   - 所有调用点统一直接调用 `RapidNotes::WordBucket::calculate`，消除间接调用与调用栈损耗。
+
+4. **数据迁移零丢失硬性红线（步骤 3 提前锚定）**：
+   - 一条文本数据都不能丢，文件本体不迁移；
+   - 迁移前必须在 `backups/` 目录使用 `VACUUM INTO` 生成 `pre_migration_<yyyyMMdd_HHmmss>.db` 物理快照备份；
+   - 单一数据库事务内完成全部数据复制、字段映射与索引重建，失败则完整回滚；
+   - 迁移完成后必须通过 `ATTACH` 机制逐字段自动化校验，比对所有非文件类笔记关键字段，不一致行数必须为 0。
+
