@@ -287,3 +287,20 @@
    - 单一数据库事务内完成全部数据复制、字段映射与索引重建，失败则完整回滚；
    - 迁移完成后必须通过 `ATTACH` 机制逐字段自动化校验，比对所有非文件类笔记关键字段，不一致行数必须为 0。
 
+
+---
+
+## 12. UI 样式内联转外联彻底重构契约 (Inline QSS to External QSS Migration Contract)
+
+根据架构治理与用户明确指令（“由内联转成外联时，不可擅自修改样式参数，只做搬迁，不做重写、不做优化、不做重新设计”）：
+
+1. **零篡改搬迁铁律 (Strict Zero-Value-Alteration Migration)**：
+   - 彻底拔除 C++ 代码中所有散落的 `setStyleSheet(...)` 内联硬编码；
+   - 严禁在搬迁过程中修改任何视觉数值参数（包括但不限于：颜色 Hex/RGB/RGBA、边框粗细与线型、圆角 border-radius、内边距 padding、外边距 margin、字体大小 font-size、最小/最大宽高 min-width/max-width/height 等）；
+   - 不做重写、不做所谓“优化”、不做重新设计，只做纯粹的物理搬迁。
+
+2. **外联 QSS 架构规范**：
+   - 所有样式统一集中搬迁至 `RapidNotes/resources/qss/dark_style.qss`；
+   - C++ 控件统一通过规范的 `setObjectName(...)` 赋予唯一语义化 ID，或通过 `setProperty("state", ...)` / `setProperty("active", ...)` 动态切换状态，并在 QSS 中使用选择器精准匹配（如 `QPushButton#myBtn[state="active"]`）；
+   - 在动态状态变化时，通过 `style()->unpolish(widget); style()->polish(widget);` 触发样式重算，替代在 C++ 中动态拼接 `setStyleSheet` 字符串；
+   - 若个别动态数值完全依赖运行时坐标或绝对动态计算且无法提取为 QSS（如取色器色相渐变、透明度滑块动态背景），需严格经过架构审计，其余所有固定视觉样式一律外联化。
