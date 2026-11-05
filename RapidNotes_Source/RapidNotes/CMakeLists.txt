@@ -303,6 +303,7 @@ set(SOURCES
     src/ui/ThumbnailDelegate.h
     src/ui/TimePasteWindow.cpp
     src/ui/TimePasteWindow.h
+    src/ui/StyleLibrary.h
     src/ui/SvgIconRenderer.cpp
     src/ui/SvgIconRenderer.h
     src/ui/ThemeManager.cpp
@@ -330,6 +331,7 @@ set(SOURCES
     src/ui/controllers/PaneActivationTracker.h
     src/ui/models/FilterProxyModel.cpp
     src/ui/models/FilterProxyModel.h
+    src/ui/models/DiskItemModel.h
     src/ui/models/ItemModelBase.h
     src/ui/models/SectionProxyModel.cpp
     src/ui/models/SectionProxyModel.h
