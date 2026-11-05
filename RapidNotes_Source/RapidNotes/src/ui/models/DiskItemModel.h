@@ -35,7 +35,7 @@ public:
         }
         const auto& rec = m_records[index.row()];
         if (role == Qt::DisplayRole) {
-            return rec.name;
+            return rec.filename.isEmpty() ? rec.path : rec.filename;
         }
         return QVariant();
     }

@@ -62,7 +62,9 @@ include_directories(
     src/ui
     src/ui/models
     src/ui/components
+    src/ui/controllers
     src/core
+    src/meta
     src/util
 )
 
@@ -79,6 +81,8 @@ set(SOURCES
     src/core/ClipboardMonitor.h
     src/core/CoreEngine.cpp
     src/core/CoreEngine.h
+    src/meta/FavoriteDao.cpp
+    src/meta/FavoriteDao.h
     src/core/DatabaseManager.cpp
     src/core/DatabaseManager.h
     src/core/FileCryptoHelper.cpp
@@ -323,15 +327,19 @@ set(SOURCES
     src/ui/TreeItemDelegate.h
     src/ui/UnifiedSearchWindow.cpp
     src/ui/UnifiedSearchWindow.h
+    src/ui/ViewDragDropHelper.cpp
+    src/ui/ViewDragDropHelper.h
     src/ui/WritingAnimation.cpp
     src/ui/WritingAnimation.h
     src/ui/controllers/ContentPaneSplitManager.cpp
     src/ui/controllers/ContentPaneSplitManager.h
+    src/ui/controllers/ContentSortController.cpp
+    src/ui/controllers/ContentSortController.h
     src/ui/controllers/PaneActivationTracker.cpp
     src/ui/controllers/PaneActivationTracker.h
+    src/ui/models/DiskItemModel.h
     src/ui/models/FilterProxyModel.cpp
     src/ui/models/FilterProxyModel.h
-    src/ui/models/DiskItemModel.h
     src/ui/models/ItemModelBase.h
     src/ui/models/SectionProxyModel.cpp
     src/ui/models/SectionProxyModel.h
