@@ -21,6 +21,7 @@
 
 #include "components/ColorBlock.h"
 #include "components/InlineHueSlider.h"
+#include "../meta/SmartFolderDao.h"
 
 namespace QuarkMeta {
 
@@ -64,6 +65,7 @@ public:
 
     void syncUIFromFilterState();
     void selectColor(const QColor& color);
+    void applySmartFolderRecord(const SmartFolderRecord& record);
     void setMirrorSource(bool isMirror);
 
 protected:

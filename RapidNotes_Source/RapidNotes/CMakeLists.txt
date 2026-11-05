@@ -73,20 +73,22 @@ set(SOURCES
     src/core/AES.cpp
     src/core/AES.h
     src/core/AppConfig.h
-    src/core/ActionCommand.h
     src/core/ActionRecorder.cpp
     src/core/ActionRecorder.h
-    src/core/TagLexiconService.cpp
-    src/core/TagLexiconService.h
-    src/core/TaskProgressService.cpp
-    src/core/TaskProgressService.h
-    src/core/UndoManager.h
     src/core/CentralEventHub.cpp
     src/core/CentralEventHub.h
     src/core/ClipboardMonitor.cpp
     src/core/ClipboardMonitor.h
     src/core/CoreEngine.cpp
+    src/core/ActionCommand.h
+    src/core/ClipboardService.cpp
+    src/core/ClipboardService.h
     src/core/CoreEngine.h
+    src/core/TagLexiconService.cpp
+    src/core/TagLexiconService.h
+    src/core/TaskProgressService.cpp
+    src/core/TaskProgressService.h
+    src/core/UndoManager.h
     src/meta/FavoriteDao.cpp
     src/meta/FavoriteDao.h
     src/meta/FavoriteService.cpp
@@ -353,6 +355,8 @@ set(SOURCES
     src/ui/WritingAnimation.h
     src/ui/controllers/ContentPaneSplitManager.cpp
     src/ui/controllers/ContentPaneSplitManager.h
+    src/ui/controllers/ContentContextMenu.cpp
+    src/ui/controllers/ContentContextMenu.h
     src/ui/controllers/ContentSortController.cpp
     src/ui/controllers/ContentSortController.h
     src/ui/controllers/PaneActivationTracker.cpp

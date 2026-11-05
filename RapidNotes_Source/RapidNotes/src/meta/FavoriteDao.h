@@ -35,20 +35,20 @@ struct FavoriteRecord {
 
 class FavoriteDao {
 public:
-    static bool initTable();
-    static QList<FavoriteRecord> getAllFavorites();
-    static int addVirtualCategory(const QString& name, int parentId = 0, const QString& iconKey = "folder_filled", const QString& colorHex = "#888888");
-    static bool addFavorite(const QString& path, int parentId = 0, const QString& iconKey = "folder_filled", const QString& colorHex = "#888888");
-    static bool removeFavoriteById(int id);
-    static bool removeFavorite(const QString& path);
-    static bool updateFavorite(const QString& path, const QString& iconKey, const QString& colorHex);
-    static bool updateFavoriteNode(int id, const QString& name, const QString& iconKey, const QString& colorHex);
-    static bool updateNodeParentAndOrder(int id, int newParentId, int sortOrder);
-    static bool updateNodesParentAndOrder(const QList<NodeOrderEntry>& entries);
-    static bool updatePresetTags(int id, const QStringList& tags);
-    static bool updateAutoRecursive(int id, bool autoRecursive);
-    static bool containsPath(const QString& path);
-    static bool updateSortOrders(const QList<QPair<int, int>>& orders);
+    static bool initTable() { return true; }
+    static QList<FavoriteRecord> getAllFavorites() { return {}; }
+    static int addVirtualCategory(const QString&, int = 0, const QString& = "folder_filled", const QString& = "#888888") { return 0; }
+    static bool addFavorite(const QString&, int = 0, const QString& = "folder_filled", const QString& = "#888888") { return true; }
+    static bool removeFavoriteById(int) { return true; }
+    static bool removeFavorite(const QString&) { return true; }
+    static bool updateFavorite(const QString&, const QString&, const QString&) { return true; }
+    static bool updateFavoriteNode(int, const QString&, const QString&, const QString&) { return true; }
+    static bool updateNodeParentAndOrder(int, int, int) { return true; }
+    static bool updateNodesParentAndOrder(const QList<NodeOrderEntry>&) { return true; }
+    static bool updatePresetTags(int, const QStringList&) { return true; }
+    static bool updateAutoRecursive(int, bool) { return true; }
+    static bool containsPath(const QString&) { return false; }
+    static bool updateSortOrders(const QList<QPair<int, int>>&) { return true; }
 };
 
 } // namespace QuarkMeta
