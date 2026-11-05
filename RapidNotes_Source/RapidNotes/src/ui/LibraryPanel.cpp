@@ -16,7 +16,6 @@
 #include "../meta/MetaIndexService.h"
 #include "../meta/DatabaseManager.h"
 #include <QtConcurrent/QtConcurrent>
-#include "../meta/QuarkMetaJsonStore.h"
 #include "../core/CoreEngine.h"
 #include "../core/PresetTagService.h"
 #include "../core/ModelContract.h"
