@@ -21,6 +21,7 @@ signals:
     void digitPressed(int digit);
     void globalLockRequested();
     void showAllDataRequested(); // 2026-05-27 [NEW]
+    void enterPressedInOtherApp(bool ctrl, bool shift, bool alt);
 
 private:
     bool m_digitInterceptEnabled = false;

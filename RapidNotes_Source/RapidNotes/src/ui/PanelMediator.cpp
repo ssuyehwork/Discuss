@@ -32,7 +32,6 @@
 #include "../core/ModelContract.h"
 #include "../core/AppConfig.h"
 #include "../util/ShellHelper.h"
-#include "../meta/MetadataManager.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
 #include "../meta/LibraryDao.h"
@@ -413,18 +412,12 @@ void PanelMediator::setupConnections() {
             QString mtimeStr = idx.isValid() ? idx.sibling(idx.row(), static_cast<int>(FileListColumn::ModifiedDate)).data(Qt::DisplayRole).toString() : "-";
             bool encrypted = idx.isValid() ? idx.data(EncryptedRole).toBool() : false;
 
-            auto meta = MetadataManager::instance().getMeta(path.toStdWString());
-
             metaPanel->updateInfo(
                 name, type, sizeStr, "-", mtimeStr, "-",
-                path, encrypted, meta.width, meta.height
+                path, encrypted, 0, 0
             );
 
             QVector<QPair<QColor, float>> qPalettes;
-            qPalettes.reserve(static_cast<int>(meta.palettes.size()));
-            for (const auto& entry : meta.palettes) {
-                qPalettes.append(qMakePair(entry.color, entry.ratio));
-            }
 
             if (idx.isValid()) {
                 int rating = idx.data(RatingRole).toInt();
@@ -433,17 +426,11 @@ void PanelMediator::setupConnections() {
                 QString note = idx.data(NoteRole).toString();
                 QString url = idx.data(UrlRole).toString();
 
-                int finalRating = rating > 0 ? rating : meta.rating;
-                QString finalColor = !color.isEmpty() ? color : QString::fromStdWString(meta.manualColor);
-                QStringList finalTagsList = !tags.isEmpty() ? tags : meta.tags;
-                QString finalNote = !note.isEmpty() ? note : QString::fromStdWString(meta.note);
-                QString finalUrl = !url.isEmpty() ? url : QString::fromStdWString(meta.url);
-
-                metaPanel->setRating(finalRating, false);
-                metaPanel->setColor(finalColor, false);
-                metaPanel->setTags(finalTagsList);
-                metaPanel->setNote(finalNote);
-                metaPanel->setURL(finalUrl);
+                metaPanel->setRating(rating, false);
+                metaPanel->setColor(color, false);
+                metaPanel->setTags(tags);
+                metaPanel->setNote(note);
+                metaPanel->setURL(url);
                 metaPanel->setPalettes(qPalettes);
 
                 QVariant decData = idx.data(Qt::DecorationRole);
@@ -511,8 +498,6 @@ void PanelMediator::setupConnections() {
                 QString itemNote;
                 QString itemUrl;
 
-                auto meta = MetadataManager::instance().getMeta(path.toStdWString());
-
                 if (idx.isValid()) {
                     int r = idx.data(RatingRole).toInt();
                     QString c = idx.data(ColorRole).toString();
@@ -520,11 +505,11 @@ void PanelMediator::setupConnections() {
                     QString n = idx.data(NoteRole).toString();
                     QString u = idx.data(UrlRole).toString();
 
-                    itemRating = r > 0 ? r : meta.rating;
-                    itemColor = !c.isEmpty() ? c : QString::fromStdWString(meta.manualColor);
-                    itemTags = !t.isEmpty() ? t : meta.tags;
-                    itemNote = !n.isEmpty() ? n : QString::fromStdWString(meta.note);
-                    itemUrl = !u.isEmpty() ? u : QString::fromStdWString(meta.url);
+                    itemRating = r;
+                    itemColor = c;
+                    itemTags = t;
+                    itemNote = n;
+                    itemUrl = u;
 
                     if (i >= previewStartIdx && multiPreviewItems.size() < MetaPanel::kMultiPreviewMaxCards) {
                         MetaPreviewItem item;

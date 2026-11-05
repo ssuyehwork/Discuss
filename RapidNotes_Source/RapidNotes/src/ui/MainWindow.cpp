@@ -56,7 +56,7 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
     setMinimumHeight(700); // 宽度由 PanelLayoutManager::updateDynamicMinimumSize() 动态管理
-    setWindowTitle("QuarkMeta");
+    setWindowTitle("RapidNotes");
 
     m_hoverFilter = new HoverEventFilter(this);
     m_isPinned = AppConfig::instance().getValue("MainWindow/AlwaysOnTop", false).toBool();

@@ -1,66 +1,52 @@
 #include "ItemRecord.h"
-#include "../meta/MetadataManager.h"
-#include "../util/ColorPaletteEngine.h"
 #include <QFileInfo>
 #include <QDir>
-#include <mutex>
-#include <unordered_map>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace QuarkMeta {
 
-void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
-    r.rating = meta.rating;
-    r.manualColor = QString::fromStdWString(meta.manualColor);
-    r.autoColor = QString::fromStdWString(meta.autoColor);
-    r.tags = meta.tags;
-    r.pinned = meta.pinned;
-    r.encrypted = meta.encrypted;
-    r.url = QString::fromStdWString(meta.url);
-    r.note = QString::fromStdWString(meta.note);
-    r.sha256 = QString::fromStdString(meta.sha256);
-    r.width = meta.width;
-    r.height = meta.height;
-    r.added_at = meta.added_at;
-    r.thumbStatus = meta.thumbStatus;
-    r.isManaged = meta.hasUserOperations();
-    r.palettes.clear();
-    for (const auto& pe : meta.palettes) {
-        r.palettes.push_back({pe.color, pe.ratio});
-    }
-
-    if (!r.isDir && ColorPaletteEngine::isGraphicsFile(r.suffix.toLower())) {
-        if (r.thumbStatus == 1) {
-            r.thumbnailState = ThumbnailState::Failed;
-        } else if (r.thumbnailState == ThumbnailState::NotApplicable || r.thumbnailState == ThumbnailState::Failed) {
-            r.thumbnailState = ThumbnailState::Pending;
-        }
-    } else {
-        r.thumbnailState = ThumbnailState::NotApplicable;
-    }
-}
-
 ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMeta) {
+    Q_UNUSED(providedMeta);
     ItemRecord r;
     QFileInfo info(path);
 
     QString nPath = QDir::toNativeSeparators(info.absoluteFilePath());
-    std::wstring wPath = nPath.toStdWString();
-
-    RuntimeMeta meta;
-    if (providedMeta) {
-        meta = *providedMeta;
-    }
-
-    long long size = 0, ctime = 0, mtime = 0, atime = 0;
-    MetadataManager::fetchWinApiMetadataDirect(wPath, &size, nullptr, &ctime, &mtime, &atime);
-    r.size = size;
-    r.ctime = ctime;
-    r.mtime = mtime;
-    r.atime = atime;
-    r.isDir = info.isDir();
     r.path = nPath;
     r.filename = info.fileName();
+    r.isDir = info.isDir();
     r.isHidden = info.isHidden();
+
+#ifdef Q_OS_WIN
+    HANDLE hFile = CreateFileW(nPath.toStdWString().c_str(), 0,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                               NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    if (hFile != INVALID_HANDLE_VALUE) {
+        BY_HANDLE_FILE_INFORMATION basicInfo;
+        if (GetFileInformationByHandle(hFile, &basicInfo)) {
+            r.size = (static_cast<long long>(basicInfo.nFileSizeHigh) << 32) | basicInfo.nFileSizeLow;
+            auto toMS = [](const FILETIME& ft) {
+                ULARGE_INTEGER ull; ull.LowPart = ft.dwLowDateTime; ull.HighPart = ft.dwHighDateTime;
+                return static_cast<long long>((ull.QuadPart - 116444736000000000ULL) / 10000ULL);
+            };
+            r.ctime = toMS(basicInfo.ftCreationTime);
+            r.mtime = toMS(basicInfo.ftLastWriteTime);
+            r.atime = toMS(basicInfo.ftLastAccessTime);
+        }
+        CloseHandle(hFile);
+    } else {
+        r.size = info.size();
+        r.ctime = info.birthTime().toMSecsSinceEpoch();
+        r.mtime = info.lastModified().toMSecsSinceEpoch();
+        r.atime = info.lastRead().toMSecsSinceEpoch();
+    }
+#else
+    r.size = info.size();
+    r.ctime = info.birthTime().toMSecsSinceEpoch();
+    r.mtime = info.lastModified().toMSecsSinceEpoch();
+    r.atime = info.lastRead().toMSecsSinceEpoch();
+#endif
 
     if (r.isDir) {
         QDir sub(nPath);
@@ -70,15 +56,13 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
         r.suffix = info.suffix();
     }
 
-    if (r.isDir || !ColorPaletteEngine::isGraphicsFile(r.suffix.toLower())) {
-        r.thumbnailState = ThumbnailState::NotApplicable;
-    } else if (r.thumbStatus == 1) {
-        r.thumbnailState = ThumbnailState::Failed;
-    } else {
-        r.thumbnailState = ThumbnailState::Pending;
-    }
-
+    r.thumbnailState = ThumbnailState::NotApplicable;
     return r;
+}
+
+void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
+    Q_UNUSED(r);
+    Q_UNUSED(meta);
 }
 
 } // namespace QuarkMeta

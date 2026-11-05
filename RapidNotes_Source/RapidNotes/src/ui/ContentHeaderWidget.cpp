@@ -166,7 +166,7 @@ void ContentHeaderWidget::mouseMoveEvent(QMouseEvent* event) {
 
                 QDrag* drag = new QDrag(this);
                 QMimeData* mimeData = new QMimeData();
-                mimeData->setData("application/x-quarkmeta-panemove", QByteArray::number(reinterpret_cast<quintptr>(panel)));
+                mimeData->setData("application/x-rapidnotes-panemove", QByteArray::number(reinterpret_cast<quintptr>(panel)));
                 drag->setMimeData(mimeData);
 
                 QPixmap pixmap = grab();

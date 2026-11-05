@@ -561,11 +561,11 @@ void ContentPanel::hideDragOverlay() {
 
 void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
     if (event->mimeData()) {
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-panemove")) {
+        if (event->mimeData()->hasFormat("application/x-rapidnotes-panemove")) {
             event->acceptProposedAction();
             return;
         }
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        if (event->mimeData()->hasFormat("application/x-rapidnotes-taburl")) {
             if (paneCount() < kMaxPanes) {
                 event->acceptProposedAction();
                 return;
@@ -577,8 +577,8 @@ void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
 
 void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
     if (event->mimeData()) {
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-panemove")) {
-            quintptr ptrVal = event->mimeData()->data("application/x-quarkmeta-panemove").toULongLong();
+        if (event->mimeData()->hasFormat("application/x-rapidnotes-panemove")) {
+            quintptr ptrVal = event->mimeData()->data("application/x-rapidnotes-panemove").toULongLong();
             ContentPanel* srcPanel = reinterpret_cast<ContentPanel*>(ptrVal);
             QPoint globalPos = mapToGlobal(event->position().toPoint());
             ContentPanel* root = rootPane();
@@ -594,7 +594,7 @@ void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
             }
             return;
         }
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        if (event->mimeData()->hasFormat("application/x-rapidnotes-taburl")) {
             if (paneCount() < kMaxPanes) {
                 QPoint globalPos = mapToGlobal(event->position().toPoint());
                 ContentPanel* root = rootPane();
@@ -626,11 +626,11 @@ void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
 void ContentPanel::dropEvent(QDropEvent* event) {
     ContentPanel* root = rootPane();
     if (event->mimeData()) {
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-panemove")) {
+        if (event->mimeData()->hasFormat("application/x-rapidnotes-panemove")) {
             if (root && root->splitManager()) {
                 root->splitManager()->hideDragOverlay();
             }
-            quintptr ptrVal = event->mimeData()->data("application/x-quarkmeta-panemove").toULongLong();
+            quintptr ptrVal = event->mimeData()->data("application/x-rapidnotes-panemove").toULongLong();
             ContentPanel* srcPanel = reinterpret_cast<ContentPanel*>(ptrVal);
             QPoint globalPos = mapToGlobal(event->position().toPoint());
             if (root && root->splitManager()) {
@@ -644,12 +644,12 @@ void ContentPanel::dropEvent(QDropEvent* event) {
             }
             return;
         }
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        if (event->mimeData()->hasFormat("application/x-rapidnotes-taburl")) {
             if (root && root->splitManager()) {
                 root->splitManager()->hideDragOverlay();
             }
             if (paneCount() < kMaxPanes) {
-                QString tabUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
+                QString tabUrl = QString::fromUtf8(event->mimeData()->data("application/x-rapidnotes-taburl"));
                 if (tabUrl.isEmpty()) {
                     tabUrl = event->mimeData()->text();
                 }

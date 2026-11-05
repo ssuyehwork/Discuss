@@ -15,7 +15,6 @@
 #include "ViewDragDropHelper.h"
 #include "RatingBarLayout.h"
 #include "RowLayoutEngine.h"
-#include "../meta/MetadataManager.h"
 #include "../core/ModelContract.h"
 #include "UiHelper.h"
 #include "CardPainterHelper.h"

@@ -63,6 +63,7 @@ include_directories(src)
 set(SOURCES
     src/core/AES.cpp
     src/core/AES.h
+    src/core/AppConfig.h
     src/core/ActionRecorder.cpp
     src/core/ActionRecorder.h
     src/core/CentralEventHub.cpp
@@ -96,6 +97,8 @@ set(SOURCES
     src/core/MessageCaptureHandler.cpp
     src/core/MessageCaptureHandler.h
     src/core/ModelContract.h
+    src/core/NavigationHistoryService.cpp
+    src/core/NavigationHistoryService.h
     src/core/NavigationService.cpp
     src/core/NavigationService.h
     src/core/NoteRepository.cpp
@@ -147,6 +150,26 @@ set(SOURCES
     src/ui/ColorPickerWindow.h
     src/ui/ContentHeaderWidget.cpp
     src/ui/ContentHeaderWidget.h
+    src/ui/components/ClickableRow.cpp
+    src/ui/components/ClickableRow.h
+    src/ui/components/ColorBlock.cpp
+    src/ui/components/ColorBlock.h
+    src/ui/components/ColorDot.cpp
+    src/ui/components/ColorDot.h
+    src/ui/components/ColorPill.cpp
+    src/ui/components/ColorPill.h
+    src/ui/components/ColorWheel.cpp
+    src/ui/components/ColorWheel.h
+    src/ui/components/ElasticEdit.cpp
+    src/ui/components/ElasticEdit.h
+    src/ui/components/FlowLayout.cpp
+    src/ui/components/FlowLayout.h
+    src/ui/components/InlineHueSlider.cpp
+    src/ui/components/InlineHueSlider.h
+    src/ui/components/StyledCheckBox.cpp
+    src/ui/components/StyledCheckBox.h
+    src/ui/components/TagPill.cpp
+    src/ui/components/TagPill.h
     src/ui/ContentPanel.cpp
     src/ui/ContentPanel.h
     src/ui/DropJustifiedView.cpp

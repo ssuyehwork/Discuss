@@ -24,7 +24,14 @@ CoreEngine& CoreEngine::instance() {
     return instance;
 }
 
-CoreEngine::CoreEngine() : m_canceled(false) {}
+CoreEngine::CoreEngine(QObject* parent) : QObject(parent) {
+    m_asyncTagPool.setMaxThreadCount(1);
+    qRegisterMetaType<QuarkMeta::AppCommand>("QuarkMeta::AppCommand");
+}
+
+std::shared_ptr<CancellationToken> CoreEngine::createCancellationToken() {
+    return std::make_shared<CancellationToken>();
+}
 
 bool CoreEngine::executeCommand(const AppCommand& cmd) {
     switch (cmd.type) {

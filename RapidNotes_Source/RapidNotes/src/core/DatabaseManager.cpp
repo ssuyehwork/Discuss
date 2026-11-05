@@ -62,6 +62,29 @@ DatabaseManager& DatabaseManager::instance() {
     return inst;
 }
 
+QSqlDatabase DatabaseManager::database() const {
+    if (m_db.isOpen()) {
+        return m_db;
+    }
+    QString connectionName = "RapidNotes_Main_Conn";
+    if (QSqlDatabase::contains(connectionName)) {
+        return QSqlDatabase::database(connectionName);
+    }
+    return m_db;
+}
+
+QSqlDatabase DatabaseManager::getReadOnlyDatabase() {
+    const QString roConnName = "RapidNotes_ReadOnly_Shared_Conn";
+    if (QSqlDatabase::contains(roConnName)) {
+        QSqlDatabase db = QSqlDatabase::database(roConnName);
+        if (db.isOpen()) return db;
+    }
+    QSqlDatabase roDb = QSqlDatabase::addDatabase("QSQLITE", roConnName);
+    roDb.setDatabaseName(DatabaseManager::instance().m_dbPath.isEmpty() ? "rapid_notes.db" : DatabaseManager::instance().m_dbPath);
+    roDb.open();
+    return roDb;
+}
+
 QStringList DatabaseManager::s_tagClipboard;
 QMutex DatabaseManager::s_tagClipboardMutex;
 
