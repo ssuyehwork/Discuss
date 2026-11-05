@@ -1,5 +1,7 @@
 #include "QuickLookWindow.h"
 #include "UiHelper.h"
+#include "ColorPaletteEngine.h"
+#include <QTextBlock>
 #include "../meta/HistoryService.h"
 #include "ShellIconManager.h"
 #include "FramelessWindowHelper.h"
@@ -111,6 +113,63 @@ void QuickLookWindow::setupUi() {
     m_infoLabel->setObjectName("QLInfoLabel");
     m_infoLabel->hide();
 
+    // 🚀【QuickLook 文本搜索悬浮浮层】：两层紧凑型结构
+    m_searchBar = new QWidget(this);
+    m_searchBar->setObjectName("QLSearchBar");
+    m_searchBar->hide();
+
+    auto* searchBarLayout = new QVBoxLayout(m_searchBar);
+    searchBarLayout->setContentsMargins(8, 6, 8, 6);
+    searchBarLayout->setSpacing(4);
+
+    // 上下两层布局：使状态指示行与搜索输入框左右精准对齐
+    auto* mainRow = new QHBoxLayout();
+    mainRow->setContentsMargins(0, 0, 0, 0);
+    mainRow->setSpacing(6);
+
+    auto* leftCol = new QVBoxLayout();
+    leftCol->setContentsMargins(0, 0, 0, 0);
+    leftCol->setSpacing(4);
+
+    m_searchEdit = new QLineEdit(m_searchBar);
+    m_searchEdit->setObjectName("QLSearchEdit");
+    m_searchEdit->setPlaceholderText("在文本中查找...");
+    leftCol->addWidget(m_searchEdit);
+
+    m_lblStatus = new QLabel("无 | 0", m_searchBar);
+    m_lblStatus->setObjectName("QLSearchStatus");
+    leftCol->addWidget(m_lblStatus);
+
+    mainRow->addLayout(leftCol, 1);
+
+    auto* btnLayout = new QHBoxLayout();
+    btnLayout->setContentsMargins(0, 0, 0, 0);
+    btnLayout->setSpacing(6);
+
+    m_btnFindNext = new QPushButton("查找下一个", m_searchBar);
+    m_btnFindNext->setObjectName("QLSearchBtn");
+    btnLayout->addWidget(m_btnFindNext);
+
+    m_btnCount = new QPushButton("计数", m_searchBar);
+    m_btnCount->setObjectName("QLSearchBtn");
+    btnLayout->addWidget(m_btnCount);
+
+    auto* rightCol = new QVBoxLayout();
+    rightCol->setContentsMargins(0, 0, 0, 0);
+    rightCol->setSpacing(4);
+    rightCol->addLayout(btnLayout);
+    rightCol->addStretch();
+
+    mainRow->addLayout(rightCol);
+    searchBarLayout->addLayout(mainRow);
+
+    connect(m_btnFindNext, &QPushButton::clicked, this, &QuickLookWindow::findNext);
+    connect(m_btnCount, &QPushButton::clicked, this, &QuickLookWindow::updateMatchCount);
+    connect(m_searchEdit, &QLineEdit::returnPressed, this, &QuickLookWindow::findNext);
+
+    m_searchBar->installEventFilter(this);
+    m_searchEdit->installEventFilter(this);
+
     rootLayout->addWidget(m_container);
 }
 
@@ -140,6 +199,7 @@ void QuickLookWindow::preview(const QString& filePath) {
 }
 
 void QuickLookWindow::closePreview() {
+    hideSearchBar();
     m_previewGeneration.fetch_add(1, std::memory_order_relaxed);
     if (m_previewToken) m_previewToken->cancel();
     if (m_graphicsView) {
@@ -149,6 +209,7 @@ void QuickLookWindow::closePreview() {
 }
 
 void QuickLookWindow::renderImage(const QString& path) {
+    hideSearchBar();
     m_textEdit->hide();
     if (m_lblEmptyPrompt) m_lblEmptyPrompt->hide();
     m_graphicsView->show();
@@ -198,6 +259,7 @@ void QuickLookWindow::renderImage(const QString& path) {
 }
 
 void QuickLookWindow::renderText(const QString& path) {
+    hideSearchBar();
     m_graphicsView->hide();
     m_lblEmptyPrompt->hide();
     m_textEdit->show();
@@ -360,6 +422,15 @@ void QuickLookWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
+    // 🚀【Ctrl+F 场景化门禁】：仅在非图形图像预览（纯文本 m_textEdit 可视）时呼出搜索栏
+    if (event->key() == Qt::Key_F && (event->modifiers() & Qt::ControlModifier)) {
+        if (m_textEdit && m_textEdit->isVisible()) {
+            showSearchBar();
+            event->accept();
+            return;
+        }
+    }
+
     if (event->key() == Qt::Key_Space || event->key() == Qt::Key_Escape) {
         closePreview();
         return;
@@ -401,6 +472,136 @@ void QuickLookWindow::keyPressEvent(QKeyEvent* event) {
 
 void QuickLookWindow::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
+    updateSearchBarGeometry();
+}
+
+void QuickLookWindow::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    updateSearchBarGeometry();
+}
+
+void QuickLookWindow::updateSearchBarGeometry() {
+    if (!m_searchBar) return;
+    int barW = 360;
+    int barH = m_searchBar->sizeHint().height();
+    if (barH < 62) barH = 62;
+    int x = width() - barW - 24;
+    int y = 24;
+    m_searchBar->setGeometry(x, y, barW, barH);
+    m_searchBar->raise();
+}
+
+void QuickLookWindow::showSearchBar() {
+    if (!m_searchBar) return;
+    updateSearchBarGeometry();
+    m_searchBar->show();
+    m_searchBar->raise();
+    m_searchEdit->setFocus();
+    m_searchEdit->selectAll();
+}
+
+void QuickLookWindow::hideSearchBar() {
+    if (m_searchBar && m_searchBar->isVisible()) {
+        m_searchBar->hide();
+        clearSearchHighlights();
+    }
+}
+
+void QuickLookWindow::clearSearchHighlights() {
+    m_lastSearchQuery.clear();
+    m_cachedTotalMatches = 0;
+    if (m_textEdit) {
+        m_textEdit->setExtraSelections({});
+    }
+    if (m_lblStatus) {
+        m_lblStatus->setText("无 | 0");
+    }
+}
+
+void QuickLookWindow::updateMatchCount() {
+    if (!m_textEdit) return;
+    QString query = m_searchEdit->text();
+    if (query.isEmpty()) {
+        clearSearchHighlights();
+        return;
+    }
+
+    QTextDocument* doc = m_textEdit->document();
+    int count = 0;
+    int currentLine = -1;
+    QTextCursor currentCursor = m_textEdit->textCursor();
+
+    QTextCursor cursor(doc);
+    while (!cursor.isNull() && !cursor.atEnd()) {
+        cursor = doc->find(query, cursor);
+        if (!cursor.isNull()) {
+            count++;
+            if (cursor.selectionStart() <= currentCursor.selectionStart() &&
+                cursor.selectionEnd() >= currentCursor.selectionEnd()) {
+                currentLine = cursor.blockNumber() + 1;
+            }
+        }
+    }
+
+    m_lastSearchQuery = query;
+    m_cachedTotalMatches = count;
+
+    if (count == 0) {
+        m_lblStatus->setText("无 | 0");
+    } else {
+        QString lineStr = (currentLine > 0) ? QString::number(currentLine) : "无";
+        m_lblStatus->setText(QString("%1 | %2").arg(lineStr).arg(count));
+    }
+}
+
+void QuickLookWindow::findNext() {
+    if (!m_textEdit) return;
+    QString query = m_searchEdit->text();
+    if (query.isEmpty()) {
+        clearSearchHighlights();
+        return;
+    }
+
+    QTextDocument* doc = m_textEdit->document();
+    QTextCursor startCursor = m_textEdit->textCursor();
+    QTextCursor match = doc->find(query, startCursor);
+
+    // 如果到底，从文档开头循环查找
+    if (match.isNull()) {
+        QTextCursor docStart(doc);
+        match = doc->find(query, docStart);
+    }
+
+    if (!match.isNull()) {
+        m_textEdit->setTextCursor(match);
+
+        // 设置 #ff551C 高亮
+        QList<QTextEdit::ExtraSelection> extraSelections;
+        QTextEdit::ExtraSelection selection;
+        selection.format.setBackground(QColor("#ff551C"));
+        selection.format.setForeground(Qt::white);
+        selection.cursor = match;
+        extraSelections.append(selection);
+        m_textEdit->setExtraSelections(extraSelections);
+
+        // 定位当前行号与总数
+        int currentLine = match.blockNumber() + 1;
+        if (m_lastSearchQuery != query) {
+            int totalMatches = 0;
+            QTextCursor c(doc);
+            while (!c.isNull() && !c.atEnd()) {
+                c = doc->find(query, c);
+                if (!c.isNull()) totalMatches++;
+            }
+            m_lastSearchQuery = query;
+            m_cachedTotalMatches = totalMatches;
+        }
+
+        m_lblStatus->setText(QString("%1 | %2").arg(currentLine).arg(m_cachedTotalMatches));
+        m_textEdit->centerCursor();
+    } else {
+        clearSearchHighlights();
+    }
 }
 
 bool QuickLookWindow::eventFilter(QObject* watched, QEvent* event) {
@@ -425,8 +626,22 @@ bool QuickLookWindow::eventFilter(QObject* watched, QEvent* event) {
         Qt::KeyboardModifiers mods = keyEvent->modifiers();
         
         if (key == Qt::Key_Space || key == Qt::Key_Escape) {
+            if (m_searchBar && m_searchBar->isVisible() && key == Qt::Key_Escape) {
+                hideSearchBar();
+                return true;
+            }
+            // 如果用户正在搜索输入框中输入空格，不拦截关闭，原生放行给输入框打字
+            if (m_searchEdit && m_searchEdit->hasFocus() && key == Qt::Key_Space) {
+                return false;
+            }
             intercept = true;
         } else if (key == Qt::Key_W && (mods & Qt::ControlModifier)) {
+            intercept = true;
+        } else if (key == Qt::Key_F && (mods & Qt::ControlModifier)) {
+            if (m_textEdit && m_textEdit->isVisible()) {
+                showSearchBar();
+                return true;
+            }
             intercept = true;
         } else if (key == Qt::Key_Up || key == Qt::Key_Left || key == Qt::Key_Down || key == Qt::Key_Right) {
             intercept = true;
@@ -449,7 +664,8 @@ bool QuickLookWindow::eventFilter(QObject* watched, QEvent* event) {
 
         QWidget* activeWin = QApplication::activeWindow();
         QWidget* focusW = QApplication::focusWidget();
-        if (activeWin == this || (focusW && this->isAncestorOf(focusW))) {
+        if (activeWin == this || (focusW && this->isAncestorOf(focusW)) ||
+            (m_searchBar && (m_searchBar == activeWin || m_searchBar->isAncestorOf(focusW)))) {
             return true;
         }
 

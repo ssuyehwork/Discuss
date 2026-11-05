@@ -2,6 +2,7 @@
 
 #include <QWidget>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
 #include <QPropertyAnimation>
@@ -37,6 +38,7 @@ signals:
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
 
@@ -54,12 +56,28 @@ private:
     static QImage loadOrExtractQuickLookImage(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
     static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
 
+    void showSearchBar();
+    void hideSearchBar();
+    void findNext();
+    void updateMatchCount();
+    void updateSearchBarGeometry();
+    void clearSearchHighlights();
+
     QuickLookGraphicsView* m_graphicsView = nullptr;
     QPlainTextEdit* m_textEdit = nullptr;
     QLabel* m_lblEmptyPrompt = nullptr;
     QLabel* m_titleLabel = nullptr;
     QLabel* m_infoLabel = nullptr;
     QWidget* m_container = nullptr;
+
+    // 文本预览内置搜索悬浮控件
+    QWidget* m_searchBar = nullptr;
+    QLineEdit* m_searchEdit = nullptr;
+    QPushButton* m_btnFindNext = nullptr;
+    QPushButton* m_btnCount = nullptr;
+    QLabel* m_lblStatus = nullptr;
+    QString m_lastSearchQuery;
+    int m_cachedTotalMatches = 0;
     
     QString m_currentPath;
     bool m_ignoreDeactivate = false;

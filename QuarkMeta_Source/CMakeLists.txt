@@ -142,6 +142,8 @@ set(SOURCES
     src/meta/LibraryService.h
     src/meta/LibraryService.cpp
     src/meta/LibrarySyncService.cpp
+    src/meta/AssociationCascadeService.h
+    src/meta/AssociationCascadeService.cpp
     src/meta/LibrarySyncService.h
     src/meta/LibraryValidationService.cpp
     src/meta/LibraryValidationService.h

@@ -110,6 +110,16 @@ set(SOURCES
     src/ui/CategoryLockWidget.h
     src/ui/CategoryPasswordDialog.cpp
     src/ui/CategoryPasswordDialog.h
+    src/ui/MainWindow.cpp
+    src/ui/MainWindow.h
+    src/ui/CategoryTabBarWidget.cpp
+    src/ui/CategoryTabBarWidget.h
+    src/ui/controllers/PanelLayoutManager.cpp
+    src/ui/controllers/PanelLayoutManager.h
+    src/ui/controllers/CategoryPaneSplitManager.cpp
+    src/ui/controllers/CategoryPaneSplitManager.h
+    src/ui/controllers/MainPanelMediator.cpp
+    src/ui/controllers/MainPanelMediator.h
     src/ui/CleanListView.cpp
     src/ui/CleanListView.h
     src/ui/ClickableLineEdit.h
