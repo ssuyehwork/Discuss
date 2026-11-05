@@ -258,7 +258,6 @@ int CardPainterHelper::drawInlinePinIcon(QPainter* painter, int rightX, int topY
     return kPinIconSize;
 }
 
-} // namespace QuarkMeta
 void CardPainterHelper::drawNoteSummary(QPainter* painter, const QRect& coverRect, const QString& summaryText) {
     if (!painter || coverRect.isEmpty()) return;
 
@@ -279,3 +278,5 @@ void CardPainterHelper::drawNoteSummary(QPainter* painter, const QRect& coverRec
 
     painter->restore();
 }
+
+} // namespace QuarkMeta

@@ -57,7 +57,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TARGET_APP_OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TARGET_APP_OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TARGET_APP_OUTPUT_DIR}")
 
-include_directories(src)
+include_directories(
+    src
+    src/ui
+    src/ui/models
+    src/ui/components
+    src/core
+    src/util
+)
 
 # 源代码列表
 set(SOURCES
@@ -138,6 +145,8 @@ set(SOURCES
     src/ui/CardLayoutEngine.h
     src/ui/CardPainterHelper.cpp
     src/ui/CardPainterHelper.h
+    src/ui/FileCollisionDialog.cpp
+    src/ui/FileCollisionDialog.h
     src/ui/CategoryDelegate.h
     src/ui/CategoryLockWidget.cpp
     src/ui/CategoryLockWidget.h
@@ -294,8 +303,16 @@ set(SOURCES
     src/ui/ThumbnailDelegate.h
     src/ui/TimePasteWindow.cpp
     src/ui/TimePasteWindow.h
+    src/ui/SvgIconRenderer.cpp
+    src/ui/SvgIconRenderer.h
+    src/ui/ThemeManager.cpp
+    src/ui/ThemeManager.h
     src/ui/TitleBarWidget.cpp
     src/ui/TitleBarWidget.h
+    src/ui/UiHelper.cpp
+    src/ui/UiHelper.h
+    src/util/ColorPaletteEngine.cpp
+    src/util/ColorPaletteEngine.h
     src/ui/TitleEditorDialog.h
     src/ui/TodoCalendarWindow.cpp
     src/ui/TodoCalendarWindow.h
@@ -313,6 +330,7 @@ set(SOURCES
     src/ui/controllers/PaneActivationTracker.h
     src/ui/models/FilterProxyModel.cpp
     src/ui/models/FilterProxyModel.h
+    src/ui/models/ItemModelBase.h
     src/ui/models/SectionProxyModel.cpp
     src/ui/models/SectionProxyModel.h
     src/ui/workers/ContentStatsWorker.cpp
