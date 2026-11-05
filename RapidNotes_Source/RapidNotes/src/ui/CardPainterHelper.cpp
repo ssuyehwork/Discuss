@@ -6,7 +6,7 @@
 #include <QCache>
 #include <algorithm>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QSize CardPainterHelper::defaultIconLogicalSize(const QSize& areaSize) {
     if (areaSize.width() < 70 && areaSize.height() < 70) {
@@ -279,4 +279,4 @@ void CardPainterHelper::drawNoteSummary(QPainter* painter, const QRect& coverRec
     painter->restore();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

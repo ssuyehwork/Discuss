@@ -2,7 +2,7 @@
 #include <QPainter>
 #include <QPainterPath>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 StyledCheckBox::StyledCheckBox(QWidget* parent) : QCheckBox(parent) {
     setFixedSize(15, 15);
@@ -33,4 +33,4 @@ void StyledCheckBox::paintEvent(QPaintEvent*) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

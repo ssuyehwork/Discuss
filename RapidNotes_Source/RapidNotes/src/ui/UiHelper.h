@@ -27,7 +27,7 @@ class QLineEdit;
 #include "../util/ColorPaletteEngine.h"
 #include "../core/AppConfig.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct ItemRecord;
 
@@ -258,4 +258,4 @@ public:
     }
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

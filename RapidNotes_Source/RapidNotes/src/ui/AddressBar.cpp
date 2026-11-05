@@ -1,19 +1,11 @@
 #include "AddressBar.h"
 #include "UiHelper.h"
-#include "FileCollisionDialog.h"
 #include "ToolTipOverlay.h"
 #include "StyleLibrary.h"
 #include "../core/NavigationHistoryService.h"
-#include "../meta/FavoriteDao.h"
-#include "../meta/FavoriteService.h"
-#include "../meta/LibraryService.h"
-#include "../meta/MarkedFolderService.h"
-#include "../core/ClipboardService.h"
 #include "../core/NavigationService.h"
-#include "../util/DiskIoService.h"
 #include "TabBarWidget.h"
 #include "ContentPanel.h"
-#include "controllers/ContextMenuFactory.h"
 #include <QHBoxLayout>
 #include <QDir>
 #include <QPushButton>
@@ -24,7 +16,7 @@
 #include <QApplication>
 #include <QClipboard>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     QHBoxLayout* layout = new QHBoxLayout(this);
@@ -85,69 +77,9 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     });
     connect(m_breadcrumbBar, &BreadcrumbBar::pathClicked, this, &AddressBar::onBreadcrumbClicked);
 
-    connect(m_breadcrumbBar, &BreadcrumbBar::pathsDroppedNode, this, [this](const QStringList& paths, const QString& targetPath) {
-        if (paths.isEmpty() || targetPath.isEmpty() || targetPath == "computer://") return;
-
-        DiskIoContext ioCtx;
-        ioCtx.destination = targetPath;
-        ioCtx.isMove = !(QApplication::keyboardModifiers() & Qt::ControlModifier);
-
-        // 1. 扫描目标目录是否存在文件冲突
-        QStringList conflictingPaths;
-        for (const QString& srcPath : paths) {
-            QFileInfo srcInfo(srcPath);
-            QString destFilePath = QDir(targetPath).filePath(srcInfo.fileName());
-            if (QFile::exists(destFilePath)) {
-                conflictingPaths.append(srcPath);
-            }
-        }
-
-        if (!conflictingPaths.isEmpty()) {
-            int remainingConflicts = conflictingPaths.size();
-            bool applyToAll = false;
-            CollisionResolveAction globalAction = CollisionResolveAction::AutoResolve;
-
-            for (const QString& srcFile : paths) {
-                QFileInfo srcInfo(srcFile);
-                QString destFilePath = QDir(targetPath).filePath(srcInfo.fileName());
-
-                if (QFile::exists(destFilePath)) {
-                    CollisionResolveAction action = globalAction;
-
-                    if (!applyToAll) {
-                        FileCollisionDialog dialog(srcFile, targetPath, remainingConflicts--, this);
-                        if (dialog.exec() != QDialog::Accepted) {
-                            return; // 用户点击取消 -> 中止拖拽移动/复制
-                        }
-                        action = dialog.selectedAction();
-                        applyToAll = dialog.applyToAll();
-                        if (applyToAll) {
-                            globalAction = action;
-                        }
-                    }
-
-                    if (action == CollisionResolveAction::Skip) {
-                        continue; // 跳过此文件
-                    } else if (action == CollisionResolveAction::AutoResolve) {
-                        ioCtx.autoRenameFiles.insert(srcFile);
-                        ioCtx.sources.append(srcFile);
-                    } else if (action == CollisionResolveAction::Replace) {
-                        ioCtx.overwriteFiles.insert(srcFile);
-                        ioCtx.sources.append(srcFile);
-                    }
-                } else {
-                    ioCtx.sources.append(srcFile);
-                }
-            }
-        } else {
-            ioCtx.sources = paths;
-        }
-
-        if (ioCtx.sources.isEmpty()) return;
-
-        DiskIoService::instance().executeAsync(ioCtx, nullptr);
+    connect(m_breadcrumbBar, &BreadcrumbBar::pathsDroppedNode, this, [](const QStringList&, const QString&) {
+        // RapidNotes 为纯文本笔记，不处理磁盘文件拖放覆盖
     });
-
     connect(m_breadcrumbBar, &BreadcrumbBar::favoriteToggleRequested, this, [this](const QString& fullPath, const QPoint& globalPos) {
         if (fullPath.isEmpty() || fullPath == "computer://") return;
 
@@ -170,36 +102,7 @@ AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
             emit pathChanged(isLibraryScene ? fullPath : nativePath);
         });
 
-        // 2. 标签页级联子菜单 (支持物理目录与库分类在新标签中打开)
-        ContextMenuFactory::buildTabCascadeMenu(&menu, isLibraryScene ? fullPath : nativePath, this);
-
-        // 3. 仅对物理目录支持在“资源管理器”中显示
-        if (isPhysicalDir) {
-            ContextMenuFactory::buildShowInExplorerAction(&menu, nativePath, this);
-        }
-
-        // 核心隔离：以下区域 ② 的所有操作仅对物理硬盘目录生效，库场景彻底剔除！
-        if (isPhysicalDir) {
-            menu.addSeparator();
-
-            // 4. 标记 / 收藏夹 / 库
-            MarkedFolderService::instance().buildMarkAction(&menu, nativePath, this);
-            FavoriteService::instance().buildFavoriteAction(&menu, nativePath, this);
-            LibraryService::instance().buildLibraryAction(&menu, QStringList{nativePath}, this);
-
-            menu.addSeparator();
-
-            // 5. 复制名称 / 复制完整路径
-            ContextMenuFactory::buildCopyNameAction(&menu, QStringList{nativePath}, this);
-            ContextMenuFactory::buildCopyPathAction(&menu, QStringList{nativePath}, this);
-
-            // 6. 粘贴到此文件夹
-            QAction* actPaste = menu.addAction(UiHelper::getIcon("paste", QColor("#EEEEEE"), 18), "粘贴到此文件夹");
-            actPaste->setEnabled(ClipboardService::instance().canPaste(nativePath));
-            connect(actPaste, &QAction::triggered, this, [this, nativePath]() {
-                ClipboardService::instance().executePaste(nativePath, this);
-            });
-        }
+        // 针对 RapidNotes 笔记场景，仅提供打开分类操作
 
         menu.exec(globalPos);
     });
@@ -297,4 +200,4 @@ bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
     return QWidget::eventFilter(obj, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

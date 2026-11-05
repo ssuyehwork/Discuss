@@ -8,7 +8,7 @@
 #include <QMutexLocker>
 #include <mutex>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 namespace {
     static std::mutex s_qtGuiMutex;
@@ -91,7 +91,7 @@ QString SvgIconRenderer::getSvgTempFilePath(const QString& key, const QColor& co
     QString svgData = SvgIcons::icons[key];
     svgData.replace("currentColor", color.name());
 
-    QString tempDir = QDir::tempPath() + "/QuarkMeta_Icons";
+    QString tempDir = QDir::tempPath() + "/RapidNotes_Icons";
     QDir().mkpath(tempDir);
     QString filePath = QString("%1/%2_%3.svg").arg(tempDir).arg(key).arg(color.name().mid(1));
 
@@ -104,4 +104,4 @@ QString SvgIconRenderer::getSvgTempFilePath(const QString& key, const QColor& co
     return QString();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

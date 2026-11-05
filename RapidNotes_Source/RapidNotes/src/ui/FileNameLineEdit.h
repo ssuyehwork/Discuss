@@ -4,7 +4,7 @@
 #include <QFocusEvent> 
 #include <QKeyEvent> 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 /** 
  * @brief Standalone LineEdit with autonomous selection and key navigation for file renaming. 
@@ -23,4 +23,4 @@ private:
     bool m_isFolder = false; 
 }; 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

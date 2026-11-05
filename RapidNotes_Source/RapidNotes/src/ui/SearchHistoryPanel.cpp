@@ -7,7 +7,7 @@
 #include <QApplication>
 #include <QMouseEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 SearchHistoryPanel::SearchHistoryPanel(QWidget* parent)
     : QFrame(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint)
@@ -166,4 +166,4 @@ bool SearchHistoryPanel::eventFilter(QObject* obj, QEvent* event) {
     return QFrame::eventFilter(obj, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

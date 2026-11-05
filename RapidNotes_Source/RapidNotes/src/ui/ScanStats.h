@@ -4,7 +4,7 @@
 #include <QString>
 #include <QSet>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 全局统一的检索与统计快照结构体
@@ -61,4 +61,4 @@ struct ScanStats {
     bool operator!=(const ScanStats& o) const { return !(*this == o); }
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

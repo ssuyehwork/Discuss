@@ -242,4 +242,41 @@ void ShellHelper::ensureHidden(const std::wstring& path) {
 #endif
 }
 
+void ShellHelper::extractArchive(const QString& archivePath, const QString& destDir) {
+#ifdef Q_OS_WIN
+    QString ext = QFileInfo(archivePath).suffix().toLower();
+
+    // .zip 格式：使用 PowerShell Expand-Archive 原生后台解压（startDetached 完全异步）
+    if (ext == QStringLiteral("zip")) {
+        QString nativeSrc  = QDir::toNativeSeparators(archivePath);
+        QString nativeDest = QDir::toNativeSeparators(destDir);
+        // -Force 允许向已存在目录写入（调用方已通过递增编号保证子文件夹唯一性）
+        QString script = QString(
+            "Expand-Archive -LiteralPath '%1' -DestinationPath '%2' -Force"
+        ).arg(nativeSrc, nativeDest);
+
+        QProcess::startDetached(
+            QStringLiteral("powershell"),
+            QStringList() << QStringLiteral("-NoProfile")
+                          << QStringLiteral("-NonInteractive")
+                          << QStringLiteral("-WindowStyle") << QStringLiteral("Hidden")
+                          << QStringLiteral("-Command") << script
+        );
+    } else {
+        // 其他格式（.7z / .rar / .tar.* 等）：委托系统关联程序
+        SHELLEXECUTEINFOW sei = { sizeof(sei) };
+        sei.fMask   = SEE_MASK_NOCLOSEPROCESS;
+        sei.lpVerb  = L"open";
+        std::wstring wpath = QDir::toNativeSeparators(archivePath).toStdWString();
+        sei.lpFile  = wpath.c_str();
+        sei.nShow   = SW_SHOW;
+        ShellExecuteExW(&sei);
+        if (sei.hProcess) CloseHandle(sei.hProcess);
+    }
+#else
+    Q_UNUSED(archivePath);
+    Q_UNUSED(destDir);
+#endif
+}
+
 } // namespace QuarkMeta

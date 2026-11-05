@@ -1,7 +1,6 @@
 #include "UiHelper.h"
 #include "ThemeManager.h"
 #include "SvgIcons.h"
-#include "../core/ItemRecord.h"
 
 #include <QApplication>
 #include <QLineEdit>
@@ -15,7 +14,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void UiHelper::showTextEditContextMenu(QWidget* textWidget, const QPoint& pos) {
     if (!textWidget) return;
@@ -146,4 +145,4 @@ void UiHelper::setupLineEditContextMenu(QLineEdit* edit) {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

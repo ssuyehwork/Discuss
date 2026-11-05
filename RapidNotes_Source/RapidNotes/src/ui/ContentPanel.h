@@ -17,9 +17,9 @@
 #include "models/FilterProxyModel.h"
 #include "controllers/ContentSortController.h"
 #include "../core/ModelContract.h"
-#include "../meta/SmartFolderDao.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
+#include "../core/SmartFolderRecord.h"
 
 class DropTreeView;
 class JustifiedView;
@@ -43,7 +43,7 @@ public:
         PathList
     };
 
-    using SortType = QuarkMeta::SortType;
+    using SortType = RapidNotes::SortType;
     static constexpr SortType SortByName = SortType::SortByName;
     static constexpr SortType SortByCreateDate = SortType::SortByCreateDate;
     static constexpr SortType SortByModifyDate = SortType::SortByModifyDate;
@@ -61,7 +61,7 @@ public:
     };
 
     enum ContextAction {
-        ActionNone, ActionOpen, ActionOpenInNewTab, ActionOpenDefault, ActionShowInExplorer, ActionShowInQuarkMeta, ActionNewFolder, ActionNewMd, ActionNewTxt, ActionCreateFolderWithSelectedItems,
+        ActionNone, ActionOpen, ActionOpenInNewTab, ActionOpenDefault, ActionShowInExplorer, ActionShowInRapidNotes, ActionNewFolder, ActionNewMd, ActionNewTxt, ActionCreateFolderWithSelectedItems,
         ActionPin, ActionUnpin, ActionColorTag, ActionEncrypt, ActionDecrypt, ActionChangePwd,
         ActionBatchRename, ActionRename, ActionCopy, ActionCut, ActionDuplicate, ActionPaste, ActionCopyTags, ActionPasteTags, ActionRepeatLastOp, ActionDelete,
         ActionPermanentDelete, ActionSecureDelete, ActionRestore, ActionRestoreAll, ActionEmptyTrash,
@@ -219,7 +219,7 @@ signals:
     void requestAddFavorite(const QStringList& paths);
     void requestRemoveFavorite(const QStringList& paths);
     void dataSourceChanged(const QString& source);
-    void directoryStatsReady(const QuarkMeta::ScanStats& stats);
+    void directoryStatsReady(const RapidNotes::ScanStats& stats);
     void statusBarStatsUpdated(int fileCount, int folderCount, int totalCount);
     void statusBarMessageReady(const QString& message);
     void dualPanePathsChanged(const QString& path1, const QString& path2);
@@ -326,4 +326,4 @@ public:
     void endWatchSuppress();
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -2,7 +2,7 @@
 #include "../../core/ModelContract.h"
 #include <algorithm>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 SectionProxyModel::SectionProxyModel(QObject* parent)
     : QAbstractProxyModel(parent) {
@@ -584,4 +584,4 @@ void SectionProxyModel::onSourceLayoutChanged() {
     emit layoutChanged();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

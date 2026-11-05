@@ -7,9 +7,9 @@
 #include <QLineEdit>
 #include <QStyledItemDelegate>
 #include "DropTreeView.h"
-#include "../meta/SmartFolderDao.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
+#include "../core/SmartFolderRecord.h"
 
 class LibraryTreeView : public DropTreeView {
     Q_OBJECT
@@ -112,4 +112,4 @@ private:
     bool m_isUpdatingCounts = false;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

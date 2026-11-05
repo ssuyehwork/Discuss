@@ -10,8 +10,6 @@
 #include "ShellIconManager.h"
 #include "ViewDragDropHelper.h"
 #include "../meta/LibraryDao.h"
-#include "../meta/SmartFolderDao.h"
-#include "dialogs/SmartFolderDialog.h"
 #include "../meta/LibraryService.h"
 #include "../meta/MetaIndexService.h"
 #include "../meta/DatabaseManager.h"
@@ -37,7 +35,7 @@
 #include <QMouseEvent>
 #include <functional>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QRect LibraryItemDelegate::addBtnRect(const QRect& optionRect) {
     int size = 16;
@@ -1588,4 +1586,4 @@ void LibraryPanel::createAndEditCategory(int parentId) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

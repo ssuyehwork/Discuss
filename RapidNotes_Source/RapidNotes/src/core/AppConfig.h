@@ -6,12 +6,12 @@
 #include <QStandardPaths>
 #include <QDir>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 工业级配置管理单例 (AppConfig)
  * 物理隔离 QSettings，解决身份分裂问题，统一组织与应用名称。
- * RapidNotes 专属持久化配置，与 QuarkMeta 严格隔离。
+ * RapidNotes 专属持久化配置，与 RapidNotes 严格隔离。
  */
 class AppConfig {
 public:
@@ -59,4 +59,4 @@ private:
     mutable QMutex m_mutex;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

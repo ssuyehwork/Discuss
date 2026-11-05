@@ -3,7 +3,7 @@
 #include <QList>
 #include <Qt>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FlowLayout : public QLayout {
 public:
@@ -34,4 +34,4 @@ private:
     Qt::Alignment m_alignment = Qt::AlignLeft;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -1,7 +1,7 @@
 #include "FlowLayout.h"
 #include <QWidget>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FlowLayout::FlowLayout(QWidget *parent, int margin, int hSpacing, int vSpacing)
     : QLayout(parent), m_hSpace(hSpacing), m_vSpace(vSpacing) { setContentsMargins(margin, margin, margin, margin); }
@@ -95,4 +95,4 @@ int FlowLayout::doLayout(const QRect &rect, bool testOnly) const {
     return totalH;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

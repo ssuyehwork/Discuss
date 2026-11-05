@@ -1,10 +1,9 @@
 #include "NavigationService.h"
 #include "NavigationHistoryService.h"
-#include "DatabaseManager.h"
 #include <QDir>
 #include <QFileInfo>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 NavigationService& NavigationService::instance() {
     static NavigationService s_instance;
@@ -12,6 +11,7 @@ NavigationService& NavigationService::instance() {
 }
 
 NavigationService::NavigationService(QObject* parent) : QObject(parent) {
+
 }
 
 QString NavigationService::normalizeUrl(const QString& rawUrl) const {
@@ -41,13 +41,10 @@ QString NavigationService::currentDisplayPath() const {
         int catId = m_currentUrl.mid(10).toInt();
         if (catId == -1) return "库 → 全部数据";
         if (catId == -2) return "库 → 未分类";
-        QString catName = DatabaseManager::instance().getCategoryNameById(catId);
-        return catName.isEmpty() ? "库" : ("库 → " + catName);
-    }
-
-    if (m_currentUrl.startsWith("smartfolder://")) {
         return "库";
     }
+
+    if (m_currentUrl.startsWith("smartfolder://")) return "库";
 
     if (m_currentUrl.contains("://")) return m_currentUrl;
     return QDir::toNativeSeparators(m_currentUrl);
@@ -160,4 +157,4 @@ void NavigationService::refresh() {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

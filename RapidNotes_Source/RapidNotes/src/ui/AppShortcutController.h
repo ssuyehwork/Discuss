@@ -5,7 +5,7 @@
 #include <QWidget>
 #include <QShortcut>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class SearchController;
 
@@ -90,4 +90,4 @@ private:
     QPointer<SearchController> m_searchController;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

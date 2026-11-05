@@ -7,7 +7,7 @@
 
 #include <QResizeEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 constexpr int kLayoutEdgeMargin = 5;
 constexpr int kSearchBoxWidth = 230;
@@ -108,4 +108,4 @@ void NavBarWidget::resizeEvent(QResizeEvent* event) {
     updateResponsiveLayout();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

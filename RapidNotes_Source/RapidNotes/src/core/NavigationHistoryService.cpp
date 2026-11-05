@@ -2,7 +2,7 @@
 #include "AppConfig.h"
 #include <QDir>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 NavigationHistoryService& NavigationHistoryService::instance() {
     static NavigationHistoryService inst;
@@ -74,4 +74,4 @@ QStringList NavigationHistoryService::getRecentVisitedFolders(const std::wstring
     return AppConfig::instance().getValue(key, QStringList()).toStringList();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

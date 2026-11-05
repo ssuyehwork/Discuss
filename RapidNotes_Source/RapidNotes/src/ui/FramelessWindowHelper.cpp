@@ -18,7 +18,7 @@
 #include <windowsx.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FramelessWindowHelper* FramelessWindowHelper::apply(QWidget* window, QWidget* titleBar) {
     if (!window) return nullptr;
@@ -238,4 +238,4 @@ bool FramelessWindowHelper::isAlwaysOnTop(QWidget* window) {
     return (window->windowFlags() & Qt::WindowStaysOnTopHint) != 0;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

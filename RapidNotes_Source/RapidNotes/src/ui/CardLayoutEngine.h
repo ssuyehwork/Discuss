@@ -3,7 +3,7 @@
 #include <QRect>
 #include <QPoint>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 归一化卡片几何结构体
@@ -47,4 +47,4 @@ public:
     static CardLayout calculate(const QRect& totalRect, int zoomLevel = 96);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

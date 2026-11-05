@@ -4,7 +4,7 @@
 #include <QtMath>
 #include <QEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ElasticEdit::ElasticEdit(QWidget* parent) : QTextEdit(parent) {
     QSizePolicy sp(QSizePolicy::Expanding, QSizePolicy::Minimum);
@@ -82,4 +82,4 @@ void ElasticEdit::keyPressEvent(QKeyEvent* e) {
     QTextEdit::keyPressEvent(e);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

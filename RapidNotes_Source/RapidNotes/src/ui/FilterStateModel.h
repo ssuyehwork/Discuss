@@ -4,7 +4,7 @@
 #include <QList>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct FilterState {
     static constexpr int kHueTolerance = 20;
@@ -72,4 +72,4 @@ private:
     FilterState m_state;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

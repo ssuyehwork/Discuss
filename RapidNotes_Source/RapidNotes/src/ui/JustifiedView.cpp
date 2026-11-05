@@ -14,7 +14,7 @@
 #include <QTimer>
 #include <algorithm>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 JustifiedView::JustifiedView(QWidget* parent) : QAbstractItemView(parent) {
     setFrameShape(QFrame::NoFrame);
@@ -644,4 +644,4 @@ QList<int> JustifiedView::rowsInRange(int top, int bottom) const {
     return rows;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

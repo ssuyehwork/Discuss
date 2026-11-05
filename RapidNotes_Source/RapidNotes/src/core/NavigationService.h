@@ -4,7 +4,7 @@
 #include <QString>
 #include <QList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class NavigationService : public QObject {
     Q_OBJECT
@@ -64,4 +64,4 @@ private:
     static constexpr int kMaxHistoryDepth = 100;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

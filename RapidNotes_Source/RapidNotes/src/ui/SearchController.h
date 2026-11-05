@@ -9,7 +9,7 @@
 #include <QPointer>
 #include "ContentPanel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class SearchHistoryPanel;
 
@@ -60,4 +60,4 @@ private:
     SearchScope m_searchScope = SearchScope::CurrentFolder;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

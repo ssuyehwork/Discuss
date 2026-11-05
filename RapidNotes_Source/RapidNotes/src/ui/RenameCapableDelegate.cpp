@@ -1,7 +1,7 @@
 #include "RenameCapableDelegate.h" 
 #include "../core/ModelContract.h" 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 QWidget* RenameCapableDelegate::createEditor(QWidget* parent, const QStyleOptionViewItem&, const QModelIndex& index) const { 
     FileNameLineEdit* editor = new FileNameLineEdit(parent); 
@@ -27,4 +27,4 @@ void RenameCapableDelegate::setModelData(QWidget* editor, QAbstractItemModel* mo
     } 
 } 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

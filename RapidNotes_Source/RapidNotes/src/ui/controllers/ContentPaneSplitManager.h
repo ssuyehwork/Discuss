@@ -11,7 +11,7 @@
 
 #include "../TabBarWidget.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 
@@ -107,4 +107,4 @@ private:
     bool m_isSecondaryPane = false;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

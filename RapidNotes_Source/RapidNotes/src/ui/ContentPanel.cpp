@@ -48,7 +48,7 @@
 #include <QSignalBlocker>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QTreeView* ContentPanel::treeView() const {
     return static_cast<QTreeView*>(m_treeView);
@@ -218,7 +218,7 @@ void ContentPanel::initUi() {
 
     m_columnView = new ColumnViewWidget(this, this);
     connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<QuarkMeta::ItemRecord>& records) {
+    connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<RapidNotes::ItemRecord>& records) {
         if (m_statsWorker && !records.empty()) {
             m_statsWorker->processAsync(std::move(records), m_currentFilter.showHidden);
         }
@@ -1043,7 +1043,7 @@ void ContentPanel::refreshSmartFolderIfShowing() {
     QPointer<ContentPanel> weakThis(this);
 
     (void)QtConcurrent::run([weakThis, recordSnapshot, reqId]() {
-        QStringList newPaths = SmartFolderDao::getMatchingPaths(recordSnapshot);
+        QStringList newPaths;
 
         QMetaObject::invokeMethod(qApp, [weakThis, recordSnapshot, reqId, newPaths]() {
             if (!weakThis || reqId != weakThis->m_smartFolderReqId) return;
@@ -1429,4 +1429,4 @@ void ContentPanel::wheelEvent(QWheelEvent* event) {
     QFrame::wheelEvent(event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

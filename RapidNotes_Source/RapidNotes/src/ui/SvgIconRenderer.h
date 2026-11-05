@@ -8,7 +8,7 @@
 #include <QMutex>
 #include <QWidget>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class SvgIconRenderer {
 public:
@@ -22,4 +22,4 @@ public:
     static QString getSvgTempFilePath(const QString& key, const QColor& color);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

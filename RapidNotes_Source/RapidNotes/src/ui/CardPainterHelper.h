@@ -8,7 +8,7 @@
 #include <QColor>
 #include <QFontMetrics>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class CardPainterHelper {
 public:
@@ -54,4 +54,4 @@ public:
     static int drawInlinePinIcon(QPainter* painter, int rightX, int topY, int height, bool isPinned);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -6,7 +6,7 @@
 #include <QColor>
 #include <QString>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 全局唯一主题与样式管理器 (Single Source of Styling Truth)
@@ -37,4 +37,4 @@ private:
     ~ThemeManager() override = default;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

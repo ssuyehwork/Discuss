@@ -1,5 +1,5 @@
-#ifndef QUARKMETA_CORE_ENGINE_H
-#define QUARKMETA_CORE_ENGINE_H
+#ifndef RapidNotes_CORE_ENGINE_H
+#define RapidNotes_CORE_ENGINE_H
 
 #include <QObject>
 #include <QString>
@@ -11,7 +11,7 @@
 #include <functional>
 #include "CentralEventHub.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 强类型应用程序命令类型枚举
@@ -98,6 +98,6 @@ private:
     QThreadPool m_asyncTagPool;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
-#endif // QUARKMETA_CORE_ENGINE_H
+#endif // RapidNotes_CORE_ENGINE_H

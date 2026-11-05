@@ -62,6 +62,7 @@ include_directories(
     src/ui
     src/ui/models
     src/ui/components
+    src/ui/controllers
     src/core
     src/util
 )
@@ -71,6 +72,7 @@ set(SOURCES
     src/core/AES.cpp
     src/core/AES.h
     src/core/AppConfig.h
+    src/core/SmartFolderRecord.h
     src/core/ActionRecorder.cpp
     src/core/ActionRecorder.h
     src/core/CentralEventHub.cpp
@@ -263,6 +265,8 @@ set(SOURCES
     src/ui/RenameCapableDelegate.h
     src/ui/ResizeHandle.cpp
     src/ui/ResizeHandle.h
+    src/ui/RowLayoutEngine.cpp
+    src/ui/RowLayoutEngine.h
     src/ui/ScanStats.h
     src/ui/ScanStatsEngine.cpp
     src/ui/ScanStatsEngine.h
@@ -295,14 +299,25 @@ set(SOURCES
     src/ui/TagEditorWidget.h
     src/ui/TagManagerWindow.cpp
     src/ui/TagManagerWindow.h
+    src/ui/TagSelectorOverlay.cpp
+    src/ui/TagSelectorOverlay.h
     src/ui/TaskProgressStrip.cpp
     src/ui/TaskProgressStrip.h
     src/ui/ThumbnailDelegate.cpp
     src/ui/ThumbnailDelegate.h
     src/ui/TimePasteWindow.cpp
     src/ui/TimePasteWindow.h
+    src/ui/StyleLibrary.h
+    src/ui/SvgIconRenderer.cpp
+    src/ui/SvgIconRenderer.h
+    src/ui/ThemeManager.cpp
+    src/ui/ThemeManager.h
     src/ui/TitleBarWidget.cpp
     src/ui/TitleBarWidget.h
+    src/ui/UiHelper.cpp
+    src/ui/UiHelper.h
+    src/util/ColorPaletteEngine.cpp
+    src/util/ColorPaletteEngine.h
     src/ui/TitleEditorDialog.h
     src/ui/TodoCalendarWindow.cpp
     src/ui/TodoCalendarWindow.h
@@ -312,6 +327,8 @@ set(SOURCES
     src/ui/TreeItemDelegate.h
     src/ui/UnifiedSearchWindow.cpp
     src/ui/UnifiedSearchWindow.h
+    src/ui/ViewDragDropHelper.cpp
+    src/ui/ViewDragDropHelper.h
     src/ui/WritingAnimation.cpp
     src/ui/WritingAnimation.h
     src/ui/controllers/ContentPaneSplitManager.cpp

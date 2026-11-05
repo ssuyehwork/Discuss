@@ -5,7 +5,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMeta) {
     Q_UNUSED(providedMeta);
@@ -65,4 +65,4 @@ void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
     Q_UNUSED(meta);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

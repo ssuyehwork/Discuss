@@ -2,7 +2,7 @@
 #include <QPoint>
 #include <QRect>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 constexpr int kStripHeight = 5;
 
@@ -75,4 +75,4 @@ void TaskProgressStrip::updateGeometryPos() {
     raise();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

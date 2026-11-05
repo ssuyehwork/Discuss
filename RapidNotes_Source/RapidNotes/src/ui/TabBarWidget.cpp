@@ -28,7 +28,7 @@
 #include <QApplication>
 #include <QScrollBar>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 static const int kTabFixedDecorationsWidth = 56; // 8+14+6+6+16+6
 
@@ -966,4 +966,4 @@ void TabBarWidget::applyDiffUpdate() {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

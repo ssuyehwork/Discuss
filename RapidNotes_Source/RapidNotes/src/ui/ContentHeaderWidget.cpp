@@ -11,7 +11,7 @@
 #include <QMimeData>
 #include "ContentPanel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentHeaderWidget::ContentHeaderWidget(QWidget* parent)
     : QWidget(parent) {
@@ -209,4 +209,4 @@ bool ContentHeaderWidget::eventFilter(QObject* watched, QEvent* event) {
     return QWidget::eventFilter(watched, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

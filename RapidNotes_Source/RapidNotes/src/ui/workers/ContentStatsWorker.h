@@ -9,7 +9,7 @@
 #include "../ScanStats.h"
 #include "../../core/ItemRecord.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentStatsWorker : public QObject {
     Q_OBJECT
@@ -23,7 +23,7 @@ public:
     bool isSettled() const { return m_pendingCount.load() == 0; }
 
 signals:
-    void statsReady(const QuarkMeta::ScanStats& stats);
+    void statsReady(const RapidNotes::ScanStats& stats);
     void settled();
 
 private:
@@ -36,4 +36,4 @@ private:
     QSet<QString> m_cachedDuplicatePaths;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

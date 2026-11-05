@@ -66,7 +66,7 @@ public:
         ActionBatchRename, ActionRename, ActionCopy, ActionCut, ActionDuplicate, ActionPaste, ActionCopyTags, ActionPasteTags, ActionRepeatLastOp, ActionDelete,
         ActionPermanentDelete, ActionSecureDelete, ActionRestore, ActionRestoreAll, ActionEmptyTrash,
         ActionCopyName, ActionCopyPath, ActionAddToFavorites, ActionRefresh, ActionReextractThumbnail, ActionBatchCreate, ActionFileCompare,
-        ActionOpenDirectoryInExplorer
+        ActionOpenDirectoryInExplorer, ActionExtractArchive, ActionCompressToZip
     };
 
     explicit ContentPanel(QWidget* parent = nullptr);

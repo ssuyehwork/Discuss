@@ -6,7 +6,7 @@
 #include <QEnterEvent>
 #include <QMouseEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ColorPill : public QWidget {
     Q_OBJECT
@@ -28,4 +28,4 @@ private:
     bool m_hovered = false;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

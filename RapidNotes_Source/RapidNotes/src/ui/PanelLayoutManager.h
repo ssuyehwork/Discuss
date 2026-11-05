@@ -7,7 +7,7 @@
 #include <QPoint>
 #include <QPointer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 
 
@@ -66,4 +66,4 @@ private:
     static constexpr int kWindowAbsoluteMinWidth = 710; // 顶栏与三栏视界物理绝对下限 (3 * 230px + 10px + 10px = 710px)
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

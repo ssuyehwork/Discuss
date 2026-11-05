@@ -4,7 +4,7 @@
 #include <QPushButton>
 #include <QPaintEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TagPill : public QWidget {
     Q_OBJECT
@@ -21,4 +21,4 @@ private:
     QPushButton* m_closeBtn = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

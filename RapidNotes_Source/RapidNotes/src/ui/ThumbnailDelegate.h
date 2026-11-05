@@ -2,7 +2,7 @@
 
 #include "RenameCapableDelegate.h" 
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ThumbnailDelegate : public RenameCapableDelegate {
     Q_OBJECT
@@ -53,4 +53,4 @@ private:
     int m_colorRole = -1;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

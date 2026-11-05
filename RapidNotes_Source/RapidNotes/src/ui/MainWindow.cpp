@@ -45,7 +45,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 constexpr int kLayoutEdgeMargin = 5;
 constexpr int kStatusBarHorizontalMargin = 12;
@@ -680,7 +680,7 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
     return QMainWindow::nativeEvent(eventType, message, result);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
 void MainWindow::showAndActivate() {
     showNormal();

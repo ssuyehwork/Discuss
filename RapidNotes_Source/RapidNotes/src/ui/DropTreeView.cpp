@@ -19,7 +19,7 @@
 #include <algorithm>
 #include "Logger.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // 声明式规则表：单一真理来源 (Single Source of Truth)
 static const std::vector<ColumnPolicy> kFileListColumnPolicies = {
@@ -456,4 +456,4 @@ void DropTreeView::paintEvent(QPaintEvent* event) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

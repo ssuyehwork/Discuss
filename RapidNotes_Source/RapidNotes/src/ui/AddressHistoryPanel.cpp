@@ -5,7 +5,7 @@
 #include <QApplication>
 #include <QMouseEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 AddressHistoryPanel::AddressHistoryPanel(QWidget* parent)
     : QFrame(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint)
@@ -139,4 +139,4 @@ bool AddressHistoryPanel::eventFilter(QObject* obj, QEvent* event) {
     return QFrame::eventFilter(obj, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

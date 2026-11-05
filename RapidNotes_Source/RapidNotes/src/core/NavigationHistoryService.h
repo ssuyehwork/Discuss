@@ -3,7 +3,7 @@
 #include <QObject>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class NavigationHistoryService : public QObject {
     Q_OBJECT
@@ -28,4 +28,4 @@ private:
     const int m_maxLimit = 15;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

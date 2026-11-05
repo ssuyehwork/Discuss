@@ -6,7 +6,7 @@
 #include <QPushButton>
 #include <QSlider>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class HoverEventFilter;
 class TabBarWidget;
@@ -76,4 +76,4 @@ protected:
     void dropEvent(QDropEvent* event) override;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

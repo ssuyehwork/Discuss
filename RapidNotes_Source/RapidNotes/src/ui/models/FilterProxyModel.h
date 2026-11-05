@@ -6,7 +6,7 @@
 #include "../FilterPanel.h"
 #include "../../core/ItemRecord.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 独立的高级多维条件过滤与加权排序代理模型
@@ -35,4 +35,4 @@ private:
     int m_sortType = 0;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

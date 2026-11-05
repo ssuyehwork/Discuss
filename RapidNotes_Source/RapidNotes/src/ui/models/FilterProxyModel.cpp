@@ -5,7 +5,7 @@
 #include <QRegularExpression>
 #include <cmath>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FilterProxyModel::FilterProxyModel(QObject* parent) : QSortFilterProxyModel(parent) {}
 
@@ -309,4 +309,4 @@ bool FilterProxyModel::lessThan(const QModelIndex& source_left, const QModelInde
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

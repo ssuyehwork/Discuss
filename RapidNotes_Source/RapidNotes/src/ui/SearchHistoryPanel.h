@@ -7,7 +7,7 @@
 #include <QPushButton>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 搜索历史悬浮面板
@@ -42,4 +42,4 @@ private:
     QString      m_category = "global";
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

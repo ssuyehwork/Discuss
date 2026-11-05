@@ -6,7 +6,7 @@
 #include <cmath>
 #include <algorithm>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool ColorPaletteEngine::isGraphicsFile(const QString& ext) {
     return isStandardImage(ext) || isVectorGraphics(ext) || isRawPhoto(ext);
@@ -276,4 +276,4 @@ double ColorPaletteEngine::calculateDeltaE(const QColor& c1, const QColor& c2) {
     return deltaE76(c1, c2);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

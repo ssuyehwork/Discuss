@@ -24,7 +24,7 @@
 #include "components/FlowLayout.h"
 #include "components/ColorPill.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct MetaPreviewItem {
     bool hasThumbnail = false;
@@ -158,4 +158,4 @@ private slots:
     void setAsPrimaryColor(const QColor& color);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

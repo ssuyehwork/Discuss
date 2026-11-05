@@ -4,7 +4,7 @@
 #include <QPen>
 #include <QCursor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ColorBlock::ColorBlock(const QColor& color, QWidget* parent) 
     : QWidget(parent), m_color(color) {
@@ -55,4 +55,4 @@ void ColorBlock::leaveEvent(QEvent*) {
     ToolTipOverlay::hideTip();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

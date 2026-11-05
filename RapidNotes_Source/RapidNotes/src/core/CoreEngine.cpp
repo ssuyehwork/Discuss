@@ -3,7 +3,7 @@
 #include "NoteRepository.h"
 #include "../core/TagCodec.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 static QList<qint64> extractNoteIds(const QStringList& paths) {
     QList<qint64> ids;
@@ -26,7 +26,7 @@ CoreEngine& CoreEngine::instance() {
 
 CoreEngine::CoreEngine(QObject* parent) : QObject(parent) {
     m_asyncTagPool.setMaxThreadCount(1);
-    qRegisterMetaType<QuarkMeta::AppCommand>("QuarkMeta::AppCommand");
+    qRegisterMetaType<RapidNotes::AppCommand>("RapidNotes::AppCommand");
 }
 
 std::shared_ptr<CancellationToken> CoreEngine::createCancellationToken() {
@@ -130,4 +130,4 @@ void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList
     if (onFinished) onFinished(paths.size());
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

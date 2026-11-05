@@ -73,6 +73,15 @@ public:
      */
     static void ensureHidden(const std::wstring& path);
 
+    /**
+     * @brief 解压压缩包到指定目标目录
+     * @param archivePath 压缩包物理路径（支持 .zip / .7z / .rar / .tar.* 等格式）
+     * @param destDir     解压目标目录（调用方负责确保该目录已创建）
+     * @note  .zip 格式使用 PowerShell Expand-Archive 原生后台解压；
+     *        其余格式通过 ShellExecuteExW 委托系统关联程序（7-Zip / WinRAR）处理。
+     */
+    static void extractArchive(const QString& archivePath, const QString& destDir);
+
 };
 
 } // namespace QuarkMeta

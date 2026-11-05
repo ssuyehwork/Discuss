@@ -14,7 +14,7 @@
 #include <QAbstractItemView>
 #include <QKeyEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 AppShortcutController::AppShortcutController(QWidget* targetWindow,
                                              SearchController* searchController,
@@ -272,4 +272,4 @@ void AppShortcutController::initShortcuts() {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

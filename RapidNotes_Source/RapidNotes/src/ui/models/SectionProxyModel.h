@@ -4,7 +4,7 @@
 #include <QVector>
 #include <QString>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class SectionProxyModel : public QAbstractProxyModel {
     Q_OBJECT
@@ -76,4 +76,4 @@ private:
     QList<QPersistentModelIndex> m_layoutChangeSourceIndexes;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
