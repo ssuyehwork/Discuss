@@ -13,6 +13,7 @@
 #include "../meta/TrashRepository.h"
 #include "../meta/QuarkMetaJson.h"
 #include "../meta/DiskTrashRepo.h"
+#include "../meta/AssociationCascadeService.h"
 #include <QtConcurrent>
 #include <QFileInfo>
 #include <QDir>
@@ -82,6 +83,7 @@ bool PermanentDeleteService::execute(const QStringList& paths, QWidget* parentWi
                     cmd.targetPaths << QString::fromStdWString(wp);
                     CoreEngine::instance().executeCommand(cmd);
                     UndoManager::instance().removeCommandsForPath(p);
+                    AssociationCascadeService::instance().cleanCascadeAssociations(QStringList{p});
                 }
             }
 
