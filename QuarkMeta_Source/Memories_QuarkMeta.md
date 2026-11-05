@@ -985,3 +985,27 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 当 `actionAt(pos)` 为空或其 `hoverPath` 为空（如分隔线、普通命令按钮）时，立即清除记录并调用 `ToolTipOverlay::hideTip()`。
 3. **生命周期与无害隔离**：
    - 事件过滤器的生命周期绑定到 `moveMenu`（作为子对象或随菜单销毁），菜单关闭后自动解除并销毁，绝不产生内存泄漏或跨菜单干扰。
+
+
+## 38. 项目删除级联清除收藏夹/库/标记与撤销恢复关联设计理念 (Cascade Delete Association & Undo Restoration Architecture)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 项目在执行“移入回收站”或“永久删除”时针对收藏夹（Favorites）、库（Library）与标记（Marked Folders）业务元数据生命周期管理、级联清除、撤销回滚与死锁防御的唯一真理源 (SSOT)。
+
+### 38.1 核心需求与设计理念
+1. **删除时零幽灵数据残留（自动级联清除）**：
+   - 凡是将文件或目录执行“移入回收站”（`TrashService::moveToTrash`）或“永久删除”（`PermanentDeleteService::execute`）时，系统不仅要处理物理磁盘文件与侧车元数据，还必须自动清除该路径及其下所有子项目在【收藏夹】（`favorites`）、【库】（`library_category_paths`、`library_items`）和【标记文件夹】（`marked_folders`）中的记录。
+   - **级联清除契约**：必须采用前缀模糊与精准匹配结合（`path = ? OR path LIKE ? || '/%' OR path LIKE ? || '\%'`），当父目录被删除时，内部单独被加入收藏、库或标记的子项必须一并同步清理，杜绝产生悬空断层与无效幽灵条目。
+2. **回收站撤销事务的关联完整性恢复（Undo / Restore）**：
+   - 当用户对“移入回收站”执行“撤销（Undo）”或“还原”时，不仅物理文件需要从回收站还原，此前被清除的收藏夹节点、库分类挂载关系以及标记目录记录必须 100% 完整恢复。
+   - 在执行移入回收站之前，通过 `AssociationCascadeService` 统一捕获受影响项目的完整关联快照（`AssetAssociationSnapshot`）；当触发撤销时，将快照数据原子恢复入库，并派发对应的重载信号通知 UI 面板（`FavoritePanel`、`LibraryPanel`、`MarkedPanel`）重新加载。
+3. **领域层单一真理源收敛 (`AssociationCascadeService`)**：
+   - 严禁在各个删除入口（上下文菜单、快捷键处理器、回收站服务、深层抹除等）分散各自手写 SQL；
+   - 统一收敛至 `AssociationCascadeService`，对外提供纯粹的领域接口：`findCascadeAssociations`、`cleanCascadeAssociations`、`restoreAssociations`。
+
+### 38.2 工业级防御机制：互斥锁与信号发射彻底物理隔离 (Notify Outside Lock)
+1. **同线程重入死锁与静默闪退根因**：
+   - 若在持有数据库全局互斥锁（`DatabaseManager::instance().getGlobalMutex()`）的情况下直接 `emit` 发射信号（如 `favoritesReloaded()`、`libraryChanged()`）或调用下游外部服务，下游 UI 槽函数响应后会立即再次查询数据库获取锁。
+   - 在标准 C++ (`std::mutex`) 与 MSVC STL 下，同一个线程试图对未释放的 `std::mutex` 重复加锁会抛出 `std::system_error`（`resource_deadlock_avoided`），逃逸出事件循环后直接触发 `std::terminate()` -> `abort()`，从而绕过 SEH 顶层崩溃捕获器，表现为**瞬间蒸发闪退且完全无 `.dmp` 文件生成**。
+2. **锁作用域隔离铁律**：
+   - 所有的数据库写操作、预编译与事务提交必须限定在独立的局部花括号作用域 `{ std::lock_guard<std::mutex> lock(...); ... }` 中；
+   - **互斥锁必须在离开局部作用域并彻底析构释放后，方可发射任何 Qt 信号或调用下游刷新服务**。确保下游 UI 重新查询数据库时，锁处于畅通状态，彻底杜绝死锁与崩溃。
