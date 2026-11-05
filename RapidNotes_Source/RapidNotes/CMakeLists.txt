@@ -78,6 +78,8 @@ set(SOURCES
     src/core/ActionRecorder.h
     src/core/TagLexiconService.cpp
     src/core/TagLexiconService.h
+    src/core/TaskProgressService.cpp
+    src/core/TaskProgressService.h
     src/core/UndoManager.h
     src/core/CentralEventHub.cpp
     src/core/CentralEventHub.h
@@ -93,6 +95,8 @@ set(SOURCES
     src/meta/LibraryDao.h
     src/meta/LibraryService.cpp
     src/meta/LibraryService.h
+    src/meta/MarkedFolderService.cpp
+    src/meta/MarkedFolderService.h
     src/meta/SmartFolderDao.cpp
     src/meta/SmartFolderDao.h
     src/core/DatabaseManager.cpp
