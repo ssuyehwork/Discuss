@@ -73,3 +73,8 @@ private:
 };
 
 } // namespace QuarkMeta
+
+namespace RapidNotes {
+    using FilterState = QuarkMeta::FilterState;
+    using FilterStateModel = QuarkMeta::FilterStateModel;
+}

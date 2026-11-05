@@ -65,3 +65,7 @@ private:
 };
 
 } // namespace QuarkMeta
+
+namespace RapidNotes {
+    using NavigationService = QuarkMeta::NavigationService;
+}

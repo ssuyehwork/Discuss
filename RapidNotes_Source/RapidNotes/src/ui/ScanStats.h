@@ -62,3 +62,7 @@ struct ScanStats {
 };
 
 } // namespace QuarkMeta
+
+namespace RapidNotes {
+    using ScanStats = QuarkMeta::ScanStats;
+}

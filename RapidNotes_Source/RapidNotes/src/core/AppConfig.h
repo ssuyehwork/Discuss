@@ -60,3 +60,7 @@ private:
 };
 
 } // namespace QuarkMeta
+
+namespace RapidNotes {
+    using AppConfig = QuarkMeta::AppConfig;
+}

@@ -55,3 +55,7 @@ public:
 };
 
 } // namespace QuarkMeta
+
+namespace RapidNotes {
+    using CardPainterHelper = QuarkMeta::CardPainterHelper;
+}

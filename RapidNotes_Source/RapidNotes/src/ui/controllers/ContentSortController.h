@@ -49,3 +49,8 @@ private:
 };
 
 } // namespace QuarkMeta
+
+namespace RapidNotes {
+    using SortType = QuarkMeta::SortType;
+    using ContentSortController = QuarkMeta::ContentSortController;
+}

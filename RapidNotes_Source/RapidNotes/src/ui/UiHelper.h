@@ -259,3 +259,7 @@ public:
 };
 
 } // namespace QuarkMeta
+
+namespace RapidNotes {
+    using UiHelper = QuarkMeta::UiHelper;
+}
