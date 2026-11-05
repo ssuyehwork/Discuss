@@ -1067,3 +1067,22 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 打包开始与完成均通过 `ToolTipOverlay::instance()->showToast(...)` 给出清晰反馈；
    - 完成后统一调用官方 SSOT `ContentPanel::refreshAll()` 原地刷新视图，新生成的 `.zip` 包即刻呈现；
 6. **SVG 矢量图标**：统一绑定专属拉链压缩包图标键 `"zip"`，保持中性单色 `#EEEEEE` 视觉标准。
+
+
+---
+
+## [新增记录] 内容面板回收站项目打开保护设计理念 (Recycle Bin Item Open Prevention)
+
+**记录日期**: 2026-11-06
+
+### 设计决策
+1. **回收站核心保护铁律**：回收站作为废弃条目的暂存区，其中的**任何文件与文件夹严禁直接被打开、执行或进入**；
+2. **唯一门禁守卫 (SSOT)**：
+   - 全软件视图双击、回车键（Return/Enter）与空格键（Space）激活项目的统一真实入口为 `ContentPanel::activateIndex(index)`；
+   - 在 `activateIndex` 最源头植入回收站状态判定（`m_currentCategoryType == "trash"`、`m_currentPath == "trash://"` 或 `index.data(IsDiskTrashRole).toBool()`）；
+   - 一旦命中，彻底阻断向下派发 `directorySelected`（避免进入废弃文件夹）和 `fileActivated`（避免调起外部关联程序或 QuickLook 预览）；
+3. **友好且明确的操作反馈**：
+   - 被拦截时，通过 `ToolTipOverlay::instance()->showToast(...)` 弹出警示反馈：“回收站中的项目无法直接打开，请先还原后再访问”；
+   - 严格遵守 Memories 规范，Toast 居中弹出，绝不追踪鼠标光标位置；
+4. **架构纯洁性与零副作用**：
+   - 无需在各个视图（ListView/GridView/ColumnView/JustifiedView）或键盘处理器（ContentKeyHandler）分别散落补丁，直接在控制协调层核心统一收口。

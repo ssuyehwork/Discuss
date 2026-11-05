@@ -333,10 +333,14 @@ set(SOURCES
     src/ui/WritingAnimation.h
     src/ui/controllers/ContentPaneSplitManager.cpp
     src/ui/controllers/ContentPaneSplitManager.h
+    src/ui/controllers/ContentSortController.cpp
+    src/ui/controllers/ContentSortController.h
     src/ui/controllers/PaneActivationTracker.cpp
     src/ui/controllers/PaneActivationTracker.h
+    src/ui/models/DiskItemModel.h
     src/ui/models/FilterProxyModel.cpp
     src/ui/models/FilterProxyModel.h
+    src/ui/models/ItemModelBase.h
     src/ui/models/SectionProxyModel.cpp
     src/ui/models/SectionProxyModel.h
     src/ui/workers/ContentStatsWorker.cpp

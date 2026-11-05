@@ -8,8 +8,9 @@
 #include <QStyledItemDelegate>
 #include "DropTreeView.h"
 
-namespace RapidNotes {
 #include "../core/SmartFolderRecord.h"
+
+namespace RapidNotes {
 
 class LibraryTreeView : public DropTreeView {
     Q_OBJECT

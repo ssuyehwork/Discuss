@@ -6,11 +6,8 @@
 #include <QIcon>
 #include <QMutex>
 #include <memory>
-#include <unordered_map>
-#include <QSet>
-#include <QPointer>
-#include <QTimer>
-#include "../core/ItemRecord.h"
+#include <vector>
+#include "../../core/ItemRecord.h"
 
 namespace RapidNotes {
 
@@ -56,16 +53,16 @@ public:
         m_records.clear();
         endResetModel();
     }
-    void updateRecordMetadata(QString path) override {}
-    void loadThumbnailsForRows(const QList<int>& rows) override {}
-    void migrateCache(const QString& oldPath, const QString& newPath) override {}
-    void clearCacheForFolder(const QString& folderPath) override {}
-    QStringList applyIncrementalChanges(const std::vector<RapidNotes::ItemRecord>& records, const QStringList& removedPaths) override {
+    void updateRecordMetadata(QString) override {}
+    void loadThumbnailsForRows(const QList<int>&) override {}
+    void migrateCache(const QString&, const QString&) override {}
+    void clearCacheForFolder(const QString&) override {}
+    QStringList applyIncrementalChanges(const std::vector<RapidNotes::ItemRecord>&, const QStringList&) override {
         return QStringList();
     }
 
     void incrementGeneration() {}
-    void reloadThumbnailForPath(const QString& path) {}
+    void reloadThumbnailForPath(const QString&) {}
 
 private:
     std::vector<RapidNotes::ItemRecord> m_records;

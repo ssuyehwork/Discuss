@@ -7,18 +7,12 @@
 #include <QTimer>
 #include <algorithm>
 #include <vector>
-#include "ItemRecord.h"
+#include "../../core/ItemRecord.h"
 
 namespace RapidNotes {
     enum class RecordSource {
         Disk,
         Prepared
-    };
-
-    struct QStringHash {
-        size_t operator()(const QString& key) const {
-            return qHash(key);
-        }
     };
 
     class ItemModelBase : public QAbstractTableModel {

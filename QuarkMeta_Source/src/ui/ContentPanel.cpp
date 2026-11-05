@@ -842,6 +842,13 @@ void ContentPanel::activateIndex(const QModelIndex& index) {
     QString path = index.data(PathRole).toString();
     if (path.isEmpty()) return;
 
+    // 回收站安全守卫：回收站中的文件和文件夹均禁止直接打开或进入
+    bool isTrash = (m_currentCategoryType == "trash" || m_currentPath == "trash://" || index.data(IsDiskTrashRole).toBool());
+    if (isTrash) {
+        ToolTipOverlay::instance()->showToast("请先还原后再访问", 2000, QColor("#f39c12"));
+        return;
+    }
+
     if (QFileInfo(path).isDir()) {
         if (m_currentViewMode == ColumnView && m_columnView) {
             ColumnViewPane* pane = m_columnView->activePane();

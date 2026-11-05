@@ -18,8 +18,9 @@
 #include "controllers/ContentSortController.h"
 #include "../core/ModelContract.h"
 
-namespace RapidNotes {
 #include "../core/SmartFolderRecord.h"
+
+namespace RapidNotes {
 
 class DropTreeView;
 class JustifiedView;
