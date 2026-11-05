@@ -1,5 +1,6 @@
 #include "AppShortcutController.h"
 #include "SearchController.h"
+#include "QuickLookWindow.h"
 #include "TitleBarWidget.h"
 #include "TabBarWidget.h"
 #include "LocalShortcutInterceptor.h"
@@ -142,8 +143,15 @@ void AppShortcutController::initShortcuts() {
         emit togglePinRequested();
     });
 
-    // 5. Ctrl+F: 局内聚焦搜索栏
+    // 5. Ctrl+F: 按场景判断当前活动窗口，根据不同窗口执行不同接口
     registerShortcut(QKeySequence::Find, [this]() {
+        // 若 QuickLookWindow 处于前台/显示状态，优先路由给 QuickLookWindow 处理
+        if (QuickLookWindow::instance().isVisible()) {
+            QuickLookWindow::instance().handleSearchShortcut();
+            return;
+        }
+
+        // 否则路由至主界面搜索栏
         if (m_searchController) {
             m_searchController->focusSearch();
         }

@@ -1,39 +1,45 @@
-# Implementation Plan: QuickLook 文本预览内置搜索工具栏实施方案
+# Implementation Plan: QuickLook 文本预览内置搜索工具栏与全局多场景按键路由实施方案
 
-本实施方案旨在严格遵循系统架构规范、《SYSTEM_PROMPT.md》、《Standard Specifications for Implementation Plan.md》以及 `Memories_QuarkMeta.md` 章节 39 的核心设计理念，在 `QuarkMeta_Source` 桌面应用的快速预览窗口（`QuickLookWindow`）中完整实现：
-1. **场景化快捷键门禁 (`Ctrl + F`)**：仅在当前处于文本预览模式（`m_textEdit` 激活）时响应快捷键呼出搜索栏；在图形图像文件预览时严格屏蔽，防止越权干扰；
+本实施方案旨在严格遵循系统架构规范、《SYSTEM_PROMPT.md》、《Standard Specifications for Implementation Plan.md》以及 `Memories_QuarkMeta.md` 章节 39 的核心设计理念，在 `QuarkMeta_Source` 桌面应用中完整实现：
+1. **多窗口/多场景感知按键路由 (Multi-Window Context Routing for Ctrl+F)**：
+   - 解决 Windows 低级键盘钩子（`LocalShortcutInterceptor`）在 `AppShortcutController` 中无脑将 `Ctrl+F` 截断派发给主窗口 `SearchController::focusSearch()` 的问题；
+   - 引入场景判断门禁：当且仅当 `QuickLookWindow` 处于显示/前台激活状态时，将 `Ctrl+F` 优先路由至 `QuickLookWindow::handleSearchShortcut()`；
+   - 在 `QuickLookWindow` 中进一步判断场景：若是文本预览模式（`m_textEdit` 可见），弹出右上角内置搜索浮层；若是图形图像模式，严格屏蔽，既不弹出浮层也不跳回主窗口打扰用户；
+   - 只有在 `QuickLookWindow` 未激活时，`Ctrl+F` 才路由为主界面的 `SearchController::focusSearch()`。
 2. **两层紧凑型悬浮面板结构**：
-   - 上层：搜索输入框（`QLineEdit`），右侧紧随“查找下一个”按钮和“计数”按钮；
-   - 下层：状态指示行，宽度与上方搜索框严格对齐，通过 `|` 分割显示“当前行号”与“计数值”（如 `42 | 5`）；
+   - 上下两层排布：左列垂直排列搜索输入框（`QLineEdit`）与状态指示栏（`QLabel`），右列排列“查找下一个”与“计数”按钮；
+   - 物理对齐：下层状态指示栏与上方搜索输入框左右两端严格对齐；
+   - 状态指示：通过 `|` 分割显示“当前行号”与“计数值”（如 `42 | 5`），无匹配时显示为“无 | 0”。
 3. **交互与高亮闭环**：
    - 回车键支持快速查找并跳转下一个匹配项；
-   - 匹配到的内容采用 `#ff551C`（醒目橙红）进行背景高亮，并自动滚动视图定位至该项；
-   - 未匹配时状态指示行相应位置显示为“无 | 0”；
-   - 关闭预览或切换文件时自动收起并重置搜索状态。
+   - 匹配项采用 `#ff551C`（醒目橙红）进行高亮，自动滚动居中文本视图；
+   - 输入框打字时输入空格不误触发窗口关闭，按 `Esc` 优先收起搜索框。
 
 ---
 
 ## Chapter 1: Overview（概述与根因分析）
 
 ### 1.1 核心病灶与系统性缺陷深入剖析
-1. **长文本与源代码预览定位困难**：
-   - `QuickLookWindow` 当前仅具备静态文本只读渲染（`QPlainTextEdit`），不支持在预览窗口内进行关键词查找。用户在预览大型日志、长代码文件或文本时，无法快速检索关键信息。
-2. **缺乏状态化的行号与计数反馈机制**：
-   - 缺乏像现代代码编辑器一样的搜索指示器，无法让用户直观掌握匹配项在文本中的具体物理位置（所在行）和全部匹配分布数量。
+1. **Windows 底层低级键盘钩子（`WH_KEYBOARD_LL`）抢先拦截 `Ctrl+F`**：
+   - `AppShortcutController` 在初始化快捷键时，通过 `LocalShortcutInterceptor` 注册了系统级低级钩子监听 `QKeySequence::Find` (`VK_CONTROL + 'F'`)；
+   - 当用户在 `QuickLookWindow` 全屏预览文本并按下 `Ctrl+F` 时，该低级钩子抢先捕获并直接执行了 `m_searchController->focusSearch()`，随后返回 `1` 彻底吞噬了按键。
+   - 这导致底层操作系统和 Qt 事件循环根本无法把 `QKeyEvent` 传递给 `QuickLookWindow`，表现为“按下 Ctrl+F 毫无反应”（实际上主界面的搜索栏被静默聚焦了）。
+2. **缺乏多窗口与多场景智能路由仲裁**：
+   - 原架构中未对激活的前台窗口进行场景识别，将 `Ctrl+F` 死绑定到主窗口；未针对 `QuickLookWindow` 建立场景优先的分发管道。
 
 ### 1.2 架构治理设计目标与核心守则
-- **单窗口原生嵌入**：在 `QuickLookWindow` 顶部右上方悬浮嵌入 `m_searchBar` 浮层，采用双层布局（输入行 + 状态指示行），无需创建第二套独立窗口，零资源冗余；
-- **状态单一真理源 (SSOT)**：当前文档内容以 `m_textEdit->document()` 为单一事实源，通过 `QTextDocument::find` 与 `QTextCursor` 定位行号（`cursor.blockNumber() + 1`），并通过 `QTextEdit::ExtraSelection` 实施 `#ff551C` 样式着色；
-- **场景与焦点门禁**：仅在 `m_textEdit->isVisible()` 且非图形图像时启用搜索，搜索框弹出时自动获得焦点并全选既有文字，按下 `ESC` 时隐藏搜索框并清空高亮。
+- **按不同窗口执行不同接口**：在 `AppShortcutController` 中监听 `QKeySequence::Find` 时，先查询 `QuickLookWindow` 是否激活。若处于快速预览状态，全权委托给 `QuickLookWindow::handleSearchShortcut()`，否则委托给 `SearchController::focusSearch()`；
+- **状态单一真理源 (SSOT)**：当前文档内容以 `m_textEdit->document()` 为单一事实源，匹配统计通过 `QTextCursor` 缓存，样式收拢至 `resources/style.qss`。
 
 ---
 
 ## Chapter 2: Modified Files List（影响文件清单）
 
 1. **修改文件**：
-   - `QuarkMeta_Source/src/ui/QuickLookWindow.h`（增加搜索控件成员指针、方法声明及 `resizeEvent` 重载）
-   - `QuarkMeta_Source/src/ui/QuickLookWindow.cpp`（构建两层悬浮搜索控件、实现查找下一个、计数、高亮渲染与按键拦截逻辑）
-   - `QuarkMeta_Source/resources/style.qss`（收拢搜索框浮层、按钮与状态栏外部样式，禁止 C++ 硬编码内联样式）
+   - `QuarkMeta_Source/src/ui/QuickLookWindow.h`（公开 `handleSearchShortcut()` 接口，声明两层搜索布局成员与搜索状态缓存）
+   - `QuarkMeta_Source/src/ui/QuickLookWindow.cpp`（实现 `handleSearchShortcut()`，构建状态栏与输入框严格对齐的两层浮层，完善按键过滤）
+   - `QuarkMeta_Source/src/ui/AppShortcutController.cpp`（引入 `QuickLookWindow.h`，在 `Ctrl+F` 触发时按场景进行窗口路由分发）
+   - `QuarkMeta_Source/resources/style.qss`（收拢搜索框浮层、按钮与状态栏外部样式，禁止内联硬编码）
 
 ---
 
@@ -50,6 +56,20 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
+#include <QPushButton>
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+    void preview(const QString& filePath);
+    QString currentPath() const { return m_currentPath; }
+    void closePreview();
+    void setIgnoreDeactivate(bool ignore) { m_ignoreDeactivate = ignore; }
+=======
+    void preview(const QString& filePath);
+    QString currentPath() const { return m_currentPath; }
+    void closePreview();
+    void setIgnoreDeactivate(bool ignore) { m_ignoreDeactivate = ignore; }
+    void handleSearchShortcut();
 >>>>>>> REPLACE
 
 <<<<<<< SEARCH
@@ -226,29 +246,6 @@ void QuickLookWindow::renderText(const QString& path) {
 >>>>>>> REPLACE
 
 <<<<<<< SEARCH
-    if (event->key() == Qt::Key_W && (event->modifiers() & Qt::ControlModifier)) {
-        closePreview();
-        event->accept();
-        return;
-    }
-=======
-    if (event->key() == Qt::Key_W && (event->modifiers() & Qt::ControlModifier)) {
-        closePreview();
-        event->accept();
-        return;
-    }
-
-    // 🚀【Ctrl+F 场景化门禁】：仅在非图形图像预览（纯文本 m_textEdit 可视）时呼出搜索栏
-    if (event->key() == Qt::Key_F && (event->modifiers() & Qt::ControlModifier)) {
-        if (m_textEdit && m_textEdit->isVisible()) {
-            showSearchBar();
-            event->accept();
-            return;
-        }
-    }
->>>>>>> REPLACE
-
-<<<<<<< SEARCH
 void QuickLookWindow::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
 }
@@ -261,6 +258,13 @@ void QuickLookWindow::showEvent(QShowEvent* event) {
 void QuickLookWindow::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     updateSearchBarGeometry();
+}
+
+void QuickLookWindow::handleSearchShortcut() {
+    // 🚀【场景化门禁】：当且仅当预览的是非图形图像（文本模式且 m_textEdit 可视）时才弹出搜索框
+    if (m_textEdit && m_textEdit->isVisible()) {
+        showSearchBar();
+    }
 }
 
 void QuickLookWindow::updateSearchBarGeometry() {
@@ -291,6 +295,8 @@ void QuickLookWindow::hideSearchBar() {
 }
 
 void QuickLookWindow::clearSearchHighlights() {
+    m_lastSearchQuery.clear();
+    m_cachedTotalMatches = 0;
     if (m_textEdit) {
         m_textEdit->setExtraSelections({});
     }
@@ -323,6 +329,9 @@ void QuickLookWindow::updateMatchCount() {
             }
         }
     }
+
+    m_lastSearchQuery = query;
+    m_cachedTotalMatches = count;
 
     if (count == 0) {
         m_lblStatus->setText("无 | 0");
@@ -362,16 +371,20 @@ void QuickLookWindow::findNext() {
         extraSelections.append(selection);
         m_textEdit->setExtraSelections(extraSelections);
 
-        // 统计总数并定位当前行号
+        // 定位当前行号与总数
         int currentLine = match.blockNumber() + 1;
-        int totalMatches = 0;
-        QTextCursor c(doc);
-        while (!c.isNull() && !c.atEnd()) {
-            c = doc->find(query, c);
-            if (!c.isNull()) totalMatches++;
+        if (m_lastSearchQuery != query) {
+            int totalMatches = 0;
+            QTextCursor c(doc);
+            while (!c.isNull() && !c.atEnd()) {
+                c = doc->find(query, c);
+                if (!c.isNull()) totalMatches++;
+            }
+            m_lastSearchQuery = query;
+            m_cachedTotalMatches = totalMatches;
         }
 
-        m_lblStatus->setText(QString("%1 | %2").arg(currentLine).arg(totalMatches));
+        m_lblStatus->setText(QString("%1 | %2").arg(currentLine).arg(m_cachedTotalMatches));
         m_textEdit->centerCursor();
     } else {
         clearSearchHighlights();
@@ -398,11 +411,8 @@ void QuickLookWindow::findNext() {
         } else if (key == Qt::Key_W && (mods & Qt::ControlModifier)) {
             intercept = true;
         } else if (key == Qt::Key_F && (mods & Qt::ControlModifier)) {
-            if (m_textEdit && m_textEdit->isVisible()) {
-                showSearchBar();
-                return true;
-            }
-            intercept = true;
+            handleSearchShortcut();
+            return true;
 >>>>>>> REPLACE
 
 <<<<<<< SEARCH
@@ -420,7 +430,41 @@ void QuickLookWindow::findNext() {
         }
 >>>>>>> REPLACE
 
-### 3.3 `QuarkMeta_Source/resources/style.qss`
+### 3.3 `QuarkMeta_Source/src/ui/AppShortcutController.cpp`
+
+<<<<<<< SEARCH
+#include "AppShortcutController.h"
+#include "SearchController.h"
+=======
+#include "AppShortcutController.h"
+#include "SearchController.h"
+#include "QuickLookWindow.h"
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+    // 5. Ctrl+F: 局内聚焦搜索栏
+    registerShortcut(QKeySequence::Find, [this]() {
+        if (m_searchController) {
+            m_searchController->focusSearch();
+        }
+    });
+=======
+    // 5. Ctrl+F: 按场景判断当前活动窗口，根据不同窗口执行不同接口
+    registerShortcut(QKeySequence::Find, [this]() {
+        // 若 QuickLookWindow 处于前台/显示状态，优先路由给 QuickLookWindow 处理
+        if (QuickLookWindow::instance().isVisible()) {
+            QuickLookWindow::instance().handleSearchShortcut();
+            return;
+        }
+
+        // 否则路由至主界面搜索栏
+        if (m_searchController) {
+            m_searchController->focusSearch();
+        }
+    });
+>>>>>>> REPLACE
+
+### 3.4 `QuarkMeta_Source/resources/style.qss`
 
 <<<<<<< SEARCH
 QPlainTextEdit#QLPlainTextEdit {
@@ -489,24 +533,24 @@ QLabel#QLSearchStatus {
 ## Chapter 4: Build & Verification Steps（构建与运行时验收标准）
 
 ### 4.1 语法验证
-- 静态验证 `m_searchBar` 内部控件的指针生命周期与事件过滤器链；
-- 确保 `QTextCursor` 查找与 `ExtraSelection` 高亮匹配无内存泄漏；
-- 确认样式全面收敛至 `resources/style.qss`，无内联硬编码。
+- 静态验证 `AppShortcutController` 中对 `QuickLookWindow::instance().isVisible()` 与 `handleSearchShortcut()` 的调用；
+- 确认头文件完整包含，类成员与类型闭合；
+- 确认样式全面收敛至 `resources/style.qss`。
 
 ### 4.2 运行时验收标准
-1. **图形文件门禁**：按空格键预览图片或 PSD 文件，按下 `Ctrl+F`，搜索框不弹出；
-2. **文本预览呼出**：按空格键预览 `.txt` 或 `.cpp` 文件，按下 `Ctrl+F`，右上角平滑呼出搜索浮层，输入光标自动聚焦；
-3. **回车与查找下一个**：在输入框内键入字符并按回车或点击“查找下一个”，文本自动滚动并将当前项高亮标记为 `#ff551C`；
-4. **两层与状态指示对齐**：下方紧随搜索框显示当前 `行号 | 计数值`；若无匹配内容，显示 `无 | 0`；
-5. **ESC 关闭与清除**：按下 ESC 键，搜索框自动隐藏，高亮彻底清除。
+1. **主界面状态**：未打开快速预览时，按 `Ctrl+F`，主界面搜索栏正常聚焦；
+2. **QuickLook 图形模式状态**：按空格键预览图片或 PSD 文件，按 `Ctrl+F`，严格静默，不弹出浮层也不将焦点抢回主界面；
+3. **QuickLook 文本模式状态**：按空格键预览文本文件，按 `Ctrl+F`，右上角精准弹出搜索框，输入光标自动就绪；
+4. **两层与状态指示对齐**：输入内容回车或点击“查找下一个”，匹配文本以 `#ff551C` 高亮，下方显示“行号 | 计数值”；无匹配时显示“无 | 0”；
+5. **ESC 与空格输入**：输入框内输入空格正常打字；按 ESC 键先收起搜索框并清除高亮。
 
 ---
 
 ## Chapter 5: Official API Reuse & Anti-Redundancy（官方 API 复用与防另起炉灶）
 
-- 复用 Qt 原生富文本引擎 `QTextDocument::find` 与 `QPlainTextEdit::setExtraSelections`；
-- 复用 `ColorPaletteEngine::isGraphicsFile` 进行纯内存零 I/O 的场景分类；
-- 杜绝重复造轮子或创建多余独立窗口。
+- 复用 `QuickLookWindow::instance().isVisible()` 区分当前顶层激活场景；
+- 复用 `LocalShortcutInterceptor` 既有保护管线，消灭全局快捷键冲突；
+- 杜绝另起炉灶建立两套快捷键监听系统。
 
 ---
 
@@ -514,23 +558,23 @@ QLabel#QLSearchStatus {
 
 | 数据项 | 唯一真理源 (SSOT) | 派生展示与表现层 | 同步方向 |
 | :--- | :--- | :--- | :--- |
-| 预览文本流 | `m_textEdit->document()` | `QLPlainTextEdit` | 文本加载时单向解析注入 |
-| 搜索关键词与匹配游标 | `m_searchEdit->text()` / `QTextCursor` | `m_lblStatus` / `extraSelections` | 触发查找时动态计算派生 |
+| 顶层活动窗口场景 | `QuickLookWindow::instance().isVisible()` | `AppShortcutController` | 按键按下时实时探测分发 |
+| 文本检索内容与游标 | `m_textEdit->document()` / `QTextCursor` | `m_lblStatus` / `extraSelections` | 搜索时动态单向计算 |
 
 ---
 
 ## Chapter 7: Interface & Visibility Consistency Check（接口签名与访问级别一致性核查）
 
-- `showSearchBar()` / `hideSearchBar()` / `findNext()` / `updateMatchCount()` / `updateSearchBarGeometry()` / `clearSearchHighlights()`：声明为 private 辅助函数；
-- `resizeEvent(QResizeEvent* event)`：protected 虚函数重载，用于在窗口尺寸改变时维护右上角几何坐标。
+- `QuickLookWindow::handleSearchShortcut()`：声明为 `public`，供 `AppShortcutController` 跨窗口跨模块路由调用；
+- `showSearchBar()` / `hideSearchBar()` / `findNext()` / `updateMatchCount()`：声明为 `private`。
 
 ---
 
 ## Chapter 8: Header Chain & Inclusion Closure Check（头文件包含链与类型完整性检查）
 
-- `QuickLookWindow.h` 显式包含 `<QLineEdit>`；
-- `QuickLookWindow.cpp` 显式包含 `"ColorPaletteEngine.h"` 与 `<QTextBlock>`；
-- 类型全部闭合。
+- `AppShortcutController.cpp` 显式包含 `"QuickLookWindow.h"`；
+- `QuickLookWindow.h` 显式包含 `<QPushButton>` 与 `<QLineEdit>`；
+- 类型声明完全闭合。
 
 ---
 
@@ -538,17 +582,17 @@ QLabel#QLSearchStatus {
 
 | 序号 | 检查项 | 判定 | 说明 |
 | :---: | :--- | :---: | :--- |
-| 1 | 契约锁 | 满足 | 未破坏已有 public 接口 |
-| 2 | 依赖锁 | 满足 | UI 内部单向装配 |
-| 3 | 门禁锁 | 满足 | 溯源真理源，非图形图像模式下严格守门 |
-| 4 | 静态红线扫描 | 满足 | 无任何 Win32 强夺焦点补丁 |
-| 5 | 无内联样式 | 满足 | 样式全部归集于 resources/style.qss |
-| 6 | SEARCH 块唯一性 | 满足 | 全部通过代码匹配验证 |
+| 1 | 契约锁 | 满足 | 保持已有公共接口向后兼容 |
+| 2 | 依赖锁 | 满足 | 单向依赖分发，符合 Controller -> UI 协调规范 |
+| 3 | 门禁锁 | 满足 | 针对不同窗口场景精确路由 |
+| 4 | 静态红线扫描 | 满足 | 无 Win32 强抢焦点 Hack |
+| 5 | 无内联样式 | 满足 | 样式全部收敛于 style.qss |
+| 6 | SEARCH 块唯一性 | 满足 | 全部通过自动化脚本验证 |
 
 ---
 
 ## Chapter 10: Behavior Preservation & Zero-Value-Alteration Table（行为零篡改与数值零篡改声明表）
 
-- 预览缩放、平移、翻转、按键打分评级逻辑 100% 保持；
-- 快捷键 `Ctrl+W`、`Space`、`Esc` 在非搜索模式下的关闭逻辑完全保留；
-- 颜色 `#ff551C` 精准照抄。
+- 主界面在未打开 QuickLook 时的原有 `Ctrl+F` 行为 100% 保持；
+- QuickLook 非文本预览时的按键行为 100% 保持；
+- 高亮色值 `#ff551C` 零篡改。
