@@ -480,6 +480,13 @@ void QuickLookWindow::resizeEvent(QResizeEvent* event) {
     updateSearchBarGeometry();
 }
 
+void QuickLookWindow::handleSearchShortcut() {
+    // 🚀【场景化门禁】：当且仅当预览的是非图形图像（文本模式且 m_textEdit 可视）时才弹出搜索框
+    if (m_textEdit && m_textEdit->isVisible()) {
+        showSearchBar();
+    }
+}
+
 void QuickLookWindow::updateSearchBarGeometry() {
     if (!m_searchBar) return;
     int barW = 360;
@@ -638,11 +645,8 @@ bool QuickLookWindow::eventFilter(QObject* watched, QEvent* event) {
         } else if (key == Qt::Key_W && (mods & Qt::ControlModifier)) {
             intercept = true;
         } else if (key == Qt::Key_F && (mods & Qt::ControlModifier)) {
-            if (m_textEdit && m_textEdit->isVisible()) {
-                showSearchBar();
-                return true;
-            }
-            intercept = true;
+            handleSearchShortcut();
+            return true;
         } else if (key == Qt::Key_Up || key == Qt::Key_Left || key == Qt::Key_Down || key == Qt::Key_Right) {
             intercept = true;
         } else if (key >= Qt::Key_1 && key <= Qt::Key_5 && !(mods & Qt::AltModifier)) {

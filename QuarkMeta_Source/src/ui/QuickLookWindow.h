@@ -27,6 +27,7 @@ public:
     QString currentPath() const { return m_currentPath; }
     void closePreview();
     void setIgnoreDeactivate(bool ignore) { m_ignoreDeactivate = ignore; }
+    void handleSearchShortcut();
 
 signals:
     void ratingRequested(int rating);
