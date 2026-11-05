@@ -17,9 +17,9 @@
 #include "models/FilterProxyModel.h"
 #include "controllers/ContentSortController.h"
 #include "../core/ModelContract.h"
-#include "../meta/SmartFolderDao.h"
 
 namespace QuarkMeta {
+struct SmartFolderRecord { int id = 0; QString rules; };
 
 class DropTreeView;
 class JustifiedView;

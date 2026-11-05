@@ -64,7 +64,6 @@ include_directories(
     src/ui/components
     src/ui/controllers
     src/core
-    src/meta
     src/util
 )
 
@@ -80,27 +79,7 @@ set(SOURCES
     src/core/ClipboardMonitor.cpp
     src/core/ClipboardMonitor.h
     src/core/CoreEngine.cpp
-    src/core/ActionCommand.h
-    src/core/ClipboardService.cpp
-    src/core/ClipboardService.h
     src/core/CoreEngine.h
-    src/core/TagLexiconService.cpp
-    src/core/TagLexiconService.h
-    src/core/TaskProgressService.cpp
-    src/core/TaskProgressService.h
-    src/core/UndoManager.h
-    src/meta/FavoriteDao.cpp
-    src/meta/FavoriteDao.h
-    src/meta/FavoriteService.cpp
-    src/meta/FavoriteService.h
-    src/meta/LibraryDao.cpp
-    src/meta/LibraryDao.h
-    src/meta/LibraryService.cpp
-    src/meta/LibraryService.h
-    src/meta/MarkedFolderService.cpp
-    src/meta/MarkedFolderService.h
-    src/meta/SmartFolderDao.cpp
-    src/meta/SmartFolderDao.h
     src/core/DatabaseManager.cpp
     src/core/DatabaseManager.h
     src/core/FileCryptoHelper.cpp
@@ -167,8 +146,6 @@ set(SOURCES
     src/ui/CardLayoutEngine.h
     src/ui/CardPainterHelper.cpp
     src/ui/CardPainterHelper.h
-    src/ui/FileCollisionDialog.cpp
-    src/ui/FileCollisionDialog.h
     src/ui/CategoryDelegate.h
     src/ui/CategoryLockWidget.cpp
     src/ui/CategoryLockWidget.h
@@ -355,16 +332,10 @@ set(SOURCES
     src/ui/WritingAnimation.h
     src/ui/controllers/ContentPaneSplitManager.cpp
     src/ui/controllers/ContentPaneSplitManager.h
-    src/ui/controllers/ContentContextMenu.cpp
-    src/ui/controllers/ContentContextMenu.h
-    src/ui/controllers/ContentSortController.cpp
-    src/ui/controllers/ContentSortController.h
     src/ui/controllers/PaneActivationTracker.cpp
     src/ui/controllers/PaneActivationTracker.h
-    src/ui/models/DiskItemModel.h
     src/ui/models/FilterProxyModel.cpp
     src/ui/models/FilterProxyModel.h
-    src/ui/models/ItemModelBase.h
     src/ui/models/SectionProxyModel.cpp
     src/ui/models/SectionProxyModel.h
     src/ui/workers/ContentStatsWorker.cpp
