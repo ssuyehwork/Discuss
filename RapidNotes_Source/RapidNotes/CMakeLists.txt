@@ -63,8 +63,14 @@ include_directories(src)
 set(SOURCES
     src/core/AES.cpp
     src/core/AES.h
+    src/core/ActionRecorder.cpp
+    src/core/ActionRecorder.h
+    src/core/CentralEventHub.cpp
+    src/core/CentralEventHub.h
     src/core/ClipboardMonitor.cpp
     src/core/ClipboardMonitor.h
+    src/core/CoreEngine.cpp
+    src/core/CoreEngine.h
     src/core/DatabaseManager.cpp
     src/core/DatabaseManager.h
     src/core/FileCryptoHelper.cpp
@@ -75,60 +81,93 @@ set(SOURCES
     src/core/HardwareInfoHelper.h
     src/core/HotkeyManager.cpp
     src/core/HotkeyManager.h
-    src/core/Logger.cpp
-    src/core/Logger.h
     src/core/HttpServer.cpp
     src/core/HttpServer.h
-    src/core/KeyboardHook.cpp
-    src/core/KeyboardHook.h
-    src/core/ShortcutManager.cpp
-    src/core/ShortcutManager.h
-    src/core/ActionRecorder.cpp
-    src/core/ItemType.cpp
-    src/core/ItemType.h
     src/core/ItemClassifier.cpp
     src/core/ItemClassifier.h
+    src/core/ItemRecord.cpp
+    src/core/ItemRecord.h
+    src/core/ItemType.cpp
+    src/core/ItemType.h
+    src/core/KeyboardHook.cpp
+    src/core/KeyboardHook.h
+    src/core/Logger.cpp
+    src/core/Logger.h
+    src/core/MessageCaptureHandler.cpp
+    src/core/MessageCaptureHandler.h
+    src/core/ModelContract.h
+    src/core/NavigationService.cpp
+    src/core/NavigationService.h
+    src/core/NoteRepository.cpp
+    src/core/NoteRepository.h
+    src/core/OCRManager.cpp
+    src/core/OCRManager.h
     src/core/PathSummary.cpp
     src/core/PathSummary.h
-    src/core/WordBucket.cpp
-    src/core/WordBucket.h
+    src/core/ReminderService.cpp
+    src/core/ReminderService.h
+    src/core/ShortcutManager.cpp
+    src/core/ShortcutManager.h
     src/core/TagCodec.cpp
     src/core/TagCodec.h
     src/core/ThumbnailMaker.cpp
     src/core/ThumbnailMaker.h
+    src/core/WordBucket.cpp
+    src/core/WordBucket.h
     src/main.cpp
     src/models/CategoryModel.cpp
     src/models/CategoryModel.h
     src/models/NoteModel.cpp
     src/models/NoteModel.h
-    src/ui/AdvancedTagSelector.cpp
-    src/ui/AdvancedTagSelector.h
     src/ui/ActivationDialog.cpp
     src/ui/ActivationDialog.h
+    src/ui/AddressBar.cpp
+    src/ui/AddressBar.h
+    src/ui/AddressHistoryPanel.cpp
+    src/ui/AddressHistoryPanel.h
+    src/ui/AdvancedTagSelector.cpp
+    src/ui/AdvancedTagSelector.h
+    src/ui/AppShortcutController.cpp
+    src/ui/AppShortcutController.h
+    src/ui/BreadcrumbBar.cpp
+    src/ui/BreadcrumbBar.h
+    src/ui/CardLayoutEngine.cpp
+    src/ui/CardLayoutEngine.h
+    src/ui/CardPainterHelper.cpp
+    src/ui/CardPainterHelper.h
     src/ui/CategoryDelegate.h
     src/ui/CategoryLockWidget.cpp
     src/ui/CategoryLockWidget.h
     src/ui/CategoryPasswordDialog.cpp
     src/ui/CategoryPasswordDialog.h
-    src/ui/MainWindow.cpp
-    src/ui/MainWindow.h
-    src/ui/CategoryTabBarWidget.cpp
-    src/ui/CategoryTabBarWidget.h
-    src/ui/controllers/PanelLayoutManager.cpp
-    src/ui/controllers/PanelLayoutManager.h
-    src/ui/controllers/CategoryPaneSplitManager.cpp
-    src/ui/controllers/CategoryPaneSplitManager.h
-    src/ui/controllers/MainPanelMediator.cpp
-    src/ui/controllers/MainPanelMediator.h
     src/ui/CleanListView.cpp
     src/ui/CleanListView.h
     src/ui/ClickableLineEdit.h
+    src/ui/ColorPickerWindow.cpp
+    src/ui/ColorPickerWindow.h
+    src/ui/ContentHeaderWidget.cpp
+    src/ui/ContentHeaderWidget.h
+    src/ui/ContentPanel.cpp
+    src/ui/ContentPanel.h
+    src/ui/DropJustifiedView.cpp
+    src/ui/DropJustifiedView.h
     src/ui/DropTreeView.cpp
     src/ui/DropTreeView.h
     src/ui/Editor.cpp
     src/ui/Editor.h
+    src/ui/FileNameLineEdit.cpp
+    src/ui/FileNameLineEdit.h
+    src/ui/FileSearchHistoryPopup.h
+    src/ui/FileSearchWidget.cpp
+    src/ui/FileSearchWidget.h
+    src/ui/FileSearchWindow.cpp
+    src/ui/FileSearchWindow.h
+    src/ui/FileStorageWindow.cpp
+    src/ui/FileStorageWindow.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
+    src/ui/FilterStateModel.cpp
+    src/ui/FilterStateModel.h
     src/ui/FireworksOverlay.cpp
     src/ui/FireworksOverlay.h
     src/ui/FloatingBall.cpp
@@ -137,14 +176,50 @@ set(SOURCES
     src/ui/FlowLayout.h
     src/ui/FramelessDialog.cpp
     src/ui/FramelessDialog.h
+    src/ui/FramelessWindowHelper.cpp
+    src/ui/FramelessWindowHelper.h
     src/ui/HelpWindow.cpp
     src/ui/HelpWindow.h
+    src/ui/HoverEventFilter.cpp
+    src/ui/HoverEventFilter.h
     src/ui/IconHelper.h
+    src/ui/IdeaQuickPanel.cpp
+    src/ui/IdeaQuickPanel.h
+    src/ui/IntegratedSearchWindow.cpp
+    src/ui/IntegratedSearchWindow.h
+    src/ui/JustifiedView.cpp
+    src/ui/JustifiedView.h
+    src/ui/KeywordSearchWidget.cpp
+    src/ui/KeywordSearchWidget.h
+    src/ui/KeywordSearchWindow.cpp
+    src/ui/KeywordSearchWindow.h
+    src/ui/LibraryPanel.cpp
+    src/ui/LibraryPanel.h
+    src/ui/LocalShortcutInterceptor.cpp
+    src/ui/LocalShortcutInterceptor.h
+    src/ui/MainWindow.cpp
+    src/ui/MainWindow.h
+    src/ui/MetaPanel.cpp
+    src/ui/MetaPanel.h
+    src/ui/NavBarWidget.cpp
+    src/ui/NavBarWidget.h
     src/ui/NoteDelegate.h
     src/ui/NoteEditWindow.cpp
     src/ui/NoteEditWindow.h
+    src/ui/OCRResultWindow.cpp
+    src/ui/OCRResultWindow.h
+    src/ui/OCRWindow.cpp
+    src/ui/OCRWindow.h
+    src/ui/PanelLayoutManager.cpp
+    src/ui/PanelLayoutManager.h
+    src/ui/PanelMediator.cpp
+    src/ui/PanelMediator.h
+    src/ui/PasswordGeneratorWindow.cpp
+    src/ui/PasswordGeneratorWindow.h
     src/ui/PasswordVerifyDialog.cpp
     src/ui/PasswordVerifyDialog.h
+    src/ui/PixelRulerOverlay.cpp
+    src/ui/PixelRulerOverlay.h
     src/ui/QuickNoteDelegate.cpp
     src/ui/QuickNoteDelegate.h
     src/ui/QuickPreview.h
@@ -154,29 +229,71 @@ set(SOURCES
     src/ui/RecentNotesDelegate.h
     src/ui/RecentNotesWindow.cpp
     src/ui/RecentNotesWindow.h
+    src/ui/RenameCapableDelegate.cpp
+    src/ui/RenameCapableDelegate.h
     src/ui/ResizeHandle.cpp
     src/ui/ResizeHandle.h
+    src/ui/ScanStats.h
+    src/ui/ScanStatsEngine.cpp
+    src/ui/ScanStatsEngine.h
+    src/ui/ScreenshotTool.cpp
+    src/ui/ScreenshotTool.h
+    src/ui/SearchAppWindow.cpp
+    src/ui/SearchAppWindow.h
+    src/ui/SearchController.cpp
+    src/ui/SearchController.h
+    src/ui/SearchHistoryPanel.cpp
+    src/ui/SearchHistoryPanel.h
     src/ui/SearchLineEdit.cpp
     src/ui/SearchLineEdit.h
     src/ui/SecurityLockDialog.cpp
     src/ui/SecurityLockDialog.h
     src/ui/SettingsWindow.cpp
     src/ui/SettingsWindow.h
+    src/ui/SidebarContainerWidget.cpp
+    src/ui/SidebarContainerWidget.h
     src/ui/StringUtils.h
     src/ui/SvgIcons.h
-    src/ui/TagCapsule.h
     src/ui/SystemTray.cpp
     src/ui/SystemTray.h
+    src/ui/TabBarWidget.cpp
+    src/ui/TabBarWidget.h
+    src/ui/TagCapsule.h
     src/ui/TagEditDialog.cpp
     src/ui/TagEditDialog.h
     src/ui/TagEditorWidget.cpp
     src/ui/TagEditorWidget.h
     src/ui/TagManagerWindow.cpp
     src/ui/TagManagerWindow.h
+    src/ui/TaskProgressStrip.cpp
+    src/ui/TaskProgressStrip.h
+    src/ui/ThumbnailDelegate.cpp
+    src/ui/ThumbnailDelegate.h
+    src/ui/TimePasteWindow.cpp
+    src/ui/TimePasteWindow.h
+    src/ui/TitleBarWidget.cpp
+    src/ui/TitleBarWidget.h
     src/ui/TitleEditorDialog.h
+    src/ui/TodoCalendarWindow.cpp
+    src/ui/TodoCalendarWindow.h
     src/ui/ToolTipOverlay.h
+    src/ui/TrayController.cpp
+    src/ui/TrayController.h
+    src/ui/TreeItemDelegate.h
+    src/ui/UnifiedSearchWindow.cpp
+    src/ui/UnifiedSearchWindow.h
     src/ui/WritingAnimation.cpp
     src/ui/WritingAnimation.h
+    src/ui/controllers/ContentPaneSplitManager.cpp
+    src/ui/controllers/ContentPaneSplitManager.h
+    src/ui/controllers/PaneActivationTracker.cpp
+    src/ui/controllers/PaneActivationTracker.h
+    src/ui/models/FilterProxyModel.cpp
+    src/ui/models/FilterProxyModel.h
+    src/ui/models/SectionProxyModel.cpp
+    src/ui/models/SectionProxyModel.h
+    src/ui/workers/ContentStatsWorker.cpp
+    src/ui/workers/ContentStatsWorker.h
     resources/resources.qrc
     resources/app.manifest
 )

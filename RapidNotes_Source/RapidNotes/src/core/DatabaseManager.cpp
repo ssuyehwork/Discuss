@@ -620,6 +620,8 @@ bool DatabaseManager::createTables() {
         addCol("categories", "password_hint", "TEXT");
         addCol("categories", "pinned_sort_order", "INTEGER DEFAULT 0"); // [NEW] 2026-04-20 增加镜像组拉伸排序
         addCol("categories", "sort_mode", "TEXT DEFAULT 'manual'"); // [NEW] 2026-04-xx 增加分类独立排序模式
+        addCol("categories", "icon_key", "TEXT DEFAULT 'Data-Classification.svg'"); // 2026 迁移：分类图标
+        addCol("notes", "color_label", "TEXT DEFAULT ''"); // 2026 迁移：手动颜色标记
     }
     query.exec("CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)");
     query.exec("CREATE TABLE IF NOT EXISTS note_tags (note_id INTEGER, tag_id INTEGER, PRIMARY KEY (note_id, tag_id))");
