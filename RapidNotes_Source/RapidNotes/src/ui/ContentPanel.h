@@ -18,8 +18,9 @@
 #include "controllers/ContentSortController.h"
 #include "../core/ModelContract.h"
 
-namespace QuarkMeta {
 #include "../core/SmartFolderRecord.h"
+
+namespace QuarkMeta {
 
 class DropTreeView;
 class JustifiedView;

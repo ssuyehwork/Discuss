@@ -8,8 +8,9 @@
 #include <QStyledItemDelegate>
 #include "DropTreeView.h"
 
-namespace QuarkMeta {
 #include "../core/SmartFolderRecord.h"
+
+namespace QuarkMeta {
 
 class LibraryTreeView : public DropTreeView {
     Q_OBJECT
