@@ -19,7 +19,7 @@
 #include "../core/ModelContract.h"
 
 namespace QuarkMeta {
-struct SmartFolderRecord { int id = 0; QString rules; };
+#include "../core/SmartFolderRecord.h"
 
 class DropTreeView;
 class JustifiedView;

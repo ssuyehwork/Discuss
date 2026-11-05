@@ -9,7 +9,7 @@
 #include "DropTreeView.h"
 
 namespace QuarkMeta {
-struct SmartFolderRecord { int id = 0; QString name; };
+#include "../core/SmartFolderRecord.h"
 
 class LibraryTreeView : public DropTreeView {
     Q_OBJECT
