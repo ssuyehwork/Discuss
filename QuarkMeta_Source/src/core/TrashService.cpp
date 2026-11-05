@@ -4,6 +4,7 @@
 #include "../core/PermanentDeleteService.h"
 #include "../meta/TrashRepository.h"
 #include "../meta/MetadataManager.h"
+#include "../meta/AssociationCascadeService.h"
 #include "../ui/ToolTipOverlay.h"
 #include <QCursor>
 
@@ -27,6 +28,9 @@ bool TrashService::moveToTrash(const QStringList& paths, QWidget* parentWidget) 
     }
     if (validPaths.isEmpty()) return false;
 
+    // 捕获受影响项目的完整收藏、库与标记关联快照
+    AssetAssociationSnapshot assocSnapshot = AssociationCascadeService::instance().findCascadeAssociations(validPaths);
+
     bool ok = OperationSnapshotEngine::instance().executeWithSnapshot(
         parentWidget,
         SnapshotOperationType::DeleteToTrash,
@@ -35,10 +39,13 @@ bool TrashService::moveToTrash(const QStringList& paths, QWidget* parentWidget) 
         [validPaths]() {
             MetadataManager::instance().beginInternalOperation();
             bool res = DiskTrashService::moveToDiskTrash(validPaths);
+            if (res) {
+                AssociationCascadeService::instance().cleanCascadeAssociations(validPaths);
+            }
             MetadataManager::instance().endInternalOperation();
             return res;
         },
-        [](const QVector<AssetItemSnapshot>& beforeState) {
+        [assocSnapshot](const QVector<AssetItemSnapshot>& beforeState) {
             for (const auto& snap : beforeState) {
                 int trashId = -1;
                 QString trashPath;
@@ -46,6 +53,8 @@ bool TrashService::moveToTrash(const QStringList& paths, QWidget* parentWidget) 
                     DiskTrashService::restoreFromDiskTrash(trashId, trashPath);
                 }
             }
+            // 物理还原后，恢复收藏夹、库分类挂载与标记关联
+            AssociationCascadeService::instance().restoreAssociations(assocSnapshot);
             MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::FullRebuild);
             return true;
         }
