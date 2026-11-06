@@ -91,6 +91,7 @@ private:
         std::atomic<bool> m_stopRequested{false};
 #ifdef Q_OS_WIN
         HANDLE m_wakeUpEvent = NULL;
+        HANDLE m_hIOCP = NULL;
 #endif
     };
 

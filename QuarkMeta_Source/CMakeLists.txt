@@ -364,6 +364,8 @@ set(SOURCES
     src/ui/dialogs/FramelessInputDialog.cpp
     src/ui/dialogs/TextExtensionDialog.h
     src/ui/dialogs/TextExtensionDialog.cpp
+    src/ui/dialogs/FolderWatchDialog.h
+    src/ui/dialogs/FolderWatchDialog.cpp
     src/ui/dialogs/CacheLocationDialog.h
     src/ui/dialogs/CacheLocationDialog.cpp
     src/ui/dialogs/CreateFolderWithItemsDialog.h

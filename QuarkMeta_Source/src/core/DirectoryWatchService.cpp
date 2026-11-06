@@ -321,6 +321,7 @@ DirectoryWatchService::WorkerThread::WorkerThread(DirectoryWatchService* service
     : m_service(service) {
 #ifdef Q_OS_WIN
     m_wakeUpEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
+    m_hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
 #endif
 }
 
@@ -329,6 +330,10 @@ DirectoryWatchService::WorkerThread::~WorkerThread() {
     if (m_wakeUpEvent) {
         CloseHandle(m_wakeUpEvent);
         m_wakeUpEvent = NULL;
+    }
+    if (m_hIOCP) {
+        CloseHandle(m_hIOCP);
+        m_hIOCP = NULL;
     }
 #endif
 }
@@ -340,6 +345,9 @@ void DirectoryWatchService::WorkerThread::stopWorker() {
 
 void DirectoryWatchService::WorkerThread::wakeUpWorker() {
 #ifdef Q_OS_WIN
+    if (m_hIOCP) {
+        PostQueuedCompletionStatus(m_hIOCP, 0, 0, NULL);
+    }
     if (m_wakeUpEvent) {
         SetEvent(m_wakeUpEvent);
     }
@@ -351,9 +359,24 @@ void DirectoryWatchService::WorkerThread::run() {
         m_service->processWorkerQueue();
 
 #ifdef Q_OS_WIN
-        DWORD dwWait = SleepEx(100, TRUE);
+        DWORD dwBytes = 0;
+        ULONG_PTR ulKey = 0;
+        LPOVERLAPPED lpOverlapped = NULL;
+
+        if (m_hIOCP) {
+            BOOL ok = GetQueuedCompletionStatus(m_hIOCP, &dwBytes, &ulKey, &lpOverlapped, 100);
+            if (ok && lpOverlapped) {
+                notificationCompletionRoutine(ERROR_SUCCESS, dwBytes, lpOverlapped);
+                continue;
+            } else if (!ok && lpOverlapped) {
+                DWORD err = GetLastError();
+                notificationCompletionRoutine(err, dwBytes, lpOverlapped);
+                continue;
+            }
+        }
+
+        DWORD dwWait = SleepEx(50, TRUE);
         if (dwWait == WAIT_IO_COMPLETION) {
-            // Asynchronous I/O completion routine was executed
             continue;
         }
 #else
@@ -460,6 +483,10 @@ void DirectoryWatchService::processWorkerQueue() {
 
         item->hDir = hDir;
         ZeroMemory(&item->overlapped, sizeof(OVERLAPPED));
+
+        if (m_workerThread && m_workerThread->m_hIOCP) {
+            CreateIoCompletionPort(item->hDir, m_workerThread->m_hIOCP, (ULONG_PTR)item.get(), 0);
+        }
 
         BOOL ok = ReadDirectoryChangesW(
             item->hDir,
