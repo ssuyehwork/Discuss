@@ -25,12 +25,9 @@
 #include "../core/TrashService.h"
 #include "../core/CoreEngine.h"
 #include "../core/CentralEventHub.h"
-#include "../core/VolumeOnlineManager.h"
 #include "../core/ModelContract.h"
 #include "../core/AppConfig.h"
 #include "../util/ShellHelper.h"
-#include "../meta/FavoriteDao.h"
-#include "../meta/FavoriteService.h"
 #include "../meta/LibraryDao.h"
 #include "UiHelper.h"
 #include <QDebug>
@@ -171,9 +168,8 @@ void PanelMediator::setupConnections() {
             });
 
             connect(titleBar->tabBar(), &TabBarWidget::tabIconChanged, this, [](int /*index*/, const QString& url, const QString& iconKey) {
-                if (!url.isEmpty()) {
-                    FavoriteDao::updateFavorite(url, iconKey, "");
-                }
+                Q_UNUSED(url);
+                Q_UNUSED(iconKey);
             });
 
         }

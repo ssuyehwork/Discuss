@@ -107,6 +107,8 @@ set(SOURCES
     src/core/MessageCaptureHandler.cpp
     src/core/MessageCaptureHandler.h
     src/core/ModelContract.h
+    src/meta/FavoriteDao.h
+    src/meta/FavoriteService.h
     src/meta/LibrarySyncService.h
     src/meta/LibraryDao.h
     src/util/ShellHelper.h
@@ -220,12 +222,9 @@ set(SOURCES
     src/ui/FilterPanel.h
     src/ui/QuickFilterPanel.cpp
     src/ui/QuickFilterPanel.h
-    src/core/PresetTagService.cpp
+    src/ui/SmartFolderDialog.h
     src/core/PresetTagService.h
-    src/ui/QuickLookWindow.cpp
     src/ui/QuickLookWindow.h
-    src/ui/QuickLookGraphicsView.cpp
-    src/ui/QuickLookGraphicsView.h
     src/ui/ModifyDateGroup.cpp
     src/ui/ModifyDateGroup.h
     src/ui/NoteStatusGroup.cpp

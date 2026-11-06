@@ -8,6 +8,7 @@
 #include "PresetTagsDialog.h"
 #include "ColorPicker.h"
 #include "ViewDragDropHelper.h"
+#include "SmartFolderDialog.h"
 #include "../meta/LibraryDao.h"
 #include "../meta/LibraryService.h"
 #include "../core/NoteRepository.h"

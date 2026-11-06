@@ -15,6 +15,7 @@ public:
 signals:
     void progressUpdated(int percentage, const QString& statusText);
     void taskFinished();
+    void allJobsFinished();
 };
 
 } // namespace RapidNotes

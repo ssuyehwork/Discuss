@@ -8,14 +8,34 @@ namespace RapidNotes {
 
 class PresetTagService {
 public:
-    static PresetTagService& instance();
+    static PresetTagService& instance() {
+        static PresetTagService s_instance;
+        return s_instance;
+    }
 
-    bool saveLibraryPresetTags(int categoryId, const QStringList& newTags, const QStringList& initialTags, std::function<void(int tagCount, int itemCount)> onTraceFinished = nullptr);
+    QStringList getPresetTagsWithAncestors(int categoryId) {
+        Q_UNUSED(categoryId);
+        return {};
+    }
 
-    int applyPresetTagsForDroppedItems(int categoryId, const QStringList& paths);
+    bool updateCategoryPresetTags(int categoryId, const QStringList& tags) {
+        Q_UNUSED(categoryId);
+        Q_UNUSED(tags);
+        return true;
+    }
 
-private:
-    void processAsyncPresetTagsUpdate(int jobId, int categoryId, const QStringList& newTags, const QStringList& newlyAddedTags, std::function<void(int tagCount, int itemCount)> onTraceFinished);
+    int applyPresetTagsToCategory(int categoryId, const QStringList& oldTags, const QStringList& newTags) {
+        Q_UNUSED(categoryId);
+        Q_UNUSED(oldTags);
+        Q_UNUSED(newTags);
+        return 0;
+    }
+
+    int applyPresetTagsForDroppedItems(int categoryId, const QStringList& paths) {
+        Q_UNUSED(categoryId);
+        Q_UNUSED(paths);
+        return 0;
+    }
 
 private:
     PresetTagService() = default;

@@ -1,5 +1,5 @@
-#ifndef FILTERPANEL_H
-#define FILTERPANEL_H
+#ifndef QUICKFILTERPANEL_H
+#define QUICKFILTERPANEL_H
 
 #include <QWidget>
 #include <QVariantMap>
@@ -46,4 +46,4 @@ private:
     QVariant m_pendingValue;
 };
 
-#endif // FILTERPANEL_H
+#endif // QUICKFILTERPANEL_H
