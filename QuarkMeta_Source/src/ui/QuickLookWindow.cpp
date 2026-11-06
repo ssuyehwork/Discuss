@@ -154,6 +154,10 @@ void QuickLookWindow::setupUi() {
     m_btnCount->setObjectName("QLSearchBtn");
     btnLayout->addWidget(m_btnCount);
 
+    m_btnMarkAll = new QPushButton("全部标记", m_searchBar);
+    m_btnMarkAll->setObjectName("QLSearchBtn");
+    btnLayout->addWidget(m_btnMarkAll);
+
     auto* rightCol = new QVBoxLayout();
     rightCol->setContentsMargins(0, 0, 0, 0);
     rightCol->setSpacing(4);
@@ -165,6 +169,7 @@ void QuickLookWindow::setupUi() {
 
     connect(m_btnFindNext, &QPushButton::clicked, this, &QuickLookWindow::findNext);
     connect(m_btnCount, &QPushButton::clicked, this, &QuickLookWindow::updateMatchCount);
+    connect(m_btnMarkAll, &QPushButton::clicked, this, &QuickLookWindow::markAll);
     connect(m_searchEdit, &QLineEdit::returnPressed, this, &QuickLookWindow::findNext);
 
     m_searchBar->installEventFilter(this);
@@ -489,7 +494,7 @@ void QuickLookWindow::handleSearchShortcut() {
 
 void QuickLookWindow::updateSearchBarGeometry() {
     if (!m_searchBar) return;
-    int barW = 360;
+    int barW = 430;
     int barH = m_searchBar->sizeHint().height();
     if (barH < 62) barH = 62;
     int x = width() - barW - 24;
@@ -511,6 +516,42 @@ void QuickLookWindow::hideSearchBar() {
     if (m_searchBar && m_searchBar->isVisible()) {
         m_searchBar->hide();
         clearSearchHighlights();
+    }
+}
+
+void QuickLookWindow::markAll() {
+    if (!m_textEdit) return;
+    QString query = m_searchEdit->text();
+    if (query.isEmpty()) {
+        clearSearchHighlights();
+        return;
+    }
+
+    QTextDocument* doc = m_textEdit->document();
+    QList<QTextEdit::ExtraSelection> extraSelections;
+    int count = 0;
+
+    QTextCursor cursor(doc);
+    while (!cursor.isNull() && !cursor.atEnd()) {
+        cursor = doc->find(query, cursor);
+        if (!cursor.isNull()) {
+            count++;
+            QTextEdit::ExtraSelection selection;
+            selection.format.setBackground(QColor("#ff551C"));
+            selection.format.setForeground(Qt::white);
+            selection.cursor = cursor;
+            extraSelections.append(selection);
+        }
+    }
+
+    m_textEdit->setExtraSelections(extraSelections);
+    m_lastSearchQuery = query;
+    m_cachedTotalMatches = count;
+
+    if (count == 0) {
+        m_lblStatus->setText("无 | 0");
+    } else {
+        m_lblStatus->setText(QString("无 | %1").arg(count));
     }
 }
 
@@ -743,6 +784,7 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     FavoriteService::instance().buildFavoriteAction(&menu, m_currentPath, this);
     menu.addSeparator();
 
+    QAction* actFind = menu.addAction(UiHelper::getIcon("seach-7", QColor("#EEEEEE"), 18), "查找 (Ctrl+F)");
     QAction* actTextExtSettings = menu.addAction(UiHelper::getIcon("Ext.svg", QColor("#EEEEEE"), 18), "文本扩展名设置...");
 
     bool isImage = m_graphicsView->isVisible();
@@ -783,6 +825,8 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
         QApplication::clipboard()->setMimeData(mime);
     } else if (selected == actDel) {
         emit deleteRequested(m_currentPath);
+    } else if (selected == actFind) {
+        handleSearchShortcut();
     } else if (selected == actTextExtSettings) {
         TextExtensionDialog dlg(this);
         dlg.exec();

@@ -6,14 +6,15 @@
    - 引入场景判断门禁：当且仅当 `QuickLookWindow` 处于显示/前台激活状态时，将 `Ctrl+F` 优先路由至 `QuickLookWindow::handleSearchShortcut()`；
    - 在 `QuickLookWindow` 中进一步判断场景：若是文本预览模式（`m_textEdit` 可见），弹出右上角内置搜索浮层；若是图形图像模式，严格屏蔽，既不弹出浮层也不跳回主窗口打扰用户；
    - 只有在 `QuickLookWindow` 未激活时，`Ctrl+F` 才路由为主界面的 `SearchController::focusSearch()`。
-2. **两层紧凑型悬浮面板结构**：
-   - 上下两层排布：左列垂直排列搜索输入框（`QLineEdit`）与状态指示栏（`QLabel`），右列排列“查找下一个”与“计数”按钮；
-   - 物理对齐：下层状态指示栏与上方搜索输入框左右两端严格对齐；
-   - 状态指示：通过 `|` 分割显示“当前行号”与“计数值”（如 `42 | 5`），无匹配时显示为“无 | 0”。
-3. **交互与高亮闭环**：
+2. **两层紧凑型悬浮面板结构与按钮高度对齐**：
+   - 上下两层排布：左列垂直排列搜索输入框（`QLineEdit`）与状态指示栏（`QLabel`），右列横向排列“查找下一个”、“计数”及“全部标记”按钮；
+   - 物理对齐与高度一致：各按钮物理高度与左侧搜索输入框严格设置为 24px 一致对齐，下层状态指示栏与上方搜索输入框左右两端严格对齐；
+   - 状态指示：通过 `|` 分割显示“当前行号”与“计数值”（如 `42 | 5`），全部标记时显示为“无 | 计数值”，无匹配时显示为“无 | 0”。
+3. **交互、全部标记与右键菜单闭环**：
    - 回车键支持快速查找并跳转下一个匹配项；
-   - 匹配项采用 `#ff551C`（醒目橙红）进行高亮，自动滚动居中文本视图；
-   - 输入框打字时输入空格不误触发窗口关闭，按 `Esc` 优先收起搜索框。
+   - 新增“全部标记”功能，将文本中所有匹配词批量用 `#ff551C`（醒目橙红）进行临时高亮，零持久化存储；
+   - 在右键菜单中增加“查找 (Ctrl+F)”选项，点击后无缝唤起并聚焦文本搜索浮层；
+   - 输入框打字时输入空格不误触发窗口关闭，按 `Esc` 优先收起搜索框并清除全部标记与高亮。
 
 ---
 
@@ -98,6 +99,7 @@ protected:
     void showSearchBar();
     void hideSearchBar();
     void findNext();
+    void markAll();
     void updateMatchCount();
     void updateSearchBarGeometry();
     void clearSearchHighlights();
@@ -114,6 +116,7 @@ protected:
     QLineEdit* m_searchEdit = nullptr;
     QPushButton* m_btnFindNext = nullptr;
     QPushButton* m_btnCount = nullptr;
+    QPushButton* m_btnMarkAll = nullptr;
     QLabel* m_lblStatus = nullptr;
     QString m_lastSearchQuery;
     int m_cachedTotalMatches = 0;
@@ -186,6 +189,10 @@ protected:
     m_btnCount->setObjectName("QLSearchBtn");
     btnLayout->addWidget(m_btnCount);
 
+    m_btnMarkAll = new QPushButton("全部标记", m_searchBar);
+    m_btnMarkAll->setObjectName("QLSearchBtn");
+    btnLayout->addWidget(m_btnMarkAll);
+
     auto* rightCol = new QVBoxLayout();
     rightCol->setContentsMargins(0, 0, 0, 0);
     rightCol->setSpacing(4);
@@ -197,6 +204,7 @@ protected:
 
     connect(m_btnFindNext, &QPushButton::clicked, this, &QuickLookWindow::findNext);
     connect(m_btnCount, &QPushButton::clicked, this, &QuickLookWindow::updateMatchCount);
+    connect(m_btnMarkAll, &QPushButton::clicked, this, &QuickLookWindow::markAll);
     connect(m_searchEdit, &QLineEdit::returnPressed, this, &QuickLookWindow::findNext);
 
     m_searchBar->installEventFilter(this);
@@ -269,7 +277,7 @@ void QuickLookWindow::handleSearchShortcut() {
 
 void QuickLookWindow::updateSearchBarGeometry() {
     if (!m_searchBar) return;
-    int barW = 360;
+    int barW = 430;
     int barH = m_searchBar->sizeHint().height();
     if (barH < 62) barH = 62;
     int x = width() - barW - 24;
@@ -390,6 +398,42 @@ void QuickLookWindow::findNext() {
         clearSearchHighlights();
     }
 }
+
+void QuickLookWindow::markAll() {
+    if (!m_textEdit) return;
+    QString query = m_searchEdit->text();
+    if (query.isEmpty()) {
+        clearSearchHighlights();
+        return;
+    }
+
+    QTextDocument* doc = m_textEdit->document();
+    QList<QTextEdit::ExtraSelection> extraSelections;
+    int count = 0;
+
+    QTextCursor cursor(doc);
+    while (!cursor.isNull() && !cursor.atEnd()) {
+        cursor = doc->find(query, cursor);
+        if (!cursor.isNull()) {
+            count++;
+            QTextEdit::ExtraSelection selection;
+            selection.format.setBackground(QColor("#ff551C"));
+            selection.format.setForeground(Qt::white);
+            selection.cursor = cursor;
+            extraSelections.append(selection);
+        }
+    }
+
+    m_textEdit->setExtraSelections(extraSelections);
+    m_lastSearchQuery = query;
+    m_cachedTotalMatches = count;
+
+    if (count == 0) {
+        m_lblStatus->setText("无 | 0");
+    } else {
+        m_lblStatus->setText(QString("无 | %1").arg(count));
+    }
+}
 >>>>>>> REPLACE
 
 <<<<<<< SEARCH
@@ -428,6 +472,37 @@ void QuickLookWindow::findNext() {
             (m_searchBar && (m_searchBar == activeWin || m_searchBar->isAncestorOf(focusW)))) {
             return true;
         }
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+    FavoriteService::instance().buildFavoriteAction(&menu, m_currentPath, this);
+    menu.addSeparator();
+
+    QAction* actTextExtSettings = menu.addAction(UiHelper::getIcon("Ext.svg", QColor("#EEEEEE"), 18), "文本扩展名设置...");
+=======
+    FavoriteService::instance().buildFavoriteAction(&menu, m_currentPath, this);
+    menu.addSeparator();
+
+    QAction* actFind = menu.addAction(UiHelper::getIcon("seach-7", QColor("#EEEEEE"), 18), "查找 (Ctrl+F)");
+    QAction* actTextExtSettings = menu.addAction(UiHelper::getIcon("Ext.svg", QColor("#EEEEEE"), 18), "文本扩展名设置...");
+>>>>>>> REPLACE
+
+<<<<<<< SEARCH
+    } else if (selected == actDel) {
+        emit deleteRequested(m_currentPath);
+    } else if (selected == actTextExtSettings) {
+        TextExtensionDialog dlg(this);
+        dlg.exec();
+    }
+=======
+    } else if (selected == actDel) {
+        emit deleteRequested(m_currentPath);
+    } else if (selected == actFind) {
+        handleSearchShortcut();
+    } else if (selected == actTextExtSettings) {
+        TextExtensionDialog dlg(this);
+        dlg.exec();
+    }
 >>>>>>> REPLACE
 
 ### 3.3 `QuarkMeta_Source/src/ui/AppShortcutController.cpp`
@@ -495,7 +570,10 @@ QLineEdit#QLSearchEdit {
     border: 1px solid #3c3c3c;
     border-radius: 4px;
     color: #E0E0E0;
-    padding: 3px 6px;
+    padding: 0px 6px;
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
     font-size: 12px;
 }
 
@@ -508,7 +586,10 @@ QPushButton#QLSearchBtn {
     border: 1px solid #444444;
     border-radius: 4px;
     color: #E0E0E0;
-    padding: 3px 8px;
+    padding: 0px 8px;
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
     font-size: 11px;
 }
 

@@ -60,6 +60,7 @@ private:
     void showSearchBar();
     void hideSearchBar();
     void findNext();
+    void markAll();
     void updateMatchCount();
     void updateSearchBarGeometry();
     void clearSearchHighlights();
@@ -76,6 +77,7 @@ private:
     QLineEdit* m_searchEdit = nullptr;
     QPushButton* m_btnFindNext = nullptr;
     QPushButton* m_btnCount = nullptr;
+    QPushButton* m_btnMarkAll = nullptr;
     QLabel* m_lblStatus = nullptr;
     QString m_lastSearchQuery;
     int m_cachedTotalMatches = 0;
