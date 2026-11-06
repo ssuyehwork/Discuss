@@ -504,7 +504,10 @@ QLineEdit#QLSearchEdit {
     border: 1px solid #3c3c3c;
     border-radius: 4px;
     color: #E0E0E0;
-    padding: 3px 6px;
+    padding: 0px 6px;
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
     font-size: 12px;
 }
 
@@ -517,7 +520,10 @@ QPushButton#QLSearchBtn {
     border: 1px solid #444444;
     border-radius: 4px;
     color: #E0E0E0;
-    padding: 3px 8px;
+    padding: 0px 8px;
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
     font-size: 11px;
 }
 
