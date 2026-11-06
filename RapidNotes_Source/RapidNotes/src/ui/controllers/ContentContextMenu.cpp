@@ -8,7 +8,6 @@
 #include "../StyleLibrary.h"
 #include "../ToolTipOverlay.h"
 #include "../ColorPicker.h"
-#include "../FavoritePanel.h"
 #include "../BatchRenameDialog.h"
 #include "../BatchCreateDialog.h"
 #include "../FramelessDialog.h"

@@ -107,6 +107,8 @@ set(SOURCES
     src/core/MessageCaptureHandler.cpp
     src/core/MessageCaptureHandler.h
     src/core/ModelContract.h
+    src/meta/FavoriteDao.h
+    src/meta/FavoriteService.h
     src/meta/LibrarySyncService.h
     src/meta/LibraryDao.h
     src/util/ShellHelper.h
