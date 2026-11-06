@@ -83,6 +83,10 @@ private:
         void stopWorker();
         void wakeUpWorker();
 
+#ifdef Q_OS_WIN
+        HANDLE iocpHandle() const { return m_hIOCP; }
+#endif
+
     protected:
         void run() override;
 

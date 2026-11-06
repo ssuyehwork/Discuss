@@ -484,8 +484,8 @@ void DirectoryWatchService::processWorkerQueue() {
         item->hDir = hDir;
         ZeroMemory(&item->overlapped, sizeof(OVERLAPPED));
 
-        if (m_workerThread && m_workerThread->m_hIOCP) {
-            CreateIoCompletionPort(item->hDir, m_workerThread->m_hIOCP, (ULONG_PTR)item.get(), 0);
+        if (m_workerThread && m_workerThread->iocpHandle()) {
+            CreateIoCompletionPort(item->hDir, m_workerThread->iocpHandle(), (ULONG_PTR)item.get(), 0);
         }
 
         BOOL ok = ReadDirectoryChangesW(
