@@ -833,21 +833,6 @@ void FilterPanel::setMirrorSource(bool isMirror) {
     Q_UNUSED(isMirror);
 }
 
- else if (rule.type == SmartRuleType::Color) {
-            if (!rule.value.isEmpty()) st.manualColors.append(rule.value);
-        } else if (rule.type == SmartRuleType::AutoColor) {
-            if (!rule.value.isEmpty()) st.colors.append(rule.value);
-        } else if (rule.type == SmartRuleType::Extension) {
-            if (!rule.value.isEmpty()) st.types.append(rule.value);
-        } else if (rule.type == SmartRuleType::Name) {
-            st.typeFilterText = rule.value;
-        }
-    }
-
-    m_filterModel->setState(st);
-    syncUIFromFilterState();
-}
-
 void FilterPanel::selectColor(const QColor& color) {
     QString hex = color.name().toUpper();
     // pushRecent removed

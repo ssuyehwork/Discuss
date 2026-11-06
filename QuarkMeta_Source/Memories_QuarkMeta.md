@@ -1086,3 +1086,22 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 严格遵守 Memories 规范，Toast 居中弹出，绝不追踪鼠标光标位置；
 4. **架构纯洁性与零副作用**：
    - 无需在各个视图（ListView/GridView/ColumnView/JustifiedView）或键盘处理器（ContentKeyHandler）分别散落补丁，直接在控制协调层核心统一收口。
+
+
+---
+
+## [新增记录] 内容面板回收站快捷键清空与永久删除设计理念 (Recycle Bin Delete Shortcuts)
+
+**记录日期**: 2026-11-06
+
+### 设计决策
+1. **回收站场景快捷键上下文分流契约**：
+   - 在回收站视图下（`getCurrentCategoryType() == "trash"` 或 `currentPath() == "trash://"`），原先针对普通目录的移入回收站行为（`moveToTrash`）被废止，转为执行彻底销毁行为；
+2. **快捷键触发规则与智能路由**：
+   - 触发键位集合：`Del`、`Shift+Del`、`Ctrl+Space`；
+   - **分支 A（有选中项）**：当用户选中了 1 个或多个回收站项目时，按下任一键位统一路由至**“永久删除选中项”**（`PermanentDeleteService::instance().execute(m_panel->getSelectedPaths(), m_panel)`）；
+   - **分支 B（无选中项）**：当用户未选择任何项目或聚焦在空白处时，按下任一键位统一路由至**“清空回收站”**（`PermanentDeleteService::instance().executeEmptyTrash(m_panel)`）；
+3. **安全防线保障**：
+   - 永久删除与清空回收站操作均完整承载 `PermanentDeleteService` 原生的二次阻断确认对话框（`FramelessConfirmDialog`）与磁盘扇区级安全清理机制，保障数据不被误删；
+4. **非回收站常规目录零篡改**：
+   - 普通目录下的 `Del` / `Ctrl+Space` 移入回收站以及 `Shift+Del` 永久删除逻辑 100% 维持原样，编译契约与交互习惯不受任何影响。
