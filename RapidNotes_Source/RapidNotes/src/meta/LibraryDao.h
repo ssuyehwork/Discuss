@@ -21,6 +21,10 @@ public:
     static bool initTable() { return true; }
     static QList<LibraryCategoryRecord> getAllCategories() { return {}; }
     static LibraryCategoryRecord getCategoryById(int) { return {}; }
+    static QStringList getCategoryPaths(int id) {
+        Q_UNUSED(id);
+        return {};
+    }
 };
 
 } // namespace RapidNotes

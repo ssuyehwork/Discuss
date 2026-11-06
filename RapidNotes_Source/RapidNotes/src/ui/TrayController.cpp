@@ -3,7 +3,6 @@
 #include <QIcon>
 #include <QDebug>
 #include <QCursor>
-#include "../meta/DatabaseManager.h"
 #include "UiHelper.h"
 
 #ifdef Q_OS_WIN

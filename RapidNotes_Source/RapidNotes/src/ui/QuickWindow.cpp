@@ -10,7 +10,9 @@
 #include "DropTreeView.h"
 #include "QuickPreview.h"
 #include "PasswordVerifyDialog.h"
-#include "FilterPanel.h"
+#include "QuickFilterPanel.h"
+
+using namespace RapidNotes;
 #include "../models/NoteModel.h"
 #include <QSortFilterProxyModel>
 #include <QTreeView>
@@ -662,9 +664,9 @@ void QuickWindow::initUI() {
     fwLayout->setContentsMargins(0, 0, 0, 0);
     fwLayout->setSpacing(0);
 
-    m_filterPanel = new FilterPanel(this);
+    m_filterPanel = new QuickFilterPanel(this);
     m_filterPanel->setStyleSheet("background: transparent; border: none;");
-    connect(m_filterPanel, &FilterPanel::filterChanged, this, &QuickWindow::refreshData);
+    connect(m_filterPanel, &QuickFilterPanel::filterChanged, this, &QuickWindow::refreshData);
     fwLayout->addWidget(m_filterPanel);
     m_filterWrapper->hide();
 

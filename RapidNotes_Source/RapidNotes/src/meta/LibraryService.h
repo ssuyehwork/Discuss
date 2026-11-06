@@ -13,6 +13,13 @@ public:
         static LibraryService s_instance;
         return s_instance;
     }
+
+    QStringList getCategoryPaths(int id) const {
+        return LibraryDao::getCategoryPaths(id);
+    }
+
+signals:
+    void libraryChanged();
 };
 
 } // namespace RapidNotes

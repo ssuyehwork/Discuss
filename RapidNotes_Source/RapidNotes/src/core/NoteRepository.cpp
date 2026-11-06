@@ -248,4 +248,9 @@ bool NoteRepository::toggleCategoryPinned(int categoryId, bool isPinned) {
     return q.exec();
 }
 
+QString NoteRepository::getDatabasePath() {
+    QSqlDatabase db = DatabaseManager::instance().database();
+    return db.databaseName();
+}
+
 } // namespace RapidNotes

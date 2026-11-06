@@ -218,6 +218,14 @@ set(SOURCES
     src/ui/FileTypeGroup.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
+    src/ui/QuickFilterPanel.cpp
+    src/ui/QuickFilterPanel.h
+    src/core/PresetTagService.cpp
+    src/core/PresetTagService.h
+    src/ui/QuickLookWindow.cpp
+    src/ui/QuickLookWindow.h
+    src/ui/QuickLookGraphicsView.cpp
+    src/ui/QuickLookGraphicsView.h
     src/ui/ModifyDateGroup.cpp
     src/ui/ModifyDateGroup.h
     src/ui/NoteStatusGroup.cpp
@@ -379,6 +387,10 @@ set(SOURCES
     src/ui/controllers/ContentViewCoordinator.h
     src/ui/controllers/ContentSortController.cpp
     src/ui/controllers/ContentSortController.h
+    src/ui/controllers/ContentContextMenu.cpp
+    src/ui/controllers/ContentContextMenu.h
+    src/ui/controllers/ContextMenuFactory.cpp
+    src/ui/controllers/ContextMenuFactory.h
     src/ui/controllers/PaneActivationTracker.cpp
     src/ui/controllers/PaneActivationTracker.h
     src/ui/models/DiskItemModel.h
