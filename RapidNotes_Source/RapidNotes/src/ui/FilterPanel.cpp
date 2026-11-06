@@ -1,18 +1,12 @@
 #include "FilterPanel.h"
 #include "components/ColorDot.h"
-#include "ThumbnailStatusGroup.h"
-#include "DuplicateStatusGroup.h"
-#include "LinkStatusGroup.h"
-#include "NoteStatusGroup.h"
-#include "TagStatusGroup.h"
-#include "AspectRatioGroup.h"
-#include "FileSizeGroup.h"
-
 #include "ColorLabelGroup.h"
 #include "RatingGroup.h"
 #include "FileTypeGroup.h"
 #include "CreateDateGroup.h"
 #include "ModifyDateGroup.h"
+#include "NoteStatusGroup.h"
+#include "TagStatusGroup.h"
 #include "../core/AppConfig.h"
 #include <QSet>
 #include <QDate>
@@ -571,74 +565,12 @@ void FilterPanel::rebuildGroups() {
         m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
     }
 
-    // ── 7. 链接 ──────────────────────────────────────────
-    {
-        QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("链接", gl);
-
-        LinkStatusGroup::populate(g, gl, m_filterModel, m_currentStats, currentSt,
-            [this](QVBoxLayout* layout, const QString& label, int count, const QString& rowKey) {
-                return addFilterRow(layout, label, count, QColor(), rowKey);
-            });
-
-        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
-    }
-
-    // ── 8. 备注 ──────────────────────────────────────────
+    // ── 7. 备注 ──────────────────────────────────────────
     {
         QVBoxLayout* gl = nullptr;
         QWidget* g = buildGroup("备注", gl);
 
         NoteStatusGroup::populate(g, gl, m_filterModel, m_currentStats, currentSt,
-            [this](QVBoxLayout* layout, const QString& label, int count, const QString& rowKey) {
-                return addFilterRow(layout, label, count, QColor(), rowKey);
-            });
-
-        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
-    }
-
-    // ── 9. 文件大小 ──────────────────────────────────────────
-    {
-        QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("文件大小", gl);
-
-        FileSizeGroup::populate(g, gl, m_filterModel);
-
-        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
-    }
-
-    // ── 11. 图像比例 ──────────────────────────────────────────
-    {
-        QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("图像比例", gl);
-
-        AspectRatioGroup::populate(g, gl, m_filterModel, m_currentStats, currentSt,
-            [this](QVBoxLayout* layout, const QString& label, int count, const QString& rowKey) {
-                return addFilterRow(layout, label, count, QColor(), rowKey);
-            });
-
-        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
-    }
-
-    // ── 12. 重复状态 ───────────────────────────
-    {
-        QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("重复状态", gl);
-
-        DuplicateStatusGroup::populate(gl, m_filterModel, m_currentStats, currentSt,
-            [this](QVBoxLayout* layout, const QString& label, int count, const QString& rowKey) {
-                return addFilterRow(layout, label, count, QColor(), rowKey);
-            });
-
-        m_containerLayout->insertWidget(m_containerLayout->count() - 1, g);
-    }
-
-    // ── 13. 缩略图状态 ───────────────────────────
-    {
-        QVBoxLayout* gl = nullptr;
-        QWidget* g = buildGroup("缩略图状态", gl);
-
-        ThumbnailStatusGroup::populate(gl, m_filterModel, m_currentStats, currentSt,
             [this](QVBoxLayout* layout, const QString& label, int count, const QString& rowKey) {
                 return addFilterRow(layout, label, count, QColor(), rowKey);
             });

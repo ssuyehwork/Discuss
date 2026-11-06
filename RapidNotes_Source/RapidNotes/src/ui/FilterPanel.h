@@ -25,13 +25,8 @@
 namespace RapidNotes {
 
 class SearchHistoryPanel;
-class ThumbnailStatusGroup;
-class DuplicateStatusGroup;
-class LinkStatusGroup;
 class NoteStatusGroup;
 class TagStatusGroup;
-class AspectRatioGroup;
-class FileSizeGroup;
 class ColorLabelGroup;
 class RatingGroup;
 class FileTypeGroup;

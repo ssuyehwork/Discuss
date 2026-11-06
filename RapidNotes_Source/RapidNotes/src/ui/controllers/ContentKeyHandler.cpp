@@ -121,18 +121,20 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
     // 1. Ctrl + 0~5: 评级
     if ((keyEvent->modifiers() & Qt::ControlModifier) && (keyEvent->key() >= Qt::Key_0 && keyEvent->key() <= Qt::Key_5)) {
         int rating = keyEvent->key() - Qt::Key_0;
-        QStringList selectedPaths = m_panel->getSelectedPaths();
-        if (!selectedPaths.isEmpty()) {
-            AppCommand cmd;
-            cmd.type = AppCommandType::SetRating;
-            cmd.targetPaths = selectedPaths;
-            cmd.params["rating"] = rating;
-            CoreEngine::instance().executeCommand(cmd);
+        if (m_panel) {
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            if (!selectedPaths.isEmpty()) {
+                AppCommand cmd;
+                cmd.type = AppCommandType::SetRating;
+                cmd.targetPaths = selectedPaths;
+                cmd.params["rating"] = rating;
+                CoreEngine::instance().executeCommand(cmd);
 
-            for (const QString& p : selectedPaths) {
-                m_panel->updateItemMetadata(p);
+                for (const QString& p : selectedPaths) {
+                    m_panel->updateItemMetadata(p);
+                }
+                m_panel->recalculateAndEmitStats();
             }
-            m_panel->recalculateAndEmitStats();
         }
         return true;
     }
@@ -144,19 +146,20 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
             "#1D9E75", "#378ADD", "#7F77DD", "#5F5E5A", ""
         };
         QString colorValue = colors[keyEvent->key() - Qt::Key_1];
-        QStringList selectedPaths = m_panel->getSelectedPaths();
+        if (m_panel) {
+            QStringList selectedPaths = m_panel->getSelectedPaths();
+            if (!selectedPaths.isEmpty()) {
+                AppCommand cmd;
+                cmd.type = AppCommandType::SetColor;
+                cmd.targetPaths = selectedPaths;
+                cmd.params["color"] = colorValue;
+                CoreEngine::instance().executeCommand(cmd);
 
-        if (!selectedPaths.isEmpty()) {
-            AppCommand cmd;
-            cmd.type = AppCommandType::SetColor;
-            cmd.targetPaths = selectedPaths;
-            cmd.params["color"] = colorValue;
-            CoreEngine::instance().executeCommand(cmd);
-
-            for (const QString& p : selectedPaths) {
-                m_panel->updateItemMetadata(p);
+                for (const QString& p : selectedPaths) {
+                    m_panel->updateItemMetadata(p);
+                }
+                m_panel->recalculateAndEmitStats();
             }
-            m_panel->recalculateAndEmitStats();
         }
         return true;
     }
