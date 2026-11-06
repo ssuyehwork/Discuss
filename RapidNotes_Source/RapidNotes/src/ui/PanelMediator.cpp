@@ -25,7 +25,6 @@
 #include "../core/TrashService.h"
 #include "../core/CoreEngine.h"
 #include "../core/CentralEventHub.h"
-#include "../core/VolumeOnlineManager.h"
 #include "../core/ModelContract.h"
 #include "../core/AppConfig.h"
 #include "../util/ShellHelper.h"

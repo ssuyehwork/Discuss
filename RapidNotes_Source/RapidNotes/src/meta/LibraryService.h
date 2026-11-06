@@ -1,7 +1,7 @@
 #pragma once
+
 #include <QObject>
-#include <QMenu>
-#include <QAction>
+#include <QStringList>
 #include "LibraryDao.h"
 
 namespace RapidNotes {
@@ -18,8 +18,32 @@ public:
         return LibraryDao::getCategoryPaths(id);
     }
 
+    int createCategory(const QString& name, int parentId = 0) {
+        return LibraryDao::addCategory(name, parentId);
+    }
+
+    bool removeCategory(int id) {
+        return LibraryDao::removeCategoryById(id);
+    }
+
+    bool addPathsToCategory(int id, const QStringList& paths) {
+        Q_UNUSED(id);
+        Q_UNUSED(paths);
+        return true;
+    }
+
+    bool removePathsFromCategory(int id, const QStringList& paths) {
+        Q_UNUSED(id);
+        Q_UNUSED(paths);
+        return true;
+    }
+
 signals:
     void libraryChanged();
+
+private:
+    explicit LibraryService(QObject* parent = nullptr) : QObject(parent) {}
+    ~LibraryService() override = default;
 };
 
 } // namespace RapidNotes

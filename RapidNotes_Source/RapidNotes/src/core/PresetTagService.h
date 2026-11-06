@@ -31,6 +31,12 @@ public:
         return 0;
     }
 
+    int applyPresetTagsForDroppedItems(int categoryId, const QStringList& paths) {
+        Q_UNUSED(categoryId);
+        Q_UNUSED(paths);
+        return 0;
+    }
+
 private:
     PresetTagService() = default;
     ~PresetTagService() = default;

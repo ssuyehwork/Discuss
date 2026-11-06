@@ -220,6 +220,7 @@ set(SOURCES
     src/ui/FilterPanel.h
     src/ui/QuickFilterPanel.cpp
     src/ui/QuickFilterPanel.h
+    src/ui/SmartFolderDialog.h
     src/core/PresetTagService.h
     src/ui/QuickLookWindow.h
     src/ui/ModifyDateGroup.cpp
