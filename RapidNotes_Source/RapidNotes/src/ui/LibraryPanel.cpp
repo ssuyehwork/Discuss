@@ -10,7 +10,7 @@
 #include "ViewDragDropHelper.h"
 #include "../meta/LibraryDao.h"
 #include "../meta/LibraryService.h"
-#include "../meta/DatabaseManager.h"
+#include "../core/NoteRepository.h"
 #include <QtConcurrent/QtConcurrent>
 #include "../core/CoreEngine.h"
 #include "../core/PresetTagService.h"
@@ -1490,7 +1490,7 @@ void LibraryPanel::refreshSmartFolderCounts() {
         m_countDebounceTimer->setSingleShot(true);
         connect(m_countDebounceTimer, &QTimer::timeout, this, [this]() {
             uint64_t reqId = ++m_currentCountReqId;
-            QString dbPath = DatabaseManager::getGlobalDbPath();
+            QString dbPath = NoteRepository::getDatabasePath();
             QPointer<LibraryPanel> weakThis(this);
 
             (void)QtConcurrent::run([weakThis, reqId, dbPath]() {
@@ -1527,7 +1527,7 @@ void LibraryPanel::refreshSmartFolderCounts() {
 }
 
 void LibraryPanel::updateSmartFolderCountsAsync(uint64_t reqId, const QList<SmartFolderRecord>& smartFolders) {
-    QString dbPath = DatabaseManager::getGlobalDbPath();
+    QString dbPath = NoteRepository::getDatabasePath();
     QPointer<LibraryPanel> weakThis(this);
 
     (void)QtConcurrent::run([weakThis, reqId, smartFolders, dbPath]() {

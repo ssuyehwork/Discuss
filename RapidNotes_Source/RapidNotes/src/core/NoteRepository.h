@@ -60,6 +60,9 @@ public:
     bool setCategoryIcon(int categoryId, const QString& iconKey);
     bool toggleCategoryPinned(int categoryId, bool isPinned);
 
+    // 数据库路径获取
+    static QString getDatabasePath();
+
 private:
     NoteRepository();
     ~NoteRepository() = default;
