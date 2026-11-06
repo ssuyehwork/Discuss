@@ -157,8 +157,6 @@ set(SOURCES
     src/ui/CleanListView.cpp
     src/ui/CleanListView.h
     src/ui/ClickableLineEdit.h
-    src/ui/ColumnViewWidget.cpp
-    src/ui/ColumnViewWidget.h
     src/ui/ColorPickerWindow.cpp
     src/ui/ColorPickerWindow.h
     src/ui/ContentHeaderWidget.cpp

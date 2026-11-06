@@ -6,7 +6,6 @@
 #include "../meta/HistoryService.h"
 #include "../meta/LibrarySyncService.h"
 #include "ContentPanel.h"
-#include "ColumnViewWidget.h"
 #include "controllers/ContentPaneSplitManager.h"
 #include "controllers/PaneActivationTracker.h"
 #include "controllers/ContextMenuFactory.h"
@@ -196,7 +195,6 @@ void PanelMediator::setupConnections() {
                 if (option == TitleBarWidget::JustifiedViewMode) targetMode = ContentPanel::JustifiedViewMode;
                 else if (option == TitleBarWidget::GridViewMode) targetMode = ContentPanel::GridView;
                 else if (option == TitleBarWidget::ListViewMode) targetMode = ContentPanel::ListView;
-                else if (option == TitleBarWidget::ColumnViewMode) targetMode = ContentPanel::ColumnView;
 
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) target->setViewMode(targetMode);

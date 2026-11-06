@@ -288,8 +288,6 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
 
     m_btnToggleSortOrder = createSquareStatusBtn("arrow_down_long", "排序方向 (降序)");
     m_btnToggleSortOrder->setCheckable(false);
-    // m_btnToggleColumn removed
-    // m_btnToggleJustified removed
     m_btnToggleGrid      = createSquareStatusBtn("gridgapm", "网格(G)");
     m_btnToggleList      = createSquareStatusBtn("list_ul", "列表(L)");
 
@@ -406,14 +404,6 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
         }
     });
 
-    connect(m_btnToggleColumn, &QPushButton::clicked, this, [this, getActivePanel]() {
-        ContentPanel* target = getActivePanel();
-        if (target) {
-            target->setViewMode(ContentPanel::ColumnView);
-            updateStatusBarButtonHighlights();
-        }
-    });
-
     connect(m_btnToggleJustified, &QPushButton::clicked, this, [this, getActivePanel]() {
         ContentPanel* target = getActivePanel();
         if (target) {
@@ -519,12 +509,10 @@ void MainWindow::updateStatusBarButtonHighlights() {
     QSignalBlocker b9(m_btnToggleGrid);
     QSignalBlocker b10(m_btnToggleList);
     QSignalBlocker b11(m_btnToggleSortOrder);
-    QSignalBlocker b12(m_btnToggleColumn);
 
     ContentPanel* targetPanel = (m_panelMediator && m_panelMediator->activeContentPanel()) ? m_panelMediator->activeContentPanel() : m_contentPanel;
     if (targetPanel) {
         ContentPanel::ViewMode mode = targetPanel->currentViewMode();
-        if (m_btnToggleColumn)    m_btnToggleColumn->setChecked(mode == ContentPanel::ColumnView);
         if (m_btnToggleJustified) m_btnToggleJustified->setChecked(mode == ContentPanel::JustifiedViewMode);
         if (m_btnToggleGrid)      m_btnToggleGrid->setChecked(mode == ContentPanel::GridView);
         if (m_btnToggleList)      m_btnToggleList->setChecked(mode == ContentPanel::ListView);
