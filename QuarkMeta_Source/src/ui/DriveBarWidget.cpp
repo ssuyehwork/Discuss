@@ -3,6 +3,7 @@
 #include "TagManagerDialog.h"
 #include "dialogs/TextExtensionDialog.h"
 #include "dialogs/CacheLocationDialog.h"
+#include "dialogs/FolderWatchDialog.h"
 #include "ToolTipOverlay.h"
 #include "../core/NavigationService.h"
 #include "../core/AppConfig.h"
@@ -77,17 +78,24 @@ void DriveBarWidget::initUi() {
         dlg.exec();
     });
 
+    m_btnFolderWatch = createIconButton("Folder-Seach-2", QColor("#9b59b6"), "目录监听设置");
+    connect(m_btnFolderWatch, &QPushButton::clicked, this, [this]() {
+        FolderWatchDialog dlg(this);
+        dlg.exec();
+    });
+
     // 默认加至布局并依配置显隐
     m_driveBarLayout->addWidget(m_btnTagManager);
     m_driveBarLayout->addWidget(m_btnTextExtension);
     m_driveBarLayout->addWidget(m_btnSaveThumbnail);
+    m_driveBarLayout->addWidget(m_btnFolderWatch);
     m_driveBarLayout->addStretch();
 
     refreshPinnedButtons();
 }
 
 void DriveBarWidget::refreshPinnedButtons() {
-    QStringList pinnedList = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail"}).toStringList();
+    QStringList pinnedList = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail", "folder_watch"}).toStringList();
 
     if (m_btnTagManager) {
         m_btnTagManager->setVisible(pinnedList.contains("tag"));
@@ -97,6 +105,9 @@ void DriveBarWidget::refreshPinnedButtons() {
     }
     if (m_btnSaveThumbnail) {
         m_btnSaveThumbnail->setVisible(pinnedList.contains("save_thumbnail"));
+    }
+    if (m_btnFolderWatch) {
+        m_btnFolderWatch->setVisible(pinnedList.contains("folder_watch"));
     }
 }
 
@@ -149,11 +160,28 @@ void DriveBarWidget::setupExtensionMenu() {
         actSaveThumb->setChecked(pinnedList.contains("save_thumbnail"));
 
         connect(actSaveThumb, &QAction::triggered, this, [this](bool checked) {
-            QStringList currentPinned = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail"}).toStringList();
+            QStringList currentPinned = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail", "folder_watch"}).toStringList();
             if (checked && !currentPinned.contains("save_thumbnail")) {
                 currentPinned.append("save_thumbnail");
             } else if (!checked) {
                 currentPinned.removeAll("save_thumbnail");
+            }
+            AppConfig::instance().setValue("DriveBar/PinnedExtensions", currentPinned);
+            AppConfig::instance().sync();
+
+            refreshPinnedButtons();
+        });
+
+        QAction* actWatch = extMenu->addAction(UiHelper::getIcon("Folder-Seach-2", QColor("#9b59b6"), 18), "目录监听设置");
+        actWatch->setCheckable(true);
+        actWatch->setChecked(pinnedList.contains("folder_watch"));
+
+        connect(actWatch, &QAction::triggered, this, [this](bool checked) {
+            QStringList currentPinned = AppConfig::instance().getValue("DriveBar/PinnedExtensions", QStringList{"tag", "text_ext", "save_thumbnail", "folder_watch"}).toStringList();
+            if (checked && !currentPinned.contains("folder_watch")) {
+                currentPinned.append("folder_watch");
+            } else if (!checked) {
+                currentPinned.removeAll("folder_watch");
             }
             AppConfig::instance().setValue("DriveBar/PinnedExtensions", currentPinned);
             AppConfig::instance().sync();

@@ -492,6 +492,15 @@ QPlainTextEdit#QLPlainTextEdit {
     font-size: 13px;
 }
 
+/* 目录监听设置对话框 */
+QLabel#FolderWatchDescLabel {
+    color: #CCCCCC;
+    font-size: 13px;
+}
+QWidget#FolderWatchContainer {
+    background: transparent;
+}
+
 /* QuickLook 文本搜索浮层样式 */
 QWidget#QLSearchBar {
     background-color: rgba(30, 30, 30, 0.92);

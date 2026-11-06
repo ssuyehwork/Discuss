@@ -19,6 +19,7 @@ public:
     QPushButton* tagManagerButton() const { return m_btnTagManager; }
     QPushButton* textExtensionButton() const { return m_btnTextExtension; }
     QPushButton* saveThumbnailButton() const { return m_btnSaveThumbnail; }
+    QPushButton* folderWatchButton() const { return m_btnFolderWatch; }
     QPushButton* extensionManagerButton() const { return m_btnExtensionManager; }
     QHBoxLayout* driveBarLayout() const { return m_driveBarLayout; }
 
@@ -37,6 +38,7 @@ private:
     QPushButton* m_btnTagManager = nullptr;
     QPushButton* m_btnTextExtension = nullptr;
     QPushButton* m_btnSaveThumbnail = nullptr;
+    QPushButton* m_btnFolderWatch = nullptr;
 };
 
 } // namespace QuarkMeta
