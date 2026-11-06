@@ -2,7 +2,6 @@
 #include "ColorPicker.h"
 #include "CardPainterHelper.h"
 #include "UiHelper.h"
-#include "../meta/HistoryService.h"
 #include <memory>
 #include "ToolTipOverlay.h"
 #include "Logger.h"
@@ -13,6 +12,10 @@
 #include <QPushButton>
 #include <QToolButton>
 #include <QHBoxLayout>
+#include <QMimeData>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QFileInfo>
 #include <QLabel>
 #include <QDir>
@@ -225,9 +228,6 @@ void MetaPanel::initUi() {
         if (!urlStr.isEmpty()) {
             QUrl url = QUrl::fromUserInput(urlStr);
             if (url.isValid() && (url.scheme().toLower() == "http" || url.scheme().toLower() == "https")) {
-                if (url.isLocalFile()) {
-                    HistoryService::instance().recordFileAccess(url.toLocalFile());
-                }
                 QDesktopServices::openUrl(url);
             } else {
                 ToolTipOverlay::instance()->showToast("无效的 Web 网址格式", 1500, QColor("#e81123"));
@@ -661,7 +661,7 @@ void MetaPanel::setSelectedPaths(const QStringList& paths) {
     }
     qint64 ms = timer.elapsed();
     if (ms > 2) {
-        Logger::log(QString("[Perf] MetaPanel::setSelectedPaths(%1 paths) took %2ms").arg(paths.size()).arg(ms));
+        qDebug() << QString("[Perf] MetaPanel::setSelectedPaths(%1 paths) took %2ms").arg(paths.size()).arg(ms));
     }
 }
 
@@ -897,7 +897,7 @@ void MetaPanel::setNote(const QString& note) {
 }
 
 
-void MetaPanel_disabled_setURL() {
+void MetaPanel::setURL(const QString& url) {
     if (m_isUserEditing) return;
     m_isInternalUpdating = true;
     m_linkEdit->setText(url);
