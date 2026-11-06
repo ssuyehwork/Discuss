@@ -218,6 +218,10 @@ set(SOURCES
     src/ui/FileTypeGroup.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
+    src/ui/QuickFilterPanel.cpp
+    src/ui/QuickFilterPanel.h
+    src/core/PresetTagService.h
+    src/ui/QuickLookWindow.h
     src/ui/ModifyDateGroup.cpp
     src/ui/ModifyDateGroup.h
     src/ui/NoteStatusGroup.cpp
