@@ -28,8 +28,8 @@ public:
         Q_UNUSED(rec);
         return true;
     }
-    static bool updateSmartFolderOrder(const QList<int>& ids) {
-        Q_UNUSED(ids);
+    static bool updateSmartFolderOrder(const QList<QPair<int, int>>& idOrderList) {
+        Q_UNUSED(idOrderList);
         return true;
     }
     static bool removeSmartFolderById(int id) {
