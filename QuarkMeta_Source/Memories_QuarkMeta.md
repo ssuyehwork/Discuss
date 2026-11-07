@@ -1101,8 +1101,7 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 在回收站视图下（`getCurrentCategoryType() == "trash"` 或 `currentPath() == "trash://"`），原先针对普通目录的移入回收站行为（`moveToTrash`）被废止，转为执行彻底销毁行为；
 2. **快捷键触发规则与智能路由**：
    - 触发键位集合：`Del`、`Shift+Del`、`Ctrl+Space`；
-   - **分支 A（有选中项）**：当用户选中了 1 个或多个回收站项目时，按下任一键位统一路由至**“永久删除选中项”**（`PermanentDeleteService::instance().execute(m_panel->getSelectedPaths(), m_panel)`）；
-   - **分支 B（无选中项）**：当用户未选择任何项目或聚焦在空白处时，按下任一键位统一路由至**“清空回收站”**（`PermanentDeleteService::instance().executeEmptyTrash(m_panel)`）；
+   - **统一收敛**：在回收站视图下，无论是否选中项目，按下 `Del`、`Shift+Del` 或 `Ctrl+Space` 中的任一键位，统一路由执行**“清空回收站”**逻辑接口（`PermanentDeleteService::instance().executeEmptyTrash(m_panel)`）；
 3. **安全防线保障**：
    - 永久删除与清空回收站操作均完整承载 `PermanentDeleteService` 原生的二次阻断确认对话框（`FramelessConfirmDialog`）与磁盘扇区级安全清理机制，保障数据不被误删；
 4. **非回收站常规目录零篡改**：
