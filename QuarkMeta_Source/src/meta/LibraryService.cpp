@@ -3,6 +3,10 @@
 #include "../ui/UiHelper.h"
 #include "../ui/ToolTipOverlay.h"
 #include <QCursor>
+#include <QDir>
+#include <QDirIterator>
+#include <QFileInfo>
+#include <QHash>
 
 namespace QuarkMeta {
 
@@ -37,6 +41,68 @@ bool LibraryService::removeCategory(int id) {
         emit libraryChanged();
     }
     return ok;
+}
+
+bool LibraryService::bindPathsToCategory(int id, const QStringList& paths) {
+    bool ok = LibraryDao::bindPathsToCategory(id, paths);
+    if (ok) {
+        emit libraryChanged();
+    }
+    return ok;
+}
+
+int LibraryService::syncWatchedFolderHierarchy(const QString& rootFolderPath) {
+    QString cleanRoot = QDir::toNativeSeparators(QDir::cleanPath(rootFolderPath));
+    QFileInfo rootInfo(cleanRoot);
+    if (!rootInfo.exists() || !rootInfo.isDir()) return 0;
+
+    QString rootName = rootInfo.fileName();
+    if (rootName.isEmpty()) {
+        rootName = rootInfo.absoluteFilePath();
+    }
+
+    int rootCatId = LibraryDao::getOrCreateCategory(rootName, 0);
+    if (rootCatId <= 0) return 0;
+
+    // 绑定根文件夹与根目录下的直接子文件
+    QStringList rootPaths;
+    rootPaths << cleanRoot;
+    QDir rDir(cleanRoot);
+    QFileInfoList rootEntries = rDir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+    for (const auto& fi : rootEntries) {
+        rootPaths << QDir::toNativeSeparators(fi.absoluteFilePath());
+    }
+    LibraryDao::bindPathsToCategory(rootCatId, rootPaths);
+
+    // 缓存已创建分类路径到 ID 的映射
+    QHash<QString, int> folderCatMap;
+    folderCatMap[cleanRoot.toLower()] = rootCatId;
+
+    // 递归遍历所有子目录
+    QDirIterator it(cleanRoot, QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        it.next();
+        QString subDirPath = QDir::toNativeSeparators(it.filePath());
+        QFileInfo subInfo(subDirPath);
+        QString parentDirPath = QDir::toNativeSeparators(subInfo.dir().absolutePath());
+
+        int parentCatId = folderCatMap.value(parentDirPath.toLower(), rootCatId);
+        int subCatId = LibraryDao::getOrCreateCategory(subInfo.fileName(), parentCatId);
+        if (subCatId > 0) {
+            folderCatMap[subDirPath.toLower()] = subCatId;
+            QStringList subPaths;
+            subPaths << subDirPath;
+            QDir sDir(subDirPath);
+            QFileInfoList fileEntries = sDir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+            for (const auto& fi : fileEntries) {
+                subPaths << QDir::toNativeSeparators(fi.absoluteFilePath());
+            }
+            LibraryDao::bindPathsToCategory(subCatId, subPaths);
+        }
+    }
+
+    emit libraryChanged();
+    return rootCatId;
 }
 
 bool LibraryService::addPathsToCategory(int id, const QStringList& paths) {

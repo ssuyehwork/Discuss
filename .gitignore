@@ -82,6 +82,9 @@
 !Time_Source/
 !Time_Source/**
 
+!OCR_Source/
+!OCR_Source/**
+
 !Python_Script_Launcher/
 !Python_Script_Launcher/**
 

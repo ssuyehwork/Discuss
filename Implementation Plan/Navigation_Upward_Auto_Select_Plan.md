@@ -4,15 +4,18 @@
 - 根因：`NavigationService` 只在 `goUp()` 时简单记录离开路径，而 `goBack()`、面包屑导航、双击空白返回等均未统一计算返回上一层时应选中的子项路径；`PanelMediator` 与 `ContentPanel` 恢复选区时未针对折叠的文件夹分区展开，未在异步加载/布局完成后滚动至刚好可见。
 - 设计：
   1. 在 `NavigationService` 中统一通过 `computeAscendingTarget(from, to)` 计算返回时应选中的直接子项；
-  2. `takePendingTarget(targetUrl)` 绑定目标路径，用完即清，防串扰；
-  3. `ContentViewCoordinator::restoreSelections` 时，若目标为文件夹且分区被折叠，自动展开文件夹分区；
-  4. 选中使用现有样式，`scrollTo` 采用 `EnsureVisible`。
+  2. `takePendingTargetChildPath(targetUrl)` 绑定目标路径，用完即清，防串扰；
+  3. 在 `ContentPanel` 封装提供 `isFolderSectionCollapsed()` 与 `expandFolderSection()` 高内聚接口，遵守黑盒隔离与契约锁；
+  4. `ContentViewCoordinator::restoreSelections` 时，若目标为文件夹且分区被折叠，通过 `ContentPanel` 自动展开文件夹分区；
+  5. 选中使用现有样式，`scrollTo` 采用 `EnsureVisible`。
 
 ## 修改文件清单
 1. `QuarkMeta_Source/src/core/NavigationService.h`
 2. `QuarkMeta_Source/src/core/NavigationService.cpp`
 3. `QuarkMeta_Source/src/ui/PanelMediator.cpp`
-4. `QuarkMeta_Source/src/ui/controllers/ContentViewCoordinator.cpp`
+4. `QuarkMeta_Source/src/ui/ContentPanel.h`
+5. `QuarkMeta_Source/src/ui/ContentPanel.cpp`
+6. `QuarkMeta_Source/src/ui/controllers/ContentViewCoordinator.cpp`
 
 ## 精准替换块
 
@@ -104,6 +107,8 @@ void NavigationService::navigateTo(const QString& rawUrl, bool recordHistory, bo
         m_pendingTargetExpectedUrl = normalized;
     }
 
+    // 路径跳转幂等性守卫 (No-op Protection)：
+    // 若目标路径与当前路径一致（大小写不敏感对比）且非递归状态变更，直接返回，阻断无意义的视图重载与筛选面板重置
     if (QString::compare(normalized, m_currentUrl, Qt::CaseInsensitive) == 0 && !recursive) {
         return;
     }
@@ -210,7 +215,52 @@ void NavigationService::goUp() {
             }
 >>>>>>> REPLACE
 
-### 4. `QuarkMeta_Source/src/ui/controllers/ContentViewCoordinator.cpp`
+### 4. `QuarkMeta_Source/src/ui/ContentPanel.h`
+<<<<<<< SEARCH
+    void setViewMode(ViewMode mode);
+    void toggleFolderSectionCollapse();
+    void selectAndScrollToPath(const QString& path);
+=======
+    void setViewMode(ViewMode mode);
+    void toggleFolderSectionCollapse();
+    bool isFolderSectionCollapsed() const;
+    void expandFolderSection();
+    void selectAndScrollToPath(const QString& path);
+>>>>>>> REPLACE
+
+### 5. `QuarkMeta_Source/src/ui/ContentPanel.cpp`
+<<<<<<< SEARCH
+void ContentPanel::toggleFolderSectionCollapse() {
+    if (m_currentViewMode == ColumnView && m_columnView) {
+        m_columnView->toggleFolderSectionCollapse();
+    } else if (m_sectionModel) {
+        m_sectionModel->setFolderCollapsed(!m_sectionModel->isFolderCollapsed());
+    }
+}
+=======
+void ContentPanel::toggleFolderSectionCollapse() {
+    if (m_currentViewMode == ColumnView && m_columnView) {
+        m_columnView->toggleFolderSectionCollapse();
+    } else if (m_sectionModel) {
+        m_sectionModel->setFolderCollapsed(!m_sectionModel->isFolderCollapsed());
+    }
+}
+
+bool ContentPanel::isFolderSectionCollapsed() const {
+    if (m_currentViewMode == ColumnView) {
+        return false;
+    }
+    return m_sectionModel && m_sectionModel->isFolderCollapsed();
+}
+
+void ContentPanel::expandFolderSection() {
+    if (m_sectionModel && m_sectionModel->isFolderCollapsed()) {
+        m_sectionModel->setFolderCollapsed(false);
+    }
+}
+>>>>>>> REPLACE
+
+### 6. `QuarkMeta_Source/src/ui/controllers/ContentViewCoordinator.cpp`
 <<<<<<< SEARCH
         int total = viewModeModel->rowCount();
         for (int r = 0; r < total; ++r) {
@@ -224,10 +274,10 @@ void NavigationService::goUp() {
         }
 =======
         // 自动展开已折叠的文件夹分区，确保目标项可见
-        if (m_panel && m_panel->sectionModel() && m_panel->sectionModel()->isFolderCollapsed()) {
+        if (m_panel && m_panel->isFolderSectionCollapsed()) {
             for (const QString& sp : selectedPaths) {
                 if (QFileInfo(sp).isDir()) {
-                    m_panel->sectionModel()->setFolderCollapsed(false);
+                    m_panel->expandFolderSection();
                     break;
                 }
             }

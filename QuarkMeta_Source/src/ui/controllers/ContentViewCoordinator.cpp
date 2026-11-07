@@ -155,10 +155,10 @@ void ContentViewCoordinator::restoreSelections(const QSet<QString>& selectedPath
         };
 
         // 自动展开已折叠的文件夹分区，确保目标项可见
-        if (m_panel && m_panel->sectionModel() && m_panel->sectionModel()->isFolderCollapsed()) {
+        if (m_panel && m_panel->isFolderSectionCollapsed()) {
             for (const QString& sp : selectedPaths) {
                 if (QFileInfo(sp).isDir()) {
-                    m_panel->sectionModel()->setFolderCollapsed(false);
+                    m_panel->expandFolderSection();
                     break;
                 }
             }
