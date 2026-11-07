@@ -60,14 +60,8 @@ bool PixelRulerOverlay::eventFilter(QObject* watched, QEvent* event) {
 
 void PixelRulerOverlay::initToolbar() {
     // 将工具栏作为本窗体的子部件，确保它在最顶层且可交互
-    m_toolbar = new QFrame(this);
+        m_toolbar = new QFrame(this);
     m_toolbar->setObjectName("rulerToolbar");
-    m_toolbar->setStyleSheet(
-        "QFrame#rulerToolbar { background: #1e1e1e; border-radius: 8px; border: 1px solid #444; }"
-        "QPushButton { background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 8px; }"
-        "QPushButton:hover { background: #333; border: 1px solid #555; }"
-        "QPushButton:checked { background: #007ACC; border: 1px solid #007ACC; }"
-    );
     auto* l = new QHBoxLayout(m_toolbar);
     l->setContentsMargins(8, 4, 8, 4);
     l->setSpacing(8);

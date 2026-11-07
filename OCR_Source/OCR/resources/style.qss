@@ -6133,3 +6133,175 @@ QWidget#container { background: #1E1E1E; border-radius: 10px; border: 1px solid 
 #IdeaQuickPanel_hintLabel_4 {
     color: #3A3A3A; font-size: 10px; background: transparent; border: none;
 }
+
+/* ==================== OCR 专用外联收敛样式 ==================== */
+/* 复选框选中对勾矢量图标 */
+QCheckBox::indicator:checked {
+    border: 1px solid #378ADD;
+    background: #1E1E1E;
+    image: url(:/icons/check.svg);
+}
+
+#ScreenshotToolbar {
+    background: transparent;
+}
+#ScreenshotToolbar #MainContainer {
+    background-color: #2D2D2D;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+}
+#ScreenshotToolbar #ToolRow, #ScreenshotToolbar #OptionWidget {
+    background: transparent;
+}
+#ScreenshotToolbar QPushButton {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 4px;
+}
+#ScreenshotToolbar #MainContainer QPushButton:hover {
+    background-color: #3e3e42;
+}
+#ScreenshotToolbar #MainContainer QPushButton:checked {
+    background-color: #3e3e42;
+}
+#ScreenshotToolbar QPushButton[colorBtn="true"] {
+    padding: 0px;
+    border-radius: 2px;
+}
+#ScreenshotToolbar QPushButton[sizeBtn="true"] {
+    background-color: #777;
+    border-radius: 50%;
+}
+#ScreenshotToolbar QPushButton[sizeBtn="true"]:checked {
+    background-color: #007ACC;
+}
+
+/* 颜色选择器窗口外联样式 */
+#ColorPickerWindow {
+    font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    color: #E0E0E0;
+}
+#ColorPickerWindow QLineEdit {
+    background-color: #2A2A2A;
+    border: 1px solid #444;
+    color: #FFFFFF;
+    border-radius: 6px;
+    padding: 4px;
+    font-weight: bold;
+}
+#ColorPickerWindow QLineEdit:focus {
+    border: 1px solid #3b8ed0;
+}
+#ColorPickerWindow QPushButton {
+    background-color: #333;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 6px;
+    outline: none;
+}
+#ColorPickerWindow QPushButton:hover {
+    background-color: #3e3e42;
+}
+#ColorPickerWindow QPushButton:pressed {
+    background-color: #222;
+}
+#ColorPickerWindow QScrollArea {
+    background: transparent;
+    border: none;
+}
+#ColorPickerWindow QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+}
+#ColorPickerWindow QScrollBar::handle:vertical {
+    background: #444;
+    border-radius: 4px;
+    min-height: 20px;
+}
+#ColorPickerWindow QScrollBar::handle:vertical:hover {
+    background: #555;
+}
+#ColorPickerWindow QScrollBar::add-line:vertical, #ColorPickerWindow QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+#ColorPickerNavBtn {
+    background: #333;
+    border-radius: 6px;
+    font-weight: bold;
+    border: 1px solid #444;
+}
+#ColorPickerNavBtn:hover {
+    background: #444;
+}
+#ColorPickerNavBtn:checked {
+    background: #007ACC;
+    color: white;
+    border-color: #007ACC;
+}
+
+#ColorPickerGradModeBtn {
+    background: #333;
+    border: 1px solid #444;
+    border-radius: 4px;
+    font-size: 11px;
+    padding: 0;
+}
+#ColorPickerGradModeBtn:hover {
+    background: #444;
+}
+#ColorPickerGradModeBtn:checked {
+    background: #007ACC;
+    color: white;
+    border-color: #007ACC;
+}
+
+#ColorPickerSpinBtn {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    margin: 0px;
+}
+#ColorPickerSpinBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+}
+
+/* 像素标尺工具栏样式 */
+QFrame#rulerToolbar {
+    background: #1e1e1e;
+    border-radius: 8px;
+    border: 1px solid #444;
+}
+QFrame#rulerToolbar QPushButton {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 8px;
+}
+QFrame#rulerToolbar QPushButton:hover {
+    background: #333;
+    border: 1px solid #555;
+}
+QFrame#rulerToolbar QPushButton:checked {
+    background: #007ACC;
+    border: 1px solid #007ACC;
+}
+
+/* OCRWindow 列表样式 */
+#OCRWindow_itemList {
+    background: #222;
+    border: 1px solid #333;
+    border-radius: 4px;
+    color: #ddd;
+}
+#OCRWindow_itemList::item {
+    height: 32px;
+    padding-left: 5px;
+}
+#OCRWindow_itemList::item:selected {
+    background: #3e3e42;
+    color: white;
+    border-radius: 2px;
+}
