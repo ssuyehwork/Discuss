@@ -237,3 +237,158 @@
    - `CategoryModel::refresh` 仅查询一次 `systemCounts()` 与一次分类列表；分类加锁状态取自 `CategoryLockService` 内存缓存，不再逐个分类高频下钻读表。
 4. **大数据量流式导出 (`streamNotes`)**：
    - 导出大文件与多笔记时，统一使用带回调函数的 `streamNotes` 流式逐行处理，按需加载大字段，杜绝内存雪崩。
+
+---
+
+## 10. SSOT 接口索引文档与全局普查反向核对真理源规范 (SSOT Index & Census Protocol)
+
+根据最新《RapidNotes_Prompts-2.md》通用规则第 6 条、第 7 条与第 8 条要求，重构每一阶段必须严格践行全景索引与控制变量普查：
+
+1. **唯一 SSOT 接口索引文档 (`docs/SSOT接口索引.md`)**：
+   - 登记全软件全部对外公开的接口（类、公开函数、信号）；
+   - 严格按“事实”分类归纳（以第二部分 2.1 的 SSOT 表为目录结构），绝对不按物理文件分类；
+   - 每一条接口必须包含五大要素：接口名与所属模块、它是哪一件事实的唯一来源、用途与适用场景、禁止在别处重复实现的内容、主要调用方；
+   - 头文件注释与索引内容严格保持 100% 绝对一致，杜绝任何两处分歧。
+2. **动手前全工程普查与完成后反向核对铁律**：
+   - 任何步骤动手修改代码前，必须执行覆盖 `src/core`、`src/models`、`src/ui`、`src/main.cpp` 的全量命令检索，统计所有读写点、调用方（文件数与处数），并如实记录于汇报开头；
+   - 完成后必须用完全相同的检索命令执行反向核对，证明旧用法彻底归零，杜绝一切盲目推测与部分替换。
+3. **消除写盘过多、多份事实与职责过载三大根因**：
+   - 每件事实只有一个来源；
+   - 一个模块只做一件事；
+   - 不增加写盘次数和计算量；
+   - 严禁任何特判、兜底分支与兼容壳，凡出现此类倾向必须停下从根上重新设计。
+
+---
+## 11. 步骤 1 返工规范：词表与纯函数彻底收敛契约 (Step 1 Remediation & Pure SSOT Contract)
+
+根据《RapidNotes 步骤 1 返工清单》，在词表与纯函数阶段必须彻底落实无死角的收敛与零冗余：
+
+1. **`ItemType` 全工程类型词表唯一 SSOT 铁律**：
+   - `DatabaseManager.cpp` 必须显式包含 `ItemType.h`，彻底消灭所有手写的类型字符串字面量（如 `"link"`、`"file"`、`"local_file"`、`"local_batch"`、`"folder"`、`"local_folder"`、`"image"`、`"code"`、`"text"` 等）。
+   - `extractFileExtensions` 内部使用 `ItemType::fromString` 或 `ItemType::toString` 进行比较；
+   - `addNote` 中对 Link 类型的自动分类判断改用 `ItemType::Type::Link`；
+   - 类型统计分支（`image`、`code`、`text`、`link`、`file`、`local_file`、`local_folder`、`folder`、`local_batch`）全部改用 `ItemType`；
+   - 过滤函数 `applyCommonFilters` 中 SQL 字符串里的类型值（`'image'` 等）必须由 `ItemType::toString(...)` 统一拼入，不得手写；
+   - 列名 `"item_type"` 允许保留作为数据库物理字段名，不受类型值限制；
+   - `NoteModel.cpp`（`ToolTipRole`、`DisplayRole`、`mimeData`）与 `StringUtils.h`（`copyNotesToClipboard`、`generateNotePreviewHtml`）中所有类型字面量全面改用 `ItemType`，判定范围严格保持逐处一致。
+
+2. **标签规范化与编解码单一真理源 (`TagCodec`)**：
+   - 全工程唯一允许对标签执行 `split`、`join`、`joinDisplay` 和去重的地方只有 `TagCodec`；
+   - `TagCodec` 新增 `normalize(const QStringList& tags)` 统一实现 trim、去空与保序去重；
+   - `DatabaseManager::updateNote` 与 `addTagsToNote` 移除手写 trim + 去重循环，分别经由 `TagCodec::normalize` 并调用 `TagCodec::joinDisplay`（保留现有的逗号+空格格式）和 `TagCodec::join`（保留现有的纯逗号格式）；
+   - 全工程严禁出现任何非 `TagCodec` 的标签逗号分割与拼接。
+
+3. **彻底物理拔除 `calculateWordBucket` 转发壳**：
+   - 物理删除 `DatabaseManager.cpp` 匿名命名空间中无实质意义的包装壳函数 `calculateWordBucket`；
+   - 所有调用点统一直接调用 `RapidNotes::WordBucket::calculate`，消除间接调用与调用栈损耗。
+
+4. **数据迁移零丢失硬性红线（步骤 3 提前锚定）**：
+   - 一条文本数据都不能丢，文件本体不迁移；
+   - 迁移前必须在 `backups/` 目录使用 `VACUUM INTO` 生成 `pre_migration_<yyyyMMdd_HHmmss>.db` 物理快照备份；
+   - 单一数据库事务内完成全部数据复制、字段映射与索引重建，失败则完整回滚；
+   - 迁移完成后必须通过 `ATTACH` 机制逐字段自动化校验，比对所有非文件类笔记关键字段，不一致行数必须为 0。
+
+---
+## 12. UI 样式内联转外联彻底重构契约 (Inline QSS to External QSS Migration Contract)
+
+根据架构治理与用户明确指令（“由内联转成外联时，不可擅自修改样式参数，只做搬迁，不做重写、不做优化、不做重新设计”）：
+
+1. **零篡改搬迁铁律 (Strict Zero-Value-Alteration Migration)**：
+   - 彻底拔除 C++ 代码中所有散落的 `setStyleSheet(...)` 内联硬编码；
+   - 严禁在搬迁过程中修改任何视觉数值参数（包括但不限于：颜色 Hex/RGB/RGBA、边框粗细与线型、圆角 border-radius、内边距 padding、外边距 margin、字体大小 font-size、最小/最大宽高 min-width/max-width/height 等）；
+   - 不做重写、不做所谓“优化”、不做重新设计，只做纯粹的物理搬迁。
+
+2. **外联 QSS 架构规范**：
+   - 所有样式统一集中搬迁至 `RapidNotes/resources/qss/dark_style.qss`；
+   - C++ 控件统一通过规范的 `setObjectName(...)` 赋予唯一语义化 ID，或通过 `setProperty("state", ...)` / `setProperty("active", ...)` 动态切换状态，并在 QSS 中使用选择器精准匹配（如 `QPushButton#myBtn[state="active"]`）；
+   - 在动态状态变化时，通过 `style()->unpolish(widget); style()->polish(widget);` 触发样式重算，替代在 C++ 中动态拼接 `setStyleSheet` 字符串；
+   - 若个别动态数值完全依赖运行时坐标或绝对动态计算且无法提取为 QSS（如取色器色相渐变、透明度滑块动态背景），需严格经过架构审计，其余所有固定视觉样式一律外联化。
+---
+
+## 13. QuickWindow 侧边栏折叠组件解耦与一体化架构设计理念 (QuickWindow Collapsible Sidebar Architecture Philosophy)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuickWindow 侧边栏“我的分类”等折叠组件架构重构的唯一真理源 (SSOT)。
+
+### 13.1 核心设计理念 (Core Design Philosophy)
+针对 QuickWindow 侧边栏分类视图组织，彻底告别原有的“普通父子树节点小箭头”或“多控件物理割裂堆叠”模式，全面对齐主程序侧边栏“库”选项卡成熟的折叠架构规范：
+
+1. **表面视觉一体化 (Accordion / Collapsible Box 视觉一体化)**：
+   - 侧边栏分类区域呈现为连续、统一的视图流，整体视觉浑然一体；
+   - “我的分类 (N)”与“快速访问”作为一级分组标头（Section Header），具备整洁统一的文字排版、清晰的节点计数徽标（如 `(113)`）以及现代矢量折叠箭头（如 `chevron_down` / `chevron_right`）；
+   - 折叠组件与下属的具体分类条目在层级与外观上高度契合，呈现出标准的折叠面板容器效果。
+
+2. **实际交互彻底独立解耦 (Hit-Test 区域精确隔离与事件消费)**：
+   - **折叠交互绝对独立**：在视图代理（Delegate）的 `editorEvent` 中严格收窄 Hit-Test 命中判定。只有当鼠标点击精确命中折叠箭头有效区域（如 18×18 px 矩形）时，才发出折叠/展开信号，驱动该组展开或收起；
+   - **标头空白区域防误触**：点击标头文字、数字或空白处时，事件被框架直接消费（`return true`），绝对不得像普通分类那样触发数据选中、高亮或内容列表刷新；
+   - **分类子项自由交互**：展开后的各个具体分类子项（如 RapidNotes、Link 等）保持纯粹独立的业务行为（单选/多选高亮、数据筛选、右键上下文菜单、拖拽移动与状态联动）；
+   - **职责单一与扩展性**：标头仅负责视觉分组与折叠状态组织，不挂载任何实体业务数据，彻底杜绝数据与容器的耦合混淆。
+
+---
+---
+
+## 14. QuarkMeta 迁移合并至 RapidNotes 核心设计理念与数据真理源 (QuarkMeta Merge Architecture & Data SSOT)
+
+> 本章节记录将 QuarkMeta 的界面与架构能力迁移合并至 RapidNotes 的根本目的与最高设计理念，作为后续一切界面适配、业务解耦与数据重构的唯一真理源 (SSOT)。
+
+### 14.1 根本目的与业务定位 (Core Purpose & Dual-Mode Roles)
+将 QuarkMeta 合并到 RapidNotes 里的根本目的：**通过 QuarkMeta 成熟的 MainWindow 界面与多维视图管理能力，更高效、更专业地集中管控 QuickWindow 日常记录与沉淀的笔记数据**。
+1. **轻量日常速记 (QuickWindow)**：作为常驻桌面的轻量悬浮入口，专注高效便携的灵感捕获、随手记事与全文快速检索；
+2. **专业集中管控 (MainWindow)**：由 QuickWindow 工具栏窗口按钮唤起，提供多标签页、多窗格分屏、分类层级树、元数据检查与多维即时筛选等专业级管理大盘；
+3. **数据一体双模共治**：两者外在交互形态虽异，但内在完全对齐、管理且共享同一份笔记数据。
+
+### 14.2 彻底放弃“物理路径”理念 (Abolishment of Physical Path Concept)
+QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理路径树、文件冲突、目录监听等），而在合并至 RapidNotes 后，**所有物理路径相关理念必须彻底放弃，全面转变为纯数据库管理**：
+1. **路由与导航纯化**：
+   - 彻底废除物理磁盘路径（如 `C:\...`、`D:\...`）；
+   - 导航协议与面包屑层级严格统一为虚拟数据库路由协议 `library://<categoryId>`（如 `library://-1` 对应全部笔记，`library://-2` 对应未分类，`library://<id>` 对应各级分类）；
+   - **地址栏与标签页**：不再显示任何物理路径，仅严格显示当前选中的数据库分类名称；
+2. **面板架构收敛与解耦**：
+   - 彻底剔除盘符栏 (`DriveBarWidget`)、物理收藏夹 (`FavoritePanel` 选项卡及相关逻辑代码彻底根除)；
+   - 彻底移除物理标记分发 (`MarkedPanel` / `MarkedFolderService`)；
+   - 侧边栏仅保留面向分类数据库表（`categories`）的 `LibraryPanel`；
+   - “目录导航”栏 (`NavPanel`) 暂不物理删除，标记为 **TODO**，待后续专门重构；
+3. **交互实体与快捷键转变**：
+   - 彻底移除磁盘扫描、物理文件碰撞提示 (`FileCollisionDialog`)、文件系统拖拽分发逻辑；
+   - **创建快捷键语义转换**：
+     - `Ctrl+Shift+N`：由原 QuarkMeta 的“创建物理文件夹”转变为“**创建分类**”；
+     - `Ctrl+N`：由原 QuarkMeta 的“创建 Markdown 实体文件”转变为“**创建笔记**”；
+   - **行内重命名**：重命名交互严格采用行内就地编辑（Inline Rename），禁止使用弹窗对话框；
+   - 视图中所有卡片展示、星级评分、颜色标记、重命名、拖拽移动与回收站软删除，其实体**严格且仅为数据库中的笔记记录 (`notes`)**。
+
+### 14.3 视图控制与界面功能精简 (View Controls & Feature Pruning)
+1. **视图模式收敛**：
+   - MainWindow 界面**仅保留“列表视图 (ListView)”和“网格视图 (GridView)”**；
+   - 状态栏上的“自适应”、“列视图 (ColumnView)”按钮彻底移除；
+2. **根除物理文件系统特性**：
+   - “显示/隐藏隐藏项目”功能彻底根除；
+   - “显示子文件夹中的项目”（递归查看物理目录）功能彻底根除；
+3. **内容面板标题联动**：
+   - 内容面板（ContentPanel）标题栏不再固定显示“内容”，而是动态联动显示为**当前选中的分类名称**；
+4. **视觉与操作资产保留**：
+   - QuarkMeta 原带的标准色系（包含高对比度暗色调与颜色标签调色盘）必须完整保留，不得丢失；
+   - 标准快捷键映射体系完整保留，无缝平移至笔记数据模型上。
+
+### 14.4 唯一存储真理源：`inspiration.db` (Storage SSOT)
+1. **唯一数据库**：所管理的数据库**绝非 QuarkMeta 原有的 `QuarkMeta.store` 数据库**，而是 RapidNotes 自身的 **`inspiration.db`** 数据库（主要包括 `notes` 表与 `categories` 表）；
+2. **彻底作废侧车文件**：
+   - 原 QuarkMeta 的 `.QuarkMeta.json` 侧车机制彻底作废与删除，所有颜色、星级、标签等元数据直接存入 `inspiration.db` 的字段中；
+3. **零数据冗余与严禁缓存副本**：
+   - 严禁在界面层自建第二份缓存副本或重复持久化层，所有数据读取与变更必须单向穿透至 RapidNotes 现有的 `DatabaseManager` 与领域服务中。
+### 14.5 卡片视图呈现与 Notes 虚拟后缀真理源规范 (Card View & Notes Extension SSOT)
+1. **卡片中央图标呈现规范**：
+   - 卡片中央图标完全对齐 QuickWindow 列表左侧图标（`NoteModel::data(DecorationRole)`、`ItemClassifier` 与 `ThumbnailMaker`）：
+     - **图片 (`image`)**：直接显示图片本身的缩略图；
+     - **纯文本 (`text`)**：显示 `text` 文本图标；
+     - **网址链接 (`link`)**：显示 `link` 链接图标；
+     - **代码片段 (`code`)**：显示 `code` 代码图标；
+     - **颜色/调色板 (`color`/`palette`)**：显示 `palette` 调色盘图标；
+     - **OCR 识别文本 (`screenshot_ocr`)**：显示 `screenshot_ocr` 图标；
+     - **剪贴板消息 (`captured_message`)**：显示 `message` 图标；
+     - **历史文件/文件夹类**：按单文件（`file`）、单文件夹（`folder`）、多文件（`files_multiple`）、多文件夹（`folders_multiple`）分别显示对应图标。
+2. **纯笔记特化虚拟后缀 "Notes"**：
+   - 为了便于统一管理与后期多维精准筛选，特地为纯笔记设定后缀名为 **`Notes`**；
+   - **卡片左上角徽章 (Badge)**：纯笔记的徽章一律固定显示为 **`Notes`**；
+   - **筛选器 (FilterPanel) 与统计引擎联动**：在数据契约层（`ModelContract` / `NoteModel`）中，纯文本笔记返回的扩展名统一为 `Notes`，使得筛选面板的文件类型分组可以直接一键筛选出纯笔记。
+3. **卡片底部名称显示与截断规范**：
+   - 卡片名称部分显示笔记的标题（`title`）；
+   - **截断规则**：若标题过长，**仅显示前 10 个字**（超出部分予以截断），保持卡片布局清爽整洁。

@@ -1,0 +1,22 @@
+{
+  "configurations": [
+    {
+      "name": "x64-release",
+      "generator": "Ninja",
+      "configurationType": "Release",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "buildRoot": "${projectDir}/../../OCR_Build/${name}",
+      "installRoot": "${projectDir}/../../OCR_Build/install/${name}",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "-v",
+      "ctestCommandArgs": "",
+      "variables": [
+        {
+          "name": "CMAKE_PREFIX_PATH",
+          "value": "G:/Qt/6.10.2/msvc2022_64_static;C:/Qt/6.10.2/msvc2022_64",
+          "type": "STRING"
+        }
+      ]
+    }
+  ]
+}

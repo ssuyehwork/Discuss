@@ -870,6 +870,19 @@ void ContentPanel::toggleFolderSectionCollapse() {
     }
 }
 
+bool ContentPanel::isFolderSectionCollapsed() const {
+    if (m_currentViewMode == ColumnView) {
+        return false;
+    }
+    return m_sectionModel && m_sectionModel->isFolderCollapsed();
+}
+
+void ContentPanel::expandFolderSection() {
+    if (m_sectionModel && m_sectionModel->isFolderCollapsed()) {
+        m_sectionModel->setFolderCollapsed(false);
+    }
+}
+
 void ContentPanel::setViewMode(ViewMode mode) {
     if (m_currentViewMode == mode) {
         return;

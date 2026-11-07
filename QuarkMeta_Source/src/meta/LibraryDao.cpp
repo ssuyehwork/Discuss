@@ -369,6 +369,71 @@ bool LibraryDao::removeCategoryById(int id) {
     return success;
 }
 
+int LibraryDao::getOrCreateCategory(const QString& name, int parentId) {
+    if (name.trimmed().isEmpty()) return 0;
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db) return 0;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    const char* querySql = "SELECT id FROM library_categories WHERE name = ? AND parent_id = ? LIMIT 1;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, querySql, -1, &stmt, nullptr) == SQLITE_OK) {
+        std::string nStd = name.trimmed().toStdString();
+        sqlite3_bind_text(stmt, 1, nStd.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, parentId);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            int existingId = sqlite3_column_int(stmt, 0);
+            sqlite3_finalize(stmt);
+            return existingId;
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    const char* insertSql = "INSERT INTO library_categories (parent_id, name, icon_key, color_hex, sort_order, created_at) "
+                           "VALUES (?, ?, 'Data-Classification.svg', '#888888', (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM library_categories), ?);";
+    if (sqlite3_prepare_v2(db, insertSql, -1, &stmt, nullptr) == SQLITE_OK) {
+        std::string nStd = name.trimmed().toStdString();
+        sqlite3_bind_int(stmt, 1, parentId);
+        sqlite3_bind_text(stmt, 2, nStd.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int64(stmt, 3, QDateTime::currentSecsSinceEpoch());
+        int newId = 0;
+        if (sqlite3_step(stmt) == SQLITE_DONE) {
+            newId = static_cast<int>(sqlite3_last_insert_rowid(db));
+        }
+        sqlite3_finalize(stmt);
+        sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+        return newId;
+    }
+    return 0;
+}
+
+bool LibraryDao::bindPathsToCategory(int id, const QStringList& paths) {
+    sqlite3* db = DatabaseManager::instance().getGlobalDb();
+    if (!db || id <= 0 || paths.isEmpty()) return false;
+
+    std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
+    SqlTransaction trans(db);
+
+    const char* sql = "INSERT OR IGNORE INTO library_category_paths (category_id, path) VALUES (?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        for (const QString& p : paths) {
+            std::string pStd = QDir::toNativeSeparators(QDir::cleanPath(p)).toStdString();
+            sqlite3_bind_int(stmt, 1, id);
+            sqlite3_bind_text(stmt, 2, pStd.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_step(stmt);
+            sqlite3_reset(stmt);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    bool ok = trans.commit();
+    if (ok) {
+        sqlite3_wal_checkpoint_v2(db, nullptr, SQLITE_CHECKPOINT_PASSIVE, nullptr, nullptr);
+    }
+    return ok;
+}
+
 bool LibraryDao::addPathsToCategory(int id, const QStringList& paths) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
     if (!db || id == 0 || paths.isEmpty()) return false;

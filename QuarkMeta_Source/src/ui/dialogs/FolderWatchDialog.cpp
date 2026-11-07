@@ -4,6 +4,7 @@
 #include "../../core/DirectoryWatchService.h"
 #include "../../core/TaskProgressService.h"
 #include "../../meta/LibrarySyncService.h"
+#include "../../meta/LibraryService.h"
 #include "../../core/DwsTrace.h"
 #include "../Logger.h"
 #include <QHBoxLayout>
@@ -248,6 +249,11 @@ void FolderWatchDialog::onComplete() {
                 QMetaObject::invokeMethod(QCoreApplication::instance(), [jobId, processed, total]() {
                     TaskProgressService::instance().updateProgress(jobId, processed, total, QString("已录入 %1 / %2 项").arg(processed).arg(total));
                 }, Qt::QueuedConnection);
+            }
+
+            // 自动将监听目录结构同步至分类树并追加绑定
+            for (const QString& folder : validFolders) {
+                LibraryService::instance().syncWatchedFolderHierarchy(folder);
             }
 
             QMetaObject::invokeMethod(QCoreApplication::instance(), [jobId]() {
