@@ -609,7 +609,16 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
         return true;
     }
-    if (keyEvent->key() == Qt::Key_Delete || ((keyEvent->modifiers() & Qt::ControlModifier) && keyEvent->key() == Qt::Key_Space)) {
+    if ((keyEvent->modifiers() & Qt::ControlModifier) && keyEvent->key() == Qt::Key_Space) {
+        bool isTrashView = (m_panel->getCurrentCategoryType() == "trash" || m_panel->currentPath() == "trash://");
+        if (isTrashView) {
+            PermanentDeleteService::instance().executeEmptyTrash(m_panel);
+        } else {
+            TrashService::instance().moveToTrash(m_panel->getSelectedPaths(), m_panel);
+        }
+        return true;
+    }
+    if (keyEvent->key() == Qt::Key_Delete) {
         bool isTrashView = (m_panel->getCurrentCategoryType() == "trash" || m_panel->currentPath() == "trash://");
         if (isTrashView) {
             QStringList selectedPaths = m_panel->getSelectedPaths();
