@@ -65,7 +65,13 @@ void NavPanel::deferredInit() {
         return;
     }
 
-    // 1. 桌面入口 (使用 SVG 语义图标替代原生图标)
+    // 1. 回收站 (固定主节点，置于最顶端，桌面上方)
+    QIcon trashIcon = UiHelper::getIcon("delete_forever", QColor("#e81123"), 18);
+    QStandardItem* trashItem = new QStandardItem(trashIcon, "回收站");
+    trashItem->setData("trash_root", Qt::UserRole + 1);
+    m_model->appendRow(trashItem);
+
+    // 2. 桌面入口 (使用 SVG 语义图标替代原生图标)
     QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
     QIcon desktopIcon = UiHelper::getIcon("home", QColor("#3498db"), 18);
     QStandardItem* desktopItem = new QStandardItem(desktopIcon, "桌面");
@@ -73,13 +79,13 @@ void NavPanel::deferredInit() {
     desktopItem->appendRow(new QStandardItem("Loading..."));
     m_model->appendRow(desktopItem);
 
-    // 2. 此电脑入口
+    // 3. 此电脑入口
     QIcon computerIcon = UiHelper::getIcon("monitor", QColor("#3498db"), 18);
     QStandardItem* computerItem = new QStandardItem(computerIcon, "此电脑");
     computerItem->setData("computer://", Qt::UserRole + 1);
     m_model->appendRow(computerItem);
 
-    // 3. 磁盘列表 (先填充基础文字路径，0 毫秒卡顿)
+    // 4. 磁盘列表 (先填充基础文字路径，0 毫秒卡顿)
     const auto drives = QDir::drives();
     for (const QFileInfo& drive : drives) {
         QString driveName = drive.absolutePath();
@@ -89,17 +95,17 @@ void NavPanel::deferredInit() {
         m_model->appendRow(driveItem);
     }
 
-    // 主线程分批次补齐磁盘图标
+    // 主线程分批次补齐磁盘图标 (回收站+桌面+此电脑占前3行，故偏移为 i + 3)
     QTimer::singleShot(0, [this, drives]() {
         for (int i = 0; i < drives.size(); ++i) {
-            if (i + 2 < m_model->rowCount()) {
+            if (i + 3 < m_model->rowCount()) {
                 QIcon driveIcon = UiHelper::getIcon("hard_drive", QColor("#95a5a6"), 18);
-                m_model->item(i + 2)->setIcon(driveIcon);
+                m_model->item(i + 3)->setIcon(driveIcon);
             }
         }
     });
 
-    // 4. 最近访问 (固定主节点，在所有磁盘正下方)
+    // 5. 最近访问 (固定主节点，在所有磁盘正下方)
     QIcon recentIcon = UiHelper::getIcon("clock_history", QColor("#3498db"), 18);
     m_recentRootItem = new QStandardItem(recentIcon, "最近访问");
     m_recentRootItem->setData("recent_root", Qt::UserRole + 1);
@@ -110,12 +116,6 @@ void NavPanel::deferredInit() {
     if (m_treeView && m_recentRootItem->index().isValid()) {
         m_treeView->expand(m_recentRootItem->index());
     }
-
-    // 5. 回收站 (固定主节点)
-    QIcon trashIcon = UiHelper::getIcon("delete_forever", QColor("#e81123"), 18);
-    QStandardItem* trashItem = new QStandardItem(trashIcon, "回收站");
-    trashItem->setData("trash_root", Qt::UserRole + 1);
-    m_model->appendRow(trashItem);
 }
 
 void NavPanel::setFocusHighlight(bool visible) {
@@ -282,7 +282,7 @@ void NavPanel::updateRecentVisitedList() {
         int count = 0;
 
         for (const QString& path : history) {
-            if (count >= 14) break;
+            if (count >= 30) break;
             if (path.isEmpty() || path == "computer://" || path.startsWith("trash") || path.startsWith("分类: ")) continue;
 
             QString normalizedKey = QDir::cleanPath(path).toLower();

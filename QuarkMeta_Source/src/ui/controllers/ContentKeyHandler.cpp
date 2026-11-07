@@ -609,15 +609,10 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
         return true;
     }
-    if (keyEvent->key() == Qt::Key_Delete || ((keyEvent->modifiers() & Qt::ControlModifier) && keyEvent->key() == Qt::Key_Space)) {
+    if (((keyEvent->modifiers() & Qt::ControlModifier) && keyEvent->key() == Qt::Key_Space) || keyEvent->key() == Qt::Key_Delete) {
         bool isTrashView = (m_panel->getCurrentCategoryType() == "trash" || m_panel->currentPath() == "trash://");
         if (isTrashView) {
-            QStringList selectedPaths = m_panel->getSelectedPaths();
-            if (!selectedPaths.isEmpty()) {
-                PermanentDeleteService::instance().execute(selectedPaths, m_panel);
-            } else {
-                ToolTipOverlay::instance()->showToast("请先选择要永久删除的项目", 2000, QColor("#e81123"), m_panel);
-            }
+            PermanentDeleteService::instance().executeEmptyTrash(m_panel);
         } else {
             if (keyEvent->modifiers() & Qt::ShiftModifier) {
                 PermanentDeleteService::instance().execute(m_panel->getSelectedPaths(), m_panel);

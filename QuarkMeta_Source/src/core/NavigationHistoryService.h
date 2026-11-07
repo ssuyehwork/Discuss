@@ -26,7 +26,7 @@ private:
     NavigationHistoryService(QObject* parent = nullptr);
     ~NavigationHistoryService() override = default;
 
-    const int m_maxLimit = 15;
+    const int m_maxLimit = 30;
 };
 
 } // namespace QuarkMeta

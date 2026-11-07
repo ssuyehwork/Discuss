@@ -4,8 +4,12 @@
 #include "QuarkMetaJsonStore.h"
 #include "ItemMetaMapper.h"
 #include "MetadataManager.h"
+#include "../core/DirectoryWatchService.h"
+#include "../core/FileFilterService.h"
+#include "../core/AppConfig.h"
 #include <QtConcurrent/QtConcurrent>
 #include <QDir>
+#include <QFileInfo>
 #include <QTimer>
 #include <QDebug>
 #include "../core/DwsTrace.h"
@@ -28,6 +32,51 @@ LibrarySyncService::LibrarySyncService(QObject* parent) : QObject(parent) {
 
     QuarkMetaJsonStore::instance().addChangeListener([this](const QuarkMetaJsonStore::ChangeEvent& ev) {
         handleJsonChangeEvent(ev);
+    });
+
+    // 订阅目录监控信号，当受监控文件夹发生文件增删变动时自动执行数据库同步
+    connect(&DirectoryWatchService::instance(), &DirectoryWatchService::directoryChanged,
+            this, [this](const QString& dirPath, const QStringList& dirtyNames, bool overflow) {
+        QStringList watchedFolders = AppConfig::instance().getValue("DirectoryWatch/WatchedFolders", QStringList{}).toStringList();
+        if (watchedFolders.isEmpty()) return;
+
+        QString normDirPath = DirectoryWatchService::normalizePathKey(dirPath);
+        bool isUnderWatched = false;
+        for (const QString& wf : watchedFolders) {
+            QString normWf = DirectoryWatchService::normalizePathKey(wf);
+            if (normDirPath == normWf || normDirPath.startsWith(normWf + "/")) {
+                isUnderWatched = true;
+                break;
+            }
+        }
+        if (!isUnderWatched) return;
+
+        QUARKMETA_DWS_TRACE("LibrarySyncService", "directoryChanged",
+            QString("受监听目录命中变更，准备自动同步入库; dirPath=%1, dirtyNamesCount=%2, overflow=%3")
+                .arg(dirPath).arg(dirtyNames.size()).arg(overflow ? "true" : "false"));
+
+        QStringList toSync;
+        QStringList toRemove;
+        if (overflow) {
+            toSync.append(dirPath);
+        } else {
+            for (const QString& name : dirtyNames) {
+                QString fullPath = QDir(dirPath).filePath(name);
+                if (FileFilterService::isAuxiliaryFile(fullPath)) continue;
+                if (QFileInfo::exists(fullPath)) {
+                    toSync.append(fullPath);
+                } else {
+                    toRemove.append(fullPath);
+                }
+            }
+        }
+
+        if (!toSync.isEmpty()) {
+            syncPaths(toSync);
+        }
+        if (!toRemove.isEmpty()) {
+            removePaths(toRemove);
+        }
     });
 
     QTimer::singleShot(1500, this, [this]() {

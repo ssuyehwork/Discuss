@@ -1101,8 +1101,7 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 在回收站视图下（`getCurrentCategoryType() == "trash"` 或 `currentPath() == "trash://"`），原先针对普通目录的移入回收站行为（`moveToTrash`）被废止，转为执行彻底销毁行为；
 2. **快捷键触发规则与智能路由**：
    - 触发键位集合：`Del`、`Shift+Del`、`Ctrl+Space`；
-   - **分支 A（有选中项）**：当用户选中了 1 个或多个回收站项目时，按下任一键位统一路由至**“永久删除选中项”**（`PermanentDeleteService::instance().execute(m_panel->getSelectedPaths(), m_panel)`）；
-   - **分支 B（无选中项）**：当用户未选择任何项目或聚焦在空白处时，按下任一键位统一路由至**“清空回收站”**（`PermanentDeleteService::instance().executeEmptyTrash(m_panel)`）；
+   - **统一收敛**：在回收站视图下，无论是否选中项目，按下 `Del`、`Shift+Del` 或 `Ctrl+Space` 中的任一键位，统一路由执行**“清空回收站”**逻辑接口（`PermanentDeleteService::instance().executeEmptyTrash(m_panel)`）；
 3. **安全防线保障**：
    - 永久删除与清空回收站操作均完整承载 `PermanentDeleteService` 原生的二次阻断确认对话框（`FramelessConfirmDialog`）与磁盘扇区级安全清理机制，保障数据不被误删；
 4. **非回收站常规目录零篡改**：
@@ -1131,3 +1130,20 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 点击“完成”后，界面进入保护状态，调用  创建进度条任务；
    - 后台线程递归扫描所有被监听目录下的所有子文件夹与子文件；
    - 提取文件物理属性与  侧车元数据，通过  /  批量写入 SQLite 数据库，实现与拖拽入库完全一致的元数据闭环。
+---
+
+## 41. 侧边栏目录导航树“回收站”置顶与“最近访问”记录扩容设计理念 (NavPanel Layout & Recent Visited Capacity)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 在目录导航栏（`NavPanel`）节点排布顺序与历史访问记录容量的唯一真理源 (SSOT)。
+
+### 41.1 核心需求与设计理念
+1. **“回收站”节点位置置顶 (Trash Root Top Placement)**：
+   - 在左侧目录导航树（`NavPanel`）中，“回收站”是最高频便捷操作入口之一；
+   - 将“回收站”节点固定置于整棵导航树的绝对最顶端，位于“桌面”正上方；
+   - 目录导航树顶部固定入口排序严格规范为：`回收站` ➔ `桌面` ➔ `此电脑` ➔ `各磁盘驱动器` ➔ `最近访问`；
+   - 补齐磁盘图标的索引偏移严格与置顶后的行号一致（原 `i + 2` 调整为 `i + 3`）。
+2. **“最近访问”容量扩容至 30 个 (Recent Visited Capacity Expansion)**：
+   - 将底层导航历史服务（`NavigationHistoryService`）的记录与持久化上限（`m_maxLimit`）由原 15 条扩充为 30 条；
+   - 将右键上下文移动菜单关联卷记录上限扩充至 30 条；
+   - 将 `NavPanel` 异步加载解析并展示的有效文件夹上限由原 14 个同步扩容为 30 个（`count >= 30`）；
+   - 严格保持异步并发探测机制（`QtConcurrent::run`）与主线程 `invokeMethod` 回调，确保大容量历史路径不会拖慢 GUI 响应。
