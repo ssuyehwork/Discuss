@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
+# 启用现代 MSVC 运行时库策略
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+
 project(OCR VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -13,6 +18,19 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TARGET_APP_OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TARGET_APP_OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TARGET_APP_OUTPUT_DIR}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TARGET_APP_OUTPUT_DIR}")
+
+# 优先探测 QT_DIR 环境变量，若无则使用标准静态与动态 Qt6 路径
+if(DEFINED ENV{QT_DIR})
+    list(APPEND CMAKE_PREFIX_PATH "$ENV{QT_DIR}")
+endif()
+if(NOT Qt6_DIR AND NOT CMAKE_PREFIX_PATH)
+    list(APPEND CMAKE_PREFIX_PATH
+        "G:/Qt/6.10.2/msvc2022_64_static"
+        "C:/Qt/6.10.2/msvc2022_64_static"
+        "C:/Qt/6.10.2/msvc2022_64"
+        "G:/Qt/6.10.2/msvc2022_64"
+    )
+endif()
 
 # 寻找 Qt6 依赖组件
 find_package(Qt6 REQUIRED COMPONENTS
@@ -28,9 +46,14 @@ set(CMAKE_AUTOUIC ON)
 
 if(MSVC)
     add_compile_options(/utf-8)
+    add_compile_options(/MP)
     # WinRT OCR C++/WinRT 支持选项
-    add_compile_options(/permissive- /Zc:twoPhase-)
+    add_compile_options(/Zc:twoPhase-)
 endif()
+
+# 屏蔽 VS 的非标准警告并优化 Windows 头文件包含
+add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+add_definitions(-DNOMINMAX)
 
 set(SOURCES
     src/main.cpp
