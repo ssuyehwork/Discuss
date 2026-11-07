@@ -1,12 +1,5 @@
 #include "RecentNotesDelegate.h"
-#include <QPainter>
-#include <QDateTime>
 #include <QFileInfo>
-#include <QHelpEvent>
-#include <QAbstractItemView>
-#include "../models/NoteModel.h"
-#include "IconHelper.h"
-#include "ToolTipOverlay.h"
 
 RecentNotesDelegate::RecentNotesDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
 

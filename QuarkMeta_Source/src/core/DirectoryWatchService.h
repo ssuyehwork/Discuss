@@ -1,6 +1,7 @@
 #ifndef DIRECTORYWATCHSERVICE_H
 #define DIRECTORYWATCHSERVICE_H
 
+#include <QtGlobal>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -67,8 +68,7 @@ private:
 #ifdef Q_OS_WIN
         OVERLAPPED overlapped{};
         HANDLE hDir = INVALID_HANDLE_VALUE;
-        alignas(DWORD) BYTE buffer[65536]{}; // 提升至 64KB 防突发丢包
-        DWORD bytesReturned = 0;
+        alignas(DWORD) BYTE buffer[32768]{};
 #endif
         WatchKey key;
         QString originalDirPath;
@@ -84,10 +84,6 @@ private:
         void stopWorker();
         void wakeUpWorker();
 
-#ifdef Q_OS_WIN
-        HANDLE iocpHandle() const { return m_hIOCP; }
-#endif
-
     protected:
         void run() override;
 
@@ -95,7 +91,7 @@ private:
         DirectoryWatchService* m_service = nullptr;
         std::atomic<bool> m_stopRequested{false};
 #ifdef Q_OS_WIN
-        HANDLE m_hIOCP = NULL;
+        HANDLE m_wakeUpEvent = NULL;
 #endif
     };
 
@@ -106,8 +102,7 @@ private:
     void removeRetiredItem(const WatchKey& key);
 
 #ifdef Q_OS_WIN
-    static void handleCompletion(DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, WatchItem* item);
-    static bool issueReadDirectoryChanges(WatchItem* item);
+    static VOID WINAPI notificationCompletionRoutine(DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped);
 #endif
 
     QMutex m_mutex;

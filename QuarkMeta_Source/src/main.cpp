@@ -31,6 +31,7 @@
 #include "meta/DatabaseManager.h"
 #include "core/CoreController.h"
 #include "core/DirectoryWatchService.h"
+#include "core/DwsTrace.h"
 #include "util/HardwareInfoHelper.h"
 #include "ui/dialogs/FramelessConfirmDialog.h"
 
@@ -59,6 +60,7 @@ void onApplicationAboutToQuit(HANDLE hMutex) {
     QuarkMeta::CoreController::requestShutdown();
 
     // 2. 停止所有目录变更监听
+    QUARKMETA_DWS_TRACE("main", "onApplicationAboutToQuit", "调用 DirectoryWatchService::stopAll()");
     QuarkMeta::DirectoryWatchService::instance().stopAll();
 
     // 3. 立即熔断提图后台流水线

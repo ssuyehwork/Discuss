@@ -18,6 +18,7 @@
 #endif
 #include "MetadataManager.h"
 #include "MetadataDefs.h"
+#include "../core/DwsTrace.h"
 #include "../util/VolumePathResolver.h"
 #include "DatabaseManager.h"
 #include "QuarkMetaJsonStore.h"
@@ -172,7 +173,14 @@ void MetadataManager::registerItem(const std::wstring& path) {
 void MetadataManager::registerItemsAsync(const QStringList& paths) {
     if (paths.isEmpty()) return;
 
+    QUARKMETA_DWS_TRACE("MetadataManager", "registerItemsAsync",
+        QString("准备投递 QtConcurrent::run 注册项目; 路径总数=%1, 首条路径=%2")
+            .arg(paths.size()).arg(paths.front()));
+
     (void)QtConcurrent::run([this, paths]() {
+        QUARKMETA_DWS_TRACE("MetadataManager", "registerItemsAsync[Worker]",
+            QString("后台线程开始处理 registerItemsAsync; 路径数=%1").arg(paths.size()));
+
         std::vector<std::wstring> enqueuedPaths;
 
         for (const auto& qp : paths) {
@@ -186,6 +194,9 @@ void MetadataManager::registerItemsAsync(const QStringList& paths) {
                 enqueuedPaths.push_back(nPath);
             }
         }
+
+        QUARKMETA_DWS_TRACE("MetadataManager", "registerItemsAsync[Worker]",
+            QString("处理完毕，加入提图队列数量=%1 / %2").arg(enqueuedPaths.size()).arg(paths.size()));
 
         if (!enqueuedPaths.empty()) {
             MediaExtractorPipeline::instance().enqueueBatch(enqueuedPaths);

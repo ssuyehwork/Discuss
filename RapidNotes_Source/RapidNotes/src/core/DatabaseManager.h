@@ -27,10 +27,6 @@ public:
     QString getLastError() const { return m_lastError; }
     void logStartup(const QString& msg);
     void closeAndPack();
-
-    // 数据库连接获取接口
-    QSqlDatabase database() const;
-    static QSqlDatabase getReadOnlyDatabase();
     
     // 核心 CRUD 操作
     int addNote(const QString& title, const QString& content, const QStringList& tags = QStringList(), 

@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QTimer>
 #include <QDebug>
+#include "../core/DwsTrace.h"
 
 namespace QuarkMeta {
 
@@ -117,6 +118,10 @@ bool LibrarySyncService::isLibraryPath(const QString& path) const {
 void LibrarySyncService::syncPaths(const QStringList& paths) {
     if (paths.isEmpty()) return;
 
+    QUARKMETA_DWS_TRACE("LibrarySyncService", "syncPaths",
+        QString("准备投递 QtConcurrent::run 同步数据到数据库; 路径数=%1, 首条路径=%2")
+            .arg(paths.size()).arg(paths.front()));
+
     {
         std::unique_lock<std::shared_mutex> lock(m_pathMutex);
         for (const QString& p : paths) {
@@ -125,6 +130,8 @@ void LibrarySyncService::syncPaths(const QStringList& paths) {
     }
 
     (void)QtConcurrent::run(&m_workPool, [this, paths]() {
+        QUARKMETA_DWS_TRACE("LibrarySyncService", "syncPaths[Worker]",
+            QString("后台工作池开始执行 syncPaths; 路径总数=%1").arg(paths.size()));
         const int batchSize = 100;
         bool anyBatchSuccess = false;
         for (int i = 0; i < paths.size(); i += batchSize) {

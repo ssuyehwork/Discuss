@@ -4,6 +4,8 @@
 #include "../../core/DirectoryWatchService.h"
 #include "../../core/TaskProgressService.h"
 #include "../../meta/LibrarySyncService.h"
+#include "../../core/DwsTrace.h"
+#include "../Logger.h"
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMimeData>
@@ -205,10 +207,14 @@ void FolderWatchDialog::onComplete() {
     // 1. 同步后台 IOCP 监控状态
     for (const QString& oldF : oldFolders) {
         if (!validFolders.contains(oldF)) {
+            QUARKMETA_DWS_TRACE("FolderWatchDialog", "onComplete",
+                QString("调用 DirectoryWatchService::unwatch; path=%1, includeSubtree=true").arg(oldF));
             DirectoryWatchService::instance().unwatch(oldF, true);
         }
     }
     for (const QString& newF : validFolders) {
+        QUARKMETA_DWS_TRACE("FolderWatchDialog", "onComplete",
+            QString("调用 DirectoryWatchService::watch; path=%1, includeSubtree=true").arg(newF));
         DirectoryWatchService::instance().watch(newF, true);
     }
 

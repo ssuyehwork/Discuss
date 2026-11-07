@@ -62,29 +62,6 @@ DatabaseManager& DatabaseManager::instance() {
     return inst;
 }
 
-QSqlDatabase DatabaseManager::database() const {
-    if (m_db.isOpen()) {
-        return m_db;
-    }
-    QString connectionName = "RapidNotes_Main_Conn";
-    if (QSqlDatabase::contains(connectionName)) {
-        return QSqlDatabase::database(connectionName);
-    }
-    return m_db;
-}
-
-QSqlDatabase DatabaseManager::getReadOnlyDatabase() {
-    const QString roConnName = "RapidNotes_ReadOnly_Shared_Conn";
-    if (QSqlDatabase::contains(roConnName)) {
-        QSqlDatabase db = QSqlDatabase::database(roConnName);
-        if (db.isOpen()) return db;
-    }
-    QSqlDatabase roDb = QSqlDatabase::addDatabase("QSQLITE", roConnName);
-    roDb.setDatabaseName(DatabaseManager::instance().m_dbPath.isEmpty() ? "rapid_notes.db" : DatabaseManager::instance().m_dbPath);
-    roDb.open();
-    return roDb;
-}
-
 QStringList DatabaseManager::s_tagClipboard;
 QMutex DatabaseManager::s_tagClipboardMutex;
 
@@ -643,8 +620,6 @@ bool DatabaseManager::createTables() {
         addCol("categories", "password_hint", "TEXT");
         addCol("categories", "pinned_sort_order", "INTEGER DEFAULT 0"); // [NEW] 2026-04-20 增加镜像组拉伸排序
         addCol("categories", "sort_mode", "TEXT DEFAULT 'manual'"); // [NEW] 2026-04-xx 增加分类独立排序模式
-        addCol("categories", "icon_key", "TEXT DEFAULT 'Data-Classification.svg'"); // 2026 迁移：分类图标
-        addCol("notes", "color_label", "TEXT DEFAULT ''"); // 2026 迁移：手动颜色标记
     }
     query.exec("CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)");
     query.exec("CREATE TABLE IF NOT EXISTS note_tags (note_id INTEGER, tag_id INTEGER, PRIMARY KEY (note_id, tag_id))");
@@ -3334,7 +3309,8 @@ bool DatabaseManager::addTagsToNote(int noteId, const QStringList& tags) {
     if (note.isEmpty()) return false;
     
     QStringList finalTags = RapidNotes::TagCodec::split(note["tags"].toString());
-    RapidNotes::TagCodec::merge(finalTags, tags);
+    finalTags.append(RapidNotes::TagCodec::normalize(tags));
+    finalTags = RapidNotes::TagCodec::normalize(finalTags);
     
     // 2026-05-09 按照用户要求：严禁使用 "逗号+空格"，统一使用纯逗号分割。
     QString tagsString = RapidNotes::TagCodec::join(finalTags);
