@@ -17,7 +17,7 @@ namespace {
         qint64 lastLogTime = 0;
     };
     static QMutex s_cbThrottleMutex;
-    static QHash<WatchKey, CallbackThrottleInfo> s_cbThrottleMap;
+    static QHash<QString, CallbackThrottleInfo> s_cbThrottleMap;
 }
 
 DirectoryWatchService& DirectoryWatchService::instance() {
@@ -388,25 +388,27 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
         bool isShutdownVal = CoreController::isShuttingDown();
         QString branchDesc;
 
+        WatchKey capturedKey = item->key;
+        QString capturedPath = item->originalDirPath;
         if (dwErrorCode == ERROR_ACCESS_DENIED || dwErrorCode == ERROR_INVALID_HANDLE ||
             dwErrorCode == ERROR_DEVICE_NOT_CONNECTED || dwErrorCode == ERROR_HANDLE_EOF) {
             branchDesc = "已知目录失效错误码(ACCESS_DENIED/INVALID_HANDLE/DEVICE_NOT_CONNECTED/HANDLE_EOF)，分发 onDirectoryLostInternal 与 removeRetiredItem";
-            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [key = item->key, path = item->originalDirPath]() {
-                DirectoryWatchService::instance().onDirectoryLostInternal(key, path);
+            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [capturedKey, capturedPath]() {
+                DirectoryWatchService::instance().onDirectoryLostInternal(capturedKey, capturedPath);
             }, Qt::QueuedConnection);
-            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [key = item->key]() {
-                DirectoryWatchService::instance().removeRetiredItem(key);
+            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [capturedKey]() {
+                DirectoryWatchService::instance().removeRetiredItem(capturedKey);
             }, Qt::QueuedConnection);
         } else if (dwErrorCode != ERROR_SUCCESS) {
             branchDesc = QString("该错误码(%1)未被特殊处理，仅分发 removeRetiredItem，监听将停止重新发起").arg(dwErrorCode);
-            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [key = item->key]() {
-                DirectoryWatchService::instance().removeRetiredItem(key);
+            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [capturedKey]() {
+                DirectoryWatchService::instance().removeRetiredItem(capturedKey);
             }, Qt::QueuedConnection);
         } else {
             branchDesc = QString("正常错误码但因 item->isStopping=%1 或 CoreController::isShuttingDown=%2 触发退出，分发 removeRetiredItem")
                             .arg(isStoppingVal ? "true" : "false").arg(isShutdownVal ? "true" : "false");
-            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [key = item->key]() {
-                DirectoryWatchService::instance().removeRetiredItem(key);
+            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [capturedKey]() {
+                DirectoryWatchService::instance().removeRetiredItem(capturedKey);
             }, Qt::QueuedConnection);
         }
 
@@ -423,7 +425,7 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
         qint64 now = QDateTime::currentMSecsSinceEpoch();
         {
             QMutexLocker throttleLocker(&s_cbThrottleMutex);
-            auto& tInfo = s_cbThrottleMap[item->key];
+            auto& tInfo = s_cbThrottleMap[item->originalDirPath];
             if (!tInfo.hasLoggedFirst) {
                 tInfo.hasLoggedFirst = true;
                 tInfo.lastLogTime = now;
@@ -439,8 +441,9 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
                     .arg(item->key.normPath));
         }
 
-        QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [key = item->key]() {
-            DirectoryWatchService::instance().onRawEventsBatch(key, QStringList(), true);
+        WatchKey capturedKey = item->key;
+        QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [capturedKey]() {
+            DirectoryWatchService::instance().onRawEventsBatch(capturedKey, QStringList(), true);
         }, Qt::QueuedConnection);
     } else {
         PFILE_NOTIFY_INFORMATION pNotify = (PFILE_NOTIFY_INFORMATION)item->buffer;
@@ -463,7 +466,7 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
         qint64 now = QDateTime::currentMSecsSinceEpoch();
         {
             QMutexLocker throttleLocker(&s_cbThrottleMutex);
-            auto& tInfo = s_cbThrottleMap[item->key];
+            auto& tInfo = s_cbThrottleMap[item->originalDirPath];
             if (!tInfo.hasLoggedFirst) {
                 tInfo.hasLoggedFirst = true;
                 tInfo.lastLogTime = now;
@@ -484,8 +487,9 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
         }
 
         if (!dirtyNames.isEmpty()) {
-            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [key = item->key, dirtyNames]() {
-                DirectoryWatchService::instance().onRawEventsBatch(key, dirtyNames, false);
+            WatchKey capturedKey = item->key;
+            QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [capturedKey, dirtyNames]() {
+                DirectoryWatchService::instance().onRawEventsBatch(capturedKey, dirtyNames, false);
             }, Qt::QueuedConnection);
         }
     }
@@ -511,8 +515,10 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
                     .arg(item->originalDirPath).arg(err));
         QUARKMETA_DWS_TRACE("DirectoryWatchService", "notificationCompletionRoutine",
             QString("重新发起 ReadDirectoryChangesW 失败! path=%1, GetLastError=%2").arg(item->originalDirPath).arg(err));
-        QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [key = item->key, path = item->originalDirPath]() {
-            DirectoryWatchService::instance().onDirectoryLostInternal(key, path);
+        WatchKey capturedKey = item->key;
+        QString capturedPath = item->originalDirPath;
+        QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [capturedKey, capturedPath]() {
+            DirectoryWatchService::instance().onDirectoryLostInternal(capturedKey, capturedPath);
         }, Qt::QueuedConnection);
     }
 }
