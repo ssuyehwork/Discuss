@@ -1147,3 +1147,30 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 将右键上下文移动菜单关联卷记录上限扩充至 30 条；
    - 将 `NavPanel` 异步加载解析并展示的有效文件夹上限由原 14 个同步扩容为 30 个（`count >= 30`）；
    - 严格保持异步并发探测机制（`QtConcurrent::run`）与主线程 `invokeMethod` 回调，确保大容量历史路径不会拖慢 GUI 响应。
+---
+
+## 42. 返回上级目录全局自动选中子项与折叠分区自动展开设计理念 (Navigation Upward Auto-Select Architecture)
+
+> 本章节整理自用户的核心设计理念指导与明确共识，作为 QuarkMeta 在目录导航层级回退、返回上层自动聚焦与折叠分区自动展开的唯一真理源 (SSOT)。
+
+### 42.1 核心需求与交互痛点
+1. **全局统一的“返回即聚焦”体验**：
+   - 用户在浏览深层目录后返回上级（无论是通过工具栏“向上”按钮、后退快捷键/鼠标侧键、地址栏面包屑点击、还是双击空白处回退），都期望能够立即看到并高亮刚才所在的子文件夹；
+   - 彻底废除仅对单一按钮打补丁的局部行为，将计算逻辑收敛至单一真理源服务中。
+2. **防串扰与原子消费契约**：
+   - 待选中的子项路径必须与预期的目标 URL（`targetUrl`）强绑定；
+   - 目标项消费采用“用完即清（Take & Clear）”原则，阻断无关跳转或并发刷新的误选中。
+3. **折叠分区智能展开与刚好可见保障**：
+   - 若视图开启了分组且“文件夹”分区被用户折叠，恢复选区时必须自动展开文件夹分区，防止项目选中了却不可见；
+   - 遵循黑盒隔离锁（Black-Box Isolation），视图协调器仅调用面板外露的 `isFolderSectionCollapsed()` 与 `expandFolderSection()`，禁止刺探模型内部细节；
+   - 恢复选中后，调用 `scrollTo(EnsureVisible)` 确保目标项无缝滚动至视口内刚好可见。
+
+### 42.2 核心架构与职责分工
+1. **`NavigationService`（导航服务层）**：
+   - 负责全局统一计算 `computeAscendingTarget(fromPath, toPath)`：识别祖先关系并准确截取第一层直接子项；
+   - 维护待选中状态 `takePendingTargetChildPath(targetUrl)`，在 `navigateTo` 和 `goBack` 等全场景中自动激活。
+2. **`PanelMediator`（面板协调层）**：
+   - 在路径发生变动且加载目标面板时，主动拉取待选中子项并传递给当前激活面板（`setPendingSelectPath`）。
+3. **`ContentPanel` 与 `ContentViewCoordinator`（视图与控制器层）**：
+   - 封装高内聚的分区折叠检测与展开接口（`isFolderSectionCollapsed` / `expandFolderSection`）；
+   - 在模型重置与选区恢复（`restoreSelections`）中，智能展开文件夹分区并滚动至可见状态。
