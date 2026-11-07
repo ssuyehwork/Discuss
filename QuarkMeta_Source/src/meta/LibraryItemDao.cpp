@@ -6,6 +6,7 @@
 #include <QUuid>
 #include <QDateTime>
 #include <QDebug>
+#include "../core/DwsTrace.h"
 
 namespace QuarkMeta {
 
@@ -177,8 +178,15 @@ bool LibraryItemDao::upsertItem(const ItemRecord& record) {
 bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
     if (records.empty()) return true;
 
+    QUARKMETA_DWS_TRACE("LibraryItemDao", "upsertItems",
+        QString("准备提交数据库写入; 待写入条数=%1, 首条路径=%2")
+            .arg(records.size()).arg(records.front().path));
+
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db) return false;
+    if (!db) {
+        QUARKMETA_DWS_TRACE("LibraryItemDao", "upsertItems", "数据库连接为空(getGlobalDb() is null)，写入失败");
+        return false;
+    }
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
     SqlTransaction tx(db);
@@ -331,7 +339,12 @@ bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
     }
 
     cleanupStmts();
-    return tx.commit();
+    bool commitSuccess = tx.commit();
+    QUARKMETA_DWS_TRACE("LibraryItemDao", "upsertItems",
+        QString("数据库写入事务完成回执; 总记录数=%1, 事务提交成功=%2, 成功条数=%3, 失败条数=%4")
+            .arg(records.size()).arg(commitSuccess ? "true" : "false")
+            .arg(commitSuccess ? records.size() : 0).arg(commitSuccess ? 0 : records.size()));
+    return commitSuccess;
 }
 
 bool LibraryItemDao::removeItemsByPaths(const QStringList& paths) {

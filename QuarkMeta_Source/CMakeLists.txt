@@ -90,6 +90,7 @@ set(SOURCES
     src/core/ClipboardService.cpp
     src/core/DeviceWatcher.h
     src/core/DeviceWatcher.cpp
+    src/core/DwsTrace.h
     src/core/DirectoryWatchService.h
     src/core/DirectoryWatchService.cpp
     src/core/TaskProgressService.h

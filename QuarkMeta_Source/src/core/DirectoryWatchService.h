@@ -83,10 +83,6 @@ private:
         void stopWorker();
         void wakeUpWorker();
 
-#ifdef Q_OS_WIN
-        HANDLE iocpHandle() const { return m_hIOCP; }
-#endif
-
     protected:
         void run() override;
 
@@ -95,7 +91,6 @@ private:
         std::atomic<bool> m_stopRequested{false};
 #ifdef Q_OS_WIN
         HANDLE m_wakeUpEvent = NULL;
-        HANDLE m_hIOCP = NULL;
 #endif
     };
 

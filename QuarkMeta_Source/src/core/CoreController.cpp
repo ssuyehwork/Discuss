@@ -7,6 +7,7 @@
 #include "../meta/LibrarySyncService.h"
 #include "../util/DiskMediaExtractor.h"
 #include "../ui/Logger.h"
+#include "DwsTrace.h"
 #include <QThreadPool>
 #include <QDebug>
 #include <QTimer>
@@ -51,7 +52,10 @@ void CoreController::initializeCoreComponents() {
     failureFlushTimer->start();
 }
 
-void CoreController::requestShutdown() { s_isShuttingDown.store(true); }
+void CoreController::requestShutdown() {
+    QUARKMETA_DWS_TRACE("CoreController", "requestShutdown", "设置 s_isShuttingDown=true");
+    s_isShuttingDown.store(true);
+}
 bool CoreController::isShuttingDown() { return s_isShuttingDown.load(); }
 uint64_t CoreController::incrementNavigationGeneration() { return ++s_navigationGeneration; }
 uint64_t CoreController::currentNavigationGeneration() { return s_navigationGeneration.load(); }
