@@ -2,7 +2,7 @@
 
 #include "../core/BatchRenameService.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 批量重命名引擎 (轻量级预览计算代理，业务流全权交由 BatchRenameService)
@@ -24,4 +24,4 @@ private:
     ~BatchRenameEngine() = default;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

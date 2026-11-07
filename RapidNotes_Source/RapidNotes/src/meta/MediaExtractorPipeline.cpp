@@ -20,7 +20,7 @@
 #include <objbase.h> 
 #endif 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 MediaExtractorPipeline& MediaExtractorPipeline::instance() { 
     static MediaExtractorPipeline inst; 
@@ -204,4 +204,4 @@ void MediaExtractorPipeline::dispatchWorkerLoop() {
 #endif 
 } 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

@@ -4,7 +4,7 @@
 #include <QStringList>
 #include <string>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ShellProtectionCommand : public ActionCommand {
 public:
@@ -36,4 +36,4 @@ private:
 // 保持向下兼容别名
 using EncryptCommand = ShellProtectionCommand;
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

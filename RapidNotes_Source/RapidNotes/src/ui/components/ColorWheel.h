@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <QColor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ColorWheel : public QWidget {
     Q_OBJECT
@@ -48,4 +48,4 @@ private:
     DragTarget m_dragTarget = DragTarget::None;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

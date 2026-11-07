@@ -5,7 +5,7 @@
 #include <vector>
 #include "../../core/ItemRecord.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 
@@ -29,4 +29,4 @@ private:
     int m_loadRequestId = 0;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -13,7 +13,7 @@
 #pragma comment(lib, "dwmapi.lib")
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 
 FramelessDialog::FramelessDialog(const QString& title, QWidget* parent) 
@@ -218,4 +218,4 @@ bool FramelessDialog::eventFilter(QObject* watched, QEvent* event) {
     return QDialog::eventFilter(watched, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

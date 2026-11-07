@@ -2,7 +2,7 @@
 #include "../FramelessDialogBase.h"
 #include <QLineEdit>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FramelessInputDialog : public FramelessDialog {
     Q_OBJECT
@@ -19,4 +19,4 @@ private:
     QLineEdit* m_edit;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

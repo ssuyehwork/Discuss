@@ -5,10 +5,10 @@
 #include <QList>
 #include "MetadataDefs.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
-#ifndef QUARKMETA_NODEORDERENTRY_DEFINED
-#define QUARKMETA_NODEORDERENTRY_DEFINED
+#ifndef RapidNotes_NODEORDERENTRY_DEFINED
+#define RapidNotes_NODEORDERENTRY_DEFINED
 struct NodeOrderEntry {
     int id = 0;
     int parentId = 0;
@@ -50,4 +50,4 @@ public:
 
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

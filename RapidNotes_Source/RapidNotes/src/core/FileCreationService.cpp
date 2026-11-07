@@ -7,7 +7,7 @@
 #include <QFile>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FileCreationService& FileCreationService::instance() {
     static FileCreationService inst;
@@ -57,4 +57,4 @@ bool FileCreationService::createNewItem(ContentPanel* panel, const QString& type
     return true;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

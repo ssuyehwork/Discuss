@@ -9,7 +9,7 @@
 
 class QWidget;
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 enum class DuplicateResolveAction {
     UseExisting, // 使用已存在文件导入
@@ -33,4 +33,4 @@ private:
     QPushButton* m_btnSubmit = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

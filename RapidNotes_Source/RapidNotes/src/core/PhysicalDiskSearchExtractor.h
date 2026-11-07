@@ -7,7 +7,7 @@
 #include <functional>
 #include <atomic>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class PhysicalDiskSearchExtractor {
 public:
@@ -26,4 +26,4 @@ public:
     );
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

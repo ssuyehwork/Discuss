@@ -1,5 +1,5 @@
 #include "ColorDot.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

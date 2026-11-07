@@ -3,7 +3,7 @@
 #include <QKeyEvent>
 #include <QResizeEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ElasticEdit : public QTextEdit {
     Q_OBJECT
@@ -23,4 +23,4 @@ protected:
     void changeEvent(QEvent* e) override;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

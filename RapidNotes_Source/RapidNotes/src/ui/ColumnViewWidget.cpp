@@ -9,7 +9,7 @@
 #include <QResizeEvent>
 #include <QScrollBar>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ColumnViewWidget::ColumnViewWidget(ContentPanel* contentPanel, QWidget* parent)
     : QScrollArea(parent), m_contentPanel(contentPanel) 
@@ -514,4 +514,4 @@ void ColumnViewWidget::expandFolder(const QString& folderPath, int paneIdx) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

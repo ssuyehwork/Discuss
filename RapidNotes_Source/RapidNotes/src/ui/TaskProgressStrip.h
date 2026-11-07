@@ -5,7 +5,7 @@
 #include <QWidget>
 #include "../core/TaskProgressService.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 顶部悬浮线条进度条
@@ -30,4 +30,4 @@ private:
     QWidget* m_statusBar = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

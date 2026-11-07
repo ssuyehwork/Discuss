@@ -12,7 +12,7 @@
 #include <functional>
 #include "CoreEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ThumbnailPipelineService : public QObject {
     Q_OBJECT
@@ -68,4 +68,4 @@ private:
     static constexpr int kMaxMemoryCacheCount = 800; // 内存最多缓存 800 张缩略图 (约 50~80MB)
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

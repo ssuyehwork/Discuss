@@ -7,7 +7,7 @@
 #include <QFileInfo>
 #include <mutex>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class VolumeOnlineManager : public QObject {
     Q_OBJECT
@@ -20,7 +20,7 @@ public:
     // 校验特定盘符/路径是否处于在线状态
     bool isLibraryOnline(const QString& libraryNameOrPath) const;
 
-    // 提取盘符 (例如 "QuarkMeta.library_g" -> "G", "G:/abc" -> "G", "g:" -> "G")
+    // 提取盘符 (例如 "RapidNotes.library_g" -> "G", "G:/abc" -> "G", "g:" -> "G")
     static QString extractDriveLetter(const QString& str);
 
     // 检查并更新盘符在线状态，检测到热拔插事件时触发 volumeStateChanged 信号
@@ -39,4 +39,4 @@ private:
     QTimer* m_timer{nullptr};
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

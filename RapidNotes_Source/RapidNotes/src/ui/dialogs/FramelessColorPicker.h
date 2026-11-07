@@ -2,7 +2,7 @@
 #include "../FramelessDialogBase.h"
 #include <QColor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ColorPicker;
 
@@ -18,4 +18,4 @@ private:
     QColor m_selectedColor;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

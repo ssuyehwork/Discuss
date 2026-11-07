@@ -11,7 +11,7 @@
 #include <QSet>
 #include <QRegularExpression>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 static QString escapeLike(const QString& str) {
     QString res = str;
@@ -842,4 +842,4 @@ bool SmartFolderDao::removeSmartFolderById(int id) {
     return success;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

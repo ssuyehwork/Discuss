@@ -3,7 +3,7 @@
 #include <QFile>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ThemeManager& ThemeManager::instance() {
     static ThemeManager inst;
@@ -80,4 +80,4 @@ void ThemeManager::applyMenuStyle(QWidget* menu) const {
     );
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

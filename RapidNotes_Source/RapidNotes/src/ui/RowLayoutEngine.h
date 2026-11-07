@@ -1,7 +1,7 @@
 #pragma once
 #include <QRect>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct RowLayout {
     int rowHeight;          // 统一行高 (30px ~ 230px)
@@ -35,4 +35,4 @@ public:
     static int calculateHeaderTextStartX(int zoomLevel);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

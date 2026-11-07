@@ -5,7 +5,7 @@
 #include <QListWidget>
 #include <QPushButton>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TextExtensionDialog : public FramelessDialog {
     Q_OBJECT
@@ -32,4 +32,4 @@ private:
     QPushButton* m_btnSave{nullptr};
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

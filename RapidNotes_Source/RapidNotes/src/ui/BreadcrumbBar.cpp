@@ -9,7 +9,7 @@
 #include <QLabel>
 #include "UiHelper.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 BreadcrumbNodeButton::BreadcrumbNodeButton(const QString& name, const QString& fullPath, QWidget* parent)
     : QPushButton(name, parent), m_fullPath(fullPath) {
@@ -221,4 +221,4 @@ void BreadcrumbBar::mousePressEvent(QMouseEvent* event) {
     QWidget::mousePressEvent(event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

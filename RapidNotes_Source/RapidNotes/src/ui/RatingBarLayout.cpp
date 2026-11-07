@@ -1,6 +1,6 @@
 #include "RatingBarLayout.h" 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 RatingBarMetrics RatingBarLayout::calculate(const QRect& targetRect,  
                                             RatingBarMode mode,  
@@ -30,4 +30,4 @@ RatingBarMetrics RatingBarLayout::calculate(const QRect& targetRect,
     return m; 
 } 
  
-} // namespace QuarkMeta
+} // namespace RapidNotes

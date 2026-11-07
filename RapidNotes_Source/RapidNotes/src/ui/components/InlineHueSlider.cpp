@@ -4,7 +4,7 @@
 #include <QPen>
 #include <QtGlobal>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 InlineHueSlider::InlineHueSlider(QWidget* parent) : QWidget(parent) {
     setFixedHeight(28);
@@ -85,4 +85,4 @@ void InlineHueSlider::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) emit sliderReleased();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

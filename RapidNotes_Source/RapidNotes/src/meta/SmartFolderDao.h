@@ -7,7 +7,7 @@
 
 struct sqlite3;
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 enum class SmartRuleType {
     Rating = 0,
@@ -110,4 +110,4 @@ private:
     static QString buildWhereClause(const SmartFolderRecord& rec);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

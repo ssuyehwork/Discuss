@@ -6,7 +6,7 @@
 #include <QRunnable>
 #include <QCoreApplication>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class RecountTask : public QRunnable {
 public:
@@ -190,4 +190,4 @@ StatisticsSnapshot StatisticsService::computeSnapshotFromDb() {
     return snapshot;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

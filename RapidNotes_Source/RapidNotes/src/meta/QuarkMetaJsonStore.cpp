@@ -1,4 +1,4 @@
-#include "QuarkMetaJsonStore.h"
+#include "RapidNotesJsonStore.h"
 #include "MetaIndexService.h"
 #include <QFileInfo>
 #include <QDir>
@@ -6,7 +6,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 namespace {
 
@@ -55,24 +55,24 @@ std::vector<std::wstring> toStdWStringVector(const QStringList& tags) {
 
 } // namespace
 
-QuarkMetaJsonStore& QuarkMetaJsonStore::instance() {
-    static QuarkMetaJsonStore s_instance;
+RapidNotesJsonStore& RapidNotesJsonStore::instance() {
+    static RapidNotesJsonStore s_instance;
     return s_instance;
 }
 
-QuarkMetaJsonStore::QuarkMetaJsonStore(QObject* parent)
+RapidNotesJsonStore::RapidNotesJsonStore(QObject* parent)
     : QObject(parent) {
     m_flushPool.setMaxThreadCount(1);
 
     m_flushTimer = new QTimer(this);
     m_flushTimer->setSingleShot(true);
     m_flushTimer->setInterval(kFlushDebounceMs);
-    connect(m_flushTimer, &QTimer::timeout, this, &QuarkMetaJsonStore::onFlushTimeout);
+    connect(m_flushTimer, &QTimer::timeout, this, &RapidNotesJsonStore::onFlushTimeout);
 
     m_maxFlushTimer = new QTimer(this);
     m_maxFlushTimer->setSingleShot(true);
     m_maxFlushTimer->setInterval(kMaxFlushDelayMs);
-    connect(m_maxFlushTimer, &QTimer::timeout, this, &QuarkMetaJsonStore::onFlushTimeout);
+    connect(m_maxFlushTimer, &QTimer::timeout, this, &RapidNotesJsonStore::onFlushTimeout);
 
     if (auto* app = QCoreApplication::instance()) {
         this->moveToThread(app->thread());
@@ -83,19 +83,19 @@ QuarkMetaJsonStore::QuarkMetaJsonStore(QObject* parent)
     }
 }
 
-QuarkMetaJsonStore::~QuarkMetaJsonStore() {
+RapidNotesJsonStore::~RapidNotesJsonStore() {
     flushAllDirtyBuffers(true);
     m_flushPool.waitForDone();
 }
 
-std::wstring QuarkMetaJsonStore::normalizeFolderPath(const std::wstring& path) {
+std::wstring RapidNotesJsonStore::normalizeFolderPath(const std::wstring& path) {
     if (path.empty()) return L"";
     QString qp = QDir::toNativeSeparators(QDir::cleanPath(QString::fromStdWString(path))).toLower();
     if (qp.length() == 2 && qp.endsWith(':')) qp += '\\';
     return qp.toStdWString();
 }
 
-void QuarkMetaJsonStore::prefetchFolderJson(const std::wstring& folderPath) {
+void RapidNotesJsonStore::prefetchFolderJson(const std::wstring& folderPath) {
     if (folderPath.empty()) return;
     std::wstring normFolder = normalizeFolderPath(folderPath);
 
@@ -106,7 +106,7 @@ void QuarkMetaJsonStore::prefetchFolderJson(const std::wstring& folderPath) {
         }
     }
 
-    auto jsonPtr = std::make_shared<QuarkMetaJson>(folderPath);
+    auto jsonPtr = std::make_shared<RapidNotesJson>(folderPath);
     jsonPtr->load();
 
     {
@@ -115,14 +115,14 @@ void QuarkMetaJsonStore::prefetchFolderJson(const std::wstring& folderPath) {
     }
 }
 
-void QuarkMetaJsonStore::addChangeListener(ChangeListener listener) {
+void RapidNotesJsonStore::addChangeListener(ChangeListener listener) {
     if (listener) {
         std::lock_guard<std::mutex> lock(m_listenerMutex);
         m_listeners.push_back(listener);
     }
 }
 
-void QuarkMetaJsonStore::notifyListeners(const ChangeEvent& event) {
+void RapidNotesJsonStore::notifyListeners(const ChangeEvent& event) {
     std::vector<ChangeListener> listenersCopy;
     {
         std::lock_guard<std::mutex> lock(m_listenerMutex);
@@ -133,19 +133,19 @@ void QuarkMetaJsonStore::notifyListeners(const ChangeEvent& event) {
     }
 }
 
-std::shared_ptr<QuarkMetaJson> QuarkMetaJsonStore::getOrLoadFolderLocked(const std::wstring& normFolder, const std::wstring& folderPath) {
+std::shared_ptr<RapidNotesJson> RapidNotesJsonStore::getOrLoadFolderLocked(const std::wstring& normFolder, const std::wstring& folderPath) {
     auto it = m_folderCacheMap.find(normFolder);
     if (it != m_folderCacheMap.end() && it->second) {
         return it->second;
     }
 
-    auto jsonPtr = std::make_shared<QuarkMetaJson>(folderPath);
+    auto jsonPtr = std::make_shared<RapidNotesJson>(folderPath);
     jsonPtr->load();
     m_folderCacheMap[normFolder] = jsonPtr;
     return jsonPtr;
 }
 
-void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater) {
+void RapidNotesJsonStore::updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater) {
     if (!updater) return;
 
     QFileInfo info(QString::fromStdWString(filePath));
@@ -170,7 +170,7 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
 
         markDirtyLocked(normFolder);
 
-        // 如果是文件夹，同步更新自身目录内部的 .QuarkMeta.json 镜像
+        // 如果是文件夹，同步更新自身目录内部的 .RapidNotes.json 镜像
         if (info.isDir()) {
             std::wstring selfDirPath = info.absoluteFilePath().toStdWString();
             std::wstring normSelfDir = normalizeFolderPath(selfDirPath);
@@ -215,7 +215,7 @@ void QuarkMetaJsonStore::updateItemMeta(const std::wstring& filePath, std::funct
     notifyListeners({ChangeType::ItemChanged, QDir::toNativeSeparators(QString::fromStdWString(filePath)), ""});
 }
 
-void QuarkMetaJsonStore::updateFolderItemsBatch(const std::wstring& folderPath,
+void RapidNotesJsonStore::updateFolderItemsBatch(const std::wstring& folderPath,
                                             const std::vector<std::pair<std::wstring, std::function<void(ItemMeta&)>>>& updaters) {
     if (folderPath.empty() || updaters.empty()) return;
 
@@ -231,7 +231,7 @@ void QuarkMetaJsonStore::updateFolderItemsBatch(const std::wstring& folderPath,
 
         for (const auto& [fileName, updater] : updaters) {
             if (!updater || fileName.empty()) continue;
-            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName);
+            std::wstring key = RapidNotesJson::normalizeItemKey(fileName);
             ItemMeta& meta = jsonPtr->items()[key];
             updater(meta);
 
@@ -249,7 +249,7 @@ void QuarkMetaJsonStore::updateFolderItemsBatch(const std::wstring& folderPath,
     }
 }
 
-QMap<QString, QStringList> QuarkMetaJsonStore::addTagsBatch(const QStringList& paths, const QStringList& tags) {
+QMap<QString, QStringList> RapidNotesJsonStore::addTagsBatch(const QStringList& paths, const QStringList& tags) {
     QMap<QString, QStringList> resultMap;
     if (paths.isEmpty()) return resultMap;
 
@@ -330,7 +330,7 @@ QMap<QString, QStringList> QuarkMetaJsonStore::addTagsBatch(const QStringList& p
     return resultMap;
 }
 
-QMap<QString, QStringList> QuarkMetaJsonStore::removeTagsBatch(const QStringList& paths, const QStringList& tags) {
+QMap<QString, QStringList> RapidNotesJsonStore::removeTagsBatch(const QStringList& paths, const QStringList& tags) {
     QMap<QString, QStringList> resultMap;
     if (paths.isEmpty()) return resultMap;
 
@@ -413,7 +413,7 @@ QMap<QString, QStringList> QuarkMetaJsonStore::removeTagsBatch(const QStringList
     return resultMap;
 }
 
-QString QuarkMetaJsonStore::getMetaFileId(const std::wstring& folderPath) {
+QString RapidNotesJsonStore::getMetaFileId(const std::wstring& folderPath) {
     if (folderPath.empty()) return QString();
     prefetchFolderJson(folderPath);
 
@@ -424,7 +424,7 @@ QString QuarkMetaJsonStore::getMetaFileId(const std::wstring& folderPath) {
     return QString::fromStdString(jsonPtr->folder().metaFileId);
 }
 
-FolderMeta QuarkMetaJsonStore::getFolderMeta(const std::wstring& folderPath) {
+FolderMeta RapidNotesJsonStore::getFolderMeta(const std::wstring& folderPath) {
     if (folderPath.empty()) return FolderMeta();
     prefetchFolderJson(folderPath);
 
@@ -435,7 +435,7 @@ FolderMeta QuarkMetaJsonStore::getFolderMeta(const std::wstring& folderPath) {
     return jsonPtr->folder();
 }
 
-void QuarkMetaJsonStore::setFolderMeta(const std::wstring& folderPath, const FolderMeta& meta) {
+void RapidNotesJsonStore::setFolderMeta(const std::wstring& folderPath, const FolderMeta& meta) {
     if (folderPath.empty()) return;
     prefetchFolderJson(folderPath);
 
@@ -449,7 +449,7 @@ void QuarkMetaJsonStore::setFolderMeta(const std::wstring& folderPath, const Fol
     scheduleFlush();
 }
 
-QuarkMetaJson::ItemMap QuarkMetaJsonStore::readFolderMeta(const std::wstring& folderPath) {
+RapidNotesJson::ItemMap RapidNotesJsonStore::readFolderMeta(const std::wstring& folderPath) {
     if (folderPath.empty()) return {};
     prefetchFolderJson(folderPath);
 
@@ -460,7 +460,7 @@ QuarkMetaJson::ItemMap QuarkMetaJsonStore::readFolderMeta(const std::wstring& fo
     return jsonPtr->items();
 }
 
-bool QuarkMetaJsonStore::readItemMeta(const std::wstring& filePath, ItemMeta& outMeta) {
+bool RapidNotesJsonStore::readItemMeta(const std::wstring& filePath, ItemMeta& outMeta) {
     QFileInfo info(QString::fromStdWString(filePath));
     std::wstring folderPath = info.absolutePath().toStdWString();
     std::wstring fileName = info.fileName().toLower().toStdWString();
@@ -480,12 +480,12 @@ bool QuarkMetaJsonStore::readItemMeta(const std::wstring& filePath, ItemMeta& ou
     return false;
 }
 
-void QuarkMetaJsonStore::markDirtyLocked(const std::wstring& normFolder) {
+void RapidNotesJsonStore::markDirtyLocked(const std::wstring& normFolder) {
     m_dirtyFolderPaths.insert(normFolder);
     ++m_folderRevision[normFolder];
 }
 
-void QuarkMetaJsonStore::scheduleFlush() {
+void RapidNotesJsonStore::scheduleFlush() {
     QMetaObject::invokeMethod(this, [this]() {
         if (m_flushTimer) {
             m_flushTimer->start(kFlushDebounceMs);
@@ -496,7 +496,7 @@ void QuarkMetaJsonStore::scheduleFlush() {
     }, Qt::QueuedConnection);
 }
 
-void QuarkMetaJsonStore::setRatingBatch(const QStringList& paths, int rating) {
+void RapidNotesJsonStore::setRatingBatch(const QStringList& paths, int rating) {
     if (paths.isEmpty()) return;
     QMap<std::wstring, QStringList> folderGroups;
     for (const QString& path : paths) {
@@ -517,7 +517,7 @@ void QuarkMetaJsonStore::setRatingBatch(const QStringList& paths, int rating) {
 
         auto& items = jsonPtr->items();
         for (const QString& fileName : fileNames) {
-            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            std::wstring key = RapidNotesJson::normalizeItemKey(fileName.toStdWString());
             items[key].rating = rating;
         }
         markDirtyLocked(normFolder);
@@ -529,7 +529,7 @@ void QuarkMetaJsonStore::setRatingBatch(const QStringList& paths, int rating) {
     }
 }
 
-void QuarkMetaJsonStore::setColorBatch(const QStringList& paths, const QString& color) {
+void RapidNotesJsonStore::setColorBatch(const QStringList& paths, const QString& color) {
     if (paths.isEmpty()) return;
     QMap<std::wstring, QStringList> folderGroups;
     for (const QString& path : paths) {
@@ -550,7 +550,7 @@ void QuarkMetaJsonStore::setColorBatch(const QStringList& paths, const QString& 
 
         auto& items = jsonPtr->items();
         for (const QString& fileName : fileNames) {
-            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            std::wstring key = RapidNotesJson::normalizeItemKey(fileName.toStdWString());
             items[key].color = color.toStdWString();
         }
         markDirtyLocked(normFolder);
@@ -562,7 +562,7 @@ void QuarkMetaJsonStore::setColorBatch(const QStringList& paths, const QString& 
     }
 }
 
-void QuarkMetaJsonStore::setNoteBatch(const QStringList& paths, const QString& note) {
+void RapidNotesJsonStore::setNoteBatch(const QStringList& paths, const QString& note) {
     if (paths.isEmpty()) return;
     QMap<std::wstring, QStringList> folderGroups;
     for (const QString& path : paths) {
@@ -583,7 +583,7 @@ void QuarkMetaJsonStore::setNoteBatch(const QStringList& paths, const QString& n
 
         auto& items = jsonPtr->items();
         for (const QString& fileName : fileNames) {
-            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            std::wstring key = RapidNotesJson::normalizeItemKey(fileName.toStdWString());
             items[key].note = note.toStdWString();
         }
         markDirtyLocked(normFolder);
@@ -595,7 +595,7 @@ void QuarkMetaJsonStore::setNoteBatch(const QStringList& paths, const QString& n
     }
 }
 
-void QuarkMetaJsonStore::setURLBatch(const QStringList& paths, const QString& url) {
+void RapidNotesJsonStore::setURLBatch(const QStringList& paths, const QString& url) {
     if (paths.isEmpty()) return;
     QMap<std::wstring, QStringList> folderGroups;
     for (const QString& path : paths) {
@@ -616,7 +616,7 @@ void QuarkMetaJsonStore::setURLBatch(const QStringList& paths, const QString& ur
 
         auto& items = jsonPtr->items();
         for (const QString& fileName : fileNames) {
-            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            std::wstring key = RapidNotesJson::normalizeItemKey(fileName.toStdWString());
             items[key].url = url.toStdWString();
         }
         markDirtyLocked(normFolder);
@@ -628,7 +628,7 @@ void QuarkMetaJsonStore::setURLBatch(const QStringList& paths, const QString& ur
     }
 }
 
-void QuarkMetaJsonStore::setPinnedBatch(const QStringList& paths, bool pinned) {
+void RapidNotesJsonStore::setPinnedBatch(const QStringList& paths, bool pinned) {
     if (paths.isEmpty()) return;
     QMap<std::wstring, QStringList> folderGroups;
     for (const QString& path : paths) {
@@ -649,7 +649,7 @@ void QuarkMetaJsonStore::setPinnedBatch(const QStringList& paths, bool pinned) {
 
         auto& items = jsonPtr->items();
         for (const QString& fileName : fileNames) {
-            std::wstring key = QuarkMetaJson::normalizeItemKey(fileName.toStdWString());
+            std::wstring key = RapidNotesJson::normalizeItemKey(fileName.toStdWString());
             items[key].pinned = pinned;
         }
         markDirtyLocked(normFolder);
@@ -661,7 +661,7 @@ void QuarkMetaJsonStore::setPinnedBatch(const QStringList& paths, bool pinned) {
     }
 }
 
-bool QuarkMetaJsonStore::saveTicket(const FlushTicket& ticket) {
+bool RapidNotesJsonStore::saveTicket(const FlushTicket& ticket) {
     if (ticket.snapshot.isLoadFailed()) {
         return false;
     }
@@ -680,13 +680,13 @@ bool QuarkMetaJsonStore::saveTicket(const FlushTicket& ticket) {
     return ok;
 }
 
-void QuarkMetaJsonStore::onFlushTimeout() {
+void RapidNotesJsonStore::onFlushTimeout() {
     if (m_flushTimer) m_flushTimer->stop();
     if (m_maxFlushTimer) m_maxFlushTimer->stop();
     flushAllDirtyBuffers();
 }
 
-void QuarkMetaJsonStore::flushAllDirtyBuffers(bool sync) {
+void RapidNotesJsonStore::flushAllDirtyBuffers(bool sync) {
     std::vector<FlushTicket> tickets;
     {
         std::lock_guard<std::mutex> lock(m_storeMutex);
@@ -709,7 +709,7 @@ void QuarkMetaJsonStore::flushAllDirtyBuffers(bool sync) {
     }
 }
 
-void QuarkMetaJsonStore::flushAllDirtyBuffersAsync(std::function<void(bool allOk)> onDone) {
+void RapidNotesJsonStore::flushAllDirtyBuffersAsync(std::function<void(bool allOk)> onDone) {
     std::vector<FlushTicket> tickets;
     {
         std::lock_guard<std::mutex> lock(m_storeMutex);
@@ -748,7 +748,7 @@ void QuarkMetaJsonStore::flushAllDirtyBuffersAsync(std::function<void(bool allOk
     });
 }
 
-void QuarkMetaJsonStore::invalidateFolderCache(const std::wstring& folderPath) {
+void RapidNotesJsonStore::invalidateFolderCache(const std::wstring& folderPath) {
     std::wstring normFolder = normalizeFolderPath(folderPath);
     std::lock_guard<std::mutex> lock(m_storeMutex);
     auto it = m_folderCacheMap.find(normFolder);
@@ -760,13 +760,13 @@ void QuarkMetaJsonStore::invalidateFolderCache(const std::wstring& folderPath) {
     m_folderCacheMap.erase(normFolder);
 }
 
-bool QuarkMetaJsonStore::renameItem(const QString& folderPath, const QString& oldName, const QString& newName) {
+bool RapidNotesJsonStore::renameItem(const QString& folderPath, const QString& oldName, const QString& newName) {
     if (oldName == newName) return true;
     std::wstring wFolder = folderPath.toStdWString();
     prefetchFolderJson(wFolder);
     std::wstring normFolder = normalizeFolderPath(wFolder);
-    std::wstring oldKey = QuarkMetaJson::normalizeItemKey(oldName.toStdWString());
-    std::wstring newKey = QuarkMetaJson::normalizeItemKey(newName.toStdWString());
+    std::wstring oldKey = RapidNotesJson::normalizeItemKey(oldName.toStdWString());
+    std::wstring newKey = RapidNotesJson::normalizeItemKey(newName.toStdWString());
     bool ok = true;
     {
         std::lock_guard<std::mutex> lock(m_storeMutex);
@@ -793,9 +793,9 @@ bool QuarkMetaJsonStore::renameItem(const QString& folderPath, const QString& ol
     return ok;
 }
 
-bool QuarkMetaJsonStore::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
+bool RapidNotesJsonStore::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
     flushAllDirtyBuffers(true);
-    bool ok = QuarkMetaJson::migrateFolderCache(oldFolderPath, newFolderPath);
+    bool ok = RapidNotesJson::migrateFolderCache(oldFolderPath, newFolderPath);
     
     std::wstring oldNorm = normalizeFolderPath(oldFolderPath.toStdWString());
     std::wstring newNorm = normalizeFolderPath(newFolderPath.toStdWString());
@@ -831,11 +831,11 @@ bool QuarkMetaJsonStore::migrateFolderCache(const QString& oldFolderPath, const 
     return ok;
 }
 
-bool QuarkMetaJsonStore::removeItem(const QString& filePath) {
+bool RapidNotesJsonStore::removeItem(const QString& filePath) {
     if (filePath.isEmpty()) return true;
     QFileInfo info(filePath);
     std::wstring folderPath = QDir::toNativeSeparators(info.absolutePath()).toStdWString();
-    std::wstring key = QuarkMetaJson::normalizeItemKey(info.fileName().toStdWString());
+    std::wstring key = RapidNotesJson::normalizeItemKey(info.fileName().toStdWString());
     prefetchFolderJson(folderPath);
     std::wstring normFolder = normalizeFolderPath(folderPath);
     bool ok = true;
@@ -855,7 +855,7 @@ bool QuarkMetaJsonStore::removeItem(const QString& filePath) {
     return ok;
 }
 
-bool QuarkMetaJsonStore::transferItems(const QList<QPair<QString, QString>>& pairs, bool isMove, bool replaceDestWhenSourceMissing) {
+bool RapidNotesJsonStore::transferItems(const QList<QPair<QString, QString>>& pairs, bool isMove, bool replaceDestWhenSourceMissing) {
     if (pairs.isEmpty()) return false;
 
     struct Entry {
@@ -875,8 +875,8 @@ bool QuarkMetaJsonStore::transferItems(const QList<QPair<QString, QString>>& pai
         e.destFolder = QDir::toNativeSeparators(newInfo.absolutePath()).toStdWString();
         e.srcNorm = normalizeFolderPath(e.srcFolder);
         e.destNorm = normalizeFolderPath(e.destFolder);
-        e.srcKey = QuarkMetaJson::normalizeItemKey(oldInfo.fileName().toStdWString());
-        e.destKey = QuarkMetaJson::normalizeItemKey(newInfo.fileName().toStdWString());
+        e.srcKey = RapidNotesJson::normalizeItemKey(oldInfo.fileName().toStdWString());
+        e.destKey = RapidNotesJson::normalizeItemKey(newInfo.fileName().toStdWString());
         entries.push_back(std::move(e));
     }
     if (entries.empty()) return true;
@@ -936,4 +936,4 @@ bool QuarkMetaJsonStore::transferItems(const QList<QPair<QString, QString>>& pai
     return allOk;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

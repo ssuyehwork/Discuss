@@ -1,7 +1,7 @@
 #pragma once
 #include <QWidget>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class StyledCheckBox;
 
@@ -17,4 +17,4 @@ private:
     StyledCheckBox* m_cb;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

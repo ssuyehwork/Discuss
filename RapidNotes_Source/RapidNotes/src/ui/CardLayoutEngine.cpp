@@ -1,6 +1,6 @@
 #include "CardLayoutEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 CardLayout CardLayoutEngine::calculate(const QRect& totalRect, int /*zoomLevel*/) {
     CardLayout l;
@@ -54,4 +54,4 @@ CardLayout CardLayoutEngine::calculate(const QRect& totalRect, int /*zoomLevel*/
     return l;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

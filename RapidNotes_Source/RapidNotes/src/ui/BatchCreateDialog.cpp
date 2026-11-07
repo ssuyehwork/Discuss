@@ -16,10 +16,10 @@
 #include <QJsonArray>
 #include <QJsonObject>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 BatchCreateDialog::BatchCreateDialog(const QString& currentDirectory, QWidget* parent)
-    : FramelessDialog("批量创建 - QuarkMeta", parent), m_currentDir(currentDirectory) {
+    : FramelessDialog("批量创建 - RapidNotes", parent), m_currentDir(currentDirectory) {
     resize(550, 420);
     initContent();
     applyTheme();
@@ -378,4 +378,4 @@ void BatchCreateDialog::onExecute() {
     accept();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

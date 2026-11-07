@@ -9,7 +9,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct ShortcutKeyCombo {
     int vkCode = 0;
@@ -72,4 +72,4 @@ private:
     std::function<bool()> m_editFocusPredicate;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

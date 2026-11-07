@@ -8,7 +8,7 @@
 #include <functional>
 #include <QWidget>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 enum class RenameComponentType {
     Text,           // 固定文本
@@ -60,4 +60,4 @@ private:
     QString processOne(const QString& originalPath, int index, const std::vector<RenameRule>& rules);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

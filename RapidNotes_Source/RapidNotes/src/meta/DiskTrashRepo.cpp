@@ -3,7 +3,7 @@
 #include "sqlite3.h" 
 #include <QMutexLocker> 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 std::vector<DiskTrashRawItem> DiskTrashRepo::getAllTrashItems() { 
     std::vector<DiskTrashRawItem> results; 

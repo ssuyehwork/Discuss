@@ -13,7 +13,7 @@
 #include <memory> 
 #include "../util/DiskMediaExtractor.h" 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 class MediaExtractorPipeline : public QObject { 
     Q_OBJECT 
@@ -42,4 +42,4 @@ private:
     QThreadPool m_workerPool; // 后台提取专用线程池，不占全局线程池 
 }; 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

@@ -1,7 +1,7 @@
 #pragma once
 #include "../FramelessDialogBase.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FramelessConflictDialog : public FramelessDialog {
     Q_OBJECT
@@ -20,4 +20,4 @@ private:
     Choice m_choice = Cancel;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -4,7 +4,7 @@
 #include "StyleLibrary.h"
 #include "FolderButton.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class DriveButton : public QPushButton {
     Q_OBJECT
@@ -40,4 +40,4 @@ private:
     void stopRotation();
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

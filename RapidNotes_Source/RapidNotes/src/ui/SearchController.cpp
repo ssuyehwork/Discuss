@@ -10,9 +10,9 @@
 #include <QMenu>
 #include <QActionGroup>
 
-using namespace QuarkMeta::Style;
+using namespace RapidNotes::Style;
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 SearchController::SearchController(QWidget* parent)
     : QObject(parent) {
@@ -214,4 +214,4 @@ bool SearchController::eventFilter(QObject* watched, QEvent* event) {
     return QObject::eventFilter(watched, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

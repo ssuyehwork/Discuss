@@ -2,7 +2,7 @@
 #include <QtConcurrent>
 #include "../core/TagLexiconService.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TagManagerController::TagManagerController(QObject* parent) : QObject(parent) {}
 
@@ -38,4 +38,4 @@ void TagManagerController::removeTagFromGroupAsync(const QString& tagName, int g
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

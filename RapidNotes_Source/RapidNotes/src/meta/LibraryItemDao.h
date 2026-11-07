@@ -4,7 +4,7 @@
 #include <QStringList>
 #include <vector>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class LibrarySyncService;
 
@@ -33,4 +33,4 @@ private:
     static bool markSyncStateByPath(const QString& path, int syncState);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

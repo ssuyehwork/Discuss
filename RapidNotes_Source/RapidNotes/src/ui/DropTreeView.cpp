@@ -19,7 +19,7 @@
 #include <algorithm>
 #include "Logger.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // 声明式规则表：单一真理来源 (Single Source of Truth)
 static const std::vector<ColumnPolicy> kFileListColumnPolicies = {
@@ -201,7 +201,7 @@ void DropTreeView::startDrag(Qt::DropActions supportedActions) {
     }
 
     QMimeData* mimeData = new QMimeData();
-    mimeData->setData("application/x-quarkmeta-tree-nodes", QByteArray("1"));
+    mimeData->setData("application/x-RapidNotes-tree-nodes", QByteArray("1"));
     if (!urls.isEmpty()) {
         mimeData->setUrls(urls);
     }
@@ -273,7 +273,7 @@ void DropTreeView::stopEdgeScroll() {
 }
 
 void DropTreeView::dragEnterEvent(QDragEnterEvent* event) {
-    if (m_internalReorderEnabled && event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-tree-nodes")) {
+    if (m_internalReorderEnabled && event->mimeData() && event->mimeData()->hasFormat("application/x-RapidNotes-tree-nodes")) {
         event->acceptProposedAction();
         return;
     }
@@ -281,7 +281,7 @@ void DropTreeView::dragEnterEvent(QDragEnterEvent* event) {
 }
 
 void DropTreeView::dragMoveEvent(QDragMoveEvent* event) {
-    if (m_internalReorderEnabled && event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-tree-nodes")) {
+    if (m_internalReorderEnabled && event->mimeData() && event->mimeData()->hasFormat("application/x-RapidNotes-tree-nodes")) {
         // 校验 sources 是否含有失效索引
         for (const QPersistentModelIndex& pidx : m_internalDragSources) {
             if (!pidx.isValid()) {
@@ -334,7 +334,7 @@ void DropTreeView::dragLeaveEvent(QDragLeaveEvent* event) {
 }
 
 void DropTreeView::dropEvent(QDropEvent* event) {
-    if (m_internalReorderEnabled && event->mimeData() && event->mimeData()->hasFormat("application/x-quarkmeta-tree-nodes")) {
+    if (m_internalReorderEnabled && event->mimeData() && event->mimeData()->hasFormat("application/x-RapidNotes-tree-nodes")) {
         stopEdgeScroll();
 
         QModelIndex targetIdx;
@@ -456,4 +456,4 @@ void DropTreeView::paintEvent(QPaintEvent* event) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

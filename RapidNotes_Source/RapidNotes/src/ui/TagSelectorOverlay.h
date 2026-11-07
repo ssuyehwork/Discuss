@@ -13,7 +13,7 @@
 #include "../core/TagLexiconService.h"
 #include "FramelessWindowHelper.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 触发来源契约枚举
@@ -101,4 +101,4 @@ private:
     FramelessWindowHelper* m_framelessHelper = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

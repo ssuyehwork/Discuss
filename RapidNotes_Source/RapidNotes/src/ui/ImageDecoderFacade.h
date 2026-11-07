@@ -6,7 +6,7 @@
 #include <memory> 
 #include "../core/CoreEngine.h" 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 struct DecodedMediaResult { 
     QSize originalSize;       // 原始图像物理尺寸 (如 6000x4000) 
@@ -34,4 +34,4 @@ public:
     static QSize readImageDimensions(const QString& filePath); 
 }; 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

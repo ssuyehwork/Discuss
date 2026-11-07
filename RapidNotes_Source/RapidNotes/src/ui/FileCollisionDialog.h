@@ -4,7 +4,7 @@
 #include <QCheckBox>
 #include <QPushButton>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 enum class CollisionResolveAction {
     AutoResolve, // 自动解析
@@ -31,4 +31,4 @@ private:
     QCheckBox* m_chkApplyToAll = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

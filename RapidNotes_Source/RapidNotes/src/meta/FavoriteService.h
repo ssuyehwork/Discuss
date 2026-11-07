@@ -6,7 +6,7 @@
 #include <QAction>
 #include "FavoriteDao.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FavoriteService : public QObject {
     Q_OBJECT
@@ -32,4 +32,4 @@ private:
     Q_DISABLE_COPY_MOVE(FavoriteService)
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

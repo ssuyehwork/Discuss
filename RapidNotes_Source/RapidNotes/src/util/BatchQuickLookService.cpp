@@ -13,7 +13,7 @@
 #include <QCryptographicHash>
 #include <QCursor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 namespace {
 QThreadPool* batchQuickLookPool() {
@@ -149,4 +149,4 @@ void BatchQuickLookService::extractBatchAsync(const QStringList& rootPaths) {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

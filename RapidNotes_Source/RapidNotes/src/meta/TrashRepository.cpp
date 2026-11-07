@@ -2,7 +2,7 @@
 #include "DatabaseManager.h"
 #include <sqlite3.h>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TrashRepository& TrashRepository::instance() {
     static TrashRepository inst;
@@ -34,4 +34,4 @@ bool TrashRepository::getDiskTrashRecordByPath(const std::wstring& originalPath,
     return false;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

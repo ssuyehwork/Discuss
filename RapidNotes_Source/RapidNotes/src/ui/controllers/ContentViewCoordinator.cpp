@@ -15,7 +15,7 @@
 #include <QSignalBlocker>
 #include <QDir>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentViewCoordinator::ContentViewCoordinator(ContentPanel* panel)
     : QObject(panel), m_panel(panel) {
@@ -277,4 +277,4 @@ void ContentViewCoordinator::installActivationFilters() {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

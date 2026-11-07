@@ -14,7 +14,7 @@
 #include "../core/BasicCommands.h"
 #include "ShellHelper.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct DiskIoContext {
     QStringList sources;
@@ -126,4 +126,4 @@ public:
     }
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

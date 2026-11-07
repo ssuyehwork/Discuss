@@ -6,7 +6,7 @@
 #include <QMouseEvent>
 #include <QScrollBar>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QuickLookGraphicsView::QuickLookGraphicsView(QWidget* parent) : QGraphicsView(parent) {
     m_scene = new QGraphicsScene(this);
@@ -211,4 +211,4 @@ void QuickLookGraphicsView::updateCursor() {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

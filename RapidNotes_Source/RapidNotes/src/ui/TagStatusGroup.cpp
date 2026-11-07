@@ -1,12 +1,12 @@
 #include "TagStatusGroup.h"
 #include <QButtonGroup>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void TagStatusGroup::populate(QWidget* parentWidget,
                               QVBoxLayout* contentLayout,
                               FilterStateModel* filterModel,
-                              const QuarkMeta::ScanStats& currentStats,
+                              const RapidNotes::ScanStats& currentStats,
                               const FilterState& currentState,
                               AddFilterRowFunc addFilterRow) {
     if (!contentLayout || !filterModel || !addFilterRow) return;
@@ -39,4 +39,4 @@ void TagStatusGroup::populate(QWidget* parentWidget,
     tagGroup->addButton(cbNo);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

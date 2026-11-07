@@ -4,7 +4,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsPixmapItem>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class QuickLookMinimap;
 
@@ -39,4 +39,4 @@ private:
     QuickLookMinimap* m_minimap = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

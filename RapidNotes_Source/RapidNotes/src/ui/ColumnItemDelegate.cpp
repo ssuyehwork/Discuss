@@ -9,7 +9,7 @@
 #include <QPainter>
 #include <QPainterPath>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ColumnItemDelegate::ColumnItemDelegate(QObject* parent)
     : RenameCapableDelegate(parent) {
@@ -231,4 +231,4 @@ void ColumnItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& op
     painter->restore();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

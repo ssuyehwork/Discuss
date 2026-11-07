@@ -12,7 +12,7 @@
 #include <QFrame>
 #include <QButtonGroup>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TagManagerDialog : public FramelessDialog {
     Q_OBJECT
@@ -64,4 +64,4 @@ private:
     QStringList m_masterTags;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

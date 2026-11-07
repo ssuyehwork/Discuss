@@ -10,7 +10,7 @@
 #include <QComboBox> 
 #include <QVBoxLayout> 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 class RuleRow; 
  
@@ -66,4 +66,4 @@ private:
     bool m_isInitializing = false; 
 }; 
  
-} // namespace QuarkMeta
+} // namespace RapidNotes

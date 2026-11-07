@@ -17,7 +17,7 @@
 
 #pragma comment(lib, "bcrypt.lib")
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void EncryptionManager::encryptBatchAsync(const QStringList& targets, const std::string& password, std::function<void(bool success)> onFinished) {
     (void)QThreadPool::globalInstance()->start([targets, password, onFinished]() {
@@ -279,4 +279,4 @@ std::shared_ptr<DecryptedFileHandle> EncryptionManager::decryptToTemp(const std:
     return std::make_shared<DecryptedFileHandle>(hFile, outPath);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

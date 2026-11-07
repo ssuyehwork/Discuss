@@ -4,7 +4,7 @@
 #include <QString>
 #include <string>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TrashRepository : public QObject {
     Q_OBJECT
@@ -18,4 +18,4 @@ private:
     explicit TrashRepository(QObject* parent = nullptr);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -15,7 +15,7 @@
 #include "../core/CoreController.h" 
 #include "../core/CoreEngine.h" 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 class DiskMediaExtractor { 
 public: 
@@ -59,7 +59,7 @@ public:
 private: 
     static void scheduleSizeUpdate(const QString& folderPath, const QString& fileName, const QSize& size); 
  
-    // 待落盘队列（失败标记 + 尺寸），由 flushPendingUpdates 合并写入 .QuarkMeta.json 
+    // 待落盘队列（失败标记 + 尺寸），由 flushPendingUpdates 合并写入 .RapidNotes.json 
     static QMutex s_pendingMutex; 
     static QHash<QString, QSet<QString>> s_pendingFailures; 
     static QHash<QString, QHash<QString, QSize>> s_pendingSizes; 
@@ -70,6 +70,6 @@ private:
     static QSet<QString> s_failureLoadedFolders; 
 }; 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 
  
 #endif // DISKMEDIAEXTRACTOR_H 

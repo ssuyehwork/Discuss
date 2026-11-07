@@ -1,7 +1,7 @@
 #include "dialogs/FramelessMessageBox.h"
 #include "dialogs/FramelessConfirmDialog.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void FramelessMessageBox::information(QWidget* parent, const QString& title, const QString& text) {
     FramelessConfirmDialog dlg(title, text, FramelessConfirmDialog::OkOnly, "info", QColor("#3498db"), parent);
@@ -23,4 +23,4 @@ void FramelessMessageBox::critical(QWidget* parent, const QString& title, const 
     dlg.exec();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

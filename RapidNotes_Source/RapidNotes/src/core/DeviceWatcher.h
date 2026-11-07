@@ -4,7 +4,7 @@
 #include <QAbstractNativeEventFilter>
 #include <QString>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class DeviceWatcher : public QObject, public QAbstractNativeEventFilter {
     Q_OBJECT
@@ -30,4 +30,4 @@ private:
     bool m_isListening = false;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

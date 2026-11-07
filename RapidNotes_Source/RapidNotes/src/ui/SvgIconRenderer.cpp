@@ -7,7 +7,7 @@
 #include <QDir>
 #include <QMutexLocker>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QMap<QString, QPixmap>& SvgIconRenderer::iconPixmapCache() {
     static QMap<QString, QPixmap> cache;
@@ -83,11 +83,11 @@ QString SvgIconRenderer::getSvgTempFilePath(const QString& key, const QColor& co
     if (pix.isNull()) return QString();
 
     QString tmpPath = QDir::temp().filePath(
-        QString("QuarkMeta_%1_%2_v3.png").arg(key).arg(color.name().mid(1))
+        QString("RapidNotes_%1_%2_v3.png").arg(key).arg(color.name().mid(1))
     );
     pix.save(tmpPath, "PNG");
     return QDir::fromNativeSeparators(tmpPath);
 }
 
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

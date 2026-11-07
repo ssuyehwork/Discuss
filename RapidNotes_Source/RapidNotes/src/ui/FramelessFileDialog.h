@@ -9,7 +9,7 @@
 #include <QComboBox>
 #include <QLineEdit>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FramelessFileDialog : public FramelessDialog {
     Q_OBJECT
@@ -49,6 +49,6 @@ private:
     QString m_selectedPath;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
 #endif // FRAMELESSFILEDIALOG_H

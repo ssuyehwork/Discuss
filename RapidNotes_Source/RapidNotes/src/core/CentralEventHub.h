@@ -1,12 +1,12 @@
-#ifndef QUARKMETA_CENTRAL_EVENT_HUB_H
-#define QUARKMETA_CENTRAL_EVENT_HUB_H
+#ifndef RapidNotes_CENTRAL_EVENT_HUB_H
+#define RapidNotes_CENTRAL_EVENT_HUB_H
 
 #include <QObject>
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 强类型应用程序事件枚举
@@ -52,7 +52,7 @@ public:
 
 signals:
     // 全局事件统一广播信号
-    void eventOccurred(const QuarkMeta::AppEvent& event);
+    void eventOccurred(const RapidNotes::AppEvent& event);
 
 private:
     explicit CentralEventHub(QObject* parent = nullptr);
@@ -61,6 +61,6 @@ private:
     CentralEventHub& operator=(const CentralEventHub&) = delete;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
-#endif // QUARKMETA_CENTRAL_EVENT_HUB_H
+#endif // RapidNotes_CENTRAL_EVENT_HUB_H

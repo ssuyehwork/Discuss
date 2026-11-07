@@ -5,7 +5,7 @@
 #include <QStringList>
 #include <QList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct TagEntry {
     int id = -1;
@@ -62,4 +62,4 @@ private:
     TagLexiconService& operator=(const TagLexiconService&) = delete;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

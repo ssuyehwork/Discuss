@@ -11,7 +11,7 @@
 #include <QScrollArea>
 #include <QWheelEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class HoverEventFilter;
 
@@ -164,4 +164,4 @@ private:
     bool m_isInitializing = true;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

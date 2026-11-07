@@ -1,7 +1,7 @@
 #include "MetaDbRepository.h"
 #include "DatabaseManager.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 MetaDbRepository& MetaDbRepository::instance() {
     static MetaDbRepository inst;
@@ -20,4 +20,4 @@ void MetaDbRepository::saveDriveMeta(const DriveMetaRecord& record) {
     DriveMetaDao::saveDriveMeta(record);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

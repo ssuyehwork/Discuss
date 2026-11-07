@@ -30,10 +30,10 @@
 #include "../core/BasicCommands.h"
 #include "../core/OperationSnapshotEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 BatchRenameDialog::BatchRenameDialog(const std::vector<std::wstring>& originalPaths, QWidget* parent)
-    : FramelessDialog("批量重命名 - QuarkMeta", parent), m_originalPaths(originalPaths) {
+    : FramelessDialog("批量重命名 - RapidNotes", parent), m_originalPaths(originalPaths) {
     setMinimumSize(900, 500);
     resize(1220, 650);
     initContent();
@@ -539,4 +539,4 @@ void BatchRenameDialog::onExecute() {
     );
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

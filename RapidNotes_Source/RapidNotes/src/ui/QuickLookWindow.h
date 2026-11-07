@@ -16,7 +16,7 @@
 #include "CoreEngine.h"
 #include "QuickLookGraphicsView.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class QuickLookWindow : public QWidget {
     Q_OBJECT
@@ -88,4 +88,4 @@ private:
     std::shared_ptr<CancellationToken> m_previewToken; // 当前预览的取消令牌（仅 UI 线程读写）
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

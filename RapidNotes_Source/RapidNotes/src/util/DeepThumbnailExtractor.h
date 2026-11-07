@@ -4,7 +4,7 @@
 #include <QStringList>
 #include <functional>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 专职负责超大/复杂矢量文件的深度重试提取服务
@@ -32,4 +32,4 @@ private:
     ~DeepThumbnailExtractor() override = default;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

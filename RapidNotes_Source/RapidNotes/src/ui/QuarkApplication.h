@@ -2,7 +2,7 @@
 
 #include <QApplication>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class QuarkApplication : public QApplication {
     Q_OBJECT
@@ -16,4 +16,4 @@ private:
     void performGlobalSelfHealing(QWidget* widget);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

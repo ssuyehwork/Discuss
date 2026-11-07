@@ -10,7 +10,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TrayController::TrayController(QMainWindow* mainWindow)
     : QObject(mainWindow), m_mainWindow(mainWindow) {
@@ -18,14 +18,14 @@ TrayController::TrayController(QMainWindow* mainWindow)
     
     // 2026-04-14 物理加固：锁定图标来源为 Qt 资源系统中的标准 ico
     m_trayIcon->setIcon(QIcon(":/app_icon.ico"));
-    m_trayIcon->setToolTip("QuarkMeta");
+    m_trayIcon->setToolTip("RapidNotes");
 
     m_trayMenu = new QMenu(mainWindow);
     UiHelper::applyMenuStyle(m_trayMenu);
 
     QAction* showAction = m_trayMenu->addAction(UiHelper::getIcon("window", QColor("#EEEEEE"), 18), "显示主界面");
     m_trayMenu->addSeparator();
-    QAction* quitAction = m_trayMenu->addAction(UiHelper::getIcon("power", QColor("#EEEEEE"), 18), "退出 QuarkMeta");
+    QAction* quitAction = m_trayMenu->addAction(UiHelper::getIcon("power", QColor("#EEEEEE"), 18), "退出 RapidNotes");
 
     connect(showAction, &QAction::triggered, this, &TrayController::onShowMainWindow);
     connect(quitAction, &QAction::triggered, this, &TrayController::onQuitApp);
@@ -84,4 +84,4 @@ void TrayController::onQuitApp() {
     QApplication::exit(0);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

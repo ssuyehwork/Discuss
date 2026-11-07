@@ -4,10 +4,10 @@
 #include <QList>
 #include <QPair>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
-#ifndef QUARKMETA_NODEORDERENTRY_DEFINED
-#define QUARKMETA_NODEORDERENTRY_DEFINED
+#ifndef RapidNotes_NODEORDERENTRY_DEFINED
+#define RapidNotes_NODEORDERENTRY_DEFINED
 struct NodeOrderEntry {
     int id = 0;
     int parentId = 0;
@@ -51,4 +51,4 @@ public:
     static bool updateSortOrders(const QList<QPair<int, int>>& orders);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

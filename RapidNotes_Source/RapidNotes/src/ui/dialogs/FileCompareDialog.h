@@ -14,7 +14,7 @@ class QLabel;
 class QPushButton;
 class QSortFilterProxyModel;
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FramelessWindowHelper;
 
@@ -111,4 +111,4 @@ private:
     FramelessWindowHelper* m_framelessHelper = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

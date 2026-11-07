@@ -14,7 +14,7 @@
 #include <QScrollArea>
 #include <QTimer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class SmartFolderDialog : public FramelessDialog {
     Q_OBJECT
@@ -56,4 +56,4 @@ protected:
     bool event(QEvent* event) override;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

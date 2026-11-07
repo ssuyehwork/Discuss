@@ -1,7 +1,7 @@
 #include "MetaIndexService.h"
 #include "DatabaseManager.h"
-#include "QuarkMetaJson.h"
-#include "QuarkMetaJsonStore.h"
+#include "RapidNotesJson.h"
+#include "RapidNotesJsonStore.h"
 #include "LibraryService.h"
 #include "../core/TaskProgressService.h"
 #include <QDir>
@@ -15,7 +15,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 namespace {
 std::wstring normalizePath(const std::wstring& path) {
@@ -262,11 +262,11 @@ void MetaIndexService::workerThreadLoop() {
 }
 
 void MetaIndexService::processFolder(sqlite3* db, const std::wstring& normFolder, const std::wstring& rawFolder) {
-    QString jsonPath = QString::fromStdWString(rawFolder) + "/.QuarkMeta.json";
+    QString jsonPath = QString::fromStdWString(rawFolder) + "/.RapidNotes.json";
     QFileInfo fi(jsonPath);
 
     if (!fi.exists()) {
-        // .QuarkMeta.json 不存在（被自愈清理），抹除该文件夹下所有旧索引
+        // .RapidNotes.json 不存在（被自愈清理），抹除该文件夹下所有旧索引
         sqlite3_stmt* stmt = nullptr;
         if (sqlite3_prepare_v2(db, "DELETE FROM items_index WHERE folder_path = ?;", -1, &stmt, nullptr) == SQLITE_OK) {
             sqlite3_bind_text(stmt, 1, QString::fromStdWString(normFolder).toUtf8().constData(), -1, SQLITE_TRANSIENT);
@@ -302,7 +302,7 @@ void MetaIndexService::processFolder(sqlite3* db, const std::wstring& normFolder
     if (!needUpdate) return;
 
     // 2. 读磁盘 JSON 并解析
-    QuarkMetaJson jsonReader(rawFolder);
+    RapidNotesJson jsonReader(rawFolder);
     if (!jsonReader.load()) return;
 
     // 3. 增量更新该文件夹的条目
@@ -432,4 +432,4 @@ QStringList MetaIndexService::searchGlobal(const QString& keyword, const QString
     return results;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

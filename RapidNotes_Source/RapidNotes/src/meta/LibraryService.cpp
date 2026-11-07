@@ -4,7 +4,7 @@
 #include "../ui/ToolTipOverlay.h"
 #include <QCursor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 LibraryService& LibraryService::instance() {
     static LibraryService s_instance;
@@ -111,4 +111,4 @@ QAction* LibraryService::buildLibraryAction(QMenu* parentMenu, const QStringList
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

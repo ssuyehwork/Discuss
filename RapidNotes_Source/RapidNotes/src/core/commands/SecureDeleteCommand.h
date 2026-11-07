@@ -7,7 +7,7 @@
 #include <QDir>
 #include <QFile>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class SecureDeleteCommand : public ActionCommand {
 public:
@@ -45,4 +45,4 @@ private:
     QStringList m_targetPaths;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

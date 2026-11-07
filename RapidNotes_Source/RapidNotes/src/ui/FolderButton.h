@@ -1,7 +1,7 @@
 #pragma once
 #include <QPushButton>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FolderButton : public QPushButton {
     Q_OBJECT
@@ -19,4 +19,4 @@ private:
     QString m_folderName;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

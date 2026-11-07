@@ -4,7 +4,7 @@
 #include <QPaintEvent>
 #include <QMouseEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class InlineHueSlider : public QWidget {
     Q_OBJECT
@@ -30,4 +30,4 @@ private:
     int m_h = 0;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

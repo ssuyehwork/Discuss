@@ -4,7 +4,7 @@
 #include <QDir>
 #include <QDateTime>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool MarkedFolderDao::initTable() {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
@@ -266,4 +266,4 @@ QStringList MarkedFolderDao::getActiveMarkedFolders() {
     return result;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

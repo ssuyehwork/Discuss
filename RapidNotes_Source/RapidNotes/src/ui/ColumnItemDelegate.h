@@ -3,7 +3,7 @@
 #include "RenameCapableDelegate.h"
 #include <QPainter>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 
 /**
@@ -19,4 +19,4 @@ public:
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

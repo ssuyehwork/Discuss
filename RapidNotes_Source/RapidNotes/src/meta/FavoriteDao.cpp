@@ -6,7 +6,7 @@
 #include <QDateTime>
 #include <QRandomGenerator>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool FavoriteDao::initTable() {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
@@ -374,4 +374,4 @@ bool FavoriteDao::updateSortOrders(const QList<QPair<int, int>>& orders) {
     return true;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

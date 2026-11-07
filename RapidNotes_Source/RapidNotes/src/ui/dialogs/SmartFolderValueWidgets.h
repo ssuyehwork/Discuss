@@ -12,7 +12,7 @@
 #include <QDate>
 #include "../../meta/SmartFolderDao.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TagPillContainer;
 
@@ -180,4 +180,4 @@ public:
     void setRuleValues(const SmartFolderRule& rule) override;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

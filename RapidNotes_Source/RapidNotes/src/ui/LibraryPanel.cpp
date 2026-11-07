@@ -16,7 +16,7 @@
 #include "../meta/MetaIndexService.h"
 #include "../meta/DatabaseManager.h"
 #include <QtConcurrent/QtConcurrent>
-#include "../meta/QuarkMetaJsonStore.h"
+#include "../meta/RapidNotesJsonStore.h"
 #include "../core/CoreEngine.h"
 #include "../core/PresetTagService.h"
 #include "../core/ModelContract.h"
@@ -38,7 +38,7 @@
 #include <QMouseEvent>
 #include <functional>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QRect LibraryItemDelegate::addBtnRect(const QRect& optionRect) {
     int size = 16;
@@ -1589,4 +1589,4 @@ void LibraryPanel::createAndEditCategory(int parentId) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

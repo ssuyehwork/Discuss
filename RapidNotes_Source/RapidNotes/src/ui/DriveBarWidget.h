@@ -4,7 +4,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 扩展与组件管理工具栏组件
@@ -39,4 +39,4 @@ private:
     QPushButton* m_btnSaveThumbnail = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

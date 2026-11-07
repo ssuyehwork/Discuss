@@ -6,7 +6,7 @@
 #include <QColor>
 #include <utility>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 工业级索引条目
@@ -34,4 +34,4 @@ struct IndexedEntry {
     }
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

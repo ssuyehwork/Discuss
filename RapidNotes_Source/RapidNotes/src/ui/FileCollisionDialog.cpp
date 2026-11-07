@@ -6,13 +6,13 @@
 #include <QFileInfo>
 #include <QDir>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FileCollisionDialog::FileCollisionDialog(const QString& firstFileName,
                                            const QString& targetDirName,
                                            int totalCount,
                                            QWidget* parent)
-    : FramelessDialog("QuarkMeta", parent) {
+    : FramelessDialog("RapidNotes", parent) {
     setFixedSize(520, 180);
     setupUi(firstFileName, targetDirName, totalCount);
 }
@@ -94,4 +94,4 @@ void FileCollisionDialog::setupUi(const QString& firstFileName, const QString& t
     mainLayout->addLayout(btmLayout);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -6,7 +6,7 @@
 #include <QSet>
 #include "../core/ItemRecord.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct DuplicateItemInfo {
     QString path;
@@ -35,4 +35,4 @@ public:
     static std::vector<DuplicateConflictGroup> detectDuplicates(const QStringList& newImportedPaths);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -54,7 +54,7 @@
 #include <QPointer>
 #include <QMouseEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentContextMenu::ContentContextMenu(ContentPanel* parentPanel)
     : QObject(parentPanel), m_panel(parentPanel) {
@@ -270,7 +270,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
                                               m_panel->currentPath().startsWith("smartfolder://"));
 
             if (m_panel && (m_panel->isRecursive() || isLibraryScene)) {
-                menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18), "在 QuarkMeta 中显示")->setData(ContentPanel::ActionShowInQuarkMeta);
+                menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18), "在 RapidNotes 中显示")->setData(ContentPanel::ActionShowInRapidNotes);
             }
 
             QString currentColorStr = currentIndex.data(ColorRole).toString();
@@ -680,7 +680,7 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             }
             break;
         }
-        case ContentPanel::ActionShowInQuarkMeta: {
+        case ContentPanel::ActionShowInRapidNotes: {
             QStringList selectedPaths = m_panel->getSelectedPaths();
             QString targetPath = !selectedPaths.isEmpty() ? selectedPaths.first() : path;
             if (!targetPath.isEmpty()) {
@@ -1241,4 +1241,4 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

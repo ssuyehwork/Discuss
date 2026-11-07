@@ -10,7 +10,7 @@
 #include <QMenu>
 #include <QEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 DriveBarWidget::DriveBarWidget(QWidget* parent)
     : QWidget(parent) {
@@ -165,4 +165,4 @@ void DriveBarWidget::setupExtensionMenu() {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

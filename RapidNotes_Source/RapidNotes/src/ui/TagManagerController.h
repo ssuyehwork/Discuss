@@ -2,7 +2,7 @@
 #include <QObject>
 #include <QString>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TagManagerController : public QObject {
     Q_OBJECT
@@ -19,4 +19,4 @@ signals:
     void tagGroupStateChanged();
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -3,11 +3,11 @@
 #include <QList>
 #include <tuple>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void DuplicateStatusGroup::populate(QVBoxLayout* contentLayout,
                                     FilterStateModel* filterModel,
-                                    const QuarkMeta::ScanStats& currentStats,
+                                    const RapidNotes::ScanStats& currentStats,
                                     const FilterState& currentState,
                                     AddFilterRowFunc addFilterRow) {
     if (!contentLayout || !filterModel || !addFilterRow) return;
@@ -34,4 +34,4 @@ void DuplicateStatusGroup::populate(QVBoxLayout* contentLayout,
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

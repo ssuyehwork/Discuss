@@ -1,7 +1,7 @@
 #include "FilterStateModel.h"
 #include "AppConfig.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FilterStateModel::FilterStateModel(QObject* parent) : QObject(parent) {
     m_state.colorPrecision = qBound(0, AppConfig::instance().getValue("Filter/ColorPrecision", 50).toInt(), 100);
@@ -24,4 +24,4 @@ void FilterStateModel::reset(bool force) {
     emit stateChanged(m_state);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

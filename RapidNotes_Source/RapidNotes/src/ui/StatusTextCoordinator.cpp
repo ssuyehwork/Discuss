@@ -2,7 +2,7 @@
 #include <QTextDocument>
 #include <QRegularExpression>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 constexpr const char* kHighlightColorHex = "#ff551c";
 
@@ -106,4 +106,4 @@ void StatusTextCoordinator::reevaluate() {
     emit finalTextChanged(formatNormalTextToHtml(m_normalText), true);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -23,7 +23,7 @@
 #include "components/InlineHueSlider.h"
 #include "../meta/SmartFolderDao.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class SearchHistoryPanel;
 class ThumbnailStatusGroup;
@@ -49,8 +49,8 @@ public:
     // 🚀【物理契约】：刚性锁定 230px 下限，杜绝被 QSplitter 挤压偷扣像素
     QSize minimumSizeHint() const override { return QSize(230, 100); }
 
-    void populateStats(const QuarkMeta::ScanStats& stats);
-    void populate(const QuarkMeta::ScanStats& stats) { populateStats(stats); }
+    void populateStats(const RapidNotes::ScanStats& stats);
+    void populate(const RapidNotes::ScanStats& stats) { populateStats(stats); }
     void clearStats();
     void populate(
         const QMap<int, int>&        ratingCounts,
@@ -102,7 +102,7 @@ private:
     ScanStatsEngine*  m_statsEngine = nullptr;
 
     FilterState m_filter;
-    QuarkMeta::ScanStats m_currentStats;
+    RapidNotes::ScanStats m_currentStats;
 
     QMap<int, int>      m_ratingCounts;
     QMap<QString, int>  m_colorCounts;
@@ -149,4 +149,4 @@ private slots:
     void onToggleAllGroupsClicked();
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

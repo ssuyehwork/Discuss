@@ -4,7 +4,7 @@
 #include "sqlite3.h"
 #include <QDateTime>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool DriveMetaDao::initTable() {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
@@ -114,4 +114,4 @@ bool DriveMetaDao::saveDriveMeta(const DriveMetaRecord& record) {
     return false;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

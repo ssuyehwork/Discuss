@@ -47,7 +47,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 
 // ==========================================
@@ -789,4 +789,4 @@ void QuickLookWindow::showContextMenu(const QPoint& globalPos) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

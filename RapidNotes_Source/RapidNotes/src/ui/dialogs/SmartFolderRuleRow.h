@@ -7,7 +7,7 @@
 #include "../../meta/SmartFolderDao.h"
 #include "SmartFolderValueWidgets.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class SmartFolderRuleRow : public QWidget {
     Q_OBJECT
@@ -40,4 +40,4 @@ private:
     SmartFolderRule m_currentRule;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

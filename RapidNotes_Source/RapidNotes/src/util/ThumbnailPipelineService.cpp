@@ -10,7 +10,7 @@
 #include <QMutexLocker>
 #include <QThread>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ThumbnailPipelineService& ThumbnailPipelineService::instance() {
     static ThumbnailPipelineService s_instance;
@@ -122,4 +122,4 @@ void ThumbnailPipelineService::loadBatchAsync(const QStringList& filePaths,
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

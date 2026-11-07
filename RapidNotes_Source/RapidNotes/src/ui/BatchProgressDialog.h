@@ -7,7 +7,7 @@
 #include <QString>
 #include <QDateTime>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 批量操作进度对话框
@@ -80,4 +80,4 @@ private:
     qint64 m_lastUpdateTime = 0;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -9,7 +9,7 @@
 #include <io.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 class SecureFileEraser {
 public:
     static bool shredFile(const QString& path) {

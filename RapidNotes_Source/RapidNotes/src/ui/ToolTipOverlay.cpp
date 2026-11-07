@@ -3,7 +3,7 @@
 
 #include <QTimer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ToolTipOverlay::ToolTipOverlay() : QWidget(nullptr) {
     setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | 
@@ -153,7 +153,7 @@ void ToolTipOverlay::showToast(const QString& text, int timeout, const QColor& b
             QList<QWidget*> allWidgets = activeWin->findChildren<QWidget*>();
             QWidget* fallbackPanel = nullptr;
             for (QWidget* w : allWidgets) {
-                if (w->inherits("QuarkMeta::ContentPanel") || w->inherits("ContentPanel") || w->objectName() == "EditorContainer") {
+                if (w->inherits("RapidNotes::ContentPanel") || w->inherits("ContentPanel") || w->objectName() == "EditorContainer") {
                     if (w->property("activePane").toString() == "true") {
                         anchor = w;
                         break;
@@ -365,4 +365,4 @@ void ToolTipOverlay::paintEvent(QPaintEvent*) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

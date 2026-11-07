@@ -48,7 +48,7 @@
 #include <QSignalBlocker>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QTreeView* ContentPanel::treeView() const {
     return static_cast<QTreeView*>(m_treeView);
@@ -218,7 +218,7 @@ void ContentPanel::initUi() {
 
     m_columnView = new ColumnViewWidget(this, this);
     connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<QuarkMeta::ItemRecord>& records) {
+    connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<RapidNotes::ItemRecord>& records) {
         if (m_statsWorker && !records.empty()) {
             m_statsWorker->processAsync(std::move(records), m_currentFilter.showHidden);
         }
@@ -561,11 +561,11 @@ void ContentPanel::hideDragOverlay() {
 
 void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
     if (event->mimeData()) {
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-panemove")) {
+        if (event->mimeData()->hasFormat("application/x-RapidNotes-panemove")) {
             event->acceptProposedAction();
             return;
         }
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        if (event->mimeData()->hasFormat("application/x-RapidNotes-taburl")) {
             if (paneCount() < kMaxPanes) {
                 event->acceptProposedAction();
                 return;
@@ -577,8 +577,8 @@ void ContentPanel::dragEnterEvent(QDragEnterEvent* event) {
 
 void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
     if (event->mimeData()) {
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-panemove")) {
-            quintptr ptrVal = event->mimeData()->data("application/x-quarkmeta-panemove").toULongLong();
+        if (event->mimeData()->hasFormat("application/x-RapidNotes-panemove")) {
+            quintptr ptrVal = event->mimeData()->data("application/x-RapidNotes-panemove").toULongLong();
             ContentPanel* srcPanel = reinterpret_cast<ContentPanel*>(ptrVal);
             QPoint globalPos = mapToGlobal(event->position().toPoint());
             ContentPanel* root = rootPane();
@@ -594,7 +594,7 @@ void ContentPanel::dragMoveEvent(QDragMoveEvent* event) {
             }
             return;
         }
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        if (event->mimeData()->hasFormat("application/x-RapidNotes-taburl")) {
             if (paneCount() < kMaxPanes) {
                 QPoint globalPos = mapToGlobal(event->position().toPoint());
                 ContentPanel* root = rootPane();
@@ -626,11 +626,11 @@ void ContentPanel::dragLeaveEvent(QDragLeaveEvent* event) {
 void ContentPanel::dropEvent(QDropEvent* event) {
     ContentPanel* root = rootPane();
     if (event->mimeData()) {
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-panemove")) {
+        if (event->mimeData()->hasFormat("application/x-RapidNotes-panemove")) {
             if (root && root->splitManager()) {
                 root->splitManager()->hideDragOverlay();
             }
-            quintptr ptrVal = event->mimeData()->data("application/x-quarkmeta-panemove").toULongLong();
+            quintptr ptrVal = event->mimeData()->data("application/x-RapidNotes-panemove").toULongLong();
             ContentPanel* srcPanel = reinterpret_cast<ContentPanel*>(ptrVal);
             QPoint globalPos = mapToGlobal(event->position().toPoint());
             if (root && root->splitManager()) {
@@ -644,12 +644,12 @@ void ContentPanel::dropEvent(QDropEvent* event) {
             }
             return;
         }
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-taburl")) {
+        if (event->mimeData()->hasFormat("application/x-RapidNotes-taburl")) {
             if (root && root->splitManager()) {
                 root->splitManager()->hideDragOverlay();
             }
             if (paneCount() < kMaxPanes) {
-                QString tabUrl = QString::fromUtf8(event->mimeData()->data("application/x-quarkmeta-taburl"));
+                QString tabUrl = QString::fromUtf8(event->mimeData()->data("application/x-RapidNotes-taburl"));
                 if (tabUrl.isEmpty()) {
                     tabUrl = event->mimeData()->text();
                 }
@@ -1436,4 +1436,4 @@ void ContentPanel::wheelEvent(QWheelEvent* event) {
     QFrame::wheelEvent(event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

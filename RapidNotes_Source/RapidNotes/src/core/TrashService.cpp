@@ -8,7 +8,7 @@
 #include "../ui/ToolTipOverlay.h"
 #include <QCursor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TrashService& TrashService::instance() {
     static TrashService s_instance;
@@ -22,7 +22,7 @@ bool TrashService::moveToTrash(const QStringList& paths, QWidget* parentWidget) 
 
     QStringList validPaths;
     for (const QString& p : paths) {
-        if (!p.isEmpty() && p != "computer://" && p != "trash://" && !p.contains(".QuarkMeta/disk_trash")) {
+        if (!p.isEmpty() && p != "computer://" && p != "trash://" && !p.contains(".RapidNotes/disk_trash")) {
             validPaths << p;
         }
     }
@@ -118,4 +118,4 @@ bool TrashService::emptyTrash(QWidget* parentWidget) {
     return PermanentDeleteService::instance().executeEmptyTrash(parentWidget);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

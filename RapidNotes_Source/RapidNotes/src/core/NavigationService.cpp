@@ -6,7 +6,7 @@
 #include <QDir>
 #include <QFileInfo>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 NavigationService& NavigationService::instance() {
     static NavigationService s_instance;
@@ -169,4 +169,4 @@ void NavigationService::refresh() {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

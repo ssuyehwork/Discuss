@@ -23,7 +23,7 @@
 #include <QApplication>
 #include <QtConcurrent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // =========================================================================
 // FileCompareModel 实现
@@ -257,7 +257,7 @@ void HashCompareDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 // =========================================================================
 
 FileCompareDialog::FileCompareDialog(const QStringList& filePaths, QWidget* parent)
-    : FramelessDialog("文件对比 - QuarkMeta", parent),
+    : FramelessDialog("文件对比 - RapidNotes", parent),
       m_filePaths(filePaths),
       m_cancelToken(std::make_shared<std::atomic<bool>>(false)) {
 
@@ -480,4 +480,4 @@ bool FileCompareDialog::eventFilter(QObject* watched, QEvent* event) {
     return FramelessDialog::eventFilter(watched, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

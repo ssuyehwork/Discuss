@@ -38,9 +38,9 @@
 #include <QComboBox>
 #include <QButtonGroup>
 
-using namespace QuarkMeta::Style;
+using namespace RapidNotes::Style;
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 
 QMap<QString, QColor> FilterPanel::s_colorMap() {
@@ -283,7 +283,7 @@ bool FilterPanel::eventFilter(QObject* watched, QEvent* event) {
 }
 
 void FilterPanel::clearStats() {
-    m_currentStats = QuarkMeta::ScanStats();
+    m_currentStats = RapidNotes::ScanStats();
     m_ratingCounts.clear();
     m_colorCounts.clear();
     m_typeCounts.clear();
@@ -293,7 +293,7 @@ void FilterPanel::clearStats() {
     syncUIFromFilterState();
 }
 
-void FilterPanel::populateStats(const QuarkMeta::ScanStats& stats) {
+void FilterPanel::populateStats(const RapidNotes::ScanStats& stats) {
     if (m_statsEngine) {
         m_statsEngine->updateStats(stats);
     }
@@ -1063,4 +1063,4 @@ void FilterPanel::selectColor(const QColor& color) {
     rebuildGroups();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

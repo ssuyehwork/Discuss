@@ -6,7 +6,7 @@
 #include <QDateTime>
 #include <QRandomGenerator>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool LibraryDao::initTable() {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
@@ -537,4 +537,4 @@ QStringList LibraryDao::getCategoryPaths(int id, bool verifyExistence) {
     return validPaths;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

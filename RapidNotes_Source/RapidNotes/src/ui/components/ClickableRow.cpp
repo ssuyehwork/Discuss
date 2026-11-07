@@ -3,7 +3,7 @@
 #include "components/StyledCheckBox.h"
 #include <QMouseEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ClickableRow::ClickableRow(StyledCheckBox* cb, QWidget* parent)
     : QWidget(parent), m_cb(cb) {
@@ -35,4 +35,4 @@ void ClickableRow::leaveEvent(QEvent* e) {
     QWidget::leaveEvent(e);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -6,7 +6,7 @@
 #include <QDir>
 #include <QFile>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TransferToMarkedCommand::TransferToMarkedCommand(
     const QStringList& sourcePaths,
@@ -188,4 +188,4 @@ void TransferToMarkedCommand::redo() {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

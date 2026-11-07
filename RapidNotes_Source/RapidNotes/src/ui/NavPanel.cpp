@@ -38,7 +38,7 @@
 #include <QtConcurrent>
 #include <QApplication>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 构造函数，设置面板属性
@@ -512,4 +512,4 @@ void NavPanel::fetchChildDirs(QStandardItem* parent) {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

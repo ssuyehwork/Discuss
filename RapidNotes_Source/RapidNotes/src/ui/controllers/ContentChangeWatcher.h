@@ -8,7 +8,7 @@
 #include <QTimer>
 #include <atomic>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 
@@ -46,6 +46,6 @@ private:
     int m_suppressCount = 0;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
 #endif // CONTENTCHANGEWATCHER_H

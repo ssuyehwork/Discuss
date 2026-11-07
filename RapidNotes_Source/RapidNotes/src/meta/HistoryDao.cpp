@@ -4,7 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool HistoryDao::initTable() {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
@@ -164,4 +164,4 @@ bool HistoryDao::updateHistoryPaths(const QStringList& oldPaths, const QStringLi
     return true;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

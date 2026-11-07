@@ -4,7 +4,7 @@
 #include "BasicCommands.h"
 #include "commands/BatchRenameCommand.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/QuarkMetaJson.h"
+#include "../meta/RapidNotesJson.h"
 #include "../meta/FileOperationHelper.h"
 #include "../util/DiskMediaExtractor.h"
 #include "../ui/UndoToastOverlay.h"
@@ -15,7 +15,7 @@
 #include <QtConcurrent>
 #include <QCoreApplication>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 BatchRenameService& BatchRenameService::instance() {
     static BatchRenameService s_instance;
@@ -45,7 +45,7 @@ QString BatchRenameService::processOne(const QString& path, int index, const std
                 newName += info.baseName();
                 break;
             case RenameComponentType::Metadata:
-                newName += "[QuarkMeta]";
+                newName += "[RapidNotes]";
                 break;
             case RenameComponentType::ParentFolderName:
                 newName += info.dir().dirName();
@@ -114,7 +114,7 @@ void BatchRenameService::executeAsync(const std::vector<std::wstring>& originalP
                 successCount++;
 
                 bool isMoveOperation = (mode != DiskOperationMode::Copy);
-                QuarkMetaJson::roamItemMetadata(oldPath, newPath, isMoveOperation);
+                RapidNotesJson::roamItemMetadata(oldPath, newPath, isMoveOperation);
                 DiskMediaExtractor::roamThumbnailCache(oldPath, newPath, isMoveOperation);
 
                 QString oldThumbHashPath = DiskMediaExtractor::getDiskThumbCachePath(oldPath);
@@ -167,4 +167,4 @@ void BatchRenameService::executeAsync(const std::vector<std::wstring>& originalP
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

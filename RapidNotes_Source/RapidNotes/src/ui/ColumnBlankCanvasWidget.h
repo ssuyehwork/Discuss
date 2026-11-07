@@ -7,7 +7,7 @@
 #include <QMouseEvent>
 #include <QPaintEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ColumnViewWidget;
 class ContentPanel;
@@ -34,4 +34,4 @@ private:
     bool m_isDragHover = false;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -11,7 +11,7 @@
 #include <QItemSelectionModel>
 #include <QFile>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FramelessFileDialog::FramelessFileDialog(const QString& title, const QString& dir, 
                                          FileMode mode, const QString& filter, QWidget* parent)
@@ -221,4 +221,4 @@ QString FramelessFileDialog::getSaveFileName(QWidget* parent, const QString& cap
     return "";
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

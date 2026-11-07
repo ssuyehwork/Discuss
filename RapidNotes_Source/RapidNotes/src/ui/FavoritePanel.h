@@ -6,7 +6,7 @@
 #include <QStyledItemDelegate>
 #include "DropTreeView.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FavoriteItemDelegate : public QStyledItemDelegate {
     Q_OBJECT
@@ -78,4 +78,4 @@ private:
     int m_pendingEditNodeId = 0;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -9,7 +9,7 @@
 #include <functional>
 #include "FilterStateModel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FileTypeGroup {
 public:
@@ -27,4 +27,4 @@ public:
                                SaveFilterHistoryFunc saveHistory);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

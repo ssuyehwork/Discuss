@@ -11,7 +11,7 @@
 #include <QStackedWidget>
 #include "HistoryPanel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 导航面板（面板一）
@@ -64,4 +64,4 @@ private:
     HistoryPanel* m_historyPanel = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

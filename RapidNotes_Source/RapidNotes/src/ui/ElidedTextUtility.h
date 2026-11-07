@@ -3,7 +3,7 @@
 #include <QString>
 #include <QFontMetrics>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ElidedTextUtility {
 public:
@@ -27,4 +27,4 @@ public:
     }
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

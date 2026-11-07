@@ -20,7 +20,7 @@
 #include <QPointer>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentDataLoader::ContentDataLoader(ContentPanel* panel)
     : QObject(panel), m_panel(panel) {}
@@ -278,7 +278,7 @@ void ContentDataLoader::loadLibraryPaths(const QStringList& paths, int reqId) {
     (void)QtConcurrent::run([weakPanel, paths, reqId]() {
         if (!weakPanel) return;
 
-        // 纯数据库装配 ItemRecord，彻底不读任何 .QuarkMeta.json
+        // 纯数据库装配 ItemRecord，彻底不读任何 .RapidNotes.json
         std::vector<ItemRecord> dbItems = LibraryItemDao::getItemsByPaths(paths);
 
         // 收集数据库中已被同步的路径
@@ -355,4 +355,4 @@ void ContentDataLoader::appendPaths(const QStringList& paths, int reqId) {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

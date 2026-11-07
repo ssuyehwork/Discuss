@@ -6,7 +6,7 @@
 #include <QFileInfo>
 #include <QDir>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class MoveCommand : public ActionCommand {
 public:
@@ -51,4 +51,4 @@ private:
     QString m_newDir;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

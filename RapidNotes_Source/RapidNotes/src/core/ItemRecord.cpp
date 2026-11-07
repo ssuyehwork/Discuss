@@ -6,7 +6,7 @@
 #include <mutex>
 #include <unordered_map>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void ItemRecord::fromMetadata(ItemRecord& r, const RuntimeMeta& meta) {
     r.rating = meta.rating;
@@ -81,4 +81,4 @@ ItemRecord ItemRecord::create(const QString& path, const RuntimeMeta* providedMe
     return r;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

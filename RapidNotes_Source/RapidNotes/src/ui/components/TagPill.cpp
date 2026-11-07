@@ -4,7 +4,7 @@
 #include <QPainter>
 #include <QFontMetrics>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TagPill::TagPill(const QString& text, QWidget* parent) : QWidget(parent), m_text(text) {
     setFixedHeight(22);
@@ -52,4 +52,4 @@ void TagPill::paintEvent(QPaintEvent*) {
     painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 4, 4);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -4,7 +4,7 @@
 #include <QStringList>
 #include <QMenu>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class MarkedFolderService : public QObject {
     Q_OBJECT
@@ -44,4 +44,4 @@ private:
     Q_DISABLE_COPY_MOVE(MarkedFolderService)
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

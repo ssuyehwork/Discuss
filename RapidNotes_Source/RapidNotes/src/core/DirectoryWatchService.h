@@ -16,7 +16,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct WatchKey {
     QString normPath;
@@ -118,6 +118,6 @@ private:
     std::atomic<bool> m_isStoppingAll{false};
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
 #endif // DIRECTORYWATCHSERVICE_H

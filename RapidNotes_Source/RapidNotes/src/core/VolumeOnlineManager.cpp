@@ -2,7 +2,7 @@
 #include "DeviceWatcher.h"
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 VolumeOnlineManager& VolumeOnlineManager::instance() {
     static VolumeOnlineManager inst;
@@ -69,7 +69,7 @@ QSet<QString> VolumeOnlineManager::getOnlineDrives() const {
 QString VolumeOnlineManager::extractDriveLetter(const QString& str) {
     if (str.isEmpty()) return QString();
 
-    // 针对 QuarkMeta.library_g 或 library_g 形态
+    // 针对 RapidNotes.library_g 或 library_g 形态
     if (str.contains("library_", Qt::CaseInsensitive)) {
         int idx = str.indexOf("library_", 0, Qt::CaseInsensitive);
         QString sub = str.mid(idx + 8);
@@ -134,4 +134,4 @@ void VolumeOnlineManager::checkVolumeState() {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

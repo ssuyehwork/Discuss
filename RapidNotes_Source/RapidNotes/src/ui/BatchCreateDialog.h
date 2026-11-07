@@ -11,7 +11,7 @@
 #include <QScrollArea>
 #include <QTimer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class BatchCreateDialog : public FramelessDialog {
     Q_OBJECT
@@ -49,4 +49,4 @@ private:
     QTimer* m_autoSaveTimer = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

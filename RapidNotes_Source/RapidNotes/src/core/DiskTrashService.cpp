@@ -1,6 +1,6 @@
 #include "DiskTrashService.h"
 #include "../meta/DatabaseManager.h"
-#include "../meta/QuarkMetaJson.h"
+#include "../meta/RapidNotesJson.h"
 #include <QFileInfo>
 #include <QDateTime>
 #include <QDir>
@@ -13,7 +13,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool DiskTrashService::moveToDiskTrash(const QStringList& paths) {
     if (paths.isEmpty()) return true;
@@ -22,11 +22,11 @@ bool DiskTrashService::moveToDiskTrash(const QStringList& paths) {
     for (const QString& p : paths) {
         QFileInfo info(p);
         QString drive = info.absolutePath().left(3); // e.g. "C:/"
-        QString trashDir = QDir::toNativeSeparators(drive + ".QuarkMeta/disk_trash");
+        QString trashDir = QDir::toNativeSeparators(drive + ".RapidNotes/disk_trash");
 
 #ifdef Q_OS_WIN
         QDir().mkpath(trashDir);
-        SetFileAttributesW(QDir::toNativeSeparators(drive + ".QuarkMeta").toStdWString().c_str(), FILE_ATTRIBUTE_HIDDEN);
+        SetFileAttributesW(QDir::toNativeSeparators(drive + ".RapidNotes").toStdWString().c_str(), FILE_ATTRIBUTE_HIDDEN);
 #else
         QDir().mkpath(trashDir);
 #endif
@@ -42,8 +42,8 @@ bool DiskTrashService::moveToDiskTrash(const QStringList& paths) {
         QString dest = QDir::toNativeSeparators(itemContainerDir + "/" + info.fileName());
 
         if (QFile::rename(p, dest)) {
-            // 物理移动成功后，漫游元数据至回收站专属 .QuarkMeta.json (同时物理擦除原目录中的孤儿元数据)
-            QuarkMetaJson::roamItemMetadata(p, dest, true);
+            // 物理移动成功后，漫游元数据至回收站专属 .RapidNotes.json (同时物理擦除原目录中的孤儿元数据)
+            RapidNotesJson::roamItemMetadata(p, dest, true);
 
             sqlite3* db = DatabaseManager::instance().getGlobalDb();
             if (!db) {
@@ -158,7 +158,7 @@ bool DiskTrashService::restoreFromDiskTrash(int id, const QString& trashPath) {
 
     if (QFile::rename(actualTrashPath, targetPath)) {
         // 从回收站反向漫游元数据回真实目标物理目录
-        QuarkMetaJson::roamItemMetadata(actualTrashPath, targetPath, true);
+        RapidNotesJson::roamItemMetadata(actualTrashPath, targetPath, true);
 
         QDir(QFileInfo(actualTrashPath).absolutePath()).removeRecursively();
 
@@ -200,7 +200,7 @@ bool DiskTrashService::restoreToDirectory(const QString& trashPath, const QStrin
 
     if (moved) {
         // 还原至指定目录时反向漫游元数据
-        QuarkMetaJson::roamItemMetadata(trashPath, dest, true);
+        RapidNotesJson::roamItemMetadata(trashPath, dest, true);
 
         QDir(QFileInfo(trashPath).absolutePath()).removeRecursively();
 
@@ -354,4 +354,4 @@ bool DiskTrashService::emptyDiskTrash() {
     return allOk;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

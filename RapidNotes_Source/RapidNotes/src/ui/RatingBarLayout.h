@@ -2,7 +2,7 @@
  
 #include <QRect> 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 enum class RatingBarMode { 
     GridCard,   // 网格卡片模式 (紧凑尺寸，随 zoom 动态适配 14px/12px) 
@@ -43,4 +43,4 @@ public:
                                       int ratingH = 24); 
 }; 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

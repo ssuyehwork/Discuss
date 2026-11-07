@@ -3,7 +3,7 @@
 #include <QStyledItemDelegate> 
 #include "FileNameLineEdit.h" 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 /** 
  * @brief Base Delegate enforcing unified inline rename logic across all view delegates. 
@@ -18,4 +18,4 @@ public:
     void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override final; 
 }; 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

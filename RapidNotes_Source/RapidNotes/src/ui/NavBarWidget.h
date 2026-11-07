@@ -5,7 +5,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class AddressBar;
 class SearchController;
@@ -50,4 +50,4 @@ private:
     bool m_isTwoRowMode = false;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

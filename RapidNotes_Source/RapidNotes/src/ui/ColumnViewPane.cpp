@@ -17,7 +17,7 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ColumnViewPane::ColumnViewPane(const QString& path, ContentPanel* contentPanel, QWidget* parent)
     : QWidget(parent), m_path(path), m_contentPanel(contentPanel) 
@@ -396,4 +396,4 @@ void ColumnViewPane::loadDirectory() {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -1,7 +1,7 @@
 #include "LibrarySyncService.h"
 #include "LibraryDao.h"
 #include "LibraryItemDao.h"
-#include "QuarkMetaJsonStore.h"
+#include "RapidNotesJsonStore.h"
 #include "ItemMetaMapper.h"
 #include "MetadataManager.h"
 #include <QtConcurrent/QtConcurrent>
@@ -9,7 +9,7 @@
 #include <QTimer>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 LibrarySyncService& LibrarySyncService::instance() {
     static LibrarySyncService s_instance;
@@ -25,7 +25,7 @@ LibrarySyncService::LibrarySyncService(QObject* parent) : QObject(parent) {
     m_debounceTimer->setInterval(200); // 200ms 防抖
     connect(m_debounceTimer, &QTimer::timeout, this, &LibrarySyncService::flushDebouncedQueue);
 
-    QuarkMetaJsonStore::instance().addChangeListener([this](const QuarkMetaJsonStore::ChangeEvent& ev) {
+    RapidNotesJsonStore::instance().addChangeListener([this](const RapidNotesJsonStore::ChangeEvent& ev) {
         handleJsonChangeEvent(ev);
     });
 
@@ -34,11 +34,11 @@ LibrarySyncService::LibrarySyncService(QObject* parent) : QObject(parent) {
     });
 }
 
-void LibrarySyncService::handleJsonChangeEvent(const QuarkMetaJsonStore::ChangeEvent& event) {
-    if (event.type == QuarkMetaJsonStore::ChangeType::ItemChanged) {
+void LibrarySyncService::handleJsonChangeEvent(const RapidNotesJsonStore::ChangeEvent& event) {
+    if (event.type == RapidNotesJsonStore::ChangeType::ItemChanged) {
         if (!isLibraryPath(event.path)) return; // 拦截阻断非库成员！
         scheduleDebouncedSync(event.path);
-    } else if (event.type == QuarkMetaJsonStore::ChangeType::ItemRenamed) {
+    } else if (event.type == RapidNotesJsonStore::ChangeType::ItemRenamed) {
         if (!isLibraryPath(event.path)) return;
         (void)QtConcurrent::run(&m_workPool, [this, oldP = event.path, newP = event.newPath]() {
             LibraryDao::updatePathPrefix(oldP, newP);
@@ -50,14 +50,14 @@ void LibrarySyncService::handleJsonChangeEvent(const QuarkMetaJsonStore::ChangeE
             }
             QMetaObject::invokeMethod(this, &LibrarySyncService::libraryItemsSynced, Qt::QueuedConnection);
         });
-    } else if (event.type == QuarkMetaJsonStore::ChangeType::FolderMigrated) {
+    } else if (event.type == RapidNotesJsonStore::ChangeType::FolderMigrated) {
         (void)QtConcurrent::run(&m_workPool, [this, oldF = event.path, newF = event.newPath]() {
             LibraryDao::updatePathPrefix(oldF, newF);
             LibraryItemDao::updatePathPrefix(oldF, newF);
             loadLibraryPathSet(); // 彻底重新从数据库刷新内存成员集合
             QMetaObject::invokeMethod(this, &LibrarySyncService::libraryItemsSynced, Qt::QueuedConnection);
         });
-    } else if (event.type == QuarkMetaJsonStore::ChangeType::ItemRemoved) {
+    } else if (event.type == RapidNotesJsonStore::ChangeType::ItemRemoved) {
         if (!isLibraryPath(event.path)) return;
         (void)QtConcurrent::run(&m_workPool, [this, eventP = event.path]() {
             LibraryItemDao::markSyncStateByPath(eventP, 2); // 标记 sync_state = 2 (缺失)
@@ -134,12 +134,12 @@ void LibrarySyncService::syncPaths(const QStringList& paths) {
             for (const QString& path : batch) {
                 ItemRecord rec = ItemRecord::create(path);
                 ItemMeta meta;
-                if (QuarkMetaJsonStore::instance().readItemMeta(path.toStdWString(), meta)) {
+                if (RapidNotesJsonStore::instance().readItemMeta(path.toStdWString(), meta)) {
                     ItemMetaMapper::apply(meta, rec);
                 }
                 QFileInfo info(path);
                 std::wstring folderPath = info.isDir() ? path.toStdWString() : info.absolutePath().toStdWString();
-                rec.metaFileId = QuarkMetaJsonStore::instance().getMetaFileId(folderPath);
+                rec.metaFileId = RapidNotesJsonStore::instance().getMetaFileId(folderPath);
                 records.push_back(rec);
             }
             if (LibraryItemDao::upsertItems(records)) {
@@ -186,12 +186,12 @@ void LibrarySyncService::processSyncBatch(const QStringList& batch) {
     for (const QString& path : batch) {
         ItemRecord rec = ItemRecord::create(path);
         ItemMeta meta;
-        if (QuarkMetaJsonStore::instance().readItemMeta(path.toStdWString(), meta)) {
+        if (RapidNotesJsonStore::instance().readItemMeta(path.toStdWString(), meta)) {
             ItemMetaMapper::apply(meta, rec);
         }
         QFileInfo info(path);
         std::wstring folderPath = info.isDir() ? path.toStdWString() : info.absolutePath().toStdWString();
-        rec.metaFileId = QuarkMetaJsonStore::instance().getMetaFileId(folderPath);
+        rec.metaFileId = RapidNotesJsonStore::instance().getMetaFileId(folderPath);
         records.push_back(rec);
     }
     LibraryItemDao::upsertItems(records);
@@ -235,4 +235,4 @@ void LibrarySyncService::triggerStartupReconciliation() {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -5,7 +5,7 @@
 #include <QMap>
 #include <QVector>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 标记目的地分发迁移复合撤销命令
@@ -33,4 +33,4 @@ private:
     bool m_isFirstRun = true;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

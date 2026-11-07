@@ -38,7 +38,7 @@
 #include <QPointer>
 #include <QTimer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QSize FavoriteItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
     QSize sz = QStyledItemDelegate::sizeHint(option, index);
@@ -1154,4 +1154,4 @@ void FavoritePanel::sortItemsByName(bool ascending) {
     m_orderDirty = false;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

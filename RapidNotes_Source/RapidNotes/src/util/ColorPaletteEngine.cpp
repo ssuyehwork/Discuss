@@ -11,7 +11,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool ColorPaletteEngine::isGraphicsFile(const QString& ext) {
     static const QSet<QString> graphicsExts = {
@@ -513,4 +513,4 @@ float ColorPaletteEngine::matchedAreaRatio(const QColor& target, const QVector<Q
     return 0.0f;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

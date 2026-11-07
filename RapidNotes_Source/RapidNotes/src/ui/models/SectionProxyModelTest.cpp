@@ -6,7 +6,7 @@
 #include <QDebug>
 #include <cassert>
 
-using namespace QuarkMeta;
+using namespace RapidNotes;
 
 class TestFilterProxyModel : public QSortFilterProxyModel {
 public:

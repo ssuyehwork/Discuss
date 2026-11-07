@@ -7,7 +7,7 @@
 #include <utility>
 #include <string>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // 前置声明 RuntimeMeta，避免循环依赖
 struct RuntimeMeta;
@@ -25,7 +25,7 @@ struct ItemRecord {
     bool isDiskTrash = false;
     int diskTrashId = 0;
     QString fileId;
-    QString metaFileId; // .QuarkMeta.json 自身 File_ID 凭据
+    QString metaFileId; // .RapidNotes.json 自身 File_ID 凭据
     QString originalPath;
 
     // 2026-06-xx 物理对标：注入核心元数据，杜绝 UI 渲染时的同步 I/O
@@ -68,4 +68,4 @@ struct ItemRecord {
     static void fromMetadata(ItemRecord& r, const RuntimeMeta& meta);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -5,7 +5,7 @@
 #include <QLabel>
 #include <QPushButton>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FramelessConfirmDialog::FramelessConfirmDialog(const QString& title, const QString& message, 
                                                ButtonType type, const QString& iconName, 
@@ -62,4 +62,4 @@ FramelessConfirmDialog::FramelessConfirmDialog(const QString& title, const QStri
     layout->addLayout(btnLayout);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

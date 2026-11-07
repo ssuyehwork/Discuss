@@ -1,6 +1,6 @@
 #include "DiskMediaExtractor.h" 
 #include "../ui/ImageDecoderFacade.h" 
-#include "../meta/QuarkMetaJsonStore.h" 
+#include "../meta/RapidNotesJsonStore.h" 
 #include "../meta/MetadataDefs.h" 
 #include "../core/AppConfig.h"
 #include <QFileInfo> 
@@ -15,7 +15,7 @@
 #include <windows.h> 
 #endif 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 std::mutex DiskMediaExtractor::s_qtGuiMutex; 
 std::mutex DiskMediaExtractor::s_jsonSaveMutex; 
@@ -107,7 +107,7 @@ bool DiskMediaExtractor::isMarkedFailed(const QString& folderPath, const QString
     } 
  
     // 该文件夹首次查询：统一通过 Store 内存一致性接口读取
-    auto itemsMap = QuarkMetaJsonStore::instance().readFolderMeta(folderPath.toStdWString());
+    auto itemsMap = RapidNotesJsonStore::instance().readFolderMeta(folderPath.toStdWString());
     QSet<QString> persisted; 
     for (const auto& kv : itemsMap) { 
         if (kv.second.thumbStatus == 1) { 
@@ -171,7 +171,7 @@ void DiskMediaExtractor::flushPendingUpdates() {
 
         // 🚀【复用 Step 1 批量接口】：按目录单次加锁单次标脏，消除逐文件锁竞争
         if (!batchUpdaters.empty()) {
-            QuarkMetaJsonStore::instance().updateFolderItemsBatch(folder.toStdWString(), batchUpdaters);
+            RapidNotesJsonStore::instance().updateFolderItemsBatch(folder.toStdWString(), batchUpdaters);
         }
     } 
 } 
@@ -364,13 +364,13 @@ QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, in
  
     saveDiskThumbnail(filePath, dec.thumbnail512); 
  
-    // 重置失败标记 thumb_status，并同步分辨率尺寸到 .QuarkMeta.json 
+    // 重置失败标记 thumb_status，并同步分辨率尺寸到 .RapidNotes.json 
     QFileInfo fi(filePath); 
     const QString parentDir = QDir::toNativeSeparators(fi.absolutePath()); 
     const QString fileName = fi.fileName(); 
     const std::wstring wFileName = fileName.toStdWString(); 
  
-    QuarkMetaJsonStore::instance().updateItemMeta(filePath.toStdWString(), [dec](ItemMeta& fileMeta) { 
+    RapidNotesJsonStore::instance().updateItemMeta(filePath.toStdWString(), [dec](ItemMeta& fileMeta) { 
         fileMeta.thumbStatus = 0; 
         if (dec.originalSize.isValid() && dec.originalSize.width() > 0) { 
             fileMeta.width = dec.originalSize.width(); 
@@ -393,4 +393,4 @@ QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, in
     return dec.thumbnail512; 
 } 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

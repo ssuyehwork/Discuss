@@ -1,6 +1,6 @@
 #include "ItemMetaMapper.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void ItemMetaMapper::apply(const ItemMeta& meta, ItemRecord& record) {
     if (!meta.fileId.empty()) {
@@ -29,4 +29,4 @@ void ItemMetaMapper::apply(const ItemMeta& meta, ItemRecord& record) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

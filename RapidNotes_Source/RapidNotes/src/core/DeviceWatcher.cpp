@@ -9,7 +9,7 @@
 #include <dbt.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 DeviceWatcher& DeviceWatcher::instance() {
     static DeviceWatcher s_instance;
@@ -74,4 +74,4 @@ bool DeviceWatcher::nativeEventFilter(const QByteArray& eventType, void* message
     return false;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

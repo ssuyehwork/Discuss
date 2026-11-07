@@ -4,7 +4,7 @@
 #include <QDateTime>
 #include <mutex>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TagLexiconService& TagLexiconService::instance() {
     static TagLexiconService s_instance;
@@ -454,4 +454,4 @@ bool TagLexiconService::removeTagFromGroup(const QString& tagName, int groupId) 
     return ok;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

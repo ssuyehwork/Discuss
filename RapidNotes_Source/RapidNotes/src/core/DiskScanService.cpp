@@ -4,7 +4,7 @@
 #include <QFileInfo> 
 #include <QSet>
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path, 
                                                         bool recursive, 
@@ -32,7 +32,7 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
  
             QString absPath = info.absoluteFilePath(); 
              
-            // 🚨 统一调用文件过滤服务（归一化处理所有辅助文件、.arc、.QuarkMeta） 
+            // 🚨 统一调用文件过滤服务（归一化处理所有辅助文件、.arc、.RapidNotes） 
             if (FileFilterService::isAuxiliaryFile(absPath)) continue; 
  
             ItemRecord itemRec = ItemRecord::create(absPath, nullptr); 
@@ -56,4 +56,4 @@ std::vector<ItemRecord> DiskScanService::scanDirectory(const QString& path,
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

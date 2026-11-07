@@ -9,7 +9,7 @@
 #include <QItemSelectionModel>
 #include <QApplication>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 DragDropEventFilter::DragDropEventFilter(QAbstractItemView* targetView, QObject* parent)
     : QObject(parent ? parent : targetView), m_targetView(targetView) {
@@ -42,7 +42,7 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
 
     if (event->type() == QEvent::DragEnter) {
         auto* dragEvent = static_cast<QDragEnterEvent*>(event);
-        if (dragEvent->mimeData() && dragEvent->mimeData()->hasFormat("application/x-quarkmeta-tree-nodes")) {
+        if (dragEvent->mimeData() && dragEvent->mimeData()->hasFormat("application/x-RapidNotes-tree-nodes")) {
             return false;
         }
         if (ViewDragDropHelper::handleDragEnter(m_targetView, dragEvent)) {
@@ -50,7 +50,7 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
         }
     } else if (event->type() == QEvent::DragMove) {
         auto* moveEvent = static_cast<QDragMoveEvent*>(event);
-        if (moveEvent->mimeData() && moveEvent->mimeData()->hasFormat("application/x-quarkmeta-tree-nodes")) {
+        if (moveEvent->mimeData() && moveEvent->mimeData()->hasFormat("application/x-RapidNotes-tree-nodes")) {
             return false;
         }
         QModelIndex hoverIdx = m_targetView->indexAt(moveEvent->position().toPoint());
@@ -79,7 +79,7 @@ bool DragDropEventFilter::eventFilter(QObject* watched, QEvent* event) {
     } else if (event->type() == QEvent::Drop) {
         clearDropHighlight();
         auto* dropEv = static_cast<QDropEvent*>(event);
-        if (dropEv->mimeData() && dropEv->mimeData()->hasFormat("application/x-quarkmeta-tree-nodes")) {
+        if (dropEv->mimeData() && dropEv->mimeData()->hasFormat("application/x-RapidNotes-tree-nodes")) {
             return false;
         }
         QStringList paths;
@@ -210,4 +210,4 @@ void ViewDragDropHelper::executeStartDrag(QAbstractItemView* view, Qt::DropActio
     s_lastDragSourceView = nullptr;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

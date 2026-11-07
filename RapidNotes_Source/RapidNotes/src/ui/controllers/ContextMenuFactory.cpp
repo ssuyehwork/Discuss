@@ -19,7 +19,7 @@
 #include <QUrl>
 #include <QFileDialog>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool ContextMenuFactory::togglePinState(const QStringList& paths, bool pin) {
     if (paths.isEmpty()) return false;
@@ -366,4 +366,4 @@ QAction* ContextMenuFactory::buildPinToggleAction(QMenu* menu, bool isPinned, st
     return action;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

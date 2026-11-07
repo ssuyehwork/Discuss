@@ -10,7 +10,7 @@
 #include "SearchHistoryPanel.h"
 #include <QLineEdit>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FavoritePanel;
 class LibraryPanel;
@@ -48,4 +48,4 @@ private:
     SearchHistoryPanel* m_historyPanel = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

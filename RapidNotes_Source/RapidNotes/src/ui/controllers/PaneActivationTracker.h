@@ -2,7 +2,7 @@
 
 #include <QObject>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 
@@ -24,4 +24,4 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -5,7 +5,7 @@
 #include <QAction>
 #include "LibraryDao.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class LibraryService : public QObject {
     Q_OBJECT
@@ -32,4 +32,4 @@ private:
     ~LibraryService() override = default;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

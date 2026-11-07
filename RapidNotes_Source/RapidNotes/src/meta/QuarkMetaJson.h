@@ -11,13 +11,13 @@
 #include <QJsonArray>
 #include "MetadataDefs.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
- * @brief 处理 .QuarkMeta.json 隐藏配置文件的读写管理类
+ * @brief 处理 .RapidNotes.json 隐藏配置文件的读写管理类
  * 2026-08-xx 双轨架构重构：
  * 1. 全面采用纯粹、高效、结构化的 JSON 规范。
- * 2. 磁盘模式下采用标准的 .QuarkMeta.json 隐藏文件直接保存在物理目录中。
+ * 2. 磁盘模式下采用标准的 .RapidNotes.json 隐藏文件直接保存在物理目录中。
  */
 struct CaseInsensitiveWStringLess {
     bool operator()(const std::wstring& a, const std::wstring& b) const {
@@ -29,7 +29,7 @@ struct CaseInsensitiveWStringLess {
     }
 };
 
-class QuarkMetaJson {
+class RapidNotesJson {
 public:
     using ItemMap = std::map<std::wstring, ItemMeta, CaseInsensitiveWStringLess>;
 
@@ -70,7 +70,7 @@ public:
     /**
      * @param folderPath 目标物理文件夹的完整路径
      */
-    explicit QuarkMetaJson(const std::wstring& folderPath);
+    explicit RapidNotesJson(const std::wstring& folderPath);
 
     /**
      * @brief 从对应位置加载 JSON 配置文件
@@ -121,7 +121,7 @@ public:
 
 private:
     std::wstring m_folderPath;
-    std::wstring m_filePath; // 映射到物理文件夹中的 .QuarkMeta.json 路径
+    std::wstring m_filePath; // 映射到物理文件夹中的 .RapidNotes.json 路径
     
     FolderMeta m_folder;
     ItemMap m_items;
@@ -136,4 +136,4 @@ private:
     static std::wstring toStdWString(const QString& qs) { return qs.toStdWString(); }
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

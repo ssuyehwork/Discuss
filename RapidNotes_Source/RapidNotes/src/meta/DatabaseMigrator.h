@@ -2,7 +2,7 @@
 #include "sqlite3.h"
 #include "../util/VolumePathResolver.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class DatabaseMigrator {
 public:
@@ -19,4 +19,4 @@ public:
     }
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

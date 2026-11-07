@@ -24,7 +24,7 @@
 #include <QApplication>
 #include <QClipboard>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 AddressBar::AddressBar(QWidget* parent) : QWidget(parent) {
     QHBoxLayout* layout = new QHBoxLayout(this);
@@ -297,4 +297,4 @@ bool AddressBar::eventFilter(QObject* obj, QEvent* event) {
     return QWidget::eventFilter(obj, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

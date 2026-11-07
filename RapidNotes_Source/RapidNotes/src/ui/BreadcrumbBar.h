@@ -5,7 +5,7 @@
 #include <QPushButton>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 面包屑导航栏部件
@@ -85,4 +85,4 @@ private:
     bool m_isElided = false; // 标记当前排版是否处于超长截断状态
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

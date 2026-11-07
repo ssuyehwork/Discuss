@@ -7,7 +7,7 @@
 #include <QPainter>
 #include <QRegularExpression>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 DecodedMediaResult ImageDecoderFacade::decodeSinglePass(const QString& filePath, int targetSize, ExtractMode mode, std::shared_ptr<CancellationToken> token) {
     DecodedMediaResult result;
@@ -230,4 +230,4 @@ QSize ImageDecoderFacade::readImageDimensions(const QString& filePath) {
     return reader.size();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

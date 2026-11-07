@@ -4,7 +4,7 @@
 #include <QStringList>
 #include <QDateTime>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct HistoryRecord {
     int id = 0;
@@ -22,4 +22,4 @@ public:
     static bool updateHistoryPaths(const QStringList& oldPaths, const QStringList& newPaths);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

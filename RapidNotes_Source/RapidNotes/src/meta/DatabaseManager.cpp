@@ -9,7 +9,7 @@
 #include <windows.h>
 #include "../util/AppDirectoryInitializer.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 SqlTransaction::SqlTransaction(sqlite3* db) : m_db(db) {
     if (m_db) {
@@ -86,12 +86,12 @@ QString DatabaseManager::getAppDir() {
 }
 
 QString DatabaseManager::getGlobalDbPath() {
-    QString dir = QDir::toNativeSeparators(getAppDir() + "/.QuarkMeta");
+    QString dir = QDir::toNativeSeparators(getAppDir() + "/.RapidNotes");
     return QDir::toNativeSeparators(dir + "/inspiration.db");
 }
 
 QString DatabaseManager::getBackupDir() {
-    QString dir = QDir::toNativeSeparators(getAppDir() + "/.QuarkMeta/backups");
+    QString dir = QDir::toNativeSeparators(getAppDir() + "/.RapidNotes/backups");
     QDir().mkpath(dir);
     return dir;
 }
@@ -102,7 +102,7 @@ void DatabaseManager::performDailyBackup() {
 
     QString backupDir = getBackupDir();
     QString todayStr = QDate::currentDate().toString("yyyyMMdd");
-    QString todayBackupPath = QDir::toNativeSeparators(backupDir + QString("/QuarkMeta_%1.store.bak").arg(todayStr));
+    QString todayBackupPath = QDir::toNativeSeparators(backupDir + QString("/RapidNotes_%1.store.bak").arg(todayStr));
 
     // 当天已存在备份副本，直接跳过，零磁盘写入磨损
     if (QFile::exists(todayBackupPath)) {
@@ -116,7 +116,7 @@ void DatabaseManager::performDailyBackup() {
     // 清理超过 7 天的历史快照文件
     QDir bDir(backupDir);
     QStringList filters;
-    filters << "QuarkMeta_*.store.bak";
+    filters << "RapidNotes_*.store.bak";
     QFileInfoList backupFiles = bDir.entryInfoList(filters, QDir::Files, QDir::Time); // 按修改时间降序排序
 
     if (backupFiles.size() > 7) {
@@ -131,7 +131,7 @@ bool DatabaseManager::tryRecoverFromBackup() {
     QString backupDir = getBackupDir();
     QDir bDir(backupDir);
     QStringList filters;
-    filters << "QuarkMeta_*.store.bak";
+    filters << "RapidNotes_*.store.bak";
     QFileInfoList backupFiles = bDir.entryInfoList(filters, QDir::Files, QDir::Time);
 
     if (backupFiles.isEmpty()) return false;
@@ -253,7 +253,7 @@ bool DatabaseManager::loadDb(const std::wstring& diskPath, DbConnection& conn) {
         -- ===================================================================
         CREATE TABLE IF NOT EXISTS library_items (
             file_id TEXT PRIMARY KEY,               -- 持久化唯一标识 (UUID/Base36)
-            meta_file_id TEXT DEFAULT '',           -- .QuarkMeta.json 自身 File_ID 凭据
+            meta_file_id TEXT DEFAULT '',           -- .RapidNotes.json 自身 File_ID 凭据
             file_path TEXT NOT NULL UNIQUE COLLATE NOCASE, -- 绝对物理路径
             file_name TEXT NOT NULL,                -- 文件名（含后缀）
             base_name TEXT NOT NULL,                -- 纯文件名（不含后缀，搜索用）
@@ -466,4 +466,4 @@ void DatabaseManager::logSqlError(const char* location, sqlite3* db, const QStri
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

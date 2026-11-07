@@ -2,7 +2,7 @@
 #include "../FramelessDialogBase.h"
 #include <QColor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FramelessConfirmDialog : public FramelessDialog {
     Q_OBJECT
@@ -14,4 +14,4 @@ public:
                                    const QString& okText = "确定");
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

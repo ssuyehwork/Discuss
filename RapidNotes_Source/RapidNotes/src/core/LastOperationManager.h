@@ -1,12 +1,12 @@
-#ifndef QuarkMeta_LAST_OPERATION_MANAGER_H
-#define QuarkMeta_LAST_OPERATION_MANAGER_H
+#ifndef RapidNotes_LAST_OPERATION_MANAGER_H
+#define RapidNotes_LAST_OPERATION_MANAGER_H
 
 #include <QString>
 #include <QStringList>
 #include <QVariant>
 #include <QFileInfo>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 enum class LastOperationType {
     None,
@@ -83,6 +83,6 @@ private:
     QString m_destination;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
-#endif // QuarkMeta_LAST_OPERATION_MANAGER_H
+#endif // RapidNotes_LAST_OPERATION_MANAGER_H

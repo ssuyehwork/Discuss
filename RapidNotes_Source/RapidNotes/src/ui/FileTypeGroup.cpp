@@ -1,7 +1,7 @@
 #include "FileTypeGroup.h"
 #include <QHBoxLayout>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QLineEdit* FileTypeGroup::populate(QObject* owner,
                                    QWidget* groupWidget,
@@ -103,4 +103,4 @@ QLineEdit* FileTypeGroup::populate(QObject* owner,
     return editType;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

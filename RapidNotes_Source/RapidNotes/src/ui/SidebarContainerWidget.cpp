@@ -6,7 +6,7 @@
 #include <QStyleOptionTab>
 #include <QPainter>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 SidebarContainerWidget::SidebarContainerWidget(QWidget* parent) : QFrame(parent) {
     setObjectName("SidebarContainerWidget");
@@ -192,4 +192,4 @@ bool SidebarContainerWidget::eventFilter(QObject* watched, QEvent* event) {
     return QFrame::eventFilter(watched, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

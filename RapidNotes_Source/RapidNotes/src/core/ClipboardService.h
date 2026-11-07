@@ -5,7 +5,7 @@
 #include <QWidget>
 #include <QAbstractItemView>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ClipboardService : public QObject {
     Q_OBJECT
@@ -40,4 +40,4 @@ private:
     ClipboardService& operator=(const ClipboardService&) = delete;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

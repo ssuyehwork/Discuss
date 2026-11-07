@@ -6,7 +6,7 @@
 #include <QMutex>
 #include <atomic>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct TaskJobInfo {
     int id = -1;
@@ -83,4 +83,4 @@ private:
     QMap<int, TaskJobInfo> m_jobs;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

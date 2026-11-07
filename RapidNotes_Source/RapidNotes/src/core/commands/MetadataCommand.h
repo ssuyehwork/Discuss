@@ -4,7 +4,7 @@
 #include <QString>
 #include <QVariant>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class MetadataCommand : public ActionCommand {
 public:
@@ -43,4 +43,4 @@ private:
     QVariant m_newVal;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

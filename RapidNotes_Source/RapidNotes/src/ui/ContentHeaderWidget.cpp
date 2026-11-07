@@ -11,7 +11,7 @@
 #include <QMimeData>
 #include "ContentPanel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentHeaderWidget::ContentHeaderWidget(QWidget* parent)
     : QWidget(parent) {
@@ -166,7 +166,7 @@ void ContentHeaderWidget::mouseMoveEvent(QMouseEvent* event) {
 
                 QDrag* drag = new QDrag(this);
                 QMimeData* mimeData = new QMimeData();
-                mimeData->setData("application/x-quarkmeta-panemove", QByteArray::number(reinterpret_cast<quintptr>(panel)));
+                mimeData->setData("application/x-RapidNotes-panemove", QByteArray::number(reinterpret_cast<quintptr>(panel)));
                 drag->setMimeData(mimeData);
 
                 QPixmap pixmap = grab();
@@ -209,4 +209,4 @@ bool ContentHeaderWidget::eventFilter(QObject* watched, QEvent* event) {
     return QWidget::eventFilter(watched, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

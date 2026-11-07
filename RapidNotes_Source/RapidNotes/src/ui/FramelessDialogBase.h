@@ -14,7 +14,7 @@
 #include <QKeyEvent>
 #include <QEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FramelessDialog : public QDialog {
     Q_OBJECT
@@ -52,4 +52,4 @@ private:
     bool m_isDragging = false;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

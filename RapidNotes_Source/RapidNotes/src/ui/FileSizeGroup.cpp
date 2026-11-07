@@ -4,7 +4,7 @@
 #include <QComboBox>
 #include <QLabel>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void FileSizeGroup::populate(QWidget* parentWidget,
                              QVBoxLayout* contentLayout,
@@ -70,4 +70,4 @@ void FileSizeGroup::populate(QWidget* parentWidget,
     QObject::connect(unitCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), contextObj, [updateSizeFilter](int){ updateSizeFilter(); });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

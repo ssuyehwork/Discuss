@@ -10,7 +10,7 @@
 #include <QResizeEvent>
 #include <QLabel>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class MarkedPanel : public QWidget {
     Q_OBJECT
@@ -56,4 +56,4 @@ private:
     QString m_currentFilterKeyword;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

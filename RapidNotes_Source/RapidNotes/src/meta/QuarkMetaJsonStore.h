@@ -1,6 +1,6 @@
 #pragma once
 
-#include "QuarkMetaJson.h"
+#include "RapidNotesJson.h"
 #include <QObject>
 #include <QString>
 #include <QTimer>
@@ -16,9 +16,9 @@
 #include <vector>
 #include <cstdint>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
-class QuarkMetaJsonStore : public QObject {
+class RapidNotesJsonStore : public QObject {
     Q_OBJECT
 
 public:
@@ -37,7 +37,7 @@ public:
 
     using ChangeListener = std::function<void(const ChangeEvent&)>;
 
-    static QuarkMetaJsonStore& instance();
+    static RapidNotesJsonStore& instance();
 
     void addChangeListener(ChangeListener listener);
 
@@ -70,7 +70,7 @@ public:
     void setPinnedBatch(const QStringList& paths, bool pinned);
 
     /**
-     * @brief 获取指定物理目录的 .QuarkMeta.json 侧车文件自身的 meta_file_id
+     * @brief 获取指定物理目录的 .RapidNotes.json 侧车文件自身的 meta_file_id
      */
     QString getMetaFileId(const std::wstring& folderPath);
 
@@ -83,7 +83,7 @@ public:
     /**
      * @brief 一致性读取指定物理文件夹的所有条目 ItemMeta (大小写不敏感匹配)
      */
-    QuarkMetaJson::ItemMap readFolderMeta(const std::wstring& folderPath);
+    RapidNotesJson::ItemMap readFolderMeta(const std::wstring& folderPath);
 
     /**
      * @brief 一致性读取指定文件的 ItemMeta，成功找到返回 true
@@ -91,7 +91,7 @@ public:
     bool readItemMeta(const std::wstring& filePath, ItemMeta& outMeta);
 
     /**
-     * @brief 物理迁移文件夹缓存文件 (.QuarkMeta.json) 并同步重键内存缓存
+     * @brief 物理迁移文件夹缓存文件 (.RapidNotes.json) 并同步重键内存缓存
      */
     bool migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath);
 
@@ -119,21 +119,21 @@ private slots:
     void onFlushTimeout();
 
 private:
-    explicit QuarkMetaJsonStore(QObject* parent = nullptr);
-    ~QuarkMetaJsonStore() override;
-    QuarkMetaJsonStore(const QuarkMetaJsonStore&) = delete;
-    QuarkMetaJsonStore& operator=(const QuarkMetaJsonStore&) = delete;
+    explicit RapidNotesJsonStore(QObject* parent = nullptr);
+    ~RapidNotesJsonStore() override;
+    RapidNotesJsonStore(const RapidNotesJsonStore&) = delete;
+    RapidNotesJsonStore& operator=(const RapidNotesJsonStore&) = delete;
 
     static std::wstring normalizeFolderPath(const std::wstring& path);
 
     void prefetchFolderJson(const std::wstring& folderPath);
-    std::shared_ptr<QuarkMetaJson> getOrLoadFolderLocked(const std::wstring& normFolder, const std::wstring& folderPath);
+    std::shared_ptr<RapidNotesJson> getOrLoadFolderLocked(const std::wstring& normFolder, const std::wstring& folderPath);
 
     struct FlushTicket {
         std::wstring normFolder;
         uint64_t revision;
-        QuarkMetaJson snapshot;
-        FlushTicket(const std::wstring& n, uint64_t r, const QuarkMetaJson& s) : normFolder(n), revision(r), snapshot(s) {}
+        RapidNotesJson snapshot;
+        FlushTicket(const std::wstring& n, uint64_t r, const RapidNotesJson& s) : normFolder(n), revision(r), snapshot(s) {}
     };
     void markDirtyLocked(const std::wstring& normFolder);   // 调用方必须已持有 m_storeMutex
     bool saveTicket(const FlushTicket& ticket);              // 内部加 m_saveMutex；锁顺序固定为 m_storeMutex → m_saveMutex，持有 m_saveMutex 时不得获取 m_storeMutex
@@ -141,7 +141,7 @@ private:
 
     std::mutex m_storeMutex;
     // 规范化目录路径 -> 内存中缓存的 JSON 对象指针
-    std::unordered_map<std::wstring, std::shared_ptr<QuarkMetaJson>> m_folderCacheMap;
+    std::unordered_map<std::wstring, std::shared_ptr<RapidNotesJson>> m_folderCacheMap;
     // 标记需要写盘落盘的规范化目录路径集合
     std::unordered_set<std::wstring> m_dirtyFolderPaths;
     std::unordered_map<std::wstring, uint64_t> m_folderRevision;  // 受 m_storeMutex 保护
@@ -159,4 +159,4 @@ private:
     static constexpr int kMaxFlushDelayMs = 3000; // 3000ms 最长强制刷盘延迟
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

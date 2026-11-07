@@ -5,7 +5,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ColorDot : public QWidget {
 public:
@@ -38,4 +38,4 @@ private:
     QColor m_color;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -12,7 +12,7 @@
 #include <string>
 #include <utility>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class BatchRenameCommand : public ActionCommand {
 public:
@@ -143,4 +143,4 @@ private:
     std::vector<std::wstring> m_newPaths;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

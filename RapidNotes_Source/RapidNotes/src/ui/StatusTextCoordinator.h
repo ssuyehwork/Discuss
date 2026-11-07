@@ -5,7 +5,7 @@
 #include <QTimer>
 #include "../core/TaskProgressService.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class StatusTextCoordinator : public QObject {
     Q_OBJECT
@@ -35,4 +35,4 @@ private:
     QTimer* m_finishTimer = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

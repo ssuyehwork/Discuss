@@ -16,7 +16,7 @@
 #include <unordered_set>
 #include "PhysicalDiskSearchExtractor.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 std::atomic<bool> CoreController::s_isShuttingDown{false};
 std::atomic<uint64_t> CoreController::s_navigationGeneration{1};
@@ -31,16 +31,16 @@ void CoreController::initializeCoreComponents() {
     DeviceWatcher::instance().startListening();
 
     // 1. 底层持久化 SQLite 连接启动与定时机制保障
-    QuarkMeta::DatabaseManager::instance();
+    RapidNotes::DatabaseManager::instance();
     
     // 2. 元数据内存索引结构预热
-    QuarkMeta::MetadataManager::instance();
+    RapidNotes::MetadataManager::instance();
     
     // 3. 后台提取特征管道、定时器及事件队列预热
-    QuarkMeta::MediaExtractorPipeline::instance();
+    RapidNotes::MediaExtractorPipeline::instance();
 
     // 4. 库同步对账服务预热（触发启动 1.5 秒后自动对账补齐）
-    QuarkMeta::LibrarySyncService::instance();
+    RapidNotes::LibrarySyncService::instance();
     
     // 4. 定时合并刷新缩略图提取失败标记落盘
     QTimer* failureFlushTimer = new QTimer(QCoreApplication::instance());
@@ -164,4 +164,4 @@ void CoreController::setStatus(const QString& text, bool indexing) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

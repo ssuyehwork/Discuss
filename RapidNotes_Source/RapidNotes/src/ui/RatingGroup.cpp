@@ -5,7 +5,7 @@
 #include <QPainter>
 #include <QPixmap>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 static QString ratingDisplayName(int r) {
     return r == 0 ? "无评级" : QString("★").repeated(r);
@@ -62,4 +62,4 @@ void RatingGroup::populate(QWidget* parentWidget,
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

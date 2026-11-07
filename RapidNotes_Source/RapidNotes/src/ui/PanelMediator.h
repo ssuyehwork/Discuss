@@ -4,7 +4,7 @@
 #include <QPointer>
 #include "ContentPanel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class NavPanel;
 class FavoritePanel;
@@ -92,4 +92,4 @@ private:
     QMap<ContentPanel*, PanelMetaDebounceState> m_panelMetaDebounceMap;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

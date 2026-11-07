@@ -4,7 +4,7 @@
 #include <QList>
 #include <vector>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class SectionProxyModel;
 
@@ -94,4 +94,4 @@ private:
     SectionProxyModel* m_sectionModel = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

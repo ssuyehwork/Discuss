@@ -5,7 +5,7 @@
 #include <QPushButton>
 #include <QTimer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FramelessInputDialog::FramelessInputDialog(const QString& title, const QString& label, 
                                            const QString& initial, QWidget* parent)
@@ -66,4 +66,4 @@ void FramelessInputDialog::setEchoMode(QLineEdit::EchoMode mode) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -4,7 +4,7 @@
 #include "ViewDragDropHelper.h"
 #include <QMouseEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 DropListView::DropListView(QWidget* parent) : QListView(parent) {
     setDragEnabled(true);
@@ -46,4 +46,4 @@ void DropListView::mouseDoubleClickEvent(QMouseEvent* event) {
     QListView::mouseDoubleClickEvent(event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -1,11 +1,11 @@
 #pragma once
 #include <string>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class VolumePathResolver {
 public:
     static std::wstring getVolumeSerialNumber(const std::wstring& path);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

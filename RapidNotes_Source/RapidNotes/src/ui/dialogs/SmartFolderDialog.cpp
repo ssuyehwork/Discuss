@@ -8,7 +8,7 @@
 #include <QGuiApplication>
 #include <QScreen>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // --- SmartFolderDialog Implementation ---
 
@@ -270,4 +270,4 @@ SmartFolderRecord SmartFolderDialog::getRecord() const {
     return m_record;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

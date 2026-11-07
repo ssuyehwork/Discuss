@@ -8,7 +8,7 @@
 #include <QSortFilterProxyModel>
 #include "FilterStateModel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 class DiskItemModel;
@@ -52,4 +52,4 @@ private:
     QSet<QObject*> m_filteredObjects;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

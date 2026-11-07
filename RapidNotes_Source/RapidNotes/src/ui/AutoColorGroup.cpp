@@ -17,7 +17,7 @@
 #include <QMenu>
 #include <QCursor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 namespace {
 
@@ -474,4 +474,4 @@ void AutoColorGroup::populate(QWidget* parentWidget,
     contentLayout->addWidget(container);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

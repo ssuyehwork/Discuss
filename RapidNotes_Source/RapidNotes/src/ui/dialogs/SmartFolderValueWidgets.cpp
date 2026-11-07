@@ -11,7 +11,7 @@
 #include <QLabel>
 #include <QSlider>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // --- TextValueWidget ---
 TextValueWidget::TextValueWidget(QWidget* parent) : ISmartFolderValueWidget(parent) {
@@ -570,4 +570,4 @@ DummyValueWidget::DummyValueWidget(QWidget* parent) : ISmartFolderValueWidget(pa
 void DummyValueWidget::getRuleValues(SmartFolderRule& /*rule*/) const {}
 void DummyValueWidget::setRuleValues(const SmartFolderRule& /*rule*/) {}
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

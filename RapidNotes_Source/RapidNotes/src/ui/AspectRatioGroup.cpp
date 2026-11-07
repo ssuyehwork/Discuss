@@ -3,12 +3,12 @@
 #include <QList>
 #include <tuple>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void AspectRatioGroup::populate(QWidget* parentWidget,
                                 QVBoxLayout* contentLayout,
                                 FilterStateModel* filterModel,
-                                const QuarkMeta::ScanStats& currentStats,
+                                const RapidNotes::ScanStats& currentStats,
                                 const FilterState& currentState,
                                 AddFilterRowFunc addFilterRow) {
     if (!contentLayout || !filterModel || !addFilterRow) return;
@@ -37,4 +37,4 @@ void AspectRatioGroup::populate(QWidget* parentWidget,
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

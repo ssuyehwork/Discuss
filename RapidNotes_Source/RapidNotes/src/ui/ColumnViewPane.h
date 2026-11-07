@@ -10,7 +10,7 @@
 #include "models/FilterProxyModel.h"
 #include "DropListView.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 class SectionProxyModel;
@@ -89,4 +89,4 @@ private:
     QString m_expandedChildPath;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

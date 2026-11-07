@@ -5,7 +5,7 @@
 #include <QFileInfo>
 #include <QCursor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FavoriteService& FavoriteService::instance() {
     static FavoriteService s_instance;
@@ -101,4 +101,4 @@ QAction* FavoriteService::buildFavoriteAction(QMenu* parentMenu, const QString& 
     return action;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -4,7 +4,7 @@
 #include <QKeyCombination>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 LocalShortcutInterceptor& LocalShortcutInterceptor::instance() {
     static LocalShortcutInterceptor s_instance;
@@ -226,4 +226,4 @@ bool LocalShortcutInterceptor::handleLowLevelKey(int vkCode, bool ctrl, bool shi
     return false;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

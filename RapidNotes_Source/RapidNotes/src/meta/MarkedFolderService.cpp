@@ -17,7 +17,7 @@
 #include "../core/UndoManager.h"
 #include "../core/TransferToMarkedCommand.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 MarkedFolderService& MarkedFolderService::instance() {
     static MarkedFolderService s_instance;
@@ -307,4 +307,4 @@ QAction* MarkedFolderService::buildMarkAction(QMenu* parentMenu, const QStringLi
     return action;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -20,7 +20,7 @@ typedef struct _ATA_IDENTIFY_DATA {
 } ATA_IDENTIFY_DATA;
 #pragma pack(pop)
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 
 QString HardwareInfoHelper::getDiskPhysicalSerialNumberByDrive(const QString& drivePath) {
@@ -207,21 +207,21 @@ bool HardwareInfoHelper::isHardwareAuthorized() {
     // 1. CPU ID 检查
     QString cpuId = getCpuId();
     if (cpuId.compare("BFEBFBFF000306C3", Qt::CaseInsensitive) == 0) {
-        qDebug() << "[QuarkMeta-AUTH] CPU ID 匹配成功:" << cpuId;
+        qDebug() << "[RapidNotes-AUTH] CPU ID 匹配成功:" << cpuId;
         return true;
     }
 
     // 2. 主板序列号检查
     QString boardSn = getBoardSerialNumber();
     if (boardSn.compare("SGH412RF00", Qt::CaseInsensitive) == 0) {
-        qDebug() << "[QuarkMeta-AUTH] 主板序列号匹配成功:" << boardSn;
+        qDebug() << "[RapidNotes-AUTH] 主板序列号匹配成功:" << boardSn;
         return true;
     }
 
     // 3. BIOS 序列号检查
     QString biosSn = getBiosSerialNumber();
     if (biosSn.compare("SGH412RF00", Qt::CaseInsensitive) == 0) {
-        qDebug() << "[QuarkMeta-AUTH] BIOS 序列号匹配成功:" << biosSn;
+        qDebug() << "[RapidNotes-AUTH] BIOS 序列号匹配成功:" << biosSn;
         return true;
     }
 
@@ -247,14 +247,14 @@ bool HardwareInfoHelper::isHardwareAuthorized() {
     // 4.1 程序所在硬盘序列号检查（移动硬盘随插随用）
     QString appDriveSn = getAppDrivePhysicalSerialNumber();
     if (checkDiskMatch(appDriveSn)) {
-        qDebug() << "[QuarkMeta-AUTH] 程序所在移动硬盘序列号匹配成功:" << appDriveSn;
+        qDebug() << "[RapidNotes-AUTH] 程序所在移动硬盘序列号匹配成功:" << appDriveSn;
         return true;
     }
 
     // 4.2 系统盘（C盘）硬盘序列号检查
     QString cDriveSn = getCDiskPhysicalSerialNumber();
     if (checkDiskMatch(cDriveSn)) {
-        qDebug() << "[QuarkMeta-AUTH] 系统盘序列号匹配成功:" << cDriveSn;
+        qDebug() << "[RapidNotes-AUTH] 系统盘序列号匹配成功:" << cDriveSn;
         return true;
     }
 
@@ -262,7 +262,7 @@ bool HardwareInfoHelper::isHardwareAuthorized() {
     QStringList allDisks = getAllDiskSerialNumbers();
     for (const QString& d : allDisks) {
         if (checkDiskMatch(d)) {
-            qDebug() << "[QuarkMeta-AUTH] 全量物理磁盘列表匹配成功:" << d;
+            qDebug() << "[RapidNotes-AUTH] 全量物理磁盘列表匹配成功:" << d;
             return true;
         }
     }
@@ -281,14 +281,14 @@ bool HardwareInfoHelper::isHardwareAuthorized() {
     for (const QString& mac : allMacAddresses) {
         for (const QString& target : targetMacs) {
             if (mac.compare(target, Qt::CaseInsensitive) == 0) {
-                qDebug() << "[QuarkMeta-AUTH] MAC 地址匹配成功:" << mac;
+                qDebug() << "[RapidNotes-AUTH] MAC 地址匹配成功:" << mac;
                 return true;
             }
         }
     }
 
-    qWarning() << "[QuarkMeta-AUTH] 当前环境未匹配任何授权硬件特征！";
+    qWarning() << "[RapidNotes-AUTH] 当前环境未匹配任何授权硬件特征！";
     return false;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

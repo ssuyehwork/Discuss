@@ -3,7 +3,7 @@
 #include <QObject>
 #include <QString>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 
@@ -20,4 +20,4 @@ private:
     ~FileCreationService() override = default;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

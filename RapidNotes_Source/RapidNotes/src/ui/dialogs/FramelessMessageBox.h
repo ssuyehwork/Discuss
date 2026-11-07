@@ -2,7 +2,7 @@
 #include <QString>
 #include <QWidget>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FramelessMessageBox {
 public:
@@ -12,4 +12,4 @@ public:
     static void critical(QWidget* parent, const QString& title, const QString& text);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -1,7 +1,7 @@
 #include "CreateDateGroup.h"
 #include "UiHelper.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QLineEdit* CreateDateGroup::populate(QObject* owner,
                                      QWidget* groupWidget,
@@ -65,4 +65,4 @@ QLineEdit* CreateDateGroup::populate(QObject* owner,
     return editCreateDate;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

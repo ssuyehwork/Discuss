@@ -14,7 +14,7 @@
 #include <QCoreApplication>
 #include <QPointer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 CreateFolderWithItemsDialog::CreateFolderWithItemsDialog(const QString& currentDir, const QStringList& selectedPaths, QWidget* parent)
     : FramelessDialog("添加文件夹", parent), m_currentDir(currentDir), m_selectedPaths(selectedPaths) {
@@ -149,4 +149,4 @@ void CreateFolderWithItemsDialog::onCreateAndMigrate() {
     accept();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -7,7 +7,7 @@
 
 #include "FilterPanel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 内容面板顶部辅助控制工具栏组件
@@ -55,4 +55,4 @@ private:
     bool m_isDraggingHeader = false;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -2,7 +2,7 @@
 #include "UiHelper.h"
 #include <QLabel>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 RuleRow::RuleRow(QWidget* parent) : QWidget(parent) {
     initUi();
@@ -153,4 +153,4 @@ void RuleRow::setRule(const RenameRule& rule) {
     emit changed();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

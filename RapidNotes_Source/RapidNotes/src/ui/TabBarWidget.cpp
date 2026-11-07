@@ -28,7 +28,7 @@
 #include <QApplication>
 #include <QScrollBar>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 static const int kTabFixedDecorationsWidth = 56; // 8+14+6+6+16+6
 
@@ -126,7 +126,7 @@ void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
             m_isDragging = true;
             QDrag* drag = new QDrag(this);
             QMimeData* mimeData = new QMimeData();
-            mimeData->setData("application/x-quarkmeta-tabindex", QByteArray::number(m_index));
+            mimeData->setData("application/x-RapidNotes-tabindex", QByteArray::number(m_index));
 
             TabBarWidget* tabBar = nullptr;
             QWidget* current = parentWidget();
@@ -139,7 +139,7 @@ void TabItemButton::mouseMoveEvent(QMouseEvent* event) {
             if (tabBar) {
                 QString url = tabBar->tabUrl(m_index);
                 if (!url.isEmpty()) {
-                    mimeData->setData("application/x-quarkmeta-taburl", url.toUtf8());
+                    mimeData->setData("application/x-RapidNotes-taburl", url.toUtf8());
                     mimeData->setText(url);
                 }
             }
@@ -644,7 +644,7 @@ void TabBarWidget::openOrFocusTab(const QString& rawPath) {
 }
 
 void TabBarWidget::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") || event->mimeData()->hasUrls())) {
+    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-RapidNotes-tabindex") || event->mimeData()->hasUrls())) {
         event->acceptProposedAction();
     } else {
         QWidget::dragEnterEvent(event);
@@ -652,7 +652,7 @@ void TabBarWidget::dragEnterEvent(QDragEnterEvent* event) {
 }
 
 void TabBarWidget::dragMoveEvent(QDragMoveEvent* event) {
-    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex") || event->mimeData()->hasUrls())) {
+    if (event->mimeData() && (event->mimeData()->hasFormat("application/x-RapidNotes-tabindex") || event->mimeData()->hasUrls())) {
         event->acceptProposedAction();
     } else {
         QWidget::dragMoveEvent(event);
@@ -661,8 +661,8 @@ void TabBarWidget::dragMoveEvent(QDragMoveEvent* event) {
 
 void TabBarWidget::dropEvent(QDropEvent* event) {
     if (event->mimeData()) {
-        if (event->mimeData()->hasFormat("application/x-quarkmeta-tabindex")) {
-            int fromIdx = event->mimeData()->data("application/x-quarkmeta-tabindex").toInt();
+        if (event->mimeData()->hasFormat("application/x-RapidNotes-tabindex")) {
+            int fromIdx = event->mimeData()->data("application/x-RapidNotes-tabindex").toInt();
             if (fromIdx >= 0 && fromIdx < m_tabs.size()) {
                 QPoint dropPos = event->position().toPoint();
                 int toIdx = m_tabs.size() - 1;
@@ -966,4 +966,4 @@ void TabBarWidget::applyDiffUpdate() {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

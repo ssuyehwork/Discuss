@@ -2,7 +2,7 @@
 #include <QColor>
 #include <QString>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 namespace Style {
 
 /**
@@ -15,7 +15,7 @@ const QColor PrimaryBlue   = QColor("#3498db");
 const QColor SuccessGreen   = QColor("#2ecc71");
 const QColor WarningOrange  = QColor("#f39c12");
 const QColor ErrorRed       = QColor("#e81123");
-const QColor BrandOrange    = QColor("#cb7208"); // 核心品牌色 (QuarkMeta)
+const QColor BrandOrange    = QColor("#cb7208"); // 核心品牌色 (RapidNotes)
 const QColor ActiveOrange   = QColor("#ff551c"); // 2026-06-23 物理级拨乱反正：全局置顶/激活态唯一合法色值
 const QColor AccentCyan     = QColor("#41F2F2");
 
@@ -77,4 +77,4 @@ inline QString getColorHexByName(const QString& name) {
 inline QString qssColor(const QColor& color) { return color.name(); }
 
 } // namespace Style
-} // namespace QuarkMeta
+} // namespace RapidNotes

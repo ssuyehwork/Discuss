@@ -8,7 +8,7 @@
 #include <QStringList>
 #include <QModelIndex>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class DropListView : public QListView {
     Q_OBJECT
@@ -29,6 +29,6 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* event) override;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
 #endif // DROPLISTVIEW_H

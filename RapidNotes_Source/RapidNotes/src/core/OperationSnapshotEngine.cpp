@@ -5,7 +5,7 @@
 #include "ActionCommand.h"
 #include <QFileInfo>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 OperationSnapshotEngine& OperationSnapshotEngine::instance() {
     static OperationSnapshotEngine inst;
@@ -120,4 +120,4 @@ bool OperationSnapshotEngine::executeWithSnapshot(
     return true;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

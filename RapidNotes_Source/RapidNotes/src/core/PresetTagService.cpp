@@ -6,7 +6,7 @@
 #include <QtConcurrent>
 #include <QApplication>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 PresetTagService& PresetTagService::instance() {
     static PresetTagService s_instance;
@@ -92,4 +92,4 @@ int PresetTagService::applyPresetTagsForDroppedItems(int categoryId, const QStri
     return tags.size();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

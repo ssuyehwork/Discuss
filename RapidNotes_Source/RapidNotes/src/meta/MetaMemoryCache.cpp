@@ -1,7 +1,7 @@
 #include "MetaMemoryCache.h"
 #include <functional>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 MetaMemoryCache& MetaMemoryCache::instance() {
     static MetaMemoryCache inst;
@@ -49,4 +49,4 @@ void MetaMemoryCache::remove(const std::wstring& normalizedPath) {
     m_shards[idx].items.erase(normalizedPath);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

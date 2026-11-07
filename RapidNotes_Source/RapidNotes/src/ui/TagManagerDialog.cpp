@@ -8,7 +8,7 @@
 #include <QMenu>
 #include <QAction>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void TagManagerDialog::showDialog(QWidget* parent, const QString& currentPath, bool isMirrorSource) {
     TagManagerDialog* dlg = new TagManagerDialog(currentPath, isMirrorSource, parent);
@@ -433,4 +433,4 @@ void TagManagerDialog::applyTheme() {
     // Style handled in style.qss
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

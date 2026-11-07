@@ -6,7 +6,7 @@
 #include <QString>
 #include <QReadWriteLock>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class IconCacheManager : public QObject {
     Q_OBJECT
@@ -22,4 +22,4 @@ private:
     QHash<QString, QIcon> m_iconCache;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

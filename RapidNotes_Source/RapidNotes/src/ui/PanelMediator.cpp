@@ -46,7 +46,7 @@
 #include <QStandardPaths>
 #include <QCursor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 static PanelMediator* s_panelMediatorInstance = nullptr;
 
@@ -302,13 +302,13 @@ void PanelMediator::setupConnections() {
             if (target) {
                 QStringList sel = target->getSelectedPaths();
                 if (!sel.isEmpty()) {
-                    QuarkMeta::MarkedFolderService::instance().toggleMarked(sel);
+                    RapidNotes::MarkedFolderService::instance().toggleMarked(sel);
                 }
             }
         });
 
         connect(shortcutController, &AppShortcutController::transferToMarkedRequested, this, []() {
-            QuarkMeta::MarkedFolderService::instance().executeTransferToMarked({});
+            RapidNotes::MarkedFolderService::instance().executeTransferToMarked({});
         });
 
         connect(shortcutController, &AppShortcutController::copyNamesEnumeratedRequested, this, [this, contentPanel]() {
@@ -1272,11 +1272,11 @@ void PanelMediator::setupConnections() {
     }
 
     // 7. 全局事件总线 CentralEventHub 增量通知响应
-    connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [this, contentPanel, metaPanel](const QuarkMeta::AppEvent& event) {
+    connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [this, contentPanel, metaPanel](const RapidNotes::AppEvent& event) {
         ContentPanel* activeOrRoot = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
         if (!activeOrRoot) return;
 
-        if (event.type == QuarkMeta::AppEventType::MetadataUpdated) {
+        if (event.type == RapidNotes::AppEventType::MetadataUpdated) {
             if (!event.targetPath.isEmpty()) {
                 activeOrRoot->updateItemMetadata(event.targetPath);
                 if (contentPanel && contentPanel != activeOrRoot) {
@@ -1309,9 +1309,9 @@ void PanelMediator::setupConnections() {
                 }
             }
             // 🚀 拔除直调：统计重算统一由模型的 dataChanged Roles 门禁经 50ms 定时器防抖触发
-        } else if (event.type == QuarkMeta::AppEventType::ItemsDeleted ||
-                   event.type == QuarkMeta::AppEventType::ItemsRenamed ||
-                   event.type == QuarkMeta::AppEventType::UndoRedoPerformed) {
+        } else if (event.type == RapidNotes::AppEventType::ItemsDeleted ||
+                   event.type == RapidNotes::AppEventType::ItemsRenamed ||
+                   event.type == RapidNotes::AppEventType::UndoRedoPerformed) {
             activeOrRoot->refreshAll();
             if (contentPanel && contentPanel != activeOrRoot) {
                 contentPanel->refreshAll();
@@ -1320,4 +1320,4 @@ void PanelMediator::setupConnections() {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

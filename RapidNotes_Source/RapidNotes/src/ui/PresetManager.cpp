@@ -7,7 +7,7 @@
 #include <QtGlobal>
 #include "../core/AppConfig.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 namespace {
 struct TypeMapping {
@@ -117,4 +117,4 @@ std::vector<RenameRule> PresetManager::importFromFile(const QString& filePath, i
     return rules;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

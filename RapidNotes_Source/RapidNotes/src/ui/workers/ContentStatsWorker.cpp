@@ -9,7 +9,7 @@
 #include <QDebug>
 #include <cmath>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentStatsWorker::ContentStatsWorker(QObject* parent) : QObject(parent) {}
 
@@ -132,4 +132,4 @@ void ContentStatsWorker::processAsync(std::vector<ItemRecord> records, bool show
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

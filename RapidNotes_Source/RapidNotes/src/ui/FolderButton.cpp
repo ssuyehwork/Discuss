@@ -7,7 +7,7 @@
 #include "../core/AppConfig.h"
 #include "StyleLibrary.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FolderButton::FolderButton(const QString& folderPath, QWidget* parent)
     : QPushButton(parent), m_folderPath(folderPath) {
@@ -77,4 +77,4 @@ void FolderButton::leaveEvent(QEvent* event) {
     ToolTipOverlay::hideTip();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

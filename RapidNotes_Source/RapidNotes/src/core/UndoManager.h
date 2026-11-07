@@ -8,7 +8,7 @@
 #include <QMutex>
 #include <QMutexLocker>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 撤销栈管理器 (Undo Stack Manager)
@@ -104,4 +104,4 @@ private:
     QMutex m_mutex;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

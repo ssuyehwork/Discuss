@@ -6,7 +6,7 @@
 #include <QIcon>
 #include <QWidget>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 系统服务层工具类 (ShellHelper)
@@ -84,4 +84,4 @@ public:
 
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

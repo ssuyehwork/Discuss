@@ -1,7 +1,7 @@
 #pragma once
 #include <Qt>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 工业级模型契约 (ModelContract)
@@ -62,4 +62,4 @@ enum class FileListColumn : int {
     Count = 8
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

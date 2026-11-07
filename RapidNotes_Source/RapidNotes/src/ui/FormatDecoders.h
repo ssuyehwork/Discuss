@@ -6,7 +6,7 @@
 #include <memory>
 #include "../core/CoreEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FormatDecoders {
 public:
@@ -43,4 +43,4 @@ private:
     static QImage extractEpsEmbeddedPreview(const QString& filePath);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

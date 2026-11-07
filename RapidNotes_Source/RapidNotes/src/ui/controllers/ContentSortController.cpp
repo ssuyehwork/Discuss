@@ -3,7 +3,7 @@
 #include "../../core/AppConfig.h"
 #include "../../meta/MetadataManager.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentSortController::ContentSortController(QObject* parent)
     : QObject(parent) {
@@ -129,4 +129,4 @@ void ContentSortController::applySortToModel(QSortFilterProxyModel* proxyModel) 
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

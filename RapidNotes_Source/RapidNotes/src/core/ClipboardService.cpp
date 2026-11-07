@@ -18,7 +18,7 @@
 #include <QCoreApplication>
 #include <QPointer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ClipboardService& ClipboardService::instance() {
     static ClipboardService s_instance;
@@ -203,7 +203,7 @@ void ClipboardService::executePaste(const QString& targetDir, QWidget* parentWid
 
     bool hasTrashSource = false;
     for (const QString& p : fromPaths) {
-        if (p.contains(".QuarkMeta/disk_trash", Qt::CaseInsensitive)) {
+        if (p.contains(".RapidNotes/disk_trash", Qt::CaseInsensitive)) {
             hasTrashSource = true;
             break;
         }
@@ -300,4 +300,4 @@ void ClipboardService::executePaste(const QString& targetDir, QWidget* parentWid
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

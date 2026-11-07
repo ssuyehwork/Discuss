@@ -7,7 +7,7 @@
 #include <mutex> 
 #include <functional> 
 
-namespace QuarkMeta { 
+namespace RapidNotes { 
 
 struct StatisticsSnapshot {
     int totalCount = 0;

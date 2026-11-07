@@ -3,7 +3,7 @@
 #include <sqlite3.h>
 #include <QDateTime>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool ExtensionColorDao::initTable() {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
@@ -111,4 +111,4 @@ QMap<QString, QPair<QColor, QColor>> ExtensionColorDao::loadAllColors() {
     return resultMap;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -3,7 +3,7 @@
 #include <QFileIconProvider>
 #include <QFileInfo>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 IconCacheManager& IconCacheManager::instance() {
     static IconCacheManager inst;
@@ -43,4 +43,4 @@ QIcon IconCacheManager::getCachedIcon(const QString& ext, bool isDir) {
     return icon;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

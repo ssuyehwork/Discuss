@@ -2,7 +2,7 @@
 #include <vector> 
 #include <string> 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 struct DiskTrashRawItem { 
     int id; 

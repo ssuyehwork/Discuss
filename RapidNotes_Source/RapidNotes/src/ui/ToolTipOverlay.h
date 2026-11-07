@@ -20,7 +20,7 @@
 #include <QRectF>
 #include <QPropertyAnimation>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief ToolTipOverlay: 全局统一的自定义 Tooltip
@@ -103,6 +103,6 @@ private:
     bool m_warmedUp = false; // 防重入预热标记
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
 #endif // TOOLTIPOVERLAY_H

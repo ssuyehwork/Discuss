@@ -7,7 +7,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class PresetTagsDialog : public FramelessDialog {
     Q_OBJECT
@@ -36,4 +36,4 @@ private:
     TagPillContainer* m_tagContainer = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

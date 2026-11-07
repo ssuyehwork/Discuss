@@ -10,7 +10,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FileOperationHelper {
 public:
@@ -60,4 +60,4 @@ public:
     }
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

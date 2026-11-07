@@ -1,7 +1,7 @@
 #pragma once
 #include <QCheckBox>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class StyledCheckBox : public QCheckBox {
     Q_OBJECT
@@ -11,4 +11,4 @@ protected:
     void paintEvent(QPaintEvent* event) override;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

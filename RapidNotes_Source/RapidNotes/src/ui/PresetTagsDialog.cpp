@@ -18,7 +18,7 @@
 #include <QListWidget>
 #include <QScrollArea>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 PresetTagsDialog::PresetTagsDialog(int categoryId, QWidget* parent, bool isLibrary)
     : FramelessDialog("设置自动标签", parent), m_categoryId(categoryId), m_isLibrary(isLibrary) {
@@ -144,4 +144,4 @@ void PresetTagsDialog::onCancelClicked() {
     reject();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -11,7 +11,7 @@
 #include <functional>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 临时解密文件句柄持有者 (RAII)
@@ -79,4 +79,4 @@ private:
     BCRYPT_ALG_HANDLE m_aesAlg = NULL;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

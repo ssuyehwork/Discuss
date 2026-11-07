@@ -5,7 +5,7 @@
 #include <QPushButton>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class CreateFolderWithItemsDialog : public FramelessDialog {
     Q_OBJECT
@@ -26,4 +26,4 @@ private:
     QPushButton* m_btnCreate{nullptr};
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

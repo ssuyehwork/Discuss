@@ -1,7 +1,7 @@
 #include "BatchRenameEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // Pure header-inline proxy; implementation details delegated to BatchRenameService.
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

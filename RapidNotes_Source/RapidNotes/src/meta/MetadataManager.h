@@ -1,5 +1,5 @@
-#ifndef QuarkMeta_METADATA_MANAGER_H
-#define QuarkMeta_METADATA_MANAGER_H
+#ifndef RapidNotes_METADATA_MANAGER_H
+#define RapidNotes_METADATA_MANAGER_H
 
 #include "MetadataDefs.h"
 #include "MetaMemoryCache.h"
@@ -18,7 +18,7 @@
 #include <memory>
 #include <array>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct LightMeta {
     std::wstring path;
@@ -200,6 +200,6 @@ private:
     void persistBatchAsync(const std::vector<std::wstring>& paths);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
-#endif // QuarkMeta_METADATA_MANAGER_H
+#endif // RapidNotes_METADATA_MANAGER_H

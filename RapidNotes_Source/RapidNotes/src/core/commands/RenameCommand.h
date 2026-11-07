@@ -3,7 +3,7 @@
 #include "../../util/ShellHelper.h"
 #include <QString>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class RenameCommand : public ActionCommand {
 public:
@@ -31,4 +31,4 @@ private:
     QString m_newPath;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

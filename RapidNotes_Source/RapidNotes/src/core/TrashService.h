@@ -5,7 +5,7 @@
 #include <QList>
 #include <QWidget>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TrashService : public QObject {
     Q_OBJECT
@@ -30,4 +30,4 @@ private:
     TrashService& operator=(const TrashService&) = delete;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

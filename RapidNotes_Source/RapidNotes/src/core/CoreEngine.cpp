@@ -1,7 +1,7 @@
 #include "CoreEngine.h"
 #include "LastOperationManager.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/QuarkMetaJsonStore.h"
+#include "../meta/RapidNotesJsonStore.h"
 #include "../meta/FavoriteDao.h"
 #include "../meta/FavoriteService.h"
 #include "../ui/PanelMediator.h"
@@ -11,7 +11,7 @@
 #include "TaskProgressService.h"
 #include <QCoreApplication>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 CoreEngine& CoreEngine::instance() {
     static CoreEngine s_instance;
@@ -21,7 +21,7 @@ CoreEngine& CoreEngine::instance() {
 CoreEngine::CoreEngine(QObject* parent)
     : QObject(parent) {
     m_asyncTagPool.setMaxThreadCount(1);
-    qRegisterMetaType<QuarkMeta::AppCommand>("QuarkMeta::AppCommand");
+    qRegisterMetaType<RapidNotes::AppCommand>("RapidNotes::AppCommand");
 }
 
 std::shared_ptr<CancellationToken> CoreEngine::createCancellationToken() {
@@ -247,7 +247,7 @@ void CoreEngine::addTagsToPathsAsync(const QStringList& paths, const QStringList
 
             auto proceedToSave = [jobId, paths, onFinished]() {
                 TaskProgressService::instance().updateProgress(jobId, paths.size(), paths.size(), "正在保存...");
-                QuarkMetaJsonStore::instance().flushAllDirtyBuffersAsync([jobId, paths, onFinished](bool allOk) {
+                RapidNotesJsonStore::instance().flushAllDirtyBuffersAsync([jobId, paths, onFinished](bool allOk) {
                     TaskProgressService::instance().finishJob(jobId);
                     if (!allOk) {
                         ToolTipOverlay::instance()->showToast("部分元数据保存失败", 2000, QColor("#e81123"));
@@ -317,4 +317,4 @@ void CoreEngine::handleToggleFavorite(const QStringList& paths) {
     CentralEventHub::instance().publishEvent(ev);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

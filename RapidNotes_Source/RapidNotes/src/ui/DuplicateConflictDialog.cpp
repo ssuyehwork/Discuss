@@ -5,7 +5,7 @@
 #include <QLabel>
 #include <QButtonGroup>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 static QWidget* createCard(const DuplicateItemInfo& item, const QString& badgeText, bool isExisting) {
     Q_UNUSED(isExisting);
@@ -123,4 +123,4 @@ bool DuplicateConflictDialog::applyToAll() const {
     return m_chkApplyToAll->isChecked();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -7,7 +7,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 std::wstring VolumePathResolver::getVolumeSerialNumber(const std::wstring& path) {
     if (path.length() < 2 || path[1] != L':') return L"UNKNOWN";
@@ -44,4 +44,4 @@ std::wstring VolumePathResolver::getVolumeSerialNumber(const std::wstring& path)
     return unknown;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

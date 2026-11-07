@@ -4,7 +4,7 @@
 #include <QStringList>
 #include <QDateTime>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct MarkedFolderRecord {
     int id = 0;
@@ -27,4 +27,4 @@ public:
     static QStringList getActiveMarkedFolders();
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

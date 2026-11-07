@@ -1,12 +1,12 @@
 #include "LinkStatusGroup.h"
 #include <QButtonGroup>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void LinkStatusGroup::populate(QWidget* parentWidget,
                                QVBoxLayout* contentLayout,
                                FilterStateModel* filterModel,
-                               const QuarkMeta::ScanStats& currentStats,
+                               const RapidNotes::ScanStats& currentStats,
                                const FilterState& currentState,
                                AddFilterRowFunc addFilterRow) {
     if (!contentLayout || !filterModel || !addFilterRow) return;
@@ -39,4 +39,4 @@ void LinkStatusGroup::populate(QWidget* parentWidget,
     linkGroup->addButton(cbNo);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

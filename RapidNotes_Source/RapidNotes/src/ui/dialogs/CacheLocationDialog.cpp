@@ -10,7 +10,7 @@
 #include <QDir>
 #include <QFile>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 CacheLocationDialog::CacheLocationDialog(QWidget* parent)
     : FramelessDialog("缩略图与缓存位置设置", parent) {
@@ -122,4 +122,4 @@ void CacheLocationDialog::onSaveAndAccept() {
     accept();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

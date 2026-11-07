@@ -71,7 +71,7 @@ static int tiffMapProc(thandle_t clientData, void** pbase, toff_t* psize) {
 static void tiffUnmapProc(thandle_t, void*, toff_t) {
 }
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QImage FormatDecoders::decodeTiffMemorySafely(const QByteArray& tiffData, int maxMemoryMB) {
     TiffMemoryStream stream;
@@ -560,4 +560,4 @@ QImage FormatDecoders::renderPdfAiFirstPage(const QString& filePath, int targetS
     return QImage(); 
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

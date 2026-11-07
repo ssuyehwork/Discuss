@@ -45,7 +45,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 constexpr int kLayoutEdgeMargin = 5;
 constexpr int kStatusBarHorizontalMargin = 12;
@@ -56,7 +56,7 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent) {
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint);
     setMinimumHeight(700); // 宽度由 PanelLayoutManager::updateDynamicMinimumSize() 动态管理
-    setWindowTitle("QuarkMeta");
+    setWindowTitle("RapidNotes");
 
     m_hoverFilter = new HoverEventFilter(this);
     m_isPinned = AppConfig::instance().getValue("MainWindow/AlwaysOnTop", false).toBool();
@@ -680,4 +680,4 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
     return QMainWindow::nativeEvent(eventType, message, result);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

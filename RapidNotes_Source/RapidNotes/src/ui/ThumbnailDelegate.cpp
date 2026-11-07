@@ -17,7 +17,7 @@
 #include <QHelpEvent>
 #include <QMouseEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ThumbnailDelegate::ThumbnailDelegate(QObject* parent) : RenameCapableDelegate(parent) {}
 
@@ -247,4 +247,4 @@ bool ThumbnailDelegate::editorEvent(QEvent* event, QAbstractItemModel* model,
     return RenameCapableDelegate::editorEvent(event, model, option, index);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -1,5 +1,5 @@
-#ifndef QuarkMeta_METADATA_DEFS_H
-#define QuarkMeta_METADATA_DEFS_H
+#ifndef RapidNotes_METADATA_DEFS_H
+#define RapidNotes_METADATA_DEFS_H
 
 #include <string>
 #include <vector>
@@ -7,7 +7,7 @@
 
 #include <QColor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct PaletteEntry {
     QColor color;
@@ -33,7 +33,7 @@ struct FolderMeta {
     std::string encryptIv;
     std::string encryptVerifyHash;
     std::string folderId; // 128-bit Folder ID (Hex string)
-    std::string metaFileId; // 128-bit Sidecar .QuarkMeta.json File_ID
+    std::string metaFileId; // 128-bit Sidecar .RapidNotes.json File_ID
     std::vector<PaletteEntry> palettes;
 
     FolderMeta() 
@@ -104,6 +104,6 @@ struct ItemMeta {
     }
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
-#endif // QuarkMeta_METADATA_DEFS_H
+#endif // RapidNotes_METADATA_DEFS_H

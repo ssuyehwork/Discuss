@@ -3,7 +3,7 @@
 #include <string>
 #include "DriveMetaDao.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class MetaDbRepository {
 public:
@@ -18,4 +18,4 @@ private:
     ~MetaDbRepository() = default;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

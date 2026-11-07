@@ -1,7 +1,7 @@
 #include "RowLayoutEngine.h"
 #include <algorithm>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 int RowLayoutEngine::calculateRowHeight(int zoomLevel) {
     return std::clamp(zoomLevel, kMinRowHeight, kMaxRowHeight);
@@ -47,4 +47,4 @@ RowLayout RowLayoutEngine::calculate(const QRect& totalRect, int zoomLevel) {
     return l;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

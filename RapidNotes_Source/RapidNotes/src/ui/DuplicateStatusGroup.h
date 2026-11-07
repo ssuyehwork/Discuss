@@ -6,7 +6,7 @@
 #include "FilterStateModel.h"
 #include "ScanStatsEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class DuplicateStatusGroup {
 public:
@@ -14,9 +14,9 @@ public:
 
     static void populate(QVBoxLayout* contentLayout,
                          FilterStateModel* filterModel,
-                         const QuarkMeta::ScanStats& currentStats,
+                         const RapidNotes::ScanStats& currentStats,
                          const FilterState& currentState,
                          AddFilterRowFunc addFilterRow);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

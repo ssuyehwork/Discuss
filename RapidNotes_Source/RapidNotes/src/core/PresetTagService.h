@@ -4,7 +4,7 @@
 #include <QStringList>
 #include <functional>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class PresetTagService {
 public:
@@ -22,4 +22,4 @@ private:
     ~PresetTagService() = default;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -6,7 +6,7 @@
 #include <QMouseEvent>
 #include <QEnterEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ColorBlock : public QWidget {
     Q_OBJECT
@@ -35,4 +35,4 @@ private:
     int m_count = 0;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

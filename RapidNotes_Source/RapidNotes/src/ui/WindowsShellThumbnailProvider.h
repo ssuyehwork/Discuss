@@ -8,7 +8,7 @@
 #include <QSet>
 #include <QMap>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 系统图标加载完成通知器（必须归属主线程）
@@ -68,4 +68,4 @@ private:
     static void recordShellSuccess();
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

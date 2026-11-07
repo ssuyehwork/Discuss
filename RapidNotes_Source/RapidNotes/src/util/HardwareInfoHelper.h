@@ -3,7 +3,7 @@
 #include <QString>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 硬件特征提取与 5 选 1 授权校验辅助类
@@ -57,4 +57,4 @@ public:
     static bool isHardwareAuthorized();
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

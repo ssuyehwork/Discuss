@@ -7,7 +7,7 @@
 #include <QWidget>
 #include <QPointer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 工业级无边框窗口助手类
@@ -34,4 +34,4 @@ private:
     static constexpr int kBaseResizeMargin = 8;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

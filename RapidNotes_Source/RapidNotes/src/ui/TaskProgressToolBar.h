@@ -6,7 +6,7 @@
 #include <QPushButton>
 #include <QHBoxLayout>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TaskProgressToolBar : public QWidget {
     Q_OBJECT
@@ -26,4 +26,4 @@ private:
     QPushButton* m_btnCancel = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

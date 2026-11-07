@@ -5,7 +5,7 @@
 #include <QStringList>
 #include <functional>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContextMenuFactory {
 public:
@@ -83,4 +83,4 @@ public:
                                       QWidget* contextWidget);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

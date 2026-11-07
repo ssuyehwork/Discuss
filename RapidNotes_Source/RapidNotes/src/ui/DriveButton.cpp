@@ -8,7 +8,7 @@
 #include <QTimer>
 #include "../core/AppConfig.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 DriveButton::DriveButton(const QString& driveLetter, QWidget* parent)
     : QPushButton(parent), m_driveLetter(driveLetter) {
@@ -118,4 +118,4 @@ void DriveButton::stopRotation() {
     m_rotationAngle = 0;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

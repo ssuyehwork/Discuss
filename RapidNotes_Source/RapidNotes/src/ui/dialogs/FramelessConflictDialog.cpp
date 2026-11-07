@@ -5,7 +5,7 @@
 #include <QLabel>
 #include <QPushButton>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FramelessConflictDialog::FramelessConflictDialog(const QString& title, const QString& message, QWidget* parent)
     : FramelessDialog(title, parent) {
@@ -73,4 +73,4 @@ FramelessConflictDialog::FramelessConflictDialog(const QString& title, const QSt
     layout->addLayout(btnLayout);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

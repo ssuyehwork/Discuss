@@ -3,7 +3,7 @@
 #include <QCoreApplication>
 #include <algorithm>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TaskProgressService& TaskProgressService::instance() {
     static TaskProgressService s_instance;
@@ -111,4 +111,4 @@ void TaskProgressService::recalculateAndEmit() {
     emit progressUpdated(averagePercent, lastTitle, lastDetail, activeCount);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

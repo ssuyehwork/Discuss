@@ -20,9 +20,9 @@
 #include "UiHelper.h"
 #include "CardPainterHelper.h"
 #include "StyleLibrary.h"
-using namespace QuarkMeta::Style;
+using namespace RapidNotes::Style;
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 通用树形视图代理，提供圆角高亮效果
@@ -290,4 +290,4 @@ private:
     bool m_drawMiniCards;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

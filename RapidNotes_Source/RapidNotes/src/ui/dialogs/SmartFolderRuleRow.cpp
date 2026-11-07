@@ -1,7 +1,7 @@
 #include "SmartFolderRuleRow.h"
 #include "../UiHelper.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 SmartFolderRuleRow::SmartFolderRuleRow(QWidget* parent) : QWidget(parent) {
     initUi();
@@ -316,4 +316,4 @@ void SmartFolderRuleRow::setRule(const SmartFolderRule& rule) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

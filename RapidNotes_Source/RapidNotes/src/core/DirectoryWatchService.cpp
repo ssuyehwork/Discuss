@@ -6,7 +6,7 @@
 #include <QFileInfo>
 #include <QMetaObject>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 DirectoryWatchService& DirectoryWatchService::instance() {
     static DirectoryWatchService service;
@@ -488,4 +488,4 @@ void DirectoryWatchService::processWorkerQueue() {
 #endif
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

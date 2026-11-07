@@ -7,7 +7,7 @@
 #include <QStringList>
 #include <QModelIndex>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief Helper class for unified drag-and-drop behavior across item views.
@@ -54,4 +54,4 @@ private:
     static QAbstractItemView* s_lastDragSourceView;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -9,7 +9,7 @@
 #include <mutex>
 #include <vector>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 
@@ -34,4 +34,4 @@ private:
     std::mutex m_tokenMutex;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

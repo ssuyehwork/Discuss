@@ -12,7 +12,7 @@
 #include <QWindow>
 #include <QStyle>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TagSelectorOverlay::TagSelectorOverlay(const QStringList& initialSelected, QWidget* parent, TagTriggerSource source)
     : TagSelectorOverlay(initialSelected, QStringList{}, parent, source)
@@ -463,4 +463,4 @@ bool TagSelectorOverlay::nativeEvent(const QByteArray& eventType, void* message,
     return QFrame::nativeEvent(eventType, message, result);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

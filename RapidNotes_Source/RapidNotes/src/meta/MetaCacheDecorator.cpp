@@ -1,5 +1,5 @@
 #include "MetaCacheDecorator.h" 
-#include "QuarkMetaJsonStore.h" 
+#include "RapidNotesJsonStore.h" 
 #include "DriveMetaDao.h"
 #include "MetadataManager.h"
 #include "ItemMetaMapper.h"
@@ -8,7 +8,7 @@
 #include <unordered_map> 
 #include <memory> 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
 void MetaCacheDecorator::decorate(std::vector<ItemRecord>& records) { 
     if (records.empty()) return; 
 
@@ -16,7 +16,7 @@ void MetaCacheDecorator::decorate(std::vector<ItemRecord>& records) {
     auto driveMetas = DriveMetaDao::getAllDriveMeta();
  
     // 按父目录路径建立统一 Store 内存视图缓存，读取尚未刷盘的最新内容
-    std::unordered_map<std::wstring, QuarkMetaJson::ItemMap> folderCacheMap; 
+    std::unordered_map<std::wstring, RapidNotesJson::ItemMap> folderCacheMap; 
  
     for (auto& itemRec : records) { 
         // 【盘符特殊处理】：如果是驱动器根目录（如 C:\、D:\）
@@ -38,7 +38,7 @@ void MetaCacheDecorator::decorate(std::vector<ItemRecord>& records) {
  
         auto cacheIt = folderCacheMap.find(dirPath); 
         if (cacheIt == folderCacheMap.end()) { 
-            folderCacheMap[dirPath] = QuarkMetaJsonStore::instance().readFolderMeta(dirPath); 
+            folderCacheMap[dirPath] = RapidNotesJsonStore::instance().readFolderMeta(dirPath); 
             cacheIt = folderCacheMap.find(dirPath); 
         } 
  

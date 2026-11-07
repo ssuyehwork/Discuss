@@ -10,7 +10,7 @@
 #include <QPointer>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 LibraryValidationService& LibraryValidationService::instance() {
     static LibraryValidationService s_instance;
@@ -98,4 +98,4 @@ void LibraryValidationService::validateRecordsAsync(const std::vector<ItemRecord
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

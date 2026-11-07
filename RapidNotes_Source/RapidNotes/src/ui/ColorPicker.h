@@ -9,7 +9,7 @@
 #include <QString>
 #include <QEnterEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // --- SV (饱和度/亮度) 拾取区域 ---
 class SvPicker : public QWidget {
@@ -110,4 +110,4 @@ private:
     int m_spacing = 7;       // 按钮与按钮之间的间距由 6 像素调整为 7 像素
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

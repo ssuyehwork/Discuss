@@ -7,7 +7,7 @@
 #include <QMouseEvent>
 #include <QtMath>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ColorWheel::ColorWheel(QWidget* parent)
     : QWidget(parent)
@@ -258,4 +258,4 @@ void ColorWheel::updateCursorShape(const QPoint& pos) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

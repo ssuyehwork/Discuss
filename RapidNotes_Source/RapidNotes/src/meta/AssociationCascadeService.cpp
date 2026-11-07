@@ -9,7 +9,7 @@
 #include <QDateTime>
 #include <sqlite3.h>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 AssociationCascadeService& AssociationCascadeService::instance() {
     static AssociationCascadeService s_inst;
@@ -402,4 +402,4 @@ bool AssociationCascadeService::restoreAssociations(const AssetAssociationSnapsh
     return ok;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

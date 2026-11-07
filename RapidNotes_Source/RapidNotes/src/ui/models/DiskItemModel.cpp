@@ -11,8 +11,8 @@
 #include <QDir>
 #include <limits>
 #include <QThreadPool>
-#include "../../meta/QuarkMetaJson.h"
-#include "../../meta/QuarkMetaJsonStore.h"
+#include "../../meta/RapidNotesJson.h"
+#include "../../meta/RapidNotesJsonStore.h"
 #include "../../meta/MetadataDefs.h"
 #include "CoreController.h"
 #include "DiskMediaExtractor.h"
@@ -21,7 +21,7 @@
 #include "DriveMetaDao.h"
 #include "../../core/LastOperationManager.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QThreadPool* DiskItemModel::thumbnailPool() {
     static QThreadPool pool;
@@ -150,7 +150,7 @@ void DiskItemModel::setRecords(const std::vector<ItemRecord>& records, RecordSou
         }
     }
 
-    // Section F: 一次性播种内存缓存，不触发侧车 .QuarkMeta.json 写盘
+    // Section F: 一次性播种内存缓存，不触发侧车 .RapidNotes.json 写盘
     MetadataManager::instance().seedMemoryCacheBatch(m_allRecords);
     m_iconCache.setMaxCost(qMax(500, static_cast<int>(m_allRecords.size()) + 50));
     endResetModel();
@@ -287,7 +287,7 @@ void DiskItemModel::preloadDimensionsAsync(const QStringList& targetPaths) {
         if (dimMap.empty() || !weakThis || weakThis->currentGeneration() != thisGen) return;
 
         for (const auto& item : resolvedSizes) {
-            QuarkMetaJsonStore::instance().updateItemMeta(item.first.toStdWString(), [sz = item.second](ItemMeta& meta) {
+            RapidNotesJsonStore::instance().updateItemMeta(item.first.toStdWString(), [sz = item.second](ItemMeta& meta) {
                 meta.width = sz.width();
                 meta.height = sz.height();
             });
@@ -821,7 +821,7 @@ QVariant DiskItemModel::data(const QModelIndex& index, int role) const {
 
 QStringList DiskItemModel::applyIncrementalChanges(const std::vector<ItemRecord>& records, const QStringList& removedPaths) {
     // 1. 构建临时规范化键映射，避免 O(n·k)
-    std::unordered_map<QString, int, QuarkMeta::QStringHash> normPathMap;
+    std::unordered_map<QString, int, RapidNotes::QStringHash> normPathMap;
     normPathMap.reserve(m_allRecords.size());
     for (int i = 0; i < static_cast<int>(m_allRecords.size()); ++i) {
         normPathMap[QDir::cleanPath(m_allRecords[i].path).toLower()] = i;
@@ -1028,4 +1028,4 @@ void DiskItemModel::reloadThumbnailForPath(const QString& path) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

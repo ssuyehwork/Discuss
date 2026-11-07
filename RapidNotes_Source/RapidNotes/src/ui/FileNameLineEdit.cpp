@@ -1,6 +1,6 @@
 #include "FileNameLineEdit.h" 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 FileNameLineEdit::FileNameLineEdit(QWidget* parent) : QLineEdit(parent) {} 
  
@@ -56,4 +56,4 @@ void FileNameLineEdit::keyPressEvent(QKeyEvent* event) {
     QLineEdit::keyPressEvent(event); 
 } 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

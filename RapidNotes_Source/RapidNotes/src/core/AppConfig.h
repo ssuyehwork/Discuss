@@ -6,7 +6,7 @@
 #include <QStandardPaths>
 #include <QDir>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 工业级配置管理单例 (AppConfig)
@@ -49,7 +49,7 @@ public:
     }
 
 private:
-    AppConfig() : m_settings("QuarkMeta", "QuarkMeta") {}
+    AppConfig() : m_settings("RapidNotes", "RapidNotes") {}
     ~AppConfig() = default;
     AppConfig(const AppConfig&) = delete;
     AppConfig& operator=(const AppConfig&) = delete;
@@ -58,4 +58,4 @@ private:
     mutable QMutex m_mutex;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

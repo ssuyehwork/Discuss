@@ -7,7 +7,7 @@
 #include "FavoriteDao.h"
 #include "MarkedFolderDao.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // 库分类路径关联快照项
 struct LibraryCategoryPathEntry {
@@ -57,4 +57,4 @@ private:
     static QString escapeLikePattern(const QString& str);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

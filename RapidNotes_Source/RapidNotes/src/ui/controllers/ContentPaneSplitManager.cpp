@@ -9,7 +9,7 @@
 #include <QStyle>
 #include <QDir>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentPaneSplitManager::ContentPaneSplitManager(ContentPanel* panel)
     : QObject(panel), m_panel(panel)
@@ -1037,4 +1037,4 @@ void ContentPaneSplitManager::hideDragOverlay() {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

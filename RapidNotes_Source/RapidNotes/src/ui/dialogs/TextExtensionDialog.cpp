@@ -6,7 +6,7 @@
 #include <QScrollArea>
 #include <QFrame>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TextExtensionDialog::TextExtensionDialog(QWidget* parent)
     : FramelessDialog("文本扩展名设置", parent) {
@@ -174,4 +174,4 @@ void TextExtensionDialog::onSaveAndAccept() {
     accept();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

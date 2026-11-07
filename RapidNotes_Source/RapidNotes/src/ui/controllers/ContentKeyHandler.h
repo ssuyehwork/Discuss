@@ -5,7 +5,7 @@
 
 class QAbstractItemView;
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 
@@ -53,4 +53,4 @@ private:
     ContentPanel* m_panel = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

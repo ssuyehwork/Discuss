@@ -1,7 +1,7 @@
 #include "DiskNavigatorService.h"
 #include <filesystem>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 DiskNavigatorService& DiskNavigatorService::instance() {
     static DiskNavigatorService inst;
@@ -9,7 +9,7 @@ DiskNavigatorService& DiskNavigatorService::instance() {
 }
 
 std::unordered_map<std::wstring, ItemMeta> DiskNavigatorService::loadDirectoryItems(const std::wstring& folderPath) {
-    return QuarkMetaJson::readFolderMeta(folderPath);
+    return RapidNotesJson::readFolderMeta(folderPath);
 }
 
 bool DiskNavigatorService::getItemMeta(const std::wstring& filePath, ItemMeta& outMeta) {
@@ -19,7 +19,7 @@ bool DiskNavigatorService::getItemMeta(const std::wstring& filePath, ItemMeta& o
 
     if (parentDir.empty()) return false;
 
-    auto items = QuarkMetaJson::readFolderMeta(parentDir);
+    auto items = RapidNotesJson::readFolderMeta(parentDir);
     auto it = items.find(fileName);
     if (it != items.end()) {
         outMeta = it->second;
@@ -29,12 +29,12 @@ bool DiskNavigatorService::getItemMeta(const std::wstring& filePath, ItemMeta& o
 }
 
 void DiskNavigatorService::saveItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater) {
-    QuarkMetaJson::updateItemMeta(filePath, updater);
+    RapidNotesJson::updateItemMeta(filePath, updater);
 }
 
 void DiskNavigatorService::handleDiskRename(const std::wstring& oldPath, const std::wstring& newPath, bool isDir) {
     Q_UNUSED(isDir);
-    QuarkMetaJson::migrateItemMetadata(QString::fromStdWString(oldPath), QString::fromStdWString(newPath));
+    RapidNotesJson::migrateItemMetadata(QString::fromStdWString(oldPath), QString::fromStdWString(newPath));
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

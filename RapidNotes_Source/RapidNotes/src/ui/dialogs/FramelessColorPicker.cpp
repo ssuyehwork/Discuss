@@ -4,7 +4,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 FramelessColorPicker::FramelessColorPicker(const QString& title, QWidget* parent)
     : FramelessDialog(title, parent)
@@ -48,4 +48,4 @@ void FramelessColorPicker::setCurrentColor(const QColor& color) {
     m_picker->setCurrentColor(color);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

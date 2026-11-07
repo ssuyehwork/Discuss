@@ -4,7 +4,7 @@
 #include <QStringList>
 #include <QObject>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 磁盘导航模式下的物理回收站服务层 (DiskTrashService)
@@ -49,4 +49,4 @@ public:
     static bool getLatestTrashItemByOriginalPath(const QString& originalPath, int& outId, QString& outTrashPath);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

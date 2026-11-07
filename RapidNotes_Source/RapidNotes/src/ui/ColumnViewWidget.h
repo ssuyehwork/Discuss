@@ -11,7 +11,7 @@
 #include "DropListView.h"
 #include "ColumnViewPane.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ContentPanel;
 
@@ -82,4 +82,4 @@ private:
     QWidget* m_blankCanvasWidget = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

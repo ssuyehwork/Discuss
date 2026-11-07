@@ -1,12 +1,12 @@
 #include "ScanStatsEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ScanStatsEngine::ScanStatsEngine(QObject* parent) : QObject(parent) {}
 
-void ScanStatsEngine::updateStats(const QuarkMeta::ScanStats& stats) {
+void ScanStatsEngine::updateStats(const RapidNotes::ScanStats& stats) {
     m_stats = stats;
     emit statsUpdated(m_stats);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

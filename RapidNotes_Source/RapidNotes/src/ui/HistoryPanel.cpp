@@ -20,7 +20,7 @@
 #include <QMouseEvent>
 #include <QHeaderView>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 HistoryPanel::HistoryPanel(QWidget* parent) : QWidget(parent) {
     initUi();
@@ -173,8 +173,8 @@ void HistoryPanel::onContextMenuRequested(const QPoint& pos) {
             }
         });
 
-        // 3. 在 QuarkMeta 中显示 (单选可用，多选时置灰禁用)
-        QAction* actShowInApp = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18), "在 QuarkMeta 中显示");
+        // 3. 在 RapidNotes 中显示 (单选可用，多选时置灰禁用)
+        QAction* actShowInApp = menu.addAction(UiHelper::getIcon("folder_filled", QColor("#EEEEEE"), 18), "在 RapidNotes 中显示");
         if (selectedPaths.size() == 1) {
             QString singlePath = selectedPaths.first();
             connect(actShowInApp, &QAction::triggered, this, [this, singlePath]() {
@@ -363,4 +363,4 @@ bool HistoryPanel::eventFilter(QObject* watched, QEvent* event) {
     return QWidget::eventFilter(watched, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

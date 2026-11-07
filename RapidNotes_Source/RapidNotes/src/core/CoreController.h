@@ -6,7 +6,7 @@
 #include <memory>
 #include <atomic>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 核心中控类
@@ -86,4 +86,4 @@ private:
     static std::atomic<uint64_t> s_navigationGeneration;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

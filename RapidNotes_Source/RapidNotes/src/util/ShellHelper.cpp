@@ -19,12 +19,12 @@
 
 #include "../meta/MetadataManager.h"
 #include "../meta/StatisticsService.h"
-#include "../meta/QuarkMetaJson.h"
-#include "../meta/QuarkMetaJsonStore.h"
+#include "../meta/RapidNotesJson.h"
+#include "../meta/RapidNotesJsonStore.h"
 #include "../core/DiskTrashService.h"
 #include "DiskMediaExtractor.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 bool ShellHelper::moveToTrash(const QStringList& paths) {
     return DiskTrashService::moveToDiskTrash(paths);
@@ -36,7 +36,7 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
                                    QMap<QString, QString>* outDestMap) {
 #ifdef Q_OS_WIN
     if (sourcePaths.isEmpty() || destDir.isEmpty()) return false;
-    QuarkMetaJsonStore::instance().flushAllDirtyBuffers(true);
+    RapidNotesJsonStore::instance().flushAllDirtyBuffers(true);
 
     QList<QPair<QString, QString>> pathPairs;
     pathPairs.reserve(sourcePaths.size());
@@ -92,7 +92,7 @@ bool ShellHelper::copyOrMoveItems(const QStringList& sourcePaths, const QString&
 
     bool ok = (SHFileOperationW(&fileOp) == 0 && !fileOp.fAnyOperationsAborted);
     if (ok && !pathPairs.isEmpty()) {
-        QuarkMetaJson::roamBatchMetadata(pathPairs, isMove);
+        RapidNotesJson::roamBatchMetadata(pathPairs, isMove);
         DiskMediaExtractor::roamThumbnailCacheBatch(pathPairs, isMove);
         MetadataManager::instance().notifyUI(MetadataManager::RefreshLevel::PathUpdate, destDir);
         if (outDestMap) {
@@ -216,10 +216,10 @@ void ShellHelper::openInExplorer(const QString& path) {
 }
 
 bool ShellHelper::renameItem(const QString& oldPath, const QString& newPath) {
-    QuarkMetaJsonStore::instance().flushAllDirtyBuffers(true);
+    RapidNotesJsonStore::instance().flushAllDirtyBuffers(true);
     if (QFile::rename(oldPath, newPath)) {
-        // 1. 物理漫游迁移 .QuarkMeta.json 元数据 
-        QuarkMetaJson::migrateItemMetadata(oldPath, newPath);
+        // 1. 物理漫游迁移 .RapidNotes.json 元数据 
+        RapidNotesJson::migrateItemMetadata(oldPath, newPath);
         // 同步数据库
         MetadataManager::instance().renameItem(oldPath.toStdWString(), newPath.toStdWString());
         return true;
@@ -279,4 +279,4 @@ void ShellHelper::extractArchive(const QString& archivePath, const QString& dest
 #endif
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -13,7 +13,7 @@
 #include <QLineEdit>
 #include <QThreadPool>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentChangeWatcher::ContentChangeWatcher(ContentPanel* panel)
     : QObject(panel), m_panel(panel) {
@@ -281,4 +281,4 @@ void ContentChangeWatcher::processAccumulatedChanges() {
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

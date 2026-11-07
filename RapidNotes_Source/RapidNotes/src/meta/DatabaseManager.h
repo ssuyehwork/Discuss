@@ -1,5 +1,5 @@
-#ifndef QuarkMeta_DATABASE_MANAGER_H
-#define QuarkMeta_DATABASE_MANAGER_H
+#ifndef RapidNotes_DATABASE_MANAGER_H
+#define RapidNotes_DATABASE_MANAGER_H
 
 #include <QString>
 #include <QObject>
@@ -8,7 +8,7 @@
 #include <mutex>
 #include "sqlite3.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 数据库事务 RAII 守卫
@@ -87,6 +87,6 @@ private:
     bool m_isInitialized = false;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
-#endif // QuarkMeta_DATABASE_MANAGER_H
+#endif // RapidNotes_DATABASE_MANAGER_H

@@ -1,7 +1,7 @@
 #include "ColorLabelGroup.h"
 #include "StyleLibrary.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void ColorLabelGroup::populate(QWidget* parentWidget,
                                QVBoxLayout* contentLayout,
@@ -44,4 +44,4 @@ void ColorLabelGroup::populate(QWidget* parentWidget,
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -14,7 +14,7 @@
 #include <memory>
 #include "sqlite3.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 专职后台增量派生索引服务 (index.db)
@@ -91,4 +91,4 @@ private:
     static constexpr int kSchemaVersion = 1;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

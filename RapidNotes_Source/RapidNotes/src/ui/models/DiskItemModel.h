@@ -9,7 +9,7 @@
 #include <QThreadPool>
 #include <memory>
 #include "../../meta/MetadataDefs.h"
-#include "../../meta/QuarkMetaJson.h"
+#include "../../meta/RapidNotesJson.h"
 
 #include <unordered_map>
 #include <QSet>
@@ -17,7 +17,7 @@
 #include <QTimer>
 #include "../../core/CoreEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class DiskItemModel : public ItemModelBase {
     Q_OBJECT
@@ -36,10 +36,10 @@ public:
     void incrementGeneration();
     uint64_t currentGeneration() const { return m_currentGen.load(std::memory_order_relaxed); }
 
-    const std::vector<QuarkMeta::ItemRecord>& allRecords() const override { return m_allRecords; }
-    void setRecords(const std::vector<QuarkMeta::ItemRecord>& records, RecordSource source = RecordSource::Disk) override;
-    void addItemRecord(const QuarkMeta::ItemRecord& record);
-    void appendRecord(const QuarkMeta::ItemRecord& record);
+    const std::vector<RapidNotes::ItemRecord>& allRecords() const override { return m_allRecords; }
+    void setRecords(const std::vector<RapidNotes::ItemRecord>& records, RecordSource source = RecordSource::Disk) override;
+    void addItemRecord(const RapidNotes::ItemRecord& record);
+    void appendRecord(const RapidNotes::ItemRecord& record);
     void clear() override;
     void updateRecordMetadata(QString path) override;
     void updateRecordMetadataBatch(const QStringList& paths) override;
@@ -48,7 +48,7 @@ public:
     void clearCacheForFolder(const QString& folderPath) override;
 
     // 增量更新接口
-    QStringList applyIncrementalChanges(const std::vector<QuarkMeta::ItemRecord>& records, const QStringList& removedPaths) override;
+    QStringList applyIncrementalChanges(const std::vector<RapidNotes::ItemRecord>& records, const QStringList& removedPaths) override;
 
     // 异步全文件夹文件头极速尺寸提取流水线
     void preloadDimensionsAsync(const QStringList& targetPaths = QStringList());
@@ -62,8 +62,8 @@ signals:
     void thumbnailLoaded(int rowIndex);
 
 protected:
-    std::vector<QuarkMeta::ItemRecord> m_allRecords;
-    std::unordered_map<QString, int, QuarkMeta::QStringHash> m_pathToIndex;
+    std::vector<RapidNotes::ItemRecord> m_allRecords;
+    std::unordered_map<QString, int, RapidNotes::QStringHash> m_pathToIndex;
     mutable QCache<QString, QIcon> m_iconCache;
     QSet<QString> m_requestedPaths; // 🚨 核心防爆锁：记录已经在排队/处理中的任务路径
     mutable QMap<QString, double> m_aspectRatios;
@@ -81,6 +81,6 @@ private:
     QSet<int> m_pendingThumbRows;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
 #endif // DISKITEMMODEL_H

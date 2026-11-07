@@ -24,7 +24,7 @@
 #include <QCoreApplication>
 #include <QMetaObject>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentFileOpsHandler::ContentFileOpsHandler(ContentPanel* panel)
     : QObject(panel), m_panel(panel) {}
@@ -290,4 +290,4 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
     });
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

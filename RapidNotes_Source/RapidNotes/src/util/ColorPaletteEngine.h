@@ -8,7 +8,7 @@
 #include <vector>
 #include <utility>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 底层图像多媒体色彩与调色板计算引擎 (纯计算与图像处理，0 UI 依赖)
@@ -57,4 +57,4 @@ private:
     static double radToDeg(double rad);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

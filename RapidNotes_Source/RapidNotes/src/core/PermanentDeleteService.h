@@ -6,7 +6,7 @@
 #include <vector>
 #include <utility>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 物理安全永久删除与物理抹除服务层 (Single Source of Destruction Truth)
@@ -42,4 +42,4 @@ private:
     PermanentDeleteService& operator=(const PermanentDeleteService&) = delete;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -37,7 +37,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 namespace {
 constexpr double kMultiPreviewAngleStep = 3.0;
@@ -1162,4 +1162,4 @@ bool MetaPanel::eventFilter(QObject* watched, QEvent* event) {
     return QFrame::eventFilter(watched, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

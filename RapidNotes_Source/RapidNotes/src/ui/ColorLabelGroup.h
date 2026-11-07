@@ -9,7 +9,7 @@
 #include <functional>
 #include "FilterStateModel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ColorLabelGroup {
 public:
@@ -23,4 +23,4 @@ public:
                          AddFilterRowFunc addFilterRow);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

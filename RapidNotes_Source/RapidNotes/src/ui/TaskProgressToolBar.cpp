@@ -2,7 +2,7 @@
 #include "../core/TaskProgressService.h"
 #include "UiHelper.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TaskProgressToolBar::TaskProgressToolBar(QWidget* parent)
     : QWidget(parent) {
@@ -58,4 +58,4 @@ void TaskProgressToolBar::bindService() {
     connect(&TaskProgressService::instance(), &TaskProgressService::allJobsFinished, this, &QWidget::hide);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

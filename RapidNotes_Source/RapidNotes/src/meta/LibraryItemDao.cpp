@@ -7,7 +7,7 @@
 #include <QDateTime>
 #include <QDebug>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 std::vector<ItemRecord> LibraryItemDao::getItemsByPaths(const QStringList& paths) {
     std::vector<ItemRecord> result;
@@ -425,4 +425,4 @@ bool LibraryItemDao::markSyncStateByPath(const QString& path, int syncState) {
     return false;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

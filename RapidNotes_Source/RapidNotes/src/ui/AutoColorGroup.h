@@ -6,7 +6,7 @@
 #include <QStringList>
 #include "FilterStateModel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class AutoColorGroup {
 public:
@@ -18,4 +18,4 @@ public:
     static void pushRecent(const QString& hex);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

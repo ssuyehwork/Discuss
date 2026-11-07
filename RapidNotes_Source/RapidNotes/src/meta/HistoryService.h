@@ -5,7 +5,7 @@
 #include <QStringList>
 #include "HistoryDao.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class HistoryService : public QObject {
     Q_OBJECT
@@ -28,4 +28,4 @@ private:
     ~HistoryService() override = default;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

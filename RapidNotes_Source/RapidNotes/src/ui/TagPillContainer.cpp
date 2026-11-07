@@ -3,7 +3,7 @@
 #include <QMouseEvent>
 #include <QLayoutItem>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 TagPillContainer::TagPillContainer(QWidget* parent, TagTriggerSource source)
     : QFrame(parent), m_triggerSource(source) {
@@ -103,4 +103,4 @@ bool TagPillContainer::eventFilter(QObject* obj, QEvent* event) {
     return QFrame::eventFilter(obj, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

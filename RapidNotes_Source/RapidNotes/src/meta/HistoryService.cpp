@@ -3,7 +3,7 @@
 #include <QFileInfo>
 #include <QDir>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 HistoryService& HistoryService::instance() {
     static HistoryService inst;
@@ -13,7 +13,7 @@ HistoryService& HistoryService::instance() {
 HistoryService::HistoryService(QObject* parent) : QObject(parent) {
     HistoryDao::initTable();
 
-    connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [this](const QuarkMeta::AppEvent& event) {
+    connect(&CentralEventHub::instance(), &CentralEventHub::eventOccurred, this, [this](const RapidNotes::AppEvent& event) {
         if (event.type == AppEventType::ItemsDeleted) {
             for (const QString& path : event.paths) {
                 if (HistoryDao::removeHistory(path)) {
@@ -71,4 +71,4 @@ bool HistoryService::clearAllHistory() {
     return ok;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

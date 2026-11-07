@@ -25,7 +25,7 @@
 #endif
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 WindowsShellThumbnailProvider& WindowsShellThumbnailProvider::instance() {
     static WindowsShellThumbnailProvider inst;
@@ -309,4 +309,4 @@ QImage WindowsShellThumbnailProvider::getShellThumbnail(const QString& path, int
     return QImage();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

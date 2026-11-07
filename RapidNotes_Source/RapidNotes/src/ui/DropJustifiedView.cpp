@@ -4,7 +4,7 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 DropJustifiedView::DropJustifiedView(QWidget* parent) : JustifiedView(parent) {
     setDragEnabled(true);
@@ -15,4 +15,4 @@ void DropJustifiedView::startDrag(Qt::DropActions supportedActions) {
     ViewDragDropHelper::executeStartDrag(this, supportedActions);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

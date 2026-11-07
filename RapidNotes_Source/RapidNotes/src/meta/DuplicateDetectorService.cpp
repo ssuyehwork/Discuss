@@ -11,7 +11,7 @@
 #include <unordered_set>
 #include <algorithm>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QString DuplicateDetectorService::computeFastHash(const QString& filePath, qint64 fileSize) {
     QFile file(filePath);
@@ -198,4 +198,4 @@ std::vector<DuplicateConflictGroup> DuplicateDetectorService::detectDuplicates(c
     return conflicts;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

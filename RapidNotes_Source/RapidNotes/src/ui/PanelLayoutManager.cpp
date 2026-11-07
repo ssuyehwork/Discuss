@@ -14,7 +14,7 @@
 #include <QList>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 PanelLayoutManager::PanelLayoutManager(QMainWindow* mainWindow,
                                        QSplitter* mainSplitter,
@@ -265,4 +265,4 @@ void PanelLayoutManager::saveLayoutState() {
     AppConfig::instance().sync();
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

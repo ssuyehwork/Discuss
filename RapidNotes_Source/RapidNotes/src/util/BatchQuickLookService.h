@@ -6,7 +6,7 @@
 #include <mutex>
 #include "../core/CoreEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 专职负责后台批量预生成 2048px 高清 QuickLook 预览图的高性能服务
@@ -42,4 +42,4 @@ private:
     mutable std::mutex m_mutex;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

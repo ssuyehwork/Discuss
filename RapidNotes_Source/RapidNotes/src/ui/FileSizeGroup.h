@@ -4,7 +4,7 @@
 #include <QVBoxLayout>
 #include "FilterStateModel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class FileSizeGroup {
 public:
@@ -13,4 +13,4 @@ public:
                          FilterStateModel* filterModel);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

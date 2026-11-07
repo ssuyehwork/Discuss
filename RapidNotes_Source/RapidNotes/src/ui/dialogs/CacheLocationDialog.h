@@ -6,7 +6,7 @@
 #include <QPushButton>
 #include <QCheckBox>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class CacheLocationDialog : public FramelessDialog {
     Q_OBJECT
@@ -33,4 +33,4 @@ private:
     QPushButton* m_btnSave{nullptr};
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

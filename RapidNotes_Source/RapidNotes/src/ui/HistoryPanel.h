@@ -7,7 +7,7 @@
 #include <QIcon>
 #include "FavoritePanel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class HistoryPanel : public QWidget {
     Q_OBJECT
@@ -43,4 +43,4 @@ private:
     QString m_lastHoveredPath;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

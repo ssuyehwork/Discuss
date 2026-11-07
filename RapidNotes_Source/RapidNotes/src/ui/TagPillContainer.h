@@ -5,7 +5,7 @@
 #include "components/FlowLayout.h"
 #include "TagSelectorOverlay.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TagPillContainer : public QFrame {
     Q_OBJECT
@@ -35,4 +35,4 @@ private:
     TagSelectorOverlay* m_selectorOverlay = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -9,7 +9,7 @@
 #include <vector>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct RuntimeMeta {
     int rating;
@@ -91,4 +91,4 @@ private:
     std::array<MetaShard, NUM_SHARDS> m_shards;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

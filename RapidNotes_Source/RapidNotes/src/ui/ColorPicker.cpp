@@ -14,7 +14,7 @@
 #include "UiHelper.h"
 #include "StyleLibrary.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // --- SvPicker ---
 SvPicker::SvPicker(QWidget* parent) : QWidget(parent) {
@@ -433,4 +433,4 @@ void ColorStripPicker::mousePressEvent(QMouseEvent* event) {
     QWidget::mousePressEvent(event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

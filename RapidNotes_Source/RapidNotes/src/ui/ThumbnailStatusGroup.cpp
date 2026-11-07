@@ -1,11 +1,11 @@
 #include "ThumbnailStatusGroup.h"
 #include <QButtonGroup>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 void ThumbnailStatusGroup::populate(QVBoxLayout* contentLayout,
                                    FilterStateModel* filterModel,
-                                   const QuarkMeta::ScanStats& currentStats,
+                                   const RapidNotes::ScanStats& currentStats,
                                    const FilterState& currentState,
                                    AddFilterRowFunc addFilterRow) {
     if (!contentLayout || !filterModel || !addFilterRow) return;
@@ -38,4 +38,4 @@ void ThumbnailStatusGroup::populate(QVBoxLayout* contentLayout,
     thumbGroup->addButton(cbNo);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

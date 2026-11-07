@@ -1,5 +1,5 @@
-#include "QuarkMetaJson.h"
-#include "QuarkMetaJsonStore.h"
+#include "RapidNotesJson.h"
+#include "RapidNotesJsonStore.h"
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -15,19 +15,19 @@
 #endif
 #include <windows.h>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
-QuarkMetaJson::QuarkMetaJson(const std::wstring& folderPath)
+RapidNotesJson::RapidNotesJson(const std::wstring& folderPath)
     : m_folderPath(folderPath) {
     std::wstring path = folderPath;
     if (!path.empty() && path.back() != L'\\' && path.back() != L'/') {
         path += L'\\';
     }
-    // 🚨 QuarkMeta 唯一物理离散缓存文件名：.QuarkMeta.json
-    m_filePath = path + L".QuarkMeta.json";
+    // 🚨 RapidNotes 唯一物理离散缓存文件名：.RapidNotes.json
+    m_filePath = path + L".RapidNotes.json";
 }
 
-bool QuarkMetaJson::load() {
+bool RapidNotesJson::load() {
     m_loadFailed = false;
     QFile file(toQString(m_filePath));
     if (!file.exists()) {
@@ -67,7 +67,7 @@ bool QuarkMetaJson::load() {
     return true;
 }
 
-bool QuarkMetaJson::save() const {
+bool RapidNotesJson::save() const {
     QJsonObject itemsObj;
     for (const auto& [name, meta] : m_items) {
         if (meta.hasUserOperations()) {
@@ -75,7 +75,7 @@ bool QuarkMetaJson::save() const {
         }
     }
 
-    // 零残留物理自愈：当所有子项目的元数据都被移除且文件夹自身为默认配置时，自动物理物理物理擦除 .QuarkMeta.json
+    // 零残留物理自愈：当所有子项目的元数据都被移除且文件夹自身为默认配置时，自动物理物理物理擦除 .RapidNotes.json
     if (itemsObj.isEmpty() && m_folder.isDefault()) {
         QString realPath = toQString(m_filePath);
         if (QFile::exists(realPath)) {
@@ -106,50 +106,50 @@ bool QuarkMetaJson::save() const {
     return true;
 }
 
-bool QuarkMetaJson::renameItem(const QString& folderPath, const QString& oldName, const QString& newName) {
-    return QuarkMetaJsonStore::instance().renameItem(folderPath, oldName, newName);
+bool RapidNotesJson::renameItem(const QString& folderPath, const QString& oldName, const QString& newName) {
+    return RapidNotesJsonStore::instance().renameItem(folderPath, oldName, newName);
 }
 
-std::unordered_map<std::wstring, ItemMeta> QuarkMetaJson::readFolderMeta(const std::wstring& folderPath) {
+std::unordered_map<std::wstring, ItemMeta> RapidNotesJson::readFolderMeta(const std::wstring& folderPath) {
     std::unordered_map<std::wstring, ItemMeta> result;
-    const ItemMap items = QuarkMetaJsonStore::instance().readFolderMeta(folderPath);
+    const ItemMap items = RapidNotesJsonStore::instance().readFolderMeta(folderPath);
     for (const auto& pair : items) {
         result[pair.first] = pair.second;
     }
     return result;
 }
 
-void QuarkMetaJson::updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater) {
-    QuarkMetaJsonStore::instance().updateItemMeta(filePath, updater);
+void RapidNotesJson::updateItemMeta(const std::wstring& filePath, std::function<void(ItemMeta&)> updater) {
+    RapidNotesJsonStore::instance().updateItemMeta(filePath, updater);
 }
 
-bool QuarkMetaJson::migrateItemMetadata(const QString& oldFilePath, const QString& newFilePath) { 
+bool RapidNotesJson::migrateItemMetadata(const QString& oldFilePath, const QString& newFilePath) { 
     return roamItemMetadata(oldFilePath, newFilePath, true);
 }
 
-bool QuarkMetaJson::roamBatchMetadata(const QList<QPair<QString, QString>>& pairs, bool isMove) {
+bool RapidNotesJson::roamBatchMetadata(const QList<QPair<QString, QString>>& pairs, bool isMove) {
     if (pairs.isEmpty()) return false;
-    return QuarkMetaJsonStore::instance().transferItems(pairs, isMove, false);
+    return RapidNotesJsonStore::instance().transferItems(pairs, isMove, false);
 }
 
-bool QuarkMetaJson::roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove) {
+bool RapidNotesJson::roamItemMetadata(const QString& oldFilePath, const QString& newFilePath, bool isMove) {
     if (oldFilePath == newFilePath) return true;
     QList<QPair<QString, QString>> pairs;
     pairs.append(qMakePair(oldFilePath, newFilePath));
-    return QuarkMetaJsonStore::instance().transferItems(pairs, isMove, true);
+    return RapidNotesJsonStore::instance().transferItems(pairs, isMove, true);
 }
 
-bool QuarkMetaJson::removeItemMetadata(const QString& filePath) {
+bool RapidNotesJson::removeItemMetadata(const QString& filePath) {
     if (filePath.isEmpty()) return true;
-    return QuarkMetaJsonStore::instance().removeItem(filePath);
+    return RapidNotesJsonStore::instance().removeItem(filePath);
 }
 
-bool QuarkMetaJson::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
+bool RapidNotesJson::migrateFolderCache(const QString& oldFolderPath, const QString& newFolderPath) {
     if (oldFolderPath == newFolderPath) return true;
     
-    // 物理自愈：当发生物理文件夹重命名时，自动原子迁移其目录内部隐藏的 .QuarkMeta.json 配置
-    QString oldMetaFile = oldFolderPath + "/.QuarkMeta.json";
-    QString newMetaFile = newFolderPath + "/.QuarkMeta.json";
+    // 物理自愈：当发生物理文件夹重命名时，自动原子迁移其目录内部隐藏的 .RapidNotes.json 配置
+    QString oldMetaFile = oldFolderPath + "/.RapidNotes.json";
+    QString newMetaFile = newFolderPath + "/.RapidNotes.json";
 
     if (QFile::exists(oldMetaFile)) {
         // 创建新物理目录（如果不存在）
@@ -171,7 +171,7 @@ bool QuarkMetaJson::migrateFolderCache(const QString& oldFolderPath, const QStri
 
 // --- 内部 JSON 结构转换实现 ---
 
-QJsonObject QuarkMetaJson::folderToEntry(const FolderMeta& meta) {
+QJsonObject RapidNotesJson::folderToEntry(const FolderMeta& meta) {
     QJsonObject obj;
     obj.insert("sort_by", toQString(meta.sortBy));
     obj.insert("sort_order", toQString(meta.sortOrder));
@@ -213,7 +213,7 @@ QJsonObject QuarkMetaJson::folderToEntry(const FolderMeta& meta) {
     return obj;
 }
 
-FolderMeta QuarkMetaJson::entryToFolder(const QJsonObject& obj) {
+FolderMeta RapidNotesJson::entryToFolder(const QJsonObject& obj) {
     FolderMeta meta;
     meta.sortBy = toStdWString(obj.value("sort_by").toString("name"));
     meta.sortOrder = toStdWString(obj.value("sort_order").toString("asc"));
@@ -246,7 +246,7 @@ FolderMeta QuarkMetaJson::entryToFolder(const QJsonObject& obj) {
     return meta;
 }
 
-QJsonObject QuarkMetaJson::itemToEntry(const ItemMeta& meta) {
+QJsonObject RapidNotesJson::itemToEntry(const ItemMeta& meta) {
     QJsonObject obj;
     QString fid = QString::fromStdString(meta.fileId).trimmed();
     if (fid.isEmpty()) {
@@ -302,7 +302,7 @@ QJsonObject QuarkMetaJson::itemToEntry(const ItemMeta& meta) {
     return obj;
 }
 
-ItemMeta QuarkMetaJson::entryToItem(const QJsonObject& obj) {
+ItemMeta RapidNotesJson::entryToItem(const QJsonObject& obj) {
     ItemMeta meta;
     meta.fileId = obj.value("file_id").toString().toStdString();
     if (meta.fileId.empty()) {
@@ -347,4 +347,4 @@ ItemMeta QuarkMetaJson::entryToItem(const QJsonObject& obj) {
     return meta;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

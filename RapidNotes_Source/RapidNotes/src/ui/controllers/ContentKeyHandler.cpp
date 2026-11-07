@@ -33,7 +33,7 @@
 #include <QSet>
 #include <QTimer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ContentKeyHandler::ContentKeyHandler(ContentPanel* panel, QObject* parent)
     : QObject(parent), m_panel(panel) {
@@ -669,4 +669,4 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
     return false;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

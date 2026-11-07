@@ -6,7 +6,7 @@
 #include "ItemRecord.h"
 #include "CoreEngine.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class DiskScanService {
 public:
@@ -26,4 +26,4 @@ public:
                                                   std::shared_ptr<CancellationToken> token);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

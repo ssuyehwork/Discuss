@@ -11,7 +11,7 @@
 #include "../core/DiskTrashService.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/TrashRepository.h"
-#include "../meta/QuarkMetaJson.h"
+#include "../meta/RapidNotesJson.h"
 #include "../meta/DiskTrashRepo.h"
 #include "../meta/AssociationCascadeService.h"
 #include <QtConcurrent>
@@ -22,7 +22,7 @@
 #include <QCoreApplication>
 #include <QCursor>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 PermanentDeleteService& PermanentDeleteService::instance() {
     static PermanentDeleteService s_instance;
@@ -55,7 +55,7 @@ bool PermanentDeleteService::execute(const QStringList& paths, QWidget* parentWi
             int trashId = -1;
             QString trashPath;
             bool foundRecord = TrashRepository::instance().getDiskTrashRecordByPath(wp, trashId, trashPath);
-            bool isTrashItem = foundRecord || p.contains(".QuarkMeta/disk_trash");
+            bool isTrashItem = foundRecord || p.contains(".RapidNotes/disk_trash");
 
             if (isTrashItem) {
                 if (isSecureShred) {
@@ -77,7 +77,7 @@ bool PermanentDeleteService::execute(const QStringList& paths, QWidget* parentWi
                 }
 
                 if (physicalOk) {
-                    QuarkMetaJson::removeItemMetadata(p);
+                    RapidNotesJson::removeItemMetadata(p);
                     AppCommand cmd;
                     cmd.type = AppCommandType::DeletePermanently;
                     cmd.targetPaths << QString::fromStdWString(wp);
@@ -191,4 +191,4 @@ bool PermanentDeleteService::executeEmptyTrash(QWidget* parentWidget, bool isSec
     return true;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

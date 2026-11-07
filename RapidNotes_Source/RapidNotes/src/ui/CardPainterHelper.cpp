@@ -6,7 +6,7 @@
 #include <QCache>
 #include <algorithm>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QSize CardPainterHelper::defaultIconLogicalSize(const QSize& areaSize) {
     if (areaSize.width() < 70 && areaSize.height() < 70) {
@@ -258,4 +258,4 @@ int CardPainterHelper::drawInlinePinIcon(QPainter* painter, int rightX, int topY
     return kPinIconSize;
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

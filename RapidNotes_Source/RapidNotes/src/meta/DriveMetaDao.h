@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include "../core/ItemRecord.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 struct DriveMetaRecord {
     std::wstring drivePath; // 格式："C:\"
@@ -39,4 +39,4 @@ public:
     static bool saveDriveMeta(const DriveMetaRecord& record);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

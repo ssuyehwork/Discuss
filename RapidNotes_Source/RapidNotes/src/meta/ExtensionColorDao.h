@@ -4,7 +4,7 @@
 #include <QPair>
 #include <QMap>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class ExtensionColorDao {
 public:
@@ -14,4 +14,4 @@ public:
     static QMap<QString, QPair<QColor, QColor>> loadAllColors();
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

@@ -18,7 +18,7 @@
 #include "TagSelectorOverlay.h"
 #include <QPointer>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class TrayController;
 class HoverEventFilter;
@@ -130,4 +130,4 @@ private:
     FramelessWindowHelper*    m_framelessHelper = nullptr;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

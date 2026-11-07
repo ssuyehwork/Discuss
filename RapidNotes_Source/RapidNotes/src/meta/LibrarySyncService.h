@@ -1,6 +1,6 @@
 #pragma once
 
-#include "QuarkMetaJsonStore.h"
+#include "RapidNotesJsonStore.h"
 #include <QObject>
 #include <QStringList>
 #include <QThreadPool>
@@ -9,7 +9,7 @@
 #include <shared_mutex>
 #include <unordered_set>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class LibrarySyncService : public QObject {
     Q_OBJECT
@@ -34,7 +34,7 @@ private:
     void processSyncBatch(const QStringList& batch);
     static QString normalizePath(const QString& path);
 
-    void handleJsonChangeEvent(const QuarkMetaJsonStore::ChangeEvent& event);
+    void handleJsonChangeEvent(const RapidNotesJsonStore::ChangeEvent& event);
     void scheduleDebouncedSync(const QString& path);
     void flushDebouncedQueue();
 
@@ -47,4 +47,4 @@ private:
     std::mutex m_debounceMutex;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

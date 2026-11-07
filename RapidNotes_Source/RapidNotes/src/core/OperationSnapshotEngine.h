@@ -7,7 +7,7 @@
 #include <memory>
 #include <QWidget>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 // 1. 支持的操作类型枚举（对应用户原话：“重命名 批量重命名 拖拽分类 删除 添加至收藏 归类到...”）
 enum class SnapshotOperationType {
@@ -65,4 +65,4 @@ private:
     OperationSnapshotEngine& operator=(const OperationSnapshotEngine&) = delete;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

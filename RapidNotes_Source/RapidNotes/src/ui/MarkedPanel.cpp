@@ -14,7 +14,7 @@
 #include "../core/NavigationService.h"
 #include "controllers/ContextMenuFactory.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 MarkedPanel::MarkedPanel(QWidget* parent) : QWidget(parent) {
     initUi();
@@ -392,4 +392,4 @@ void MarkedPanel::filterTreeNodes(const QString& keyword) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

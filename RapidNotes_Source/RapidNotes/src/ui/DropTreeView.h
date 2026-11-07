@@ -15,7 +15,7 @@
 #include "RowLayoutEngine.h"
 #include "../core/ModelContract.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 enum class InternalDropZone { Above, OnItem, Below, Blank };
 
@@ -178,6 +178,6 @@ private:
     int m_edgeScrollDelta = 0;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
 
 #endif // DROPTREEVIEW_H

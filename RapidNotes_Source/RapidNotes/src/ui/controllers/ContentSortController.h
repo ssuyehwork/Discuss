@@ -4,7 +4,7 @@
 #include <QSortFilterProxyModel>
 #include "../../core/ModelContract.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 enum class SortType {
     SortByName,
@@ -48,4 +48,4 @@ private:
     QString m_currentFolderPath;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

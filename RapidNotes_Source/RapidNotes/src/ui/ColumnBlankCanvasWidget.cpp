@@ -6,7 +6,7 @@
 #include <QPainter>
 #include <QUrl>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 ColumnBlankCanvasWidget::ColumnBlankCanvasWidget(ColumnViewWidget* columnView, ContentPanel* contentPanel, QWidget* parent)
     : QWidget(parent), m_columnView(columnView), m_contentPanel(contentPanel) {
@@ -79,4 +79,4 @@ void ColumnBlankCanvasWidget::onContextMenuRequested(const QPoint& pos) {
     }
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

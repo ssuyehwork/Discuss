@@ -7,7 +7,7 @@
 #include <QFile> 
 #include <mutex> 
  
-namespace QuarkMeta { 
+namespace RapidNotes { 
  
 namespace { 
 // 重新生成缩略图专用单线程池：单项耗时可达 45 秒， 
@@ -68,4 +68,4 @@ void DeepThumbnailExtractor::extractBatchAsync(
     }); 
 } 
  
-} // namespace QuarkMeta 
+} // namespace RapidNotes 

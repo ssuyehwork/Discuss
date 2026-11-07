@@ -7,7 +7,7 @@
 #include <QPushButton>
 #include <QStringList>
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 /**
  * @brief 地址栏历史路径悬浮面板
@@ -37,4 +37,4 @@ private:
     QStringList  m_history;
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

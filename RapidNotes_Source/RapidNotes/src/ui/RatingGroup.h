@@ -7,7 +7,7 @@
 #include <functional>
 #include "FilterStateModel.h"
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 class RatingGroup {
 public:
@@ -21,4 +21,4 @@ public:
                          AddFilterRowFunc addFilterRow);
 };
 
-} // namespace QuarkMeta
+} // namespace RapidNotes

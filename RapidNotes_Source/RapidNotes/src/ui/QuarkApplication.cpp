@@ -17,7 +17,7 @@
 #include <windows.h>
 #endif
 
-namespace QuarkMeta {
+namespace RapidNotes {
 
 QuarkApplication::QuarkApplication(int& argc, char** argv)
     : QApplication(argc, argv) {}
@@ -62,7 +62,7 @@ bool QuarkApplication::notify(QObject* receiver, QEvent* event) {
     if (event && receiver) {
         QEvent::Type type = event->type();
 
-        // 1. 全局 ContextMenu 拦截并应用 QuarkMeta 专属暗色右键菜单
+        // 1. 全局 ContextMenu 拦截并应用 RapidNotes 专属暗色右键菜单
         if (type == QEvent::ContextMenu && receiver->isWidgetType()) {
             if (QLineEdit* edit = qobject_cast<QLineEdit*>(receiver)) {
                 if (edit->contextMenuPolicy() == Qt::DefaultContextMenu) {
@@ -151,4 +151,4 @@ bool QuarkApplication::notify(QObject* receiver, QEvent* event) {
     return QApplication::notify(receiver, event);
 }
 
-} // namespace QuarkMeta
+} // namespace RapidNotes
