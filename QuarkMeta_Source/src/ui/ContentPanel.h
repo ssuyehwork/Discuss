@@ -185,6 +185,8 @@ public:
     bool resolvePasteDestination();
     void setViewMode(ViewMode mode);
     void toggleFolderSectionCollapse();
+    bool isFolderSectionCollapsed() const;
+    void expandFolderSection();
     void selectAndScrollToPath(const QString& path);
     void selectAndScrollToItem(const QString& path);
     void selectAndEditPath(const QString& path);
