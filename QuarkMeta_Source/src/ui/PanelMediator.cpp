@@ -282,14 +282,10 @@ void PanelMediator::setupConnections() {
             ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
             if (target) {
                 bool isTrashView = (target->getCurrentCategoryType() == "trash" || target->currentPath() == "trash://");
-                QStringList sel = target->getSelectedPaths();
                 if (isTrashView) {
-                    if (!sel.isEmpty()) {
-                        PermanentDeleteService::instance().execute(sel, target);
-                    } else {
-                        ToolTipOverlay::instance()->showToast("请先选择要永久删除的项目", 2000, QColor("#e81123"), target);
-                    }
+                    PermanentDeleteService::instance().executeEmptyTrash(target);
                 } else {
+                    QStringList sel = target->getSelectedPaths();
                     if (!sel.isEmpty()) {
                         TrashService::instance().moveToTrash(sel, target);
                     }
