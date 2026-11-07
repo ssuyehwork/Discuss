@@ -4,6 +4,7 @@
 #include "QuarkMetaJsonStore.h"
 #include "ItemMetaMapper.h"
 #include "MetadataManager.h"
+#include "LibraryService.h"
 #include "../core/DirectoryWatchService.h"
 #include "../core/FileFilterService.h"
 #include "../core/AppConfig.h"
@@ -73,6 +74,14 @@ LibrarySyncService::LibrarySyncService(QObject* parent) : QObject(parent) {
 
         if (!toSync.isEmpty()) {
             syncPaths(toSync);
+            // 实时维护监听目录分类与文件绑定
+            for (const QString& wf : watchedFolders) {
+                QString normWf = DirectoryWatchService::normalizePathKey(wf);
+                if (normDirPath == normWf || normDirPath.startsWith(normWf + "/")) {
+                    LibraryService::instance().syncWatchedFolderHierarchy(wf);
+                    break;
+                }
+            }
         }
         if (!toRemove.isEmpty()) {
             removePaths(toRemove);

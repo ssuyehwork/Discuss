@@ -17,6 +17,8 @@ public:
     int createCategory(const QString& name, int parentId = 0);
     bool removeCategory(int id);
     bool addPathsToCategory(int id, const QStringList& paths);
+    bool bindPathsToCategory(int id, const QStringList& paths);
+    int syncWatchedFolderHierarchy(const QString& rootFolderPath);
     bool removePathsFromCategory(int id, const QStringList& paths);
     bool removePathsFromLibrary(const QStringList& paths);
     QStringList getCategoryPaths(int id) const;
