@@ -191,7 +191,7 @@ bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
     SqlTransaction tx(db);
 
-    const char* queryIdSql = "SELECT file_id FROM library_items WHERE file_path = ? COLLATE NOCASE;";
+    const char* queryIdSql = "SELECT file_id FROM library_items WHERE file_path = ? COLLATE NOCASE OR file_path = ? COLLATE NOCASE;";
     const char* upsertSql = "INSERT INTO library_items ("
                             "file_id, meta_file_id, file_path, file_name, base_name, extension, file_size, is_dir, is_empty, "
                             "is_hidden, is_managed, encrypted, pinned, rating, color_hex, auto_color, width, height, "
@@ -247,11 +247,16 @@ bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
     long long now = QDateTime::currentSecsSinceEpoch();
 
     for (const auto& record : records) {
+        QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(record.path));
+        QString altPath = cleanPath;
+        altPath.replace('\\', '/');
+
         QString fileId = record.fileId;
         if (fileId.isEmpty()) {
             sqlite3_reset(stmtQueryId);
             sqlite3_clear_bindings(stmtQueryId);
-            sqlite3_bind_text(stmtQueryId, 1, record.path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmtQueryId, 1, cleanPath.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmtQueryId, 2, altPath.toUtf8().constData(), -1, SQLITE_TRANSIENT);
             if (sqlite3_step(stmtQueryId) == SQLITE_ROW) {
                 fileId = QString::fromUtf8(reinterpret_cast<const char*>(sqlite3_column_text(stmtQueryId, 0)));
             }
@@ -269,7 +274,7 @@ bool LibraryItemDao::upsertItems(const std::vector<ItemRecord>& records) {
 
         sqlite3_bind_text(stmtUpsert, 1, fileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmtUpsert, 2, record.metaFileId.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmtUpsert, 3, record.path.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmtUpsert, 3, cleanPath.toUtf8().constData(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmtUpsert, 4, record.filename.toUtf8().constData(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmtUpsert, 5, baseName.toUtf8().constData(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(stmtUpsert, 6, ext.toUtf8().constData(), -1, SQLITE_TRANSIENT);

@@ -1,5 +1,6 @@
 #include "CoreController.h"
 #include "AppConfig.h"
+#include "DirectoryWatchService.h"
 #include "DeviceWatcher.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/DatabaseManager.h"
@@ -42,6 +43,16 @@ void CoreController::initializeCoreComponents() {
 
     // 4. 库同步对账服务预热（触发启动 1.5 秒后自动对账补齐）
     QuarkMeta::LibrarySyncService::instance();
+
+    // 5. 自动恢复已配置的多目录后台监听
+    QStringList watchedFolders = AppConfig::instance().getValue("DirectoryWatch/WatchedFolders", QStringList{}).toStringList();
+    for (const QString& wf : watchedFolders) {
+        if (!wf.isEmpty() && QFileInfo(wf).isDir()) {
+            QUARKMETA_DWS_TRACE("CoreController", "initializeCoreComponents",
+                QString("启动自动加载监听目录: %1").arg(wf));
+            DirectoryWatchService::instance().watch(wf, true);
+        }
+    }
     
     // 4. 定时合并刷新缩略图提取失败标记落盘
     QTimer* failureFlushTimer = new QTimer(QCoreApplication::instance());
