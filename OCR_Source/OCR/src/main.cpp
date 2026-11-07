@@ -7,6 +7,7 @@
 #include <QPointer>
 #include <QClipboard>
 #include <QCursor>
+#include <QSettings>
 
 #include "ui/ScreenshotTool.h"
 #include "ui/OCRWindow.h"

@@ -38,6 +38,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Gui
     Widgets
     Svg
+    Concurrent
 )
 
 set(CMAKE_AUTOMOC ON)
@@ -116,6 +117,7 @@ target_link_libraries(OCR PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::Svg
+    Qt6::Concurrent
 )
 
 if(WIN32)
