@@ -1,6 +1,7 @@
 #ifndef DIRECTORYWATCHSERVICE_H
 #define DIRECTORYWATCHSERVICE_H
 
+#include <QtGlobal>
 #include <QObject>
 #include <QString>
 #include <QStringList>
