@@ -159,7 +159,7 @@ QImage OCRManager::preprocessImage(const QImage& original) {
         }
     }
     
-    if (maxGray > minGray) {
+        if (maxGray > minGray) {
         for (int y = 0; y < processed.height(); ++y) {
             uchar* line = processed.scanLine(y);
             for (int x = 0; x < processed.width(); ++x) {
@@ -171,30 +171,8 @@ QImage OCRManager::preprocessImage(const QImage& original) {
         }
     }
 
-    // 5. 简单锐化处理 (卷积)
-    // 增加文字边缘对比度，有助于 Tesseract 识别彩色变灰度后的细微笔画
-    QImage sharpened = processed;
-    int kernel[3][3] = {
-        {0, -1, 0},
-        {-1, 5, -1},
-        {0, -1, 0}
-    };
-    for (int y = 1; y < processed.height() - 1; ++y) {
-        const uchar* prevLine = processed.constScanLine(y - 1);
-        const uchar* currLine = processed.constScanLine(y);
-        const uchar* nextLine = processed.constScanLine(y + 1);
-        uchar* destLine = sharpened.scanLine(y);
-        for (int x = 1; x < processed.width() - 1; ++x) {
-            int sum = currLine[x] * kernel[1][1]
-                    + prevLine[x] * kernel[0][1] + nextLine[x] * kernel[2][1]
-                    + currLine[x-1] * kernel[1][0] + currLine[x+1] * kernel[1][2];
-            destLine[x] = static_cast<uchar>(qBound(0, sum, 255));
-        }
-    }
-    processed = sharpened;
-    
-    // 注意：不再手动调用 Otsu 二值化。
-    // Tesseract 4.0+ 内部的二值化器（基于 Leptonica）在处理具有抗锯齿边缘的灰度图像时表现更好。
+    // 5. 中文字体保真策略：杜绝 3x3 破坏性锐化卷积
+    // 保持字体抗锯齿平滑边缘与原始中文字形笔画连续性，避免细笔画断裂与文字黏连
     
     return processed;
 }

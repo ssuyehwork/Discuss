@@ -1933,6 +1933,7 @@ QCheckBox::indicator:hover { border: 1px solid #666; }
 QCheckBox::indicator:checked { 
     border: 1px solid #378ADD; 
     background: #1E1E1E; 
+    image: url(:/icons/check.svg);
 }
 
 /* 统一输入框与多行文本框样式 */

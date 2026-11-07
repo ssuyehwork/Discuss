@@ -58,10 +58,12 @@ add_definitions(-DNOMINMAX)
 
 set(SOURCES
     src/main.cpp
-    # core
+        # core
     src/core/ClipboardMonitor.cpp
     src/core/ClipboardMonitor.h
     src/core/DatabaseManager.h
+    src/core/HotkeyManager.cpp
+    src/core/HotkeyManager.h
     src/core/ItemType.cpp
     src/core/ItemType.h
     src/core/OCRManager.cpp
@@ -70,8 +72,10 @@ set(SOURCES
     src/ui/ColorPickerWindow.cpp
     src/ui/ColorPickerWindow.h
     src/ui/FlowLayout.cpp
-    src/ui/FlowLayout.h
+        src/ui/FlowLayout.h
     src/ui/FramelessDialog.cpp
+    src/ui/HotkeySettingsDialog.cpp
+    src/ui/HotkeySettingsDialog.h
     src/ui/FramelessDialog.h
     src/ui/FramelessDialogBase.h
     src/ui/IconHelper.h
