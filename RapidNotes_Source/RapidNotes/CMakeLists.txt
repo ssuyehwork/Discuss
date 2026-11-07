@@ -119,8 +119,6 @@ set(SOURCES
     src/core/NavigationHistoryService.h
     src/core/NavigationService.cpp
     src/core/NavigationService.h
-    src/core/NoteRepository.cpp
-    src/core/NoteRepository.h
     src/core/OCRManager.cpp
     src/core/OCRManager.h
     src/core/PathSummary.cpp
@@ -225,8 +223,6 @@ set(SOURCES
     src/ui/FileTypeGroup.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
-    src/ui/QuickFilterPanel.cpp
-    src/ui/QuickFilterPanel.h
     src/ui/SmartFolderDialog.h
     src/core/PresetTagService.h
     src/ui/QuickLookWindow.h
