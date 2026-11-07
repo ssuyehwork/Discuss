@@ -1,8 +1,8 @@
 {
+  "version": 3,
   "configurePresets": [
     {
       "name": "windows-base",
-      "description": "面向具有 Visual Studio 开发环境的 Windows。",
       "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/../../OCR_Build/${presetName}",
@@ -21,7 +21,7 @@
     {
       "name": "x64-release",
       "displayName": "x64 Release",
-      "description": "使用 Visual Studio 开发环境定向到 Windows (64 位)。(Release)",
+      "description": "面向具有 Visual Studio 开发环境的 Windows (x64-release)",
       "inherits": "windows-base",
       "architecture": {
         "value": "x64",
@@ -32,5 +32,10 @@
       }
     }
   ],
-  "version": 3
+  "buildPresets": [
+    {
+      "name": "x64-release",
+      "configurePreset": "x64-release"
+    }
+  ]
 }
