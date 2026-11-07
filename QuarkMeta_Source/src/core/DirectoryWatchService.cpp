@@ -8,6 +8,9 @@
 
 namespace QuarkMeta {
 
+// 特殊的完成键：用于唤醒工作线程处理队列
+static constexpr ULONG_PTR SPECIAL_KEY_WAKEUP = static_cast<ULONG_PTR>(-1);
+
 DirectoryWatchService& DirectoryWatchService::instance() {
     static DirectoryWatchService service;
     return service;
@@ -18,10 +21,10 @@ QString DirectoryWatchService::normalizePathKey(const QString& rawPath) {
     QString cleaned = QDir::cleanPath(rawPath);
     cleaned = cleaned.toLower();
 
-    if (cleaned.endsWith('/')) {
+    // 移除尾部斜杠（盘符如 c: 保留 c:/）
+    if (cleaned.endsWith('/') && !cleaned.endsWith(":/")) {
         cleaned.chop(1);
     }
-
     if (cleaned.endsWith(':')) {
         cleaned += '/';
     }
@@ -118,7 +121,7 @@ void DirectoryWatchService::stopAll() {
 
     {
         QMutexLocker locker(&m_mutex);
-        m_debounceTimer->stop();
+        if (m_debounceTimer) m_debounceTimer->stop();
         m_debounceMap.clear();
 
         for (auto it = m_watches.begin(); it != m_watches.end(); ++it) {
@@ -245,15 +248,41 @@ void DirectoryWatchService::checkDebounceTimers() {
 }
 
 #ifdef Q_OS_WIN
-VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, LPOVERLAPPED lpOverlapped) {
-    if (!lpOverlapped) return;
+bool DirectoryWatchService::issueReadDirectoryChanges(WatchItem* item) {
+    if (!item || item->hDir == INVALID_HANDLE_VALUE || item->isStopping) {
+        return false;
+    }
 
-    WatchItem* item = reinterpret_cast<WatchItem*>(lpOverlapped);
+    ZeroMemory(&item->overlapped, sizeof(OVERLAPPED));
+
+    // 关键修正：必须传入合法的 &item->bytesReturned，禁止传 NULL；回调必须为 NULL
+    BOOL ok = ReadDirectoryChangesW(
+        item->hDir,
+        item->buffer,
+        sizeof(item->buffer),
+        item->key.includeSubtree ? TRUE : FALSE,
+        FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
+        FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE |
+        FILE_NOTIFY_CHANGE_CREATION | FILE_NOTIFY_CHANGE_ATTRIBUTES,
+        &item->bytesReturned,
+        &item->overlapped,
+        NULL
+    );
+
+    if (!ok) {
+        DWORD err = GetLastError();
+        return (err == ERROR_IO_PENDING);
+    }
+    return true;
+}
+
+void DirectoryWatchService::handleCompletion(DWORD dwErrorCode, DWORD dwNumberOfBytesTransfered, WatchItem* item) {
     if (!item) return;
 
     if (dwErrorCode != ERROR_SUCCESS || item->isStopping || CoreController::isShuttingDown()) {
         if (dwErrorCode == ERROR_ACCESS_DENIED || dwErrorCode == ERROR_INVALID_HANDLE ||
-            dwErrorCode == ERROR_DEVICE_NOT_CONNECTED || dwErrorCode == ERROR_HANDLE_EOF) {
+            dwErrorCode == ERROR_DEVICE_NOT_CONNECTED || dwErrorCode == ERROR_HANDLE_EOF ||
+            dwErrorCode == ERROR_NETNAME_DELETED) {
             QMetaObject::invokeMethod(&DirectoryWatchService::instance(), [key = item->key, path = item->originalDirPath]() {
                 DirectoryWatchService::instance().onDirectoryLostInternal(key, path);
             }, Qt::QueuedConnection);
@@ -269,7 +298,7 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
             DirectoryWatchService::instance().onRawEventsBatch(key, QStringList(), true);
         }, Qt::QueuedConnection);
     } else {
-        PFILE_NOTIFY_INFORMATION pNotify = (PFILE_NOTIFY_INFORMATION)item->buffer;
+        PFILE_NOTIFY_INFORMATION pNotify = reinterpret_cast<PFILE_NOTIFY_INFORMATION>(item->buffer);
         QStringList dirtyNames;
 
         while (pNotify) {
@@ -281,7 +310,7 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
             }
 
             if (pNotify->NextEntryOffset == 0) break;
-            pNotify = (PFILE_NOTIFY_INFORMATION)((LPBYTE)pNotify + pNotify->NextEntryOffset);
+            pNotify = reinterpret_cast<PFILE_NOTIFY_INFORMATION>(reinterpret_cast<LPBYTE>(pNotify) + pNotify->NextEntryOffset);
         }
 
         if (!dirtyNames.isEmpty()) {
@@ -291,22 +320,8 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
         }
     }
 
-    // Re-issue ReadDirectoryChangesW for continuous monitoring
-    ZeroMemory(&item->overlapped, sizeof(OVERLAPPED));
-    BOOL ok = ReadDirectoryChangesW(
-        item->hDir,
-        item->buffer,
-        sizeof(item->buffer),
-        item->key.includeSubtree ? TRUE : FALSE,
-        FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
-        FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE |
-        FILE_NOTIFY_CHANGE_CREATION | FILE_NOTIFY_CHANGE_ATTRIBUTES,
-        NULL,
-        &item->overlapped,
-        DirectoryWatchService::notificationCompletionRoutine
-    );
-
-    if (!ok) {
+    // 重新闭环挂接异步监听
+    if (!issueReadDirectoryChanges(item)) {
         DWORD err = GetLastError();
         Logger::log(QString("[DirectoryWatchService] Re-issue ReadDirectoryChangesW failed for %1, error: %2")
                     .arg(item->originalDirPath).arg(err));
@@ -320,15 +335,15 @@ VOID WINAPI DirectoryWatchService::notificationCompletionRoutine(DWORD dwErrorCo
 DirectoryWatchService::WorkerThread::WorkerThread(DirectoryWatchService* service)
     : m_service(service) {
 #ifdef Q_OS_WIN
-    m_wakeUpEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
+    m_hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 1);
 #endif
 }
 
 DirectoryWatchService::WorkerThread::~WorkerThread() {
 #ifdef Q_OS_WIN
-    if (m_wakeUpEvent) {
-        CloseHandle(m_wakeUpEvent);
-        m_wakeUpEvent = NULL;
+    if (m_hIOCP) {
+        CloseHandle(m_hIOCP);
+        m_hIOCP = NULL;
     }
 #endif
 }
@@ -340,8 +355,8 @@ void DirectoryWatchService::WorkerThread::stopWorker() {
 
 void DirectoryWatchService::WorkerThread::wakeUpWorker() {
 #ifdef Q_OS_WIN
-    if (m_wakeUpEvent) {
-        SetEvent(m_wakeUpEvent);
+    if (m_hIOCP) {
+        PostQueuedCompletionStatus(m_hIOCP, 0, SPECIAL_KEY_WAKEUP, NULL);
     }
 #endif
 }
@@ -351,28 +366,36 @@ void DirectoryWatchService::WorkerThread::run() {
         m_service->processWorkerQueue();
 
 #ifdef Q_OS_WIN
-        DWORD dwWait = SleepEx(100, TRUE);
-        if (dwWait == WAIT_IO_COMPLETION) {
-            // Asynchronous I/O completion routine was executed
+        DWORD dwBytes = 0;
+        ULONG_PTR ulKey = 0;
+        LPOVERLAPPED lpOverlapped = NULL;
+
+        // 阻塞等待事件，超时 250ms 用于维持线程退出的周期检查
+        BOOL ok = GetQueuedCompletionStatus(m_hIOCP, &dwBytes, &ulKey, &lpOverlapped, 250);
+        DWORD dwErr = ok ? ERROR_SUCCESS : GetLastError();
+
+        if (ulKey == SPECIAL_KEY_WAKEUP) {
             continue;
+        }
+
+        // 关键修正：ulKey 就是我们在 CreateIoCompletionPort 绑定的 WatchItem*
+        if (ulKey != 0 && ulKey != SPECIAL_KEY_WAKEUP) {
+            WatchItem* item = reinterpret_cast<WatchItem*>(ulKey);
+            DirectoryWatchService::handleCompletion(dwErr, dwBytes, item);
         }
 #else
         QThread::msleep(100);
 #endif
     }
 
-    // Cleanup all remaining handles on worker thread shutdown
+    // 线程退出时清理所有句柄
     QList<std::shared_ptr<WatchItem>> itemsToCleanup;
     {
         QMutexLocker locker(&m_service->m_mutex);
-        for (auto item : m_service->m_pendingStops) {
-            itemsToCleanup.append(item);
-        }
+        for (auto item : m_service->m_pendingStops) itemsToCleanup.append(item);
         m_service->m_pendingStops.clear();
 
-        for (auto item : m_service->m_pendingStarts) {
-            itemsToCleanup.append(item);
-        }
+        for (auto item : m_service->m_pendingStarts) itemsToCleanup.append(item);
         m_service->m_pendingStarts.clear();
 
         for (auto it = m_service->m_watches.begin(); it != m_service->m_watches.end(); ++it) {
@@ -411,7 +434,7 @@ void DirectoryWatchService::processWorkerQueue() {
     }
 
 #ifdef Q_OS_WIN
-    // 1. Process pending stops
+    // 1. 处理移除的句柄
     for (auto item : stops) {
         if (item->hDir != INVALID_HANDLE_VALUE) {
             CancelIoEx(item->hDir, &item->overlapped);
@@ -420,13 +443,21 @@ void DirectoryWatchService::processWorkerQueue() {
         }
     }
 
-    // 2. Process pending starts
+    // 2. 处理挂接的句柄
     for (auto item : starts) {
         if (m_isStoppingAll.load() || item->isStopping) continue;
 
-        QString pathStr = item->originalDirPath;
-        if (!pathStr.startsWith("\\\\?\\")) {
-            QString native = QDir::toNativeSeparators(pathStr);
+        // 关键修正：规范化 Windows 目录路径（严禁非根目录末尾携带斜杠）
+        QString cleanedPath = QDir::cleanPath(item->originalDirPath);
+        QString native = QDir::toNativeSeparators(cleanedPath);
+        
+        // 如果是 D:\ 则保留，如果是 D:\Folder\ 则去除末尾斜杠
+        if (native.length() > 3 && native.endsWith('\\')) {
+            native.chop(1);
+        }
+
+        QString pathStr;
+        if (!native.startsWith("\\\\?\\")) {
             if (native.length() >= 240) {
                 if (native.startsWith("\\\\")) {
                     pathStr = "\\\\?\\UNC\\" + native.mid(2);
@@ -437,7 +468,7 @@ void DirectoryWatchService::processWorkerQueue() {
                 pathStr = native;
             }
         } else {
-            pathStr = QDir::toNativeSeparators(pathStr);
+            pathStr = native;
         }
 
         std::wstring wPath = pathStr.toStdWString();
@@ -459,22 +490,28 @@ void DirectoryWatchService::processWorkerQueue() {
         }
 
         item->hDir = hDir;
-        ZeroMemory(&item->overlapped, sizeof(OVERLAPPED));
 
-        BOOL ok = ReadDirectoryChangesW(
-            item->hDir,
-            item->buffer,
-            sizeof(item->buffer),
-            item->key.includeSubtree ? TRUE : FALSE,
-            FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
-            FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE |
-            FILE_NOTIFY_CHANGE_CREATION | FILE_NOTIFY_CHANGE_ATTRIBUTES,
-            NULL,
-            &item->overlapped,
-            DirectoryWatchService::notificationCompletionRoutine
-        );
+        // 关键修正：将 item.get() 作为 CompletionKey 传给 IOCP，安全无 UB
+        if (m_workerThread && m_workerThread->iocpHandle()) {
+            HANDLE hPort = CreateIoCompletionPort(
+                item->hDir,
+                m_workerThread->iocpHandle(),
+                reinterpret_cast<ULONG_PTR>(item.get()),
+                0
+            );
 
-        if (!ok) {
+            if (!hPort) {
+                DWORD err = GetLastError();
+                Logger::log(QString("[DirectoryWatchService] Bind IOCP failed for %1, error: %2")
+                            .arg(item->originalDirPath).arg(err));
+                CloseHandle(item->hDir);
+                item->hDir = INVALID_HANDLE_VALUE;
+                continue;
+            }
+        }
+
+        // 初次挂起监控
+        if (!issueReadDirectoryChanges(item.get())) {
             DWORD err = GetLastError();
             Logger::log(QString("[DirectoryWatchService] Initial ReadDirectoryChangesW failed for %1, error: %2")
                         .arg(item->originalDirPath).arg(err));
