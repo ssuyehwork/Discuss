@@ -83,10 +83,59 @@ void NavigationService::openInNewTab(const QString& rawPath) {
     emit requestOpenInNewTab(normUrl);
 }
 
+QString NavigationService::computeAscendingTarget(const QString& fromPath, const QString& toPath) {
+    if (fromPath.isEmpty() || toPath.isEmpty()) return QString();
+    if (fromPath.contains("://") || toPath.contains("://")) return QString();
+
+    QString fromNorm = QDir::fromNativeSeparators(QDir::cleanPath(fromPath));
+    QString toNorm = QDir::fromNativeSeparators(QDir::cleanPath(toPath));
+
+    if (toNorm.endsWith(':')) toNorm += "/";
+    if (fromNorm.endsWith(':')) fromNorm += "/";
+
+    QString fromLower = fromNorm.toLower();
+    QString toLower = toNorm.toLower();
+    if (toLower.endsWith('/')) toLower.chop(1);
+    if (fromLower.endsWith('/')) fromLower.chop(1);
+
+    if (fromLower == toLower) return QString();
+
+    QString prefix = toLower + "/";
+    if (!fromLower.startsWith(prefix)) return QString();
+
+    QString rel = fromNorm.mid(prefix.length());
+    int slashIdx = rel.indexOf('/');
+    QString directChildName = (slashIdx == -1) ? rel : rel.left(slashIdx);
+    if (directChildName.isEmpty()) return QString();
+
+    QDir targetDir(toNorm);
+    return QDir::toNativeSeparators(targetDir.filePath(directChildName));
+}
+
+QString NavigationService::takePendingTargetChildPath(const QString& targetUrl) {
+    QString normTarget = normalizeUrl(targetUrl);
+    if (QString::compare(normTarget, m_pendingTargetExpectedUrl, Qt::CaseInsensitive) == 0) {
+        QString res = m_pendingTargetChildPath;
+        m_pendingTargetChildPath.clear();
+        m_pendingTargetExpectedUrl.clear();
+        return res;
+    }
+    m_pendingTargetChildPath.clear();
+    m_pendingTargetExpectedUrl.clear();
+    return QString();
+}
+
 void NavigationService::navigateTo(const QString& rawUrl, bool recordHistory, bool recursive) {
     if (rawUrl.isEmpty()) return;
 
     QString normalized = normalizeUrl(rawUrl);
+
+    // 计算返回上一级时需选中的子项
+    QString ascTarget = computeAscendingTarget(m_currentUrl, normalized);
+    if (!ascTarget.isEmpty()) {
+        m_pendingTargetChildPath = ascTarget;
+        m_pendingTargetExpectedUrl = normalized;
+    }
 
     // 路径跳转幂等性守卫 (No-op Protection)：
     // 若目标路径与当前路径一致（大小写不敏感对比）且非递归状态变更，直接返回，阻断无意义的视图重载与筛选面板重置
@@ -121,6 +170,12 @@ void NavigationService::navigateTo(const QString& rawUrl, bool recordHistory, bo
 
 void NavigationService::goBack() {
     if (canGoBack()) {
+        QString prevUrl = m_history[m_currentIndex - 1];
+        QString ascTarget = computeAscendingTarget(m_currentUrl, prevUrl);
+        if (!ascTarget.isEmpty()) {
+            m_pendingTargetChildPath = ascTarget;
+            m_pendingTargetExpectedUrl = normalizeUrl(prevUrl);
+        }
         m_currentIndex--;
         m_currentUrl = m_history[m_currentIndex];
         emit currentUrlChanged(m_currentUrl, currentDisplayPath(), false);
@@ -137,28 +192,18 @@ void NavigationService::goForward() {
     }
 }
 
-QString NavigationService::takePendingGoUpChildPath() {
-    QString path = m_pendingGoUpChildPath;
-    m_pendingGoUpChildPath.clear();
-    return path;
-}
-
 void NavigationService::goUp() {
     if (!canGoUp()) return;
 
-    QString departingPath = m_currentUrl;
     QDir dir(m_currentUrl);
     if (dir.isRoot()) {
-        m_pendingGoUpChildPath.clear();
         navigateTo("computer://");
         return;
     }
 
     if (dir.cdUp()) {
-        m_pendingGoUpChildPath = departingPath;
         navigateTo(dir.absolutePath());
     } else {
-        m_pendingGoUpChildPath.clear();
         navigateTo("computer://");
     }
 }

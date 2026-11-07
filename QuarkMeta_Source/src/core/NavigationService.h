@@ -20,7 +20,8 @@ public:
     void goUp();
     void refresh();
 
-    QString takePendingGoUpChildPath();
+    QString takePendingTargetChildPath(const QString& targetUrl);
+    static QString computeAscendingTarget(const QString& fromPath, const QString& toPath);
 
     // 状态查询接口
     QString currentUrl() const { return m_currentUrl; }
@@ -60,7 +61,8 @@ private:
     QString m_currentUrl;
     QList<QString> m_history;
     int m_currentIndex = -1;
-    QString m_pendingGoUpChildPath;
+    QString m_pendingTargetChildPath;
+    QString m_pendingTargetExpectedUrl;
     static constexpr int kMaxHistoryDepth = 100;
 };
 

@@ -351,9 +351,9 @@ void PanelMediator::setupConnections() {
         }
 
         if (targetPanel) {
-            QString goUpChild = NavigationService::instance().takePendingGoUpChildPath();
-            if (!goUpChild.isEmpty() && url != "computer://" && url != "trash://") {
-                targetPanel->setPendingSelectPath(goUpChild, false);
+            QString targetChild = NavigationService::instance().takePendingTargetChildPath(url);
+            if (!targetChild.isEmpty() && url != "computer://" && url != "trash://") {
+                targetPanel->setPendingSelectPath(targetChild, false);
             }
 
             if (url == "computer://") {
