@@ -52,7 +52,8 @@ bool LibraryService::bindPathsToCategory(int id, const QStringList& paths) {
 }
 
 int LibraryService::syncWatchedFolderHierarchy(const QString& rootFolderPath) {
-    QFileInfo rootInfo(rootFolderPath);
+    QString cleanRoot = QDir::toNativeSeparators(QDir::cleanPath(rootFolderPath));
+    QFileInfo rootInfo(cleanRoot);
     if (!rootInfo.exists() || !rootInfo.isDir()) return 0;
 
     QString rootName = rootInfo.fileName();
@@ -64,7 +65,6 @@ int LibraryService::syncWatchedFolderHierarchy(const QString& rootFolderPath) {
     if (rootCatId <= 0) return 0;
 
     // 绑定根文件夹与根目录下的直接子文件
-    QString cleanRoot = QDir::toNativeSeparators(QDir::cleanPath(rootFolderPath));
     QStringList rootPaths;
     rootPaths << cleanRoot;
     QDir rDir(cleanRoot);
