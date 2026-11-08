@@ -848,6 +848,7 @@ void MetaEditController::wire() {
 #include <QObject>
 #include <QString>
 #include "ContentPanel.h"
+#include "MetaPanel.h"
 
 namespace QuarkMeta {
 
@@ -860,7 +861,9 @@ class ActivePaneCoordinator;
 class QuickLookController : public QObject {
     Q_OBJECT
 public:
-    explicit QuickLookController(ActivePaneCoordinator* activeCoordinator, QObject* parent = nullptr);
+    explicit QuickLookController(ActivePaneCoordinator* activeCoordinator,
+                                MetaPanel* metaPanel = nullptr,
+                                QObject* parent = nullptr);
     ~QuickLookController() override = default;
 
     void bindPane(ContentPanel* pane);
@@ -870,6 +873,7 @@ private:
     QString findAdjacentPreviewable(ContentPanel* target, const QString& currentPath, int direction);
 
     ActivePaneCoordinator* m_activeCoordinator = nullptr;
+    QPointer<MetaPanel> m_metaPanel;
 };
 
 } // namespace QuarkMeta
@@ -895,8 +899,8 @@ private:
 
 namespace QuarkMeta {
 
-QuickLookController::QuickLookController(ActivePaneCoordinator* activeCoordinator, QObject* parent)
-    : QObject(parent), m_activeCoordinator(activeCoordinator) {
+QuickLookController::QuickLookController(ActivePaneCoordinator* activeCoordinator, MetaPanel* metaPanel, QObject* parent)
+    : QObject(parent), m_activeCoordinator(activeCoordinator), m_metaPanel(metaPanel) {
 }
 
 QString QuickLookController::findAdjacentPreviewable(ContentPanel* target, const QString& currentPath, int direction) {
@@ -959,51 +963,68 @@ void QuickLookController::wire() {
         }
     });
 
-    connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [](const QString& path, int rating) {
-        if (path.isEmpty()) return;
+    connect(&QuickLookWindow::instance(), &QuickLookWindow::ratingRequested, this, [this](int rating) {
+        QString curPath = QuickLookWindow::instance().currentPath();
+        if (curPath.isEmpty()) return;
+
         AppCommand cmd;
         cmd.type = AppCommandType::SetRating;
-        cmd.targetPaths << path;
+        cmd.targetPaths << curPath;
         cmd.params["rating"] = rating;
         CoreEngine::instance().executeCommand(cmd);
-        ToolTipOverlay::instance()->showToast(QString("已将评级设为 %1 星").arg(rating), 1200);
+
+        if (m_metaPanel) m_metaPanel->setRating(rating, false);
+
+        ToolTipOverlay::instance()->showRatingToast(
+            rating, &QuickLookWindow::instance()
+        );
     });
 
-    connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [](const QString& path, const QString& hex) {
-        if (path.isEmpty()) return;
+    connect(&QuickLookWindow::instance(), &QuickLookWindow::colorRequested, this, [this](const QString& color) {
+        QString curPath = QuickLookWindow::instance().currentPath();
+        if (curPath.isEmpty()) return;
+
         AppCommand cmd;
         cmd.type = AppCommandType::SetColor;
-        cmd.targetPaths << path;
-        cmd.params["color"] = hex;
+        cmd.targetPaths << curPath;
+        cmd.params["color"] = color;
         CoreEngine::instance().executeCommand(cmd);
-        ToolTipOverlay::instance()->showToast("已更新颜色标记", 1200);
+
+        if (m_metaPanel) m_metaPanel->setColor(color, false);
+
+        ToolTipOverlay::instance()->showColorToast(
+            color, &QuickLookWindow::instance()
+        );
     });
 
     connect(&QuickLookWindow::instance(), &QuickLookWindow::deleteRequested, this, [this](const QString& path) {
+        if (path.isEmpty()) return;
         ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-        if (!target || path.isEmpty()) return;
+        if (!target) return;
 
-        // 合并为连续两次调用单一函数：先向后找，找不到再向前找
-        QString nextFile = findAdjacentPreviewable(target, path, 1);
-        if (nextFile.isEmpty()) {
-            nextFile = findAdjacentPreviewable(target, path, -1);
+        // 提前计算下一个有效文件（若末项则计算备选的上一个有效文件），防止物理删除后寻址失败
+        QString nextTarget = findAdjacentPreviewable(target, path, 1);
+        if (nextTarget.isEmpty()) {
+            nextTarget = findAdjacentPreviewable(target, path, -1);
         }
 
+        // 锁定 QuickLook 失焦关闭门禁，防止刷新与对话框导致预览被误关
         QuickLookWindow::instance().setIgnoreDeactivate(true);
 
-        bool success = TrashService::instance().moveToTrash({path});
-        if (success) {
+        bool deleteOk = TrashService::instance().moveToTrash({path}, target);
+
+        if (deleteOk) {
             target->refreshAll();
 
-            if (!nextFile.isEmpty()) {
-                QuickLookWindow::instance().preview(nextFile);
-                target->selectAndScrollToPath(nextFile);
+            if (!nextTarget.isEmpty() && QFile::exists(nextTarget)) {
+                QuickLookWindow::instance().preview(nextTarget);
+                target->selectAndScrollToPath(nextTarget);
             } else {
-                QuickLookWindow::instance().close();
+                QuickLookWindow::instance().closePreview();
             }
         }
 
-        QTimer::singleShot(200, []() {
+        QTimer::singleShot(200, &QuickLookWindow::instance(), []() {
             QuickLookWindow::instance().setIgnoreDeactivate(false);
         });
     });
@@ -1025,6 +1046,7 @@ void QuickLookController::wire() {
 #include "AppShortcutController.h"
 #include "TitleBarWidget.h"
 #include "PanelLayoutManager.h"
+#include "FilterPanel.h"
 
 namespace QuarkMeta {
 
@@ -1041,18 +1063,18 @@ public:
                                   AppShortcutController* shortcutController,
                                   TitleBarWidget* titleBar,
                                   PanelLayoutManager* layoutManager,
+                                  FilterPanel* filterPanel,
                                   QObject* parent = nullptr);
     ~ShortcutActionRouter() override = default;
 
     void wire();
 
 private:
-    bool isRecycleBinView() const;
-
     ActivePaneCoordinator* m_activeCoordinator = nullptr;
     QPointer<AppShortcutController> m_shortcutController;
     QPointer<TitleBarWidget> m_titleBar;
     QPointer<PanelLayoutManager> m_layoutManager;
+    QPointer<FilterPanel> m_filterPanel;
 };
 
 } // namespace QuarkMeta
@@ -1072,8 +1094,6 @@ private:
 #include "../core/PermanentDeleteService.h"
 #include "../meta/MarkedFolderService.h"
 #include "../core/AppConfig.h"
-#include <QClipboard>
-#include <QGuiApplication>
 
 namespace QuarkMeta {
 
@@ -1081,143 +1101,153 @@ ShortcutActionRouter::ShortcutActionRouter(ActivePaneCoordinator* activeCoordina
                                            AppShortcutController* shortcutController,
                                            TitleBarWidget* titleBar,
                                            PanelLayoutManager* layoutManager,
+                                           FilterPanel* filterPanel,
                                            QObject* parent)
     : QObject(parent),
       m_activeCoordinator(activeCoordinator),
       m_shortcutController(shortcutController),
       m_titleBar(titleBar),
-      m_layoutManager(layoutManager) {
-}
-
-bool ShortcutActionRouter::isRecycleBinView() const {
-    ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-    return target && (target->displayPath() == "trash_root" || target->displayPath().startsWith("trash://"));
+      m_layoutManager(layoutManager),
+      m_filterPanel(filterPanel) {
 }
 
 void ShortcutActionRouter::wire() {
     if (m_titleBar) {
-        connect(m_titleBar, &TitleBarWidget::layoutMenuRequested, this, [this](const QPoint& globalPos) {
-            if (m_layoutManager) {
-                m_layoutManager->showLayoutMenu(globalPos);
-            }
-        });
-
-        connect(m_titleBar, &TitleBarWidget::toggleZenModeRequested, this, [this]() {
-            if (m_layoutManager) {
-                m_layoutManager->toggleZenMode();
-            }
-        });
-
-        connect(m_titleBar, &TitleBarWidget::viewModeRequested, this, [this](const QString& mode) {
-            ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (target) {
-                target->setViewMode(mode);
-            }
-        });
-
-        connect(m_titleBar, &TitleBarWidget::createNewItemRequested, this, [this](const QString& type) {
-            ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (target) {
-                target->createNewItem(type);
-            }
-        });
-
-        // 初始化读取缩放等级
-        int savedZoom = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
-        savedZoom = qBound(30, savedZoom, 230);
-        m_titleBar->setZoomValue(savedZoom);
-        ContentPanel* root = m_activeCoordinator ? m_activeCoordinator->rootPane() : nullptr;
-        if (root) {
-            root->setGridZoomLevel(savedZoom);
+        if (m_layoutManager) {
+            connect(m_titleBar, &TitleBarWidget::layoutMenuRequested, m_layoutManager, [this](const QPoint& pos) {
+                if (m_layoutManager) {
+                    m_layoutManager->showPanelContextMenu(pos);
+                }
+            });
         }
 
-        connect(m_titleBar, &TitleBarWidget::zoomValueChanged, this, [this](int value) {
+        connect(m_titleBar, &TitleBarWidget::viewModeRequested, this, [this](TitleBarWidget::ViewModeOption option) {
+            ContentPanel::ViewMode targetMode = ContentPanel::GridView;
+            if (option == TitleBarWidget::JustifiedViewMode) targetMode = ContentPanel::JustifiedViewMode;
+            else if (option == TitleBarWidget::GridViewMode) targetMode = ContentPanel::GridView;
+            else if (option == TitleBarWidget::ListViewMode) targetMode = ContentPanel::ListView;
+            else if (option == TitleBarWidget::ColumnViewMode) targetMode = ContentPanel::ColumnView;
+
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (target) {
-                target->setGridZoomLevel(value);
-            }
+            if (target) target->setViewMode(targetMode);
+        });
+
+        connect(m_titleBar, &TitleBarWidget::createItemRequested, this, [this](const QString& type) {
+            ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
+            if (target) target->createNewItem(type);
+        });
+
+        // 缩放级别初始化与双向同步 + 持久化
+        int initZoom = AppConfig::instance().getValue("UI/GridZoomLevel", 96).toInt();
+        int boundZoom = qBound(30, initZoom, 230);
+        m_titleBar->setZoomLevel(boundZoom);
+        ContentPanel* root = m_activeCoordinator ? m_activeCoordinator->rootPane() : nullptr;
+        if (root) {
+            root->setZoomLevel(boundZoom);
+        }
+
+        connect(m_titleBar, &TitleBarWidget::zoomLevelChanged, this, [this](int value) {
+            ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
+            if (target) target->setZoomLevel(value);
             AppConfig::instance().setValue("UI/GridZoomLevel", value);
         });
+
+        if (root) {
+            connect(root, &ContentPanel::zoomLevelChanged, this, [this](int level) {
+                if (m_titleBar) m_titleBar->setZoomLevel(level);
+                AppConfig::instance().setValue("UI/GridZoomLevel", level);
+            });
+        }
     }
 
     if (m_shortcutController) {
-        connect(m_shortcutController, &AppShortcutController::newFolderRequested, this, [this]() {
+        if (m_layoutManager) {
+            connect(m_shortcutController, &AppShortcutController::toggleImmersiveRequested, m_layoutManager, [this]() {
+                if (m_layoutManager) {
+                    m_layoutManager->toggleImmersiveMode();
+                }
+            });
+        }
+
+        connect(m_shortcutController, &AppShortcutController::createNewFolderRequested, this, [this]() {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (target) target->createNewItem("folder");
+            if (target) {
+                target->createNewItem("folder");
+            }
         });
 
-        connect(m_shortcutController, &AppShortcutController::newMarkdownRequested, this, [this]() {
+        connect(m_shortcutController, &AppShortcutController::createNewMdRequested, this, [this]() {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (target) target->createNewItem("markdown");
+            if (target) {
+                target->createNewItem("md");
+            }
         });
 
         connect(m_shortcutController, &AppShortcutController::extractContentRequested, this, [this]() {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (target) target->extractArchiveItems();
+            if (target) {
+                QStringList selectedPaths = target->getSelectedPaths();
+                if (!selectedPaths.isEmpty()) {
+                    ContextMenuFactory::extractContentToClipboard(selectedPaths.first());
+                } else {
+                    ToolTipOverlay::instance()->showToast("未选择任何可提取内容的文件", 1200, QColor("#e81123"));
+                }
+            }
         });
 
         connect(m_shortcutController, &AppShortcutController::toggleRecursiveRequested, this, [this]() {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (target) target->toggleRecursiveMode();
+            if (target && !target->currentPath().isEmpty() && target->currentPath() != "computer://") {
+                bool nextState = !target->isRecursive();
+                target->setIsRecursive(nextState);
+                target->loadDirectory(target->currentPath(), nextState);
+            }
         });
 
-        connect(m_shortcutController, &AppShortcutController::resetFiltersRequested, this, [this]() {
-            ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (target) target->clearAllFilters(true);
-        });
+        if (m_filterPanel) {
+            connect(m_shortcutController, &AppShortcutController::resetFilterRequested, m_filterPanel, [this]() {
+                if (m_filterPanel) {
+                    m_filterPanel->clearAllFilters(true);
+                }
+            });
+        }
 
         connect(m_shortcutController, &AppShortcutController::moveToTrashRequested, this, [this]() {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (!target) return;
-            QStringList selectedPaths = target->getSelectedPaths();
-            if (selectedPaths.isEmpty()) return;
-
-            if (isRecycleBinView()) {
-                PermanentDeleteService::instance().deletePermanently(selectedPaths, target);
-            } else {
-                TrashService::instance().moveToTrash(selectedPaths);
+            if (target) {
+                bool isTrashView = (target->getCurrentCategoryType() == "trash" || target->currentPath() == "trash://");
+                if (isTrashView) {
+                    PermanentDeleteService::instance().executeEmptyTrash(target);
+                } else {
+                    QStringList sel = target->getSelectedPaths();
+                    if (!sel.isEmpty()) {
+                        TrashService::instance().moveToTrash(sel, target);
+                    }
+                }
             }
         });
 
         connect(m_shortcutController, &AppShortcutController::toggleMarkedRequested, this, [this]() {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (!target) return;
-            QStringList selectedPaths = target->getSelectedPaths();
-            if (selectedPaths.isEmpty()) return;
-
-            bool anyUnmarked = false;
-            for (const QString& path : selectedPaths) {
-                if (!MarkedFolderService::instance().isMarked(path)) {
-                    anyUnmarked = true;
-                    break;
+            if (target) {
+                QStringList sel = target->getSelectedPaths();
+                if (!sel.isEmpty()) {
+                    QuarkMeta::MarkedFolderService::instance().toggleMarked(sel);
                 }
             }
-            if (anyUnmarked) {
-                MarkedFolderService::instance().markPaths(selectedPaths);
-            } else {
-                MarkedFolderService::instance().unmarkPaths(selectedPaths);
-            }
         });
 
-        connect(m_shortcutController, &AppShortcutController::transferToMarkedRequested, this, [this]() {
-            ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (!target) return;
-            QStringList selectedPaths = target->getSelectedPaths();
-            if (selectedPaths.isEmpty()) return;
-            MarkedFolderService::instance().transferToMarked(selectedPaths, target);
+        connect(m_shortcutController, &AppShortcutController::transferToMarkedRequested, this, []() {
+            QuarkMeta::MarkedFolderService::instance().executeTransferToMarked({});
         });
 
-        connect(m_shortcutController, &AppShortcutController::copyNamesRequested, this, [this](int type) {
+        connect(m_shortcutController, &AppShortcutController::copyNamesEnumeratedRequested, this, [this]() {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (!target) return;
-            QStringList selectedPaths = target->getSelectedPaths();
-            if (selectedPaths.isEmpty()) return;
-
-            auto copyType = static_cast<ContextMenuFactory::CopyNameType>(type);
-            QString text = ContextMenuFactory::formatCopyNames(selectedPaths, copyType);
-            if (!text.isEmpty()) {
-                QGuiApplication::clipboard()->setText(text);
-                ToolTipOverlay::instance()->showToast(QString("已复制 %1 个名称到剪贴板").arg(selectedPaths.size()), 1500);
+            if (target) {
+                QStringList sel = target->getSelectedPaths();
+                if (!sel.isEmpty()) {
+                    ContextMenuFactory::copyNamesToClipboard(sel, ContextMenuFactory::NameDelimiter::Enumeration, true);
+                }
             }
         });
     }
@@ -1246,7 +1276,7 @@ class ActivePaneCoordinator;
 
 /**
  * @brief 标签栏协同协调器
- * 负责多标签页生命周期、分屏状态导出保存（单一实现）、标签页切换导航与属性变更。
+ * 负责多标签页生命周期、基于 TabSplitState 的分屏状态导出保存（单一实现）、标签页切换导航与属性变更。
  */
 class TabBarCoordinator : public QObject {
     Q_OBJECT
@@ -1299,103 +1329,99 @@ TabBarCoordinator::TabBarCoordinator(ActivePaneCoordinator* activeCoordinator,
 void TabBarCoordinator::exportAndSaveSplitState() {
     if (!m_tabBar || !m_activeCoordinator) return;
     ContentPanel* root = m_activeCoordinator->rootPane();
-    if (!root) return;
-    QJsonObject splitState = ContentPaneSplitManager::exportSplitState(root);
-    m_tabBar->saveCurrentTabSplitState(splitState);
+    if (root && root->splitManager()) {
+        TabSplitState state = root->splitManager()->exportSplitState();
+        m_tabBar->setTabSplitState(m_tabBar->currentIndex(), state);
+    }
 }
 
 void TabBarCoordinator::wire() {
     if (!m_tabBar || !m_activeCoordinator) return;
     ContentPanel* root = m_activeCoordinator->rootPane();
 
-    connect(m_tabBar, &TabBarWidget::tabAboutToChange, this, [this]() {
-        exportAndSaveSplitState();
-    });
-
-    connect(m_tabBar, &TabBarWidget::currentTabChanged, this, [this, root](const QString& path) {
-        if (root && m_tabBar) {
-            QJsonObject splitState = m_tabBar->currentTabSplitState();
-            if (!splitState.isEmpty()) {
-                ContentPaneSplitManager::restoreSplitState(root, splitState, [this](ContentPanel* activeP) {
-                    if (m_activeCoordinator) {
-                        m_activeCoordinator->activate(activeP);
-                    }
-                });
-            }
-        }
-        NavigationService::instance().navigateTo(path);
-    });
-
-    connect(m_tabBar, &TabBarWidget::mergeRequested, this, [this, root](int targetTabIndex, const QString& targetPath) {
-        exportAndSaveSplitState();
-        if (root && m_tabBar) {
-            int currentPanes = ContentPaneSplitManager::countPanes(root);
-            QJsonObject targetState = m_tabBar->tabSplitState(targetTabIndex);
-            int targetPanes = targetState.isEmpty() ? 1 : ContentPaneSplitManager::countPanesInState(targetState);
-            if (currentPanes + targetPanes > 4) {
-                ToolTipOverlay::instance()->showToast("合并后窗格数量超过上限 (最大 4 个)", 2000, QColor("#e81123"));
-                return;
-            }
-            ContentPaneSplitManager::mergeTabIntoCurrent(root, targetPath, targetState, [this](ContentPanel* activeP) {
-                if (m_activeCoordinator) {
-                    m_activeCoordinator->activate(activeP);
-                }
-            });
-            m_tabBar->removeTab(targetTabIndex);
+    // 切出旧 Tab 前：快照导出旧 Tab 的完整分屏树
+    connect(m_tabBar, &TabBarWidget::tabAboutToChange, this, [this, root](int oldIndex) {
+        if (root && root->splitManager() && m_tabBar) {
+            TabSplitState state = root->splitManager()->exportSplitState();
+            m_tabBar->setTabSplitState(oldIndex, state);
         }
     });
 
-    connect(m_tabBar, &TabBarWidget::splitRequested, this, [this, root](ContentPanel* pane) {
-        exportAndSaveSplitState();
-        if (root && m_tabBar) {
-            QString path = pane ? pane->displayPath() : QString();
-            QJsonObject paneState = pane ? ContentPaneSplitManager::exportPaneState(pane) : QJsonObject();
-            ContentPaneSplitManager::splitPaneIntoNewTab(root, pane);
-            m_tabBar->addNewTab(path, paneState);
+    // 切换到新 Tab：还原新 Tab 的专属分屏树并通知 NavigationService
+    connect(m_tabBar, &TabBarWidget::currentTabChanged, this, [this, root](int index, const QString& url) {
+        if (root && root->splitManager() && m_tabBar) {
+            TabSplitState state = m_tabBar->tabSplitState(index);
+            root->splitManager()->restoreSplitState(state);
         }
+        NavigationService::instance().navigateTo(url);
     });
 
-    connect(m_tabBar, &TabBarWidget::folderDroppedOnTab, this, [this, root](int tabIndex, const QString& folderPath) {
-        if (!root || !m_tabBar) return;
-        int currentPanes = ContentPaneSplitManager::countPanes(root);
-        if (currentPanes >= 4) {
-            ToolTipOverlay::instance()->showToast("当前窗格数量已达上限 (最大 4 个)", 2000, QColor("#e81123"));
-            return;
-        }
-        ContentPaneSplitManager::openFolderInSplitPane(root, folderPath, [this](ContentPanel* activeP) {
-            if (m_activeCoordinator) {
-                m_activeCoordinator->activate(activeP);
-            }
-        });
-    });
-
+    // 标签页刷新请求
     connect(m_tabBar, &TabBarWidget::refreshRequested, this, [this]() {
         if (m_refreshCurrentFunc) {
             m_refreshCurrentFunc();
         }
     });
 
-    connect(m_tabBar, &TabBarWidget::tabColorChanged, this, [](const QString& path, const QString& colorHex) {
-        if (path.isEmpty()) return;
-        AppCommand cmd;
-        cmd.type = AppCommandType::SetColor;
-        cmd.targetPaths << path;
-        cmd.params["color"] = colorHex;
-        CoreEngine::instance().executeCommand(cmd);
-    });
+    // 标签页合并请求
+    connect(m_tabBar, &TabBarWidget::mergeRequested, this, [this, root](int sourceIndex, int targetIndex) {
+        if (root && root->splitManager() && m_tabBar) {
+            TabSplitState state = root->splitManager()->exportSplitState();
+            m_tabBar->setTabSplitState(m_tabBar->currentIndex(), state);
 
-    connect(m_tabBar, &TabBarWidget::tabIconChanged, this, [](const QString& path, const QString& iconKey) {
-        if (path.isEmpty()) return;
-        FavoriteDao::updateFavorite(path, iconKey);
-    });
+            TabSplitState srcState = m_tabBar->tabSplitState(sourceIndex);
+            TabSplitState tgtState = m_tabBar->tabSplitState(targetIndex);
 
-    if (root) {
-        connect(root, &ContentPanel::requestOpenInNewTab, this, [this](const QString& path) {
-            if (m_tabBar) {
-                m_tabBar->addNewTab(path);
+            int srcCount = (srcState.isSplit && !srcState.panePaths.isEmpty()) ? srcState.panePaths.size() : 1;
+            int tgtCount = (tgtState.isSplit && !tgtState.panePaths.isEmpty()) ? tgtState.panePaths.size() : 1;
+
+            if (srcCount + tgtCount > ContentPanel::kMaxPanes) {
+                ToolTipOverlay::instance()->showToast(QString("窗格数量超出上限%1窗格，不支持合并").arg(ContentPanel::kMaxPanes), 2000, QColor("#e81123"));
+                return;
             }
-        });
-    }
+
+            m_tabBar->mergeTab(sourceIndex, targetIndex);
+        }
+    });
+
+    // 标签页拆分请求
+    connect(m_tabBar, &TabBarWidget::splitRequested, this, [this, root](int tabIndex) {
+        if (root && root->splitManager() && m_tabBar) {
+            TabSplitState state = root->splitManager()->exportSplitState();
+            m_tabBar->setTabSplitState(m_tabBar->currentIndex(), state);
+            m_tabBar->splitTab(tabIndex);
+        }
+    });
+
+    // 拖拽文件夹到标签页分屏
+    connect(m_tabBar, &TabBarWidget::folderDroppedOnTab, this, [this, root](int tabIndex, const QString& folderPath) {
+        if (!m_tabBar) return;
+        m_tabBar->setCurrentIndex(tabIndex, true);
+        if (root) {
+            if (root->paneCount() >= ContentPanel::kMaxPanes) {
+                ToolTipOverlay::instance()->showToast(QString("窗格数量超出上限%1窗格，不支持继续分屏").arg(ContentPanel::kMaxPanes), 2000, QColor("#e81123"));
+                return;
+            }
+            root->splitPane(Qt::Horizontal, folderPath);
+        }
+    });
+
+    // 标签页颜色与图标变更
+    connect(m_tabBar, &TabBarWidget::tabColorChanged, this, [](int /*index*/, const QString& url, const QString& hexColor) {
+        if (!url.isEmpty() && !url.startsWith("computer://")) {
+            AppCommand cmd;
+            cmd.type = AppCommandType::SetColor;
+            cmd.targetPaths = {url};
+            cmd.params["color"] = hexColor;
+            CoreEngine::instance().executeCommand(cmd);
+        }
+    });
+
+    connect(m_tabBar, &TabBarWidget::tabIconChanged, this, [](int /*index*/, const QString& url, const QString& iconKey) {
+        if (!url.isEmpty()) {
+            FavoriteDao::updateFavorite(url, iconKey, "");
+        }
+    });
 }
 
 } // namespace QuarkMeta
@@ -1411,8 +1437,7 @@ void TabBarCoordinator::wire() {
 
 #include <QObject>
 #include <QPointer>
-#include <QStringList>
-#include "ContentPanel.h"
+#include <QString>
 #include "NavPanel.h"
 #include "FavoritePanel.h"
 #include "LibraryPanel.h"
@@ -1420,32 +1445,34 @@ void TabBarCoordinator::wire() {
 #include "AddressBar.h"
 #include "TabBarWidget.h"
 #include "SearchController.h"
-#include "../meta/SmartFolderDao.h"
+#include "ContentPanel.h"
 
 namespace QuarkMeta {
 
 class ActivePaneCoordinator;
 
 /**
- * @brief 导航与全局位置协调器
- * 统一处理全应用路径跳转、位置显示（单一实现）、分类/智能文件夹路由、搜索绑定与数据刷新。
+ * @brief 导航与全局路径协同协调器
+ * 负责全应用位置显示（单一实现）、路径导航跳转、搜索联动与多面板路径联动。
  */
 class NavigationCoordinator : public QObject {
     Q_OBJECT
 public:
-    explicit NavigationCoordinator(ActivePaneCoordinator* activeCoordinator,
-                                   NavPanel* navPanel,
-                                   FavoritePanel* favoritePanel,
-                                   LibraryPanel* libraryPanel,
-                                   MarkedPanel* markedPanel,
-                                   AddressBar* addressBar,
-                                   TabBarWidget* tabBar,
-                                   SearchController* searchController,
-                                   QObject* parent = nullptr);
+    NavigationCoordinator(ActivePaneCoordinator* activeCoordinator,
+                          NavPanel* navPanel,
+                          FavoritePanel* favoritePanel,
+                          LibraryPanel* libraryPanel,
+                          MarkedPanel* markedPanel,
+                          AddressBar* addressBar,
+                          TabBarWidget* tabBar,
+                          SearchController* searchController,
+                          QObject* parent = nullptr);
     ~NavigationCoordinator() override = default;
 
+    void showLocation(const QString& addressText, const QString& tabTitle, const QString& tabUrl);
     void locateItem(const QString& fullPath);
     void refreshCurrent();
+
     void bindPane(ContentPanel* pane);
     void wire();
 
@@ -1453,8 +1480,6 @@ signals:
     void statusMessageRequested(const QString& message);
 
 private:
-    void showLocation(const QString& addressText, const QString& tabTitle, const QString& tabUrl);
-
     ActivePaneCoordinator* m_activeCoordinator = nullptr;
     QPointer<NavPanel> m_navPanel;
     QPointer<FavoritePanel> m_favoritePanel;
@@ -1481,9 +1506,9 @@ private:
 #include "../meta/LibrarySyncService.h"
 #include "../core/CentralEventHub.h"
 #include "../core/VolumeOnlineManager.h"
-#include <QStandardPaths>
 #include <QFileInfo>
 #include <QDir>
+#include <QStandardPaths>
 
 namespace QuarkMeta {
 
@@ -1512,23 +1537,40 @@ void NavigationCoordinator::showLocation(const QString& addressText, const QStri
         m_addressBar->setPath(addressText);
     }
     if (m_tabBar) {
-        m_tabBar->updateCurrentTabInfo(tabTitle, tabUrl);
+        m_tabBar->updateCurrentTabTitle(tabTitle, tabUrl);
     }
 }
 
 void NavigationCoordinator::locateItem(const QString& fullPath) {
-    if (fullPath.isEmpty()) return;
+    if (fullPath.isEmpty() || fullPath.contains("://")) return;
 
+    QFileInfo fi(fullPath);
+    QString targetDir = fi.absolutePath();
     ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
     if (!target) return;
 
-    QFileInfo fi(fullPath);
-    QString dirPath = fi.isDir() ? fullPath : fi.absolutePath();
-    target->setPendingSelectedItem(fullPath);
-    NavigationService::instance().navigateTo(dirPath);
+    target->setPendingSelectPath(fullPath, false);
+
+    if (m_searchController) {
+        m_searchController->clearSearch(true);
+    }
+    target->search("");
+
+    QString currentNative = QDir::toNativeSeparators(QDir::cleanPath(target->currentPath()));
+    QString targetDirNative = QDir::toNativeSeparators(QDir::cleanPath(targetDir));
+
+    bool isSameDir = (QString::compare(currentNative, targetDirNative, Qt::CaseInsensitive) == 0);
+
+    if (isSameDir && !target->isRecursive()) {
+        target->restoreSelections();
+    } else if (isSameDir && target->isRecursive()) {
+        target->loadDirectory(targetDir, false);
+    } else {
+        NavigationService::instance().navigateTo(targetDir, true, false);
+    }
 
     if (m_navPanel) {
-        m_navPanel->setCurrentPath(dirPath);
+        m_navPanel->selectPath(targetDirNative);
     }
 }
 
@@ -1558,36 +1600,49 @@ void NavigationCoordinator::bindPane(ContentPanel* pane) {
         });
     }
 
-    // panelActivated 更新地址栏为窗格的 displayPath
-    connect(pane, &ContentPanel::panelActivated, this, [this](ContentPanel* activePanel) {
-        if (m_addressBar && activePanel) {
-            m_addressBar->setPath(activePanel->displayPath());
-        }
-    });
+    if (pane->columnView()) {
+        connect(pane->columnView(), &ColumnViewWidget::pathNavigated, this, [this](const QString& path) {
+            NavigationService::instance().navigateTo(path);
+        });
+    }
 }
 
 void NavigationCoordinator::wire() {
     connect(&NavigationService::instance(), &NavigationService::requestLocateItem, this, &NavigationCoordinator::locateItem);
 
+    connect(&NavigationService::instance(), &NavigationService::requestOpenInNewTab, this, [this](const QString& url) {
+        if (m_tabBar) {
+            m_tabBar->openInNewTab(url);
+        }
+    });
+
     if (m_navPanel) {
-        connect(m_navPanel, &NavPanel::pathSelected, &NavigationService::instance(), [](const QString& path) {
+        connect(m_navPanel, &NavPanel::directorySelected, &NavigationService::instance(), [](const QString& path) {
             NavigationService::instance().navigateTo(path);
         });
         connect(m_navPanel, &NavPanel::requestLocateFile, this, &NavigationCoordinator::locateItem);
-        connect(m_navPanel, &NavPanel::requestAddFavorite, this, [](const QString& path) {
-            FavoriteService::instance().addFavorites({path});
+        connect(m_navPanel, &NavPanel::requestOpenTrash, &NavigationService::instance(), []() {
+            NavigationService::instance().navigateTo("trash://");
         });
+        if (m_favoritePanel) {
+            connect(m_navPanel, &NavPanel::requestAddFavorite, this, [](const QString& path) {
+                FavoriteService::instance().addFavorites({path});
+            });
+            connect(m_navPanel, &NavPanel::requestRemoveFavorite, this, [](const QString& path) {
+                FavoriteService::instance().removeFavorites({path});
+            });
+        }
     }
 
     if (m_favoritePanel) {
-        connect(m_favoritePanel, &FavoritePanel::pathSelected, &NavigationService::instance(), [](const QString& path) {
-            NavigationService::instance().navigateTo(path);
+        connect(m_favoritePanel, &FavoritePanel::directorySelected, &NavigationService::instance(), [](const QString& path, bool recursive) {
+            NavigationService::instance().navigateTo(path, true, recursive);
         });
         connect(m_favoritePanel, &FavoritePanel::requestLocateFile, this, &NavigationCoordinator::locateItem);
     }
 
     if (m_markedPanel) {
-        connect(m_markedPanel, &MarkedPanel::pathSelected, &NavigationService::instance(), [](const QString& path) {
+        connect(m_markedPanel, &MarkedPanel::requestLocateFolder, this, [](const QString& path) {
             NavigationService::instance().navigateTo(path);
         });
     }
@@ -1612,96 +1667,82 @@ void NavigationCoordinator::wire() {
         }
     }
 
-    connect(&VolumeOnlineManager::instance(), &VolumeOnlineManager::driveOffline, this, [](const QString& driveLetter) {
-        QString current = NavigationService::instance().currentUrl();
-        if (current.contains(driveLetter + ":", Qt::CaseInsensitive)) {
-            QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-            NavigationService::instance().navigateTo(desktopPath);
+    connect(&VolumeOnlineManager::instance(), &VolumeOnlineManager::volumeStateChanged, this,
+            [](const QString& driveLetter, bool isOnline) {
+        if (!isOnline) {
+            QString current = NavigationService::instance().currentUrl();
+            if (current.contains(driveLetter + ":", Qt::CaseInsensitive)) {
+                QString desktopPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+                NavigationService::instance().navigateTo(desktopPath);
+            }
         }
     });
 
     if (m_libraryPanel) {
         connect(m_libraryPanel, &LibraryPanel::categoryPathsSelected, this, [this](const QStringList& paths, const QString& name, int categoryId) {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (!target) return;
-
-            QString title = name.isEmpty() ? "全部数据" : name;
-            showLocation(title, title, QString("library://%1").arg(categoryId));
-
-            target->clearAllFilters(true);
-            target->applyViewTarget(categoryId, paths);
-            target->setLastLoadedLibraryPaths(paths);
-            target->loadLibraryPaths(paths);
+            if (target) {
+                target->search("");
+                target->applyViewTarget(QString("library://%1").arg(categoryId), "library", name, categoryId, false);
+                target->setLastLoadedLibraryPaths(paths);
+                target->loadLibraryPaths(paths);
+            }
+            showLocation("库 → " + name, name, "library://" + QString::number(categoryId));
         });
 
         connect(m_libraryPanel, &LibraryPanel::smartFolderSelected, this, [this](const SmartFolderRecord& record) {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (!target) return;
-
-            showLocation(record.name, record.name, QString("smart_folder://%1").arg(record.id));
-
-            target->clearAllFilters(true);
-            target->loadSmartFolder(record);
+            if (target) {
+                target->loadSmartFolder(record, record.name);
+            }
+            showLocation("库 → " + record.name, record.name, "smartfolder://" + QString::number(record.id));
         });
 
         connect(m_libraryPanel, &LibraryPanel::smartFolderPreviewRequested, this, [this](const SmartFolderRecord& record) {
-            ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-            if (!target) return;
-
             QString displayName = record.name.isEmpty() ? "智能文件夹预览" : record.name;
-            showLocation(displayName, displayName, QString("smart_folder_preview://%1").arg(record.id));
-
-            target->clearAllFilters(true);
-            target->loadSmartFolder(record);
+            ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
+            if (target) {
+                target->loadSmartFolder(record, displayName);
+            }
+            showLocation("库 → " + displayName, displayName, "smartfolder://" + QString::number(record.id));
         });
     }
 
-    connect(&NavigationService::instance(), &NavigationService::currentUrlChanged, this, [this](const QString& url) {
-        ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-        if (!target) return;
-
+    connect(&NavigationService::instance(), &NavigationService::currentUrlChanged, this,
+            [this](const QString& url, const QString& displayPath, bool recursive) {
         if (m_searchController) {
-            m_searchController->clearSearch();
+            m_searchController->clearSearch(true);
         }
-        target->search("");
-        target->clearAllFilters(true);
-        target->clearDirectoryStats();
-        target->setMirrorSource(false);
-
-        QString subItemToSelect = target->takePendingSelectedItem();
-
-        if (url == "computer://") {
-            showLocation("此电脑", "此电脑", "computer://");
-            if (m_navPanel) m_navPanel->setCurrentPath("computer://");
-            target->loadComputer();
-            return;
+        ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
+        if (target) {
+            target->search("");
         }
 
-        if (url == "trash_root" || url == "trash://") {
-            showLocation("回收站", "回收站", "trash://");
-            if (m_navPanel) m_navPanel->setCurrentPath("trash_root");
-            target->loadTrash();
-            return;
-        }
-
-        QString cleanPath = QDir::toNativeSeparators(QDir::cleanPath(url));
-        QFileInfo fi(cleanPath);
-        QString tabName = fi.fileName().isEmpty() ? cleanPath : fi.fileName();
-        showLocation(cleanPath, tabName, cleanPath);
+        showLocation(displayPath, displayPath, url);
 
         if (m_navPanel) {
-            m_navPanel->setCurrentPath(cleanPath);
+            m_navPanel->selectPath(url == "computer://" ? "" : url);
         }
 
-        target->loadDirectory(cleanPath, subItemToSelect);
+        if (target) {
+            QString targetChild = NavigationService::instance().takePendingTargetChildPath(url);
+            if (!targetChild.isEmpty() && url != "computer://" && url != "trash://") {
+                target->setPendingSelectPath(targetChild, false);
+            }
+
+            if (url == "computer://") {
+                target->loadDirectory("computer://");
+            } else if (url == "trash://") {
+                target->loadCategory("trash");
+            } else {
+                target->loadDirectory(url, recursive);
+            }
+        }
     });
 
     if (m_searchController) {
-        ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
-        m_searchController->bindContentPanel(target);
-
-        connect(m_searchController, &SearchController::searchCompleted, this, [this](int count, qint64 elapsedMs) {
-            emit statusMessageRequested(QString("搜索已完成，共匹配 %1 个项目 (耗时 %2 毫秒)").arg(count).arg(elapsedMs));
+        connect(m_searchController, &SearchController::searchExecuted, this, [this]() {
+            emit statusMessageRequested("搜索已完成");
         });
     }
 
@@ -1807,21 +1848,27 @@ FilterStatsBinder::FilterStatsBinder(ActivePaneCoordinator* activeCoordinator,
 void FilterStatsBinder::bindFilterToActivePanel(ContentPanel* activePanel) {
     if (!m_filterPanel || !activePanel) return;
 
+    // 1. 严格解绑上一个窗格的统计信号，杜绝后台非焦点窗格冲刷侧边栏
     if (m_statsConnection) {
-        disconnect(m_statsConnection);
+        QObject::disconnect(m_statsConnection);
     }
 
-    m_statsConnection = connect(activePanel, &ContentPanel::directoryStatsReady, m_filterPanel, &FilterPanel::updateStats);
+    // 2. 绑定新焦点窗格的统计就绪信号
+    m_statsConnection = connect(activePanel, &ContentPanel::directoryStatsReady, m_filterPanel, [this](const ScanStats& stats) {
+        if (m_filterPanel) {
+            m_filterPanel->populateStats(stats);
+            AppEvent ev;
+            ev.type = AppEventType::FilterStateChanged;
+            CentralEventHub::instance().publishEvent(ev);
+        }
+    });
 
-    AppEvent event;
-    event.type = AppEventType::FilterStateChanged;
-    CentralEventHub::instance().publish(event);
+    // 3. 切换焦点的瞬间：反向刷出新焦点窗格已有的 FilterState 与统计数据给 FilterPanel
+    m_filterPanel->blockSignals(true);
+    m_filterPanel->syncUIFromFilterState();
+    m_filterPanel->blockSignals(false);
 
-    {
-        QSignalBlocker blocker(m_filterPanel);
-        m_filterPanel->syncUIFromFilterState(activePanel->currentFilterState());
-    }
-
+    // 触发当前焦点窗格重新计算并广播统计
     activePanel->recalculateAndEmitStats();
 }
 
@@ -1832,6 +1879,7 @@ void FilterStatsBinder::wire() {
             bindFilterToActivePanel(root);
         }
 
+        // 筛选条件变动时精准应用至当前激活分栏
         connect(m_filterPanel, &FilterPanel::filterChanged, this, [this](const FilterState& state) {
             ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
             if (target) {
@@ -1841,7 +1889,11 @@ void FilterStatsBinder::wire() {
     }
 
     if (m_metaPanel && m_filterPanel) {
-        connect(m_metaPanel, &MetaPanel::searchByColor, m_filterPanel, &FilterPanel::selectColor);
+        connect(m_metaPanel, &MetaPanel::searchByColor, m_filterPanel, [this](const QColor& color) {
+            if (m_filterPanel) {
+                m_filterPanel->selectColor(color);
+            }
+        });
     }
 }
 
@@ -1881,25 +1933,6 @@ void FilterStatsBinder::wire() {
 
 ```
 <<<<<<< SEARCH
-#pragma once
-
-#include <QObject>
-#include <QPointer>
-#include "ContentPanel.h"
-
-namespace QuarkMeta {
-
-class NavPanel;
-class FavoritePanel;
-class LibraryPanel;
-class MarkedPanel;
-class ContentPanel;
-class MetaPanel;
-class FilterPanel;
-class AddressBar;
-class SearchController;
-class TitleBarWidget;
-class PanelLayoutManager;
 class AppShortcutController;
 class PaneActivationTracker;
 
@@ -1980,28 +2013,7 @@ private:
     };
     QMap<ContentPanel*, PanelMetaDebounceState> m_panelMetaDebounceMap;
 };
-
-} // namespace QuarkMeta
 =======
-#pragma once
-
-#include <QObject>
-#include <QPointer>
-#include "ContentPanel.h"
-
-namespace QuarkMeta {
-
-class NavPanel;
-class FavoritePanel;
-class LibraryPanel;
-class MarkedPanel;
-class ContentPanel;
-class MetaPanel;
-class FilterPanel;
-class AddressBar;
-class SearchController;
-class TitleBarWidget;
-class PanelLayoutManager;
 class AppShortcutController;
 
 class ActivePaneCoordinator;
@@ -2093,8 +2105,6 @@ private:
     NavigationCoordinator* m_navCoordinator = nullptr;
     FilterStatsBinder* m_filterStatsBinder = nullptr;
 };
-
-} // namespace QuarkMeta
 >>>>>>> REPLACE
 ```
 
@@ -3497,10 +3507,17 @@ void PanelMediator::setupConnections() {
     m_activeCoordinator = new ActivePaneCoordinator(contentPanel, this);
     m_metaPresenter = new MetaPanelPresenter(m_activeCoordinator, m_metaPanel.data(), contentPanel, this);
     m_metaEditController = new MetaEditController(m_activeCoordinator, m_metaPanel.data(), this);
-    m_quickLookController = new QuickLookController(m_activeCoordinator, this);
-    m_shortcutRouter = new ShortcutActionRouter(m_activeCoordinator, m_shortcutController.data(), m_titleBar.data(), m_layoutManager.data(), this);
+    m_quickLookController = new QuickLookController(m_activeCoordinator, m_metaPanel.data(), this);
+    m_shortcutRouter = new ShortcutActionRouter(
+        m_activeCoordinator,
+        m_shortcutController.data(),
+        m_titleBar.data(),
+        m_layoutManager.data(),
+        m_filterPanel.data(),
+        this
+    );
 
-    TabBarWidget* tabBar = m_titleBar ? m_titleBar->findChild<TabBarWidget*>("WindowTabBar") : nullptr;
+    TabBarWidget* tabBar = m_titleBar ? m_titleBar->tabBar() : nullptr;
 
     m_navCoordinator = new NavigationCoordinator(
         m_activeCoordinator,
@@ -3539,8 +3556,11 @@ void PanelMediator::setupConnections() {
     connect(m_activeCoordinator, &ActivePaneCoordinator::activePaneChanged, this, &PanelMediator::activeContentPanelChanged);
 
     // 严格保持的原有接收顺序：
-    // ① 搜索控制器 setActiveContentPanel
+    // ① 搜索控制器 setActiveContentPanel（在初始化阶段只对 contentPanel bindContentPanel 一次）
     if (m_searchController) {
+        if (contentPanel) {
+            m_searchController->bindContentPanel(contentPanel);
+        }
         connect(this, &PanelMediator::activeContentPanelChanged, this, [this](ContentPanel* activePanel) {
             if (m_searchController) {
                 m_searchController->setActiveContentPanel(activePanel);
@@ -3629,9 +3649,22 @@ void PanelMediator::setupConnections() {
 
 ## Chapter 7: Interface & Visibility Consistency Check（接口签名与访问级别一致性核查）
 
-1. `PanelMediator::instance()`、`locateItem()`、`activeContentPanel()`、`setupConnections()` 签名与访问级别 100% 保持；
-2. 信号 `statusMessageRequested`、`activeContentPanelChanged` 保持原样；
-3. 新增的各个协调器与控制器的公开接口 `bindPane`、`wire`、`currentTarget` 均在各自头文件中显式声明为 `public`，并在 `.cpp` 中严格匹配。
+1. **外部调用接口 100% 冻结与保持**：
+   - `PanelMediator::instance()`、`locateItem()`、`activeContentPanel()`、`setupConnections()` 签名与访问级别 100% 保持；
+   - 信号 `statusMessageRequested(const QString&)` 与 `activeContentPanelChanged(ContentPanel*)` 保持原样；
+2. **协调器调用真实外部 API 核查通过**：
+   - `TabBarWidget.h`：调用 `setTabSplitState(int, const TabSplitState&)`、`tabSplitState(int)`、`mergeTab(int, int)`、`splitTab(int)`、`updateCurrentTabTitle(const QString&, const QString&)`；连接 `currentTabChanged(int, const QString&)` 等真实声明方法与信号；
+   - `ContentPaneSplitManager.h`：调用成员函数 `exportSplitState()`（返回 `TabSplitState`）、`restoreSplitState(const TabSplitState&)`、`paneCount()`，彻底杜绝臆造静态函数；
+   - `FilterPanel.h`：调用 `populateStats(const QuarkMeta::ScanStats&)` 与无参 `syncUIFromFilterState()`；
+   - `SearchController.h`：初始化只对根窗格调用 `bindContentPanel(ContentPanel*)`，窗格激活切换调用 `setActiveContentPanel(ContentPanel*)`；
+3. **新增的各个协调器公开接口声明、定义与调用点一致性**：
+   - `ActivePaneCoordinator::currentTarget()`、`isCurrentTarget(ContentPanel*)`、`activate(ContentPanel*)`、`bindPane(ContentPanel*)`、`wire()`；
+   - `QuickLookController::bindPane(ContentPanel*)`、`wire()`；
+   - `ShortcutActionRouter::wire()`；
+   - `TabBarCoordinator::wire()`；
+   - `NavigationCoordinator::showLocation(const QString&, const QString&, const QString&)`、`locateItem(const QString&)`、`refreshCurrent()`、`bindPane(ContentPanel*)`、`wire()`；
+   - `FilterStatsBinder::bindFilterToActivePanel(ContentPanel*)`、`wire()`；
+   - 均在各自 `.h` 声明为 `public`，在 `.cpp` 中严格匹配实现并在 `PanelMediator::setupConnections()` 中闭环组装。
 
 ---
 
@@ -3639,7 +3672,8 @@ void PanelMediator::setupConnections() {
 
 1. `PanelMediator.h` 前置声明新增的 8 个协调器/控制器类，删除原有未使用的内部防抖结构体；
 2. `PanelMediator.cpp` 显式包含 8 个协调器头文件与所有涉及的面板头文件；
-3. 8 个协调器 `.h` 与 `.cpp` 均显式包含各自用到的 Qt 类型（`QPointer`、`QTimer`、`QSet` 等）与业务类型定义。
+3. 8 个协调器 `.h` 与 `.cpp` 均显式包含各自用到的 Qt 类型（`QPointer`、`QTimer`、`QSet` 等）与业务类型定义；
+4. **彻底消除臆造类型引用**：所有分屏状态均严格基于 `TabBarWidget.h` 中真实声明的 `TabSplitState` 结构体，彻底移除并杜绝 `QJsonObject` 相关依赖，确保头文件闭合与类型完整。
 
 ---
 
