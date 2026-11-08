@@ -12,6 +12,7 @@
 #include <QDir>
 #include <QCoreApplication>
 #include <QSettings>
+#include <QCheckBox>
 
 HotkeyKeyEdit::HotkeyKeyEdit(QWidget* parent) : QLineEdit(parent) {
     setObjectName("HotkeyKeyEdit");
@@ -100,7 +101,7 @@ SettingsWindow::SettingsWindow(QWidget* parent)
     : FramelessDialog("系统设置", parent)
 {
     setObjectName("SettingsWindow");
-    setFixedSize(580, 420);
+    setFixedSize(620, 440);
     initUI();
     loadSettings();
 }
@@ -110,12 +111,14 @@ void SettingsWindow::initUI() {
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
 
-    // 左侧导航栏 (严格对齐参考图样式)
+    // 左侧导航栏 (严密对应参考图样式)
     m_navBar = new QListWidget();
     m_navBar->setObjectName("SettingsNavBar");
     m_navBar->setFixedWidth(150);
     m_navBar->addItem("全局热键");
     m_navBar->addItem("截图设置");
+    m_navBar->addItem("通用设置");
+
     connect(m_navBar, &QListWidget::currentRowChanged, this, &SettingsWindow::onCategoryChanged);
 
     // 右侧内容区
@@ -123,6 +126,7 @@ void SettingsWindow::initUI() {
     m_contentStack->setObjectName("SettingsContentStack");
     m_contentStack->addWidget(createHotkeyPage());
     m_contentStack->addWidget(createScreenshotPage());
+    m_contentStack->addWidget(createGeneralPage());
 
     auto* scrollArea = new QScrollArea();
     scrollArea->setObjectName("SettingsScrollArea");
@@ -218,6 +222,41 @@ QWidget* SettingsWindow::createScreenshotPage() {
     defaultTip->setObjectName("SettingsHintLabel");
     layout->addWidget(defaultTip);
 
+    layout->addSpacing(10);
+    auto* ocrTitle = new QLabel("截图取文 (OCR) 交互设置：");
+    ocrTitle->setObjectName("SettingsItemLabel");
+    layout->addWidget(ocrTitle);
+
+    m_checkOcrAutoCopy = new QCheckBox("OCR 识别后自动复制识别文本并隐藏结果窗口");
+    m_checkOcrAutoCopy->setObjectName("SettingsCheckBox");
+    layout->addWidget(m_checkOcrAutoCopy);
+
+    m_checkSilentCapture = new QCheckBox("开启静默采集模式 (识别完成仅显示气泡提示，不弹出大窗口)");
+    m_checkSilentCapture->setObjectName("SettingsCheckBox");
+    layout->addWidget(m_checkSilentCapture);
+
+    layout->addStretch();
+    return page;
+}
+
+QWidget* SettingsWindow::createGeneralPage() {
+    auto* page = new QWidget();
+    auto* layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(14);
+
+    m_checkAutoStart = new QCheckBox("开机自动启动");
+    m_checkAutoStart->setObjectName("SettingsCheckBox");
+    layout->addWidget(m_checkAutoStart);
+
+    m_checkConflictWarning = new QCheckBox("快捷键注册失败时在托盘弹出气泡告警");
+    m_checkConflictWarning->setObjectName("SettingsCheckBox");
+    layout->addWidget(m_checkConflictWarning);
+
+    auto* tip = new QLabel("提示：软件配置实时保存在本地注册表/配置文件中。");
+    tip->setObjectName("SettingsHintLabel");
+    layout->addWidget(tip);
+
     layout->addStretch();
     return page;
 }
@@ -253,6 +292,16 @@ void SettingsWindow::loadSettings() {
     QString defaultPath = QCoreApplication::applicationDirPath() + "/RPN_screenshot";
     QString currentPath = ssSettings.value("savePath", defaultPath).toString();
     m_editSavePath->setText(currentPath);
+
+    // 载入 OCR 选项
+    QSettings ocrSettings("OCR", "OCR");
+    m_checkOcrAutoCopy->setChecked(ocrSettings.value("autoCopy", false).toBool());
+    m_checkSilentCapture->setChecked(ocrSettings.value("silentCapture", false).toBool());
+
+    // 载入通用设置
+    QSettings generalSettings("OCR", "General");
+    m_checkAutoStart->setChecked(generalSettings.value("autoStart", false).toBool());
+    m_checkConflictWarning->setChecked(generalSettings.value("conflictWarning", true).toBool());
 }
 
 void SettingsWindow::onBrowseSavePath() {
@@ -274,6 +323,11 @@ void SettingsWindow::onRestoreDefaults() {
 
     QString defaultPath = QDir::toNativeSeparators(QCoreApplication::applicationDirPath() + "/RPN_screenshot");
     m_editSavePath->setText(defaultPath);
+
+    m_checkOcrAutoCopy->setChecked(false);
+    m_checkSilentCapture->setChecked(false);
+    m_checkAutoStart->setChecked(false);
+    m_checkConflictWarning->setChecked(true);
 }
 
 void SettingsWindow::onSaveClicked() {
@@ -300,6 +354,26 @@ void SettingsWindow::onSaveClicked() {
         QSettings ssSettings("OCR", "Screenshot");
         ssSettings.setValue("savePath", savePath);
     }
+
+    // 保存 OCR 交互选项
+    QSettings ocrSettings("OCR", "OCR");
+    ocrSettings.setValue("autoCopy", m_checkOcrAutoCopy->isChecked());
+    ocrSettings.setValue("silentCapture", m_checkSilentCapture->isChecked());
+
+    // 保存通用设置
+    QSettings generalSettings("OCR", "General");
+    generalSettings.setValue("autoStart", m_checkAutoStart->isChecked());
+    generalSettings.setValue("conflictWarning", m_checkConflictWarning->isChecked());
+
+#ifdef Q_OS_WIN
+    // 同步写入 Windows 开机启动注册表项
+    QSettings bootSettings("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", QSettings::NativeFormat);
+    if (m_checkAutoStart->isChecked()) {
+        bootSettings.setValue("SSUYEH_OCR", QDir::toNativeSeparators(QCoreApplication::applicationFilePath()));
+    } else {
+        bootSettings.remove("SSUYEH_OCR");
+    }
+#endif
 
     ToolTipOverlay::instance()->showText(QCursor::pos(), "<b style='color: #2ecc71;'>[OK] 系统设置已保存并立即生效</b>", 800);
     accept();

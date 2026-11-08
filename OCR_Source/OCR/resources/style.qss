@@ -1,3 +1,18 @@
+
+/* 全局暗黑背景兜底，彻底杜绝任何原生白底色暴露 */
+QListWidget {
+    background-color: #1E1E1E;
+    color: #CCCCCC;
+    border: none;
+}
+QScrollArea {
+    background-color: transparent;
+    border: none;
+}
+QStackedWidget {
+    background-color: #1E1E1E;
+    border: none;
+}
 /* 全局基础样式 */
 QMainWindow, QDialog { background-color: #1E1E1E; color: #EEEEEE; }
 QLabel { color: #CCCCCC; }
@@ -6415,4 +6430,34 @@ QFrame#rulerToolbar QPushButton:checked {
 }
 #SettingsWindow QPushButton#SettingsBrowseBtn:pressed {
     background-color: #1E1E1E;
+}
+
+/* ColorPickerWindow 渐变调节栏一体化精细样式 */
+#ColorPickerStepContainer {
+    background-color: #252526;
+    border: 1px solid #444444;
+    border-radius: 4px;
+}
+#ColorPickerStepEdit {
+    background-color: transparent;
+    border: none;
+    color: #FFFFFF;
+    font-size: 12px;
+}
+#ColorPickerGradModeBtn {
+    background-color: #2D2D2D;
+    color: #CCCCCC;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    font-size: 11px;
+}
+#ColorPickerGradModeBtn:hover {
+    background-color: #3E3E42;
+    color: #FFFFFF;
+}
+#ColorPickerGradModeBtn:checked {
+    background-color: #007ACC;
+    color: #FFFFFF;
+    border-color: #007ACC;
+    font-weight: bold;
 }

@@ -25,6 +25,7 @@ private:
 class QListWidget;
 class QStackedWidget;
 class QPushButton;
+class QCheckBox;
 
 class SettingsWindow : public FramelessDialog {
     Q_OBJECT
@@ -43,6 +44,7 @@ private:
     void loadSettings();
     QWidget* createHotkeyPage();
     QWidget* createScreenshotPage();
+    QWidget* createGeneralPage();
 
     QListWidget* m_navBar = nullptr;
     QStackedWidget* m_contentStack = nullptr;
@@ -53,8 +55,14 @@ private:
     HotkeyKeyEdit* m_editColorPicker = nullptr;
     HotkeyKeyEdit* m_editPixelRuler = nullptr;
 
-    // 截图保存路径
+    // 截图设置
     QLineEdit* m_editSavePath = nullptr;
+    QCheckBox* m_checkOcrAutoCopy = nullptr;
+    QCheckBox* m_checkSilentCapture = nullptr;
+
+    // 通用设置
+    QCheckBox* m_checkAutoStart = nullptr;
+    QCheckBox* m_checkConflictWarning = nullptr;
 };
 
 #endif // SETTINGSWINDOW_H

@@ -924,52 +924,114 @@ void ArrowShape::draw(QPainter& p, const QPixmap&) const {
     QPointF start = data.points[0], end = data.points[1];
     QPointF dir = end - start;
     double len = std::sqrt(QPointF::dotProduct(dir, dir));
-    if (len < 2) return;
-    QPointF unit = dir / len; QPointF perp(-unit.y(), unit.x());
+    if (len < 4) return;
+    QPointF unit = dir / len;
+    QPointF perp(-unit.y(), unit.x());
     double angle = std::atan2(dir.y(), dir.x());
-    
-    // 增加基础尺寸，使其更显眼
-    double baseSize = 24 + data.strokeWidth * 2.0;
-    double headLen = baseSize;
+
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    // [高保真几何矢量建模] 严格对标专业截图标注规范 (PixPin/Snipaste 标准流线型设计)
+    // 基础箭杆半宽: 根据 strokeWidth 动态平滑映射，杜绝随放大过度粗暴膨胀
+    double shaftHalfWidth = std::max(1.5, data.strokeWidth * 1.0);
+    // 箭头头部长度与翼展: 保证任何比例下均呈现黄金几何三角
+    double headLen = std::max(16.0, std::min(len * 0.45, 18.0 + data.strokeWidth * 3.2));
+    double headHalfWidth = headLen * 0.65;
+    // 箭翼凹陷深度 (Waist Indent): 现代专业标注工具标志性的回凹比例 (约为头部长度的 25%)
+    double waistBack = headLen * 0.28;
+
     bool isOutline = (data.arrowStyle == ArrowStyle::OutlineSingle || data.arrowStyle == ArrowStyle::OutlineDouble || data.arrowStyle == ArrowStyle::OutlineDot);
-    
+
     if (data.arrowStyle == ArrowStyle::SolidSingle || data.arrowStyle == ArrowStyle::OutlineSingle) {
+        QPointF ptTip = end;
+        QPointF ptBarbLeft = end - unit * headLen + perp * headHalfWidth;
+        QPointF ptBarbRight = end - unit * headLen - perp * headHalfWidth;
+        QPointF ptWaistLeft = end - unit * (headLen - waistBack) + perp * shaftHalfWidth;
+        QPointF ptWaistRight = end - unit * (headLen - waistBack) - perp * shaftHalfWidth;
+        QPointF ptBaseLeft = start + perp * shaftHalfWidth;
+        QPointF ptBaseRight = start - perp * shaftHalfWidth;
+
+        QPolygonF arrowPoly;
+        arrowPoly << ptTip
+                  << ptBarbLeft
+                  << ptWaistLeft
+                  << ptBaseLeft
+                  << ptBaseRight
+                  << ptWaistRight
+                  << ptBarbRight;
+
         if (isOutline) {
-            QPointF neck = end - unit * (headLen * 0.8); double w = data.strokeWidth + 2;
-            QPolygonF poly; poly << end << neck + perp * (headLen*0.5) << neck + perp * w << start + perp * w << start - perp * w << neck - perp * w << neck - perp * (headLen*0.5);
-            p.setBrush(Qt::transparent); p.setPen(QPen(data.color, 2.5)); p.drawPolygon(poly);
+            p.setPen(QPen(data.color, std::max(1.5, data.strokeWidth * 0.8), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.setBrush(Qt::transparent);
+            p.drawPolygon(arrowPoly);
         } else {
-            double barbWidth = headLen * 0.55; double waistLen = headLen * 0.75; double waistWidth = data.strokeWidth + 1;
-            p.setPen(Qt::NoPen); p.setBrush(data.color);
-            p.drawPolygon(QPolygonF() << end << end - unit * headLen + perp * barbWidth << end - unit * waistLen + perp * waistWidth << start << end - unit * waistLen - perp * waistWidth << end - unit * headLen - perp * barbWidth);
+            p.setPen(Qt::NoPen);
+            p.setBrush(data.color);
+            p.drawPolygon(arrowPoly);
         }
     } else if (data.arrowStyle == ArrowStyle::Thin) {
-        p.setPen(QPen(data.color, data.strokeWidth + 1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        double penW = std::max(2.0, data.strokeWidth * 1.2);
+        p.setPen(QPen(data.color, penW, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.drawLine(start, end);
-        double thinAngle = 0.5; double thinLen = headLen * 0.8;
+        double thinAngle = 0.48;
+        double thinLen = headLen * 0.9;
         p.drawLine(end, end - QPointF(thinLen * std::cos(angle - thinAngle), thinLen * std::sin(angle - thinAngle)));
         p.drawLine(end, end - QPointF(thinLen * std::cos(angle + thinAngle), thinLen * std::sin(angle + thinAngle)));
     } else if (data.arrowStyle == ArrowStyle::SolidDouble || data.arrowStyle == ArrowStyle::OutlineDouble) {
-        p.setPen(QPen(data.color, data.strokeWidth + 1)); p.drawLine(start + unit * (headLen*0.7), end - unit * (headLen*0.7));
-        p.setPen(isOutline ? QPen(data.color, 2.0) : Qt::NoPen);
-        p.setBrush(isOutline ? Qt::transparent : data.color);
-        auto drawH = [&](const QPointF& e, double ang) {
-            QPointF u(std::cos(ang), std::sin(ang)), pr(-u.y(), u.x());
-            p.drawPolygon(QPolygonF() << e << e - u * headLen + pr * (headLen*0.5) << e - u * (headLen*0.7) + pr * (data.strokeWidth) << e - u * (headLen*0.7) - pr * (data.strokeWidth) << e - u * headLen - pr * (headLen*0.5));
+        p.setPen(QPen(data.color, shaftHalfWidth * 2.0, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin));
+        p.drawLine(start + unit * (headLen * 0.7), end - unit * (headLen * 0.7));
+
+        auto drawHeadAt = [&](const QPointF& tip, double ang) {
+            QPointF u(std::cos(ang), std::sin(ang));
+            QPointF pr(-u.y(), u.x());
+            QPolygonF poly;
+            poly << tip
+                 << tip - u * headLen + pr * headHalfWidth
+                 << tip - u * (headLen - waistBack) + pr * shaftHalfWidth
+                 << tip - u * (headLen - waistBack) - pr * shaftHalfWidth
+                 << tip - u * headLen - pr * headHalfWidth;
+            if (isOutline) {
+                p.setPen(QPen(data.color, std::max(1.5, data.strokeWidth * 0.8), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+                p.setBrush(Qt::transparent);
+            } else {
+                p.setPen(Qt::NoPen);
+                p.setBrush(data.color);
+            }
+            p.drawPolygon(poly);
         };
-        drawH(end, angle); drawH(start, angle + M_PI);
+        drawHeadAt(end, angle);
+        drawHeadAt(start, angle + M_PI);
     } else if (data.arrowStyle == ArrowStyle::SolidDot || data.arrowStyle == ArrowStyle::OutlineDot) {
-        p.setPen(QPen(data.color, data.strokeWidth + 1)); p.drawLine(start, end - unit * (headLen*0.7));
-        p.setPen(isOutline ? QPen(data.color, 2.0) : Qt::NoPen);
-        p.setBrush(isOutline ? Qt::transparent : data.color);
-        p.drawEllipse(start, 5+data.strokeWidth, 5+data.strokeWidth);
-        p.drawPolygon(QPolygonF() << end << end - unit * headLen + perp * (headLen*0.5) << end - unit * (headLen*0.7) + perp * (data.strokeWidth) << end - unit * (headLen*0.7) - perp * (data.strokeWidth) << end - unit * headLen - perp * (headLen*0.5));
+        double dotRadius = std::max(4.0, 3.5 + data.strokeWidth * 0.8);
+        p.setPen(QPen(data.color, shaftHalfWidth * 2.0, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin));
+        p.drawLine(start, end - unit * (headLen * 0.7));
+
+        if (isOutline) {
+            p.setPen(QPen(data.color, std::max(1.5, data.strokeWidth * 0.8), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.setBrush(Qt::transparent);
+        } else {
+            p.setPen(Qt::NoPen);
+            p.setBrush(data.color);
+        }
+        p.drawEllipse(start, dotRadius, dotRadius);
+
+        QPolygonF headPoly;
+        headPoly << end
+                 << end - unit * headLen + perp * headHalfWidth
+                 << end - unit * (headLen - waistBack) + perp * shaftHalfWidth
+                 << end - unit * (headLen - waistBack) - perp * shaftHalfWidth
+                 << end - unit * headLen - perp * headHalfWidth;
+        p.drawPolygon(headPoly);
     } else if (data.arrowStyle == ArrowStyle::Dimension) {
-        p.setPen(QPen(data.color, data.strokeWidth + 1, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin));
+        double penW = std::max(1.5, data.strokeWidth * 0.8);
+        p.setPen(QPen(data.color, penW, Qt::SolidLine, Qt::FlatCap, Qt::RoundJoin));
         p.drawLine(start, end);
-        p.drawLine(start + perp * (10 + data.strokeWidth), start - perp * (10 + data.strokeWidth));
-        p.drawLine(end + perp * (10 + data.strokeWidth), end - perp * (10 + data.strokeWidth));
+        double capLen = 8.0 + data.strokeWidth * 1.0;
+        p.drawLine(start + perp * capLen, start - perp * capLen);
+        p.drawLine(end + perp * capLen, end - perp * capLen);
     }
+    p.restore();
 }
 
 bool ArrowShape::hitTest(const QPoint& pos) const {
@@ -1337,20 +1399,27 @@ void ScreenshotTool::wheelEvent(QWheelEvent* event) {
         if (m_hoveredShape->data.type == ScreenshotToolType::Text) {
             int newSize = m_hoveredShape->data.fontSize + (delta > 0 ? 2 : -2);
             m_hoveredShape->data.fontSize = std::max(8, std::min(100, newSize));
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("文字大小: %1 pt").arg(m_hoveredShape->data.fontSize), 500);
         } else {
             int newWidth = m_hoveredShape->data.strokeWidth + (delta > 0 ? 1 : -1);
             m_hoveredShape->data.strokeWidth = std::max(1, std::min(50, newWidth));
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("线条粗细: %1 px").arg(m_hoveredShape->data.strokeWidth), 500);
         }
         update();
     } else {
-        // 如果没有悬浮标注，修改全局设置
+        // 如果没有悬浮标注，修改全局设置并实时持久化
         if (m_currentTool == ScreenshotToolType::Text) {
             m_currentFontSize += (delta > 0 ? 2 : -2);
             m_currentFontSize = std::max(8, std::min(100, m_currentFontSize));
+            QSettings("OCR", "Screenshot").setValue("fontSize", m_currentFontSize);
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("当前字号: %1 pt").arg(m_currentFontSize), 500);
         } else {
             m_currentStrokeWidth += (delta > 0 ? 1 : -1);
             m_currentStrokeWidth = std::max(1, std::min(50, m_currentStrokeWidth));
+            QSettings("OCR", "Screenshot").setValue("strokeWidth", m_currentStrokeWidth);
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("当前粗细: %1 px").arg(m_currentStrokeWidth), 500);
         }
+        update();
     }
     event->accept();
 }
