@@ -170,8 +170,11 @@ void PinnedScreenshotWidget::contextMenuEvent(QContextMenuEvent* e) {
         QApplication::clipboard()->setPixmap(m_pixmap); 
     });
     menu.addAction("保存", [this](){
-        QString fileName = QString("RPN_%1.png").arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
-        QString f = QFileDialog::getSaveFileName(this, "保存截图", fileName, "PNG(*.png)");
+                QSettings settings("OCR", "Screenshot");
+        QString defaultPath = QCoreApplication::applicationDirPath() + "/RPN_screenshot";
+        QString saveDir = settings.value("savePath", defaultPath).toString();
+        QString defaultFile = QDir(saveDir).filePath(QString("RPN_%1.png").arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss")));
+        QString f = QFileDialog::getSaveFileName(this, "保存截图", defaultFile, "PNG(*.png)");
         if(!f.isEmpty()) m_pixmap.save(f);
     });
     menu.addSeparator();
@@ -205,32 +208,7 @@ ScreenshotToolbar::ScreenshotToolbar(ScreenshotTool* tool)
     setAttribute(Qt::WA_AlwaysShowToolTips);
     setMouseTracking(true);
 
-    setStyleSheet(R"(
-        #MainContainer { 
-            background-color: #2D2D2D; 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
-            border-radius: 12px; 
-        }
-        #ToolRow, #OptionWidget {
-            background: transparent;
-        }
-        QPushButton { 
-            background: transparent; 
-            border: none; 
-            border-radius: 4px; 
-            padding: 4px; 
-        }
-        #MainContainer QPushButton:hover { background-color: #3e3e42; } // 2026-03-xx 统一悬停色
-        #MainContainer QPushButton:checked { background-color: #3e3e42; } // 2026-03-xx 统一选中色
-        #OptionWidget { 
-            background: transparent; 
-        }
-        QPushButton[colorBtn="true"] { padding: 0px; border-radius: 2px; }
-        QPushButton[sizeBtn="true"] { background-color: #777; border-radius: 50%; }
-        QPushButton[sizeBtn="true"]:checked { background-color: #007ACC; }
-        QPushButton[sizeBtn="true"]:checked { background-color: #007ACC; }
-    )");
-    setAttribute(Qt::WA_StyledBackground);
+        setAttribute(Qt::WA_StyledBackground);
 
     auto* outerLayout = new QVBoxLayout(this);
     outerLayout->setContentsMargins(6, 6, 6, 6);
@@ -1476,11 +1454,14 @@ void ScreenshotTool::copyToClipboard() {
     cancel(); 
 }
 void ScreenshotTool::save() { 
-    QImage img = generateFinalImage();
+        QImage img = generateFinalImage();
     emit screenshotCaptured(img, false);
-    QString fileName = QString("RPN_%1.png").arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss"));
-    QString f = QFileDialog::getSaveFileName(this, "保存截图", fileName, "PNG(*.png)"); 
-    if(!f.isEmpty()) img.save(f); 
+    QSettings settings("OCR", "Screenshot");
+    QString defaultPath = QCoreApplication::applicationDirPath() + "/RPN_screenshot";
+    QString saveDir = settings.value("savePath", defaultPath).toString();
+    QString defaultFile = QDir(saveDir).filePath(QString("RPN_%1.png").arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss")));
+    QString f = QFileDialog::getSaveFileName(this, "保存截图", defaultFile, "PNG(*.png)"); 
+    if(!f.isEmpty()) img.save(f);  
     autoSaveImage(img);
     cancel(); 
 }

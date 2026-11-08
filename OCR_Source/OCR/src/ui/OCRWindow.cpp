@@ -46,14 +46,14 @@ void OCRWindow::initUI() {
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(8);
 
-    auto* btnBrowse = new QPushButton(" 本地浏览");
+    auto* btnBrowse = new QPushButton("本地浏览");
     btnBrowse->setIcon(IconHelper::getIcon("folder", "#ffffff"));
     btnBrowse->setFixedHeight(36);
     btnBrowse->setObjectName("OCRWindow_btnBrowse_1"); // 2026-03-xx 统一悬停色
     connect(btnBrowse, &QPushButton::clicked, this, &OCRWindow::onBrowseAndRecognize);
     leftLayout->addWidget(btnBrowse);
 
-    auto* btnPaste = new QPushButton(" 粘贴识别");
+    auto* btnPaste = new QPushButton("粘贴识别");
     btnPaste->setIcon(IconHelper::getIcon("copy", "#ffffff"));
     btnPaste->setFixedHeight(36);
     btnPaste->setObjectName("OCRWindow_btnPaste_2");
@@ -62,7 +62,7 @@ void OCRWindow::initUI() {
 
     leftLayout->addSpacing(10);
 
-    auto* btnClear = new QPushButton(" 清空列表");
+    auto* btnClear = new QPushButton("清空列表");
     btnClear->setIcon(IconHelper::getIcon("trash", "#e74c3c")); // 2026-03-13 统一 Trash 图标颜色为红色
     btnClear->setFixedHeight(36);
     btnClear->setObjectName("OCRWindow_btnClear_3");
@@ -71,7 +71,7 @@ void OCRWindow::initUI() {
 
     leftLayout->addStretch();
 
-    auto* btnCopy = new QPushButton(" 复制文字");
+    auto* btnCopy = new QPushButton("复制文字");
     btnCopy->setIcon(IconHelper::getIcon("copy", "#ffffff"));
     btnCopy->setFixedHeight(36);
     btnCopy->setObjectName("OCRWindow_btnCopy_4");
@@ -91,14 +91,10 @@ void OCRWindow::initUI() {
     listLabel->setObjectName("OCRWindow_listLabel_5");
     middleLayout->addWidget(listLabel);
 
-    m_itemList = new QListWidget();
+        m_itemList = new QListWidget();
+    m_itemList->setObjectName("OCRWindow_itemList");
     m_itemList->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_itemList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_itemList->setStyleSheet(
-        "QListWidget { background: #222; border: 1px solid #333; border-radius: 4px; color: #ddd; }"
-        "QListWidget::item { height: 32px; padding-left: 5px; }"
-        "QListWidget::item:selected { background: #3e3e42; color: white; border-radius: 2px; }" // 2026-03-xx 统一选中色
-    );
     connect(m_itemList, &QListWidget::itemSelectionChanged, this, &OCRWindow::onItemSelectionChanged);
     middleLayout->addWidget(m_itemList);
 

@@ -535,20 +535,6 @@ ColorPickerWindow::~ColorPickerWindow() {
 }
 
 void ColorPickerWindow::initUI() {
-    setStyleSheet(R"(
-        QWidget { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; color: #E0E0E0; }
-        QLineEdit { background-color: #2A2A2A; border: 1px solid #444; color: #FFFFFF; border-radius: 6px; padding: 4px; font-weight: bold; }
-        QLineEdit:focus { border: 1px solid #3b8ed0; }
-        QPushButton { background-color: #333; border: 1px solid #444; border-radius: 4px; padding: 6px; outline: none; }
-        QPushButton:hover { background-color: #3e3e42; } // 2026-03-xx 统一悬停色
-        QPushButton:pressed { background-color: #222; }
-        QScrollArea { background: transparent; border: none; }
-        QScrollBar:vertical { background: transparent; width: 8px; }
-        QScrollBar::handle:vertical { background: #444; border-radius: 4px; min-height: 20px; }
-        QScrollBar::handle:vertical:hover { background: #555; }
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
-    )");
-
     auto* mainVLayout = new QVBoxLayout(m_contentArea);
     mainVLayout->setContentsMargins(20, 20, 20, 20);
     mainVLayout->setSpacing(15);
@@ -709,8 +695,8 @@ void ColorPickerWindow::initUI() {
     btnUp->setFixedSize(16, 12);
     btnUp->setCursor(Qt::PointingHandCursor);
     btnUp->setIcon(IconHelper::getIcon("arrow_up", "#aaaaaa", 12));
-    btnUp->setIconSize(QSize(12, 12));
-    btnUp->setStyleSheet(spinBtnStyle);
+        btnUp->setIconSize(QSize(12, 12));
+    btnUp->setObjectName("ColorPickerSpinBtn");
     connect(btnUp, &QPushButton::clicked, [this](){
         int val = m_gradSteps->text().toInt();
         m_gradSteps->setText(QString::number(val + 1));
@@ -721,7 +707,7 @@ void ColorPickerWindow::initUI() {
     btnDown->setCursor(Qt::PointingHandCursor);
     btnDown->setIcon(IconHelper::getIcon("arrow_down", "#aaaaaa", 12));
     btnDown->setIconSize(QSize(12, 12));
-    btnDown->setStyleSheet(spinBtnStyle);
+    btnDown->setObjectName("ColorPickerSpinBtn");
     connect(btnDown, &QPushButton::clicked, [this](){
         int val = m_gradSteps->text().toInt();
         if (val > 2) m_gradSteps->setText(QString::number(val - 1));
@@ -740,11 +726,7 @@ void ColorPickerWindow::initUI() {
         btn->setCheckable(true);
         btn->setFixedWidth(45);
         btn->setFixedHeight(26);
-        btn->setStyleSheet(
-            "QPushButton { background: #333; border: 1px solid #444; border-radius: 4px; font-size: 11px; padding: 0; } "
-            "QPushButton:hover { background: #444; } "
-            "QPushButton:checked { background: #007ACC; color: white; border-color: #007ACC; }"
-        );
+                btn->setObjectName("ColorPickerGradModeBtn");
         if (m_gradMode == mode) btn->setChecked(true);
         connect(btn, &QPushButton::clicked, [this, mode, gradBox](){
             m_gradMode = mode;
@@ -802,11 +784,7 @@ void ColorPickerWindow::initUI() {
         btn->setAutoDefault(false);
         btn->setFixedHeight(36);
         btn->setFixedWidth(120);
-        btn->setStyleSheet(
-            "QPushButton { background: #333; border-radius: 6px; font-weight: bold; border: 1px solid #444; } "
-            "QPushButton:hover { background: #444; } "
-            "QPushButton:checked { background: #007ACC; color: white; border-color: #007ACC; }"
-        );
+                btn->setObjectName("ColorPickerNavBtn");
         btn->setCheckable(true);
         connect(btn, &QPushButton::clicked, [this, text, navBar, btn](){ 
             for(int i=0; i<navBar->count(); i++) {

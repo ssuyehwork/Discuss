@@ -15,8 +15,11 @@
 #include "ui/ColorPickerWindow.h"
 #include "ui/PixelRulerOverlay.h"
 #include "ui/ToolTipOverlay.h"
+#include "ui/HotkeySettingsDialog.h"
 #include "core/OCRManager.h"
 #include "core/ClipboardMonitor.h"
+#include "core/HotkeyManager.h"
+#include <QFileDialog>
 
 int main(int argc, char* argv[]) {
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
@@ -49,10 +52,13 @@ int main(int argc, char* argv[]) {
     // 托盘右键功能菜单
     QMenu trayMenu;
 
-    auto* actScreenshot = trayMenu.addAction("屏幕截图");
+        auto* actScreenshot = trayMenu.addAction("屏幕截图");
     auto* actOCR = trayMenu.addAction("文字识别 (OCR)");
     auto* actColorPicker = trayMenu.addAction("屏幕拾色器");
     auto* actPixelRuler = trayMenu.addAction("像素标尺");
+    trayMenu.addSeparator();
+    auto* actSetSaveDir = trayMenu.addAction("设置截图保存目录");
+    auto* actHotkeySettings = trayMenu.addAction("快捷键设置");
     trayMenu.addSeparator();
     auto* actQuit = trayMenu.addAction("退出");
 
@@ -136,6 +142,69 @@ int main(int argc, char* argv[]) {
         s_pixelRuler->show();
         s_pixelRuler->raise();
         s_pixelRuler->activateWindow();
+    });
+
+        // 设置截图保存目录
+    QObject::connect(actSetSaveDir, &QAction::triggered, []() {
+        QSettings settings("OCR", "Screenshot");
+        QString defaultPath = QCoreApplication::applicationDirPath() + "/RPN_screenshot";
+        QString currentPath = settings.value("savePath", defaultPath).toString();
+
+        QString chosenDir = QFileDialog::getExistingDirectory(nullptr, "选择截图保存目录", currentPath);
+        if (!chosenDir.isEmpty()) {
+            settings.setValue("savePath", chosenDir);
+            ToolTipOverlay::instance()->showText(QCursor::pos(), QString("<b style=\'color: #2ecc71;\'>[OK] 截图保存目录已更新至:\n%1</b>").arg(chosenDir), 700);
+        }
+    });
+
+    // 快捷键设置窗口
+    static QPointer<HotkeySettingsDialog> s_hotkeyDialog;
+    QObject::connect(actHotkeySettings, &QAction::triggered, []() {
+        if (!s_hotkeyDialog) {
+            s_hotkeyDialog = new HotkeySettingsDialog(nullptr);
+            s_hotkeyDialog->setAttribute(Qt::WA_DeleteOnClose);
+        }
+        s_hotkeyDialog->show();
+        s_hotkeyDialog->raise();
+        s_hotkeyDialog->activateWindow();
+    });
+
+    // 托盘单击事件响应：直接激活屏幕截图
+    QObject::connect(&trayIcon, &QSystemTrayIcon::activated, [startCapture](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger) {
+            startCapture(false);
+        }
+    });
+
+    // 全局热键管理器初始化与分发
+    auto& hk = HotkeyManager::instance();
+    hk.reapplyHotkeys();
+    QObject::connect(&hk, &HotkeyManager::hotkeyPressed, [startCapture](int id) {
+        if (id == HotkeyManager::Screenshot) {
+            startCapture(false);
+        } else if (id == HotkeyManager::OCR) {
+            if (!s_ocrWindow) {
+                s_ocrWindow = new OCRWindow(nullptr);
+            }
+            s_ocrWindow->showNormal();
+            s_ocrWindow->raise();
+            s_ocrWindow->activateWindow();
+        } else if (id == HotkeyManager::ColorPicker) {
+            if (!s_colorPicker) {
+                s_colorPicker = new ColorPickerWindow(nullptr);
+            }
+            s_colorPicker->showNormal();
+            s_colorPicker->raise();
+            s_colorPicker->activateWindow();
+        } else if (id == HotkeyManager::PixelRuler) {
+            if (!s_pixelRuler) {
+                s_pixelRuler = new PixelRulerOverlay(nullptr);
+                s_pixelRuler->setAttribute(Qt::WA_DeleteOnClose);
+            }
+            s_pixelRuler->show();
+            s_pixelRuler->raise();
+            s_pixelRuler->activateWindow();
+        }
     });
 
     QObject::connect(actQuit, &QAction::triggered, &app, &QApplication::quit);
