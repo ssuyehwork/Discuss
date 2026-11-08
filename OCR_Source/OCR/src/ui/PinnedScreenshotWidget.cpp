@@ -1,6 +1,5 @@
 #include "PinnedScreenshotWidget.h"
 #include "IconHelper.h"
-#include "core/ClipboardMonitor.h"
 
 #include <QPainter>
 #include <QMenu>
@@ -42,8 +41,7 @@ void PinnedScreenshotWidget::contextMenuEvent(QContextMenuEvent* e) {
     QMenu menu(this);
     IconHelper::setupMenu(&menu);
     menu.addAction("复制", [this](){
-        ClipboardMonitor::instance().forceNext();
-        QApplication::clipboard()->setPixmap(m_pixmap);
+                QApplication::clipboard()->setPixmap(m_pixmap);
     });
     menu.addAction("保存", [this](){
         QSettings settings("OCR", "Screenshot");

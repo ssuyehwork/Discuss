@@ -2,7 +2,6 @@
 #include "ToolTipOverlay.h"
 #include "StringUtils.h"
 #include "IconHelper.h"
-#include "core/ClipboardMonitor.h"
 
 #include <QApplication>
 #include <QScreen>
@@ -859,8 +858,7 @@ void ScreenshotTool::keyPressEvent(QKeyEvent* e) {
             else if (m_colorFormatIndex == 1) colorStr = QString("%1, %2, %3").arg(color.red()).arg(color.green()).arg(color.blue());
             else colorStr = QString("HSL(%1, %2, %3)").arg(color.hslHue() < 0 ? 0 : color.hslHue()).arg(int(color.hslSaturationF()*100)).arg(int(color.lightnessF()*100));
             
-            ClipboardMonitor::instance().forceNext();
-            QApplication::clipboard()->setText(colorStr);
+                        QApplication::clipboard()->setText(colorStr);
             // 2026-03-13 按照用户要求：提示时长缩短为 700ms
             ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制色值: %1").arg(colorStr), 700);
         } else {
@@ -873,8 +871,7 @@ void ScreenshotTool::keyPressEvent(QKeyEvent* e) {
     }
     else if (e->key() == Qt::Key_M) {
         QString coordStr = QString("%1, %2").arg(m_lastMouseMovePos.x()).arg(m_lastMouseMovePos.y());
-        ClipboardMonitor::instance().forceNext();
-        QApplication::clipboard()->setText(coordStr);
+                QApplication::clipboard()->setText(coordStr);
         // 2026-03-13 按照用户要求：提示时长缩短为 700ms
         ToolTipOverlay::instance()->showText(QCursor::pos(), QString("已复制坐标: %1").arg(coordStr), 700);
     }
