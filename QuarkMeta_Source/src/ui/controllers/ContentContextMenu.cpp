@@ -6,6 +6,8 @@
 #include "../TabBarWidget.h"
 #include "ContentSortController.h"
 #include "ContentKeyHandler.h"
+#include "ArchiveTaskHelper.h"
+#include "CryptoActionHelper.h"
 #include "../UiHelper.h"
 #include "../StyleLibrary.h"
 #include "../ToolTipOverlay.h"
@@ -794,75 +796,15 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             break;
         }
         case ContentPanel::ActionEncrypt: {
-            FramelessInputDialog dlg("加密保护", "设置加密密码:", "", m_panel);
-            dlg.setEchoMode(QLineEdit::Password);
-            if (dlg.exec() == QDialog::Accepted) {
-                QString pwd = dlg.text();
-                if (pwd.isEmpty()) break;
-                auto indexes = view->selectionModel()->selectedIndexes();
-                QStringList targets;
-                for (const auto& idx : indexes) if (idx.column() == 0) targets << idx.data(PathRole).toString();
-
-                ToolTipOverlay::instance()->showToast("加密任务已在后台启动...", 2000);
-
-                QPointer<ContentPanel> self(m_panel);
-                EncryptionManager::instance().encryptBatchAsync(targets, pwd.toStdString(), [self](bool success) {
-                    if (self) self->refreshAll();
-                    ToolTipOverlay::instance()->showToast(success ? "加密任务处理完成" : "部分项目加密失败", 1500, success ? QColor("#2ecc71") : QColor("#e81123"));
-                });
-            }
+            CryptoActionHelper::executeEncrypt(m_panel, view);
             break;
         }
         case ContentPanel::ActionDecrypt: {
-            FramelessInputDialog dlg("解除外壳保护", "输入解密密码:", "", m_panel);
-            dlg.setEchoMode(QLineEdit::Password);
-            if (dlg.exec() == QDialog::Accepted) {
-                QString pwd = dlg.text();
-                if (pwd.isEmpty()) break;
-                auto indexes = view->selectionModel()->selectedIndexes();
-                QStringList targets;
-                for (const auto& idx : indexes) if (idx.column() == 0) targets << idx.data(PathRole).toString();
-
-                ToolTipOverlay::instance()->showToast("解密还原任务已在后台启动...", 2000);
-
-                QPointer<ContentPanel> self(m_panel);
-                EncryptionManager::instance().decryptBatchAsync(targets, pwd.toStdString(), [self](bool anySuccess) {
-                    if (self) self->refreshAll();
-                    if (anySuccess) {
-                        ToolTipOverlay::instance()->showToast("解除保护成功，文件已还原", 1500, QColor("#2ecc71"));
-                    } else {
-                        ToolTipOverlay::instance()->showToast("解密失败，请检查密码是否正确", 2000, QColor("#e74c3c"));
-                    }
-                });
-            }
+            CryptoActionHelper::executeDecrypt(m_panel, view);
             break;
         }
         case ContentPanel::ActionChangePwd: {
-            FramelessInputDialog dlgOld("修改保护密码", "输入原密码:", "", m_panel);
-            dlgOld.setEchoMode(QLineEdit::Password);
-            if (dlgOld.exec() != QDialog::Accepted || dlgOld.text().isEmpty()) break;
-            QString oldPwd = dlgOld.text();
-
-            FramelessInputDialog dlgNew("修改保护密码", "输入新密码:", "", m_panel);
-            dlgNew.setEchoMode(QLineEdit::Password);
-            if (dlgNew.exec() != QDialog::Accepted || dlgNew.text().isEmpty()) break;
-            QString newPwd = dlgNew.text();
-
-            auto indexes = view->selectionModel()->selectedIndexes();
-            QStringList targets;
-            for (const auto& idx : indexes) if (idx.column() == 0) targets << idx.data(PathRole).toString();
-
-            ToolTipOverlay::instance()->showToast("密码修改中...", 2000);
-
-            QPointer<ContentPanel> self(m_panel);
-            EncryptionManager::instance().changePasswordBatchAsync(targets, oldPwd.toStdString(), newPwd.toStdString(), [self](bool anySuccess) {
-                if (self) self->refreshAll();
-                if (anySuccess) {
-                    ToolTipOverlay::instance()->showToast("保护密码修改成功", 1500, QColor("#2ecc71"));
-                } else {
-                    ToolTipOverlay::instance()->showToast("原密码错误，修改失败", 2000, QColor("#e74c3c"));
-                }
-            });
+            CryptoActionHelper::executeChangePassword(m_panel, view);
             break;
         }
         case ContentPanel::ActionBatchRename:
@@ -1056,172 +998,11 @@ void ContentContextMenu::showMenu(QAbstractItemView* view, const QPoint& pos) {
             break;
         }
         case ContentPanel::ActionExtractArchive: {
-            // 确定压缩包路径：仅处理第一个选中文件
-            QStringList selectedPaths = m_panel->getSelectedPaths();
-            QString archivePath = !selectedPaths.isEmpty() ? selectedPaths.first() : path;
-            if (archivePath.isEmpty() || !QFileInfo::exists(archivePath)) break;
-
-            QFileInfo archiveInfo(archivePath);
-            QString parentDir = archiveInfo.absolutePath();
-            QString baseName  = archiveInfo.completeBaseName();
-
-            // 自动生成唯一目标子文件夹名（同名递增编号）
-            QString destDir = QDir(parentDir).filePath(baseName);
-            if (QDir(destDir).exists()) {
-                int counter = 1;
-                while (QDir(QDir(parentDir).filePath(
-                    QString("%1-%2").arg(baseName).arg(counter))).exists()) {
-                    ++counter;
-                }
-                destDir = QDir(parentDir).filePath(QString("%1-%2").arg(baseName).arg(counter));
-            }
-            QDir().mkpath(destDir);
-
-            QString ext = archiveInfo.suffix().toLower();
-
-            if (ext == QStringLiteral("zip")) {
-                // .zip：通过 QProcess 追踪进程退出，完成后安全刷新面板
-                ToolTipOverlay::instance()->showToast(
-                    QString("正在解压 %1 ...").arg(archiveInfo.fileName()), 2000, QColor("#3498db")
-                );
-
-                QPointer<ContentPanel> weakPanel(m_panel);
-                QString capturedArchive = archivePath;
-                QString capturedDest    = destDir;
-
-                QProcess* proc = new QProcess();
-                QObject::connect(
-                    proc,
-                    QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                    [weakPanel, proc, capturedArchive, capturedDest](int exitCode, QProcess::ExitStatus) {
-                        QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, exitCode, capturedArchive, capturedDest, proc]() {
-                            if (weakPanel) weakPanel->refreshAll();
-                            QFileInfo info(capturedArchive);
-                            if (exitCode == 0) {
-                                ToolTipOverlay::instance()->showToast(
-                                    QString("解压完成：%1").arg(info.fileName()), 2000, QColor("#2ecc71")
-                                );
-                            } else {
-                                // 失败时清理可能为空的目标目录
-                                QDir failDir(capturedDest);
-                                if (failDir.exists() && failDir.isEmpty()) failDir.rmdir(capturedDest);
-                                ToolTipOverlay::instance()->showToast(
-                                    QString("解压失败：%1").arg(info.fileName()), 2000, QColor("#e81123")
-                                );
-                            }
-                            proc->deleteLater();
-                        });
-                    }
-                );
-
-                QString nativeSrc  = QDir::toNativeSeparators(capturedArchive);
-                QString nativeDest = QDir::toNativeSeparators(capturedDest);
-                QString script = QString(
-                    "Expand-Archive -LiteralPath '%1' -DestinationPath '%2' -Force"
-                ).arg(nativeSrc, nativeDest);
-                proc->start(QStringLiteral("powershell"),
-                    QStringList() << QStringLiteral("-NoProfile")
-                                  << QStringLiteral("-NonInteractive")
-                                  << QStringLiteral("-WindowStyle") << QStringLiteral("Hidden")
-                                  << QStringLiteral("-Command") << script);
-            } else {
-                // 其他格式：委托系统关联程序（7-Zip / WinRAR），无法精确追踪退出
-                ShellHelper::extractArchive(archivePath, destDir);
-                ToolTipOverlay::instance()->showToast(
-                    QString("已委托系统程序处理，解压完成后将自动刷新"), 2500, QColor("#3498db")
-                );
-                QPointer<ContentPanel> weakPanel(m_panel);
-                // 延迟 1.5s 刷新，给系统程序完成初始化的时间
-                QTimer::singleShot(1500, QCoreApplication::instance(), [weakPanel]() {
-                    if (weakPanel) weakPanel->refreshAll();
-                });
-            }
+            ArchiveTaskHelper::extractArchive(m_panel, path);
             break;
         }
         case ContentPanel::ActionCompressToZip: {
-            QStringList selectedPaths = m_panel->getSelectedPaths();
-            if (selectedPaths.isEmpty() && !path.isEmpty()) {
-                selectedPaths << path;
-            }
-            if (selectedPaths.isEmpty()) break;
-
-            QString firstItem = selectedPaths.first();
-            QFileInfo firstInfo(firstItem);
-            QString parentDir = firstInfo.isDir() && selectedPaths.size() == 1
-                ? firstInfo.dir().absolutePath()
-                : (currentPath.isEmpty() || currentPath.contains("://") ? firstInfo.absolutePath() : currentPath);
-
-            // 基础名称：文件夹取目录名，文件取主文件名（无后缀）
-            QString baseName = firstInfo.isDir() ? firstInfo.fileName() : firstInfo.completeBaseName();
-            if (baseName.isEmpty()) baseName = QStringLiteral("Archive");
-
-            // 自动计算递增编号目标 zip 路径，防冲洗覆盖
-            QString destZip = QDir(parentDir).filePath(baseName + QStringLiteral(".zip"));
-            if (QFile::exists(destZip)) {
-                int counter = 1;
-                while (QFile::exists(QDir(parentDir).filePath(QString("%1-%2.zip").arg(baseName).arg(counter)))) {
-                    ++counter;
-                }
-                destZip = QDir(parentDir).filePath(QString("%1-%2.zip").arg(baseName).arg(counter));
-            }
-
-            QFileInfo destZipInfo(destZip);
-            ToolTipOverlay::instance()->showToast(
-                QString("正在将 %1 个项目压缩为 %2 ...").arg(selectedPaths.size()).arg(destZipInfo.fileName()),
-                2000,
-                QColor("#3498db")
-            );
-
-            // 构造 PowerShell 脚本：使用单引号与转义处理路径
-            QStringList nativePaths;
-            for (const QString& p : selectedPaths) {
-                QString nPath = QDir::toNativeSeparators(p);
-                nPath.replace("'", "''"); // PowerShell 单引号转义
-                nativePaths << QString("'%1'").arg(nPath);
-            }
-            QString nativeDest = QDir::toNativeSeparators(destZip);
-            nativeDest.replace("'", "''");
-
-            QString script = QString(
-                "$files = @(%1); Compress-Archive -LiteralPath $files -DestinationPath '%2' -Force"
-            ).arg(nativePaths.join(", "), nativeDest);
-
-            QPointer<ContentPanel> weakPanel(m_panel);
-            QString capturedDestZip = destZip;
-
-            QProcess* proc = new QProcess();
-            QObject::connect(
-                proc,
-                QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                [weakPanel, proc, capturedDestZip](int exitCode, QProcess::ExitStatus) {
-                    QMetaObject::invokeMethod(QCoreApplication::instance(), [weakPanel, exitCode, capturedDestZip, proc]() {
-                        if (weakPanel) weakPanel->refreshAll();
-                        QFileInfo info(capturedDestZip);
-                        if (exitCode == 0) {
-                            ToolTipOverlay::instance()->showToast(
-                                QString("压缩完成：%1").arg(info.fileName()), 2000, QColor("#2ecc71")
-                            );
-                        } else {
-                            // 若压缩失败且产生了残缺文件，则进行清理
-                            if (QFile::exists(capturedDestZip)) {
-                                QFile::remove(capturedDestZip);
-                            }
-                            ToolTipOverlay::instance()->showToast(
-                                QString("压缩失败：%1").arg(info.fileName()), 2000, QColor("#e81123")
-                            );
-                        }
-                        proc->deleteLater();
-                    });
-                }
-            );
-
-            proc->start(
-                QStringLiteral("powershell"),
-                QStringList() << QStringLiteral("-NoProfile")
-                              << QStringLiteral("-NonInteractive")
-                              << QStringLiteral("-WindowStyle") << QStringLiteral("Hidden")
-                              << QStringLiteral("-Command") << script
-            );
+            ArchiveTaskHelper::compressToZip(m_panel, currentPath, path);
             break;
         }
         default:

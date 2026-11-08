@@ -1,4 +1,6 @@
 #include "ContentPaneSplitManager.h"
+#include "PaneHitTester.h"
+#include "PaneStateSerializer.h"
 #include "../ContentPanel.h"
 #include "../ContentHeaderWidget.h"
 #include "../TabBarWidget.h"
@@ -187,28 +189,7 @@ void ContentPaneSplitManager::normalizeTree(PaneNode* node) {
     }
 }
 
-PaneTreeNode ContentPaneSplitManager::exportNodeRecursive(PaneNode* node) const {
-    PaneTreeNode tn;
-    if (!node) return tn;
-
-    tn.isSplitter = node->isSplitter;
-    tn.orientation = node->orientation;
-    tn.isPrimary = node->isPrimary;
-    if (!node->isSplitter && node->panel) {
-        tn.path = node->panel->currentPath();
-    }
-
-    if (node->isSplitter) {
-        for (PaneNode* child : node->children) {
-            tn.children.append(exportNodeRecursive(child));
-        }
-    }
-
-    return tn;
-}
-
 ContentPaneSplitManager::SplitEvaluationResult ContentPaneSplitManager::evaluateDropAtPosition(const QPoint& globalPos, ContentPanel* sourcePane) {
-    SplitEvaluationResult res;
     if (rootPane() != m_panel) {
         return rootPane()->splitManager()->evaluateDropAtPosition(globalPos, sourcePane);
     }
@@ -220,100 +201,24 @@ ContentPaneSplitManager::SplitEvaluationResult ContentPaneSplitManager::evaluate
         allPanes.append(m_panel);
     }
 
-    for (ContentPanel* target : allPanes) {
-        if (!target || !target->isVisible()) continue;
-        if (sourcePane && target == sourcePane) continue; // 不能落在自己身上
-
-        QPoint localPos = target->mapFromGlobal(globalPos);
-        QRect targetRect = target->rect();
-        if (!targetRect.contains(localPos)) continue;
-
-        int w = targetRect.width();
-        int h = targetRect.height();
-        if (w <= 0 || h <= 0) continue;
-
-        double relX = static_cast<double>(localPos.x()) / w;
-        double relY = static_cast<double>(localPos.y()) / h;
-
-        bool isValid = false;
-        Qt::Orientation ori = Qt::Horizontal;
-        bool insertBefore = false;
-        QRect highlightLocal;
-
-        if (relX < 0.25) {
-            isValid = true;
-            ori = Qt::Horizontal;
-            insertBefore = true;
-            highlightLocal = QRect(0, 0, w / 2, h);
-        } else if (relX > 0.75) {
-            isValid = true;
-            ori = Qt::Horizontal;
-            insertBefore = false;
-            highlightLocal = QRect(w / 2, 0, w / 2, h);
-        } else if (relY < 0.25) {
-            isValid = true;
-            ori = Qt::Vertical;
-            insertBefore = true;
-            highlightLocal = QRect(0, 0, w, h / 2);
-        } else if (relY > 0.75) {
-            isValid = true;
-            ori = Qt::Vertical;
-            insertBefore = false;
-            highlightLocal = QRect(0, h / 2, w, h / 2);
-        }
-
-        if (isValid) {
-            // 最小尺寸校验：验证插入后目标区域空间是否足够
-            int reqWidth = (ori == Qt::Horizontal) ? ContentPanel::kMinPaneWidth * 2 : ContentPanel::kMinPaneWidth;
-            int reqHeight = (ori == Qt::Vertical) ? ContentPanel::kMinPaneHeight * 2 : ContentPanel::kMinPaneHeight;
-            if (w < reqWidth || h < reqHeight) {
-                isValid = false;
-            }
-        }
-
-        if (isValid) {
-            res.isValid = true;
-            res.orientation = ori;
-            res.insertBefore = insertBefore;
-            res.targetPanel = target;
-
-            QPoint globalTopLeft = target->mapToGlobal(highlightLocal.topLeft());
-            QPoint hostTopLeft = m_panel->mapFromGlobal(globalTopLeft);
-            res.highlightRect = QRect(hostTopLeft, highlightLocal.size());
-            return res;
-        }
-    }
-
+    PaneHitTester::HitResult hit = PaneHitTester::evaluateDropAtPosition(globalPos, sourcePane, allPanes, m_panel);
+    SplitEvaluationResult res;
+    res.isValid = hit.isValid;
+    res.orientation = hit.orientation;
+    res.insertBefore = hit.insertBefore;
+    res.highlightRect = hit.highlightRect;
+    res.targetPanel = hit.targetPanel;
     return res;
 }
 
 ContentPaneSplitManager::SplitEvaluationResult ContentPaneSplitManager::evaluateSplitDrop(const QPoint& pos, const QSize& refSize) {
+    PaneHitTester::HitResult hit = PaneHitTester::evaluateSplitDrop(pos, refSize);
     SplitEvaluationResult res;
-    int w = refSize.width();
-    int h = refSize.height();
-    if (w <= 0 || h <= 0) return res;
-
-    if (pos.x() < w * 0.25) {
-        res.isValid = true;
-        res.orientation = Qt::Horizontal;
-        res.insertBefore = true;
-        res.highlightRect = QRect(0, 0, w / 2, h);
-    } else if (pos.x() > w * 0.75) {
-        res.isValid = true;
-        res.orientation = Qt::Horizontal;
-        res.insertBefore = false;
-        res.highlightRect = QRect(w / 2, 0, w / 2, h);
-    } else if (pos.y() < h * 0.25) {
-        res.isValid = true;
-        res.orientation = Qt::Vertical;
-        res.insertBefore = true;
-        res.highlightRect = QRect(0, 0, w, h / 2);
-    } else if (pos.y() > h * 0.75) {
-        res.isValid = true;
-        res.orientation = Qt::Vertical;
-        res.insertBefore = false;
-        res.highlightRect = QRect(0, h / 2, w, h / 2);
-    }
+    res.isValid = hit.isValid;
+    res.orientation = hit.orientation;
+    res.insertBefore = hit.insertBefore;
+    res.highlightRect = hit.highlightRect;
+    res.targetPanel = hit.targetPanel;
     return res;
 }
 
@@ -402,98 +307,6 @@ void ContentPaneSplitManager::splitPaneAtTarget(ContentPanel* targetPane, Qt::Or
     splitPane(orientation, secondaryPath, insertBefore);
 }
 
-ContentPaneSplitManager::PaneNode* ContentPaneSplitManager::importNodeRecursive(const PaneTreeNode& treeNode, QWidget* parentWidget) {
-    if (!m_panel) return nullptr;
-
-    PaneNode* node = new PaneNode();
-    node->isSplitter = treeNode.isSplitter;
-    node->orientation = treeNode.orientation;
-    node->isPrimary = treeNode.isPrimary;
-
-    if (node->isSplitter) {
-        QSplitter* splitter = new QSplitter(node->orientation, parentWidget);
-        splitter->setHandleWidth(5);
-        splitter->setChildrenCollapsible(false);
-        node->splitter = splitter;
-
-        for (const auto& childTN : treeNode.children) {
-            PaneNode* childNode = importNodeRecursive(childTN, splitter);
-            if (childNode) {
-                childNode->parent = node;
-                node->children.append(childNode);
-                if (childNode->container) {
-                    splitter->addWidget(childNode->container);
-                } else if (childNode->splitter) {
-                    splitter->addWidget(childNode->splitter);
-                }
-            }
-        }
-    } else {
-        if (node->isPrimary) {
-            node->panel = m_panel;
-            if (!m_primaryPaneContainer) {
-                m_primaryPaneContainer = new QFrame(parentWidget);
-                m_primaryPaneContainer->setObjectName("EditorContainer");
-                m_primaryPaneContainer->setAttribute(Qt::WA_StyledBackground, true);
-                m_primaryPaneContainer->setMinimumWidth(ContentPanel::kMinPaneWidth);
-                QVBoxLayout* primLayout = new QVBoxLayout(m_primaryPaneContainer);
-                primLayout->setContentsMargins(0, 0, 0, 0);
-                primLayout->setSpacing(0);
-
-                if (m_panel->headerWidget()) {
-                    m_panel->mainLayout()->removeWidget(m_panel->headerWidget());
-                    primLayout->addWidget(m_panel->headerWidget());
-                }
-                if (m_panel->viewStack()) {
-                    m_panel->mainLayout()->removeWidget(m_panel->viewStack());
-                    primLayout->addWidget(m_panel->viewStack(), 1);
-                }
-            } else {
-                m_primaryPaneContainer->setParent(parentWidget);
-            }
-            m_primaryPaneContainer->show();
-            node->container = m_primaryPaneContainer;
-            if (!treeNode.path.isEmpty()) {
-                m_panel->loadDirectory(treeNode.path);
-            }
-        } else {
-            QWidget* container = new QWidget(parentWidget);
-            QVBoxLayout* layout = new QVBoxLayout(container);
-            layout->setContentsMargins(0, 0, 0, 0);
-            layout->setSpacing(0);
-
-            ContentPanel* newPane = new ContentPanel(container);
-            container->setMinimumWidth(ContentPanel::kMinPaneWidth);
-            newPane->setIsSecondaryPane(true);
-            if (newPane->splitManager()) {
-                newPane->splitManager()->m_rootPane = m_panel;
-            }
-            newPane->setViewMode(m_panel->currentViewMode());
-
-            connect(newPane, &ContentPanel::closePaneRequested, m_panel, [this, newPane]() {
-                closePane(newPane);
-            });
-            connect(newPane, &ContentPanel::directorySelected, m_panel, [this, newPane](const QString& path) {
-                newPane->setActivePane(true);
-                newPane->loadDirectory(path);
-                emit m_panel->dualPanePathsChanged(m_panel->currentPath(), path);
-                emit newPane->panelActivated(newPane);
-                notifyLayoutChanged();
-            });
-
-            layout->addWidget(newPane);
-            node->container = container;
-            node->panel = newPane;
-
-            if (!treeNode.path.isEmpty()) {
-                newPane->loadDirectory(treeNode.path);
-            }
-            emit m_panel->secondaryPaneCreated(newPane);
-        }
-    }
-
-    return node;
-}
 
 void ContentPaneSplitManager::splitPane(Qt::Orientation orientation, const QString& secondaryPath, bool insertBefore) {
     if (!m_panel) return;
@@ -828,7 +641,7 @@ TabSplitState ContentPaneSplitManager::exportSplitState() const {
     QList<ContentPanel*> allPanes;
     if (m_rootNode) {
         collectPanesDepthFirst(m_rootNode, allPanes);
-        state.rootNode = exportNodeRecursive(m_rootNode);
+        state.rootNode = PaneStateSerializer::exportNodeRecursive(m_rootNode);
     } else {
         allPanes.append(m_panel);
         PaneTreeNode leaf;
@@ -879,7 +692,7 @@ void ContentPaneSplitManager::restoreSplitState(const TabSplitState& state) {
 
     // 2. 如果序列化数据包含分屏树结构（isSplit == true），则按树层次还原；否则为单窗格
     if (state.isSplit && (state.rootNode.isSplitter || !state.rootNode.children.isEmpty())) {
-        m_rootNode = importNodeRecursive(state.rootNode, m_panel);
+        m_rootNode = PaneStateSerializer::importNodeRecursive(state.rootNode, m_panel, m_panel, m_primaryPaneContainer);
         if (m_rootNode) {
             if (m_rootNode->splitter) {
                 m_panel->mainLayout()->addWidget(m_rootNode->splitter, 1);

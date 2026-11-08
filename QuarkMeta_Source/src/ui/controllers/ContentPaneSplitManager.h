@@ -28,6 +28,11 @@ public:
 
     ContentPanel* secondaryContentPanel() const;
     /**
+     * @brief 获取当前处于活跃激活态的窗格（若无则安全回退至宿主主窗格）
+     */
+    ContentPanel* activePane() const { return m_activePaneForSplit ? m_activePaneForSplit : m_panel; }
+    void setRootPane(ContentPanel* root) { m_rootPane = root; }
+    /**
      * @brief 获取管理的全部副窗格列表（扁平一维列表）
      * @note 严禁调用方对列表中的各副窗格再次递归调用 panes()。
      */
@@ -35,7 +40,7 @@ public:
     int paneCount() const;
     ContentPanel* rootPane() const;
 
-    struct SplitEvaluationResult {
+    using SplitEvaluationResult = struct SplitEvaluationResultType {
         bool isValid = false;
         Qt::Orientation orientation = Qt::Horizontal;
         bool insertBefore = false;
@@ -96,8 +101,6 @@ private:
     PaneNode* findNodeForPanel(PaneNode* node, ContentPanel* panel) const;
     void normalizeTree(PaneNode* node);
     void deleteNodeRecursive(PaneNode* node);
-    struct PaneTreeNode exportNodeRecursive(PaneNode* node) const;
-    PaneNode* importNodeRecursive(const struct PaneTreeNode& treeNode, QWidget* parentWidget);
     ContentPanel* m_rootPane = nullptr;
     ContentPanel* m_activePaneForSplit = nullptr;
     QWidget* m_dragOverlayWidget = nullptr;

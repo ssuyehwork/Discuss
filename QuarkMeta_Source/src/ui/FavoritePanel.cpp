@@ -9,7 +9,8 @@
 #include "ToolTipOverlay.h"
 #include "PresetTagsDialog.h"
 #include "dialogs/FramelessConfirmDialog.h"
-#include "../meta/FavoriteDao.h"
+#include "delegates/FavoriteItemDelegate.h"
+#include "controllers/FavoriteTreeDropHandler.h"
 #include "../meta/FavoriteService.h"
 #include "../meta/MarkedFolderService.h"
 #include "../meta/LibraryService.h"
@@ -39,191 +40,6 @@
 #include <QTimer>
 
 namespace QuarkMeta {
-
-QSize FavoriteItemDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const {
-    QSize sz = QStyledItemDelegate::sizeHint(option, index);
-    sz.setHeight(28);
-    return sz;
-}
-
-void FavoriteItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const {
-    QStyleOptionViewItem opt = option;
-    initStyleOption(&opt, index);
-
-    painter->save();
-    painter->setRenderHint(QPainter::Antialiasing);
-    painter->setRenderHint(QPainter::SmoothPixmapTransform);
-    
-    // 背景高亮
-    if (opt.state & QStyle::State_Selected) {
-        QColor selBg("#378ADD");
-        selBg.setAlphaF(0.15f);
-        painter->fillRect(opt.rect, selBg);
-    } else if (opt.state & QStyle::State_MouseOver) {
-        painter->fillRect(opt.rect, QColor("#2A2D2E"));
-    } else {
-        painter->fillRect(opt.rect, Qt::transparent);
-    }
-
-    // 几何布局（根据树层级深度计算缩进，保证子节点图标与文本排版层次清晰）
-    int depth = 0;
-    QModelIndex parentIdx = index.parent();
-    while (parentIdx.isValid()) {
-        depth++;
-        parentIdx = parentIdx.parent();
-    }
-
-    int leftMargin = 10 + depth * 14;
-    int iconSize = 18;
-    int spacing = 8;
-
-    QRect iconRect(opt.rect.left() + leftMargin, opt.rect.top() + (opt.rect.height() - iconSize) / 2, iconSize, iconSize);
-    QRect textRect(iconRect.right() + spacing, opt.rect.top(), opt.rect.width() - leftMargin - iconSize - spacing, opt.rect.height());
-
-    // 微卡片圆角绘制
-    QVariant decoData = index.data(Qt::DecorationRole);
-    bool isFolder = index.data(Qt::UserRole + 4).toBool();
-    bool hasCustomThumb = index.data(Qt::UserRole + 5).toBool();
-
-    if (!isFolder && hasCustomThumb && decoData.canConvert<QIcon>()) {
-        QIcon icon = decoData.value<QIcon>();
-        QPixmap pix = icon.pixmap(QSize(64, 64));
-
-        if (!pix.isNull()) {
-            QPainterPath clipPath;
-            clipPath.addRoundedRect(iconRect, 3, 3);
-            painter->save();
-            painter->setClipPath(clipPath);
-
-            QPixmap scaled = pix.scaled(iconRect.size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-            int x = iconRect.center().x() - scaled.width() / 2;
-            int y = iconRect.center().y() - scaled.height() / 2;
-            painter->drawPixmap(x, y, scaled);
-            painter->restore();
-        } else {
-            icon.paint(painter, iconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
-        }
-    } else {
-        QIcon icon = decoData.value<QIcon>();
-        if (!icon.isNull()) {
-            icon.paint(painter, iconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
-        }
-    }
-
-    // 绘制文本
-    QString text = index.data(Qt::DisplayRole).toString();
-    QColor normalTextColor = (opt.state & QStyle::State_Selected) ? QColor("#FFFFFF") : QColor("#EEEEEE");
-    QColor matchTextColor("#3498db");
-
-    bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
-    int rightIconWidth = isAutoRec ? 22 : 0;
-    QRect adjustedTextRect = textRect.adjusted(0, 0, -rightIconWidth, 0);
-
-    paintHighlightedText(painter, adjustedTextRect, text, m_filterKeyword, opt.font, normalTextColor, matchTextColor);
-
-    // 绘制开启自动递归右侧 layers 图标与标记 Destination 图标
-    bool isMarked = index.data(Qt::UserRole + 10).toBool();
-    int rightOffset = 22;
-    if (isAutoRec) {
-        QRect layersRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
-        QIcon layersIcon = UiHelper::getIcon("layers", QColor("#2ecc71"), 16);
-        layersIcon.paint(painter, layersRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
-        rightOffset += 20;
-    }
-
-    if (isMarked) {
-        QRect markIconRect(opt.rect.right() - rightOffset, opt.rect.top() + (opt.rect.height() - 16) / 2, 16, 16);
-        QIcon markIcon = UiHelper::getIcon("Destination.svg", QColor("#ff551c"), 16);
-        markIcon.paint(painter, markIconRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
-    }
-
-    painter->restore();
-}
-
-void FavoriteItemDelegate::paintHighlightedText(QPainter* painter, const QRect& rect, const QString& text, const QString& keyword, const QFont& font, const QColor& normalColor, const QColor& matchColor) const {
-    if (text.isEmpty()) return;
-
-    QFontMetrics fm(font);
-    painter->setFont(font);
-
-    if (keyword.isEmpty()) {
-        painter->setPen(normalColor);
-        painter->drawText(rect, Qt::AlignLeft | Qt::AlignVCenter, fm.elidedText(text, Qt::ElideRight, rect.width()));
-        return;
-    }
-
-    int curX = rect.left();
-    int endX = rect.right();
-    int lastIdx = 0;
-    int kwLen = keyword.length();
-
-    while (lastIdx < text.length() && curX < endX) {
-        int foundIdx = text.indexOf(keyword, lastIdx, Qt::CaseInsensitive);
-        if (foundIdx == -1) {
-            QString remStr = text.mid(lastIdx);
-            QString elidedRem = fm.elidedText(remStr, Qt::ElideRight, endX - curX);
-            painter->setPen(normalColor);
-            painter->drawText(QRect(curX, rect.top(), endX - curX, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, elidedRem);
-            break;
-        }
-
-        if (foundIdx > lastIdx) {
-            QString normalSegment = text.mid(lastIdx, foundIdx - lastIdx);
-            int segWidth = fm.horizontalAdvance(normalSegment);
-            if (curX + segWidth > endX) {
-                QString elidedSeg = fm.elidedText(normalSegment, Qt::ElideRight, endX - curX);
-                painter->setPen(normalColor);
-                painter->drawText(QRect(curX, rect.top(), endX - curX, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, elidedSeg);
-                break;
-            }
-            painter->setPen(normalColor);
-            painter->drawText(QRect(curX, rect.top(), segWidth, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, normalSegment);
-            curX += segWidth;
-        }
-
-        QString matchSegment = text.mid(foundIdx, kwLen);
-        int matchWidth = fm.horizontalAdvance(matchSegment);
-        if (curX + matchWidth > endX) {
-            QString elidedMatch = fm.elidedText(matchSegment, Qt::ElideRight, endX - curX);
-            painter->setPen(matchColor);
-            painter->drawText(QRect(curX, rect.top(), endX - curX, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, elidedMatch);
-            break;
-        }
-        painter->setPen(matchColor);
-        painter->drawText(QRect(curX, rect.top(), matchWidth, rect.height()), Qt::AlignLeft | Qt::AlignVCenter, matchSegment);
-        curX += matchWidth;
-
-        lastIdx = foundIdx + kwLen;
-    }
-}
-
-void FavoriteItemDelegate::updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const {
-    if (!editor) return;
-
-    int depth = 0;
-    QModelIndex parentIdx = index.parent();
-    while (parentIdx.isValid()) {
-        depth++;
-        parentIdx = parentIdx.parent();
-    }
-
-    int leftMargin = 10 + depth * 14;
-    int iconSize = 18;
-    int spacing = 8;
-
-    int textLeft = option.rect.left() + leftMargin + iconSize + spacing;
-    
-    bool isAutoRec = index.data(Qt::UserRole + 9).toBool();
-    int rightMargin = isAutoRec ? 26 : 8;
-
-    QRect editorRect = option.rect;
-    editorRect.setLeft(textLeft - 2);
-    editorRect.setRight(option.rect.right() - rightMargin);
-    editorRect.setTop(option.rect.top() + 2);
-    editorRect.setHeight(option.rect.height() - 4);
-
-    editor->setGeometry(editorRect);
-}
 
 FavoritePanel::FavoritePanel(QWidget* parent)
     : QFrame(parent) {
@@ -309,91 +125,7 @@ void FavoritePanel::initUi() {
     });
 
     m_favoriteView->setInternalDropValidator([this](const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone) -> bool {
-        if (sources.isEmpty()) return false;
-
-        auto isSourceOrDescendant = [](const QModelIndex& idx, const QList<QPersistentModelIndex>& srcList) -> bool {
-            QModelIndex cur = idx;
-            while (cur.isValid()) {
-                for (const QPersistentModelIndex& psrc : srcList) {
-                    if (psrc.isValid() && psrc == cur) return true;
-                }
-                cur = cur.parent();
-            }
-            return false;
-        };
-
-        // 1. 检查目标节点或其父节点是否属于被拖动节点或其后代
-        if (zone == InternalDropZone::OnItem) {
-            if (isSourceOrDescendant(target, sources)) return false;
-        } else if (zone == InternalDropZone::Above || zone == InternalDropZone::Below) {
-            for (const QPersistentModelIndex& psrc : sources) {
-                if (psrc.isValid() && psrc == target) return false;
-            }
-            if (target.parent().isValid() && isSourceOrDescendant(target.parent(), sources)) return false;
-        }
-
-        // 2. 位置变化检查
-        QStandardItem* targetParentItem = nullptr;
-        int destRow = 0;
-
-        if (zone == InternalDropZone::OnItem) {
-            if (target.isValid()) {
-                targetParentItem = m_favoriteModel->itemFromIndex(target);
-                if (targetParentItem) destRow = targetParentItem->rowCount();
-            }
-        } else if (zone == InternalDropZone::Above) {
-            if (target.isValid()) {
-                targetParentItem = target.parent().isValid() ? m_favoriteModel->itemFromIndex(target.parent()) : m_favoriteModel->invisibleRootItem();
-                destRow = target.row();
-            }
-        } else if (zone == InternalDropZone::Below) {
-            if (target.isValid()) {
-                targetParentItem = target.parent().isValid() ? m_favoriteModel->itemFromIndex(target.parent()) : m_favoriteModel->invisibleRootItem();
-                destRow = target.row() + 1;
-            }
-        } else if (zone == InternalDropZone::Blank) {
-            targetParentItem = m_favoriteModel->invisibleRootItem();
-            destRow = targetParentItem->rowCount();
-        }
-
-        if (!targetParentItem) {
-            targetParentItem = m_favoriteModel->invisibleRootItem();
-            destRow = targetParentItem->rowCount();
-        }
-
-        bool anyChanged = false;
-        for (const QPersistentModelIndex& psrc : sources) {
-            if (!psrc.isValid()) continue;
-            QStandardItem* srcItem = m_favoriteModel->itemFromIndex(psrc);
-            if (!srcItem) continue;
-
-            QStandardItem* srcParentItem = srcItem->parent() ? srcItem->parent() : m_favoriteModel->invisibleRootItem();
-            int srcRow = srcItem->row();
-
-            if (srcParentItem != targetParentItem) {
-                anyChanged = true;
-                break;
-            } else {
-                if (zone == InternalDropZone::OnItem || zone == InternalDropZone::Blank) {
-                    if (srcRow != targetParentItem->rowCount() - 1) {
-                        anyChanged = true;
-                        break;
-                    }
-                } else if (zone == InternalDropZone::Above) {
-                    if (srcRow != destRow && srcRow != destRow - 1) {
-                        anyChanged = true;
-                        break;
-                    }
-                } else if (zone == InternalDropZone::Below) {
-                    if (srcRow != destRow && srcRow != destRow - 1) {
-                        anyChanged = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        return anyChanged;
+        return FavoriteTreeDropHandler::validateDrop(sources, target, zone, m_favoriteModel);
     });
 
     connect(m_favoriteView, &DropTreeView::internalMoveRequested, this, &FavoritePanel::onInternalMoveRequested);
@@ -413,7 +145,7 @@ void FavoritePanel::initUi() {
             QString name = item->text();
             QString iconKey = item->data(Qt::UserRole + 2).toString();
             QString colorHex = item->data(Qt::UserRole + 3).toString();
-            FavoriteDao::updateFavoriteNode(nodeId, name, iconKey, colorHex);
+            FavoriteService::instance().updateFavoriteNode(nodeId, name, iconKey, colorHex);
         }
     });
 
@@ -488,122 +220,10 @@ void FavoritePanel::filterTreeNodes(const QString& keyword) {
 }
 
 void FavoritePanel::onInternalMoveRequested(const QList<QPersistentModelIndex>& sources, const QModelIndex& target, InternalDropZone zone) {
-    if (sources.isEmpty() || !m_favoriteModel) return;
-
-    QStandardItem* parentItem = nullptr;
-    int destRow = 0;
-
-    if (zone == InternalDropZone::OnItem) {
-        if (target.isValid()) {
-            parentItem = m_favoriteModel->itemFromIndex(target);
-            if (parentItem) {
-                destRow = parentItem->rowCount();
-            }
-        }
-    } else if (zone == InternalDropZone::Above) {
-        if (target.isValid()) {
-            parentItem = target.parent().isValid() ? m_favoriteModel->itemFromIndex(target.parent()) : m_favoriteModel->invisibleRootItem();
-            destRow = target.row();
-        }
-    } else if (zone == InternalDropZone::Below) {
-        if (target.isValid()) {
-            parentItem = target.parent().isValid() ? m_favoriteModel->itemFromIndex(target.parent()) : m_favoriteModel->invisibleRootItem();
-            destRow = target.row() + 1;
-        }
-    } else if (zone == InternalDropZone::Blank) {
-        parentItem = m_favoriteModel->invisibleRootItem();
-        destRow = parentItem->rowCount();
+    if (FavoriteTreeDropHandler::executeMove(sources, target, zone, m_favoriteModel, m_favoriteView)) {
+        saveFavorites();
+        m_orderDirty = false;
     }
-
-    if (!parentItem) {
-        parentItem = m_favoriteModel->invisibleRootItem();
-        destRow = parentItem->rowCount();
-    }
-
-    // 记录展开状态
-    QMap<int, bool> expandedMap;
-    std::function<void(QStandardItem*)> saveExpandedStates = [&](QStandardItem* pItem) {
-        int rCount = pItem ? pItem->rowCount() : m_favoriteModel->rowCount();
-        for (int i = 0; i < rCount; ++i) {
-            QStandardItem* child = pItem ? pItem->child(i) : m_favoriteModel->item(i);
-            if (!child) continue;
-            int nodeId = child->data(Qt::UserRole + 6).toInt();
-            if (nodeId > 0 && m_favoriteView) {
-                expandedMap[nodeId] = m_favoriteView->isExpanded(child->index());
-            }
-            saveExpandedStates(child);
-        }
-    };
-    saveExpandedStates(nullptr);
-
-    // 转换 itemsToMove
-    QList<QStandardItem*> itemsToMove;
-    for (const QPersistentModelIndex& pidx : sources) {
-        if (pidx.isValid()) {
-            QStandardItem* item = m_favoriteModel->itemFromIndex(pidx);
-            if (item) itemsToMove.append(item);
-        }
-    }
-    if (itemsToMove.isEmpty()) return;
-
-    QList<QStandardItem*> movedItemsList;
-    for (QStandardItem* item : itemsToMove) {
-        QStandardItem* srcParent = item->parent() ? item->parent() : m_favoriteModel->invisibleRootItem();
-        int srcRow = item->row();
-
-        QList<QStandardItem*> rowItems = srcParent->takeRow(srcRow);
-        if (rowItems.isEmpty()) continue;
-
-        int insertRow = destRow;
-        if (srcParent == parentItem && srcRow < insertRow) {
-            insertRow--;
-        }
-
-        parentItem->insertRow(insertRow, rowItems);
-        destRow = insertRow + 1;
-        movedItemsList.append(rowItems.first());
-    }
-
-    // 恢复展开状态
-    std::function<void(QStandardItem*)> restoreExpandedStates = [&](QStandardItem* pItem) {
-        int rCount = pItem ? pItem->rowCount() : m_favoriteModel->rowCount();
-        for (int i = 0; i < rCount; ++i) {
-            QStandardItem* child = pItem ? pItem->child(i) : m_favoriteModel->item(i);
-            if (!child) continue;
-            int nodeId = child->data(Qt::UserRole + 6).toInt();
-            if (nodeId > 0 && expandedMap.contains(nodeId) && m_favoriteView) {
-                m_favoriteView->setExpanded(child->index(), expandedMap.value(nodeId));
-            }
-            restoreExpandedStates(child);
-        }
-    };
-    restoreExpandedStates(nullptr);
-
-    // 目标若是虚拟文件夹，展开它
-    if (zone == InternalDropZone::OnItem && target.isValid() && target.data(Qt::UserRole + 7).toBool()) {
-        m_favoriteView->setExpanded(target, true);
-    }
-
-    // 更新新父节点的 id (顶层为 0)
-    int newParentNodeId = 0;
-    if (parentItem != m_favoriteModel->invisibleRootItem()) {
-        newParentNodeId = parentItem->data(Qt::UserRole + 6).toInt();
-    }
-    for (QStandardItem* movedItem : movedItemsList) {
-        movedItem->setData(newParentNodeId, Qt::UserRole + 8);
-    }
-
-    // 恢复选中状态
-    if (m_favoriteView && m_favoriteView->selectionModel()) {
-        m_favoriteView->selectionModel()->clearSelection();
-        for (QStandardItem* movedItem : movedItemsList) {
-            m_favoriteView->selectionModel()->select(movedItem->index(), QItemSelectionModel::Select | QItemSelectionModel::Rows);
-        }
-    }
-
-    // 落地保存
-    saveFavorites();
-    m_orderDirty = false;
 }
 
 void FavoritePanel::onFavoriteClicked(const QModelIndex& index) {
@@ -713,7 +333,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
                                                  isAutoRec ? "关闭自动递归" : "开启自动递归");
             connect(actAutoRec, &QAction::triggered, this, [this, nodeId, isAutoRec, index]() {
                 bool nextState = !isAutoRec;
-                FavoriteDao::updateAutoRecursive(nodeId, nextState);
+                FavoriteService::instance().updateAutoRecursive(nodeId, nextState);
                 if (m_favoriteModel) {
                     QStandardItem* item = m_favoriteModel->itemFromIndex(index);
                     if (item) {
@@ -838,7 +458,7 @@ void FavoritePanel::onFavoriteContextMenu(const QPoint& pos) {
             QString finalIconKey = item->data(Qt::UserRole + 2).toString();
             QString finalColorHex = item->data(Qt::UserRole + 3).toString();
             QString finalName = item->text();
-            FavoriteDao::updateFavoriteNode(nodeId, finalName, finalIconKey, finalColorHex);
+            FavoriteService::instance().updateFavoriteNode(nodeId, finalName, finalIconKey, finalColorHex);
         }
     }
 }
@@ -927,7 +547,7 @@ void FavoritePanel::loadFavorites() {
     m_isLoading = true;
     m_favoriteModel->clear();
 
-    auto list = FavoriteDao::getAllFavorites();
+    auto list = FavoriteService::instance().getAllFavorites();
 
     QStringList pathsToExtract;
     QMap<int, QStandardItem*> itemMap;
@@ -1070,7 +690,7 @@ void FavoritePanel::saveFavorites() {
     traverseAndCollect(nullptr, 0);
 
     if (!entries.isEmpty()) {
-        FavoriteDao::updateNodesParentAndOrder(entries);
+        FavoriteService::instance().saveFavoritesOrder(entries);
     }
 }
 

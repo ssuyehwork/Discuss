@@ -21,6 +21,26 @@ public:
     bool toggleFavorite(const QString& path);
 
     /**
+     * @brief 获取所有收藏项记录（下沉封装 FavoriteDao）
+     */
+    QList<FavoriteRecord> getAllFavorites() const;
+
+    /**
+     * @brief 更新收藏项节点属性（名称、图标、色彩）
+     */
+    bool updateFavoriteNode(int id, const QString& name, const QString& iconKey, const QString& colorHex);
+
+    /**
+     * @brief 更新文件夹自动递归状态
+     */
+    bool updateAutoRecursive(int id, bool autoRecursive);
+
+    /**
+     * @brief 批量更新收藏项父子层级与自定义排序
+     */
+    bool saveFavoritesOrder(const QList<NodeOrderEntry>& entries);
+
+    /**
      * @brief 统一批量添加至收藏夹并触发全局统一交互反馈 (SSOT)
      */
     void addFavorites(const QStringList& paths, int parentId = 0);

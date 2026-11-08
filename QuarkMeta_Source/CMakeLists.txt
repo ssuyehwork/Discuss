@@ -258,6 +258,22 @@ set(SOURCES
     src/ui/AppShortcutController.cpp
     src/ui/LocalShortcutInterceptor.h
     src/ui/LocalShortcutInterceptor.cpp
+    src/ui/ActivePaneCoordinator.h
+    src/ui/ActivePaneCoordinator.cpp
+    src/ui/MetaPanelPresenter.h
+    src/ui/MetaPanelPresenter.cpp
+    src/ui/MetaEditController.h
+    src/ui/MetaEditController.cpp
+    src/ui/QuickLookController.h
+    src/ui/QuickLookController.cpp
+    src/ui/ShortcutActionRouter.h
+    src/ui/ShortcutActionRouter.cpp
+    src/ui/TabBarCoordinator.h
+    src/ui/TabBarCoordinator.cpp
+    src/ui/NavigationCoordinator.h
+    src/ui/NavigationCoordinator.cpp
+    src/ui/FilterStatsBinder.h
+    src/ui/FilterStatsBinder.cpp
     src/ui/PanelMediator.h
     src/ui/PanelMediator.cpp
     src/ui/MainWindow.cpp
@@ -308,6 +324,10 @@ set(SOURCES
     src/ui/components/ColorBlock.h
     src/ui/NavPanel.cpp
     src/ui/NavPanel.h
+    src/ui/delegates/FavoriteItemDelegate.h
+    src/ui/delegates/FavoriteItemDelegate.cpp
+    src/ui/controllers/FavoriteTreeDropHandler.h
+    src/ui/controllers/FavoriteTreeDropHandler.cpp
     src/ui/FavoritePanel.cpp
     src/ui/FavoritePanel.h
     src/ui/MarkedPanel.cpp
@@ -334,6 +354,10 @@ set(SOURCES
     src/ui/TagManagerController.h
     src/ui/controllers/ContentContextMenu.h
     src/ui/controllers/ContentContextMenu.cpp
+    src/ui/controllers/ArchiveTaskHelper.h
+    src/ui/controllers/ArchiveTaskHelper.cpp
+    src/ui/controllers/CryptoActionHelper.h
+    src/ui/controllers/CryptoActionHelper.cpp
     src/ui/controllers/ContextMenuFactory.h
     src/ui/controllers/ContextMenuFactory.cpp
     src/ui/controllers/ContentKeyHandler.h
@@ -346,6 +370,10 @@ set(SOURCES
     src/ui/controllers/ContentFileOpsHandler.cpp
     src/ui/controllers/ContentViewCoordinator.h
     src/ui/controllers/ContentViewCoordinator.cpp
+    src/ui/controllers/PaneHitTester.h
+    src/ui/controllers/PaneHitTester.cpp
+    src/ui/controllers/PaneStateSerializer.h
+    src/ui/controllers/PaneStateSerializer.cpp
     src/ui/controllers/ContentPaneSplitManager.h
     src/ui/controllers/ContentPaneSplitManager.cpp
     src/ui/controllers/ContentChangeWatcher.h

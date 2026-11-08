@@ -8,20 +8,7 @@
 
 namespace QuarkMeta {
 
-class FavoriteItemDelegate : public QStyledItemDelegate {
-    Q_OBJECT
-public:
-    explicit FavoriteItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
-
-    void setFilterKeyword(const QString& kw) { m_filterKeyword = kw; }
-    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override;
-    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
-    void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
-
-private:
-    void paintHighlightedText(QPainter* painter, const QRect& rect, const QString& text, const QString& keyword, const QFont& font, const QColor& normalColor, const QColor& matchColor) const;
-    QString m_filterKeyword;
-};
+class FavoriteItemDelegate;
 
 /**
  * @brief 独立收藏夹面板（主界面第二栏）

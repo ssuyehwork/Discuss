@@ -53,6 +53,22 @@ bool FavoriteService::addFavorite(const QString& path, int parentId) {
     return ok;
 }
 
+QList<FavoriteRecord> FavoriteService::getAllFavorites() const {
+    return FavoriteDao::getAllFavorites();
+}
+
+bool FavoriteService::updateFavoriteNode(int id, const QString& name, const QString& iconKey, const QString& colorHex) {
+    return FavoriteDao::updateFavoriteNode(id, name, iconKey, colorHex);
+}
+
+bool FavoriteService::updateAutoRecursive(int id, bool autoRecursive) {
+    return FavoriteDao::updateAutoRecursive(id, autoRecursive);
+}
+
+bool FavoriteService::saveFavoritesOrder(const QList<NodeOrderEntry>& entries) {
+    return FavoriteDao::updateNodesParentAndOrder(entries);
+}
+
 int FavoriteService::addVirtualCategory(const QString& name, int parentId) {
     int newId = FavoriteDao::addVirtualCategory(name, parentId, "folder_filled", "#888888");
     if (newId > 0) {
