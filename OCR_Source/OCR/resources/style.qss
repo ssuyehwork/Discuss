@@ -1,5 +1,6 @@
 /* 全局基础样式 */
 QMainWindow, QDialog { background-color: #1E1E1E; color: #EEEEEE; }
+QLabel { color: #CCCCCC; }
 QWidget#CentralWidget { background-color: #1E1E1E; }
 
 /* 标题栏与导航栏切割线 */
@@ -2473,6 +2474,7 @@ QPushButton#FileCompareCloseBtn:pressed {
 /* ==================== Imported from dark_style.qss ==================== */
 /* 全局基础样式 */
 QMainWindow, QDialog { background-color: #1E1E1E; color: #EEEEEE; }
+QLabel { color: #CCCCCC; }
 QWidget#CentralWidget { background-color: #1E1E1E; }
 
 /* 标题栏与导航栏切割线 */
@@ -6310,4 +6312,59 @@ QFrame#rulerToolbar QPushButton:checked {
     background: #3e3e42;
     color: white;
     border-radius: 2px;
+}
+
+/* HotkeySettingsDialog 专属高对比暗黑美学样式 */
+#HotkeySettingsDialog QLabel {
+    color: #DDDDDD;
+    font-size: 13px;
+}
+#HotkeySettingsDialog QLabel#HotkeyHintLabel {
+    color: #888888;
+    font-size: 11px;
+}
+QLineEdit#HotkeyKeyEdit {
+    background-color: #252526;
+    color: #FFFFFF;
+    border: 1px solid #3E3E42;
+    border-radius: 4px;
+    padding: 0 8px;
+    font-family: Consolas, 'Segoe UI', monospace;
+    font-size: 13px;
+    font-weight: bold;
+}
+QLineEdit#HotkeyKeyEdit:focus {
+    border: 1px solid #3A90FF;
+    background-color: #2D2D30;
+}
+QPushButton#HotkeyResetBtn {
+    background-color: #2D2D2D;
+    color: #CCCCCC;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    font-size: 12px;
+    padding: 4px 10px;
+}
+QPushButton#HotkeyResetBtn:hover {
+    background-color: #3E3E42;
+    color: #FFFFFF;
+    border-color: #555555;
+}
+QPushButton#HotkeyResetBtn:pressed {
+    background-color: #252526;
+}
+QPushButton#HotkeySaveBtn {
+    background-color: #3A90FF;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 4px 12px;
+}
+QPushButton#HotkeySaveBtn:hover {
+    background-color: #2B7AE6;
+}
+QPushButton#HotkeySaveBtn:pressed {
+    background-color: #1A60C6;
 }

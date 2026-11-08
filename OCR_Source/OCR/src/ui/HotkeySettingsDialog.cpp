@@ -9,10 +9,11 @@
 #include <QKeySequence>
 
 HotkeyKeyEdit::HotkeyKeyEdit(QWidget* parent) : QLineEdit(parent) {
+    setObjectName("HotkeyKeyEdit");
     setReadOnly(true);
     setPlaceholderText("点击并按下按键组合...");
     setAlignment(Qt::AlignCenter);
-    setFixedHeight(30);
+    setFixedHeight(32);
 }
 
 void HotkeyKeyEdit::setKeyData(uint mods, uint vk) {
@@ -120,19 +121,20 @@ void HotkeySettingsDialog::initUI() {
     addRow("像素标尺:", m_editPixelRuler);
 
     auto* hintLabel = new QLabel("提示：按 Backspace 或 Delete 可清除按键配置");
-    hintLabel->setStyleSheet("color: #888; font-size: 11px;");
+    hintLabel->setObjectName("HotkeyHintLabel");
     layout->addWidget(hintLabel);
 
     layout->addStretch();
 
     auto* btnLayout = new QHBoxLayout();
     auto* resetBtn = new QPushButton("恢复默认");
-    resetBtn->setFixedWidth(90);
+    resetBtn->setObjectName("HotkeyResetBtn");
+    resetBtn->setFixedSize(96, 32);
     connect(resetBtn, &QPushButton::clicked, this, &HotkeySettingsDialog::onResetDefaultsClicked);
 
     auto* saveBtn = new QPushButton("保存并生效");
-    saveBtn->setFixedWidth(100);
-    saveBtn->setObjectName("PrimaryButton");
+    saveBtn->setObjectName("HotkeySaveBtn");
+    saveBtn->setFixedSize(100, 32);
     connect(saveBtn, &QPushButton::clicked, this, &HotkeySettingsDialog::onSaveClicked);
 
     btnLayout->addWidget(resetBtn);
