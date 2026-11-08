@@ -53,10 +53,38 @@ QString HotkeyKeyEdit::keyToString(uint mods, uint vk) {
     if (mods & 0x0004) parts << "Shift";
     if (mods & 0x0008) parts << "Win";
 
-    QKeySequence ks(vk);
-    QString str = ks.toString();
-    if (str.isEmpty()) {
-        str = QString("Key_0x%1").arg(vk, 2, 16, QChar('0')).toUpper();
+    QString str;
+    if (vk >= 0x70 && vk <= 0x87) { // F1 - F24
+        str = QString("F%1").arg(vk - 0x70 + 1);
+    } else if (vk >= 0x30 && vk <= 0x39) { // 0 - 9
+        str = QString(QChar(vk));
+    } else if (vk >= 0x41 && vk <= 0x5A) { // A - Z
+        str = QString(QChar(vk));
+    } else {
+        switch (vk) {
+            case 0x20: str = "Space"; break;
+            case 0x0D: str = "Enter"; break;
+            case 0x1B: str = "Esc"; break;
+            case 0x09: str = "Tab"; break;
+            case 0x08: str = "Backspace"; break;
+            case 0x2E: str = "Delete"; break;
+            case 0x2D: str = "Insert"; break;
+            case 0x24: str = "Home"; break;
+            case 0x23: str = "End"; break;
+            case 0x21: str = "PageUp"; break;
+            case 0x22: str = "PageDown"; break;
+            case 0x25: str = "Left"; break;
+            case 0x26: str = "Up"; break;
+            case 0x27: str = "Right"; break;
+            case 0x28: str = "Down"; break;
+            case 0x2C: str = "PrintScreen"; break;
+            case 0x13: str = "Pause"; break;
+            case 0x90: str = "NumLock"; break;
+            case 0x91: str = "ScrollLock"; break;
+            default:
+                str = QString("Key_0x%1").arg(vk, 2, 16, QChar('0')).toUpper();
+                break;
+        }
     }
     parts << str;
     return parts.join(" + ");

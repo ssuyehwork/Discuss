@@ -8,6 +8,7 @@
 #include <QDebug>
 #include <QLocale>
 #include <QCoreApplication>
+#include <QRegularExpression>
 #include <utility>
 
 #ifdef Q_OS_WIN
@@ -327,6 +328,12 @@ QString OCRManager::recognizeWithWindowsOCR(const QImage& image) {
         QString err = QString::fromUtf8(ps.readAllStandardError());
         if (!err.isEmpty()) qDebug() << "[OCRManager] Windows OCR PowerShell 错误:" << err;
         return "Windows OCR 未识别到文字";
+    }
+
+        // 智能剔除 CJK 中文字符之间被 Windows OCR (WinRT) 强行插入的无意义多余空格
+    static const QRegularExpression cjkSpaceRegex(QStringLiteral(R"(([\x{4e00}-\x{9fff}\x{3000}-\x{303f}\x{ff01}-\x{ffee}])\s+([\x{4e00}-\x{9fff}\x{3000}-\x{303f}\x{ff01}-\x{ffee}]))"));
+    while (output.contains(cjkSpaceRegex)) {
+        output.replace(cjkSpaceRegex, QStringLiteral(R"(\1\2)"));
     }
 
     return output;

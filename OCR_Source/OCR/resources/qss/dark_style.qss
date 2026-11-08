@@ -399,6 +399,9 @@ QPushButton#FramelessCloseBtn {
     background-color: #E81123;
     border: none;
     border-radius: 4px;
+    padding: 0px;
+    margin: 0px;
+    text-align: center;
 }
 QPushButton#FramelessCloseBtn:hover {
     background-color: #E81123;
