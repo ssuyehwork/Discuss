@@ -85,6 +85,12 @@ set(SOURCES
     src/ui/OCRWindow.h
     src/ui/PixelRulerOverlay.cpp
     src/ui/PixelRulerOverlay.h
+    src/ui/ScreenshotShapes.cpp
+    src/ui/ScreenshotShapes.h
+    src/ui/PinnedScreenshotWidget.cpp
+    src/ui/PinnedScreenshotWidget.h
+    src/ui/ScreenshotToolbar.cpp
+    src/ui/ScreenshotToolbar.h
     src/ui/ScreenshotTool.cpp
     src/ui/ScreenshotTool.h
     src/ui/StringUtils.h
