@@ -1,5 +1,21 @@
+
+/* 全局暗黑背景兜底，彻底杜绝任何原生白底色暴露 */
+QListWidget {
+    background-color: #1E1E1E;
+    color: #CCCCCC;
+    border: none;
+}
+QScrollArea {
+    background-color: transparent;
+    border: none;
+}
+QStackedWidget {
+    background-color: #1E1E1E;
+    border: none;
+}
 /* 全局基础样式 */
 QMainWindow, QDialog { background-color: #1E1E1E; color: #EEEEEE; }
+QLabel { color: #CCCCCC; }
 QWidget#CentralWidget { background-color: #1E1E1E; }
 
 /* 标题栏与导航栏切割线 */
@@ -2473,6 +2489,7 @@ QPushButton#FileCompareCloseBtn:pressed {
 /* ==================== Imported from dark_style.qss ==================== */
 /* 全局基础样式 */
 QMainWindow, QDialog { background-color: #1E1E1E; color: #EEEEEE; }
+QLabel { color: #CCCCCC; }
 QWidget#CentralWidget { background-color: #1E1E1E; }
 
 /* 标题栏与导航栏切割线 */
@@ -6310,4 +6327,137 @@ QFrame#rulerToolbar QPushButton:checked {
     background: #3e3e42; 
     color: white; 
     border-radius: 2px; 
+}
+
+
+/* ==================== SettingsWindow 系统设置专属高对比暗黑美学样式 ==================== */
+#SettingsWindow QListWidget#SettingsNavBar {
+    background-color: #1E1E1E;
+    border: none;
+    border-right: 1px solid #333333;
+    outline: none;
+    padding: 0px;
+}
+#SettingsWindow QListWidget#SettingsNavBar::item {
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+    padding-left: 16px;
+    color: #AAAAAA;
+    border: none;
+    font-size: 13px;
+}
+#SettingsWindow QListWidget#SettingsNavBar::item:selected {
+    background-color: #3E3E42;
+    color: #3A90FF;
+    border-left: 3px solid #3A90FF;
+    font-weight: bold;
+}
+#SettingsWindow QListWidget#SettingsNavBar::item:hover {
+    background-color: #2D2D30;
+    color: #FFFFFF;
+}
+
+#SettingsWindow QLabel#SettingsItemLabel {
+    color: #DDDDDD;
+    font-size: 13px;
+}
+#SettingsWindow QLabel#SettingsHintLabel {
+    color: #888888;
+    font-size: 11px;
+}
+
+#SettingsWindow QLineEdit#HotkeyKeyEdit,
+#SettingsWindow QLineEdit#SettingsPathEdit {
+    background-color: #252526;
+    color: #FFFFFF;
+    border: 1px solid #3E3E42;
+    border-radius: 4px;
+    padding: 0 8px;
+    font-size: 13px;
+}
+#SettingsWindow QLineEdit#HotkeyKeyEdit {
+    font-family: Consolas, 'Segoe UI', monospace;
+    font-weight: bold;
+}
+#SettingsWindow QLineEdit#HotkeyKeyEdit:focus,
+#SettingsWindow QLineEdit#SettingsPathEdit:focus {
+    border: 1px solid #3A90FF;
+    background-color: #2D2D30;
+}
+
+#SettingsWindow QPushButton#SettingsResetBtn {
+    background-color: #2D2D2D;
+    color: #CCCCCC;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    font-size: 12px;
+}
+#SettingsWindow QPushButton#SettingsResetBtn:hover {
+    background-color: #3E3E42;
+    color: #FFFFFF;
+    border-color: #555555;
+}
+#SettingsWindow QPushButton#SettingsResetBtn:pressed {
+    background-color: #252526;
+}
+
+#SettingsWindow QPushButton#SettingsSaveBtn {
+    background-color: #3A90FF;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+#SettingsWindow QPushButton#SettingsSaveBtn:hover {
+    background-color: #2B7AE6;
+}
+#SettingsWindow QPushButton#SettingsSaveBtn:pressed {
+    background-color: #1A60C6;
+}
+
+#SettingsWindow QPushButton#SettingsBrowseBtn {
+    background-color: #2D2D2D;
+    color: #EEEEEE;
+    border: 1px solid #3E3E42;
+    border-radius: 4px;
+    font-size: 12px;
+}
+#SettingsWindow QPushButton#SettingsBrowseBtn:hover {
+    background-color: #3E3E42;
+    border-color: #555555;
+}
+#SettingsWindow QPushButton#SettingsBrowseBtn:pressed {
+    background-color: #1E1E1E;
+}
+
+/* ColorPickerWindow 渐变调节栏一体化精细样式 */
+#ColorPickerStepContainer {
+    background-color: #252526;
+    border: 1px solid #444444;
+    border-radius: 4px;
+}
+#ColorPickerStepEdit {
+    background-color: transparent;
+    border: none;
+    color: #FFFFFF;
+    font-size: 12px;
+}
+#ColorPickerGradModeBtn {
+    background-color: #2D2D2D;
+    color: #CCCCCC;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    font-size: 11px;
+}
+#ColorPickerGradModeBtn:hover {
+    background-color: #3E3E42;
+    color: #FFFFFF;
+}
+#ColorPickerGradModeBtn:checked {
+    background-color: #007ACC;
+    color: #FFFFFF;
+    border-color: #007ACC;
+    font-weight: bold;
 }

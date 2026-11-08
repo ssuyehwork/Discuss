@@ -677,25 +677,31 @@ void ColorPickerWindow::initUI() {
     stepslbl->setObjectName("ColorPickerWindow_stepslbl_19");
     gl->addWidget(stepslbl);
     
+    // 步数与微调按钮一体化优雅容器，杜绝挤压错位
+    auto* stepContainer = new QWidget();
+    stepContainer->setObjectName("ColorPickerStepContainer");
+    stepContainer->setFixedSize(65, 28);
+    auto* scl = new QHBoxLayout(stepContainer);
+    scl->setContentsMargins(0, 0, 0, 0);
+    scl->setSpacing(0);
+
     m_gradSteps = new QLineEdit("7");
-    m_gradSteps->setFixedWidth(77);
+    m_gradSteps->setObjectName("ColorPickerStepEdit");
+    m_gradSteps->setFixedWidth(45);
     m_gradSteps->setFixedHeight(28);
     m_gradSteps->setAlignment(Qt::AlignCenter);
     m_gradSteps->installEventFilter(this);
-    gl->addWidget(m_gradSteps);
+    scl->addWidget(m_gradSteps);
     
     auto* sl = new QVBoxLayout();
-    sl->setContentsMargins(0, 4, 0, 4);
+    sl->setContentsMargins(0, 2, 2, 2);
     sl->setSpacing(0);
-    
-    QString spinBtnStyle = "QPushButton { background: transparent; border: none; padding: 0px; margin: 0px; } "
-                           "QPushButton:hover { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }";
 
     auto* btnUp = new QPushButton();
-    btnUp->setFixedSize(16, 12);
+    btnUp->setFixedSize(16, 11);
     btnUp->setCursor(Qt::PointingHandCursor);
-    btnUp->setIcon(IconHelper::getIcon("arrow_up", "#aaaaaa", 12));
-        btnUp->setIconSize(QSize(12, 12));
+    btnUp->setIcon(IconHelper::getIcon("arrow_up", "#aaaaaa", 10));
+    btnUp->setIconSize(QSize(10, 10));
     btnUp->setObjectName("ColorPickerSpinBtn");
     connect(btnUp, &QPushButton::clicked, [this](){
         int val = m_gradSteps->text().toInt();
@@ -703,10 +709,10 @@ void ColorPickerWindow::initUI() {
     });
     
     auto* btnDown = new QPushButton();
-    btnDown->setFixedSize(16, 12);
+    btnDown->setFixedSize(16, 11);
     btnDown->setCursor(Qt::PointingHandCursor);
-    btnDown->setIcon(IconHelper::getIcon("arrow_down", "#aaaaaa", 12));
-    btnDown->setIconSize(QSize(12, 12));
+    btnDown->setIcon(IconHelper::getIcon("arrow_down", "#aaaaaa", 10));
+    btnDown->setIconSize(QSize(10, 10));
     btnDown->setObjectName("ColorPickerSpinBtn");
     connect(btnDown, &QPushButton::clicked, [this](){
         int val = m_gradSteps->text().toInt();
@@ -715,18 +721,17 @@ void ColorPickerWindow::initUI() {
     
     sl->addWidget(btnUp);
     sl->addWidget(btnDown);
-    
-    gl->addSpacing(-6); 
-    gl->addLayout(sl);
+    scl->addLayout(sl);
+    gl->addWidget(stepContainer);
 
-    gl->addSpacing(5);
+    gl->addSpacing(10);
     auto createModeBtn = [&](const QString& mode) {
         auto* btn = new QPushButton(mode);
         btn->setAutoDefault(false);
         btn->setCheckable(true);
-        btn->setFixedWidth(45);
-        btn->setFixedHeight(26);
-                btn->setObjectName("ColorPickerGradModeBtn");
+        btn->setFixedWidth(48);
+        btn->setFixedHeight(28);
+        btn->setObjectName("ColorPickerGradModeBtn");
         if (m_gradMode == mode) btn->setChecked(true);
         connect(btn, &QPushButton::clicked, [this, mode, gradBox](){
             m_gradMode = mode;
@@ -740,6 +745,7 @@ void ColorPickerWindow::initUI() {
     gl->addWidget(createModeBtn("变亮"));
     gl->addWidget(createModeBtn("饱和"));
 
+    gl->addSpacing(6);
     auto* btnGrad = new QPushButton("生成渐变");
     btnGrad->setAutoDefault(false);
     btnGrad->setFixedSize(80, 28);
@@ -1103,9 +1109,19 @@ void ColorPickerWindow::generateGradient() {
         for (int i = 0; i < steps; ++i) {
             double ratio = (double)i / (steps - 1);
             QColor c;
-            if (m_gradMode == "变暗") c = QColor::fromHsvF(h, s, v * (1 - ratio * 0.7));
-            else if (m_gradMode == "变亮") c = QColor::fromHsvF(h, s, v + (1 - v) * ratio);
-            else if (m_gradMode == "饱和") c = QColor::fromHsvF(h, std::min(1.0f, std::max(0.0f, s + (1 - s) * (float)ratio * (s < 0.5f ? 1.0f : -1.0f))), v);
+            if (m_gradMode == "变暗") {
+                // 平滑非线性亮度衰减，保留明暗过渡细节
+                double curve = std::pow(1.0 - ratio, 1.15);
+                c = QColor::fromHsvF(h, s, std::max(0.0, v * curve));
+            } else if (m_gradMode == "变亮") {
+                // 亮部平滑过渡至高光，同时适度拉伸明度
+                double curve = std::pow(ratio, 0.85);
+                c = QColor::fromHsvF(h, s * (1.0 - curve * 0.35), std::min(1.0, v + (1.0 - v) * curve));
+            } else if (m_gradMode == "饱和") {
+                float targetS = (s < 0.5f) ? 1.0f : 0.05f;
+                float newS = s + (targetS - s) * (float)ratio;
+                c = QColor::fromHsvF(h, std::clamp(newS, 0.0f, 1.0f), v);
+            }
             colors << c.name().toUpper();
         }
     } else {
