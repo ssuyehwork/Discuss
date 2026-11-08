@@ -74,8 +74,8 @@ set(SOURCES
     src/ui/FlowLayout.cpp
         src/ui/FlowLayout.h
     src/ui/FramelessDialog.cpp
-    src/ui/HotkeySettingsDialog.cpp
-    src/ui/HotkeySettingsDialog.h
+    src/ui/SettingsWindow.cpp
+    src/ui/SettingsWindow.h
     src/ui/FramelessDialog.h
     src/ui/FramelessDialogBase.h
     src/ui/IconHelper.h

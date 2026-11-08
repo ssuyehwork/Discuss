@@ -1,5 +1,5 @@
-#ifndef HOTKEYSETTINGSDIALOG_H
-#define HOTKEYSETTINGSDIALOG_H
+#ifndef SETTINGSWINDOW_H
+#define SETTINGSWINDOW_H
 
 #include "FramelessDialog.h"
 #include <QLineEdit>
@@ -22,24 +22,39 @@ private:
     uint m_vk = 0;
 };
 
-class HotkeySettingsDialog : public FramelessDialog {
+class QListWidget;
+class QStackedWidget;
+class QPushButton;
+
+class SettingsWindow : public FramelessDialog {
     Q_OBJECT
 public:
-    explicit HotkeySettingsDialog(QWidget* parent = nullptr);
-    ~HotkeySettingsDialog() override = default;
+    explicit SettingsWindow(QWidget* parent = nullptr);
+    ~SettingsWindow() override = default;
 
 private slots:
+    void onCategoryChanged(int index);
     void onSaveClicked();
-    void onResetDefaultsClicked();
+    void onRestoreDefaults();
+    void onBrowseSavePath();
 
 private:
     void initUI();
     void loadSettings();
+    QWidget* createHotkeyPage();
+    QWidget* createScreenshotPage();
 
+    QListWidget* m_navBar = nullptr;
+    QStackedWidget* m_contentStack = nullptr;
+
+    // 全局热键
     HotkeyKeyEdit* m_editScreenshot = nullptr;
     HotkeyKeyEdit* m_editOCR = nullptr;
     HotkeyKeyEdit* m_editColorPicker = nullptr;
     HotkeyKeyEdit* m_editPixelRuler = nullptr;
+
+    // 截图保存路径
+    QLineEdit* m_editSavePath = nullptr;
 };
 
-#endif // HOTKEYSETTINGSDIALOG_H
+#endif // SETTINGSWINDOW_H
