@@ -121,7 +121,7 @@ enum LibraryItemRole {
     SmartFolderIdRole  = Qt::UserRole + 502, // 智能文件夹专属 ID (int)
     IconKeyRole        = Qt::UserRole + 503, // 矢量图标标识 (QString)
     ColorHexRole       = Qt::UserRole + 504  // 颜色代码 Hex (QString)
-    // 注：PinnedRole (Qt::UserRole + 101) 与 CountRole (Qt::UserRole + 204) 直接复用 ModelContract.h 中的既有定义，杜绝重定义
+    // 注：PinnedRole (Qt::UserRole + 101) 与 CountRole (Qt::UserRole + 204) 直接复用 ModelContract.h 的 SSOT 定义，避免枚举重定义
 };
 
 /**
