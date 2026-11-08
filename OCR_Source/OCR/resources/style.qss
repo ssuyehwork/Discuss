@@ -4688,7 +4688,10 @@ QFrame#rulerToolbar QPushButton:checked {
     height: 40px;
     min-height: 40px;
     max-height: 40px;
-    padding-left: 16px;
+    padding: 0px;
+    padding-left: 15px;
+    margin: 0px;
+    border-radius: 0px;
     color: #AAAAAA;
     border: none;
     font-size: 13px;
@@ -4698,12 +4701,16 @@ QFrame#rulerToolbar QPushButton:checked {
     background-color: #3E3E42;
     color: #3A90FF;
     border-left: 3px solid #3A90FF;
+    border-radius: 0px;
+    margin: 0px;
     font-weight: bold;
 }
 
 #SettingsWindow QListWidget#SettingsNavBar::item:hover {
     background-color: #2D2D30;
     color: #FFFFFF;
+    border-radius: 0px;
+    margin: 0px;
 }
 
 #SettingsWindow QLabel#SettingsItemLabel {
