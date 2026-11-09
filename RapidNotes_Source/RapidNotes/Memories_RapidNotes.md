@@ -608,10 +608,18 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - 物理磁盘目录中的 `.RapidNotes.json` / `.QuarkMeta.json` 隐藏侧车文件机制彻底失去存在意义；
    - **全面删除与解耦**：物理删除 `QuarkMetaJson.h`、`QuarkMetaJson.cpp`、`QuarkMetaJsonStore.h`、`QuarkMetaJsonStore.cpp`，消除所有磁盘元数据读写、脏缓冲区刷新及与 `DiskItemModel`、`DiskMediaExtractor`、`ShellHelper`、`LibrarySyncService` 的深层耦合，元数据读写唯一穿透至 `DatabaseManager`。
 
-2. **彻底删除物理收藏夹 (`FavoritePanel` / `FavoriteDao` / `FavoriteService`)**：
-   - 原 QuarkMeta 的“收藏夹”是面向物理磁盘路径（如驱动器盘符、文件绝对路径）构建的多级虚拟树；
-   - 在 RapidNotes 纯笔记体系下，收藏功能已原生收敛为 `notes.is_favorite` 数据库字段以及系统内置分类“收藏”视图，物理收藏夹树已完全冗余；
-   - **全面删除**：物理删除 `FavoritePanel.h/.cpp`、`FavoriteDao.h/.cpp`、`FavoriteService.h/.cpp`，从 `MainWindow`、`PanelMediator`、`SidebarContainerWidget` 中彻底移除收藏夹选项卡与右键菜单项。
+2. **“收藏夹”替换为“收藏”：由物理路径转变为笔记实体收藏 (Transform "Favorites Folder" to "Favorites Note Panel" SSOT)**：
+   - 原 QuarkMeta 的“收藏夹”是面向本地物理磁盘路径（如驱动器盘符、文件绝对路径）构建的虚拟树；而 RapidNotes 原本具备纯笔记实体的“收藏”（`notes.is_favorite = 1`）；
+   - **最高设计理念确认**：将 QuarkMeta 界面中的“收藏夹”替换成“收藏”，彻底摒弃物理文件/文件夹路径收藏，转变为对数据库中具体笔记实体的收藏管理；
+   - **UI 呈现与选项卡收敛**：
+     - 侧边栏第一选项卡名称由“收藏夹”更名为“**收藏**”（图标保留 `Favorites.svg` / `star_filled`）；
+     - 面板容器由原本的物理路径树转变为展现所有已标记收藏（`is_favorite = 1` 且 `is_deleted = 0`）的笔记列表；
+   - **底层数据源与持久化 SSOT**：
+     - 彻底废除面向物理路径的 `FavoriteDao` 与 `FavoriteService`；
+     - 收藏数据源唯一穿透至 `inspiration.db` 的 `notes` 表（即 `notes.is_favorite` 字段）；
+     - 添加/取消收藏操作直接调用 `DatabaseManager::instance().updateNoteState(noteId, "is_favorite", val)` 或 `toggleNoteState`，并由全局数据事件总线（`DataEvents` / `CentralEventHub`）驱动界面无缝增量刷新；
+   - **交互与路由联动**：
+     - 点击“收藏”面板中的笔记条目，直接在主内容区定位、展示或聚焦该笔记，彻底脱离物理磁盘文件导航。
 
 3. **“标记”选项卡零篡改，底层纯分类化 (Keep "Marked" Tab Intact, Internal Category Redirection)**：
    - **UI 零篡改铁律**：侧边栏顶部的“标记”选项卡名称（`"标记"`）与既有图标（`Destination.svg`）**保持 100% 稳定不变，严禁改名或擅自修改 UI 选项卡**；
