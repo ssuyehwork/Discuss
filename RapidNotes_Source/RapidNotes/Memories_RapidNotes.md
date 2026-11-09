@@ -595,3 +595,26 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - **交互设计**：内嵌专属快捷键捕获控件（`HotkeyKeyEdit` / `HotkeyEdit`），在获得焦点时精准捕获用户的按键组合（修饰键 Modifiers + 虚拟键码 VK），实时格式化显示按键文本；
    - **自动化持久化**：点击保存或应用后，自动将修饰键与键码写入持久化配置（`QSettings hotkeys("RapidNotes", "Hotkeys")`），并立即驱动 `HotkeyManager::reapplyHotkeys()` 动态热重载生效，无需重启软件；
    - **冲突与恢复**：支持一键“恢复默认设置”，在热键被外部系统抢占时输出友好告警，杜绝静默失败。
+
+---
+
+## 21. 彻底剔除侧车 JSON、废除物理收藏夹与“标记”转分类架构规范 (Abolish Sidecar JSON & Physical Favorites, Repurpose Marked to Categories SSOT)
+
+> 本章节记录 RapidNotes 从物理文件系统彻底纯化为统一数据库笔记管理体系的最高架构决策与剥离重构事实标准。
+
+### 21.1 顶层架构铁律 (Hard Architectural Locks)
+1. **彻底拔除侧车 JSON (`QuarkMetaJson` / `QuarkMetaJsonStore`)**：
+   - 在纯数据库笔记模式下，所有笔记元数据（标题、颜色、星级、标签、备注、路径等）均统一持久化在 `inspiration.db` 的 `notes`、`tags`、`categories` 等结构化表中；
+   - 物理磁盘目录中的 `.RapidNotes.json` / `.QuarkMeta.json` 隐藏侧车文件机制彻底失去存在意义；
+   - **全面删除与解耦**：物理删除 `QuarkMetaJson.h`、`QuarkMetaJson.cpp`、`QuarkMetaJsonStore.h`、`QuarkMetaJsonStore.cpp`，消除所有磁盘元数据读写、脏缓冲区刷新及与 `DiskItemModel`、`DiskMediaExtractor`、`ShellHelper`、`LibrarySyncService` 的深层耦合，元数据读写唯一穿透至 `DatabaseManager`。
+
+2. **彻底删除物理收藏夹 (`FavoritePanel` / `FavoriteDao` / `FavoriteService`)**：
+   - 原 QuarkMeta 的“收藏夹”是面向物理磁盘路径（如驱动器盘符、文件绝对路径）构建的多级虚拟树；
+   - 在 RapidNotes 纯笔记体系下，收藏功能已原生收敛为 `notes.is_favorite` 数据库字段以及系统内置分类“收藏”视图，物理收藏夹树已完全冗余；
+   - **全面删除**：物理删除 `FavoritePanel.h/.cpp`、`FavoriteDao.h/.cpp`、`FavoriteService.h/.cpp`，从 `MainWindow`、`PanelMediator`、`SidebarContainerWidget` 中彻底移除收藏夹选项卡与右键菜单项。
+
+3. **“标记”选项卡彻底转变为“分类”导航 (Repurpose "Marked" Tab to "Categories")**：
+   - 原“标记（Marked）”选项卡设计用于向固定的磁盘文件夹分发归档物理文件；
+   - **角色转变**：在数据库模式下，“标记”选项卡彻底升级转变为**“分类（Categories）”**专属树形/面板视图；
+   - 彻底废除基于物理磁盘目录的 `MarkedFolderDao`、`MarkedFolderService` 与 `TransferToMarkedCommand`；
+   - 侧边栏统一呈现面向 `categories` 数据库表的树形导航与管理，拖拽条目至分类节点即自动执行 `DatabaseManager::instance().updateNote(id, ..., newCategoryId)`，实现纯数据库分类归档。
