@@ -1245,3 +1245,130 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - **点击 ② 区域**：作为安全留白消费事件，防止误触。
 4. **技术保障**：
    - `m_treeView` 及其 `viewport()` 全程启用 `setMouseTracking(true)` 确保实时捕获鼠标坐标并按区域独立刷新。
+
+
+---
+
+## 46. 侧边栏“历史”与“收藏夹”对标列表视图微型卡片缩略图渲染统一设计理念 (Sidebar History & Favorites Thumbnail Micro-Card Alignment SSOT)
+
+> 本章节记录侧边栏“历史记录”选项卡补全缩略图渲染，以及与“收藏夹”选项卡全面对标主内容区列表视图（TreeItemDelegate）微型圆角卡片渲染标准的设计理念与工程规范。
+
+### 46.1 痛点与历史缺陷背景
+1. **“历史”选项卡无缩略图缺陷**：
+   - 在旧实现中，HistoryPanel 在创建节点时虽有缩略图异步提取钩子，但其判定图片格式使用的是 ColorPaletteEngine::isGraphicsFile(path)，传入了完整文件路径而非文件后缀名（suffix），导致核心图形格式全部被误判为非图形文件，缩略图提取管线完全被跳过；
+   - 界面仅使用 QTreeWidget 默认的 16x16 图标与通用文件图标，导致历史选项卡全是一马平川的静态格式图标，完全丧失了设计图档的可视化导览能力；
+2. **“收藏夹”选项卡圆角计算失真缺陷（“单圆角、三直角”问题）**：
+   - 在旧 FavoriteItemDelegate 中，缩略图采用了 scaled(..., Qt::KeepAspectRatioByExpanding) 搭配对整体 iconRect 进行裁剪；
+   - 当非正方形缩略图（如长条图、宽图）填充时，由于缺乏针对实际绘制矩形 targetRect 的闭环几何计算，造成图片内容外溢并冲刷边缘抗锯齿遮罩，最终在视觉上呈现出“左上角为圆角，其余三个角看起来像直角”的计算严重失真。
+
+### 46.2 核心设计哲学与统一对齐标准（对标列表视图 TreeItemDelegate）
+1. **基准统一原则**：
+   - 侧边栏“收藏夹”与“历史”选项卡的缩略图卡片绘制方式，必须 100% 严格遵循主内容区列表视图（TreeItemDelegate / RowLayoutEngine）的标准规范；
+   - 保证侧边栏与主内容区的视觉质感、缩放几何与圆角平滑度达成最高水准的全局一致性。
+2. **微型卡片几何与平滑圆角计算法则**：
+   - **等比居中自适应**：
+     无论原始缩略图高宽比如何，一律采用 Qt::KeepAspectRatio 进行等比缩放并物理居中计算目标矩形 targetRect：
+     先计算缩放后的 QPixmap scaled = thumb.scaled(squareRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+     再居中得到 targetRect(x, y, scaled.width(), scaled.height());
+   - **四角全对称平滑裁剪**：
+     必须将圆角裁剪路径（QPainterPath::addRoundedRect，标准平滑半径 3px~4px）精准施加在计算后的 targetRect 真实渲染矩形上，严禁直接对父容器矩形施加容易被外溢像素冲刷的伪裁剪，从而在物理上保证四个角视觉完全对称、平滑圆润，杜绝直角残留瑕疵；
+   - **透明底板与抗锯齿渲染**：
+     卡片底板保持统一的高级纯透明底板，全程开启 QPainter::Antialiasing 与 QPainter::SmoothPixmapTransform。
+3. **“历史”选项卡高品质渲染重构架构**：
+   - 为 HistoryPanel 引入专属的微型卡片委托（基于 TreeItemDelegate 规范演化，或与标准微卡片渲染代理对齐），行高统一设定为标准舒适尺寸（如 28px）；
+   - 修复格式扩展名过滤判断（ColorPaletteEngine::isGraphicsFile(QFileInfo(path).suffix().toLower()) 以及对 psd/ai/eps/pdf/svg 矢量设计格式的全面捕获）；
+   - 接入 ThumbnailPipelineService 异步流水线或 DiskMediaExtractor 快速内存/磁盘缓存降采样，实现平滑非阻塞回填，保障界面极速滚动体验。
+
+
+---
+
+---
+
+
+---
+
+## 47. 侧边栏“历史”选项卡全功能即时预览与无缝目录定位设计理念 (Sidebar History Tab Instant Preview & Seamless Navigation SSOT)
+
+> 本章节记录侧边栏“历史”选项卡条目在选中后，通过鼠标双击、空格键、回车键触发即刻唤起 QuickLook 高保真预览，同时联动内容面板精准定位同步（模式 A）的交互规范与设计决策。
+
+### 47.1 痛点与交互诉求
+1. **旧交互缺陷**：
+   - 历史选项卡中的条目单击仅高亮选中，双击无任何响应，按下空格键（Space）与回车键（Return/Enter）也完全失效；
+   - 用户翻查历史记录时，不仅希望快速查阅大图内容，更希望工作区能迅速聚焦到该图档所在的目录上下文，方便后续进行全量文件管理与多文件对比。
+
+### 47.2 核心设计决策与交互契约（模式 A）
+1. **即刻唤起 QuickLook 预览 + 异步无缝定位同步（模式 A）**：
+   - 当用户在“历史”选项卡中选中任意条目并执行以下任意操作之一时：
+     - **鼠标双击（Double Click）**；
+     - **按下空格键（Space）**（无 Ctrl 修饰符）；
+     - **按下回车键（Return / Enter）**；
+   - **执行流**：
+     1. **文件分支**：
+        - 优先检查 UiHelper::canPreviewFile(path)；若是可预览文件，立即、零时延唤起 QuickLookWindow::instance().preview(path)；
+        - 同时向外发射信号（或通过 PanelMediator::locateItem(path)），让当前激活的内容面板（ContentPanel）精准定位到该文件所在物理目录并选中高亮它，实现工作区无缝对齐；
+     2. **文件夹分支**：
+        - 若选中的是目录，则直接触发 NavigationService::instance().navigateTo(path) 进入该目录；
+2. **极速顺滑与用户体验**：
+   - 用户按空格键瞬间即可弹出 QuickLook 预览卡片，零等待卡顿；
+   - 目录定位在后台平滑完成，彻底对齐主内容区双击/空格的激活体验。
+
+
+---
+
+
+---
+
+## 48. QuickLook 缩略图源双轨选择与缓存配置持久化设计理念 (QuickLook Thumbnail Source Dual-Track Selection & Cache Config SSOT)
+
+> 本章节记录在“缩略图与缓存位置设置”窗口中新增 QuickLook 预览图数据源二选一互斥选择，以及底层渲染流水线自适应分流的设计理念与工程规范。
+
+### 48.1 痛点与设计背景
+1. **用户诉求与性能/画质权衡**：
+   - QuarkMeta 原生在后台为网格与列表建立了现成的 disk_thumbs 缩略图缓存（标准规格 230px~512px）；
+   - 同时为 QuickLook 建立了超高清的 quicklook_previews 缓存（最高可达 2048px）；
+   - 部分用户在大量快速翻阅文件时，追求极致的“秒开”响应速度与低磁盘占用，希望复用现成的 disk_thumbs；
+   - 而另一部分设计师用户则更看重超清细节与色彩还原，愿意接受首次解码耗时来换取 quicklook_previews 高清画质；
+   - 因此，将两者的选择权以透明、直观的方式开放给用户自由抉择并持久化保存。
+
+### 48.2 核心设计决策与交互契约
+1. **界面交互与互斥单选源（SSOT）**：
+   - 在“缩略图与缓存位置设置”窗口（CacheLocationDialog）中，“迁移现有缓存数据到新目录”下方新增互斥的二选一选项组（通过 QButtonGroup 或单选联动控件）：
+     - 选项 A（快速模式）：优先使用现成缩略图（disk_thumbs）；
+     - 选项 B（高清模式）：优先使用高质量大图预览（quicklook_previews）；
+   - **下方注释清晰说明**：在选项下方配以清晰细致的注释文字，供用户参考思量：
+     - 注释说明：disk_thumbs 中的缩略图是系统日常浏览现成生成的，加载速度极快无需二次解析，但清晰度不如专用预览图；quicklook_previews 生成最高 2048px 超高清大图，细节极其锐利，但首次加载或未缓存时解码稍需时间。
+2. **配置持久化与平滑降级（防黑屏）**：
+   - 勾选状态持久化至 AppConfig（键名 QuickLook/ThumbnailSource，取值为 disk_thumbs 或 quicklook_previews，默认高清模式 quicklook_previews）；
+   - **QuickLookWindow 渲染调度契约**：
+     - 当处于 disk_thumbs 模式时，优先通过 DiskMediaExtractor::getDiskThumbCachePath(filePath) 秒开读取已有的磁盘缓存图；若未命中则自动降级执行实时解码，绝对杜绝黑屏与无图异常；
+     - 当处于 quicklook_previews 模式时，严格遵循 2048px 高清两级分桶缓存解码流程。
+
+
+---
+
+## 49. 可执行文件与独立图标格式真机专属 Logo 提取与隔离缓存设计理念 (Executable & Custom Icon File Genuine Logo Extraction SSOT)
+
+> 本章节记录在树形列表、网格卡片、侧边栏收藏夹及历史记录中，针对 .exe（可执行文件）、.lnk（快捷方式）、.ico（图标文件）等特殊格式从内部资源提取专属高清 Logo 并建立独立路径缓存的设计理念与工程规范。
+
+### 49.1 痛点与历史缺陷背景
+1. **统一占位符同质化缺陷**：
+   - 在旧实现中，`WindowsShellThumbnailProvider::handleIconLoad` 使用了虚拟文件占位符：`provider.icon(QFileInfo("dummy." + key))`；
+   - 导致 Windows Shell 仅按文件扩展名返回通用的应用程序白框/蓝框默认占位符图标，从未读取可执行文件或快捷方式内部真正的 PE 资源表（PE Resource Table）；
+   - 用户在查看包含 OCR.exe、RapidNotes.exe 等多个不同程序的目录时，所有程序均显示完全一致的通用占位符，无法辨识具体软件；
+2. **缓存键（Key）粗粒度归并导致图标被同化**：
+   - 旧版 `WindowsShellThumbnailProvider::iconKey` 将所有非目录文件一律归一为 `suffix.toLower()`（如 `"exe"`）；
+   - 导致整个应用程序生命周期中，所有 `.exe` 文件共用同一个 `"exe"` 缓存槽位，不仅无法呈现独立 Logo，且一旦写入通用图标便全局同化；
+   - `DiskItemModel` 与 `ItemModelBase` 的异步回填机制按 `iconKey` 匹配通知行，粗粒度 Key 无法驱动单个 exe 文件的独立局部重绘。
+
+### 49.2 核心设计决策与技术规范
+1. **独立图标文件格式白名单扩展（Dedicated Icon Extension Table）**：
+   - 提取具有独立内部 Logo/外观的扩展名白名单（支持 `.exe`、`.lnk`、`.ico`、`.scr`）；
+   - 对于普通数据文件（如 `.txt`、`.pdf`、`.zip` 等），继续沿用扩展名级别的共享缓存以保证极高吞吐与最小内存占用；
+   - 对于白名单内的独立图标文件，强制采用文件的绝对规范化路径（`QDir::cleanPath(filePath).toLower()`）作为唯一的 `iconKey`。
+2. **真实文件元数据与 PE 资源提取管线**：
+   - 异步提取时，若命中白名单格式，构造真实的 `QFileInfo(filePath)` 并调用 `provider.icon(realFileInfo)` 或 Windows Shell API 提取多分辨率真实图标；
+   - 若提取失败或文件暂时不可达，平滑降级为系统通用扩展名图标，绝不发生空白或阻塞。
+3. **模型层与视图层无缝联动（防撕裂与极速刷新）**：
+   - `ItemModelBase::flushIconRefresh()` 针对白名单文件使用精确路径匹配，单行触发 `dataChanged(..., {Qt::DecorationRole})`，避免全表抖动；
+   - `DiskItemModel` 内部的 `m_iconCache` 同样以真实路径为键，确保二级缓存与底座 Shell 图标缓存完全对齐；
+   - 主列表视图微型卡片（`TreeItemDelegate`）、收藏夹（`FavoritePanel`）、网格视图卡片（`CardPainterHelper`）统一渲染所提取出的专属高清 Logo。
