@@ -472,3 +472,29 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
 2. **UI 渲染与预览解耦**：
    - `NoteModel`（缩略图、ToolTip 预览）与 `QuickPreview` 不再依赖 `data_blob`，统一根据 `content` 的物理文件路径加载图片；
    - 失效图片统一展示优雅的缺失占位图标，杜绝程序崩溃与白屏。
+
+---
+
+## 17. 独立看门狗守护进程架构规范 (Standalone Watchdog Daemon SSOT)
+
+> 本章节记录 RapidNotes 与看门狗守护程序 `RapidNotesWatchdog` 彻底解耦与独立构建的核心架构设计规范。
+
+### 17.1 核心设计理念 (Core Design Philosophy)
+1. **单一可执行目标与进程隔离铁律**：
+   - 严禁将 `src/watchdog/main.cpp` 与主程序 `src/main.cpp` 打包编译到同一个 `RapidNotes` 可执行目标中（杜绝多重 main 函数符号冲突）；
+   - `CMakeLists.txt` 中必须独立定义看门狗子目标 `RapidNotesWatchdog`：
+     ```cmake
+     add_executable(RapidNotesWatchdog src/watchdog/main.cpp)
+     target_link_libraries(RapidNotesWatchdog PRIVATE Qt6::Core)
+     ```
+   - 独立生成轻量无 UI 守护可执行文件 `RapidNotesWatchdog.exe`。
+
+2. **生命周期与崩溃重启调度契约**：
+   - **守护启动**：主程序 `RapidNotes.exe` 启动并完成单实例监听后，以非阻塞分离进程方式启动看门狗：
+     ```cpp
+     QString watchdogExe = QCoreApplication::applicationDirPath() + "/RapidNotesWatchdog.exe";
+     if (QFile::exists(watchdogExe)) {
+         QProcess::startDetached(watchdogExe, {"--pid", QString::number(QCoreApplication::applicationPid())});
+     }
+     ```
+   - **合法退出握手 (`exit_gracefully.lock`)**：主程序在用户主动退出（如托盘退出、`doSafeExit`）时，在应用目录创建锁文件 `exit_gracefully.lock`。看门狗在监测到主进程 PID 终止后，若发现该锁文件则清理锁并静默退出；若无锁文件则判定为主程序异常崩溃，自动延迟拉起 `RapidNotes.exe` 恢复现场。
