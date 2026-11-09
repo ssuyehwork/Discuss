@@ -616,3 +616,28 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
 3. **“标记”选项卡零篡改，底层纯分类化 (Keep "Marked" Tab Intact, Internal Category Redirection)**：
    - **UI 零篡改铁律**：侧边栏顶部的“标记”选项卡名称（`"标记"`）与既有图标（`Destination.svg`）**保持 100% 稳定不变，严禁改名或擅自修改 UI 选项卡**；
    - **底层数据源与行为转换**：“标记”面板内部的数据源由原先的物理磁盘目录映射，转换为加载与呈现数据库中的**分类（`categories` 表）**；双击或拖拽不再分发至本地磁盘物理文件夹，而是定位或归档至数据库对应的 `categoryId`。
+
+---
+
+## 22. 快捷键全面整合与低级键盘钩子彻底根除架构规范 (Global Hotkey Consolidation & WH_KEYBOARD_LL Elimination SSOT)
+
+> 本章节记录全软件快捷键组件全面收敛与整合的唯一真理源 (SSOT)。彻底终结多重钩子与割裂实现，建立 Win32 原生全局热键与标准 Qt 局内快捷键的双轨中枢。
+
+### 22.1 架构整合核心决策 (Core Architectural Consolidation)
+1. **彻底物理拔除 `KeyboardHook` 与 `WH_KEYBOARD_LL` 钩子**：
+   - 物理删除 `src/core/KeyboardHook.h` 与 `src/core/KeyboardHook.cpp`；
+   - 彻底废除 `SetWindowsHookEx(WH_KEYBOARD_LL, ...)` 全局键盘监控，杜绝系统轮询卡顿、游戏/全屏焦点丢失与杀毒软件误报；
+   - 在 `CMakeLists.txt` 中同步移除 `KeyboardHook` 编译项。
+
+2. **全局热键中枢统一收敛至 `HotkeyManager`**：
+   - 原 `KeyboardHook` 负责的全局操作（`Ctrl+Shift+Alt+S` 锁定、`Ctrl+Shift+A` 唤出展示全部数据等），全部收敛由 `HotkeyManager`（Win32 `RegisterHotKey` / `UnregisterHotKey` + `QAbstractNativeEventFilter` 监听 `WM_HOTKEY`）原生掌管；
+   - 零轮询、零系统卡顿损耗、纯事件驱动。
+
+3. **专职无边框交互式配置弹窗 (`HotkeySettingsDialog`)**：
+   - 引入标准独立弹窗 `HotkeySettingsDialog`（继承自 `FramelessDialog`）；
+   - 内置 `HotkeyKeyEdit` 热键捕获器，支持用户自定义全局热键并自动持久化至 `QSettings("RapidNotes", "Hotkeys")`，即刻调用 `HotkeyManager::reapplyHotkeys()` 动态热生效；
+   - 支持一键恢复默认热键。
+
+4. **应用局内快捷键解耦归一 (`AppShortcutController`)**：
+   - 彻底废除 `LocalShortcutInterceptor` 中的底层低级钩子，局内快捷键统一由 `AppShortcutController`（基于 Qt 标准 `QShortcut`）掌管；
+   - 严格执行输入焦点断言 `isEditingFocus()`，确保用户在文本编辑时不被局内快捷键抢占。
