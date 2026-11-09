@@ -1105,3 +1105,36 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 永久删除与清空回收站操作均完整承载 `PermanentDeleteService` 原生的二次阻断确认对话框（`FramelessConfirmDialog`）与磁盘扇区级安全清理机制，保障数据不被误删；
 4. **非回收站常规目录零篡改**：
    - 普通目录下的 `Del` / `Ctrl+Space` 移入回收站以及 `Shift+Del` 永久删除逻辑 100% 维持原样，编译契约与交互习惯不受任何影响。
+
+
+---
+
+## 46. 侧边栏“历史”与“收藏夹”对标列表视图微型卡片缩略图渲染统一设计理念 (Sidebar History & Favorites Thumbnail Micro-Card Alignment SSOT)
+
+> 本章节记录侧边栏“历史记录”选项卡补全缩略图渲染，以及与“收藏夹”选项卡全面对标主内容区列表视图（TreeItemDelegate）微型圆角卡片渲染标准的设计理念与工程规范。
+
+### 46.1 痛点与历史缺陷背景
+1. **“历史”选项卡无缩略图缺陷**：
+   - 在旧实现中，HistoryPanel 在创建节点时虽有缩略图异步提取钩子，但其判定图片格式使用的是 ColorPaletteEngine::isGraphicsFile(path)，传入了完整文件路径而非文件后缀名（suffix），导致核心图形格式全部被误判为非图形文件，缩略图提取管线完全被跳过；
+   - 界面仅使用 QTreeWidget 默认的 16x16 图标与通用文件图标，导致历史选项卡全是一马平川的静态格式图标，完全丧失了设计图档的可视化导览能力；
+2. **“收藏夹”选项卡圆角计算失真缺陷（“单圆角、三直角”问题）**：
+   - 在旧 FavoriteItemDelegate 中，缩略图采用了 scaled(..., Qt::KeepAspectRatioByExpanding) 搭配对整体 iconRect 进行裁剪；
+   - 当非正方形缩略图（如长条图、宽图）填充时，由于缺乏针对实际绘制矩形 targetRect 的闭环几何计算，造成图片内容外溢并冲刷边缘抗锯齿遮罩，最终在视觉上呈现出“左上角为圆角，其余三个角看起来像直角”的计算严重失真。
+
+### 46.2 核心设计哲学与统一对齐标准（对标列表视图 TreeItemDelegate）
+1. **基准统一原则**：
+   - 侧边栏“收藏夹”与“历史”选项卡的缩略图卡片绘制方式，必须 100% 严格遵循主内容区列表视图（TreeItemDelegate / RowLayoutEngine）的标准规范；
+   - 保证侧边栏与主内容区的视觉质感、缩放几何与圆角平滑度达成最高水准的全局一致性。
+2. **微型卡片几何与平滑圆角计算法则**：
+   - **等比居中自适应**：
+     无论原始缩略图高宽比如何，一律采用 Qt::KeepAspectRatio 进行等比缩放并物理居中计算目标矩形 targetRect：
+     先计算缩放后的 QPixmap scaled = thumb.scaled(squareRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+     再居中得到 targetRect(x, y, scaled.width(), scaled.height());
+   - **四角全对称平滑裁剪**：
+     必须将圆角裁剪路径（QPainterPath::addRoundedRect，标准平滑半径 3px~4px）精准施加在计算后的 targetRect 真实渲染矩形上，严禁直接对父容器矩形施加容易被外溢像素冲刷的伪裁剪，从而在物理上保证四个角视觉完全对称、平滑圆润，杜绝直角残留瑕疵；
+   - **透明底板与抗锯齿渲染**：
+     卡片底板保持统一的高级纯透明底板，全程开启 QPainter::Antialiasing 与 QPainter::SmoothPixmapTransform。
+3. **“历史”选项卡高品质渲染重构架构**：
+   - 为 HistoryPanel 引入专属的微型卡片委托（基于 TreeItemDelegate 规范演化，或与标准微卡片渲染代理对齐），行高统一设定为标准舒适尺寸（如 28px）；
+   - 修复格式扩展名过滤判断（ColorPaletteEngine::isGraphicsFile(QFileInfo(path).suffix().toLower()) 以及对 psd/ai/eps/pdf/svg 矢量设计格式的全面捕获）；
+   - 接入 ThumbnailPipelineService 异步流水线或 DiskMediaExtractor 快速内存/磁盘缓存降采样，实现平滑非阻塞回填，保障界面极速滚动体验。
