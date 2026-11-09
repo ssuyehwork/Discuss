@@ -598,7 +598,7 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
 
 ---
 
-## 21. 彻底剔除侧车 JSON、废除物理收藏夹与“标记”转分类架构规范 (Abolish Sidecar JSON & Physical Favorites, Repurpose Marked to Categories SSOT)
+## 21. 彻底剔除侧车 JSON、废除物理收藏夹与“标记”面板底层纯分类化规范 (Purge Sidecar JSON & Favorites, Transform Marked Panel to Database Categories SSOT)
 
 > 本章节记录 RapidNotes 从物理文件系统彻底纯化为统一数据库笔记管理体系的最高架构决策与剥离重构事实标准。
 
@@ -613,8 +613,6 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - 在 RapidNotes 纯笔记体系下，收藏功能已原生收敛为 `notes.is_favorite` 数据库字段以及系统内置分类“收藏”视图，物理收藏夹树已完全冗余；
    - **全面删除**：物理删除 `FavoritePanel.h/.cpp`、`FavoriteDao.h/.cpp`、`FavoriteService.h/.cpp`，从 `MainWindow`、`PanelMediator`、`SidebarContainerWidget` 中彻底移除收藏夹选项卡与右键菜单项。
 
-3. **“标记”选项卡彻底转变为“分类”导航 (Repurpose "Marked" Tab to "Categories")**：
-   - 原“标记（Marked）”选项卡设计用于向固定的磁盘文件夹分发归档物理文件；
-   - **角色转变**：在数据库模式下，“标记”选项卡彻底升级转变为**“分类（Categories）”**专属树形/面板视图；
-   - 彻底废除基于物理磁盘目录的 `MarkedFolderDao`、`MarkedFolderService` 与 `TransferToMarkedCommand`；
-   - 侧边栏统一呈现面向 `categories` 数据库表的树形导航与管理，拖拽条目至分类节点即自动执行 `DatabaseManager::instance().updateNote(id, ..., newCategoryId)`，实现纯数据库分类归档。
+3. **“标记”选项卡零篡改，底层纯分类化 (Keep "Marked" Tab Intact, Internal Category Redirection)**：
+   - **UI 零篡改铁律**：侧边栏顶部的“标记”选项卡名称（`"标记"`）与既有图标（`Destination.svg`）**保持 100% 稳定不变，严禁改名或擅自修改 UI 选项卡**；
+   - **底层数据源与行为转换**：“标记”面板内部的数据源由原先的物理磁盘目录映射，转换为加载与呈现数据库中的**分类（`categories` 表）**；双击或拖拽不再分发至本地磁盘物理文件夹，而是定位或归档至数据库对应的 `categoryId`。
