@@ -429,3 +429,46 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
        AND data_blob IS NOT NULL;
      ```
    - 在空闲或关闭时通过检查点与 `VACUUM` 回收物理磁盘空间。
+
+---
+
+## 16. 彻底纯文本化数据库与外部媒体资产托管库解耦架构规范 (Pure-Text Database & Media Storage Architecture SSOT)
+
+> 本章节记录 RapidNotes 数据库彻底纯文本化、零 BLOB、建立“Ditto 式物理引用 + 外部图片托管库”解耦架构的核心设计理念与事实规范。
+
+### 16.1 核心设计理念 (Core Design Philosophy)
+1. **原则一（数据库彻底纯文本化与零 BLOB 铁律）**：
+   - `inspiration.db` 的 `notes` 表彻底停用 `data_blob` 字段；
+   - 数据库内**坚决不保存任何文件或图片的二进制本体字节流**，杜绝 SQLite 文件体积膨胀、大字段 I/O 阻塞、WAL 刷盘压力与高频备份卡顿。
+
+2. **原则二（外部文件走绝对物理路径引用）**：
+   - 凡是来自文件系统的文件/文件夹条目（`file`, `local_file`, `folder`, `local_folder`, `local_batch`, `files`, `folders` 等），`content` 字段仅记录其绝对物理路径（多路径以分号 `;` 分隔），`data_blob` 恒为 `NULL`。
+
+3. **原则三（纯内存位图走主程序同根目录媒体托管库落地）**：
+   - 凡是无物理落地的纯剪贴板截屏/位图（`image`），必须在入库前立即持久化落地保存到磁盘“托管媒体库”中；
+   - **托管库路径规范**：严格与主程序同根目录（绿色便携模式），位于 `QCoreApplication::applicationDirPath() + "/media/{yyyyMM}/"`；
+   - **命名与去重规范**：对图片字节流计算 SHA-256，命名为 `{hash}.png`。若同名文件已存在则复用，杜绝重复写盘；
+   - **入库内容**：将生成的绝对物理路径写入 `notes.content`，`item_type` 记为 `image`，`data_blob` 传空（`NULL`）；
+   - **极速查重**：所有条目的 `content_hash` 一律基于 `content.toUtf8()`（即路径或文本内容字符串）计算 SHA-256，实现毫秒级快速查重，严禁对大文件做耗时内容哈希。
+
+### 16.2 存量历史旧数据安全热迁移 (Migration & Zero Data Loss SSOT)
+1. **历史图片导出与保全**：
+   - 在 `DatabaseManager::createTables` 中部署单事务热迁移 `migration_20260515_media_purge_all_blobs`；
+   - 迁移脚本首先检索所有 `item_type == 'image'` 且 `data_blob IS NOT NULL` 的存量记录；
+   - 逐一将二进制数据写入托管媒体库 `media/{yyyyMM}/{hash}.png`，并将其生成的绝对路径回填到 `content`；
+   - 导出回填完成后，执行全量清空：
+     ```sql
+     UPDATE notes SET data_blob = NULL WHERE data_blob IS NOT NULL;
+     ```
+   - 确保历史截图一张不丢，且数据库物理字段彻底纯文本化。
+
+### 16.3 剪贴板系统级双模回写与 UI 渲染规范 (Clipboard & View SSOT)
+1. **剪贴板双模回写（全场景兼容粘贴）**：
+   - **文件/目录条目**：将 `content` 中的绝对物理路径解析为 `QUrl` 列表，通过 `QMimeData::setUrls()` 写入剪贴板（Windows 原生 `CF_HDROP` 格式）；
+   - **图片条目 (`image`)**：校验 `content` 路径有效性并加载 `QImage`，同时调用：
+     - `mimeData->setImageData(img)`：确保微信、QQ、浏览器、Word 等聊天与富文本应用能直接粘贴图片本体；
+     - `mimeData->setUrls({QUrl::fromLocalFile(path)})`：确保 Windows 资源管理器、桌面能直接粘贴生成该图片文件。
+   - 若物理文件失效或已被删除，降级为复制路径文本，并弹出轻量提示“文件已移动或丢失”。
+2. **UI 渲染与预览解耦**：
+   - `NoteModel`（缩略图、ToolTip 预览）与 `QuickPreview` 不再依赖 `data_blob`，统一根据 `content` 的物理文件路径加载图片；
+   - 失效图片统一展示优雅的缺失占位图标，杜绝程序崩溃与白屏。
