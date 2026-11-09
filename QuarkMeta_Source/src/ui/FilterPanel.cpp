@@ -164,7 +164,7 @@ FilterPanel::FilterPanel(QWidget* parent) : QFrame(parent) {
     m_btnClearAll->setIconSize(QSize(16, 16));
     m_btnClearAll->setFlat(true);
     m_btnClearAll->setCursor(Qt::PointingHandCursor);
-    m_btnClearAll->setProperty("tooltipText", "重置筛选条件（Ctrl + Space）");
+    m_btnClearAll->setProperty("tooltipText", "重置筛选条件（Ctrl + D）");
     m_btnClearAll->installEventFilter(this);
     connect(m_btnClearAll, &QPushButton::clicked, this, [this]() { clearAllFilters(true); });
 
