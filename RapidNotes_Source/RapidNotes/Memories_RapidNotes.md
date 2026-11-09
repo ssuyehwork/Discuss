@@ -498,3 +498,23 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
      }
      ```
    - **合法退出握手 (`exit_gracefully.lock`)**：主程序在用户主动退出（如托盘退出、`doSafeExit`）时，在应用目录创建锁文件 `exit_gracefully.lock`。看门狗在监测到主进程 PID 终止后，若发现该锁文件则清理锁并静默退出；若无锁文件则判定为主程序异常崩溃，自动延迟拉起 `RapidNotes.exe` 恢复现场。
+
+---
+
+## 18. 基础编译契约与头文件包含闭合规范 (Compilation Contract & Header Closure SSOT)
+
+> 本章节记录 RapidNotes 命名空间作用域闭合、基类显式暴露以及跨模块头文件包含契约。
+
+### 18.1 FramelessDialog 命名空间全局导出
+- `FramelessDialogBase.h` 在 `namespace RapidNotes` 中定义了 `class FramelessDialog : public QDialog`；
+- `FramelessDialog.h` 作为中枢头文件，必须显式 `using RapidNotes::FramelessDialog;`，保证派生类如 `SettingsWindow`、`TagManagerWindow`、`HelpWindow`、`ActivationDialog` 能正确识别基类，避免出现 `C2504 未定义基类` 导致的 `QWidget` 成员缺失连锁报错。
+
+### 18.2 ProgressDialog 统一收敛与类型闭合
+- 全局使用 `BatchProgressDialog.h`（派生自 `FramelessDialog`）作为无边框进度对话框统一真理源；
+- 为保持既有接口兼容，提供 `using FramelessProgressDialog = RapidNotes::BatchProgressDialog;` 类型别名，彻底清除 `使用了未定义类型 FramelessProgressDialog` 错误。
+
+### 18.3 JSON 元数据头文件映射契约
+- 废弃历史未同步的 `RapidNotesJson.h` 与 `RapidNotesJsonStore.h` 散落别名引用，直接重命名或头文件对齐包含 `QuarkMetaJson.h` 与 `QuarkMetaJsonStore.h`。
+
+### 18.4 KeyboardHook 信号完整性
+- 维护 `KeyboardHook` 的信号完整性，显式声明 `enterPressedInOtherApp()` 信号供消息捕获处理器绑定。
