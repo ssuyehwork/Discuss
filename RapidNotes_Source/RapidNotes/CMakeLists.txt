@@ -497,10 +497,6 @@ set(SOURCES
     src/meta/MetadataDefs.h
     src/meta/MetadataManager.cpp
     src/meta/MetadataManager.h
-    src/meta/QuarkMetaJson.cpp
-    src/meta/QuarkMetaJson.h
-    src/meta/QuarkMetaJsonStore.cpp
-    src/meta/QuarkMetaJsonStore.h
     src/meta/SmartFolderDao.cpp
     src/meta/SmartFolderDao.h
     src/meta/StatisticsService.cpp
