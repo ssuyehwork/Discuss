@@ -1377,3 +1377,22 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - `ItemModelBase::flushIconRefresh()` 针对白名单文件使用精确路径匹配，单行触发 `dataChanged(..., {Qt::DecorationRole})`，避免全表抖动；
    - `DiskItemModel` 内部的 `m_iconCache` 同样以真实路径为键，确保二级缓存与底座 Shell 图标缓存完全对齐；
    - 主列表视图微型卡片（`TreeItemDelegate`）、收藏夹（`FavoritePanel`）、网格视图卡片（`CardPainterHelper`）统一渲染所提取出的专属高清 Logo。
+
+---
+
+## 50. 矢量图标库管理理念与规范 (Vector SVG Icons Specification)
+
+> 本章节记录 QuarkMeta 矢量图标真理源 `SvgIcons.h` 的扩展管理规则、动态调色规范以及清除按钮语义归一化铁律。
+
+### 50.1 100% 纯矢量图标真理源与动态调色
+1. **单一事实来源 (SSOT)**：`QuarkMeta_Source/src/ui/SvgIcons.h` 中的 `SvgIcons::icons` 映射表为全软件矢量图标的唯一权威真理源。
+2. **动态调色规范**：所有嵌入 `SvgIcons::icons` 的 SVG 矢量代码必须在根 `<svg>` 节点配置 `fill="currentColor"`（或在对应描边与填充中使用 `currentColor`），禁止硬编码固定单色，使应用层通过 `SvgIconRenderer` / `UiHelper` 根据当前主题色进行动态着色。
+3. **资源来源与映射一致性**：`QuarkMeta_Source/resources/09-11-2026 1127/` 中的 17 个图标文件（包含 `save-thumbnails-1.svg` 与 `save-thumbnails-2.svg`）统一追加收敛至 `SvgIcons::icons`。
+
+### 50.2 键名规范与防覆盖铁律
+1. **文件名作为键名**：新增加的独立图标键名采用对应的 SVG 文件完整名称（如 `"Cross-Potent-1.svg"`、`"save-thumbnails-1.svg"` 等）。
+2. **递增序号防覆盖**：若遇到既有键名重复冲突，必须严格采用递增序号方式（例如 `link-1.svg`、`link-2.svg`、`link-3.svg`、`link-N.svg`）进行区分，决不可发生任何覆盖或篡改既有键名行为。对于内容 100% 相同且已存在的图标（如 `Monitoring-1.svg`），原样保留即可。
+
+### 50.3 清除与关闭语义归一化铁律
+1. **清除/清空/移除条目操作**：全软件针对数据条目的清除、移除、清空历史及删除规则按钮/菜单项（如历史记录行删除、标签药丸清除、清空历史），**必须统一引用 `"clear-2.svg"`**，形成统一的圆形带叉清除视觉语言；
+2. **窗口/窗格/标签页关闭操作**：顶层窗口关闭（`TitleBarWidget`）、对话框关闭（`FramelessDialog`）、标签页关闭（`TabBarWidget`）及窗格拆分关闭保留使用 `"close"` 纯叉号语义。两者职责严格解耦隔离。
