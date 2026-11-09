@@ -574,3 +574,24 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
   2. **控制器与右键菜单清理**：
      - `ContentContextMenu`：移除 `ActionBatchCreate` 与批量重命名菜单动作；
      - `ContentFileOpsHandler`：移除 `batchRename(...)` 槽函数及 `WatchSuppressor` 物理文件监听抑制器。
+
+---
+
+## 20. Win32 原生全局热键与交互式设置弹窗架构规范 (Win32 Native Hotkey & Settings Dialog SSOT)
+
+> 本章节记录全软件快捷键与系统热键的唯一合法实现机制。凡是不采用此机制、擅自引入低级键盘钩子或轮询者，一律一票否决不予通过。
+
+### 20.1 顶层架构铁律 (Hard Architectural Locks)
+1. **彻底摒弃低级键盘钩子 (`WH_KEYBOARD_LL`)**：
+   - 严禁使用 Windows 低级键盘钩子 `SetWindowsHookEx(WH_KEYBOARD_LL, ...)` 处理全局热键；
+   - 低级键盘钩子不仅在高负载、全屏独占或游戏场景下容易引发系统级卡顿、输入丢键甚至被杀软判定为恶意键盘记录器（Keylogger），且具有极高的系统轮询损耗；
+   - **唯一合法架构通道**：必须使用 Win32 原生全局热键机制：
+     - `RegisterHotKey(nullptr, id, modifiers, vk)` / `UnregisterHotKey(nullptr, id)`；
+     - 配合 Qt 跨平台原生事件过滤器 `QAbstractNativeEventFilter` 的 `nativeEventFilter` 监听 `WM_HOTKEY` 消息；
+     - 实现零轮询、零卡顿、零 CPU 损耗的纯事件驱动中枢 `HotkeyManager`。
+
+2. **交互式快捷键设置弹窗 (`HotkeySettingsDialog`) 架构规范**：
+   - 必须提供专职、独立的无边框交互式快捷键配置弹窗 `HotkeySettingsDialog`（继承自 `FramelessDialog`）；
+   - **交互设计**：内嵌专属快捷键捕获控件（`HotkeyKeyEdit` / `HotkeyEdit`），在获得焦点时精准捕获用户的按键组合（修饰键 Modifiers + 虚拟键码 VK），实时格式化显示按键文本；
+   - **自动化持久化**：点击保存或应用后，自动将修饰键与键码写入持久化配置（`QSettings hotkeys("RapidNotes", "Hotkeys")`），并立即驱动 `HotkeyManager::reapplyHotkeys()` 动态热重载生效，无需重启软件；
+   - **冲突与恢复**：支持一键“恢复默认设置”，在热键被外部系统抢占时输出友好告警，杜绝静默失败。
