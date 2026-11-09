@@ -392,3 +392,40 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
 3. **卡片底部名称显示与截断规范**：
    - 卡片名称部分显示笔记的标题（`title`）；
    - **截断规则**：若标题过长，**仅显示前 10 个字**（超出部分予以截断），保持卡片布局清爽整洁。
+
+---
+
+## 15. 数据库结构向 Ditto 看齐：废除大文件本体持久化与物理路径引用规范 (Ditto-Style Path Storage & Zero-Blob SSOT)
+
+> 本章节记录 RapidNotes 数据库结构重构的核心设计理念与事实规范，面向剪贴板文件/文件夹条目彻底终结 `data_blob` 写入模式，向 Ditto 架构看齐。
+
+### 15.1 核心设计理念 (Core Design Philosophy)
+1. **彻底废除文件本体存库（零 BLOB 铁律）**：
+   - 严禁向 SQLite 数据库 `notes.data_blob` 写入任何来自文件系统的大文件、小文件、文件夹的二进制字节流；
+   - 彻底解决大文件入库引发的 SQLite 文件膨胀、锁库重写延迟与 UI 主线程掉帧问题；
+   - **向 Ditto 架构对齐**：凡是文件类剪贴板对象（`file`, `local_file`, `folder`, `local_folder`, `local_batch`, `files`, `folders` 等），数据库**仅记录文件的物理绝对路径**，不存实体。
+
+2. **字段职责与物理路径规范**：
+   - **`content` 字段**：唯一存储文件的绝对物理路径。单文件/单目录直接存绝对路径字符串；多文件/多目录统一以分号 `;` 拼接绝对路径；
+   - **`data_blob` 字段**：对于所有文件/路径类条目，此字段恒为 `NULL` / 空 `QByteArray()`。**全软件仅允许纯内存截图/剪贴板位图（`image` 类型且无物理落地）写入位图二进制字节流**。
+
+3. **极速哈希查重计算 (Content Hash SSOT)**：
+   - 对于所有文件/路径类条目，计算 `content_hash` 时**严禁读取物理文件内容进行 Hash**；
+   - 统一直接对物理路径字符串（`content.toUtf8()`）计算 SHA-256 哈希，实现毫秒级快速查重与去重。
+
+4. **剪贴板系统级还原与回写 (`QMimeData::setUrls`)**：
+   - 无论是通过 `StringUtils::copyNotesToClipboard`、`QuickWindow` 还是 `RecentNotesWindow` 向剪贴板回写文件条目：
+     - 一律将 `content` 中的绝对物理路径解析并校验本地是否存在；
+     - 存在的物理路径转为 `QUrl::fromLocalFile(path)` 并调用 `QMimeData::setUrls(urls)` 写入系统剪贴板（Windows 原生 `CF_HDROP` 格式）；
+     - 若物理文件已被外部删除/移动导致有效路径为空，则降级为复制路径纯文本，并给出友好提示，严禁再通过临时目录写入临时文件导出。
+
+5. **存量数据平滑迁移与空间回收 (Schema Migration)**：
+   - 在 `DatabaseManager::createTables` 中建立自动化迁移检查项 `migration_20260510_ditto_file_blob_purge`；
+   - 执行单事务清空历史文件 BLOB：
+     ```sql
+     UPDATE notes SET data_blob = NULL
+     WHERE (item_type IN ('file', 'files', 'local_file', 'folder', 'folders', 'local_folder', 'local_batch')
+            OR file_extensions != '')
+       AND data_blob IS NOT NULL;
+     ```
+   - 在空闲或关闭时通过检查点与 `VACUUM` 回收物理磁盘空间。
