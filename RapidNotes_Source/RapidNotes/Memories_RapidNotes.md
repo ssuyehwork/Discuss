@@ -557,3 +557,64 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
 #### 📅 里程碑 5：MSVC 编译契约与头文件包含闭合 (Header Closure & Namespace Export)
 - **命名空间导出**：在 `FramelessDialog.h` 中导出 `using RapidNotes::FramelessDialog;`，消除派生窗口 C2504 未定义基类引发的大量成员缺失报错；
 - **类型收敛与包含闭合**：统一进度条别名 `FramelessProgressDialog = RapidNotes::BatchProgressDialog;`，补齐 `ToolTipOverlay.h`、`FramelessMessageBox.h`，纠正 `QuarkMetaJson.h` 包含，恢复 `KeyboardHook::enterPressedInOtherApp` 信号。
+
+#### 📅 里程碑 6：彻底剥离物理文件批量创建与批量重命名链条 (BatchCreate & BatchRename Pruning)
+- **决策根因**：RapidNotes 全面转向由 `inspiration.db` 驱动的纯笔记与分类体系，所有视图实体皆为数据库条目，彻底脱离了本地磁盘物理文件系统映射；
+- **废弃判定**：
+  - `BatchCreateDialog`（物理磁盘批量生成 `.md` / 目录）与当前 `Ctrl+N`（新建笔记）/ `Ctrl+Shift+N`（新建分类）的数据库体系相违背；
+  - `BatchRenameDialog`（物理磁盘 `MoveFileEx` 文件重命名）与既有的卡片/列表 **行内就地重命名 (F2 Inline Rename)** 规则相违背；
+- **清理与剥离范围（整条调用链彻底清除）**：
+  1. **物理删除的源码文件（共 10 个，并在 `CMakeLists.txt` 中同步移除）**：
+     - `src/ui/BatchCreateDialog.h` / `src/ui/BatchCreateDialog.cpp`
+     - `src/ui/CreateRuleRow.h` / `src/ui/CreateRuleRow.cpp`
+     - `src/ui/BatchRenameDialog.h` / `src/ui/BatchRenameDialog.cpp`
+     - `src/meta/BatchRenameEngine.h` / `src/meta/BatchRenameEngine.cpp`
+     - `src/core/BatchRenameService.h` / `src/core/BatchRenameService.cpp`
+     - `src/core/commands/BatchRenameCommand.h`
+  2. **控制器与右键菜单清理**：
+     - `ContentContextMenu`：移除 `ActionBatchCreate` 与批量重命名菜单动作；
+     - `ContentFileOpsHandler`：移除 `batchRename(...)` 槽函数及 `WatchSuppressor` 物理文件监听抑制器。
+
+---
+
+## 20. Win32 原生全局热键与交互式设置弹窗架构规范 (Win32 Native Hotkey & Settings Dialog SSOT)
+
+> 本章节记录全软件快捷键与系统热键的唯一合法实现机制。凡是不采用此机制、擅自引入低级键盘钩子或轮询者，一律一票否决不予通过。
+
+### 20.1 顶层架构铁律 (Hard Architectural Locks)
+1. **彻底摒弃低级键盘钩子 (`WH_KEYBOARD_LL`)**：
+   - 严禁使用 Windows 低级键盘钩子 `SetWindowsHookEx(WH_KEYBOARD_LL, ...)` 处理全局热键；
+   - 低级键盘钩子不仅在高负载、全屏独占或游戏场景下容易引发系统级卡顿、输入丢键甚至被杀软判定为恶意键盘记录器（Keylogger），且具有极高的系统轮询损耗；
+   - **唯一合法架构通道**：必须使用 Win32 原生全局热键机制：
+     - `RegisterHotKey(nullptr, id, modifiers, vk)` / `UnregisterHotKey(nullptr, id)`；
+     - 配合 Qt 跨平台原生事件过滤器 `QAbstractNativeEventFilter` 的 `nativeEventFilter` 监听 `WM_HOTKEY` 消息；
+     - 实现零轮询、零卡顿、零 CPU 损耗的纯事件驱动中枢 `HotkeyManager`。
+
+2. **交互式快捷键设置弹窗 (`HotkeySettingsDialog`) 架构规范**：
+   - 必须提供专职、独立的无边框交互式快捷键配置弹窗 `HotkeySettingsDialog`（继承自 `FramelessDialog`）；
+   - **交互设计**：内嵌专属快捷键捕获控件（`HotkeyKeyEdit` / `HotkeyEdit`），在获得焦点时精准捕获用户的按键组合（修饰键 Modifiers + 虚拟键码 VK），实时格式化显示按键文本；
+   - **自动化持久化**：点击保存或应用后，自动将修饰键与键码写入持久化配置（`QSettings hotkeys("RapidNotes", "Hotkeys")`），并立即驱动 `HotkeyManager::reapplyHotkeys()` 动态热重载生效，无需重启软件；
+   - **冲突与恢复**：支持一键“恢复默认设置”，在热键被外部系统抢占时输出友好告警，杜绝静默失败。
+
+---
+
+## 21. 彻底剔除侧车 JSON、废除物理收藏夹与“标记”转分类架构规范 (Abolish Sidecar JSON & Physical Favorites, Repurpose Marked to Categories SSOT)
+
+> 本章节记录 RapidNotes 从物理文件系统彻底纯化为统一数据库笔记管理体系的最高架构决策与剥离重构事实标准。
+
+### 21.1 顶层架构铁律 (Hard Architectural Locks)
+1. **彻底拔除侧车 JSON (`QuarkMetaJson` / `QuarkMetaJsonStore`)**：
+   - 在纯数据库笔记模式下，所有笔记元数据（标题、颜色、星级、标签、备注、路径等）均统一持久化在 `inspiration.db` 的 `notes`、`tags`、`categories` 等结构化表中；
+   - 物理磁盘目录中的 `.RapidNotes.json` / `.QuarkMeta.json` 隐藏侧车文件机制彻底失去存在意义；
+   - **全面删除与解耦**：物理删除 `QuarkMetaJson.h`、`QuarkMetaJson.cpp`、`QuarkMetaJsonStore.h`、`QuarkMetaJsonStore.cpp`，消除所有磁盘元数据读写、脏缓冲区刷新及与 `DiskItemModel`、`DiskMediaExtractor`、`ShellHelper`、`LibrarySyncService` 的深层耦合，元数据读写唯一穿透至 `DatabaseManager`。
+
+2. **彻底删除物理收藏夹 (`FavoritePanel` / `FavoriteDao` / `FavoriteService`)**：
+   - 原 QuarkMeta 的“收藏夹”是面向物理磁盘路径（如驱动器盘符、文件绝对路径）构建的多级虚拟树；
+   - 在 RapidNotes 纯笔记体系下，收藏功能已原生收敛为 `notes.is_favorite` 数据库字段以及系统内置分类“收藏”视图，物理收藏夹树已完全冗余；
+   - **全面删除**：物理删除 `FavoritePanel.h/.cpp`、`FavoriteDao.h/.cpp`、`FavoriteService.h/.cpp`，从 `MainWindow`、`PanelMediator`、`SidebarContainerWidget` 中彻底移除收藏夹选项卡与右键菜单项。
+
+3. **“标记”选项卡彻底转变为“分类”导航 (Repurpose "Marked" Tab to "Categories")**：
+   - 原“标记（Marked）”选项卡设计用于向固定的磁盘文件夹分发归档物理文件；
+   - **角色转变**：在数据库模式下，“标记”选项卡彻底升级转变为**“分类（Categories）”**专属树形/面板视图；
+   - 彻底废除基于物理磁盘目录的 `MarkedFolderDao`、`MarkedFolderService` 与 `TransferToMarkedCommand`；
+   - 侧边栏统一呈现面向 `categories` 数据库表的树形导航与管理，拖拽条目至分类节点即自动执行 `DatabaseManager::instance().updateNote(id, ..., newCategoryId)`，实现纯数据库分类归档。

@@ -409,8 +409,6 @@ set(SOURCES
     src/ui/workers/ContentStatsWorker.h
     src/core/ActionCommand.h
     src/core/BasicCommands.h
-    src/core/BatchRenameService.cpp
-    src/core/BatchRenameService.h
     src/core/CoreController.cpp
     src/core/CoreController.h
     src/core/DeviceWatcher.cpp
@@ -440,7 +438,6 @@ set(SOURCES
     src/core/UndoManager.h
     src/core/VolumeOnlineManager.cpp
     src/core/VolumeOnlineManager.h
-    src/core/commands/BatchRenameCommand.h
     src/core/commands/MetadataCommand.h
     src/core/commands/MoveCommand.h
     src/core/commands/RenameCommand.h
@@ -450,8 +447,6 @@ set(SOURCES
     src/crypto/EncryptionManager.h
     src/meta/AssociationCascadeService.cpp
     src/meta/AssociationCascadeService.h
-    src/meta/BatchRenameEngine.cpp
-    src/meta/BatchRenameEngine.h
     src/meta/DatabaseManager.cpp
     src/meta/DatabaseManager.h
     src/meta/DatabaseMigrator.h
@@ -561,13 +556,7 @@ set(SOURCES
     src/ui/AspectRatioGroup.h
     src/ui/AutoColorGroup.cpp
     src/ui/AutoColorGroup.h
-    src/ui/BatchCreateDialog.cpp
-    src/ui/BatchCreateDialog.h
     src/ui/BatchProgressDialog.h
-    src/ui/BatchRenameDialog.cpp
-    src/ui/BatchRenameDialog.h
-    src/ui/CreateRuleRow.cpp
-    src/ui/CreateRuleRow.h
     src/ui/DriveButton.cpp
     src/ui/DriveButton.h
     src/ui/DuplicateConflictDialog.cpp
@@ -600,8 +589,6 @@ set(SOURCES
     src/ui/MarkedPanel.h
     src/ui/NavPanel.cpp
     src/ui/NavPanel.h
-    src/ui/PresetManager.cpp
-    src/ui/PresetManager.h
     src/ui/QuarkApplication.cpp
     src/ui/QuarkApplication.h
     src/ui/QuickLookGraphicsView.cpp
@@ -609,8 +596,6 @@ set(SOURCES
     src/ui/QuickLookMinimap.cpp
     src/ui/QuickLookMinimap.h
     src/ui/QuickLookWindow.cpp
-    src/ui/RuleRow.cpp
-    src/ui/RuleRow.h
     src/ui/ShellIconManager.h
     src/ui/StatusTextCoordinator.cpp
     src/ui/StatusTextCoordinator.h
@@ -664,7 +649,6 @@ set(SOURCES
     src/util/ThumbnailPipelineService.h
     src/util/VolumePathResolver.cpp
     src/util/VolumePathResolver.h
-    src/watchdog/main.cpp
     resources/resources.qrc
     resources/app.manifest
 )
@@ -713,6 +697,34 @@ if(WIN32)
         version crypt32 windowsapp dbghelp
     )
     set_target_properties(RapidNotes PROPERTIES
+        WIN32_EXECUTABLE TRUE
+    )
+endif()
+
+# ==============================================================================
+# 方案 A: 独立看门狗守护进程 (RapidNotesWatchdog)
+# ==============================================================================
+add_executable(RapidNotesWatchdog
+    src/watchdog/main.cpp
+)
+
+set_property(TARGET RapidNotesWatchdog PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+set_target_properties(RapidNotesWatchdog PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TARGET_APP_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${TARGET_APP_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${TARGET_APP_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${TARGET_APP_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${TARGET_APP_OUTPUT_DIR}"
+)
+
+target_link_libraries(RapidNotesWatchdog PRIVATE
+    Qt6::Core
+)
+
+if(WIN32)
+    # 看门狗无窗口运行
+    set_target_properties(RapidNotesWatchdog PROPERTIES
         WIN32_EXECUTABLE TRUE
     )
 endif()
