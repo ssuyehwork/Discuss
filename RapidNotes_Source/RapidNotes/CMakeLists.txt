@@ -580,8 +580,6 @@ set(SOURCES
     src/ui/ColumnViewWidget.h
     src/ui/CreateRuleRow.cpp
     src/ui/CreateRuleRow.h
-    src/ui/DriveBarWidget.cpp
-    src/ui/DriveBarWidget.h
     src/ui/DriveButton.cpp
     src/ui/DriveButton.h
     src/ui/DuplicateConflictDialog.cpp
