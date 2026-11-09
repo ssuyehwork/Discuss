@@ -557,3 +557,20 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
 #### 📅 里程碑 5：MSVC 编译契约与头文件包含闭合 (Header Closure & Namespace Export)
 - **命名空间导出**：在 `FramelessDialog.h` 中导出 `using RapidNotes::FramelessDialog;`，消除派生窗口 C2504 未定义基类引发的大量成员缺失报错；
 - **类型收敛与包含闭合**：统一进度条别名 `FramelessProgressDialog = RapidNotes::BatchProgressDialog;`，补齐 `ToolTipOverlay.h`、`FramelessMessageBox.h`，纠正 `QuarkMetaJson.h` 包含，恢复 `KeyboardHook::enterPressedInOtherApp` 信号。
+
+#### 📅 里程碑 6：彻底剥离物理文件批量创建与批量重命名链条 (BatchCreate & BatchRename Pruning)
+- **决策根因**：RapidNotes 全面转向由 `inspiration.db` 驱动的纯笔记与分类体系，所有视图实体皆为数据库条目，彻底脱离了本地磁盘物理文件系统映射；
+- **废弃判定**：
+  - `BatchCreateDialog`（物理磁盘批量生成 `.md` / 目录）与当前 `Ctrl+N`（新建笔记）/ `Ctrl+Shift+N`（新建分类）的数据库体系相违背；
+  - `BatchRenameDialog`（物理磁盘 `MoveFileEx` 文件重命名）与既有的卡片/列表 **行内就地重命名 (F2 Inline Rename)** 规则相违背；
+- **清理与剥离范围（整条调用链彻底清除）**：
+  1. **物理删除的源码文件（共 10 个，并在 `CMakeLists.txt` 中同步移除）**：
+     - `src/ui/BatchCreateDialog.h` / `src/ui/BatchCreateDialog.cpp`
+     - `src/ui/CreateRuleRow.h` / `src/ui/CreateRuleRow.cpp`
+     - `src/ui/BatchRenameDialog.h` / `src/ui/BatchRenameDialog.cpp`
+     - `src/meta/BatchRenameEngine.h` / `src/meta/BatchRenameEngine.cpp`
+     - `src/core/BatchRenameService.h` / `src/core/BatchRenameService.cpp`
+     - `src/core/commands/BatchRenameCommand.h`
+  2. **控制器与右键菜单清理**：
+     - `ContentContextMenu`：移除 `ActionBatchCreate` 与批量重命名菜单动作；
+     - `ContentFileOpsHandler`：移除 `batchRename(...)` 槽函数及 `WatchSuppressor` 物理文件监听抑制器。
