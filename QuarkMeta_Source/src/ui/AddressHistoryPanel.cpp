@@ -92,13 +92,39 @@ void AddressHistoryPanel::rebuild() {
             icon->setPixmap(UiHelper::getIcon("folder", QColor("#555555"), 14).pixmap(14, 14));
             icon->setFixedSize(14, 14);
 
-            QLabel* pathLabel = new QLabel(path, row);
-            pathLabel->setObjectName("HistoryItemLabel");
+            QWidget* pathWidget = nullptr;
+            if (path.contains(" → ")) {
+                QWidget* container = new QWidget(row);
+                container->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+                QHBoxLayout* pathLayout = new QHBoxLayout(container);
+                pathLayout->setContentsMargins(0, 0, 0, 0);
+                pathLayout->setSpacing(4);
+
+                QStringList parts = path.split(" → ", Qt::SkipEmptyParts);
+                for (int i = 0; i < parts.size(); ++i) {
+                    if (i > 0) {
+                        QLabel* crumbSep = new QLabel(container);
+                        crumbSep->setPixmap(UiHelper::getIcon("chevron_right", QColor("#AAAAAA"), 12).pixmap(12, 12));
+                        crumbSep->setFixedSize(12, 12);
+                        crumbSep->setObjectName("BreadcrumbSep");
+                        pathLayout->addWidget(crumbSep);
+                    }
+                    QLabel* partLabel = new QLabel(parts[i], container);
+                    partLabel->setObjectName("HistoryItemLabel");
+                    pathLayout->addWidget(partLabel);
+                }
+                pathLayout->addStretch();
+                pathWidget = container;
+            } else {
+                QLabel* pathLabel = new QLabel(path, row);
+                pathLabel->setObjectName("HistoryItemLabel");
+                pathWidget = pathLabel;
+            }
 
             QPushButton* btnRemove = new QPushButton(row);
             btnRemove->setFixedSize(16, 16);
             btnRemove->setFlat(true);
-            btnRemove->setIcon(UiHelper::getIcon("close", QColor("#555555"), 12));
+            btnRemove->setIcon(UiHelper::getIcon("clear-2.svg", QColor("#555555"), 12));
             btnRemove->setIconSize(QSize(12, 12));
             btnRemove->setObjectName("HistoryBtnRemove");
             connect(btnRemove, &QPushButton::clicked, this, [path]() {
@@ -106,7 +132,7 @@ void AddressHistoryPanel::rebuild() {
             });
 
             rowLayout->addWidget(icon);
-            rowLayout->addWidget(pathLabel, 1);
+            rowLayout->addWidget(pathWidget, 1);
             rowLayout->addWidget(btnRemove);
 
             row->installEventFilter(this);
