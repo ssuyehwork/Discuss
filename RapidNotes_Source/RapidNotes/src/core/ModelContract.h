@@ -32,8 +32,7 @@ enum CommonRole {
     PalettesRole        = Qt::UserRole + 203, // 物理色板数据
     CountRole           = Qt::UserRole + 204, // 子项数量
 
-    // 列视图与拖放交互角色 (UserRole + 210..220)
-    IsParentExpandedRole = Qt::UserRole + 210, // 列视图父目录展开高亮
+    // 拖放交互角色 (UserRole + 210..220)
     IsDropTargetRole     = Qt::UserRole + 211, // 拖拽目标悬停高亮
     SectionHeaderRole    = Qt::UserRole + 212, // 是否为分区标头行
     SectionHeaderTextRole = Qt::UserRole + 213,// 分区标头显示文本

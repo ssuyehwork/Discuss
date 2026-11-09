@@ -288,8 +288,6 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
 
     m_btnToggleSortOrder = createSquareStatusBtn("arrow_down_long", "排序方向 (降序)");
     m_btnToggleSortOrder->setCheckable(false);
-    m_btnToggleColumn    = createSquareStatusBtn("column_view", "分栏(C)");
-    m_btnToggleJustified = createSquareStatusBtn("resize2", "自适应(A)");
     m_btnToggleGrid      = createSquareStatusBtn("gridgapm", "网格(G)");
     m_btnToggleList      = createSquareStatusBtn("list_ul", "列表(L)");
 
@@ -406,22 +404,6 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
         }
     });
 
-    connect(m_btnToggleColumn, &QPushButton::clicked, this, [this, getActivePanel]() {
-        ContentPanel* target = getActivePanel();
-        if (target) {
-            target->setViewMode(ContentPanel::ColumnView);
-            updateStatusBarButtonHighlights();
-        }
-    });
-
-    connect(m_btnToggleJustified, &QPushButton::clicked, this, [this, getActivePanel]() {
-        ContentPanel* target = getActivePanel();
-        if (target) {
-            target->setViewMode(ContentPanel::JustifiedViewMode);
-            updateStatusBarButtonHighlights();
-        }
-    });
-
     connect(m_btnToggleGrid, &QPushButton::clicked, this, [this, getActivePanel]() {
         ContentPanel* target = getActivePanel();
         if (target) {
@@ -470,8 +452,6 @@ void MainWindow::setupStatusBar(QWidget* parentWidget) {
     statusL->setSpacing(4);
     statusL->addWidget(m_btnToggleSortOrder);
     statusL->addWidget(sepLineSort);
-    statusL->addWidget(m_btnToggleColumn);
-    statusL->addWidget(m_btnToggleJustified);
     statusL->addWidget(m_btnToggleGrid);
     statusL->addWidget(m_btnToggleList);
     statusL->addWidget(sepLine);
@@ -515,17 +495,13 @@ void MainWindow::updateStatusBarButtonHighlights() {
     QSignalBlocker b5(m_btnToggleNav);
     QSignalBlocker b6(m_btnPresetLayout);
     QSignalBlocker b7(m_btnResetLayout);
-    QSignalBlocker b8(m_btnToggleJustified);
-    QSignalBlocker b9(m_btnToggleGrid);
-    QSignalBlocker b10(m_btnToggleList);
-    QSignalBlocker b11(m_btnToggleSortOrder);
-    QSignalBlocker b12(m_btnToggleColumn);
+    QSignalBlocker b8(m_btnToggleGrid);
+    QSignalBlocker b9(m_btnToggleList);
+    QSignalBlocker b10(m_btnToggleSortOrder);
 
     ContentPanel* targetPanel = (m_panelMediator && m_panelMediator->activeContentPanel()) ? m_panelMediator->activeContentPanel() : m_contentPanel;
     if (targetPanel) {
         ContentPanel::ViewMode mode = targetPanel->currentViewMode();
-        if (m_btnToggleColumn)    m_btnToggleColumn->setChecked(mode == ContentPanel::ColumnView);
-        if (m_btnToggleJustified) m_btnToggleJustified->setChecked(mode == ContentPanel::JustifiedViewMode);
         if (m_btnToggleGrid)      m_btnToggleGrid->setChecked(mode == ContentPanel::GridView);
         if (m_btnToggleList)      m_btnToggleList->setChecked(mode == ContentPanel::ListView);
 

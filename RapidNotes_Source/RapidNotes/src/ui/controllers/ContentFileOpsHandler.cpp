@@ -2,7 +2,6 @@
 #include "../ContentPanel.h"
 #include "../ViewDragDropHelper.h"
 #include "../../core/FileCreationService.h"
-#include "../ColumnViewWidget.h"
 #include "../ToolTipOverlay.h"
 #include "../BatchRenameDialog.h"
 #include "../FileCollisionDialog.h"
@@ -152,7 +151,7 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
         }
     }
 
-    qDebug() << "[ColumnView DragDrop Debug] Sources:" << paths 
+    qDebug() << "[DragDrop Debug] Sources:" << paths 
              << "| TargetDirOverride:" << targetDirOverride 
              << "| Final DestDir:" << destDir
              << "| DropAction:" << action;

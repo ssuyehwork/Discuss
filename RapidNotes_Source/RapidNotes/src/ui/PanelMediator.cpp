@@ -6,7 +6,6 @@
 #include "../meta/HistoryService.h"
 #include "../meta/LibrarySyncService.h"
 #include "ContentPanel.h"
-#include "ColumnViewWidget.h"
 #include "controllers/ContentPaneSplitManager.h"
 #include "controllers/PaneActivationTracker.h"
 #include "controllers/ContextMenuFactory.h"
@@ -197,10 +196,8 @@ void PanelMediator::setupConnections() {
         if (contentPanel) {
             connect(titleBar, &TitleBarWidget::viewModeRequested, this, [this, contentPanel](TitleBarWidget::ViewModeOption option) {
                 ContentPanel::ViewMode targetMode = ContentPanel::GridView;
-                if (option == TitleBarWidget::JustifiedViewMode) targetMode = ContentPanel::JustifiedViewMode;
-                else if (option == TitleBarWidget::GridViewMode) targetMode = ContentPanel::GridView;
+                if (option == TitleBarWidget::GridViewMode) targetMode = ContentPanel::GridView;
                 else if (option == TitleBarWidget::ListViewMode) targetMode = ContentPanel::ListView;
-                else if (option == TitleBarWidget::ColumnViewMode) targetMode = ContentPanel::ColumnView;
 
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) target->setViewMode(targetMode);
@@ -498,14 +495,6 @@ void PanelMediator::setupConnections() {
             });
         }
 
-        if (contentPanel->columnView()) {
-            connect(contentPanel->columnView(), &ColumnViewWidget::pathNavigated, this, [filterPanel](const QString& path) {
-                if (filterPanel) {
-                    filterPanel->clearAllFilters(false);
-                }
-                NavigationService::instance().navigateTo(path);
-            });
-        }
 
         if (favoritePanel) {
             connect(contentPanel, &ContentPanel::requestAddFavorite, favoritePanel, [favoritePanel](const QStringList& paths) {

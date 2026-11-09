@@ -1,6 +1,5 @@
 #include "ContentChangeWatcher.h"
 #include "../ContentPanel.h"
-#include "../ColumnViewWidget.h"
 #include "models/DiskItemModel.h"
 #include "../../core/DirectoryWatchService.h"
 #include "../../core/FileFilterService.h"
@@ -27,10 +26,6 @@ ContentChangeWatcher::ContentChangeWatcher(ContentPanel* panel)
     connect(&DirectoryWatchService::instance(), &DirectoryWatchService::watchedDirectoryLost,
             this, &ContentChangeWatcher::onWatchedDirectoryLost);
 
-    if (m_panel && m_panel->columnView()) {
-        connect(m_panel->columnView(), &ColumnViewWidget::activeColumnRecordsChanged,
-                this, &ContentChangeWatcher::updateTarget);
-    }
 }
 
 ContentChangeWatcher::~ContentChangeWatcher() {
@@ -61,27 +56,6 @@ void ContentChangeWatcher::updateTarget() {
         return;
     }
 
-    if (m_panel->currentViewMode() == ContentPanel::ColumnView && m_panel->columnView()) {
-        QStringList colPaths = m_panel->columnView()->columnPaths();
-        QSet<QString> newTargetSet;
-        for (const QString& cp : colPaths) {
-            if (shouldWatchPath(cp)) {
-                newTargetSet.insert(cp);
-            }
-        }
-
-        if (newTargetSet == m_watchedPaths && !m_watchedIncludeSubtree) {
-            return;
-        }
-
-        unwatchAll();
-        for (const QString& tp : newTargetSet) {
-            DirectoryWatchService::instance().watch(tp, false);
-            m_watchedPaths.insert(tp);
-        }
-        m_watchedIncludeSubtree = false;
-        return;
-    }
 
     QString cPath = m_panel->currentPath();
     bool recursive = m_panel->isRecursive();
@@ -183,10 +157,6 @@ void ContentChangeWatcher::onDirectoryChanged(const QString& dirPath, const QStr
         return;
     }
 
-    if (m_panel->currentViewMode() == ContentPanel::ColumnView && m_panel->columnView()) {
-        m_panel->columnView()->refreshAllColumns();
-        return;
-    }
 
     if (overflow || effectiveNames.size() > 500) {
         m_pendingDirtyNames.clear();

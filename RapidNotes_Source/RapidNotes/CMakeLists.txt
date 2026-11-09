@@ -566,14 +566,6 @@ set(SOURCES
     src/ui/BatchProgressDialog.h
     src/ui/BatchRenameDialog.cpp
     src/ui/BatchRenameDialog.h
-    src/ui/ColumnBlankCanvasWidget.cpp
-    src/ui/ColumnBlankCanvasWidget.h
-    src/ui/ColumnItemDelegate.cpp
-    src/ui/ColumnItemDelegate.h
-    src/ui/ColumnViewPane.cpp
-    src/ui/ColumnViewPane.h
-    src/ui/ColumnViewWidget.cpp
-    src/ui/ColumnViewWidget.h
     src/ui/CreateRuleRow.cpp
     src/ui/CreateRuleRow.h
     src/ui/DriveButton.cpp

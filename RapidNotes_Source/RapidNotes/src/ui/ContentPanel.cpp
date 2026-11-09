@@ -17,7 +17,6 @@
 #include "DropJustifiedView.h"
 #include "DropTreeView.h"
 #include "DropListView.h"
-#include "ColumnViewWidget.h"
 #include "ThumbnailDelegate.h"
 #include "TreeItemDelegate.h"
 #include "CardLayoutEngine.h"
@@ -235,7 +234,6 @@ void ContentPanel::initUi() {
     if (m_treeView) {
         m_viewStack->addWidget(m_treeView);
     }
-    m_viewStack->addWidget(m_columnView);
     if (m_gridView) {
         m_viewStack->setCurrentWidget(m_gridView);
     }
@@ -527,22 +525,10 @@ void ContentPanel::setActivePane(bool active) {
 }
 
 QString ContentPanel::activePath() const {
-    if (m_currentViewMode == ColumnView && m_columnView) {
-        ColumnViewPane* pane = m_columnView->activePane();
-        if (pane && !pane->currentPath().isEmpty()) {
-            return pane->currentPath();
-        }
-    }
     return m_currentPath;
 }
 
 QString ContentPanel::pathForView(QAbstractItemView* view) const {
-    if (m_currentViewMode == ColumnView && m_columnView && view) {
-        ColumnViewPane* pane = m_columnView->findPaneForView(view);
-        if (pane && !pane->currentPath().isEmpty()) {
-            return pane->currentPath();
-        }
-    }
     return activePath();
 }
 
@@ -758,23 +744,6 @@ void ContentPanel::setCurrentPath(const QString& path) {
 
 void ContentPanel::loadDirectory(const QString& path, bool recursive) {
     updateHeaderTitle();
-    if (m_currentViewMode == ColumnView) {
-        if (path.contains("://") && path != "computer://") {
-            return;
-        }
-        setCurrentPath(path);
-        m_isRecursive = recursive;
-        if (m_columnView) {
-            if (m_columnView->containsPath(path)) {
-                m_columnView->refreshAllColumns();
-            } else {
-                m_columnView->setRootPath(path);
-                restoreSelections();
-            }
-        }
-        updateStatusBarStats();
-        return;
-    }
     if (m_dataLoader) m_dataLoader->loadDirectory(path, recursive);
 }
 
@@ -849,22 +818,14 @@ void ContentPanel::activateIndex(const QModelIndex& index) {
     }
 
     if (QFileInfo(path).isDir()) {
-        if (m_currentViewMode == ColumnView && m_columnView) {
-            ColumnViewPane* pane = m_columnView->activePane();
-            int paneIdx = pane ? pane->property("paneIndex").toInt() : 0;
-            m_columnView->expandFolder(path, paneIdx);
-        } else {
-            emit directorySelected(path);
-        }
+        emit directorySelected(path);
     } else {
         emit fileActivated(path);
     }
 }
 
 void ContentPanel::toggleFolderSectionCollapse() {
-    if (m_currentViewMode == ColumnView && m_columnView) {
-        m_columnView->toggleFolderSectionCollapse();
-    } else if (m_sectionModel) {
+    if (m_sectionModel) {
         m_sectionModel->setFolderCollapsed(!m_sectionModel->isFolderCollapsed());
     }
 }
@@ -908,29 +869,8 @@ void ContentPanel::setViewMode(ViewMode mode) {
 
     if (mode == ListView) {
         m_viewStack->setCurrentWidget(m_treeView);
-    } else if (mode == ColumnView) {
-        if (m_columnView) {
-            QString targetPath = !m_selectionState.focusedPath.isEmpty() ? m_selectionState.focusedPath : m_currentPath;
-            if (targetPath.contains("://") && targetPath != "computer://") {
-                targetPath = "computer://";
-            }
-            m_columnView->setRootPath(targetPath);
-            m_viewStack->setCurrentWidget(m_columnView);
-        }
     } else {
-        auto* jv = qobject_cast<JustifiedView*>(m_gridView);
-        if (jv) jv->setLayoutMode(mode == GridView ? JustifiedView::GridMode : JustifiedView::JustifiedMode);
         m_viewStack->setCurrentWidget(m_gridView);
-    }
-
-    if (oldMode == ColumnView && mode != ColumnView) {
-        if (!m_currentPath.isEmpty()) {
-            if (!m_currentCategoryType.isEmpty()) {
-                refreshAll();
-            } else {
-                loadDirectory(m_currentPath, m_isRecursive);
-            }
-        }
     }
 
     setMinimumWidth(kMinPaneWidth);
@@ -999,10 +939,7 @@ void ContentPanel::search(const QString& query) {
 void ContentPanel::refreshAll() {
     if (m_isLoading) return;
 
-    if (m_currentViewMode == ColumnView) {
-        if (m_columnView) m_columnView->refreshAllColumns();
-        return;
-    }
+
 
     if (m_currentCategoryType == "trash" || m_currentPath == "trash://") {
         loadCategory("trash");
@@ -1089,7 +1026,6 @@ void ContentPanel::updateItemMetadata(QString path) {
     if (m_model) m_model->updateRecordMetadata(path);
     if (m_gridView && m_gridView->viewport()) m_gridView->viewport()->update();
     if (m_treeView && m_treeView->viewport()) m_treeView->viewport()->update();
-    if (m_currentViewMode == ColumnView && m_columnView) m_columnView->updateMetadataForPath(path);
 
     if (m_currentCategoryType == "smart_folder") {
         LibrarySyncService::instance().syncPaths(QStringList{path});
@@ -1102,9 +1038,7 @@ void ContentPanel::updateItemsMetadata(const QStringList& paths) {
     if (m_model) m_model->updateRecordMetadataBatch(paths);
     if (m_gridView && m_gridView->viewport()) m_gridView->viewport()->update();
     if (m_treeView && m_treeView->viewport()) m_treeView->viewport()->update();
-    if (m_currentViewMode == ColumnView && m_columnView) {
-        for (const QString& p : paths) m_columnView->updateMetadataForPath(p);
-    }
+
 
     if (m_currentCategoryType == "smart_folder") {
         LibrarySyncService::instance().syncPaths(paths);
@@ -1130,12 +1064,9 @@ void ContentPanel::emitSelectionChangedSignal() {
 void ContentPanel::updateStatusBarStats(int cachedSelectedCount) {
     int folderCount = 0;
     int fileCount = 0;
-    if (m_currentViewMode != ColumnView && m_sectionModel) {
+    if (m_sectionModel) {
         folderCount = m_sectionModel->folderCount();
         fileCount = m_sectionModel->fileCount();
-    } else if (m_currentViewMode == ColumnView && m_columnView && m_columnView->rightmostPane()) {
-        folderCount = m_columnView->rightmostPane()->sectionProxyModel() ? m_columnView->rightmostPane()->sectionProxyModel()->folderCount() : 0;
-        fileCount = m_columnView->rightmostPane()->sectionProxyModel() ? m_columnView->rightmostPane()->sectionProxyModel()->fileCount() : 0;
     }
     int visibleCount = folderCount + fileCount;
     int fullCount = m_model ? m_model->rowCount() : visibleCount;
@@ -1375,11 +1306,7 @@ QModelIndexList ContentPanel::getSelectedIndexes() const {
 }
 
 void ContentPanel::restoreActiveView() {
-    if (m_currentViewMode == ColumnView) {
-        m_viewStack->setCurrentWidget(m_columnView);
-    } else {
-        m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
-    }
+    m_viewStack->setCurrentWidget(m_currentViewMode == ListView ? static_cast<QWidget*>(m_treeView) : static_cast<QWidget*>(m_gridView));
 }
 
 void ContentPanel::restoreSelections() {

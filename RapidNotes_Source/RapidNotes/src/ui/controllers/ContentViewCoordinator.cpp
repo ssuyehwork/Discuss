@@ -5,7 +5,6 @@
 #include "../ContentPanel.h"
 #include "../DropTreeView.h"
 #include "../DropListView.h"
-#include "../ColumnViewWidget.h"
 #include "../JustifiedView.h"
 #include "../models/DiskItemModel.h"
 #include "../models/FilterProxyModel.h"
@@ -26,15 +25,9 @@ QList<QAbstractItemView*> ContentViewCoordinator::currentActiveViews() const {
     if (!m_panel) return views;
 
     auto mode = m_panel->currentViewMode();
-    if (mode == ContentPanel::ColumnView) {
-        if (m_panel->columnView() && m_panel->columnView()->activePane()) {
-            if (m_panel->columnView()->activePane()->listView()) {
-                views << m_panel->columnView()->activePane()->listView();
-            }
-        }
-    } else if (mode == ContentPanel::ListView) {
+    if (mode == ContentPanel::ListView) {
         if (m_panel->dropTreeView()) views << m_panel->dropTreeView();
-    } else { // GridView / JustifiedViewMode
+    } else { // GridView
         if (m_panel->gridView()) views << m_panel->gridView();
     }
     return views;
@@ -44,13 +37,6 @@ QAbstractItemView* ContentViewCoordinator::activeItemView() const {
     if (!m_panel) return nullptr;
 
     auto mode = m_panel->currentViewMode();
-    if (mode == ContentPanel::ColumnView) {
-        if (m_panel->columnView() && m_panel->columnView()->activePane()) {
-            return m_panel->columnView()->activePane()->listView();
-        }
-        return nullptr;
-    }
-
     if (mode == ContentPanel::ListView) {
         return m_panel->dropTreeView();
     }
@@ -78,18 +64,6 @@ QModelIndex ContentViewCoordinator::toSourceIndex(const QModelIndex& idx, const 
 QModelIndexList ContentViewCoordinator::getSelectedIndexes() const {
     QModelIndexList res;
     if (!m_panel) return res;
-
-    if (m_panel->currentViewMode() == ContentPanel::ColumnView) {
-        if (m_panel->columnView() && m_panel->columnView()->activePane()) {
-            auto* view = m_panel->columnView()->activePane()->listView();
-            if (view && view->selectionModel() && view->selectionModel()->hasSelection()) {
-                for (const auto& idx : view->selectionModel()->selectedIndexes()) {
-                    if (idx.column() == static_cast<int>(FileListColumn::Name)) res.append(idx);
-                }
-            }
-        }
-        return res;
-    }
 
     QList<QAbstractItemView*> views = currentActiveViews();
     for (auto* view : views) {
@@ -123,17 +97,6 @@ void ContentViewCoordinator::applyFilterStateToAllViews(const FilterState& state
 
 void ContentViewCoordinator::restoreSelections(const QSet<QString>& selectedPaths, bool isPendingEdit) {
     if (!m_panel || selectedPaths.isEmpty()) return;
-
-    if (m_panel->currentViewMode() == ContentPanel::ColumnView) {
-        if (m_panel->columnView()) {
-            QString firstPath = *selectedPaths.begin();
-            ColumnViewPane* targetPane = m_panel->columnView()->findPaneForPath(firstPath);
-            if (targetPane) {
-                targetPane->setPendingSelectPaths(selectedPaths, isPendingEdit);
-            }
-        }
-        return;
-    }
 
     QList<QAbstractItemView*> views = currentActiveViews();
     for (auto* view : views) {

@@ -26,7 +26,7 @@ namespace RapidNotes {
         Q_OBJECT
     public:
         explicit ItemModelBase(QObject* parent = nullptr) : QAbstractTableModel(parent) {
-            // 系统图标异步加载完成后的刷新，统一由基类负责，所有派生模型（内容区/列视图每一列）自动生效。
+            // 系统图标异步加载完成后的刷新，统一由基类负责，所有派生模型自动生效。
             // 先在主线程确保提供者与通知器已创建，保证它们归属主线程。
             WindowsShellThumbnailProvider::instance();
 

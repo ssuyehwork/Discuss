@@ -55,9 +55,7 @@ public:
 
     enum ViewMode {
         ListView,
-        GridView,
-        JustifiedViewMode,
-        ColumnView
+        GridView
     };
 
     enum ContextAction {
@@ -168,7 +166,6 @@ public:
     QStackedWidget* viewStack() const { return m_viewStack; }
     QAbstractItemView* gridView() const { return m_gridView; }
     QTreeView* treeView() const;
-    class ColumnViewWidget* columnView() const { return m_columnView; }
     DropTreeView* dropTreeView() const { return m_treeView; }
     DiskItemModel* diskModel() const { return m_diskModel; }
     ContentKeyHandler* keyHandler() const { return m_keyHandler; }
@@ -307,7 +304,6 @@ private:
     SectionProxyModel* m_sectionModel = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
-    class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;
     

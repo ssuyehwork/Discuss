@@ -305,7 +305,7 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
     QModelIndex index = view->indexAt(pos);
     if (!index.isValid() || index.data(SectionHeaderRole).toBool()) return false;
 
-    // 1. 网格/自适应视图：归一化 Hitbox 查询
+    // 1. 网格视图：归一化 Hitbox 查询
     if (!m_panel->isTreeView(view)) {
         QRect itemRect = view->visualRect(index);
         CardLayout l = CardLayoutEngine::calculate(itemRect, m_panel->zoomLevel());
@@ -658,10 +658,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
     if ((keyEvent->modifiers() & Qt::ControlModifier) && keyEvent->key() == Qt::Key_Backslash) {
-        ContentPanel::ViewMode nextMode = ContentPanel::ListView;
-        if (m_panel->currentViewMode() == ContentPanel::ListView) nextMode = ContentPanel::GridView;
-        else if (m_panel->currentViewMode() == ContentPanel::GridView) nextMode = ContentPanel::JustifiedViewMode;
-        else if (m_panel->currentViewMode() == ContentPanel::JustifiedViewMode) nextMode = ContentPanel::ListView;
+        ContentPanel::ViewMode nextMode = (m_panel->currentViewMode() == ContentPanel::ListView) ? ContentPanel::GridView : ContentPanel::ListView;
         m_panel->setViewMode(nextMode);
         return true;
     }

@@ -226,30 +226,20 @@ void TitleBarWidget::setupViewMenu() {
         menu.setObjectName("TitleBarViewModeMenu");
         UiHelper::applyMenuStyle(&menu);
 
-        QAction* actAdaptive = menu.addAction(UiHelper::getIcon("resize2", QColor("#EEEEEE"), 18), "自适应(A)");
         QAction* actGrid = menu.addAction(UiHelper::getIcon("gridgapm", QColor("#EEEEEE"), 18), "网格(G)");
         QAction* actList = menu.addAction(UiHelper::getIcon("list_ul", QColor("#EEEEEE"), 18), "列表(L)");
-        QAction* actColumn = menu.addAction(UiHelper::getIcon("column_view", QColor("#EEEEEE"), 18), "分栏(C)");
 
-        actAdaptive->setCheckable(true);
         actGrid->setCheckable(true);
         actList->setCheckable(true);
-        actColumn->setCheckable(true);
 
-        actAdaptive->setChecked(m_currentViewMode == JustifiedViewMode);
         actGrid->setChecked(m_currentViewMode == GridViewMode);
         actList->setChecked(m_currentViewMode == ListViewMode);
-        actColumn->setChecked(m_currentViewMode == ColumnViewMode);
 
         QString checkPath = SvgIconRenderer::getSvgTempFilePath("check", QColor("#ff551c"));
         menu.setStyleSheet(menu.styleSheet() + QString(
             "QMenu#TitleBarViewModeMenu::indicator:checked { image: url(%1); }"
         ).arg(checkPath));
 
-        connect(actAdaptive, &QAction::triggered, this, [this]() {
-            m_currentViewMode = JustifiedViewMode;
-            emit viewModeRequested(JustifiedViewMode);
-        });
         connect(actGrid, &QAction::triggered, this, [this]() {
             m_currentViewMode = GridViewMode;
             emit viewModeRequested(GridViewMode);
@@ -257,10 +247,6 @@ void TitleBarWidget::setupViewMenu() {
         connect(actList, &QAction::triggered, this, [this]() {
             m_currentViewMode = ListViewMode;
             emit viewModeRequested(ListViewMode);
-        });
-        connect(actColumn, &QAction::triggered, this, [this]() {
-            m_currentViewMode = ColumnViewMode;
-            emit viewModeRequested(ColumnViewMode);
         });
 
         menu.exec(m_btnViewMenu->mapToGlobal(QPoint(0, m_btnViewMenu->height())));

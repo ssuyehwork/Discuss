@@ -1,7 +1,6 @@
 #include "ContentContextMenu.h"
 #include "../ContentPanel.h"
 #include "../../meta/HistoryService.h"
-#include "../ColumnViewWidget.h"
 #include "../TitleBarWidget.h"
 #include "../TabBarWidget.h"
 #include "ContentSortController.h"

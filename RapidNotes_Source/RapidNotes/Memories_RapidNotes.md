@@ -472,3 +472,88 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
 2. **UI 渲染与预览解耦**：
    - `NoteModel`（缩略图、ToolTip 预览）与 `QuickPreview` 不再依赖 `data_blob`，统一根据 `content` 的物理文件路径加载图片；
    - 失效图片统一展示优雅的缺失占位图标，杜绝程序崩溃与白屏。
+
+---
+
+## 17. 独立看门狗守护进程架构规范 (Standalone Watchdog Daemon SSOT)
+
+> 本章节记录 RapidNotes 与看门狗守护程序 `RapidNotesWatchdog` 彻底解耦与独立构建的核心架构设计规范。
+
+### 17.1 核心设计理念 (Core Design Philosophy)
+1. **单一可执行目标与进程隔离铁律**：
+   - 严禁将 `src/watchdog/main.cpp` 与主程序 `src/main.cpp` 打包编译到同一个 `RapidNotes` 可执行目标中（杜绝多重 main 函数符号冲突）；
+   - `CMakeLists.txt` 中必须独立定义看门狗子目标 `RapidNotesWatchdog`：
+     ```cmake
+     add_executable(RapidNotesWatchdog src/watchdog/main.cpp)
+     target_link_libraries(RapidNotesWatchdog PRIVATE Qt6::Core)
+     ```
+   - 独立生成轻量无 UI 守护可执行文件 `RapidNotesWatchdog.exe`。
+
+2. **生命周期与崩溃重启调度契约**：
+   - **守护启动**：主程序 `RapidNotes.exe` 启动并完成单实例监听后，以非阻塞分离进程方式启动看门狗：
+     ```cpp
+     QString watchdogExe = QCoreApplication::applicationDirPath() + "/RapidNotesWatchdog.exe";
+     if (QFile::exists(watchdogExe)) {
+         QProcess::startDetached(watchdogExe, {"--pid", QString::number(QCoreApplication::applicationPid())});
+     }
+     ```
+   - **合法退出握手 (`exit_gracefully.lock`)**：主程序在用户主动退出（如托盘退出、`doSafeExit`）时，在应用目录创建锁文件 `exit_gracefully.lock`。看门狗在监测到主进程 PID 终止后，若发现该锁文件则清理锁并静默退出；若无锁文件则判定为主程序异常崩溃，自动延迟拉起 `RapidNotes.exe` 恢复现场。
+
+---
+
+## 18. 基础编译契约与头文件包含闭合规范 (Compilation Contract & Header Closure SSOT)
+
+> 本章节记录 RapidNotes 命名空间作用域闭合、基类显式暴露以及跨模块头文件包含契约。
+
+### 18.1 FramelessDialog 命名空间全局导出
+- `FramelessDialogBase.h` 在 `namespace RapidNotes` 中定义了 `class FramelessDialog : public QDialog`；
+- `FramelessDialog.h` 作为中枢头文件，必须显式 `using RapidNotes::FramelessDialog;`，保证派生类如 `SettingsWindow`、`TagManagerWindow`、`HelpWindow`、`ActivationDialog` 能正确识别基类，避免出现 `C2504 未定义基类` 导致的 `QWidget` 成员缺失连锁报错。
+
+### 18.2 ProgressDialog 统一收敛与类型闭合
+- 全局使用 `BatchProgressDialog.h`（派生自 `FramelessDialog`）作为无边框进度对话框统一真理源；
+- 为保持既有接口兼容，提供 `using FramelessProgressDialog = RapidNotes::BatchProgressDialog;` 类型别名，彻底清除 `使用了未定义类型 FramelessProgressDialog` 错误。
+
+### 18.3 JSON 元数据头文件映射契约
+- 废弃历史未同步的 `RapidNotesJson.h` 与 `RapidNotesJsonStore.h` 散落别名引用，直接重命名或头文件对齐包含 `QuarkMetaJson.h` 与 `QuarkMetaJsonStore.h`。
+
+### 18.4 KeyboardHook 信号完整性
+- 维护 `KeyboardHook` 的信号完整性，显式声明 `enterPressedInOtherApp()` 信号供消息捕获处理器绑定。
+
+---
+
+## 19. 架构演变与重构里程碑时间轴 (Architecture Evolution & Refactoring Timeline SSOT)
+
+> 本章节作为 RapidNotes 全局演变的时间轴与工作接力台，记录核心决策、剥离模块、已完成与进行中的重构里程碑，确保多轮会话之间无缝衔接与长久持续续航。
+
+### 19.1 里程碑记录 (Timeline Milestones)
+
+#### 📅 里程碑 1：QuarkMeta 融合与纯数据库化转变 (QuarkMeta Merge into RapidNotes)
+- **核心定位**：彻底放弃 QuarkMeta 面向物理磁盘文件系统的传统理念，全面转变为由 `inspiration.db`（`notes` + `categories` 表）驱动的统一管理中枢；
+- **纯化剥离**：彻底剔除盘符栏 (`DriveBarWidget`)、物理收藏夹 (`FavoritePanel`)、物理标记分发 (`MarkedPanel`) 与文件碰撞对话框；
+- **虚拟路由**：导航协议统一为 `library://<categoryId>`，地址栏仅显示数据库分类名，按键转换为 `Ctrl+N`（新建笔记）与 `Ctrl+Shift+N`（新建分类）。
+
+#### 📅 里程碑 2：列视图与自适应视图彻底剥离与网格视图纯化 (ColumnView & JustifiedView Pruning)
+- **背景与目标**：RapidNotes 版本聚焦专业集中管控，界面模式收敛，不再需要“列视图（ColumnView / 分栏）”与“自适应视图（JustifiedViewMode）”，仅保留“列表视图 (ListView)”和“网格视图 (GridView)”。
+- **物理删除的列视图源码文件（共 8 个文件，并在 `CMakeLists.txt` 中同步移除）**：
+  1. `src/ui/ColumnViewWidget.h` / `src/ui/ColumnViewWidget.cpp`
+  2. `src/ui/ColumnViewPane.h` / `src/ui/ColumnViewPane.cpp`
+  3. `src/ui/ColumnBlankCanvasWidget.h` / `src/ui/ColumnBlankCanvasWidget.cpp`
+  4. `src/ui/ColumnItemDelegate.h` / `src/ui/ColumnItemDelegate.cpp`
+- **自适应视图彻底剥离与网格视图纯粹化**：
+  - `JustifiedView.h` / `.cpp`：作为 `DropJustifiedView` 的基类与 `GridView` 的载体，彻底剔除了自适应布局（`LayoutMode::JustifiedMode`）计算分支与切换逻辑，网格视图纯化为等比网格布局；
+  - `TitleBarWidget` 与 `MainWindow`：彻底清除了状态栏上的自适应按钮（`m_btnToggleJustified` / `actAdaptive`）与分栏按钮（`m_btnToggleColumn`），剔除了 `ColumnViewMode` 与 `JustifiedViewMode` 枚举项、菜单项及切换信号；
+  - `ContentPanel`：彻底移除 `ColumnView`、`JustifiedViewMode` 枚举项、`m_columnView` 成员变量、初始化与所有视图分支逻辑；
+  - **全链路控制器解耦清理**：覆盖 `PanelMediator`、`ContentViewCoordinator`、`ContentKeyHandler`、`ContentChangeWatcher`、`ContentDataLoader`、`ContentFileOpsHandler`、`ContentContextMenu`，彻底清除了所有涉及列视图与自适应模式的业务分支与死代码引用。
+
+#### 📅 里程碑 3：看门狗独立进程解耦 (Standalone Watchdog Daemon)
+- **根因消除**：解决了 `src/main.cpp` 与 `src/watchdog/main.cpp` 在同一个 CMake 目标中导致的 main 符号重定义冲突；
+- **构建独立**：将看门狗独立构建为轻量守护程序 `RapidNotesWatchdog.exe`，主程序通过 `QProcess::startDetached` 启动守护，退出流通过 `exit_gracefully.lock` 握手。
+
+#### 📅 里程碑 4：数据库纯文本化与外部图片托管库架构 (Ditto-Style Path Storage & Media Storage)
+- **零 BLOB 铁律**：`notes.data_blob` 彻底废除，所有文件条目仅在 `content` 存绝对物理路径；
+- **托管媒体库**：纯截屏图片落盘至主程序同级根目录 `applicationDirPath() + "/media/{yyyyMM}/{hash}.png"`，去重后将路径写入 `content`；
+- **剪贴板双模回写**：图片复制时同时调用 `QMimeData::setImageData(img)`（兼容聊天工具）与 `QMimeData::setUrls()`（兼容系统资源管理器）。
+
+#### 📅 里程碑 5：MSVC 编译契约与头文件包含闭合 (Header Closure & Namespace Export)
+- **命名空间导出**：在 `FramelessDialog.h` 中导出 `using RapidNotes::FramelessDialog;`，消除派生窗口 C2504 未定义基类引发的大量成员缺失报错；
+- **类型收敛与包含闭合**：统一进度条别名 `FramelessProgressDialog = RapidNotes::BatchProgressDialog;`，补齐 `ToolTipOverlay.h`、`FramelessMessageBox.h`，纠正 `QuarkMetaJson.h` 包含，恢复 `KeyboardHook::enterPressedInOtherApp` 信号。

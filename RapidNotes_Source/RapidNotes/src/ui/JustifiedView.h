@@ -11,14 +11,11 @@ class SectionProxyModel;
 class JustifiedView : public QAbstractItemView {
     Q_OBJECT
 public:
-    enum LayoutMode { JustifiedMode, GridMode };
 
     explicit JustifiedView(QWidget* parent = nullptr);
 
     void setTargetRowHeight(int h);
     void setAspectRatioRole(int role);
-    void setLayoutMode(LayoutMode mode);
-    LayoutMode layoutMode() const;
 
     int totalHeight() const { return m_totalHeight; }
 
@@ -88,7 +85,6 @@ private:
     bool m_isDraggingSelection = false;
     QRect m_selectionRect;
 
-    LayoutMode m_layoutMode = JustifiedMode;
     QTimer* m_layoutTimer = nullptr;
     bool m_layoutDirty = false;
     SectionProxyModel* m_sectionModel = nullptr;
