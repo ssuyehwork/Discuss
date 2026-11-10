@@ -26,6 +26,9 @@ public:
     QWidget* getContentArea() const { return m_contentArea; }
     void setVisibleButtons(int flags);
 
+    virtual void loadWindowSettings();
+    virtual void saveWindowSettings();
+
 protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
