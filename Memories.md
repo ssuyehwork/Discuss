@@ -10,7 +10,3 @@
 - **ToolTipOverlay 规则**：任何引用 `ToolTipOverlay` 的场景，绝不可以追随鼠标位置显示 ToolTipOverlay。
 - **样式规范真理源**：UI 界面样式、主题管理、控件外观等重构或新增修改必须遵守 `Memories.md`，严禁在 C++ 代码中内联 `setStyleSheet` 硬编码样式，统一通过 `resources/style.qss` 与 `ThemeManager` 实施。
 - **重构数值零篡改**：代码重构与解耦过程中，既有数值参数（颜色、尺寸、边距、圆角等）必须 100% 原样照抄。
-
-## 3. RapidNotes 收藏体系架构真理源 (Favorites Note SSOT)
-- **“收藏夹”替换为“收藏”**：将 QuarkMeta 界面中的“收藏夹”替换成“收藏”，彻底摒弃物理文件/文件夹路径收藏，转变为对数据库中具体笔记实体的收藏管理（`notes.is_favorite = 1`）。
-- **底层数据源与持久化**：彻底废除面向物理路径的 `FavoriteDao` 与 `FavoriteService`，收藏数据源唯一穿透至 `inspiration.db` 的 `notes` 表，状态更新与事件由全局数据事件中枢驱动。
