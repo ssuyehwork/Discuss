@@ -145,3 +145,7 @@
 #### 3. 元数据缓存接口调用纠正（修改）
 - **`src/meta/MetadataManager.cpp`**：
   - **修改原因**：`addTagsBatch` 与 `removeTagsBatch` 中误调用了不存在的方法 `MetaMemoryCache::instance().get(nPath)`，引发 MSVC C2039“不是 MetaMemoryCache 的成员”报错。本次将其修正为标准接口 `getMeta(nPath)`。
+
+#### 4. 第三方库头文件搜索路径补全（修改）
+- **`CMakeLists.txt`**：
+  - **修改原因**：`FormatDecoders.cpp` 依赖了 `src/third_party/libtiff/tiffio.h`，但全局 `include_directories` 中此前缺少 `src/third_party/libtiff` 目录，导致 MSVC 报出 C1083“无法打开包括文件: ‘tiffio.h’: No such file or directory”错误。本次在 `include_directories` 中补充注册该路径。

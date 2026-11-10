@@ -66,6 +66,7 @@ include_directories(
     src/core
     src/util
     src/meta
+    src/third_party/libtiff
 )
 
 # 源代码列表
