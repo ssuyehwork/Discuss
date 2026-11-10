@@ -141,3 +141,7 @@
   - **修改原因**：`QuickWindow` 中原定义使用了主窗口的 `FilterPanel`，导致与调用的 `getCheckedCriteria()`、`updateStats`、无参 `filterChanged` 信号不匹配。本次将其修正为专职组件 `QuickFilterPanel`，包含 `#include "QuickFilterPanel.h"` 并更新连接。
 - **`CMakeLists.txt`**：
   - **修改原因**：在构建单元源文件列表中同步注册 `src/ui/QuickFilterPanel.cpp` 与 `src/ui/QuickFilterPanel.h`，确保符号完整链接。
+
+#### 3. 元数据缓存接口调用纠正（修改）
+- **`src/meta/MetadataManager.cpp`**：
+  - **修改原因**：`addTagsBatch` 与 `removeTagsBatch` 中误调用了不存在的方法 `MetaMemoryCache::instance().get(nPath)`，引发 MSVC C2039“不是 MetaMemoryCache 的成员”报错。本次将其修正为标准接口 `getMeta(nPath)`。
