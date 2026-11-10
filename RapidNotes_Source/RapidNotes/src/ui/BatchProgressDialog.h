@@ -1,6 +1,6 @@
 #pragma once
 
-#include "FramelessDialog.h"
+#include "FramelessDialogBase.h"
 #include <QProgressBar>
 #include <QLabel>
 #include <QVBoxLayout>
@@ -17,21 +17,29 @@ class BatchProgressDialog : public FramelessDialog {
 
 public:
     explicit BatchProgressDialog(const QString& title, QWidget* parent = nullptr)
+        : BatchProgressDialog(title, "正在准备...", 0, 100, parent) {}
+
+    explicit BatchProgressDialog(const QString& title, const QString& label,
+                                 int min = 0, int max = 100, QWidget* parent = nullptr)
         : FramelessDialog(title, parent) {
         setVisibleButtons(Close);
-        setFixedSize(400, 150);
+        setFixedSize(450, 160);
         
         auto* layout = new QVBoxLayout(m_contentArea);
         layout->setContentsMargins(20, 20, 20, 20);
-        layout->setSpacing(10);
+        layout->setSpacing(12);
 
-        m_statusLabel = new QLabel("正在准备...", this);
+        m_statusLabel = new QLabel(label, this);
         m_statusLabel->setObjectName("ProgressStatusLabel");
+        m_statusLabel->setStyleSheet("color: #eee; font-size: 13px;");
+        m_statusLabel->setWordWrap(true);
         layout->addWidget(m_statusLabel);
 
         m_progressBar = new QProgressBar(this);
-        m_progressBar->setFixedHeight(8);
+        m_progressBar->setFixedHeight(12);
         m_progressBar->setTextVisible(false);
+        m_progressBar->setRange(min, max);
+        m_progressBar->setValue(min);
         m_progressBar->setObjectName("ProgressDialogBar");
         layout->addWidget(m_progressBar);
         
@@ -42,6 +50,10 @@ public:
         m_statusLabel->setText(text);
     }
 
+    void setLabelText(const QString& text) {
+        setStatus(text);
+    }
+
     void setRange(int min, int max) {
         m_progressBar->setRange(min, max);
     }
@@ -50,6 +62,27 @@ public:
         m_progressBar->setValue(value);
     }
 
+    bool wasCanceled() const {
+        return m_wasCanceled;
+    }
+
+signals:
+    void canceled();
+
+protected:
+    void reject() override {
+        m_wasCanceled = true;
+        emit canceled();
+        FramelessDialog::reject();
+    }
+
+    void closeEvent(QCloseEvent* event) override {
+        m_wasCanceled = true;
+        emit canceled();
+        FramelessDialog::closeEvent(event);
+    }
+
+public:
     /**
      * @brief 跨线程安全更新进度
      */
@@ -78,6 +111,9 @@ private:
     QLabel* m_statusLabel = nullptr;
     QProgressBar* m_progressBar = nullptr;
     qint64 m_lastUpdateTime = 0;
+    bool m_wasCanceled = false;
 };
 
 } // namespace RapidNotes
+
+using FramelessProgressDialog = RapidNotes::BatchProgressDialog;

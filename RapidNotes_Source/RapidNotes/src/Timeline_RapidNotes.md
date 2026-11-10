@@ -3,7 +3,8 @@
 ## 记录日期：2025-05-18
 
 ### 核心演进目标
-依据最新架构设计理念，彻底废除 RapidNotes 中的文件级伴随侧车 JSON（`.QuarkMeta.json` 与 `.RapidNotes.json`）存储机制，全面解绑对物理目录中 JSON 文件的读写与缓存维护，所有数据操作与元数据管理彻底移交给本地数据库 `inspiration.db`。
+1. 依据最新架构设计理念，彻底废除 RapidNotes 中的文件级伴随侧车 JSON（`.QuarkMeta.json` 与 `.RapidNotes.json`）存储机制，全面解绑对物理目录中 JSON 文件的读写与缓存维护，所有数据操作与元数据管理彻底移交给本地数据库 `inspiration.db`。
+2. 修复从旧工程合并/重构到 RapidNotes 过程中的命名空间对齐、头文件路径错位、信号槽参数不匹配以及公共对话框组件（`FramelessMessageBox` / `BatchProgressDialog`）接口缺失等编译错误。
 
 ---
 
@@ -20,6 +21,8 @@
 - **`src/core/DiskTrashService.cpp`**：
   - 移除了对 `RapidNotesJson.h` 的引用。
   - 删除了回收站恢复与放入时对 `RapidNotesJson::roamItemMetadata` 的调用。
+- **`src/core/KeyboardHook.h`**：
+  - 修复 `enterPressedInOtherApp` 信号参数声明，赋予默认值 `(bool ctrl = false, bool shift = false, bool alt = false)`，解决 `MessageCaptureHandler::onEnterPressed` 槽函数连接时的静态断言失败 (C2338/C2660/C2672)。
 
 #### 3. 元数据与同步服务（修改）
 - **`src/meta/LibrarySyncService.h`** / **`src/meta/LibrarySyncService.cpp`**：
@@ -56,3 +59,13 @@
 - **`src/ui/models/DiskItemModel.h`** / **`src/ui/models/DiskItemModel.cpp`**：
   - 移除了对 `RapidNotesJson.h` 和 `RapidNotesJsonStore.h` 的头文件引用。
   - 移除了异步预加载图片尺寸后向侧车 JSON 同步刷写的逻辑。
+- **`src/ui/models/ItemModelBase.h`**：
+  - 纠正了 `ItemRecord.h` 头文件包含路径（从绝对虚拟路径 `src/core/ItemRecord.h` 修正为相对路径 `../../core/ItemRecord.h`），修复 C1083 错误。
+- **`src/ui/ActivationDialog.cpp`** / **`src/ui/CategoryPasswordDialog.cpp`**：
+  - 修正了对基类 `FramelessDialog` 成员变量的访问（将 `m_btnPin` 修正为 `m_pinBtn`），修复 C2065 错误。
+- **`src/ui/ToolTipOverlay.h`**：
+  - 补充全局命名空间类型别名 `using ToolTipOverlay = RapidNotes::ToolTipOverlay;`，根除跨模块未限定命名空间导致的 C2653 与 C3861 错误。
+- **`src/ui/dialogs/FramelessMessageBox.h`** / **`src/ui/dialogs/FramelessMessageBox.cpp`**：
+  - 补充继承自 `FramelessDialog` 的实体对话框构造重载，提供 `confirmed` 与 `cancelled` 信号，并导出全局类型别名，全面兼容 `main.cpp` 与 `QuickWindow.cpp` 中的 `dlg.exec()` 实体调用。
+- **`src/ui/BatchProgressDialog.h`**：
+  - 完善多参构造函数 `(title, label, min, max, parent)`，补充 `setLabelText()`、`wasCanceled()` 以及取消中断事件监听，修复 `FileStorageHelper.cpp` 的 C2039/C2661 错误。

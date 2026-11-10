@@ -7,7 +7,7 @@
 #include <QTimer>
 #include <algorithm>
 #include <vector>
-#include "src/core/ItemRecord.h" // 修正为正确的头文件路径
+#include "../../core/ItemRecord.h" // 修正为正确的头文件路径
 #include "WindowsShellThumbnailProvider.h"
 
 namespace RapidNotes {
