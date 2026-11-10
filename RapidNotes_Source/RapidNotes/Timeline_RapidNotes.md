@@ -159,3 +159,20 @@
 #### 6. 筛选面板分组组件构建注册（修改）
 - **`CMakeLists.txt`**：
   - **修改原因**：`FilterPanel.cpp` 引用了 `DuplicateStatusGroup::populate`，但 `src/ui/DuplicateStatusGroup.cpp` 与 `DuplicateStatusGroup.h` 此前未在 `CMakeLists.txt` 中注册编译，引发 MSVC 链接器报出 LNK2019 / LNK1120 无法解析的外部符号错误。本次将其同步补充进源文件列表。
+
+
+### 2026-11-10 外联样式归一化 (style.qss)、QuickWindow 内联样式迁移与 MainWindow 快捷入口
+
+#### 1. 外联样式库归一化与 dark_style.qss 彻底删除（移除 & 归一化）
+- **resources/qss/dark_style.qss**: 废弃并彻底删除物理目录 resources/qss 及文件 dark_style.qss，单一可信源归一化至 resources/style.qss。
+- **resources/resources.qrc**: 从 Qt 资源清单中移除 qss/dark_style.qss，仅保留 style.qss。
+- **src/main.cpp**: 将启动阶段读取的全局样式表路径由 :/qss/dark_style.qss 切换为 :/style.qss。
+
+#### 2. QuickWindow 行内 setStyleSheet 零值迁移至 style.qss（零值搬迁）
+- **src/ui/QuickWindow.cpp**: 彻底杜绝 C++ 源码中硬编码内联样式，遵循 Zero-Value-Alteration 原则。将 AppLockWidget 密码锁界面、输入框 QuickWindow_m_pwdEdit、关闭按钮 QuickWindow_m_closeBtn、主容器 QuickWindow_container、搜索框 QuickWindow_m_searchEdit、分类树/系统树、底部分类搜索与标签输入框、自定义工具栏 customToolbar、新建菜单及列表右键上下文菜单内联样式完全搬迁至 resources/style.qss。移除全部 23 处内联 setStyleSheet 调用，并设置对应语义化 objectName。
+- **resources/style.qss**: 集中承接 QuickWindow 提取的全部样式规则，并配置针对 QPushButton#QuickWindow_btnAdd_12::menu-indicator 的隐藏规则，去除原“+”号按钮右下角下拉三角箭头，恢复原版居中扁平外观。
+
+#### 3. 新增 MainWindow 快捷打开按钮及跨模块联动（新增 & 连接）
+- **src/ui/QuickWindow.h**: 声明信号 signals: void toggleMainWindowRequested();。
+- **src/ui/QuickWindow.cpp**: 在垂直工具栏的“+”号按钮下方插入 btnMainWindow 工具按钮，图标使用 SvgIcons 库内置的 window (18px, #aaaaaa)，点击时触发 toggleMainWindowRequested() 信号。
+- **src/main.cpp**: 引入 ui/MainWindow.h，连接 quickWin->toggleMainWindowRequested 信号：若主窗口尚未创建则动态实例化，若已存在或刚创建则通过 showNormal() / activateWindow() / raise() 还原并激活至前台。

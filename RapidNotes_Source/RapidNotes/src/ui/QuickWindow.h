@@ -52,6 +52,9 @@ public:
         return -1;
     }
 
+signals:
+    void toggleMainWindowRequested();
+
 public slots:
     void refreshData();
     void scheduleRefresh();

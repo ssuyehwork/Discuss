@@ -116,8 +116,7 @@ public:
         layout->setSpacing(20);
 
         
-        setStyleSheet("QWidget#AppLockWidget { background-color: #1C1C1C; border-radius: 10px; } "
-                      "QLabel { background: transparent; border: none; }");
+
 
         auto* appTitle = new QLabel("懒人笔记");
         appTitle->setObjectName("QuickWindow_appTitle_1");
@@ -148,31 +147,22 @@ public:
 
         
         m_pwdEdit = new QLineEdit();
+        m_pwdEdit->setObjectName("QuickWindow_m_pwdEdit");
         m_pwdEdit->setEchoMode(QLineEdit::Password);
         m_pwdEdit->setPlaceholderText("请输入密码");
         m_pwdEdit->setFixedWidth(240);
         m_pwdEdit->setFixedHeight(36);
         m_pwdEdit->setAlignment(Qt::AlignCenter);
-        m_pwdEdit->setStyleSheet(
-            "QLineEdit {"
-            "  background-color: #2A2A2A; border: 1px solid #333; border-radius: 6px;"
-            "  color: white; font-size: 14px;"
-            "}"
-            "QLineEdit:focus { border: 1px solid #3A90FF; }"
-        );
         connect(m_pwdEdit, &QLineEdit::returnPressed, this, &AppLockWidget::handleVerify);
         layout->addWidget(m_pwdEdit, 0, Qt::AlignHCenter);
 
         
         m_closeBtn = new QPushButton(this);
+        m_closeBtn->setObjectName("QuickWindow_m_closeBtn");
         m_closeBtn->setIcon(IconHelper::getIcon("close", "#aaaaaa"));
         m_closeBtn->setIconSize(QSize(18, 18));
         m_closeBtn->setFixedSize(32, 32);
         m_closeBtn->setCursor(Qt::PointingHandCursor);
-        m_closeBtn->setStyleSheet(
-            "QPushButton { border: none; border-radius: 4px; background: transparent; } "
-            "QPushButton:hover { background-color: #E81123; }"
-        );
         connect(m_closeBtn, &QPushButton::clicked, []() { QApplication::quit(); });
 
         
@@ -348,16 +338,8 @@ void QuickWindow::initUI() {
     m_mainLayout->setContentsMargins(12, 12, 12, 12);
 
     auto* container = new QWidget();
-    container->setObjectName("container");
-    container->setMouseTracking(true); 
-    container->setStyleSheet(
-        "QWidget#container { background: #1E1E1E; border-radius: 10px; border: 1px solid #333; }"
-        "QListView, QTreeView { background: transparent; border: none; color: #BBB; outline: none; }"
-        "QTreeView::item { height: 22px; padding: 0px 4px; border-radius: 4px; }"
-        "QTreeView::item:hover { background-color: #2a2d2e; }"
-        "QTreeView::item:selected { background-color: transparent; color: white; }"
-        "QListView::item { padding: 6px; border-bottom: 1px solid #2A2A2A; }"
-    );
+    container->setObjectName("QuickWindow_container");
+    container->setMouseTracking(true);
 
     auto* shadow = new QGraphicsDropShadowEffect(this);
     shadow->setBlurRadius(7);
@@ -379,13 +361,9 @@ void QuickWindow::initUI() {
     leftLayout->setSpacing(8);
 
     m_searchEdit = new SearchLineEdit();
+    m_searchEdit->setObjectName("QuickWindow_m_searchEdit");
 
     m_searchEdit->setFixedHeight(32);
-    m_searchEdit->setStyleSheet(
-        "QLineEdit { background-color: #252526; border: 1px solid #333; border-radius: 6px; "
-        "padding: 4px 15px; color: #eee; font-size: 12px; } "
-        "QLineEdit:focus { border: 1px solid #4a90e2; }"
-    );
     m_searchEdit->setPlaceholderText("搜索灵感 (双击查看历史)");
     m_searchEdit->setClearButtonEnabled(true);
     leftLayout->addWidget(m_searchEdit);
@@ -411,6 +389,7 @@ void QuickWindow::initUI() {
     listWrapperLayout->addWidget(m_listStack);
 
     m_listView = new CleanListView();
+    m_listView->setObjectName("QuickWindow_m_listView");
     m_listView->setDragEnabled(true);
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_listView->setIconSize(QSize(28, 28));
@@ -468,36 +447,8 @@ void QuickWindow::initUI() {
     m_sidebarFocusLine->hide();
     sidebarLayout->addWidget(m_sidebarFocusLine);
 
-    QString treeStyle = R"(
-        QTreeView {
-            background-color: transparent;
-            border: none;
-            outline: none;
-            color: #ccc;
-        }
-        
-        QTreeView::item:!selectable {
-            color: #ffffff;
-            font-weight: bold;
-        }
-        QTreeView::item {
-            height: 22px;
-            padding: 0px;
-            border: none;
-            background: transparent;
-        }
-        QTreeView::item:hover, QTreeView::item:selected, QTreeView::item:selected:!focus {
-            background: transparent;
-        }
-        QTreeView::branch:hover, QTreeView::branch:selected {
-            background: transparent;
-        }
-        QTreeView::branch:has-children:closed { image: url(:/icons/arrow_right.svg); }
-        QTreeView::branch:has-children:open   { image: url(:/icons/arrow_down.svg); }
-    )";
-
     m_systemTree = new DropTreeView();
-    m_systemTree->setStyleSheet(treeStyle);
+    m_systemTree->setObjectName("QuickWindow_m_systemTree");
     m_systemTree->setItemDelegate(new CategoryDelegate(this));
     m_systemModel = new CategoryModel(CategoryModel::System, this);
 
@@ -522,7 +473,7 @@ void QuickWindow::initUI() {
     connect(m_systemTree, &QTreeView::customContextMenuRequested, this, &QuickWindow::showSidebarMenu);
 
     m_partitionTree = new DropTreeView();
-    m_partitionTree->setStyleSheet(treeStyle);
+    m_partitionTree->setObjectName("QuickWindow_m_partitionTree");
     m_partitionTree->setItemDelegate(new CategoryDelegate(this));
     m_partitionModel = new CategoryModel(CategoryModel::User, this);
 
@@ -721,15 +672,7 @@ void QuickWindow::initUI() {
     QAction* filterIconAction = new QAction(IconHelper::getIcon("filter_funnel", "#888"), "", m_catSearchEdit);
     m_catSearchEdit->addAction(filterIconAction, QLineEdit::LeadingPosition);
 
-    m_catSearchEdit->setStyleSheet(
-        "QLineEdit { background-color: rgba(255, 255, 255, 0.05); "
-        "border: 1px solid rgba(255, 255, 255, 0.1); "
-        "border-radius: 6px; "
-        "padding: 4px 12px 4px 0px; " 
-        "font-size: 12px; "
-        "color: #EEE; } "
-        "QLineEdit:focus { border-color: #4FACFE; background-color: rgba(255, 255, 255, 0.08); }"
-    );
+    m_catSearchEdit->setObjectName("QuickWindow_m_catSearchEdit");
     connect(m_catSearchEdit, &QLineEdit::textChanged, this, [this](const QString& text){
         
         m_partitionProxyModel->setFilterFixedString(text);
@@ -745,17 +688,8 @@ void QuickWindow::initUI() {
 
     
     m_tagEdit = new ClickableLineEdit();
+    m_tagEdit->setObjectName("QuickWindow_m_tagEdit");
     m_tagEdit->setPlaceholderText("输入标签添加... (双击显示历史)");
-    m_tagEdit->setStyleSheet(
-        "QLineEdit { background-color: rgba(255, 255, 255, 0.05); "
-        "border: 1px solid rgba(255, 255, 255, 0.1); "
-        "border-radius: 6px; "
-        "padding: 6px 12px; "
-        "font-size: 12px; "
-        "color: #EEE; } "
-        "QLineEdit:focus { border-color: #4a90e2; background-color: rgba(255, 255, 255, 0.08); } "
-        "QLineEdit:disabled { background-color: transparent; border: 1px solid #333; color: #666; }"
-    );
     connect(m_tagEdit, &QLineEdit::returnPressed, this, &QuickWindow::handleTagInput);
     connect(m_tagEdit, &ClickableLineEdit::doubleClicked, this, [this](){
         this->openTagSelector();
@@ -778,17 +712,7 @@ void QuickWindow::initUI() {
     customToolbar->setObjectName("customToolbar");
     customToolbar->setMouseTracking(true);
     customToolbar->setAttribute(Qt::WA_Hover);
-    customToolbar->setFixedWidth(36); 
-    customToolbar->setStyleSheet(
-        "QWidget { background-color: #252526; border-top-right-radius: 10px; border-bottom-right-radius: 10px; border-left: 1px solid #333; }"
-        "QPushButton { border: none; border-radius: 4px; background: transparent; padding: 0px; margin: 0px; outline: none; }"
-        "QPushButton:hover { background-color: #3e3e42; }"
-        "QPushButton#btnClose { background-color: #E81123; }"
-        "QPushButton#btnClose:hover { background-color: #D71520; }"
-        "QPushButton:pressed { background-color: #2d2d2d; }"
-        "QLabel { color: #888; font-size: 11px; }"
-        "QLineEdit { background: transparent; border: 1px solid #444; border-radius: 4px; color: white; font-size: 11px; font-weight: bold; padding: 0; }"
-    );
+    customToolbar->setFixedWidth(36);
 
     QVBoxLayout* toolLayout = new QVBoxLayout(customToolbar);
     toolLayout->setContentsMargins(4, 8, 4, 8); 
@@ -874,22 +798,16 @@ void QuickWindow::initUI() {
 
     
     QPushButton* btnAdd = createToolBtn("add", "#aaaaaa", "新建数据", "qw_new_idea");
-    btnAdd->setObjectName("btnAdd");
     btnAdd->setObjectName("QuickWindow_btnAdd_12");
 
     QMenu* addMenu = new QMenu(this);
     IconHelper::setupMenu(addMenu);
-    addMenu->setStyleSheet("QMenu { background-color: #2D2D2D; color: #EEE; border: 1px solid #444; padding: 4px; } "
-                           "QMenu::item { padding: 6px 10px 6px 10px; border-radius: 3px; } "
-                           "QMenu::icon { margin-left: 6px; } "
-                           "QMenu::item:selected { background-color: #3E3E42; }");
 
     addMenu->addAction(IconHelper::getIcon("add", "#aaaaaa", 18), "新建数据", [this](){
         this->doNewIdea();
     });
 
     QMenu* createByLineMenu = addMenu->addMenu(IconHelper::getIcon("list_ul", "#aaaaaa", 18), "按行创建数据");
-    createByLineMenu->setStyleSheet(addMenu->styleSheet());
     createByLineMenu->addAction("从复制的内容创建", [this](){
         this->doCreateByLine(true);
     });
@@ -900,6 +818,12 @@ void QuickWindow::initUI() {
     btnAdd->setMenu(addMenu);
     connect(btnAdd, &QPushButton::clicked, [btnAdd](){
         btnAdd->showMenu();
+    });
+
+    QPushButton* btnMainWindow = createToolBtn("window", "#aaaaaa", "打开主界面");
+    btnMainWindow->setObjectName("btnMainWindow");
+    connect(btnMainWindow, &QPushButton::clicked, this, [this](){
+        emit toggleMainWindowRequested();
     });
 
     
@@ -960,6 +884,8 @@ void QuickWindow::initUI() {
     toolLayout->addWidget(btnPin, 0, Qt::AlignHCenter);
     toolLayout->addSpacing(4);
     toolLayout->addWidget(btnAdd, 0, Qt::AlignHCenter);
+    toolLayout->addSpacing(4);
+    toolLayout->addWidget(btnMainWindow, 0, Qt::AlignHCenter);
     toolLayout->addSpacing(4);
 
     
@@ -1662,29 +1588,7 @@ void QuickWindow::safeExpandPartitionTree() {
 }
 
 void QuickWindow::applyListTheme(const QString& colorHex) {
-    QString style;
-    if (!colorHex.isEmpty()) {
-        QColor c(colorHex);
-        
-        style = QString("QListView { "
-                        "  border: none; "
-                        "  background-color: #1e1e1e; "
-                        "  alternate-background-color: #252526; "
-                        "  selection-background-color: transparent; "
-                        "  color: #eee; "
-                        "  outline: none; "
-                        "}");
-    } else {
-        style = "QListView { "
-                "  border: none; "
-                "  background-color: #1e1e1e; "
-                "  alternate-background-color: #252526; "
-                "  selection-background-color: transparent; "
-                "  color: #eee; "
-                "  outline: none; "
-                "}";
-    }
-    m_listView->setStyleSheet(style);
+    Q_UNUSED(colorHex);
 }
 
 void QuickWindow::activateNote(const QModelIndex& index) {
@@ -2396,11 +2300,6 @@ void QuickWindow::showListContextMenu(const QPoint& pos) {
     int selCount = selected.size();
     QMenu menu(this);
     IconHelper::setupMenu(&menu);
-    menu.setStyleSheet("QMenu { background-color: #2D2D2D; color: #EEE; border: 1px solid #444; padding: 4px; } "
-                       
-                       "QMenu::item { padding: 6px 10px 6px 10px; border-radius: 3px; } "
-                       "QMenu::icon { margin-left: 6px; } "
-                       "QMenu::item:selected { background-color: #3E3E42; color: white; }");
 
     auto getHint = [](const QString& id) {
         QKeySequence seq = ShortcutManager::instance().getShortcut(id);
@@ -2484,7 +2383,6 @@ void QuickWindow::showListContextMenu(const QPoint& pos) {
     }
 
     auto* ratingMenu = menu.addMenu(IconHelper::getIcon("star_filled", "#f39c12", 18), QString("标记星级 (%1)").arg(selCount));
-    ratingMenu->setStyleSheet(menu.styleSheet());
     auto* starGroup = new QActionGroup(this);
     int currentRating = (selCount == 1) ? selected.first().data(NoteModel::RatingRole).toInt() : -1;
 
@@ -2511,7 +2409,6 @@ void QuickWindow::showListContextMenu(const QPoint& pos) {
     menu.addSeparator();
 
     auto* catMenu = menu.addMenu(IconHelper::getIcon("branch", "#cccccc", 18), QString("移动选中项到分类 (%1)").arg(selCount));
-    catMenu->setStyleSheet(menu.styleSheet());
     catMenu->addAction(IconHelper::getIcon("uncategorized", "#e67e22", 18), "未分类", [this]() { doMoveToCategory(-1); });
 
     QVariantList recentCats = StringUtils::getRecentCategories();
@@ -2569,7 +2466,6 @@ void QuickWindow::showListContextMenu(const QPoint& pos) {
     if (m_currentFilterType != "recently_visited") {
         menu.addSeparator();
         auto* sortMenu = menu.addMenu(IconHelper::getIcon("list_ol", "#aaaaaa", 18), "排列");
-        sortMenu->setStyleSheet(menu.styleSheet());
 
         sortMenu->addAction("上移" + getHint("qw_move_up"), [this](){ doMoveNote(DatabaseManager::Up); });
         sortMenu->addAction("下移" + getHint("qw_move_down"), [this](){ doMoveNote(DatabaseManager::Down); });
@@ -2622,11 +2518,6 @@ void QuickWindow::showSidebarMenu(const QPoint& pos) {
 
     QMenu menu(this);
     IconHelper::setupMenu(&menu);
-    menu.setStyleSheet("QMenu { background-color: #2D2D2D; color: #EEE; border: 1px solid #444; padding: 4px; } "
-                       
-                       "QMenu::item { padding: 6px 10px 6px 10px; border-radius: 3px; } "
-                       "QMenu::icon { margin-left: 6px; } "
-                       "QMenu::item:selected { background-color: #3E3E42; color: white; }");
 
     QString type = index.data(CategoryModel::TypeRole).toString();
     QString idxName = index.data(CategoryModel::NameRole).toString();
@@ -2679,7 +2570,6 @@ void QuickWindow::showSidebarMenu(const QPoint& pos) {
             }
         });
         auto* importMenu = menu.addMenu(IconHelper::getIcon("file_import", "#1abc9c", 18), "导入数据");
-        importMenu->setStyleSheet(menu.styleSheet());
         importMenu->addAction(IconHelper::getIcon("file", "#1abc9c", 18), "导入文件(s)...", [this]() {
             doImportCategory(-1);
         });
@@ -2702,7 +2592,6 @@ void QuickWindow::showSidebarMenu(const QPoint& pos) {
         });
         menu.addSeparator();
         auto* importMenu = menu.addMenu(IconHelper::getIcon("file_import", "#1abc9c", 18), "导入数据");
-        importMenu->setStyleSheet(menu.styleSheet());
         importMenu->addAction(IconHelper::getIcon("file", "#1abc9c", 18), "导入文件(s)...", [this, catId]() {
             doImportCategory(catId);
         });
@@ -2717,7 +2606,6 @@ void QuickWindow::showSidebarMenu(const QPoint& pos) {
         });
 
         auto* exportMenu = menu.addMenu(IconHelper::getIcon("file_export", "#3498db", 18), "导出");
-        exportMenu->setStyleSheet(menu.styleSheet());
 
         QVariantMap rootCat = DatabaseManager::instance().getRootCategory(catId);
         QString rootName = rootCat.value("name").toString();
@@ -2862,7 +2750,6 @@ void QuickWindow::showSidebarMenu(const QPoint& pos) {
 
         menu.addSeparator();
         auto* sortMenu = menu.addMenu(IconHelper::getIcon("list_ol", "#aaaaaa", 18), "排列");
-        sortMenu->setStyleSheet(menu.styleSheet());
 
         int parentId = -1;
         QModelIndex parentIdx = index.parent();
@@ -2889,7 +2776,6 @@ void QuickWindow::showSidebarMenu(const QPoint& pos) {
 
         menu.addSeparator();
         auto* pwdMenu = menu.addMenu(IconHelper::getIcon("lock", "#aaaaaa", 18), "密码保护");
-        pwdMenu->setStyleSheet(menu.styleSheet());
 
         pwdMenu->addAction("设置", [this, catId]() {
             QTimer::singleShot(0, [this, catId]() {
