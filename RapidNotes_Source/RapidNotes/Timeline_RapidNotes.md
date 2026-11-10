@@ -150,6 +150,8 @@
 - **`CMakeLists.txt`**：
   - **修改原因**：`FormatDecoders.cpp` 依赖了 `src/third_party/libtiff/tiffio.h`，但全局 `include_directories` 中此前缺少 `src/third_party/libtiff` 目录，导致 MSVC 报出 C1083“无法打开包括文件: ‘tiffio.h’: No such file or directory”错误。本次在 `include_directories` 中补充注册该路径。
 
-#### 5. 后台任务进度接口对齐（修改）
+#### 5. 后台任务进度接口对齐与大图生成权限解耦（修改）
 - **`src/util/BatchQuickLookService.cpp`**：
-  - **修改原因**：代码中使用了未定义的历史类型与函数 `TaskJobOptions`、`TaskProgressJob` 与 `createJobHandle`，导致 MSVC 报出 C2760“此处出现意外的 opts/job；应为 ;”及 C2059 语法错误。本次按照 `TaskProgressService` 现存的标准契约重构为 `createJob(...)`、`updateProgress(...)` 与 `finishJob(...)` / `cancelJob(...)`。
+  - **修改原因**：代码中使用了未定义的历史类型与函数 `TaskJobOptions`、`TaskProgressJob` 与 `createJobHandle`，导致 MSVC 报出 C2760“此处出现意外的 opts/job；应为 ;”及 C2059 语法错误；同时误写了 `UiHelper::isGraphicsFile`（应为 `ColorPaletteEngine::isGraphicsFile`），引发 C2039/C3861 报错。本次统一对齐现有标准接口。
+- **`src/ui/QuickLookWindow.h`**：
+  - **修改原因**：`loadOrExtractQuickLookImage` 静态大图提取函数此前声明在 `private` 作用域下，导致 `BatchQuickLookService` 无法跨模块访问并报出 C2248“无法访问 private 成员”错误。本次将其提升至 `public` 访问级别。

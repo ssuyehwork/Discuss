@@ -2,6 +2,7 @@
 #include "../ui/QuickLookWindow.h"
 #include "../ui/UiHelper.h"
 #include "../ui/ToolTipOverlay.h"
+#include "ColorPaletteEngine.h"
 #include "../core/TaskProgressService.h"
 #include "../core/AppConfig.h"
 #include <QtConcurrent>
@@ -86,7 +87,7 @@ void BatchQuickLookService::extractBatchAsync(const QStringList& rootPaths) {
                     it.next();
                     QString filePath = it.filePath();
                     QString ext = it.fileInfo().suffix().toLower();
-                    if (UiHelper::isGraphicsFile(ext)) {
+                    if (ColorPaletteEngine::isGraphicsFile(ext)) {
                         // 预检：只保留缓存缺失或需要更新的文件，避免重复生成浪费算力
                         if (!isQuickLookCacheValid(filePath)) {
                             targetFiles << filePath;
@@ -95,7 +96,7 @@ void BatchQuickLookService::extractBatchAsync(const QStringList& rootPaths) {
                 }
             } else if (fi.isFile()) {
                 QString ext = fi.suffix().toLower();
-                if (UiHelper::isGraphicsFile(ext)) {
+                if (ColorPaletteEngine::isGraphicsFile(ext)) {
                     if (!isQuickLookCacheValid(rootPath)) {
                         targetFiles << rootPath;
                     }
