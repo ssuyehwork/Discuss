@@ -180,6 +180,4 @@ private:
 
 } // namespace RapidNotes
 
-using RapidNotes::DropTreeView;
-
 #endif // DROPTREEVIEW_H

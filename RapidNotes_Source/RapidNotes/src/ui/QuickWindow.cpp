@@ -8,6 +8,7 @@
 #include "ClickableLineEdit.h"
 #include "CategoryLockWidget.h"
 #include "DropTreeView.h"
+using RapidNotes::DropTreeView;
 #include "QuickPreview.h"
 #include "PasswordVerifyDialog.h"
 #include "QuickFilterPanel.h"

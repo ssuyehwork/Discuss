@@ -131,8 +131,8 @@
 ### 修改文件清单与原因说明
 
 #### 1. 命名空间全局导出与类型别名闭合（修改）
-- **`src/ui/DropTreeView.h`**：
-  - **修改原因**：`DropTreeView` 声明于 `namespace RapidNotes` 中，而在 `QuickWindow.h` 中为全局前向声明，导致在全局作用域编译 `QuickWindow.cpp` 时识别为 Incomplete Type（C2027），进而引发无法转换为 `QWidget*`（C2664、C2446）和无法识别其自定义信号（C2065 `notesDropped`）。本次在 `DropTreeView.h` 底部添加 `using RapidNotes::DropTreeView;`，实现全局可见性闭合。
+- **`src/ui/QuickWindow.h` / `src/ui/QuickWindow.cpp`**：
+  - **修改原因**：`DropTreeView` 定义于 `namespace RapidNotes` 中，若直接在头文件底部使用 `using RapidNotes::DropTreeView;` 会在包含全局前向声明时引发 MSVC C2874（多次声明）。本次在 `QuickWindow.h` 中将前向声明精确归入 `namespace RapidNotes { class DropTreeView; }` 并使用 `using RapidNotes::DropTreeView;`，同时在 `QuickWindow.cpp` 包含 `DropTreeView.h` 后明确引入 `using RapidNotes::DropTreeView;`，从根本上解决 Incomplete Type（C2027）、指针无法转换为 `QWidget*`/`QObject*`（C2664、C2446）以及无法识别自定义信号（C2065 `notesDropped`）的问题。
 - **`src/ui/dialogs/FramelessInputDialog.h` / `src/ui/FramelessDialog.h`**：
   - **修改原因**：`FramelessInputDialog` 定义在 `RapidNotes` 命名空间中，`FramelessDialog.h` 中漏导出了该类型别名，导致 `QuickWindow.cpp:2671` 等处识别不到类型定义并报出 C2760“此处出现意外的 dlg；应为 ;”及级联作用域报错。本次在 `FramelessInputDialog.h` 底部与 `FramelessDialog.h` 中显式导出 `using RapidNotes::FramelessInputDialog;`。
 

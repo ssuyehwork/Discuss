@@ -27,7 +27,8 @@ class QLineEdit;
 class QShortcut;
 class QTimer;
 class CategoryLockWidget;
-class DropTreeView;
+namespace RapidNotes { class DropTreeView; }
+using RapidNotes::DropTreeView;
 class ClickableLineEdit;
 class CleanListView;
 class QuickFilterPanel;
