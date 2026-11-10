@@ -608,19 +608,30 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - 物理磁盘目录中的 `.RapidNotes.json` / `.QuarkMeta.json` 隐藏侧车文件机制彻底失去存在意义；
    - **全面删除与解耦**：物理删除 `QuarkMetaJson.h`、`QuarkMetaJson.cpp`、`QuarkMetaJsonStore.h`、`QuarkMetaJsonStore.cpp`，消除所有磁盘元数据读写、脏缓冲区刷新及与 `DiskItemModel`、`DiskMediaExtractor`、`ShellHelper`、`LibrarySyncService` 的深层耦合，元数据读写唯一穿透至 `DatabaseManager`。
 
-2. **“收藏夹”替换为“收藏”：由物理路径转变为笔记实体收藏 (Transform "Favorites Folder" to "Favorites Note Panel" SSOT)**：
-   - 原 QuarkMeta 的“收藏夹”是面向本地物理磁盘路径（如驱动器盘符、文件绝对路径）构建的虚拟树；而 RapidNotes 原本具备纯笔记实体的“收藏”（`notes.is_favorite = 1`）；
-   - **最高设计理念确认**：将 QuarkMeta 界面中的“收藏夹”替换成“收藏”，彻底摒弃物理文件/文件夹路径收藏，转变为对数据库中具体笔记实体的收藏管理；
-   - **UI 呈现与选项卡收敛**：
-     - 侧边栏第一选项卡名称由“收藏夹”更名为“**收藏**”（图标保留 `Favorites.svg` / `star_filled`）；
-     - 面板容器由原本的物理路径树转变为展现所有已标记收藏（`is_favorite = 1` 且 `is_deleted = 0`）的笔记列表；
-   - **底层数据源与持久化 SSOT**：
-     - 彻底废除面向物理路径的 `FavoriteDao` 与 `FavoriteService`；
-     - 收藏数据源唯一穿透至 `inspiration.db` 的 `notes` 表（即 `notes.is_favorite` 字段）；
-     - 添加/取消收藏操作直接调用 `DatabaseManager::instance().updateNoteState(noteId, "is_favorite", val)` 或 `toggleNoteState`，并由全局数据事件总线（`DataEvents` / `CentralEventHub`）驱动界面无缝增量刷新；
-   - **交互与路由联动**：
-     - 点击“收藏”面板中的笔记条目，直接在主内容区定位、展示或聚焦该笔记，彻底脱离物理磁盘文件导航。
+2. **彻底删除物理收藏夹 (`FavoritePanel` / `FavoriteDao` / `FavoriteService`)**：
+   - 原 QuarkMeta 的“收藏夹”是面向物理磁盘路径（如驱动器盘符、文件绝对路径）构建的多级虚拟树；
+   - 在 RapidNotes 纯笔记体系下，收藏功能已原生收敛为 `notes.is_favorite` 数据库字段以及系统内置分类“收藏”视图，物理收藏夹树已完全冗余；
+   - **全面删除**：物理删除 `FavoritePanel.h/.cpp`、`FavoriteDao.h/.cpp`、`FavoriteService.h/.cpp`，从 `MainWindow`、`PanelMediator`、`SidebarContainerWidget` 中彻底移除收藏夹选项卡与右键菜单项。
 
 3. **“标记”选项卡零篡改，底层纯分类化 (Keep "Marked" Tab Intact, Internal Category Redirection)**：
    - **UI 零篡改铁律**：侧边栏顶部的“标记”选项卡名称（`"标记"`）与既有图标（`Destination.svg`）**保持 100% 稳定不变，严禁改名或擅自修改 UI 选项卡**；
    - **底层数据源与行为转换**：“标记”面板内部的数据源由原先的物理磁盘目录映射，转换为加载与呈现数据库中的**分类（`categories` 表）**；双击或拖拽不再分发至本地磁盘物理文件夹，而是定位或归档至数据库对应的 `categoryId`。
+
+---
+
+## 22. 窗口职责分工与双击行为解耦规范 (Window Responsibilities & Double-Click Semantics SSOT)
+
+> 本章节记录 RapidNotes 中主窗口（`MainWindow`）与快捷悬浮窗口（`QuickWindow`）的核心职责解耦与双击交互行为的唯一真理源 (SSOT)。坚决杜绝职责混淆与跨窗口行为篡改。
+
+### 22.1 窗口核心定位与职责分工
+1. **`QuickWindow`（快捷悬浮窗口）—— 数据发送与第三方投递终端**：
+   - **核心定位**：专职面向第三方目标应用（如微信、浏览器、IDE、文本编辑器等）的即时投递工具；
+   - **核心交互契约**：用户在 `QuickWindow` 中的操作（包括列表项双击、按回车发送等），其核心业务意图是将选中的笔记/数据原子化**发送/粘贴至当前激活的第三方应用程序**中，用后即隐，追求极致的高效投递节奏。
+2. **`MainWindow`（主管理窗口）—— 数据资产管理与沉浸浏览中心**：
+   - **核心定位**：专职负责笔记数据的全局组织、多维分类、标签关联、批量整理、全量检索与内容编辑；
+   - **核心交互契约**：用户在 `MainWindow` 内容列表中的双击操作，**必须严格保持原生纯粹的“预览功能”**（即唤起 `QuickLookWindow` 就地快速预览笔记图文与元数据），绝对禁止将 `QuickWindow` 的发送粘贴逻辑套用至主窗口；
+3. **语义严格隔离铁律**：
+   - 两个窗口职责边界分明，交互上下文完全独立：
+     - **`MainWindow` 双击条目** $\equiv$ **就地预览 (QuickLook Preview)**，保持稳定不变；
+     - **`QuickWindow` 双击条目** $\equiv$ **发送数据到第三方应用 (Paste/Send to Third-Party App)**；
+   - 严禁任何形式的交互倒错与逻辑混淆。

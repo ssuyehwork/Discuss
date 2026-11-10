@@ -1,6 +1,5 @@
 #include "DiskMediaExtractor.h" 
 #include "../ui/ImageDecoderFacade.h" 
-#include "../meta/RapidNotesJsonStore.h" 
 #include "../meta/MetadataDefs.h" 
 #include "../core/AppConfig.h"
 #include <QFileInfo> 
@@ -107,14 +106,8 @@ bool DiskMediaExtractor::isMarkedFailed(const QString& folderPath, const QString
     } 
  
     // 该文件夹首次查询：统一通过 Store 内存一致性接口读取
-    auto itemsMap = RapidNotesJsonStore::instance().readFolderMeta(folderPath.toStdWString());
-    QSet<QString> persisted; 
-    for (const auto& kv : itemsMap) { 
-        if (kv.second.thumbStatus == 1) { 
-            persisted.insert(QString::fromStdWString(kv.first)); 
-        } 
-    } 
- 
+    // 该文件夹首次查询
+    QSet<QString> persisted;
     QMutexLocker locker(&s_failureMutex); 
     s_failedNames[folderPath].unite(persisted); 
     s_failureLoadedFolders.insert(folderPath); 
@@ -169,10 +162,7 @@ void DiskMediaExtractor::flushPendingUpdates() {
             }); 
         } 
 
-        // 🚀【复用 Step 1 批量接口】：按目录单次加锁单次标脏，消除逐文件锁竞争
-        if (!batchUpdaters.empty()) {
-            RapidNotesJsonStore::instance().updateFolderItemsBatch(folder.toStdWString(), batchUpdaters);
-        }
+        // 批量尺寸更新（纯数据库/缓存管理，不再写入侧车文件）
     } 
 } 
  
@@ -370,13 +360,7 @@ QImage DiskMediaExtractor::forceExtractDeepThumbnail(const QString& filePath, in
     const QString fileName = fi.fileName(); 
     const std::wstring wFileName = fileName.toStdWString(); 
  
-    RapidNotesJsonStore::instance().updateItemMeta(filePath.toStdWString(), [dec](ItemMeta& fileMeta) { 
-        fileMeta.thumbStatus = 0; 
-        if (dec.originalSize.isValid() && dec.originalSize.width() > 0) { 
-            fileMeta.width = dec.originalSize.width(); 
-            fileMeta.height = dec.originalSize.height(); 
-        } 
-    }); 
+    // 移除侧车 JSON 元数据写入
  
     // 内存失败名单与待落盘队列同步清除，避免旧的 1 再次拦截或被延迟写回 
     { 

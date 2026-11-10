@@ -756,7 +756,6 @@ void TabBarWidget::updateCurrentTabTitle(const QString& title, const QString& ur
 
     applyDiffUpdate();
     saveStateToConfig();
-    emit tabDisplayTitleChanged(currentTab.title);
 }
 
 void TabBarWidget::showTabContextMenu(int index, const QPoint& globalPos) {

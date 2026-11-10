@@ -1,7 +1,5 @@
 #include "MetaIndexService.h"
 #include "DatabaseManager.h"
-#include "RapidNotesJson.h"
-#include "RapidNotesJsonStore.h"
 #include "LibraryService.h"
 #include "../core/TaskProgressService.h"
 #include <QDir>
@@ -261,131 +259,8 @@ void MetaIndexService::workerThreadLoop() {
     }
 }
 
-void MetaIndexService::processFolder(sqlite3* db, const std::wstring& normFolder, const std::wstring& rawFolder) {
-    QString jsonPath = QString::fromStdWString(rawFolder) + "/.RapidNotes.json";
-    QFileInfo fi(jsonPath);
-
-    if (!fi.exists()) {
-        // .RapidNotes.json 不存在（被自愈清理），抹除该文件夹下所有旧索引
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(db, "DELETE FROM items_index WHERE folder_path = ?;", -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, QString::fromStdWString(normFolder).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_step(stmt);
-            sqlite3_finalize(stmt);
-        }
-        if (sqlite3_prepare_v2(db, "DELETE FROM folders_index WHERE folder_path = ?;", -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, QString::fromStdWString(normFolder).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_step(stmt);
-            sqlite3_finalize(stmt);
-        }
-        return;
-    }
-
-    qint64 currentMtime = fi.lastModified().toMSecsSinceEpoch();
-    qint64 currentSize = fi.size();
-
-    // 1. 新鲜度检查：mtime 和 size 没变，直接跳过整个文件夹
-    sqlite3_stmt* checkStmt = nullptr;
-    bool needUpdate = true;
-    if (sqlite3_prepare_v2(db, "SELECT mtime, size FROM folders_index WHERE folder_path = ?;", -1, &checkStmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text(checkStmt, 1, QString::fromStdWString(normFolder).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        if (sqlite3_step(checkStmt) == SQLITE_ROW) {
-            qint64 dbMtime = sqlite3_column_int64(checkStmt, 0);
-            qint64 dbSize = sqlite3_column_int64(checkStmt, 1);
-            if (dbMtime == currentMtime && dbSize == currentSize) {
-                needUpdate = false;
-            }
-        }
-        sqlite3_finalize(checkStmt);
-    }
-
-    if (!needUpdate) return;
-
-    // 2. 读磁盘 JSON 并解析
-    RapidNotesJson jsonReader(rawFolder);
-    if (!jsonReader.load()) return;
-
-    // 3. 增量更新该文件夹的条目
-    sqlite3_stmt* delStmt = nullptr;
-    if (sqlite3_prepare_v2(db, "DELETE FROM items_index WHERE folder_path = ?;", -1, &delStmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text(delStmt, 1, QString::fromStdWString(normFolder).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_step(delStmt);
-        sqlite3_finalize(delStmt);
-    }
-
-    const char* insertSql = R"(
-        INSERT INTO items_index (path, folder_path, name, type, rating, color, tags, note, url, width, height, auto_color, file_size, file_mtime)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(path) DO UPDATE SET
-            folder_path=excluded.folder_path,
-            name=excluded.name,
-            type=excluded.type,
-            rating=excluded.rating,
-            color=excluded.color,
-            tags=excluded.tags,
-            note=excluded.note,
-            url=excluded.url,
-            width=excluded.width,
-            height=excluded.height,
-            auto_color=excluded.auto_color,
-            file_size=excluded.file_size,
-            file_mtime=excluded.file_mtime;
-    )";
-
-    sqlite3_stmt* insStmt = nullptr;
-    if (sqlite3_prepare_v2(db, insertSql, -1, &insStmt, nullptr) == SQLITE_OK) {
-        for (const auto& kv : jsonReader.items()) {
-            const std::wstring& fileName = kv.first;
-            const ItemMeta& meta = kv.second;
-
-            QString fullPath = QDir(QString::fromStdWString(rawFolder)).filePath(QString::fromStdWString(fileName));
-            std::wstring normItemPath = normalizePath(fullPath.toStdWString());
-
-            QString tagsJoined;
-            for (const auto& t : meta.tags) {
-                if (!tagsJoined.isEmpty()) tagsJoined.append(" ");
-                tagsJoined.append(QString::fromStdWString(t));
-            }
-
-            sqlite3_bind_text(insStmt, 1, QString::fromStdWString(normItemPath).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(insStmt, 2, QString::fromStdWString(normFolder).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(insStmt, 3, QString::fromStdWString(fileName).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(insStmt, 4, QString::fromStdWString(meta.type).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_int(insStmt, 5, meta.rating);
-            sqlite3_bind_text(insStmt, 6, QString::fromStdWString(meta.color).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(insStmt, 7, tagsJoined.toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(insStmt, 8, QString::fromStdWString(meta.note).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_text(insStmt, 9, QString::fromStdWString(meta.url).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_int(insStmt, 10, meta.width);
-            sqlite3_bind_int(insStmt, 11, meta.height);
-            sqlite3_bind_text(insStmt, 12, QString::fromStdWString(meta.autoColor).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-            sqlite3_bind_int64(insStmt, 13, meta.size);
-            sqlite3_bind_int64(insStmt, 14, meta.modificationTime);
-
-            sqlite3_step(insStmt);
-            sqlite3_reset(insStmt);
-        }
-        sqlite3_finalize(insStmt);
-    }
-
-    // 4. 更新文件夹索引时间戳
-    const char* folderSql = R"(
-        INSERT INTO folders_index (folder_path, mtime, size, indexed_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(folder_path) DO UPDATE SET
-            mtime=excluded.mtime,
-            size=excluded.size,
-            indexed_at=excluded.indexed_at;
-    )";
-    sqlite3_stmt* fStmt = nullptr;
-    if (sqlite3_prepare_v2(db, folderSql, -1, &fStmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text(fStmt, 1, QString::fromStdWString(normFolder).toUtf8().constData(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int64(fStmt, 2, currentMtime);
-        sqlite3_bind_int64(fStmt, 3, currentSize);
-        sqlite3_bind_int64(fStmt, 4, QDateTime::currentMSecsSinceEpoch());
-        sqlite3_step(fStmt);
-        sqlite3_finalize(fStmt);
-    }
+void MetaIndexService::processFolder(sqlite3* /*db*/, const std::wstring& /*normFolder*/, const std::wstring& /*rawFolder*/) {
+    // 侧车 .RapidNotes.json 已全面废除，纯笔记模式无需扫描物理文件夹侧车文件
 }
 
 QStringList MetaIndexService::searchGlobal(const QString& keyword, const QString& scopeFolderPath, int limit) {

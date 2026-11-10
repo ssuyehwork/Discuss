@@ -1,6 +1,5 @@
 #pragma once
 
-#include "QuarkMetaJsonStore.h"
 #include <QObject>
 #include <QStringList>
 #include <QThreadPool>
@@ -34,7 +33,6 @@ private:
     void processSyncBatch(const QStringList& batch);
     static QString normalizePath(const QString& path);
 
-    void handleJsonChangeEvent(const RapidNotesJsonStore::ChangeEvent& event);
     void scheduleDebouncedSync(const QString& path);
     void flushDebouncedQueue();
 

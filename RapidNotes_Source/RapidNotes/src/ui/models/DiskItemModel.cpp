@@ -11,8 +11,6 @@
 #include <QDir>
 #include <limits>
 #include <QThreadPool>
-#include "../../meta/RapidNotesJson.h"
-#include "../../meta/RapidNotesJsonStore.h"
 #include "../../meta/MetadataDefs.h"
 #include "CoreController.h"
 #include "DiskMediaExtractor.h"
@@ -286,12 +284,7 @@ void DiskItemModel::preloadDimensionsAsync(const QStringList& targetPaths) {
 
         if (dimMap.empty() || !weakThis || weakThis->currentGeneration() != thisGen) return;
 
-        for (const auto& item : resolvedSizes) {
-            RapidNotesJsonStore::instance().updateItemMeta(item.first.toStdWString(), [sz = item.second](ItemMeta& meta) {
-                meta.width = sz.width();
-                meta.height = sz.height();
-            });
-        }
+        // 尺寸已解析，不再向侧车 JSON 同步落盘
 
         QMetaObject::invokeMethod(weakThis.data(), [weakThis, resolvedSizes = std::move(resolvedSizes), thisGen]() {
             if (!weakThis || weakThis->currentGeneration() != thisGen) return;

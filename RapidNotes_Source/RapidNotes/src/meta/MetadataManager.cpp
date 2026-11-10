@@ -20,7 +20,6 @@
 #include "MetadataDefs.h"
 #include "../util/VolumePathResolver.h"
 #include "DatabaseManager.h"
-#include "RapidNotesJsonStore.h"
 #include "MetaDbRepository.h"
 #include "MetaMemoryCache.h"
 #include "../core/AppConfig.h"
@@ -118,14 +117,6 @@ bool MetadataManager::shouldExtractMediaFeatures(const std::wstring& path, long 
         return false; // 非图片文件，不用提取
     }
 
-    ItemMeta meta;
-    if (RapidNotesJsonStore::instance().readItemMeta(path, meta)) {
-        if (!meta.autoColor.empty() && !meta.palettes.empty() && meta.width > 0 && meta.height > 0) {
-            if (meta.size == pSize && meta.modificationTime == pMtime) {
-                return false; // 已新鲜，跳过
-            }
-        }
-    }
     return true;
 }
 
@@ -240,9 +231,7 @@ void MetadataManager::setRating(const std::wstring& path, int rating, bool notif
         m.rating = rating;
     });
 
-    RapidNotesJsonStore::instance().updateItemMeta(nPath, [rating](ItemMeta& item) {
-        item.rating = rating;
-    });
+
 
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
@@ -347,18 +336,6 @@ void MetadataManager::updateExtractedMediaFeaturesBatch(const std::vector<Extrac
             }
         });
 
-        // 仅写这几项落地写入 .RapidNotes.json 侧车文件：width, height, autoColor, palettes, file_size, file_mtime
-        RapidNotesJsonStore::instance().updateItemMeta(nPath, [&item](ItemMeta& jsonMeta) {
-            jsonMeta.width = item.width;
-            jsonMeta.height = item.height;
-            jsonMeta.autoColor = item.autoColor;
-            jsonMeta.size = item.fileSize;
-            jsonMeta.modificationTime = item.mtime;
-            jsonMeta.palettes.clear();
-            for (const auto& p : item.palettes) {
-                jsonMeta.palettes.push_back(PaletteEntry(p.first, p.second));
-            }
-        });
 
         actualWritten++;
         writtenPaths.append(QString::fromStdWString(nPath));
@@ -455,9 +432,7 @@ void MetadataManager::setColor(const std::wstring& path, const std::wstring& col
         m.manualColor = normColor;
     });
 
-    RapidNotesJsonStore::instance().updateItemMeta(nPath, [normColor](ItemMeta& item) {
-        item.color = normColor;
-    });
+
 
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
@@ -478,30 +453,28 @@ void MetadataManager::setPinned(const std::wstring& path, bool pinned, bool noti
         m.pinned = pinned;
     });
 
-    RapidNotesJsonStore::instance().updateItemMeta(nPath, [pinned](ItemMeta& item) {
-        item.pinned = pinned;
-    });
+
 
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
 
 QMap<QString, QStringList> MetadataManager::addTagsBatch(const QStringList& paths, const QStringList& tags) {
-    QMap<QString, QStringList> resultMap = RapidNotesJsonStore::instance().addTagsBatch(paths, tags);
-
-    for (auto it = resultMap.begin(); it != resultMap.end(); ++it) {
-        std::wstring nPath = normalizePath(it.key().toStdWString());
+    QMap<QString, QStringList> resultMap;
+    for (const QString& p : paths) {
+        std::wstring nPath = normalizePath(p.toStdWString());
         if (MetaMemoryCache::instance().contains(nPath)) {
-            MetaMemoryCache::instance().update(nPath, [&it](RuntimeMeta& m) {
-                m.tags = it.value();
+            MetaMemoryCache::instance().update(nPath, [&tags](RuntimeMeta& m) {
+                for (const QString& t : tags) {
+                    if (!m.tags.contains(t)) m.tags.append(t);
+                }
             });
+            resultMap[p] = MetaMemoryCache::instance().get(nPath).tags;
         }
     }
-
     return resultMap;
 }
 
 void MetadataManager::setRatingBatch(const QStringList& paths, int rating) {
-    RapidNotesJsonStore::instance().setRatingBatch(paths, rating);
     for (const QString& p : paths) {
         std::wstring nPath = normalizePath(p.toStdWString());
         if (MetaMemoryCache::instance().contains(nPath)) {
@@ -513,7 +486,6 @@ void MetadataManager::setRatingBatch(const QStringList& paths, int rating) {
 }
 
 void MetadataManager::setColorBatch(const QStringList& paths, const QString& color) {
-    RapidNotesJsonStore::instance().setColorBatch(paths, color);
     std::wstring stdColor = color.toStdWString();
     for (const QString& p : paths) {
         std::wstring nPath = normalizePath(p.toStdWString());
@@ -526,7 +498,6 @@ void MetadataManager::setColorBatch(const QStringList& paths, const QString& col
 }
 
 void MetadataManager::setNoteBatch(const QStringList& paths, const QString& note) {
-    RapidNotesJsonStore::instance().setNoteBatch(paths, note);
     std::wstring stdNote = note.toStdWString();
     for (const QString& p : paths) {
         std::wstring nPath = normalizePath(p.toStdWString());
@@ -539,7 +510,6 @@ void MetadataManager::setNoteBatch(const QStringList& paths, const QString& note
 }
 
 void MetadataManager::setURLBatch(const QStringList& paths, const QString& url) {
-    RapidNotesJsonStore::instance().setURLBatch(paths, url);
     std::wstring stdUrl = url.toStdWString();
     for (const QString& p : paths) {
         std::wstring nPath = normalizePath(p.toStdWString());
@@ -552,7 +522,6 @@ void MetadataManager::setURLBatch(const QStringList& paths, const QString& url) 
 }
 
 void MetadataManager::setPinnedBatch(const QStringList& paths, bool pinned) {
-    RapidNotesJsonStore::instance().setPinnedBatch(paths, pinned);
     for (const QString& p : paths) {
         std::wstring nPath = normalizePath(p.toStdWString());
         if (MetaMemoryCache::instance().contains(nPath)) {
@@ -564,17 +533,18 @@ void MetadataManager::setPinnedBatch(const QStringList& paths, bool pinned) {
 }
 
 QMap<QString, QStringList> MetadataManager::removeTagsBatch(const QStringList& paths, const QStringList& tags) {
-    QMap<QString, QStringList> resultMap = RapidNotesJsonStore::instance().removeTagsBatch(paths, tags);
-
-    for (auto it = resultMap.begin(); it != resultMap.end(); ++it) {
-        std::wstring nPath = normalizePath(it.key().toStdWString());
+    QMap<QString, QStringList> resultMap;
+    for (const QString& p : paths) {
+        std::wstring nPath = normalizePath(p.toStdWString());
         if (MetaMemoryCache::instance().contains(nPath)) {
-            MetaMemoryCache::instance().update(nPath, [&it](RuntimeMeta& m) {
-                m.tags = it.value();
+            MetaMemoryCache::instance().update(nPath, [&tags](RuntimeMeta& m) {
+                for (const QString& t : tags) {
+                    m.tags.removeAll(t);
+                }
             });
+            resultMap[p] = MetaMemoryCache::instance().get(nPath).tags;
         }
     }
-
     return resultMap;
 }
 
@@ -593,9 +563,7 @@ void MetadataManager::setTags(const std::wstring& path, const QStringList& tags,
             wTags.push_back(trimmed.toStdWString());
         }
     }
-    RapidNotesJsonStore::instance().updateItemMeta(path, [wTags](ItemMeta& item) {
-        item.tags = wTags;
-    });
+
 
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
@@ -616,9 +584,7 @@ void MetadataManager::setNote(const std::wstring& path, const std::wstring& note
         m.note = note;
     });
 
-    RapidNotesJsonStore::instance().updateItemMeta(path, [note](ItemMeta& item) {
-        item.note = note;
-    });
+
 
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
@@ -639,9 +605,7 @@ void MetadataManager::setURL(const std::wstring& path, const std::wstring& url, 
         m.url = url;
     });
 
-    RapidNotesJsonStore::instance().updateItemMeta(path, [url](ItemMeta& item) {
-        item.url = url;
-    });
+
 
     if (notify) notifyUI(RefreshLevel::PathUpdate, QString::fromStdWString(nPath));
 }
@@ -761,15 +725,7 @@ void MetadataManager::renameBatchAsync(
             }
         }
 
-        for (const auto& pair : ioTasks) {
-            QFileInfo oldFileInfo(QString::fromStdWString(pair.first));
-            QFileInfo newFileInfo(QString::fromStdWString(pair.second));
-            if (oldFileInfo.isDir()) {
-                RapidNotesJsonStore::instance().migrateFolderCache(oldFileInfo.absoluteFilePath(), newFileInfo.absoluteFilePath());
-            } else {
-                RapidNotesJsonStore::instance().renameItem(oldFileInfo.absolutePath(), oldFileInfo.fileName(), newFileInfo.fileName());
-            }
-        }
+        // 侧车文件已废除，无需落盘更新 .RapidNotes.json
 
         setInternalOperating(false);
 
@@ -824,15 +780,7 @@ void MetadataManager::renameItem(const std::wstring& oldPath, const std::wstring
             }
         }
 
-        for (const auto& pair : ioTasks) {
-            QFileInfo oldFileInfo(QString::fromStdWString(pair.first));
-            QFileInfo newFileInfo(QString::fromStdWString(pair.second));
-            if (oldFileInfo.isDir()) {
-                RapidNotesJsonStore::instance().migrateFolderCache(oldFileInfo.absoluteFilePath(), newFileInfo.absoluteFilePath());
-            } else {
-                RapidNotesJsonStore::instance().renameItem(oldFileInfo.absolutePath(), oldFileInfo.fileName(), newFileInfo.fileName());
-            }
-        }
+        // 侧车文件已废除，无需落盘更新 .RapidNotes.json
 
         notifyFullUIRebuild();
     });
@@ -1078,12 +1026,11 @@ std::vector<LightMeta> MetadataManager::getLightweightCacheSnapshot() const {
     return result;
 }
 
-FolderMeta MetadataManager::getFolderMeta(const QString& folderPath) {
-    return RapidNotesJsonStore::instance().getFolderMeta(folderPath.toStdWString());
+FolderMeta MetadataManager::getFolderMeta(const QString& /*folderPath*/) {
+    return FolderMeta();
 }
 
-void MetadataManager::setFolderMeta(const QString& folderPath, const FolderMeta& meta) {
-    RapidNotesJsonStore::instance().setFolderMeta(folderPath.toStdWString(), meta);
+void MetadataManager::setFolderMeta(const QString& /*folderPath*/, const FolderMeta& /*meta*/) {
 }
 
 } // namespace RapidNotes

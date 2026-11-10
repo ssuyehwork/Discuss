@@ -128,7 +128,6 @@ public:
 signals:
     void tabAboutToChange(int oldIndex);
     void currentTabChanged(int index, const QString& url);
-    void tabDisplayTitleChanged(const QString& displayTitle);
     void tabClosed(int index);
     void newTabRequested();
     void refreshRequested();

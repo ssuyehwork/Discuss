@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../core/ItemRecord.h"
-#include "RapidNotesJson.h"
+#include "MetadataDefs.h"
 
 namespace RapidNotes {
 

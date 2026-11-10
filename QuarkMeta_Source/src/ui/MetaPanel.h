@@ -132,12 +132,6 @@ private:
     ElasticEdit* m_pathEdit = nullptr;
     QPushButton* m_btnCopyPath = nullptr;
     QPushButton* m_btnOpenLocation = nullptr;
-    QPushButton* m_btnShowProperties = nullptr;
-    QPushButton* m_btnComputeHash = nullptr;
-    QWidget* m_hashResultBox = nullptr;
-    QLabel* m_hashValueLabel = nullptr;
-    QPushButton* m_btnCopyHash = nullptr;
-    std::shared_ptr<std::atomic<bool>> m_hashCancelToken;
 
     QStringList m_selectedPaths;
     QStringList m_editingPathsSnapshot;
@@ -162,8 +156,6 @@ private slots:
     void flushPendingTagDeletions();
     void openTagSelectorOverlay(QWidget* targetAnchor);
     void setAsPrimaryColor(const QColor& color);
-    void onComputeHashClicked();
-    void onShowPropertiesClicked();
 };
 
 } // namespace QuarkMeta
