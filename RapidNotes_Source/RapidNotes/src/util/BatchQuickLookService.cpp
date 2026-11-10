@@ -114,27 +114,24 @@ void BatchQuickLookService::extractBatchAsync(const QStringList& rootPaths) {
 
         // 2. 将真正的“缺失/过期增量文件列表”打包提交批量渲染
         int total = targetFiles.size();
-
-        TaskJobOptions opts;
-        opts.title = "正在批量生成大图预览";
-        opts.total = total;
-        opts.showCount = true;
-        opts.showEta = true;
-        opts.finishTextTemplate = "批量生成大图预览完成  数量：{total}  |  实际耗时：{elapsed}";
-        opts.onTrip = [token]() {
-            if (token) token->cancel();
-        };
-
-        TaskProgressJob job = TaskProgressService::instance().createJobHandle(opts);
+        int jobId = TaskProgressService::instance().createJob("正在批量生成大图预览", total);
+        int current = 0;
 
         for (const QString& filePath : targetFiles) {
             if (token->isCanceled()) break;
 
             (void)QuickLookWindow::loadOrExtractQuickLookImage(filePath, 2048, token);
-            job.advance(1);
+            ++current;
+            TaskProgressService::instance().updateProgress(
+                jobId, current, total, QString("已完成 %1 / %2 项").arg(current).arg(total)
+            );
         }
 
-        job.finish();
+        if (token->isCanceled()) {
+            TaskProgressService::instance().cancelJob(jobId);
+        } else {
+            TaskProgressService::instance().finishJob(jobId);
+        }
 
         if (!token->isCanceled()) {
             QMetaObject::invokeMethod(QCoreApplication::instance(), [total]() {

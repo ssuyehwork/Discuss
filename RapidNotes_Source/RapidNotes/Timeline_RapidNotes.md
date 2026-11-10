@@ -149,3 +149,7 @@
 #### 4. 第三方库头文件搜索路径补全（修改）
 - **`CMakeLists.txt`**：
   - **修改原因**：`FormatDecoders.cpp` 依赖了 `src/third_party/libtiff/tiffio.h`，但全局 `include_directories` 中此前缺少 `src/third_party/libtiff` 目录，导致 MSVC 报出 C1083“无法打开包括文件: ‘tiffio.h’: No such file or directory”错误。本次在 `include_directories` 中补充注册该路径。
+
+#### 5. 后台任务进度接口对齐（修改）
+- **`src/util/BatchQuickLookService.cpp`**：
+  - **修改原因**：代码中使用了未定义的历史类型与函数 `TaskJobOptions`、`TaskProgressJob` 与 `createJobHandle`，导致 MSVC 报出 C2760“此处出现意外的 opts/job；应为 ;”及 C2059 语法错误。本次按照 `TaskProgressService` 现存的标准契约重构为 `createJob(...)`、`updateProgress(...)` 与 `finishJob(...)` / `cancelJob(...)`。
