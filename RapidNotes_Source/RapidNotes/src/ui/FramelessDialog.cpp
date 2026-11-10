@@ -7,6 +7,7 @@
 #include <QKeySequence>
 #include <QCheckBox>
 #include <QLineEdit>
+#include <QSettings>
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <dwmapi.h>
@@ -137,6 +138,33 @@ void FramelessDialog::setVisibleButtons(int flags) {
     if (m_minBtn) m_minBtn->setVisible(flags & Min);
     if (m_maxBtn) m_maxBtn->setVisible(flags & Max);
     if (m_closeBtn) m_closeBtn->setVisible(flags & Close);
+}
+
+void FramelessDialog::loadWindowSettings() {
+    if (objectName().isEmpty()) return;
+    QSettings settings("RapidNotes", "WindowStates");
+    bool stay = settings.value(objectName() + "/StayOnTop", false).toBool();
+    if (m_pinBtn) {
+        m_pinBtn->blockSignals(true);
+        m_pinBtn->setChecked(stay);
+        m_pinBtn->setIcon(UiHelper::getIcon(stay ? "pin_vertical" : "pin_tilted", 
+                                            stay ? QColor("#FF551C") : QColor("#CCCCCC"), 18));
+        m_pinBtn->blockSignals(false);
+    }
+#ifdef Q_OS_WIN
+    HWND hwnd = reinterpret_cast<HWND>(winId());
+    SetWindowPos(hwnd, stay ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOSENDCHANGING);
+#else
+    setWindowFlag(Qt::WindowStaysOnTopHint, stay);
+#endif
+}
+
+void FramelessDialog::saveWindowSettings() {
+    if (objectName().isEmpty()) return;
+    QSettings settings("RapidNotes", "WindowStates");
+    bool stay = m_pinBtn ? m_pinBtn->isChecked() : false;
+    settings.setValue(objectName() + "/StayOnTop", stay);
 }
 
 FramelessDialog::~FramelessDialog() = default;

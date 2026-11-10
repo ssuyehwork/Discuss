@@ -32,6 +32,11 @@ namespace RapidNotes {
 class ToolTipOverlay : public QWidget {
     Q_OBJECT
 public:
+    enum Priority {
+        PassivePriority = 0,
+        ActivePriority = 1
+    };
+
     static ToolTipOverlay* instance() {
         static QPointer<ToolTipOverlay> inst;
         if (!inst) {
@@ -44,6 +49,10 @@ public:
      * @brief 显示提示文字
      */
     void showText(const QPoint& globalPos, const QString& text, int timeout = 700, const QColor& borderColor = QColor("#B0B0B0"), bool exactPosition = false, const QColor& backgroundColor = QColor("#2B2B2B"));
+
+    void showText(const QPoint& globalPos, const QString& text, int timeout, const QColor& borderColor, Priority /*priority*/) {
+        showText(globalPos, text, timeout, borderColor, false);
+    }
 
     /**
      * @brief 显示固定在目标 Widget (默认为 ContentPanel) 顶部下方 10px 且水平居中的 Toast 气泡

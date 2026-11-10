@@ -223,7 +223,6 @@ set(SOURCES
     src/ui/FileTypeGroup.h
     src/ui/FilterPanel.cpp
     src/ui/FilterPanel.h
-    src/ui/SmartFolderDialog.h
     src/core/PresetTagService.h
     src/ui/QuickLookWindow.h
     src/ui/ModifyDateGroup.cpp
