@@ -607,6 +607,8 @@ set(SOURCES
     src/ui/TagManagerDialog.h
     src/ui/TaskProgressToolBar.cpp
     src/ui/TaskProgressToolBar.h
+    src/ui/DuplicateStatusGroup.cpp
+    src/ui/DuplicateStatusGroup.h
     src/ui/ThumbnailStatusGroup.cpp
     src/ui/ThumbnailStatusGroup.h
     src/ui/ToolTipOverlay.cpp

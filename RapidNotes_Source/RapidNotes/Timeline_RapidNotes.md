@@ -155,3 +155,7 @@
   - **修改原因**：代码中使用了未定义的历史类型与函数 `TaskJobOptions`、`TaskProgressJob` 与 `createJobHandle`，导致 MSVC 报出 C2760“此处出现意外的 opts/job；应为 ;”及 C2059 语法错误；同时误写了 `UiHelper::isGraphicsFile`（应为 `ColorPaletteEngine::isGraphicsFile`），引发 C2039/C3861 报错。本次统一对齐现有标准接口。
 - **`src/ui/QuickLookWindow.h`**：
   - **修改原因**：`loadOrExtractQuickLookImage` 静态大图提取函数此前声明在 `private` 作用域下，导致 `BatchQuickLookService` 无法跨模块访问并报出 C2248“无法访问 private 成员”错误。本次将其提升至 `public` 访问级别。
+
+#### 6. 筛选面板分组组件构建注册（修改）
+- **`CMakeLists.txt`**：
+  - **修改原因**：`FilterPanel.cpp` 引用了 `DuplicateStatusGroup::populate`，但 `src/ui/DuplicateStatusGroup.cpp` 与 `DuplicateStatusGroup.h` 此前未在 `CMakeLists.txt` 中注册编译，引发 MSVC 链接器报出 LNK2019 / LNK1120 无法解析的外部符号错误。本次将其同步补充进源文件列表。
