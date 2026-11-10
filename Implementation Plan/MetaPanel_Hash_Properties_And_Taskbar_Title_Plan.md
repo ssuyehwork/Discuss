@@ -237,6 +237,7 @@ private slots:
     actionBtnL->setSpacing(6);
 
     m_btnShowProperties = new QPushButton("查看属性", pathBox);
+    m_btnShowProperties->setFocusPolicy(Qt::NoFocus);
     m_btnShowProperties->setFixedHeight(24);
     m_btnShowProperties->setCursor(Qt::PointingHandCursor);
     m_btnShowProperties->setObjectName("BtnShowProperties");
@@ -244,6 +245,7 @@ private slots:
     actionBtnL->addWidget(m_btnShowProperties);
 
     m_btnComputeHash = new QPushButton("查看哈希值", pathBox);
+    m_btnComputeHash->setFocusPolicy(Qt::NoFocus);
     m_btnComputeHash->setFixedHeight(24);
     m_btnComputeHash->setCursor(Qt::PointingHandCursor);
     m_btnComputeHash->setObjectName("BtnComputeHash");
@@ -269,6 +271,7 @@ private slots:
     hashL->addWidget(m_hashValueLabel, 1);
 
     m_btnCopyHash = new QPushButton("复制", m_hashResultBox);
+    m_btnCopyHash->setFocusPolicy(Qt::NoFocus);
     m_btnCopyHash->setFixedSize(36, 20);
     m_btnCopyHash->setCursor(Qt::PointingHandCursor);
     m_btnCopyHash->setObjectName("BtnCopyHash");
@@ -462,6 +465,7 @@ QPushButton#BtnShowProperties, QPushButton#BtnComputeHash {
     border-radius: 4px;
     color: #CCCCCC;
     font-size: 11px;
+    outline: none;
 }
 QPushButton#BtnShowProperties:hover, QPushButton#BtnComputeHash:hover {
     background: #333333;
@@ -481,6 +485,7 @@ QPushButton#BtnCopyHash {
     border-radius: 3px;
     color: #CCCCCC;
     font-size: 10px;
+    outline: none;
 }
 QPushButton#BtnCopyHash:hover {
     background: #378ADD;
