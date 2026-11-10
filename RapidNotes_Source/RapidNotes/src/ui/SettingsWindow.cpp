@@ -106,7 +106,7 @@ SettingsWindow::SettingsWindow(QWidget* parent)
     : FramelessDialog("系统设置", parent)
 {
     // 2026-04-xx 按照用户要求：模态设置窗口不需要置顶、最小化、最大化按钮
-    if (m_btnPin) m_btnPin->hide();
+    if (m_pinBtn) m_pinBtn->hide();
     if (m_minBtn) m_minBtn->hide();
     if (m_maxBtn) m_maxBtn->hide();
 
