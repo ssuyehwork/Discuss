@@ -26,7 +26,7 @@ class AddressBar;
 class TaskProgressStrip;
 class SearchController; 
 class TitleBarWidget;
-class DriveBarWidget;
+class SettingsBarWidget;
 class NavBarWidget;
 class NavPanel;
 class FavoritePanel;
@@ -80,7 +80,7 @@ private:
 
     TitleBarWidget* m_titleBarWidget = nullptr;
     NavBarWidget* m_navBarWidget = nullptr;
-    DriveBarWidget* m_driveBarWidget = nullptr;
+    SettingsBarWidget* m_settingsBarWidget = nullptr;
     QVBoxLayout* m_bodyLayout = nullptr;
 
     // 导航与搜索组件句柄
