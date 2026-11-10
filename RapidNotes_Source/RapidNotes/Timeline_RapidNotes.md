@@ -116,3 +116,28 @@
 #### 7. 派生窗口基类置顶按钮成员变量对齐（修改）
 - **`src/ui/PasswordVerifyDialog.cpp`** / **`src/ui/SettingsWindow.cpp`** / **`src/ui/TagEditDialog.cpp`**：
   - **修改原因**：基类 `FramelessDialog` 中定义的置顶按钮成员变量名为 `m_pinBtn`，而在 `PasswordVerifyDialog`、`SettingsWindow` 与 `TagEditDialog` 中误写为旧名称 `m_btnPin`，导致 MSVC 报出 C2065“m_btnPin 未声明的标识符”错误。本次统一将这些派生类中的 `m_btnPin` 修正为基类实际受保护成员 `m_pinBtn`，使对话框在初始化时正确隐匿置顶按钮，彻底根除 C2065 报错。
+
+---
+
+## 记录日期：2025-05-20
+
+### 核心演进目标
+1. 解决 `QuickWindow.cpp` 中 MSVC 编译报出的 C2027（使用了未定义类型“DropTreeView”）、C2446/C2664（DropTreeView 指针无法转换为 QWidget*）及 C2065（未声明标识符）错误。
+2. 修复 `FramelessInputDialog` 命名空间未导出导致的 C2760 / C2059 语法错误及 `pwdMenu` 作用域截断报错。
+3. 纠正 `QuickWindow` 中筛选面板类型，对齐专用组件 `QuickFilterPanel` 契约并在 `CMakeLists.txt` 中同步注册。
+
+---
+
+### 修改文件清单与原因说明
+
+#### 1. 命名空间全局导出与类型别名闭合（修改）
+- **`src/ui/DropTreeView.h`**：
+  - **修改原因**：`DropTreeView` 声明于 `namespace RapidNotes` 中，而在 `QuickWindow.h` 中为全局前向声明，导致在全局作用域编译 `QuickWindow.cpp` 时识别为 Incomplete Type（C2027），进而引发无法转换为 `QWidget*`（C2664、C2446）和无法识别其自定义信号（C2065 `notesDropped`）。本次在 `DropTreeView.h` 底部添加 `using RapidNotes::DropTreeView;`，实现全局可见性闭合。
+- **`src/ui/dialogs/FramelessInputDialog.h` / `src/ui/FramelessDialog.h`**：
+  - **修改原因**：`FramelessInputDialog` 定义在 `RapidNotes` 命名空间中，`FramelessDialog.h` 中漏导出了该类型别名，导致 `QuickWindow.cpp:2671` 等处识别不到类型定义并报出 C2760“此处出现意外的 dlg；应为 ;”及级联作用域报错。本次在 `FramelessInputDialog.h` 底部与 `FramelessDialog.h` 中显式导出 `using RapidNotes::FramelessInputDialog;`。
+
+#### 2. 筛选面板契约对齐与构建注册（修改）
+- **`src/ui/QuickWindow.h` / `src/ui/QuickWindow.cpp`**：
+  - **修改原因**：`QuickWindow` 中原定义使用了主窗口的 `FilterPanel`，导致与调用的 `getCheckedCriteria()`、`updateStats`、无参 `filterChanged` 信号不匹配。本次将其修正为专职组件 `QuickFilterPanel`，包含 `#include "QuickFilterPanel.h"` 并更新连接。
+- **`CMakeLists.txt`**：
+  - **修改原因**：在构建单元源文件列表中同步注册 `src/ui/QuickFilterPanel.cpp` 与 `src/ui/QuickFilterPanel.h`，确保符号完整链接。

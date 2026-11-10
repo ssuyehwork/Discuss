@@ -293,6 +293,8 @@ set(SOURCES
     src/ui/PasswordVerifyDialog.h
     src/ui/PixelRulerOverlay.cpp
     src/ui/PixelRulerOverlay.h
+    src/ui/QuickFilterPanel.cpp
+    src/ui/QuickFilterPanel.h
     src/ui/QuickNoteDelegate.cpp
     src/ui/QuickNoteDelegate.h
     src/ui/QuickPreview.h
