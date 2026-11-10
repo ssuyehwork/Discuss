@@ -110,3 +110,5 @@
 #### 6. 盘符栏（DriveBarWidget）向设置栏（SettingsBarWidget）重构替换（修改）
 - **`src/ui/MainWindow.h` / `src/ui/MainWindow.cpp`**：
   - **修改原因**：根据《Memories_RapidNotes.md》第 14.2 节与第 19 章里程碑 1 规范，QuarkMeta 原有的面向磁盘物理盘符的 `DriveBarWidget` 已被彻底剔除，并更名重构为快捷设置与扩展管理工具栏组件 `SettingsBarWidget`。原 `DriveBarWidget.h` 已不存在，导致 `MainWindow.cpp:8` 报出 C1083 错误。本次将 `MainWindow` 中的头文件包含由 `DriveBarWidget.h` 更新为 `SettingsBarWidget.h`，成员变量由 `m_driveBarWidget` 更新为 `m_settingsBarWidget`，彻底根除物理驱动器旧概念并消除编译报错。
+- **`src/ui/SettingsWindow.h` / `src/ui/SettingsWindow.cpp`**：
+  - **核验说明**：在移除 `DriveBarWidget.h` 的同时，已全面确认 `SettingsWindow.h` 与 `SettingsWindow.cpp` 的头文件与实现完整性，确保全局设置、热键、外观及插件扩展配置均由 `SettingsWindow` 统一承接管控，并在 `CMakeLists.txt` 中完整注册。
