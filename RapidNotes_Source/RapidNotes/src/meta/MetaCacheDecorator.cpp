@@ -1,5 +1,4 @@
 #include "MetaCacheDecorator.h" 
-#include "RapidNotesJsonStore.h" 
 #include "DriveMetaDao.h"
 #include "MetadataManager.h"
 #include "ItemMetaMapper.h"
@@ -14,9 +13,6 @@ void MetaCacheDecorator::decorate(std::vector<ItemRecord>& records) {
 
     // 预先批量拉取全局盘符元数据
     auto driveMetas = DriveMetaDao::getAllDriveMeta();
- 
-    // 按父目录路径建立统一 Store 内存视图缓存，读取尚未刷盘的最新内容
-    std::unordered_map<std::wstring, RapidNotesJson::ItemMap> folderCacheMap; 
  
     for (auto& itemRec : records) { 
         // 【盘符特殊处理】：如果是驱动器根目录（如 C:\、D:\）
@@ -33,22 +29,6 @@ void MetaCacheDecorator::decorate(std::vector<ItemRecord>& records) {
             }
             continue;
         }
- 
-        std::wstring dirPath = info.absolutePath().toStdWString(); 
- 
-        auto cacheIt = folderCacheMap.find(dirPath); 
-        if (cacheIt == folderCacheMap.end()) { 
-            folderCacheMap[dirPath] = RapidNotesJsonStore::instance().readFolderMeta(dirPath); 
-            cacheIt = folderCacheMap.find(dirPath); 
-        } 
- 
-        const auto& cachedItems = cacheIt->second; 
-        std::wstring fileName = info.fileName().toStdWString(); 
-         
-        auto it = cachedItems.find(fileName); 
-        if (it != cachedItems.end()) { 
-            ItemMetaMapper::apply(it->second, itemRec);
-        } 
     } 
 } 
-} 
+}

@@ -11,7 +11,6 @@
 #include "../core/DiskTrashService.h"
 #include "../meta/MetadataManager.h"
 #include "../meta/TrashRepository.h"
-#include "../meta/QuarkMetaJson.h"
 #include "../meta/DiskTrashRepo.h"
 #include "../meta/AssociationCascadeService.h"
 #include <QtConcurrent>
@@ -77,7 +76,6 @@ bool PermanentDeleteService::execute(const QStringList& paths, QWidget* parentWi
                 }
 
                 if (physicalOk) {
-                    RapidNotesJson::removeItemMetadata(p);
                     AppCommand cmd;
                     cmd.type = AppCommandType::DeletePermanently;
                     cmd.targetPaths << QString::fromStdWString(wp);

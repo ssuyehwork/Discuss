@@ -207,8 +207,10 @@ protected:
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 signals:
+    void filterResetRequested();
     void panelActivated(ContentPanel* panel);
     void secondaryPaneCreated(ContentPanel* pane);
     void secondaryPaneClosed();
@@ -235,6 +237,7 @@ public slots:
     void onPathsDropped(const QStringList& paths, const QModelIndex& targetIndex, const QString& targetDirOverride = QString(), Qt::DropAction action = Qt::CopyAction);
     void loadDirectory(const QString& path, bool recursive = false);
     void setPendingSelectPath(const QString& fullPath, bool edit = false);
+    void setPendingSelectPaths(const QStringList& fullPaths);
     void setPendingSelectName(const QString& name, bool edit = false);
     void refreshAll();
     void loadSmartFolder(const SmartFolderRecord& record, const QString& displayName = QString());
@@ -264,6 +267,8 @@ private:
     void initListView();
     void updateGridSize();
     void updateStatusBarStats(int cachedSelectedCount = -1);
+    void initEmptyFilterOverlay();
+    void updateEmptyStateOverlay(int visibleCount, int fullCount, int hiddenCount);
     void emitSelectionChangedSignal();
 
     // 单一事实来源配置与状态 (FilterState)
@@ -309,6 +314,10 @@ private:
     SectionProxyModel* m_sectionModel = nullptr;
 
     QStackedWidget* m_viewStack = nullptr;
+    QWidget* m_emptyFilterOverlay = nullptr;
+    QLabel* m_emptyFilterTitleLabel = nullptr;
+    QLabel* m_emptyFilterSubLabel = nullptr;
+    QPushButton* m_emptyFilterResetBtn = nullptr;
     class ColumnViewWidget* m_columnView = nullptr;
     DiskItemModel* m_diskModel = nullptr;
     ItemModelBase* m_model = nullptr;

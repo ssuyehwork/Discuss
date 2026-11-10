@@ -1803,7 +1803,8 @@ QPushButton#BtnCopyPath {
     font-size: 11px;
 }
 QPushButton#BtnCopyPath:hover {
-    background: #333333;
+    background: #378ADD;
+    border-color: #378ADD;
     color: #FFFFFF;
 }
 QPushButton#BtnOpenLocation {
@@ -1828,27 +1829,6 @@ QPushButton#BtnShowProperties, QPushButton#BtnComputeHash {
 }
 QPushButton#BtnShowProperties:hover, QPushButton#BtnComputeHash:hover {
     background: #333333;
-    color: #FFFFFF;
-}
-QLabel#MetaHashValueLabel {
-    font-size: 10px;
-    color: #3498db;
-    background: #1e1e1e;
-    border: 1px solid #333333;
-    border-radius: 3px;
-    padding: 2px 4px;
-}
-QPushButton#BtnCopyHash {
-    background: #252526;
-    border: 1px solid #3c3c3c;
-    border-radius: 3px;
-    color: #CCCCCC;
-    font-size: 10px;
-    outline: none;
-}
-QPushButton#BtnCopyHash:hover {
-    background: #378ADD;
-    border-color: #378ADD;
     color: #FFFFFF;
 }
 QLabel#MetaInfoKeyLabel {
@@ -2363,7 +2343,7 @@ QComboBox#SmartFolderComboBox {
     color: #EEEEEE;
     border: 1px solid #333333;
     border-radius: 4px;
-    padding: 2px 8px;
+    padding: 2px 22px 2px 8px;
     min-height: 24px;
 }
 
@@ -2497,4 +2477,119 @@ QPushButton#FileCompareCloseBtn:hover {
 
 QPushButton#FileCompareCloseBtn:pressed {
     background-color: #1E1E1E;
+}
+
+/* ============================================================ */
+/* Empty Filter Overlay (内容面板过滤空态提示)                     */
+/* ============================================================ */
+QWidget#EmptyFilterOverlay {
+    background-color: transparent;
+}
+
+QLabel#EmptyFilterTitleLabel {
+    color: #DDDDDD;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QLabel#EmptyFilterSubLabel {
+    color: #888888;
+    font-size: 12px;
+}
+
+QPushButton#EmptyFilterResetBtn {
+    background-color: #ff551c;
+    color: #FFFFFF;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    border: none;
+    outline: none;
+}
+
+QPushButton#EmptyFilterResetBtn:hover {
+    background-color: #ff6e3d;
+}
+
+QPushButton#EmptyFilterResetBtn:pressed {
+    background-color: #e04b17;
+}
+
+/* ============================================================ */
+/* ProgressDialog (进度对话框)                                   */
+/* ============================================================ */
+QLabel#ProgressStatusLabel {
+    color: #EEEEEE;
+    font-size: 13px;
+}
+
+QProgressBar#ProgressDialogBar {
+    background-color: #2D2D2D;
+    border: none;
+    border-radius: 4px;
+}
+
+QProgressBar#ProgressDialogBar::chunk {
+    background-color: #378ADD;
+    border-radius: 4px;
+}
+
+QPushButton#ProgressPauseBtn, QPushButton#ProgressCancelBtn {
+    background-color: #2D2D30;
+    color: #EEEEEE;
+    border: 1px solid #3E3E42;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+QPushButton#ProgressPauseBtn:hover, QPushButton#ProgressCancelBtn:hover {
+    background-color: #3E3E42;
+    border-color: #555555;
+}
+
+QPushButton#ProgressPauseBtn:pressed, QPushButton#ProgressCancelBtn:pressed {
+    background-color: #1E1E1E;
+}
+
+/* 文件哈希值独立展示弹窗样式 */
+QLabel#FileHashDialogFileName {
+    color: #888888;
+    font-size: 11px;
+}
+
+QLabel#FileHashDialogTitleLabel {
+    color: #CCCCCC;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+QTextEdit#FileHashDialogEdit {
+    background: #1E1E1E;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    color: #3498db;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 12px;
+    padding: 6px;
+}
+
+QPushButton#FileHashDialogCopyBtn, QPushButton#FileHashDialogCloseBtn {
+    background-color: #2D2D30;
+    color: #EEEEEE;
+    border: 1px solid #3E3E42;
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+}
+
+QPushButton#FileHashDialogCopyBtn:hover, QPushButton#FileHashDialogCloseBtn:hover {
+    background-color: #378ADD;
+    border-color: #378ADD;
+    color: #FFFFFF;
+}
+
+QPushButton#FileHashDialogCloseBtn:hover {
+    background-color: #3E3E42;
+    border-color: #555555;
 }

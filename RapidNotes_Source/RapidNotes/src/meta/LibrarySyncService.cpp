@@ -1,7 +1,6 @@
 #include "LibrarySyncService.h"
 #include "LibraryDao.h"
 #include "LibraryItemDao.h"
-#include "RapidNotesJsonStore.h"
 #include "ItemMetaMapper.h"
 #include "MetadataManager.h"
 #include <QtConcurrent/QtConcurrent>
@@ -25,45 +24,9 @@ LibrarySyncService::LibrarySyncService(QObject* parent) : QObject(parent) {
     m_debounceTimer->setInterval(200); // 200ms 防抖
     connect(m_debounceTimer, &QTimer::timeout, this, &LibrarySyncService::flushDebouncedQueue);
 
-    RapidNotesJsonStore::instance().addChangeListener([this](const RapidNotesJsonStore::ChangeEvent& ev) {
-        handleJsonChangeEvent(ev);
-    });
-
     QTimer::singleShot(1500, this, [this]() {
         triggerStartupReconciliation();
     });
-}
-
-void LibrarySyncService::handleJsonChangeEvent(const RapidNotesJsonStore::ChangeEvent& event) {
-    if (event.type == RapidNotesJsonStore::ChangeType::ItemChanged) {
-        if (!isLibraryPath(event.path)) return; // 拦截阻断非库成员！
-        scheduleDebouncedSync(event.path);
-    } else if (event.type == RapidNotesJsonStore::ChangeType::ItemRenamed) {
-        if (!isLibraryPath(event.path)) return;
-        (void)QtConcurrent::run(&m_workPool, [this, oldP = event.path, newP = event.newPath]() {
-            LibraryDao::updatePathPrefix(oldP, newP);
-            LibraryItemDao::updatePath(oldP, newP);
-            {
-                std::unique_lock<std::shared_mutex> lock(m_pathMutex);
-                m_libraryPathsSet.erase(normalizePath(oldP).toStdWString());
-                m_libraryPathsSet.insert(normalizePath(newP).toStdWString());
-            }
-            QMetaObject::invokeMethod(this, &LibrarySyncService::libraryItemsSynced, Qt::QueuedConnection);
-        });
-    } else if (event.type == RapidNotesJsonStore::ChangeType::FolderMigrated) {
-        (void)QtConcurrent::run(&m_workPool, [this, oldF = event.path, newF = event.newPath]() {
-            LibraryDao::updatePathPrefix(oldF, newF);
-            LibraryItemDao::updatePathPrefix(oldF, newF);
-            loadLibraryPathSet(); // 彻底重新从数据库刷新内存成员集合
-            QMetaObject::invokeMethod(this, &LibrarySyncService::libraryItemsSynced, Qt::QueuedConnection);
-        });
-    } else if (event.type == RapidNotesJsonStore::ChangeType::ItemRemoved) {
-        if (!isLibraryPath(event.path)) return;
-        (void)QtConcurrent::run(&m_workPool, [this, eventP = event.path]() {
-            LibraryItemDao::markSyncStateByPath(eventP, 2); // 标记 sync_state = 2 (缺失)
-            QMetaObject::invokeMethod(this, &LibrarySyncService::libraryItemsSynced, Qt::QueuedConnection);
-        });
-    }
 }
 
 void LibrarySyncService::scheduleDebouncedSync(const QString& path) {
@@ -133,13 +96,6 @@ void LibrarySyncService::syncPaths(const QStringList& paths) {
             records.reserve(batch.size());
             for (const QString& path : batch) {
                 ItemRecord rec = ItemRecord::create(path);
-                ItemMeta meta;
-                if (RapidNotesJsonStore::instance().readItemMeta(path.toStdWString(), meta)) {
-                    ItemMetaMapper::apply(meta, rec);
-                }
-                QFileInfo info(path);
-                std::wstring folderPath = info.isDir() ? path.toStdWString() : info.absolutePath().toStdWString();
-                rec.metaFileId = RapidNotesJsonStore::instance().getMetaFileId(folderPath);
                 records.push_back(rec);
             }
             if (LibraryItemDao::upsertItems(records)) {
@@ -185,13 +141,6 @@ void LibrarySyncService::processSyncBatch(const QStringList& batch) {
     records.reserve(batch.size());
     for (const QString& path : batch) {
         ItemRecord rec = ItemRecord::create(path);
-        ItemMeta meta;
-        if (RapidNotesJsonStore::instance().readItemMeta(path.toStdWString(), meta)) {
-            ItemMetaMapper::apply(meta, rec);
-        }
-        QFileInfo info(path);
-        std::wstring folderPath = info.isDir() ? path.toStdWString() : info.absolutePath().toStdWString();
-        rec.metaFileId = RapidNotesJsonStore::instance().getMetaFileId(folderPath);
         records.push_back(rec);
     }
     LibraryItemDao::upsertItems(records);

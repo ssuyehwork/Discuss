@@ -9,7 +9,6 @@
 #include <QThreadPool>
 #include <memory>
 #include "../../meta/MetadataDefs.h"
-#include "../../meta/RapidNotesJson.h"
 
 #include <unordered_map>
 #include <QSet>

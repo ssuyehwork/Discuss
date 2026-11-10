@@ -5,68 +5,94 @@
 - **方案名称**：Unified_Filter_Search_Reset_And_Empty_State_Plan.md
 - **物理存储路径**：`Implementation Plan/Unified_Filter_Search_Reset_And_Empty_State_Plan.md`
 - **关联设计规范**：`QuarkMeta_Source/Memories_QuarkMeta.md`（第 0 节、第 1.2 节、第 51 章与第 52 章）
-- **基准状态**：Verified & Self-Audited (Audit-Corrected Version)
+- **基准状态**：Verified & Self-Audited (Audit-Corrected Version with Edit-Focus Exemption)
 
 ---
 
 ## 门禁 1：起草前物理证据清单 (Gate 1: Pre-Draft Physical Evidence)
 
 ### 1.1 物理读取文件列表与确认
-1. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/ShortcutActionRouter.h`（已通过 `read_file` 物理核对）
-2. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/ShortcutActionRouter.cpp`（已通过 `read_file` 物理核对）
-3. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/PanelMediator.h`（已通过 `read_file` 物理核对）
-4. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/PanelMediator.cpp`（已通过 `read_file` 物理核对）
-5. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/FilterPanel.h`（已通过 `read_file` 物理核对）
-6. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/FilterPanel.cpp`（已通过 `read_file` 物理核对）
-7. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/ContentPanel.h`（已通过 `read_file` 物理核对）
-8. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/ContentPanel.cpp`（已通过 `read_file` 物理核对）
-9. `G:/C++/Project/Source_Code/QuarkMeta_Source/resources/style.qss`（已通过 `read_file` 物理核对）
+1. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/AppShortcutController.cpp`（已通过 `read_file` 物理核对 `Ctrl+D` 注册位置与 `isEditingFocus()` 阻断代码）
+2. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/ShortcutActionRouter.h`（已通过 `read_file` 物理核对）
+3. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/ShortcutActionRouter.cpp`（已通过 `read_file` 物理核对）
+4. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/PanelMediator.h`（已通过 `read_file` 物理核对）
+5. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/PanelMediator.cpp`（已通过 `read_file` 物理核对）
+6. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/FilterPanel.h`（已通过 `read_file` 物理核对）
+7. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/FilterPanel.cpp`（已通过 `read_file` 物理核对）
+8. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/ContentPanel.h`（已通过 `read_file` 物理核对）
+9. `G:/C++/Project/Source_Code/QuarkMeta_Source/src/ui/ContentPanel.cpp`（已通过 `read_file` 物理核对）
+10. `G:/C++/Project/Source_Code/QuarkMeta_Source/resources/style.qss`（已通过 `read_file` 物理核对）
 
 ### 1.2 调用的外部成员函数原样签名核对
 - `SearchController::clearSearch(bool silent)`：在 `SearchController.h:42` 真实存在，声明为 `void clearSearch(bool silent = false);`
+- `SearchController::searchEdit()`：在 `SearchController.h:27` 真实存在，声明为 `QLineEdit* searchEdit() const;`
 - `ContentPanel::search(const QString& query)`：在 `ContentPanel.h:246` 真实存在，声明为 `void search(const QString& query);`
 - `FilterPanel::clearAllFilters(bool force)`：在 `FilterPanel.h:83` 真实存在，声明为 `void clearAllFilters(bool force = false);`
 - `ShortcutActionRouter::wire()`：在 `ShortcutActionRouter.h:29` 真实存在，声明为 `void wire();`
 
 ### 1.3 查重优先与既有 API 检索记录
+- 检索 `Ctrl+D` 阻断点：在 `AppShortcutController.cpp:249` 发现 `if (!isEditingFocus())`，用户在搜索框打字时焦点处于 `QLineEdit`，导致快捷键被直接吞噬；必须将其彻底废除；
 - 检索 `clearSearch`：在 `SearchController.cpp` 中由 `clearSearch(true)` 负责静默清空输入框文字与清除按钮状态；
-- 检索 `updateStatusBarStats`：在 `ContentPanel.cpp:1157` 中已具备 `visibleCount`、`fullCount` 与 `hiddenCount` 统计计算，本方案复用该数据源，坚决不另起炉灶重复遍历模型；
-- 检索 `style.qss`：所有通用 UI 样式必须在 `resources/style.qss` 中配置，禁止任何 C++ 内联 `setStyleSheet` 硬编码。
+- 检索 `updateStatusBarStats`：在 `ContentPanel.cpp:1157` 中已具备 `visibleCount`、`fullCount` 与 `hiddenCount` 统计计算，复用该数据源；
+- 检索 `style.qss`：所有通用 UI 样式在 `resources/style.qss` 中配置，坚决杜绝内联硬编码。
 
 ---
 
 ## Chapter 1: Overview
 
 ### 1.1 背景与用户痛点
-1. **搜索与筛选解耦残留痛点**：用户按下 `Ctrl + D` 快捷键或点击筛选面板顶部“重置筛选条件（Ctrl + D）”按钮时，旧代码仅单向清空了 `FilterPanel` 的元数据过滤属性，未联动顶栏搜索框（`SearchController`）和内容面板搜索词；由于底层 `FilterProxyModel` 采用复合 AND 过滤，搜索框残留的文本仍持续隐藏文件，导致用户无法通过单次快捷键彻底还原列表；
-2. **幽灵黑屏/空态猜疑痛点**：当目录中真实存在文件（如截图中存在 11 个文件），但全部被筛选器或搜索词过滤拦截导致可见项为 0 时，中间内容面板没有任何提示，呈现一片死寂的黑底，导致用户误判为软件卡死、扫描故障或空目录。
+1. **输入框焦点误杀致命缺陷**：用户在顶栏搜索框中输入文字时，键盘焦点位于 `QLineEdit`。由于 `AppShortcutController` 在处理 `Ctrl + D` 时盲目嵌套了 `if (!isEditingFocus())` 检查，导致光标在搜索框内时按 `Ctrl + D` 被直接当作打字拦截吞噬，根本不触发重置；
+2. **筛选器无变动时的重置失效缺陷**：当右侧筛选器本来就没有勾选任何条件，仅搜索框有文字时，系统未把搜索框视为联合过滤维度，导致用户误判为快捷键失灵；
+3. **幽灵黑屏/空态猜疑痛点**：当目录中真实存在文件（如 11 个文件），但全部被筛选器或搜索词过滤拦截导致可见项为 0 时，中间内容面板没有任何提示，呈现一片死寂黑底。
 
 ### 1.2 重构与实施目标
-1. **Ctrl + D 联合复位通道**：在 `ShortcutActionRouter` 中接入 `SearchController`，当按下 `Ctrl + D`、点击筛选面板“重置筛选条件”按钮或点击内容面板空态复位按钮时，强制执行“筛选面板清空 + 搜索框清空 + 内容面板搜索词归零”的三重联合复位；
-2. **内容面板二态空态提示**：在 `ContentPanel` 视图层引入轻量级 `m_emptyFilterOverlay` 遮罩控件，当物理文件数大于 0 但过滤后可见数为 0 时，居中清晰显示“当前共有 N 个项目，已过滤隐藏 N 个项目”，并提供“重置筛选与搜索 (Ctrl + D)”快捷交互按钮，形成闭环体验；
-3. **红线严格遵守**：
-   - 所有新建按钮调用 `setFocusPolicy(Qt::NoFocus)`（杜绝虚线框）；
-   - 彻底杜绝 C++ 内联 `setStyleSheet`，样式全部收敛到 `resources/style.qss`；
-   - 补充 `#include "SearchController.h"` 与 `#include "ContentPanel.h"` 确保头文件完全闭合。
+1. **彻底豁免 Ctrl+D 焦点阻断（顶级全局指令）**：
+   - 彻底废除 `AppShortcutController.cpp` 中 `Ctrl + D` 上的 `if (!isEditingFocus())` 守卫，无论用户光标是否在搜索框内，按下 `Ctrl + D` 均强制发射 `resetFilterRequested()`；
+2. **联合复位强化（清空文字 + 释放焦点）**：
+   - 调用 `m_searchController->clearSearch(true)` 强力清空搜索框文字；
+   - 搜索框主动释放焦点（`clearFocus()`），将焦点交回内容面板，并清除内部搜索词 `target->search("")`；
+   - 清空 `FilterPanel` 所有元数据维度；即使筛选器本身无变化，也坚决执行搜索清空与视图重载；
+3. **内容面板二态空态提示**：在 `ContentPanel` 引入 `m_emptyFilterOverlay` 遮罩，当物理总数大于 0 但可见数为 0 时，居中清晰显示“当前共有 N 个项目，已过滤隐藏 N 个项目”，并提供“重置筛选与搜索 (Ctrl + D)”快捷交互按钮；
+4. **红线严格遵循**：
+   - 按钮强制配置 `setFocusPolicy(Qt::NoFocus)` 与 `outline: none`；
+   - 样式 100% 收敛至 `resources/style.qss`，杜绝内联样式表。
 
 ---
 
 ## Chapter 2: Modified Files List
 
-1. `QuarkMeta_Source/src/ui/ShortcutActionRouter.h`（扩展构造函数默认参数与 `bindPane` 声明）
-2. `QuarkMeta_Source/src/ui/ShortcutActionRouter.cpp`（补齐头文件包含，实现联合复位逻辑并监听筛选与窗格重置信号）
-3. `QuarkMeta_Source/src/ui/PanelMediator.cpp`（传递 `m_searchController` 并向 `m_shortcutRouter` 分发窗格绑定）
-4. `QuarkMeta_Source/src/ui/FilterPanel.h`（增加 `resetFilterRequested` 信号）
-5. `QuarkMeta_Source/src/ui/FilterPanel.cpp`（点击重置按钮时发射 `resetFilterRequested` 信号，精确对齐源码字符串）
-6. `QuarkMeta_Source/src/ui/ContentPanel.h`（增加 `resizeEvent`、`filterResetRequested` 信号及空态遮罩成员）
-7. `QuarkMeta_Source/src/ui/ContentPanel.cpp`（实现 `resizeEvent` 与 `initEmptyFilterOverlay`，通过 QSS 样式表装配外观）
-8. `QuarkMeta_Source/resources/style.qss`（追加空态提示遮罩与按钮的外部 QSS 样式）
+1. `QuarkMeta_Source/src/ui/AppShortcutController.cpp`（废除 `Ctrl + D` 的 `isEditingFocus()` 阻断守卫）
+2. `QuarkMeta_Source/src/ui/ShortcutActionRouter.h`（扩展构造函数默认参数与 `bindPane` 声明）
+3. `QuarkMeta_Source/src/ui/ShortcutActionRouter.cpp`（补齐头文件包含，实现联合复位并清空搜索框与释放焦点）
+4. `QuarkMeta_Source/src/ui/PanelMediator.cpp`（传递 `m_searchController` 并向 `m_shortcutRouter` 分发窗格绑定）
+5. `QuarkMeta_Source/src/ui/FilterPanel.h`（增加 `resetFilterRequested` 信号）
+6. `QuarkMeta_Source/src/ui/FilterPanel.cpp`（点击重置按钮时发射 `resetFilterRequested` 信号，精确对齐源码字符串）
+7. `QuarkMeta_Source/src/ui/ContentPanel.h`（增加 `resizeEvent`、`filterResetRequested` 信号及空态遮罩成员）
+8. `QuarkMeta_Source/src/ui/ContentPanel.cpp`（实现 `resizeEvent` 与 `initEmptyFilterOverlay`，通过 QSS 样式表装配外观）
+9. `QuarkMeta_Source/resources/style.qss`（追加空态提示遮罩与按钮的外部 QSS 样式）
 
 ---
 
 ## Chapter 3: Detailed Line-by-Line Changes
 
-### 3.1 `QuarkMeta_Source/src/ui/ShortcutActionRouter.h`
+### 3.1 `QuarkMeta_Source/src/ui/AppShortcutController.cpp`
+```
+<<<<<<< SEARCH
+    // 12. Ctrl+D: 重置筛选
+    registerShortcut(QKeySequence(Qt::CTRL | Qt::Key_D), [this]() {
+        if (!isEditingFocus()) {
+            emit resetFilterRequested();
+        }
+    });
+=======
+    // 12. Ctrl+D: 重置筛选与搜索（顶级全局快捷键，豁免 isEditingFocus 阻断，输入框内同样坚决生效）
+    registerShortcut(QKeySequence(Qt::CTRL | Qt::Key_D), [this]() {
+        emit resetFilterRequested();
+    });
+>>>>>>> REPLACE
+```
+
+### 3.2 `QuarkMeta_Source/src/ui/ShortcutActionRouter.h`
 ```
 <<<<<<< SEARCH
 class ActivePaneCoordinator;
@@ -131,7 +157,7 @@ private:
 >>>>>>> REPLACE
 ```
 
-### 3.2 `QuarkMeta_Source/src/ui/ShortcutActionRouter.cpp`
+### 3.3 `QuarkMeta_Source/src/ui/ShortcutActionRouter.cpp`
 ```
 <<<<<<< SEARCH
 #include "ShortcutActionRouter.h"
@@ -207,10 +233,14 @@ void ShortcutActionRouter::triggerUnifiedReset() {
     }
     if (m_searchController) {
         m_searchController->clearSearch(true);
+        if (m_searchController->searchEdit()) {
+            m_searchController->searchEdit()->clearFocus();
+        }
     }
     ContentPanel* target = m_activeCoordinator ? m_activeCoordinator->currentTarget() : nullptr;
     if (target) {
         target->search("");
+        target->setActivePane(true);
     }
 }
 
@@ -223,7 +253,7 @@ void ShortcutActionRouter::bindPane(ContentPanel* pane) {
 >>>>>>> REPLACE
 ```
 
-### 3.3 `QuarkMeta_Source/src/ui/PanelMediator.cpp`
+### 3.4 `QuarkMeta_Source/src/ui/PanelMediator.cpp`
 ```
 <<<<<<< SEARCH
     m_shortcutRouter = new ShortcutActionRouter(
@@ -266,7 +296,7 @@ void ShortcutActionRouter::bindPane(ContentPanel* pane) {
 >>>>>>> REPLACE
 ```
 
-### 3.4 `QuarkMeta_Source/src/ui/FilterPanel.h`
+### 3.5 `QuarkMeta_Source/src/ui/FilterPanel.h`
 ```
 <<<<<<< SEARCH
 signals:
@@ -284,7 +314,7 @@ public slots:
 >>>>>>> REPLACE
 ```
 
-### 3.5 `QuarkMeta_Source/src/ui/FilterPanel.cpp`
+### 3.6 `QuarkMeta_Source/src/ui/FilterPanel.cpp`
 ```
 <<<<<<< SEARCH
     m_btnClearAll->setProperty("tooltipText", "重置筛选条件（Ctrl + D）");
@@ -300,7 +330,7 @@ public slots:
 >>>>>>> REPLACE
 ```
 
-### 3.6 `QuarkMeta_Source/src/ui/ContentPanel.h`
+### 3.7 `QuarkMeta_Source/src/ui/ContentPanel.h`
 ```
 <<<<<<< SEARCH
 protected:
@@ -353,7 +383,7 @@ signals:
 >>>>>>> REPLACE
 ```
 
-### 3.7 `QuarkMeta_Source/src/ui/ContentPanel.cpp`
+### 3.8 `QuarkMeta_Source/src/ui/ContentPanel.cpp`
 ```
 <<<<<<< SEARCH
     m_viewStack = new QStackedWidget(this);
@@ -478,7 +508,7 @@ void ContentPanel::updateEmptyStateOverlay(int visibleCount, int fullCount, int 
 >>>>>>> REPLACE
 ```
 
-### 3.8 `QuarkMeta_Source/resources/style.qss`
+### 3.9 `QuarkMeta_Source/resources/style.qss`
 ```
 <<<<<<< SEARCH
 QPushButton#FileCompareCloseBtn:pressed {
@@ -535,13 +565,13 @@ QPushButton#EmptyFilterResetBtn:pressed {
    使用 CMake 驱动 MSVC 构建工程：
    `cmake --build build --config Debug`
    核验是否存在签名不匹配或类型未定义报错。
-2. **场景验证 1：Ctrl+D 联合复位**：
-   - 在搜索框输入文本（如 `svg`）；
-   - 在筛选器面板中选择色标或评分；
-   - 按下键盘快捷键 `Ctrl + D`；
-   - 验证：搜索框内容清空，筛选器所有选中项取消，中间内容面板全量项目立刻刷新还原。
+2. **场景验证 1：搜索框输入文字（焦点留在输入框）按 Ctrl+D 立即生效**：
+   - 光标点击顶栏搜索框，输入文本 `test`（此时输入光标正在闪烁，焦点在 `QLineEdit` 上）；
+   - 右侧筛选面板不作任何勾选（无变化）；
+   - 直接按下键盘快捷键 `Ctrl + D`；
+   - **验证**：搜索框内的 `test` 立即被清空，搜索框释放焦点，中间内容面板瞬间恢复无过滤的完整列表，彻底解决打字时快捷键失效的问题。
 3. **场景验证 2：重置筛选按钮对齐**：
-   - 再次输入搜索文本与筛选条件；
+   - 再次在搜索框输入文字；
    - 用鼠标点击筛选器顶部的“重置筛选条件（Ctrl + D）”按钮；
    - 验证：同样触发搜索框与筛选面板的联合清空。
 4. **场景验证 3：空态感知提示**：
@@ -566,7 +596,7 @@ QPushButton#EmptyFilterResetBtn:pressed {
 
 | 数据项 / 状态 | 唯一 SSOT 真理源 | 变动通知渠道 | 刷新目标 |
 | :--- | :--- | :--- | :--- |
-| 搜索框文本状态 | `SearchController::m_searchEdit` | `clearSearch(true)` | 顶栏搜索框还原占位符 |
+| 搜索框文本状态 | `SearchController::m_searchEdit` | `clearSearch(true)` | 顶栏搜索框还原占位符并释放焦点 |
 | 面板过滤状态 | `FilterStateModel` | `clearAllFilters(true)` | 右侧筛选面板全部取消勾选 |
 | 视图可见条目状态 | `FilterProxyModel` | `applyFilters()` | `m_emptyFilterOverlay` 显隐切换 |
 
@@ -599,8 +629,8 @@ QPushButton#EmptyFilterResetBtn:pressed {
 | 3 | 契约锁（头文件冻结） | PASS | 既有公有 API 签名保持兼容，采用默认参数扩展 |
 | 4 | 依赖锁（单向流动） | PASS | Shell $\to$ View $\to$ Controller，无逆向头文件侵入 |
 | 5 | 无直接修改代码铁律 | PASS | 仅生成/修正实施方案，源代码 0 修改 |
-| 6 | SEARCH 块 100% 精确匹配 | PASS | FilterPanel 字符已对齐真实中文括号，ContentPanel resizeEvent 改为覆写，statusText 原文已 100% 对齐 |
-| 7 | 无虚构成员函数 | PASS | 彻底去除未定义的 notifyFilterReset，改由标准 signals 接入 Mediator 分发 |
+| 6 | SEARCH 块 100% 精确匹配 | PASS | FilterPanel 字符已对齐真实中文括号，AppShortcutController 原文唯一匹配 |
+| 7 | 彻底解除焦点误杀 | PASS | 废除 Ctrl+D 上的 if (!isEditingFocus())，搜索框内打字按 Ctrl+D 100% 生效 |
 | 8 | 严格杜绝内联 setStyleSheet | PASS | 遮罩与按钮外观 100% 收敛至 resources/style.qss |
 | 9 | 按钮防虚线框强锁 | PASS | m_emptyFilterResetBtn 显式配置 setFocusPolicy(Qt::NoFocus) 与 outline:none |
 | 10 | 100% 中文说明 | PASS | 除代码标识符外全中文表达 |
@@ -610,4 +640,4 @@ QPushButton#EmptyFilterResetBtn:pressed {
 ## Chapter 10: Behavior Preservation & Zero-Value-Alteration Table
 
 1. **零属性篡改**：未修改任何既有颜色 Hex 值、边框、间距或字体属性；空态提示新增的样式严格遵循既有主题颜色（橘色 `#ff551c`、悬停 `#ff6e3d`、浅灰 `#DDDDDD`、暗灰 `#888888`）；
-2. **交互形态保持**：既有的搜索逻辑、筛选器独立操作、快捷键分发逻辑全部完整保留，仅在触发“重置”操作时增补联动通知与空态展示，无破坏性变更。
+2. **交互形态保持**：既有的搜索逻辑、筛选器独立操作、快捷键分发逻辑全部完整保留，仅在触发“重置”操作时增补联动通知与空态展示，解除搜索框焦点误伤，无破坏性变更。

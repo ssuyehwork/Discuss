@@ -105,4 +105,6 @@ private:
 
 } // namespace RapidNotes
 
+using ToolTipOverlay = RapidNotes::ToolTipOverlay;
+
 #endif // TOOLTIPOVERLAY_H
