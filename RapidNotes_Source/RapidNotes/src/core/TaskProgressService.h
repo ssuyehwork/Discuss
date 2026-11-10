@@ -4,9 +4,22 @@
 #include <QString>
 #include <QMap>
 #include <QMutex>
+#include <QList>
 #include <atomic>
 
 namespace RapidNotes {
+
+struct TextSegment {
+    QString text;
+    bool highlight = false;
+};
+
+struct TaskProgressSnapshot {
+    bool active = false;
+    bool finished = false;
+    QList<TextSegment> statusSegments;
+    QList<TextSegment> finishSegments;
+};
 
 struct TaskJobInfo {
     int id = -1;
@@ -69,6 +82,11 @@ signals:
      * @brief 全量后台任务归零时发射 (驱动进度栏平滑收起隐藏)
      */
     void allJobsFinished();
+
+    /**
+     * @brief 快照状态变动广播 (供状态栏文本协调器渲染)
+     */
+    void snapshotChanged(const TaskProgressSnapshot& snapshot);
 
 private:
     explicit TaskProgressService(QObject* parent = nullptr);

@@ -194,27 +194,13 @@ void ContentPanel::initUi() {
             return;
         }
         m_isRecursive = recursive;
-        if (m_currentViewMode == ColumnView) {
-            if (m_columnView && m_columnView->rightmostPane()) {
-                m_columnView->rightmostPane()->loadDirectory();
-            }
-        } else {
-            loadDirectory(m_currentPath, recursive);
-        }
+        loadDirectory(m_currentPath, recursive);
     });
 
     m_mainLayout->addWidget(m_headerWidget);
 
     m_viewStack = new QStackedWidget(this);
     m_viewStack->setFrameShape(QFrame::NoFrame);
-
-    m_columnView = new ColumnViewWidget(this, this);
-    connect(m_columnView, &ColumnViewWidget::selectionChanged, this, &ContentPanel::onSelectionChanged);
-    connect(m_columnView, &ColumnViewWidget::activeColumnRecordsChanged, this, [this](const std::vector<RapidNotes::ItemRecord>& records) {
-        if (m_statsWorker && !records.empty()) {
-            m_statsWorker->processAsync(std::move(records), m_currentFilter.showHidden);
-        }
-    });
 
     m_proxyModel = new FilterProxyModel(this);
     m_proxyModel->setSourceModel(m_model);
@@ -384,9 +370,6 @@ void ContentPanel::ensureSourceModelIsDiskModel() {
 void ContentPanel::applySort() {
     if (m_sortController) {
         if (m_proxyModel) m_sortController->applySortToModel(m_proxyModel);
-        if (m_columnView) {
-            m_columnView->applySort(static_cast<int>(m_sortController->sortType()), m_sortController->sortOrder());
-        }
     }
 }
 
@@ -921,9 +904,6 @@ void ContentPanel::applyFilters() {
         m_proxyModel->currentFilter = m_currentFilter;
         m_proxyModel->updateFilter();
     }
-    if (m_columnView) {
-        m_columnView->applyFilterState(m_currentFilter);
-    }
     updateStatusBarStats();
 }
 
@@ -1117,17 +1097,7 @@ void ContentPanel::endWatchSuppress() {
 
 void ContentPanel::recalculateAndEmitStats() {
     // 🚀【杜绝主线程全量深拷贝】：提取指针并在非空时仅进行一次轻量级移动处理
-    if (m_currentViewMode == ColumnView && m_columnView) {
-        ColumnViewPane* pane = m_columnView->rightmostPane();
-        if (!pane) pane = m_columnView->activePane();
-        if (pane && pane->model() && m_statsWorker) {
-            const auto& allRecs = pane->model()->allRecords();
-            if (!allRecs.empty()) {
-                std::vector<ItemRecord> snapshot = allRecs;
-                m_statsWorker->processAsync(std::move(snapshot), m_currentFilter.showHidden);
-            }
-        }
-    } else if (m_model && m_statsWorker) {
+    if (m_model && m_statsWorker) {
         const auto& allRecs = m_model->allRecords();
         if (!allRecs.empty()) {
             std::vector<ItemRecord> snapshot = allRecs;
@@ -1139,13 +1109,7 @@ void ContentPanel::recalculateAndEmitStats() {
 void ContentPanel::refreshVisibleThumbnails() {
     if (!m_model || CoreController::isShuttingDown()) return;
 
-    if (m_currentViewMode == ColumnView) {
-        if (m_columnView && m_columnView->activePane()) {
-            m_columnView->activePane()->refreshVisibleThumbnails();
-        }
-    } else {
-        if (m_viewCoordinator) m_viewCoordinator->refreshVisibleThumbnails();
-    }
+    if (m_viewCoordinator) m_viewCoordinator->refreshVisibleThumbnails();
 }
 
 void ContentPanel::selectAndEditPath(const QString& path) {
@@ -1153,13 +1117,6 @@ void ContentPanel::selectAndEditPath(const QString& path) {
 
     QAbstractItemView* view = activeItemView();
     QAbstractItemModel* model = view ? view->model() : nullptr;
-
-    if (m_currentViewMode == ColumnView) {
-        if (m_columnView && m_columnView->activePane()) {
-            view = m_columnView->activePane()->listView();
-            if (view) model = view->model();
-        }
-    }
 
     if (!model || !view) return;
 
@@ -1182,24 +1139,6 @@ void ContentPanel::selectAndEditPath(const QString& path) {
 
 void ContentPanel::selectAndScrollToPath(const QString& path) { selectAndScrollToItem(path); }
 void ContentPanel::selectAndScrollToItem(const QString& path) {
-    if (m_currentViewMode == ColumnView) {
-        if (m_columnView) {
-            QFileInfo info(path);
-            if (info.exists() && !info.isDir()) {
-                QString dirPath = info.absolutePath();
-                if (!m_columnView->containsPath(dirPath)) {
-                    m_columnView->setRootPath(path);
-                } else if (m_columnView->rightmostPane()) {
-                    m_columnView->rightmostPane()->selectItemByPath(path);
-                }
-            } else {
-                if (!m_columnView->containsPath(path)) {
-                    m_columnView->setRootPath(path);
-                }
-            }
-        }
-        return;
-    }
     QAbstractItemView* view = activeItemView();
     if (!view || !view->model() || path.isEmpty()) return;
     QAbstractItemModel* model = view->model();
@@ -1276,13 +1215,6 @@ QList<int> ContentPanel::getSelectedTrashIds() const {
 }
 
 QAbstractItemView* ContentPanel::activeItemView() const {
-    if (m_currentViewMode == ColumnView) {
-        if (m_columnView && m_columnView->activePane()) {
-            return m_columnView->activePane()->listView();
-        }
-        return nullptr;
-    }
-
     if (m_currentViewMode == ListView) {
         return m_treeView;
     }
