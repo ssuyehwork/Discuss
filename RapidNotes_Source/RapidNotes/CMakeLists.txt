@@ -458,8 +458,6 @@ set(SOURCES
     src/crypto/EncryptionManager.h
     src/meta/AssociationCascadeService.cpp
     src/meta/AssociationCascadeService.h
-    src/meta/DatabaseManager.cpp
-    src/meta/DatabaseManager.h
     src/meta/DatabaseMigrator.h
     src/meta/DiskNavigatorService.cpp
     src/meta/DiskNavigatorService.h
