@@ -299,11 +299,11 @@ int main(int argc, char *argv[]) {
         });
     });
 
-    MainWindow* mainWin = nullptr;
-    auto showMainWindow = [=, &mainWin, &checkLockAndExecute]() {
-        checkLockAndExecute([=, &mainWin](){
+    RapidNotes::MainWindow* mainWin = nullptr;
+    std::function<void()> showMainWindow = [&]() {
+        checkLockAndExecute([&](){
             if (!mainWin) {
-                mainWin = new MainWindow();
+                mainWin = new RapidNotes::MainWindow();
             }
             if (mainWin->isMinimized()) {
                 mainWin->showNormal();
