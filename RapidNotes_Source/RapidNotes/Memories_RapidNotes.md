@@ -711,3 +711,34 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
      - **源码层**：`RapidNotes_Source/RapidNotes` 纯净代码圣殿，零二进制污染；
      - **中间构建层**：`RapidNotes_Build/x64-release/` 作为临时编译消耗品目录；
      - **固化运行层**：`RapidNotes_Build/RapidNotes/` 免安装绿色沙盒，由 CMake 自动将 `RapidNotes.exe` 输出至该目录，并使用 `windeployqt.exe RapidNotes.exe` 部署一次依赖，日常编译仅覆盖单一 exe，实现即编即测。
+
+---
+
+## 26. QuickWindow 四大专职子模块解耦与单一职责契约 (QuickWindow Four Submodules Architecture SSOT)
+
+> 本章节记录用户的核心设计理念指导与明确共识，作为将超过 4200 行代码的上帝类 `QuickWindow.cpp` 精细化拆分为四大专职模块的唯一真理源 (SSOT)。
+
+### 26.1 核心设计理念与模块职责矩阵 (Module Responsibility Matrix)
+针对 `QuickWindow` 违背单一职责、杂糅 8 大职责的问题，确立以下四大专职模块的正交分工契约：
+
+1. **`QuickMediator`（中枢协调器与大脑通道）**：
+   - **唯一职责**：负责 UI 交互意图与中央大脑 `CoreEngine` 之间的双向协调；
+   - **下行通道**：接收来自 `QuickWindow` 的所有数据操作意图（分类移动、软硬删除、置顶、收藏、评分、设置色标、标签修改等），打包为标准 `AppCommand` 投递给 `CoreEngine`；
+   - **上行通道**：订阅全局事件中枢 `CentralEventHub` 的领域广播（`MetadataUpdated`、`ItemsDeleted` 等），计算增量 Diff 并驱动 `QuickWindow` 局部刷新视图，主窗口与悬浮窗口 0 延迟协同。
+
+2. **`QuickContextMenuBuilder`（专职右键与动作菜单构建器）**：
+   - **唯一职责**：承接原 `QuickWindow.cpp` 中数百行手写 QMenu 逻辑；
+   - **契约对齐**：全面对齐主管理窗口成熟的 `ContextMenuFactory` 模式；
+   - **构建场景**：专职提供 `buildListContextMenu(view, selectedIndices)`、`buildSidebarContextMenu(tree, index)` 与 `buildAddMenu()`，按选区数量（0/1/N）装配二级分类子菜单、标签药丸子菜单与色标快捷选择器。
+
+3. **`QuickPasteDeliveryService`（专职前台探测与第三方投递服务）**：
+   - **唯一职责**：完全封装 Win32 原生窗口探测与双模剪贴板模拟投递逻辑；
+   - **原子投递管线**：
+     - 记录与捕获唤醒前的前台窗口句柄 `HWND` 与线程 ID；
+     - 依据条目类型（纯文本、多路径、托管图片等）执行系统级还原（`QMimeData`），并校验物理路径有效性；
+     - 跨线程通过 Win32 `AttachThreadInput` + `SetForegroundWindow` + `SendInput(Ctrl+V)` 模拟按键，投递完成后自动分离线程并记录访问历史（`recordAccess`）。
+
+4. **`QuickShortcutHandler`（专职快捷键分发与打字态保护器）**：
+   - **唯一职责**：统一承接 `QuickWindow` 的键盘事件（`keyPressEvent`）；
+   - **打字态焦点保护**：严格执行 `isEditingFocus()` 断言。当焦点处于搜索框（`SearchLineEdit`）、密码框或标签输入框时，放行用户打字、光标移动及文本编辑热键，绝对不截断；
+   - **集中调度**：在非打字态下，精准映射数字快捷键、`Ctrl+N`（新建笔记）、`Ctrl+D`（清空重置）、`Delete`（移入回收站）、`Shift+Delete`（永久物理删除）等指令，委托给 `QuickMediator` 处理。
