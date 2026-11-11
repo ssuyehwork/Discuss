@@ -232,3 +232,19 @@
   4. **专职菜单构建器 (`QuickContextMenuBuilder`)**：对齐 `ContextMenuFactory` 工业级范式，专职构建列表项与侧边栏右键上下文菜单，消除大段行内硬编码；
   5. **专职快捷键拦截器 (`QuickShortcutHandler`)**：对齐 `LocalShortcutInterceptor`，实现严格的打字态焦点保护（在输入框中放行按键）与删除/退出快捷键的安全分发；
   6. **构建注册**：在 `CMakeLists.txt` 中完整注册上述四大模块源文件，确保符号完整链接与零编译警告。
+
+### 2026-11-11: 样式系统全局重构与 QuickWindow 视觉 100% 对齐修复
+- **修改原因**：
+  1. `style.qss` 底部存在长达 2469 行的 `dark_style.qss` 重复镜像块，且包含大量裸括号语法错误；
+  2. 内联样式外联迁移时提取了 130 余处无具体命名空间的全局选择器（如裸 `QPushButton`、裸 `QLineEdit` 等），全局污染了主窗口与 QuickWindow 的控件外观；
+  3. QuickWindow 的 `container`、`leftContent` 与 `customToolbar` 缺少 `Qt::WA_StyledBackground` 属性，导致在 `WA_TranslucentBackground` 下无实色绘制，透出 Windows 系统桌面绿色背景；
+  4. 主窗口 TabBar 滚动区缺少透明与无边框声明导致白色高亮块。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/resources/style.qss`
+  - `RapidNotes_Source/RapidNotes/src/ui/QuickWindow.cpp`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
+- **修改内容**：
+  1. 彻底删除 `style.qss` 中 2469 行冗余重复内容与所有裸括号语法错误；
+  2. 将全部裸选择器精确绑定至各窗口的具体 `objectName` 作用域，杜绝全局样式泄漏；
+  3. 在 `QuickWindow.cpp` 中显式为 `container`、`leftContent` 和 `customToolbar` 设置 `setAttribute(Qt::WA_StyledBackground, true)`，确保实体背景 `#1E1E1E` 和 `#252526` 稳定绘制，彻底消除半透明桌面穿透；
+  4. 恢复 QuickWindow 专属工具栏无边框与悬停高亮，规范关闭按钮红底，完善 `TabBarScrollArea` 透明度适配。

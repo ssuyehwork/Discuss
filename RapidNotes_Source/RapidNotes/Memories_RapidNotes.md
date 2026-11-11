@@ -328,6 +328,8 @@
 
 ## 14. QuarkMeta 迁移合并至 RapidNotes 核心设计理念与数据真理源 (QuarkMeta Merge Architecture & Data SSOT)
 
+合并后的RapidNotes和QuarkMeta UI风格被破坏情况下，可直接从"Source_Code\QuarkMeta_Source"和"Source_Code\RapidNotes_Source\RapidNotes_Old\RapidNotes_Full Version"中参考恢复
+
 > 本章节记录将 QuarkMeta 的界面与架构能力迁移合并至 RapidNotes 的根本目的与最高设计理念，作为后续一切界面适配、业务解耦与数据重构的唯一真理源 (SSOT)。
 
 ### 14.1 根本目的与业务定位 (Core Purpose & Dual-Mode Roles)
