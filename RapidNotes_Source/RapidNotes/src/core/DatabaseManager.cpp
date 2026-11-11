@@ -1,5 +1,54 @@
 #include "DatabaseManager.h"
 #include "ItemType.h"
+#include <QDebug>
+
+SqlTransaction::SqlTransaction(sqlite3* db) : m_db(db) {
+    if (m_db) {
+        m_isNested = (sqlite3_get_autocommit(m_db) == 0);
+        if (m_isNested) {
+            qWarning() << "[SqlTransaction] ⚠️ 警告：检测到数据库连接已处于未提交事务中 (autocommit=0)，本事务判定为嵌套事务！";
+        } else {
+            int rc = sqlite3_exec(m_db, "BEGIN IMMEDIATE TRANSACTION", nullptr, nullptr, nullptr);
+            if (rc != SQLITE_OK) {
+                qCritical() << "[SqlTransaction] ❌ BEGIN IMMEDIATE TRANSACTION 失败，错误码:" << rc << sqlite3_errmsg(m_db);
+            }
+        }
+    }
+}
+
+SqlTransaction::~SqlTransaction() {
+    if (m_db && !m_committed) {
+        if (!m_isNested) {
+            sqlite3_exec(m_db, "ROLLBACK", nullptr, nullptr, nullptr);
+        }
+    }
+}
+
+bool SqlTransaction::commit() {
+    if (m_db && !m_committed) {
+        if (m_isNested) {
+            m_committed = true;
+            return true;
+        }
+        int rc = sqlite3_exec(m_db, "COMMIT", nullptr, nullptr, nullptr);
+        if (rc == SQLITE_OK) {
+            m_committed = true;
+            return true;
+        } else {
+            qCritical() << "[SqlTransaction] ❌ COMMIT 失败，错误码:" << rc << sqlite3_errmsg(m_db);
+        }
+    }
+    return false;
+}
+
+void SqlTransaction::rollback() {
+    if (m_db && !m_committed) {
+        if (!m_isNested) {
+            sqlite3_exec(m_db, "ROLLBACK", nullptr, nullptr, nullptr);
+        }
+        m_committed = true;
+    }
+}
 #include "WordBucket.h"
 #include "TagCodec.h"
 #include <QDebug>
@@ -336,6 +385,20 @@ bool DatabaseManager::init(const QString& dbPath) {
     // [STARTUP-SYNC] 已移除旧架构下的强制合壳同步，去壳版始终保持明文实时性
     m_autoSaveTimer->start();
     return true;
+}
+
+QString DatabaseManager::getDbPath() const {
+    return m_realDbPath.isEmpty() ? m_dbPath : m_realDbPath;
+}
+
+sqlite3* DatabaseManager::getGlobalDb() {
+    QMutexLocker locker(&m_mutex);
+    if (!m_db.isOpen()) return nullptr;
+    QVariant v = m_db.driver()->handle();
+    if (v.isValid() && qstrcmp(v.typeName(), "sqlite3*") == 0) {
+        return *static_cast<sqlite3**>(v.data());
+    }
+    return nullptr;
 }
 
 void DatabaseManager::closeAndPack() {

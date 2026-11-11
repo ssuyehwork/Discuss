@@ -1,8 +1,8 @@
 #include "CoreController.h"
 #include "AppConfig.h"
 #include "DeviceWatcher.h"
+#include "DatabaseManager.h"
 #include "../meta/MetadataManager.h"
-#include "../meta/DatabaseManager.h"
 #include "../meta/MediaExtractorPipeline.h"
 #include "../meta/LibrarySyncService.h"
 #include "../util/DiskMediaExtractor.h"
@@ -31,7 +31,7 @@ void CoreController::initializeCoreComponents() {
     DeviceWatcher::instance().startListening();
 
     // 1. 底层持久化 SQLite 连接启动与定时机制保障
-    RapidNotes::DatabaseManager::instance();
+    DatabaseManager::instance();
     
     // 2. 元数据内存索引结构预热
     RapidNotes::MetadataManager::instance();

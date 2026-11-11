@@ -305,3 +305,36 @@
   3. 创建专职服务 `RapidNotes::NoteIngestService`，实现 `ingestNote` 与 `updateNote`，完成标签清洗规范化与单事务落库；
   4. 在 `CMakeLists.txt` 中注册 `NoteIngestService.h` 与 `NoteIngestService.cpp` 构建单元；
   5. 在 `NoteEditWindow.cpp` 中将全部 7 处 `DatabaseManager::instance()` 直连调用替换为对应领域服务，UI 直连彻底清零。
+
+### 2026-11-11: 数据库管理器归一化与 src/core/DatabaseManager 单一真理源收敛 (DatabaseManager Core SSOT Consolidation)
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 彻底终结从 QuarkMeta 合并迁移遗留的 `src/meta/DatabaseManager.h` 双重管理器冲突；
+  2. 拔除 `TrayController.cpp`、`CoreController.cpp`、`LibraryPanel.cpp`、`TagLexiconService.cpp` 与 `DiskTrashService.cpp` 中对 `src/meta/DatabaseManager.h` 的残留引用；
+  3. 全软件统一收敛至 `src/core/DatabaseManager` 单一真理源，并在核心管理器中原生提供 `getDbPath()` 与原生句柄桥接。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.h`
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.cpp`
+  - `RapidNotes_Source/RapidNotes/src/ui/TrayController.cpp`
+  - `RapidNotes_Source/RapidNotes/src/core/CoreController.cpp`
+  - `RapidNotes_Source/RapidNotes/src/ui/LibraryPanel.cpp`
+  - `RapidNotes_Source/RapidNotes/src/core/TagLexiconService.cpp`
+  - `RapidNotes_Source/RapidNotes/src/core/DiskTrashService.cpp`
+  - `RapidNotes_Source/RapidNotes/Memories_RapidNotes.md`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
+- **修改内容**：
+  1. 在 `src/core/DatabaseManager` 声明并实现 `QString getDbPath() const`、`sqlite3* getGlobalDb()` 与 `static std::mutex& getGlobalMutex()`；
+  2. 移除 `TrayController.cpp` 中无用的 `#include "../meta/DatabaseManager.h"`；
+  3. 将 `CoreController.cpp` 中引用的头文件修正为 `DatabaseManager.h`，单例调用对齐为 `DatabaseManager::instance()`；
+  4. 将 `LibraryPanel.cpp` 中引用的头文件修正为 `../core/DatabaseManager.h`，路径调用统一为 `DatabaseManager::instance().getDbPath()`；
+  5. 将 `TagLexiconService.cpp` 与 `DiskTrashService.cpp` 引用的头文件切换为 `DatabaseManager.h`，解绑 meta 层，全项目对 `src/meta/DatabaseManager.h` 的引用彻底清零。
+
+### 2026-11-11: 解决 SqlTransaction 未声明导致的 MSVC 编译错误 (C2065/C2146/C3861)
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 在收敛 `DiskTrashService.cpp` 与 `TagLexiconService.cpp` 的头文件引用至 `src/core/DatabaseManager.h` 后，由于 `src/core/DatabaseManager.h` 缺少原先在 `src/meta/DatabaseManager.h` 中定义的 `SqlTransaction` 事务 RAII 类，引发 MSVC 报出 C2065/C2146/C3861 级联报错；
+  2. 在 `src/core/DatabaseManager.h` 与 `DatabaseManager.cpp` 中完整引入 `SqlTransaction` 的声明与实现，并在 `namespace RapidNotes` 下建立全局别名，使事务执行 100% 编译兼容。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.h`
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.cpp`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
