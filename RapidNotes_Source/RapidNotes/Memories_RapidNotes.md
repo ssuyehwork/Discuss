@@ -784,3 +784,31 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - 彻底拔除在 `NoteEditWindow` 中直接调用 `DatabaseManager::instance().getAllTags()` 与 `getRecentTagsWithCounts()`；
    - **标签词表检索真理源**：统一委托给 `RapidNotes::TagLexiconService::instance()`（`getAllTagNames()`, `querySuggestions()`）；
    - **笔记原始元数据回显**：`loadNoteData(id)` 统一委托给 `RapidNotes::NoteRepository::instance().getNoteById(id)`，保持单向依赖流动与职责正交。
+
+
+---
+
+## 29. MainWindow 五栏区保留与 NavPanel 空壳化规范 (MainWindow 5-Panel Architecture & NavPanel Shell Protocol)
+
+> 本章节记录用户的核心设计理念指导与明确共识，作为规范 MainWindow 五栏区布局以及将 NavPanel 改造为空壳容器（方案 B）的唯一真理源 (SSOT)。
+
+### 29.1 核心设计理念与架构铁律 (Core Philosophy & Architecture Locks)
+1. **五栏区布局完整保留 (Five-Panel Architecture Preservation)**：
+   - MainWindow 水平分割器（`m_mainSplitter`）严格维持 **5 个栏区** 完整布局：
+     1. 最左侧栏区：`NavPanel`（导航面板）
+     2. 第二栏区：`SidebarContainerWidget`（库面板 `LibraryPanel` 等）
+     3. 第三栏区：`ContentPanel`（内容面板）
+     4. 第四栏区：`MetaPanel`（元数据面板）
+     5. 第五栏区：`FilterPanel`（筛选面板）
+   - 严禁裁撤最左侧栏区，维持五面板的布局比例、状态栏按钮控制与 QSplitter 伸缩协调。
+
+2. **NavPanel 视觉方案 B（保留选项卡框架，内容设为空壳 TODO）**：
+   - **保留 Tab 栏与容器框架**：NavPanel 顶部保留“目录导航”与“历史”Tab 栏（`SidebarTabBar`），保留 `m_stackedWidget` 容器架构与 230px 最小宽度约束（`minimumSizeHint`）；
+   - **内容区域清空并设为 TODO 占位**：
+     - Page 0（原目录导航树）：不再挂载 `m_treeView` 物理目录树，不再扫描桌面、此电脑、物理磁盘与回收站，替换为优雅且样式统一的 TODO 占位组件（如置灰占位提示）；
+     - Page 1（原历史面板）：不再加载物理文件操作历史 `HistoryPanel`，替换为 TODO 占位组件；
+   - **对外编译契约与联动保留**：
+     - 保留 `NavPanel` 现有的公开接口签名（`deferredInit`、`setFocusHighlight`、`setRootPath`、`selectPath`）与对外信号；
+     - 内部实现转为安全 no-op，避免触碰物理文件与物理路径；
+     - `PanelLayoutManager` 维持对 NavPanel 的显示/隐藏记忆与折叠控制；
+     - 状态栏与视图菜单维持“显示目录导航”联动开关。
