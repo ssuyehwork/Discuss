@@ -1,5 +1,5 @@
 #include "DiskTrashRepo.h" 
-#include "DatabaseManager.h" 
+#include "../core/DatabaseManager.h"
 #include "sqlite3.h" 
 #include <QMutexLocker> 
  

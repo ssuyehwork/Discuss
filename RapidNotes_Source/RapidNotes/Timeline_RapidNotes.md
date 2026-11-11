@@ -338,3 +338,33 @@
   - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.h`
   - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.cpp`
   - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
+
+### 2026-11-11: 彻底物理移除多余的 meta/DatabaseManager 并统一收敛至 core/DatabaseManager (SSOT)
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 彻底贯彻用户最高指令：两应用合并为一个独立应用后，全软件绝对只允许使用一个数据库（唯一的 `inspiration.db`）；
+  2. 在 `CMakeLists.txt` 中补齐 `src/core/NoteRepository.cpp` 与 `NoteRepository.h`，彻底消灭 `NoteRepository` 链接符号缺失报错；
+  3. 将 `src/meta/` 目录下全部 15 个 DAO 与 Service 的头文件引用与命名空间全部收敛至 `src/core/DatabaseManager.h`，底层直接操作唯一的 `inspiration.db` 连接与互斥锁；
+  4. 物理删除多余且冲突的 `src/meta/DatabaseManager.cpp` 与 `src/meta/DatabaseManager.h`，消除双重管理器并存的历史包袱。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/CMakeLists.txt`
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.h`
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/AssociationCascadeService.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/DiskTrashRepo.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/DriveMetaDao.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/ExtensionColorDao.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/FavoriteDao.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/HistoryDao.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/LibraryDao.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/LibraryItemDao.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/MarkedFolderDao.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/MetaDbRepository.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/MetaIndexService.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/MetadataManager.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/SmartFolderDao.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/StatisticsService.cpp`
+  - `RapidNotes_Source/RapidNotes/src/meta/TrashRepository.cpp`
+  - (物理删除) `RapidNotes_Source/RapidNotes/src/meta/DatabaseManager.cpp`
+  - (物理删除) `RapidNotes_Source/RapidNotes/src/meta/DatabaseManager.h`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`

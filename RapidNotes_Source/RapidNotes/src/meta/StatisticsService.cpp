@@ -1,5 +1,5 @@
 #include "StatisticsService.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 #include "MetadataManager.h"
 #include "../core/VolumeOnlineManager.h"
 #include <QThreadPool>

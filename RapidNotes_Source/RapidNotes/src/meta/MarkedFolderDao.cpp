@@ -1,5 +1,5 @@
 #include "MarkedFolderDao.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 #include "Logger.h"
 #include <QDir>
 #include <QDateTime>

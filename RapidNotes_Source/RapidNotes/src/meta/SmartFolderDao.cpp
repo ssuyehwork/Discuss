@@ -1,5 +1,5 @@
 #include "SmartFolderDao.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 #include "LibraryDao.h"
 #include "MetadataManager.h"
 #include "../util/ColorPaletteEngine.h"

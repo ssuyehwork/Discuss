@@ -1,5 +1,5 @@
 #include "ExtensionColorDao.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 #include <sqlite3.h>
 #include <QDateTime>
 
