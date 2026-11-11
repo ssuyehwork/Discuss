@@ -338,6 +338,20 @@ bool DatabaseManager::init(const QString& dbPath) {
     return true;
 }
 
+QString DatabaseManager::getDbPath() const {
+    return m_realDbPath.isEmpty() ? m_dbPath : m_realDbPath;
+}
+
+sqlite3* DatabaseManager::getGlobalDb() {
+    QMutexLocker locker(&m_mutex);
+    if (!m_db.isOpen()) return nullptr;
+    QVariant v = m_db.driver()->handle();
+    if (v.isValid() && qstrcmp(v.typeName(), "sqlite3*") == 0) {
+        return *static_cast<sqlite3**>(v.data());
+    }
+    return nullptr;
+}
+
 void DatabaseManager::closeAndPack() {
     QMutexLocker locker(&m_mutex);
     if (!m_isInitialized) return;

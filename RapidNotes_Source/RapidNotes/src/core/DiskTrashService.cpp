@@ -1,5 +1,5 @@
 #include "DiskTrashService.h"
-#include "../meta/DatabaseManager.h"
+#include "DatabaseManager.h"
 #include <QFileInfo>
 #include <QDateTime>
 #include <QDir>

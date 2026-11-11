@@ -5,6 +5,7 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
+#include <QSqlDriver>
 #include <QDateTime>
 #include <QVariant>
 #include <QVariantList>
@@ -13,6 +14,8 @@
 #include <QSet>
 #include <QMutex>
 #include <QTimer>
+#include <mutex>
+#include "../meta/sqlite3.h"
 
 class DatabaseManager : public QObject {
     Q_OBJECT
@@ -27,6 +30,9 @@ public:
     QString getLastError() const { return m_lastError; }
     void logStartup(const QString& msg);
     void closeAndPack();
+    QString getDbPath() const;
+    sqlite3* getGlobalDb();
+    static std::mutex& getGlobalMutex() { static std::mutex s_globalMutex; return s_globalMutex; }
     
     // 核心 CRUD 操作
     int addNote(const QString& title, const QString& content, const QStringList& tags = QStringList(), 
