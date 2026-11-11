@@ -384,3 +384,38 @@
   3. 在 `main.cpp` 中展示主窗口时核验数据库连接状态；
   4. 在 `LibraryDao.cpp` 中增加对 `db == nullptr` 的明确判空防御与告警提示；
   5. 彻底杜绝了 `MainWindow` 构造装配过程中触发 `m_db.close()` 引起的驱动 handle 野指针或虚表寻址崩溃。
+
+### 2026-11-11: QuickWindow 全局应用锁实体绘制与数据层安全隔离 (AppLock Forced Opacity & Defense-in-Depth Protocol)
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 彻底解决 QuickWindow 在开启应用锁时，锁屏半透明透出底层笔记正文、分类树以及原生关闭按钮重叠穿透的严重安全与视觉缺陷；
+  2. 采纳用户方案 1，在渲染层强制启用 `WA_OpaquePaintEvent` 与实体深灰底色（`#1E1E1E`，圆角 10px）绘制；
+  3. 在数据层实施深度防御，加锁期间硬性阻断 `refreshData()` 数据填充，解锁后自动恢复拉取。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/src/ui/QuickWindow.cpp`
+  - `RapidNotes_Source/RapidNotes/Memories_RapidNotes.md`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
+- **修改内容**：
+  1. 在 `AppLockWidget` 构造中追加 `setAttribute(Qt::WA_OpaquePaintEvent, true);` 与 `setAutoFillBackground(true);`；
+  2. 在 `AppLockWidget::paintEvent` 中使用 `QPainter` 强制填充纯黑深灰实体画刷（`QColor(0x1E, 0x1E, 0x1E)`）绘制圆角矩形，切断底层透视；
+  3. 在 `QuickWindow::refreshData()` 入口处增加 `if (!isVisible() || isLocked()) return;`，防止加锁期间装载笔记数据；
+  4. 在 `setupAppLock()` 的 `unlocked` 回调中追加调用 `refreshData()`，实现解锁后的平滑数据呈现。
+
+### 2026-11-11: QuickWindow 容器实色背景属性补齐与透底桌面壁纸修复 (QuickWindow Solid Background & WA_StyledBackground)
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 彻底解决 QuickWindow 解锁后主窗口内部区域（分类栏与笔记列表底栏、拆分条拖动区域、筛选栏外层）变为透明，透出用户操作系统绿色桌面壁纸的视觉异常；
+  2. 原生 QWidget 在透明顶层窗口（Qt::WA_TranslucentBackground）下，若未显式启用 Qt::WA_StyledBackground，将不会按照 QSS 规则绘制实色背景；
+  3. m_filterWrapper 的 objectName 在设置后被后续代码覆盖为 QuickWindow_m_filterWrapper_8，导致 QSS 原样选择器 QFrame#FilterWrapper 失效；
+  4. 拆分条 m_splitter 及其 handle 缺乏深色实色背景样式定义。
+- **涉及文件**：
+  - RapidNotes_Source/RapidNotes/src/ui/QuickWindow.cpp
+  - RapidNotes_Source/RapidNotes/resources/style.qss
+  - RapidNotes_Source/RapidNotes/Memories_RapidNotes.md
+  - RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md
+- **修改内容**：
+  1. 在 QuickWindow.cpp 中为 container、leftContent、customToolbar、m_listWrapper、m_filterWrapper、m_sidebarWrapper 和 m_splitter 全面补齐 setAttribute(Qt::WA_StyledBackground, true)；
+  2. 规范各容器的 objectName，使 m_listWrapper、m_sidebarWrapper 可被 QSS 精确匹配；
+  3. 在 style.qss 中为 QuickWindow_m_listWrapper、QuickWindow_m_sidebarWrapper、QSplitter#QuickWindow_m_splitter 及其 ::handle、QFrame#QuickWindow_m_filterWrapper_8 等补齐 solid #1E1E1E 背景；
+  4. 确保透明顶层窗口仅保留 12px 阴影透明边界，内部全部区域 100% 不透明实色绘制，杜绝桌面壁纸穿透。
+

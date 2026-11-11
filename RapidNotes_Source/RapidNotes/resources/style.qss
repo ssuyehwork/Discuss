@@ -2876,13 +2876,23 @@ QWidget#leftContent { background: #1E1E1E; border-top-left-radius: 10px; border-
 }
 
 #QuickWindow_sbContent_7 {
-    background: transparent; border: none;
+    background-color: #1E1E1E;
+    background: #1E1E1E;
+    border: none;
 }
 
-QFrame#FilterWrapper { background-color: #1e1e1e; border: none; }
+QFrame#FilterWrapper,
+QFrame#QuickWindow_m_filterWrapper_8 {
+    background-color: #1E1E1E;
+    background: #1E1E1E;
+    border: none;
+}
 
-#QuickWindow_m_filterPanel_9 {
-    background: transparent; border: none;
+#QuickWindow_m_filterPanel_9,
+QWidget#QuickFilterPanel {
+    background-color: #1E1E1E;
+    background: #1E1E1E;
+    border: none;
 }
 
 #QuickWindow_m_statusLabel_10 {
@@ -3683,9 +3693,21 @@ QWidget#QuickWindow_container {
 }
 QWidget#leftContent,
 QWidget#QuickWindow_leftContent_4,
-QWidget#QuickWindow_leftContent_19 {
+QWidget#QuickWindow_leftContent_19,
+QWidget#QuickWindow_m_listWrapper,
+QWidget#QuickWindow_m_sidebarWrapper {
     background-color: #1E1E1E;
     background: #1E1E1E;
+}
+QSplitter#QuickWindow_m_splitter {
+    background-color: #1E1E1E;
+    background: #1E1E1E;
+}
+QSplitter#QuickWindow_m_splitter::handle {
+    background-color: #1E1E1E;
+}
+QWidget#leftContent,
+QWidget#QuickWindow_leftContent_4 {
     border-top-left-radius: 10px;
     border-bottom-left-radius: 10px;
 }

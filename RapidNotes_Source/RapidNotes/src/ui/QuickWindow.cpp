@@ -345,6 +345,7 @@ void QuickWindow::initUI() {
 
     auto* container = new QWidget();
     container->setObjectName("QuickWindow_container");
+    container->setAttribute(Qt::WA_StyledBackground, true);
     container->setMouseTracking(true);
 
     auto* shadow = new QGraphicsDropShadowEffect(this);
@@ -361,6 +362,7 @@ void QuickWindow::initUI() {
     auto* leftContent = new QWidget();
     leftContent->setObjectName("leftContent");
     leftContent->setObjectName("QuickWindow_leftContent_4");
+    leftContent->setAttribute(Qt::WA_StyledBackground, true);
     leftContent->setMouseTracking(true);
     auto* leftLayout = new QVBoxLayout(leftContent);
     leftLayout->setContentsMargins(10, 10, 10, 5);
@@ -375,11 +377,15 @@ void QuickWindow::initUI() {
     leftLayout->addWidget(m_searchEdit);
 
     m_splitter = new QSplitter(Qt::Horizontal);
+    m_splitter->setObjectName("QuickWindow_m_splitter");
+    m_splitter->setAttribute(Qt::WA_StyledBackground, true);
     m_splitter->setHandleWidth(4);
     m_splitter->setChildrenCollapsible(false);
 
     
     m_listWrapper = new QWidget();
+    m_listWrapper->setObjectName("QuickWindow_m_listWrapper");
+    m_listWrapper->setAttribute(Qt::WA_StyledBackground, true);
     auto* listWrapperLayout = new QVBoxLayout(m_listWrapper);
     listWrapperLayout->setContentsMargins(0, 0, 0, 0);
     listWrapperLayout->setSpacing(0);
@@ -442,6 +448,8 @@ void QuickWindow::initUI() {
     });
 
     m_sidebarWrapper = new QWidget();
+    m_sidebarWrapper->setObjectName("QuickWindow_m_sidebarWrapper");
+    m_sidebarWrapper->setAttribute(Qt::WA_StyledBackground, true);
     m_sidebarWrapper->setMinimumWidth(163); 
     auto* sidebarLayout = new QVBoxLayout(m_sidebarWrapper);
     sidebarLayout->setContentsMargins(0, 0, 0, 0);
@@ -635,6 +643,7 @@ void QuickWindow::initUI() {
 
     m_filterWrapper = new QFrame();
     m_filterWrapper->setObjectName("FilterWrapper");
+    m_filterWrapper->setAttribute(Qt::WA_StyledBackground, true);
 
     m_filterWrapper->setMinimumWidth(163);
     m_filterWrapper->setObjectName("QuickWindow_m_filterWrapper_8");
@@ -739,6 +748,7 @@ void QuickWindow::initUI() {
     QWidget* customToolbar = new QWidget(this);
 
     customToolbar->setObjectName("customToolbar");
+    customToolbar->setAttribute(Qt::WA_StyledBackground, true);
     customToolbar->setMouseTracking(true);
     customToolbar->setAttribute(Qt::WA_Hover);
     customToolbar->setFixedWidth(36);

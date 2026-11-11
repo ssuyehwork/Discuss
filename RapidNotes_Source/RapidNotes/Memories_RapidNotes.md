@@ -883,3 +883,19 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - `QuickWindow::refreshData()` 在入口处强制执行双重断言：`if (!isVisible() || isLocked()) return;`；
    - 在应用锁激活期间，严禁向底层模型或视图填充、渲染任何笔记数据，确保即使渲染发生极端异常，底层也无任何数据泄漏；
    - 在 `AppLockWidget` 的 `unlocked` 信号回调中触发 `refreshData()`，实现解锁后的平滑无缝数据填充与视图聚焦。
+
+---
+
+## 34. QuickWindow 容器实色背景与抗穿透透底规范 (Container WA_StyledBackground & Opacity Architecture)
+
+> 本章节记录用户的核心设计理念指导与明确共识，作为消除 `QuickWindow` 在 `Qt::WA_TranslucentBackground` 下解锁后窗口内部部件穿透、透出操作系统桌面壁纸的唯一真理源 (SSOT)。
+
+### 34.1 核心设计理念与架构铁律 (Core Philosophy & Architecture Locks)
+1. **容器部件显式启用样式背景绘制 (`Qt::WA_StyledBackground`)**：
+   - 在设置了 `Qt::WA_TranslucentBackground` 的顶层无边框窗口中，所有承载背景色的直属和间接 `QWidget` / `QFrame` 容器（如 `container`、`leftContent`、`customToolbar`、`m_listWrapper`、`m_sidebarWrapper`、`m_splitter`、`m_filterWrapper`），必须在构造与装配时显式设置：
+     `widget->setAttribute(Qt::WA_StyledBackground, true);`
+   - 杜绝纯 `QWidget` 因默认不绘制 QSS 背景而产生穿透透明孔洞；
+2. **QSS 选择器唯一性与实色背景覆盖**：
+   - 内部拆分容器 `m_splitter` 与手柄 `::handle`，以及筛选容器 `m_filterWrapper`、侧边栏包装器 `m_sidebarWrapper`、列表包装器 `m_listWrapper` 必须具有确定的选择器匹配，并在 `resources/style.qss` 中全量赋予 solid `#1E1E1E` 实色背景；
+   - 顶层窗口仅保留外围 12px 阴影透明边界，内部全部工作区与容器严格保持 100% 不透明实色绘制。
+
