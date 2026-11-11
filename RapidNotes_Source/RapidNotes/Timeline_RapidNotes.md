@@ -364,3 +364,14 @@
   1. 在 `LibraryPanel::loadLibrary()` 恢复树节点高亮处引入持久化索引有效性与归属核验；
   2. 在新建分类 50ms 延迟行内编辑 Lambda 中引入 `QPointer<LibraryPanel> weakThis(this)` 守卫，核查宿主、模型与树视图非空；
   3. 引入 `QPersistentModelIndex pIdx(targetItem->index())` 并在有效断言通过后依次调用 `expand`、`setCurrentIndex`、`setFocus(Qt::OtherFocusReason)` 与 `edit(pIdx)`。
+
+### 2026-11-11: QuickWindow 全局应用锁强制实体绘制与数据层双重防御 (AppLockWidget Forced Opacity & Defense-in-Depth)
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 彻底解决因无边框主窗口开启 `Qt::WA_TranslucentBackground`，子控件单纯依赖 QSS 和 `QStyle::PE_Widget` 绘制导致 `AppLockWidget` 呈现半透明、底部的笔记列表、搜索框及工具栏直接暴露的严重隐私缺陷；
+  2. 采纳方案 1：在 `AppLockWidget::paintEvent` 中通过 `QPainter` 强制用纯色不透明画刷（`#1E1E1E`）绘制带圆角实体矩形，并开启 `Qt::WA_OpaquePaintEvent` 与 `setAutoFillBackground(true)`，从根源切断图层透视可能；
+  3. 落地数据层 Defense-in-Depth 双重防御：在 `QuickWindow::refreshData()` 开头增加 `if (!isVisible() || isLocked()) return;` 阻断机制，在锁屏激活时严禁加载任何笔记数据到 `NoteModel`，并在解锁回调触发时才刷新，彻底杜绝数据泄露。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/src/ui/QuickWindow.cpp`
+  - `RapidNotes_Source/RapidNotes/Memories_RapidNotes.md`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
