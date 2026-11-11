@@ -66,6 +66,7 @@ include_directories(
     src/core
     src/util
     src/meta
+    src/third_party/libtiff
 )
 
 # 源代码列表
@@ -293,6 +294,8 @@ set(SOURCES
     src/ui/PasswordVerifyDialog.h
     src/ui/PixelRulerOverlay.cpp
     src/ui/PixelRulerOverlay.h
+    src/ui/QuickFilterPanel.cpp
+    src/ui/QuickFilterPanel.h
     src/ui/QuickNoteDelegate.cpp
     src/ui/QuickNoteDelegate.h
     src/ui/QuickPreview.h
@@ -604,6 +607,8 @@ set(SOURCES
     src/ui/TagManagerDialog.h
     src/ui/TaskProgressToolBar.cpp
     src/ui/TaskProgressToolBar.h
+    src/ui/DuplicateStatusGroup.cpp
+    src/ui/DuplicateStatusGroup.h
     src/ui/ThumbnailStatusGroup.cpp
     src/ui/ThumbnailStatusGroup.h
     src/ui/ToolTipOverlay.cpp

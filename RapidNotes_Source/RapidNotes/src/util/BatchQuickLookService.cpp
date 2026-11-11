@@ -2,6 +2,7 @@
 #include "../ui/QuickLookWindow.h"
 #include "../ui/UiHelper.h"
 #include "../ui/ToolTipOverlay.h"
+#include "ColorPaletteEngine.h"
 #include "../core/TaskProgressService.h"
 #include "../core/AppConfig.h"
 #include <QtConcurrent>
@@ -86,7 +87,7 @@ void BatchQuickLookService::extractBatchAsync(const QStringList& rootPaths) {
                     it.next();
                     QString filePath = it.filePath();
                     QString ext = it.fileInfo().suffix().toLower();
-                    if (UiHelper::isGraphicsFile(ext)) {
+                    if (ColorPaletteEngine::isGraphicsFile(ext)) {
                         // 预检：只保留缓存缺失或需要更新的文件，避免重复生成浪费算力
                         if (!isQuickLookCacheValid(filePath)) {
                             targetFiles << filePath;
@@ -95,7 +96,7 @@ void BatchQuickLookService::extractBatchAsync(const QStringList& rootPaths) {
                 }
             } else if (fi.isFile()) {
                 QString ext = fi.suffix().toLower();
-                if (UiHelper::isGraphicsFile(ext)) {
+                if (ColorPaletteEngine::isGraphicsFile(ext)) {
                     if (!isQuickLookCacheValid(rootPath)) {
                         targetFiles << rootPath;
                     }
@@ -114,27 +115,24 @@ void BatchQuickLookService::extractBatchAsync(const QStringList& rootPaths) {
 
         // 2. 将真正的“缺失/过期增量文件列表”打包提交批量渲染
         int total = targetFiles.size();
-
-        TaskJobOptions opts;
-        opts.title = "正在批量生成大图预览";
-        opts.total = total;
-        opts.showCount = true;
-        opts.showEta = true;
-        opts.finishTextTemplate = "批量生成大图预览完成  数量：{total}  |  实际耗时：{elapsed}";
-        opts.onTrip = [token]() {
-            if (token) token->cancel();
-        };
-
-        TaskProgressJob job = TaskProgressService::instance().createJobHandle(opts);
+        int jobId = TaskProgressService::instance().createJob("正在批量生成大图预览", total);
+        int current = 0;
 
         for (const QString& filePath : targetFiles) {
             if (token->isCanceled()) break;
 
             (void)QuickLookWindow::loadOrExtractQuickLookImage(filePath, 2048, token);
-            job.advance(1);
+            ++current;
+            TaskProgressService::instance().updateProgress(
+                jobId, current, total, QString("已完成 %1 / %2 项").arg(current).arg(total)
+            );
         }
 
-        job.finish();
+        if (token->isCanceled()) {
+            TaskProgressService::instance().cancelJob(jobId);
+        } else {
+            TaskProgressService::instance().finishJob(jobId);
+        }
 
         if (!token->isCanceled()) {
             QMetaObject::invokeMethod(QCoreApplication::instance(), [total]() {

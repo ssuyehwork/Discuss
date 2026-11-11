@@ -129,3 +129,6 @@ private:
 };
 
 } // namespace RapidNotes
+
+using RapidNotes::MainWindow;
+

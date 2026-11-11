@@ -20,3 +20,5 @@ private:
 };
 
 } // namespace RapidNotes
+
+using FramelessInputDialog = RapidNotes::FramelessInputDialog;
