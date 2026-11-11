@@ -831,3 +831,28 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
 3. **接口扩展与能力收敛 (Capability Convergence)**：
    - 为 `src/core/DatabaseManager` 补齐安全规范的持久化路径获取接口 `QString getDbPath() const`；
    - 将 `TagLexiconService` 等标签词表与分类词库的管理彻底收敛到 `src/core/DatabaseManager` 的标准化 Qt SQL 操作中，实现高内聚与职责单一。
+
+---
+
+## 31. RapidNotes 运行时闪退防御与空指针执行根因治理规范 (Crash & Null Pointer Execution Prevention SSOT)
+
+> 本章节记录用户的核心设计理念指导与明确共识，根据《Complex Issues/Crash/RapidNotes-shantui.md》及历史闪退转储报告权威总结，作为 RapidNotes 防范 UI 树模型异步时序悬空、空函数指针跳转与确保生命周期闭环的唯一真理源 (SSOT)。
+
+### 31.1 核心设计理念与架构铁律 (Core Philosophy & Architecture Locks)
+1. **彻底根治异步时序下的空函数指针执行与悬空索引 (Zero-Tolerance Null Pointer Execution)**：
+   - 转储报告确凿显示崩溃异常为 `c0000005`，子类型为 `SOFTWARE_NX_FAULT_NULL_INVALID_POINTER_EXECUTE`（尝试执行 `0x0000000000000000`）；
+   - 在 Qt 模型/视图（`QTreeView` / `QStandardItemModel`）架构中，当进行分类树刷新、节点重绘或延迟编辑时，必须对目标索引与指针进行双重有效性与归属断言（`pIdx.isValid() && pIdx.model() == m_model`）；
+   - 严禁在异步定时器（如 `QTimer::singleShot`）中捕获并解引用可能已在主线程被 `clear()` 销毁的模型项指针或裸索引；
+   - 必须使用 `QPointer` 弱引用守卫保护接收对象（`QPointer<QWidget>`），在回调执行第一时间进行安全断言，防止接收对象析构导致的野指针调用。
+
+2. **树节点行内编辑与选中状态恢复防御规范**：
+   - 在 `LibraryPanel` 与 `QuickWindow` 树形结构重构中，当执行 `setCurrentIndex`、`setFocus` 与 `edit(index)` 时：
+     1. 严禁使用未经验证的裸 `targetItem->index()`；
+     2. 必须先通过 `QPersistentModelIndex pIdx(targetItem->index())` 转换为持久化索引；
+     3. 强制校验 `if (!pIdx.isValid() || pIdx.model() != m_model) return;`；
+     4. 必须按序先设置 `setCurrentIndex(pIdx)`，再激活焦点，最后触发编辑，确保 Qt 视图内部状态机 100% 处于同步就绪态。
+
+3. **模型重置与局部增量更新红线**：
+   - 严格遵循五大红线之算力与资源利用规范，废除粗暴的 `clear()` 全量重置树模型；
+   - 节点重命名、计数变动与属性刷新必须通过局部 `dataChanged` 或定向单行增删原子完成，避免打碎既有视图的选择与焦点状态机；
+   - 必须建立健全的全局未捕获异常与 DUMP 记录管道，保证所有异常现场透明、可追踪且无损定位。
