@@ -742,3 +742,45 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - **唯一职责**：统一承接 `QuickWindow` 的键盘事件（`keyPressEvent`）；
    - **打字态焦点保护**：严格执行 `isEditingFocus()` 断言。当焦点处于搜索框（`SearchLineEdit`）、密码框或标签输入框时，放行用户打字、光标移动及文本编辑热键，绝对不截断；
    - **集中调度**：在非打字态下，精准映射数字快捷键、`Ctrl+N`（新建笔记）、`Ctrl+D`（清空重置）、`Delete`（移入回收站）、`Shift+Delete`（永久物理删除）等指令，委托给 `QuickMediator` 处理。
+
+---
+
+## 27. 待办日历直连剥离与 TodoRepository 专职领域仓储规范 (TodoCalendar Repository Decoupling SSOT)
+
+> 本章节记录用户的核心设计理念指导与明确共识，作为消除 `TodoCalendarWindow.cpp` 中 22 处直接调用 `DatabaseManager::instance()`、接入专职 `TodoRepository` 仓储模块的唯一真理源 (SSOT)。
+
+### 27.1 核心设计理念与架构铁律 (Core Philosophy & Architecture Locks)
+1. **纯化 Dumb View 容器与彻底消灭 UI 直连存储**：
+   - `TodoCalendarWindow` 必须严格纯化为专职负责日历绘制与交互排版的视图层（View）；
+   - 严禁直接穿透调用底层上帝类 `DatabaseManager::instance()`；
+   - 所有待办事项（`todos` 表）的数据读取、创建、更新、单项删除与批量删除，必须收敛至专职领域仓储类 `RapidNotes::TodoRepository`。
+
+2. **`TodoRepository` 专职职责矩阵与实体契约**：
+   - **实体结构体统一真理源**：确立 `RapidNotes::TodoItem` 数据传输对象（DTO），统一替代内嵌的 `DatabaseManager::Todo`，涵盖字段：`id`, `title`, `content`, `startTime`, `endTime`, `status`, `reminderTime`, `priority`, `color`, `noteId`, `repeatMode`, `parentId`, `progress`, `createdAt`, `updatedAt`；
+   - **核心接口矩阵**：
+     - `QList<TodoItem> getTodosByDate(const QDate& date)`：按特定日期检索待办；
+     - `QList<TodoItem> getAllTodos()`：全量加载有效待办；
+     - `bool addTodo(const TodoItem& todo, int* outId = nullptr)`：原子化添加待办；
+     - `bool updateTodo(const TodoItem& todo)`：精准更新待办属性；
+     - `bool deleteTodo(int todoId)`：单项删除待办；
+     - `bool deleteTodosBatch(const QList<int>& todoIds)`：原生集合式批量删除待办（`WHERE id IN (...)`），严禁 UI 层循环单条写盘；
+   - **信号总线广播契约**：仓储层状态变更后，统一发射标准领域信号 `todoChanged` / `todosBatchChanged`，驱动 `TodoCalendarWindow` 响应式刷新。
+
+---
+
+## 28. 笔记编辑入库解耦与 NoteIngestService / TagLexicon 统一通道规范 (NoteEditWindow Ingest Service & TagLexicon SSOT)
+
+> 本章节记录用户的核心设计理念指导与明确共识，作为消除 `NoteEditWindow.cpp` 中 7 处直接调用 `DatabaseManager::instance()`、接入 `NoteIngestService` 统一入库指挥中心与 `TagLexiconService` 词典服务的唯一真理源 (SSOT)。
+
+### 28.1 核心设计理念与架构铁律 (Core Philosophy & Architecture Locks)
+1. **统一入库业务指挥中心 (`NoteIngestService`)**：
+   - 彻底终止在 `NoteEditWindow` 的后台线程中直接裸调 `DatabaseManager::instance().addNote` 与 `updateNote`；
+   - 统一收敛至 `RapidNotes::NoteIngestService`：
+     - **新增笔记通道**：`NoteIngestService::instance().ingestNote(...)`，统一负责正文哈希计算、内容去重合并、分类推断与预设标签追加；
+     - **编辑更新通道**：`NoteIngestService::instance().updateNoteContent(...)`，确保元数据（身世、原始类型、关联分类）严格原子化同步；
+   - **访问历史更新收敛**：`recordAccess` 统一收敛至中央大脑 `CoreEngine::instance().executeCommand(RecordAccess)` 或统一仓储通道，杜绝 UI 孤岛写盘。
+
+2. **标签与元数据检索统一收敛至真理源专职服务**：
+   - 彻底拔除在 `NoteEditWindow` 中直接调用 `DatabaseManager::instance().getAllTags()` 与 `getRecentTagsWithCounts()`；
+   - **标签词表检索真理源**：统一委托给 `RapidNotes::TagLexiconService::instance()`（`getAllTagNames()`, `querySuggestions()`）；
+   - **笔记原始元数据回显**：`loadNoteData(id)` 统一委托给 `RapidNotes::NoteRepository::instance().getNoteById(id)`，保持单向依赖流动与职责正交。
