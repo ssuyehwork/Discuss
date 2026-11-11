@@ -345,6 +345,7 @@ void QuickWindow::initUI() {
 
     auto* container = new QWidget();
     container->setObjectName("QuickWindow_container");
+    container->setAttribute(Qt::WA_StyledBackground, true);
     container->setMouseTracking(true);
 
     auto* shadow = new QGraphicsDropShadowEffect(this);
@@ -361,6 +362,7 @@ void QuickWindow::initUI() {
     auto* leftContent = new QWidget();
     leftContent->setObjectName("leftContent");
     leftContent->setObjectName("QuickWindow_leftContent_4");
+    leftContent->setAttribute(Qt::WA_StyledBackground, true);
     leftContent->setMouseTracking(true);
     auto* leftLayout = new QVBoxLayout(leftContent);
     leftLayout->setContentsMargins(10, 10, 10, 5);
@@ -739,6 +741,7 @@ void QuickWindow::initUI() {
     QWidget* customToolbar = new QWidget(this);
 
     customToolbar->setObjectName("customToolbar");
+    customToolbar->setAttribute(Qt::WA_StyledBackground, true);
     customToolbar->setMouseTracking(true);
     customToolbar->setAttribute(Qt::WA_Hover);
     customToolbar->setFixedWidth(36);

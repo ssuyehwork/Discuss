@@ -384,3 +384,20 @@
   3. 在 `main.cpp` 中展示主窗口时核验数据库连接状态；
   4. 在 `LibraryDao.cpp` 中增加对 `db == nullptr` 的明确判空防御与告警提示；
   5. 彻底杜绝了 `MainWindow` 构造装配过程中触发 `m_db.close()` 引起的驱动 handle 野指针或虚表寻址崩溃。
+
+
+### 2026-11-12: QuickWindow 容器实色绘制与桌面绿色穿透彻底修复 (QuickWindow Container StyledBackground & Desktop Opacity Fix)
+- **时间轴**：2026-11-12
+- **修改原因**：
+  1. 修复 QuickWindow 在透明无边框窗口模式（`Qt::WA_TranslucentBackground`）下，基础 `QWidget` 容器默认未启用样式绘制导致深色实体背景（`#1E1E1E` 与 `#252526`）无法渲染、透出 Windows 系统桌面鲜绿色背景的严重 UI 破坏问题；
+  2. 修复右侧垂直工具栏（`customToolbar`）背景完全透明穿透、按钮悬浮在桌面上的视觉缺陷；
+  3. 清理从 C++ 搬迁内联样式至 `style.qss` 时残留的冗余裸选择器。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/src/ui/QuickWindow.cpp`
+  - `RapidNotes_Source/RapidNotes/resources/style.qss`
+  - `RapidNotes_Source/RapidNotes/Memories_RapidNotes.md`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
+- **修改内容**：
+  1. 在 `QuickWindow::initUI()` 中，分别为 `container`、`leftContent` 和 `customToolbar` 显式设置 `setAttribute(Qt::WA_StyledBackground, true)`，确保外部 QSS 实体深灰底色（`#1E1E1E` 和 `#252526`）、圆角与边框 100% 稳定绘制；
+  2. 清理 `resources/style.qss` 中 4 处无限定命名空间的裸 `QPushButton:checked` 与 1 处裸 `QPushButton::menu-indicator`，消除潜在全局污染；
+  3. 在 `Memories_RapidNotes.md` 中补充第 34 章规范，确立透明窗口下容器实色绘制的单一真理源。
