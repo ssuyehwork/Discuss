@@ -668,3 +668,25 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - 整体工程以 **RapidNotes 为主，QuarkMeta 为次**；
    - Windows 资源清单、可执行程序图标、系统托盘图标、窗口标题栏图标统一以 RapidNotes 官方资产为主视觉真理源；
    - 清理重定义冲突的 Manifest 与 RC 资源文件，保持命名与品牌规范严谨闭合。
+
+---
+
+## 24. MSVC 动态链接与三权分立构建规范 (MSVC Dynamic Linking & Build SSOT)
+
+> 本章节记录用户的核心架构决策：RapidNotes 正式锁定官方标准动态链接版 Qt (`msvc2022_64`)，构建体系全面归一化为动态运行时库 (`/MD`)，并依托“三权分立”与 `windeployqt` 进行固化运行层部署。
+
+### 24.1 核心设计决策与硬性规范 (Core Philosophy & Build Locks)
+1. **彻底终结 `/MT` 与 `/MD` 混用冲突 (LNK2038 / LNK2005 根因消除)**：
+   - 正式废除 RapidNotes 构建系统中强行设置的静态运行时库（`MultiThreaded` / `/MT`）；
+   - 全面切换为动态运行时库 **`/MD` (Release) 与 `/MDd` (Debug)**，即 `CMAKE_MSVC_RUNTIME_LIBRARY` 统一设为 `MultiThreadedDLL$<$<CONFIG:Debug>:Debug>`；
+   - 与官方 Qt SDK `C:/Qt/6.10.2/msvc2022_64`（其内部为 `/MD` 构建）实现 100% 运行时库契约对齐，彻底消除 `libcpmt.lib` 与 `msvcprt.lib` 的多重符号定义冲突。
+
+2. **静态专属插件导入彻底清除 (Clean Dynamic Linking)**：
+   - 物理移除 `CMakeLists.txt` 中的静态插件导入宏 `qt_import_plugins(...)`，动态版由 Qt 官方机制自动加载动态插件（如 `platforms/qwindows.dll`、`imageformats/qjpeg.dll` 等）；
+   - 彻底解决静态插件对象初始化文件（如 `QGifPlugin_init.cpp.obj` 等）引发的 LNK2038 报错。
+
+3. **三权分立与运行层部署标准 (Three-Tier Architecture & windeployqt)**：
+   - 严格遵循根目录 `T 统一编译路径.md` 约定的工程闭环：
+     - **源码层**：`RapidNotes_Source/RapidNotes` 纯净代码圣殿，零二进制污染；
+     - **中间构建层**：`RapidNotes_Build/x64-release/` 作为临时编译消耗品目录；
+     - **固化运行层**：`RapidNotes_Build/RapidNotes/` 免安装绿色沙盒，由 CMake 自动将 `RapidNotes.exe` 输出至该目录，并使用 `windeployqt.exe RapidNotes.exe` 部署一次依赖，日常编译仅覆盖单一 exe，实现即编即测。
