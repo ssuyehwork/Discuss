@@ -635,3 +635,36 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
      - **`MainWindow` 双击条目** $\equiv$ **就地预览 (QuickLook Preview)**，保持稳定不变；
      - **`QuickWindow` 双击条目** $\equiv$ **发送数据到第三方应用 (Paste/Send to Third-Party App)**；
    - 严禁任何形式的交互倒错与逻辑混淆。
+
+---
+
+## 23. Quick 界面中央大脑架构接入与上帝类职责解耦规范 (QuickWindow Brain Decoupling & Batch SSOT)
+
+> 本章节记录用户的核心设计理念指导与明确共识，作为 QuickWindow 彻底废除直连 DatabaseManager、接入中央大脑 (CoreEngine)、上帝类职责拆分与全链路收敛至批量 SSOT 的唯一真理源 (SSOT)。
+
+### 23.1 核心设计理念与架构铁律 (Core Philosophy & Hard Locks)
+1. **彻底拔除 UI 直连存储层（零直连铁律）**：
+   - `QuickWindow` 严禁直接调用 `DatabaseManager::instance()` 执行业务状态变更、数据写盘或直接订阅数据库信号；
+   - 全面纯化为 **Dumb View 容器**，所有业务意图统一包装为标准命令结构体 `AppCommand`，通过 `CoreEngine::instance().executeCommand(cmd)` 调度；
+   - 所有数据变更监听统一走全局事件中枢 `CentralEventHub`，严格遵守单向依赖流动：
+     $$\text{QuickWindow (View)} \longrightarrow \text{QuickMediator / Controller} \longrightarrow \text{CoreEngine (Domain)} \longrightarrow \text{Repository / SQLite}$$
+
+2. **QuickWindow 职责过载拆分与模块化规范**：
+   - 彻底拆解超过 4000 行的上帝类 `QuickWindow.cpp`，按职责单一原则（SRP）正交拆解为专职模块：
+     - **`QuickMediator`**：中枢协调器，专职负责将 UI 操作映射为 `AppCommand` 投递给大脑，并监听 `CentralEventHub` 驱动列表刷新；
+     - **`QuickContextMenuBuilder`**：专职菜单构建器，承接上千行右键菜单、分类/标签子菜单的动态构建；
+     - **`QuickPasteDeliveryService`**：专职第三方投递服务，负责前台目标窗口句柄探测、系统级双模回写与模拟粘贴投递；
+     - **`QuickShortcutHandler`**：专职快捷键拦截器，统一对齐 `LocalShortcutInterceptor` 架构，强制执行打字态输入焦点保护（`isEditingFocus()`）。
+
+3. **违背 SSOT 行为全面归一化与强制批量优先契约 (Batch SSOT Contract)**：
+   - **状态变更必须原生支持批量接口**：
+     - 严禁在 UI 层使用 `for` 循环单条串行调用 `updateNoteState` 伪装批量操作；
+     - 必须统一接入 `CoreEngine` 批量操作通道，底层使用 `WHERE id IN (...)` 集合式 SQL 完成单事务批处理与单次聚合广播；
+   - **标签编解码统一真理源**：所有标签操作严格收敛至 `RapidNotes::TagCodec`（拆分 `split`、合并 `merge`、规范化 `normalize`、紧凑拼接 `join` 与展示拼接 `joinDisplay`），严禁手写字符串正则；
+   - **路径条目解析统一真理源**：所有剪贴板物理路径、多路径拆分统一委托给 `RapidNotes::PathSummary`，主线程零磁盘探测；
+   - **软删除与永久删除统一真理源**：删除行为统一接入 `TrashService` / `PermanentDeleteService`，杜绝分散的零星删除逻辑。
+
+4. **品牌与 Logo 资产主次规范 (Logo & Brand Assets SSOT)**：
+   - 整体工程以 **RapidNotes 为主，QuarkMeta 为次**；
+   - Windows 资源清单、可执行程序图标、系统托盘图标、窗口标题栏图标统一以 RapidNotes 官方资产为主视觉真理源；
+   - 清理重定义冲突的 Manifest 与 RC 资源文件，保持命名与品牌规范严谨闭合。
