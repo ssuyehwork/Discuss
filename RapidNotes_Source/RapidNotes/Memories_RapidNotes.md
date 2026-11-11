@@ -883,3 +883,18 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - `QuickWindow::refreshData()` 在入口处强制执行双重断言：`if (!isVisible() || isLocked()) return;`；
    - 在应用锁激活期间，严禁向底层模型或视图填充、渲染任何笔记数据，确保即使渲染发生极端异常，底层也无任何数据泄漏；
    - 在 `AppLockWidget` 的 `unlocked` 信号回调中触发 `refreshData()`，实现解锁后的平滑无缝数据填充与视图聚焦。
+
+---
+
+## 34. QuickWindow 容器实色绘制与桌面防穿透规范 (QuickWindow StyledBackground & Opacity SSOT)
+
+> 本章节记录用户的核心设计理念指导与明确共识，作为消除 QuickWindow 在透明窗口（`WA_TranslucentBackground`）下透出 Windows 桌面背景（绿色穿透）以及右侧工具栏背景缺失的唯一真理源 (SSOT)。
+
+### 34.1 核心设计理念与架构铁律 (Core Philosophy & Architecture Locks)
+1. **容器层强制启用 QSS 样式绘制属性 (`Qt::WA_StyledBackground`)**：
+   - 在透明父窗口（`Qt::WA_TranslucentBackground`）体系下，所有直接承载 QSS 实体背景的通用 `QWidget`（包括主容器 `container`、左内容区 `leftContent`、垂直工具栏 `customToolbar`）必须在构造装配时显式设置 `setAttribute(Qt::WA_StyledBackground, true)`；
+   - 彻底解决 Qt 基础部件默认不渲染 QSS 背景导致的透明穿透与悬浮缺陷；
+2. **零数值篡改与视觉 100% 对齐旧版基准**：
+   - 主容器底色严格维持 `#1E1E1E`（10px 圆角，1px solid #333 边框）；
+   - 右侧垂直工具栏底色严格维持 `#252526`（右上/右下 10px 圆角，左边框 1px solid #333，宽度 36px）；
+   - 坚守外联 QSS (`resources/style.qss`) 单一真理源，严禁向 C++ 源码倒退回写内联 `setStyleSheet`。
