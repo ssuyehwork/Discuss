@@ -57,6 +57,10 @@ public:
     static QString getGlobalDbPath() { return instance().getDbPath(); }
     static void logSqlError(const char* location, sqlite3* db, const QString& sql = QString());
     void shutdown() { closeAndPack(); }
+
+    // 暴露数据库连接与递归互斥锁供仓储层与多线程安全访问
+    QSqlDatabase database() const { return m_db; }
+    QRecursiveMutex* dbMutex() { return &m_mutex; }
     
     // 核心 CRUD 操作
     int addNote(const QString& title, const QString& content, const QStringList& tags = QStringList(), 
