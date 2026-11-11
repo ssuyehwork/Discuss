@@ -368,3 +368,13 @@
   - (物理删除) `RapidNotes_Source/RapidNotes/src/meta/DatabaseManager.cpp`
   - (物理删除) `RapidNotes_Source/RapidNotes/src/meta/DatabaseManager.h`
   - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
+
+### 2026-11-11: 补齐 DatabaseManager::database() 与 dbMutex() 成员方法 (解决 NoteRepository 与 DiskTrashRepo 编译报错)
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. `NoteRepository.cpp` 调用了 `DatabaseManager::instance().database()` 获取底层 `QSqlDatabase`；
+  2. `DiskTrashRepo.cpp` 调用了 `DatabaseManager::instance().dbMutex()` 获取递归互斥锁；
+  3. 在 `src/core/DatabaseManager.h` 中分别内联声明并导出 `QSqlDatabase database() const { return m_db; }` 与 `QRecursiveMutex* dbMutex() { return &m_mutex; }`，彻底修复 C2039 编译错误。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.h`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`

@@ -54,6 +54,8 @@ public:
     QString getDbPath() const;
     sqlite3* getGlobalDb();
     static std::mutex& getGlobalMutex() { static std::mutex s_globalMutex; return s_globalMutex; }
+    QRecursiveMutex* dbMutex() { return &m_mutex; }
+    QSqlDatabase database() const { return m_db; }
     static QString getGlobalDbPath() { return instance().getDbPath(); }
     static void logSqlError(const char* location, sqlite3* db, const QString& sql = QString());
     void shutdown() { closeAndPack(); }
