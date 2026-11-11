@@ -7,32 +7,101 @@
 1. **日历绘制直连**：`paintCell` 中每次单元格重绘均调用 `DatabaseManager::instance().getTodosByDate(date)`，高频阻塞 UI 渲染；
 2. **信号订阅直连**：直接监听 `&DatabaseManager::instance(), &DatabaseManager::todoChanged`；
 3. **右键动作与状态变更直连**：在上下文菜单中直接就地调用 `addTodo`、`updateTodo`、`deleteTodo`；
-4. **伪批量循环写盘 (违背 SSOT 批量契约)**：在右键批量完成与批量删除动作中，手写 `for (int id : taskIds) { DatabaseManager::instance().deleteTodo(id); }`，造成多次无效磁盘事务与信号风暴；
+4. **伪批量循环写盘 (违背 SSOT 批量契约)**：在右键批量删除动作中，手写 `for (auto* item : items) { DatabaseManager::instance().deleteTodo(id); }`，在排程视图中手写 `for (int id : taskIds) { DatabaseManager::instance().deleteTodo(id); }`，单次删除都会触发独立加锁、独立执行、写盘标记以及发射 `emit todoChanged()`，引发严重的磁盘 I/O 浪费与 UI 连环刷新风暴；
 5. **违背单向依赖契约**：UI 视图层直接耦合数据库单例，违背了 `Shell -> View -> Controller -> Domain -> Data` 单向架构流动。
 
 ### 2. 根因剖析
-历史遗留代码中未设立专职的待办仓储层（`TodoRepository`），导致 `DatabaseManager` 充当了通用数据池，UI 视图层在缺乏领域抽象的情况下直接下钻操作底层接口。
+历史遗留代码中未设立专职的待办仓储层（`TodoRepository`），且 `DatabaseManager` 中缺少原生原子批量删除接口，导致 UI 视图层不得不手写循环串行写盘。
 
 ### 3. 治理目标
-1. 建立专职的 `RapidNotes::TodoRepository` 仓储模块，确立 `TodoItem` 领域实体契约；
-2. 在 `TodoRepository` 中原生提供集合式批量删除接口 `deleteTodosBatch(const QList<int>& ids)`；
-3. 将 `TodoCalendarWindow.cpp` 中的全部 22 处 `DatabaseManager::instance()` 替换为 `TodoRepository::instance()`，彻底纯化为 Dumb View。
+1. **在底层 `DatabaseManager` 原生提供原子批量删除接口**：`bool deleteTodosBatch(const QList<int>& ids)`，在单次互斥锁与单次 SQL 事务中执行 `DELETE FROM todos WHERE id IN (...)`，执行完毕后仅标记一次写盘并只发射一次 `emit todoChanged()`；
+2. **建立专职领域仓储 `RapidNotes::TodoRepository`**：确立 `TodoItem` 实体契约，精准对接底层接口；`addTodo` 严格返回 `int`（新增待办记录 ID），`deleteTodosBatch` 直接委托底层单事务批量接口；
+3. **彻底纯化 UI 容器**：将 `TodoCalendarWindow.cpp` 中的全部 22 处 `DatabaseManager::instance()` 替换为 `TodoRepository::instance()`，消除所有伪批量 for 循环，彻底纯化为 Dumb View。
 
 ---
 
 ## Chapter 2: Modified Files List（影响文件清单）
 
-1. `RapidNotes_Source/RapidNotes/src/core/TodoRepository.h` [新建] — 待办专职仓储模块头文件与 TodoItem 契约。
-2. `RapidNotes_Source/RapidNotes/src/core/TodoRepository.cpp` [新建] — 待办专职仓储模块实现。
-3. `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.h` — 替换头文件包含与类型声明。
-4. `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 彻底替换 22 处直连调用，收敛至 `TodoRepository`。
-5. `RapidNotes_Source/RapidNotes/CMakeLists.txt` — 注册 `TodoRepository.h` 与 `TodoRepository.cpp` 构建单元。
+1. `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.h` — 声明原生原子批量删除接口 `bool deleteTodosBatch(const QList<int>& ids)`。
+2. `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.cpp` — 实现基于单事务与集合式 SQL 的 `deleteTodosBatch`。
+3. `RapidNotes_Source/RapidNotes/src/core/TodoRepository.h` [新建] — 待办专职仓储模块头文件与 TodoItem 契约。
+4. `RapidNotes_Source/RapidNotes/src/core/TodoRepository.cpp` [新建] — 待办专职仓储模块实现。
+5. `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.h` — 替换头文件包含与类型声明。
+6. `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 彻底替换 22 处直连调用，收敛至 `TodoRepository` 原生批量接口。
+7. `RapidNotes_Source/RapidNotes/CMakeLists.txt` — 注册 `TodoRepository.h` 与 `TodoRepository.cpp` 构建单元。
 
 ---
 
 ## Chapter 3: Detailed Line-by-Line Changes（精准替换块）
 
-### 3.1 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.h` — 替换数据库依赖为专职仓储头文件
+### 3.1 `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.h` — 声明原生原子批量删除接口
+
+```diff
+<<<<<<< SEARCH
+    bool updateTodo(const Todo& todo);
+    bool deleteTodo(int id);
+    QList<Todo> getTodosByDate(const QDate& date);
+=======
+    bool updateTodo(const Todo& todo);
+    bool deleteTodo(int id);
+    bool deleteTodosBatch(const QList<int>& ids);
+    QList<Todo> getTodosByDate(const QDate& date);
+>>>>>>> REPLACE
+```
+
+### 3.2 `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.cpp` — 实现原子批量删除接口
+
+```diff
+<<<<<<< SEARCH
+bool DatabaseManager::deleteTodo(int id) {
+    QMutexLocker locker(&m_mutex);
+    if (!m_db.isOpen()) return false;
+    
+    QSqlQuery query(m_db);
+    query.prepare("DELETE FROM todos WHERE id = ?");
+    query.addBindValue(id);
+    
+    bool ok = query.exec();
+    if (ok) {
+        markDirty();
+        emit todoChanged();
+    }
+    return ok;
+}
+=======
+bool DatabaseManager::deleteTodo(int id) {
+    return deleteTodosBatch(QList<int>() << id);
+}
+
+bool DatabaseManager::deleteTodosBatch(const QList<int>& ids) {
+    if (ids.isEmpty()) return true;
+
+    QMutexLocker locker(&m_mutex);
+    if (!m_db.isOpen()) return false;
+
+    QStringList placeholders;
+    placeholders.reserve(ids.size());
+    for (int i = 0; i < ids.size(); ++i) {
+        placeholders.append("?");
+    }
+
+    QSqlQuery query(m_db);
+    query.prepare(QString("DELETE FROM todos WHERE id IN (%1)").arg(placeholders.join(",")));
+    for (int id : ids) {
+        query.addBindValue(id);
+    }
+
+    bool ok = query.exec();
+    if (ok) {
+        markDirty();
+        emit todoChanged();
+    }
+    return ok;
+}
+>>>>>>> REPLACE
+```
+
+### 3.3 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.h` — 替换数据库依赖为专职仓储头文件
 
 ```diff
 <<<<<<< SEARCH
@@ -46,7 +115,7 @@
 >>>>>>> REPLACE
 ```
 
-### 3.2 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换信号连接与初始化
+### 3.4 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换信号连接与初始化
 
 ```diff
 <<<<<<< SEARCH
@@ -64,7 +133,7 @@
 >>>>>>> REPLACE
 ```
 
-### 3.3 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换日历单元格绘制中的直连读取
+### 3.5 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换日历单元格绘制中的直连读取
 
 ```diff
 <<<<<<< SEARCH
@@ -78,7 +147,7 @@ void CustomCalendar::paintCell(QPainter* painter, const QRect& rect, QDate date)
 >>>>>>> REPLACE
 ```
 
-### 3.4 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换左侧列表右键动作直连与单条写盘
+### 3.6 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换左侧列表右键动作直连与单条写盘
 
 ```diff
 <<<<<<< SEARCH
@@ -133,7 +202,7 @@ void CustomCalendar::paintCell(QPainter* painter, const QRect& rect, QDate date)
 >>>>>>> REPLACE
 ```
 
-### 3.5 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换排程视图右键菜单中的直连与伪批量
+### 3.7 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换排程视图右键菜单中的直连与伪批量
 
 ```diff
 <<<<<<< SEARCH
@@ -289,7 +358,7 @@ void CustomCalendar::paintCell(QPainter* painter, const QRect& rect, QDate date)
 >>>>>>> REPLACE
 ```
 
-### 3.6 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换日历视图右键弹窗中的直连
+### 3.8 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换日历视图右键弹窗中的直连
 
 ```diff
 <<<<<<< SEARCH
@@ -301,7 +370,7 @@ void CustomCalendar::paintCell(QPainter* painter, const QRect& rect, QDate date)
 >>>>>>> REPLACE
 ```
 
-### 3.7 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换悬停 ToolTip 与 24h 列表渲染直连
+### 3.9 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换悬停 ToolTip 与 24h 列表渲染直连
 
 ```diff
 <<<<<<< SEARCH
@@ -327,7 +396,7 @@ void TodoCalendarWindow::update24hList(const QDate& date) {
 >>>>>>> REPLACE
 ```
 
-### 3.8 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换任务全量加载与新增/编辑槽函数直连
+### 3.10 `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp` — 替换任务全量加载与新增/编辑槽函数直连
 
 ```diff
 <<<<<<< SEARCH
@@ -517,7 +586,7 @@ void TodoCalendarWindow::openEditDialog(const DatabaseManager::Todo& t) {
 >>>>>>> REPLACE
 ```
 
-### 3.9 `RapidNotes_Source/RapidNotes/CMakeLists.txt` — 注册 TodoRepository 构建单元
+### 3.11 `RapidNotes_Source/RapidNotes/CMakeLists.txt` — 注册 TodoRepository 构建单元
 
 ```diff
 <<<<<<< SEARCH
@@ -550,15 +619,18 @@ void TodoCalendarWindow::openEditDialog(const DatabaseManager::Todo& t) {
 
 namespace RapidNotes {
 
+// 遵循 SSOT 实体契约：过度期兼容引用并确立独立 TodoItem 契约
+using TodoItem = DatabaseManager::Todo;
+
 class TodoRepository : public QObject {
     Q_OBJECT
 public:
     static TodoRepository& instance();
 
-    QList<DatabaseManager::Todo> getTodosByDate(const QDate& date);
-    QList<DatabaseManager::Todo> getAllTodos();
-    bool addTodo(const DatabaseManager::Todo& todo);
-    bool updateTodo(const DatabaseManager::Todo& todo);
+    QList<TodoItem> getTodosByDate(const QDate& date);
+    QList<TodoItem> getAllTodos();
+    int addTodo(const TodoItem& todo);
+    bool updateTodo(const TodoItem& todo);
     bool deleteTodo(int id);
     bool deleteTodosBatch(const QList<int>& ids);
 
@@ -578,6 +650,7 @@ private:
 ### 4.2 实现文件 `src/core/TodoRepository.cpp`
 ```cpp
 #include "TodoRepository.h"
+#include "DatabaseManager.h"
 
 namespace RapidNotes {
 
@@ -590,19 +663,20 @@ TodoRepository::TodoRepository(QObject* parent) : QObject(parent) {
     connect(&DatabaseManager::instance(), &DatabaseManager::todoChanged, this, &TodoRepository::todoChanged);
 }
 
-QList<DatabaseManager::Todo> TodoRepository::getTodosByDate(const QDate& date) {
+QList<TodoItem> TodoRepository::getTodosByDate(const QDate& date) {
     return DatabaseManager::instance().getTodosByDate(date);
 }
 
-QList<DatabaseManager::Todo> TodoRepository::getAllTodos() {
+QList<TodoItem> TodoRepository::getAllTodos() {
     return DatabaseManager::instance().getAllTodos();
 }
 
-bool TodoRepository::addTodo(const DatabaseManager::Todo& todo) {
+int TodoRepository::addTodo(const TodoItem& todo) {
+    // 严格对齐实际返回值契约：返回底层真实生成的新待办 ID
     return DatabaseManager::instance().addTodo(todo);
 }
 
-bool TodoRepository::updateTodo(const DatabaseManager::Todo& todo) {
+bool TodoRepository::updateTodo(const TodoItem& todo) {
     return DatabaseManager::instance().updateTodo(todo);
 }
 
@@ -611,11 +685,8 @@ bool TodoRepository::deleteTodo(int id) {
 }
 
 bool TodoRepository::deleteTodosBatch(const QList<int>& ids) {
-    if (ids.isEmpty()) return true;
-    for (int id : ids) {
-        DatabaseManager::instance().deleteTodo(id);
-    }
-    return true;
+    // 严格调用底层单事务原子批量删除接口，杜绝任何 for 循环串行调用
+    return DatabaseManager::instance().deleteTodosBatch(ids);
 }
 
 } // namespace RapidNotes
@@ -625,8 +696,8 @@ bool TodoRepository::deleteTodosBatch(const QList<int>& ids) {
 
 ## Chapter 5: Build & Compilation Verification（构建与编译验收标准）
 
-1. **构建语法通过**：CMake 成功生成 VS 解决方案，`src/core/TodoRepository.cpp` 与 `.h` 正常编译；
-2. **零符号冲突与零链接错误**：MSVC 成功解析 `TodoRepository::instance()`，无外部未解析符号；
+1. **构建语法通过**：CMake 成功生成 VS 解决方案，`DatabaseManager` 与 `TodoRepository` 正常编译；
+2. **零符号冲突与零签名报错**：MSVC 成功解析 `DatabaseManager::deleteTodosBatch` 与 `TodoRepository::addTodo`，返回值类型匹配一致；
 3. **消除直连证据**：在 `TodoCalendarWindow.cpp` 中检索 `DatabaseManager::instance()`，匹配次数严格由 22 处归零至 0 处。
 
 ---
@@ -634,8 +705,8 @@ bool TodoRepository::deleteTodosBatch(const QList<int>& ids) {
 ## Chapter 6: Runtime Behavior Verification（运行时行为验收）
 
 1. **日历网格热力渲染**：点击不同日期，单元格热力高亮与待办事件正确加载展示；
-2. **待办增删改正常**：通过双击排程列表新增待办、双击编辑、右键单项删除，数据库能正确写入并实时刷新；
-3. **批量删除原子性生效**：在多选待办时点击“批量删除”，所有选中待办一次性被移除并刷新界面，无界面卡顿或异常弹窗。
+2. **待办增删改正常**：双击排程列表新增待办、双击编辑、右键单项删除，数据库能正确写入并实时刷新；
+3. **原子批量删除性能验收**：在多选待办时点击“批量删除”，由 `deleteTodosBatch` 一次性完成 SQL 事务执行，并且在日志与事件总线中**确认仅发射了一次 `todoChanged` 信号**，界面无卡顿与闪烁。
 
 ---
 
@@ -644,8 +715,9 @@ bool TodoRepository::deleteTodosBatch(const QList<int>& ids) {
 | 业务领域与实体行为 | 既有违背 SSOT 方式 | 重构后唯一合法真理源通道 | 批量化支持契约 |
 | :--- | :--- | :--- | :--- |
 | **待办事项数据读取** | `TodoCalendarWindow` 直连 `DatabaseManager::getTodosByDate` / `getAllTodos` | `RapidNotes::TodoRepository::instance().getTodosByDate` / `getAllTodos` | 集合式读取 |
-| **待办事项增改** | 直连 `DatabaseManager::addTodo` / `updateTodo` | `RapidNotes::TodoRepository::instance().addTodo` / `updateTodo` | 单项/批量事务封装 |
-| **待办事项单项与批量删除** | 界面 for 循环逐条调用 `DatabaseManager::deleteTodo(id)` | `RapidNotes::TodoRepository::instance().deleteTodosBatch(ids)` | 原生 `deleteTodosBatch(QList<int>)`，杜绝 UI 循环刷盘 |
+| **待办事项新增** | 直连 `DatabaseManager::addTodo` | `RapidNotes::TodoRepository::instance().addTodo` | 严格返回新记录主键 ID |
+| **待办事项修改** | 直连 `DatabaseManager::updateTodo` | `RapidNotes::TodoRepository::instance().updateTodo` | 原子化属性同步 |
+| **待办事项原子批量删除** | 界面或仓储层使用 `for` 循环串行调用 `deleteTodo(id)` | `DatabaseManager::deleteTodosBatch` + `TodoRepository::deleteTodosBatch` | 底层原生单事务 `WHERE id IN (...)`，单次加锁单次广播 |
 | **变更通知广播** | 监听底层 `DatabaseManager::todoChanged` | 订阅领域仓储 `TodoRepository::todoChanged` | 单一领域事件总线 |
 
 ---
@@ -654,10 +726,11 @@ bool TodoRepository::deleteTodosBatch(const QList<int>& ids) {
 
 - [x] **第一关：代码真实性核查**
   - 所有 SEARCH 块均与实际文件精确匹配（100% 存在且唯一）；
-  - 方法签名与字段完全符合既有 `DatabaseManager::Todo` 契约。
+  - `addTodo` 签名严格返回 `int`，与底层头文件 100% 吻合；
+  - `deleteTodosBatch` 在底层实现单事务批量删除，彻底消灭伪批量。
 - [x] **第二关：架构硬锁审查**
   - 【契约锁】：既有接口签名冻结，对外暴露符合规范；
-  - 【依赖锁】：`TodoCalendarWindow (View) -> TodoRepository (Domain/Data)` 严格单向依赖；
+  - 【依赖锁】：`TodoCalendarWindow (View) -> TodoRepository (Domain) -> Database (Data)` 严格单向依赖；
   - 【门禁锁】：彻底消灭 UI 直连；
   - 【黑盒隔离锁】：内部实现私有，通过 API/DTO 通信；
   - 【零值篡改锁】：样式、颜色 Hex、时间计算完全照抄既有逻辑，零擅自修改。
