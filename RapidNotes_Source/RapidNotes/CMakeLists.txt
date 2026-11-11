@@ -118,6 +118,8 @@ set(SOURCES
     src/core/NavigationService.cpp
     src/core/NavigationService.h
     src/core/OCRManager.cpp
+    src/core/NoteIngestService.cpp
+    src/core/NoteIngestService.h
     src/core/OCRManager.h
     src/core/PathSummary.cpp
     src/core/PathSummary.h
@@ -440,6 +442,8 @@ set(SOURCES
     src/core/PresetTagService.cpp
     src/core/TagLexiconService.cpp
     src/core/TagLexiconService.h
+    src/core/TodoRepository.cpp
+    src/core/TodoRepository.h
     src/core/TransferToMarkedCommand.cpp
     src/core/TransferToMarkedCommand.h
     src/core/UndoManager.h

@@ -248,3 +248,60 @@
   2. 将全部裸选择器精确绑定至各窗口的具体 `objectName` 作用域，杜绝全局样式泄漏；
   3. 在 `QuickWindow.cpp` 中显式为 `container`、`leftContent` 和 `customToolbar` 设置 `setAttribute(Qt::WA_StyledBackground, true)`，确保实体背景 `#1E1E1E` 和 `#252526` 稳定绘制，彻底消除半透明桌面穿透；
   4. 恢复 QuickWindow 专属工具栏无边框与悬停高亮，规范关闭按钮红底，完善 `TabBarScrollArea` 透明度适配。
+
+### 2026-11-11: TodoCalendarWindow 直连剥离与 TodoRepository 专职领域仓储重构
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 治理 UI 层直接穿透调用底层上帝类 `DatabaseManager` 单例的坏味道，建立专职待办领域仓储层，遵循 `Shell -> View -> Controller -> Domain -> Data` 单向架构流动；
+  2. 根治既有批量删除操作中使用 `for` 循环单项删除导致的频繁加锁、频繁执行 SQL 与 UI 连环刷新风暴，提供原生原子批量删除接口，单次加锁单次事务执行并在完成后仅发射一次 `todoChanged` 信号；
+  3. 彻底将 `TodoCalendarWindow.cpp` 中的全部 22 处 `DatabaseManager::instance()` 直连替换为 `RapidNotes::TodoRepository::instance()`，彻底纯化 UI 容器。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.h`
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.cpp`
+  - `RapidNotes_Source/RapidNotes/src/core/TodoRepository.h` [新建]
+  - `RapidNotes_Source/RapidNotes/src/core/TodoRepository.cpp` [新建]
+  - `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.h`
+  - `RapidNotes_Source/RapidNotes/src/ui/TodoCalendarWindow.cpp`
+  - `RapidNotes_Source/RapidNotes/CMakeLists.txt`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
+- **修改内容**：
+  1. 在 `DatabaseManager` 声明并实现原生原子批量删除接口 `bool deleteTodosBatch(const QList<int>& ids)`，采用 `WHERE id IN (...)` 单事务执行，单项 `deleteTodo(id)` 委托给批量删除；
+  2. 新建专职领域仓储 `RapidNotes::TodoRepository`，确立 `TodoItem` 实体契约，封装数据读写与变更通知；
+  3. 在 `CMakeLists.txt` 中注册 `TodoRepository.h` 与 `TodoRepository.cpp` 构建单元；
+  4. 在 `TodoCalendarWindow.h` 与 `TodoCalendarWindow.cpp` 中将全部 22 处 `DatabaseManager::instance()` 直连调用替换为 `TodoRepository::instance()`，消灭右键批量删除中的伪批量循环。
+
+### 2026-11-11: QuickWindow 密码锁定遮罩不透光与内容绝对安全隔离修复
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 修复 QuickWindow 分类加锁时，遮罩层背景透明导致底层笔记条目与内容直接暴露的严重安全缺陷；
+  2. 废除 `style.qss` 中 `#CategoryLockWidget_this_1` 的 `background: transparent;` 配置，设为实体深色 `#1E1E1E`；
+  3. 在 `CategoryLockWidget.cpp` 中启用 `setAttribute(Qt::WA_StyledBackground, true);`，确保 QSS 样式能够 100% 作用于自定义 QWidget，建立绝对不透光遮罩屏障。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/resources/style.qss`
+  - `RapidNotes_Source/RapidNotes/src/ui/CategoryLockWidget.cpp`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
+- **修改内容**：
+  1. 修改 `style.qss`，将 `#CategoryLockWidget_this_1` 背景改为 `background-color: #1E1E1E; background: #1E1E1E;`；
+  2. 修改 `CategoryLockWidget.cpp`，在构造函数首行添加 `setAttribute(Qt::WA_StyledBackground, true);`。
+
+### 2026-11-11: NoteEditWindow 笔记编辑入库解耦与 NoteIngestService / TagLexicon 统一通道重构
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 彻底消灭 `NoteEditWindow.cpp` 中直接穿透调用底层 `DatabaseManager::instance()` 的 7 处坏味道；
+  2. 确立 SSOT 职责正交划分：元数据查询与回显归属 `NoteRepository`，标签词表与最近标签统计收敛至 `TagLexiconService`，笔记新建入库与更新归口至专职指挥中心 `NoteIngestService`。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/src/core/NoteRepository.h`
+  - `RapidNotes_Source/RapidNotes/src/core/NoteRepository.cpp`
+  - `RapidNotes_Source/RapidNotes/src/core/TagLexiconService.h`
+  - `RapidNotes_Source/RapidNotes/src/core/TagLexiconService.cpp`
+  - `RapidNotes_Source/RapidNotes/src/core/NoteIngestService.h` [新建]
+  - `RapidNotes_Source/RapidNotes/src/core/NoteIngestService.cpp` [新建]
+  - `RapidNotes_Source/RapidNotes/src/ui/NoteEditWindow.cpp`
+  - `RapidNotes_Source/RapidNotes/CMakeLists.txt`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`
+- **修改内容**：
+  1. 在 `NoteRepository` 中声明并实现 `QVariantMap getNoteById(int id)`；
+  2. 在 `TagLexiconService` 中声明并实现 `QList<QVariantMap> getRecentTagsWithCounts(int limit)`；
+  3. 创建专职服务 `RapidNotes::NoteIngestService`，实现 `ingestNote` 与 `updateNote`，完成标签清洗规范化与单事务落库；
+  4. 在 `CMakeLists.txt` 中注册 `NoteIngestService.h` 与 `NoteIngestService.cpp` 构建单元；
+  5. 在 `NoteEditWindow.cpp` 中将全部 7 处 `DatabaseManager::instance()` 直连调用替换为对应领域服务，UI 直连彻底清零。
