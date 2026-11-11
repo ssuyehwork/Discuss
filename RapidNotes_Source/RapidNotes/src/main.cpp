@@ -35,6 +35,7 @@
 #include "core/ClipboardMonitor.h"
 #include "ui/IconHelper.h"
 #include "ui/QuickWindow.h"
+#include "ui/MainWindow.h"
 #include "ui/FloatingBall.h"
 #include "ui/SystemTray.h"
 #include "ui/ToolTipOverlay.h"
@@ -131,7 +132,7 @@ int main(int argc, char *argv[]) {
     }
 
     // 加载全局样式表
-    QFile styleFile(":/qss/dark_style.qss");
+    QFile styleFile(":/style.qss");
     if (styleFile.open(QFile::ReadOnly)) {
         a.setStyleSheet(styleFile.readAll());
     }
@@ -296,6 +297,26 @@ int main(int argc, char *argv[]) {
             QObject::connect(win, &NoteEditWindow::noteSaved, quickWin, &QuickWindow::refreshData);
             win->show();
         });
+    });
+
+    MainWindow* mainWin = nullptr;
+    auto showMainWindow = [=, &mainWin, &checkLockAndExecute]() {
+        checkLockAndExecute([=, &mainWin](){
+            if (!mainWin) {
+                mainWin = new MainWindow();
+            }
+            if (mainWin->isMinimized()) {
+                mainWin->showNormal();
+            } else {
+                mainWin->show();
+            }
+            mainWin->raise();
+            mainWin->activateWindow();
+        });
+    };
+
+    QObject::connect(quickWin, &QuickWindow::toggleMainWindowRequested, [=](){
+        showMainWindow();
     });
 
     // [USER_REQUEST] 定义可复用的采集逻辑

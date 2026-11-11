@@ -116,3 +116,67 @@
 #### 7. 派生窗口基类置顶按钮成员变量对齐（修改）
 - **`src/ui/PasswordVerifyDialog.cpp`** / **`src/ui/SettingsWindow.cpp`** / **`src/ui/TagEditDialog.cpp`**：
   - **修改原因**：基类 `FramelessDialog` 中定义的置顶按钮成员变量名为 `m_pinBtn`，而在 `PasswordVerifyDialog`、`SettingsWindow` 与 `TagEditDialog` 中误写为旧名称 `m_btnPin`，导致 MSVC 报出 C2065“m_btnPin 未声明的标识符”错误。本次统一将这些派生类中的 `m_btnPin` 修正为基类实际受保护成员 `m_pinBtn`，使对话框在初始化时正确隐匿置顶按钮，彻底根除 C2065 报错。
+
+---
+
+## 记录日期：2025-05-20
+
+### 核心演进目标
+1. 解决 `QuickWindow.cpp` 中 MSVC 编译报出的 C2027（使用了未定义类型“DropTreeView”）、C2446/C2664（DropTreeView 指针无法转换为 QWidget*）及 C2065（未声明标识符）错误。
+2. 修复 `FramelessInputDialog` 命名空间未导出导致的 C2760 / C2059 语法错误及 `pwdMenu` 作用域截断报错。
+3. 纠正 `QuickWindow` 中筛选面板类型，对齐专用组件 `QuickFilterPanel` 契约并在 `CMakeLists.txt` 中同步注册。
+
+---
+
+### 修改文件清单与原因说明
+
+#### 1. 命名空间全局导出与类型别名闭合（修改）
+- **`src/ui/QuickWindow.h` / `src/ui/QuickWindow.cpp`**：
+  - **修改原因**：`DropTreeView` 定义于 `namespace RapidNotes` 中，若直接在头文件底部使用 `using RapidNotes::DropTreeView;` 会在包含全局前向声明时引发 MSVC C2874（多次声明）。本次在 `QuickWindow.h` 中将前向声明精确归入 `namespace RapidNotes { class DropTreeView; }` 并使用 `using RapidNotes::DropTreeView;`，同时在 `QuickWindow.cpp` 包含 `DropTreeView.h` 后明确引入 `using RapidNotes::DropTreeView;`，从根本上解决 Incomplete Type（C2027）、指针无法转换为 `QWidget*`/`QObject*`（C2664、C2446）以及无法识别自定义信号（C2065 `notesDropped`）的问题。
+- **`src/ui/dialogs/FramelessInputDialog.h` / `src/ui/FramelessDialog.h`**：
+  - **修改原因**：`FramelessInputDialog` 定义在 `RapidNotes` 命名空间中，`FramelessDialog.h` 中漏导出了该类型别名，导致 `QuickWindow.cpp:2671` 等处识别不到类型定义并报出 C2760“此处出现意外的 dlg；应为 ;”及级联作用域报错。本次在 `FramelessInputDialog.h` 底部与 `FramelessDialog.h` 中显式导出 `using RapidNotes::FramelessInputDialog;`。
+
+#### 2. 筛选面板契约对齐与构建注册（修改）
+- **`src/ui/QuickWindow.h` / `src/ui/QuickWindow.cpp`**：
+  - **修改原因**：`QuickWindow` 中原定义使用了主窗口的 `FilterPanel`，导致与调用的 `getCheckedCriteria()`、`updateStats`、无参 `filterChanged` 信号不匹配。本次将其修正为专职组件 `QuickFilterPanel`，包含 `#include "QuickFilterPanel.h"` 并更新连接。
+- **`CMakeLists.txt`**：
+  - **修改原因**：在构建单元源文件列表中同步注册 `src/ui/QuickFilterPanel.cpp` 与 `src/ui/QuickFilterPanel.h`，确保符号完整链接。
+
+#### 3. 元数据缓存接口调用纠正（修改）
+- **`src/meta/MetadataManager.cpp`**：
+  - **修改原因**：`addTagsBatch` 与 `removeTagsBatch` 中误调用了不存在的方法 `MetaMemoryCache::instance().get(nPath)`，引发 MSVC C2039“不是 MetaMemoryCache 的成员”报错。本次将其修正为标准接口 `getMeta(nPath)`。
+
+#### 4. 第三方库头文件搜索路径补全（修改）
+- **`CMakeLists.txt`**：
+  - **修改原因**：`FormatDecoders.cpp` 依赖了 `src/third_party/libtiff/tiffio.h`，但全局 `include_directories` 中此前缺少 `src/third_party/libtiff` 目录，导致 MSVC 报出 C1083“无法打开包括文件: ‘tiffio.h’: No such file or directory”错误。本次在 `include_directories` 中补充注册该路径。
+
+#### 5. 后台任务进度接口对齐与大图生成权限解耦（修改）
+- **`src/util/BatchQuickLookService.cpp`**：
+  - **修改原因**：代码中使用了未定义的历史类型与函数 `TaskJobOptions`、`TaskProgressJob` 与 `createJobHandle`，导致 MSVC 报出 C2760“此处出现意外的 opts/job；应为 ;”及 C2059 语法错误；同时误写了 `UiHelper::isGraphicsFile`（应为 `ColorPaletteEngine::isGraphicsFile`），引发 C2039/C3861 报错。本次统一对齐现有标准接口。
+- **`src/ui/QuickLookWindow.h`**：
+  - **修改原因**：`loadOrExtractQuickLookImage` 静态大图提取函数此前声明在 `private` 作用域下，导致 `BatchQuickLookService` 无法跨模块访问并报出 C2248“无法访问 private 成员”错误。本次将其提升至 `public` 访问级别。
+
+#### 6. 筛选面板分组组件构建注册（修改）
+- **`CMakeLists.txt`**：
+  - **修改原因**：`FilterPanel.cpp` 引用了 `DuplicateStatusGroup::populate`，但 `src/ui/DuplicateStatusGroup.cpp` 与 `DuplicateStatusGroup.h` 此前未在 `CMakeLists.txt` 中注册编译，引发 MSVC 链接器报出 LNK2019 / LNK1120 无法解析的外部符号错误。本次将其同步补充进源文件列表。
+
+
+### 2026-11-10 外联样式归一化 (style.qss)、QuickWindow 内联样式迁移与 MainWindow 快捷入口
+
+#### 1. 外联样式库归一化与 dark_style.qss 彻底删除（移除 & 归一化）
+- **resources/qss/dark_style.qss**: 废弃并彻底删除物理目录 resources/qss 及文件 dark_style.qss，单一可信源归一化至 resources/style.qss。
+- **resources/resources.qrc**: 从 Qt 资源清单中移除 qss/dark_style.qss，仅保留 style.qss。
+- **src/main.cpp**: 将启动阶段读取的全局样式表路径由 :/qss/dark_style.qss 切换为 :/style.qss。
+
+#### 2. QuickWindow 行内 setStyleSheet 零值迁移至 style.qss（零值搬迁）
+- **src/ui/QuickWindow.cpp**: 彻底杜绝 C++ 源码中硬编码内联样式，遵循 Zero-Value-Alteration 原则。将 AppLockWidget 密码锁界面、输入框 QuickWindow_m_pwdEdit、关闭按钮 QuickWindow_m_closeBtn、主容器 QuickWindow_container、搜索框 QuickWindow_m_searchEdit、分类树/系统树、底部分类搜索与标签输入框、自定义工具栏 customToolbar、新建菜单及列表右键上下文菜单内联样式完全搬迁至 resources/style.qss。移除全部 23 处内联 setStyleSheet 调用，并设置对应语义化 objectName。
+- **resources/style.qss**: 集中承接 QuickWindow 提取的全部样式规则，并配置针对 QPushButton#QuickWindow_btnAdd_12::menu-indicator 的隐藏规则，去除原“+”号按钮右下角下拉三角箭头，恢复原版居中扁平外观。
+
+#### 3. 新增 MainWindow 快捷打开按钮及跨模块联动（新增 & 连接）
+- **src/ui/QuickWindow.h**: 声明信号 signals: void toggleMainWindowRequested();。
+- **src/ui/QuickWindow.cpp**: 在垂直工具栏的“+”号按钮下方插入 btnMainWindow 工具按钮，图标使用 SvgIcons 库内置的 window (18px, #aaaaaa)，点击时触发 toggleMainWindowRequested() 信号。
+- **src/main.cpp**: 引入 ui/MainWindow.h，连接 quickWin->toggleMainWindowRequested 信号：若主窗口尚未创建则动态实例化，若已存在或刚创建则通过 showNormal() / activateWindow() / raise() 还原并激活至前台。
+
+#### 4. 解决 MainWindow 命名空间导出与主入口符号未声明问题（修改）
+- **`src/ui/MainWindow.h`**：
+  - **修改原因**：`MainWindow` 声明在 `RapidNotes` 命名空间内，而 `main.cpp` 未使用 `using namespace RapidNotes;`，导致 MSVC 在编译 `main.cpp` 时报出 C2065“MainWindow 未声明的标识符”并引发连锁语法报错。本次在 `MainWindow.h` 底部增加全局类型别名导出 `using RapidNotes::MainWindow;`。

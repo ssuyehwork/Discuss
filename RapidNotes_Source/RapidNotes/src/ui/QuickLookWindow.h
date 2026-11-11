@@ -29,6 +29,9 @@ public:
     void setIgnoreDeactivate(bool ignore) { m_ignoreDeactivate = ignore; }
     void handleSearchShortcut();
 
+    static QImage loadOrExtractQuickLookImage(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
+    static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
+
 signals:
     void ratingRequested(int rating);
     void colorRequested(const QString& color);
@@ -54,8 +57,6 @@ private:
     
     QString detectEncoding(const QByteArray& data);
     bool isBinary(const QByteArray& data);
-    static QImage loadOrExtractQuickLookImage(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
-    static QImage loadOrExtractQuickLookEps(const QString& filePath, int targetSize, std::shared_ptr<CancellationToken> token);
 
     void showSearchBar();
     void hideSearchBar();

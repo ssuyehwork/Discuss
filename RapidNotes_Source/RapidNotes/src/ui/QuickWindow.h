@@ -27,10 +27,11 @@ class QLineEdit;
 class QShortcut;
 class QTimer;
 class CategoryLockWidget;
-class DropTreeView;
+namespace RapidNotes { class DropTreeView; }
+using RapidNotes::DropTreeView;
 class ClickableLineEdit;
 class CleanListView;
-class FilterPanel;
+class QuickFilterPanel;
 class QVBoxLayout;
 
 #ifdef Q_OS_WIN
@@ -50,6 +51,9 @@ public:
         if (m_currentFilterType == "category") return m_currentFilterValue.toInt();
         return -1;
     }
+
+signals:
+    void toggleMainWindowRequested();
 
 public slots:
     void refreshData();
@@ -169,7 +173,7 @@ public:
     QPushButton* m_btnToggleAll; // 2026-04-xx 按照用户要求：全面板联动折叠按钮
     QStackedWidget* m_bottomStackedWidget;
     QWidget* m_sidebarWrapper; // 2026-04-xx 按照用户要求：修正侧边栏显隐逻辑，操作外层容器
-    FilterPanel* m_filterPanel;
+    QuickFilterPanel* m_filterPanel;
     QWidget* m_filterWrapper;
     ClickableLineEdit* m_tagEdit;
     SearchLineEdit* m_catSearchEdit;

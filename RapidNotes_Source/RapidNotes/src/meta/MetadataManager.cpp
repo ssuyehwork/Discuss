@@ -468,7 +468,7 @@ QMap<QString, QStringList> MetadataManager::addTagsBatch(const QStringList& path
                     if (!m.tags.contains(t)) m.tags.append(t);
                 }
             });
-            resultMap[p] = MetaMemoryCache::instance().get(nPath).tags;
+            resultMap[p] = MetaMemoryCache::instance().getMeta(nPath).tags;
         }
     }
     return resultMap;
@@ -542,7 +542,7 @@ QMap<QString, QStringList> MetadataManager::removeTagsBatch(const QStringList& p
                     m.tags.removeAll(t);
                 }
             });
-            resultMap[p] = MetaMemoryCache::instance().get(nPath).tags;
+            resultMap[p] = MetaMemoryCache::instance().getMeta(nPath).tags;
         }
     }
     return resultMap;

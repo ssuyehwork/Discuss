@@ -10,6 +10,7 @@
 
 // 全局导出命名空间，修复所有派生窗口的 C2504 基类未定义错误
 using RapidNotes::FramelessDialog;
+using RapidNotes::FramelessInputDialog;
 using FramelessProgressDialog = RapidNotes::BatchProgressDialog;
 
 #endif // FRAMELESSDIALOG_H
