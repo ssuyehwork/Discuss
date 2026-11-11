@@ -8,7 +8,7 @@ namespace RapidNotes {
 QuickMediator::QuickMediator(QuickWindow* window, QObject* parent)
     : QObject(parent), m_window(window) {
     auto& hub = CentralEventHub::instance();
-    connect(&hub, &CentralEventHub::eventPublished, this, [this](const AppEvent& event) {
+    connect(&hub, &CentralEventHub::eventOccurred, this, [this](const AppEvent& event) {
         if (event.type == AppEventType::MetadataUpdated) {
             onMetadataUpdated(event.paths);
         } else if (event.type == AppEventType::ItemsDeleted) {

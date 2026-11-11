@@ -408,8 +408,15 @@ int LibraryDao::getOrCreateCategory(const QString& name, int parentId) {
 }
 
 bool LibraryDao::bindPathsToCategory(int id, const QStringList& paths) {
+    if (id <= 0 || paths.isEmpty()) return false;
+    QMap<int, QStringList> batch;
+    batch.insert(id, paths);
+    return bindPathsToCategoriesBatch(batch);
+}
+
+bool LibraryDao::bindPathsToCategoriesBatch(const QMap<int, QStringList>& catToPaths) {
     sqlite3* db = DatabaseManager::instance().getGlobalDb();
-    if (!db || id <= 0 || paths.isEmpty()) return false;
+    if (!db || catToPaths.isEmpty()) return false;
 
     std::lock_guard<std::mutex> lock(DatabaseManager::instance().getGlobalMutex());
     SqlTransaction trans(db);
@@ -417,12 +424,16 @@ bool LibraryDao::bindPathsToCategory(int id, const QStringList& paths) {
     const char* sql = "INSERT OR IGNORE INTO library_category_paths (category_id, path) VALUES (?, ?);";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-        for (const QString& p : paths) {
-            std::string pStd = QDir::toNativeSeparators(QDir::cleanPath(p)).toStdString();
-            sqlite3_bind_int(stmt, 1, id);
-            sqlite3_bind_text(stmt, 2, pStd.c_str(), -1, SQLITE_TRANSIENT);
-            sqlite3_step(stmt);
-            sqlite3_reset(stmt);
+        for (auto it = catToPaths.begin(); it != catToPaths.end(); ++it) {
+            int catId = it.key();
+            const QStringList& paths = it.value();
+            for (const QString& p : paths) {
+                std::string pStd = QDir::toNativeSeparators(QDir::cleanPath(p)).toStdString();
+                sqlite3_bind_int(stmt, 1, catId);
+                sqlite3_bind_text(stmt, 2, pStd.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(stmt);
+                sqlite3_reset(stmt);
+            }
         }
         sqlite3_finalize(stmt);
     }

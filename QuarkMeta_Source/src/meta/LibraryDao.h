@@ -41,6 +41,7 @@ public:
     static bool updateCategoryPaths(int id, const QStringList& paths);
     static bool addPathsToCategory(int id, const QStringList& paths);
     static bool bindPathsToCategory(int id, const QStringList& paths);
+    static bool bindPathsToCategoriesBatch(const QMap<int, QStringList>& catToPaths);
     static int getOrCreateCategory(const QString& name, int parentId = 0);
     static bool removePathsFromCategory(int id, const QStringList& paths);
     static bool removePathsFromLibrary(const QStringList& paths);
