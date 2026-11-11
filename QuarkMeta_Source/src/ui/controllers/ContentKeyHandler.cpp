@@ -105,11 +105,11 @@ bool ContentKeyHandler::executeRepeatLastOp(ContentPanel* panel, QAbstractItemVi
             cmd.targetPaths = selectedPaths;
             cmd.params["rating"] = LastOperationManager::instance().rating();
             CoreEngine::instance().executeCommand(cmd);
-                    if (panel) {
-                        for (const QString& p : selectedPaths) {
-                            panel->updateItemMetadata(p);
-                        }
-                        panel->recalculateAndEmitStats();
+            if (panel) {
+                for (const QString& p : selectedPaths) {
+                    panel->updateItemMetadata(p);
+                }
+                panel->recalculateAndEmitStats();
             }
             count = selectedPaths.size();
         }
@@ -127,11 +127,11 @@ bool ContentKeyHandler::executeRepeatLastOp(ContentPanel* panel, QAbstractItemVi
             cmd.targetPaths = selectedPaths;
             cmd.params["color"] = LastOperationManager::instance().color();
             CoreEngine::instance().executeCommand(cmd);
-                    if (panel) {
-                        for (const QString& p : selectedPaths) {
-                            panel->updateItemMetadata(p);
-                        }
-                        panel->recalculateAndEmitStats();
+            if (panel) {
+                for (const QString& p : selectedPaths) {
+                    panel->updateItemMetadata(p);
+                }
+                panel->recalculateAndEmitStats();
             }
             count = selectedPaths.size();
         }
@@ -314,12 +314,11 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
         if (hitVal != -1) {
             bool isSelected = view->selectionModel() && view->selectionModel()->isSelected(index);
             if (!CardPainterHelper::canModifyRatingOnPress(isSelected, mEvent->modifiers())) {
-                return false; // 未选中或有 Ctrl/Shift，不修改评分、不消费事件，放行给视图的默认选中处理
+                return false;
             }
 
             QAbstractItemModel* model = view->model();
             if (model) {
-                // 1. 获取选中的路径集合（多选/单选统一处理）
                 QStringList targetPaths;
                 if (isSelected && view->selectionModel()) {
                     QModelIndexList selectedIndexes = view->selectionModel()->selectedIndexes();
@@ -342,7 +341,6 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
                     if (!p.isEmpty()) targetPaths.append(p);
                 }
 
-                // 2. 统一分发归一化命令给 CoreEngine
                 if (!targetPaths.isEmpty()) {
                     AppCommand cmd;
                     cmd.type = AppCommandType::SetRating;
@@ -350,7 +348,6 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
                     cmd.params["rating"] = hitVal;
                     CoreEngine::instance().executeCommand(cmd);
 
-                    // 刷新视图上受影响行的 UI 展现
                     for (const QString& p : targetPaths) {
                         m_panel->updateItemMetadata(p);
                     }
@@ -385,12 +382,11 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
         if (hitStar != -1) {
             bool isRowSelected = treeView->selectionModel() && treeView->selectionModel()->isRowSelected(index.row(), index.parent());
             if (!CardPainterHelper::canModifyRatingOnPress(isRowSelected, mEvent->modifiers())) {
-                return false; // 未选中或有 Ctrl/Shift，不修改评分、不消费事件，放行给视图的默认选中处理
+                return false;
             }
 
             QAbstractItemModel* model = treeView->model();
             if (model) {
-                // 1. 获取选中的路径集合（多选/单选统一处理）
                 QStringList targetPaths;
                 if (isRowSelected && treeView->selectionModel()) {
                     QModelIndexList selectedIndexes = treeView->selectionModel()->selectedIndexes();
@@ -416,7 +412,6 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
                     }
                 }
 
-                // 2. 统一分发归一化命令给 CoreEngine
                 if (!targetPaths.isEmpty()) {
                     AppCommand cmd;
                     cmd.type = AppCommandType::SetRating;
@@ -424,7 +419,6 @@ bool ContentKeyHandler::handleMousePress(QObject* obj, QEvent* event) {
                     cmd.params["rating"] = hitStar;
                     CoreEngine::instance().executeCommand(cmd);
 
-                    // 刷新视图上受影响行的 UI 展现
                     for (const QString& p : targetPaths) {
                         m_panel->updateItemMetadata(p);
                     }
@@ -511,14 +505,45 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
 
-    // 3. Alt + 1~9: 色标快速赋予（归一化提交至 CoreEngine）
-    if ((keyEvent->modifiers() & Qt::AltModifier) && (keyEvent->key() >= Qt::Key_1 && keyEvent->key() <= Qt::Key_9)) {
-        static const QString colors[] = {
-            "#E24B4A", "#EF9F27", "#FECF0E", "#639922",
-            "#1D9E75", "#378ADD", "#7F77DD", "#5F5E5A", ""
-        };
-        QString colorValue = colors[keyEvent->key() - Qt::Key_1];
+    // 3. 色标快速赋予（归一化提交至 CoreEngine）：
+    //    Alt + 0: 清除颜色
+    //    Alt + 1~8: 红、橙、黄、绿、青、蓝、紫、灰
+    //    Ctrl + 6~9: 红、黄、绿、蓝
+    QString colorValue;
+    bool matchColorShortcut = false;
 
+    if (keyEvent->modifiers() & Qt::AltModifier) {
+        if (keyEvent->key() == Qt::Key_0) {
+            colorValue = "";
+            matchColorShortcut = true;
+        } else if (keyEvent->key() >= Qt::Key_1 && keyEvent->key() <= Qt::Key_8) {
+            static const QString s_altColors[] = {
+                "#E24B4A", // Alt+1: 红色
+                "#EF9F27", // Alt+2: 橙色
+                "#FECF0E", // Alt+3: 黄色
+                "#639922", // Alt+4: 绿色
+                "#1D9E75", // Alt+5: 青色
+                "#378ADD", // Alt+6: 蓝色
+                "#7F77DD", // Alt+7: 紫色
+                "#5F5E5A"  // Alt+8: 灰色
+            };
+            colorValue = s_altColors[keyEvent->key() - Qt::Key_1];
+            matchColorShortcut = true;
+        }
+    } else if (keyEvent->modifiers() & Qt::ControlModifier) {
+        if (keyEvent->key() >= Qt::Key_6 && keyEvent->key() <= Qt::Key_9) {
+            static const QString s_ctrlColors[] = {
+                "#E24B4A", // Ctrl+6: 红色
+                "#FECF0E", // Ctrl+7: 黄色
+                "#639922", // Ctrl+8: 绿色
+                "#378ADD"  // Ctrl+9: 蓝色
+            };
+            colorValue = s_ctrlColors[keyEvent->key() - Qt::Key_6];
+            matchColorShortcut = true;
+        }
+    }
+
+    if (matchColorShortcut) {
         QAbstractItemModel* model = view->model();
         if (!model || !view->selectionModel()) return true;
 
@@ -544,6 +569,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
                 m_panel->updateItemMetadata(p);
             }
             m_panel->recalculateAndEmitStats();
+            LastOperationManager::instance().recordSetColor(colorValue);
         }
         return true;
     }
@@ -551,7 +577,6 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
     // 4. Ctrl + Shift + C / V / R
     if ((keyEvent->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier)) == (Qt::ControlModifier | Qt::ShiftModifier)) {
         if (keyEvent->key() == Qt::Key_C) {
-            // 优先检查选中项目是否有标签，有标签则复制标签；若无标签，则保留原有的复制路径逻辑
             QModelIndex idx = view->currentIndex();
             if (!idx.isValid() && view->selectionModel()) {
                 auto selected = view->selectionModel()->selectedIndexes();
@@ -588,7 +613,7 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
     }
 
-    // 4b. Ctrl + Home / Ctrl + End: 视图首项与末项导航（避让 SectionHeader 并滚动）
+    // 4b. Ctrl + Home / Ctrl + End: 视图首项与末项导航
     if (keyEvent->modifiers() & Qt::ControlModifier) {
         if (keyEvent->key() == Qt::Key_Home) {
             if (navigateViewFirstItem(view)) return true;

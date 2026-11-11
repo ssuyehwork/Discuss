@@ -1,21 +1,16 @@
 #pragma once
 
 #include <QWidget>
-#include <QTreeView>
-#include <QStandardItemModel>
-#include <QStandardItem>
 #include <QVBoxLayout>
-#include <QDir>
 #include <QFrame>
 #include <QTabBar>
 #include <QStackedWidget>
-#include "HistoryPanel.h"
 
 namespace RapidNotes {
 
 /**
  * @brief 导航面板（面板一）
- * 使用 QTreeView + QFileSystemModel 实现文件夹树导航
+ * 遵循纯文本笔记架构标准，保留五栏区 Tab 框架与契约占位，作为空壳 (TODO) 运行
  */
 class NavPanel : public QFrame {
     Q_OBJECT
@@ -41,27 +36,13 @@ signals:
     void requestAddFavorite(const QString& path);
     void requestRemoveFavorite(const QString& path);
 
-private slots:
-    void onItemExpanded(const QModelIndex& index);
-    void onTreeClicked(const QModelIndex& index);
-    void onTreeContextMenu(const QPoint& pos);
-    void updateTreeHeight();
-    void updateRecentVisitedList();
-
 private:
     void initUi();
-    void fetchChildDirs(QStandardItem* parent);
-    QStandardItem* findItemByData(QStandardItem* parent, const QString& targetData);
+    QWidget* createPlaceholderPage(const QString& iconName, const QString& title, const QString& subtitle);
 
-    QTreeView* m_treeView = nullptr;
-    QStandardItemModel* m_model = nullptr;
     QVBoxLayout* m_mainLayout = nullptr;
-    QStandardItem* m_recentRootItem = nullptr;
-    QString m_currentPath;
-
     QTabBar* m_tabBar = nullptr;
     QStackedWidget* m_stackedWidget = nullptr;
-    HistoryPanel* m_historyPanel = nullptr;
 };
 
 } // namespace RapidNotes

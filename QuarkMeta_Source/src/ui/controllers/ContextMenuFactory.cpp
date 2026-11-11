@@ -232,11 +232,56 @@ bool ContextMenuFactory::copyNamesToClipboard(const QStringList& paths, bool sho
 QAction* ContextMenuFactory::buildCopyPathAction(QMenu* menu, const QStringList& paths, QObject* receiver) {
     if (!menu || paths.isEmpty()) return nullptr;
 
-    QAction* action = menu->addAction(UiHelper::getIcon("link", QColor("#EEEEEE"), 18), "复制完整路径");
-    QObject::connect(action, &QAction::triggered, receiver ? receiver : menu, [paths]() {
-        copyPathsToClipboard(paths, true);
+    // 1. 创建“复制路径”二级父菜单
+    QMenu* copyPathMenu = menu->addMenu(UiHelper::getIcon("link", QColor("#EEEEEE"), 18), "复制路径");
+    UiHelper::applyMenuStyle(copyPathMenu);
+
+    QObject* target = receiver ? receiver : menu;
+
+    // 辅助 lambda：添加首尾双引号并存入系统剪贴板，随后弹出 Toast 提示
+    auto copyQuotedToClipboard = [](const QString& textToCopy) {
+        QString quoted = QString("\"%1\"").arg(textToCopy);
+        QApplication::clipboard()->setText(quoted);
+        ToolTipOverlay::instance()->showToast("已复制路径至剪贴板", 1500, Style::SuccessGreen);
+    };
+
+    // 2. 第一个子选项：“复制完整路径”
+    QString primaryNativePath = QDir::toNativeSeparators(paths.first());
+    QAction* actFull = copyPathMenu->addAction(UiHelper::getIcon("link", QColor("#EEEEEE"), 16), "复制完整路径");
+    QObject::connect(actFull, &QAction::triggered, target, [paths, copyQuotedToClipboard]() {
+        if (paths.size() == 1) {
+            copyQuotedToClipboard(QDir::toNativeSeparators(paths.first()));
+        } else {
+            QStringList quotedList;
+            for (const QString& p : paths) {
+                if (!p.isEmpty()) {
+                    quotedList << QString("\"%1\"").arg(QDir::toNativeSeparators(p));
+                }
+            }
+            QApplication::clipboard()->setText(quotedList.join("\r\n"));
+            ToolTipOverlay::instance()->showToast(QString("已复制 %1 个完整路径至剪贴板").arg(quotedList.size()), 1500, Style::SuccessGreen);
+        }
     });
-    return action;
+
+    // 3. 按照层级拆解相对路径子选项
+    QStringList parts = primaryNativePath.split('\\', Qt::SkipEmptyParts);
+
+    if (parts.size() >= 2) {
+        copyPathMenu->addSeparator();
+
+        // 从第 1 层（去除盘符后）开始逐层向后切片，直到倒数第二层（保留：父文件夹\文件名）
+        for (int i = 1; i < parts.size() - 1; ++i) {
+            QStringList subParts = parts.mid(i);
+            QString levelPath = subParts.join('\\');
+
+            QAction* actLevel = copyPathMenu->addAction(levelPath);
+            QObject::connect(actLevel, &QAction::triggered, target, [levelPath, copyQuotedToClipboard]() {
+                copyQuotedToClipboard(levelPath);
+            });
+        }
+    }
+
+    return copyPathMenu->menuAction();
 }
 
 QMenu* ContextMenuFactory::buildTabCascadeMenu(QMenu* parentMenu, const QString& path, QWidget* contextWidget) {
@@ -277,7 +322,6 @@ QMenu* ContextMenuFactory::buildOpenWithMenu(QMenu* parentMenu, const QString& f
 QMenu* ContextMenuFactory::buildOpenWithMenu(QMenu* parentMenu, const QStringList& filePaths, QWidget* parentWidget) {
     if (!parentMenu || filePaths.isEmpty()) return nullptr;
 
-    // 过滤出文件路径，排除文件夹
     QStringList validFiles;
     for (const QString& p : filePaths) {
         if (!p.isEmpty() && !QFileInfo(p).isDir()) {
@@ -289,7 +333,6 @@ QMenu* ContextMenuFactory::buildOpenWithMenu(QMenu* parentMenu, const QStringLis
     QMenu* openWithMenu = parentMenu->addMenu(UiHelper::getIcon("launch", QColor("#EEEEEE"), 18), "打开方式");
     UiHelper::applyMenuStyle(openWithMenu);
 
-    // 以首个文件的扩展名作为推荐程序探测基准
     QString primaryFile = validFiles.first();
     QList<ShellHelper::AssocAppInfo> apps = ShellHelper::getAssociatedApps(primaryFile);
     for (const auto& app : apps) {
@@ -316,7 +359,6 @@ QMenu* ContextMenuFactory::buildOpenWithMenu(QMenu* parentMenu, const QStringLis
         if (validFiles.size() == 1) {
             ShellHelper::showOpenWithDialog(validFiles.first(), parentWidget);
         } else {
-            // 多选批量场景：通过选择可执行文件对所有选中项批量打开
             QString exec = QFileDialog::getOpenFileName(parentWidget, "选择打开程序", QString(), "可执行程序 (*.exe);;所有文件 (*.*)");
             if (!exec.isEmpty()) {
                 QProcess::startDetached(exec, validFiles);
