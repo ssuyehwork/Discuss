@@ -1,5 +1,5 @@
 #include "DriveMetaDao.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 #include "MetadataManager.h"
 #include "sqlite3.h"
 #include <QDateTime>

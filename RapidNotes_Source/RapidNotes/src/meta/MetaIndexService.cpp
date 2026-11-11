@@ -1,5 +1,5 @@
 #include "MetaIndexService.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 #include "LibraryService.h"
 #include "../core/TaskProgressService.h"
 #include <QDir>

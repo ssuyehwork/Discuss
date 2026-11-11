@@ -1,5 +1,5 @@
 #include "HistoryDao.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 #include <sqlite3.h>
 #include <QDir>
 #include <QFileInfo>

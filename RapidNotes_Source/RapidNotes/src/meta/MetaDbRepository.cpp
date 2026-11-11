@@ -1,5 +1,5 @@
 #include "MetaDbRepository.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 
 namespace RapidNotes {
 

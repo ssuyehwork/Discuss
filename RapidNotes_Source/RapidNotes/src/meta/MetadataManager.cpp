@@ -19,7 +19,7 @@
 #include "MetadataManager.h"
 #include "MetadataDefs.h"
 #include "../util/VolumePathResolver.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 #include "MetaDbRepository.h"
 #include "MetaMemoryCache.h"
 #include "../core/AppConfig.h"

@@ -1,5 +1,5 @@
 #include "LibraryItemDao.h"
-#include "DatabaseManager.h"
+#include "../core/DatabaseManager.h"
 #include "MetadataManager.h"
 #include <QFileInfo>
 #include <QDir>

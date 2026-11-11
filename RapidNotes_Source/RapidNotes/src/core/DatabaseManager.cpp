@@ -226,8 +226,11 @@ bool DatabaseManager::init(const QString& dbPath) {
         return false;
     }
     
+    if (m_isInitialized && m_db.isOpen()) {
+        return true;
+    }
     // 统一明文数据库路径 (程序目录下的 inspiration.db)
-    m_realDbPath = dbPath; 
+    m_realDbPath = dbPath.isEmpty() ? (QCoreApplication::applicationDirPath() + "/inspiration.db") : dbPath; 
     // [ARCH-CHANGE] 在“去壳”架构下，内核路径即为主路径，不再使用 AppData 里的 notes_core
     m_dbPath = m_realDbPath;
 
@@ -399,6 +402,16 @@ sqlite3* DatabaseManager::getGlobalDb() {
         return *static_cast<sqlite3**>(v.data());
     }
     return nullptr;
+}
+
+void DatabaseManager::logSqlError(const char* location, sqlite3* db, const QString& sql) {
+    const char* errmsg = db ? sqlite3_errmsg(db) : "Unknown error (null db)";
+    if (!sql.isEmpty()) {
+        QString truncatedSql = sql.left(120);
+        qWarning() << QString("[DatabaseError][%1] %2 | SQL: %3").arg(location, errmsg, truncatedSql);
+    } else {
+        qWarning() << QString("[DatabaseError][%1] %2").arg(location, errmsg);
+    }
 }
 
 void DatabaseManager::closeAndPack() {

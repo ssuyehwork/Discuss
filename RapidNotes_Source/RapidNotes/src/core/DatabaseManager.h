@@ -47,13 +47,16 @@ public:
     
     static DatabaseManager& instance();
 
-    bool init(const QString& dbPath = "rapid_notes.db");
+    bool init(const QString& dbPath = QString());
     QString getLastError() const { return m_lastError; }
     void logStartup(const QString& msg);
     void closeAndPack();
     QString getDbPath() const;
     sqlite3* getGlobalDb();
     static std::mutex& getGlobalMutex() { static std::mutex s_globalMutex; return s_globalMutex; }
+    static QString getGlobalDbPath() { return instance().getDbPath(); }
+    static void logSqlError(const char* location, sqlite3* db, const QString& sql = QString());
+    void shutdown() { closeAndPack(); }
     
     // 核心 CRUD 操作
     int addNote(const QString& title, const QString& content, const QStringList& tags = QStringList(), 
@@ -263,5 +266,9 @@ public:
     static void setTagClipboard(const QStringList& tags);
     static QStringList getTagClipboard();
 };
+
+namespace RapidNotes {
+    using ::DatabaseManager;
+}
 
 #endif // DATABASEMANAGER_H
