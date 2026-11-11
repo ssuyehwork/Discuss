@@ -671,6 +671,27 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
 
 ---
 
+## 25. 品牌与 Logo 资产归一化与历史包袱彻底清理规范 (Brand & Logo Assets Consolidation SSOT)
+
+> 本章节记录用户的核心设计决策：全工程品牌资产与图标引用严格遵循“以 RapidNotes 为主，QuarkMeta 为次”，彻底消除命名割裂与孤儿资源，保持应用主品牌的统一性与纯粹性。
+
+### 25.1 核心设计决策与规范 (Core Philosophy & Brand SSOT)
+1. **主次定位与品牌纯粹性铁律**：
+   - **主品牌 (Primary Brand)**：**RapidNotes** —— 作为对外呈现、可执行程序名称、系统托盘、任务栏及窗口标题栏的唯一法定主品牌；
+   - **次要底座 (Secondary Engine)**：**QuarkMeta** —— 仅作为多窗格、文件管理与多维视图内核的技术来源；在用户界面的所有常规视觉呈现中，不作为主品牌露出，仅允许在“关于”或“技术内核信息”中次要标注；
+   - 彻底清除主界面中容易引起品牌认知混淆的遗留标识。
+
+2. **Windows 资源文件与清单彻底归一化**：
+   - **RC 资源文件归一化**：废弃并物理重命名/收敛根目录下残留的 `QuarkMeta.rc`，统一归入 `resources/app_icon.rc`（或标准 `RapidNotes.rc`），确保 PE 资源表中的 `IDI_ICON1` 严格指向 `resources/app_icon.ico`（RapidNotes 官方图标）；
+   - **Manifest 应用程序清单归一化**：彻底修正清单描述，将 `<description>QuarkMeta File Manager</description>` 修正为 `<description>RapidNotes Desktop Application</description>`，装配件标识 `<assemblyIdentity name="QuarkMeta" .../>` 修正为 `name="RapidNotes"`；
+   - 避免在 Windows 任务管理器、UAC 提权提示及系统属性中出现错误的 "QuarkMeta File Manager" 旧程序描述。
+
+3. **编译构建与代码级残留清除 (Dead Code Pruning)**：
+   - **物理注销与删除未使用的 `QuarkApplication`**：`src/ui/QuarkApplication.cpp` / `.h` 为原 QuarkMeta 单实例与自愈包装类，在 RapidNotes 纯笔记体系中从未被 `main.cpp` 调用，属于典型的孤儿死代码；必须在 `CMakeLists.txt` 构建列表中物理注销并从项目中彻底剔除，杜绝符号冗余与多入口混淆；
+   - **资源清单收敛**：`resources/resources.qrc` 仅保留全工程实际引用的 SVG 与图片资产，彻底断绝任何误引用废弃资源的路径。
+
+---
+
 ## 24. MSVC 动态链接与三权分立构建规范 (MSVC Dynamic Linking & Build SSOT)
 
 > 本章节记录用户的核心架构决策：RapidNotes 正式锁定官方标准动态链接版 Qt (`msvc2022_64`)，构建体系全面归一化为动态运行时库 (`/MD`)，并依托“三权分立”与 `windeployqt` 进行固化运行层部署。
