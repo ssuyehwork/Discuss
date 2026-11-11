@@ -668,3 +668,77 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - 整体工程以 **RapidNotes 为主，QuarkMeta 为次**；
    - Windows 资源清单、可执行程序图标、系统托盘图标、窗口标题栏图标统一以 RapidNotes 官方资产为主视觉真理源；
    - 清理重定义冲突的 Manifest 与 RC 资源文件，保持命名与品牌规范严谨闭合。
+
+---
+
+## 25. 品牌与 Logo 资产归一化与历史包袱彻底清理规范 (Brand & Logo Assets Consolidation SSOT)
+
+> 本章节记录用户的核心设计决策：全工程品牌资产与图标引用严格遵循“以 RapidNotes 为主，QuarkMeta 为次”，彻底消除命名割裂与孤儿资源，保持应用主品牌的统一性与纯粹性。
+
+### 25.1 核心设计决策与规范 (Core Philosophy & Brand SSOT)
+1. **主次定位与品牌纯粹性铁律**：
+   - **主品牌 (Primary Brand)**：**RapidNotes** —— 作为对外呈现、可执行程序名称、系统托盘、任务栏及窗口标题栏的唯一法定主品牌；
+   - **次要底座 (Secondary Engine)**：**QuarkMeta** —— 仅作为多窗格、文件管理与多维视图内核的技术来源；在用户界面的所有常规视觉呈现中，不作为主品牌露出，仅允许在“关于”或“技术内核信息”中次要标注；
+   - 彻底清除主界面中容易引起品牌认知混淆的遗留标识。
+
+2. **Windows 资源文件与清单彻底归一化**：
+   - **RC 资源文件归一化**：废弃并物理重命名/收敛根目录下残留的 `QuarkMeta.rc`，统一归入 `resources/app_icon.rc`（或标准 `RapidNotes.rc`），确保 PE 资源表中的 `IDI_ICON1` 严格指向 `resources/app_icon.ico`（RapidNotes 官方图标）；
+   - **Manifest 应用程序清单归一化**：彻底修正清单描述，将 `<description>QuarkMeta File Manager</description>` 修正为 `<description>RapidNotes Desktop Application</description>`，装配件标识 `<assemblyIdentity name="QuarkMeta" .../>` 修正为 `name="RapidNotes"`；
+   - 避免在 Windows 任务管理器、UAC 提权提示及系统属性中出现错误的 "QuarkMeta File Manager" 旧程序描述。
+
+3. **编译构建与代码级残留清除 (Dead Code Pruning)**：
+   - **物理注销与删除未使用的 `QuarkApplication`**：`src/ui/QuarkApplication.cpp` / `.h` 为原 QuarkMeta 单实例与自愈包装类，在 RapidNotes 纯笔记体系中从未被 `main.cpp` 调用，属于典型的孤儿死代码；必须在 `CMakeLists.txt` 构建列表中物理注销并从项目中彻底剔除，杜绝符号冗余与多入口混淆；
+   - **资源清单收敛**：`resources/resources.qrc` 仅保留全工程实际引用的 SVG 与图片资产，彻底断绝任何误引用废弃资源的路径。
+
+---
+
+## 24. MSVC 动态链接与三权分立构建规范 (MSVC Dynamic Linking & Build SSOT)
+
+> 本章节记录用户的核心架构决策：RapidNotes 正式锁定官方标准动态链接版 Qt (`msvc2022_64`)，构建体系全面归一化为动态运行时库 (`/MD`)，并依托“三权分立”与 `windeployqt` 进行固化运行层部署。
+
+### 24.1 核心设计决策与硬性规范 (Core Philosophy & Build Locks)
+1. **彻底终结 `/MT` 与 `/MD` 混用冲突 (LNK2038 / LNK2005 根因消除)**：
+   - 正式废除 RapidNotes 构建系统中强行设置的静态运行时库（`MultiThreaded` / `/MT`）；
+   - 全面切换为动态运行时库 **`/MD` (Release) 与 `/MDd` (Debug)**，即 `CMAKE_MSVC_RUNTIME_LIBRARY` 统一设为 `MultiThreadedDLL$<$<CONFIG:Debug>:Debug>`；
+   - 与官方 Qt SDK `C:/Qt/6.10.2/msvc2022_64`（其内部为 `/MD` 构建）实现 100% 运行时库契约对齐，彻底消除 `libcpmt.lib` 与 `msvcprt.lib` 的多重符号定义冲突。
+
+2. **静态专属插件导入彻底清除 (Clean Dynamic Linking)**：
+   - 物理移除 `CMakeLists.txt` 中的静态插件导入宏 `qt_import_plugins(...)`，动态版由 Qt 官方机制自动加载动态插件（如 `platforms/qwindows.dll`、`imageformats/qjpeg.dll` 等）；
+   - 彻底解决静态插件对象初始化文件（如 `QGifPlugin_init.cpp.obj` 等）引发的 LNK2038 报错。
+
+3. **三权分立与运行层部署标准 (Three-Tier Architecture & windeployqt)**：
+   - 严格遵循根目录 `T 统一编译路径.md` 约定的工程闭环：
+     - **源码层**：`RapidNotes_Source/RapidNotes` 纯净代码圣殿，零二进制污染；
+     - **中间构建层**：`RapidNotes_Build/x64-release/` 作为临时编译消耗品目录；
+     - **固化运行层**：`RapidNotes_Build/RapidNotes/` 免安装绿色沙盒，由 CMake 自动将 `RapidNotes.exe` 输出至该目录，并使用 `windeployqt.exe RapidNotes.exe` 部署一次依赖，日常编译仅覆盖单一 exe，实现即编即测。
+
+---
+
+## 26. QuickWindow 四大专职子模块解耦与单一职责契约 (QuickWindow Four Submodules Architecture SSOT)
+
+> 本章节记录用户的核心设计理念指导与明确共识，作为将超过 4200 行代码的上帝类 `QuickWindow.cpp` 精细化拆分为四大专职模块的唯一真理源 (SSOT)。
+
+### 26.1 核心设计理念与模块职责矩阵 (Module Responsibility Matrix)
+针对 `QuickWindow` 违背单一职责、杂糅 8 大职责的问题，确立以下四大专职模块的正交分工契约：
+
+1. **`QuickMediator`（中枢协调器与大脑通道）**：
+   - **唯一职责**：负责 UI 交互意图与中央大脑 `CoreEngine` 之间的双向协调；
+   - **下行通道**：接收来自 `QuickWindow` 的所有数据操作意图（分类移动、软硬删除、置顶、收藏、评分、设置色标、标签修改等），打包为标准 `AppCommand` 投递给 `CoreEngine`；
+   - **上行通道**：订阅全局事件中枢 `CentralEventHub` 的领域广播（`MetadataUpdated`、`ItemsDeleted` 等），计算增量 Diff 并驱动 `QuickWindow` 局部刷新视图，主窗口与悬浮窗口 0 延迟协同。
+
+2. **`QuickContextMenuBuilder`（专职右键与动作菜单构建器）**：
+   - **唯一职责**：承接原 `QuickWindow.cpp` 中数百行手写 QMenu 逻辑；
+   - **契约对齐**：全面对齐主管理窗口成熟的 `ContextMenuFactory` 模式；
+   - **构建场景**：专职提供 `buildListContextMenu(view, selectedIndices)`、`buildSidebarContextMenu(tree, index)` 与 `buildAddMenu()`，按选区数量（0/1/N）装配二级分类子菜单、标签药丸子菜单与色标快捷选择器。
+
+3. **`QuickPasteDeliveryService`（专职前台探测与第三方投递服务）**：
+   - **唯一职责**：完全封装 Win32 原生窗口探测与双模剪贴板模拟投递逻辑；
+   - **原子投递管线**：
+     - 记录与捕获唤醒前的前台窗口句柄 `HWND` 与线程 ID；
+     - 依据条目类型（纯文本、多路径、托管图片等）执行系统级还原（`QMimeData`），并校验物理路径有效性；
+     - 跨线程通过 Win32 `AttachThreadInput` + `SetForegroundWindow` + `SendInput(Ctrl+V)` 模拟按键，投递完成后自动分离线程并记录访问历史（`recordAccess`）。
+
+4. **`QuickShortcutHandler`（专职快捷键分发与打字态保护器）**：
+   - **唯一职责**：统一承接 `QuickWindow` 的键盘事件（`keyPressEvent`）；
+   - **打字态焦点保护**：严格执行 `isEditingFocus()` 断言。当焦点处于搜索框（`SearchLineEdit`）、密码框或标签输入框时，放行用户打字、光标移动及文本编辑热键，绝对不截断；
+   - **集中调度**：在非打字态下，精准映射数字快捷键、`Ctrl+N`（新建笔记）、`Ctrl+D`（清空重置）、`Delete`（移入回收站）、`Shift+Delete`（永久物理删除）等指令，委托给 `QuickMediator` 处理。
