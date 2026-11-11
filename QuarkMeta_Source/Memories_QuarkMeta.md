@@ -1509,6 +1509,9 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - `DropTreeView` 必须显式开启 `setUniformRowHeights(true)`，避免 QTreeView 对数千行数据逐单元格调用 `sizeHint` 产生全量重算风暴；
    - `DropTreeView::updateGroupHeaderSpanning` 仅在未跨列时调用 `setFirstColumnSpanned`，且只针对前置标头行生效，跳过数据主体避免清空全树尺寸缓存；
    - `TreeItemDelegate::sizeHint` 直接基于 `RowLayoutEngine::calculateRowHeight(zoom)` 构造 `QSize` 返回，坚决杜绝调用 `QStyledItemDelegate::sizeHint` 昂贵底层排版计算。
+4. **监听目录层级同步批量单事务与异步化规约**：
+   - `LibraryService::syncWatchedFolderHierarchy` 严禁在递归子目录循环中逐个子目录调用单项事务；必须使用 `LibraryDao::bindPathsToCategoriesBatch` 进行整棵目录树的单次原子提交与单次 `wal_checkpoint`，消除数百次 `winSync / FlushFileBuffers` 导致的系统级硬等待；
+   - `LibrarySyncService` 在目录变动后调用 `syncWatchedFolderHierarchy` 必须通过工作线程池（`QtConcurrent::run(&m_workPool, ...)`）执行，严禁阻塞 GUI 主线程。
 
 
 

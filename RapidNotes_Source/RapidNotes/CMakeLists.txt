@@ -5,7 +5,7 @@ if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 
-project(RapidNotes VERSION 1.0.0 LANGUAGES CXX)
+project(RapidNotes VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,11 +41,6 @@ elseif(NOT Qt6_DIR AND NOT CMAKE_PREFIX_PATH)
 endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network Concurrent Svg)
-
-# 2026-03-xx 按照用户要求：重新启用日志输出，配合本地日志系统使用
-# add_definitions(-DQT_NO_DEBUG_OUTPUT)
-# add_definitions(-DQT_NO_INFO_OUTPUT)
-# add_definitions(-DQT_NO_WARNING_OUTPUT)
 
 # 遵循“三权分立”规范：将生成的 exe 输出到固化运行层 RapidNotes_Build/RapidNotes
 set(TARGET_APP_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/../../RapidNotes_Build/RapidNotes")

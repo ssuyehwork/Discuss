@@ -74,11 +74,13 @@ LibrarySyncService::LibrarySyncService(QObject* parent) : QObject(parent) {
 
         if (!toSync.isEmpty()) {
             syncPaths(toSync);
-            // 实时维护监听目录分类与文件绑定
+            // 实时维护监听目录分类与文件绑定（通过后台工作线程池执行，杜绝阻塞主线程）
             for (const QString& wf : watchedFolders) {
                 QString normWf = DirectoryWatchService::normalizePathKey(wf);
                 if (normDirPath == normWf || normDirPath.startsWith(normWf + "/")) {
-                    LibraryService::instance().syncWatchedFolderHierarchy(wf);
+                    (void)QtConcurrent::run(&m_workPool, [wf]() {
+                        LibraryService::instance().syncWatchedFolderHierarchy(wf);
+                    });
                     break;
                 }
             }

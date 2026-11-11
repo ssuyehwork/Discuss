@@ -64,6 +64,9 @@ int LibraryService::syncWatchedFolderHierarchy(const QString& rootFolderPath) {
     int rootCatId = LibraryDao::getOrCreateCategory(rootName, 0);
     if (rootCatId <= 0) return 0;
 
+    // 批量映射：分类 ID -> 待绑定的所有路径列表
+    QMap<int, QStringList> batchCatPaths;
+
     // 绑定根文件夹与根目录下的直接子文件
     QStringList rootPaths;
     rootPaths << cleanRoot;
@@ -72,7 +75,7 @@ int LibraryService::syncWatchedFolderHierarchy(const QString& rootFolderPath) {
     for (const auto& fi : rootEntries) {
         rootPaths << QDir::toNativeSeparators(fi.absoluteFilePath());
     }
-    LibraryDao::bindPathsToCategory(rootCatId, rootPaths);
+    batchCatPaths[rootCatId] = rootPaths;
 
     // 缓存已创建分类路径到 ID 的映射
     QHash<QString, int> folderCatMap;
@@ -97,8 +100,13 @@ int LibraryService::syncWatchedFolderHierarchy(const QString& rootFolderPath) {
             for (const auto& fi : fileEntries) {
                 subPaths << QDir::toNativeSeparators(fi.absoluteFilePath());
             }
-            LibraryDao::bindPathsToCategory(subCatId, subPaths);
+            batchCatPaths[subCatId] = subPaths;
         }
+    }
+
+    // 单次原子批量写入与物理落盘，彻底消除数百次 winSync 导致的主线程阻塞
+    if (!batchCatPaths.isEmpty()) {
+        LibraryDao::bindPathsToCategoriesBatch(batchCatPaths);
     }
 
     emit libraryChanged();
