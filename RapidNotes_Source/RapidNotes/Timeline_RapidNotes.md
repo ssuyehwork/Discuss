@@ -328,3 +328,13 @@
   3. 将 `CoreController.cpp` 中引用的头文件修正为 `DatabaseManager.h`，单例调用对齐为 `DatabaseManager::instance()`；
   4. 将 `LibraryPanel.cpp` 中引用的头文件修正为 `../core/DatabaseManager.h`，路径调用统一为 `DatabaseManager::instance().getDbPath()`；
   5. 将 `TagLexiconService.cpp` 与 `DiskTrashService.cpp` 引用的头文件切换为 `DatabaseManager.h`，解绑 meta 层，全项目对 `src/meta/DatabaseManager.h` 的引用彻底清零。
+
+### 2026-11-11: 解决 SqlTransaction 未声明导致的 MSVC 编译错误 (C2065/C2146/C3861)
+- **时间轴**：2026-11-11
+- **修改原因**：
+  1. 在收敛 `DiskTrashService.cpp` 与 `TagLexiconService.cpp` 的头文件引用至 `src/core/DatabaseManager.h` 后，由于 `src/core/DatabaseManager.h` 缺少原先在 `src/meta/DatabaseManager.h` 中定义的 `SqlTransaction` 事务 RAII 类，引发 MSVC 报出 C2065/C2146/C3861 级联报错；
+  2. 在 `src/core/DatabaseManager.h` 与 `DatabaseManager.cpp` 中完整引入 `SqlTransaction` 的声明与实现，并在 `namespace RapidNotes` 下建立全局别名，使事务执行 100% 编译兼容。
+- **涉及文件**：
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.h`
+  - `RapidNotes_Source/RapidNotes/src/core/DatabaseManager.cpp`
+  - `RapidNotes_Source/RapidNotes/Timeline_RapidNotes.md`

@@ -17,6 +17,27 @@
 #include <mutex>
 #include "../meta/sqlite3.h"
 
+/**
+ * @brief 数据库事务 RAII 守卫
+ */
+class SqlTransaction {
+public:
+    explicit SqlTransaction(sqlite3* db);
+    ~SqlTransaction();
+
+    bool commit();
+    void rollback();
+
+private:
+    sqlite3* m_db;
+    bool m_committed = false;
+    bool m_isNested = false;
+};
+
+namespace RapidNotes {
+    using ::SqlTransaction;
+}
+
 class DatabaseManager : public QObject {
     Q_OBJECT
 public:
