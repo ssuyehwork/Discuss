@@ -868,3 +868,31 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
    - 确保全生命周期内获取的底层 SQLite 驱动句柄 `sqlite3*` 持续有效，防止异步线程或新装配窗口访问时出现悬空指针或跳转 `0x0` 地址。
 2. **外部模块数据库初始化前置检查**：
    - 在 `MetaDbRepository::initDatabase()` 等桥接层中，调用 `DatabaseManager::instance().init()` 之前必须核查 `if (!DatabaseManager::instance().database().isOpen())`，避免任何多余无参初始化调用。
+
+---
+
+## 33. QuickWindow 全局应用锁遮罩实色绘制与数据层绝对安全隔离规范 (AppLockWidget Opacity & Data Defense-in-Depth SSOT)
+
+> 本章节记录用户的核心设计理念指导与明确共识（方案 1），作为彻底消除 QuickWindow 启动锁透明穿透、底层控件与笔记数据泄露缺陷的唯一真理源 (SSOT)。
+
+### 33.1 核心设计理念与架构铁律 (Core Philosophy & Architecture Locks)
+1. **实体画刷纯色强刷底色（防透视铁律）**：
+   - 在父窗口开启 `Qt::WA_TranslucentBackground` 的无边框窗口体系中，子控件单纯依赖 `style()->drawPrimitive(QStyle::PE_Widget, ...)` 配合 QSS 的 `border-radius` 容易被 Qt 渲染引擎视作透明层进行图层混合，从而导致下层兄弟控件被透视渲染出来；
+   - **唯一合法绘制规范**：在 `AppLockWidget::paintEvent` 中，不论 QSS 如何设置，必须直接使用 `QPainter` 强制画满实体背景：
+     ```cpp
+     QPainter p(this);
+     p.setRenderHint(QPainter::Antialiasing);
+     p.setBrush(QColor(0x1E, 0x1E, 0x1E));
+     p.setPen(Qt::NoPen);
+     p.drawRoundedRect(rect(), 10, 10);
+     ```
+   - 构造函数中显式设置属性锁死不透明度：
+     `setAttribute(Qt::WA_OpaquePaintEvent, true);` 与 `setAutoFillBackground(true);`，彻底物理切断底层任何透视可能。
+
+2. **数据与视图层双重防御（Defense-in-Depth 铁律）**：
+   - 最稳妥的隐私保护绝不能仅仅依赖“图层覆盖”，必须在数据和视图层做到物理级拦截；
+   - 在 `QuickWindow::refreshData()` 入口处增加锁定状态守卫：
+     ```cpp
+     if (!isVisible() || isLocked()) return; // 锁定状态下坚决不向界面加载渲染任何数据
+     ```
+   - 在解锁回调中触发 `refreshData()` 恢复渲染数据，确保在输入密码前底层 `NoteModel` 保持零数据状态，即使图层发生任何极端渲染异常，底层也根本无任何数据可透，彻底根除隐私泄露。
