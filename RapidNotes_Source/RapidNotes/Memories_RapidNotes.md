@@ -814,3 +814,20 @@ QuarkMeta 原版面向本地磁盘物理文件系统（磁盘驱动器、物理�
      - 内部实现转为安全 no-op，避免触碰物理文件与物理路径；
      - `PanelLayoutManager` 维持对 NavPanel 的显示/隐藏记忆与折叠控制；
      - 状态栏与视图菜单维持“显示目录导航”联动开关。
+
+---
+
+## 30. 数据库管理器归一化与 src/core/DatabaseManager 单一真理源规范 (DatabaseManager Core SSOT Consolidation)
+
+> 本章节记录用户的核心设计决策与明确指导，作为彻底消除遗留自 QuarkMeta 的 `src/meta/DatabaseManager` 引用、将全软件数据库访问统一收敛至 RapidNotes 原生 `src/core/DatabaseManager` 的唯一真理源 (SSOT)。
+
+### 30.1 核心设计理念与架构治理目标 (Core Philosophy & Architecture Locks)
+1. **彻底终结双数据库管理器冲突 (Dual DatabaseManager Collision Elimination)**：
+   - 彻底废除并严禁新旧代码中对 `src/meta/DatabaseManager.h` 的任何 `#include` 与实例化调用；
+   - 全软件数据库连接、事务管理、生命周期与持久化路径访问，**唯一合法入口必须且只能是 `src/core/DatabaseManager::instance()`**。
+2. **连接生命周期与驱动体系纯化 (Qt SQL & SQLite SSOT)**：
+   - 统一由 `src/core/DatabaseManager` 管理基于 `QSqlDatabase` / `QSqlQuery` 的事务，严禁在外部业务模块（如 `TagLexiconService`、`DiskTrashService`）中私自持有 `sqlite3*` 句柄或全局外部互斥锁；
+   - 彻底杜绝两个不同的 DatabaseManager 类以两套连接机制同时操作同一个 `inspiration.db` 文件的并发锁与数据不一致风险。
+3. **接口扩展与能力收敛 (Capability Convergence)**：
+   - 为 `src/core/DatabaseManager` 补齐安全规范的持久化路径获取接口 `QString getDbPath() const`；
+   - 将 `TagLexiconService` 等标签词表与分类词库的管理彻底收敛到 `src/core/DatabaseManager` 的标准化 Qt SQL 操作中，实现高内聚与职责单一。
