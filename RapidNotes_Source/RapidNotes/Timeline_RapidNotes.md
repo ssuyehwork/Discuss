@@ -176,3 +176,7 @@
 - **src/ui/QuickWindow.h**: 声明信号 signals: void toggleMainWindowRequested();。
 - **src/ui/QuickWindow.cpp**: 在垂直工具栏的“+”号按钮下方插入 btnMainWindow 工具按钮，图标使用 SvgIcons 库内置的 window (18px, #aaaaaa)，点击时触发 toggleMainWindowRequested() 信号。
 - **src/main.cpp**: 引入 ui/MainWindow.h，连接 quickWin->toggleMainWindowRequested 信号：若主窗口尚未创建则动态实例化，若已存在或刚创建则通过 showNormal() / activateWindow() / raise() 还原并激活至前台。
+
+#### 4. 解决 MainWindow 命名空间导出与主入口符号未声明问题（修改）
+- **`src/ui/MainWindow.h`**：
+  - **修改原因**：`MainWindow` 声明在 `RapidNotes` 命名空间内，而 `main.cpp` 未使用 `using namespace RapidNotes;`，导致 MSVC 在编译 `main.cpp` 时报出 C2065“MainWindow 未声明的标识符”并引发连锁语法报错。本次在 `MainWindow.h` 底部增加全局类型别名导出 `using RapidNotes::MainWindow;`。
