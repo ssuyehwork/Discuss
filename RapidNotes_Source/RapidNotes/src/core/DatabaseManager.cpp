@@ -75,6 +75,13 @@ void SqlTransaction::rollback() {
 #include "FileCryptoHelper.h"
 #include "HardwareInfoHelper.h"
 #include "ClipboardMonitor.h"
+#include "../meta/SmartFolderDao.h"
+#include "../meta/DriveMetaDao.h"
+#include "../util/AppDirectoryInitializer.h"
+#include <functional>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace {
     // 2026-04-09 按照用户要求：采用纯动态后缀解析架构，彻底废弃并移除所有静态白/黑名单
@@ -104,6 +111,73 @@ namespace {
         return result.join(", ");
     }
 
+}
+
+// ===================================================================
+// 合并架构辅助（仅本文件可见）
+// ===================================================================
+namespace RapidNotes {
+    // QuarkMeta 侧的目录/DAO 初始化（沿用其原有调用，类名按其所在命名空间解析）
+    static void prepareStorageDirs(const QString& appDir) {
+        AppDirectoryInitializer::initializeStoragePath(appDir);
+    }
+    static void initMetaDaos() {
+        DriveMetaDao::initTable();
+    }
+}
+
+namespace {
+    bool isSqliteFile(const QString& path) {
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly)) return false;
+        return f.read(16).startsWith("SQLite format 3");
+    }
+
+    // 用原生句柄只读探测笔记数量；无 notes 表或无法打开返回 -1
+    int countNotesNative(const QString& path) {
+        sqlite3* db = nullptr;
+        std::wstring w = QDir::toNativeSeparators(path).toStdWString();
+        if (sqlite3_open16(w.c_str(), &db) != SQLITE_OK || !db) {
+            if (db) sqlite3_close_v2(db);
+            return -1;
+        }
+        sqlite3_busy_timeout(db, 5000);
+        int count = -1;
+        sqlite3_stmt* st = nullptr;
+        if (sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM notes;", -1, &st, nullptr) == SQLITE_OK) {
+            if (sqlite3_step(st) == SQLITE_ROW) count = sqlite3_column_int(st, 0);
+            sqlite3_finalize(st);
+        }
+        sqlite3_close_v2(db);   // 关闭时 SQLite 会把 -wal 合并回主文件
+        return count;
+    }
+
+    // 连同 -wal / -shm 一起搬走（先重命名，失败再复制后删除）
+    bool moveDbWithSidecars(const QString& from, const QString& to) {
+        const QStringList sfx = {"", "-wal", "-shm"};
+        for (const QString& s : sfx) {
+            if (!QFile::exists(from + s)) continue;
+            QFile::remove(to + s);
+            if (QFile::rename(from + s, to + s)) continue;
+            if (QFile::copy(from + s, to + s)) { QFile::remove(from + s); continue; }
+            if (s.isEmpty()) return false;   // 主文件搬不动才算失败
+        }
+        return true;
+    }
+}
+
+
+namespace {
+    constexpr int kInChunk = 500;   // 单条 SQL 的 IN(...) 上限，远低于 SQLite 变量上限
+    QString inList(int n) {
+        QString s; s.reserve(n * 2);
+        for (int i = 0; i < n; ++i) { if (i) s += ','; s += '?'; }
+        return s;
+    }
+    template <typename F>
+    void forEachIdChunk(const QList<int>& ids, F&& fn) {
+        for (int i = 0; i < ids.size(); i += kInChunk) fn(ids.mid(i, kInChunk));
+    }
 }
 
 DatabaseManager& DatabaseManager::instance() {
@@ -206,6 +280,10 @@ DatabaseManager::~DatabaseManager() {
     if (m_db.isOpen()) {
         m_db.close();
     }
+    if (m_nativeDb) {
+        sqlite3_close_v2(m_nativeDb);
+        m_nativeDb = nullptr;
+    }
 }
 
 void DatabaseManager::logStartup(const QString& msg) {
@@ -213,43 +291,70 @@ void DatabaseManager::logStartup(const QString& msg) {
     qDebug() << "[DB-STARTUP]" << msg;
 }
 
-bool DatabaseManager::init(const QString& dbPath) {
+bool DatabaseManager::init(const QString& legacyDbPath) {
     QMutexLocker locker(&m_mutex);
-    
-    // 【核心修复】：若已经初始化且数据库已开启，严禁重复关闭现有连接（杜绝底层 sqlite3* 句柄失效引发 c0000005 闪退）
-    if (m_isInitialized && m_db.isOpen()) {
+
+    // 【核心修复】：已完整初始化则严禁重复关闭连接（杜绝句柄失效引发 c0000005 闪退）
+    if (m_isInitialized && m_db.isOpen() && m_nativeDb) {
         return true;
     }
 
     m_isInitialized = false;
     m_lastError.clear();
-    
-    logStartup("--- [DE-SHELL] 架构初始化开始 ---");
+
+    logStartup("--- [MERGED-DB] 架构初始化开始 ---");
 
     if (!QSqlDatabase::isDriverAvailable("QSQLITE")) {
         m_lastError = "Qt 环境缺失 QSQLITE 驱动支持。";
         logStartup("[ERR] " + m_lastError);
         return false;
     }
-    // 统一明文数据库路径 (程序目录下的 inspiration.db)
-    m_realDbPath = dbPath.isEmpty() ? (QCoreApplication::applicationDirPath() + "/inspiration.db") : dbPath; 
-    // [ARCH-CHANGE] 在“去壳”架构下，内核路径即为主路径，不再使用 AppData 里的 notes_core
-    m_dbPath = m_realDbPath;
 
+    // 路径单一真实数据源：程序目录/.RapidNotes/inspiration.db（Qt 连接与原生连接共用这一个文件）
+    m_dbPath = getGlobalDbPath();
     logStartup("目标主路径: " + m_dbPath);
 
-    auto isSqlite = [](const QString& path) -> bool {
-        QFile f(path);
-        if (f.open(QIODevice::ReadOnly)) {
-            QByteArray header = f.read(16);
-            f.close();
-            return header.startsWith("SQLite format 3");
+    RapidNotes::prepareStorageDirs(getAppDir());
+    QDir().mkpath(QFileInfo(m_dbPath).absolutePath());
+#ifdef Q_OS_WIN
+    SetFileAttributesW(QFileInfo(m_dbPath).absolutePath().toStdWString().c_str(), FILE_ATTRIBUTE_HIDDEN);
+#endif
+
+    // [MIGRATE] 旧位置(程序目录/inspiration.db)的真实数据迁入新位置，绝不丢笔记
+    {
+        QString legacy = legacyDbPath.isEmpty() ? (getAppDir() + "/inspiration.db") : legacyDbPath;
+        legacy = QDir::toNativeSeparators(QDir::cleanPath(legacy));
+        if (legacy.compare(QDir::toNativeSeparators(QDir::cleanPath(m_dbPath)), Qt::CaseInsensitive) != 0
+            && QFile::exists(legacy) && isSqliteFile(legacy)) {
+            int legacyNotes = countNotesNative(legacy);
+            if (!QFile::exists(m_dbPath)) {
+                logStartup("[MIGRATE] 新位置无数据库，迁入旧库 (笔记数 " + QString::number(legacyNotes) + ")");
+                if (!moveDbWithSidecars(legacy, m_dbPath)) {
+                    m_lastError = "旧数据库迁移失败：" + legacy;
+                    logStartup("[ERR] " + m_lastError);
+                    return false;
+                }
+            } else {
+                int targetNotes = countNotesNative(m_dbPath);
+                if (targetNotes <= 0 && legacyNotes > 0) {
+                    QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+                    logStartup("[MIGRATE] 新位置库为空而旧库有 " + QString::number(legacyNotes) + " 条笔记，旧库迁入，空库另存备查");
+                    if (!moveDbWithSidecars(m_dbPath, m_dbPath + ".premerge_" + stamp) ||
+                        !moveDbWithSidecars(legacy, m_dbPath)) {
+                        m_lastError = "旧数据库迁移失败：" + legacy;
+                        logStartup("[ERR] " + m_lastError);
+                        return false;
+                    }
+                } else {
+                    logStartup("[MIGRATE] 新旧位置均已有数据，保留新位置，旧库原样未动: " + legacy);
+                }
+            }
         }
-        return false;
-    };
+    }
+
+    auto isSqlite = [](const QString& path) -> bool { return isSqliteFile(path); };
 
     bool loaded = false;
-
     // [LEVEL 1] 优先检测主路径是否已是明文 SQLite
     if (QFile::exists(m_dbPath) && isSqlite(m_dbPath)) {
         logStartup("[L1] 命中主路径明文数据库，直接加载。");
@@ -274,7 +379,7 @@ bool DatabaseManager::init(const QString& dbPath) {
 
     // [LEVEL 3] 检测旧版明文 notes.db 迁移
     if (!loaded) {
-        QString legacyPlain = QFileInfo(m_realDbPath).absolutePath() + "/notes.db";
+        QString legacyPlain = getAppDir() + "/notes.db";
         if (QFile::exists(legacyPlain) && isSqlite(legacyPlain)) {
             logStartup("[L3] 检测到旧版 notes.db 明文，执行架构平滑迁移...");
             if (QFile::copy(legacyPlain, m_dbPath)) {
@@ -337,29 +442,64 @@ bool DatabaseManager::init(const QString& dbPath) {
         logStartup("[INIT] 所有抢救链均失效，初始化全新明文数据库。");
     }
 
-    // 4. 打开数据库
+    // 打开 Qt 连接并建表（RapidNotes 笔记模块）
+    if (!initQtSqlDb(m_dbPath)) {
+        return false;
+    }
+
+    // 打开原生连接并建表（QuarkMeta 全套 DAO，句柄由本类持有，不再借用 Qt 驱动的句柄）
+    if (!initNativeDb(m_dbPath)) {
+        if (m_db.isOpen()) m_db.close();
+        return false;
+    }
+
+    logStartup("执行建表及升级检查...");
+    if (!createAllTables()) {
+        if (m_lastError.isEmpty()) m_lastError = "建表或表升级失败: " + m_db.lastError().text();
+        logStartup("[ERR] " + m_lastError);
+        if (m_db.isOpen()) m_db.close();
+        std::lock_guard<std::mutex> g(m_globalDbMutex);
+        if (m_nativeDb) { sqlite3_close_v2(m_nativeDb); m_nativeDb = nullptr; }
+        return false;
+    }
+
+    m_isInitialized = true;
+    logStartup("--- 初始化全部成功 ---");
+    m_autoSaveTimer->start();
+
+    // 释放 Qt 侧锁后再调用 DAO（DAO 会取原生互斥锁，避免锁序交叉）
+    locker.unlock();
+    RapidNotes::initMetaDaos();
+    {
+        std::lock_guard<std::mutex> g(m_globalDbMutex);
+        if (m_nativeDb) sqlite3_wal_checkpoint_v2(m_nativeDb, nullptr, SQLITE_CHECKPOINT_TRUNCATE, nullptr, nullptr);
+    }
+    performDailyBackup();
+    return true;
+}
+
+bool DatabaseManager::initQtSqlDb(const QString& dbPath) {
     if (m_db.isOpen()) m_db.close();
-    
+
     QString connectionName = "RapidNotes_Main_Conn";
     if (QSqlDatabase::contains(connectionName)) {
-        m_db = QSqlDatabase::database(connectionName);
+        m_db = QSqlDatabase::database(connectionName, false);
     } else {
         m_db = QSqlDatabase::addDatabase("QSQLITE", connectionName);
     }
-    
-    m_db.setDatabaseName(m_dbPath);
+
+    m_db.setDatabaseName(dbPath);
+    // 与原生连接共用同一文件，写冲突时等待而不是立刻报 busy
+    m_db.setConnectOptions("QSQLITE_BUSY_TIMEOUT=25000");
 
     logStartup("正在建立 SQL 连接...");
     if (!m_db.open()) {
-        // 2026-03-xx [DIAGNOSTIC] 记录导致数据库无法打开的具体 SQL 错误，便于排查权限或文件锁冲突
         m_lastError = QString("[%1] %2").arg(m_db.lastError().nativeErrorCode()).arg(m_db.lastError().text());
         logStartup("[ERR] SQL 打开失败: " + m_lastError);
         return false;
     }
     logStartup("SQL 连接成功。");
 
-    // [STABILITY] 开启 WAL 模式 + FULL 同步级别。
-    // 在 Windows 下，synchronous=FULL 能确保崩溃时已提交的数据绝对抵达硬件/系统层。
     QSqlQuery walQuery(m_db);
     logStartup("正在配置高可靠性写入模式 (WAL + FULL)...");
     if (!walQuery.exec("PRAGMA journal_mode = WAL;")) {
@@ -369,7 +509,6 @@ bool DatabaseManager::init(const QString& dbPath) {
     }
     walQuery.exec("PRAGMA synchronous = FULL;");
 
-    // 完整性预检
     logStartup("执行完整性预检...");
     if (!walQuery.exec("PRAGMA integrity_check;")) {
         m_lastError = "数据库文件结构损坏: " + walQuery.lastError().text();
@@ -377,34 +516,244 @@ bool DatabaseManager::init(const QString& dbPath) {
         return false;
     }
 
-    logStartup("执行建表及升级检查...");
-    if (!createTables()) {
-        m_lastError = "建表或表升级失败: " + m_db.lastError().text();
-        logStartup("[ERR] " + m_lastError);
-        return false;
-    }
-
-    m_isInitialized = true;
-    logStartup("--- 初始化全部成功 ---");
-
-    // [STARTUP-SYNC] 已移除旧架构下的强制合壳同步，去壳版始终保持明文实时性
-    m_autoSaveTimer->start();
+    walQuery.exec("PRAGMA foreign_keys = ON;");   // 标签关联表依赖外键级联
+    if (!renameLegacyNoteTagDict()) return false;
     return true;
 }
 
-QString DatabaseManager::getDbPath() const {
-    return m_realDbPath.isEmpty() ? m_dbPath : m_realDbPath;
+bool DatabaseManager::initNativeDb(const QString& dbPath) {
+    std::lock_guard<std::mutex> g(m_globalDbMutex);
+    if (m_nativeDb) return true;
+
+    sqlite3* db = nullptr;
+    std::wstring wpath = QDir::toNativeSeparators(dbPath).toStdWString();
+    int rc = sqlite3_open16(wpath.c_str(), &db);
+    if (rc != SQLITE_OK || !db) {
+        m_lastError = "无法打开原生数据库连接: " + dbPath;
+        logStartup("[ERR] " + m_lastError);
+        if (db) sqlite3_close_v2(db);
+        return false;
+    }
+
+    sqlite3_busy_timeout(db, 25000);
+    sqlite3_exec(db, "PRAGMA foreign_keys = ON;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "PRAGMA journal_mode = WAL;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "PRAGMA synchronous = NORMAL;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "PRAGMA temp_store = MEMORY;", nullptr, nullptr, nullptr);
+
+    RapidNotes::SmartFolderDao::registerColorFunctions(db);
+
+    constexpr int kSchemaVersion = 1;
+    int currentVersion = 0;
+    sqlite3_stmt* verStmt = nullptr;
+    if (sqlite3_prepare_v2(db, "PRAGMA user_version;", -1, &verStmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(verStmt) == SQLITE_ROW) currentVersion = sqlite3_column_int(verStmt, 0);
+        sqlite3_finalize(verStmt);
+    }
+
+    if (currentVersion != kSchemaVersion) {
+        char* err = nullptr;
+        if (sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, &err) == SQLITE_OK) {
+            sqlite3_exec(db, "DROP TABLE IF EXISTS item_palettes;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db, "DROP TABLE IF EXISTS file_tags;", nullptr, nullptr, nullptr);
+            sqlite3_exec(db, "DROP TABLE IF EXISTS library_items;", nullptr, nullptr, nullptr);
+            if (sqlite3_exec(db, "COMMIT;", nullptr, nullptr, &err) != SQLITE_OK) {
+                logSqlError("Version upgrade commit", db, "COMMIT;");
+                if (err) sqlite3_free(err);
+                sqlite3_close_v2(db);
+                m_lastError = "原生库版本升级失败";
+                return false;
+            }
+        } else {
+            logSqlError("Version upgrade begin", db, "BEGIN TRANSACTION;");
+            if (err) sqlite3_free(err);
+            sqlite3_close_v2(db);
+            m_lastError = "原生库版本升级失败";
+            return false;
+        }
+    }
+
+    static const char* kNativeSchema = R"(
+        -- ===================================================================
+        -- 1. 基础字典表：标签管理
+        -- ===================================================================
+        CREATE TABLE IF NOT EXISTS tags (
+            name TEXT PRIMARY KEY COLLATE NOCASE,   -- 忽略大小写
+            color TEXT DEFAULT '',
+            pinned INTEGER DEFAULT 0,
+            use_count INTEGER DEFAULT 0,            -- 使用频次
+            last_used INTEGER DEFAULT 0             -- 最后使用时间
+        );
+        -- 索引：覆盖按热门使用量排序、按最后使用时间排序
+        CREATE INDEX IF NOT EXISTS idx_tags_use_count ON tags(use_count DESC);
+        CREATE INDEX IF NOT EXISTS idx_tags_last_used ON tags(last_used DESC);
+
+        -- ===================================================================
+        -- 2. 标签组及多对多关联
+        -- ===================================================================
+        CREATE TABLE IF NOT EXISTS tag_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,              -- 组名禁止重复
+            color TEXT DEFAULT '',
+            sort_order INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_tag_groups_sort ON tag_groups(sort_order ASC);
+
+        CREATE TABLE IF NOT EXISTS tag_group_items (
+            group_id INTEGER,
+            tag_name TEXT COLLATE NOCASE,
+            PRIMARY KEY (group_id, tag_name),
+            FOREIGN KEY (group_id) REFERENCES tag_groups(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_name) REFERENCES tags(name) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_tag_group_items_tag ON tag_group_items(tag_name);
+
+        -- ===================================================================
+        -- 3. 全局文件索引表 (Sidecar File_ID 主键契约)
+        -- ===================================================================
+        CREATE TABLE IF NOT EXISTS library_items (
+            file_id TEXT PRIMARY KEY,               -- 持久化唯一标识 (UUID/Base36)
+            meta_file_id TEXT DEFAULT '',           -- .RapidNotes.json 自身 File_ID 凭据
+            file_path TEXT NOT NULL UNIQUE COLLATE NOCASE, -- 绝对物理路径
+            file_name TEXT NOT NULL,                -- 文件名（含后缀）
+            base_name TEXT NOT NULL,                -- 纯文件名（不含后缀，搜索用）
+            extension TEXT NOT NULL COLLATE NOCASE, -- 后缀（如 png、md）
+            file_size INTEGER DEFAULT 0,
+            is_dir INTEGER DEFAULT 0,
+            is_empty INTEGER DEFAULT 0,
+            is_hidden INTEGER DEFAULT 0,
+            is_managed INTEGER DEFAULT 0,
+            encrypted INTEGER DEFAULT 0,
+            pinned INTEGER DEFAULT 0,
+            rating INTEGER DEFAULT 0,               -- 评级 0~5
+            color_hex TEXT DEFAULT '',              -- 标记颜色
+            auto_color TEXT DEFAULT '',             -- 自动调色板特征 Hex
+            width INTEGER DEFAULT 0,
+            height INTEGER DEFAULT 0,
+            thumb_status INTEGER DEFAULT 0,
+            note TEXT DEFAULT '',                   -- 备注
+            url TEXT DEFAULT '',                    -- 关联网址
+            sha256 TEXT DEFAULT '',
+            created_at INTEGER DEFAULT 0,
+            updated_at INTEGER DEFAULT 0,
+            added_at INTEGER DEFAULT 0,
+            sync_state INTEGER DEFAULT 0,
+            synced_at INTEGER DEFAULT 0
+        );
+        -- 为物理路径及智能文件夹的高频过滤字段建立 B-Tree 索引
+        CREATE INDEX IF NOT EXISTS idx_items_meta_file_id ON library_items(meta_file_id);
+        CREATE INDEX IF NOT EXISTS idx_items_rating ON library_items(rating);
+        CREATE INDEX IF NOT EXISTS idx_items_ext ON library_items(extension);
+        CREATE INDEX IF NOT EXISTS idx_items_color ON library_items(color_hex);
+        CREATE INDEX IF NOT EXISTS idx_items_updated ON library_items(updated_at DESC);
+
+        -- ===================================================================
+        -- 4. 主色调调色板拆分表
+        -- ===================================================================
+        CREATE TABLE IF NOT EXISTS item_palettes (
+            file_id TEXT NOT NULL,
+            idx INTEGER NOT NULL,
+            color_hex TEXT DEFAULT '',
+            ratio REAL DEFAULT 0,
+            PRIMARY KEY (file_id, idx),
+            FOREIGN KEY (file_id) REFERENCES library_items(file_id) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+
+        -- ===================================================================
+        -- 5. 文件与标签的多对多解耦关联表
+        -- ===================================================================
+        CREATE TABLE IF NOT EXISTS file_tags (
+            file_id TEXT NOT NULL,
+            tag_name TEXT NOT NULL COLLATE NOCASE,
+            PRIMARY KEY (file_id, tag_name),
+            FOREIGN KEY (file_id) REFERENCES library_items(file_id) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (tag_name) REFERENCES tags(name) ON DELETE CASCADE ON UPDATE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_name);
+
+        -- ===================================================================
+        -- 6. 回收站表（补全高频检索与恢复索引）
+        -- ===================================================================
+        CREATE TABLE IF NOT EXISTS disk_trash (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id TEXT NOT NULL,
+            trash_path TEXT NOT NULL,
+            original_path TEXT NOT NULL,
+            drive_letter TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            is_folder INTEGER DEFAULT 0,
+            file_size INTEGER DEFAULT 0,
+            created_at INTEGER DEFAULT 0,
+            deleted_at INTEGER DEFAULT 0
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_disk_trash_file_id ON disk_trash(file_id);
+        CREATE INDEX IF NOT EXISTS idx_disk_trash_orig_path ON disk_trash(original_path);
+        CREATE INDEX IF NOT EXISTS idx_disk_trash_deleted ON disk_trash(deleted_at DESC);
+
+        -- ===================================================================
+        -- 7. 驱动器与智能文件夹元数据
+        -- ===================================================================
+        CREATE TABLE IF NOT EXISTS drive_metadata (
+            drive_path TEXT PRIMARY KEY,
+            rating INTEGER DEFAULT 0,
+            color TEXT DEFAULT '',
+            pinned INTEGER DEFAULT 0,
+            note TEXT DEFAULT '',
+            url TEXT DEFAULT '',
+            updated_at INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS smart_folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            match_mode TEXT DEFAULT 'ALL',
+            icon_key TEXT DEFAULT 'folder_filled',
+            color_hex TEXT DEFAULT '#888888',
+            sort_order INTEGER DEFAULT 0,
+            rules_json TEXT DEFAULT '[]',
+            created_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_smart_folders_sort ON smart_folders(sort_order ASC);
+    )";
+
+    char* errMsg = nullptr;
+    if (sqlite3_exec(db, kNativeSchema, nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        logSqlError("Native schema creation", db);
+        if (errMsg) sqlite3_free(errMsg);
+        sqlite3_close_v2(db);
+        m_lastError = "原生库建表失败";
+        return false;
+    }
+
+    if (currentVersion != kSchemaVersion) {
+        sqlite3_exec(db, QString("PRAGMA user_version = %1;").arg(kSchemaVersion).toUtf8().constData(),
+                     nullptr, nullptr, nullptr);
+    }
+
+    m_nativeDb = db;
+    logStartup("原生连接就绪: " + dbPath);
+    return true;
+}
+
+QString DatabaseManager::getAppDir() {
+    return QCoreApplication::applicationDirPath();
+}
+
+QString DatabaseManager::getGlobalDbPath() {
+    return QDir::toNativeSeparators(getAppDir() + "/.RapidNotes/inspiration.db");
+}
+
+QString DatabaseManager::getBackupDir() {
+    QString dir = QDir::toNativeSeparators(getAppDir() + "/.RapidNotes/backups");
+    QDir().mkpath(dir);
+    return dir;
 }
 
 sqlite3* DatabaseManager::getGlobalDb() {
-    QMutexLocker locker(&m_mutex);
-    if (!m_db.isOpen()) return nullptr;
-    QVariant v = m_db.driver()->handle();
-    if (v.isValid() && qstrcmp(v.typeName(), "sqlite3*") == 0) {
-        return *static_cast<sqlite3**>(v.data());
-    }
-    return nullptr;
+    // 原生句柄由本类自己持有（exe 内的 sqlite3.c），绝不再返回 Qt 驱动里另一份 SQLite 的句柄
+    return m_nativeDb;
 }
+
 
 void DatabaseManager::logSqlError(const char* location, sqlite3* db, const QString& sql) {
     const char* errmsg = db ? sqlite3_errmsg(db) : "Unknown error (null db)";
@@ -416,24 +765,54 @@ void DatabaseManager::logSqlError(const char* location, sqlite3* db, const QStri
     }
 }
 
-void DatabaseManager::closeAndPack() {
+void DatabaseManager::shutdown() {
     QMutexLocker locker(&m_mutex);
-    if (!m_isInitialized) return;
+    if (m_autoSaveTimer) m_autoSaveTimer->stop();
+    if (!m_isInitialized && !m_nativeDb && !m_db.isOpen()) return;
     m_isInitialized = false;
-    
+
+    {
+        std::lock_guard<std::mutex> g(m_globalDbMutex);
+        if (m_nativeDb) {
+            sqlite3_wal_checkpoint_v2(m_nativeDb, nullptr, SQLITE_CHECKPOINT_FULL, nullptr, nullptr);
+            sqlite3_close_v2(m_nativeDb);
+            m_nativeDb = nullptr;
+        }
+    }
+
     QString connName = m_db.connectionName();
     if (m_db.isOpen()) {
-        // [DE-SHELL] 退出前仅执行快速 Checkpoint 刷盘，彻底移除加密环节
         QSqlQuery cp(m_db);
-        cp.exec("PRAGMA wal_checkpoint(FULL);");
+        cp.exec("PRAGMA wal_checkpoint(TRUNCATE);");
         m_db.close();
     }
-    m_db = QSqlDatabase(); 
+    m_db = QSqlDatabase();
     if (!connName.isEmpty()) QSqlDatabase::removeDatabase(connName);
-    
-    // 退出时执行一次快速归档备份，确保数据绝对安全
+
+    // 退出时执行一次快速归档备份
     backupDatabaseLatest();
-    qDebug() << "[DB] [DE-SHELL] 数据库已安全关闭，实现秒级退出。";
+    qDebug() << "[DB] 数据库已安全关闭（Qt 连接 + 原生连接）。";
+}
+
+void DatabaseManager::performDailyBackup() {
+    QString dbPath = getGlobalDbPath();
+    if (!QFile::exists(dbPath)) return;
+
+    QString backupDir = getBackupDir();
+    QString todayStr = QDate::currentDate().toString("yyyyMMdd");
+    QString todayBackupPath = QDir::toNativeSeparators(backupDir + QString("/RapidNotes_%1.store.bak").arg(todayStr));
+
+    // 当天已存在备份副本，直接跳过，零磁盘写入磨损
+    if (QFile::exists(todayBackupPath)) return;
+
+    QFile::copy(dbPath, todayBackupPath);
+    qInfo() << "[DatabaseManager] 已创建每日数据库快照备份:" << todayBackupPath;
+
+    QDir bDir(backupDir);
+    QFileInfoList backupFiles = bDir.entryInfoList(QStringList() << "RapidNotes_*.store.bak", QDir::Files, QDir::Time);
+    for (int i = 7; i < backupFiles.size(); ++i) {
+        QFile::remove(backupFiles[i].absoluteFilePath());
+    }
 }
 
 bool DatabaseManager::flushDatabase(const QString& source) {
@@ -446,9 +825,9 @@ bool DatabaseManager::flushDatabase(const QString& source) {
 }
 
 bool DatabaseManager::tryRecoverFromBackup() {
-    if (m_realDbPath.isEmpty()) return false;
+    if (m_dbPath.isEmpty()) return false;
 
-    QFileInfo dbInfo(m_realDbPath);
+    QFileInfo dbInfo(m_dbPath);
     QDir dbDir = dbInfo.dir();
     QString backupPath = dbDir.absoluteFilePath("backups/inspiration_latest.db");
 
@@ -461,14 +840,14 @@ bool DatabaseManager::tryRecoverFromBackup() {
 
     // 1. 备份损坏的文件以备后续人工检查
     QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
-    QString corruptedPath = m_realDbPath + ".corrupted_" + timestamp;
-    if (QFile::exists(m_realDbPath)) {
-        if (QFile::rename(m_realDbPath, corruptedPath)) {
+    QString corruptedPath = m_dbPath + ".corrupted_" + timestamp;
+    if (QFile::exists(m_dbPath)) {
+        if (QFile::rename(m_dbPath, corruptedPath)) {
             qDebug() << "[DB] 已将损坏文件移至:" << corruptedPath;
             
             // [UX-OPTIMIZATION] 数量控制：仅保留最近 5 个损坏备份，防止无限堆积
             QStringList corruptedFilter;
-            corruptedFilter << QFileInfo(m_realDbPath).fileName() + ".corrupted_*";
+            corruptedFilter << QFileInfo(m_dbPath).fileName() + ".corrupted_*";
             QFileInfoList corruptedFiles = dbDir.entryInfoList(corruptedFilter, QDir::Files, QDir::Name);
             while (corruptedFiles.size() > 5) {
                 QFileInfo oldest = corruptedFiles.takeFirst();
@@ -478,12 +857,12 @@ bool DatabaseManager::tryRecoverFromBackup() {
             }
         } else {
             qWarning() << "[DB] 无法重命名损坏的文件，尝试直接覆盖。";
-            QFile::remove(m_realDbPath);
+            QFile::remove(m_dbPath);
         }
     }
 
     // 2. 从血包恢复
-    if (QFile::copy(backupPath, m_realDbPath)) {
+    if (QFile::copy(backupPath, m_dbPath)) {
         qDebug() << "[DB] 核心救治成功：已从备份文件恢复数据库外壳。";
         return true;
     } else {
@@ -526,9 +905,9 @@ void DatabaseManager::handleAutoSave() {
 }
 
 void DatabaseManager::backupDatabaseLatest() {
-    if (m_realDbPath.isEmpty() || !QFile::exists(m_realDbPath)) return;
+    if (m_dbPath.isEmpty() || !QFile::exists(m_dbPath)) return;
 
-    QFileInfo dbInfo(m_realDbPath);
+    QFileInfo dbInfo(m_dbPath);
     QDir dbDir = dbInfo.dir();
     QString backupDirPath = dbDir.absoluteFilePath("backups");
     QDir backupDir(backupDirPath);
@@ -549,7 +928,7 @@ void DatabaseManager::backupDatabaseLatest() {
     // [HEALING] 备份熔断保护机制
     // 如果当前主库大小异常缩小（例如从数MB缩减到几十KB），则拒绝直接覆盖血包备份。
     if (QFile::exists(backupPath)) {
-        qint64 currentSize = QFileInfo(m_realDbPath).size();
+        qint64 currentSize = QFileInfo(m_dbPath).size();
         qint64 backupSize = QFileInfo(backupPath).size();
         
         // 判定熔断条件：备份已存在且大于 200KB，且当前文件比备份缩小了 50% 以上
@@ -561,7 +940,7 @@ void DatabaseManager::backupDatabaseLatest() {
         }
     }
 
-    if (QFile::copy(m_realDbPath, tempPath)) {
+    if (QFile::copy(m_dbPath, tempPath)) {
         if (QFile::exists(backupPath)) {
             QFile::remove(backupPath);
         }
@@ -577,9 +956,9 @@ void DatabaseManager::backupDatabaseLatest() {
 }
 
 void DatabaseManager::backupDatabase() {
-    if (m_realDbPath.isEmpty() || !QFile::exists(m_realDbPath)) return;
+    if (m_dbPath.isEmpty() || !QFile::exists(m_dbPath)) return;
 
-    QFileInfo dbInfo(m_realDbPath);
+    QFileInfo dbInfo(m_dbPath);
     QDir dbDir = dbInfo.dir();
     QString backupDirPath = dbDir.absoluteFilePath("backups");
     QDir backupDir(backupDirPath);
@@ -596,7 +975,7 @@ void DatabaseManager::backupDatabase() {
     QString backupFileName = QString("inspiration_backup_%1.db").arg(timestamp);
     QString backupPath = backupDir.absoluteFilePath(backupFileName);
 
-    if (QFile::copy(m_realDbPath, backupPath)) {
+    if (QFile::copy(m_dbPath, backupPath)) {
         // [FIX] 显式更新归档备份的时间戳，确保资源管理器显示正确
         QFile bFile(backupPath);
         bFile.setFileTime(now, QFileDevice::FileBirthTime);
@@ -621,7 +1000,123 @@ void DatabaseManager::backupDatabase() {
     }
 }
 
-bool DatabaseManager::createTables() {
+
+bool DatabaseManager::renameLegacyNoteTagDict() {
+    // QuarkMeta 的 tags(name 主键) 与 RapidNotes 旧 tags(id 自增) 同名：旧表先改名，让出 tags 给统一标签字典
+    QSqlQuery chk(m_db);
+    bool legacy = false, dictExists = false;
+    if (chk.exec("PRAGMA table_info(tags)")) {
+        while (chk.next()) if (chk.value(1).toString().compare("id", Qt::CaseInsensitive) == 0) legacy = true;
+    }
+    QSqlQuery c2(m_db);
+    if (c2.exec("SELECT 1 FROM sqlite_master WHERE type='table' AND name='note_tag_dict'") && c2.next()) dictExists = true;
+    if (legacy && !dictExists) {
+        QSqlQuery ren(m_db);
+        if (!ren.exec("ALTER TABLE tags RENAME TO note_tag_dict")) {
+            m_lastError = "旧标签表改名失败: " + ren.lastError().text();
+            return false;
+        }
+    }
+    return true;
+}
+
+bool DatabaseManager::migrateNoteTagsSchema() {
+    // 统一后的标签模型：tags(字典，唯一) + note_tags(note_id, tag_name)。notes.tags 仅作为由它生成的展示/搜索缓存。
+    QSqlQuery q(m_db);
+    q.exec("CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT)");
+
+    bool legacyRel = false, hasDict = false;
+    if (q.exec("PRAGMA table_info(note_tags)")) {
+        while (q.next()) if (q.value(1).toString() == "tag_id") legacyRel = true;
+    }
+    QSqlQuery c(m_db);
+    if (c.exec("SELECT 1 FROM sqlite_master WHERE type='table' AND name='note_tag_dict'") && c.next()) hasDict = true;
+
+    m_db.transaction();
+    QSqlQuery s(m_db);
+    if (hasDict) s.exec("INSERT OR IGNORE INTO tags(name) SELECT name FROM note_tag_dict");
+    if (legacyRel) s.exec("DROP TABLE note_tags");
+    bool ok = s.exec("CREATE TABLE IF NOT EXISTS note_tags ("
+                     "note_id INTEGER NOT NULL, tag_name TEXT NOT NULL COLLATE NOCASE, "
+                     "PRIMARY KEY (note_id, tag_name), "
+                     "FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE, "
+                     "FOREIGN KEY (tag_name) REFERENCES tags(name) ON DELETE CASCADE ON UPDATE CASCADE)");
+    if (!ok) { m_lastError = "创建 note_tags 失败: " + s.lastError().text(); m_db.rollback(); return false; }
+    s.exec("CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_name, note_id)");
+
+    QSqlQuery key(m_db);
+    if (!(key.exec("SELECT 1 FROM system_config WHERE key = 'migration_20261113_tags_unify'") && key.next())) {
+        // 以 notes.tags 字符串为准一次性重建关联（用户可见的标签就是它）
+        QSqlQuery fetch(m_db);
+        QSqlQuery insDict(m_db), insRel(m_db);
+        insDict.prepare("INSERT OR IGNORE INTO tags(name) VALUES(?)");
+        insRel.prepare("INSERT OR IGNORE INTO note_tags(note_id, tag_name) VALUES(?, ?)");
+        if (fetch.exec("SELECT id, tags FROM notes WHERE tags IS NOT NULL AND tags != ''")) {
+            while (fetch.next()) {
+                int id = fetch.value(0).toInt();
+                const QStringList names = RapidNotes::TagCodec::normalize(RapidNotes::TagCodec::split(fetch.value(1).toString()));
+                for (const QString& n : names) {
+                    insDict.bindValue(0, n); insDict.exec();
+                    insRel.bindValue(0, id); insRel.bindValue(1, n); insRel.exec();
+                }
+            }
+        }
+        s.exec("INSERT OR REPLACE INTO system_config (key, value) VALUES ('migration_20261113_tags_unify', '1')");
+    }
+    if (hasDict) s.exec("DROP TABLE note_tag_dict");
+    return m_db.commit();
+}
+
+void DatabaseManager::ensureTagsExist(const QStringList& names) {
+    if (names.isEmpty()) return;
+    QSqlQuery q(m_db);
+    q.prepare("INSERT OR IGNORE INTO tags(name) VALUES(?)");
+    for (const QString& n : names) { q.bindValue(0, n); q.exec(); }
+}
+
+// 由 note_tags 重新生成 notes.tags 缓存：按批 IN 读取，一次事务内写回（调用方负责事务）
+void DatabaseManager::refreshNoteTagsCache(const QList<int>& ids) {
+    if (ids.isEmpty()) return;
+    QSqlQuery up(m_db);
+    up.prepare("UPDATE notes SET tags = ? WHERE id = ?");
+    forEachIdChunk(ids, [&](const QList<int>& chunk) {
+        QHash<int, QStringList> map;
+        for (int id : chunk) map[id];
+        QSqlQuery sel(m_db);
+        sel.prepare("SELECT note_id, tag_name FROM note_tags WHERE note_id IN (" + inList(chunk.size()) + ") ORDER BY rowid");
+        for (int id : chunk) sel.addBindValue(id);
+        if (sel.exec()) while (sel.next()) map[sel.value(0).toInt()].append(sel.value(1).toString());
+        for (auto it = map.constBegin(); it != map.constEnd(); ++it) {
+            up.bindValue(0, RapidNotes::TagCodec::join(it.value()));
+            up.bindValue(1, it.key());
+            up.exec();
+        }
+    });
+}
+
+QList<QVariantMap> DatabaseManager::getNotesByIds(const QList<int>& ids) {
+    QMutexLocker locker(&m_mutex);
+    QList<QVariantMap> out;
+    if (!m_db.isOpen() || ids.isEmpty()) return out;
+    QHash<int, QVariantMap> byId;
+    forEachIdChunk(ids, [&](const QList<int>& chunk) {
+        QSqlQuery q(m_db);
+        q.prepare("SELECT * FROM notes WHERE id IN (" + inList(chunk.size()) + ")");
+        for (int id : chunk) q.addBindValue(id);
+        if (!q.exec()) return;
+        while (q.next()) {
+            QSqlRecord rec = q.record();
+            QVariantMap m;
+            for (int i = 0; i < rec.count(); ++i) m[rec.fieldName(i).toLower()] = q.value(i);
+            byId.insert(m.value("id").toInt(), m);
+        }
+    });
+    out.reserve(ids.size());
+    for (int id : ids) if (byId.contains(id)) out.append(byId.value(id));
+    return out;
+}
+
+bool DatabaseManager::createAllTables() {
     QSqlQuery query(m_db);
     QString createNotesTable = R"(
         CREATE TABLE IF NOT EXISTS notes (
@@ -701,8 +1196,7 @@ bool DatabaseManager::createTables() {
         addCol("categories", "sort_mode", "TEXT DEFAULT 'manual'"); // [NEW] 2026-04-xx 增加分类独立排序模式
         addCol("categories", "icon_key", "TEXT DEFAULT 'Data-Classification.svg'"); // [NEW] 分类矢量图标键
     }
-    query.exec("CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL)");
-    query.exec("CREATE TABLE IF NOT EXISTS note_tags (note_id INTEGER, tag_id INTEGER, PRIMARY KEY (note_id, tag_id))");
+    if (!migrateNoteTagsSchema()) return false;
     query.exec("CREATE INDEX IF NOT EXISTS idx_notes_content_hash ON notes(content_hash)");
     
     // 2026-05-02 彻底摧毁弱智的 SQL 触发器架构，字数计算权全面收回归 C++ 引擎
@@ -798,6 +1292,18 @@ bool DatabaseManager::createTables() {
         addCol("notes", "file_extensions", "TEXT DEFAULT ''"); // [NEW] 2026-04-08 多后缀关联字段
         addCol("notes", "word_count", "INTEGER DEFAULT 0");
         addCol("notes", "color_label", "TEXT DEFAULT ''"); // [NEW] 纯笔记独立手动颜色标记字段
+        addCol("notes", "url", "TEXT DEFAULT ''"); // 链接独立字段（原先与备注共用 remark 导致互相覆盖）
+
+        // 索引（放在补列之后，旧库缺列时也能建成）
+        query.exec("CREATE INDEX IF NOT EXISTS idx_notes_main_filter ON notes(is_deleted, category_id, is_pinned, updated_at)");
+        query.exec("CREATE INDEX IF NOT EXISTS idx_notes_rating ON notes(rating) WHERE rating > 0");
+        query.exec("CREATE INDEX IF NOT EXISTS idx_notes_color_label ON notes(color_label) WHERE is_deleted = 0 AND color_label != ''");
+        query.exec("CREATE INDEX IF NOT EXISTS idx_notes_recent ON notes(last_accessed_at DESC) WHERE is_deleted = 0");
+        query.exec("CREATE INDEX IF NOT EXISTS idx_notes_fav ON notes(is_favorite) WHERE is_favorite = 1 AND is_deleted = 0");
+        query.exec("CREATE INDEX IF NOT EXISTS idx_notes_cat_sort ON notes(category_id, is_deleted, sort_order)");
+        query.exec("CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC)");
+        query.exec("CREATE INDEX IF NOT EXISTS idx_notes_type ON notes(item_type)");
+        query.exec("CREATE INDEX IF NOT EXISTS idx_cat_parent ON categories(parent_id, is_deleted)");
 
         // 2026-05-03 按照用户要求：执行 C++ 引擎全量字数精准校准迁移 v3 (修复 0 字逻辑并应用绿色收藏)
         QSqlQuery checkAccurateMigV3(m_db);
@@ -1446,15 +1952,25 @@ bool DatabaseManager::updateNoteState(int id, const QString& column, const QVari
 bool DatabaseManager::updateNoteStateBatch(const QList<int>& ids, const QString& column, const QVariant& value) {
     if (ids.isEmpty()) return true;
     bool success = false;
-    QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
     {
         QMutexLocker locker(&m_mutex);
         if (!m_db.isOpen()) return false;
-        // [CRITICAL] 保持与 updateNoteState 相同的允许列白名单，确保功能不丢失
-        QStringList allowedColumns = {"is_pinned", "is_favorite", "is_deleted", "tags", "rating", "category_id", "color", "content", "title", "item_type", "remark", "color_label"};
+        QStringList allowedColumns = {"is_pinned", "is_favorite", "is_deleted", "tags", "rating", "category_id", "color", "content", "title", "item_type", "remark", "color_label", "url"};
         if (!allowedColumns.contains(column)) return false;
         m_db.transaction();
-        QSqlQuery query(m_db);
+
+        // 同一条 SET 子句按 500 个 ID 一批执行
+        auto runIn = [&](const QString& setClause, const QVariantList& setVals) {
+            forEachIdChunk(ids, [&](const QList<int>& chunk) {
+                QSqlQuery q(m_db);
+                q.prepare("UPDATE notes SET " + setClause + " WHERE id IN (" + inList(chunk.size()) + ")");
+                for (const QVariant& v : setVals) q.addBindValue(v);
+                for (int id : chunk) q.addBindValue(id);
+                q.exec();
+            });
+        };
+
         if (column == "category_id") {
             int catId = value.isNull() ? -1 : value.toInt();
             QString color = "#0A362F";
@@ -1464,76 +1980,61 @@ bool DatabaseManager::updateNoteStateBatch(const QList<int>& ids, const QString&
                 catQuery.bindValue(":id", catId);
                 if (catQuery.exec() && catQuery.next()) color = catQuery.value(0).toString();
             }
-            // [CRITICAL] 锁定：批量移动分类必须同步更新 last_accessed_at。严禁移除。
-            query.prepare("UPDATE notes SET category_id = :val, color = :color, is_deleted = 0, updated_at = :now, last_accessed_at = :now WHERE id = :id");
-            for (int id : ids) {
-                query.bindValue(":val", value);
-                query.bindValue(":color", color);
-                query.bindValue(":now", currentTime);
-                query.bindValue(":id", id);
-                query.exec();
-            }
+            runIn("category_id = ?, color = ?, is_deleted = 0, updated_at = ?, last_accessed_at = ?", {value, color, now, now});
         } else if (column == "is_favorite") {
-            bool fav = value.toBool();
-            if (fav) {
-                // [CRITICAL] 锁定：批量收藏同步更新 last_accessed_at。
-                // 2026-03-13 按照用户要求：收藏颜色统一为 #2ECC71
-                query.prepare("UPDATE notes SET is_favorite = 1, color = '#2ECC71', updated_at = :now, last_accessed_at = :now WHERE id = :id");
+            if (value.toBool()) {
+                runIn("is_favorite = 1, color = '#2ECC71', updated_at = ?, last_accessed_at = ?", {now, now});
             } else {
-                // [CRITICAL] 锁定：批量取消收藏同步更新 last_accessed_at。
-                query.prepare("UPDATE notes SET is_favorite = 0, color = COALESCE((SELECT color FROM categories WHERE id = notes.category_id), '#0A362F'), updated_at = :now, last_accessed_at = :now WHERE id = :id");
-            }
-            for (int id : ids) {
-                query.bindValue(":now", currentTime);
-                query.bindValue(":id", id);
-                query.exec();
+                runIn("is_favorite = 0, color = COALESCE((SELECT color FROM categories WHERE id = notes.category_id), '#0A362F'), updated_at = ?, last_accessed_at = ?", {now, now});
             }
         } else if (column == "is_deleted") {
-            bool del = value.toBool();
-            if (del) {
-                // [CRITICAL] 锁定：批量删除同步更新 last_accessed_at。不再清除 category_id 以支持原位恢复。
-                query.prepare("UPDATE notes SET is_deleted = 1, color = '#2d2d2d', is_pinned = 0, is_favorite = 0, updated_at = :now, last_accessed_at = :now WHERE id = :id");
+            if (value.toBool()) {
+                runIn("is_deleted = 1, color = '#2d2d2d', is_pinned = 0, is_favorite = 0, updated_at = ?, last_accessed_at = ?", {now, now});
             } else {
-                // [CRITICAL] 锁定：批量恢复同步更新 last_accessed_at。
-                query.prepare("UPDATE notes SET is_deleted = 0, color = '#0A362F', updated_at = :now, last_accessed_at = :now WHERE id = :id");
+                runIn("is_deleted = 0, color = '#0A362F', updated_at = ?, last_accessed_at = ?", {now, now});
             }
-            for (int id : ids) {
-                query.bindValue(":now", currentTime);
-                query.bindValue(":id", id);
-                query.exec();
-            }
+        } else if (column == "tags") {
+            // 标签的唯一真相是 note_tags：整批替换为同一组标签，再统一回写 notes.tags 缓存
+            const QStringList clean = RapidNotes::TagCodec::normalize(RapidNotes::TagCodec::split(value.toString()));
+            ensureTagsExist(clean);
+            forEachIdChunk(ids, [&](const QList<int>& chunk) {
+                QSqlQuery d(m_db);
+                d.prepare("DELETE FROM note_tags WHERE note_id IN (" + inList(chunk.size()) + ")");
+                for (int id : chunk) d.addBindValue(id);
+                d.exec();
+                for (const QString& tg : clean) {
+                    QSqlQuery q(m_db);
+                    q.prepare("INSERT OR IGNORE INTO note_tags(note_id, tag_name) SELECT id, ? FROM notes WHERE id IN (" + inList(chunk.size()) + ")");
+                    q.addBindValue(tg);
+                    for (int id : chunk) q.addBindValue(id);
+                    q.exec();
+                }
+            });
+            refreshNoteTagsCache(ids);
+            runIn("updated_at = ?, last_accessed_at = ?", {now, now});
         } else {
-            // [CRITICAL] 锁定：批量修改通用属性同步更新 last_accessed_at。
-            QString sql = QString("UPDATE notes SET %1 = :val, updated_at = :now, last_accessed_at = :now WHERE id = :id").arg(column);
-            query.prepare(sql);
-            for (int id : ids) {
-                query.bindValue(":val", value);
-                query.bindValue(":now", currentTime);
-                query.bindValue(":id", id);
-                query.exec();
-
-                // 2026-05-02 补齐批量状态下的字数与标签同步
-                if (column == "tags") {
-                    syncNoteTags(id, RapidNotes::TagCodec::split(value.toString()));
-                } else if (column == "content" || column == "item_type") {
+            // column 已通过白名单校验
+            runIn(column + " = ?, updated_at = ?, last_accessed_at = ?", {value, now, now});
+            if (column == "content" || column == "item_type") {
+                QSqlQuery up(m_db);
+                up.prepare("UPDATE notes SET word_count = ? WHERE id = ?");
+                forEachIdChunk(ids, [&](const QList<int>& chunk) {
                     QSqlQuery fetch(m_db);
-                    fetch.prepare("SELECT content, item_type FROM notes WHERE id = ?");
-                    fetch.addBindValue(id);
-                    if (fetch.exec() && fetch.next()) {
-                        QSqlQuery up(m_db);
-                        up.prepare("UPDATE notes SET word_count = ? WHERE id = ?");
-                        up.addBindValue(RapidNotes::WordBucket::calculate(fetch.value(0).toString(), fetch.value(1).toString()));
-                        up.addBindValue(id);
+                    fetch.prepare("SELECT id, content, item_type FROM notes WHERE id IN (" + inList(chunk.size()) + ")");
+                    for (int id : chunk) fetch.addBindValue(id);
+                    if (!fetch.exec()) return;
+                    while (fetch.next()) {
+                        up.bindValue(0, RapidNotes::WordBucket::calculate(fetch.value(1).toString(), fetch.value(2).toString()));
+                        up.bindValue(1, fetch.value(0).toInt());
                         up.exec();
                     }
-                }
+                });
             }
         }
         success = m_db.commit();
     }
     if (success) {
         markDirty();
-        // for (int id : ids) syncFtsById(id); // 触发器自动维护
         emit noteUpdated();
     }
     return success;
@@ -1576,43 +2077,39 @@ bool DatabaseManager::moveNotesToCategory(const QList<int>& noteIds, int catId) 
         QMutexLocker locker(&m_mutex);
         if (!m_db.isOpen()) return false;
         m_db.transaction();
-        QString catColor = "#0A362F"; 
-        QString presetTags;
+        QString catColor = "#0A362F";
+        QStringList presetTags;
         if (catId != -1) {
             QSqlQuery catQuery(m_db);
             catQuery.prepare("SELECT color, preset_tags FROM categories WHERE id = :id");
             catQuery.bindValue(":id", catId);
-            if (catQuery.exec() && catQuery.next()) { catColor = catQuery.value(0).toString(); presetTags = catQuery.value(1).toString(); }
-        }
-        QSqlQuery query(m_db);
-        // [CRITICAL] 移动分类同步更新 last_accessed_at
-        query.prepare("UPDATE notes SET category_id = :cat_id, color = :color, is_deleted = 0, updated_at = :now, last_accessed_at = :now WHERE id = :id");
-        QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-        for (int id : noteIds) {
-            query.bindValue(":cat_id", catId == -1 ? QVariant() : catId);
-            query.bindValue(":color", catColor);
-            query.bindValue(":now", now);
-            query.bindValue(":id", id);
-            query.exec();
-            if (!presetTags.isEmpty()) {
-                QSqlQuery fetchTags(m_db);
-                fetchTags.prepare("SELECT tags FROM notes WHERE id = :id");
-                fetchTags.bindValue(":id", id);
-                if (fetchTags.exec() && fetchTags.next()) {
-                    QString existing = fetchTags.value(0).toString();
-                    QStringList tagList = RapidNotes::TagCodec::split(existing);
-                    QStringList newTags = RapidNotes::TagCodec::split(presetTags);
-                    bool changed = false;
-                    RapidNotes::TagCodec::merge(tagList, newTags, &changed);
-                    if (changed) { QSqlQuery updateTags(m_db); updateTags.prepare("UPDATE notes SET tags = :tags WHERE id = :id"); updateTags.bindValue(":tags", RapidNotes::TagCodec::joinDisplay(tagList)); updateTags.bindValue(":id", id); updateTags.exec(); }
-                }
+            if (catQuery.exec() && catQuery.next()) {
+                catColor = catQuery.value(0).toString();
+                presetTags = RapidNotes::TagCodec::normalize(RapidNotes::TagCodec::split(catQuery.value(1).toString()));
             }
         }
+        const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+        ensureTagsExist(presetTags);
+        forEachIdChunk(noteIds, [&](const QList<int>& chunk) {
+            QSqlQuery q(m_db);   // 移动分类同步更新 last_accessed_at
+            q.prepare("UPDATE notes SET category_id = ?, color = ?, is_deleted = 0, updated_at = ?, last_accessed_at = ? WHERE id IN (" + inList(chunk.size()) + ")");
+            q.addBindValue(catId == -1 ? QVariant() : QVariant(catId));
+            q.addBindValue(catColor); q.addBindValue(now); q.addBindValue(now);
+            for (int id : chunk) q.addBindValue(id);
+            q.exec();
+            for (const QString& tg : presetTags) {   // 分类预设标签：集合化补齐
+                QSqlQuery r(m_db);
+                r.prepare("INSERT OR IGNORE INTO note_tags(note_id, tag_name) SELECT id, ? FROM notes WHERE id IN (" + inList(chunk.size()) + ")");
+                r.addBindValue(tg);
+                for (int id : chunk) r.addBindValue(id);
+                r.exec();
+            }
+        });
+        if (!presetTags.isEmpty()) refreshNoteTagsCache(noteIds);
         success = m_db.commit();
     }
     if (success) {
         markDirty();
-        // for (int id : noteIds) syncFtsById(id); // 触发器自动维护
         emit noteUpdated();
     }
     return success;
@@ -1625,9 +2122,12 @@ bool DatabaseManager::deleteNotesBatch(const QList<int>& ids) {
         QMutexLocker locker(&m_mutex);
         if (!m_db.isOpen()) return false;
         m_db.transaction();
-        QSqlQuery query(m_db);
-        query.prepare("DELETE FROM notes WHERE id=:id");
-        for (int id : ids) { query.bindValue(":id", id); query.exec(); }
+        forEachIdChunk(ids, [&](const QList<int>& chunk) {   // note_tags 由外键级联清理
+            QSqlQuery q(m_db);
+            q.prepare("DELETE FROM notes WHERE id IN (" + inList(chunk.size()) + ")");
+            for (int id : chunk) q.addBindValue(id);
+            q.exec();
+        });
         success = m_db.commit();
     }
     if (success) {
@@ -1641,15 +2141,18 @@ bool DatabaseManager::deleteNotesBatch(const QList<int>& ids) {
 bool DatabaseManager::softDeleteNotes(const QList<int>& ids) {
     if (ids.isEmpty()) return true;
     bool success = false;
-    QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
     {
         QMutexLocker locker(&m_mutex);
         if (!m_db.isOpen()) return false;
         m_db.transaction();
-        QSqlQuery query(m_db);
-        // [MODIFIED] 不再清除 category_id，以便后续分类恢复或笔记原位恢复。增加 last_accessed_at 更新。
-        query.prepare("UPDATE notes SET is_deleted = 1, color = '#2d2d2d', is_pinned = 0, is_favorite = 0, updated_at = :now, last_accessed_at = :now WHERE id = :id");
-        for (int id : ids) { query.bindValue(":now", currentTime); query.bindValue(":id", id); query.exec(); }
+        forEachIdChunk(ids, [&](const QList<int>& chunk) {   // 不清 category_id，便于原位恢复
+            QSqlQuery q(m_db);
+            q.prepare("UPDATE notes SET is_deleted = 1, color = '#2d2d2d', is_pinned = 0, is_favorite = 0, updated_at = ?, last_accessed_at = ? WHERE id IN (" + inList(chunk.size()) + ")");
+            q.addBindValue(now); q.addBindValue(now);
+            for (int id : chunk) q.addBindValue(id);
+            q.exec();
+        });
         success = m_db.commit();
     }
     if (success) {
@@ -1891,17 +2394,10 @@ QStringList DatabaseManager::getAllTags() {
     QStringList allTags;
     if (!m_db.isOpen()) return allTags;
     QSqlQuery query(m_db);
-    if (query.exec("SELECT tags FROM notes WHERE tags != '' AND is_deleted = 0")) {
-        while (query.next()) {
-            QString tagsStr = query.value(0).toString();
-            QStringList parts = RapidNotes::TagCodec::split(tagsStr);
-            for (const QString& part : parts) {
-                QString trimmed = part.trimmed();
-                if (!trimmed.isEmpty() && !allTags.contains(trimmed)) allTags.append(trimmed);
-            }
-        }
+    if (query.exec("SELECT DISTINCT nt.tag_name FROM note_tags nt JOIN notes n ON n.id = nt.note_id "
+                   "WHERE n.is_deleted = 0 ORDER BY nt.tag_name")) {
+        while (query.next()) allTags.append(query.value(0).toString());
     }
-    allTags.sort();
     return allTags;
 }
 
@@ -1909,29 +2405,17 @@ QList<QVariantMap> DatabaseManager::getRecentTagsWithCounts(int limit) {
     QMutexLocker locker(&m_mutex);
     QList<QVariantMap> results;
     if (!m_db.isOpen()) return results;
-    struct TagData { QString name; int count = 0; QDateTime lastUsed; };
-    QMap<QString, TagData> tagMap;
     QSqlQuery query(m_db);
-    if (query.exec("SELECT tags, updated_at FROM notes WHERE tags != '' AND is_deleted = 0")) {
+    query.prepare("SELECT nt.tag_name, COUNT(*) AS c, MAX(n.updated_at) AS lu FROM note_tags nt "
+                  "JOIN notes n ON n.id = nt.note_id WHERE n.is_deleted = 0 "
+                  "GROUP BY nt.tag_name ORDER BY lu DESC, nt.tag_name ASC LIMIT ?");
+    query.addBindValue(limit);
+    if (query.exec()) {
         while (query.next()) {
-            QString tagsStr = query.value(0).toString();
-            QDateTime updatedAt = query.value(1).toDateTime();
-            QStringList parts = RapidNotes::TagCodec::split(tagsStr);
-            for (const QString& part : parts) {
-                QString name = part.trimmed();
-                if (name.isEmpty()) continue;
-                if (!tagMap.contains(name)) tagMap[name] = {name, 1, updatedAt};
-                else {
-                    tagMap[name].count++;
-                    if (updatedAt > tagMap[name].lastUsed) tagMap[name].lastUsed = updatedAt;
-                }
-            }
+            QVariantMap m; m["name"] = query.value(0).toString(); m["count"] = query.value(1).toInt();
+            results.append(m);
         }
     }
-    QList<TagData> sortedList = tagMap.values();
-    std::sort(sortedList.begin(), sortedList.end(), [](const TagData& a, const TagData& b) { if (a.lastUsed != b.lastUsed) return a.lastUsed > b.lastUsed; return a.count > b.count; });
-    int actualLimit = qMin(limit, (int)sortedList.size());
-    for (int i = 0; i < actualLimit; ++i) { QVariantMap m; m["name"] = sortedList[i].name; m["count"] = sortedList[i].count; results.append(m); }
     return results;
 }
 
@@ -3214,11 +3698,10 @@ QVariantMap DatabaseManager::getFilterStats(const QString& keyword, const QStrin
                 .replace("word_count", "n.word_count")
                 .replace("rating", "n.rating");
 
-    QString tagStatsSql = "SELECT t.name, COUNT(*) "
-                          "FROM tags t "
-                          "JOIN note_tags nt ON t.id = nt.tag_id "
+    QString tagStatsSql = "SELECT nt.tag_name, COUNT(*) "
+                          "FROM note_tags nt "
                           "JOIN notes n ON nt.note_id = n.id "
-                          + refinedWhere + " GROUP BY t.name";
+                          + refinedWhere + " GROUP BY nt.tag_name";
 
     QSqlQuery tagQuery(m_db);
     tagQuery.prepare(tagStatsSql);
@@ -3479,74 +3962,56 @@ bool DatabaseManager::addTagsToNote(int noteId, const QStringList& tags) {
 
 bool DatabaseManager::addTagsToNotesBatch(const QList<int>& noteIds, const QStringList& tags) {
     if (noteIds.isEmpty() || tags.isEmpty()) return true;
-    QStringList normTags = RapidNotes::TagCodec::normalize(tags);
-    if (normTags.isEmpty()) return true;
-
+    const QStringList norm = RapidNotes::TagCodec::normalize(tags);
+    if (norm.isEmpty()) return true;
     QMutexLocker locker(&m_mutex);
     if (!m_db.isOpen()) return false;
     m_db.transaction();
-
-    QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-    for (int id : noteIds) {
-        QSqlQuery sel(m_db);
-        sel.prepare("SELECT tags FROM notes WHERE id = ?");
-        sel.addBindValue(id);
-        if (sel.exec() && sel.next()) {
-            QStringList cur = RapidNotes::TagCodec::split(sel.value(0).toString());
-            cur.append(normTags);
-            cur = RapidNotes::TagCodec::normalize(cur);
-            QString joined = RapidNotes::TagCodec::join(cur);
-
-            QSqlQuery up(m_db);
-            up.prepare("UPDATE notes SET tags = ?, updated_at = ? WHERE id = ?");
-            up.addBindValue(joined);
-            up.addBindValue(currentTime);
-            up.addBindValue(id);
-            up.exec();
+    ensureTagsExist(norm);
+    const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    forEachIdChunk(noteIds, [&](const QList<int>& chunk) {
+        for (const QString& tg : norm) {
+            QSqlQuery q(m_db);
+            q.prepare("INSERT OR IGNORE INTO note_tags(note_id, tag_name) SELECT id, ? FROM notes WHERE id IN (" + inList(chunk.size()) + ")");
+            q.addBindValue(tg);
+            for (int id : chunk) q.addBindValue(id);
+            q.exec();
         }
-    }
-
+        QSqlQuery u(m_db);
+        u.prepare("UPDATE notes SET updated_at = ? WHERE id IN (" + inList(chunk.size()) + ")");
+        u.addBindValue(now);
+        for (int id : chunk) u.addBindValue(id);
+        u.exec();
+    });
+    refreshNoteTagsCache(noteIds);
     bool ok = m_db.commit();
-    if (ok) {
-        markDirty();
-        emit noteUpdated();
-    }
+    if (ok) { markDirty(); emit noteUpdated(); }
     return ok;
 }
 
 bool DatabaseManager::removeTagsFromNotesBatch(const QList<int>& noteIds, const QStringList& tags) {
     if (noteIds.isEmpty() || tags.isEmpty()) return true;
-    QStringList normTags = RapidNotes::TagCodec::normalize(tags);
-    if (normTags.isEmpty()) return true;
-
+    const QStringList norm = RapidNotes::TagCodec::normalize(tags);
+    if (norm.isEmpty()) return true;
     QMutexLocker locker(&m_mutex);
     if (!m_db.isOpen()) return false;
     m_db.transaction();
-
-    QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-    for (int id : noteIds) {
-        QSqlQuery sel(m_db);
-        sel.prepare("SELECT tags FROM notes WHERE id = ?");
-        sel.addBindValue(id);
-        if (sel.exec() && sel.next()) {
-            QStringList cur = RapidNotes::TagCodec::split(sel.value(0).toString());
-            for (const QString& t : normTags) cur.removeAll(t);
-            QString joined = RapidNotes::TagCodec::join(cur);
-
-            QSqlQuery up(m_db);
-            up.prepare("UPDATE notes SET tags = ?, updated_at = ? WHERE id = ?");
-            up.addBindValue(joined);
-            up.addBindValue(currentTime);
-            up.addBindValue(id);
-            up.exec();
-        }
-    }
-
+    const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    forEachIdChunk(noteIds, [&](const QList<int>& chunk) {
+        QSqlQuery q(m_db);
+        q.prepare("DELETE FROM note_tags WHERE note_id IN (" + inList(chunk.size()) + ") AND tag_name IN (" + inList(norm.size()) + ")");
+        for (int id : chunk) q.addBindValue(id);
+        for (const QString& tg : norm) q.addBindValue(tg);
+        q.exec();
+        QSqlQuery u(m_db);
+        u.prepare("UPDATE notes SET updated_at = ? WHERE id IN (" + inList(chunk.size()) + ")");
+        u.addBindValue(now);
+        for (int id : chunk) u.addBindValue(id);
+        u.exec();
+    });
+    refreshNoteTagsCache(noteIds);
     bool ok = m_db.commit();
-    if (ok) {
-        markDirty();
-        emit noteUpdated();
-    }
+    if (ok) { markDirty(); emit noteUpdated(); }
     return ok;
 }
 
@@ -3555,14 +4020,14 @@ bool DatabaseManager::recordAccessBatch(const QList<int>& ids) {
     QMutexLocker locker(&m_mutex);
     if (!m_db.isOpen()) return false;
     m_db.transaction();
-    QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-    QSqlQuery query(m_db);
-    query.prepare("UPDATE notes SET last_accessed_at = ? WHERE id = ?");
-    for (int id : ids) {
-        query.bindValue(0, currentTime);
-        query.bindValue(1, id);
-        query.exec();
-    }
+    const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    forEachIdChunk(ids, [&](const QList<int>& chunk) {
+        QSqlQuery q(m_db);
+        q.prepare("UPDATE notes SET last_accessed_at = ? WHERE id IN (" + inList(chunk.size()) + ")");
+        q.addBindValue(now);
+        for (int id : chunk) q.addBindValue(id);
+        q.exec();
+    });
     return m_db.commit();
 }
 
@@ -3571,127 +4036,67 @@ bool DatabaseManager::toggleNoteFavoriteBatch(const QList<int>& ids) {
     QMutexLocker locker(&m_mutex);
     if (!m_db.isOpen()) return false;
     m_db.transaction();
-    QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-    for (int id : ids) {
+    const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    forEachIdChunk(ids, [&](const QList<int>& chunk) {   // 每行按自己当前状态翻转，一条 SQL 搞定一批
         QSqlQuery q(m_db);
-        q.prepare("SELECT is_favorite FROM notes WHERE id = ?");
-        q.addBindValue(id);
-        if (q.exec() && q.next()) {
-            int cur = q.value(0).toInt();
-            int nextFav = (cur == 1) ? 0 : 1;
-            QString color = (nextFav == 1) ? "#2ECC71" : "#0A362F";
-            QSqlQuery up(m_db);
-            up.prepare("UPDATE notes SET is_favorite = ?, color = ?, updated_at = ?, last_accessed_at = ? WHERE id = ?");
-            up.addBindValue(nextFav);
-            up.addBindValue(color);
-            up.addBindValue(currentTime);
-            up.addBindValue(currentTime);
-            up.addBindValue(id);
-            up.exec();
-        }
-    }
+        q.prepare("UPDATE notes SET color = CASE WHEN is_favorite = 1 THEN '#0A362F' ELSE '#2ECC71' END, "
+                  "is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END, updated_at = ?, last_accessed_at = ? "
+                  "WHERE id IN (" + inList(chunk.size()) + ")");
+        q.addBindValue(now); q.addBindValue(now);
+        for (int id : chunk) q.addBindValue(id);
+        q.exec();
+    });
     bool ok = m_db.commit();
-    if (ok) {
-        markDirty();
-        emit noteUpdated();
-    }
+    if (ok) { markDirty(); emit noteUpdated(); }
     return ok;
 }
 bool DatabaseManager::renameTagGlobally(const QString& oldName, const QString& newName) {
-    QString targetOld = oldName.trimmed();
-    QString targetNew = newName.trimmed();
-    if (targetOld.isEmpty() || targetOld == targetNew) return true;
-    
+    const QString o = oldName.trimmed(), n = newName.trimmed();
+    if (o.isEmpty() || n.isEmpty() || o == n) return true;
     QMutexLocker locker(&m_mutex);
     if (!m_db.isOpen()) return false;
     m_db.transaction();
-
-    // 1. 更新实体表
-    QSqlQuery upEntity(m_db);
-    upEntity.prepare("UPDATE tags SET name = ? WHERE name = ?");
-    upEntity.addBindValue(targetNew);
-    upEntity.addBindValue(targetOld);
-    upEntity.exec();
-
-    // 2. 更新冗余字段 (兼容旧逻辑)
-    QSqlQuery query(m_db);
-    query.prepare("SELECT id, tags FROM notes WHERE tags LIKE ?");
-    query.addBindValue("%" + targetOld + "%");
-    if (query.exec()) {
-        while (query.next()) {
-            int noteId = query.value(0).toInt(); 
-            QString tagsStr = query.value(1).toString();
-            QStringList tagList = RapidNotes::TagCodec::split(tagsStr);
-            QStringList newList;
-            bool changed = false;
-            for (const QString& t : tagList) {
-                if (t.trimmed() == targetOld) { newList << targetNew; changed = true; }
-                else newList << t.trimmed();
-            }
-            if (changed) {
-                QSqlQuery up(m_db);
-                up.prepare("UPDATE notes SET tags = ? WHERE id = ?");
-                up.addBindValue(RapidNotes::TagCodec::joinDisplay(newList));
-                up.addBindValue(noteId);
-                up.exec();
-            }
-        }
+    QList<int> ids;
+    {
+        QSqlQuery s(m_db);
+        s.prepare("SELECT DISTINCT note_id FROM note_tags WHERE tag_name IN (?, ?)");
+        s.addBindValue(o); s.addBindValue(n);
+        if (s.exec()) while (s.next()) ids << s.value(0).toInt();
     }
+    if (o.compare(n, Qt::CaseInsensitive) == 0) {
+        QSqlQuery u(m_db);                       // 仅大小写变化：直接改字典，关联表由外键级联
+        u.prepare("UPDATE tags SET name = ? WHERE name = ?");
+        u.addBindValue(n); u.addBindValue(o); u.exec();
+    } else {
+        ensureTagsExist({n});
+        QSqlQuery mv(m_db);
+        mv.prepare("INSERT OR IGNORE INTO note_tags(note_id, tag_name) SELECT note_id, ? FROM note_tags WHERE tag_name = ?");
+        mv.addBindValue(n); mv.addBindValue(o); mv.exec();
+        QSqlQuery d1(m_db); d1.prepare("DELETE FROM note_tags WHERE tag_name = ?"); d1.addBindValue(o); d1.exec();
+        QSqlQuery d2(m_db); d2.prepare("DELETE FROM tags WHERE name = ?"); d2.addBindValue(o); d2.exec();
+    }
+    refreshNoteTagsCache(ids);
     bool ok = m_db.commit();
-    if (ok) {
-        markDirty();
-        emit noteUpdated();
-    }
+    if (ok) { markDirty(); emit noteUpdated(); }
     return ok;
 }
 
 bool DatabaseManager::deleteTagGlobally(const QString& tagName) {
-    QString target = tagName.trimmed();
-    if (target.isEmpty()) return true;
-    
+    const QString tg = tagName.trimmed();
+    if (tg.isEmpty()) return true;
     QMutexLocker locker(&m_mutex);
     if (!m_db.isOpen()) return false;
     m_db.transaction();
-
-    // 1. 获取标签 ID
-    int tagId = -1;
-    QSqlQuery tagQuery(m_db);
-    tagQuery.prepare("SELECT id FROM tags WHERE name = ?");
-    tagQuery.addBindValue(target);
-    if (tagQuery.exec() && tagQuery.next()) tagId = tagQuery.value(0).toInt();
-
-    if (tagId != -1) {
-        // 2. 从关联表中物理删除
-        QSqlQuery delRel(m_db);
-        delRel.prepare("DELETE FROM note_tags WHERE tag_id = ?");
-        delRel.addBindValue(tagId);
-        delRel.exec();
-
-        // 3. 从实体表中物理删除
-        QSqlQuery delTag(m_db);
-        delTag.prepare("DELETE FROM tags WHERE id = ?");
-        delTag.addBindValue(tagId);
-        delTag.exec();
-
-        // 4. 同步更新冗余字段 (仅为兼容旧逻辑，后续将逐步废弃)
-        QSqlQuery updateNotes(m_db);
-        updateNotes.prepare("SELECT id, tags FROM notes WHERE tags LIKE ?");
-        updateNotes.addBindValue("%" + target + "%");
-        if (updateNotes.exec()) {
-            while (updateNotes.next()) {
-                int id = updateNotes.value(0).toInt();
-                QStringList tagList = RapidNotes::TagCodec::split(updateNotes.value(1).toString());
-                QStringList newList;
-                for(auto& t : tagList) if(t.trimmed() != target) newList << t.trimmed();
-                QSqlQuery up(m_db);
-                up.prepare("UPDATE notes SET tags = ? WHERE id = ?");
-                up.addBindValue(RapidNotes::TagCodec::joinDisplay(newList));
-                up.addBindValue(id);
-                up.exec();
-            }
-        }
+    QList<int> ids;
+    {
+        QSqlQuery s(m_db);
+        s.prepare("SELECT DISTINCT note_id FROM note_tags WHERE tag_name = ?");
+        s.addBindValue(tg);
+        if (s.exec()) while (s.next()) ids << s.value(0).toInt();
     }
-
+    QSqlQuery d1(m_db); d1.prepare("DELETE FROM note_tags WHERE tag_name = ?"); d1.addBindValue(tg); d1.exec();
+    QSqlQuery d2(m_db); d2.prepare("DELETE FROM tags WHERE name = ?"); d2.addBindValue(tg); d2.exec();
+    refreshNoteTagsCache(ids);
     bool ok = m_db.commit();
     if (ok) { markDirty(); emit noteUpdated(); }
     return ok;
@@ -3699,48 +4104,17 @@ bool DatabaseManager::deleteTagGlobally(const QString& tagName) {
 
 void DatabaseManager::syncNoteTags(int noteId, const QStringList& tags) {
     if (noteId <= 0) return;
-
-    // 1. 清理现有映射
+    const QStringList clean = RapidNotes::TagCodec::normalize(tags);
     QSqlQuery del(m_db);
     del.prepare("DELETE FROM note_tags WHERE note_id = ?");
-    del.addBindValue(noteId);
-    del.exec();
-
-    QStringList cleanTags = RapidNotes::TagCodec::normalize(tags);
-
-    // 2. 处理每一个独立标签
-    for (const QString& name : std::as_const(cleanTags)) {
-        // 确保标签在实体表中存在 (唯一性)
-        int tagId = -1;
-        QSqlQuery check(m_db);
-        check.prepare("SELECT id FROM tags WHERE name = ?");
-        check.addBindValue(name);
-        if (check.exec() && check.next()) {
-            tagId = check.value(0).toInt();
-        } else {
-            QSqlQuery ins(m_db);
-            ins.prepare("INSERT INTO tags (name) VALUES (?)");
-            ins.addBindValue(name);
-            if (ins.exec()) tagId = ins.lastInsertId().toInt();
-        }
-
-        // 建立关联
-        if (tagId != -1) {
-            QSqlQuery rel(m_db);
-            rel.prepare("INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?, ?)");
-            rel.addBindValue(noteId);
-            rel.addBindValue(tagId);
-            rel.exec();
-        }
-    }
-
-    // 3. 2026-05-09 关键修复：同步回写 notes 表的 tags 冗余字段，确保搜索可见性
-    // 严禁使用 "逗号+空格"，统一使用纯逗号分割。
-    QSqlQuery upNotes(m_db);
-    upNotes.prepare("UPDATE notes SET tags = ? WHERE id = ?");
-    upNotes.addBindValue(RapidNotes::TagCodec::join(cleanTags));
-    upNotes.addBindValue(noteId);
-    upNotes.exec();
+    del.addBindValue(noteId); del.exec();
+    ensureTagsExist(clean);
+    QSqlQuery rel(m_db);
+    rel.prepare("INSERT OR IGNORE INTO note_tags(note_id, tag_name) VALUES(?, ?)");
+    for (const QString& n : clean) { rel.bindValue(0, noteId); rel.bindValue(1, n); rel.exec(); }
+    QSqlQuery up(m_db);   // 同步回写 notes.tags 缓存（统一用纯逗号分隔）
+    up.prepare("UPDATE notes SET tags = ? WHERE id = ?");
+    up.addBindValue(RapidNotes::TagCodec::join(clean)); up.addBindValue(noteId); up.exec();
 }
 
 
@@ -3887,7 +4261,7 @@ void DatabaseManager::applyCommonFilters(QString& whereClause, QVariantList& par
                     if (t == "__untagged__") {
                         tagExists << "(tags IS NULL OR tags = '')";
                     } else {
-                        tagExists << "EXISTS (SELECT 1 FROM note_tags nt JOIN tags t ON nt.tag_id = t.id WHERE nt.note_id = notes.id AND t.name = ?)";
+                        tagExists << "EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = notes.id AND nt.tag_name = ?)";
                         params << t.trimmed();
                     }
                 }

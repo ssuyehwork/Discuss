@@ -86,6 +86,15 @@ ContentPanel::ContentPanel(QWidget* parent) : QFrame(parent) {
         }
     });
 
+    // [Fix] 监听重命名完成信号，在下一事件循环中恢复新文件名的选中高亮。
+    // 使用 QueuedConnection 确保在 Qt 编辑器（closeEditor）完成关闭、系统清除选区之后再执行恢复，
+    // 避免与 Qt 内部编辑器关闭流程产生竞争导致选中态被覆盖。
+    connect(m_diskModel, &DiskItemModel::itemRenamed, this,
+            [this](const QString& /*oldPath*/, const QString& newPath) {
+                setPendingSelectPath(newPath, false);
+                QMetaObject::invokeMethod(this, &ContentPanel::restoreSelections, Qt::QueuedConnection);
+            });
+
     m_visibleTimer = new QTimer(this);
     m_visibleTimer->setSingleShot(true);
     m_visibleTimer->setInterval(60);

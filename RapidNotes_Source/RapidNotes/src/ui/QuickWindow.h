@@ -29,6 +29,7 @@ class QLineEdit;
 class QShortcut;
 class QTimer;
 class CategoryLockWidget;
+class AppLockWidget;
 namespace RapidNotes { class DropTreeView; }
 using RapidNotes::DropTreeView;
 class ClickableLineEdit;
@@ -47,6 +48,7 @@ class QuickShortcutHandler;
 
 class QuickWindow : public QWidget {
     Q_OBJECT
+    friend class RapidNotes::QuickShortcutHandler; // 授权控制器访问私有成员与函数
 public:
     explicit QuickWindow(QWidget* parent = nullptr);
     void showAuto();
@@ -90,6 +92,7 @@ protected:
 private:
     void initUI();
     void setupAppLock();
+    void finishUnlock();
     void activateNote(const QModelIndex& index);
     void sendNote(const QVariantMap& note); // 2026-03-20 [NEW] 提取统一发送逻辑
     void updateContextSnapshotById(int noteId); // 2026-03-20 [NEW] 滚动更新快照中心
@@ -156,7 +159,8 @@ public:
     QStackedWidget* m_listStack;
     CleanListView* m_listView;
     CategoryLockWidget* m_lockWidget;
-    QWidget* m_appLockWidget = nullptr;
+    AppLockWidget* m_appLockWidget = nullptr;
+    QStackedWidget* m_rootStack = nullptr;
     NoteModel* m_model;
     
     DropTreeView* m_systemTree;

@@ -61,6 +61,8 @@ public:
 
 signals:
     void thumbnailLoaded(int rowIndex);
+    // [Fix] 重命名完成后通知上层恢复选中高亮（SSOT: ContentPanel::setPendingSelectPath）
+    void itemRenamed(const QString& oldPath, const QString& newPath);
 
 protected:
     std::vector<QuarkMeta::ItemRecord> m_allRecords;

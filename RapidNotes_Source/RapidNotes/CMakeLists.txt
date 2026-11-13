@@ -388,6 +388,8 @@ set(SOURCES
     src/ui/ViewDragDropHelper.h
     src/ui/WritingAnimation.cpp
     src/ui/WritingAnimation.h
+	src/ui/AppLockWidget.cpp
+	src/ui/AppLockWidget.h
     src/ui/controllers/ContentChangeWatcher.cpp
     src/ui/controllers/ContentChangeWatcher.h
     src/ui/controllers/ContentDataLoader.cpp
@@ -416,6 +418,8 @@ set(SOURCES
     src/ui/models/SectionProxyModel.h
     src/ui/workers/ContentStatsWorker.cpp
     src/ui/workers/ContentStatsWorker.h
+	src/core/AppLockService.cpp
+	src/core/AppLockService.h
     src/core/ActionCommand.h
     src/core/BasicCommands.h
     src/core/CoreController.cpp

@@ -535,6 +535,8 @@ bool DiskItemModel::setData(const QModelIndex& index, const QVariant& value, int
             m_pathToIndex[newPath] = index.row();
             
             emit dataChanged(this->index(index.row(), 0), this->index(index.row(), columnCount() - 1), {Qt::EditRole, Qt::DisplayRole});
+            // [Fix] 通知上层重命名已完成，ContentPanel 将在下一事件循环中恢复新路径的选中高亮
+            emit itemRenamed(oldPath, newPath);
             return true;
         }
         return false;

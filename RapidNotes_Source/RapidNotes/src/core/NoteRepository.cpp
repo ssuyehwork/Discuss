@@ -56,26 +56,27 @@ QList<NoteItemDTO> NoteRepository::loadNotesLight(int categoryId, int offset, in
                   "COALESCE(color_label, '') AS color_label, is_pinned, item_type, "
                   "created_at, updated_at, remark, word_count "
                   "FROM notes WHERE is_deleted = 0 ";
+    if (categoryId > 0) sql += "AND category_id = :cat ";
+    else if (categoryId == -2) sql += "AND (category_id IS NULL OR category_id <= 0) ";
 
-    if (categoryId > 0) {
-        sql += QString("AND category_id = %1 ").arg(categoryId);
-    } else if (categoryId == -2) { // 未分类
-        sql += "AND (category_id IS NULL OR category_id <= 0) ";
-    } // categoryId == -1 或其他负数即全部分类
-
-    if (!searchKeyword.trimmed().isEmpty()) {
-        QString kw = searchKeyword.trimmed();
-        kw.replace("'", "''");
-        sql += QString("AND (title LIKE '%%1%' OR remark LIKE '%%1%' OR tags LIKE '%%1%') ").arg(kw);
+    const QString kw = searchKeyword.trimmed();
+    if (!kw.isEmpty()) {
+        sql += "AND (title LIKE :kw ESCAPE '\\' OR remark LIKE :kw ESCAPE '\\' OR url LIKE :kw ESCAPE '\\' "
+               "OR EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = notes.id AND nt.tag_name LIKE :kw ESCAPE '\\')) ";
     }
-
     sql += "ORDER BY is_pinned DESC, updated_at DESC ";
-    if (limit > 0) {
-        sql += QString("LIMIT %1 OFFSET %2").arg(limit).arg(offset);
-    }
+    if (limit > 0) sql += "LIMIT :lim OFFSET :off";
 
     QSqlQuery q(db);
-    if (q.exec(sql)) {
+    q.prepare(sql);
+    if (categoryId > 0) q.bindValue(":cat", categoryId);
+    if (!kw.isEmpty()) {
+        QString esc = kw;
+        esc.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        q.bindValue(":kw", "%" + esc + "%");
+    }
+    if (limit > 0) { q.bindValue(":lim", limit); q.bindValue(":off", offset); }
+    if (q.exec()) {
         while (q.next()) {
             NoteItemDTO item;
             item.id = q.value("id").toLongLong();
@@ -93,7 +94,6 @@ QList<NoteItemDTO> NoteRepository::loadNotesLight(int categoryId, int offset, in
             list.append(item);
         }
     }
-
     return list;
 }
 
@@ -116,12 +116,7 @@ bool NoteRepository::updateColorLabel(qint64 noteId, const QString& colorLabel) 
 }
 
 bool NoteRepository::updateTags(qint64 noteId, const QString& tags) {
-    QSqlDatabase db = DatabaseManager::instance().database();
-    QSqlQuery q(db);
-    q.prepare("UPDATE notes SET tags = :tags WHERE id = :id");
-    q.bindValue(":tags", tags);
-    q.bindValue(":id", noteId);
-    return q.exec();
+    return DatabaseManager::instance().updateNoteStateBatch({int(noteId)}, "tags", tags);
 }
 
 bool NoteRepository::updateRemark(qint64 noteId, const QString& remark) {
@@ -152,59 +147,23 @@ bool NoteRepository::updateTitle(qint64 noteId, const QString& title) {
 }
 
 bool NoteRepository::batchUpdateRating(const QList<qint64>& noteIds, int rating) {
-    if (noteIds.isEmpty()) return true;
-    QSqlDatabase db = DatabaseManager::instance().database();
-    db.transaction();
-    QSqlQuery q(db);
-    q.prepare("UPDATE notes SET rating = :rating WHERE id = :id");
-    for (qint64 id : noteIds) {
-        q.bindValue(":rating", rating);
-        q.bindValue(":id", id);
-        q.exec();
-    }
-    return db.commit();
+    QList<int> ids; for (qint64 i : noteIds) ids << int(i);
+    return DatabaseManager::instance().updateNoteStateBatch(ids, "rating", rating);
 }
 
 bool NoteRepository::batchUpdateColorLabel(const QList<qint64>& noteIds, const QString& colorLabel) {
-    if (noteIds.isEmpty()) return true;
-    QSqlDatabase db = DatabaseManager::instance().database();
-    db.transaction();
-    QSqlQuery q(db);
-    q.prepare("UPDATE notes SET color_label = :color_label WHERE id = :id");
-    for (qint64 id : noteIds) {
-        q.bindValue(":color_label", colorLabel);
-        q.bindValue(":id", id);
-        q.exec();
-    }
-    return db.commit();
+    QList<int> ids; for (qint64 i : noteIds) ids << int(i);
+    return DatabaseManager::instance().updateNoteStateBatch(ids, "color_label", colorLabel);
 }
 
 bool NoteRepository::batchUpdateTags(const QList<qint64>& noteIds, const QString& tags) {
-    if (noteIds.isEmpty()) return true;
-    QSqlDatabase db = DatabaseManager::instance().database();
-    db.transaction();
-    QSqlQuery q(db);
-    q.prepare("UPDATE notes SET tags = :tags WHERE id = :id");
-    for (qint64 id : noteIds) {
-        q.bindValue(":tags", tags);
-        q.bindValue(":id", id);
-        q.exec();
-    }
-    return db.commit();
+    QList<int> ids; for (qint64 i : noteIds) ids << int(i);
+    return DatabaseManager::instance().updateNoteStateBatch(ids, "tags", tags);   // 经标签统一入口，写 note_tags
 }
 
 bool NoteRepository::moveNotesToCategory(const QList<qint64>& noteIds, int targetCategoryId) {
-    if (noteIds.isEmpty()) return true;
-    QSqlDatabase db = DatabaseManager::instance().database();
-    db.transaction();
-    QSqlQuery q(db);
-    q.prepare("UPDATE notes SET category_id = :cat WHERE id = :id");
-    for (qint64 id : noteIds) {
-        q.bindValue(":cat", targetCategoryId > 0 ? targetCategoryId : QVariant(QMetaType::fromType<int>()));
-        q.bindValue(":id", id);
-        q.exec();
-    }
-    return db.commit();
+    QList<int> ids; for (qint64 i : noteIds) ids << int(i);
+    return DatabaseManager::instance().moveNotesToCategory(ids, targetCategoryId > 0 ? targetCategoryId : -1);
 }
 
 bool NoteRepository::updateCategoryOrder(const QList<int>& orderedIds) {

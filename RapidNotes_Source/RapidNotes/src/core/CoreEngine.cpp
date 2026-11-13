@@ -314,9 +314,9 @@ void CoreEngine::handleSetNote(const QStringList& paths, const QString& note) {
 }
 
 void CoreEngine::handleSetURL(const QStringList& paths, const QString& url) {
-    // 纯文本笔记统一映射到 remark 补充信息或 content 特征中
+    // 链接写入独立的 url 字段，不再占用备注 remark
     QList<int> noteIds = extractNoteIds(paths);
-    DatabaseManager::instance().updateNoteStateBatch(noteIds, "remark", url);
+    DatabaseManager::instance().updateNoteStateBatch(noteIds, "url", url);
 
     AppEvent ev;
     ev.type = AppEventType::MetadataUpdated;

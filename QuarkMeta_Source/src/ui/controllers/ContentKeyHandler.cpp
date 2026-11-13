@@ -469,6 +469,17 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
 
+    // [Fix] Ctrl+V 提前处理：解除对 obj 是 View 的强依赖。
+    // 粘贴行为与当前焦点控件无关，只要面板可粘贴即执行。
+    // 此处早于 view 判断，确保焦点在 SearchBar/FilterPanel 等非 View 控件时 Ctrl+V 仍可正常粘贴。
+    if ((keyEvent->modifiers() & Qt::ControlModifier) &&
+        !(keyEvent->modifiers() & Qt::ShiftModifier) &&
+        keyEvent->key() == Qt::Key_V) {
+        m_panel->setActivePane(true);
+        m_panel->performPaste();
+        return true;
+    }
+
     QAbstractItemView* view = qobject_cast<QAbstractItemView*>(obj);
     if (!view) view = qobject_cast<QAbstractItemView*>(obj->parent());
     if (!view) return false;
@@ -662,7 +673,8 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         return true;
     }
 
-    // 6. Ctrl + C / X / V
+    // 6. Ctrl + C / X
+    // 注意：Ctrl+V 已在 view 判断之前统一处理，此处不再重复
     if (keyEvent->modifiers() & Qt::ControlModifier) {
         if (keyEvent->key() == Qt::Key_C && !(keyEvent->modifiers() & Qt::ShiftModifier)) {
             m_panel->performCopy(false);
@@ -670,11 +682,6 @@ bool ContentKeyHandler::handleKeyPress(QObject* obj, QEvent* event) {
         }
         if (keyEvent->key() == Qt::Key_X) {
             m_panel->performCopy(true);
-            return true;
-        }
-        if (keyEvent->key() == Qt::Key_V) {
-            m_panel->setActivePane(true);
-            m_panel->performPaste();
             return true;
         }
     }

@@ -3,16 +3,21 @@
 
 #include <QMenu>
 #include <QModelIndexList>
+#include <QModelIndex>
 #include <QWidget>
 
 class QuickWindow;
+namespace RapidNotes { class DropTreeView; }
 
 namespace RapidNotes {
 
 class QuickContextMenuBuilder {
 public:
+    // 构建笔记列表右键菜单 (单选、多选、回收站模式与排序)
     static QMenu* buildListContextMenu(QuickWindow* window, const QModelIndexList& selected, QWidget* parent);
-    static QMenu* buildSidebarContextMenu(QuickWindow* window, const QModelIndex& index, QWidget* parent);
+
+    // 构建侧边栏树形节点右键菜单 (分类管理、导入导出、密码保护、排序等)
+    static QMenu* buildSidebarContextMenu(QuickWindow* window, DropTreeView* tree, const QModelIndex& index, const QModelIndexList& selected, QWidget* parent);
 };
 
 } // namespace RapidNotes
