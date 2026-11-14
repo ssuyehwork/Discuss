@@ -462,7 +462,7 @@ void PanelMediator::setupConnections() {
             });
 
             connect(libraryPanel, &LibraryPanel::smartFolderPreviewRequested, this, [this, contentPanel, filterPanel, addressBar, titleBar](const SmartFolderRecord& record) {
-                QString displayName = record.name.isEmpty() ? "智能文件夹预览" : record.name;
+                QString displayName = record.name.isEmpty() ? "智能分类预览" : record.name;
                 ContentPanel* target = m_activeContentPanel ? m_activeContentPanel.data() : contentPanel;
                 if (target) {
                     target->setActivePane(true);

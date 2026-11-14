@@ -6,9 +6,8 @@
 #include "../../core/TagCodec.h"
 #include "../../core/ActionRecorder.h"
 #include "../StringUtils.h"
-#include "../ToolTipOverlay.h"
 #include <QRegularExpression>
-#include <QCursor>
+#include <QSet>
 
 namespace RapidNotes {
 
@@ -56,6 +55,15 @@ void QuickMediator::requestToggleFavorite(const QList<int>& ids) {
     cmd.targetPaths.reserve(ids.size());
     for (int id : ids) cmd.targetPaths.append(QString("note://%1").arg(id));
     CoreEngine::instance().executeCommand(cmd);
+}
+
+void QuickMediator::requestSetFavorite(const QList<int>& ids, bool favorite) {
+    if (ids.isEmpty()) return;
+    DatabaseManager::instance().updateNoteStateBatch(
+        ids, "is_favorite", favorite ? 1 : 0);
+    AppEvent event;
+    event.type = AppEventType::MetadataUpdated;
+    CentralEventHub::instance().publishEvent(event);
 }
 
 void QuickMediator::requestTogglePinned(const QList<int>& ids, bool pinned) {
@@ -169,6 +177,22 @@ void QuickMediator::requestRecordAccess(int id) {
     cmd.type = AppCommandType::RecordAccess;
     cmd.targetPaths = { QString("note://%1").arg(id) };
     CoreEngine::instance().executeCommand(cmd);
+}
+
+// ---------------------------------------------------------------------
+// 笔记基础创建与入库
+// ---------------------------------------------------------------------
+
+int QuickMediator::requestAddNote(const QString& title, const QString& content, const QStringList& tags,
+                                  const QString& remark, int categoryId,
+                                  const QString& itemType, const QByteArray& dataBlob) {
+    int newId = DatabaseManager::instance().addNote(title, content, tags, remark, categoryId, itemType, dataBlob);
+    if (newId > 0) {
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        CentralEventHub::instance().publishEvent(ev);
+    }
+    return newId;
 }
 
 // ---------------------------------------------------------------------
@@ -302,15 +326,33 @@ bool QuickMediator::requestRepeatLastAction(const QList<int>& targetIds) {
 // ---------------------------------------------------------------------
 
 bool QuickMediator::requestMoveNote(int id, DatabaseManager::MoveDirection dir, const QString& filterType, const QVariant& filterValue) {
-    return DatabaseManager::instance().moveNote(id, dir, filterType, filterValue);
+    bool ok = DatabaseManager::instance().moveNote(id, dir, filterType, filterValue);
+    if (ok) {
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        CentralEventHub::instance().publishEvent(ev);
+    }
+    return ok;
 }
 
 bool QuickMediator::requestMoveNotesToRow(const QList<int>& ids, int targetRow, const QString& filterType, const QVariant& filterValue) {
-    return DatabaseManager::instance().moveNotesToRow(ids, targetRow, filterType, filterValue);
+    bool ok = DatabaseManager::instance().moveNotesToRow(ids, targetRow, filterType, filterValue);
+    if (ok) {
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        CentralEventHub::instance().publishEvent(ev);
+    }
+    return ok;
 }
 
 bool QuickMediator::requestReorderNotes(const QString& filterType, const QVariant& filterValue, bool ascending, const QVariantMap& criteria) {
-    return DatabaseManager::instance().reorderNotes(filterType, filterValue, ascending, criteria);
+    bool ok = DatabaseManager::instance().reorderNotes(filterType, filterValue, ascending, criteria);
+    if (ok) {
+        AppEvent ev;
+        ev.type = AppEventType::MetadataUpdated;
+        CentralEventHub::instance().publishEvent(ev);
+    }
+    return ok;
 }
 
 // ---------------------------------------------------------------------
@@ -318,46 +360,149 @@ bool QuickMediator::requestReorderNotes(const QString& filterType, const QVarian
 // ---------------------------------------------------------------------
 
 int QuickMediator::requestAddCategory(const QString& name, int parentId, const QString& color) {
-    return DatabaseManager::instance().addCategory(name, parentId, color);
+    int catId = DatabaseManager::instance().addCategory(name, parentId, color);
+    if (catId > 0 && m_window) {
+        m_window->refreshSidebar();
+    }
+    return catId;
 }
 
 bool QuickMediator::requestRenameCategory(int catId, const QString& name) {
-    return DatabaseManager::instance().renameCategory(catId, name);
+    bool ok = DatabaseManager::instance().renameCategory(catId, name);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+    }
+    return ok;
 }
 
 bool QuickMediator::requestDeleteCategories(const QList<int>& catIds, bool hardDelete) {
-    if (hardDelete) {
-        return DatabaseManager::instance().hardDeleteCategories(catIds);
+    bool ok = hardDelete ? DatabaseManager::instance().hardDeleteCategories(catIds)
+                         : DatabaseManager::instance().softDeleteCategories(catIds);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+        m_window->scheduleRefresh();
     }
-    return DatabaseManager::instance().softDeleteCategories(catIds);
+    return ok;
 }
 
 bool QuickMediator::requestToggleCategoryPinned(int catId) {
-    return DatabaseManager::instance().toggleCategoryPinned(catId);
+    bool ok = DatabaseManager::instance().toggleCategoryPinned(catId);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+    }
+    return ok;
 }
 
 bool QuickMediator::requestSetCategoryColor(int catId, const QString& color) {
-    return DatabaseManager::instance().setCategoryColor(catId, color);
+    bool ok = DatabaseManager::instance().setCategoryColor(catId, color);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+    }
+    return ok;
 }
 
 bool QuickMediator::requestSetCategoryPresetTags(int catId, const QString& tags) {
-    return DatabaseManager::instance().setCategoryPresetTags(catId, tags);
+    bool ok = DatabaseManager::instance().setCategoryPresetTags(catId, tags);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+    }
+    return ok;
 }
 
 bool QuickMediator::requestMoveCategory(int id, DatabaseManager::MoveDirection direction) {
-    return DatabaseManager::instance().moveCategory(id, direction);
+    bool ok = DatabaseManager::instance().moveCategory(id, direction);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+    }
+    return ok;
 }
 
 bool QuickMediator::requestReorderCategories(int parentId, bool ascending) {
-    return DatabaseManager::instance().reorderCategories(parentId, ascending);
+    bool ok = DatabaseManager::instance().reorderCategories(parentId, ascending);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+    }
+    return ok;
 }
 
 bool QuickMediator::requestReorderAllCategories(bool ascending) {
-    return DatabaseManager::instance().reorderAllCategories(ascending);
+    bool ok = DatabaseManager::instance().reorderAllCategories(ascending);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+    }
+    return ok;
 }
 
 bool QuickMediator::requestSetCategorySortMode(int catId, const QString& mode) {
-    return DatabaseManager::instance().setCategorySortMode(catId, mode);
+    bool ok = DatabaseManager::instance().setCategorySortMode(catId, mode);
+    if (ok && m_window) {
+        m_window->scheduleRefresh();
+    }
+    return ok;
+}
+
+// ---------------------------------------------------------------------
+// 分类密码保护与锁定状态调度
+// ---------------------------------------------------------------------
+
+bool QuickMediator::requestSetCategoryPassword(int catId, const QString& password, const QString& hint) {
+    bool ok = DatabaseManager::instance().setCategoryPassword(catId, password, hint);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+        m_window->scheduleRefresh();
+    }
+    return ok;
+}
+
+bool QuickMediator::requestVerifyCategoryPassword(int catId, const QString& password) {
+    return DatabaseManager::instance().verifyCategoryPassword(catId, password);
+}
+
+bool QuickMediator::requestRemoveCategoryPassword(int catId) {
+    bool ok = DatabaseManager::instance().removeCategoryPassword(catId);
+    if (ok && m_window) {
+        m_window->refreshSidebar();
+        m_window->scheduleRefresh();
+    }
+    return ok;
+}
+
+void QuickMediator::requestLockCategory(int catId) {
+    DatabaseManager::instance().lockCategory(catId);
+    if (m_window) {
+        m_window->refreshSidebar();
+        m_window->scheduleRefresh();
+    }
+}
+
+void QuickMediator::requestLockAllCategories() {
+    DatabaseManager::instance().lockAllCategories();
+    if (m_window) {
+        m_window->refreshSidebar();
+        m_window->scheduleRefresh();
+    }
+}
+
+bool QuickMediator::requestToggleLockedCategoriesVisibility() {
+    DatabaseManager::instance().toggleLockedCategoriesVisibility();
+    bool isHidden = DatabaseManager::instance().isLockedCategoriesHidden();
+    if (m_window) {
+        m_window->refreshSidebar();
+        m_window->scheduleRefresh();
+    }
+    return isHidden;
+}
+
+// ---------------------------------------------------------------------
+// 自动归档配置调度
+// ---------------------------------------------------------------------
+
+void QuickMediator::requestSetAutoCategorize(bool enabled, int targetCatId) {
+    auto& db = DatabaseManager::instance();
+    db.setAutoCategorizeEnabled(enabled);
+    if (targetCatId > 0) {
+        db.setActiveCategoryId(targetCatId);
+    }
 }
 
 } // namespace RapidNotes

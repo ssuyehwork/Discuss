@@ -109,7 +109,7 @@ bool QuarkApplication::notify(QObject* receiver, QEvent* event) {
                         QTreeView* tv = qobject_cast<QTreeView*>(candidateTree);
                         if (tv && tv->currentIndex().isValid()) {
                             int nodeId = tv->currentIndex().data(Qt::UserRole + 1).toInt();
-                            if (nodeId > 0) { // 仅自定义分类与智能文件夹
+                            if (nodeId > 0) { // 仅自定义分类与智能分类
                                 tv->setFocus();
                                 tv->edit(tv->currentIndex());
                                 event->accept();

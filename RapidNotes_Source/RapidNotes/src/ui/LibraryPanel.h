@@ -105,7 +105,7 @@ private:
     bool m_orderDirty = false;
     int m_pendingEditNodeId = 0;
 
-    // 智能文件夹异步匹配数量内存缓存
+    // 智能分类异步匹配数量内存缓存
     QMap<int, int> m_smartFolderCountCache;
     uint64_t m_currentCountReqId = 0;
     QTimer* m_countDebounceTimer = nullptr;

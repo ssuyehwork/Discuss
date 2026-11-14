@@ -1544,5 +1544,134 @@ QuarkMeta 采用“侧车文件持久化 + 中心数据库索引”的读写分�
    - 坚决杜绝刷新时调用单实例 `NavigationService::instance().refresh()`（该调用广播的 `currentUrlChanged` 易错误覆盖非激活窗格的当前路径）；
    - 严格通过 `target = m_activeCoordinator->currentTarget()` 并直接执行 `target->refreshAll()`，确保刷新行为百分之百严格作用于当前激活窗格（包括物理路径、库、智能文件夹、回收站或分栏视图），彻底防止刷新波及甚至覆写其他分屏窗格。
 
+---
+
+## 57. 不可内读项目空格键/双击 ToolTipOverlay 提示规范 (Unsupported Content Space/DoubleClick ToolTip Notice Specification)
+
+> 本章节记录选中不可在软件内解析/预览内容的文件（如可执行程序 exe、表格 xlsx/xls/csv、未知二进制等）时，按空格键或双击通过 ToolTipOverlay 弹出“用系统默认程序打开”提示的设计理念与交互契约。
+
+### 57.1 痛点与设计背景
+1. **历史缺陷与无响应痛点**：
+   - QuarkMeta 在主内容视图中通过空格键或双击激活条目时，若选中的是文件，统一会走 `fileActivated` 并交由 `QuickLookController` 处理；
+   - 过去 `QuickLookController` 在判定 `!UiHelper::canPreviewFile(path)` 后直接执行了 `return;`，导致用户对 `.exe` 可执行程序、各类表格文件（`.xlsx` / `.xls` 等）或其它非内置预览格式按空格或双击时，界面没有任何视觉反馈与外部响应，静默吞没按键与点击事件；
+2. **用户操作直觉与预期交互**：
+   - 对于图片、文本、PDF 等可内读格式，空格键或双击弹出 QuickLook 悬浮大图进行即时快速预览；
+   - 对于软件本身不具备直接内容解析/读取能力的文件（例如：Windows 应用程序 exe、电子表格等），由于直接唤起外部程序可能导致用户在只想浏览/选取的场景下被强打断（或意外运行未知可执行程序），因此采用统一的扁平化气泡 `ToolTipOverlay` 弹出居中提示：**“用系统默认程序打开”**；
+   - 既提供了明确的界面反馈，又指引用户通过右键菜单或系统方式进行外部打开，交互体验自然温和且符合资产管理习惯。
+
+### 57.2 核心架构决策与 SSOT 契约
+1. **单一入口与分流契约 (Activation SSOT Contract)**：
+   - 用户在各类主视图（列表、网格、瀑布流、分栏视图等）中选中项目后，按空格键、回车键或鼠标双击均统一流向 `ContentPanel::activateIndex` 并在确定为文件后发射 `fileActivated(path)`；
+   - 监听者 `QuickLookController::bindPane` 为文件激活后的单一调度中心：
+     ```cpp
+     connect(pane, &ContentPanel::fileActivated, this, [pane](const QString& path) {
+         if (path.isEmpty() || !QFile::exists(path)) {
+             return;
+         }
+         HistoryService::instance().recordFileAccess(path);
+
+         if (!UiHelper::canPreviewFile(path)) {
+             // 不可内读项目：通过 ToolTipOverlay 弹出居中提示气泡
+             ToolTipOverlay::instance()->showToast("用系统默认程序打开", 1500, QColor("#f39c12"), pane);
+             return;
+         }
+
+         AppCommand cmd;
+         cmd.type = AppCommandType::RecordAccess;
+         cmd.targetPaths << path;
+         CoreEngine::instance().executeCommand(cmd);
+
+         QuickLookWindow::instance().preview(path);
+     });
+     ```
+2. **不可内读判定权威源**：
+   - 严格以 `UiHelper::canPreviewFile(path)` 作为当前应用能否进行内部预览的真理源，严禁在 Controller 处另起炉灶判断扩展名；
+3. **提示气泡视觉规范契约**：
+   - 提示使用全局单例 `ToolTipOverlay::instance()->showToast(...)`；
+   - 严禁追随鼠标位置，必须锚定在触发窗格 `pane` 的顶部下方 10px 居中悬浮；
+   - 边框采用警示/引导橙黄色 `#f39c12`，停留时长 1500ms，保持全软件轻量级 Toast 的统一视觉哲学；
+4. **历史面板体验联动契约**：
+   - 在侧边栏“历史”选项卡 `HistoryPanel::activateCurrentItem()` 中对齐相同逻辑：不可内读文件在按空格或双击时同样触发该提示，保持全局一致。
+
+---
+
+## 58. 空状态互斥感知与 Ctrl+D 重置后退分流契约 (Empty State Mutual Exclusion & Ctrl+D Navigation Fallback SSOT)
+
+> 本章节记录内容面板与瀑布流/网格视图（JustifiedView）空状态二选一互斥显示契约，以及 Ctrl+D 在搜索/筛选已重置状态下自动分流执行“后退”导航的设计决策与 SSOT 规范。
+
+### 58.1 痛点与历史缺陷背景
+1. **空态提示穿透叠加与重复绘制缺陷**：
+   - 过去 `EmptyFilterOverlay` 的 QSS 样式被设置成了透明背景（`background-color: transparent;`）；
+   - 在 `JustifiedView` 中，当条目因筛选器或搜索词被过滤隐藏导致可见条目为 0 时，`JustifiedView::paintEvent` 依然在最底层居中绘制灰色文字：“没有可显示的项目”；
+   - 浮在上层的 `EmptyFilterOverlay` 虽被唤起，但由于背景透明，两层提示文字在屏幕正中央发生直接重叠穿透与互相覆盖，破坏了界面的专业性与清晰度；
+2. **Ctrl+D 快捷键行为单一断点**：
+   - 用户在界面已经处于无筛选、无搜索文本（已重置）的状态下按下 `Ctrl + D` 时，系统继续重复执行清空动作，没有任何响应反馈；
+   - 用户期望在无需重置时，按 `Ctrl + D` 能自然流动执行“后退”导航逻辑，提升键盘流操作效率。
+
+### 58.2 核心架构决策与 SSOT 契约
+1. **统一空状态组件（EmptyFilterOverlay）全权纳管契约**：
+   - 彻底废除多处分散绘制空文本的模式，统一由 `ContentPanel` 的 `EmptyFilterOverlay` 接管所有空态展示，`JustifiedView` 在 Overlay 激活时严禁重复绘制文字；
+   - **两态空态模型**：
+     - **状态 A（过滤隐藏空态，`fullCount > 0 && visibleCount == 0`）**：
+       - 主标题（标记 ②）：显示“当前共有 X 个项目，已过滤隐藏 X 个项目”；
+       - 副标题：显示“未显示内容是因为筛选器或搜索过滤了结果”；
+       - 操作按钮（标记 ①）：显示“重置筛选与搜索 或 后退 (Ctrl + D)”；
+     - **状态 B（物理真正为空，`fullCount == 0 && visibleCount == 0`）**：
+       - 主标题（标记 ②）：明确显示为 **“该文件夹为空”**；
+       - 副标题：坚决隐藏；
+       - 操作按钮（标记 ①）：自适应显示为 **“后退 (Ctrl + D)”**；
+     - **状态 C（条目正常可见，`visibleCount > 0`）**：
+       - `EmptyFilterOverlay` 坚决隐藏（`hide()`）；
+2. **按钮自适应尺寸与零截断契约**：
+   - 操作按钮严禁写死固定宽度（废除 `setFixedSize(190, 32)`）；
+   - 采用 `setFixedHeight(32)` 并配合 `padding: 0 16px;` 与 `adjustSize()`，随文本内容自适应舒展，彻底杜绝文字或快捷键提示被截断；
+3. **Ctrl + D 状态自适应分流契约 (Ctrl+D State-Aware Routing Contract)**：
+   - 统一收敛至 `ShortcutActionRouter::triggerUnifiedReset()`：
+     - **分支 1（有筛选或搜索词生效）**：强制联合复位，清空搜索文本并清除所有高级筛选条件；
+     - **分支 2（搜索框与筛选器均为空/已重置）**：直接调用导航单一事实来源 `NavigationService::instance().goBack()` 执行“后退”；
+4. **“前进/后退/上一级” SSOT 导航排查与治理准则**：
+   - 全局路径导航历史与状态机必须且只能由 `NavigationService::instance()` 单一单例托管，严禁在局部（如 `ContentKeyHandler` 的 Backspace 分支）私自使用 `QDir::cdUp` 另起炉灶。
+
+---
+
+## 59. 项目重命名后选中高亮与导航后退时序完全对齐契约 (Rename Selection Persistence & Navigation Sync SSOT)
+
+> 本章节记录项目在执行重命名（行内编辑或批量重命名）后，视图如何与“后退”导航的成功时序对齐，彻底治愈重命名后选中高亮丢失与被异步文件事件冲掉的架构契约与设计规范。
+
+### 59.1 历史缺陷根因剖析
+1. **时序竞争与 Qt 委托覆盖**：
+   - 旧实现尝试在重命名信号槽中直接调用 `QMetaObject::invokeMethod(this, &ContentPanel::restoreSelections, Qt::QueuedConnection)`；
+   - 此时 Qt 编辑器（`closeEditor`）与模型重绘尚在当前事件循环尾部交织，直接触发局部的 `restoreSelections` 极易与 Qt 内部选区重置发生竞态；
+2. **缺乏全流水线排序与过滤结算**：
+   - 重命名后文件名字改变，排序位置本应发生变动，旧逻辑未触发视图全量重排（`applySort`），代理模型的索引映射未彻底更新；
+3. **文件监视器（ContentChangeWatcher）延迟冲刷覆写**：
+   - 物理重命名必然触发 Windows 系统的文件变更通知，`ContentChangeWatcher` 的 300ms 防抖计时器超时后会调用 `applyIncrementalChanges` 并触发 `notifyRecordsChanged`；
+   - 由于旧逻辑在 300ms 前就已经将 `pendingSelectPath` 消费清空，导致 300ms 后的文件监视器刷新直接将刚刚建立的高亮选区彻底抹除，表现为高亮一闪即逝或完全未选中。
+
+### 59.2 标杆对照与时序对齐契约（参考“后退”成功经验）
+1. **生命周期对齐原则**：
+   - “后退”导航之所以能够 100% 稳定高亮目标条目，是因为后退严格遵循了以下闭环时序：
+     1. 预先登记目标待选路径：`setPendingSelectPath(targetPath, false)` 与 `setPendingSelectPaths({targetPath})`；
+     2. 触发面板数据加载/原位刷新：`refreshAll()`；
+     3. 在加载数据完成、集中执行 `applySort()`（排序）、`recalculateAndEmitStats()`（统计）与 `applyFilters()`（过滤）的最后一步，统一调用 `restoreSelections()` 挂载高亮并滚动可见（`scrollTo`）；
+     4. `refreshAll()` 递增了 `loadRequestId`，使得在刷新期间所有延迟产生的 Windows 文件监视事件被自动作废丢弃，彻底杜绝选区被二次冲刷；
+2. **重命名统一收敛至 SSOT 通道**：
+   - 在 `ContentPanel` 监听 `DiskItemModel::itemRenamed` 信号中：
+     ```cpp
+     connect(m_diskModel, &DiskItemModel::itemRenamed, this,
+             [this](const QString& /*oldPath*/, const QString& newPath) {
+                 setPendingSelectPath(newPath, false);
+                 setPendingSelectPaths({newPath});
+                 QMetaObject::invokeMethod(this, [this]() {
+                     refreshAll();
+                 }, Qt::QueuedConnection);
+             });
+     ```
+   - 通过在下一个队列周期无缝调用唯一的横切入口 `refreshAll()`，完全复用“后退”经受验证的流水线结算机制，确保重命名完成后 100% 持续稳定高亮选中并精准滚动到视口中央。
+
+
+
+
+
 
 

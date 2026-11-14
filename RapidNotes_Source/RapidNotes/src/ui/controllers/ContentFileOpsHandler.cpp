@@ -78,7 +78,7 @@ void ContentFileOpsHandler::onPathsDropped(const QStringList& paths, const QMode
         }
         return;
     } else if (catType == "smart_folder" || catType == "library") {
-        // 目标为智能文件夹或全量/系统分类：兜底入库归属于“未分类”
+        // 目标为智能分类或全量/系统分类：兜底入库归属于“未分类”
         bool ok = LibraryService::instance().addPathsToCategory(-2, paths);
         if (ok) {
             ToolTipOverlay::instance()->showToast("项目已入库到“未分类”", 2500, QColor("#3498db"));

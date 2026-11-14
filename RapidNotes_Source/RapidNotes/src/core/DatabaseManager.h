@@ -221,6 +221,10 @@ private:
     bool migrateNoteTagsSchema();
     void ensureTagsExist(const QStringList& names);
     void refreshNoteTagsCache(const QList<int>& ids);
+    void refreshNoteColors(const QList<int>& ids);
+    bool ensureSearchIndex();
+    void appendKeywordFilter(QString& whereClause, QVariantList& params, const QString& keyword);
+    bool m_ftsAvailable = false;
 
     void applySecurityFilter(QString& whereClause, QVariantList& params, const QString& filterType);
     void applyCommonFilters(QString& whereClause, QVariantList& params, const QString& filterType, const QVariant& filterValue, const QVariantMap& criteria);

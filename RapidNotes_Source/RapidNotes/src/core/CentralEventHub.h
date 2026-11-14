@@ -20,7 +20,8 @@ enum class AppEventType {
     ItemsDeleted,           // 文件物理擦除/删除
     ItemsRenamed,           // 文件批量或单项重命名
     FilterStateChanged,     // 条件筛选状态变更
-    UndoRedoPerformed       // 撤销/重做事务完成
+    UndoRedoPerformed,      // 撤销/重做事务完成
+    CategoriesUpdated       // 分类增删改/排序/回收站状态变更
 };
 
 /**

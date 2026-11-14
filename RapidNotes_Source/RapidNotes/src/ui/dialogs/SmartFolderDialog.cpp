@@ -12,13 +12,13 @@ namespace RapidNotes {
 
 // --- SmartFolderDialog Implementation ---
 
-SmartFolderDialog::SmartFolderDialog(QWidget* parent) : FramelessDialog("智能文件夹规则配置", parent) {
-    m_record.name = "新智能文件夹";
+SmartFolderDialog::SmartFolderDialog(QWidget* parent) : FramelessDialog("智能分类规则配置", parent) {
+    m_record.name = "新智能分类";
     m_record.matchMode = "ALL";
     setupUi();
 }
 
-SmartFolderDialog::SmartFolderDialog(const SmartFolderRecord& record, QWidget* parent) : FramelessDialog("智能文件夹规则配置", parent), m_record(record) {
+SmartFolderDialog::SmartFolderDialog(const SmartFolderRecord& record, QWidget* parent) : FramelessDialog("智能分类规则配置", parent), m_record(record) {
     setupUi();
 }
 
@@ -30,7 +30,7 @@ void SmartFolderDialog::setupUi() {
     bodyLayout->setContentsMargins(20, 15, 20, 20);
     bodyLayout->setSpacing(12);
 
-    // 智能文件夹名称与匹配模式配置
+    // 智能分类名称与匹配模式配置
     QHBoxLayout* topLayout = new QHBoxLayout();
     topLayout->setSpacing(12);
 
@@ -242,7 +242,7 @@ void SmartFolderDialog::onRemoveRule(SmartFolderRuleRow* row) {
 void SmartFolderDialog::onSaveAndAccept() {
     m_record.name = m_nameEdit->text().trimmed();
     if (m_record.name.isEmpty()) {
-        m_record.name = "新智能文件夹";
+        m_record.name = "新智能分类";
     }
 
     m_record.matchMode = m_matchModeCombo->currentData().toString();

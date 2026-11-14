@@ -14,3 +14,4 @@ aistudio
 
 补充说明：
 当前RapidNotes版本，是由原先RapidNotes版本和QuarkMeta版本两个独立应用合并而来的，原本的QuarkMeta（mainwindow）是专用来管理文件夹/文件的，但现在是用来管理笔记的，所以关于管理文件夹/文件的架构理念，都要转变成管理笔记。
+管理方面必须遵循QuarkMeta版本，排序、拖拽迁移数据、或分类都必须遵循QuarkMeta

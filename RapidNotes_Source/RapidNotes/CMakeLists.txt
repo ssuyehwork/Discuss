@@ -5,13 +5,13 @@ if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW)
 endif()
 
-project(RapidNotes VERSION 1.0.0 LANGUAGES C CXX)
+project(RapidNotes VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 全局设置 MSVC 为动态运行时库 (/MD Release, /MDd Debug)，严格匹配动态版 Qt6 (msvc2022_64)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>")
 
 # 2026-03-xx 按照用户要求：彻底废除 MinGW 支持，锁定 MSVC (Visual Studio 2022) 环境
 if(NOT MSVC)
@@ -41,6 +41,11 @@ elseif(NOT Qt6_DIR AND NOT CMAKE_PREFIX_PATH)
 endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Network Concurrent Svg)
+
+# 2026-03-xx 按照用户要求：重新启用日志输出，配合本地日志系统使用
+# add_definitions(-DQT_NO_DEBUG_OUTPUT)
+# add_definitions(-DQT_NO_INFO_OUTPUT)
+# add_definitions(-DQT_NO_WARNING_OUTPUT)
 
 # 遵循“三权分立”规范：将生成的 exe 输出到固化运行层 RapidNotes_Build/RapidNotes
 set(TARGET_APP_OUTPUT_DIR "${PROJECT_SOURCE_DIR}/../../RapidNotes_Build/RapidNotes")
@@ -118,8 +123,6 @@ set(SOURCES
     src/core/NavigationService.cpp
     src/core/NavigationService.h
     src/core/OCRManager.cpp
-    src/core/NoteIngestService.cpp
-    src/core/NoteIngestService.h
     src/core/OCRManager.h
     src/core/PathSummary.cpp
     src/core/PathSummary.h
@@ -300,14 +303,6 @@ set(SOURCES
     src/ui/QuickPreview.h
     src/ui/QuickWindow.cpp
     src/ui/QuickWindow.h
-    src/ui/controllers/QuickMediator.cpp
-    src/ui/controllers/QuickMediator.h
-    src/ui/controllers/QuickContextMenuBuilder.cpp
-    src/ui/controllers/QuickContextMenuBuilder.h
-    src/ui/controllers/QuickPasteDeliveryService.cpp
-    src/ui/controllers/QuickPasteDeliveryService.h
-    src/ui/controllers/QuickShortcutHandler.cpp
-    src/ui/controllers/QuickShortcutHandler.h
     src/ui/RecentNotesDelegate.cpp
     src/ui/RecentNotesDelegate.h
     src/ui/RecentNotesWindow.cpp
@@ -388,8 +383,6 @@ set(SOURCES
     src/ui/ViewDragDropHelper.h
     src/ui/WritingAnimation.cpp
     src/ui/WritingAnimation.h
-	src/ui/AppLockWidget.cpp
-	src/ui/AppLockWidget.h
     src/ui/controllers/ContentChangeWatcher.cpp
     src/ui/controllers/ContentChangeWatcher.h
     src/ui/controllers/ContentDataLoader.cpp
@@ -418,8 +411,6 @@ set(SOURCES
     src/ui/models/SectionProxyModel.h
     src/ui/workers/ContentStatsWorker.cpp
     src/ui/workers/ContentStatsWorker.h
-	src/core/AppLockService.cpp
-	src/core/AppLockService.h
     src/core/ActionCommand.h
     src/core/BasicCommands.h
     src/core/CoreController.cpp
@@ -446,10 +437,6 @@ set(SOURCES
     src/core/PresetTagService.cpp
     src/core/TagLexiconService.cpp
     src/core/TagLexiconService.h
-    src/core/NoteRepository.cpp
-    src/core/NoteRepository.h
-    src/core/TodoRepository.cpp
-    src/core/TodoRepository.h
     src/core/TransferToMarkedCommand.cpp
     src/core/TransferToMarkedCommand.h
     src/core/UndoManager.h
@@ -464,6 +451,8 @@ set(SOURCES
     src/crypto/EncryptionManager.h
     src/meta/AssociationCascadeService.cpp
     src/meta/AssociationCascadeService.h
+    src/meta/DatabaseManager.cpp
+    src/meta/DatabaseManager.h
     src/meta/DatabaseMigrator.h
     src/meta/DiskNavigatorService.cpp
     src/meta/DiskNavigatorService.h
@@ -675,7 +664,7 @@ endif()
 add_executable(RapidNotes ${SOURCES})
 
 # 显式指定 Target 级别的动态运行时 (/MD)
-set_property(TARGET RapidNotes PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+set_property(TARGET RapidNotes PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>")
 
 # 强力锁定目标二进制输出路径，确保无论何种生成器与配置均绝对输出至 RapidNotes_Build/RapidNotes
 set_target_properties(RapidNotes PROPERTIES
@@ -717,7 +706,7 @@ add_executable(RapidNotesWatchdog
     src/watchdog/main.cpp
 )
 
-set_property(TARGET RapidNotesWatchdog PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+set_property(TARGET RapidNotesWatchdog PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>")
 
 set_target_properties(RapidNotesWatchdog PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${TARGET_APP_OUTPUT_DIR}"

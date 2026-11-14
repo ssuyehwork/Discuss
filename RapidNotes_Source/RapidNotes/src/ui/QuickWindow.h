@@ -29,17 +29,12 @@ class QLineEdit;
 class QShortcut;
 class QTimer;
 class CategoryLockWidget;
-class AppLockWidget;
 namespace RapidNotes { class DropTreeView; }
 using RapidNotes::DropTreeView;
 class ClickableLineEdit;
 class CleanListView;
 class QuickFilterPanel;
 class QVBoxLayout;
-namespace RapidNotes {
-class QuickMediator;
-class QuickShortcutHandler;
-}
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -48,7 +43,6 @@ class QuickShortcutHandler;
 
 class QuickWindow : public QWidget {
     Q_OBJECT
-    friend class RapidNotes::QuickShortcutHandler; // 授权控制器访问私有成员与函数
 public:
     explicit QuickWindow(QWidget* parent = nullptr);
     void showAuto();
@@ -92,7 +86,6 @@ protected:
 private:
     void initUI();
     void setupAppLock();
-    void finishUnlock();
     void activateNote(const QModelIndex& index);
     void sendNote(const QVariantMap& note); // 2026-03-20 [NEW] 提取统一发送逻辑
     void updateContextSnapshotById(int noteId); // 2026-03-20 [NEW] 滚动更新快照中心
@@ -159,8 +152,7 @@ public:
     QStackedWidget* m_listStack;
     CleanListView* m_listView;
     CategoryLockWidget* m_lockWidget;
-    AppLockWidget* m_appLockWidget = nullptr;
-    QStackedWidget* m_rootStack = nullptr;
+    QWidget* m_appLockWidget = nullptr;
     NoteModel* m_model;
     
     DropTreeView* m_systemTree;
@@ -203,9 +195,6 @@ public:
     int m_sidebarWidth = 163;
     int m_filterWidth = 163;
     QElapsedTimer m_lastWheelPageTimer;    // [NEW] 用于滚轮翻页防抖
-
-    RapidNotes::QuickMediator* m_mediator = nullptr;
-    RapidNotes::QuickShortcutHandler* m_shortcutHandler = nullptr;
 
     // 2026-03-20 [NEW] 记录最近一次发送灵感的上下文快照 (上下各5条，共11条)
     QList<QVariantMap> m_contextNotesSnapshot;

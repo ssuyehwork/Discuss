@@ -20,21 +20,32 @@
 
 namespace RapidNotes {
 
-FramelessWindowHelper* FramelessWindowHelper::apply(QWidget* window, QWidget* titleBar) {
+FramelessWindowHelper* FramelessWindowHelper::apply(QWidget* window, QWidget* titleBar, int resizeMargin) {
     if (!window) return nullptr;
-    return new FramelessWindowHelper(window, titleBar);
+    return new FramelessWindowHelper(window, titleBar, resizeMargin);
 }
 
-FramelessWindowHelper::FramelessWindowHelper(QWidget* window, QWidget* titleBar)
-    : QObject(window), m_window(window), m_titleBar(titleBar) {
+FramelessWindowHelper::FramelessWindowHelper(QWidget* window, QWidget* titleBar, int resizeMargin)
+    : QObject(window), m_window(window), m_titleBar(titleBar),
+      m_resizeMargin(resizeMargin > 0 ? resizeMargin : kBaseResizeMargin) {
 
     Qt::WindowFlags requiredFlags = m_window->windowFlags() | Qt::FramelessWindowHint | Qt::WindowMinMaxButtonsHint;
     if (m_window->windowFlags() != requiredFlags) {
         m_window->setWindowFlags(requiredFlags);
     }
 
+    applyNativeStyles();
+
+    // 生命周期钩子：句柄重建（setWindowFlags 等触发 WinIdChange）后自动补注 WS_THICKFRAME，
+    // 彻底消灭"只注一次"的 static 开关式隐患
+    m_window->installEventFilter(this);
+}
+
+void FramelessWindowHelper::applyNativeStyles() {
 #ifdef Q_OS_WIN
+    if (!m_window) return;
     HWND hwnd = reinterpret_cast<HWND>(m_window->winId());
+    if (!hwnd) return;
     DWORD style = GetWindowLong(hwnd, GWL_STYLE);
     // 只有真正带标题栏（传入了 titleBar）的窗口，才需要完整的系统窗口属性
     // 像 TagSelectorOverlay 这种 Qt::Tool 悬浮面板，不该被强行赋予标题栏/最大化/系统菜单语义
@@ -46,6 +57,13 @@ FramelessWindowHelper::FramelessWindowHelper(QWidget* window, QWidget* titleBar)
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
 #endif
+}
+
+bool FramelessWindowHelper::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == m_window && event->type() == QEvent::WinIdChange) {
+        applyNativeStyles();
+    }
+    return QObject::eventFilter(watched, event);
 }
 
 bool FramelessWindowHelper::isInteractiveWidget(QWidget* child, QWidget* titleBar, QWidget* window) {
@@ -142,7 +160,9 @@ bool FramelessWindowHelper::handleNativeEvent(void* message, qintptr* result) {
         bool isMaximizedOrFullScreen = isMax || m_window->isFullScreen();
 
         if (!isMaximizedOrFullScreen) {
-            const int m = kBaseResizeMargin;
+            // 热区宽度必须恰好覆盖窗口可见边缘（含圆角阴影外框的内缩量），
+            // 否则用户瞄准可见边框的落点会落入 HTCLIENT 区被 startSystemMove 抢走
+            const int m = m_resizeMargin;
             bool left = localPos.x() >= 0 && localPos.x() < m;
             bool right = localPos.x() >= width - m && localPos.x() < width;
             bool top = localPos.y() >= 0 && localPos.y() < m;

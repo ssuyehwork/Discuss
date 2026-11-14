@@ -7,17 +7,11 @@
 #include "CleanListView.h"
 #include "ClickableLineEdit.h"
 #include "CategoryLockWidget.h"
-#include "AppLockWidget.h"
-#include "../core/AppLockService.h"
 #include "DropTreeView.h"
 using RapidNotes::DropTreeView;
 #include "QuickPreview.h"
 #include "PasswordVerifyDialog.h"
 #include "QuickFilterPanel.h"
-#include "controllers/QuickMediator.h"
-#include "controllers/QuickShortcutHandler.h"
-#include "controllers/QuickPasteDeliveryService.h"
-#include "controllers/QuickContextMenuBuilder.h"
 #include "../models/NoteModel.h"
 #include <QSortFilterProxyModel>
 #include <QTreeView>
@@ -108,6 +102,144 @@ using RapidNotes::DropTreeView;
 #pragma comment(lib, "dwmapi.lib")
 #endif
 
+class AppLockWidget : public QWidget {
+    Q_OBJECT
+public:
+    AppLockWidget(const QString& correctPassword, QWidget* parent = nullptr)
+        : QWidget(parent), m_correctPassword(correctPassword) {
+        setObjectName("AppLockWidget");
+        setFocusPolicy(Qt::StrongFocus);
+        setAttribute(Qt::WA_StyledBackground);
+
+        auto* layout = new QVBoxLayout(this);
+        layout->setAlignment(Qt::AlignCenter);
+        layout->setSpacing(20);
+
+        
+
+
+        auto* appTitle = new QLabel("懒人笔记");
+        appTitle->setObjectName("QuickWindow_appTitle_1");
+        appTitle->setAlignment(Qt::AlignCenter);
+        layout->addWidget(appTitle);
+
+        
+        auto* lockIcon = new QLabel();
+
+        lockIcon->setPixmap(IconHelper::getIcon("lock_secure", "#00A650").pixmap(64, 64));
+        lockIcon->setAlignment(Qt::AlignCenter);
+        layout->addWidget(lockIcon);
+
+        
+        auto* titleLabel = new QLabel("已锁定");
+
+        titleLabel->setObjectName("QuickWindow_titleLabel_2");
+        titleLabel->setAlignment(Qt::AlignCenter);
+        layout->addWidget(titleLabel);
+
+        
+        QSettings settings("RapidNotes", "QuickWindow");
+        QString hint = settings.value("appPasswordHint", "请输入启动密码").toString();
+        auto* hintLabel = new QLabel(hint);
+        hintLabel->setObjectName("QuickWindow_hintLabel_3");
+        hintLabel->setAlignment(Qt::AlignCenter);
+        layout->addWidget(hintLabel);
+
+        
+        m_pwdEdit = new QLineEdit();
+        m_pwdEdit->setObjectName("QuickWindow_m_pwdEdit");
+        m_pwdEdit->setEchoMode(QLineEdit::Password);
+        m_pwdEdit->setPlaceholderText("请输入密码");
+        m_pwdEdit->setFixedWidth(240);
+        m_pwdEdit->setFixedHeight(36);
+        m_pwdEdit->setAlignment(Qt::AlignCenter);
+        connect(m_pwdEdit, &QLineEdit::returnPressed, this, &AppLockWidget::handleVerify);
+        layout->addWidget(m_pwdEdit, 0, Qt::AlignHCenter);
+
+        
+        m_closeBtn = new QPushButton(this);
+        m_closeBtn->setObjectName("QuickWindow_m_closeBtn");
+        m_closeBtn->setIcon(IconHelper::getIcon("close", "#aaaaaa"));
+        m_closeBtn->setIconSize(QSize(18, 18));
+        m_closeBtn->setFixedSize(32, 32);
+        m_closeBtn->setCursor(Qt::PointingHandCursor);
+        connect(m_closeBtn, &QPushButton::clicked, []() { QApplication::quit(); });
+
+        
+        m_pwdEdit->setFocus();
+    }
+
+    void focusInput() {
+        m_pwdEdit->setFocus();
+        m_pwdEdit->selectAll();
+    }
+
+protected:
+    void keyPressEvent(QKeyEvent* event) override {
+        if (event->key() == Qt::Key_Escape) {
+            
+            event->accept();
+            return;
+        }
+        QWidget::keyPressEvent(event);
+    }
+
+    void resizeEvent(QResizeEvent* event) override {
+        m_closeBtn->move(width() - m_closeBtn->width() - 10, 10);
+        QWidget::resizeEvent(event);
+    }
+
+private slots:
+    void handleVerify() {
+        if (m_pwdEdit->text() == m_correctPassword) {
+            startFadeOut();
+        } else {
+            startShake();
+        }
+    }
+
+    void startFadeOut() {
+        auto* opacityEffect = new QGraphicsOpacityEffect(this);
+        setGraphicsEffect(opacityEffect);
+        auto* animation = new QPropertyAnimation(opacityEffect, "opacity");
+        animation->setDuration(300);
+        animation->setStartValue(1.0);
+        animation->setEndValue(0.0);
+        animation->setEasingCurve(QEasingCurve::OutCubic);
+        connect(animation, &QPropertyAnimation::finished, this, [this]() {
+            emit unlocked();
+            this->deleteLater();
+        });
+        animation->start(QAbstractAnimation::DeleteWhenStopped);
+    }
+
+    void startShake() {
+        m_pwdEdit->clear();
+        auto* anim = new QPropertyAnimation(m_pwdEdit, "pos");
+        anim->setDuration(400);
+        anim->setLoopCount(1);
+
+        QPoint pos = m_pwdEdit->pos();
+        anim->setKeyValueAt(0, pos);
+        anim->setKeyValueAt(0.1, pos + QPoint(-10, 0));
+        anim->setKeyValueAt(0.3, pos + QPoint(10, 0));
+        anim->setKeyValueAt(0.5, pos + QPoint(-10, 0));
+        anim->setKeyValueAt(0.7, pos + QPoint(10, 0));
+        anim->setKeyValueAt(0.9, pos + QPoint(-10, 0));
+        anim->setKeyValueAt(1, pos);
+
+        anim->start(QAbstractAnimation::DeleteWhenStopped);
+    }
+
+signals:
+    void unlocked();
+
+private:
+    QLineEdit* m_pwdEdit;
+    QPushButton* m_closeBtn;
+    QString m_correctPassword;
+};
+
 #define RESIZE_MARGIN 10
 
 QuickWindow::QuickWindow(QWidget* parent)
@@ -127,9 +259,6 @@ setAttribute(Qt::WA_TranslucentBackground);
 
     setMouseTracking(true);
     setAttribute(Qt::WA_Hover);
-
-    m_mediator = new RapidNotes::QuickMediator(this, this);
-    m_shortcutHandler = new RapidNotes::QuickShortcutHandler(this, this);
 
     initUI();
 
@@ -240,7 +369,6 @@ void QuickWindow::initUI() {
     leftLayout->addWidget(m_searchEdit);
 
     m_splitter = new QSplitter(Qt::Horizontal);
-    m_splitter->setObjectName("QuickWindow_m_splitter");
     m_splitter->setHandleWidth(4);
     m_splitter->setChildrenCollapsible(false);
 
@@ -266,7 +394,7 @@ void QuickWindow::initUI() {
     m_listView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_listView->setIconSize(QSize(28, 28));
     m_listView->setAlternatingRowColors(true);
-    m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_listView->setMouseTracking(true);
     m_listView->setItemDelegate(new QuickNoteDelegate(this));
@@ -867,11 +995,7 @@ void QuickWindow::initUI() {
     
     
 
-    // 根层页面切换：第0页=主界面，锁定时第1页=锁屏页（整体替换，不再覆盖）
-    m_rootStack = new QStackedWidget(this);
-    m_rootStack->setMouseTracking(true);
-    m_rootStack->addWidget(container);
-    m_mainLayout->addWidget(m_rootStack);
+    m_mainLayout->addWidget(container);
 
     
     QTimer::singleShot(500, []() {
@@ -1021,46 +1145,25 @@ void QuickWindow::initUI() {
 
 void QuickWindow::setupAppLock() {
     if (m_appLockWidget) return;
-    auto& lockService = AppLockService::instance();
-    if (!lockService.hasPassword()) return;
+    QSettings settings("RapidNotes", "QuickWindow");
+    QString appPwd = settings.value("appPassword").toString();
+    if (!appPwd.isEmpty()) {
+        auto* lock = new AppLockWidget(appPwd, this);
+        m_appLockWidget = lock;
+        lock->resize(this->size());
 
-    auto* lock = new AppLockWidget(lockService.hint(), this);
-    m_appLockWidget = lock;
-    m_rootStack->addWidget(lock);
-    m_rootStack->setCurrentWidget(lock);
+        connect(lock, &AppLockWidget::unlocked, this, [this]() {
+            m_appLockWidget = nullptr;
+            updateAppLockStatus();
 
-    // 锁定期间：所有快捷键停用（其他顶层窗口已由 doGlobalLock 隐藏）
-    for (auto* sc : std::as_const(m_shortcuts)) sc->setEnabled(false);
+            m_listView->setFocus();
+            if (m_model->rowCount() > 0 && !m_listView->currentIndex().isValid()) {
+                m_listView->setCurrentIndex(m_model->index(0, 0));
+            }
+        });
 
-    connect(lock, &AppLockWidget::passwordSubmitted, this, [this](const QString& pwd) {
-        if (!m_appLockWidget) return;
-        if (AppLockService::instance().verify(pwd)) {
-            m_appLockWidget->playUnlockFade();
-        } else {
-            m_appLockWidget->rejectPassword();
-        }
-    });
-    connect(lock, &AppLockWidget::unlockFinished, this, &QuickWindow::finishUnlock);
-
-    lock->focusInput();
-}
-
-void QuickWindow::finishUnlock() {
-    AppLockWidget* lock = m_appLockWidget;
-    if (!lock) return;
-    m_appLockWidget = nullptr;
-
-    m_rootStack->setCurrentIndex(0);
-    m_rootStack->removeWidget(lock);
-    lock->deleteLater();
-
-    for (auto* sc : std::as_const(m_shortcuts)) sc->setEnabled(true);
-    updateAppLockStatus();
-    scheduleRefresh();
-
-    m_listView->setFocus();
-    if (m_model->rowCount() > 0 && !m_listView->currentIndex().isValid()) {
-        m_listView->setCurrentIndex(m_model->index(0, 0));
+        lock->show();
+        lock->raise();
     }
 }
 
@@ -1093,7 +1196,7 @@ void QuickWindow::restoreState() {
         m_sidebarWrapper->setHidden(hidden);
 
         
-        auto* btnSidebar = findChild<QPushButton*>("QuickWindow_btnSidebar_13");
+        auto* btnSidebar = findChild<QPushButton*>("btnSidebar");
         if (btnSidebar) {
             bool visible = !hidden;
             btnSidebar->setChecked(visible);
@@ -1106,7 +1209,7 @@ void QuickWindow::restoreState() {
         m_filterWrapper->setHidden(hidden);
 
         
-        auto* btnFilter = findChild<QPushButton*>("QuickWindow_btnFilter_14");
+        auto* btnFilter = findChild<QPushButton*>("btnFilter");
         if (btnFilter) {
             bool visible = !hidden;
             btnFilter->setChecked(visible);
@@ -1248,7 +1351,10 @@ void QuickWindow::updateAppLockStatus() {
     QPushButton* btnLock = findChild<QPushButton*>("btnLock");
     if (!btnLock) return;
 
-    if (AppLockService::instance().hasPassword()) {
+    QSettings settings("RapidNotes", "QuickWindow");
+    bool hasPwd = !settings.value("appPassword").toString().isEmpty();
+
+    if (hasPwd) {
         
         btnLock->setIcon(IconHelper::getIcon("unlock_secure", "#00A650"));
     } else {
@@ -1278,11 +1384,11 @@ void QuickWindow::updateShortcuts() {
     };
 
     updateBtnTip("btnClose", "关闭", "qw_close");
-    updateBtnTip("QuickWindow_btnPin_11", "置顶", "qw_stay_on_top");
+    updateBtnTip("btnPin", "置顶", "qw_stay_on_top");
 
-    updateBtnTip("QuickWindow_btnSidebar_13", "显示/隐藏侧边栏", "qw_sidebar");
-    updateBtnTip("QuickWindow_btnFilter_14", "显示/隐藏高级筛选", "qw_filter");
-    updateBtnTip("QuickWindow_m_btnToggleAll_15", "联动显示/隐藏面板", "qw_toggle_all_panels");
+    updateBtnTip("btnSidebar", "显示/隐藏侧边栏", "qw_sidebar");
+    updateBtnTip("btnFilter", "显示/隐藏高级筛选", "qw_filter");
+    updateBtnTip("btnToggleAll", "联动显示/隐藏面板", "qw_toggle_all_panels");
     updateBtnTip("btnLock", "锁定应用", "qw_lock_app");
     
     updateBtnTip("btnRefresh", "刷新", "qw_refresh");
@@ -1291,7 +1397,6 @@ void QuickWindow::updateShortcuts() {
 }
 
 void QuickWindow::scheduleRefresh() {
-    if (isLocked()) return; // 锁定期间不刷新，解锁时统一刷新一次
     m_refreshTimer->start();
     
     refreshSidebar();
@@ -1340,7 +1445,7 @@ void QuickWindow::onNoteAdded(const QVariantMap& note) {
 
 void QuickWindow::refreshData() {
     qDebug() << "[QuickWindow] 开始执行 refreshData()...";
-    if (!isVisible() || isLocked()) return;
+    if (!isVisible()) return;
 
     
     QSet<int> selectedIds;
@@ -1404,7 +1509,7 @@ void QuickWindow::refreshData() {
     auto* pageInput = findChild<QLineEdit*>("pageInput");
     if (pageInput) pageInput->setText(QString::number(m_currentPage));
 
-    auto* totalLabel = findChild<QLabel*>("QuickWindow_totalLabel_16");
+    auto* totalLabel = findChild<QLabel*>("totalLabel");
     if (totalLabel) totalLabel->setText(QString::number(m_totalPages));
 
     if (!m_filterWrapper->isHidden()) {
@@ -1708,12 +1813,8 @@ void QuickWindow::doDeleteSelected(bool physical) {
 
         if (msg.exec() == QDialog::Accepted) {
             if (!idsToDelete.isEmpty()) {
-                 if (m_mediator) {
-                     m_mediator->requestPermanentDelete(idsToDelete);
-                 } else {
-                     DatabaseManager::instance().deleteNotesBatch(idsToDelete);
-                     refreshData();
-                 }
+                DatabaseManager::instance().deleteNotesBatch(idsToDelete);
+                refreshData();
                 refreshSidebar();
                 ToolTipOverlay::instance()->showText(QCursor::pos(), QString("<b style='color: #2ecc71;'>[OK] 已永久删除 %1 条数据</b>").arg(idsToDelete.size()));
             }
@@ -1722,12 +1823,8 @@ void QuickWindow::doDeleteSelected(bool physical) {
         
         QList<int> idsToTrash;
         for (const auto& index : std::as_const(selected)) idsToTrash << index.data(NoteModel::IdRole).toInt();
-        if (m_mediator) {
-            m_mediator->requestMoveToTrash(idsToTrash);
-        } else {
-            DatabaseManager::instance().softDeleteNotes(idsToTrash);
-            refreshData();
-        }
+        DatabaseManager::instance().softDeleteNotes(idsToTrash);
+        refreshData();
     }
     refreshSidebar();
 }
@@ -1742,22 +1839,17 @@ void QuickWindow::doRestoreTrash() {
 void QuickWindow::doToggleFavorite() {
     auto selected = m_listView->selectionModel()->selectedIndexes();
     if (selected.isEmpty()) return;
-    QList<int> ids;
+    bool isFav = false;
     for (const auto& index : std::as_const(selected)) {
-        ids << index.data(NoteModel::IdRole).toInt();
+        int id = index.data(NoteModel::IdRole).toInt();
+        isFav = DatabaseManager::instance().toggleNoteState(id, "is_favorite");
     }
-    if (m_mediator) {
-        m_mediator->requestToggleFavorite(ids);
-    } else {
-        bool isFav = false;
-        for (int id : ids) {
-            isFav = DatabaseManager::instance().toggleNoteState(id, "is_favorite");
-        }
-        refreshData();
-        ToolTipOverlay::instance()->showText(QCursor::pos(), 
-            isFav ? "<b style='color: #2ecc71;'>★ 已添加至收藏</b>" : "<b style='color: #aaaaaa;'>☆ 已取消收藏</b>", 
-            1000, QColor("#B0B0B0"), ToolTipOverlay::ActivePriority);
-    }
+    refreshData();
+    
+    // 2026-04-xx 按照用户要求：增加显式反馈，并提升优先级以防被覆盖
+    ToolTipOverlay::instance()->showText(QCursor::pos(), 
+        isFav ? "<b style='color: #2ecc71;'>★ 已添加至收藏</b>" : "<b style='color: #aaaaaa;'>☆ 已取消收藏</b>", 
+        1000, QColor("#B0B0B0"), ToolTipOverlay::ActivePriority);
 }
 
 void QuickWindow::doTogglePin() {
@@ -1923,7 +2015,8 @@ void QuickWindow::doSetRating(int rating) {
 
 void QuickWindow::doGlobalLock() {
     
-    if (!AppLockService::instance().hasPassword()) {
+    QSettings settings("RapidNotes", "QuickWindow");
+    if (settings.value("appPassword").toString().isEmpty()) {
         ToolTipOverlay::instance()->showText(QCursor::pos(), "<b style='color: #e74c3c;'>[ERR] 尚未设定应用密码，请先进行设定</b>");
         return;
     }
@@ -2028,7 +2121,7 @@ void QuickWindow::toggleStayOnTop(bool checked) {
 #endif
     }
     
-    auto* btnPin = findChild<QPushButton*>("QuickWindow_btnPin_11");
+    auto* btnPin = findChild<QPushButton*>("btnPin");
     if (btnPin) {
         if (btnPin->isChecked() != checked) btnPin->setChecked(checked);
 
@@ -2044,7 +2137,7 @@ void QuickWindow::toggleSidebar() {
     m_sidebarWrapper->setVisible(visible);
 
     
-    auto* btnSidebar = findChild<QPushButton*>("QuickWindow_btnSidebar_13");
+    auto* btnSidebar = findChild<QPushButton*>("btnSidebar");
     if (btnSidebar) {
         btnSidebar->setChecked(visible);
 
@@ -2075,7 +2168,7 @@ void QuickWindow::toggleFilter() {
     updateToggleAllIcon(); 
 
     
-    QPushButton* btnFilter = findChild<QPushButton*>("QuickWindow_btnFilter_14");
+    QPushButton* btnFilter = findChild<QPushButton*>("btnFilter");
     if (btnFilter) {
         btnFilter->setChecked(visible);
 
@@ -2094,12 +2187,12 @@ void QuickWindow::toggleLayoutDirection() {
         m_btnNavDir->setIcon(IconHelper::getIcon(m_isLayoutReversed ? "nav_last" : "nav_first", "#aaaaaa"));
     }
 
-    QWidget* container = findChild<QWidget*>("QuickWindow_container");
+    QWidget* container = findChild<QWidget*>("container");
     if (!container) return;
     QHBoxLayout* containerLayout = qobject_cast<QHBoxLayout*>(container->layout());
     if (!containerLayout) return;
 
-    QWidget* leftContent = findChild<QWidget*>("QuickWindow_leftContent_4");
+    QWidget* leftContent = findChild<QWidget*>("leftContent");
     QWidget* customToolbar = findChild<QWidget*>("customToolbar");
 
     if (leftContent && customToolbar) {
@@ -2108,9 +2201,11 @@ void QuickWindow::toggleLayoutDirection() {
         if (m_isLayoutReversed) {
             containerLayout->addWidget(customToolbar);
             containerLayout->addWidget(leftContent);
+            leftContent->setObjectName("QuickWindow_leftContent_19");
         } else {
             containerLayout->addWidget(leftContent);
             containerLayout->addWidget(customToolbar);
+            leftContent->setObjectName("QuickWindow_leftContent_4");
         }
     }
 
@@ -2137,9 +2232,9 @@ void QuickWindow::toggleAllPanels() {
     if (m_filterWrapper) m_filterWrapper->setVisible(targetVisible);
 
     
-    QPushButton* btnSidebar = findChild<QPushButton*>("QuickWindow_btnSidebar_13");
+    QPushButton* btnSidebar = findChild<QPushButton*>("btnSidebar");
     if (btnSidebar) btnSidebar->setChecked(targetVisible);
-    QPushButton* btnFilter = findChild<QPushButton*>("QuickWindow_btnFilter_14");
+    QPushButton* btnFilter = findChild<QPushButton*>("btnFilter");
     if (btnFilter) btnFilter->setChecked(targetVisible);
 
     updateLayoutWidth();
@@ -2864,7 +2959,11 @@ void QuickWindow::sendNote(const QVariantMap& note) {
 
 bool QuickWindow::verifyExportPermission() {
 
-    if (!AppLockService::instance().hasPassword()) {
+    QSettings settings("RapidNotes", "QuickWindow");
+    QString savedPwd = settings.value("appPassword").toString();
+
+    
+    if (savedPwd.isEmpty()) {
         ToolTipOverlay::instance()->showText(QCursor::pos(),
             "<b style='color: #e74c3c;'>[安全拦截] 您尚未设置应用密码，请先前往主程序“设置-安全”中设置导出授权密码。</b>", 5000);
         return false;
@@ -2872,7 +2971,7 @@ bool QuickWindow::verifyExportPermission() {
 
     PasswordVerifyDialog dlg("导出身份验证", "请输入应用启动密码以授权本次导出操作", this);
     if (dlg.exec() == QDialog::Accepted) {
-        if (AppLockService::instance().verify(dlg.password())) {
+        if (dlg.password() == savedPwd) {
             ToolTipOverlay::instance()->showText(QCursor::pos(), "<b style='color: #2ecc71;'>[OK] 验证成功，正在准备导出...</b>", 1500);
             return true;
         } else {
@@ -3048,12 +3147,15 @@ void QuickWindow::doRepeatAction() {
 
 void QuickWindow::focusLockInput() {
     if (m_appLockWidget) {
-        m_appLockWidget->focusInput();
+        static_cast<AppLockWidget*>(m_appLockWidget)->focusInput();
     }
 }
 
 void QuickWindow::recordLastActiveWindow(HWND captureHwnd) {
 #ifdef Q_OS_WIN
+    
+    
+    
 
     HWND targetHwnd = captureHwnd;
     if (!targetHwnd) {
@@ -3424,6 +3526,9 @@ void QuickWindow::hideEvent(QHideEvent* event) {
 }
 
 void QuickWindow::resizeEvent(QResizeEvent* event) {
+    if (m_appLockWidget) {
+        m_appLockWidget->resize(this->size());
+    }
     QWidget::resizeEvent(event);
     saveState();
 }
@@ -3434,10 +3539,6 @@ void QuickWindow::moveEvent(QMoveEvent* event) {
 }
 
 void QuickWindow::keyPressEvent(QKeyEvent* event) {
-    if (isLocked()) {
-        event->accept();
-        return;
-    }
     if (event->key() == Qt::Key_Escape) {
         // 2026-04-xx 按照用户要求：Esc 键优先清空文字，文字为空时才关闭窗口
         bool searchHasText = m_searchEdit && !m_searchEdit->text().isEmpty();
@@ -3528,10 +3629,6 @@ void QuickWindow::updateFocusLines() {
 }
 
 bool QuickWindow::eventFilter(QObject* watched, QEvent* event) {
-    // 锁定期间：主界面的所有按键处理一律不执行
-    if (isLocked() && (event->type() == QEvent::KeyPress || event->type() == QEvent::ShortcutOverride)) {
-        return false;
-    }
     
     if (event->type() == QEvent::ShortcutOverride) {
         QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
@@ -4131,4 +4228,4 @@ bool QuickWindow::eventFilter(QObject* watched, QEvent* event) {
     return QWidget::eventFilter(watched, event);
 }
 
-
+#include "QuickWindow.moc"

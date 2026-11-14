@@ -6,6 +6,7 @@
 #include <QStringList>
 #include <QVariant>
 #include <QVariantMap>
+#include <QByteArray>
 #include "../../core/DatabaseManager.h"
 
 class QuickWindow;
@@ -21,6 +22,7 @@ public:
     // --- 笔记核心元数据写操作 (通过 CoreEngine 命令通道，保证 SSOT 与全局事件广播) ---
     void requestMoveToCategory(const QList<int>& ids, int categoryId);
     void requestToggleFavorite(const QList<int>& ids);
+    void requestSetFavorite(const QList<int>& ids, bool favorite);
     void requestTogglePinned(const QList<int>& ids, bool pinned);
     void requestMoveToTrash(const QList<int>& ids);
     void requestPermanentDelete(const QList<int>& ids);
@@ -34,18 +36,23 @@ public:
     void requestSetNoteURL(int id, const QString& url);
     void requestRecordAccess(int id);
 
+    // --- 笔记基础创建与入库 ---
+    int  requestAddNote(const QString& title, const QString& content, const QStringList& tags = {},
+                        const QString& remark = "", int categoryId = -1,
+                        const QString& itemType = "text", const QByteArray& dataBlob = QByteArray());
+
     // --- 回收站专项操作 ---
     void requestRestoreFromTrash(const QList<int>& noteIds, const QList<int>& catIds = {});
     void requestRestoreAllTrash();
     void requestEmptyTrash();
 
-    // --- 高级业务逻辑调度 (按行拆分、合并、复制提取、批量标签覆盖) ---
+    // --- 高级业务逻辑调度 (按行拆分、合并、批量标签覆盖、重复上一次操作) ---
     int  requestCreateByLine(const QString& text, int targetCategoryId);
     bool requestMergeNotes(const QList<int>& ids, int targetCategoryId);
     bool requestPasteTagsBatch(const QList<int>& ids, const QStringList& tags);
     bool requestRepeatLastAction(const QList<int>& targetIds);
 
-    // --- 列表排序与拖拽位移调度 ---
+    // --- 列表排序与位移调度 ---
     bool requestMoveNote(int id, DatabaseManager::MoveDirection dir, const QString& filterType, const QVariant& filterValue);
     bool requestMoveNotesToRow(const QList<int>& ids, int targetRow, const QString& filterType, const QVariant& filterValue);
     bool requestReorderNotes(const QString& filterType, const QVariant& filterValue, bool ascending, const QVariantMap& criteria = {});
@@ -61,6 +68,17 @@ public:
     bool requestReorderCategories(int parentId, bool ascending);
     bool requestReorderAllCategories(bool ascending);
     bool requestSetCategorySortMode(int catId, const QString& mode);
+
+    // --- 分类密码保护与锁定状态调度 ---
+    bool requestSetCategoryPassword(int catId, const QString& password, const QString& hint);
+    bool requestVerifyCategoryPassword(int catId, const QString& password);
+    bool requestRemoveCategoryPassword(int catId);
+    void requestLockCategory(int catId);
+    void requestLockAllCategories();
+    bool requestToggleLockedCategoriesVisibility();
+
+    // --- 自动归档配置调度 ---
+    void requestSetAutoCategorize(bool enabled, int targetCatId = -1);
 
 private slots:
     void onCentralEventTriggered();

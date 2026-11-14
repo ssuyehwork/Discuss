@@ -68,7 +68,7 @@ struct SmartFolderRule {
 
 struct SmartFolderRecord {
     int id = 0;
-    QString name = "新智能文件夹";
+    QString name = "新智能分类";
     QString matchMode = "ALL"; // "ALL" (AND) 或 "ANY" (OR)
     QString iconKey = "smart-folder-1.svg";
     QString colorHex = "#888888";

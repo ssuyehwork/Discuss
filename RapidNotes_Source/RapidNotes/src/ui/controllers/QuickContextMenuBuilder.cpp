@@ -23,6 +23,7 @@
 #include <QFileDialog>
 #include <QTimer>
 #include <QCursor>
+#include <QCoreApplication>
 
 namespace RapidNotes {
 
@@ -177,7 +178,7 @@ QMenu* QuickContextMenuBuilder::buildListContextMenu(QuickWindow* window, const 
     bool inTrash = (window->m_currentFilterType == "trash");
     if (inTrash) {
         QString restoreText = (selCount > 1) ? QString("恢复选中项 (%1)").arg(selCount) : "恢复";
-        menu->addAction(IconHelper::getIcon("refresh", "#2ecc71", 18), restoreText, [window, mediator, selected]() {
+        menu->addAction(IconHelper::getIcon("refresh", "#2ecc71", 18), restoreText, [mediator, selected]() {
             QList<int> noteIds;
             QList<int> catIds;
             for (const auto& idx : selected) {
@@ -333,6 +334,30 @@ QMenu* QuickContextMenuBuilder::buildSidebarContextMenu(QuickWindow* window, Dro
         QString rootName = rootCat.value("name").toString();
         int rootId = rootCat.value("id").toInt();
 
+        if (rootId == catId) {
+            exportMenu->addAction(IconHelper::getIcon("folder", "#3498db", 18), rootName, [window, rootId, rootName]() {
+                window->doExportCategory(rootId, rootName);
+            });
+            auto children = DatabaseManager::instance().getChildCategories(rootId);
+            for (const auto& child : std::as_const(children)) {
+                int childId = child.value("id").toInt();
+                QString childName = child.value("name").toString();
+                exportMenu->addAction(IconHelper::getIcon("branch", "#3498db", 18), childName, [window, childId, childName]() {
+                    window->doExportCategory(childId, childName);
+                });
+            }
+        } else {
+            exportMenu->addAction(IconHelper::getIcon("branch", "#3498db", 18), currentName, [window, catId, currentName]() {
+                window->doExportCategory(catId, currentName);
+            });
+            if (!rootName.isEmpty()) {
+                exportMenu->addAction(IconHelper::getIcon("folder", "#3498db", 18), rootName, [window, rootId, rootName]() {
+                    window->doExportCategory(rootId, rootName);
+                });
+            }
+        }
+
+        exportMenu->addSeparator();
         exportMenu->addAction(IconHelper::getIcon("folder", "#3498db", 18), "整分类", [window, rootId, rootName]() {
             if (!window->verifyExportPermission()) return;
             FileStorageHelper::exportCategoryRecursive(rootId, rootName, window);
@@ -372,9 +397,8 @@ QMenu* QuickContextMenuBuilder::buildSidebarContextMenu(QuickWindow* window, Dro
             }
         });
 
-        menu->addAction(IconHelper::getIcon("switch_on", "#00A650", 18), "归类到此分类", [catId, currentName]() {
-            DatabaseManager::instance().setAutoCategorizeEnabled(true);
-            DatabaseManager::instance().setActiveCategoryId(catId);
+        menu->addAction(IconHelper::getIcon("switch_on", "#00A650", 18), "归类到此分类", [mediator, catId, currentName]() {
+            if (mediator) mediator->requestSetAutoCategorize(true, catId);
             ToolTipOverlay::instance()->showText(QCursor::pos(), QString("<b style='color: #00A650;'>[OK] 已将“%1”设为自动归档目标并开启开关</b>").arg(currentName));
         });
 
@@ -449,21 +473,20 @@ QMenu* QuickContextMenuBuilder::buildSidebarContextMenu(QuickWindow* window, Dro
 
         // 密码保护
         auto* pwdMenu = menu->addMenu(IconHelper::getIcon("lock", "#aaaaaa", 18), "密码保护");
-        pwdMenu->addAction("设置", [window, catId]() {
-            QTimer::singleShot(0, [window, catId]() {
+        pwdMenu->addAction("设置", [window, mediator, catId]() {
+            QTimer::singleShot(0, [window, mediator, catId]() {
                 CategoryPasswordDialog dlg("设置密码", window);
-                if (dlg.exec() == QDialog::Accepted) {
-                    DatabaseManager::instance().setCategoryPassword(catId, dlg.password(), dlg.passwordHint());
-                    window->scheduleRefresh();
+                if (dlg.exec() == QDialog::Accepted && mediator) {
+                    mediator->requestSetCategoryPassword(catId, dlg.password(), dlg.passwordHint());
                 }
             });
         });
-        pwdMenu->addAction("修改", [window, catId]() {
-            QTimer::singleShot(0, [window, catId]() {
+        pwdMenu->addAction("修改", [window, mediator, catId]() {
+            QTimer::singleShot(0, [window, mediator, catId]() {
                 FramelessInputDialog verifyDlg("验证旧密码", "请输入当前密码:", "", window);
                 verifyDlg.setEchoMode(QLineEdit::Password);
                 if (verifyDlg.exec() == QDialog::Accepted) {
-                    if (DatabaseManager::instance().verifyCategoryPassword(catId, verifyDlg.text())) {
+                    if (mediator && mediator->requestVerifyCategoryPassword(catId, verifyDlg.text())) {
                         CategoryPasswordDialog dlg("修改密码", window);
                         QString currentHint;
                         auto cats = DatabaseManager::instance().getAllCategories();
@@ -472,8 +495,7 @@ QMenu* QuickContextMenuBuilder::buildSidebarContextMenu(QuickWindow* window, Dro
                         }
                         dlg.setInitialData(currentHint);
                         if (dlg.exec() == QDialog::Accepted) {
-                            DatabaseManager::instance().setCategoryPassword(catId, dlg.password(), dlg.passwordHint());
-                            window->scheduleRefresh();
+                            mediator->requestSetCategoryPassword(catId, dlg.password(), dlg.passwordHint());
                         }
                     } else {
                         ToolTipOverlay::instance()->showText(QCursor::pos(), "<b style='color: #e74c3c;'>[ERR] 旧密码验证失败</b>");
@@ -481,23 +503,21 @@ QMenu* QuickContextMenuBuilder::buildSidebarContextMenu(QuickWindow* window, Dro
                 }
             });
         });
-        pwdMenu->addAction("移除", [window, catId]() {
-            QTimer::singleShot(0, [window, catId]() {
+        pwdMenu->addAction("移除", [window, mediator, catId]() {
+            QTimer::singleShot(0, [window, mediator, catId]() {
                 FramelessInputDialog dlg("验证密码", "请输入当前密码以移除保护:", "", window);
                 dlg.setEchoMode(QLineEdit::Password);
                 if (dlg.exec() == QDialog::Accepted) {
-                    if (DatabaseManager::instance().verifyCategoryPassword(catId, dlg.text())) {
-                        DatabaseManager::instance().removeCategoryPassword(catId);
-                        window->scheduleRefresh();
+                    if (mediator && mediator->requestVerifyCategoryPassword(catId, dlg.text())) {
+                        mediator->requestRemoveCategoryPassword(catId);
                     } else {
                         ToolTipOverlay::instance()->showText(QCursor::pos(), "<b style='color: #e74c3c;'>[ERR] 密码错误</b>");
                     }
                 }
             });
         });
-        pwdMenu->addAction("立即锁定", [window, catId]() {
-            DatabaseManager::instance().lockCategory(catId);
-            window->scheduleRefresh();
+        pwdMenu->addAction("立即锁定", [mediator, catId]() {
+            if (mediator) mediator->requestLockCategory(catId);
         })->setShortcut(QKeySequence("Ctrl+S"));
 
         return menu;

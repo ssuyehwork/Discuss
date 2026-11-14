@@ -78,8 +78,8 @@ bool LibraryItemDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, 
                 int countVal = index.data(Qt::UserRole + 9).toInt();
                 QString sectionText;
                 if (nodeId == -10) sectionText = QString("快速访问(%1)").arg(countVal);
-                else if (nodeId == -20) sectionText = QString("智能文件夹(%1)").arg(countVal);
-                else sectionText = QString("文件夹(%1)").arg(countVal);
+                else if (nodeId == -20) sectionText = QString("智能分类(%1)").arg(countVal);
+                else sectionText = QString("普通分类(%1)").arg(countVal);
 
                 QFont hdrFont = option.font;
                 hdrFont.setPointSize(10);
@@ -193,7 +193,7 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 
     int nodeId = index.data(Qt::UserRole + 1).toInt();
 
-    // 1. 渲染三大分组 Header (快速访问 -10, 智能文件夹 -20, 文件夹 0)，不得绘制选中/拖放背景
+    // 1. 渲染三大分组 Header (快速访问 -10, 智能分类 -20, 分类 0)，不得绘制选中/拖放背景
     if (nodeId == -10 || nodeId == -20 || nodeId == 0) {
         painter->fillRect(opt.rect, Qt::transparent);
 
@@ -203,8 +203,8 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
 
         QString sectionText;
         if (nodeId == -10) sectionText = QString("快速访问(%1)").arg(countVal);
-        else if (nodeId == -20) sectionText = QString("智能文件夹(%1)").arg(countVal);
-        else sectionText = QString("文件夹(%1)").arg(countVal);
+        else if (nodeId == -20) sectionText = QString("智能分类(%1)").arg(countVal);
+        else sectionText = QString("分类(%1)").arg(countVal);
 
         QFont hdrFont = opt.font;
         hdrFont.setPointSize(10);
@@ -226,7 +226,7 @@ void LibraryItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& o
         QRect arrowRect(arrowLeft, opt.rect.top() + (opt.rect.height() - 14) / 2, 14, 14);
         arrowIcon.paint(painter, arrowRect, Qt::AlignCenter, QIcon::Normal, QIcon::Off);
 
-        // 智能文件夹与文件夹分组右侧绘制加号按钮 (+) 图标 ("add")
+        // 智能分类与分类分组右侧绘制加号按钮 (+) 图标 ("add")
         if (nodeId == -20 || nodeId == 0) {
             QRect addRect = addBtnRect(opt.rect);
             QIcon addIcon = UiHelper::getIcon("add", (opt.state & QStyle::State_MouseOver) ? QColor("#FFFFFF") : QColor("#888888"), 16);
@@ -421,7 +421,7 @@ void LibraryPanel::initUi() {
 
     connect(m_delegate, &LibraryItemDelegate::requestAddCategory, this, [this](int nodeId) {
         if (nodeId == -20) {
-            // 触发智能文件夹规则配置对话框
+            // 触发智能分类规则配置对话框
             SmartFolderDialog dlg(this);
             connect(&dlg, &SmartFolderDialog::rulesPreviewRequested, this, &LibraryPanel::smartFolderPreviewRequested);
             if (dlg.exec() == QDialog::Accepted) {
@@ -447,7 +447,7 @@ void LibraryPanel::initUi() {
         if (!index.isValid()) return false;
         int nodeId = index.data(Qt::UserRole + 1).toInt();
         QString type = index.data(TypeRole).toString();
-        // 允许普通分类(nodeId > 0 且 type != "smart_folder")与智能文件夹(nodeId > 0 且 type == "smart_folder")拖拽
+        // 允许普通分类(nodeId > 0 且 type != "smart_folder")与智能分类(nodeId > 0 且 type == "smart_folder")拖拽
         return nodeId > 0 && (type == "smart_folder" || type != "section");
     });
 
@@ -464,18 +464,18 @@ void LibraryPanel::initUi() {
             }
         }
 
-        // 智能文件夹同组隔离守卫
+        // 智能分类同组隔离守卫
         if (isSmartFolderDrag) {
             QStandardItem* sfHeader = findItemByNodeId(m_model->invisibleRootItem(), -20);
             if (!sfHeader) return false;
 
             if (zone == InternalDropZone::OnItem) {
                 if (!target.isValid()) return false;
-                // 仅允许直接拖到智能文件夹 Header (-20)
+                // 仅允许直接拖到智能分类 Header (-20)
                 return target.data(Qt::UserRole + 1).toInt() == -20;
             } else if (zone == InternalDropZone::Above || zone == InternalDropZone::Below) {
                 if (!target.isValid()) return false;
-                // 目标必须为智能文件夹子项
+                // 目标必须为智能分类子项
                 if (target.data(TypeRole).toString() != "smart_folder") return false;
                 for (const QPersistentModelIndex& psrc : sources) {
                     if (psrc.isValid() && psrc == target) return false;
@@ -829,7 +829,7 @@ void LibraryPanel::saveLibraryOrder() {
         LibraryDao::updateNodesParentAndOrder(entries);
     }
 
-    // 持久化智能文件夹自定义排序
+    // 持久化智能分类自定义排序
     QStandardItem* sfHeader = findItemByNodeId(m_model->invisibleRootItem(), -20);
     if (sfHeader) {
         QList<QPair<int, int>> sfOrderList;
@@ -904,7 +904,7 @@ bool LibraryPanel::eventFilter(QObject* watched, QEvent* event) {
             QModelIndex curIdx = m_treeView->currentIndex();
             if (curIdx.isValid()) {
                 int nodeId = curIdx.data(Qt::UserRole + 1).toInt();
-                // 仅允许用户自定义分类（nodeId > 0）或智能文件夹进入行内编辑，屏蔽系统固定项(-1, -2)和分组标头(-10, -20, 0)
+                // 仅允许用户自定义分类（nodeId > 0）或智能分类进入行内编辑，屏蔽系统固定项(-1, -2)和分组标头(-10, -20, 0)
                 if (nodeId > 0) {
                     m_treeView->setFocus();
                     m_treeView->edit(curIdx);
@@ -1040,7 +1040,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
         if (curIconKey.isEmpty() || curIconKey == "folder_filled" || curIconKey == "folder") curIconKey = "smart-folder-1.svg";
         if (curColorHex.isEmpty()) curColorHex = "#888888";
 
-        // 右键具体的智能文件夹节点
+        // 右键具体的智能分类节点
         QAction* editRuleAct = menu.addAction(UiHelper::getIcon("edit", QColor("#EEEEEE")), "编辑规则");
         connect(editRuleAct, &QAction::triggered, this, [this, smartFolderId]() {
             SmartFolderRecord rec = SmartFolderDao::getSmartFolderById(smartFolderId);
@@ -1079,7 +1079,7 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
 
         menu.addSeparator();
 
-        QAction* deleteSmartAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除智能文件夹");
+        QAction* deleteSmartAct = menu.addAction(UiHelper::getIcon("close", QColor("#EEEEEE")), "删除智能分类");
         connect(deleteSmartAct, &QAction::triggered, this, [this, smartFolderId]() {
             if (SmartFolderDao::removeSmartFolderById(smartFolderId)) {
                 invalidateSmartFolderCache(smartFolderId);
@@ -1108,8 +1108,8 @@ void LibraryPanel::onCategoryContextMenu(const QPoint& pos) {
     }
 
     if (nodeId == -20) {
-        // 智能文件夹分组右键菜单
-        QAction* newSmartAct = menu.addAction(UiHelper::getIcon("smart-folder-1.svg", QColor("#EEEEEE")), "新建智能文件夹");
+        // 智能分类分组右键菜单
+        QAction* newSmartAct = menu.addAction(UiHelper::getIcon("smart-folder-1.svg", QColor("#EEEEEE")), "新建智能分类");
         connect(newSmartAct, &QAction::triggered, this, [this]() {
             SmartFolderDialog dlg(this);
             connect(&dlg, &SmartFolderDialog::rulesPreviewRequested, this, &LibraryPanel::smartFolderPreviewRequested);
@@ -1251,7 +1251,7 @@ void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QMod
         nodeId = target.data(Qt::UserRole + 1).toInt();
     }
 
-    // 拖到系统分类(-1)、快速访问(-10)、智能文件夹(-20) 或 “文件夹(N)”标题行(0) 时：静默返回，不做任何处理
+    // 拖到系统分类(-1)、快速访问(-10)、智能分类(-20) 或 “分类(N)”标题行(0) 时：静默返回，不做任何处理
     if (nodeId == -1 || nodeId == -10 || nodeId == -20 || nodeId == 0) {
         return;
     }
@@ -1283,7 +1283,7 @@ void LibraryPanel::onPathsDroppedToCategory(const QStringList& paths, const QMod
 void LibraryPanel::loadLibrary() {
     if (!m_model) return;
 
-    // 记录刷新前选中的分类或智能文件夹节点 ID 与节点类型（"category" 还是 "smart_folder"），刷新后精准恢复高亮选中
+    // 记录刷新前选中的分类或智能分类节点 ID 与节点类型（"category" 还是 "smart_folder"），刷新后精准恢复高亮选中
     int savedSelectedNodeId = 0;
     QString savedSelectedType;
     if (m_treeView && m_treeView->currentIndex().isValid()) {
@@ -1320,10 +1320,10 @@ void LibraryPanel::loadLibrary() {
         if (rec.isPinned) pinnedCount++;
     }
 
-    // 加载所有智能文件夹
+    // 加载所有智能分类
     auto smartFolders = SmartFolderDao::getAllSmartFolders();
 
-    // 2. 构建三大折叠分组 Header 节点 (-10 快速访问, -20 智能文件夹, 0 文件夹)
+    // 2. 构建三大折叠分组 Header 节点 (-10 快速访问, -20 智能分类, 0 分类)
     QStandardItem* quickAccessHeader = new QStandardItem();
     quickAccessHeader->setData("section", TypeRole);
     quickAccessHeader->setData(-10, IdRole);
@@ -1430,13 +1430,13 @@ void LibraryPanel::loadLibrary() {
 
     m_isLoading = false;
 
-    // 触发智能文件夹异步后台计算
+    // 触发智能分类异步后台计算
     if (!smartFolders.isEmpty()) {
         m_currentCountReqId++;
         updateSmartFolderCountsAsync(m_currentCountReqId, smartFolders);
     }
 
-    // 恢复树节点的选中高亮状态：严格同时校验 ID 与节点类型，严禁把普通分类的高亮挂到同名同 ID 的智能文件夹上
+    // 恢复树节点的选中高亮状态：严格同时校验 ID 与节点类型，严禁把普通分类的高亮挂到同名同 ID 的智能分类上
     if (savedSelectedNodeId != 0 && m_treeView && m_model) {
         QStandardItem* targetItem = findItemByNodeId(m_model->invisibleRootItem(), savedSelectedNodeId, savedSelectedType);
         if (targetItem) {
@@ -1593,7 +1593,7 @@ void LibraryPanel::createAndEditCategory(int parentId) {
         }
     }
 
-    QString defaultName = (parentId == -20) ? "新建智能文件夹" : "新建分类";
+    QString defaultName = (parentId == -20) ? "新建智能分类" : "新建分类";
     int newId = LibraryService::instance().createCategory(defaultName, parentId);
     if (newId > 0) {
         m_pendingEditNodeId = newId;
