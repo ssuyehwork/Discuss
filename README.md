@@ -1,2 +1,0 @@
-# Implementer
-Implementer
